@@ -2,14 +2,15 @@
 id: network
 layer: domain
 status: draft
-version: 14
+version: 15
 updated: 2026-09-26
 ---
 
 # The hot loop — the few configs near their ceiling, in seconds
 
 A topic file of `contract.md` (§10). What governs `network-service/internal/hot`
-and `billing-service/src/app/traffic/horizon.ts` (F-027-u, ADR-0072): when a
+and `billing-service/src/app/traffic/horizon.ts` (F-027-u, ADR-0072) with its
+caller `traffic/hot-loop.consumer.ts` (F-027-cl, ADR-0092): when a
 config is read sooner than the bulk pass reads it, and how much traffic is
 bought next. Read it before changing an interval, a horizon or a block size.
 
@@ -80,7 +81,18 @@ ceiling was written against money that failed to leave the wallet.
 
 A hot Grant is topped back up to `HORIZON_SECONDS` (120) of its projected rate.
 The target is the deficit — what a full horizon needs, less the headroom it
-already holds.
+already holds. **Only an active metered Grant buys.** A prepaid bag is fixed
+at purchase, so for it the loop is the split alone.
+
+**A config is hot on its own share too** (F-027-cl). The panel cuts a config
+off at its share, not at the bag, so a Grant far from spent can still have one
+config seconds from its cut. When a config is inside `HORIZON_SECONDS` of its
+`allocatedCeilingBytes` less its lifetime bytes, and the bag still holds
+bytes, the pass re-splits (`rebalance`) with nothing bought. The concentrated
+config is the fastest one. If nothing measurably runs, it is the one nearest
+the end of its share, because a config the panel has cut measures no rate.
+A short wallet with bytes still in the bag is reported (`refused`) rather than
+thrown, and the split still moves.
 
 **The rate is measured, then extrapolated up but never down.** A rate still
 climbing is extrapolated one more step of the same climb: a user who went from
@@ -138,15 +150,30 @@ it at once — not hot, nothing bought, `exhausted: null` — and
 Its usage is still counted: the delta consumer advances `consumedBytes` for
 every Grant alike.
 
-## Two halves, two processes, no channel between them
+## The channel between the halves — the delta stream (F-027-cl, ADR-0092)
 
-The collector is Go and the purchase is in-process in `billing-service`, so
-nothing today carries "this Grant is hot" from the one that knows it to the one
-that acts on it. Both halves compute time to ceiling from their own side's
-data, which is why the figure is defined here once rather than passed.
-`topUpIn` therefore has **no caller yet** — the same state `RemainderCredit` is
-in. What connects them is a decision, not an oversight, and it is open in
-`open-questions.md`.
+`billing-service` has its own durable queue (`HOT_LOOP_QUEUE`) on
+`network.usage.#`, beside `metering-service`'s. Each collection pass, bulk or
+hot, becomes **one `topUp` per Grant** the pass carried a delta for, under that
+Grant's tenant (the config read that finds it is cross-tenant, as metering's
+is). There is never one per delta: two configs of one Grant would buy two
+blocks for one horizon. Because the collector reads a hot config every 2–60 s
+and publishes each read, the calls arrive at the rate the hot few need.
+
+- **Prefetch 1, fixed.** Rates are measured between two of this process's
+  passes, in memory. Two passes handled at once would measure each other's
+  gap.
+- **One behind metering, at most.** The bytes that woke a top-up may not be
+  applied to `consumedBytes` or the cursors yet. The top-up sizes from rows,
+  never from the message, so headroom is overstated by one pass at most. That
+  is the quarter-interval's premise above.
+- **A lost race is not a failure.** `WalletVersionConflict` means another
+  pass bought first. Any other failure is raised after the pass's other
+  Grants are done, and the pass dead-letters as evidence. Nothing is owed by
+  it, because the next pass re-reads the same rows.
+- **An idle Grant is never called.** A zero delta is not published. A config
+  cut off before any pass put it inside its share horizon waits for the next
+  delta from any config of its Grant (ADR-0092's revisit trigger).
 
 ## Running it — `cmd/server` (F-027-bu)
 

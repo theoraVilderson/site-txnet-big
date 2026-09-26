@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigStatus, Prisma } from '@prisma/client';
+import { ConfigStatus, GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { BlockPurchaseService, type PurchasedBlock } from './block-purchase';
+import { BlockPurchaseRefused, BlockPurchaseService, type BlockPurchaseRejection, type PurchasedBlock } from './block-purchase';
 import { CeilingAllocatorService, type RebalancedGrant } from './ceiling-allocator';
 import { type Exhaustion, isShortOfFunds, suspendIfExhausted } from './exhaustion';
 
@@ -211,11 +211,22 @@ export type TopUp = {
 
 export type TopUpOutcome = Horizon & {
   grantId: string;
-  /** The config the bag was concentrated on — the fastest one, or null where none is measurably running. */
+  /**
+   * The config the bag was concentrated on — the fastest one; where none is
+   * measurably running, the one nearest the end of its own share; null where
+   * neither.
+   */
   hotConfigId: string | null;
-  /** Null where nothing was bought: the Grant is not near its ceiling, or has no rate to size a block from. */
+  /** Null where nothing was bought: the Grant is not near its ceiling, has no rate to size a block from, or does not buy blocks. */
   bought: PurchasedBlock | null;
+  /**
+   * Set on a buy with nothing bought (F-027-u), and on a split with nothing
+   * bought: some config is inside a horizon of its **own share** while the
+   * bag still holds bytes elsewhere (F-027-cl).
+   */
   rebalanced: RebalancedGrant | null;
+  /** A short wallet with bytes still in the bag: nothing bought and nothing suspended — reported, not thrown. */
+  refused: BlockPurchaseRejection | null;
   /**
    * Asked only when the bag is spent and nothing was bought (F-027-x): whether
    * the Grant was suspended for it, or why not. Null on every other pass.
@@ -261,14 +272,14 @@ export class HotLoopService {
     const atMs = input.atMs ?? Date.now();
     const grant = await tx.grant.findUnique({
       where: { id: input.grantId },
-      select: { id: true, purchasedBytes: true, consumedBytes: true, trafficUnlimited: true },
+      select: { id: true, status: true, billingMode: true, meteredRate: true, purchasedBytes: true, consumedBytes: true, trafficUnlimited: true },
     });
     if (!grant) throw new HotLoopRefused('grant_not_found', input.grantId);
     // No ceiling to approach and nothing to buy (F-111-q). Its empty bag would
     // otherwise put it inside the horizon on every pass, and exhaustion after.
     if (grant.trafficUnlimited) {
       const idle = { rateBps: BigInt(0), timeToCeilingSeconds: null, hot: false, targetBytes: BigInt(0), flooredToMinimumBlock: false };
-      return { ...idle, grantId: grant.id, hotConfigId: null, bought: null, rebalanced: null, exhausted: null };
+      return { ...idle, grantId: grant.id, hotConfigId: null, bought: null, rebalanced: null, refused: null, exhausted: null };
     }
 
     const configs = await tx.config.findMany({
@@ -276,6 +287,7 @@ export class HotLoopService {
       select: {
         id: true,
         observedRateBps: true,
+        allocatedCeilingBytes: true,
         counterState: { select: { lifetimeUpBytes: true, lifetimeDownBytes: true } },
         panel: { select: { maxLineRateBps: true } },
       },
@@ -285,6 +297,12 @@ export class HotLoopService {
     let hotConfigId: string | null = null;
     let hotRateBps = BigInt(0);
     let lineRateBps: bigint | null = null;
+    // The config nearest the end of its own share, among those inside a
+    // horizon of it (F-027-cl). The Grant's bag can be far from spent while
+    // one config's share is: the panel cuts that config off at its share, not
+    // at the bag, so its split is what has to move.
+    let tightConfigId: string | null = null;
+    let tightSeconds = Number.POSITIVE_INFINITY;
 
     for (const config of configs) {
       const served = config.counterState
@@ -309,6 +327,13 @@ export class HotLoopService {
           hotConfigId = config.id;
         }
       }
+      if (config.allocatedCeilingBytes !== null) {
+        const seconds = timeToCeilingSeconds(config.allocatedCeilingBytes - served, rateBps ?? BigInt(0));
+        if (seconds !== null && seconds <= HORIZON_SECONDS && seconds < tightSeconds) {
+          tightSeconds = seconds;
+          tightConfigId = config.id;
+        }
+      }
       const panelRate = config.panel.maxLineRateBps;
       if (panelRate !== null && (lineRateBps === null || panelRate > lineRateBps)) lineRateBps = panelRate;
     }
@@ -322,14 +347,28 @@ export class HotLoopService {
     });
     if (grantRateBps !== null) this.lastRate.set(grant.id, grantRateBps);
 
-    const nothingBought = { ...horizon, grantId: grant.id, hotConfigId, bought: null, rebalanced: null };
+    // A cut-off config measures no rate, and is still the one the bag has to
+    // move to: the one at the end of its share is named where nobody is running.
+    hotConfigId ??= tightConfigId;
+    const nothingBought = { ...horizon, grantId: grant.id, hotConfigId, bought: null, refused: null as BlockPurchaseRejection | null };
     // A spent bag with nothing bought is the one place exhaustion is asked
     // (F-027-x). A user the panel has already stopped measures no rate, so
     // this is also the branch a cut-off Grant arrives by, pass after pass.
     const exhaustion = () => (headroomBytes <= BigInt(0) ? suspendIfExhausted(tx, grant.id, new Date(atMs)) : Promise.resolve(null));
+    // Nothing bought, and still a split to move: some config is inside a
+    // horizon of its own share while the bag holds bytes it is not carrying
+    // (F-027-cl). A spent bag has nothing left to move.
+    const resplit = () =>
+      tightConfigId !== null && headroomBytes > BigInt(0) && grant.status === GrantStatus.active
+        ? this.ceilings.rebalance(tx, { grantId: grant.id, hotConfigId })
+        : Promise.resolve(null);
 
-    if (!horizon.hot || horizon.targetBytes <= BigInt(0)) {
-      return { ...nothingBought, exhausted: await exhaustion() };
+    // Only an active metered Grant buys. A prepaid bag is fixed at purchase,
+    // so for it the hot loop is the split alone — asking `purchase()` would be
+    // refused (`grant_not_metered`) and roll the split back with it.
+    const buys = grant.status === GrantStatus.active && grant.billingMode === VariantBillingMode.metered && grant.meteredRate !== null;
+    if (!buys || !horizon.hot || horizon.targetBytes <= BigInt(0)) {
+      return { ...nothingBought, rebalanced: await resplit(), exhausted: await exhaustion() };
     }
 
     // One transaction, both halves. A purchase committed without the
@@ -340,14 +379,17 @@ export class HotLoopService {
     try {
       bought = await this.blocks.purchase(tx, { grantId: grant.id, targetBytes: horizon.targetBytes });
     } catch (error) {
-      // A short wallet with bytes still in the bag is not exhaustion yet: the
-      // refusal stands, and the pass that finds the bag spent suspends.
+      if (!isShortOfFunds(error)) throw error;
       // `purchase()` refuses before it writes, so the transaction is clean.
-      if (headroomBytes > BigInt(0) || !isShortOfFunds(error)) throw error;
-      return { ...nothingBought, exhausted: await exhaustion() };
+      // A short wallet with bytes still in the bag is not exhaustion yet: it
+      // is reported, and the split still moves; the pass that finds the bag
+      // spent suspends.
+      const refused = (error as BlockPurchaseRefused).reason;
+      if (headroomBytes > BigInt(0)) return { ...nothingBought, refused, rebalanced: await resplit(), exhausted: null };
+      return { ...nothingBought, refused, rebalanced: null, exhausted: await exhaustion() };
     }
     const rebalanced = await this.ceilings.rebalance(tx, { grantId: grant.id, hotConfigId });
 
-    return { ...horizon, grantId: grant.id, hotConfigId, bought, rebalanced, exhausted: null };
+    return { ...horizon, grantId: grant.id, hotConfigId, bought, rebalanced, refused: null, exhausted: null };
   }
 }

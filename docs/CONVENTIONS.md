@@ -176,7 +176,7 @@ second check block below holds it to that.
 ```check C-04
 forbid: ['"]x-[a-z0-9]+(-[a-z0-9]+)+['"]
 in: txnet-backend/**/*.ts
-except: txnet-backend/shared-core/src/lib/http/**, txnet-backend/**/*.spec.ts, txnet-backend/worker-service/src/app/broker/broker.service.ts, txnet-backend/metering-service/src/app/broker/broker.service.ts, txnet-backend/bot-service/src/app/webhook/webhook.controller.ts, txnet-backend/billing-service/src/app/payment/gateway/*.provider.ts
+except: txnet-backend/shared-core/src/lib/http/**, txnet-backend/**/*.spec.ts, txnet-backend/worker-service/src/app/broker/broker.service.ts, txnet-backend/metering-service/src/app/broker/broker.service.ts, txnet-backend/billing-service/src/app/traffic/hot-loop.queue.ts, txnet-backend/bot-service/src/app/webhook/webhook.controller.ts, txnet-backend/billing-service/src/app/payment/gateway/*.provider.ts
 message: import the name from shared-core/src/lib/http (C-04) — a header spelled twice is the drift ADR-0036 exists to stop
 ```
 

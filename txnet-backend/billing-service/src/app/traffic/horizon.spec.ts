@@ -159,9 +159,9 @@ describe('nextIntervalMs', () => {
 
 // ---- the transaction -------------------------------------------------------
 
-type ConfigRow = { id: string; observedRateBps: bigint | null; served: bigint; panelRateBps: bigint | null };
+type ConfigRow = { id: string; observedRateBps: bigint | null; served: bigint; panelRateBps: bigint | null; share: bigint | null };
 
-function fakeTx(input: { purchasedBytes: bigint; consumedBytes: bigint; configs: ConfigRow[]; balance?: string }) {
+function fakeTx(input: { purchasedBytes: bigint; consumedBytes: bigint; configs: ConfigRow[]; balance?: string; prepaid?: boolean }) {
   const writes: { id: string; observedRateBps: bigint | null }[] = [];
   const suspensions: Record<string, unknown>[] = [];
   const tx = {
@@ -173,8 +173,8 @@ function fakeTx(input: { purchasedBytes: bigint; consumedBytes: bigint; configs:
               id: GRANT,
               userId: 'u',
               status: GrantStatus.active,
-              billingMode: VariantBillingMode.metered,
-              meteredRate: new Prisma.Decimal('0.5'),
+              billingMode: input.prepaid ? VariantBillingMode.prepaid : VariantBillingMode.metered,
+              meteredRate: input.prepaid ? null : new Prisma.Decimal('0.5'),
               purchasedBytes: input.purchasedBytes,
               consumedBytes: input.consumedBytes,
             },
@@ -189,6 +189,7 @@ function fakeTx(input: { purchasedBytes: bigint; consumedBytes: bigint; configs:
         input.configs.map((c) => ({
           id: c.id,
           observedRateBps: c.observedRateBps,
+          allocatedCeilingBytes: c.share,
           counterState: { lifetimeUpBytes: c.served, lifetimeDownBytes: BigInt(0) },
           panel: { maxLineRateBps: c.panelRateBps },
         })),
@@ -201,12 +202,13 @@ function fakeTx(input: { purchasedBytes: bigint; consumedBytes: bigint; configs:
   return { tx: tx as unknown as Prisma.TransactionClient, writes, suspensions };
 }
 
-const config = (id: string, served: bigint, observedRateBps: bigint | null = null, panelRateBps: bigint | null = GIGABIT): ConfigRow => ({
-  id,
-  served,
-  observedRateBps,
-  panelRateBps,
-});
+const config = (
+  id: string,
+  served: bigint,
+  observedRateBps: bigint | null = null,
+  panelRateBps: bigint | null = GIGABIT,
+  share: bigint | null = null,
+): ConfigRow => ({ id, served, observedRateBps, panelRateBps, share });
 
 function service(refuse?: BlockPurchaseRefused) {
   const purchases: { grantId: string; targetBytes: bigint }[] = [];
@@ -311,11 +313,15 @@ describe('HotLoopService.topUpIn', () => {
     expect(rebalances).toHaveLength(0);
   });
 
-  it('keeps the refusal while the bag still holds bytes — a short wallet is not yet an empty bag', async () => {
+  it('reports, rather than throws, a short wallet while the bag still holds bytes — not yet exhaustion', async () => {
     const { tx, suspensions } = fakeTx({ purchasedBytes: secondsOf(GIGABIT, 30), consumedBytes: BigInt(0), configs: [config('a', BigInt(0), GIGABIT)] });
     const { hot } = service(new BlockPurchaseRefused('insufficient_funds', '0.00'));
 
-    await expect(hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 })).rejects.toMatchObject({ reason: 'insufficient_funds' });
+    const outcome = await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
+
+    expect(outcome.bought).toBeNull();
+    expect(outcome.refused).toBe('insufficient_funds');
+    expect(outcome.exhausted).toBeNull();
     expect(suspensions).toHaveLength(0);
   });
 
@@ -335,5 +341,71 @@ describe('HotLoopService.topUpIn', () => {
     const { hot } = service();
 
     await expect(hot.topUpIn(tx, { grantId: 'other', atMs: 0 })).rejects.toMatchObject({ reason: 'grant_not_found' });
+  });
+
+  // ---- a config inside its horizon of its own share (F-027-cl) -------------
+  // Panel 5922ac13, 2026-09-26: a prepaid 1 GiB Grant split 512/512 over two
+  // inbounds was cut off at 512 MiB on the busy one, with the other half idle.
+
+  const MiB = BigInt(1) << BigInt(20);
+  const HUNDRED_MEGABIT = BigInt(100) * MEGABIT;
+
+  it('rebalances a prepaid Grant, buying nothing, when the busy config nears its own share', async () => {
+    const { tx } = fakeTx({
+      prepaid: true,
+      purchasedBytes: GB,
+      consumedBytes: BigInt(500) * MiB,
+      configs: [config('idle', BigInt(0), BigInt(0), GIGABIT, BigInt(512) * MiB), config('busy', BigInt(500) * MiB, HUNDRED_MEGABIT, GIGABIT, BigInt(512) * MiB)],
+    });
+    const { hot, purchases, rebalances } = service();
+
+    const outcome = await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
+
+    expect(purchases).toHaveLength(0);
+    expect(rebalances).toEqual([{ grantId: GRANT, hotConfigId: 'busy' }]);
+    expect(outcome.bought).toBeNull();
+    expect(outcome.rebalanced).not.toBeNull();
+  });
+
+  it('rebalances a metered Grant far from its bag when one config nears its share', async () => {
+    const { tx } = fakeTx({
+      purchasedBytes: BigInt(100) * GB,
+      consumedBytes: GB,
+      configs: [config('busy', GB, GIGABIT, GIGABIT, GB + BigInt(10) * MiB), config('idle', BigInt(0), BigInt(0), GIGABIT, BigInt(50) * GB)],
+    });
+    const { hot, purchases, rebalances } = service();
+
+    await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
+
+    expect(purchases).toHaveLength(0);
+    expect(rebalances).toEqual([{ grantId: GRANT, hotConfigId: 'busy' }]);
+  });
+
+  it('concentrates on a config the panel has already cut off at its share, though it measures no rate', async () => {
+    const { tx } = fakeTx({
+      prepaid: true,
+      purchasedBytes: GB,
+      consumedBytes: BigInt(512) * MiB,
+      configs: [config('idle', BigInt(0), BigInt(0), GIGABIT, BigInt(512) * MiB), config('cut', BigInt(512) * MiB, BigInt(0), GIGABIT, BigInt(512) * MiB)],
+    });
+    const { hot, rebalances } = service();
+
+    await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
+
+    expect(rebalances).toEqual([{ grantId: GRANT, hotConfigId: 'cut' }]);
+  });
+
+  it('leaves the split alone when every config has more than a horizon of its share left', async () => {
+    const { tx } = fakeTx({
+      prepaid: true,
+      purchasedBytes: BigInt(100) * GB,
+      consumedBytes: BigInt(0),
+      configs: [config('a', BigInt(0), MEGABIT, GIGABIT, BigInt(50) * GB), config('b', BigInt(0), BigInt(0), GIGABIT, BigInt(50) * GB)],
+    });
+    const { hot, rebalances } = service();
+
+    await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
+
+    expect(rebalances).toHaveLength(0);
   });
 });

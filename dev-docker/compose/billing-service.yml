@@ -89,6 +89,12 @@ services:
       - REDIS_URL=${REDIS_URL}
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
       - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      # The hot loop's caller (F-027-cl, ADR-0092): its own queue on
+      # `network.usage.#`, beside metering-service's — both need every pass.
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}
+      - AUTOMATION_DLX=${AUTOMATION_DLX:-txnet.automation.dlx}
+      - HOT_LOOP_QUEUE=${HOT_LOOP_QUEUE:-txnet.billing.hot-loop}
       # Per-user limits; empty means the schema default (F-087).
       - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-}
       - DEPOSIT_GATEWAYS_RATE_LIMIT=${DEPOSIT_GATEWAYS_RATE_LIMIT:-}
@@ -250,4 +256,6 @@ services:
       main-db:
         condition: service_healthy
       locale-service:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy

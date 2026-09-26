@@ -14,6 +14,8 @@ const DB = {
   // tenant from the Host, and that read cannot run on the scoped pool.
   DATABASE_CROSS_TENANT_URL: 'postgresql://cross@db/txnet',
   REDIS_URL: 'redis://redis:6379',
+  // Required since F-027-cl: the hot loop's queue.
+  RABBITMQ_URL: 'amqp://rabbitmq:5672',
 };
 
 describe('envSchema', () => {

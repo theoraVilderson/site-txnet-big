@@ -74,8 +74,8 @@ only where `walletCanBuy` — the predicate `suspendIfExhausted` suspended on �
 is true at that Grant's own locked rate. Writing it as a second rule about
 money would let the two drift, and the drift lands on the purge clock. A
 revived Grant is `active` with its configs `present` and enabled, and **no
-ceiling until something buys it a block** — which is the hot loop, still
-without a caller (F-027-u).
+ceiling until something buys it a block** — the hot loop, on the next
+collection pass that carries one of its configs (F-027-cl, ADR-0092).
 
 The clock is not here. `worker-service` holds it and asks hourly over `POST
 /api/internal/billing/entitlement/purge-due` (`ServiceOnlyGuard`, key

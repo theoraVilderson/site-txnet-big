@@ -1,4 +1,5 @@
 import {
+  AUTOMATION_EXCHANGE_DEFAULT,
   REDIS_KEYSPACE_VERSION_DEFAULT,
   REDIS_KEY_NAMESPACE_DEFAULT,
 } from '@txnet-backend/shared-core';
@@ -160,6 +161,20 @@ export const envSchema = z.object({
     .string()
     .min(1)
     .default(REDIS_KEYSPACE_VERSION_DEFAULT),
+
+  /**
+   * The hot loop's caller (F-027-cl, ADR-0092): this service's own queue on
+   * `network.usage.#`. Required — without it no Grant is topped up or
+   * re-split, and a config is cut off at its share while the bag holds bytes
+   * elsewhere, with nothing red anywhere.
+   */
+  RABBITMQ_URL: z.string().min(1, 'RABBITMQ_URL is required'),
+  /** The exchange every automation message rides; the default is shared-core's (F-079). */
+  AUTOMATION_EXCHANGE: z.string().min(1).default(AUTOMATION_EXCHANGE_DEFAULT),
+  /** Where a failed pass goes (F-067-d) — the platform's one dead-letter exchange. */
+  AUTOMATION_DLX: z.string().min(1).default('txnet.automation.dlx'),
+  /** Its own queue, not `metering-service`'s: both need every pass. */
+  HOT_LOOP_QUEUE: z.string().min(1).default('txnet.billing.hot-loop'),
 
   /**
    * How long a `pending` payment stays payable, and with it the coupon holds it

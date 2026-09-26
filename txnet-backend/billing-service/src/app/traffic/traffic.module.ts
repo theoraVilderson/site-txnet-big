@@ -10,6 +10,8 @@ import { GroupFulfilmentController } from './group-fulfilment.controller';
 import { GroupFulfilmentService } from './group-fulfilment';
 import { GroupDrainService } from './group-drain';
 import { HotLoopService } from './horizon';
+import { HotLoopConsumer } from './hot-loop.consumer';
+import { HotLoopQueue } from './hot-loop.queue';
 import { RemainderCreditService } from './remainder-credit';
 import { UserConfigsController } from './user-configs.controller';
 import { UserConfigsService } from './user-configs';
@@ -23,7 +25,9 @@ import { GrantUsageService } from './grant-usage';
  * with the two actions a user may take on them (F-027-ac). None moves money.
  *
  * `HotLoopService` is the hot loop's money half: it sizes the next block from
- * the measured rate and calls the other two in one transaction.
+ * the measured rate and calls the other two in one transaction. `HotLoopQueue`
+ * is its caller — this service's own queue on `network.usage.#`, one top-up
+ * per Grant a pass touched (F-027-cl, ADR-0092).
  *
  * `ConfigActionsService` is every action on a config as a desired-state write
  * (F-027-z); `network-service` carries it to the panel, nothing here does.
@@ -35,7 +39,7 @@ import { GrantUsageService } from './grant-usage';
 @Module({
   imports: [WalletModule],
   controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController],
-  providers: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GroupFulfilmentService, GroupDrainService],
+  providers: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, HotLoopConsumer, HotLoopQueue, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GroupFulfilmentService, GroupDrainService],
   exports: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, ConfigActionsService, GroupFulfilmentService, UserConfigsService, GrantUsageService],
 })
 export class TrafficModule {}
