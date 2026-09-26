@@ -113,8 +113,9 @@ still a desired-state write, and nothing here calls a panel.
 
 | Route | In | Answers `data` |
 |---|---|---|
-| `GET /api/billing/traffic/grants/:grantId/configs` | the Grant id | `{grantId, rows[{id, protocol, status, region, allocatedCeilingBytes, appliedCeilingBytes, driftState, enforcementState, regenerateUsedCount, maxRegenerateCount, lastReconciledAt, lines[], linksCapturedAt, login, ovpnProfile}]}` |
+| `GET /api/billing/traffic/grants/:grantId/configs` | the Grant id | `{grantId, rows[{id, protocol, status, region, allocatedCeilingBytes, appliedCeilingBytes, driftState, enforcementState, regenerateUsedCount, maxRegenerateCount, lastReconciledAt, label, lines[], linksCapturedAt, login, ovpnProfile}]}` |
 | `POST /api/billing/traffic/configs/actions` | `{action: regenerate \| retire, configIds[1..50]}` | `{action, results[{configId, ok: true} \| {configId, ok: false, reason}]}` — always **200** |
+| `PUT /api/billing/traffic/configs/:configId/label` | `{label: string \| null}` — trimmed, ≤ 40; empty or `null` is the default | `{configId, label}`; another user's, retired or missing config **404** `configNotFound` (F-307-g) |
 
 | Rule | Why |
 |---|---|
@@ -124,8 +125,9 @@ still a desired-state write, and nothing here calls a panel.
 | Whose configs is the gate's `X-User-Id`. Another user's Grant is the same **404** as a missing one; another user's config is `config_not_found` | neither route is a way to ask whether an id exists |
 | Retired configs are not listed, and the list **never answers the bare `uuid`** — columns are selected, and `uuid` is read only to judge the lines | retired is what the user deleted; the owner needs the lines, not the key inside them |
 | `lines` are the config's captured link lines, answered to the owner only while `linksUuid` = `uuid` (F-307-a, user 2026-09-26); otherwise `[]` with `linksCapturedAt` `null`. `[]` with a time is a panel that gives none | they are the lines `/sub` already hands the same user (F-113), and `/sub`'s own rule (network `contract.links.md`): lines from the client before a regenerate are dead links until the next capture |
+| **Lines are named as `/sub` names them** (F-307-g, ADR-0089): the buyer's `label`, else the platform's `{region}`; a name given earlier in the Grant gets ` 2`, ` 3`. Numbered over this whole list, dead lines excluded; `traffic/line-names.ts`, held to `contracts/network/line-names.json`. A label is display only — no desired state, no panel call | a copied line and an imported `/sub` must show one name; the client's panel name is a matching key (F-027-aa) |
 | `login` `{username, password}` only for a config on a **MikroTik User Manager** router, and only while `linksUuid` = `uuid` (the capture confirmed that login); `null` otherwise. `ovpnProfile` is the router's `.ovpn` (`network.panel.ovpnProfile`) for such a config whose protocol is `openvpn`, `null` when none was uploaded (F-307-d, user 2026-09-26) | the one exception to "never the `uuid`": User Manager names the user after it and makes it the password (network `contract.drivers.md`), and a PPP/OpenVPN login has no line to carry it. The file is the router's, the same for every buyer: server and CA, no key |
-| Buckets `CONFIG_LIST` (**180**/900s) and `CONFIG_ACTION` (**30**/900s, per request); capability `subscriptionLink` | looking must not spend the budget for acting; these are the configs `/sub` serves |
+| Buckets `CONFIG_LIST` (**180**/900s) and `CONFIG_ACTION` (**30**/900s, per request, a label write included); capability `subscriptionLink` | looking must not spend the budget for acting; these are the configs `/sub` serves |
 
 **Not covered:** a regenerate's new lines reach this answer only after the next
 capture — the answer to the action itself carries none; move and provision from the panel are nobody's row.

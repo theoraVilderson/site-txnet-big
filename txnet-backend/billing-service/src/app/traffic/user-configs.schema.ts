@@ -1,6 +1,7 @@
 import { BackendI18nKeys } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
+import { MAX_CONFIG_LABEL_LENGTH } from './line-names';
 import { MAX_BULK_CONFIGS, USER_CONFIG_ACTIONS } from './user-configs';
 
 const E = BackendI18nKeys.errors.billing;
@@ -20,3 +21,19 @@ export const configActionSchema = z.object({
 });
 
 export type ConfigActionBody = z.infer<typeof configActionSchema>;
+
+/**
+ * The body of `PUT /api/billing/traffic/configs/:configId/label` (F-307-g):
+ * the buyer's name, trimmed, 1..40 characters. An empty or `null` label is
+ * the default name again (ADR-0089 rule 5).
+ */
+export const configLabelSchema = z.object({
+  label: z
+    .string({ message: E.configLabelInvalid })
+    .trim()
+    .max(MAX_CONFIG_LABEL_LENGTH, { message: E.configLabelInvalid })
+    .nullable()
+    .transform((label) => (label === '' ? null : label)),
+});
+
+export type ConfigLabelBody = z.infer<typeof configLabelSchema>;

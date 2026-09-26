@@ -1,0 +1,127 @@
+{
+  "$comment": [
+    "How a served config line is named (F-307-g, F-307-h, ADR-0089).",
+    "",
+    "The stored lines are served by two readers in two languages: billing's",
+    "config list (TypeScript, the panel's copy) and sub-service (Go, `/sub`).",
+    "A copied line and an imported `/sub` must show the same name, and nothing",
+    "can be imported across that boundary, so these cases plus a test on each",
+    "side replace the import that does not exist (the delta.json pattern). The",
+    "TypeScript half is billing-service/src/app/traffic/line-names.spec.ts; the",
+    "Go half is sub-service/internal/sub/line_names_test.go.",
+    "",
+    "A line's base name: the buyer's `label`, else `platformTemplate` with",
+    "`{region}` as the panel's region; an empty base keeps the panel's own name",
+    "and takes no part in numbering. The Grant is named as one list: configs",
+    "not retired whose lines are their current client's, oldest first (createdAt,",
+    "id), each config's lines in order, BEFORE a reader drops what it does not",
+    "serve, so both readers number alike. A name already given in the Grant",
+    "gets ` 2`, ` 3`, ... (the first not yet given).",
+    "",
+    "Naming a line: `vmess://` + base64 JSON gets `ps` (re-encoded as base64 of",
+    "the JSON; key order is not part of the contract, so those cases compare",
+    "the decoded object, `expectVmess`); any other `scheme://` line gets its",
+    "`#fragment` replaced with encodeURIComponent(name); anything else is",
+    "answered unchanged."
+  ],
+  "platformTemplate": "{region}",
+  "maxLabelLength": 40,
+  "lineCases": [
+    {
+      "why": "a fragment is replaced",
+      "line": "vless://u@de.example:443?type=tcp&security=tls#DE-1-tx_ab12",
+      "name": "home",
+      "expect": "vless://u@de.example:443?type=tcp&security=tls#home"
+    },
+    {
+      "why": "a line with no fragment gets one",
+      "line": "trojan://p@de.example:443?security=tls",
+      "name": "work",
+      "expect": "trojan://p@de.example:443?security=tls#work"
+    },
+    {
+      "why": "the name is encodeURIComponent'd: Persian, space, emoji, reserved characters",
+      "line": "vless://u@h:1?type=ws#old",
+      "name": "آلمان 2 🚀 a#b&c/d",
+      "expect": "vless://u@h:1?type=ws#%D8%A2%D9%84%D9%85%D8%A7%D9%86%202%20%F0%9F%9A%80%20a%23b%26c%2Fd"
+    },
+    {
+      "why": "encodeURIComponent's unreserved set stays as it is",
+      "line": "ss://YWVzOnB3@h:8388#x",
+      "name": "A-z_0.9!~*'()",
+      "expect": "ss://YWVzOnB3@h:8388#A-z_0.9!~*'()"
+    },
+    {
+      "why": "a wireguard line is a URI like any other",
+      "line": "wireguard://priv%2Bkey@h:51820?publickey=pk#wg",
+      "name": "wg home",
+      "expect": "wireguard://priv%2Bkey@h:51820?publickey=pk#wg%20home"
+    },
+    {
+      "why": "a vmess line's name is `ps` inside its base64 JSON",
+      "line": "vmess://ewogICJ2IjogIjIiLAogICJwcyI6ICJERS0xLXR4X2FiMTIiLAogICJhZGQiOiAiZGUuZXhhbXBsZSIsCiAgInBvcnQiOiA0NDMsCiAgImlkIjogInUiCn0=",
+      "name": "آلمان",
+      "expectVmess": { "v": "2", "ps": "آلمان", "add": "de.example", "port": 443, "id": "u" }
+    },
+    {
+      "why": "a vmess line that is not base64 JSON is named as a URI",
+      "line": "vmess://u@h:443?type=tcp#old",
+      "name": "n",
+      "expect": "vmess://u@h:443?type=tcp#n"
+    },
+    {
+      "why": "a line that is not a URI is answered unchanged",
+      "line": "[Interface]\nPrivateKey = k",
+      "name": "n",
+      "expect": "[Interface]\nPrivateKey = k"
+    }
+  ],
+  "grantCases": [
+    {
+      "why": "no label: the platform template names every line; the second line of a config is numbered",
+      "configs": [{ "region": "آلمان", "label": null, "lines": 2 }],
+      "expectNames": [["آلمان", "آلمان 2"]]
+    },
+    {
+      "why": "two configs in one region are numbered across the Grant, not each from 1",
+      "configs": [
+        { "region": "آلمان", "label": null, "lines": 1 },
+        { "region": "آلمان", "label": null, "lines": 1 },
+        { "region": "هلند", "label": null, "lines": 1 }
+      ],
+      "expectNames": [["آلمان"], ["آلمان 2"], ["هلند"]]
+    },
+    {
+      "why": "a buyer's label wins over the template",
+      "configs": [
+        { "region": "آلمان", "label": "خانه", "lines": 2 },
+        { "region": "آلمان", "label": null, "lines": 1 }
+      ],
+      "expectNames": [["خانه", "خانه 2"], ["آلمان"]]
+    },
+    {
+      "why": "a number already taken by a label is skipped",
+      "configs": [
+        { "region": "x", "label": "a 2", "lines": 1 },
+        { "region": "x", "label": "a", "lines": 2 }
+      ],
+      "expectNames": [["a 2"], ["a", "a 3"]]
+    },
+    {
+      "why": "an empty region and no label keep the panel's own name (null) and take no number",
+      "configs": [
+        { "region": "", "label": null, "lines": 2 },
+        { "region": "x", "label": null, "lines": 1 }
+      ],
+      "expectNames": [[null, null], ["x"]]
+    },
+    {
+      "why": "a config with no lines takes no name",
+      "configs": [
+        { "region": "x", "label": null, "lines": 0 },
+        { "region": "x", "label": null, "lines": 1 }
+      ],
+      "expectNames": [[], ["x"]]
+    }
+  ]
+}

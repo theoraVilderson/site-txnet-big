@@ -25,7 +25,7 @@ import { RATE_LIMIT_KEY, RateLimitBucket, type RateLimitOptions, runWithTenant }
 import { ConfigActionRefused } from './config-actions';
 import { CONFIG_ACTION_FAILED, MAX_BULK_CONFIGS, UserConfigsService } from './user-configs';
 import { UserConfigsController } from './user-configs.controller';
-import { configActionSchema } from './user-configs.schema';
+import { configActionSchema, configLabelSchema } from './user-configs.schema';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -53,13 +53,22 @@ function configRow(overrides: Record<string, unknown> = {}) {
     linkLines: ['vless://uuid-now@de.example:443?type=tcp#de-1'],
     linksRemoteId: 'remote-now' as string | null,
     linksCapturedAt: new Date('2026-09-23T09:00:00Z') as Date | null,
+    userLabel: null as string | null,
     panel: { region: 'de-fra', driverType: DriverType.marzban as DriverType, ovpnProfile: null as string | null },
     ...overrides,
   };
 }
 
-function build(opts: { grant?: { id: string } | null; configs?: ReturnType<typeof configRow>[] } = {}) {
-  const asked: { grantWhere?: unknown; configWhere?: unknown; select?: unknown; orderBy?: unknown; transactions: number } = { transactions: 0 };
+function build(opts: { grant?: { id: string } | null; configs?: ReturnType<typeof configRow>[]; updated?: number } = {}) {
+  const asked: {
+    grantWhere?: unknown;
+    configWhere?: unknown;
+    select?: unknown;
+    orderBy?: unknown;
+    updateWhere?: unknown;
+    updateData?: unknown;
+    transactions: number;
+  } = { transactions: 0 };
   const tx = {
     $executeRaw: async () => 0,
     grant: {
@@ -69,6 +78,11 @@ function build(opts: { grant?: { id: string } | null; configs?: ReturnType<typeo
       },
     },
     config: {
+      updateMany: async (args: { where: unknown; data: unknown }) => {
+        asked.updateWhere = args.where;
+        asked.updateData = args.data;
+        return { count: opts.updated ?? 1 };
+      },
       findMany: async (args: { where: unknown; select: unknown; orderBy: unknown }) => {
         asked.configWhere = args.where;
         asked.select = args.select;
@@ -115,11 +129,30 @@ describe('UserConfigsService.listForGrant', () => {
         regenerateUsedCount: 1,
         maxRegenerateCount: 3,
         lastReconciledAt: '2026-09-23T10:00:00.000Z',
-        lines: ['vless://uuid-now@de.example:443?type=tcp#de-1'],
+        label: null,
+        // Named by the platform template, the panel's region (ADR-0089).
+        lines: ['vless://uuid-now@de.example:443?type=tcp#de-fra'],
         linksCapturedAt: '2026-09-23T09:00:00.000Z',
         login: null,
         ovpnProfile: null,
       },
+    ]);
+  });
+
+  it('names lines by the buyer’s label, numbering over the whole Grant, and skips dead lines when numbering', async () => {
+    const line = (h: string) => `vless://uuid-now@${h}:443?type=tcp#raw`;
+    const { service, inTenant } = build({
+      configs: [
+        configRow({ id: C1, userLabel: 'خانه', linkLines: [line('a'), line('b')] }),
+        configRow({ id: C2, uuid: 'uuid-new', linkLines: [line('dead')] }),
+        configRow({ id: C3, linkLines: [line('c')] }),
+      ],
+    });
+    const rows = await inTenant(() => service.listForGrant(USER, GRANT));
+    expect(rows.map((r) => [r.label, r.lines])).toEqual([
+      ['خانه', [`${line('a').replace('#raw', '')}#${encodeURIComponent('خانه')}`, `${line('b').replace('#raw', '')}#${encodeURIComponent('خانه 2')}`]],
+      [null, []],
+      [null, [line('c').replace('#raw', '#de-fra')]],
     ]);
   });
 
@@ -208,6 +241,21 @@ describe('UserConfigsService.listForGrant', () => {
   });
 });
 
+describe('UserConfigsService.setLabel (F-307-g)', () => {
+  it('writes only the label, on the gate’s user’s own live config', async () => {
+    const { service, asked, inTenant } = build();
+    await inTenant(() => service.setLabel(USER, C1, 'خانه'));
+    expect(asked.updateWhere).toEqual({ id: C1, userId: USER, status: { not: ConfigStatus.retired } });
+    // Display only: nothing for the panel, no desired state touched.
+    expect(asked.updateData).toEqual({ userLabel: 'خانه' });
+  });
+
+  it('refuses another user’s, a retired or a missing config as `config_not_found`', async () => {
+    const { service, inTenant } = build({ updated: 0 });
+    await expect(inTenant(() => service.setLabel(USER, C1, null))).rejects.toMatchObject({ reason: 'config_not_found' });
+  });
+});
+
 describe('UserConfigsService.act', () => {
   it('runs each config in its own transaction, as the gate’s user', async () => {
     const { service, actions, asked, inTenant } = build();
@@ -272,6 +320,20 @@ describe('configActionSchema', () => {
   });
 });
 
+describe('configLabelSchema', () => {
+  it('trims a label, and reads an empty one as the default', () => {
+    expect(configLabelSchema.parse({ label: '  خانه  ' })).toEqual({ label: 'خانه' });
+    expect(configLabelSchema.parse({ label: '   ' })).toEqual({ label: null });
+    expect(configLabelSchema.parse({ label: null })).toEqual({ label: null });
+  });
+
+  it('refuses a label past 40 characters, and a missing one', () => {
+    expect(configLabelSchema.safeParse({ label: 'x'.repeat(40) }).success).toBe(true);
+    expect(configLabelSchema.safeParse({ label: 'x'.repeat(41) }).success).toBe(false);
+    expect(configLabelSchema.safeParse({}).success).toBe(false);
+  });
+});
+
 describe('UserConfigsController', () => {
   it('passes the gate’s user, and answers another user’s Grant as a 404', async () => {
     const configs = {
@@ -303,5 +365,23 @@ describe('UserConfigsController', () => {
     expect(readLimit.key(req(USER) as never)).toBe(`${RateLimitBucket.CONFIG_LIST}:${USER}`);
     expect(actLimit.key(req(USER) as never)).toBe(`${RateLimitBucket.CONFIG_ACTION}:${USER}`);
     expect(actLimit.configKey).toBe('CONFIG_ACTION_RATE_LIMIT');
+  });
+
+  it('names a config under PUT, the acting bucket, and answers another user’s config as a 404', async () => {
+    const setLabel = UserConfigsController.prototype.setLabel;
+    expect(Reflect.getMetadata(METHOD_METADATA, setLabel)).toBe(2); // PUT
+    expect(Reflect.getMetadata(PATH_METADATA, setLabel)).toBe('configs/:configId/label');
+    expect((Reflect.getMetadata(RATE_LIMIT_KEY, setLabel) as RateLimitOptions).key(req(USER) as never)).toBe(
+      `${RateLimitBucket.CONFIG_ACTION}:${USER}`,
+    );
+
+    const configs = {
+      setLabel: vi.fn(async () => {
+        throw new ConfigActionRefused('config_not_found', C1);
+      }),
+    };
+    const controller = new UserConfigsController(configs as never, {} as never);
+    await expect(controller.setLabel(C1, { label: 'x' }, req(USER) as never)).rejects.toBeInstanceOf(NotFoundException);
+    expect(configs.setLabel).toHaveBeenCalledWith(USER, C1, 'x');
   });
 });

@@ -40,10 +40,13 @@ for the panel, and `sub-service` (Go) for `/sub`.
 3. **Resolution order:** the buyer's `userLabel`, then the tenant's template,
    then the platform template, then the panel's own name. The platform
    template is `{region}`, the panel's region as the admin wrote it
-   (e.g. `آلمان`). A config's second and later lines get ` 2`, ` 3` so no two
-   lines share a name in an app.
+   (e.g. `آلمان`). A name already given in the Grant gets ` 2`, ` 3` (the
+   first free), so no two lines share a name in an app, even two configs in
+   one region. Both readers number the same list: configs not retired whose
+   lines are their current client's, oldest first, before `/sub` drops what
+   it does not serve.
 4. **The default is a template evaluated per request, not a value stored at
-   create.** A tenant's template (`{brand}`, `{region}`, `{n}`) lives in
+   create.** A tenant's template (`{brand}`, `{region}`; numbering stays automatic) lives in
    that tenant's branding settings, because in a white-label product the
    name in the buyer's app belongs to the reseller's brand. A changed
    template reaches every config without a stored label at once, with no

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, NotFoundException, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, NotFoundException, Param, ParseUUIDPipe, Post, Put, Req } from '@nestjs/common';
 import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
@@ -8,7 +8,7 @@ import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { ConfigActionRefused } from './config-actions';
 import { GrantUsageService } from './grant-usage';
 import { UserConfigsService } from './user-configs';
-import { ConfigActionBody, configActionSchema } from './user-configs.schema';
+import { ConfigActionBody, configActionSchema, ConfigLabelBody, configLabelSchema } from './user-configs.schema';
 
 const E = BackendI18nKeys.errors.billing;
 
@@ -82,5 +82,32 @@ export class UserConfigsController {
   })
   async act(@Body(new ZodValidationPipe(configActionSchema)) body: ConfigActionBody, @Req() req: Request) {
     return { action: body.action, results: await this.configs.act(identityOf(req).userId, body.action, body.configIds) };
+  }
+
+  /**
+   * The buyer names one of their configs, or clears the name (F-307-g,
+   * ADR-0089). Under `CONFIG_ACTION`: a write, and cheap to spend on naming.
+   */
+  @TenantCapability('subscriptionLink')
+  @Put('configs/:configId/label')
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.CONFIG_ACTION, identityOf(req).userId),
+    configKey: 'CONFIG_ACTION_RATE_LIMIT',
+    windowSec: 900,
+  })
+  async setLabel(
+    @Param('configId', ParseUUIDPipe) configId: string,
+    @Body(new ZodValidationPipe(configLabelSchema)) body: ConfigLabelBody,
+    @Req() req: Request,
+  ) {
+    try {
+      await this.configs.setLabel(identityOf(req).userId, configId, body.label);
+      return { configId, label: body.label };
+    } catch (e) {
+      if (e instanceof ConfigActionRefused && e.reason === 'config_not_found') {
+        throw new NotFoundException({ i18nKey: E.configNotFound, reason: e.reason, message: `${e.name}: ${e.message}` });
+      }
+      throw e;
+    }
   }
 }

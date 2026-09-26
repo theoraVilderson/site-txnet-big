@@ -4,6 +4,7 @@ import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionRefused, ConfigActionsService, type ConfigActionRejection } from './config-actions';
+import { nameGrantLines } from './line-names';
 
 /** What a user may do to their own config from the panel (user, 2026-09-23). Enable/disable is an operator's switch; a move needs a panel list users do not have. */
 export const USER_CONFIG_ACTIONS = ['regenerate', 'retire'] as const;
@@ -37,7 +38,9 @@ export type UserConfigView = {
   regenerateUsedCount: number;
   maxRegenerateCount: number;
   lastReconciledAt: string | null;
-  /** The panel's link lines for the client this config is now, in the panel's order. Empty until captured, or while a regenerate waits for the next capture. */
+  /** The buyer's own name for it (F-307-g); `null` is the default name. */
+  label: string | null;
+  /** The panel's link lines for the client this config is now, in the panel's order, named as `/sub` names them (ADR-0089). Empty until captured, or while a regenerate waits for the next capture. */
   lines: string[];
   /** When `lines` were captured; `null` when they are not this client's. Set with `lines` empty is a panel that gives none. */
   linksCapturedAt: string | null;
@@ -68,6 +71,7 @@ const CONFIG_VIEW_COLUMNS = {
   linkLines: true,
   linksCapturedAt: true,
   linksRemoteId: true,
+  userLabel: true,
   panel: { select: { region: true, driverType: true, ovpnProfile: true } },
 } as const;
 
@@ -105,10 +109,15 @@ export class UserConfigsService {
         select: CONFIG_VIEW_COLUMNS,
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       });
-      return rows.map((r) => {
-        // `/sub`'s rule (network contract.links.md): lines read from another
-        // client are dead links, so they wait for the next capture.
-        const current = r.linksUuid !== null && r.linksUuid === r.uuid;
+      // `/sub`'s rule (network contract.links.md): lines read from another
+      // client are dead links, so they wait for the next capture.
+      const isCurrent = (r: (typeof rows)[number]) => r.linksUuid !== null && r.linksUuid === r.uuid;
+      // Named over this whole list, as `/sub` names it (ADR-0089 rule 3).
+      const named = nameGrantLines(
+        rows.map((r) => ({ label: r.userLabel, region: r.panel.region, lines: isCurrent(r) ? r.linkLines : [] })),
+      );
+      return rows.map((r, i) => {
+        const current = isCurrent(r);
         // A User Manager user is named after its uuid and logs in with it
         // (network contract.drivers.md): the key the capture confirmed is
         // exactly the login the router holds now (F-307-d, user 2026-09-26).
@@ -128,12 +137,28 @@ export class UserConfigsService {
           regenerateUsedCount: r.regenerateUsedCount,
           maxRegenerateCount: r.maxRegenerateCount,
           lastReconciledAt: r.lastReconciledAt?.toISOString() ?? null,
-          lines: current ? r.linkLines : [],
+          label: r.userLabel,
+          lines: named[i],
           linksCapturedAt: current ? (r.linksCapturedAt?.toISOString() ?? null) : null,
           login,
           ovpnProfile: login && r.protocol === ConfigProtocol.openvpn ? r.panel.ovpnProfile : null,
         };
       });
+    });
+  }
+
+  /**
+   * Sets or clears the buyer's name for one of their configs (F-307-g,
+   * ADR-0089). Display only: nothing is queued for its panel. A config of
+   * another user, or retired, is `config_not_found`, as for an action.
+   */
+  setLabel(userId: string, configId: string, label: string | null): Promise<void> {
+    return tenantTransaction(this.prisma, async (tx) => {
+      const { count } = await tx.config.updateMany({
+        where: { id: configId, userId, status: { not: ConfigStatus.retired } },
+        data: { userLabel: label },
+      });
+      if (count === 0) throw new ConfigActionRefused('config_not_found', configId);
     });
   }
 
