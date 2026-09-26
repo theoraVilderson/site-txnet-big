@@ -2224,6 +2224,13 @@
       "clear": "Clear search",
       "count": "{{shown}} of {{total}} configs",
       "none": "No config matches “{{query}}”."
+    },
+    "serviceSearch": {
+      "label": "Search services",
+      "placeholder": "Find a service by a config's name or region",
+      "clear": "Clear search",
+      "none": "No service has a config matching “{{query}}”.",
+      "noneCurrent": "No current service has a config matching “{{query}}”; ended services are hidden."
     }
   },
   "systems": {

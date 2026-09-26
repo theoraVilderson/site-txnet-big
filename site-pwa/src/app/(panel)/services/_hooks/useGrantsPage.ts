@@ -34,7 +34,9 @@ export interface GrantsPageState {
 /**
  * One page of the caller's own Grants, plus the names to show them under
  * (F-502-s) — in billing's `current` scope unless `all` is asked (F-502-u).
- * `hidden` is how many `current` left out.
+ * `hidden` is how many `current` left out. `q` is billing's search (F-307-n,
+ * F-307-m): only the Grants holding a live config named like it, and `hidden`
+ * then counts the ended ones that match.
  *
  * **The names are a second read, and a failing one costs only the names.**
  * Billing answers a `nameKey`, not a translated string
@@ -68,7 +70,12 @@ export interface GrantsPageState {
  * reconnects on its own backoff (`lib/realtime.ts`), and `onMissed` is the
  * one read that follows; until then the page shows billing's last answer.
  */
-export function useGrantsPage(page: number, lang: string, scope: GrantScope = "current"): GrantsPageState {
+export function useGrantsPage(
+  page: number,
+  lang: string,
+  scope: GrantScope = "current",
+  q = "",
+): GrantsPageState {
   const [rows, setRows] = useState<GrantRow[] | null>(null);
   const [total, setTotal] = useState(0);
   const [hidden, setHidden] = useState(0);
@@ -81,7 +88,7 @@ export function useGrantsPage(page: number, lang: string, scope: GrantScope = "c
   // What this read *is*, as one string: loading is derived rather than stored,
   // so the skeleton is up in the render that changed the page rather than one
   // render later (`contract.financial.md`'s hook has the longer note).
-  const key = `${page}|${lang}|${scope}|${asked}`;
+  const key = `${page}|${lang}|${scope}|${q}|${asked}`;
   const [loaded, setLoaded] = useState<string | null>(null);
   const isLoading = loaded !== key;
 
@@ -98,14 +105,19 @@ export function useGrantsPage(page: number, lang: string, scope: GrantScope = "c
 
   // The page the quiet read asks for, synced after render as `pendingIds` is:
   // it is read only from a socket event or the clock, never while rendering.
-  const pageRef = useRef({ page, scope });
+  const pageRef = useRef({ page, scope, q });
   useEffect(() => {
-    pageRef.current = { page, scope };
-  }, [page, scope]);
+    pageRef.current = { page, scope, q };
+  }, [page, scope, q]);
   const quietRead = useCallback(async () => {
     const mine = ++seq.current;
     try {
-      const answer = await billingApi.grants(pageRef.current.page, PAGE_SIZE, pageRef.current.scope);
+      const answer = await billingApi.grants(
+        pageRef.current.page,
+        PAGE_SIZE,
+        pageRef.current.scope,
+        pageRef.current.q,
+      );
       if (mine !== seq.current) return;
       setRows(answer.rows);
       setTotal(answer.total);
@@ -157,7 +169,7 @@ export function useGrantsPage(page: number, lang: string, scope: GrantScope = "c
     (async () => {
       try {
         const [answer, catalogTexts] = await Promise.all([
-          billingApi.grants(page, PAGE_SIZE, scope),
+          billingApi.grants(page, PAGE_SIZE, scope, q),
           catalogApi.texts(lang).then(flattenTexts).catch(() => ({})),
         ]);
         if (!alive || mine !== seq.current) return;
@@ -181,7 +193,7 @@ export function useGrantsPage(page: number, lang: string, scope: GrantScope = "c
     return () => {
       alive = false;
     };
-  }, [page, lang, scope, key]);
+  }, [page, lang, scope, q, key]);
 
   return { rows, total, pageSize: PAGE_SIZE, hidden, texts, isLoading, configsAsked, error, retry };
 }

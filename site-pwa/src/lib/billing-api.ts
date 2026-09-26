@@ -755,7 +755,8 @@ export const billingApi = {
    * **Whose Grants is not a parameter.** The user is the gate's `X-User-Id`,
    * the same shape as the financial page's lists, so there is nothing here to
    * pass and nothing to get wrong. A user with no Grants is an empty page, not
-   * a 404; paging is the only knob the route has.
+   * a 404. `scope` leaves ended Grants out (F-502-u); `q` keeps only the
+   * Grants holding a live config named like it (F-307-m).
    */
   async shopOffers(): Promise<ShopOffer[]> {
     return call<ShopOffer[]>("/offers", { method: "GET" });
@@ -793,8 +794,11 @@ export const billingApi = {
     return call<{ id: string; status: InvoiceStatus }>(`/invoices/${encodeURIComponent(id)}/cancel`, { method: "POST" });
   },
 
-  async grants(page: number, pageSize: number, scope: GrantScope): Promise<GrantsPage> {
-    return call<GrantsPage>(`/gift/grants?page=${page}&pageSize=${pageSize}&scope=${scope}`, { method: "GET" });
+  async grants(page: number, pageSize: number, scope: GrantScope, q = ""): Promise<GrantsPage> {
+    const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize), scope });
+    // Billing trims `q` and reads a blank one as none (F-307-m); none is not sent.
+    if (q.trim() !== "") query.set("q", q.trim());
+    return call<GrantsPage>(`/gift/grants?${query}`, { method: "GET" });
   },
 
   /**

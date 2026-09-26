@@ -246,7 +246,7 @@ describe("useGrantsPage — which Grants (user, 2026-09-26)", () => {
     const { result } = renderHook(() => useGrantsPage(1, "en"));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(grants).toHaveBeenCalledWith(1, 20, "current");
+    expect(grants).toHaveBeenCalledWith(1, 20, "current", "");
     expect(result.current.hidden).toBe(3);
   });
 
@@ -257,6 +257,17 @@ describe("useGrantsPage — which Grants (user, 2026-09-26)", () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     rerender({ scope: "all" });
-    await waitFor(() => expect(grants).toHaveBeenLastCalledWith(1, 20, "all"));
+    await waitFor(() => expect(grants).toHaveBeenLastCalledWith(1, 20, "all", ""));
+  });
+
+  it("hands billing the search, and reads again when it changes (F-307-n)", async () => {
+    const { result, rerender } = renderHook(({ q }) => useGrantsPage(1, "en", "current", q), {
+      initialProps: { q: "" },
+    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    rerender({ q: "de-1" });
+    expect(result.current.isLoading).toBe(true);
+    await waitFor(() => expect(grants).toHaveBeenLastCalledWith(1, 20, "current", "de-1"));
   });
 });

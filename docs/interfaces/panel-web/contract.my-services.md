@@ -76,7 +76,7 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
    answers no `sourceLang` and a SKU a user can quote to support beats a
    language they may not read. A Grant with no catalog item (`variant: null`)
    has neither and shows "unnamed service".
-7. **The URL is the page.** `?page=` is read from and written to the query
+7. **The URL is the page.** `?page=` (and `?all=1`, `?q=`) is read from and written to the query
    string, so a page of services survives a reload and can be sent to support;
    nothing is mirrored into a store beside it. Page 1 writes no parameter.
    `Pagination` owns no navigation ([contract.kit.md](contract.kit.md) rule 6).
@@ -188,8 +188,12 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
     hard"). From 6 configs, one box per row narrows both the lines and
     "manage" by name, label, protocol or region (ی/ي, ک/ك and ۲/2 alike);
     "copy all", "select all" and a bulk action reach only the configs shown.
-    The list is the Grant's whole list, so this never shortens a page;
-    finding a *service* by a config is billing's (F-307-m).
+    The list is the Grant's whole list, so this never shortens a page.
+19. **A service is found by its configs, and billing finds it** (F-307-n over
+    billing's `q`, F-307-m). One box above the list, shown once there is a
+    service or a search, written to `?q=` beside `?page=`/`?all=1` when typing
+    rests (a `replace`, back to page 1); paging and "show ended" keep it. No
+    match names the query — never "no services". Billing folds no ی/ي.
 
 ## Proof
 
@@ -230,7 +234,9 @@ asked. F-307-i: one rename per config, a save that re-reads and copies the
 line billing named, an empty name clearing to the default, Escape writing
 nothing, and a refusal keeping the field. F-307-l: the matcher's folding,
 no box under 6 configs, the lines narrowed with a "none" sentence, and a
-bulk delete reaching only the configs shown.
+bulk delete reaching only the configs shown. F-307-n: `services/search.test.tsx`
+— the URL's `q` asked for, a settled write at page 1, paging and "show
+ended" keeping it, the no-match sentence; `useGrantsPage` hands `q` to billing.
 
 ## Not covered
 
@@ -239,6 +245,5 @@ and reaches its card only after the next capture. A User Manager config's login 
 its router's `.ovpn` (answered since F-307-d) are shown by F-307-e. Per-config bars and a window other than 30 days are nobody's row.
 A server's own "new link" (F-027-ac) is a config credential, not the
 subscription link, whose reset reads "make a new subscription link". Moving a config or
-adding one from here is nobody's row. Filtering
-or searching the list is nobody's row; so is renewing a service from here, which
+adding one from here is nobody's row; so is renewing a service from here, which
 needs a checkout the panel does not have yet.
