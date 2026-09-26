@@ -78,6 +78,10 @@ type DesiredConfig struct {
 	// create a client. The pass then writes down the inbound the client is
 	// actually on (Outcome.InboundRemoteID, F-027-ch).
 	InboundResolved bool
+	// CredentialGroupID is the purchase the config is one client of; its
+	// clients on the panel are one account (F-114-n). Empty is a config of
+	// no group.
+	CredentialGroupID string
 	// Enabled is `desiredEnabled`; Present is `desiredRemote = present`.
 	Enabled bool
 	Present bool
@@ -269,6 +273,7 @@ func (v *Provisioning) PassOver(ctx context.Context, p collect.Panel, clients []
 	}
 
 	inbounds := &inboundCache{driver: p.Driver}
+	names := newAccountNames(clients)
 	var outcomes []Outcome
 	for _, row := range rows {
 		report.Checked++
@@ -281,7 +286,7 @@ func (v *Provisioning) PassOver(ctx context.Context, p collect.Panel, clients []
 			Was: row.Drift, Now: identityVerdict(row, match, matched),
 			RepairCount: row.RepairCount, RepairedAt: row.RepairedAt,
 		}
-		outcome, finding := v.one(ctx, p, row, match, matched, stopped, inbounds, at, &report)
+		outcome, finding := v.one(ctx, p, row, match, matched, stopped, inbounds, names, at, &report)
 		if finding != nil {
 			report.Findings = append(report.Findings, *finding)
 			switch finding.Action {
@@ -336,7 +341,7 @@ func (v *Provisioning) takeInventory(ctx context.Context, p collect.Panel, inbou
 // what it should carry. Every write goes to the client the match found.
 func (v *Provisioning) one(
 	ctx context.Context, p collect.Panel, row DesiredConfig, match Match, matched, stopped bool,
-	inbounds *inboundCache, at time.Time, report *ProvisionReport,
+	inbounds *inboundCache, names *accountNames, at time.Time, report *ProvisionReport,
 ) (*Outcome, *ProvisionFinding) {
 	outcome := func(remoteID string, state EnforcementState) *Outcome {
 		return &Outcome{
@@ -388,13 +393,13 @@ func (v *Provisioning) one(
 				report.Skipped++
 				return nil, found(ActionContested, row.RemoteID, nil)
 			}
-			o, f := v.create(ctx, p, row, inbounds, report, outcome, found, refused)
+			o, f := v.create(ctx, p, row, inbounds, names, report, outcome, found, refused)
 			if f != nil && f.Action == ActionCreated {
 				f.Action = ActionRecreated
 			}
 			return o, f
 		}
-		return v.create(ctx, p, row, inbounds, report, outcome, found, refused)
+		return v.create(ctx, p, row, inbounds, names, report, outcome, found, refused)
 	}
 
 	if row.RemoteID == "" {
@@ -468,7 +473,7 @@ func (v *Provisioning) one(
 }
 
 func (v *Provisioning) create(
-	ctx context.Context, p collect.Panel, row DesiredConfig, inbounds *inboundCache, report *ProvisionReport,
+	ctx context.Context, p collect.Panel, row DesiredConfig, inbounds *inboundCache, names *accountNames, report *ProvisionReport,
 	outcome func(string, EnforcementState) *Outcome,
 	found func(Action, string, error) *ProvisionFinding,
 	refused func(string, error) (*Outcome, *ProvisionFinding),
@@ -500,9 +505,10 @@ func (v *Provisioning) create(
 		return nil, found(ActionNoInbound, "", nil)
 	}
 
+	key, name := names.For(row)
 	created, err := p.Driver.CreateClient(ctx, driver.CreateClientRequest{
 		ClaimTag: row.ClaimTag, UUID: row.UUID, InboundRemoteID: inbound.RemoteID,
-		Protocol: row.Protocol, DataLimitBytes: ceiling, NoDataLimit: row.Unlimited, Enabled: row.Enabled,
+		SubscriptionKey: key, Name: name, Protocol: row.Protocol, DataLimitBytes: ceiling, NoDataLimit: row.Unlimited, Enabled: row.Enabled,
 	})
 	if err != nil {
 		return refused("", err)

@@ -534,10 +534,13 @@ func (d *Driver) ListClients(ctx context.Context) ([]driver.RemoteClient, error)
 	return out, nil
 }
 
-// CreateClient names the client after its uuid without hyphens, as its email:
-// unique on the panel, and never changed, because the email is the key of the
-// client's counters. It is created under its first block and its enabled
-// state in one request.
+// CreateClient names the client by its email: the name provisioning chose
+// (`<subscription key>-<n>`, F-114-n), else its uuid without hyphens. Unique on
+// the panel, and never changed, because the email is the key of the client's
+// counters. The clients of one purchase share the subscription key as their
+// subId, so the panel shows them as one account; a client of no purchase gets
+// a random one. It is created under its first block and its enabled state in
+// one request.
 func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientRequest) (driver.RemoteClient, error) {
 	const op = "CreateClient"
 	if !isProtocol(req.Protocol) {
@@ -549,12 +552,18 @@ func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientReques
 		return driver.RemoteClient{}, driver.NewFault(driver.FaultProtocol, op, 0,
 			fmt.Errorf("inbound %q is not an x-ui inbound id", req.InboundRemoteID))
 	}
-	subID, err := newSubID()
-	if err != nil {
-		return driver.RemoteClient{}, driver.NewFault(driver.FaultProtocol, op, 0, err)
+	subID := req.SubscriptionKey
+	if subID == "" {
+		if subID, err = newSubID(); err != nil {
+			return driver.RemoteClient{}, driver.NewFault(driver.FaultProtocol, op, 0, err)
+		}
+	}
+	email := req.Name
+	if email == "" {
+		email = strings.ReplaceAll(req.UUID, "-", "")
 	}
 	c := client{
-		Email:      strings.ReplaceAll(req.UUID, "-", ""),
+		Email:      email,
 		Enable:     req.Enabled,
 		TotalGB:    limit(req.NoDataLimit, req.DataLimitBytes),
 		ExpiryTime: expiry(req.ExpiresAt),

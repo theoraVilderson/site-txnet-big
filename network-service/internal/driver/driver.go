@@ -141,6 +141,14 @@ type CreateClientRequest struct {
 	UUID            string
 	InboundRemoteID string
 	Protocol        string
+	// SubscriptionKey is what every client of one purchase on this panel
+	// shares (F-114-n): x-ui's subId, so the panel shows one account. Empty is
+	// a client of its own. A family with no such field ignores it.
+	SubscriptionKey string
+	// Name is the client's name where the family takes one from us (x-ui's
+	// email): `<SubscriptionKey>-<n>`, free on the panel. Empty is the
+	// family's own default.
+	Name string
 	// DataLimitBytes is the ceiling to create the client under. A metered
 	// client is created with its first block already written, never with no
 	// limit and a ceiling applied afterwards — the gap between the two is

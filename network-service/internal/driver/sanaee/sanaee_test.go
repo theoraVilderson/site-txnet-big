@@ -418,6 +418,32 @@ func TestZeroCeilingIsNeverUnlimited(t *testing.T) {
 
 // A client is created under its claim tag and first block, answers every
 // matching key back, and never with an auto-reset that zeroes its counter.
+// One purchase is one account (F-114-n): its clients carry the key provisioning
+// gave them as their subId, under the names it chose, each with its own uuid.
+func TestClientsOfOnePurchaseShareOneSubIdUnderTheirOwnNames(t *testing.T) {
+	f, d := open(t)
+	ctx := context.Background()
+	for i, uuid := range []string{"8a3c1e2b-0000-4000-8000-00000000abcd", "8a3c1e2b-0000-4000-8000-00000000abce"} {
+		name := "k3y0000000000000-" + strconv.Itoa(i+1)
+		created, err := d.CreateClient(ctx, driver.CreateClientRequest{
+			ClaimTag: "cfg_" + strconv.Itoa(i), UUID: uuid, InboundRemoteID: "1", Protocol: "vless",
+			SubscriptionKey: "k3y0000000000000", Name: name, DataLimitBytes: 1 << 30, Enabled: true,
+		})
+		if err != nil {
+			t.Fatalf("CreateClient: %v", err)
+		}
+		if created.RemoteID != name {
+			t.Errorf("remote id = %q, want the chosen name %q as the email", created.RemoteID, name)
+		}
+		f.mu.Lock()
+		far := *f.clients[name]
+		f.mu.Unlock()
+		if far.SubID != "k3y0000000000000" || far.ID != uuid {
+			t.Errorf("panel holds subId %q, uuid %q: want the purchase's key and the client's own uuid", far.SubID, far.ID)
+		}
+	}
+}
+
 func TestCreateClientRoundTrip(t *testing.T) {
 	f, d := open(t)
 	ctx := context.Background()

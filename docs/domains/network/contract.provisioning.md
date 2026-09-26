@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 14
+version: 15
 updated: 2026-09-26
 ---
 
@@ -122,6 +122,29 @@ pass writes the panel's inventory of inbounds when it is due (rule 1 there).
 copied from its Grant at create, is what was sold, so there is no allocation to
 wait for and none to run out of: `CreateClient` goes out with `NoDataLimit`, and
 a rebuilt client gets no limit back where a limited one gets its first block.
+
+## One purchase, one account (F-114-n)
+
+Every config of a placement carries one `credentialGroupId` (`provisionForGroup`,
+group fulfilment reuses the Grant's), and **its clients on a panel are one
+account**: they share a subscription key and are named `<key>-1`, `<key>-2`,
+each with its own `uuid` (invariant 1). Reported 2026-09-26 (user): an `all`
+purchase showed on x-ui as two unrelated accounts.
+
+- The key is `converge.SubscriptionKey(credentialGroupId)`
+  (`internal/converge/account.go`): 16 of `[a-z0-9]` from a SHA-256 of the id —
+  derived, never stored, so a pick added later joins the same account; hashed,
+  so the id is not readable off the panel. A config of no group gets none.
+- A create asks for `CreateClientRequest.SubscriptionKey` and `.Name`. The name
+  is the lowest `<key>-<n>` no client of this pass's `ListClients` holds (ours
+  or not) and none handed out earlier in the pass; a recreate (`missing`)
+  keeps its `remoteId` while it is free. Only a create names a client —
+  existing clients are never renamed, since the name keys their counters.
+- **Honoured by alireza0 and 3x-ui v2 (`sanaee`) only**: key → `subId`, name →
+  `email` (`contract.xui.md`). Every other family ignores both. 3x-ui v3
+  (`three_x_ui`) is left out on purpose: its lines are read off the sub server
+  by `subId` (`contract.links.md`), so a shared one would hand every sibling's
+  lines to each config.
 
 **Staging.** Desired state is read through `converge.Desired` and shares
 through `converge.Allocations`; `PostgresDesired` and `PostgresAllocations`

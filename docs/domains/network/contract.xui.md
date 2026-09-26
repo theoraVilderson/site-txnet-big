@@ -41,7 +41,8 @@ Marzban.
 | `POST /login` (form), session cookie | made on the first call. `{success, msg, obj}` replies, and `success=false` on a 200 is a failure |
 | `GET /xui/API/inbounds/` | `GetUsage`, `ListClients`, `ListInbounds`, and `GetUsageFor` (filtered out of it) |
 | `addClient`, `updateClient/{uuid}`, `{id}/delClient/{uuid}`, `{id}/resetClientTraffic/{email}` | the lifecycle, under `/xui/API/inbounds/`. A trojan client is keyed by its password |
-| `email` | `RemoteID`: the uuid without hyphens, never changed (it keys the counters) |
+| `email` | `RemoteID`: the name provisioning chose (`<key>-<n>`, F-114-n), else the uuid without hyphens; never changed (it keys the counters) |
+| `subId` | the purchase's subscription key, shared by its clients on the panel (F-114-n, `contract.provisioning.md`); random for a client of no purchase |
 | `comment` — not x-ui's | `Label`, the claim tag (rule 2) |
 | `id` (or `password` for trojan) | `UUID` |
 | `clientStats.up` / `.down` / `.total` | `UpBytes` / `DownBytes` / `DataLimitBytes` |

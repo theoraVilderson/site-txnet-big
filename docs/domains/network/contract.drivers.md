@@ -106,7 +106,7 @@ inbound's `clientStats`.
 | `POST /login` (form), session cookie | made on the first call. Every reply is `{success, msg, obj}`, and `success=false` on a 200 is a failure. A `404` (v2 hides its API) or `401` (older versions) is an expired session: **one** login, one retry |
 | `GET /panel/api/inbounds/list` | `GetUsage`, `ListClients`, `ListInbounds`, and `GetUsageFor` (a subset is filtered out of it, since `getClientTraffics` reads one email per request) |
 | `addClient`, `updateClient/{uuid}`, `{id}/delClient/{uuid}` | the lifecycle. A trojan client is keyed by its password |
-| `email` | `RemoteID`: the uuid without hyphens. It is unique on the panel and keys the counters, so it is never changed |
+| `email`, `subId` | `RemoteID`: the chosen `<key>-<n>`, else the uuid without hyphens — unique, keys the counters, never changed. `subId`: the purchase's key (F-114-n, `contract.xui.md`) |
 | `comment` | `Label`, the claim tag |
 | `id` (or `password` for trojan) | `UUID` |
 | `clientStats.up` / `.down` | `UpBytes` / `DownBytes` |

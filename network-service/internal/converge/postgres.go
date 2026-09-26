@@ -42,7 +42,7 @@ var _ Desired = PostgresDesired{}
 //
 // The inbound is the config's own (F-114-b). A row placed before it names
 // none, and takes the lowest picked inbound of its protocol on the panel —
-// still only a picked one: with nothing picked it is '' and `no_inbound` —
+// still only a picked one: with nothing picked it is ” and `no_inbound` —
 // and only one in the pool: never an inbound a group holds (F-027-ch). Which
 // group the row is for lives outside `network.*` (ADR-0071), so it is never
 // placed on its own group's either; the pass writes down where its client is
@@ -60,7 +60,7 @@ SELECT c.id::text, coalesce(c."remoteId", ''), c."claimTag", c.uuid, c.protocol:
        coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0)::bigint,
        c."enforcementState"::text, c."driftState"::text, c."driftRepairCount", c."driftRepairedAt",
        c."linkLines", coalesce(c."linksRemoteId", ''), coalesce(c."linksUuid", ''), c."linksCapturedAt",
-       c."trafficUnlimited", c."inboundRemoteId" IS NULL
+       c."trafficUnlimited", c."inboundRemoteId" IS NULL, coalesce(c."credentialGroupId"::text, '')
   FROM network.config c
   LEFT JOIN network.config_counter_state s ON s."configId" = c.id
  WHERE c."panelId" = $1::uuid
@@ -81,7 +81,7 @@ func (s PostgresDesired) For(ctx context.Context, panelID string) ([]DesiredConf
 		if err := rows.Scan(&d.ConfigID, &d.RemoteID, &d.ClaimTag, &d.UUID, &d.Protocol, &d.InboundRemoteID,
 			&d.Enabled, &d.Present, &d.AllocatedBytes, &d.ServedBytes,
 			&state, &drift, &d.RepairCount, &repairedAt,
-			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt, &d.Unlimited, &d.InboundResolved); err != nil {
+			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt, &d.Unlimited, &d.InboundResolved, &d.CredentialGroupID); err != nil {
 			return nil, fmt.Errorf("reading panel %s desired state: %w", panelID, err)
 		}
 		d.State, d.Drift = EnforcementState(state), DriftState(drift)

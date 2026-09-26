@@ -46,13 +46,15 @@ type Config struct {
 }
 
 type client struct {
-	remoteID  string
-	label     string
-	uuid      string
-	inbound   string
-	enabled   bool
-	rateLimit int64
-	expiresAt time.Time
+	remoteID string
+	label    string
+	uuid     string
+	// subscriptionKey is what CreateClient was asked to share (F-114-n).
+	subscriptionKey string
+	inbound         string
+	enabled         bool
+	rateLimit       int64
+	expiresAt       time.Time
 
 	// up and down are the far end's own counters, in full precision. What a
 	// read reports is derived from them: truncated to 32 bits without
@@ -139,6 +141,17 @@ func (p *Panel) Given(remoteID string) {
 	}
 	p.clients[remoteID] = c
 	p.order = append(p.order, remoteID)
+}
+
+// SubscriptionKeyOf is the key the client was created to share, "" for none
+// or no such client.
+func (p *Panel) SubscriptionKeyOf(remoteID string) string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if c := p.clients[remoteID]; c != nil {
+		return c.subscriptionKey
+	}
+	return ""
 }
 
 // Rename is an operator renaming a client on the panel: a new id and the same
@@ -449,9 +462,18 @@ func (p *Panel) CreateClient(ctx context.Context, req driver.CreateClientRequest
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	// A name we chose is taken as x-ui takes an email: as the id, and never
+	// twice on one panel.
 	p.created++
+	remoteID := req.Name
+	if remoteID == "" {
+		remoteID = fmt.Sprintf("remote-%d", p.created)
+	} else if _, taken := p.clients[remoteID]; taken {
+		return driver.RemoteClient{}, driver.NewFault(driver.FaultProtocol, "CreateClient", 0,
+			fmt.Errorf("duplicate name %q", remoteID))
+	}
 	c := &client{
-		remoteID: fmt.Sprintf("remote-%d", p.created), uuid: req.UUID,
+		remoteID: remoteID, uuid: req.UUID, subscriptionKey: req.SubscriptionKey,
 		inbound: req.InboundRemoteID, enabled: req.Enabled,
 		dataLimit: req.DataLimitBytes, rateLimit: req.RateLimitBps, expiresAt: req.ExpiresAt,
 	}
