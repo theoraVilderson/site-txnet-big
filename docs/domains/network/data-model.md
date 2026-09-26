@@ -75,7 +75,7 @@ deleted** (ADR-0075), because desired state is what makes a rebuild a button.
 confirmed, and the gap is the loop's remaining work — what the panel UI shows
 as `in queue`. Collapsed into one, the system believes a ceiling it never
 wrote, which is free traffic at the far end of it and nothing red anywhere.
-`observedRateBps` sizes the horizon (F-027-u); `driftState`/`driftRepairCount`/
+`observedRateBps` sizes the horizon (F-027-u) and the guard band (F-027-co); `driftState`/`driftRepairCount`/
 `driftRepairedAt` are the verdict and 24 h stop (F-027-ab); `credentialGroupId`
 is one group placement, one row per panel (`config_group_panel_once`, F-027-bl) but a drained (`drainedAt`) one, F-027-bp; `walletBackedCeilingBytes` ≥ allocation is a shutdown's
 ceiling (ADR-0078); `linkLines` is what `/sub` serves (contract.links.md); `trafficUnlimited` is its Grant's, copied at create, and such a row holds no ceiling (`config_unlimited_has_no_ceiling`, F-111-r). `userLabel` is the buyer's name for it, display only, never sent to a panel (`config_user_label_shape`: trimmed, 1..40; F-307-f, ADR-0089), stored in one spelling — ي/ى as ی, ك as ک, digits Latin (billing folds on save; F-307-o).

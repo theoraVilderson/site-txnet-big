@@ -91,6 +91,8 @@ type DesiredConfig struct {
 	// ceiling is what is left, not the whole share again.
 	AllocatedBytes *int64
 	ServedBytes    int64
+	// RateBps is `observedRateBps`, what the guard band is sized on (F-027-co).
+	RateBps int64
 	// Unlimited is `trafficUnlimited`, copied from its Grant (F-111-r): the
 	// client carries no limit, so there is no allocation to wait for, and
 	// AllocatedBytes is nil by construction (CHECK
@@ -416,7 +418,7 @@ func (v *Provisioning) one(
 		// usually has none: that is the exception, written and not counted.
 		// The row still follows its client, because a re-key writes nothing.
 		if row.AllocatedBytes != nil {
-			want := PanelCeiling(*row.AllocatedBytes, row.ServedBytes)
+			want := guardedCeiling(p, row)
 			if have := client.DataLimitBytes; have == 0 || have > want {
 				if err := p.Driver.SetClientDataLimit(ctx, client.RemoteID, want); err != nil {
 					return refused(client.RemoteID, err)
@@ -437,7 +439,7 @@ func (v *Provisioning) one(
 		if rebuilt && row.Unlimited {
 			none = true
 		} else if rebuilt && row.AllocatedBytes != nil {
-			limit = PanelCeiling(*row.AllocatedBytes, row.ServedBytes)
+			limit = guardedCeiling(p, row)
 		}
 		err := p.Driver.UpdateClient(ctx, driver.UpdateClientRequest{
 			RemoteID: client.RemoteID, ClaimTag: row.ClaimTag, UUID: row.UUID,
@@ -489,7 +491,7 @@ func (v *Provisioning) create(
 	default:
 		// A new client's counter starts at zero, so everything the config
 		// has already carried is the offset.
-		ceiling = PanelCeiling(*row.AllocatedBytes, row.ServedBytes)
+		ceiling = guardedCeiling(p, row)
 		if ceiling == 0 {
 			report.Skipped++
 			return nil, found(ActionAllowanceExhausted, "", nil)
@@ -667,4 +669,12 @@ func (v *Provisioning) log() *slog.Logger {
 		return v.Log
 	}
 	return slog.Default()
+}
+
+// guardedCeiling is the first ceiling a created or rebuilt client gets: the
+// share less the guard band, in a counter that starts at zero (F-027-co). It is
+// the ceiling pass's figure, so the pass after it finds nothing to lower.
+func guardedCeiling(p collect.Panel, row DesiredConfig) int64 {
+	band := GuardBandBytes(row.RateBps, p.DriverType.EnforcementLag())
+	return PanelCeiling(GuardedAllowance(*row.AllocatedBytes, row.ServedBytes, band), row.ServedBytes)
 }

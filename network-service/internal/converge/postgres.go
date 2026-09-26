@@ -60,7 +60,8 @@ SELECT c.id::text, coalesce(c."remoteId", ''), c."claimTag", c.uuid, c.protocol:
        coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0)::bigint,
        c."enforcementState"::text, c."driftState"::text, c."driftRepairCount", c."driftRepairedAt",
        c."linkLines", coalesce(c."linksRemoteId", ''), coalesce(c."linksUuid", ''), c."linksCapturedAt",
-       c."trafficUnlimited", c."inboundRemoteId" IS NULL, coalesce(c."credentialGroupId"::text, '')
+       c."trafficUnlimited", c."inboundRemoteId" IS NULL, coalesce(c."credentialGroupId"::text, ''),
+       coalesce(c."observedRateBps", 0)::bigint
   FROM network.config c
   LEFT JOIN network.config_counter_state s ON s."configId" = c.id
  WHERE c."panelId" = $1::uuid
@@ -81,7 +82,7 @@ func (s PostgresDesired) For(ctx context.Context, panelID string) ([]DesiredConf
 		if err := rows.Scan(&d.ConfigID, &d.RemoteID, &d.ClaimTag, &d.UUID, &d.Protocol, &d.InboundRemoteID,
 			&d.Enabled, &d.Present, &d.AllocatedBytes, &d.ServedBytes,
 			&state, &drift, &d.RepairCount, &repairedAt,
-			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt, &d.Unlimited, &d.InboundResolved, &d.CredentialGroupID); err != nil {
+			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt, &d.Unlimited, &d.InboundResolved, &d.CredentialGroupID, &d.RateBps); err != nil {
 			return nil, fmt.Errorf("reading panel %s desired state: %w", panelID, err)
 		}
 		d.State, d.Drift = EnforcementState(state), DriftState(drift)
@@ -264,7 +265,8 @@ var _ Allocations = PostgresAllocations{}
 // allocationsSQL is the configs the ceiling pass can write to: a share, a
 // client, and still wanted on the panel. One being deleted is provisioning's.
 const allocationsSQL = `
-SELECT c.id::text, c."remoteId", c."allocatedCeilingBytes", c."appliedCeilingBytes"
+SELECT c.id::text, c."remoteId", c."allocatedCeilingBytes", c."appliedCeilingBytes",
+       coalesce(c."observedRateBps", 0)::bigint
   FROM network.config c
  WHERE c."panelId" = $1::uuid
    AND c."allocatedCeilingBytes" IS NOT NULL
@@ -281,7 +283,7 @@ func (s PostgresAllocations) For(ctx context.Context, panelID string) ([]Allocat
 	var out []Allocation
 	for rows.Next() {
 		var a Allocation
-		if err := rows.Scan(&a.ConfigID, &a.RemoteID, &a.AllocatedBytes, &a.AppliedBytes); err != nil {
+		if err := rows.Scan(&a.ConfigID, &a.RemoteID, &a.AllocatedBytes, &a.AppliedBytes, &a.RateBps); err != nil {
 			return nil, fmt.Errorf("reading panel %s allocations: %w", panelID, err)
 		}
 		out = append(out, a)

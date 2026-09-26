@@ -170,6 +170,31 @@ watching, a figure the plausibility cap quarantined — get **no** headroom.
 Covering them would serve traffic against nobody's purchase; refusing to is a
 user who stalls, which is ADR-0072's accepted worst failure in every direction.
 
+### The guard band — the panel's lag lands inside the bag (F-027-co)
+
+A panel cuts a client some seconds **after** it crosses its ceiling, and what
+it serves in between is past the share and billed by nobody
+(`open-questions.md`, 2026-09-26). So the figure written is
+
+```
+band    = observedRateBps / 8 × the family's enforcement lag
+allowed = max(allocatedCeilingBytes - band, min(served, allocatedCeilingBytes))
+```
+
+and then translated as above. The lag is **seconds, per family**
+(`driver.DriverType.EnforcementLag`, user 2026-09-26): 3x-ui and both forks
+are 35 s — a 5 s traffic check plus a Xray restart of up to 30 s. A family not
+yet measured takes the same 35 s: no band is its whole lag served free. At
+25 MB/s the band is ~875 MB; a config with no measured rate has none.
+**Never below what it served** — a band wider than what is left cuts it now.
+
+Every active config's rate moves every pass, so the pass leaves a panel
+holding **between 1× and 1.25× the band** alone (`withinBand`) instead of a
+write per config per pass (invariant 34). Always inside the bag; a quarter is
+under the smallest block (60 s of rate), so a top-up is never absorbed. The
+same band rides on provisioning's first ceiling and on the shutdown extension
+(`contract.resilience.md`). Overrun stays uncharged.
+
 ### What a write says about itself
 
 Every write is a `Finding` with a reason, because each is a different thing to

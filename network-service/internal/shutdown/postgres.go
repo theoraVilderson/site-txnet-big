@@ -22,7 +22,8 @@ var _ Reserves = PostgresReserves{}
 // guess made on the way out. A disabled config is not raised — a suspension
 // has to hold across a deploy too.
 const reservesSQL = `
-SELECT c.id::text, c."remoteId", c."allocatedCeilingBytes", c."walletBackedCeilingBytes"
+SELECT c.id::text, c."remoteId", c."allocatedCeilingBytes", c."walletBackedCeilingBytes",
+       coalesce(c."observedRateBps", 0)::bigint
   FROM network.config c
  WHERE c."panelId" = $1::uuid
    AND c."remoteId" IS NOT NULL
@@ -41,7 +42,7 @@ func (s PostgresReserves) Extensions(ctx context.Context, panelID string) ([]Ext
 	var out []Extension
 	for rows.Next() {
 		var e Extension
-		if err := rows.Scan(&e.ConfigID, &e.RemoteID, &e.AllocatedBytes, &e.WalletBackedBytes); err != nil {
+		if err := rows.Scan(&e.ConfigID, &e.RemoteID, &e.AllocatedBytes, &e.WalletBackedBytes, &e.RateBps); err != nil {
 			return nil, fmt.Errorf("reading panel %s reserves: %w", panelID, err)
 		}
 		out = append(out, e)

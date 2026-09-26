@@ -106,6 +106,9 @@ type Allocation struct {
 	// panel last confirmed. Nil where no read ever has. It is what tells a
 	// ceiling somebody else wrote from one that is merely ours and stale.
 	AppliedBytes *int64
+	// RateBps is `config.observedRateBps`, what the guard band is sized on
+	// (F-027-co). Zero where no rate was ever measured.
+	RateBps int64
 }
 
 // AppliedCeiling is what a panel was found to be enforcing, expressed in the
@@ -249,7 +252,9 @@ func (c *Ceilings) pass(
 		}
 
 		offset := OffsetBytes(c.Counters, p, allocation.RemoteID)
-		want := PanelCeiling(allocation.AllocatedBytes, offset)
+		band := GuardBandBytes(allocation.RateBps, p.DriverType.EnforcementLag())
+		served := ServedBytes(c.Counters, p, allocation.RemoteID)
+		want := PanelCeiling(GuardedAllowance(allocation.AllocatedBytes, served, band), offset)
 		have := client.DataLimitBytes
 
 		if have > 0 {
@@ -263,7 +268,7 @@ func (c *Ceilings) pass(
 			})
 		}
 
-		if have == want && want > 0 {
+		if (have == want && want > 0) || withinBand(have, want, band) {
 			report.Synced++
 			continue
 		}

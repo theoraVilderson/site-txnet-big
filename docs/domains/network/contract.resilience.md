@@ -33,7 +33,7 @@ call is ADR-0078.
 |---|---|
 | **only ever raises** | a panel already enforcing more is left alone. A shutdown that lowered a ceiling is the cut-off this exists to prevent |
 | **never writes zero** | zero on a panel reads as *no limit*. A user whose money has run out keeps the ceiling they had; cutting off is F-027-x's |
-| **translated like any ceiling** | into the counter's own origin, through `converge.OffsetBytes` / `PanelCeiling` — the same functions, so the two cannot drift |
+| **translated like any ceiling** | into the counter's own origin, through `converge.OffsetBytes` / `PanelCeiling`, less the same guard band (`GuardedAllowance`, F-027-co) — the same functions, so the two cannot drift |
 | **still somebody else's server** | one `ListClients` per panel, the budget and the single flight hold, and a panel refusing us is not asked (F-027-v). A ban earned at exit is one nobody is watching for |
 | **records nothing** | no `appliedCeilingBytes`, no cursor. The first pass after the restart finds the panel above its allocation and pulls it back as `above_allocation` (F-027-t) |
 | **bounded** | `DefaultPanelTimeout` 5s per panel, 8 in flight, inside `HTTP_SHUTDOWN_TIMEOUT`. A budget that runs out leaves the panels it reached extended and the rest as they were — never worse than no extension |

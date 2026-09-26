@@ -60,6 +60,9 @@ type Panel struct {
 	// cursor computed under the old one.
 	CounterSemantics driver.CounterSemantics
 	Transport        driver.Transport
+	// DriverType is the family, carried for its enforcement lag — how long
+	// the panel serves past a ceiling (F-027-co, the guard band).
+	DriverType driver.DriverType
 	// MaxLineRateBps is `panel.maxLineRateBps`, the ceiling on what the far
 	// end could physically have carried. The column is nullable, so zero is
 	// **unknown**, not zero: a panel that has not declared a line rate gets no

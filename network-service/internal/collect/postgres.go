@@ -124,6 +124,7 @@ func (s *PostgresSource) Panels(ctx context.Context) ([]Panel, error) {
 			return nil, fmt.Errorf("reading panels: %w", err)
 		}
 		p.CounterSemantics = driver.CounterSemantics(semantics)
+		p.DriverType = driver.DriverType(family)
 		p.Transport = driver.TransportPull
 		p.ReviewState = driver.ReviewState(review)
 		row.PanelID, row.DriverType, row.Transport, row.CounterSemantics = p.ID, driver.DriverType(family), p.Transport, p.CounterSemantics

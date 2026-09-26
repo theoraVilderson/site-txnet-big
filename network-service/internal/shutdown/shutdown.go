@@ -78,6 +78,9 @@ type Extension struct {
 	// below AllocatedBytes; the database CHECKs it
 	// (`config_wallet_backed_ceiling_extends`).
 	WalletBackedBytes int64
+	// RateBps is `config.observedRateBps`: the extension is a ceiling on a
+	// panel like any other, and carries the same guard band (F-027-co).
+	RateBps int64
 }
 
 // Reserves is where those figures come from — `network.config` behind an
@@ -246,7 +249,9 @@ func (e *Extender) extend(ctx context.Context, p collect.Panel) Report {
 		}
 
 		offset := converge.OffsetBytes(e.Counters, p, ext.RemoteID)
-		want := converge.PanelCeiling(e.allowance(ext), offset)
+		band := converge.GuardBandBytes(ext.RateBps, p.DriverType.EnforcementLag())
+		served := converge.ServedBytes(e.Counters, p, ext.RemoteID)
+		want := converge.PanelCeiling(converge.GuardedAllowance(e.allowance(ext), served, band), offset)
 		if want <= 0 || want <= have {
 			// Nothing to give, or the panel already holds more. Either way the
 			// figure it has is the one it keeps: this only ever extends, and
