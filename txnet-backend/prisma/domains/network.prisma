@@ -469,6 +469,10 @@ model Config {
   /// `grant.trafficUnlimited`: the client is created with none, and the row
   /// never holds a ceiling (CHECK `config_unlimited_has_no_ceiling`, raw SQL).
   trafficUnlimited         Boolean   @default(false)
+  /// The buyer's own name for it (F-307-f, ADR-0089): shown on its lines by
+  /// billing's list and `/sub`, never written to a panel. Null is the default
+  /// name. Trimmed, 1..40 characters (CHECK `config_user_label_shape`, raw SQL).
+  userLabel                String?
 
   panel Panel @relation(fields: [panelId], references: [id])
   grant Grant @relation(fields: [grantId], references: [id])
