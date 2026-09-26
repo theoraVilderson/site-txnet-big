@@ -9,6 +9,7 @@ import {
   type UserConfigRow,
 } from "@/lib/billing-api";
 import { numberLocale } from "../../_lib/digits";
+import { lineLabel } from "./config-lines";
 
 const C = FrontendI18nKeys.common.myServices.configs;
 
@@ -112,4 +113,18 @@ export function purgeCountdown(purgeAt: string | null, now: Date = new Date()): 
 /** Whether the panel has accepted less than the allocator decided — work the loop has not finished. */
 export function ceilingQueued(row: Pick<UserConfigRow, "allocatedCeilingBytes" | "appliedCeilingBytes">): boolean {
   return row.allocatedCeilingBytes !== null && row.allocatedCeilingBytes !== row.appliedCeilingBytes;
+}
+
+/**
+ * What a user calls a config: the name its panel gave its first line (the
+ * server's own label, such as "DE Reality"), else its protocol and region —
+ * the pair support reads. A config's id is never shown.
+ */
+export function configName(row: Pick<UserConfigRow, "lines" | "protocol" | "region">): string {
+  const fallback = `${row.protocol} · ${row.region}`;
+  const first = row.lines[0];
+  if (!first) return fallback;
+  const name = lineLabel(first);
+  // An unnamed line's label is its own scheme or head; the region says more.
+  return first.startsWith(name) ? fallback : name;
 }

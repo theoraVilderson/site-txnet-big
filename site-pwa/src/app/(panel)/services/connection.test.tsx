@@ -5,13 +5,12 @@ import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type GrantRow, type GrantUsage, type UserConfigRow } from "@/lib/billing-api";
 import { copyText } from "../_lib/clipboard";
 import { ServiceRow } from "./_components/ServiceRow";
-import { GrantConfigs } from "./_components/GrantConfigs";
 import { lineLabel, wireguardConf } from "./_lib/config-lines";
 import { dayBars, usedShare } from "./_lib/usage";
 
 /**
- * My services, redesigned (F-307-c): what a user connects with comes first,
- * and the things about it that break silently.
+ * My services, redesigned (F-307-c, then user 2026-09-26): "connect" is the
+ * one strong button on a row, and the things about it that break silently.
  *
  * > **A `.conf` is offered only where it is a whole WireGuard config.** The
  * > file is built in the browser from the `wireguard://` line; a line missing
@@ -163,23 +162,34 @@ describe("the bytes behind the ring and the bars", () => {
   });
 });
 
-describe("a config card", () => {
-  const open = async (rows: UserConfigRow[]) => {
-    grantConfigs.mockResolvedValue({ grantId: "g1", rows });
-    const user = userEvent.setup();
-    render(<GrantConfigs grantId="g1" />);
-    await user.click(screen.getByRole("button", { name: "myServices.configs.show" }));
-    await screen.findAllByText(/de-fra/);
-    return user;
-  };
+/** Open one of the row's two halves and wait for its server list to land. */
+async function openRow(rows: UserConfigRow[], half: "connect.open" | "manage.open" = "connect.open") {
+  grantConfigs.mockResolvedValue({ grantId: "g1", rows });
+  const user = userEvent.setup();
+  const view = render(<ServiceRow row={GRANT} name="VPN" capabilities={[]} />);
+  await user.click(screen.getByRole("button", { name: `myServices.${half}` }));
+  await waitFor(() => expect(screen.queryByText("myServices.configs.loading")).not.toBeInTheDocument());
+  return { user, ...view };
+}
 
-  it("reads the 30 days beside the configs when opened, and draws 30 bars", async () => {
-    await open([CONFIG]);
+describe("connect", () => {
+  const open = async (rows: UserConfigRow[]) => (await openRow(rows)).user;
+
+  it("reads the 30 days only under details, and draws 30 bars", async () => {
+    await openRow([CONFIG], "manage.open");
     await waitFor(() => expect(grantUsage).toHaveBeenCalledWith("g1"));
     const chart = await screen.findByRole("img", {
       name: /myServices\.chart\.label/,
     });
     expect(chart.querySelectorAll("[data-day]")).toHaveLength(30);
+  });
+
+  it("offers nothing that changes a server: no new link, no delete, no reset", async () => {
+    await open([CONFIG]);
+    expect(grantUsage).not.toHaveBeenCalled();
+    for (const name of ["myServices.configs.regenerate", "myServices.configs.retire", "myServices.link.reset"]) {
+      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+    }
   });
 
   it("copies one line, and shows that line's QR", async () => {
@@ -233,15 +243,14 @@ describe("a config card", () => {
 describe("a config list told its lines are captured (F-111-l)", () => {
   const WAITING = { ...CONFIG, lines: [], linksCapturedAt: null };
 
+  const row = (asked: number) => <ServiceRow row={GRANT} name="VPN" capabilities={[]} configsAsked={asked} />;
+
   it("re-reads when its count moves, keeping the list up while it asks", async () => {
-    grantConfigs.mockResolvedValue({ grantId: "g1", rows: [WAITING] });
-    const user = userEvent.setup();
-    const { rerender } = render(<GrantConfigs grantId="g1" asked={0} />);
-    await user.click(screen.getByRole("button", { name: "myServices.configs.show" }));
+    const { rerender } = await openRow([WAITING]);
     await screen.findByText("myServices.lines.notCaptured");
 
     grantConfigs.mockResolvedValue({ grantId: "g1", rows: [{ ...CONFIG, lines: [VLESS] }] });
-    rerender(<GrantConfigs grantId="g1" asked={1} />);
+    rerender(row(1));
     // No skeleton over the card while it is asked again.
     expect(screen.getByText("myServices.lines.notCaptured")).toBeInTheDocument();
 
@@ -251,32 +260,27 @@ describe("a config list told its lines are captured (F-111-l)", () => {
   });
 
   it("keeps what it shows when that read fails", async () => {
-    grantConfigs.mockResolvedValue({ grantId: "g1", rows: [WAITING] });
-    const user = userEvent.setup();
-    const { rerender } = render(<GrantConfigs grantId="g1" asked={0} />);
-    await user.click(screen.getByRole("button", { name: "myServices.configs.show" }));
+    const { rerender } = await openRow([WAITING]);
     await screen.findByText("myServices.lines.notCaptured");
 
     grantConfigs.mockRejectedValue(new Error("down"));
-    rerender(<GrantConfigs grantId="g1" asked={1} />);
+    rerender(row(1));
     await waitFor(() => expect(grantConfigs).toHaveBeenCalledTimes(2));
     expect(screen.getByText("myServices.lines.notCaptured")).toBeInTheDocument();
   });
 
   it("reads nothing while closed", () => {
-    const { rerender } = render(<GrantConfigs grantId="g1" asked={0} />);
-    rerender(<GrantConfigs grantId="g1" asked={3} />);
+    const { rerender } = render(row(0));
+    rerender(row(3));
     expect(grantConfigs).not.toHaveBeenCalled();
   });
 });
 
-describe("the subscription link, folded below", () => {
-  it("is closed until asked for, and still read only when a copy or the QR needs it", async () => {
-    const user = userEvent.setup();
+describe("the subscription link, under the lines", () => {
+  it("shows once connect is open, and is still read only when a copy or the QR needs it", async () => {
     render(<ServiceRow row={GRANT} name="VPN" capabilities={[]} />);
     expect(screen.queryByRole("button", { name: "myServices.link.copy" })).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "myServices.link.label" }));
+    await userEvent.setup().click(screen.getByRole("button", { name: "myServices.connect.open" }));
     expect(screen.getByRole("button", { name: "myServices.link.copy" })).toBeEnabled();
     expect(subscriptionLink).not.toHaveBeenCalled();
   });

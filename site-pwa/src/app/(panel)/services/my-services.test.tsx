@@ -8,7 +8,6 @@ import { billingApi, type GrantRow } from "@/lib/billing-api";
 import { ApiError } from "@/lib/api-error";
 import { copyText } from "../_lib/clipboard";
 import { ServiceRow } from "./_components/ServiceRow";
-import { GrantConfigs } from "./_components/GrantConfigs";
 import { GRANT_STATUSES, GRANT_TONES, capabilityNames } from "./_lib/my-services";
 import {
   CONFIG_ACTION_REFUSALS,
@@ -16,9 +15,11 @@ import {
   DRIFT_STATES,
   DRIFT_VERDICTS,
   REFUSAL_KEYS,
+  configName,
   formatBytes,
   purgeCountdown,
 } from "./_lib/service-configs";
+import { timeLeft } from "./_lib/usage";
 import type { UserConfigRow } from "@/lib/billing-api";
 
 /**
@@ -127,12 +128,14 @@ const CONFIG: UserConfigRow = {
   linksCapturedAt: null,
 };
 
-/** A row with its subscription link unfolded — folded below the configs since F-307-c. */
+/** A row with "connect" open — its lines and the subscription link. */
 const show = (row: Partial<GrantRow> = {}) => {
   const view = render(<ServiceRow row={{ ...GRANT, ...row }} name="VPN Pro" capabilities={[]} />);
-  fireEvent.click(screen.getByRole("button", { name: "myServices.link.label" }));
+  fireEvent.click(screen.getByRole("button", { name: "myServices.connect.open" }));
   return view;
 };
+/** Switch the open row to "details" — the 30 days, the servers, reset. */
+const details = () => fireEvent.click(screen.getByRole("button", { name: "myServices.manage.open" }));
 
 const L = "myServices.link";
 const LINK_1 = "https://sub.example.com/sub/tok-first";
@@ -143,6 +146,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(useLocale).mockReturnValue({ lang: "en", t } as ReturnType<typeof useLocale>);
   subscriptionLink.mockResolvedValue({ grantId: "g1", subscriptionUrl: LINK_1 });
+  grantConfigs.mockResolvedValue({ grantId: "g1", rows: [] });
   resetSubscriptionLink.mockResolvedValue({ grantId: "g1", subscriptionUrl: LINK_2 });
 });
 
@@ -251,6 +255,13 @@ describe("usage and the purge clock", () => {
     expect(formatBytes("18014398509481984", "en")).toBe("16 PB");
   });
 
+  it("counts the days left, a part day as one, and none once the end has passed", () => {
+    const now = new Date("2026-09-10T12:00:00Z");
+    expect(timeLeft("2026-09-01T00:00:00Z", "2026-09-11T00:00:00Z", now)).toEqual({ days: 1, spent: 0.95 });
+    expect(timeLeft("2026-09-01T00:00:00Z", "2026-09-10T00:00:00Z", now)).toEqual({ days: 0, spent: 1 });
+    expect(timeLeft("2026-09-01T00:00:00Z", null, now)).toBeNull();
+  });
+
   it("shows the countdown only when billing answered a purge instant", () => {
     const { unmount } = show();
     expect(screen.queryByText(/myServices\.purge/)).not.toBeInTheDocument();
@@ -260,26 +271,25 @@ describe("usage and the purge clock", () => {
   });
 });
 
-describe("a Grant's configs", () => {
+describe("a Grant's servers, under details", () => {
   const open = async (rows: UserConfigRow[]) => {
     grantConfigs.mockResolvedValue({ grantId: "g1", rows });
     const user = userEvent.setup();
-    render(<GrantConfigs grantId="g1" />);
-    await user.click(screen.getByRole("button", { name: "myServices.configs.show" }));
+    render(<ServiceRow row={GRANT} name="VPN Pro" capabilities={[]} />);
+    await user.click(screen.getByRole("button", { name: "myServices.manage.open" }));
     await screen.findAllByText(/de-fra/);
     return user;
   };
 
   it("reads nothing until opened", () => {
-    render(<GrantConfigs grantId="g1" />);
+    render(<ServiceRow row={GRANT} name="VPN Pro" capabilities={[]} />);
     expect(grantConfigs).not.toHaveBeenCalled();
   });
 
-  it("makes every non-synced verdict a button that says why, and synced not one", async () => {
+  it("makes every non-synced verdict a button that says why, and says nothing for a healthy one", async () => {
     const user = await open([CONFIG, { ...CONFIG, id: "c2", region: "de-fra-2", driftState: "limit_overridden" }]);
 
-    expect(screen.queryByRole("button", { name: "myServices.configs.verdict.synced.label" })).not.toBeInTheDocument();
-    expect(screen.getByText("myServices.configs.verdict.synced.label")).toBeInTheDocument();
+    expect(screen.queryByText("myServices.configs.verdict.synced.label")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "myServices.configs.verdict.limit_overridden.label" }));
     expect(screen.getByText("myServices.configs.verdict.limit_overridden.why")).toBeInTheDocument();
@@ -319,6 +329,12 @@ describe("a Grant's configs", () => {
     expect(configAction).not.toHaveBeenCalled();
   });
 
+  it("names a server by its panel's label, else its protocol and region", () => {
+    expect(configName({ ...CONFIG, lines: ["vless://u@h:443?x=1#DE%20Reality"] })).toBe("DE Reality");
+    expect(configName({ ...CONFIG, lines: ["vless://u@h:443"] })).toBe("vless · de-fra");
+    expect(configName(CONFIG)).toBe("vless · de-fra");
+  });
+
   it("offers no new key once a config's allowance is spent", async () => {
     await open([{ ...CONFIG, regenerateUsedCount: 3 }]);
     expect(screen.getByRole("button", { name: "myServices.configs.regenerate" })).toBeDisabled();
@@ -326,10 +342,13 @@ describe("a Grant's configs", () => {
 });
 
 describe("a row's subscription link (F-114-e-c)", () => {
-  it("offers copy, QR and reset whatever the status, and never says key", () => {
+  it("offers copy and QR under connect, reset under details, whatever the status, and never says key", () => {
     const { container } = show({ status: "expired", endsAt: "2026-01-01T00:00:00.000Z" });
     expect(button(`${L}.copy`)).toBeEnabled();
     expect(button(`${L}.showQr`)).toBeEnabled();
+    // Connect changes nothing: what can break a working setup is one press further.
+    expect(screen.queryByRole("button", { name: `${L}.reset` })).not.toBeInTheDocument();
+    details();
     expect(button(`${L}.reset`)).toBeEnabled();
     expect(container.textContent ?? "").not.toMatch(/wallet\.gift\.key|newKey/);
   });
@@ -373,6 +392,7 @@ describe("a row's subscription link (F-114-e-c)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("press reset link once");
     expect(screen.getByText("req-9")).toBeInTheDocument();
     expect(copyText).not.toHaveBeenCalled();
+    details();
     expect(button(`${L}.reset`)).toBeEnabled();
   });
 });
@@ -381,6 +401,7 @@ describe("resetting a link", () => {
   it("asks first, and a declined confirmation resets nothing", async () => {
     const user = userEvent.setup();
     show();
+    details();
 
     await user.click(button(`${L}.reset`));
     expect(screen.getByText(`${L}.resetConfirm`)).toBeInTheDocument();
@@ -397,6 +418,7 @@ describe("resetting a link", () => {
     await user.click(button(`${L}.showQr`));
     expect(await screen.findByText(LINK_1)).toBeInTheDocument();
 
+    details();
     await user.click(button(`${L}.reset`));
     await user.click(button(`${L}.resetYes`));
 
@@ -413,12 +435,17 @@ describe("resetting a link", () => {
     expect(await screen.findByText(LINK_1)).toBeInTheDocument();
 
     resetSubscriptionLink.mockRejectedValue(new ApiError("too many requests, try again later", { status: 429, ref: "req-7" }));
+    details();
     await user.click(button(`${L}.reset`));
     await user.click(button(`${L}.resetYes`));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("too many requests, try again later");
-    expect(screen.getByText(LINK_1)).toBeInTheDocument();
     expect(screen.queryByText(`${L}.resetDone`)).not.toBeInTheDocument();
+    // Back under connect, the link on screen is still the first one.
+    await user.click(button("myServices.connect.open"));
+    await user.click(button(`${L}.showQr`));
+    expect(await screen.findByText(LINK_1)).toBeInTheDocument();
+    expect(subscriptionLink).toHaveBeenCalledTimes(1);
   });
 
   it("never asks twice while a reset is in flight — each call destroys a working link", async () => {
@@ -426,6 +453,7 @@ describe("resetting a link", () => {
     let answer: (v: { grantId: string; subscriptionUrl: string }) => void = () => {};
     resetSubscriptionLink.mockReturnValue(new Promise((resolve) => (answer = resolve)));
     show();
+    details();
 
     await user.click(button(`${L}.reset`));
     await user.click(button(`${L}.resetYes`));

@@ -21,7 +21,7 @@ export interface GrantsPageState {
   isLoading: boolean;
   /**
    * How many times each Grant's configs were said to have changed — by id, a
-   * missing id is 0. An open `GrantConfigs` re-reads when its count moves.
+   * missing id is 0. An open row (`useGrantConfigs`) re-reads when its count moves.
    */
   configsAsked: Record<string, number>;
   /** What went wrong, already in the user's language, or `null`. */

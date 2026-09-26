@@ -2,7 +2,7 @@
 id: panel-web
 layer: interface
 status: active
-version: 29
+version: 30
 updated: 2026-09-26
 ---
 
@@ -19,12 +19,14 @@ gets their `/sub` link — copied or as a QR, as often as asked — and the only
 place a leaked one is reset. The panel never says "key".
 
 Its pieces: `_components/MyServicesView.tsx` (the page), `_components/ServiceRow.tsx`
-(one Grant), `_components/GrantConfigs.tsx` (its configs, F-027-ac), `UsageRing.tsx`,
-`UsageBars.tsx` and `ConfigLines.tsx` (F-307-c),
+(one Grant), `ConnectPanel.tsx` (its "connect" half), `GrantConfigs.tsx`
+(its servers under "details", F-027-ac), `Meter.tsx`, `UsageBars.tsx` and
+`ConfigLines.tsx` (F-307-c), `_hooks/useGrantConfigs.ts` and
+`useSubscriptionLink.ts` (what the two halves share),
 `_hooks/useGrantsPage.ts` (the two reads, and the re-read a purchase's end
 asks for), `_lib/my-services.ts` (the status tones, the name rule and
 `readGrantSettled`), `_lib/service-configs.ts` (verdicts, refusals, bytes,
-the purge countdown), `_lib/usage.ts` (ring and bar shares) and
+the purge countdown), `_lib/usage.ts` (bar shares, time left) and
 `_lib/config-lines.ts` (a line's name, the WireGuard `.conf`).
 
 ## Rules
@@ -93,13 +95,14 @@ the purge countdown), `_lib/usage.ts` (ring and bar shares) and
    configs are being removed — the hourly job acts *after* it, never at it.
 9a. **Unlimited is said, never inferred from a 0** (F-111-s). A Grant billing
     answers with `trafficUnlimited` shows what it used and "unlimited
-    traffic", and no ring: its `purchasedBytes` of 0 bounds nothing
+    traffic", and no bar: its `purchasedBytes` of 0 bounds nothing
     ([entitlement/invariants.md](../../domains/entitlement/invariants.md) 15).
     An `endsAt` of `null` reads "unlimited time" — 0 days sold is stored null.
-10. **Every verdict but `synced` is a button that says why.** Each
-    `DriftState` has a label and — except `synced` — a sentence; the spec reads
-    the enum out of `network.prisma`, so a new verdict is red there, not a
-    blank pill. A ceiling the panel has not fully taken reads as queued.
+10. **Every verdict but `synced` is a button that says why, and `synced`
+    shows nothing** (user, 2026-09-26: a "synced" pill on every server taught
+    a word and nothing else). Each `DriftState` has a label and — except
+    `synced` — a sentence; the spec reads the enum out of `network.prisma`, so
+    a new verdict is red there, not a blank pill. A ceiling the panel has not fully taken reads as queued.
 11. **An action answers per config** (user, 2026-09-23). New key and delete, on
     one config or the ticked ones, in one request; delete asks first. The done
     count and each refused config — by the label it had when pressed, with its
@@ -148,11 +151,18 @@ the purge countdown), `_lib/usage.ts` (ring and bar shares) and
     shows the key, `dir="ltr"`, as before — no second read, no source-language
     fallback (rule 6's reason). A named chip keeps the key as its `title`.
 
-15. **Configs first: a ring, 30 bars, then each config's lines** (F-307-c,
-    user 2026-09-26). A metered Grant with bytes bought shows used against
-    bought — or a capped prepaid one against its cap (F-111-t) — as a ring,
-    from the row itself, no read; an unlimited one has no bound and no ring. Expanding reads the 30 days (billing's `GRANT_USAGE`)
-    beside the config list and draws one bar per day, download under upload,
+15. **A row is: what is left, "connect", and "details"** (F-307-c, user
+    2026-09-26: "nothing is easy, the words are unclear"). Traffic left and
+    time left are each a headline and a bar, from the row itself, no read — a
+    metered Grant against what it bought, a capped prepaid one against its cap
+    (F-111-t); unlimited traffic or no `endsAt` reads "unlimited", no bar.
+    **"Connect"** is the one strong button: each server's lines first, then the
+    subscription link (user: lines first), and nothing that changes a server.
+    **"Details"** holds the 30 days, the servers with a new link and delete,
+    and reset — what can break a working setup, one press further. One half
+    is open at a time; both share one config read and one link, so a reset
+    replaces the link "connect" shows. The 30 days (billing's `GRANT_USAGE`)
+    are read only under "details": one bar per day, download under upload,
     scaled to the busiest day; a failed read costs the chart only. Every share
     is taken in `BigInt`, so a Grant with a byte left never draws full. SVG,
     no chart library, theme tokens; the time axis never mirrors in RTL.
@@ -171,9 +181,11 @@ the purge countdown), `_lib/usage.ts` (ring and bar shares) and
 the copy of billing's link and one read per row, the QR, the hand-select
 fallback, a refusal's sentence with reset still offered, and "key" nowhere;
 reset: a declined confirmation, the replacement, a refusal that changes
-nothing, and one ask at a time. F-027-ac: `DriftState` and
+nothing, and one ask at a time; copy and QR under "connect", reset only
+under "details". F-027-ac: `DriftState` and
 `ConfigStatus` against `network.prisma` and the refusals against billing's
-tuple; usage, the countdown, the verdict button, the queued ceiling, a bulk
+tuple; usage, days left, the countdown, the verdict button and a healthy server's
+silence, a server's name, the queued ceiling, a bulk
 delete with one refusal, a declined confirm, and a spent allowance. F-111-f:
 the "being prepared" line on a pending row only, and
 `services/_hooks/useGrantsPage.test.ts` — a delivery and a refund each re-read
@@ -186,24 +198,25 @@ shown row's configs, a reconnect bumps every row's, and `connection.test.tsx`
 closed one reads nothing;
 F-111-s: an unlimited Grant's "unlimited traffic" and "unlimited time",
 no "0 B" anywhere; F-111-t: a capped prepaid one against billing's cap,
-with a ring, and one with no cap saying only what it used.
+with a bar, and one with no cap saying only what it used.
 `lib/realtime.test.ts` — `onMissed` on a reconnect's accepted channels only.
 F-114-f-c: `capabilityNames` — a tenant's own by its product's prefix, the
 platform's, another tenant's same key never read — and a chip showing the
 name, the key only where none was published.
 F-307-c: `services/connection.test.tsx` — the `.conf` for a whole line and
-none for a partial one, a line's name, shares exact past 2^53 and a ring
-never full with bytes left, 30 bars read on expand, per-line copy and QR,
-the download on a whole WireGuard line only, the two empty-lines sentences,
-and the link folded and unread until asked.
+none for a partial one, a line's name, shares exact past 2^53 and a bar
+never full with bytes left, 30 bars read under "details" only, "connect"
+offering no new link, delete or reset, per-line copy and QR, the download on
+a whole WireGuard line only, the two empty-lines sentences, and the link
+under the lines, unread until asked.
 
 ## Not covered
 
 A regenerated config's new credential is delivered by the same link (F-113),
 and reaches its card only after the next capture. A User Manager config's login and
 its router's `.ovpn` (answered since F-307-d) are shown by F-307-e. Per-config bars and a window other than 30 days are nobody's row.
-The configs' own "new key" action (F-027-ac) is a config credential, not the
-subscription link, and keeps its wording. Moving a config or
+A server's own "new link" (F-027-ac) is a config credential, not the
+subscription link, whose reset reads "make a new subscription link". Moving a config or
 adding one from here is nobody's row. Filtering
 or searching the list is nobody's row; so is renewing a service from here, which
 needs a checkout the panel does not have yet.

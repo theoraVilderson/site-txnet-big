@@ -2027,111 +2027,111 @@
   },
   "myServices": {
     "title": "My services",
-    "subtitle": "The services you have — each one's period and status, and its subscription link.",
+    "subtitle": "The services you bought. To connect, press “Connect”.",
     "empty": "You have no services yet.",
     "unavailable": "The service list is unavailable.",
     "retry": "Try again",
     "unnamed": "Unnamed service",
-    "period": "From {{from}} to {{until}}",
-    "periodUnlimited": "From {{from}} — unlimited time",
+    "period": "{{from}} to {{until}}",
+    "periodUnlimited": "From {{from}}, no end date",
     "features": "Features",
-    "usage": "{{consumed}} used of {{purchased}} bought",
+    "usage": "{{consumed}} of {{purchased}} used",
     "usageUnmetered": "{{consumed}} used",
-    "usageUnlimited": "{{consumed}} used — unlimited traffic",
-    "purgeIn": "Suspended. Top up within {{days}} days and {{hours}} hours ({{at}}) or this service's configs are removed from the servers. Nothing you bought is lost; a top-up brings them back.",
-    "purgeDue": "Suspended. This service's configs are being removed from the servers. Nothing you bought is lost; a top-up brings them back.",
-    "meteringUnavailable": "Usage is not being measured right now. Your service is not cut off; the numbers catch up once measuring resumes.",
+    "usageUnlimited": "{{consumed}} used",
+    "purgeIn": "This service is paused. Top up your wallet within {{days}} days and {{hours}} hours ({{at}}) and everything comes back; otherwise its servers are removed for now. Nothing you bought is lost — a top-up brings it back.",
+    "purgeDue": "This service is paused and its servers are being removed. Nothing you bought is lost — a top-up brings it back.",
+    "meteringUnavailable": "Your usage is not updating right now, but your service is still connected. The numbers catch up shortly.",
     "configs": {
-      "show": "Show usage and configs",
-      "hide": "Hide usage and configs",
-      "loading": "Loading configs…",
-      "empty": "This service has no configs.",
+      "loading": "Loading servers…",
+      "empty": "No server has been set up for this service yet.",
       "selectAll": "Select all",
       "selected": "{{count}} selected",
-      "bulkRegenerate": "New key for selected",
+      "bulkRegenerate": "New link for the selected",
       "bulkRetire": "Delete selected",
-      "regenerate": "New key",
-      "regenerateLeft": "{{left}} of {{max}} new keys left",
+      "regenerate": "New link",
+      "regenerateLeft": "{{left}} of {{max}} left",
       "retire": "Delete",
-      "retireConfirm": "Delete {{count}} config(s)? They stop working and cannot be brought back.",
+      "retireConfirm": "Delete {{count}} server(s)? Their links stop working for good.",
       "sending": "Sending…",
-      "done": "Done for {{count}} config(s).",
-      "ceiling": "Limit: {{allocated}}",
-      "ceilingQueued": "Limit: {{allocated}} set, {{applied}} applied on the server so far — the rest is queued.",
-      "ceilingNone": "No limit set yet.",
-      "checkedAt": "Last checked {{at}}",
+      "done": "Done for {{count}} server(s).",
+      "ceiling": "This server's share of the traffic: {{allocated}}",
+      "ceilingQueued": "This server's share of the traffic: {{allocated}} — {{applied}} is on the server so far, the rest is on its way.",
+      "ceilingNone": "This server's share of the traffic is not set yet.",
       "status": {
         "active": "Active",
-        "frozen": "Frozen",
+        "frozen": "Paused",
         "disabled_by_admin": "Disabled by support",
         "disabled_by_system": "Disabled by the system"
       },
       "verdict": {
         "synced": {
-          "label": "In sync"
+          "label": "Healthy"
         },
         "reset": {
-          "label": "Counter reset",
-          "why": "The server reset this config's usage counter. We keep counting from what we had already measured, so nothing you used is lost or charged twice."
+          "label": "Fixed automatically",
+          "why": "The server reset this link's usage counter. We carried on from the figure we had, so nothing is lost or counted twice."
         },
         "renamed": {
-          "label": "Renamed on server",
-          "why": "This config was renamed on the server. We found it again by its tag and kept it as it was."
+          "label": "Fixed automatically",
+          "why": "This link was renamed on the server. We found it and put it right. There is nothing to do."
         },
         "rebuilt": {
-          "label": "Rebuilt on server",
-          "why": "This config was deleted and created again on the server with the same key. We matched it by its key and kept it."
+          "label": "Fixed automatically",
+          "why": "This link was deleted on the server and rebuilt with the same key. Your link is unchanged and works."
         },
         "missing": {
-          "label": "Missing on server",
-          "why": "This config is gone from the server. We are creating it again; if it keeps disappearing we stop and support is told."
+          "label": "Being rebuilt",
+          "why": "This link was deleted from the server and is being rebuilt. If it is deleted again, support takes a look."
         },
         "orphan": {
-          "label": "Unrecognised on server",
-          "why": "The server has a client we did not create. It is reported to support and left untouched."
+          "label": "Support is looking",
+          "why": "There is something on this server we did not create. Support has been told, and your service is left alone."
         },
         "limit_overridden": {
-          "label": "Limit changed on server",
-          "why": "Someone changed this config's limit on the server. We put back the limit you paid for."
+          "label": "Traffic restored",
+          "why": "This link's traffic limit was changed on the server. We restored the amount you paid for."
         },
         "contested": {
           "label": "Needs support",
-          "why": "This config was repaired twice within a day and changed back each time, so we stopped repairing it. Support has to look at it."
+          "why": "This link was repaired twice in one day and changed again each time, so automatic repair stopped. Support needs to check it."
         }
       },
       "refusal": {
-        "config_not_found": "not found — it may already be deleted.",
+        "config_not_found": "Not found — it may already be deleted.",
         "config_retired": "already deleted.",
         "grant_not_active": "the service is not active.",
-        "regenerate_limit_reached": "no new keys left for this config.",
+        "regenerate_limit_reached": "No new links are left for this server.",
         "config_changed": "it changed while you were acting on it. Try again.",
         "failed": "could not be done. Try again."
-      }
+      },
+      "title": "This service's servers"
     },
     "status": {
       "pending": "Being prepared",
       "active": "Active",
-      "suspended": "Suspended",
+      "suspended": "Paused",
       "exhausted": "Used up",
       "expired": "Expired",
       "cancelled": "Cancelled"
     },
-    "preparing": "Paid — your service is being set up. This row turns active on its own when it is ready; there is no need to reload.",
+    "preparing": "Paid — your service is being set up. There is nothing to do; it turns active on its own when it is ready.",
     "link": {
-      "label": "Subscription link",
-      "hint": "One link for all your configs. Add it to your app (such as v2rayNG) once and it keeps them up to date — a new key included. You can come back for it here whenever you need it.",
+      "label": "One link for every server",
+      "hint": "This subscription link holds all the servers above. Add it to your app once and it stays up to date — even after you make a new link for a server.",
       "copy": "Copy subscription link",
       "copying": "Getting the link…",
       "copied": "Link copied",
       "showQr": "Show QR",
       "hideQr": "Hide QR",
       "qrLabel": "Subscription link QR code",
-      "reset": "Reset link",
-      "resetting": "Resetting…",
-      "resetConfirm": "The current link will stop working and you will have to add the new one to your app again. Only do this if someone else has your link. Continue?",
-      "resetYes": "Yes, reset it",
+      "reset": "Make a new subscription link",
+      "resetting": "Making…",
+      "resetConfirm": "The current link will stop working and you will have to add the new one to your app again. Continue?",
+      "resetYes": "Yes, make a new link",
       "resetNo": "Cancel",
-      "resetDone": "A new link was created. The previous link no longer works."
+      "resetDone": "A new link was created. The previous link no longer works.",
+      "resetTitle": "Subscription link",
+      "resetHint": "If someone else has your subscription link, make a new one. The old link stops working."
     },
     "ring": {
       "label": "{{used}} used of {{bought}} — {{remaining}} left"
@@ -2144,7 +2144,7 @@
       "download": "Download",
       "upload": "Upload",
       "loading": "Loading daily usage…",
-      "unavailable": "Daily usage is unavailable right now. Your configs below are not affected."
+      "unavailable": "The usage chart is not available right now. Your service is fine."
     },
     "lines": {
       "title": "Connection links",
@@ -2154,9 +2154,25 @@
       "hideQr": "Hide QR",
       "qrLabel": "QR code of {{name}}",
       "qrTooLong": "This link is too long for a QR code. Copy it instead.",
-      "download": "Download .conf",
-      "notCaptured": "This config's links are not ready yet — they appear after the next sync. The subscription link below already carries it.",
-      "none": "This server gives no link for this config. Use the subscription link below."
+      "download": "Download WireGuard file",
+      "notCaptured": "This server's link will be ready in a few minutes and shows up here on its own. Until then, use “One link for every server” below.",
+      "none": "This server has no separate link. Use “One link for every server” below."
+    },
+    "left": {
+      "trafficTitle": "Traffic left",
+      "timeTitle": "Time left",
+      "traffic": "{{left}}",
+      "unlimited": "Unlimited",
+      "days": "{{days}} days",
+      "ended": "Ended",
+      "timeLabel": "{{days}} days left, until {{until}}"
+    },
+    "connect": {
+      "open": "Connect",
+      "step": "Copy one server's link, or scan its QR code with your app (such as v2rayNG, Hiddify or Streisand)."
+    },
+    "manage": {
+      "open": "Details and settings"
     }
   },
   "systems": {

@@ -21,22 +21,24 @@ const QR_MAX = 2900;
  * leaves the browser. Nothing is read: the lines came with the config list.
  *
  * No lines is two answers: not captured since the last new key (a wait), or a
- * panel that gives none. Both point at the subscription link, which carries
- * the same configs.
+ * panel that gives none. Both point at the subscription link below, which
+ * carries the same configs.
+ *
+ * Copy is the one strong button on a line: it is what a user came to press.
  */
 export function ConfigLines({ config }: { config: Pick<UserConfigRow, "lines" | "linksCapturedAt"> }) {
   const { t } = useLocale();
 
   if (config.lines.length === 0) {
     return (
-      <p className="mt-2 text-[11px] text-text-secondary">
+      <p className="rounded-xl border border-dashed border-card-border px-3 py-2 text-xs text-text-secondary">
         {t("common", config.linksCapturedAt === null ? N.notCaptured : N.none)}
       </p>
     );
   }
 
   return (
-    <ul aria-label={t("common", N.title)} className="mt-2 space-y-2">
+    <ul aria-label={t("common", N.title)} className="space-y-2">
       {config.lines.map((line, i) => (
         <Line key={`${i}:${line}`} line={line} />
       ))}
@@ -60,20 +62,24 @@ function Line({ line }: { line: string }) {
   }
 
   const control =
-    "flex items-center gap-1 rounded-xl border border-card-border px-2.5 py-1 text-[11px] font-bold text-text-primary hover:bg-leaf-bg";
+    "flex items-center gap-1.5 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg";
 
   return (
-    <li data-line className="rounded-xl border border-card-border bg-card-bg p-2.5">
-      <p className="truncate font-mono text-xs font-bold text-text-primary" dir="ltr">
-        {name}
-      </p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => void copy()} className={control}>
-          <Copy size={12} aria-hidden />
+    <li data-line className="rounded-2xl border border-card-border bg-card-bg p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="min-w-0 flex-1 truncate text-sm font-bold text-text-primary" dir="ltr">
+          {name}
+        </p>
+        <button
+          type="button"
+          onClick={() => void copy()}
+          className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white"
+        >
+          <Copy size={14} aria-hidden />
           {t("common", copied ? N.copied : N.copy)}
         </button>
         <button type="button" aria-expanded={qrOpen} onClick={() => setQrOpen((o) => !o)} className={control}>
-          <QrCode size={12} aria-hidden />
+          <QrCode size={14} aria-hidden />
           {t("common", qrOpen ? N.hideQr : N.showQr)}
         </button>
         {conf !== null && (
@@ -82,7 +88,7 @@ function Line({ line }: { line: string }) {
             download={confFileName(line)}
             className={control}
           >
-            <Download size={12} aria-hidden />
+            <Download size={14} aria-hidden />
             {t("common", N.download)}
           </a>
         )}
@@ -90,15 +96,15 @@ function Line({ line }: { line: string }) {
 
       {qrOpen &&
         (line.length > QR_MAX ? (
-          <p className="mt-2 text-[11px] text-text-secondary">{t("common", N.qrTooLong)}</p>
+          <p className="mt-2 text-xs text-text-secondary">{t("common", N.qrTooLong)}</p>
         ) : (
           // White behind the code in both themes: a scanner needs the contrast.
           <div
             role="img"
             aria-label={t("common", N.qrLabel, { name })}
-            className="mx-auto mt-2 w-fit rounded-xl bg-white p-3"
+            className="mx-auto mt-3 w-fit rounded-xl bg-white p-3"
           >
-            <QRCodeSVG value={line} size={176} aria-hidden />
+            <QRCodeSVG value={line} size={200} aria-hidden />
           </div>
         ))}
 
