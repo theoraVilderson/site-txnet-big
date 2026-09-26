@@ -13,6 +13,7 @@ import { HotLoopService } from './horizon';
 import { RemainderCreditService } from './remainder-credit';
 import { UserConfigsController } from './user-configs.controller';
 import { UserConfigsService } from './user-configs';
+import { GrantUsageService } from './grant-usage';
 
 /**
  * Metered traffic's money side (F-027-q, ADR-0072). In-process only: the hot
@@ -34,7 +35,7 @@ import { UserConfigsService } from './user-configs';
 @Module({
   imports: [WalletModule],
   controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController],
-  providers: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, CollectionHealthService, ConfigActionsService, UserConfigsService, GroupFulfilmentService, GroupDrainService],
+  providers: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GroupFulfilmentService, GroupDrainService],
   exports: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, ConfigActionsService, GroupFulfilmentService],
 })
 export class TrafficModule {}

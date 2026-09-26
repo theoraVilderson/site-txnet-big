@@ -311,6 +311,14 @@ export const RateLimitBucket = {
   CONFIG_ACTION: 'config:action',
 
   /**
+   * A Grant's daily usage (F-307-b), per user: the 30-day chart on the service
+   * page, read on every expand alongside the config list. Its own bucket
+   * because it is one more read per expand — sharing `CONFIG_LIST` would halve
+   * how often a user can open their configs.
+   */
+  GRANT_USAGE: 'grant:usage',
+
+  /**
    * The platform owner's settlement surface in `billing-service` (F-096-e),
    * per operator. Two buckets rather than one because the surface is read far
    * more often than it is written — an operator refreshes what is owed while

@@ -6,6 +6,7 @@ import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { ConfigActionRefused } from './config-actions';
+import { GrantUsageService } from './grant-usage';
 import { UserConfigsService } from './user-configs';
 import { ConfigActionBody, configActionSchema } from './user-configs.schema';
 
@@ -22,11 +23,16 @@ const E = BackendI18nKeys.errors.billing;
  * exists.
  *
  * The capability is `subscriptionLink`, as on the Grant list: these are the
- * configs `/sub` serves, so they are open exactly when it is.
+ * configs `/sub` serves, so they are open exactly when it is. The Grant's
+ * 30-day usage (F-307-b) sits here too: it is read through the same configs,
+ * behind the same ownership check.
  */
 @Controller('billing/traffic')
 export class UserConfigsController {
-  constructor(private readonly configs: UserConfigsService) {}
+  constructor(
+    private readonly configs: UserConfigsService,
+    private readonly usageOf: GrantUsageService,
+  ) {}
 
   @TenantCapability('subscriptionLink')
   @Get('grants/:grantId/configs')
@@ -38,6 +44,25 @@ export class UserConfigsController {
   async list(@Param('grantId', ParseUUIDPipe) grantId: string, @Req() req: Request) {
     try {
       return { grantId, rows: await this.configs.listForGrant(identityOf(req).userId, grantId) };
+    } catch (e) {
+      if (e instanceof ConfigActionRefused && e.reason === 'grant_not_found') {
+        throw new NotFoundException({ i18nKey: E.grant.notFound, reason: e.reason, message: `${e.name}: ${e.message}` });
+      }
+      throw e;
+    }
+  }
+
+  /** The Grant's daily upload/download over the last 30 UTC days, today included (F-307-b). */
+  @TenantCapability('subscriptionLink')
+  @Get('grants/:grantId/usage')
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.GRANT_USAGE, identityOf(req).userId),
+    configKey: 'GRANT_USAGE_RATE_LIMIT',
+    windowSec: 900,
+  })
+  async usage(@Param('grantId', ParseUUIDPipe) grantId: string, @Req() req: Request) {
+    try {
+      return { grantId, ...(await this.usageOf.dailyForGrant(identityOf(req).userId, grantId)) };
     } catch (e) {
       if (e instanceof ConfigActionRefused && e.reason === 'grant_not_found') {
         throw new NotFoundException({ i18nKey: E.grant.notFound, reason: e.reason, message: `${e.name}: ${e.message}` });

@@ -338,6 +338,8 @@ export const envSchema = z.object({
   CONFIG_LIST_RATE_LIMIT: rateLimit(180),
   /** One request is up to 50 configs, and each regenerate spends one of that config's three (F-027-ac). */
   CONFIG_ACTION_RATE_LIMIT: rateLimit(30),
+  /** The 30-day usage chart, opened with a Grant's configs (`traffic/user-configs.controller.ts`, F-307-b). */
+  GRANT_USAGE_RATE_LIMIT: rateLimit(180),
   /**
    * The operator settlement surface (`settlement/settlement.controller.ts`,
    * F-096-e), per operator. The read budget is the admin UI's refresh rate

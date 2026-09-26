@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 7
-updated: 2026-09-25
+updated: 2026-09-26
 ---
 
 # Contract — billing / gift code
@@ -128,3 +128,18 @@ still a desired-state write, and nothing here calls a panel.
 **Not covered:** a regenerate's new lines reach this answer only after the next
 capture — the answer to the action itself carries none; move and provision from the panel are nobody's row.
 Its consumer is `panel-web/contract.my-services.md`.
+
+## A Grant's daily usage (built — F-307-b)
+
+`GET /api/billing/traffic/grants/:grantId/usage`, on the same controller, over
+`traffic/grant-usage.ts`. Answers `data` `{grantId, from, to, days[{date, uploadBytes, downloadBytes}]}`.
+
+| Rule | Why |
+|---|---|
+| `traffic_daily_aggregate` is read **only by `configId`**, for the configs of a Grant whose `userId` is the gate's `X-User-Id`; another user's Grant is the same **404** as a missing one, and no aggregate is read for it | the table has no `tenantId` and no policy (network `data-model.md`): this check is the only fence |
+| Every config of the Grant counts, **retired included** | their bytes were spent against this Grant; the chart must not shrink when a user deletes a config |
+| Exactly 30 UTC days, today included, oldest first; a day with no row is `"0"`. Bytes are decimal strings | the chart never fills gaps; a day's sum can pass 2^53 |
+| Today is what the last rollup saw, not the live counter | the rollup re-rolls today on every run (network `contract.rollup.md`) |
+| Bucket `GRANT_USAGE` (**180**/900s, per user); capability `subscriptionLink` | read on every expand beside the config list; sharing `CONFIG_LIST` would halve it |
+
+**Not covered:** per-config breakdown and a window other than 30 days are nobody's row. Its consumer is F-307-c.

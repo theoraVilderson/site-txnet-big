@@ -227,7 +227,7 @@ describe('UserConfigsController', () => {
       }),
       act: vi.fn(async () => []),
     };
-    const controller = new UserConfigsController(configs as never);
+    const controller = new UserConfigsController(configs as never, {} as never);
 
     await expect(controller.list(GRANT, req(USER) as never)).rejects.toBeInstanceOf(NotFoundException);
     expect(configs.listForGrant).toHaveBeenCalledWith(USER, GRANT);
