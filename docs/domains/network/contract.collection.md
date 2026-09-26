@@ -87,6 +87,20 @@ loop is proved against.
    (`converge.Converger` over `PostgresDesired` / `PostgresAllocations`). A turn
    that fails its publish converges nothing: no queue bound for
    `network.usage.delta` means no provisioning either.
+5. **A changed desired state wakes its panel at once** (F-111-j). A trigger on
+   `network.config` (migration `…_a_new_config_wakes_its_panel`) notifies
+   `network_converge` with the panel id on an insert, or when `desiredEnabled`,
+   `desiredRemote`, `uuid`, `inboundRemoteId` or `panelId` changes — columns
+   no process here writes, so a turn never wakes the next. It is ADR-0083's
+   pattern, chosen over a broker event (user, 2026-09-26): every writer, a
+   purchase, an admin's action or a hand edit, is heard without code.
+   `WakeListener` holds one `LISTEN` connection; `Waker` folds a panel's wakes
+   into one turn after `DefaultWakeDebounce` (2s), and a wake that lands while
+   that turn holds the panel runs one more after it. The woken turn is
+   convergence only — no usage read, nothing published, so it does not wait on
+   the broker — under the panel's turn lock and health gate, over the panels
+   the last pass offered (`Offered`). A lost wake or an unoffered panel is left
+   to this loop, which stays the safety net.
 
 Each pass logs one line, plus one per panel that did not complete, with its
 `Op`. The hot loop reads through the same panels, drivers and cursors, and

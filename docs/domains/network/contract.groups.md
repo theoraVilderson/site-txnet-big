@@ -112,11 +112,12 @@ rows are written through `ConfigActionsService.provisionForGroup`
 Refusals are `GROUP_FULFILMENT_REJECTIONS`: `grant_not_found`,
 `grant_not_fulfillable`, `no_panel_group`, `strategy_not_built`.
 
-**End to end:** `network-service` runs the convergence pass in each collected
-panel's turn (F-027-bt, `contract.collection.md` "Running it"), so a placed
-config reaches `complete` on the pass after it is written. The turn converges
-only after its usage publish succeeds, so a stack with nothing bound to
-`network.usage.delta` activates no Grant.
+**End to end:** a placed config wakes its panel's convergence turn about two
+seconds after it commits (F-111-j, `contract.collection.md` "Running it"
+rule 5), and the minute pass in each collected panel's turn (F-027-bt) is the
+safety net for a wake that was lost. The woken turn publishes nothing, so a
+stack with nothing bound to `network.usage.delta` still places configs; their
+bytes wait on the cursors until a pass can publish them.
 
 ## Draining — `GroupDrainService` (billing-service, F-027-bm)
 

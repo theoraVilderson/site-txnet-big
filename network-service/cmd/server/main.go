@@ -133,6 +133,18 @@ func main() {
 	}
 	go func() { _ = collector.Run(runCtx) }()
 
+	// A config whose desired state changed wakes its panel's convergence turn
+	// at once (F-111-j): Postgres notifies on commit, and the waker folds a
+	// purchase's rows into one turn per panel. The loop above stays the safety
+	// net, so a wake lost while the listener reconnects is only the old delay.
+	wakes := &collect.WakeListener{
+		DatabaseURL:    cfg.DatabaseURL,
+		ConnectTimeout: cfg.ConnectTimeout,
+		Waker:          &collect.Waker{Loop: collector, Panels: panels.Offered},
+		Log:            log,
+	}
+	go wakes.Run(runCtx)
+
 	// The hot loop (F-027-bu): the few configs near their ceiling, read on
 	// their own interval through the bulk pass's panels, drivers, cursors,
 	// sink, health, rates and containment — nothing downstream can tell the
