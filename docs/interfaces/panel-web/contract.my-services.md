@@ -193,7 +193,7 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
     billing's `q`, F-307-m). One box above the list, shown once there is a
     service or a search, written to `?q=` beside `?page=`/`?all=1` when typing
     rests (a `replace`, back to page 1); paging and "show ended" keep it. No
-    match names the query — never "no services". Billing folds no ی/ي.
+    match names the query — never "no services". ي/ك fold (F-307-o).
 
 ## Proof
 

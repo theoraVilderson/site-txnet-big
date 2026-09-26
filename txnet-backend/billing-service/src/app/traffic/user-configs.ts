@@ -5,6 +5,7 @@ import { tenantTransaction } from '@txnet-backend/shared-core';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionRefused, ConfigActionsService, type ConfigActionRejection } from './config-actions';
 import { nameGrantLines } from './line-names';
+import { foldConfigText } from './config-text';
 
 /** What a user may do to their own config from the panel (user, 2026-09-23). Enable/disable is an operator's switch; a move needs a panel list users do not have. */
 export const USER_CONFIG_ACTIONS = ['regenerate', 'retire'] as const;
@@ -155,16 +156,20 @@ export class UserConfigsService {
 
   /**
    * Sets or clears the buyer's name for one of their configs (F-307-g,
-   * ADR-0089). Display only: nothing is queued for its panel. A config of
+   * ADR-0089), in one spelling (F-307-o, `config-text.ts`), and answers it as
+   * saved. Display only:
+   * nothing is queued for its panel. A config of
    * another user, or retired, is `config_not_found`, as for an action.
    */
-  setLabel(userId: string, configId: string, label: string | null): Promise<void> {
+  setLabel(userId: string, configId: string, label: string | null): Promise<string | null> {
+    const saved = label === null ? null : foldConfigText(label);
     return tenantTransaction(this.prisma, async (tx) => {
       const { count } = await tx.config.updateMany({
         where: { id: configId, userId, status: { not: ConfigStatus.retired } },
-        data: { userLabel: label },
+        data: { userLabel: saved },
       });
       if (count === 0) throw new ConfigActionRefused('config_not_found', configId);
+      return saved;
     });
   }
 

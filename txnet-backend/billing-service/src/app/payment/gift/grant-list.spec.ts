@@ -292,6 +292,20 @@ describe('GrantService.listForUser with q (F-307-m)', () => {
     expect(asked.configReads).toEqual([{ userId: USER, status: live, userLabel: null }]);
   });
 
+  it('folds q as a label is saved, and a default name before it is matched (F-307-o)', async () => {
+    const { list, asked } = build([grantRow()], 1, 7, [], 0, {
+      branding: { brandName: 'Leaf', lineNameTemplate: null },
+      regions: ['كرج ۲', 'تهران'],
+    });
+
+    await list(undefined, undefined, undefined, 'كرج 2');
+
+    expect(asked.where.configs.some.OR).toEqual([
+      { userLabel: { contains: 'کرج 2', mode: 'insensitive' } },
+      { userLabel: null, panel: { region: { in: ['كرج ۲'] } } },
+    ]);
+  });
+
   it('matches what the reseller’s template adds, not the region alone — the brand names every default line', async () => {
     const { list, asked } = build([grantRow()], 1, 7, [], 0, {
       branding: { brandName: 'Leaf', lineNameTemplate: '{brand} · {region}' },

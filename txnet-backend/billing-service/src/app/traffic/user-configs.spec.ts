@@ -275,6 +275,12 @@ describe('UserConfigsService.setLabel (F-307-g)', () => {
     expect(asked.updateData).toEqual({ userLabel: 'خانه' });
   });
 
+  it('saves the label in one spelling, so a search typed on either keyboard finds it (F-307-o)', async () => {
+    const { service, asked, inTenant } = build();
+    await expect(inTenant(() => service.setLabel(USER, C1, 'علي ۲'))).resolves.toBe('علی 2');
+    expect(asked.updateData).toEqual({ userLabel: 'علی 2' });
+  });
+
   it('refuses another user’s, a retired or a missing config as `config_not_found`', async () => {
     const { service, inTenant } = build({ updated: 0 });
     await expect(inTenant(() => service.setLabel(USER, C1, null))).rejects.toMatchObject({ reason: 'config_not_found' });
@@ -408,5 +414,9 @@ describe('UserConfigsController', () => {
     const controller = new UserConfigsController(configs as never, {} as never);
     await expect(controller.setLabel(C1, { label: 'x' }, req(USER) as never)).rejects.toBeInstanceOf(NotFoundException);
     expect(configs.setLabel).toHaveBeenCalledWith(USER, C1, 'x');
+
+    // A save answers the label as it was saved, not as it was sent (F-307-o).
+    configs.setLabel.mockImplementationOnce(async () => 'علی' as never);
+    await expect(controller.setLabel(C1, { label: 'علي' }, req(USER) as never)).resolves.toEqual({ configId: C1, label: 'علی' });
   });
 });

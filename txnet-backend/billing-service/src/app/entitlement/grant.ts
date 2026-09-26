@@ -8,6 +8,7 @@ import { isSellableBySku, meteredRateAt, type MeteredRateRow, type OfferFacts } 
 import { trafficQuotaOf } from '../catalog/traffic-quota';
 import { PrismaService } from '../prisma/prisma.service';
 import { GrantTokenSeal, NO_TOKEN_SEAL, type SealedToken } from './grant-token-seal';
+import { foldConfigText } from '../traffic/config-text';
 
 /**
  * Grant core (F-026-e; D-34, ADR-0049; spec: `tools/spec.py --section 4.4`).
@@ -245,7 +246,9 @@ type GrantViewRow = Prisma.GrantGetPayload<{ select: typeof GRANT_VIEW_COLUMNS }
  * default name is the same for every config of one region, so it is evaluated
  * here once per region and matched as a region list — the page stays one
  * query. The ` 2` numbering is not matched (it is a position, not a name), nor
- * a panel's own name where a template evaluates empty.
+ * a panel's own name where a template evaluates empty. `q` and a default name
+ * are folded as a label is saved (F-307-o, `config-text.ts`), so either
+ * keyboard's spelling finds either.
  */
 async function configNamedLike(tx: Prisma.TransactionClient, userId: string, q: string): Promise<Prisma.ConfigWhereInput> {
   const live = { not: ConfigStatus.retired };
@@ -256,15 +259,16 @@ async function configNamedLike(tx: Prisma.TransactionClient, userId: string, q: 
     }),
     tx.config.findMany({ where: { userId, status: live, userLabel: null }, select: { panel: { select: { region: true } } } }),
   ]);
-  const needle = q.toLocaleLowerCase();
+  const folded = foldConfigText(q);
+  const needle = folded.toLocaleLowerCase();
   const regions = [...new Set(unlabelled.map((c) => c.panel.region))].filter((region) =>
-    evaluateLineNameTemplate(branding?.lineNameTemplate ?? null, { brand: branding?.brandName ?? '', region })
+    foldConfigText(evaluateLineNameTemplate(branding?.lineNameTemplate ?? null, { brand: branding?.brandName ?? '', region }))
       .toLocaleLowerCase()
       .includes(needle),
   );
   return {
     status: live,
-    OR: [{ userLabel: { contains: q, mode: 'insensitive' } }, { userLabel: null, panel: { region: { in: regions } } }],
+    OR: [{ userLabel: { contains: folded, mode: 'insensitive' } }, { userLabel: null, panel: { region: { in: regions } } }],
   };
 }
 

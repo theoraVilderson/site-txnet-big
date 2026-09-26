@@ -101,8 +101,9 @@ export class UserConfigsController {
     @Req() req: Request,
   ) {
     try {
-      await this.configs.setLabel(identityOf(req).userId, configId, body.label);
-      return { configId, label: body.label };
+      // The label as saved, in one spelling (F-307-o), not as sent.
+      const label = await this.configs.setLabel(identityOf(req).userId, configId, body.label);
+      return { configId, label };
     } catch (e) {
       if (e instanceof ConfigActionRefused && e.reason === 'config_not_found') {
         throw new NotFoundException({ i18nKey: E.configNotFound, reason: e.reason, message: `${e.name}: ${e.message}` });
