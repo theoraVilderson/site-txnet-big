@@ -100,6 +100,8 @@ type Store interface {
 	// Fail records a test that produced no verdict. The panel stays pending.
 	// It is held by the same guard as Answer, and false means the same.
 	Fail(ctx context.Context, p Pending, fault FaultKind, detail string, at time.Time) (bool, error)
+	// DuplicateStore is the registered-once check (F-027-ce).
+	DuplicateStore
 }
 
 // Opener builds the driver for one panel.
@@ -119,6 +121,9 @@ type Registrar struct {
 	RetryAfter time.Duration
 	Now        func() time.Time
 	Log        *slog.Logger
+	// Resolve looks a host up for the duplicate check's same-IP suspicion.
+	// Nil is net.DefaultResolver.LookupHost.
+	Resolve func(ctx context.Context, host string) ([]string, error)
 }
 
 // Failure is one panel whose test produced no verdict.
@@ -236,6 +241,33 @@ func (r *Registrar) test(ctx context.Context, p Pending, report *Report) error {
 	}
 
 	verdict := caps.Verdict(p.Transport, p.CounterSemantics)
+	// Registered once (F-027-ce): a pull panel that would be taken is first
+	// asked whether it is one already registered. A refused one is not taken
+	// either way, and a push panel is never called.
+	if p.Transport == driver.TransportPull && verdict.ReviewState != driver.ReviewRefused {
+		dupCtx, cancel := context.WithTimeout(ctx, orDefault(r.Timeout, DefaultTimeout))
+		holder, found, err := r.duplicateOf(dupCtx, d, p)
+		cancel()
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return fail(faultOf(err, FaultKind(driver.FaultProtocol)), err.Error())
+		}
+		if found {
+			written, err := r.Store.Duplicate(ctx, p, caps, holder, at)
+			if err != nil {
+				return err
+			}
+			if !written {
+				report.Stale++
+				return nil
+			}
+			report.Answered++
+			r.log().Warn("panel refused: it is one already registered", "panel", p.PanelID, "duplicateOf", holder.PanelID, "name", holder.Name)
+			return nil
+		}
+	}
 	written, err := r.Store.Answer(ctx, p, caps, verdict.ReviewState, at)
 	if err != nil {
 		return err

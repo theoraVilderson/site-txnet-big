@@ -65,6 +65,8 @@ const PANEL_FIELDS = {
   connectionTestedAt: true,
   connectionTestFault: true,
   connectionTestDetail: true,
+  // The panel a refused duplicate is (F-027-ce): its id and name, nothing else.
+  duplicateOf: { select: { id: true, name: true } },
   panelState: true,
   blockedSince: true,
   lastHealthyAt: true,
@@ -141,6 +143,7 @@ export class SystemsReadService {
           connectionTestedAt: p.connectionTestedAt,
           connectionTestFault: p.connectionTestFault,
           connectionTestDetail: p.connectionTestDetail,
+          duplicateOf: p.duplicateOf,
         },
         health: {
           panelState: p.panelState,

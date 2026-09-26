@@ -75,7 +75,14 @@ export class PanelLifecycleService {
     const data = {
       ...input,
       ...(retest
-        ? { reviewState: PanelReviewState.pending, connectionTestedAt: null, connectionTestFault: null, connectionTestDetail: null }
+        ? {
+            reviewState: PanelReviewState.pending,
+            connectionTestedAt: null,
+            connectionTestFault: null,
+            connectionTestDetail: null,
+            // A duplicate's name goes with its refusal (CHECK `panel_duplicate_is_refused`, F-027-ce).
+            duplicateOfPanelId: null,
+          }
         : {}),
     };
     // A new API address is one no other panel holds (F-027-cd); its own, re-spelled, is not a duplicate.
@@ -140,7 +147,14 @@ export class PanelLifecycleService {
     const where = { id: panelId, ...scope };
     const { count } = await this.all.panel.updateMany({
       where: { ...where, retiredAt: { not: null } },
-      data: { retiredAt: null, reviewState: PanelReviewState.pending, connectionTestedAt: null, connectionTestFault: null, connectionTestDetail: null },
+      data: {
+        retiredAt: null,
+        reviewState: PanelReviewState.pending,
+        connectionTestedAt: null,
+        connectionTestFault: null,
+        connectionTestDetail: null,
+        duplicateOfPanelId: null,
+      },
     });
     if (count === 0) {
       const panel = await this.prisma.panel.findFirst({ where, select: { retiredAt: true } });

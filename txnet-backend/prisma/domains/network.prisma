@@ -370,9 +370,16 @@ model Panel {
   /// `network-service` loop skips it; its configs, usage and holds stay for
   /// the record. Null for a panel in service; one with no history is deleted.
   retiredAt                  DateTime?
+  /// The registered panel the connection test found this one to be, under
+  /// another address (F-027-ce, ADR-0090): a claim tag of its configs, or a
+  /// canary created through it, seen here. Set only with `refused`
+  /// (CHECK `panel_duplicate_is_refused`); cleared when it is re-tested.
+  duplicateOfPanelId         String?            @db.Uuid
 
   pairedPanel Panel?   @relation("PanelHAPair", fields: [pairedPanelId], references: [id])
   pairedWith  Panel[]  @relation("PanelHAPair")
+  duplicateOf Panel?   @relation("PanelDuplicate", fields: [duplicateOfPanelId], references: [id], onDelete: SetNull)
+  duplicates  Panel[]  @relation("PanelDuplicate")
   configs     Config[]
 
   driftEvents       PanelDriftEvent[]

@@ -18,6 +18,10 @@ type Record struct {
 	TestedAt     time.Time
 	Fault        FaultKind
 	Detail       string
+	// DuplicateOf is the panel this one was found to be (F-027-ce); set only with refused.
+	DuplicateOf string
+	// Registered is the panel as the duplicate check sees it, once accepted.
+	Registered Registered
 }
 
 // MemoryStore holds registration state in memory. It is what the pass is
@@ -25,9 +29,27 @@ type Record struct {
 type MemoryStore struct {
 	mu   sync.Mutex
 	rows map[string]*Record
+	// claims is each panel's configs, as claim tag and uuid pairs.
+	claims map[string][][2]string
 }
 
-func NewMemoryStore() *MemoryStore { return &MemoryStore{rows: map[string]*Record{}} }
+func NewMemoryStore() *MemoryStore {
+	return &MemoryStore{rows: map[string]*Record{}, claims: map[string][][2]string{}}
+}
+
+// PutRegistered puts a panel in service, in the given state.
+func (m *MemoryStore) PutRegistered(r Registered, state driver.ReviewState) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.rows[r.PanelID] = &Record{Pending: r.Pending, ReviewState: state, Registered: r}
+}
+
+// Claim gives a panel a config with this claim tag and uuid.
+func (m *MemoryStore) Claim(panelID, claimTag, uuid string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.claims[panelID] = append(m.claims[panelID], [2]string{claimTag, uuid})
+}
 
 // Put registers a panel as `pending` — what `billing-service`'s register route
 // writes, and what a re-submission resets to.
@@ -55,7 +77,7 @@ func (m *MemoryStore) Edit(panelID, apiBaseURL, clientBaseURL string) {
 	if r := m.rows[panelID]; r != nil {
 		r.APIBaseURL, r.ClientBaseURL = apiBaseURL, clientBaseURL
 		r.ReviewState, r.Capabilities = driver.ReviewPending, nil
-		r.TestedAt, r.Fault, r.Detail = time.Time{}, "", ""
+		r.TestedAt, r.Fault, r.Detail, r.DuplicateOf = time.Time{}, "", "", ""
 	}
 }
 
@@ -114,5 +136,67 @@ func (m *MemoryStore) Fail(_ context.Context, p Pending, fault FaultKind, detail
 		return false, nil
 	}
 	r.TestedAt, r.Fault, r.Detail = at, fault, detail
+	return true, nil
+}
+
+func (m *MemoryStore) ClaimHolder(_ context.Context, panelID string, tags, uuids []string) (Holder, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	want := map[string]bool{}
+	for _, t := range tags {
+		want["t:"+t] = true
+	}
+	for _, u := range uuids {
+		want["u:"+u] = true
+	}
+	ids := make([]string, 0, len(m.claims))
+	for id := range m.claims {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		if id == panelID {
+			continue
+		}
+		for _, c := range m.claims[id] {
+			if want["t:"+c[0]] || want["u:"+c[1]] {
+				name := ""
+				if r := m.rows[id]; r != nil {
+					name = r.Registered.Name
+				}
+				return Holder{PanelID: id, Name: name}, true, nil
+			}
+		}
+	}
+	return Holder{}, false, nil
+}
+
+func (m *MemoryStore) Registered(_ context.Context, panelID string) ([]Registered, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []Registered
+	for id, r := range m.rows {
+		if id == panelID || r.Transport != driver.TransportPull ||
+			(r.ReviewState != driver.ReviewAccepted && r.ReviewState != driver.ReviewAcceptedLowTrust) {
+			continue
+		}
+		reg := r.Registered
+		reg.Pending = r.Pending
+		out = append(out, reg)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].PanelID < out[j].PanelID })
+	return out, nil
+}
+
+func (m *MemoryStore) Duplicate(_ context.Context, p Pending, caps driver.Capabilities, holder Holder, at time.Time) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.tested(p)
+	if r == nil {
+		return false, nil
+	}
+	r.Capabilities = &caps
+	r.ReviewState, r.DuplicateOf = driver.ReviewRefused, holder.PanelID
+	r.TestedAt, r.Fault, r.Detail = at, "", ""
 	return true, nil
 }

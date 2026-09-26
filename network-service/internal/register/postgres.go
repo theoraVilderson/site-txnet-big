@@ -171,3 +171,111 @@ func truncate(s string, max int) string {
 	}
 	return s
 }
+
+// claimHolderSQL is a config of another panel carrying one of the tags or
+// uuids the new panel's clients hold. Every config counts, retired ones too:
+// a client of ours left behind is still proof of which server this is.
+const claimHolderSQL = `
+SELECT p.id::text, p.name
+  FROM network.config c
+  JOIN network.panel p ON p.id = c."panelId"
+ WHERE c."panelId" <> $1::uuid
+   AND (c."claimTag" = ANY($2::text[]) OR c.uuid = ANY($3::text[]))
+ ORDER BY p.id
+ LIMIT 1`
+
+func (s PostgresStore) ClaimHolder(ctx context.Context, panelID string, tags, uuids []string) (Holder, bool, error) {
+	rows, err := s.DB.Query(ctx, claimHolderSQL, panelID, nonNil(tags), nonNil(uuids))
+	if err != nil {
+		return Holder{}, false, fmt.Errorf("reading claim holders for panel %s: %w", panelID, err)
+	}
+	defer rows.Close()
+	var h Holder
+	found := rows.Next()
+	if found {
+		if err := rows.Scan(&h.PanelID, &h.Name); err != nil {
+			return Holder{}, false, fmt.Errorf("reading claim holders for panel %s: %w", panelID, err)
+		}
+	}
+	return h, found, rows.Err()
+}
+
+// registeredSQL is every pull panel in service but $1, with the inbounds it
+// was last read with — the suspects a new panel is compared against.
+const registeredSQL = `
+SELECT p.id::text, p."driverType"::text, p.transport::text, p."counterSemantics"::text,
+       p."apiBaseUrl", coalesce(p."clientBaseUrl", ''), p."panelApiCredentials",
+       p.name, coalesce(p."ipAddress", ''),
+       coalesce(array_agg(i."remoteId" ORDER BY i."remoteId") FILTER (WHERE i."remoteId" IS NOT NULL), '{}'),
+       coalesce(array_agg(i.port ORDER BY i."remoteId") FILTER (WHERE i."remoteId" IS NOT NULL), '{}'),
+       coalesce(array_agg(coalesce(i.protocol::text, '')) FILTER (WHERE i."remoteId" IS NOT NULL), '{}')
+  FROM network.panel p
+  LEFT JOIN network.panel_inbound i ON i."panelId" = p.id AND i."goneAt" IS NULL
+ WHERE p.id <> $1::uuid
+   AND p.transport = 'pull' AND p."apiBaseUrl" IS NOT NULL
+   AND p."reviewState" IN ('accepted', 'accepted_low_trust')
+   AND p."retiredAt" IS NULL
+ GROUP BY p.id
+ ORDER BY p.id`
+
+func (s PostgresStore) Registered(ctx context.Context, panelID string) ([]Registered, error) {
+	rows, err := s.DB.Query(ctx, registeredSQL, panelID)
+	if err != nil {
+		return nil, fmt.Errorf("reading registered panels: %w", err)
+	}
+	defer rows.Close()
+	var out []Registered
+	for rows.Next() {
+		var r Registered
+		var family, transport, semantics string
+		var ids, protocols []string
+		var ports []int32
+		if err := rows.Scan(&r.PanelID, &family, &transport, &semantics,
+			&r.APIBaseURL, &r.ClientBaseURL, &r.Credentials, &r.Name, &r.IPAddress,
+			&ids, &ports, &protocols); err != nil {
+			return nil, fmt.Errorf("reading registered panels: %w", err)
+		}
+		r.DriverType = driver.DriverType(family)
+		r.Transport = driver.Transport(transport)
+		r.CounterSemantics = driver.CounterSemantics(semantics)
+		for i := range ids {
+			r.Inbounds = append(r.Inbounds, InboundKey{RemoteID: ids[i], Port: int(ports[i]), Protocol: protocols[i]})
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+var duplicateSQL = `
+WITH tested AS (
+UPDATE network.panel
+   SET capabilities = $2::jsonb,
+       "reviewState" = 'refused',
+       "duplicateOfPanelId" = $3::uuid,
+       "connectionTestedAt" = $4,
+       "connectionTestFault" = NULL,
+       "connectionTestDetail" = NULL
+ WHERE id = $1::uuid AND "reviewState" = 'pending'` + testedAddressSQL + `
+RETURNING id, name, "tenantId", "reviewState", "connectionTestFault")` + fmt.Sprintf(announceSQL, 7)
+
+// Duplicate refuses the panel as one already registered, naming it, under
+// Answer's guard and announced the same way.
+func (s PostgresStore) Duplicate(ctx context.Context, p Pending, caps driver.Capabilities, holder Holder, at time.Time) (bool, error) {
+	doc, err := json.Marshal(caps)
+	if err != nil {
+		return false, fmt.Errorf("encoding capabilities: %w", err)
+	}
+	tag, err := s.DB.Exec(ctx, duplicateSQL, p.PanelID, doc, holder.PanelID, at,
+		p.APIBaseURL, p.ClientBaseURL, PanelTestedEvent)
+	if err != nil {
+		return false, fmt.Errorf("writing panel %s duplicate verdict: %w", p.PanelID, err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}

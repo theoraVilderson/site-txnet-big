@@ -38,7 +38,9 @@ its next tick.
    and a refused one, since the new server has not been asked. Collection
    reads only an accepted panel (network invariant 44), so it pauses until the
    next tick's test (`network/contract.registration.md` rule 4). The same
-   value sent again is not a change. `retest` says which happened.
+   value sent again is not a change. `retest` says which happened. A
+   refused duplicate's `duplicateOfPanelId` is cleared with it, and on
+   restore (F-027-ce, `network/contract.registration.md` rule 8).
 2a. **A new API address is one no other panel holds** (F-027-cd): 409
    `panel_already_registered` naming the holder, and nothing is written —
    contract.systems.md rule 4a. The panel's own address, re-spelled, is not

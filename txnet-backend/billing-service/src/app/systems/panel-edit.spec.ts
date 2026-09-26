@@ -96,6 +96,12 @@ describe('PanelLifecycleService.update (F-027-by)', () => {
     expect(panel['reviewState']).toBe(PanelReviewState.pending);
   });
 
+  it('a refused duplicate moved to its own address is re-tested without the name it was refused under (F-027-ce)', async () => {
+    const { service, panel, actor } = harness({ reviewState: PanelReviewState.refused, duplicateOfPanelId: '66666666-6666-4666-8666-666666666666' });
+    await service.update(actor, PANEL, { apiBaseUrl: 'https://own.example.com:2053/panel' });
+    expect(panel).toMatchObject({ reviewState: PanelReviewState.pending, duplicateOfPanelId: null });
+  });
+
   it('a name, region or budget change leaves the verdict alone', async () => {
     const { service, panel, actor } = harness();
     const answer = await service.update(actor, PANEL, { name: 'de-fra-main', region: 'eu', maxRequestsPerMinute: 30 });

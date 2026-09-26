@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: draft
-version: 15
-updated: 2026-09-25
+version: 16
+updated: 2026-09-26
 ---
 
 # Registration: the connection test and its verdict
@@ -39,6 +39,8 @@ would only spend the connections a collection pass needs.
 | unreachable, stalled, refused our credentials, `5xx` | `connectionTestedAt`, `connectionTestFault`, `connectionTestDetail` | stays `pending` |
 | driver could not be built (unknown family, credentials do not decrypt) | same, fault `unopenable` | stays `pending` |
 | the driver answered a document `Validate` refuses | same, fault `invalid_answers`; the document is **not** stored | stays `pending` |
+| answers validate, and the panel **is one already registered** (below) | as a verdict, plus `duplicateOfPanelId` | `refused` |
+| the duplicate check could not run (a list failed, the canary could not be made) | a fault, the detail naming the suspect | stays `pending` |
 
 The rules:
 
@@ -70,6 +72,39 @@ The rules:
 kinds (`contract.md` "The driver contract") plus `unopenable` and
 `invalid_answers`. `register.FaultKind` mirrors it, and
 `network-panel-declaration.spec.ts` pins the eight values.
+
+## Registered once — the duplicate check (F-027-ce, ADR-0090 decision 1)
+
+billing refuses a second row at the same normalised address (F-027-cd,
+invariant 51); this catches the same panel under another one. It runs after
+the answers validate, for a pull panel the questionnaire would take — a
+refused one is not taken anyway, and a push panel is never called
+(`register/duplicate.go`, `duplicate_test.go`).
+
+6. **Our client on it names the panel.** A client of the new panel carrying a
+   `claimTag` or `uuid` of another panel's config — any status, since a client
+   left behind is still proof — makes it that panel's duplicate. No canary.
+7. **A suspect gets a canary.** Otherwise every panel in service (pull,
+   accepted, not archived) whose inbound set equals the new panel's — remote
+   id and port, and protocol where `panel_inbound` has one — or whose IP (its
+   `ipAddress`, or its host resolved) is one the new host resolves to, is a
+   suspect. Through the **registered** panel a disabled client is created
+   (random `canary-` tag and uuid, a 1-byte limit, an hour's expiry) and looked
+   for on the new one. Seen = the same panel. It is deleted either way, on a
+   context the test's own deadline cannot cut; a delete that fails is logged
+   with the tag, for removal by hand. It runs whether or not the new panel has
+   clients — a panel's own users are not ours and would hide the copy (widens
+   ADR-0090's "no clients", at the cost of one disabled client on a suspect).
+8. **Found = `refused`, naming the holder.** `duplicateOfPanelId` is written
+   with the verdict, in the same guarded, announced statement as an answer
+   (rule 3); CHECK `panel_duplicate_is_refused` keeps it on a refused panel
+   only, and billing's address edit and restore clear it. Deleting the holder
+   leaves the refusal without a name (`ON DELETE SET NULL`).
+9. **A check that cannot run is no verdict.** A failed list, an unopenable
+   suspect or a family that cannot create the canary leaves the panel
+   `pending` with the fault and a detail naming the suspect — never accepted
+   past the check, never refused for our failure. A DNS failure only removes
+   a reason to suspect.
 
 ## Every result is announced, in the statement that writes it (F-027-bs)
 

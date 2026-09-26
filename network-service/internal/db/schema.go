@@ -45,6 +45,10 @@ var RequiredColumns = map[string][]string{
 		"reviewState", "orphanPolicy", "panelApiCredentials",
 		// Why the connection test gave no verdict (F-027-aq, ADR-0080).
 		"connectionTestedAt", "connectionTestFault", "connectionTestDetail",
+		// The panel a refused duplicate is (F-027-ce, ADR-0090).
+		"duplicateOfPanelId",
+		// What the duplicate check compares and names a suspect by (F-027-ce).
+		"name", "ipAddress",
 		"panelState", "blockedSince", "maxRequestsPerMinute",
 		"maxLineRateBps", "observedWriteLatencyMs",
 		"lastHealthyAt", "lastSuccessfulCollectionAt",
