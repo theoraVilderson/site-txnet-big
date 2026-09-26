@@ -139,7 +139,11 @@ func TestAFailedCaptureKeepsTheStoredLinesAndIsRetried(t *testing.T) {
 	}
 }
 
-func TestAPanelWithNoLinksIsCapturedAsNoneAndNotAskedAgain(t *testing.T) {
+// A capture that stored no lines is a fact, but not forever (ADR-0088 rule 5):
+// it is asked again once EmptyRecapture has passed, so a panel whose lines
+// appear later, or a builder that learns its transport, fills in without a
+// new key. Inside the interval it costs nothing.
+func TestAPanelWithNoLinksIsCapturedAsNoneAndAskedAgainLater(t *testing.T) {
 	r := newProvRig(t, fake.Config{Unsupported: map[driver.RowKey]bool{driver.RowNativeSubscriptionLink: true}})
 	r.desired.Put("panel-1", wanted("c1"))
 	r.pass(t)
@@ -151,6 +155,19 @@ func TestAPanelWithNoLinksIsCapturedAsNoneAndNotAskedAgain(t *testing.T) {
 		t.Fatalf("links = %+v, want captured as none: a config that gives no lines is a fact, visibly", got.Links)
 	}
 	if n := r.panel.CallCount("ClientLinks"); n != 1 {
-		t.Fatalf("ClientLinks called %d times, want 1", n)
+		t.Fatalf("ClientLinks called %d times inside the interval, want 1", n)
+	}
+
+	r.at = r.at.Add(converge.EmptyRecapture)
+	r.pass(t)
+	if n := r.panel.CallCount("ClientLinks"); n != 2 {
+		t.Fatalf("ClientLinks called %d times after EmptyRecapture, want 2", n)
+	}
+	if again := r.row(t, "c1"); !again.Links.At.After(got.Links.At) {
+		t.Errorf("the second capture kept the first's time %v, want a new one", again.Links.At)
+	}
+	r.pass(t)
+	if n := r.panel.CallCount("ClientLinks"); n != 2 {
+		t.Errorf("ClientLinks called %d times right after the second capture, want 2", n)
 	}
 }

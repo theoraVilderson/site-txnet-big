@@ -20,7 +20,7 @@ import (
 // recreate capture at once, from the client the panel answered with (F-111-k),
 // and the confirming read then finds them read from that client. A config
 // nobody changed is never asked again, so capture spends no budget on a
-// steady panel.
+// steady panel — except one captured with no lines, asked again hourly.
 
 // CapturedLinks is `linkLines` and the key they were captured under. At is
 // zero for a config never captured, which is not the same as one captured
@@ -32,9 +32,18 @@ type CapturedLinks struct {
 	At       time.Time
 }
 
-// From says whether these lines were read from this client.
-func (l CapturedLinks) From(client driver.RemoteClient) bool {
-	return !l.At.IsZero() && l.RemoteID == client.RemoteID && l.UUID == client.UUID
+// EmptyRecapture is how long a capture that stored no lines stands before it
+// is asked again (ADR-0088 rule 5): once an hour per such config, inside the
+// panel's budget, so lines that appear later fill in without a new key.
+const EmptyRecapture = time.Hour
+
+// From says whether these lines were read from this client and still stand
+// at `at`: lines always do, none only for EmptyRecapture.
+func (l CapturedLinks) From(client driver.RemoteClient, at time.Time) bool {
+	if l.At.IsZero() || l.RemoteID != client.RemoteID || l.UUID != client.UUID {
+		return false
+	}
+	return len(l.Lines) > 0 || at.Sub(l.At) < EmptyRecapture
 }
 
 // ActionLinksUnread: the client is confirmed and its lines could not be read.
@@ -46,7 +55,7 @@ const ActionLinksUnread Action = "links_unread"
 // were read from another client. A failed read is a finding and leaves the
 // outcome without lines.
 func (v *Provisioning) capture(ctx context.Context, p collect.Panel, row DesiredConfig, client driver.RemoteClient, outcome *Outcome, report *ProvisionReport) {
-	if row.Links.From(client) {
+	if row.Links.From(client, outcome.At) {
 		return
 	}
 	lines, err := p.Driver.ClientLinks(ctx, client)

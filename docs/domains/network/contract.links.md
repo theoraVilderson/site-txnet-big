@@ -65,7 +65,10 @@ that should exist and does not, which is drift (`contract.drift.md`).
    row's lines were read from another client, another `remoteId` or `uuid`.
    That one test is every trigger: a create, a move (a new row) and a recreate
    confirm a client the row has no lines from; a regenerate confirms a new
-   `uuid`; a rename or a rebuild re-keys `remoteId`.
+   `uuid`; a rename or a rebuild re-keys `remoteId`. A capture that stored
+   **no** lines stands for `converge.EmptyRecapture` (one hour) and is then
+   asked again (F-111-v, ADR-0088 rule 5), so lines that appear later, or a
+   config captured before its family's lines were built, fill in with no key.
 6a. **A create captures in its own pass** (F-111-k). After a create or a
    recreate the pass calls `ClientLinks` on the client the panel answered
    with, keyed by that client, so a buyer's `/sub` is filled in the pass that
