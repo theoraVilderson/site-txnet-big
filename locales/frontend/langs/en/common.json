@@ -1904,6 +1904,13 @@
       "reseller_not_found": "This reseller does not exist.",
       "reseller_suspended": "This reseller is suspended.",
       "reseller_terminated": "This reseller has been terminated."
+    },
+    "more": {
+      "title": "More settings",
+      "branding": {
+        "title": "Brand",
+        "hint": "How your configs are named in your customers' VPN apps."
+      }
     }
   },
   "resellerGateways": {
@@ -2023,6 +2030,43 @@
       "primary_exists": "this reseller already has a bot on this messenger. Remove it first.",
       "bot_not_found": "that bot was not found.",
       "vault_unavailable": "bot tokens cannot be stored on this deployment right now. Try again later."
+    }
+  },
+  "resellerBranding": {
+    "title": "Brand of {{slug}}",
+    "titlePlain": "Your reseller's brand",
+    "subtitle": "What your customers see of your brand outside your panel.",
+    "backToConsole": "Back to setup",
+    "reload": "Try again",
+    "lineName": {
+      "title": "Config names in your customers' apps",
+      "body": "When a customer adds a config to a VPN app, the app shows this name for it. A name the customer gave the config always comes first. When two lines would share a name, “ 2”, “ 3” is added on its own.",
+      "field": "Name pattern",
+      "hint": "Leave it empty to show the region alone, e.g. “Germany”. At most 40 characters.",
+      "insert": "Add to the pattern:",
+      "placeholders": {
+        "brand": "Brand name",
+        "region": "Region"
+      },
+      "preview": "How a config will look in the app",
+      "previewNone": "The server's own name is kept",
+      "sampleRegion": "Germany",
+      "numbered": "A second line with the same name shows as “{{name}} 2”.",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Saved. Every config without a name of its own uses it now; a customer's app shows it on its next refresh.",
+      "useDefault": "Back to the default",
+      "problems": {
+        "too_long": "The pattern can be at most 40 characters.",
+        "unknown_placeholder": "Only {brand} and {region} can go inside braces.",
+        "control_character": "Remove the invisible control characters."
+      }
+    },
+    "refusals": {
+      "not_allowed": "You cannot manage this reseller's brand.",
+      "reseller_not_found": "This reseller does not exist.",
+      "reseller_suspended": "This reseller is suspended: its brand can be seen, not changed.",
+      "reseller_terminated": "This reseller is terminated."
     }
   },
   "myServices": {

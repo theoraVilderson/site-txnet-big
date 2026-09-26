@@ -198,6 +198,42 @@ export const resellerOnboardingApi = {
   },
 };
 
+/** shared-core's `LineNameTemplateProblem`: why a line-name template would be refused. */
+export type LineNameTemplateProblem = "too_long" | "unknown_placeholder" | "control_character";
+
+/** The part of the branding view this panel edits (`tenant/contract.branding.md`). */
+export interface ResellerBranding {
+  brandName: string;
+  /** The default name of a config line in a buyer's app (F-307-j); `null` is the platform's `{region}`. */
+  lineNameTemplate: string | null;
+}
+
+/** One line's name under a template, evaluated by tenant-service, or why it would be refused. */
+export interface LineNamePreview {
+  name: string | null;
+  problem: LineNameTemplateProblem | null;
+}
+
+export const resellerBrandingApi = {
+  async get(tenantId: string): Promise<ResellerBranding> {
+    return call<ResellerBranding>(`/tenants/${encodeURIComponent(tenantId)}/branding`, { method: "GET" });
+  },
+  /** Its own route: the whole-text `PUT` would clear what it is not sent. `null` is the platform default. */
+  async setLineNameTemplate(tenantId: string, template: string | null): Promise<ResellerBranding> {
+    return call<ResellerBranding>(`/tenants/${encodeURIComponent(tenantId)}/branding/line-name-template`, {
+      method: "PUT",
+      body: JSON.stringify({ template }),
+    });
+  },
+  /** Writes nothing. The panel never builds a line's name itself (ADR-0089). */
+  async previewLineName(tenantId: string, template: string | null, region: string): Promise<LineNamePreview> {
+    return call<LineNamePreview>(`/tenants/${encodeURIComponent(tenantId)}/branding/line-name-template/preview`, {
+      method: "POST",
+      body: JSON.stringify({ template, region }),
+    });
+  },
+};
+
 export const resellerDomainsApi = {
   async list(tenantId: string): Promise<ResellerDomain[]> {
     return call<ResellerDomain[]>(`/tenants/${encodeURIComponent(tenantId)}/domains`, { method: "GET" });

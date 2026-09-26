@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 20
-updated: 2026-09-18
+updated: 2026-09-26
 ---
 
 # panel-web — the domain's brand (F-066-v, ADR-0059)
@@ -59,3 +59,24 @@ Client components get it through `context/BrandContext.tsx` (`useBrand()`).
 
 A replaced logo can take up to 60s here plus the file route's five minutes
 (`max-age=300`) to show.
+
+## Editing it: config names in a buyer's app (F-307-k, ADR-0089 rule 4)
+
+A reseller's owner edits its **line-name template** at
+`/my-resellers/[id]/branding` (`myResellerBrandingPath`), reached from its
+console's "More settings" (not a step: nothing waits on it). By the path's
+reseller, as the rest of its workspace (`contract.resellers.md`). Files:
+`my-resellers/[id]/branding/_components/ResellerBrandingView.tsx`, rules
+`my-resellers/_lib/branding.ts`; calls `resellerBrandingApi` (`lib/tenant-api.ts`):
+`GET .../branding`, `PUT .../branding/line-name-template`,
+`POST .../line-name-template/preview` (tenant `contract.branding.md` rule 7).
+
+| Rule | Why |
+|---|---|
+| 5. **The preview is the service's answer**, asked 300 ms after typing rests, over a sample region from the locale (`آلمان` / `Germany`); an answer for an older template is dropped. The page never evaluates a template | ADR-0089: the panel shows the name the API answers; one evaluator in TypeScript |
+| 6. A problem is shown in its own sentence (`LINE_NAME_PROBLEM_KEYS`, closed over shared-core's `LINE_NAME_TEMPLATE_PROBLEMS`) and Save stays off while there is one, while the preview is pending, or when nothing changed | the `PUT` would refuse it with only `validation.failed` |
+| 7. Sent trimmed; empty is `null`, the platform's `{region}` ("Back to the default") | an empty string is not a template |
+| 8. The placeholder buttons are shared-core's `LINE_NAME_PLACEHOLDERS`, inserted at the caret | a placeholder offered that the service refuses would fail on save |
+
+`branding.test.ts` reads the problems, placeholders, cap and refusals from
+shared-core's source.

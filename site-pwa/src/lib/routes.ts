@@ -134,6 +134,8 @@ export const myResellerBotPath = (id: string) => `${PANEL_MY_RESELLERS}/${encode
  * never the session tenant's — the platform's, for the visitor this is for.
  */
 export const myResellerCatalogPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/catalog`;
+/** A reseller's brand settings: today the default name of a config line in a buyer's app (F-307-k). */
+export const myResellerBrandingPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/branding`;
 /** Where that catalog's machine-drafted names are reviewed (F-1533-e on the reseller's surface). */
 export const myResellerCatalogTranslationsPath = (id: string) => `${myResellerCatalogPath(id)}/translations`;
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */

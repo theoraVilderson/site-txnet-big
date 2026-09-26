@@ -168,6 +168,7 @@ front page; the gateways screen (w4) is beside it, the bot screen (w6) is
 | its gateways | `/my-resellers/[id]/gateways` (`myResellerGatewaysPath`) | `my-resellers/[id]/gateways/_components/ResellerGatewaysView.tsx`, rules `my-resellers/_lib/gateways.ts` |
 | its bot | `/my-resellers/[id]/bot` (`myResellerBotPath`) | [contract.reseller-bot.md](contract.reseller-bot.md) (F-066-w6) |
 | its catalog | `/my-resellers/[id]/catalog` (`myResellerCatalogPath`) | [contract.catalog.md](contract.catalog.md) "The same page for a reseller a route names" (F-066-w8) |
+| its brand | `/my-resellers/[id]/branding` (`myResellerBrandingPath`) | [contract.branding.md](contract.branding.md) "Editing it" (F-307-k) |
 
 Its calls are `resellerDomainsApi` (`lib/tenant-api.ts`): list, add, check —
 every rule behind them is [tenant/contract.domains.md](../../domains/tenant/contract.domains.md).

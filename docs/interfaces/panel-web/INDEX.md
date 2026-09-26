@@ -22,7 +22,7 @@ updated: 2026-09-25
 | [contract.errors.md](contract.errors.md) | a failed call is not reaching the user, or reaches them in the wrong language |
 | [contract.md](contract.md) | changing routes / the API proxy / i18n endpoints |
 | [contract.origin.md](contract.origin.md) | a call or the socket reaches the wrong domain or tenant, the panel on a reseller's domain cannot sign in (F-066-u), or a host renders a bare 404 (F-066-x) |
-| [contract.branding.md](contract.branding.md) | the panel shows the wrong name, logo, favicon or colours for its domain, or the platform's on a reseller's (F-066-v) |
+| [contract.branding.md](contract.branding.md) | the panel shows the wrong name, logo, favicon or colours for its domain, or the platform's on a reseller's (F-066-v); a reseller editing how its configs are named in buyers' apps, `/my-resellers/:id/branding` (F-307-k) |
 | [contract.realtime.md](contract.realtime.md) | the panel opens, holds or loses a WebSocket (F-070-a), an auth screen waits on an OTP delivery (F-070-b), or a signed-in screen wants live updates (F-070-c) |
 | [contract.mini-app.md](contract.mini-app.md) | the panel is running inside Telegram or Bale (F-310) |
 | [contract.shell.md](contract.shell.md) | a panel page gets a menu entry, a top-bar control is added, a wallet quick action opens something (F-093-g), or the sidebar / mobile drawer misbehaves (F-093-a) |

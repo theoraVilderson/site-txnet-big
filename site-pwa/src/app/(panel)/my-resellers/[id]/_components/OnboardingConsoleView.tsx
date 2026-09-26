@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Circle, Clock, DoorClosed, DoorOpen, RefreshCw } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, Clock, DoorClosed, DoorOpen, Palette, RefreshCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { authApi } from "@/lib/auth-api";
+import { myResellerBrandingPath } from "@/lib/routes";
 import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-api";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { Badge } from "../../../financial/_components/Badge";
@@ -155,6 +156,24 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
           ))}
         </div>
       )}
+
+      {/* Not a step: nothing waits on it, and it is never "done". */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-bold text-text-secondary">{t("common", K.more.title)}</h2>
+        <section className="flex flex-col gap-3 rounded-2xl border border-card-border bg-card-bg p-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-3">
+            <Palette size={20} className="mt-0.5 shrink-0 text-primary" aria-hidden />
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-text-primary">{t("common", K.more.branding.title)}</h3>
+              <p className="text-xs text-text-secondary">{t("common", K.more.branding.hint)}</p>
+            </div>
+          </div>
+          <Link href={myResellerBrandingPath(id)} className={quietButton}>
+            {t("common", K.open)}
+            <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
+          </Link>
+        </section>
+      </div>
     </>
   );
 }
