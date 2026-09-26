@@ -324,7 +324,8 @@ async function refusal(run: () => Promise<unknown>): Promise<CatalogAdminRefused
 }
 
 const NEW_PRODUCT = { categoryIds: [PLATFORM_CATEGORY], key: 'vpn_pro', name: { fa: 'وی‌پی‌ان پرو', en: 'VPN Pro' }, fulfilmentKind: FulfilmentKind.network_access };
-const NEW_VARIANT = { sku: 'VPN-90', billingMode: VariantBillingMode.prepaid, visibility: VariantVisibility.public, durationDays: 90, price: '12.00' };
+const TRAFFIC_50G = { traffic_bytes: { limit: 50 * 1024 ** 3, resetPolicy: 'none' as const } };
+const NEW_VARIANT = { sku: 'VPN-90', billingMode: VariantBillingMode.prepaid, visibility: VariantVisibility.public, durationDays: 90, price: '12.00', quotas: TRAFFIC_50G };
 
 describe('createProductSchema — a retired kind is never created (F-111-g, F-111-h)', () => {
   const body = (fulfilmentKind: string) => ({ ...NEW_PRODUCT, fulfilmentKind });
@@ -438,6 +439,35 @@ describe('CatalogAdminService — variants and prices', () => {
     expect((await refusal(() => service.updateVariant(actor(OWNER), RESELLER_VARIANT, { panelGroupId: OTHER_GROUP }))).reason).toBe('panel_group_not_found');
     expect(db.productVariant.rows.find((r) => r['id'] === RESELLER_VARIANT)?.['panelGroupId']).toBe(RESELLER_GROUP);
     await expect(service.updateVariant(actor(RESELLER), RESELLER_VARIANT, { panelGroupId: null })).resolves.toMatchObject({ panelGroupId: null });
+  });
+
+  it('refuses a prepaid network variant that states no traffic, on create and on a quotas edit, and writes nothing (F-111-p)', async () => {
+    const { service, db, writes } = build();
+    const { quotas: _none, ...noTraffic } = NEW_VARIANT;
+    expect((await refusal(() => service.createVariant(actor(RESELLER), RESELLER_PRODUCT, noTraffic))).reason).toBe('traffic_quota_required');
+    expect((await refusal(() => service.createVariant(actor(RESELLER), RESELLER_PRODUCT, { ...NEW_VARIANT, quotas: {} }))).reason).toBe('traffic_quota_required');
+    expect((await refusal(() => service.updateVariant(actor(RESELLER), RESELLER_VARIANT, { quotas: { devices: { limit: 3, resetPolicy: 'none' } } }))).reason).toBe(
+      'traffic_quota_required',
+    );
+    expect(writes.filter((w) => w.startsWith('productVariant') || w.startsWith('price'))).toEqual([]);
+    expect(db.productVariant.rows).toHaveLength(2);
+  });
+
+  it("takes traffic from the product's defaults, accepts 0 as unlimited, and asks none of a metered variant (F-111-p)", async () => {
+    const { service, db } = build();
+    const product = db.product.rows.find((r) => r['id'] === RESELLER_PRODUCT);
+    if (product) product['defaultQuotas'] = TRAFFIC_50G;
+    const { quotas: _none, ...noTraffic } = NEW_VARIANT;
+    await expect(service.createVariant(actor(RESELLER), RESELLER_PRODUCT, noTraffic)).resolves.toMatchObject({ quotas: TRAFFIC_50G });
+    const unlimited = { traffic_bytes: { limit: 0, resetPolicy: 'none' as const } };
+    await expect(service.createVariant(actor(RESELLER), RESELLER_PRODUCT, { ...NEW_VARIANT, sku: 'VPN-UNL', quotas: unlimited })).resolves.toMatchObject({
+      quotas: unlimited,
+    });
+    await expect(
+      service.createVariant(actor(RESELLER), RESELLER_PRODUCT, { ...NEW_VARIANT, sku: 'VPN-MET', billingMode: VariantBillingMode.metered, quotas: {} }),
+    ).resolves.toMatchObject({ sku: 'VPN-MET' });
+    // An edit that leaves quotas alone is not asked again: the row it edits may predate the rule.
+    await expect(service.updateVariant(actor(RESELLER), RESELLER_VARIANT, { isActive: false })).resolves.toMatchObject({ isActive: false });
   });
 
   it("answers another tenant's variant as not found, to change or to price", async () => {

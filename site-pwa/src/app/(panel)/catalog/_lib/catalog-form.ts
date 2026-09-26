@@ -55,6 +55,7 @@ export const REFUSAL_KEYS: Record<CatalogRejection, string> = {
   capability_not_found: CATALOG_KEYS.refusals.capability_not_found,
   capability_unknown: CATALOG_KEYS.refusals.capability_unknown,
   capability_in_use: CATALOG_KEYS.refusals.capability_in_use,
+  traffic_quota_required: CATALOG_KEYS.refusals.traffic_quota_required,
 };
 
 /** The refusal's own sentence key, when billing named one this page knows. */

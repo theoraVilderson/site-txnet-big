@@ -1381,7 +1381,8 @@
       "category_too_deep": "Categories go at most 3 levels deep; this would go deeper. Pick a higher parent.",
       "capability_not_found": "That capability was not found, or is not yours to change.",
       "capability_unknown": "A capability picked is not on this product's list — the platform's or its own tenant's. Pick again.",
-      "capability_in_use": "A product or a service already sold carries this capability, so it stays. Take it off those products first; a sold one keeps it."
+      "capability_in_use": "A product or a service already sold carries this capability, so it stays. Take it off those products first; a sold one keeps it.",
+      "traffic_quota_required": "A network variant must state its traffic. Add a traffic limit in GB; 0 means unlimited."
     },
     "rename": "Edit names",
     "translations": {
@@ -1955,7 +1956,8 @@
       "category_too_deep": "categories go at most 3 levels deep; pick a higher parent.",
       "capability_not_found": "That capability was not found, or is the platform's and not this reseller's to change.",
       "capability_unknown": "A capability picked is not on this reseller's list — the platform's or its own. Pick again.",
-      "capability_in_use": "A product or a service already sold carries this capability, so it stays. Take it off those products first; a sold one keeps it."
+      "capability_in_use": "A product or a service already sold carries this capability, so it stays. Take it off those products first; a sold one keeps it.",
+      "traffic_quota_required": "A network variant must state its traffic. Add a traffic limit in GB; 0 means unlimited."
     }
   },
   "resellerBots": {

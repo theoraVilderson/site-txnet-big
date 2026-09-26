@@ -97,6 +97,7 @@ export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, 400 | 403 | 4
   capability_not_found: 404,
   capability_unknown: 400,
   capability_in_use: 409,
+  traffic_quota_required: 400,
 };
 
 

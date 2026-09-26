@@ -3,7 +3,7 @@ id: catalog
 layer: domain
 status: draft
 version: 6
-updated: 2026-09-25
+updated: 2026-09-26
 ---
 
 # Contract — catalog
@@ -41,7 +41,7 @@ cross-tenant pool.
 | `GET /capabilities` (F-114-f-a) | — | the platform's and the caller's own (owner: all), each `{id, tenantId, key, nameKey, descriptionKey, sourceLang}` by key | — |
 | `POST /capabilities`, `PATCH /capabilities/:id` | `tenantId?`, `key` (the feature-key shape, `vpn.access`), `sourceLang?`, `name`, `description?`, `translateAll?`; patch has no key | capability | `key_taken` 409 (a key the new row's tenant already sees; for a platform row, a key any tenant holds), `not_platform_owner`, `capability_not_found` 404, the text refusals |
 | `POST /capabilities/:id/remove` | — | `{id, outcome: 'deleted'}` | `capability_in_use` 409 (a product or a Grant holds the key — a platform one counted across tenants), `capability_not_found` |
-| `POST /products/:id/variants`, `PATCH /variants/:id` | `sku`, `billingMode`, `visibility`, `quotas?`, `durationDays?`, `panelGroupId?`, `qualityTier?`, first `price`; patch has no SKU or billing mode | variant with prices | `variant_not_found`, `sku_taken`, `price_in_the_past`, `panel_group_not_found` (a group that is neither the platform's nor the variant's tenant's, F-027-bk) |
+| `POST /products/:id/variants`, `PATCH /variants/:id` | `sku`, `billingMode`, `visibility`, `quotas?`, `durationDays?`, `panelGroupId?`, `qualityTier?`, first `price`; patch has no SKU or billing mode | variant with prices | `variant_not_found`, `sku_taken`, `price_in_the_past`, `panel_group_not_found` (a group that is neither the platform's nor the variant's tenant's, F-027-bk), `traffic_quota_required` 400 (F-111-p: a `network_access` + `prepaid` variant with no `quotas.traffic_bytes` — on create, the product's `defaultQuotas` count; on a patch, only one that writes `quotas`). `traffic_bytes.limit: 0` = unlimited; `durationDays: 0` = unlimited, stored `null` |
 | `GET /panel-groups` (F-026-p) | — | `[{id, tenantId, name, strategy, protocols, healthyMembers}]` by name (`protocols`: what its members' picked inbounds sell, sorted, F-114-b — empty = nothing is placed): the groups a variant may name — the platform's and the caller's own (owner: all, so a variant is offered only the platform's and its own tenant's). `healthyMembers` counts what fulfilment places on now (`placeableMember`: not `drain`, accepted, `healthy`); only `mirror` is fulfilled | — |
 | `POST /variants/:id/prices` | `amount`, `effectiveFrom?` (default now; never in the past) | a **new** price row | `variant_not_found`, `price_in_the_past` 400 |
 | `POST /prices/:id/deactivate` | — | the price, switched off | `price_not_found` |

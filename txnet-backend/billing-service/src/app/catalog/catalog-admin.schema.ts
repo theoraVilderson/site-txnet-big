@@ -175,8 +175,15 @@ export const removeCategoriesSchema = removeProductsSchema.extend({ withProducts
 const variantFields = {
   nameKey: i18nKey('nameKey').nullable().optional(),
   quotas: quotas.optional(),
-  /** Null = permanent; at most ten years. */
-  durationDays: z.number().int().min(1).max(3650).nullable().optional(),
+  /** Null or 0 = unlimited, stored null (F-111-p); at most ten years. */
+  durationDays: z
+    .number()
+    .int()
+    .min(0)
+    .max(3650)
+    .nullable()
+    .optional()
+    .transform((d) => (d === 0 ? null : d)),
   visibility: z.nativeEnum(VariantVisibility).optional(),
   panelGroupId: uuid('panelGroupId').nullable().optional(),
   qualityTier: z.nativeEnum(QualityTier).optional(),

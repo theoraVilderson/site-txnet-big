@@ -4,6 +4,7 @@ import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import { CatalogOffer, listOffersIn, sellableOfferById } from '../catalog/catalog-reads';
+import { sellsTrafficToday } from '../catalog/traffic-quota';
 import { deliveryRouteOf } from '../entitlement/delivery';
 import { deliverableGroupIds } from '../traffic/group-fulfilment';
 import { discountRuleFor } from './discount/discount-rule';
@@ -117,7 +118,8 @@ export class InvoiceService {
       const routed = await tx.productVariant.findUnique({ where: { id: offer.variantId }, select: { panelGroupId: true } });
       const groupId = routed?.panelGroupId ?? null;
       const route = deliveryRouteOf(offer.fulfilmentKind, groupId);
-      if (route === null) throw new InvoiceVariantNotFound(variantId);
+      // ...nor a prepaid network Grant with no traffic to fill it (F-111-p).
+      if (route === null || !sellsTrafficToday(offer)) throw new InvoiceVariantNotFound(variantId);
       // ...nor what no panel of its group could ever place (F-111-i).
       if (route === 'panel_group' && groupId && !(await deliverableGroupIds(tx, [groupId])).has(groupId)) {
         throw new InvoiceVariantNotFound(variantId);
@@ -185,12 +187,14 @@ export class InvoiceService {
   /**
    * What the shop lists (F-111-e): every listed variant with a price in
    * effect, less those nothing can deliver — no handler, or a group with no
-   * panel that could place it (F-111-i) — the rule {@link create} refuses
-   * with, so the list never offers a buy that answers `variantNotFound`.
+   * panel that could place it (F-111-i), or no traffic to fill (F-111-p) —
+   * the rule {@link create} refuses with, so the list never offers a buy
+   * that answers `variantNotFound`.
    */
   forSale(at: Date = new Date()): Promise<CatalogOffer[]> {
     return tenantTransaction(this.prisma, async (tx) => {
       const routed = (await listOffersIn(tx, at))
+        .filter(sellsTrafficToday)
         .map((offer) => ({ offer, route: deliveryRouteOf(offer.fulfilmentKind, offer.panelGroupId) }))
         .filter((r) => r.route !== null);
       const deliverable = await deliverableGroupIds(

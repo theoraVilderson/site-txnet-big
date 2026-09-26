@@ -2,12 +2,12 @@
 id: catalog
 layer: domain
 status: draft
-version: 5
-keywords: [catalog, product, category, subcategory, category tree, product in several categories, variant, sku, price, price history, visibility, fulfilment kind, product model, delete product, archive product, capability, capabilities, feature key, what a product unlocks]
+version: 6
+keywords: [catalog, product, category, subcategory, category tree, product in several categories, variant, sku, price, price history, visibility, fulfilment kind, product model, delete product, archive product, capability, capabilities, feature key, what a product unlocks, traffic quota, unlimited traffic, unlimited duration]
 source: [txnet-backend/prisma/domains/catalog.prisma, txnet-backend/prisma/domains/migrations/20260914001500_catalog_product_model/**, txnet-backend/prisma/domains/migrations/20260925000300_a_product_never_sold_can_be_deleted/**, txnet-backend/prisma/domains/migrations/20260925000800_a_category_with_no_products_can_be_deleted/**, txnet-backend/prisma/domains/migrations/20260925001000_categories_nest_and_a_product_sits_in_several/**, txnet-backend/prisma/domains/migrations/20260925001400_a_capability_is_a_catalog_row/**, txnet-backend/billing-service/src/app/catalog/**, txnet-backend/shared-core/src/lib/catalog/**]
 owns_tables: [product_category, product_category_link, product_capability, product, product_variant, price]
 depends_on: [tenant]
-updated: 2026-09-25
+updated: 2026-09-26
 ---
 
 # Catalog
@@ -32,10 +32,10 @@ Runs as a module inside `billing-service` (ADR-0049). Spec:
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-26 | v6 (F-111-p): **contract break** — a prepaid network variant must carry `quotas.traffic_bytes` (`traffic_quota_required`); 0 traffic / 0 days = unlimited. Consumers: panel-web (refusal text), billing (shop) |
 | 2026-09-25 | v5 (F-114-f-a, ADR-0086): **contract break** — a product's `featureKeys` must name a `product_capability` its tenant sees (`capability_unknown`); keys in use migrated in. Consumer: panel-web (F-114-f-b) |
 | 2026-09-25 | v4 (F-026-q/r): **contract break** — a product's `categoryId` is `categoryIds[]` (`product_category_link`); a category has `parentId` (3 levels). Consumer: panel-web (F-026-s) |
 | 2026-09-25 | v3 (F-026-h): `POST /products/remove` — a product nothing references is **deleted** with its variants (a price goes with its variant); a referenced one is archived (`archivedAt`) |
 | 2026-09-14 | v2 (F-026-a, ADR-0049): **`service_plan` and `service_plan_promotion` removed** for product → variant → price; coupon scope names a product or a variant |
-| 2026-09-04 | Documented from schema during onboarding — no service yet |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

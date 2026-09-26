@@ -7,6 +7,7 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
 import { PrismaService } from '../prisma/prisma.service';
 import { placeableMember } from '../traffic/group-fulfilment';
 import { CatalogTextKind, CatalogTextService, ReviewItem, Texts, catalogTextKey, parseCatalogTextKey } from './catalog-texts';
+import { mustStateTraffic, trafficQuotaOf } from './traffic-quota';
 
 /**
  * Catalog management (F-026-d; D-34, ADR-0049): categories, products, variants
@@ -75,7 +76,9 @@ export type CatalogAdminRejection =
   | 'category_too_deep'
   | 'capability_not_found'
   | 'capability_unknown'
-  | 'capability_in_use';
+  | 'capability_in_use'
+  /** A prepaid network variant with no `traffic_bytes` quota (F-111-p): 0 is unlimited, absent is refused. */
+  | 'traffic_quota_required';
 
 /** One group a variant may name (F-026-p). */
 export type PanelGroupOption = {
@@ -919,6 +922,8 @@ export class CatalogAdminService {
       const product = await this.managed(tx, 'product', 'product_not_found', actor, productId, owner);
       const tenantId = (product['tenantId'] as string | null) ?? null;
       await this.usableGroup(tx, input.panelGroupId, tenantId);
+      const quotas = input.quotas ?? product['defaultQuotas'] ?? {};
+      this.refuseUnstatedTraffic(product['fulfilmentKind'] as FulfilmentKind, input.billingMode, quotas, input.sku);
       const variant = (await this.refuseDuplicate('sku_taken', input.sku, () =>
         tx.productVariant.create({
           data: {
@@ -926,7 +931,7 @@ export class CatalogAdminService {
             productId,
             sku: input.sku,
             nameKey: input.nameKey ?? null,
-            quotas: (input.quotas ?? product['defaultQuotas'] ?? {}) as Prisma.InputJsonValue,
+            quotas: quotas as Prisma.InputJsonValue,
             durationDays: input.durationDays ?? null,
             billingMode: input.billingMode,
             visibility: input.visibility,
@@ -956,6 +961,12 @@ export class CatalogAdminService {
     return this.within(owner, async (tx) => {
       const before = await this.managed(tx, 'productVariant', 'variant_not_found', actor, id, owner);
       await this.usableGroup(tx, patch.panelGroupId, (before['tenantId'] as string | null) ?? null);
+      // Asked only of an edit that writes quotas: a row made before F-111-p is
+      // left to the shop's refusal, not locked against every other edit.
+      if (patch.quotas !== undefined) {
+        const product = await tx.product.findUnique({ where: { id: before['productId'] as string }, select: { fulfilmentKind: true } });
+        this.refuseUnstatedTraffic(product?.fulfilmentKind ?? null, before['billingMode'] as VariantBillingMode, patch.quotas, before['sku'] as string);
+      }
       const data: Prisma.ProductVariantUpdateInput = {
         ...(patch.nameKey !== undefined ? { nameKey: patch.nameKey } : {}),
         ...(patch.quotas !== undefined ? { quotas: patch.quotas as Prisma.InputJsonValue } : {}),
@@ -1205,6 +1216,13 @@ export class CatalogAdminService {
     const row = await delegate.findUnique({ where: { id } });
     if (!row || (!owner && row['tenantId'] !== actor.tenantId)) throw new CatalogAdminRefused(missing, id);
     return row;
+  }
+
+  /** A prepaid network variant states its traffic (F-111-p); `0` = unlimited is a statement, absent is not. */
+  private refuseUnstatedTraffic(kind: FulfilmentKind | null, mode: VariantBillingMode, quotas: unknown, sku: string): void {
+    if (kind && mustStateTraffic(kind, mode) && trafficQuotaOf(quotas).kind === 'missing') {
+      throw new CatalogAdminRefused('traffic_quota_required', sku);
+    }
   }
 
   /** `effectiveFrom` as given, or now; a backdated one would reprice an issued invoice. */

@@ -51,6 +51,7 @@ const REFUSAL_STEP: Record<string, WizardStep> = {
   not_platform_owner: "access",
   capability_unknown: "access",
   sku_taken: "variant",
+  traffic_quota_required: "variant",
 };
 
 /**

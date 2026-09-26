@@ -60,7 +60,8 @@ export type CatalogRejection =
   | "category_too_deep"
   | "capability_not_found"
   | "capability_unknown"
-  | "capability_in_use";
+  | "capability_in_use"
+  | "traffic_quota_required";
 
 /** Text by language code (F-1533-d/f); at least the item's source language. The key is billing's. */
 export type Texts = Record<string, string>;

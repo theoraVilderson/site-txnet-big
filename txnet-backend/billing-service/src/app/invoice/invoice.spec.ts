@@ -50,7 +50,12 @@ type VariantOverrides = {
   prices?: Array<{ id: string; amount: Prisma.Decimal; effectiveFrom: Date; isActive: boolean }>;
   fulfilmentKind?: FulfilmentKind;
   panelGroupId?: string | null;
+  quotas?: Record<string, unknown>;
+  billingMode?: 'prepaid' | 'metered';
 };
+
+/** A sold traffic limit (F-111-p): a prepaid network variant with none is not for sale. */
+const traffic = (limit: number) => ({ traffic_bytes: { limit, resetPolicy: 'none' } });
 
 function variantRow(o: VariantOverrides = {}) {
   return {
@@ -60,9 +65,9 @@ function variantRow(o: VariantOverrides = {}) {
     nameKey: null,
     visibility: o.visibility ?? VariantVisibility.public,
     isActive: o.isActive ?? true,
-    quotas: {},
+    quotas: o.quotas ?? traffic(50 * 1024 ** 3),
     durationDays: 30,
-    billingMode: 'prepaid',
+    billingMode: o.billingMode ?? 'prepaid',
     qualityTier: 'standard',
     panelGroupId: o.panelGroupId === undefined ? GROUP : o.panelGroupId,
     product: {
@@ -239,6 +244,9 @@ describe('InvoiceService.create', () => {
     // F-111-d: nothing is sold that nothing can deliver.
     ['of a kind with no delivery (external order)', variantRow({ fulfilmentKind: FulfilmentKind.external_order })],
     ['a network service with no panel group', variantRow({ panelGroupId: null })],
+    // F-111-p: a prepaid network Grant with no traffic is a 0-byte bag, refunded an hour later.
+    ['a network service that states no traffic (VI_PI_AN_PRV-30D)', variantRow({ quotas: {} })],
+    ['a network service with unlimited traffic, until the panels carry it (F-111-r)', variantRow({ quotas: traffic(0) })],
   ])('refuses a variant that is %s, and writes nothing', async (_what, variant) => {
     const { service, calls } = buildCreate({ variant });
 
@@ -491,6 +499,17 @@ describe('InvoiceService.forSale — what the shop lists (F-111-e)', () => {
     );
     const offers = await asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')));
     expect(offers.map((o) => o.variantId)).toEqual([VARIANT]);
+  });
+
+  it('leaves out a prepaid network variant with no traffic or unlimited traffic, keeping a metered one (F-111-p)', async () => {
+    const METERED = '88888888-8888-4888-8888-888888888888';
+    const { service } = buildList([
+      variantRow({ quotas: {} }),
+      { ...variantRow({ quotas: traffic(0) }), id: INVOICE_2 },
+      { ...variantRow({ quotas: {}, billingMode: 'metered' }), id: METERED },
+    ]);
+    const offers = await asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')));
+    expect(offers.map((o) => o.variantId)).toEqual([METERED]);
   });
 
   it('leaves out an unlisted variant: a direct link sells it, the list does not show it', async () => {
