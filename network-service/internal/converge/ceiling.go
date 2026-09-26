@@ -239,6 +239,7 @@ func (c *Ceilings) pass(
 		enforcing[client.RemoteID] = client
 	}
 
+	quiet := quietSet(c.Counters, p, res)
 	var confirmed []AppliedCeiling
 	for _, allocation := range allocations {
 		report.Checked++
@@ -252,8 +253,9 @@ func (c *Ceilings) pass(
 		}
 
 		offset := OffsetBytes(c.Counters, p, allocation.RemoteID)
-		band := GuardBandBytes(allocation.RateBps, p.DriverType.EnforcementLag())
 		served := ServedBytes(c.Counters, p, allocation.RemoteID)
+		band := NearBand(allocation.AllocatedBytes, served, allocation.RateBps, p.DriverType.EnforcementLag())
+		band = releasedBand(band, allocation.AllocatedBytes, served, quiet(allocation.RemoteID))
 		want := PanelCeiling(GuardedAllowance(allocation.AllocatedBytes, served, band), offset)
 		have := client.DataLimitBytes
 

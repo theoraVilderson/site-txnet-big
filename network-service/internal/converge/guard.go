@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"network-service/internal/collect"
+	"network-service/internal/hot"
 )
 
 // The guard band (F-027-co). A panel cuts a client some seconds after it
@@ -22,6 +23,19 @@ func GuardBandBytes(rateBps int64, lag time.Duration) int64 {
 		return 0
 	}
 	return rateBps / 8 * lag.Milliseconds() / 1000
+}
+
+// NearBand is the band a config needs now: GuardBandBytes while it is within
+// the hot horizon of its own rate from its allowance, and zero further out
+// (F-027-cq). The lag only matters at the moment the panel cuts, and a far
+// config reaches that moment through this window first — while a band on
+// every running config is a write on every move of its rate (invariant 34).
+func NearBand(allowance, served, rateBps int64, lag time.Duration) int64 {
+	band := GuardBandBytes(rateBps, lag)
+	if band == 0 || allowance-served > GuardBandBytes(rateBps, hot.DefaultHorizon) {
+		return 0
+	}
+	return band
 }
 
 // GuardedAllowance is the allowance less the band, never below what the config
@@ -58,4 +72,34 @@ func ServedBytes(counters Counters, p collect.Panel, remoteID string) int64 {
 // bought block is never absorbed by it.
 func withinBand(have, want, band int64) bool {
 	return band > 0 && have > 0 && have <= want && want-have <= band/4
+}
+
+// quietSet is the remote clients a pass read with no traffic since the read
+// before: counted in this pass (the cursor was stamped at its clock) and
+// named by no delta. A convergence-only turn reads no usage, stamps no
+// cursor, and so finds nobody quiet.
+func quietSet(counters Counters, p collect.Panel, res collect.Result) func(remoteID string) bool {
+	moved := make(map[string]bool, len(res.Deltas))
+	for _, d := range res.Deltas {
+		moved[d.RemoteID] = true
+	}
+	return func(remoteID string) bool {
+		if moved[remoteID] || res.ObservedAt.IsZero() {
+			return false
+		}
+		counter, seen := counters.Counter(p.ID, remoteID)
+		return seen && counter.LastObservedAt.Equal(res.ObservedAt)
+	}
+}
+
+// releasedBand is the band after the tail rule (F-027-cq): a config inside
+// its band that the pass found quiet has been cut and is not moving, and its
+// rate — measured only off traffic — will never be re-measured to shrink the
+// band. Kept, it would strand what a prepaid user bought; so the whole
+// allowance goes back. The cost is one more lag past it, at most one band.
+func releasedBand(band, allowance, served int64, quiet bool) int64 {
+	if band > 0 && quiet && served >= allowance-band {
+		return 0
+	}
+	return band
 }

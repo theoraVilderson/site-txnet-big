@@ -675,6 +675,6 @@ func (v *Provisioning) log() *slog.Logger {
 // share less the guard band, in a counter that starts at zero (F-027-co). It is
 // the ceiling pass's figure, so the pass after it finds nothing to lower.
 func guardedCeiling(p collect.Panel, row DesiredConfig) int64 {
-	band := GuardBandBytes(row.RateBps, p.DriverType.EnforcementLag())
+	band := NearBand(*row.AllocatedBytes, row.ServedBytes, row.RateBps, p.DriverType.EnforcementLag())
 	return PanelCeiling(GuardedAllowance(*row.AllocatedBytes, row.ServedBytes, band), row.ServedBytes)
 }

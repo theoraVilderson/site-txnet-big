@@ -190,12 +190,21 @@ yet measured takes the same 35 s: no band is its whole lag served free. At
 25 MB/s the band is ~875 MB; a config with no measured rate has none.
 **Never below what it served** — a band wider than what is left cuts it now.
 
-Every active config's rate moves every pass, so the pass leaves a panel
-holding **between 1× and 1.25× the band** alone (`withinBand`) instead of a
-write per config per pass (invariant 34). Always inside the bag; a quarter is
-under the smallest block (60 s of rate), so a top-up is never absorbed. The
-same band rides on provisioning's first ceiling and on the shutdown extension
-(`contract.resilience.md`). Overrun stays uncharged.
+**Only near the cut** (F-027-cq, `NearBand`): a config more than the hot
+horizon (120 s) of its own rate from its share keeps the whole share. The lag
+matters only when the panel cuts, and a band on every running config was a
+write on every move of its rate (invariant 34). Near it, a panel holding
+**1×–1.25× the band** is left alone (`withinBand`) — a quarter is under the
+smallest block (60 s of rate), so a top-up is never absorbed.
+
+**A quiet config inside its band gets it back**: read in a usage pass with no
+delta, it is cut and not moving, and its rate — measured only off traffic —
+would hold the band for ever, stranding what a prepaid user bought. The cost
+is one more lag past the share, at most one band. A convergence-only turn
+reads no usage, so it never finds anyone quiet.
+
+The same band rides on provisioning's first ceiling and on the shutdown
+extension (`contract.resilience.md`). Overrun stays uncharged.
 
 ### What a write says about itself
 
