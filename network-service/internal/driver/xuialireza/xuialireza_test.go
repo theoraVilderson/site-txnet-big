@@ -294,7 +294,7 @@ func (f *farEnd) list() []map[string]any {
 		out = append(out, map[string]any{
 			"id": in.id, "up": 0, "down": 0, "total": 0, "remark": in.protocol, "enable": true,
 			"expiryTime": 0, "clientStats": stats, "listen": "", "port": in.port, "protocol": in.protocol,
-			"settings": string(settings), "streamSettings": "{}", "tag": "inbound-" + strconv.Itoa(in.port),
+			"settings": string(settings), "streamSettings": streamOf(in.protocol), "tag": "inbound-" + strconv.Itoa(in.port),
 		})
 	}
 	return out
@@ -387,7 +387,7 @@ func open(t *testing.T) (*farEnd, *Driver) {
 	f := newFarEnd(t)
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
-	d, err := New(srv.URL+"/base/", Credentials{Username: "admin", Password: "secret"}, srv.Client())
+	d, err := New(srv.URL+"/base/", "", Credentials{Username: "admin", Password: "secret"}, srv.Client())
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -562,10 +562,20 @@ func (f *farEnd) serveSub(w http.ResponseWriter, r *http.Request, subID string) 
 	http.NotFound(w, r)
 }
 
-// ClientLinks is every line the panel's sub server gives the client
-// (contract.links.md, F-027-bi), read with no session; with the sub server
-// off the family has none to give, which is no lines and no error.
-func TestClientLinksAreTheSubServersLines(t *testing.T) {
+// streamOf is an inbound's streamSettings: REALITY for the vless listener, as
+// a panel sold today is set up, and the page's defaults for trojan.
+func streamOf(protocol string) string {
+	if protocol == "vless" {
+		return `{"network":"tcp","security":"reality","realitySettings":{"serverNames":["a.example"],` +
+			`"shortIds":["ab"],"privateKey":"never-shared","settings":{"publicKey":"PBK","fingerprint":"chrome","spiderX":"/"}}}`
+	}
+	return "{}"
+}
+
+// ClientLinks builds the client's line from its inbound, as x-ui's page does
+// (ADR-0088): the sub server is never read, so it being off changes nothing.
+// The address is the panel's host, or its clientBaseUrl when one is set.
+func TestClientLinksAreBuiltFromTheInbound(t *testing.T) {
 	f, d := open(t)
 	ctx := context.Background()
 	created, err := d.CreateClient(ctx, driver.CreateClientRequest{
@@ -576,22 +586,25 @@ func TestClientLinksAreTheSubServersLines(t *testing.T) {
 		t.Fatalf("CreateClient: %v", err)
 	}
 	f.mu.Lock()
-	f.subURI = d.base.Scheme + "://" + d.base.Host + "/sub/"
-	f.mu.Unlock()
-	lines, err := d.ClientLinks(ctx, created)
-	want := "vless://" + created.RemoteID + "@node.example:443#a"
-	if err != nil || len(lines) != 2 || lines[0] != want {
-		t.Fatalf("ClientLinks = %q, %v, want the sub server's two lines, the first %q", lines, err, want)
-	}
-	if f.subCookies != 0 {
-		t.Error("the subscription read carried the panel session")
-	}
-
-	f.mu.Lock()
 	f.subOff = true
 	f.mu.Unlock()
-	if lines, err := d.ClientLinks(ctx, created); err != nil || lines != nil {
-		t.Errorf("with the sub server off ClientLinks = %q, %v, want none and no error", lines, err)
+	lines, err := d.ClientLinks(ctx, created)
+	want := "vless://8a3c1e2b-0000-4000-8000-00000000abcd@127.0.0.1:443?type=tcp&encryption=none&security=reality" +
+		"&pbk=PBK&fp=chrome&sni=a.example&sid=ab&spx=%2F#vless-" + created.RemoteID
+	if err != nil || len(lines) != 1 || lines[0] != want {
+		t.Fatalf("ClientLinks = %q, %v, want the one line %q", lines, err, want)
+	}
+
+	served, err := New(d.base.String(), "https://users.example/", d.creds, d.http)
+	if err != nil {
+		t.Fatalf("New with a client base url: %v", err)
+	}
+	lines, err = served.ClientLinks(ctx, created)
+	if err != nil || len(lines) != 1 || !strings.Contains(lines[0], "@users.example:443?") {
+		t.Errorf("with clientBaseUrl set ClientLinks = %q, %v, want the line at users.example", lines, err)
+	}
+	if _, err := New(d.base.String(), "not a url", d.creds, d.http); err == nil {
+		t.Error("a client base url that is not absolute was accepted")
 	}
 	if _, err := d.ClientLinks(ctx, driver.RemoteClient{RemoteID: "nobody"}); err == nil {
 		t.Error("a client the panel does not hold gave no error")

@@ -46,7 +46,8 @@ Marzban.
 | `id` (or `password` for trojan) | `UUID` |
 | `clientStats.up` / `.down` / `.total` | `UpBytes` / `DownBytes` / `DataLimitBytes` |
 | `enable`, `expiryTime` (unix ms, 0 = none) | `Enabled`, `ExpiresAt` |
-| `POST /xui/setting/all` | `SubscriptionURL`, built as Sanaee's rule 6; `ClientLinks` reads the sub server there (`contract.links.md`) |
+| `POST /xui/setting/all` | `SubscriptionURL`, built as Sanaee's rule 6 |
+| `listen`, `port`, `remark`, `settings`, `streamSettings` of the client's inbound | `ClientLinks`: the line built as x-ui's page builds it, never read from the sub server (`contract.links.md` rule 1, ADR-0088) |
 
 The rules:
 

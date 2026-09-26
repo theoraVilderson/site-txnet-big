@@ -159,11 +159,11 @@ func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, er
 	case driver.DriverMikrotikUserManager:
 		return usermanager.New(p.APIBaseURL, usermanager.Credentials{Username: username, Password: password}, o.HTTP)
 	case driver.DriverSanaee:
-		return sanaee.New(p.APIBaseURL, sanaee.Credentials{Username: username, Password: password}, o.HTTP)
+		return sanaee.New(p.APIBaseURL, p.ClientBaseURL, sanaee.Credentials{Username: username, Password: password}, o.HTTP)
 	case driver.DriverThreeXUI:
 		return threexui.New(p.APIBaseURL, threexui.Credentials{Username: username, Password: password}, o.HTTP)
 	case driver.DriverXUIAlireza:
-		return xuialireza.New(p.APIBaseURL, xuialireza.Credentials{Username: username, Password: password}, o.HTTP)
+		return xuialireza.New(p.APIBaseURL, p.ClientBaseURL, xuialireza.Credentials{Username: username, Password: password}, o.HTTP)
 	}
 	return marzban.New(p.APIBaseURL, marzban.Credentials{Username: username, Password: password}, o.HTTP)
 }

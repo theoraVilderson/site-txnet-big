@@ -16,11 +16,15 @@ when the provisioning pass captures them and where they are kept (F-027-bj,
 
 ## The rules
 
-1. **Every line, as the panel built it.** `ClientLinks(ctx, client)` returns
-   every link line the panel gives that client, in the panel's order. None is
-   assembled here: a family builds its links from host, domain and transport
-   settings the admin API does not fully show, and a line of ours would
-   disagree with the one the panel serves.
+1. **Every line, as the panel built it, or as its own page builds it.**
+   `ClientLinks(ctx, client)` returns every link line the panel gives that
+   client, in the panel's order. None is invented here: a family that serves
+   its lines is read. The exception is the x-ui families (alireza0, Sanaee),
+   whose page builds lines in the browser from the inbound JSON the admin API
+   also answers. Their driver builds the same lines with `driver.XrayLines`,
+   a port of x-ui's `inbound.js`, and never reads the sub server (ADR-0088).
+   What the port does not cover (xhttp, an old h2/quic network, REALITY with
+   no public key, a protocol other than vless/vmess/trojan) builds nothing.
 2. **None is a fact, not a failure.** A family or a panel with no links to
    give answers no lines and **no error**, and the config contributes nothing
    to `/sub`, visibly. A read that failed is a `*driver.Fault`, never an empty
@@ -34,8 +38,8 @@ when the provisioning pass captures them and where they are kept (F-027-bj,
    else is dropped, so a login page read by mistake gives no lines. A body over
    1 MiB is a `protocol` fault.
 5. **One budgeted call.** `ClientLinks` is paced as one call, as `BuildLink`
-   is. Inside it a family makes at most three requests (x-ui: the client list,
-   the settings, the sub server). Capture runs only when a client is created,
+   is. Inside it a family makes at most three requests (3x-ui v3: the client
+   list, the settings, the sub server; alireza0 and Sanaee: the client list). Capture runs only when a client is created,
    regenerated, moved or re-keyed (rule 6), never for a config that is steady.
 
 ## Per family
@@ -45,7 +49,8 @@ when the provisioning pass captures them and where they are kept (F-027-bj,
 | Marzban | `links` on `GET /api/user/{name}` (`contract.drivers.md` rule 6) | the user has no links |
 | Marzneshin | `<subscription_url>/links` (`contract.marzneshin.md` rule 9) | no `subscription_url` |
 | Hiddify | `<clientBaseUrl>/<uuid>/sub/` (`contract.hiddify.md` rule 8) | no `clientBaseUrl` |
-| Sanaee, 3x-ui v3, x-ui (alireza0) | the sub server, at the address `SubscriptionURL` builds (Sanaee rule 6) | no `subId`, or the sub server off |
+| Sanaee, x-ui (alireza0) | built from the client's inbound (`driver.XrayLines`, ADR-0088): one line, or one per `externalProxy` entry; the address is the inbound's `listen`, else `clientBaseUrl`'s host, else the panel's | the inbound's stream is one the port does not cover |
+| 3x-ui v3 | the sub server, at the address `SubscriptionURL` builds (Sanaee rule 6) | no `subId`, or the sub server off |
 | User Manager | nothing: a PPP login is a name and a password; an OpenVPN buyer gets the router's uploaded `.ovpn` instead (below) | always |
 | fake | one `vless://` line per client | `native_subscription_link` declared no |
 

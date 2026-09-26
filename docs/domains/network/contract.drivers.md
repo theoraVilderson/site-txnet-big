@@ -133,7 +133,7 @@ The rules:
    that page shows: the panel's `subURI` if set, otherwise the sub server's
    scheme, domain (or the panel's host), port and path, then the client's
    `subId`, all read from `POST /panel/setting/all`. With the sub server off it
-   returns false. `ClientLinks` reads that address with no session.
+   returns false. `ClientLinks` builds instead (`contract.links.md` rule 1).
 
 `apiBaseUrl` includes the panel's secret web path, and every route above is
 relative to it.
@@ -159,7 +159,7 @@ a family of its own (user, 2026-09-24). Pull, `cumulative`, ADR-0072 as above.
 | `clients/add` (`{client, inboundIds}`), `clients/update/{email}`, `clients/del/{email}`, `clients/resetTraffic/{email}` | the lifecycle, keyed by email |
 | `uuid` (or `password` for trojan) | `UUID`; `id` on the list is the panel's row number |
 | `traffic.total` / `totalGB` | `DataLimitBytes` (the traffic row is the one enforced) |
-| `POST /panel/api/setting/all` | `SubscriptionURL` and `ClientLinks`, built as Sanaee's rule 6 |
+| `POST /panel/api/setting/all` | `SubscriptionURL`, built as Sanaee's rule 6. v3's `ClientLinks` still reads that address with no session (ADR-0088 leaves v3 for its own row) |
 
 Its own rules, beside Sanaee's rules 1, 5 and 6, which hold unchanged:
 

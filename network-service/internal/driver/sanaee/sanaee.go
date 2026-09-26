@@ -57,6 +57,9 @@ type Driver struct {
 	base  *url.URL
 	creds Credentials
 	http  *http.Client
+	// served is where users connect when an inbound listens on every
+	// address: the panel's clientBaseUrl, else base (ADR-0088).
+	served *url.URL
 
 	mu      sync.Mutex
 	cookies []*http.Cookie
@@ -70,17 +73,26 @@ var _ driver.Driver = (*Driver)(nil)
 var protocols = []string{"vless", "vmess", "trojan"}
 
 // New builds a driver over the panel at baseURL, which includes the panel's
-// web base path when it has one. Nothing is sent until the first call.
-func New(baseURL string, creds Credentials, client *http.Client) (*Driver, error) {
+// web base path when it has one. clientBaseURL, when set, is the host users
+// connect to on an inbound that listens on every address (ADR-0088). Nothing is sent until the first call.
+func New(baseURL, clientBaseURL string, creds Credentials, client *http.Client) (*Driver, error) {
 	base, err := url.Parse(strings.TrimRight(baseURL, "/"))
 	if err != nil || base.Scheme == "" || base.Host == "" {
 		return nil, fmt.Errorf("sanaee: base url %q is not an absolute url", baseURL)
+	}
+	served := base
+	if strings.TrimSpace(clientBaseURL) != "" {
+		u, err := url.Parse(strings.TrimRight(strings.TrimSpace(clientBaseURL), "/"))
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			return nil, fmt.Errorf("sanaee: client base url %q is not an absolute url", clientBaseURL)
+		}
+		served = u
 	}
 	if client == nil {
 		// No client timeout: the caller's context is the deadline (driver.Driver).
 		client = &http.Client{}
 	}
-	return &Driver{base: base, creds: creds, http: client}, nil
+	return &Driver{base: base, creds: creds, http: client, served: served}, nil
 }
 
 // ---- wire ------------------------------------------------------------------
@@ -106,6 +118,7 @@ type client struct {
 	LimitIP    int    `json:"limitIp"`
 	TgID       any    `json:"tgId,omitempty"`
 	Flow       string `json:"flow,omitempty"`
+	Security   string `json:"security,omitempty"`
 }
 
 type clientStat struct {
@@ -123,6 +136,11 @@ type inbound struct {
 	Tag         string       `json:"tag"`
 	Settings    string       `json:"settings"`
 	ClientStats []clientStat `json:"clientStats"`
+	// Listen, Remark and StreamSettings are what a client's line is built
+	// from (ClientLinks, ADR-0088).
+	Listen         string `json:"listen"`
+	Remark         string `json:"remark"`
+	StreamSettings string `json:"streamSettings"`
 }
 
 // found is one client where the panel holds it: its settings, its counters,
@@ -678,21 +696,27 @@ func (d *Driver) SubscriptionURL(ctx context.Context, remoteID string) (string, 
 	return u, ok && err == nil
 }
 
-// ClientLinks is every line the panel's subscription server gives the client,
-// read from the address SubscriptionURL builds, with no session of ours
-// (contract.links.md). A client with no subId, or a panel with the sub server
-// off, has none to give.
+// ClientLinks is the client's lines, built from the inbound it lives on as
+// x-ui's own page builds them (driver.XrayLines, ADR-0088). The sub server is
+// not read. An inbound the port does not cover answers no lines and no error;
+// the one read is the client list, and a client it does not hold is a fault.
 func (d *Driver) ClientLinks(ctx context.Context, client driver.RemoteClient) ([]string, error) {
 	const op = "ClientLinks"
 	f, err := d.mustFind(ctx, op, client.RemoteID)
 	if err != nil {
 		return nil, err
 	}
-	u, ok, err := d.subscription(ctx, op, f.client.SubID)
-	if err != nil || !ok {
-		return nil, err
-	}
-	return driver.FetchLinks(ctx, d.http, op, u)
+	return driver.XrayLines(
+		driver.XrayInbound{
+			Listen: f.inbound.Listen, Port: f.inbound.Port, Protocol: f.inbound.Protocol,
+			Remark: f.inbound.Remark, Settings: f.inbound.Settings, StreamSettings: f.inbound.StreamSettings,
+		},
+		driver.XrayClient{
+			ID: f.client.ID, Password: f.client.Password, Email: f.client.Email,
+			Flow: f.client.Flow, Security: f.client.Security,
+		},
+		d.served.Hostname(),
+	), nil
 }
 
 // subscription builds the address from the panel's settings. ok is false for
