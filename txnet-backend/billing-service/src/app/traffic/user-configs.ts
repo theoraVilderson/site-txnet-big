@@ -15,7 +15,11 @@ export const MAX_BULK_CONFIGS = 50;
 /** A config whose action threw something other than a refusal. Its neighbours still ran. */
 export const CONFIG_ACTION_FAILED = 'failed';
 
-/** One config of a Grant, as its own user reads it (F-027-ac). Never its `uuid`: that is the credential, and `/sub` hands it out (F-113). */
+/**
+ * One config of a Grant, as its own user reads it (F-027-ac). Never its bare
+ * `uuid`; its captured link lines are the owner's (F-307-a), the same lines
+ * `/sub` hands out (F-113).
+ */
 export type UserConfigView = {
   id: string;
   protocol: ConfigProtocol;
@@ -31,6 +35,10 @@ export type UserConfigView = {
   regenerateUsedCount: number;
   maxRegenerateCount: number;
   lastReconciledAt: string | null;
+  /** The panel's link lines for the client this config is now, in the panel's order. Empty until captured, or while a regenerate waits for the next capture. */
+  lines: string[];
+  /** When `lines` were captured; `null` when they are not this client's. Set with `lines` empty is a panel that gives none. */
+  linksCapturedAt: string | null;
 };
 
 export type UserConfigOutcome =
@@ -48,6 +56,11 @@ const CONFIG_VIEW_COLUMNS = {
   regenerateUsedCount: true,
   maxRegenerateCount: true,
   lastReconciledAt: true,
+  // Read only to judge whether the lines are this client's — never answered.
+  uuid: true,
+  linksUuid: true,
+  linkLines: true,
+  linksCapturedAt: true,
   panel: { select: { region: true } },
 } as const;
 
@@ -85,19 +98,26 @@ export class UserConfigsService {
         select: CONFIG_VIEW_COLUMNS,
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       });
-      return rows.map((r) => ({
-        id: r.id,
-        protocol: r.protocol,
-        status: r.status,
-        region: r.panel.region,
-        allocatedCeilingBytes: r.allocatedCeilingBytes?.toString() ?? null,
-        appliedCeilingBytes: r.appliedCeilingBytes?.toString() ?? null,
-        driftState: r.driftState,
-        enforcementState: r.enforcementState,
-        regenerateUsedCount: r.regenerateUsedCount,
-        maxRegenerateCount: r.maxRegenerateCount,
-        lastReconciledAt: r.lastReconciledAt?.toISOString() ?? null,
-      }));
+      return rows.map((r) => {
+        // `/sub`'s rule (network contract.links.md): lines read from another
+        // client are dead links, so they wait for the next capture.
+        const current = r.linksUuid !== null && r.linksUuid === r.uuid;
+        return {
+          id: r.id,
+          protocol: r.protocol,
+          status: r.status,
+          region: r.panel.region,
+          allocatedCeilingBytes: r.allocatedCeilingBytes?.toString() ?? null,
+          appliedCeilingBytes: r.appliedCeilingBytes?.toString() ?? null,
+          driftState: r.driftState,
+          enforcementState: r.enforcementState,
+          regenerateUsedCount: r.regenerateUsedCount,
+          maxRegenerateCount: r.maxRegenerateCount,
+          lastReconciledAt: r.lastReconciledAt?.toISOString() ?? null,
+          lines: current ? r.linkLines : [],
+          linksCapturedAt: current ? (r.linksCapturedAt?.toISOString() ?? null) : null,
+        };
+      });
     });
   }
 

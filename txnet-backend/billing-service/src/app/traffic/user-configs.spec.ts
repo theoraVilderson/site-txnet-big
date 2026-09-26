@@ -11,9 +11,11 @@
  *    the configs before it are committed and have to be reported;
  *  - **whose configs.** The actor is the gate's user, so another user's
  *    config reads as `config_not_found` and another user's Grant as a 404;
- *  - **the credential stays out of the list.** A config's `uuid` is what
- *    `/sub` hands out (F-113); the list selects its columns and `uuid` is not
- *    one of them.
+ *  - **the bare credential stays out of the list.** A config's `uuid` is read
+ *    only to tell whether its captured lines are its current client's; it is
+ *    never answered. The lines themselves are the owner's (F-307-a) — `/sub`
+ *    already hands them out — but only lines captured from the client the
+ *    config is now: a regenerate makes the old ones dead links.
  */
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { NotFoundException } from '@nestjs/common';
@@ -46,6 +48,10 @@ function configRow(overrides: Record<string, unknown> = {}) {
     regenerateUsedCount: 1,
     maxRegenerateCount: 3,
     lastReconciledAt: new Date('2026-09-23T10:00:00Z'),
+    uuid: 'uuid-now',
+    linksUuid: 'uuid-now' as string | null,
+    linkLines: ['vless://uuid-now@de.example:443?type=tcp#de-1'],
+    linksCapturedAt: new Date('2026-09-23T09:00:00Z') as Date | null,
     panel: { region: 'de-fra' },
     ...overrides,
   };
@@ -108,15 +114,39 @@ describe('UserConfigsService.listForGrant', () => {
         regenerateUsedCount: 1,
         maxRegenerateCount: 3,
         lastReconciledAt: '2026-09-23T10:00:00.000Z',
+        lines: ['vless://uuid-now@de.example:443?type=tcp#de-1'],
+        linksCapturedAt: '2026-09-23T09:00:00.000Z',
       },
     ]);
   });
 
-  it('never reads the credential: a config’s uuid is `/sub`’s to hand out', async () => {
+  it('never answers the bare uuid, though it reads it to judge the lines', async () => {
     const { service, asked, inTenant } = build();
-    await inTenant(() => service.listForGrant(USER, GRANT));
-    expect(Object.keys(asked.select as object)).not.toContain('uuid');
+    const [row] = await inTenant(() => service.listForGrant(USER, GRANT));
+    expect(row).not.toHaveProperty('uuid');
+    expect(row).not.toHaveProperty('linksUuid');
     expect(JSON.stringify(asked.select)).not.toContain('Credentials');
+  });
+
+  it('answers no lines captured from a client the config no longer is: a regenerate makes them dead links', async () => {
+    const { service, inTenant } = build({ configs: [configRow({ uuid: 'uuid-new', linksUuid: 'uuid-now' })] });
+    const [row] = await inTenant(() => service.listForGrant(USER, GRANT));
+    expect(row.lines).toEqual([]);
+    expect(row.linksCapturedAt).toBeNull();
+  });
+
+  it('answers a never-captured config as no lines and no capture time', async () => {
+    const { service, inTenant } = build({ configs: [configRow({ linksUuid: null, linkLines: [], linksCapturedAt: null })] });
+    const [row] = await inTenant(() => service.listForGrant(USER, GRANT));
+    expect(row.lines).toEqual([]);
+    expect(row.linksCapturedAt).toBeNull();
+  });
+
+  it('answers a panel that gives no lines as captured and empty', async () => {
+    const { service, inTenant } = build({ configs: [configRow({ linkLines: [] })] });
+    const [row] = await inTenant(() => service.listForGrant(USER, GRANT));
+    expect(row.lines).toEqual([]);
+    expect(row.linksCapturedAt).toBe('2026-09-23T09:00:00.000Z');
   });
 
   it('refuses another user’s Grant exactly as a missing one', async () => {

@@ -112,7 +112,7 @@ still a desired-state write, and nothing here calls a panel.
 
 | Route | In | Answers `data` |
 |---|---|---|
-| `GET /api/billing/traffic/grants/:grantId/configs` | the Grant id | `{grantId, rows[{id, protocol, status, region, allocatedCeilingBytes, appliedCeilingBytes, driftState, enforcementState, regenerateUsedCount, maxRegenerateCount, lastReconciledAt}]}` |
+| `GET /api/billing/traffic/grants/:grantId/configs` | the Grant id | `{grantId, rows[{id, protocol, status, region, allocatedCeilingBytes, appliedCeilingBytes, driftState, enforcementState, regenerateUsedCount, maxRegenerateCount, lastReconciledAt, lines[], linksCapturedAt}]}` |
 | `POST /api/billing/traffic/configs/actions` | `{action: regenerate \| retire, configIds[1..50]}` | `{action, results[{configId, ok: true} \| {configId, ok: false, reason}]}` — always **200** |
 
 | Rule | Why |
@@ -121,9 +121,10 @@ still a desired-state write, and nothing here calls a panel.
 | **A bulk action is one transaction per config**, in the order named, ids deduplicated; every config's outcome is answered (user, 2026-09-23) | one refused config — at its regenerate limit, retired meanwhile — must not stop the others, and the page must not have to guess which one it was. A second regenerate of one id would spend another of three |
 | `reason` is `CONFIG_ACTION_REJECTIONS` (`config-actions.ts`, C-09) or `failed` for a throw that was not a refusal — logged, and still an outcome | the configs before it are committed and must be reported |
 | Whose configs is the gate's `X-User-Id`. Another user's Grant is the same **404** as a missing one; another user's config is `config_not_found` | neither route is a way to ask whether an id exists |
-| Retired configs are not listed, and the list **never answers `uuid`** — columns are selected | retired is what the user deleted; the `uuid` is the credential, `/sub`'s to hand out (F-113) |
+| Retired configs are not listed, and the list **never answers the bare `uuid`** — columns are selected, and `uuid` is read only to judge the lines | retired is what the user deleted; the owner needs the lines, not the key inside them |
+| `lines` are the config's captured link lines, answered to the owner only while `linksUuid` = `uuid` (F-307-a, user 2026-09-26); otherwise `[]` with `linksCapturedAt` `null`. `[]` with a time is a panel that gives none | they are the lines `/sub` already hands the same user (F-113), and `/sub`'s own rule (network `contract.links.md`): lines from the client before a regenerate are dead links until the next capture |
 | Buckets `CONFIG_LIST` (**180**/900s) and `CONFIG_ACTION` (**30**/900s, per request); capability `subscriptionLink` | looking must not spend the budget for acting; these are the configs `/sub` serves |
 
-**Not covered:** the new credential a regenerate mints is delivered by `/sub`
-(F-113), not by this answer; move and provision from the panel are nobody's row.
+**Not covered:** a regenerate's new lines reach this answer only after the next
+capture — the answer to the action itself carries none; move and provision from the panel are nobody's row.
 Its consumer is `panel-web/contract.my-services.md`.
