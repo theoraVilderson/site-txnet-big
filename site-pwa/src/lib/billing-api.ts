@@ -1598,12 +1598,30 @@ export type ConfigProtocol = "vmess" | "vless" | "trojan" | "shadowsocks" | "hys
 /** `network.PanelGroupMemberRole` — the member's, not the panel's HA `role`. */
 export type PanelGroupMemberRole = "primary" | "replica" | "drain";
 
-/** A member as `panel-groups.ts` `wireMember` answers it: its panel's health beside it. */
+/** Where a selling setting's effective value came from (billing `selling-settings.ts`, F-027-cg). */
+export type SellingLayer = "member" | "panel" | "platform";
+
+/** Each selling setting's effective value and its layer: member -> panel -> platform default. */
+export interface EffectiveSellingSettings {
+  inboundPlacement: { value: InboundPlacement; layer: SellingLayer };
+  maxClients: { value: number | null; layer: SellingLayer };
+  priority: { value: number; layer: SellingLayer };
+  weight: { value: number; layer: SellingLayer };
+}
+
+/**
+ * A member as `panel-groups.ts` `wireMember` answers it: its own selling
+ * settings (null = inherited from the panel), their `effective` values, and
+ * its panel's health beside it.
+ */
 export interface PanelGroupMember {
   groupId: string;
   panelId: string;
-  priority: number;
-  weight: number;
+  inboundPlacement: InboundPlacement | null;
+  maxClients: number | null;
+  priority: number | null;
+  weight: number | null;
+  effective: EffectiveSellingSettings;
   role: PanelGroupMemberRole;
   drainingSince: string | null;
   createdAt: string;
@@ -1652,8 +1670,13 @@ export interface PanelInbound {
 /** `GET /systems/panels/:id/inbounds` (billing `panel-inbounds.ts`). */
 export interface PanelInbounds {
   panelId: string;
-  inboundPlacement: InboundPlacement;
+  /** The panel's own layer; null = the platform default (F-027-cg). */
+  inboundPlacement: InboundPlacement | null;
   maxClients: number | null;
+  priority: number | null;
+  weight: number | null;
+  /** Each value as fulfilment reads it for a member that sets none, with `panel` or `platform`. */
+  effective: EffectiveSellingSettings;
   /** Null until the first read, and again after a refresh until the next pass reads. */
   inboundsReadAt: string | null;
   /** Grants with a live config on the panel — what `maxClients` caps. */
@@ -1661,10 +1684,12 @@ export interface PanelInbounds {
   inbounds: PanelInbound[];
 }
 
-/** `updatePanelInboundsSchema`: what is left out keeps its value; null clears a cap. */
+/** `updatePanelInboundsSchema`: what is left out keeps its value; null hands a setting to the platform default. */
 export type PanelInboundsBody = {
-  inboundPlacement?: InboundPlacement;
+  inboundPlacement?: InboundPlacement | null;
   maxClients?: number | null;
+  priority?: number | null;
+  weight?: number | null;
   inbounds?: { remoteId: string; sold: boolean; maxClients?: number | null }[];
 };
 

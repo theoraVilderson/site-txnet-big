@@ -202,31 +202,51 @@ export const updatePanelGroupSchema = createPanelGroupSchema
 export type UpdatePanelGroupBody = z.infer<typeof updatePanelGroupSchema>;
 
 /**
+ * A layer's own selling settings (F-027-cg, ADR-0090 decision 2), each
+ * optional; null hands the setting to the layer below (member -> panel ->
+ * platform). A cap is `>= 1` or null, as the tables' CHECKs. Server facts are
+ * not here: a group never overrides them.
+ */
+const capSchema = z.number().int().min(1).max(1_000_000).nullable();
+const prioritySchema = z.number().int().min(0).max(1000).nullable();
+const weightSchema = z.number().int().min(1).max(1000).nullable();
+
+const sellingFields = {
+  inboundPlacement: z.nativeEnum(InboundPlacement).nullable().optional(),
+  maxClients: capSchema.optional(),
+  priority: prioritySchema.optional(),
+  weight: weightSchema.optional(),
+};
+
+/**
  * Adding a panel to a group. `.strict()`: `role` is refused — a member enters
- * as `primary`, and `drain` is its own route, whose clock the database keeps.
+ * as `primary`, and `drain` is its own route, whose clock the database keeps —
+ * and so is every server fact (`maxRequestsPerMinute`, addresses, credentials).
  */
 export const addPanelGroupMemberSchema = z
-  .object({
-    panelId: z.string().uuid(),
-    priority: z.number().int().min(0).max(1000).optional(),
-    weight: z.number().int().min(1).max(1000).optional(),
-  })
+  .object({ panelId: z.string().uuid(), ...sellingFields })
   .strict();
 
 export type AddPanelGroupMemberBody = z.infer<typeof addPanelGroupMemberSchema>;
 
-/**
- * A panel's inbound picks and placement (F-114-b, network `contract.inbounds.md`).
- * A cap is `>= 1` or null (none), as the table's CHECKs; a pick names the
- * inbound by the panel's own id. `.strict()`: the read's columns (`protocol`,
- * `enabled`, `goneAt`) are the panel's and are refused, not dropped.
- */
-const capSchema = z.number().int().min(1).max(1_000_000).nullable();
+/** Editing a member's overrides: any of the four, at least one; null clears it. */
+export const updatePanelGroupMemberSchema = z
+  .object(sellingFields)
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, { message: 'name one field to change' });
 
+export type UpdatePanelGroupMemberBody = z.infer<typeof updatePanelGroupMemberSchema>;
+
+/**
+ * A panel's inbound picks and its layer of the selling settings (F-114-b,
+ * F-027-cg; network `contract.inbounds.md`). Null hands a setting back to the
+ * platform default. A pick names the inbound by the panel's own id.
+ * `.strict()`: the read's columns (`protocol`, `enabled`, `goneAt`) are the
+ * panel's and are refused, not dropped.
+ */
 export const updatePanelInboundsSchema = z
   .object({
-    inboundPlacement: z.nativeEnum(InboundPlacement).optional(),
-    maxClients: capSchema.optional(),
+    ...sellingFields,
     inbounds: z
       .array(z.object({ remoteId: z.string().min(1).max(200), sold: z.boolean(), maxClients: capSchema.optional() }).strict())
       .max(500)

@@ -50,8 +50,16 @@ function prismaEnum(name: string): string[] {
 const member = (over: Partial<PanelGroupMember> = {}): PanelGroupMember => ({
   groupId: "g-1",
   panelId: "p-1",
-  priority: 0,
-  weight: 1,
+  inboundPlacement: null,
+  maxClients: null,
+  priority: null,
+  weight: null,
+  effective: {
+    inboundPlacement: { value: "all", layer: "platform" },
+    maxClients: { value: null, layer: "platform" },
+    priority: { value: 0, layer: "platform" },
+    weight: { value: 1, layer: "platform" },
+  },
   role: "primary",
   drainingSince: null,
   createdAt: "2026-09-25T10:00:00.000Z",
@@ -177,7 +185,14 @@ describe("a panel's inbounds (F-114-b)", () => {
     seenAt: "2026-09-25T10:00:00.000Z", sold: false, maxClients: null, clients: 0, ...over,
   });
   const view = (inbounds: PanelInbound[], over: Partial<PanelInbounds> = {}): PanelInbounds => ({
-    panelId: "p-1", inboundPlacement: "all", maxClients: null, inboundsReadAt: null, users: 0, inbounds, ...over,
+    panelId: "p-1", inboundPlacement: null, maxClients: null, priority: null, weight: null, inboundsReadAt: null, users: 0, inbounds,
+    effective: {
+      inboundPlacement: { value: over.inboundPlacement ?? "all", layer: over.inboundPlacement ? "panel" : "platform" },
+      maxClients: { value: over.maxClients ?? null, layer: over.maxClients ? "panel" : "platform" },
+      priority: { value: 0, layer: "platform" },
+      weight: { value: 1, layer: "platform" },
+    },
+    ...over,
   });
 
   it("names every placement the database can hold, and every refusal billing can answer", () => {

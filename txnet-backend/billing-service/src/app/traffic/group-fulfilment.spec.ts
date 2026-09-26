@@ -34,6 +34,8 @@ type PanelOpts = { inboundPlacement?: InboundPlacement; maxClients?: number | nu
 type Member = {
   panelId: string;
   role: PanelGroupMemberRole;
+  inboundPlacement?: InboundPlacement | null;
+  maxClients?: number | null;
   panel: { reviewState: PanelReviewState; panelState: PanelState; inboundPlacement: InboundPlacement; maxClients: number | null; inbounds: Inbound[] };
 };
 
@@ -286,6 +288,17 @@ describe('placement on the picked inbounds (F-114-b)', () => {
     await held.service.fulfil(held.tx, GRANT);
     held.group.members = [on(A, { maxClients: 1, inbounds: [inbound('1'), inbound('5')] })];
     expect((await held.service.fulfil(held.tx, GRANT)).placed).toBe(1);
+  });
+
+  it('places by the member\'s own placement and cap over its panel\'s, and by the panel\'s where the member sets none (F-027-cg)', async () => {
+    const others = [taken(A, '1', 'g1')];
+    const panel = { inboundPlacement: InboundPlacement.spread, maxClients: 1, inbounds: [inbound('1'), inbound('2')] };
+    const overridden = build({ members: [{ ...on(A, panel), inboundPlacement: InboundPlacement.all, maxClients: 5 }], others });
+    await overridden.service.fulfil(overridden.tx, GRANT);
+    expect(overridden.configs.map((c) => c.inboundRemoteId)).toEqual(['1', '2']);
+
+    const inherited = build({ members: [{ ...on(A, panel), inboundPlacement: null, maxClients: null }], others });
+    expect(await inherited.service.fulfil(inherited.tx, GRANT)).toMatchObject({ placed: 0, waiting: [A] });
   });
 
   it('a config placed before picks holds its panel, and counts once towards minHealthyPanels', async () => {

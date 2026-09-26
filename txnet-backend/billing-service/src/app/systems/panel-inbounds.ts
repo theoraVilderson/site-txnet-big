@@ -1,20 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InboundPlacement, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { effectiveSellingSettings, SellingLayerValues } from '../traffic/selling-settings';
 import { panelScopeOf, SystemsActor } from './panel-scope';
 import { SystemsRefused } from './systems-read';
 
 /** One inbound's pick. `maxClients` null = no cap. */
 export type InboundPickInput = { remoteId: string; sold: boolean; maxClients?: number | null };
 
-/** The panel's placement settings and any picks, all optional; what is left out keeps its value. */
-export type PanelInboundsInput = {
-  inboundPlacement?: InboundPlacement;
-  maxClients?: number | null;
-  inbounds?: InboundPickInput[];
-};
+/**
+ * The panel's layer of the selling settings (F-027-cg; null hands one to the
+ * platform default) and any picks, all optional; what is left out keeps its value.
+ */
+export type PanelInboundsInput = SellingLayerValues & { inbounds?: InboundPickInput[] };
 
 const INBOUND_FIELDS = {
   remoteId: true,
@@ -29,7 +29,7 @@ const INBOUND_FIELDS = {
   maxClients: true,
 } satisfies Prisma.PanelInboundSelect;
 
-const PANEL_FIELDS = { id: true, inboundPlacement: true, maxClients: true, inboundsReadAt: true } satisfies Prisma.PanelSelect;
+const PANEL_FIELDS = { id: true, inboundPlacement: true, maxClients: true, priority: true, weight: true, inboundsReadAt: true } satisfies Prisma.PanelSelect;
 
 /**
  * A panel's inbounds on the systems surface (F-114-b, network
@@ -55,7 +55,11 @@ export class PanelInboundsService {
     private readonly crossTenant: CrossTenantPrismaService,
   ) {}
 
-  /** The panel's placement, its inbounds by id, and how full each is. */
+  /**
+   * The panel's selling settings as stored (null = the platform's) and
+   * `effective` — each value with its layer, `panel` or `platform` (F-027-cg);
+   * its inbounds by id, and how full each is.
+   */
   async inbounds(actor: SystemsActor, panelId: string) {
     const panel = await this.panelInScope(actor, panelId);
     const [rows, load] = await Promise.all([
@@ -65,7 +69,8 @@ export class PanelInboundsService {
     const inbounds = rows
       .sort((a, b) => a.remoteId.localeCompare(b.remoteId, 'en', { numeric: true }))
       .map((i) => ({ ...i, clients: load.byInbound.get(i.remoteId) ?? 0 }));
-    return { panelId: panel.id, inboundPlacement: panel.inboundPlacement, maxClients: panel.maxClients, inboundsReadAt: panel.inboundsReadAt, users: load.users, inbounds };
+    const { id, inboundsReadAt, ...settings } = panel;
+    return { panelId: id, ...settings, effective: effectiveSellingSettings(null, settings), inboundsReadAt, users: load.users, inbounds };
   }
 
   /**
@@ -95,10 +100,8 @@ export class PanelInboundsService {
           });
         }
       }
-      const settings = {
-        ...(input.inboundPlacement !== undefined ? { inboundPlacement: input.inboundPlacement } : {}),
-        ...(input.maxClients !== undefined ? { maxClients: input.maxClients } : {}),
-      };
+      const { inboundPlacement, maxClients, priority, weight } = input;
+      const settings = Object.fromEntries(Object.entries({ inboundPlacement, maxClients, priority, weight }).filter(([, v]) => v !== undefined));
       if (Object.keys(settings).length > 0) await tx.panel.update({ where: { id: panel.id }, data: settings });
     });
     this.logger.log(`panel ${panel.id} inbounds edited by ${actor.adminId}`);

@@ -362,10 +362,18 @@ model Panel {
   /// The external watchdog's input (F-027-w): a stalled collector is visible
   /// here before it is visible as a wrong number.
   lastSuccessfulCollectionAt DateTime?
-  /// How a buyer is placed on the picked inbounds (F-114-b).
-  inboundPlacement           InboundPlacement   @default(all)
-  /// The most users (Grants with a live config) the panel takes; null = no cap.
+  /// Selling settings, the panel's layer (F-027-cg, ADR-0090): a group member
+  /// may override each, and null here is the platform default
+  /// (`PLATFORM_SELLING_DEFAULTS`). How a buyer is placed on the picked
+  /// inbounds (F-114-b); null = `all`.
+  inboundPlacement           InboundPlacement?
+  /// The most users (Grants with a live config) the panel takes; null = the
+  /// platform's, which is no cap.
   maxClients                 Int?
+  /// Lower first; null = 0. Read by strategies that choose among members.
+  priority                   Int?
+  /// Null = 1.
+  weight                     Int?
   /// When `network-service` last read the panel's inbounds into
   /// `panel_inbound`. Null asks for a read on the next pass (the admin's refresh).
   inboundsReadAt             DateTime?
@@ -566,15 +574,19 @@ model PanelInbound {
 }
 
 /// A panel in a group, once. `tenantId` is its group's — a trigger holds it —
-/// so RLS reads it without a join. `priority` and `weight` are for the
-/// strategies that choose among members; `mirror` reads neither.
+/// so RLS reads it without a join. The four selling settings are the member's
+/// layer (F-027-cg, ADR-0090): null = the panel's, then the platform default.
+/// `priority` and `weight` are for the strategies that choose among members;
+/// `mirror` reads neither.
 model PanelGroupMember {
   groupId   String               @db.Uuid
   panelId   String               @db.Uuid
   tenantId  String?              @db.Uuid
+  inboundPlacement InboundPlacement?
+  maxClients Int?
   /// Lower first.
-  priority  Int                  @default(0)
-  weight    Int                  @default(1)
+  priority  Int?
+  weight    Int?
   role      PanelGroupMemberRole @default(primary)
   /// When `role` became `drain`; the database's clock, set and held by trigger
   /// `panel_group_member_drain_clock` (F-027-bm). Null when not draining.

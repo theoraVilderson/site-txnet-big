@@ -19,7 +19,7 @@ fulfilment is F-027-bl (below), draining F-027-bm (below).
 | table | columns that matter | held by |
 |---|---|---|
 | `panel_group` | `tenantId` (null = platform), `name`, `strategy` (`mirror` default), `minHealthyPanels` (default 1), `subscriptionTtlSeconds` (default 3600); no protocol — its panels' picked inbounds say it (`contract.inbounds.md`) | CHECK `minHealthyPanels >= 1`, `subscriptionTtlSeconds > 0`; trigger `panel_group_tenant_is_fixed` |
-| `panel_group_member` | key `(groupId, panelId)`; `tenantId` = its group's; `priority` (default 0, lower first), `weight` (default 1), `role` (`primary` default), `drainingSince` (F-027-bm) | CHECK `priority >= 0`, `weight >= 1`, `drainingSince` iff `drain`; triggers `panel_group_member_fits`, `panel_group_member_drain_clock` |
+| `panel_group_member` | key `(groupId, panelId)`; `tenantId` = its group's; `inboundPlacement`, `maxClients`, `priority` (lower first), `weight` — the member's layer of the selling settings, null = the panel's (`contract.inbounds.md` rule 4a, F-027-cg); `role` (`primary` default), `drainingSince` (F-027-bm) | CHECK `priority >= 0`, `weight >= 1`, `maxClients >= 1` when set, `drainingSince` iff `drain`; triggers `panel_group_member_fits`, `panel_group_member_drain_clock` |
 
 Both are policied as `network.panel` is: shared-read for `txnet_app` (its own
 tenant's rows and the platform's), everything for `txnet_cross_tenant`.

@@ -24,7 +24,8 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
 |---|---|---|
 | `panel_inbound` | key `(panelId, remoteId)`; `tag`, `protocol` (null = one we do not sell), `port`, `host`, `enabled`, `goneAt`, `seenAt` | `network-service`'s read |
 | `panel_inbound` | `sold`, `maxClients` (null = no cap, else `>= 1`) | the admin, on billing's systems routes |
-| `panel` | `inboundPlacement` (`all` default \| `spread`), `maxClients` (null \| `>= 1`) | the admin |
+| `panel` | the panel's layer of the selling settings (rule 4a): `inboundPlacement` (`all` \| `spread`), `maxClients` (`>= 1`), `priority` (`>= 0`), `weight` (`>= 1`); null = the platform default | the admin |
+| `panel_group_member` | the member's layer: the same four, null = the panel's | the admin |
 | `panel` | `inboundsReadAt` — null = read on the next pass | the read sets it; the admin's refresh clears it |
 | `config` | `inboundRemoteId` — the inbound fulfilment placed it on | `ConfigActionsService.provisionForGroup` |
 
@@ -53,8 +54,19 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
    (`contract.ceiling.md`). `spread`: one config, on the picked inbound with
    the fewest live configs that is under its cap (ties: the lower id). A
    config's `protocol` is its inbound's.
+4a. **Three layers, and always an answer** (F-027-cg, ADR-0090 decision 2).
+   A selling setting resolves group membership -> panel -> platform default
+   (`PLATFORM_SELLING_DEFAULTS` in billing's `traffic/selling-settings.ts`:
+   `all`, no cap, priority 0, weight 1); null at a layer is "not set here".
+   So one panel can place `all` for one group and `spread` with a lower cap for
+   another. Server facts — addresses, credentials, `maxRequestsPerMinute`,
+   `maxLineRateBps` — have no member column and are never overridden. A member
+   cannot set "no cap" under a capped panel: unset inherits the cap. The due
+   scan resolves the two `mirror` reads in SQL (`COALESCE`), which assumes the
+   platform cap is none; `placementSettings` does it in TypeScript, and rules 4
+   and 5 read the effective values. Which inbounds a member sells is F-027-ch.
 5. **The caps.** An inbound at `maxClients` live configs takes nobody. A panel
-   at `maxClients` users — distinct Grants with a live config (`present`, not
+   at its effective `maxClients` (rule 4a) users — distinct Grants with a live config (`present`, not
    drained) — takes no **new** Grant; a Grant already on it still gets a pick
    added later. Counted across every tenant, after a transaction lock on each
    placeable panel (`pg_advisory_xact_lock`, panel-id order), so two

@@ -42,7 +42,7 @@ function matches(row: Row, where: Row): boolean {
 
 function harness() {
   const panels: Row[] = [
-    { id: PLATFORM_PANEL, tenantId: null, ownershipType: 'platform', name: 'de-fra-1', panelState: 'healthy', reviewState: 'accepted', lastHealthyAt: null },
+    { id: PLATFORM_PANEL, tenantId: null, ownershipType: 'platform', name: 'de-fra-1', panelState: 'healthy', reviewState: 'accepted', lastHealthyAt: null, maxClients: 300, inboundPlacement: null, priority: null, weight: null },
     { id: SECOND_PANEL, tenantId: null, ownershipType: 'platform', name: 'nl-ams-1', panelState: 'down', reviewState: 'pending', lastHealthyAt: null },
     { id: RESELLER_PANEL, tenantId: RESELLER, ownershipType: 'tenant', name: 'their-own', panelState: 'healthy', reviewState: 'accepted', lastHealthyAt: null },
   ];
@@ -63,7 +63,8 @@ function harness() {
   ]);
   const withPanel = (m: Row) => {
     const p = panels.find((x) => x['id'] === m['panelId'])!;
-    return { ...m, panel: { name: p['name'], panelState: p['panelState'], reviewState: p['reviewState'], lastHealthyAt: p['lastHealthyAt'] } };
+    const selling = { inboundPlacement: p['inboundPlacement'] ?? null, maxClients: p['maxClients'] ?? null, priority: p['priority'] ?? null, weight: p['weight'] ?? null };
+    return { ...m, panel: { name: p['name'], panelState: p['panelState'], reviewState: p['reviewState'], lastHealthyAt: p['lastHealthyAt'], ...selling } };
   };
   const withMembers = (g: Row) => ({
     ...g,
@@ -127,8 +128,9 @@ function harness() {
       },
       updateMany: async ({ where, data }: { where: Row; data: Row }) => {
         const hit = members.filter((m) => matches(m, where));
-        // The database's clock (`panel_group_member_drain_clock`), as the trigger stamps it.
-        hit.forEach((m) => Object.assign(m, data, { drainingSince: new Date('2026-09-25T10:00:00Z') }));
+        // The database's clock (`panel_group_member_drain_clock`), as the trigger stamps it on a drain.
+        const clock = data['role'] === PanelGroupMemberRole.drain ? { drainingSince: new Date('2026-09-25T10:00:00Z') } : {};
+        hit.forEach((m) => Object.assign(m, data, clock));
         return { count: hit.length };
       },
     },
@@ -204,6 +206,24 @@ describe('PanelGroupsService', () => {
     expect(members).toHaveLength(2);
     expect(addPanelGroupMemberSchema.safeParse({ panelId: SECOND_PANEL, role: 'drain' }).success).toBe(false);
     expect(addPanelGroupMemberSchema.safeParse({ panelId: SECOND_PANEL, weight: 0 }).success).toBe(false);
+  });
+
+  it("overrides a member's selling settings over its panel's, answers each with its layer, and clears back (F-027-cg)", async () => {
+    const { service, members } = harness();
+    const m = await service.updateMember(owner, GROUP, PLATFORM_PANEL, { maxClients: 40, inboundPlacement: 'spread' as never });
+    expect(m.effective).toEqual({
+      inboundPlacement: { value: 'spread', layer: 'member' },
+      maxClients: { value: 40, layer: 'member' },
+      priority: { value: 0, layer: 'member' },
+      weight: { value: 1, layer: 'member' },
+    });
+    expect(members[0]).toMatchObject({ drainingSince: null, role: 'primary' });
+
+    const cleared = await service.updateMember(owner, GROUP, PLATFORM_PANEL, { maxClients: null, inboundPlacement: null, priority: null, weight: null });
+    expect(cleared.effective).toMatchObject({ maxClients: { value: 300, layer: 'panel' }, inboundPlacement: { value: 'all', layer: 'platform' }, priority: { layer: 'platform' } });
+
+    await expect(service.updateMember(owner, GROUP, SECOND_PANEL, { weight: 2 })).rejects.toMatchObject({ reason: 'member_not_found' });
+    await expect(service.updateMember(owner, TENANT_GROUP, PLATFORM_PANEL, { weight: 2 })).rejects.toMatchObject({ reason: 'not_found' });
   });
 
   it('removes a member only when no live config of the group is on it — else it is to be drained', async () => {

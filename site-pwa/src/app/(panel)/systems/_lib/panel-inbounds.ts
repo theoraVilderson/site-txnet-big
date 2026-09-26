@@ -33,7 +33,8 @@ const capText = (n: number | null) => (n === null ? "" : String(n));
 
 export function inboundsFormOf(view: PanelInbounds): InboundsForm {
   return {
-    placement: view.inboundPlacement,
+    // The placement in force: the panel's own, else the platform's (F-027-cg).
+    placement: view.effective.inboundPlacement.value,
     panelMax: capText(view.maxClients),
     picks: Object.fromEntries(view.inbounds.map((i) => [i.remoteId, { sold: i.sold, cap: capText(i.maxClients) }])),
   };
@@ -81,7 +82,7 @@ export function validateInbounds(form: InboundsForm, view: PanelInbounds): Inbou
   const errors: Record<string, string> = {};
   const body: PanelInboundsBody = {};
 
-  if (form.placement !== view.inboundPlacement) body.inboundPlacement = form.placement;
+  if (form.placement !== view.effective.inboundPlacement.value) body.inboundPlacement = form.placement;
 
   const panelMax = capOf(form.panelMax);
   if (panelMax === undefined) errors.panelMax = K.invalid.cap;

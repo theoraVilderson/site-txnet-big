@@ -30,7 +30,7 @@ import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { PanelCredentialRefused, PanelCredentialUnavailable } from './panel-credential.client';
 import { PanelRegistrationService, PanelResubmitRefused, RegisterPanelInput } from './panel-registration';
-import { PanelGroupInput, PanelGroupMemberInput, PanelGroupsService } from './panel-groups';
+import { MemberSellingInput, PanelGroupInput, PanelGroupMemberInput, PanelGroupsService } from './panel-groups';
 import { PanelInboundsInput, PanelInboundsService } from './panel-inbounds';
 import { PanelLifecycleService, PanelSettingsInput } from './panel-lifecycle';
 import {
@@ -41,6 +41,8 @@ import {
   createPanelGroupSchema,
   UpdatePanelGroupBody,
   updatePanelGroupSchema,
+  UpdatePanelGroupMemberBody,
+  updatePanelGroupMemberSchema,
   UpdatePanelBody,
   updatePanelSchema,
   UpdatePanelInboundsBody,
@@ -211,6 +213,21 @@ export class SystemsController {
     @Req() req: Request,
   ) {
     return refusing(() => this.panelGroups.addMember(actorOf(req), id, body as PanelGroupMemberInput));
+  }
+
+  /**
+   * A member's own selling settings (F-027-cg): null inherits the panel's.
+   * `200` the member, with `effective` — each value and its layer.
+   */
+  @Patch('panel-groups/:id/members/:panelId')
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  updateMember(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('panelId', new ParseUUIDPipe()) panelId: string,
+    @Body(new ZodValidationPipe(updatePanelGroupMemberSchema)) body: UpdatePanelGroupMemberBody,
+    @Req() req: Request,
+  ) {
+    return refusing(() => this.panelGroups.updateMember(actorOf(req), id, panelId, body as MemberSellingInput));
   }
 
   /** `409 member_has_configs` while a live config of the group's Grants is on it: drain it instead. */

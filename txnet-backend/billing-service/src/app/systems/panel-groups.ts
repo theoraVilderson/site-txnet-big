@@ -4,6 +4,7 @@ import { PanelGroupMemberRole, Prisma } from '@prisma/client';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DRAIN_TTL_MULTIPLE } from '../traffic/group-drain';
+import { effectiveSellingSettings, SellingLayerValues } from '../traffic/selling-settings';
 import { panelScopeOf, SystemsActor } from './panel-scope';
 import { SystemsRefused } from './systems-read';
 
@@ -13,18 +14,26 @@ export type PanelGroupInput = {
   subscriptionTtlSeconds?: number;
 };
 
-export type PanelGroupMemberInput = { panelId: string; priority?: number; weight?: number };
+/** A member's own layer of the selling settings (F-027-cg); null clears one, absent leaves it. */
+export type MemberSellingInput = SellingLayerValues;
+
+export type PanelGroupMemberInput = MemberSellingInput & { panelId: string };
+
+/** The panel's layer, beneath each member's. */
+const PANEL_SELLING_FIELDS = { inboundPlacement: true, maxClients: true, priority: true, weight: true } satisfies Prisma.PanelSelect;
 
 /** A member's panel, field by field: `panelApiCredentials` is on the same row. */
 const MEMBER_FIELDS = {
   groupId: true,
   panelId: true,
+  inboundPlacement: true,
+  maxClients: true,
   priority: true,
   weight: true,
   role: true,
   drainingSince: true,
   createdAt: true,
-  panel: { select: { name: true, panelState: true, reviewState: true, lastHealthyAt: true } },
+  panel: { select: { name: true, panelState: true, reviewState: true, lastHealthyAt: true, ...PANEL_SELLING_FIELDS } },
 } satisfies Prisma.PanelGroupMemberSelect;
 
 const GROUP_FIELDS = {
@@ -35,7 +44,8 @@ const GROUP_FIELDS = {
   subscriptionTtlSeconds: true,
   createdAt: true,
   updatedAt: true,
-  members: { select: MEMBER_FIELDS, orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }] },
+  // Ordered by effective priority in `wireGroup`: a member's own may be unset.
+  members: { select: MEMBER_FIELDS, orderBy: { createdAt: 'asc' } },
   _count: { select: { variants: true } },
 } satisfies Prisma.PanelGroupSelect;
 
@@ -107,7 +117,7 @@ export class PanelGroupsService {
 
     try {
       const row = await this.crossTenant.panelGroupMember.create({
-        data: { groupId: group.id, panelId: panel.id, tenantId: scope.tenantId, priority: input.priority, weight: input.weight },
+        data: { groupId: group.id, panelId: panel.id, tenantId: scope.tenantId, ...sellingData(input) },
         select: MEMBER_FIELDS,
       });
       this.logger.log(`panel ${panel.id} added to group ${group.id} by ${actor.adminId}`);
@@ -116,6 +126,24 @@ export class PanelGroupsService {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new SystemsRefused('already_member');
       throw e;
     }
+  }
+
+  /**
+   * A member's own selling settings (F-027-cg, ADR-0090 decision 2): set one
+   * to override its panel for this group, null to inherit again. Server facts
+   * never reach here (the schema is `.strict()`). Like every group change, it
+   * reaches what is placed next; placed configs keep theirs (rule 22).
+   */
+  async updateMember(actor: SystemsActor, groupId: string, panelId: string, input: MemberSellingInput) {
+    const scope = await this.groupScopeOf(actor);
+    const group = await this.groupInScope(scope, groupId);
+    const where = { groupId: group.id, panelId };
+    const { count } = await this.crossTenant.panelGroupMember.updateMany({ where, data: sellingData(input) });
+    if (count === 0) throw new SystemsRefused('member_not_found');
+    const member = await this.crossTenant.panelGroupMember.findFirst({ where, select: MEMBER_FIELDS });
+    if (!member) throw new SystemsRefused('member_not_found');
+    this.logger.log(`panel ${panelId} selling settings in group ${group.id} edited by ${actor.adminId}`);
+    return wireMember(member);
   }
 
   /**
@@ -209,6 +237,16 @@ export class PanelGroupsService {
   }
 }
 
+/** Only the keys the body named: absent leaves a layer's value, null clears it. */
+function sellingData(input: MemberSellingInput) {
+  const { inboundPlacement, maxClients, priority, weight } = input;
+  return Object.fromEntries(Object.entries({ inboundPlacement, maxClients, priority, weight }).filter(([, v]) => v !== undefined)) as MemberSellingInput;
+}
+
+/**
+ * The member's own values as stored (null = inherited), and `effective`:
+ * each setting's value for this group and the layer it came from.
+ */
 function wireMember({ panel, ...m }: MemberRow) {
   return {
     ...m,
@@ -216,9 +254,11 @@ function wireMember({ panel, ...m }: MemberRow) {
     panelState: panel.panelState,
     reviewState: panel.reviewState,
     lastHealthyAt: panel.lastHealthyAt,
+    effective: effectiveSellingSettings(m, panel),
   };
 }
 
 function wireGroup({ members, _count, ...g }: GroupRow) {
-  return { ...g, variantCount: _count.variants, members: members.map(wireMember) };
+  const wired = members.map(wireMember).sort((a, b) => a.effective.priority.value - b.effective.priority.value);
+  return { ...g, variantCount: _count.variants, members: wired };
 }

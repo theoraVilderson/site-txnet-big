@@ -22,6 +22,7 @@ import { errorLine } from '../log-line';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionsService, ConfigActor, InboundPlacementTarget } from './config-actions';
+import { effectiveSellingSettings, PLATFORM_SELLING_DEFAULTS } from './selling-settings';
 
 /**
  * Who placed a group's configs in `config_action_log`: the fulfilment job, not
@@ -73,11 +74,21 @@ const MEMBER_PANEL_FIELDS = {
   },
 } satisfies Prisma.PanelSelect;
 
-type MemberRow = { panelId: string; role: PanelGroupMemberRole; panel: Prisma.PanelGetPayload<{ select: typeof MEMBER_PANEL_FIELDS }> };
+/** The member's own layer of the selling settings (F-027-cg); null = the panel's. */
+const MEMBER_FIELDS = {
+  panelId: true,
+  role: true,
+  inboundPlacement: true,
+  maxClients: true,
+  panel: { select: MEMBER_PANEL_FIELDS },
+} satisfies Prisma.PanelGroupMemberSelect;
+
+type MemberRow = Prisma.PanelGroupMemberGetPayload<{ select: typeof MEMBER_FIELDS }>;
 
 /** A picked inbound as fulfilment reads it: `sold`, enabled, not gone, of a known protocol (F-114-b). */
 export type InboundFacts = { remoteId: string; protocol: ConfigProtocol; maxClients: number | null; clients: number };
 
+/** `inboundPlacement` and `maxClients` are the effective ones for this group: member -> panel -> platform (F-027-cg). */
 type PanelFacts = {
   reviewState: PanelReviewState;
   panelState: PanelState;
@@ -89,6 +100,22 @@ type PanelFacts = {
 };
 
 type MemberFacts = { panelId: string; role: PanelGroupMemberRole; panel: PanelFacts };
+
+/**
+ * How this group places on a member's panel: the member's own value, else the
+ * panel's, else the platform default (F-027-cg, ADR-0090 decision 2). Only the
+ * two `mirror` reads; `priority` / `weight` resolve the same way for the
+ * strategies not built yet. The due-scan SQL in `fulfilDue` resolves the same
+ * two with `COALESCE`, and assumes the platform cap is none.
+ */
+export function placementSettings(m: {
+  inboundPlacement?: InboundPlacement | null;
+  maxClients?: number | null;
+  panel: { inboundPlacement?: InboundPlacement | null; maxClients?: number | null };
+}): Pick<PanelFacts, 'inboundPlacement' | 'maxClients'> {
+  const effective = effectiveSellingSettings(m, m.panel);
+  return { inboundPlacement: effective.inboundPlacement.value, maxClients: effective.maxClients.value };
+}
 
 /**
  * A member a new config may be placed on now: not `drain`, its panel accepted
@@ -282,7 +309,7 @@ export class GroupFulfilmentService {
               select: {
                 strategy: true,
                 minHealthyPanels: true,
-                members: { select: { panelId: true, role: true, panel: { select: MEMBER_PANEL_FIELDS } } },
+                members: { select: MEMBER_FIELDS },
               },
             },
           },
@@ -341,6 +368,7 @@ export class GroupFulfilmentService {
       role: m.role,
       panel: {
         ...m.panel,
+        ...placementSettings(m),
         users: Number(panelRow(m.panelId)?.users ?? 0),
         inbounds: m.panel.inbounds.flatMap((i) =>
           i.protocol === null
@@ -395,18 +423,19 @@ export class GroupFulfilmentService {
                     -- not already where this inbound would put the Grant
                     AND NOT EXISTS (SELECT 1 FROM "network"."config" c
                                     WHERE c."grantId" = g."id" AND c."panelId" = m."panelId" AND c."drainedAt" IS NULL
-                                      AND (p."inboundPlacement" = 'spread' OR c."inboundRemoteId" IS NULL OR c."inboundRemoteId" = i."remoteId"))
+                                      AND (COALESCE(m."inboundPlacement", p."inboundPlacement", ${PLATFORM_SELLING_DEFAULTS.inboundPlacement}::"network"."InboundPlacement") = 'spread'
+                                           OR c."inboundRemoteId" IS NULL OR c."inboundRemoteId" = i."remoteId"))
                     -- the inbound has a seat
                     AND (i."maxClients" IS NULL OR i."maxClients" > (
                            SELECT count(*) FROM "network"."config" c
                             WHERE c."panelId" = i."panelId" AND c."inboundRemoteId" = i."remoteId"
                               AND c."desiredRemote" = 'present' AND c."drainedAt" IS NULL))
-                    -- the panel has room, or already holds this Grant
-                    AND (p."maxClients" IS NULL
+                    -- the panel has room for this group (member -> panel cap; the platform's is none), or already holds this Grant
+                    AND (COALESCE(m."maxClients", p."maxClients") IS NULL
                          OR EXISTS (SELECT 1 FROM "network"."config" c
                                      WHERE c."grantId" = g."id" AND c."panelId" = p."id"
                                        AND c."desiredRemote" = 'present' AND c."drainedAt" IS NULL)
-                         OR p."maxClients" > (
+                         OR COALESCE(m."maxClients", p."maxClients") > (
                               SELECT count(DISTINCT c."grantId") FROM "network"."config" c
                                WHERE c."panelId" = p."id" AND c."desiredRemote" = 'present' AND c."drainedAt" IS NULL)))
             OR (g."status" = 'pending' AND pg."minHealthyPanels" <= (
