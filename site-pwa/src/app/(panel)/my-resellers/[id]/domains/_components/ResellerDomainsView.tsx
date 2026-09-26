@@ -63,10 +63,13 @@ export function ResellerDomainsView({ id }: { id: string }) {
   const [slug, setSlug] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [asked, setAsked] = useState(0);
+  const retry = () => {
+    setLoadError(null);
+    setAsked((n) => n + 1);
+  };
 
   useEffect(() => {
     let alive = true;
-    setLoadError(null);
     resellerDomainsApi
       .list(id)
       .then((list) => alive && setDomains(list))
@@ -106,7 +109,7 @@ export function ResellerDomainsView({ id }: { id: string }) {
           </h1>
           <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
         </div>
-        <button type="button" className={quietButton} onClick={() => setAsked((n) => n + 1)}>
+        <button type="button" className={quietButton} onClick={retry}>
           <RefreshCw size={12} aria-hidden />
           {t("common", K.refresh)}
         </button>
@@ -115,7 +118,7 @@ export function ResellerDomainsView({ id }: { id: string }) {
       {loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
           <Alert>{message(loadError)}</Alert>
-          <button type="button" className={primaryButton} onClick={() => setAsked((n) => n + 1)}>
+          <button type="button" className={primaryButton} onClick={retry}>
             {t("common", K.reload)}
           </button>
         </div>
