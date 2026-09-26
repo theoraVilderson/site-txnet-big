@@ -18,12 +18,12 @@
  *    on the query rather than on the answer.
  */
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
-import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
+import { ConfigStatus, GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 import { RATE_LIMIT_KEY, RateLimitBucket, type RateLimitOptions, runWithTenant } from '@txnet-backend/shared-core';
 
 import { GrantService } from '../../entitlement/grant';
 import { GrantListController } from './grant-list.controller';
-import { grantListSchema } from './grant-list.schema';
+import { GRANT_LIST_QUERY_MAX, grantListSchema } from './grant-list.schema';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -60,6 +60,7 @@ function build(
   tenantPurgeDays = 7,
   adjustments: { grantId: string; delta: bigint }[] = [],
   hidden = 0,
+  search: { branding?: { brandName: string; lineNameTemplate: string | null } | null; regions?: string[] } = {},
 ) {
   const asked: {
     where?: Prisma.GrantWhereInput;
@@ -69,7 +70,8 @@ function build(
     select?: unknown;
     tenantReads: number;
     adjustmentsWhere?: Prisma.QuotaAdjustmentWhereInput;
-  } = { tenantReads: 0, counted: [] };
+    configReads: Prisma.ConfigWhereInput[];
+  } = { tenantReads: 0, counted: [], configReads: [] };
   const tx = {
     tenant: {
       findUnique: async () => {
@@ -78,6 +80,14 @@ function build(
       },
     },
     $executeRaw: async () => 0,
+    tenantBranding: { findUnique: async () => search.branding ?? null },
+    // The unlabelled live configs' panels: what a default name is made of.
+    config: {
+      findMany: async (args: { where: Prisma.ConfigWhereInput }) => {
+        asked.configReads.push(args.where);
+        return (search.regions ?? []).map((region) => ({ panel: { region } }));
+      },
+    },
     quotaAdjustment: {
       groupBy: async (args: { where: Prisma.QuotaAdjustmentWhereInput }) => {
         asked.adjustmentsWhere = args.where;
@@ -105,8 +115,8 @@ function build(
   };
   const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
   const grants = new GrantService(prisma as never);
-  const list = (page?: number, pageSize?: number, scope?: 'current' | 'all') =>
-    runWithTenant({ id: TENANT }, () => grants.listForUser(USER, { page, pageSize, scope }));
+  const list = (page?: number, pageSize?: number, scope?: 'current' | 'all', q?: string) =>
+    runWithTenant({ id: TENANT }, () => grants.listForUser(USER, { page, pageSize, scope, q }));
   return { grants, list, asked };
 }
 
@@ -257,6 +267,71 @@ describe('GrantService.listForUser', () => {
   });
 });
 
+describe('GrantService.listForUser with q (F-307-m)', () => {
+  const live = { not: ConfigStatus.retired };
+
+  it('keeps a Grant holding a live config whose label, or unlabelled its default line name, holds q — case aside', async () => {
+    const { list, asked } = build([grantRow()], 1, 7, [], 0, {
+      branding: { brandName: 'Leaf', lineNameTemplate: '{brand} · {region}' },
+      regions: ['Germany', 'Netherlands', 'Germany'],
+    });
+
+    await list(undefined, undefined, undefined, 'GERM');
+
+    expect(asked.where).toEqual({
+      userId: USER,
+      status: { notIn: [GrantStatus.cancelled, GrantStatus.exhausted] },
+      configs: {
+        some: {
+          status: live,
+          OR: [{ userLabel: { contains: 'GERM', mode: 'insensitive' } }, { userLabel: null, panel: { region: { in: ['Germany'] } } }],
+        },
+      },
+    });
+    // Only the user's own unlabelled live configs are read to name them.
+    expect(asked.configReads).toEqual([{ userId: USER, status: live, userLabel: null }]);
+  });
+
+  it('matches what the reseller’s template adds, not the region alone — the brand names every default line', async () => {
+    const { list, asked } = build([grantRow()], 1, 7, [], 0, {
+      branding: { brandName: 'Leaf', lineNameTemplate: '{brand} · {region}' },
+      regions: ['Germany', 'Netherlands'],
+    });
+
+    await list(undefined, undefined, undefined, 'leaf');
+
+    const some = (asked.where?.configs as { some: Prisma.ConfigWhereInput }).some;
+    expect(some.OR?.[1]).toEqual({ userLabel: null, panel: { region: { in: ['Germany', 'Netherlands'] } } });
+  });
+
+  it('names by the platform’s template when the reseller set none, and a default name nothing matches is no region', async () => {
+    const { list, asked } = build([], 0, 7, [], 0, { branding: null, regions: ['Germany'] });
+
+    await list(undefined, undefined, undefined, 'x');
+
+    const some = (asked.where?.configs as { some: Prisma.ConfigWhereInput }).some;
+    expect(some.OR?.[1]).toEqual({ userLabel: null, panel: { region: { in: [] } } });
+  });
+
+  it('counts `hidden` among the Grants that match q, so an ended match is still said', async () => {
+    const { list, asked } = build([grantRow()], 1, 7, [], 2, { regions: ['Germany'] });
+
+    const answer = await list(undefined, undefined, undefined, 'germany');
+
+    expect(answer.hidden).toBe(2);
+    expect(asked.counted[1]).toEqual({ userId: USER, configs: asked.where?.configs });
+  });
+
+  it('an absent or blank q filters nothing and reads no config', async () => {
+    const { list, asked } = build();
+
+    await list(undefined, undefined, undefined, '');
+
+    expect(asked.where).toEqual({ userId: USER, status: { notIn: [GrantStatus.cancelled, GrantStatus.exhausted] } });
+    expect(asked.configReads).toEqual([]);
+  });
+});
+
 describe('grantListSchema', () => {
   it('leaves an absent page absent — the service decides what absent means', () => {
     expect(grantListSchema.parse({})).toEqual({});
@@ -273,6 +348,11 @@ describe('grantListSchema', () => {
     expect(grantListSchema.parse({ scope: 'all' })).toEqual({ scope: 'all' });
     expect(grantListSchema.parse({ scope: 'current' })).toEqual({ scope: 'current' });
     expect(grantListSchema.safeParse({ scope: 'cancelled' }).success).toBe(false);
+  });
+
+  it('takes q trimmed, and refuses one longer than any line name can be', () => {
+    expect(grantListSchema.parse({ q: '  Germany ' })).toEqual({ q: 'Germany' });
+    expect(grantListSchema.safeParse({ q: 'x'.repeat(GRANT_LIST_QUERY_MAX + 1) }).success).toBe(false);
   });
 });
 

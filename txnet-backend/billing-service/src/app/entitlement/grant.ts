@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
-import { Grant, GrantSource, GrantStatus, Prisma, QuotaAdjustment, QuotaMetric, VariantBillingMode } from '@prisma/client';
-import { TenantContext, meteredRatesInEffect, productCategoriesInclude, productCategoriesLive, tenantTransaction } from '@txnet-backend/shared-core';
+import { ConfigStatus, Grant, GrantSource, GrantStatus, Prisma, QuotaAdjustment, QuotaMetric, VariantBillingMode } from '@prisma/client';
+import { TenantContext, evaluateLineNameTemplate, meteredRatesInEffect, productCategoriesInclude, productCategoriesLive, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { isSellableBySku, meteredRateAt, type MeteredRateRow, type OfferFacts } from '../catalog/catalog-reads';
 import { trafficQuotaOf } from '../catalog/traffic-quota';
@@ -239,6 +239,35 @@ export function purgeAtOf(suspendedAt: Date | null, grantDays: number | null, te
 type GrantViewRow = Prisma.GrantGetPayload<{ select: typeof GRANT_VIEW_COLUMNS }>;
 
 /** The sold limit of a Grant that has a cap; `null` for metered, unlimited or no quota (F-111-t). */
+/**
+ * A live config whose name, as ADR-0089 gives it, holds `q`, case aside: its
+ * buyer's label, else the tenant's template over its panel's region. The
+ * default name is the same for every config of one region, so it is evaluated
+ * here once per region and matched as a region list — the page stays one
+ * query. The ` 2` numbering is not matched (it is a position, not a name), nor
+ * a panel's own name where a template evaluates empty.
+ */
+async function configNamedLike(tx: Prisma.TransactionClient, userId: string, q: string): Promise<Prisma.ConfigWhereInput> {
+  const live = { not: ConfigStatus.retired };
+  const [branding, unlabelled] = await Promise.all([
+    tx.tenantBranding.findUnique({
+      where: { tenantId: TenantContext.current('grant list').id },
+      select: { brandName: true, lineNameTemplate: true },
+    }),
+    tx.config.findMany({ where: { userId, status: live, userLabel: null }, select: { panel: { select: { region: true } } } }),
+  ]);
+  const needle = q.toLocaleLowerCase();
+  const regions = [...new Set(unlabelled.map((c) => c.panel.region))].filter((region) =>
+    evaluateLineNameTemplate(branding?.lineNameTemplate ?? null, { brand: branding?.brandName ?? '', region })
+      .toLocaleLowerCase()
+      .includes(needle),
+  );
+  return {
+    status: live,
+    OR: [{ userLabel: { contains: q, mode: 'insensitive' } }, { userLabel: null, panel: { region: { in: regions } } }],
+  };
+}
+
 function soldLimitOf(r: GrantViewRow): bigint | null {
   if (r.billingMode !== VariantBillingMode.prepaid || r.trafficUnlimited) return null;
   const traffic = trafficQuotaOf(r.quotas);
@@ -396,13 +425,18 @@ export class GrantService {
    * once (D-35) and a hidden Grant must stay one request away. The filter is
    * here, not in the reader, because a page of 20 filtered afterwards would
    * come back short or empty.
+   *
+   * **`q` keeps the Grants holding a live config named like it** (F-307-m):
+   * `configNamedLike`. `hidden` then counts the ended Grants that match.
    */
-  listForUser(userId: string, request: { page?: number; pageSize?: number; scope?: GrantListScope } = {}): Promise<GrantPage> {
+  listForUser(userId: string, request: { page?: number; pageSize?: number; scope?: GrantListScope; q?: string } = {}): Promise<GrantPage> {
     const page = request.page ?? DEFAULT_PAGE;
     const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
     const all = request.scope === 'all';
-    const where: Prisma.GrantWhereInput = all ? { userId } : { userId, status: { notIn: [...SETTLED_GRANT_STATUSES] } };
+    const q = request.q?.trim() ?? '';
     return tenantTransaction(this.prisma, async (tx) => {
+      const mine: Prisma.GrantWhereInput = q === '' ? { userId } : { userId, configs: { some: await configNamedLike(tx, userId, q) } };
+      const where: Prisma.GrantWhereInput = all ? mine : { ...mine, status: { notIn: [...SETTLED_GRANT_STATUSES] } };
       const [rows, total, everything] = await Promise.all([
         tx.grant.findMany({
           where,
@@ -414,7 +448,7 @@ export class GrantService {
           take: pageSize,
         }),
         tx.grant.count({ where }),
-        all ? null : tx.grant.count({ where: { userId } }),
+        all ? null : tx.grant.count({ where: mine }),
       ]);
       const hidden = everything === null ? 0 : everything - total;
       // The tenant's window is read only when a row needs it: a suspended
