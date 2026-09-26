@@ -1065,6 +1065,25 @@ export const billingApi = {
     });
   },
 
+  /** A member's own selling settings (F-027-cg); null hands one back to the panel. */
+  async updatePanelGroupMember(groupId: string, panelId: string, body: MemberSellingBody): Promise<PanelGroupMember> {
+    return call<PanelGroupMember>(`/systems/panel-groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(panelId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  /**
+   * The membership's whole inbound set (F-027-ch); `[]` sells the pool again.
+   * 409 `inbound_assigned_elsewhere` (`facts.groupId`) / `inbound_has_configs` (`facts.configs`).
+   */
+  async setPanelGroupMemberInbounds(groupId: string, panelId: string, inbounds: string[]): Promise<{ groupId: string; panelId: string; inbounds: string[] }> {
+    return call(`/systems/panel-groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(panelId)}/inbounds`, {
+      method: "PUT",
+      body: JSON.stringify({ inbounds }),
+    });
+  },
+
   /** 409 `member_has_configs` while a live config of the group's Grants is on it: drain it instead (rule 23). */
   /** Delete a group (F-027-ca): 409 `group_has_members` / `group_in_use` while it has members or a variant names it. */
   async deletePanelGroup(id: string): Promise<{ id: string; removed: true }> {
@@ -1520,6 +1539,8 @@ export interface SystemsPanel {
     connectionTestedAt: string | null;
     connectionTestFault: ConnectionTestFault | null;
     connectionTestDetail: string | null;
+    /** A refused duplicate's holder (F-027-ce); null when none, or when it is outside the reader's scope (F-027-cj). */
+    duplicateOf: { id: string; name: string } | null;
   };
   health: {
     panelState: PanelState;
@@ -1622,6 +1643,8 @@ export interface PanelGroupMember {
   priority: number | null;
   weight: number | null;
   effective: EffectiveSellingSettings;
+  /** The inbounds assigned to this membership (F-027-ch); `[]` = it sells the panel's pool. */
+  inbounds: string[];
   role: PanelGroupMemberRole;
   drainingSince: string | null;
   createdAt: string;
@@ -1665,6 +1688,8 @@ export interface PanelInbound {
   sold: boolean;
   maxClients: number | null;
   clients: number;
+  /** The group whose membership holds it (F-027-ch); null = the panel's pool. */
+  assignedTo: { id: string; name: string } | null;
 }
 
 /** `GET /systems/panels/:id/inbounds` (billing `panel-inbounds.ts`). */
@@ -1692,6 +1717,9 @@ export type PanelInboundsBody = {
   weight?: number | null;
   inbounds?: { remoteId: string; sold: boolean; maxClients?: number | null }[];
 };
+
+/** A member's own selling settings (F-027-cg): any of them, at least one; null inherits the panel's. */
+export type MemberSellingBody = Partial<Pick<PanelGroupMember, "inboundPlacement" | "maxClients" | "priority" | "weight">>;
 
 export type DrainedMember = PanelGroupMember & { waitSeconds: number };
 export type RemovedMember = { groupId: string; panelId: string; removed: true };

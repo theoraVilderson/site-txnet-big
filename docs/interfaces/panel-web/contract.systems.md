@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 32
-updated: 2026-09-25
+version: 33
+updated: 2026-09-26
 ---
 
 # Contract — panel-web: the systems page (F-027-ad)
@@ -131,7 +131,9 @@ The *why* is **ADR-0080**.
    only what differs from the read (`validateInbounds`), so a pick made
    elsewhere is not overwritten, and nothing changed is refused here. "Read
    again" is `refresh`, answered in a sentence: the list is re-read within a
-   minute.
+   minute. The placement and cap are **the panel's defaults**, each beside the
+   layer in force — this panel or the platform (`LAYER_KEYS`, F-027-ci) — and
+   an inbound a group has taken names it (`assignedTo`): only it sells there.
 
 13. **A panel is edited in one sheet** (F-027-cb -> billing F-027-by,
    `PanelEditSheet.tsx`, rules `_lib/panel-lifecycle.ts`). "Edit" on the card
@@ -156,6 +158,27 @@ The *why* is **ADR-0080**.
    billing F-027-ca). The card names members, variants and refresh as pills;
    delete is offered with its blocker said first (`groupDeleteBlock`:
    members, then variants), and the button only on an empty, unsold group.
+16. **How one group sells on one panel** (F-027-ci -> billing rules 24b–24c,
+   `_lib/member-settings.ts`). Every member shows its placement, cap and
+   inbounds **with the layer each comes from** — member, panel, platform —
+   so an admin changes the right one. "Selling settings" reads the panel's
+   inbounds and offers the member's own placement and cap, **empty =
+   inherit** (null), with the inherited value and its layer shown; there is
+   no "no cap" for a member, which cannot lift a capped panel (network rule
+   4a). `priority` / `weight` stay unasked (rule 11). The save sends only what
+   differs (`validateMember`). Below it, the membership's inbounds: none
+   ticked sells the panel's pool; ticking takes an inbound out of it. One
+   another group holds is shown with that group and never offered, a gone one
+   only while held (to let it go), and one not on sale or disabled on the
+   panel is marked as taking nobody (`inboundChoices`). The save is the whole
+   set (`validateMemberInbounds`); a membership whose set — or pool — has
+   nothing live says it places nobody (`sellsNobody`). Both re-read.
+17. **A refusal names its holder** (F-027-ci). Billing sends the holder of
+   `panel_already_registered`, `inbound_assigned_elsewhere` and
+   `inbound_has_configs` as `facts` ids only; `refusalSentence` names it from
+   the panels and groups the page read (`HolderNamesContext`), so a holder
+   outside the reader's scope (billing F-027-cj) or none sent reads as the
+   plain sentence. A refused duplicate's card names `review.duplicateOf`.
 ## Proof
 
 `systems/register-wizard.test.ts` — rule 10: the steps, each blocking on its own fields, the family profiles (the ready set read out of `opener.go`), the composed login, the IP an address names.
@@ -167,5 +190,6 @@ billing's `SystemsRejection` / `PanelScopeRejection` / `ResubmitRejection`),
 `refusedBecause`, `canResubmit`, `validateLogin`, `resubmitOutcome`, the
 RADIUS secret's predicates and limits, the hold
 and drift predicates, `validateNote`, the menu entry, every key in `en` and `fa`.
+`systems/member-settings.test.ts` — rules 16–17: `LAYER_KEYS` against billing's `SellingLayer`, `validateMember` (inherit as null, only what changed), `inboundChoices`, `validateMemberInbounds`, `sellsNobody`, `refusalSentence` named and plain.
 `systems/panel-lifecycle.test.ts` — rules 13–15: only what changed is sent, the untouched form refused, the address warning, a push panel's fields, `groupsHolding`, both delete outcomes, `groupDeleteBlock`, `visiblePanels`.
 `systems/panel-groups.test.ts` — rule 11: `ConfigProtocol` and `PanelGroupMemberRole` read out of `network.prisma`; rule 12: `InboundPlacement` and the two inbound refusals from their homes, `validateInbounds` (only what changed, caps, never an unsellable tick), `inboundNote`, `nothingPicked`; the drain multiple out of `group-drain.ts`, `validateGroup` (create, limits, an edit sending only what changed), `memberPlaceable`, `groupHealth`, `addablePanels`, `canDrain` / `canRemove`, `drainEarliestAt`, `waitOf`.

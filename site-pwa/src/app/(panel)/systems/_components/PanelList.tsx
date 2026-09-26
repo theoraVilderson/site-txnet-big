@@ -457,7 +457,9 @@ function VerdictLine({ panel }: { panel: SystemsPanel }) {
         ? `${t("common", K.review.faultHint)} ${t("common", FAULT_KEYS[fault])}`
         : t("common", K.review.pendingHint)
       : state === "refused"
-        ? t("common", K.review.refusedHint)
+        ? panel.review.duplicateOf
+          ? t("common", K.review.duplicateOf, { panel: panel.review.duplicateOf.name })
+          : t("common", K.review.refusedHint)
         : t("common", K.review.lowTrustHint);
   return (
     <p className={`text-xs ${state === "refused" ? "font-bold text-error" : "text-text-secondary"}`}>

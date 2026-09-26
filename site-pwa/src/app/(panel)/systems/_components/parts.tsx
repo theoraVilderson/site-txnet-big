@@ -1,18 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Loader2, MoreHorizontal, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
-import { SYSTEMS_KEYS as K, refusalKey, validateNote } from "../_lib/systems";
+import { SYSTEMS_KEYS as K, refusalSentence, validateNote, type HolderNames } from "../_lib/systems";
 
-/** A refusal billing named in this page's words; anything else in the client's. */
+const NO_NAMES: HolderNames = { panel: () => null, group: () => null };
+
+/** The panels and groups the page read, so a refusal can name the one holding what was refused (F-027-ci). */
+export const HolderNamesContext = createContext<HolderNames>(NO_NAMES);
+
+/** A refusal billing named in this page's words, naming its holder where the page can; anything else in the client's. */
 export function useSystemsError(): (e: unknown) => string {
   const { t } = useLocale();
+  const names = useContext(HolderNamesContext);
   const errorMessage = useApiErrorMessage();
   return (e) => {
-    const key = refusalKey(e);
-    return key ? t("common", key) : errorMessage(e);
+    const sentence = refusalSentence(e, names);
+    return sentence ? t("common", sentence.key, sentence.vars) : errorMessage(e);
   };
 }
 

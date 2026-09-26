@@ -2452,7 +2452,8 @@
       "pendingHint": "The verdict appears after the next connection test.",
       "faultHint": "The last test got no answer, so there is no verdict yet; it is tried again:",
       "lowTrustHint": "Accepted, but what it reports is held for a person before it is billed.",
-      "refusedHint": "Refused at registration. Nothing from this panel is read or billed."
+      "refusedHint": "Refused at registration. Nothing from this panel is read or billed.",
+      "duplicateOf": "It is the same panel as “{{panel}}”, already registered under another address. Edit or restore that one instead."
     },
     "fault": {
       "timeout": "the panel did not answer in time.",
@@ -2640,7 +2641,9 @@
       "panel_retired": "This panel is archived. Restore it first.",
       "panel_not_retired": "This panel is not archived.",
       "group_has_members": "The group still has members. Remove or drain them first.",
-      "group_in_use": "A variant still sells on this group. Move it to another group in the catalog first."
+      "group_in_use": "A variant still sells on this group. Move it to another group in the catalog first.",
+      "inbound_assigned_elsewhere": "Another group already sells this inbound on this panel. Take it off that group's member first.",
+      "inbound_has_configs": "Buyers of another group still have configs on this inbound. Drain that group's member on this panel first, so they are moved."
     },
     "resubmit": {
       "open": "New login",
@@ -2722,6 +2725,29 @@
         "minutes": "{{n}} min",
         "hours": "{{n}} h",
         "days": "{{n}} days"
+      },
+      "settings": {
+        "action": "Selling settings",
+        "title": "How this group sells on {{panel}}",
+        "hint": "What you leave empty follows the panel's own setting, or the platform default where the panel sets none. A change reaches the next buyer; configs already placed stay where they are.",
+        "placement": "How a buyer is placed",
+        "inherit": "Inherit",
+        "inheritValue": "Inherit — {{value}}",
+        "cap": "Most users on this panel through this group",
+        "capHint": "Empty inherits. A member cannot lift a capped panel to no cap: empty takes the panel's cap.",
+        "noCap": "no cap",
+        "save": "Save settings",
+        "saved": "Saved. The next buyer is placed this way.",
+        "inbounds": "Inbounds this group sells here",
+        "inboundsHint": "With none ticked this group sells the panel's pool. Ticking one takes it out of the pool: then only this group places on it, and this group places only on what it ticked.",
+        "pool": "sells the panel's pool",
+        "own": "sells {{count}} inbound(s) of its own",
+        "heldBy": "held by {{group}}",
+        "takesNobody": "not on sale on the panel, or disabled there — takes nobody",
+        "sellsNobody": "Nothing this group sells here is on sale and enabled: it places nobody on this panel.",
+        "saveInbounds": "Save inbounds",
+        "savedInbounds": "Saved. The next buyer of this group is placed on these inbounds.",
+        "loading": "Reading the panel's inbounds…"
       }
     },
     "inbounds": {
@@ -2755,7 +2781,10 @@
       "invalid": {
         "cap": "A whole number from 1, or empty for no cap.",
         "unchanged": "Nothing was changed."
-      }
+      },
+      "from": "In force: {{layer}}",
+      "assignedTo": "sold only by {{group}}",
+      "poolHint": "An inbound a group has taken is sold only by that group; the rest are the pool every other group on this panel shares."
     },
     "edit": {
       "title": "Edit {{panel}}",
@@ -2791,7 +2820,17 @@
       "submit": "Delete group",
       "deleted": "Group deleted."
     },
-    "groupsMembersCount": "{{n}} member(s)"
+    "groupsMembersCount": "{{n}} member(s)",
+    "layer": {
+      "member": "set on this member",
+      "panel": "the panel's default",
+      "platform": "the platform default"
+    },
+    "refusalsNamed": {
+      "panel_already_registered": "This API address is already registered as “{{panel}}”. Edit or restore that panel instead of registering it again.",
+      "inbound_assigned_elsewhere": "Inbound #{{inbound}} is already sold only by group “{{group}}”. Take it off that group's member first.",
+      "inbound_has_configs": "Buyers of another group still have {{configs}} configs on inbound #{{inbound}}. Drain that group's member on this panel first, so they are moved."
+    }
   },
   "shop": {
     "title": "Shop",

@@ -219,7 +219,7 @@ const panel = (review: Partial<SystemsPanel["review"]>): SystemsPanel => ({
   apiBaseUrl: "https://de-1.example.com",
   clientBaseUrl: null,
   retiredAt: null,
-  review: { reviewState: "pending", connectionTestedAt: null, connectionTestFault: null, connectionTestDetail: null, ...review },
+  review: { reviewState: "pending", connectionTestedAt: null, connectionTestFault: null, connectionTestDetail: null, duplicateOf: null, ...review },
   health: { panelState: "healthy", lastHealthyAt: null, lastSuccessfulCollectionAt: null, collectionHalted: false, openDriftEvents: 0 },
   budget: { maxRequestsPerMinute: 60, blockedSince: null },
   radiusSecretConfigured: null,

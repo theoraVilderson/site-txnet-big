@@ -2,8 +2,8 @@
 id: billing
 layer: domain
 status: active
-version: 46
-updated: 2026-09-25
+version: 47
+updated: 2026-09-26
 ---
 
 # Systems — a panel after registration
@@ -19,7 +19,7 @@ its next tick.
 
 | Route | Body | Answers | Errors |
 |---|---|---|---|
-| `PATCH /api/billing/systems/panels/:id` | any of `name` (1–100), `region` (1–50), `ipAddress` (v4/v6 \| null), `apiBaseUrl` (URL ≤500, never null), `clientBaseUrl` (URL ≤500 \| null), `maxRequestsPerMinute` (1–6000), `ovpnProfile` (text ≤64 KiB \| null, rule 5a); at least one; `.strict()` | `200 {id, reviewState, retest}` | 400; 403; 404 `not_found`; 409 `not_for_transport` / `not_for_driver` / `panel_retired` / `panel_already_registered` + `panel: {id, name} \| null` (rule 2a) |
+| `PATCH /api/billing/systems/panels/:id` | any of `name` (1–100), `region` (1–50), `ipAddress` (v4/v6 \| null), `apiBaseUrl` (URL ≤500, never null), `clientBaseUrl` (URL ≤500 \| null), `maxRequestsPerMinute` (1–6000), `ovpnProfile` (text ≤64 KiB \| null, rule 5a); at least one; `.strict()` | `200 {id, reviewState, retest}` | 400; 403; 404 `not_found`; 409 `not_for_transport` / `not_for_driver` / `panel_retired` / `panel_already_registered` + `facts.panelId` when in scope (rule 2a) |
 | `DELETE /api/billing/systems/panels/:id` | — | `200 {id, outcome: 'deleted' \| 'archived'}` | 400; 403; 404 `not_found`; 409 `panel_in_group` / `panel_has_configs` / `panel_retired` |
 | `POST /api/billing/systems/panels/:id/restore` | — | `200 {id, reviewState: 'pending'}` | 400; 403; 404 `not_found`; 409 `panel_not_retired` |
 

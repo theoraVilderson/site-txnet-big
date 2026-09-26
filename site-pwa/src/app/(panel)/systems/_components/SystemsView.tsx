@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Server } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type PanelGroup, type SystemsPanel } from "@/lib/billing-api";
@@ -12,6 +12,7 @@ import { DriftReport } from "./DriftReport";
 import { HoldsQueue } from "./HoldsQueue";
 import { PanelGroups } from "./PanelGroups";
 import { PanelList } from "./PanelList";
+import { HolderNamesContext } from "./parts";
 import { RegisterPanel } from "./RegisterPanel";
 
 /**
@@ -88,24 +89,35 @@ export function SystemsView() {
     };
   }, [client, channel, reload]);
 
-  return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-lg font-bold text-text-primary">
-            <Server size={18} className="text-primary" aria-hidden />
-            {t("common", K.title)}
-          </h1>
-          <p className="text-xs leading-5 text-text-secondary">{t("common", K.subtitle)}</p>
-        </div>
-      </header>
+  // A refusal names its holder from these (F-027-ci): billing sends only ids, and only inside this reader's scope.
+  const names = useMemo(
+    () => ({
+      panel: (id: string) => panels.find((p) => p.id === id)?.name ?? null,
+      group: (id: string) => groups.find((g) => g.id === id)?.name ?? null,
+    }),
+    [panels, groups],
+  );
 
-      <RegisterPanel onRegistered={reload} />
-      <PanelList panels={panels} groups={groups} isLoading={isLoading} error={error} onRetry={reloadPanels} />
-      <PanelGroups groups={groups} panels={panels} isLoading={groupsLoading} error={groupsError} onChanged={reloadGroups} />
-      {/* Acknowledging resumes a halted panel: its health line is read again. */}
-      <DriftReport onAcknowledged={reload} />
-      <HoldsQueue />
-    </div>
+  return (
+    <HolderNamesContext.Provider value={names}>
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="flex items-center gap-2 text-lg font-bold text-text-primary">
+              <Server size={18} className="text-primary" aria-hidden />
+              {t("common", K.title)}
+            </h1>
+            <p className="text-xs leading-5 text-text-secondary">{t("common", K.subtitle)}</p>
+          </div>
+        </header>
+
+        <RegisterPanel onRegistered={reload} />
+        <PanelList panels={panels} groups={groups} isLoading={isLoading} error={error} onRetry={reloadPanels} />
+        <PanelGroups groups={groups} panels={panels} isLoading={groupsLoading} error={groupsError} onChanged={reloadGroups} />
+        {/* Acknowledging resumes a halted panel: its health line is read again. */}
+        <DriftReport onAcknowledged={reload} />
+        <HoldsQueue />
+      </div>
+    </HolderNamesContext.Provider>
   );
 }

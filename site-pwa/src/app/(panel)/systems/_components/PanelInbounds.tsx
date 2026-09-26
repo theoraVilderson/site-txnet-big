@@ -16,6 +16,7 @@ import {
   validateInbounds,
   type InboundsForm,
 } from "../_lib/panel-inbounds";
+import { LAYER_KEYS } from "../_lib/member-settings";
 import { SYSTEMS_KEYS } from "../_lib/systems";
 import { BAD, QUIET, useSystemsError } from "./parts";
 
@@ -28,7 +29,9 @@ const SECONDARY = "inline-flex items-center gap-1 rounded-xl border border-card-
  * One panel's inbounds (F-114-b), fetched when opened: which ones a buyer is
  * placed on, how, and the caps. The list is what `network-service` last read;
  * "read again" asks the panel's next pass to read it (a minute), and the list
- * is fetched again once the admin asks for it.
+ * is fetched again once the admin asks for it. The placement and cap are the
+ * panel's defaults, each with the layer in force (F-027-ci); an inbound a
+ * group has taken names that group — only it sells there (F-027-ch).
  */
 export function PanelInbounds({ panelId }: { panelId: string }) {
   const { lang, t } = useLocale();
@@ -137,7 +140,12 @@ export function PanelInbounds({ panelId }: { panelId: string }) {
       )}
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-xs font-bold text-text-primary">{t("common", K.placement.label)}</legend>
+        <legend className="mb-1 flex flex-wrap items-center gap-2 text-xs font-bold text-text-primary">
+          {t("common", K.placement.label)}
+          <span className={`rounded-lg border px-2 py-0.5 font-normal ${QUIET}`}>
+            {t("common", K.from, { layer: t("common", LAYER_KEYS[view.effective.inboundPlacement.layer]) })}
+          </span>
+        </legend>
         {INBOUND_PLACEMENTS.map((p) => (
           <label key={p} className="flex items-start gap-2 text-xs text-text-primary">
             <input
@@ -159,9 +167,11 @@ export function PanelInbounds({ panelId }: { panelId: string }) {
         {t("common", K.panelMax)}
         <input dir="ltr" inputMode="numeric" value={form.panelMax} onChange={(e) => setForm({ ...form, panelMax: e.target.value })} className={INPUT} />
         <span className="leading-5">{t("common", K.panelMaxHint)}</span>
+        <span>{t("common", K.from, { layer: t("common", LAYER_KEYS[view.effective.maxClients.layer]) })}</span>
         {errors.panelMax && <span className="text-error">{t("common", errors.panelMax)}</span>}
       </label>
 
+      {view.inbounds.some((i) => i.assignedTo) && <p className="text-xs leading-5 text-text-secondary">{t("common", K.poolHint)}</p>}
       {view.inbounds.length === 0 ? (
         <p className="text-xs text-text-secondary">{t("common", K.empty)}</p>
       ) : (
@@ -187,6 +197,7 @@ export function PanelInbounds({ panelId }: { panelId: string }) {
                   </span>
                 </label>
                 {note && <span className={`rounded-lg border px-2 py-0.5 ${note === K.disabled ? QUIET : BAD}`}>{t("common", note)}</span>}
+                {i.assignedTo && <span className={`rounded-lg border px-2 py-0.5 ${QUIET}`}>{t("common", K.assignedTo, { group: i.assignedTo.name })}</span>}
                 <span className="text-text-secondary">{t("common", K.clients, { count: String(i.clients) })}</span>
                 <label className="flex items-center gap-1 text-text-secondary">
                   {t("common", K.cap)}

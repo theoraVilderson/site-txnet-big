@@ -14,10 +14,14 @@
  */
 import { ConfigProtocol, Prisma, TenantType } from '@prisma/client';
 
+import { sanitizeError } from '@txnet-backend/shared-core';
+
 import { sellingInbounds } from '../traffic/selling-settings';
-import { MemberInboundsService } from './member-inbounds';
+import { InboundHeldElsewhere, MemberInboundsService } from './member-inbounds';
+import { PanelAlreadyRegistered } from './panel-address';
 import { assignMemberInboundsSchema } from './panel-registration.schema';
 import { PanelScopeRefused } from './panel-scope';
+import { refusing } from './systems.controller';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -151,6 +155,40 @@ describe('MemberInboundsService.assign', () => {
     await expect(service.assign(owner, GROUP, 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', ['1'])).rejects.toMatchObject({ reason: 'member_not_found' });
     await expect(service.assign(owner, 'ffffffff-ffff-4fff-8fff-ffffffffffff', PANEL, ['1'])).rejects.toMatchObject({ reason: 'not_found' });
     await expect(service.assign({ adminId: ADMIN, tenantId: RESELLER }, GROUP, PANEL, ['1'])).rejects.toBeInstanceOf(PanelScopeRefused);
+  });
+});
+
+/**
+ * The holder reaches the page (F-027-ci). The envelope passes a refusal's
+ * `facts` and nothing else beside it, and a fact is never free text — so the
+ * holder travels as its id, and the page names it from its own scoped lists.
+ */
+describe('a refusal naming its holder, as the client receives it', () => {
+  const answered = async (e: Error) => sanitizeError(await refusing(() => Promise.reject(e)).catch((x: unknown) => x));
+
+  it('an inbound held elsewhere carries the group and the inbound', async () => {
+    const out = await answered(new InboundHeldElsewhere('inbound_assigned_elsewhere', '3', { id: OTHER_GROUP, name: 'Gaming' }));
+    expect(out).toMatchObject({ status: 409, reason: 'inbound_assigned_elsewhere', facts: { remoteId: '3', groupId: OTHER_GROUP } });
+  });
+
+  it('an inbound under live configs carries their count', async () => {
+    const out = await answered(new InboundHeldElsewhere('inbound_has_configs', '1', null, 4));
+    expect(out).toMatchObject({ status: 409, reason: 'inbound_has_configs', facts: { remoteId: '1', configs: 4 } });
+  });
+
+  it('a race lost on the unique index carries no holder, and still refuses', async () => {
+    const out = await answered(new InboundHeldElsewhere('inbound_assigned_elsewhere', null, null));
+    expect(out).toMatchObject({ status: 409, reason: 'inbound_assigned_elsewhere' });
+    expect(out.facts).toBeUndefined();
+  });
+
+  it('an address already registered carries the panel holding it, when the reader may see it', async () => {
+    expect(await answered(new PanelAlreadyRegistered({ id: PANEL, name: 'Frankfurt 1' }))).toMatchObject({
+      status: 409,
+      reason: 'panel_already_registered',
+      facts: { panelId: PANEL },
+    });
+    expect((await answered(new PanelAlreadyRegistered(null))).facts).toBeUndefined();
   });
 });
 

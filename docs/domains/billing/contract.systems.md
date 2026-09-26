@@ -2,8 +2,8 @@
 id: billing
 layer: domain
 status: active
-version: 47
-updated: 2026-09-25
+version: 48
+updated: 2026-09-26
 ---
 
 # Systems — the platform owner's panel routes
@@ -34,7 +34,7 @@ would dial an address a tenant chose (`network/open-questions.md`).
 
 | Route | Body | Answers | Errors |
 |---|---|---|---|
-| `POST /api/billing/systems/panels` | `name`, `ipAddress` (required for `push`, its NAS's allowlist entry; optional for `pull`, F-027-br, CHECK `panel_push_has_ip_address`), `apiBaseUrl` (required for `pull`), `clientBaseUrl?` (where users are served their links, F-027-bg; refused for `push`), `driverType`, `counterSemantics`, `transport`, `role`, `region`, `maxRequestsPerMinute?`, `credentials` (≤4096), `radiusSecret` (≤4096; required for `push`, refused for `pull`); `.strict()` | `201 {id, reviewState: 'pending', credentials: {configured, version, rotatedAt}, radiusSecret?}` (`radiusSecret` on a push panel, same three fields) | 400 validation; 403 `panel.manage` / `not_platform_owner`; 409 `panel_already_registered` + `panel: {id, name} \| null` (rule 4a); 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
+| `POST /api/billing/systems/panels` | `name`, `ipAddress` (required for `push`, its NAS's allowlist entry; optional for `pull`, F-027-br, CHECK `panel_push_has_ip_address`), `apiBaseUrl` (required for `pull`), `clientBaseUrl?` (where users are served their links, F-027-bg; refused for `push`), `driverType`, `counterSemantics`, `transport`, `role`, `region`, `maxRequestsPerMinute?`, `credentials` (≤4096), `radiusSecret` (≤4096; required for `push`, refused for `pull`); `.strict()` | `201 {id, reviewState: 'pending', credentials: {configured, version, rotatedAt}, radiusSecret?}` (`radiusSecret` on a push panel, same three fields) | 400 validation; 403 `panel.manage` / `not_platform_owner`; 409 `panel_already_registered` + `facts.panelId` when in scope (rule 4a); 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
 | `PUT /api/billing/systems/panels/:id/credentials` | `credentials` (1–4096, untrimmed); `.strict()` | `200 {id, reviewState, retest, credentials: {configured, version, rotatedAt}}` | 400; 403; 404 `not_found`; 409 `panel_refused`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
 | `PUT /api/billing/systems/panels/:id/radius-secret` | `radiusSecret` (1–4096, untrimmed); `.strict()` | `200 {id, reviewState, radiusSecret: {configured, version, rotatedAt}}` | 400; 403; 404 `not_found`; 409 `panel_not_push` / `panel_refused`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
 | `GET /api/billing/systems/panels` | — | `[{id, name, driverType, transport, role, region, ipAddress, apiBaseUrl, clientBaseUrl, retiredAt, radiusSecretConfigured, review: {reviewState, connectionTestedAt, connectionTestFault, connectionTestDetail, duplicateOf: {id, name} | null}, health: {panelState, lastHealthyAt, lastSuccessfulCollectionAt, collectionHalted, openDriftEvents}, budget: {maxRequestsPerMinute, blockedSince}}]`, by name | 403 |
@@ -52,7 +52,7 @@ would dial an address a tenant chose (`network/open-questions.md`).
 | `POST /api/billing/systems/panel-groups/:id/members` | `panelId`, and any of `inboundPlacement`, `maxClients` (1–1000000), `priority` (0–1000), `weight` (1–1000), each nullable; `.strict()` | `201` the member, `primary` | 400; 403; 404 `not_found` / `panel_not_found`; 409 `already_member` |
 | `PATCH /api/billing/systems/panel-groups/:id/members/:panelId` | any of those four, at least one; null inherits; `.strict()` — a server fact is refused | `200` the member | 400; 403; 404 `not_found` / `member_not_found` |
 | `DELETE /api/billing/systems/panel-groups/:id/members/:panelId` | — | `200 {groupId, panelId, removed: true}` | 400; 403; 404 `not_found` / `member_not_found`; 409 `member_has_configs` |
-| `PUT /api/billing/systems/panel-groups/:id/members/:panelId/inbounds` | `inbounds: [remoteId]` (≤500, each once; `[]` = the pool again); `.strict()` | `200 {groupId, panelId, inbounds}` | 400; 403; 404 `not_found` / `member_not_found` / `inbound_not_found`; 409 `inbound_not_sellable`, `inbound_assigned_elsewhere` `{remoteId, group: {id, name}}`, `inbound_has_configs` `{remoteId, configs}` |
+| `PUT /api/billing/systems/panel-groups/:id/members/:panelId/inbounds` | `inbounds: [remoteId]` (≤500, each once; `[]` = the pool again); `.strict()` | `200 {groupId, panelId, inbounds}` | 400; 403; 404 `not_found` / `member_not_found` / `inbound_not_found`; 409 `inbound_not_sellable`, `inbound_assigned_elsewhere` `facts: {remoteId, groupId}` (none after a race on the unique index), `inbound_has_configs` `facts: {remoteId, configs}` |
 | `POST /api/billing/systems/panel-groups/:id/members/:panelId/drain` | — | `200` the member, `drain`, with `drainingSince` and `waitSeconds` | 400; 403; 404 `not_found` / `member_not_found`; 409 `already_draining` |
 | `GET /api/billing/systems/panels/:id/inbounds` | — | `{panelId, inboundPlacement, maxClients, priority, weight, effective, inboundsReadAt, users, inbounds: [{remoteId, tag, protocol, port, host, enabled, goneAt, seenAt, sold, maxClients, assignedTo, clients}]}`, by id; `assignedTo` `{id, name}` of the group holding it, null = the pool (rule 24c) | 400; 403; 404 `panel_not_found` |
 | `PUT /api/billing/systems/panels/:id/inbounds` | any of the four selling settings as on a member (null = platform default), `inbounds: [{remoteId, sold, maxClients?}]` (≤500, each once); `.strict()` | `200` as the `GET` | 400; 403; 404 `panel_not_found` / `inbound_not_found`; 409 `inbound_not_sellable` |
@@ -84,8 +84,8 @@ both re-submits, the panel edit, delete and restore, acknowledge, release, write
    owner and archived ones included, share a normalised `apiBaseUrl` —
    lower-case, no user info, query or fragment, the default port written out,
    no trailing `/`, the path kept. Another is 409 `panel_already_registered`,
-   naming the holder (`panel: {id, name}`) so the owner edits or restores it
-   — only a holder inside the actor's scope; another owner's is `panel: null`,
+   naming the holder as `facts.panelId` (F-027-ci: the envelope carries only ids, never a name) so
+   the owner edits or restores it — only inside the actor's scope; another owner's sends none,
    as is a `review.duplicateOf` or a `foreignPanel` outside it (`inScope`).
    The normaliser is SQL, `network.panel_api_address`; the unique index
    `panel_api_address_key` over it settles a race and billing's look-up uses

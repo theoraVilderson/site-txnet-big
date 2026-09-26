@@ -122,16 +122,24 @@ const CONFLICTS: ReadonlySet<SystemsRejection> = new Set([
   'inbound_has_configs',
 ]);
 
-/** The service's refusals as HTTP: the scope is a 403, a panel, group or event outside it a 404. */
-async function refusing<T>(work: () => Promise<T>): Promise<T> {
+/**
+ * The service's refusals as HTTP: the scope is a 403, a panel, group or event
+ * outside it a 404. A holder travels as `facts` ids — the envelope drops every
+ * other field and a fact is never free text, so the page names it from its own
+ * scoped lists (F-027-ci). Exported for the spec that pins that.
+ */
+export async function refusing<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (e) {
     if (e instanceof PanelScopeRefused) throw new ForbiddenException({ reason: e.reason, message: e.message });
     if (e instanceof SystemsRefused) {
-      if (e instanceof PanelAlreadyRegistered) throw new ConflictException({ reason: e.reason, message: e.message, panel: e.panel });
+      if (e instanceof PanelAlreadyRegistered) {
+        throw new ConflictException({ reason: e.reason, message: e.message, facts: e.panel ? { panelId: e.panel.id } : undefined });
+      }
       if (e instanceof InboundHeldElsewhere) {
-        throw new ConflictException({ reason: e.reason, message: e.message, remoteId: e.remoteId, group: e.group, configs: e.configs });
+        const facts = { remoteId: e.remoteId ?? undefined, groupId: e.group?.id, configs: e.configs ?? undefined };
+        throw new ConflictException({ reason: e.reason, message: e.message, facts });
       }
       if (CONFLICTS.has(e.reason)) throw new ConflictException({ reason: e.reason, message: e.message });
       throw new NotFoundException({ reason: e.reason, message: e.message });

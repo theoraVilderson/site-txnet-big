@@ -60,6 +60,7 @@ const member = (over: Partial<PanelGroupMember> = {}): PanelGroupMember => ({
     priority: { value: 0, layer: "platform" },
     weight: { value: 1, layer: "platform" },
   },
+  inbounds: [],
   role: "primary",
   drainingSince: null,
   createdAt: "2026-09-25T10:00:00.000Z",
@@ -182,7 +183,7 @@ describe("adding and draining a member", () => {
 describe("a panel's inbounds (F-114-b)", () => {
   const inbound = (remoteId: string, over: Partial<PanelInbound> = {}): PanelInbound => ({
     remoteId, tag: "", protocol: "vless", port: 443, host: "", enabled: true, goneAt: null,
-    seenAt: "2026-09-25T10:00:00.000Z", sold: false, maxClients: null, clients: 0, ...over,
+    seenAt: "2026-09-25T10:00:00.000Z", sold: false, maxClients: null, clients: 0, assignedTo: null, ...over,
   });
   const view = (inbounds: PanelInbound[], over: Partial<PanelInbounds> = {}): PanelInbounds => ({
     panelId: "p-1", inboundPlacement: null, maxClients: null, priority: null, weight: null, inboundsReadAt: null, users: 0, inbounds,

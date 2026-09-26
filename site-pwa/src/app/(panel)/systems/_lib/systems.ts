@@ -207,7 +207,10 @@ export type SystemsRefusal =
   | "panel_retired"
   | "panel_not_retired"
   | "group_has_members"
-  | "group_in_use";
+  | "group_in_use"
+  // An inbound is the pool's or one group's (F-027-ch).
+  | "inbound_assigned_elsewhere"
+  | "inbound_has_configs";
 
 export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   not_found: K.refusals.not_found,
@@ -233,12 +236,45 @@ export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   panel_not_retired: K.refusals.panel_not_retired,
   group_has_members: K.refusals.group_has_members,
   group_in_use: K.refusals.group_in_use,
+  inbound_assigned_elsewhere: K.refusals.inbound_assigned_elsewhere,
+  inbound_has_configs: K.refusals.inbound_has_configs,
 };
 
 /** The refusal's own sentence key, when billing named one this page knows; else the generic message applies. */
 export function refusalKey(e: unknown): string | null {
   const reason = (e as { reason?: unknown } | null)?.reason;
   return typeof reason === "string" && reason in REFUSAL_KEYS ? REFUSAL_KEYS[reason as SystemsRefusal] : null;
+}
+
+/** Names the page already holds: the panels and groups it read, both inside the reader's scope. Null = not one of them. */
+export type HolderNames = { panel: (id: string) => string | null; group: (id: string) => string | null };
+
+/**
+ * A refusal's sentence, naming the holder when billing sent its id and the
+ * page can name it (F-027-ci). Billing sends ids as `facts` — a fact is never
+ * free text — and only inside the reader's scope (F-027-cj); a holder the page
+ * cannot name, or none sent (a race lost on the unique index), reads as the
+ * plain sentence. Null when the refusal is not one of billing's.
+ */
+export function refusalSentence(e: unknown, names: HolderNames): { key: string; vars?: Record<string, string> } | null {
+  const key = refusalKey(e);
+  if (!key) return null;
+  const { reason, facts = {} } = e as { reason: SystemsRefusal; facts?: Record<string, unknown> };
+  const text = (v: unknown) => (typeof v === "string" || typeof v === "number" ? String(v) : null);
+  const inbound = text(facts.remoteId);
+  if (reason === "panel_already_registered") {
+    const panel = typeof facts.panelId === "string" ? names.panel(facts.panelId) : null;
+    if (panel) return { key: K.refusalsNamed.panel_already_registered, vars: { panel } };
+  }
+  if (reason === "inbound_assigned_elsewhere") {
+    const group = typeof facts.groupId === "string" ? names.group(facts.groupId) : null;
+    if (group && inbound) return { key: K.refusalsNamed.inbound_assigned_elsewhere, vars: { group, inbound } };
+  }
+  if (reason === "inbound_has_configs") {
+    const configs = text(facts.configs);
+    if (configs && inbound) return { key: K.refusalsNamed.inbound_has_configs, vars: { inbound, configs } };
+  }
+  return { key };
 }
 
 // ── Registering ───────────────────────────────────────────────────────────────
