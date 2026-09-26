@@ -4,7 +4,7 @@ layer: interface
 status: active
 version: 1
 keywords: [subscription link, xray json, clash yaml, sing-box config, sub link, /sub, sub endpoint, subscription url, sub-service, subscription domain, subscription token, subscription-userinfo, remaining quota in the app, profile-update-interval, clash, sing-box, v2rayng, base64 subscription, لینک اشتراک, لینک ساب, ساب, لینک سابسکریپشن]
-source: [sub-service/**, txnet-backend/prisma/domains/migrations/20260924000700_sub_is_told_what_changed/**, txnet-backend/prisma/domains/migrations/20260924000800_sub_hears_a_grants_quota/**]
+source: [sub-service/**, txnet-backend/prisma/domains/migrations/20260924000700_sub_is_told_what_changed/**, txnet-backend/prisma/domains/migrations/20260924000800_sub_hears_a_grants_quota/**, txnet-backend/prisma/domains/migrations/20260926000600_sub_hears_an_unlimited_grant/**]
 owns_tables: []
 depends_on: [network, entitlement, tenant, redis-keyspace]
 updated: 2026-09-24

@@ -137,7 +137,8 @@ which client apps show as used, remaining and expiry. An app reads
    (rollover, F-604, shows here), never below `1`. A Grant sold with
    unlimited traffic (`grant.trafficUnlimited`, F-111-s) → `0`: its quotas
    keep the catalog's `limit = 0`, which read as a cap is `1`, "nothing left".
-   The flag is set at issue and never changes, so no trigger watches it.
+   The Grant trigger watches the flag too (rule 4 below), though only issue
+   writes it today: an admin's correction must still reach the cache.
    A `metered` Grant, or no readable limit → `0`: a metered Grant buys blocks just before use
    (ADR-0072), so `purchasedBytes` would always look nearly empty (user,
    2026-09-24).
@@ -154,8 +155,8 @@ which client apps show as used, remaining and expiry. An app reads
    header is rebuilt each time. A missing, unreadable or lower key, or Redis
    failing, shows the render's own figure — the key is never the truth, and
    it outlives the render (`SUB_USAGE_TTL_SECONDS` ≥ `SUB_RENDER_TTL`).
-   `consumedBytes` still fires no trigger; `endsAt`, `quotas`, `billingMode`
-   and a new traffic adjustment do (user, 2026-09-24).
+   `consumedBytes` still fires no trigger; `endsAt`, `quotas`, `billingMode`,
+   `trafficUnlimited` and a new traffic adjustment do (user, 2026-09-24).
 
 ### The cache (F-113-c, built)
 `sub/cache.go`, ADR-0083. A `200` is stored in Redis under

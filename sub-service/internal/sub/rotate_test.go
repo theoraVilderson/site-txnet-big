@@ -77,6 +77,31 @@ func TestTheGrantTriggerFiresOnATokenRotation(t *testing.T) {
 	}
 }
 
+// F-111-s: `Subscription-Userinfo` reads `trafficUnlimited`, and a column
+// the render reads with no trigger watching it is a cached `total` that
+// outlives a change (contract.md, the cache rule 4) — even one written only
+// at issue today, since an admin fix is the change nobody plans.
+func TestTheGrantTriggerFiresOnTheUnlimitedFlag(t *testing.T) {
+	sqls, _ := filepath.Glob("../../../txnet-backend/prisma/domains/migrations/*/migration.sql")
+	sort.Strings(sqls)
+	fn := lastMatch(t, sqls, regexp.MustCompile(
+		`(?s)CREATE OR REPLACE FUNCTION entitlement\.notify_sub_grant_changed\(\).*?\$\$;`))
+	trigger := lastMatch(t, sqls, regexp.MustCompile(
+		`(?s)CREATE TRIGGER sub_grant_changed.*?;`))
+	if !strings.Contains(fn, `OLD."trafficUnlimited" IS DISTINCT FROM NEW."trafficUnlimited"`) {
+		t.Errorf("notify_sub_grant_changed does not notify on trafficUnlimited:\n%s", fn)
+	}
+	if !regexp.MustCompile(`AFTER UPDATE OF [^;]*"trafficUnlimited"`).MatchString(trigger) {
+		t.Errorf("sub_grant_changed does not fire on UPDATE OF \"trafficUnlimited\":\n%s", trigger)
+	}
+	// Every column the earlier migrations watched is still watched.
+	for _, col := range []string{`"subscriptionTokenHash"`, `"endsAt"`, "quotas", `"billingMode"`, "status", `"tenantId"`} {
+		if !strings.Contains(trigger, col) {
+			t.Errorf("sub_grant_changed no longer fires on %s:\n%s", col, trigger)
+		}
+	}
+}
+
 func lastMatch(t *testing.T, paths []string, re *regexp.Regexp) string {
 	t.Helper()
 	found := ""
