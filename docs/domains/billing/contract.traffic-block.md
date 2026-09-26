@@ -117,7 +117,7 @@ still standing, and a live one would buy the money back within minutes.
 
 | | |
 |---|---|
-| what is unconsumed | `billedBytes - consumedBytes`. A Grant reported **past** what it bought (ADR-0074) has a negative remainder and is refused, never refunded into the red — that gap is a debt the holds queue settles |
+| what is unconsumed | `billedBytes - consumedBytes`. A Grant reported **past** what it bought (ADR-0074) has a negative remainder and is refused, never refunded into the red — that gap is not charged by anything (user 2026-09-26: network `open-questions.md`, 2026-09-26 overrun row) |
 | what it is worth | the remainder priced at `grant.meteredRate` and rounded **down** to a whole cent — the exact mirror of the purchase's round up, so a refund never exceeds what the blocks cost. Sub-cent dust stays taken |
 | what moves | one `traffic_refund` **credit**, `referenceId` the Grant, and `billedBytes` down by the bytes those cents paid for. `purchasedBytes` never moves: it is what was bought, and it bounds the ceilings that were written against it |
 
