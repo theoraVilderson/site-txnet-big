@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 7
+version: 8
 updated: 2026-09-26
 ---
 
@@ -86,13 +86,13 @@ closed had no way back.
 
 | Route | Query | Answers `data` |
 |---|---|---|
-| `GET /api/billing/gift/grants` | `page`, `pageSize` (≤ 100) | `{total, page, pageSize, rows[{id, status, startsAt, endsAt, featureKeys, variant{id, sku, nameKey} \| null, billingMode, consumedBytes, purchasedBytes, trafficUnlimited, trafficCapBytes, suspendedAt, purgeAt}]}` |
+| `GET /api/billing/gift/grants` | `page`, `pageSize` (≤ 100), `scope` (`current` default, `all`) | `{total, page, pageSize, hidden, rows[{id, status, startsAt, endsAt, featureKeys, variant{id, sku, nameKey} \| null, billingMode, consumedBytes, purchasedBytes, trafficUnlimited, trafficCapBytes, suspendedAt, purgeAt}]}` |
 
 | Rule | Why |
 |---|---|
 | Whose Grants is the gate's `X-User-Id`. There is no id in the query, so there is nothing here to authorise | the same shape as the financial page (`contract.history.md`); a user id a client could send is another user's list |
 | The columns are selected explicitly and **neither the subscription key nor its hash is among them** | the hash sits in the same row (D-35). A `select` is what keeps it, and whatever the schema grows next, out of a response nobody re-read |
-| **Every Grant, whatever its status** — the status is answered, never a filter | a key is lost from an expired Grant as easily as a live one, and hiding it would hide exactly the row the user came for. What to do with a dead one is the panel's (F-502-s) |
+| **`current` leaves out `cancelled` and `exhausted`** (`SETTLED_GRANT_STATUSES`) and answers `hidden`, how many; `all` lists every Grant and `hidden` is 0 (F-502-t, user 2026-09-26) | those two never serve again and nothing the user does brings them back; `suspended` (a top-up revives it) and `expired` stay. The filter is here, not in the reader, so a page of 20 is never short — and `hidden` keeps an ended Grant's link one request away |
 | `nameKey` is the variant's own wording, else its product's (§4.3), and a Grant issued without a catalog item answers `variant: null`. The key is answered, not the translated text | the same key the catalog answers (`catalog-reads.ts`), so the panel resolves both through `locale-service` and neither holds a language |
 | Ordered `startsAt` desc, then `id` desc. Absent paging is page 1 of 20 | two Grants issued in one transaction share an instant, and an unstable order repeats or skips one across pages |
 | No domain error: a user with no Grants is an empty page, not a **404**. Only a malformed query (**400**) and the limiter (**429**) fail | the page exists before the first Grant does |
@@ -100,10 +100,10 @@ closed had no way back.
 | Bytes are decimal strings. `purgeAt` is `suspendedAt` + `coalesce(grant.purgeAfterDays, tenant.purgeAfterDays)` days, and `null` when the Grant is not suspended or the window is `0` (F-027-ac) | a Grant's bytes pass 2^53; and it is the SQL `entitlement/purge.ts` runs, so the panel's countdown is the instant the hourly job acts after. The tenant is read only when a suspended row has no window of its own |
 | `trafficUnlimited` is the Grant's flag (F-111-s). `trafficCapBytes` is a capped prepaid Grant's `quotas.traffic_bytes.limit` plus its unexpired `traffic_bytes` adjustments, floored at 0, from one `groupBy` per page read only when a row has a cap; `null` for metered, unlimited or no quota (F-111-t) | the same sum `/sub` answers as `total` (sub-api `contract.md`), so the panel and the app never show two caps for one Grant |
 
-**Not covered:** filtering or searching the list is nobody's row yet. Its consumer since
+**Not covered:** searching the list, or any scope but these two. Its consumer since
 2026-09-20 is the panel's "my services" page (F-502-s,
-`panel-web/contract.my-services.md`), which lists every status this answers and
-puts each Grant's link and its reset on the row. Paging is the only knob.
+`panel-web/contract.my-services.md`), which asks `current` and offers `all`
+(F-502-u) and puts each Grant's link and its reset on the row.
 
 ## A Grant's configs, and what a user may do to them (built — F-027-ac)
 

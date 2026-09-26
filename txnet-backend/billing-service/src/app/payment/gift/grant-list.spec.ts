@@ -54,15 +54,22 @@ function grantRow(overrides: Record<string, unknown> = {}) {
 type Slice = { skip: number; take: number };
 
 /** Records what the list was actually asked for — the `where`, the slice and the order. */
-function build(rows: ReturnType<typeof grantRow>[] = [grantRow()], total = rows.length, tenantPurgeDays = 7, adjustments: { grantId: string; delta: bigint }[] = []) {
+function build(
+  rows: ReturnType<typeof grantRow>[] = [grantRow()],
+  total = rows.length,
+  tenantPurgeDays = 7,
+  adjustments: { grantId: string; delta: bigint }[] = [],
+  hidden = 0,
+) {
   const asked: {
     where?: Prisma.GrantWhereInput;
+    counted: Prisma.GrantWhereInput[];
     slice?: Slice;
     orderBy?: unknown;
     select?: unknown;
     tenantReads: number;
     adjustmentsWhere?: Prisma.QuotaAdjustmentWhereInput;
-  } = { tenantReads: 0 };
+  } = { tenantReads: 0, counted: [] };
   const tx = {
     tenant: {
       findUnique: async () => {
@@ -89,12 +96,17 @@ function build(rows: ReturnType<typeof grantRow>[] = [grantRow()], total = rows.
         asked.select = args.select;
         return rows;
       },
-      count: async () => total,
+      // `total` Grants in the scope asked; `hidden` more exist outside it.
+      count: async (args: { where: Prisma.GrantWhereInput }) => {
+        asked.counted.push(args.where);
+        return args.where.status ? total : total + hidden;
+      },
     },
   };
   const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
   const grants = new GrantService(prisma as never);
-  const list = (page?: number, pageSize?: number) => runWithTenant({ id: TENANT }, () => grants.listForUser(USER, { page, pageSize }));
+  const list = (page?: number, pageSize?: number, scope?: 'current' | 'all') =>
+    runWithTenant({ id: TENANT }, () => grants.listForUser(USER, { page, pageSize, scope }));
   return { grants, list, asked };
 }
 
@@ -104,11 +116,12 @@ describe('GrantService.listForUser', () => {
 
     const answer = await list();
 
-    expect(asked.where).toEqual({ userId: USER });
+    expect(asked.where).toEqual({ userId: USER, status: { notIn: [GrantStatus.cancelled, GrantStatus.exhausted] } });
     expect(answer).toEqual({
       total: 1,
       page: 1,
       pageSize: 20,
+      hidden: 0,
       rows: [
         {
           id: GRANT,
@@ -220,13 +233,27 @@ describe('GrantService.listForUser', () => {
     expect(answer).toMatchObject({ total: 42, page: 3, pageSize: 5 });
   });
 
-  it('lists a dead Grant too — status is answered, never filtered', async () => {
-    const { list, asked } = build([grantRow({ status: GrantStatus.expired })]);
+  it('leaves a cancelled or exhausted Grant out by default and says how many — expired and suspended stay (user, 2026-09-26)', async () => {
+    const { list, asked } = build([grantRow({ status: GrantStatus.expired }), grantRow({ status: GrantStatus.suspended })], 2, 7, [], 3);
 
-    const { rows } = await list();
+    const answer = await list();
+
+    const current = { userId: USER, status: { notIn: [GrantStatus.cancelled, GrantStatus.exhausted] } };
+    expect(asked.where).toEqual(current);
+    expect(asked.counted).toEqual(expect.arrayContaining([current, { userId: USER }]));
+    expect(answer).toMatchObject({ total: 2, hidden: 3 });
+    expect(answer.rows.map((r) => r.status)).toEqual([GrantStatus.expired, GrantStatus.suspended]);
+  });
+
+  it('lists every Grant on scope=all — status is answered, and nothing is left out to count', async () => {
+    const { list, asked } = build([grantRow({ status: GrantStatus.cancelled })]);
+
+    const answer = await list(undefined, undefined, 'all');
 
     expect(asked.where).toEqual({ userId: USER });
-    expect(rows[0].status).toBe(GrantStatus.expired);
+    expect(asked.counted).toEqual([{ userId: USER }]);
+    expect(answer).toMatchObject({ total: 1, hidden: 0 });
+    expect(answer.rows[0].status).toBe(GrantStatus.cancelled);
   });
 });
 
@@ -240,6 +267,12 @@ describe('grantListSchema', () => {
     expect(grantListSchema.safeParse({ page: 'x' }).success).toBe(false);
     expect(grantListSchema.safeParse({ pageSize: 101 }).success).toBe(false);
     expect(grantListSchema.parse({ page: '2', pageSize: '50' })).toEqual({ page: 2, pageSize: 50 });
+  });
+
+  it('takes a scope of current or all, and refuses any other', () => {
+    expect(grantListSchema.parse({ scope: 'all' })).toEqual({ scope: 'all' });
+    expect(grantListSchema.parse({ scope: 'current' })).toEqual({ scope: 'current' });
+    expect(grantListSchema.safeParse({ scope: 'cancelled' }).success).toBe(false);
   });
 });
 

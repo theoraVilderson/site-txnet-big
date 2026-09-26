@@ -182,7 +182,21 @@ export type GrantView = {
   purgeAt: string | null;
 };
 
-export type GrantPage = { total: number; page: number; pageSize: number; rows: GrantView[] };
+/** `hidden`: the user's Grants the scope left out — 0 on `all` (user, 2026-09-26). */
+export type GrantPage = { total: number; page: number; pageSize: number; hidden: number; rows: GrantView[] };
+
+/** Which of a user's Grants the list answers: `current` by default, `all` on request. */
+export const GRANT_LIST_SCOPES = ['current', 'all'] as const;
+export type GrantListScope = (typeof GRANT_LIST_SCOPES)[number];
+
+/**
+ * The statuses `current` leaves out: a Grant that will never serve again and
+ * that no action of the user's brings back — `cancelled` (delivery failed, the
+ * money went back) and `exhausted`. `suspended` stays, because a top-up revives
+ * it and its purge countdown is what the user must see; `expired` stays because
+ * the user asked for it (2026-09-26).
+ */
+export const SETTLED_GRANT_STATUSES: readonly GrantStatus[] = [GrantStatus.cancelled, GrantStatus.exhausted];
 
 /**
  * The columns a user's own list reads. Explicit, because the row beside them is
@@ -376,18 +390,22 @@ export class GrantService {
    * One page of a user's own Grants (F-502-r), newest period first — the list
    * the panel's "my services" page reads.
    *
-   * **Every Grant, whatever its status.** A key is shown once (D-35) and the
-   * reissue route (F-502-p) is the only way back, so a list that hid an
-   * expired or suspended Grant would hide exactly the row a user came looking
-   * for. The status is answered and the reader decides what to do with it.
+   * **`current` by default, `all` on request** (user, 2026-09-26). A cancelled
+   * or exhausted Grant is left out of the default page (`SETTLED_GRANT_STATUSES`)
+   * and counted in `hidden`, so the reader can offer the rest — a key is shown
+   * once (D-35) and a hidden Grant must stay one request away. The filter is
+   * here, not in the reader, because a page of 20 filtered afterwards would
+   * come back short or empty.
    */
-  listForUser(userId: string, request: { page?: number; pageSize?: number } = {}): Promise<GrantPage> {
+  listForUser(userId: string, request: { page?: number; pageSize?: number; scope?: GrantListScope } = {}): Promise<GrantPage> {
     const page = request.page ?? DEFAULT_PAGE;
     const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
+    const all = request.scope === 'all';
+    const where: Prisma.GrantWhereInput = all ? { userId } : { userId, status: { notIn: [...SETTLED_GRANT_STATUSES] } };
     return tenantTransaction(this.prisma, async (tx) => {
-      const [rows, total] = await Promise.all([
+      const [rows, total, everything] = await Promise.all([
         tx.grant.findMany({
-          where: { userId },
+          where,
           select: GRANT_VIEW_COLUMNS,
           // `id` breaks the tie: two Grants issued in one transaction share an
           // instant, and an unstable order repeats or skips one across pages.
@@ -395,8 +413,10 @@ export class GrantService {
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),
-        tx.grant.count({ where: { userId } }),
+        tx.grant.count({ where }),
+        all ? null : tx.grant.count({ where: { userId } }),
       ]);
+      const hidden = everything === null ? 0 : everything - total;
       // The tenant's window is read only when a row needs it: a suspended
       // Grant with no window of its own.
       const needsTenant = rows.some((r) => r.status === GrantStatus.suspended && r.purgeAfterDays === null);
@@ -414,7 +434,7 @@ export class GrantService {
           })
         : [];
       const adjusted = new Map(sums.map((s) => [s.grantId, s._sum.delta ?? BigInt(0)]));
-      return { total, page, pageSize, rows: rows.map((r) => grantViewOf(r, tenant?.purgeAfterDays ?? null, adjusted.get(r.id))) };
+      return { total, page, pageSize, hidden, rows: rows.map((r) => grantViewOf(r, tenant?.purgeAfterDays ?? null, adjusted.get(r.id))) };
     });
   }
 
