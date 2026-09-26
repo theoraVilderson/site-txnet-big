@@ -2633,6 +2633,8 @@
       "inbound_not_found": "That inbound is not on this panel any more. Read the inbounds again.",
       "inbound_not_sellable": "That inbound cannot be sold: it is gone from the panel, or serves a protocol we do not sell.",
       "not_for_transport": "A push panel takes no API or link address, and cannot lose its NAS IP.",
+      "panel_already_registered": "Another panel is already registered at this API address. Edit or restore that panel instead of registering it again.",
+      "not_for_driver": "Only a MikroTik User Manager router takes an .ovpn file.",
       "panel_in_group": "It is still in a panel group. Remove it from the group first — or drain it, if users have configs on it.",
       "panel_has_configs": "Users still have configs on this panel. Drain it from its group first.",
       "panel_retired": "This panel is archived. Restore it first.",

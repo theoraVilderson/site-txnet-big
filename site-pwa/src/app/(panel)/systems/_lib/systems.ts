@@ -200,6 +200,8 @@ export type SystemsRefusal =
   | "inbound_not_sellable"
   // A panel's settings, deleting it, deleting a group (F-027-by/bz/ca).
   | "not_for_transport"
+  | "panel_already_registered"
+  | "not_for_driver"
   | "panel_in_group"
   | "panel_has_configs"
   | "panel_retired"
@@ -223,6 +225,8 @@ export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   inbound_not_found: K.refusals.inbound_not_found,
   inbound_not_sellable: K.refusals.inbound_not_sellable,
   not_for_transport: K.refusals.not_for_transport,
+  panel_already_registered: K.refusals.panel_already_registered,
+  not_for_driver: K.refusals.not_for_driver,
   panel_in_group: K.refusals.panel_in_group,
   panel_has_configs: K.refusals.panel_has_configs,
   panel_retired: K.refusals.panel_retired,
