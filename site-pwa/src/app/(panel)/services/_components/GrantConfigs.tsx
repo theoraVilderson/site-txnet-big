@@ -37,8 +37,19 @@ type Refused = Extract<ConfigActionOutcome, { ok: false }>;
  * after every action, because a deleted one leaves it and a new link spends
  * one of its allowance; the refused ones are named with billing's reason
  * under the list, by the name they had when they were pressed.
+ *
+ * **Only what is shown is acted on.** `shown` is the row's search over the
+ * list (user, 2026-09-26); a config ticked and then hidden by a search is not
+ * a target, so "delete selected" never reaches one the user cannot see.
  */
-export function GrantConfigs({ configs }: { configs: GrantConfigsState }) {
+export function GrantConfigs({
+  configs,
+  shown = configs.rows,
+}: {
+  configs: GrantConfigsState;
+  /** The configs the row's search leaves; the whole list when there is none. */
+  shown?: UserConfigRow[] | null;
+}) {
   const { t, lang } = useLocale();
   const toMessage = useApiErrorMessage();
   const { rows } = configs;
@@ -50,15 +61,17 @@ export function GrantConfigs({ configs }: { configs: GrantConfigsState }) {
   const [refused, setRefused] = useState<{ outcome: Refused; label: string }[]>([]);
   const [actError, setActError] = useState<{ message: string; ref?: string } | null>(null);
 
-  // A ticked server that is gone from the list is not a target any more.
-  const all = rows ?? [];
+  // A ticked server that is gone from the list, or hidden by the search, is
+  // not a target any more. The whole list still names a refusal.
+  const every = rows ?? [];
+  const all = shown ?? [];
   const selected = new Set(all.map((r) => r.id).filter((id) => picked.has(id)));
   const allSelected = all.length > 0 && all.every((r) => selected.has(r.id));
 
   async function act(action: ConfigAction, ids: string[]) {
     if (busy || ids.length === 0) return;
     if (action === "retire" && !window.confirm(t("common", C.retireConfirm, { count: ids.length }))) return;
-    const labels = new Map(all.map((r) => [r.id, configName(r)]));
+    const labels = new Map(every.map((r) => [r.id, configName(r)]));
     setBusy(action);
     setActError(null);
     setDone(null);
@@ -94,7 +107,7 @@ export function GrantConfigs({ configs }: { configs: GrantConfigsState }) {
     <section aria-label={t("common", C.title)} className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-bold text-text-primary">{t("common", C.title)}</p>
-        {all.length > 1 && (
+        {every.length > 1 && all.length > 0 && (
           <label className="flex items-center gap-1.5 text-xs text-text-secondary">
             <input
               type="checkbox"
@@ -147,15 +160,15 @@ export function GrantConfigs({ configs }: { configs: GrantConfigsState }) {
         </div>
       )}
 
-      {rows !== null && rows.length > 0 && (
+      {all.length > 0 && (
         <ul className="space-y-2">
-          {rows.map((row) => (
+          {all.map((row) => (
             <ConfigItem
               key={row.id}
               row={row}
               label={configName(row)}
               lang={lang}
-              selectable={all.length > 1}
+              selectable={every.length > 1}
               checked={selected.has(row.id)}
               onToggle={() => toggle(row.id)}
               whyOpen={why === row.id}

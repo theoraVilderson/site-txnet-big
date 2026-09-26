@@ -2217,7 +2217,14 @@
     "manage": {
       "open": "Manage configs and usage chart"
     },
-    "qrClose": "Close"
+    "qrClose": "Close",
+    "search": {
+      "label": "Search configs",
+      "placeholder": "Search by config name, protocol or region",
+      "clear": "Clear search",
+      "count": "{{shown}} of {{total}} configs",
+      "none": "No config matches “{{query}}”."
+    }
   },
   "systems": {
     "title": "Systems",

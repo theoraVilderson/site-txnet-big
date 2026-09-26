@@ -6,6 +6,7 @@ import { billingApi, type GrantRow, type GrantUsage, type UserConfigRow } from "
 import { copyText } from "../_lib/clipboard";
 import { ServiceRow } from "./_components/ServiceRow";
 import { lineLabel, wireguardConf } from "./_lib/config-lines";
+import { matchesConfig } from "./_lib/service-configs";
 import { dayBars, usedShare } from "./_lib/usage";
 
 /**
@@ -360,5 +361,61 @@ describe("the subscription link row", () => {
     render(<ServiceRow row={GRANT} name="VPN" capabilities={[]} />);
     expect(screen.getByRole("button", { name: "myServices.link.copy" })).toBeEnabled();
     expect(subscriptionLink).not.toHaveBeenCalled();
+  });
+});
+
+describe("finding one config among many (user, 2026-09-26)", () => {
+  /** Six configs, one named by its buyer in Persian — "Ali's phone 2". */
+  const many = (): UserConfigRow[] =>
+    Array.from({ length: 6 }, (_, i) => ({
+      ...CONFIG,
+      id: `c${i + 1}`,
+      region: `nl-ams-${i + 1}`,
+      label: i === 3 ? "گوشی علی ۲" : null,
+      lines: [`vless://u@nl${i + 1}.example.net:443#${i === 3 ? encodeURIComponent("گوشی علی ۲") : `NL ${i + 1}`}`],
+    }));
+
+  it("matches the name, the protocol and the region, whatever the keyboard typed", () => {
+    const row = many()[3];
+    // An Arabic keyboard types ي and ك, a Latin one 2 for ۲.
+    for (const q of ["علی", "علي 2", "  گوشی  ", "VLESS", "ams-4", ""]) expect(matchesConfig(row, q)).toBe(true);
+    for (const q of ["ams-5", "wireguard", "رضا"]) expect(matchesConfig(row, q)).toBe(false);
+    expect(matchesConfig({ ...CONFIG, label: "كيان" }, "کیان")).toBe(true);
+  });
+
+  it("offers no search to a service with a few configs", async () => {
+    await openRow(many().slice(0, 5));
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+  });
+
+  it("narrows the lines to the configs that match, and says when none does", async () => {
+    const { user } = await openRow(many());
+    const lines = () => screen.getAllByRole("listitem").filter((li) => li.hasAttribute("data-line"));
+    expect(lines()).toHaveLength(6);
+
+    await user.type(screen.getByRole("searchbox", { name: "myServices.search.label" }), "علي");
+    expect(lines()).toHaveLength(1);
+    expect(within(lines()[0]).getByText("گوشی علی ۲")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "myServices.search.clear" }));
+    await user.type(screen.getByRole("searchbox"), "ams-");
+    expect(lines()).toHaveLength(6);
+    await user.type(screen.getByRole("searchbox"), "9");
+    expect(lines()).toHaveLength(0);
+    expect(screen.getByText("myServices.search.none:ams-9")).toBeInTheDocument();
+  });
+
+  it("under manage, ticks and deletes only the configs it shows", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const configAction = vi.mocked(billingApi.configAction);
+    configAction.mockResolvedValue({ action: "retire", results: [{ ok: true, configId: "c1" }] } as never);
+    const { user } = await openRow(many(), "manage");
+
+    // A config ticked before the search is not deleted by one it hid.
+    await user.click(screen.getByRole("checkbox", { name: "NL 1" }));
+    await user.type(screen.getByRole("searchbox"), "ams-2");
+    await user.click(screen.getByRole("checkbox", { name: "myServices.configs.selectAll" }));
+    await user.click(screen.getByRole("button", { name: "myServices.configs.bulkRetire" }));
+    await waitFor(() => expect(configAction).toHaveBeenCalledWith("retire", ["c2"]));
   });
 });

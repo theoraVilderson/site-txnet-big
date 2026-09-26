@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, Check, ChevronDown, Copy, Link2, Loader2, QrCode, RotateCcw } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, Copy, Link2, Loader2, QrCode, RotateCcw, Search, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
@@ -10,7 +10,7 @@ import { formatInstant } from "../../_lib/datetime";
 import { useGrantConfigs } from "../_hooks/useGrantConfigs";
 import { useSubscriptionLink } from "../_hooks/useSubscriptionLink";
 import { GRANT_TONES, type CapabilityName } from "../_lib/my-services";
-import { formatBytes, purgeCountdown } from "../_lib/service-configs";
+import { formatBytes, matchesConfig, purgeCountdown } from "../_lib/service-configs";
 import { remainingBytes, timeLeft, usedShare } from "../_lib/usage";
 import { ConfigLines } from "./ConfigLines";
 import { GrantConfigs } from "./GrantConfigs";
@@ -19,6 +19,13 @@ import { UsageBars } from "./UsageBars";
 
 const S = FrontendI18nKeys.common.myServices;
 const L = S.link;
+
+/**
+ * How many configs a service holds before it offers a search (user,
+ * 2026-09-26: "managing 20 configs got hard"). Five fit on a phone screen;
+ * past that, a name is quicker typed than scrolled to.
+ */
+const SEARCH_FROM = 6;
 
 /**
  * One Grant on the "my services" page (F-502-s), laid out like a subscription
@@ -39,7 +46,9 @@ const L = S.link;
  *    working setup is here, never above it.
  *
  * The configs and the link are read once per row and shared by 3–5, so a
- * reset under "manage" replaces the link row 4 copies.
+ * reset under "manage" replaces the link row 4 copies. So is the search over
+ * them: one box narrows both 3 and 5, and what it hides is neither copied nor
+ * deleted.
  */
 export function ServiceRow({
   row,
@@ -65,6 +74,10 @@ export function ServiceRow({
   const [confirmReset, setConfirmReset] = useState(false);
   const configs = useGrantConfigs(row.id, configsOpen || manageOpen, configsAsked);
   const sub = useSubscriptionLink(row.id);
+  const [query, setQuery] = useState("");
+  const searchable = (configs.rows?.length ?? 0) >= SEARCH_FROM;
+  // Below the threshold a leftover query would hide configs with no box to clear it.
+  const shown = configs.rows && searchable ? configs.rows.filter((c) => matchesConfig(c, query)) : configs.rows;
 
   const tone = GRANT_TONES[row.status];
   const countdown = purgeCountdown(row.purgeAt);
@@ -173,6 +186,44 @@ export function ServiceRow({
           </ul>
         )}
 
+        {searchable && configs.rows && shown && (
+          <div>
+            <div className="flex items-center gap-2 rounded-2xl border border-card-border bg-bg-inner px-3 focus-within:border-primary">
+              <Search size={16} className="shrink-0 text-text-secondary" aria-hidden />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setQuery("");
+                }}
+                placeholder={t("common", S.search.placeholder)}
+                aria-label={t("common", S.search.label)}
+                dir="auto"
+                className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-text-primary outline-none [&::-webkit-search-cancel-button]:hidden"
+              />
+              {query !== "" && (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  aria-label={t("common", S.search.clear)}
+                  title={t("common", S.search.clear)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
+                >
+                  <X size={16} aria-hidden />
+                </button>
+              )}
+            </div>
+            {query.trim() !== "" && (
+              <p role="status" className="mt-1.5 text-xs text-text-secondary">
+                {shown.length === 0
+                  ? t("common", S.search.none, { query: query.trim() })
+                  : t("common", S.search.count, { shown: shown.length, total: configs.rows.length })}
+              </p>
+            )}
+          </div>
+        )}
+
         {configsOpen ? (
           <>
             {configs.isLoading && configs.rows === null && (
@@ -193,7 +244,7 @@ export function ServiceRow({
             {configs.rows !== null && configs.rows.length === 0 && (
               <p className="text-xs text-text-secondary">{t("common", S.configs.empty)}</p>
             )}
-            {configs.rows !== null && configs.rows.length > 0 && <ConfigLines rows={configs.rows} onRenamed={configs.reload} />}
+            {shown && shown.length > 0 && <ConfigLines rows={shown} onRenamed={configs.reload} />}
           </>
         ) : (
           <button
@@ -269,7 +320,7 @@ export function ServiceRow({
       {manageOpen && (
         <div className="space-y-4 border-t border-card-border p-4 sm:p-5">
           <UsageBars grantId={row.id} />
-          <GrantConfigs configs={configs} />
+          <GrantConfigs configs={configs} shown={shown} />
 
           <section aria-label={t("common", L.resetTitle)} className="rounded-2xl border border-card-border p-3">
             <p className="text-sm font-bold text-text-primary">{t("common", L.resetTitle)}</p>

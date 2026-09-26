@@ -128,3 +128,33 @@ export function configName(row: Pick<UserConfigRow, "lines" | "protocol" | "regi
   // An unnamed line's label is its own scheme or head; the region says more.
   return first.startsWith(name) ? fallback : name;
 }
+
+/**
+ * A config's search text and a typed query, made comparable: lower case, the
+ * Arabic ي/ك as the Persian ی/ک, and Persian or Arabic digits as Latin ones —
+ * an Arabic keyboard types "علي", and "۲" is "2" to whoever typed it.
+ */
+function fold(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[يى]/g, "ی")
+    .replace(/ك/g, "ک")
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Whether a config answers a search (user, 2026-09-26: twenty configs on one
+ * service are hard to manage): its buyer's name, the names on its lines, its
+ * protocol or its region — the words the user can see on the row. An empty
+ * query matches everything. The list is the Grant's whole list, so matching
+ * here never shortens a page.
+ */
+export function matchesConfig(row: Pick<UserConfigRow, "label" | "lines" | "protocol" | "region">, query: string): boolean {
+  const q = fold(query);
+  if (q === "") return true;
+  const names = [row.label ?? "", configName(row), row.protocol, row.region, ...row.lines.map(lineLabel)];
+  return names.some((name) => fold(name).includes(q));
+}

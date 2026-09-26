@@ -183,6 +183,13 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
     saves through `billing-config-label`, Escape writes nothing, a refusal
     keeps what was typed with billing's sentence. A save re-reads the list:
     the lines arrive named, as `/sub` serves them, and are never renamed here.
+18. **A service with many configs is searched, and a search hides nothing
+    from an action by accident** (F-307-l; user 2026-09-26: "20 configs got
+    hard"). From 6 configs, one box per row narrows both the lines and
+    "manage" by name, label, protocol or region (ی/ي, ک/ك and ۲/2 alike);
+    "copy all", "select all" and a bulk action reach only the configs shown.
+    The list is the Grant's whole list, so this never shortens a page;
+    finding a *service* by a config is billing's (F-307-m).
 
 ## Proof
 
@@ -221,7 +228,9 @@ all", a closed row opening with one tap, the download on a whole WireGuard
 line only, the two empty-lines sentences, and the link row unread until
 asked. F-307-i: one rename per config, a save that re-reads and copies the
 line billing named, an empty name clearing to the default, Escape writing
-nothing, and a refusal keeping the field.
+nothing, and a refusal keeping the field. F-307-l: the matcher's folding,
+no box under 6 configs, the lines narrowed with a "none" sentence, and a
+bulk delete reaching only the configs shown.
 
 ## Not covered
 
