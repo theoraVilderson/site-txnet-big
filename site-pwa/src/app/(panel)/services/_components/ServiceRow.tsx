@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { AlertCircle, Check, ChevronDown, Copy, Link2, Loader2, QrCode, RotateCcw, Search, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -49,8 +49,11 @@ const SEARCH_FROM = 6;
  * reset under "manage" replaces the link row 4 copies. So is the search over
  * them: one box narrows both 3 and 5, and what it hides is neither copied nor
  * deleted.
+ *
+ * Memoised: the page re-renders when its URL or data moves, and a row whose
+ * props did not move has nothing to redraw.
  */
-export function ServiceRow({
+export const ServiceRow = memo(function ServiceRow({
   row,
   name,
   capabilities,
@@ -376,7 +379,7 @@ export function ServiceRow({
       )}
     </li>
   );
-}
+});
 
 /** Billing's sentence for a refused read or reset, and its ref for support. */
 function LinkError({ error }: { error: { message: string; ref?: string } }) {

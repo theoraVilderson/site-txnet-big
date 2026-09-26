@@ -124,6 +124,36 @@ describe("the page's search (F-307-n)", () => {
     expect(box()).toHaveValue("zz");
   });
 
+  it("keeps what is typed while the URL catches up, instead of blanking it for a moment", () => {
+    at("");
+    const { rerender } = render(<MyServicesView />);
+    fireEvent.change(box(), { target: { value: "de" } });
+    act(() => vi.advanceTimersByTime(400));
+    rerender(<MyServicesView />); // the write has not landed yet
+    expect(box()).toHaveValue("de");
+    fireEvent.change(box(), { target: { value: "de-1 " } });
+    at("q=de"); // the first write lands while a second word is typed
+    rerender(<MyServicesView />);
+    expect(box()).toHaveValue("de-1 ");
+  });
+
+  it("still follows the URL when it moves on its own (back, forward, a link)", () => {
+    at("q=de");
+    const { rerender } = render(<MyServicesView />);
+    at("q=nl");
+    rerender(<MyServicesView />);
+    expect(box()).toHaveValue("nl");
+  });
+
+  it("re-renders only the box while typing, not the list", () => {
+    at("");
+    render(<MyServicesView />);
+    const before = hook.mock.calls.length;
+    for (const v of ["d", "de", "de-", "de-1"]) fireEvent.change(box(), { target: { value: v } });
+    expect(hook.mock.calls.length).toBe(before);
+    expect(box()).toHaveValue("de-1");
+  });
+
   it("offers no box to a user with no services and no search", () => {
     at("");
     hook.mockReturnValue(state({ rows: [], total: 0 }));
@@ -224,6 +254,18 @@ describe("pasted config links (F-307-q)", () => {
     paste(VLESS);
     fireEvent.change(box(), { target: { value: "de" } });
     expect(hook).toHaveBeenLastCalledWith(1, "en", "current", "", []);
+  });
+
+  it("keeps a paste when a name typed just before it lands in the URL late", () => {
+    at("");
+    const { rerender } = render(<MyServicesView />);
+    fireEvent.change(box(), { target: { value: "de" } });
+    act(() => vi.advanceTimersByTime(400)); // ?q=de sent, not landed
+    paste(VLESS);
+    at("q=de");
+    rerender(<MyServicesView />);
+    expect(hook).toHaveBeenLastCalledWith(1, "en", "current", "", [VLESS]);
+    expect(replace).toHaveBeenLastCalledWith("/services", { scroll: false });
   });
 
   it("treats a link that arrives without a paste (a drop) the same way", () => {
