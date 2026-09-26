@@ -18,6 +18,7 @@ import {
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { markDelivered } from '../entitlement/delivered';
+import { errorLine } from '../log-line';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionsService, ConfigActor, InboundPlacementTarget } from './config-actions';
@@ -382,7 +383,7 @@ export class GroupFulfilmentService {
         // One Grant's failure — a concurrent run winning `config_group_panel_once`,
         // a status that moved — is that Grant's; the next tick names it again.
         result.grantsFailed += 1;
-        this.logger.warn(`group fulfilment of grant ${grant.id} failed: ${(e as Error).message}`);
+        this.logger.warn(`group fulfilment of grant ${grant.id} failed: ${errorLine(e)}`);
       }
     }
     if (result.configsPlaced > 0 || result.grantsActivated > 0) {

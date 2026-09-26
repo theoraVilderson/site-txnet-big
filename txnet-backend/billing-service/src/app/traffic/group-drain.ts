@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ActorType, GrantStatus } from '@prisma/client';
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
+import { errorLine } from '../log-line';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionsService, ConfigActor } from './config-actions';
@@ -122,7 +123,7 @@ export class GroupDrainService {
           // One config's failure — a user's own retire or move meanwhile — is its
           // own; the member stays and is named again next tick.
           failed += 1;
-          this.logger.warn(`drain of config ${c.configId} on panel ${member.panelId} failed: ${(e as Error).message}`);
+          this.logger.warn(`drain of config ${c.configId} on panel ${member.panelId} failed: ${errorLine(e)}`);
         }
       }
       result.failed += failed;

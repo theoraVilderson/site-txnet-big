@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionsService, ConfigActor } from '../traffic/config-actions';
 import { GroupFulfilmentRefused, GroupFulfilmentService } from '../traffic/group-fulfilment';
 import { WalletCreditService } from '../wallet/wallet-credit.service';
+import { errorLine } from '../log-line';
 import { GRANT_AGGREGATE, markDelivered } from './delivered';
 
 /**
@@ -226,7 +227,7 @@ export class GrantDeliveryService {
         if (outcome !== 'skipped') result[outcome] += 1;
       } catch (e) {
         result.failed += 1;
-        this.logger.warn(`delivery of grant ${grant.id} failed: ${(e as Error).message}`);
+        this.logger.warn(`delivery of grant ${grant.id} failed: ${errorLine(e)}`);
       }
     }
     if (result.delivered > 0 || result.refunded > 0) {
