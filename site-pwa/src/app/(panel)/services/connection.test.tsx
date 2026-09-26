@@ -135,6 +135,12 @@ describe("a wireguard:// line as a file", () => {
     expect(lineLabel(WG)).toBe("DE WG");
     expect(lineLabel("trojan://pw@h:443")).toBe("trojan");
   });
+
+  it("reads a vmess line's `ps` as UTF-8, so a Persian name is not mojibake", () => {
+    // Billing writes `ps` as the buyer's label, base64 of UTF-8 JSON (line-names.ts).
+    const vmess = "vmess://" + Buffer.from(JSON.stringify({ v: "2", ps: "کانفیگ رضا 2" }), "utf8").toString("base64");
+    expect(lineLabel(vmess)).toBe("کانفیگ رضا 2");
+  });
 });
 
 describe("the bytes behind the ring and the bars", () => {

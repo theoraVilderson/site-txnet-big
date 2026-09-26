@@ -28,7 +28,10 @@ export function lineLabel(line: string): string {
   const proto = scheme(line);
   if (proto === "vmess") {
     try {
-      const ps = (JSON.parse(atob(line.slice("vmess://".length))) as { ps?: unknown }).ps;
+      // `atob` answers bytes, one per char; the JSON is UTF-8, and a Persian
+      // `ps` read as those bytes is mojibake.
+      const bytes = Uint8Array.from(atob(line.slice("vmess://".length)), (c) => c.charCodeAt(0));
+      const ps = (JSON.parse(new TextDecoder().decode(bytes)) as { ps?: unknown }).ps;
       if (typeof ps === "string" && ps) return ps;
     } catch {
       // Not the base64 JSON form: named by its protocol.
