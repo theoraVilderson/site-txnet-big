@@ -474,6 +474,27 @@ is `docs/CODE-LAYOUT.md` "Commits".
 A commit that is wrong is cheap to fix locally, but only if the user knows it
 happened — so the report always ends with the commit hash(es) and subjects.
 
+## Dev database migrations — apply them, do not ask
+
+**Standing instruction from the user (2026-09-26): on the dev stack, a pending
+migration is applied by the agent without asking.** A migration committed but
+not deployed breaks the next service restart with Prisma `P2022` ("column does
+not exist in the current database") — the Panels page on 2026-09-26.
+
+- **When:** you wrote a migration, pulled one, or see `P2022`/`P2021`. Compare
+  `ls txnet-backend/prisma/domains/migrations` with `_prisma_migrations`.
+- **How** (then `npx prisma generate` once if the client is stale):
+
+  ```bash
+  docker exec -e DATABASE_URL=postgresql://admin:$(docker exec txnet-dev-postgres printenv POSTGRES_PASSWORD)@main-db:5432/devtxnet \
+    txnet-dev-billing-service sh -c 'cd /app && npx prisma migrate deploy --schema prisma/domains'
+  ```
+- **Read the SQL first. Ask — and only then — when it deletes data:** `DROP
+  TABLE`/`DROP COLUMN`/`DROP SCHEMA`, `DELETE`, `TRUNCATE`, a type change or
+  constraint that rewrites or rejects existing rows, or any `migrate reset`.
+  Name the tables and row counts at stake in the question.
+- **Dev only.** Never `docker/swarm` prod, never another database.
+
 ## If you cannot run shell commands
 
 Some setups give you this file but no terminal and no filesystem. In that case
