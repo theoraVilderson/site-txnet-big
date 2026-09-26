@@ -10,7 +10,8 @@ updated: 2026-09-26
 
 A topic file of `contract.md` (§10). What governs `network-service/internal/hot`
 and `billing-service/src/app/traffic/horizon.ts` (F-027-u, ADR-0072) with its
-caller `traffic/hot-loop.consumer.ts` (F-027-cl, ADR-0092): when a
+callers `traffic/hot-loop.consumer.ts` (F-027-cl, ADR-0092) and
+`traffic/hot-loop.sweep.ts` (F-027-cn): when a
 config is read sooner than the bulk pass reads it, and how much traffic is
 bought next. Read it before changing an interval, a horizon or a block size.
 
@@ -171,9 +172,21 @@ and publishes each read, the calls arrive at the rate the hot few need.
   pass bought first. Any other failure is raised after the pass's other
   Grants are done, and the pass dead-letters as evidence. Nothing is owed by
   it, because the next pass re-reads the same rows.
-- **An idle Grant is never called.** A zero delta is not published. A config
-  cut off before any pass put it inside its share horizon waits for the next
-  delta from any config of its Grant (ADR-0092's revisit trigger).
+- **An idle Grant is not called by the stream.** A zero delta is not
+  published, so a config the panel cut off at its share, beside configs that
+  are idle, is never named by a pass.
+
+**The sweep is the second caller** (F-027-cn, ADR-0092 amendment). Every
+minute `worker-service`'s `hot_loop_sweep` asks billing
+`hot-loop/sweep-due` (`traffic/hot-loop.sweep.ts`). It names each `active`,
+not unlimited Grant with `purchasedBytes > consumedBytes` and an active,
+enabled config whose cursor lifetime (up + down) is at or past its
+`allocatedCeilingBytes`, and runs the same `topUp` on it in its tenant. The
+split moves onto the cut-off config, and the convergence pass raises its
+ceiling and re-enables the client. Once split, the config's share is above what
+it served, so the next scan skips it (ADR-0027: safe twice). It runs beside
+the consumer in the same process, so a sweep may add a rate sample between
+two passes; an idle Grant measures zero either way.
 
 ## Running it — `cmd/server` (F-027-bu)
 

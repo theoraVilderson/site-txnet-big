@@ -60,3 +60,17 @@ bytes left is reported in the outcome, not thrown.
 `billing-service` runs more than one replica (the rate samples must then be
 keyed per panel or moved out of memory), or idle Grants cut off at a share
 are reported.
+
+## Amendment 2026-09-26 — a sweep for the Grants no delta names (F-027-cn)
+
+The revisit trigger fired the same day: on dev, grant 0c8034ad sat at
+780/512 MiB on one config, cut off by its panel, with 255 MiB of its 1 GiB
+unspent. It was cut off before the consumer was running, and its other
+config was idle, so no delta ever named it. The user chose a sweep
+(2026-09-26). `worker-service`'s `hot_loop_sweep` job asks billing
+`hot-loop/sweep-due` every minute. That route names only active Grants with
+bytes left and a config served up to its own share, then runs the same
+`topUp`. This is not the timer rejected above: that timer was the only
+caller, measuring rates over its own interval. The stream stays the caller
+for hot Grants. The sweep is one scan a minute, and it names only
+Grants the stream cannot reach.

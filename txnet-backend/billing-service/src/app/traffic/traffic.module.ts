@@ -12,6 +12,8 @@ import { GroupDrainService } from './group-drain';
 import { HotLoopService } from './horizon';
 import { HotLoopConsumer } from './hot-loop.consumer';
 import { HotLoopQueue } from './hot-loop.queue';
+import { HotLoopSweepController } from './hot-loop.sweep.controller';
+import { HotLoopSweepService } from './hot-loop.sweep';
 import { RemainderCreditService } from './remainder-credit';
 import { UserConfigsController } from './user-configs.controller';
 import { UserConfigsService } from './user-configs';
@@ -27,7 +29,9 @@ import { GrantUsageService } from './grant-usage';
  * `HotLoopService` is the hot loop's money half: it sizes the next block from
  * the measured rate and calls the other two in one transaction. `HotLoopQueue`
  * is its caller — this service's own queue on `network.usage.#`, one top-up
- * per Grant a pass touched (F-027-cl, ADR-0092).
+ * per Grant a pass touched (F-027-cl, ADR-0092). `HotLoopSweepService` is its
+ * second, for the Grants no pass touches: a config cut off at its share, asked
+ * by `worker-service` over `hot-loop/sweep-due` (F-027-cn).
  *
  * `ConfigActionsService` is every action on a config as a desired-state write
  * (F-027-z); `network-service` carries it to the panel, nothing here does.
@@ -38,8 +42,8 @@ import { GrantUsageService } from './grant-usage';
  */
 @Module({
   imports: [WalletModule],
-  controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController],
-  providers: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, HotLoopConsumer, HotLoopQueue, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GroupFulfilmentService, GroupDrainService],
+  controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController, HotLoopSweepController],
+  providers: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, HotLoopConsumer, HotLoopQueue, HotLoopSweepService, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GroupFulfilmentService, GroupDrainService],
   exports: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, ConfigActionsService, GroupFulfilmentService, UserConfigsService, GrantUsageService],
 })
 export class TrafficModule {}
