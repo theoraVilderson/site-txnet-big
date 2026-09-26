@@ -366,6 +366,7 @@ export const envSchema = z.object({
   COUPON_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
   /** Catalog management (`catalog/catalog-admin.controller.ts`, F-026-d), per user. */
   RESELLER_REVENUE_READ_RATE_LIMIT: rateLimit(120),
+  RESELLER_USER_GRANTS_READ_RATE_LIMIT: rateLimit(300),
   CATALOG_ADMIN_READ_RATE_LIMIT: rateLimit(120),
   CATALOG_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
   /** Manual billing-wallet adjustment (`tenant-billing/tenant-billing-admin.controller.ts`, F-019-a), per user. */

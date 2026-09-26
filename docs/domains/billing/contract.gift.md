@@ -150,3 +150,29 @@ Its consumer is `panel-web/contract.my-services.md`.
 | Bucket `GRANT_USAGE` (**180**/900s, per user); capability `subscriptionLink` | read on every expand beside the config list; sharing `CONFIG_LIST` would halve it |
 
 **Not covered:** per-config breakdown and a window other than 30 days are nobody's row. Its consumer is F-307-c.
+
+## One user's services, read by a reseller's admin (built — F-311-f)
+
+`payment/gift/reseller-user-grants.controller.ts` over `ResellerUserGrantsService`,
+which asks the four owner reads above — `GrantService.listForUser`,
+`UserConfigsService.listForGrant`, `GrantUsageService.dailyForGrant`,
+`SubscriptionLinkService.linkFor` — unchanged, with the **path's** user.
+
+| Route (`/api/billing/tenants/:tenantId/users/:userId/grants…`) | In | Answers `data` |
+|---|---|---|
+| `GET …/grants` | the Grant list's query (`page`, `pageSize`, `scope`, `q`) | the owner list's page, as above |
+| `GET …/grants/:grantId/configs` | — | `{grantId, rows[]}`, the owner's config view, `lines` and `login` included |
+| `GET …/grants/:grantId/usage` | — | `{grantId, from, to, days[]}`, as above |
+| `GET …/grants/:grantId/subscription-link` | — | `{grantId, subscriptionUrl}`; its two 409s as above |
+
+| Rule | Why |
+|---|---|
+| `ResellerAccess` (F-066-w1) is the door, capability `read`, no permission guard; refusals travel as `reason` — `not_allowed` / `reseller_suspended` **403**, `reseller_not_found` **404**, `reseller_terminated` **409** | every reseller-named surface (`contract.revenue.md`); a suspended reseller still sees its users' services |
+| **The reseller is the path's**, and every read runs in its scope | the owner's session carries the platform's `X-Tenant-Id` (ADR-0059) |
+| **Only that reseller's users** (C-15): the user is read first, in the reseller's scope (`user` is RLS-strict and in `TENANT_SCOPED_MODELS`); another tenant's user or none is **404** `user_not_found`, and no Grant is read for them | the Grant reads fence only by `userId`, and `traffic_daily_aggregate` has no tenant at all |
+| The owner reads are asked **as the path's user**, so a Grant of another user of the same reseller is their own **404** `grant_not_found` | their ownership check is the only one that knows a Grant's user |
+| One bucket for all four, `RESELLER_USER_GRANTS_READ`, default **300**/900s per caller; nothing here writes or rotates | expanding one Grant asks three routes at once. Reset link is F-311-n; config actions are F-311-g |
+
+**Not covered:** retired configs (the owner's view leaves them out), and an audit
+row for a read (F-311-r audits actions only). Its consumers are F-311-v (panel)
+and F-311-y (bot).

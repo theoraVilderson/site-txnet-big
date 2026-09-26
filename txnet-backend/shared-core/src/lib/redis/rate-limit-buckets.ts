@@ -468,6 +468,13 @@ export const RateLimitBucket = {
   RESELLER_REVENUE_READ: 'reseller-revenue:read',
 
   /**
+   * An admin reading one user's services in `billing-service` (F-311-f), per
+   * caller: the user's Grants, a Grant's configs, its usage and its `/sub`
+   * link. One bucket for the four, since expanding one Grant asks three at once.
+   */
+  RESELLER_USER_GRANTS_READ: 'reseller-user-grants:read',
+
+  /**
    * A named reseller's own campaigns in `notification-service` (F-313-d), per
    * caller. The two-bucket split the reseller users surface uses, for the same
    * reason: the list and the audience count are asked repeatedly while a

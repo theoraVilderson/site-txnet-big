@@ -36,6 +36,6 @@ import { GrantUsageService } from './grant-usage';
   imports: [WalletModule],
   controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController],
   providers: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GroupFulfilmentService, GroupDrainService],
-  exports: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, ConfigActionsService, GroupFulfilmentService],
+  exports: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, ConfigActionsService, GroupFulfilmentService, UserConfigsService, GrantUsageService],
 })
 export class TrafficModule {}

@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 54
+version: 55
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -61,7 +61,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 | [contract.webhook.md](contract.webhook.md) | a provider's signed webhook, and money that arrived for more, for less, or after the row was settled |
 | [contract.history.md](contract.history.md) | the panel's financial page: the wallet ledger and the top-up attempts |
 | [contract.verify.md](contract.verify.md) | a payment the gateway met with silence: the retry clock, the flag, manual confirmation |
-| [contract.gift.md](contract.gift.md) | the panel's gift-code box: redeeming a wallet-credit coupon |
+| [contract.gift.md](contract.gift.md) | the panel's gift-code box, and a user's Grants, configs, usage and `/sub` link — to their owner, or to a reseller's admin for one of its users |
 | [contract.coupon.md](contract.coupon.md) | whose a coupon is, whose users it serves, managing coupons and gift codes |
 | [contract.revenue.md](contract.revenue.md) | what one reseller sold and what its users paid in, over a period |
 | [contract.metering.md](contract.metering.md) | a collection pass becoming usage: what `metering-service` writes, and what it refuses to |
@@ -76,9 +76,9 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-26 | contract v55 (F-311-f): `GET /api/billing/tenants/:tenantId/users/:userId/grants` and a Grant's `configs`, `usage`, `subscription-link` under it — the owner reads for a reseller's admin, 404 `user_not_found` for another tenant's user. Additive. [contract.gift.md](contract.gift.md). Consumers: F-311-v, F-311-y |
 | 2026-09-26 | contract v54 (F-027-ci): the holder of 409 `panel_already_registered` / `inbound_assigned_elsewhere` / `inbound_has_configs` travels as `facts` ids (`panelId`; `remoteId`, `groupId`, `configs`) — the envelope had dropped the old body fields, so no client ever received them |
 | 2026-09-26 | contract v53 (F-027-ch): `PUT …/members/:panelId/inbounds` is new (409 `inbound_assigned_elsewhere` / `inbound_has_configs`); a member answers `inbounds`, a panel's inbound `assignedTo`. Additive. [contract.systems.md](contract.systems.md) rule 24c. Consumer panel-web: F-027-ci |
 | 2026-09-26 | contract v52 (F-027-cg): a group member's and a panel's `priority` / `weight` are nullable (null = inherited); both reads add `effective` `{value, layer}`; `PATCH …/members/:panelId` is new. [contract.systems.md](contract.systems.md) rule 24b. Consumer panel-web: this row (types, placement form), F-027-ci (display) |
-| 2026-09-26 | contract v51: a refusal or read names another panel only inside the reader's scope — 409 `panel_already_registered` answers `panel: null` for another owner's holder, `review.duplicateOf` is null likewise. Consumer panel-web: F-027-ci |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->
