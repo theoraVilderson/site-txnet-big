@@ -196,6 +196,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly tenantSubscriptionNoticeQueue: string;
   private readonly grantDeliveryNoticeQueue: string;
   private readonly grantCreatedQueue: string;
+  private readonly livePushQueue: string;
   private readonly noticeDelayQueue: string;
   private readonly noticeFlushQueue: string;
   private readonly outboxPrefetch: number;
@@ -222,6 +223,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     this.tenantSubscriptionNoticeQueue = config.getOrThrow<string>('AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE');
     this.grantDeliveryNoticeQueue = config.getOrThrow<string>('AUTOMATION_GRANT_DELIVERY_NOTICE_QUEUE');
     this.grantCreatedQueue = config.getOrThrow<string>('AUTOMATION_GRANT_CREATED_QUEUE');
+    this.livePushQueue = config.getOrThrow<string>('AUTOMATION_LIVE_PUSH_QUEUE');
     this.noticeDelayQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_DELAY_QUEUE');
     this.noticeFlushQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_FLUSH_QUEUE');
     this.outboxPrefetch = config.getOrThrow<number>('AUTOMATION_OUTBOX_PREFETCH');
@@ -333,6 +335,15 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
     });
     await this.channel.bindQueue(this.grantCreatedQueue, this.exchange, outboxRoutingKey(OutboxEventType.GRANT_CREATED));
+    // F-111-l: the events only an open page needs — one queue, because each is
+    // a live push and nothing else (`LIVE_PUSH_FIELDS`).
+    await this.channel.assertQueue(this.livePushQueue, {
+      durable: true,
+      arguments: { 'x-dead-letter-exchange': this.deadExchange },
+    });
+    for (const type of [OutboxEventType.GRANT_LINKS_CAPTURED]) {
+      await this.channel.bindQueue(this.livePushQueue, this.exchange, outboxRoutingKey(type));
+    }
     // F-067-p: a combined notice's flush waits out its window in a queue nobody
     // consumes; the broker dead-letters it on expiry onto the flush key. A
     // durable delay: a flush survives the process that scheduled it.
@@ -585,6 +596,11 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   /** Start consuming a purchase's `entitlement.grant.created` (F-114-i), by the same rules. */
   async consumeGrantCreated(handle: OutboxHandler): Promise<void> {
     await this.consumeOutbox(this.grantCreatedQueue, handle);
+  }
+
+  /** Start consuming the live-only events (F-111-l), by the same rules. */
+  async consumeLivePushes(handle: OutboxHandler): Promise<void> {
+    await this.consumeOutbox(this.livePushQueue, handle);
   }
 
   /**

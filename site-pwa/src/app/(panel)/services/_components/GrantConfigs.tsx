@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, ChevronDown, KeyRound, Loader2, Trash2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -46,7 +46,18 @@ type Refused = Extract<ConfigActionOutcome, { ok: false }>;
  * and each config is a card of its link lines — copy, QR, and a `.conf` where
  * the protocol needs a file.
  */
-export function GrantConfigs({ grantId }: { grantId: string }) {
+export function GrantConfigs({
+  grantId,
+  asked: told = 0,
+}: {
+  grantId: string;
+  /**
+   * Moves when the page heard this Grant's lines were captured (F-111-l,
+   * `useGrantsPage`). An open list re-reads quietly on it; a closed one reads
+   * nothing, because opening reads anyway.
+   */
+  asked?: number;
+}) {
   const { t, lang } = useLocale();
   const toMessage = useApiErrorMessage();
 
@@ -59,6 +70,9 @@ export function GrantConfigs({ grantId }: { grantId: string }) {
   const key = `${grantId}|${asked}`;
   const [loaded, setLoaded] = useState<string | null>(null);
   const isLoading = open && loaded !== key;
+  // A told read is quiet: it is not part of `key`, so no skeleton goes up over
+  // the card, and a failure keeps what is shown — the event was a hint (D-15).
+  const heard = useRef(told);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<ConfigAction | null>(null);
@@ -66,6 +80,29 @@ export function GrantConfigs({ grantId }: { grantId: string }) {
   const [done, setDone] = useState<number | null>(null);
   const [refused, setRefused] = useState<{ outcome: Refused; label: string }[]>([]);
   const [actError, setActError] = useState<{ message: string; ref?: string } | null>(null);
+
+  useEffect(() => {
+    // A closed list absorbs the count: opening reads anyway.
+    if (!open) heard.current = told;
+    if (told === heard.current) return;
+    heard.current = told;
+    if (loaded !== key) return; // the loud read in flight answers this too
+    let alive = true;
+    billingApi
+      .grantConfigs(grantId)
+      .then((answer) => {
+        if (!alive) return;
+        setRows(answer.rows);
+        setReadError(null);
+        setSelected((before) => new Set(answer.rows.map((r) => r.id).filter((id) => before.has(id))));
+      })
+      .catch(() => {
+        // Billing's last answer stays up; the next event or a reopen asks again.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, grantId, told, loaded, key]);
 
   useEffect(() => {
     if (!open) return;

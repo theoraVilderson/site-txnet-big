@@ -7,17 +7,10 @@ import { userChannel } from "@/lib/realtime";
 import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { flattenTexts } from "../../catalog/_lib/catalog-form";
-import { readGrantSettled } from "../_lib/my-services";
+import { readGrantSettled, readLinksCaptured } from "../_lib/my-services";
 
 /** Billing's own default page size (`GrantService.listForUser`), sent explicitly. */
 export const PAGE_SIZE = 20;
-
-/**
- * How often a page with a pending row asks billing while the socket is not
- * live (F-111-f). A minute is well under delivery's shortest retry (1 min)
- * doubled, and at 15 asks per 900s it leaves `GRANT_LIST` (120/900s) the rest.
- */
-export const PENDING_POLL_MS = 60_000;
 
 export interface GrantsPageState {
   rows: GrantRow[] | null;
@@ -26,6 +19,11 @@ export interface GrantsPageState {
   /** The published `catalog` namespace in the viewer's language, flat by full key. */
   texts: Record<string, string>;
   isLoading: boolean;
+  /**
+   * How many times each Grant's configs were said to have changed — by id, a
+   * missing id is 0. An open `GrantConfigs` re-reads when its count moves.
+   */
+  configsAsked: Record<string, number>;
   /** What went wrong, already in the user's language, or `null`. */
   error: unknown;
   retry: () => void;
@@ -55,10 +53,17 @@ export interface GrantsPageState {
  * not the record (D-15). The row is never patched from the payload — delivery
  * also sets the period, and a refund ends in a status this page would guess.
  * The same quiet read follows a reconnect while a row is pending (`onMissed`),
- * since an event sent to a dropped socket reaches nobody. And while the
- * socket is not live at all — never welcomed, or down between attempts — a
- * pending row is asked about every `PENDING_POLL_MS` with the tab visible;
- * a live socket makes that clock ask nothing.
+ * since an event sent to a dropped socket reaches nobody.
+ *
+ * **A Grant's configs turn usable without a reload (F-111-l).** Their lines
+ * are captured a minute or two after delivery, and `network.grant.linksCaptured`
+ * names the Grant. The lines are in the config list a row opens, not in these
+ * rows, so the event reads nothing here: it bumps `configsAsked[grantId]` and
+ * an open list re-reads. A reconnect bumps every row, for the same reason.
+ *
+ * **Nothing is asked on a clock** (user, 2026-09-26). A socket that is down
+ * reconnects on its own backoff (`lib/realtime.ts`), and `onMissed` is the
+ * one read that follows; until then the page shows billing's last answer.
  */
 export function useGrantsPage(page: number, lang: string): GrantsPageState {
   const [rows, setRows] = useState<GrantRow[] | null>(null);
@@ -105,6 +110,20 @@ export function useGrantsPage(page: number, lang: string): GrantsPageState {
     }
   }, []);
 
+  const [configsAsked, setConfigsAsked] = useState<Record<string, number>>({});
+  const shownIds = useRef<string[]>([]);
+  useEffect(() => {
+    shownIds.current = (rows ?? []).map((r) => r.id);
+  }, [rows]);
+  const askConfigs = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    setConfigsAsked((before) => {
+      const next = { ...before };
+      for (const id of ids) next[id] = (next[id] ?? 0) + 1;
+      return next;
+    });
+  }, []);
+
   const { group } = usePanelSession();
   const userId = group?.current.userId ?? null;
   const client = usePanelRealtime();
@@ -114,29 +133,18 @@ export function useGrantsPage(page: number, lang: string): GrantsPageState {
       onMessage: (payload) => {
         const settled = readGrantSettled(payload);
         if (settled && pendingIds.current.has(settled.grantId)) void quietRead();
+        const captured = readLinksCaptured(payload);
+        if (captured && shownIds.current.includes(captured.grantId)) askConfigs([captured.grantId]);
       },
-      // A delivery that ended while the socket was down was told to nobody,
-      // so a page still showing a pending row asks again once it is back.
+      // A delivery or a capture that happened while the socket was down was
+      // told to nobody, so the page asks again once it is back: the rows while
+      // one is pending, and every open config list.
       onMissed: () => {
         if (pendingIds.current.size > 0) void quietRead();
+        askConfigs(shownIds.current);
       },
     });
-  }, [client, userId, quietRead]);
-
-  // The fallback for a socket that is not live: nothing is published to it,
-  // and `onMissed` waits on a reconnect that may never come. The clock runs
-  // only while a row is pending; each tick asks only if the socket is still
-  // not live and the tab is visible, so a working socket costs no request.
-  const hasPending = (rows ?? []).some((r) => r.status === "pending");
-  useEffect(() => {
-    if (!hasPending) return;
-    const timer = setInterval(() => {
-      if (client?.connectionInfo()) return;
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      void quietRead();
-    }, PENDING_POLL_MS);
-    return () => clearInterval(timer);
-  }, [hasPending, client, quietRead]);
+  }, [client, userId, quietRead, askConfigs]);
 
   useEffect(() => {
     let alive = true;
@@ -168,5 +176,5 @@ export function useGrantsPage(page: number, lang: string): GrantsPageState {
     };
   }, [page, lang, key]);
 
-  return { rows, total, pageSize: PAGE_SIZE, texts, isLoading, error, retry };
+  return { rows, total, pageSize: PAGE_SIZE, texts, isLoading, configsAsked, error, retry };
 }

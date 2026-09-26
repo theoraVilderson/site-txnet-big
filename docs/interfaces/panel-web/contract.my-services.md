@@ -118,10 +118,17 @@ the purge countdown), `_lib/usage.ts` (ring and bar shares) and
     quiet read of page 1 cannot overwrite page 2. A delivery that ended while the socket
     was down went to nobody, so the same quiet read follows a reconnect
     (`onMissed`, [contract.realtime.md](contract.realtime.md)) while a row is
-    still `pending`. And while the socket is not live at all — the gateway
-    never answered, or it is between attempts — a pending row is asked about
-    every minute (`PENDING_POLL_MS`) with the tab visible: 15 per 900s,
-    inside `GRANT_LIST`'s 120. A live socket makes that clock ask nothing.
+    still `pending`. **Nothing is asked on a clock** (F-111-l, user
+    2026-09-26): a socket that is down reconnects on its own backoff, and
+    until then the page shows billing's last answer.
+13a. **A Grant's configs turn usable without a reload** (F-111-l). Their lines
+    are captured a minute or two after delivery; `network.grant.linksCaptured`
+    on the owner's channel names the Grant
+    ([network/contract.links.md](../../domains/network/contract.links.md) 7a).
+    The event reads no list: it bumps that row's `configsAsked`, and its config
+    list re-reads if open — quietly, no skeleton, a failure keeps what is
+    shown. A closed list reads nothing; opening reads anyway. A reconnect
+    bumps every row's.
 
 14. **A capability reads by its name, and by its key only where none is
     published** (F-114-f-c, ADR-0086). A Grant's `featureKeys` resolve against
@@ -166,8 +173,11 @@ the "being prepared" line on a pending row only, and
 `services/_hooks/useGrantsPage.test.ts` — a delivery and a refund each re-read
 without a skeleton, an event for a row not shown pending (or with no
 `grantId`) asks nothing, a failed re-read keeps the rows, a reconnect re-reads
-only while a row is pending, the minute clock asks only with a pending row, a
-socket that is not live and a visible tab, and no socket still reads the page;
+only while a row is pending, no clock asks anything even with the socket
+down, and no socket still reads the page; F-111-l: a capture bumps only a
+shown row's configs, a reconnect bumps every row's, and `connection.test.tsx`
+— an open list re-reads with no skeleton, keeps its rows on a failure, and a
+closed one reads nothing;
 `lib/realtime.test.ts` — `onMissed` on a reconnect's accepted channels only.
 F-114-f-c: `capabilityNames` — a tenant's own by its product's prefix, the
 platform's, another tenant's same key never read — and a chip showing the

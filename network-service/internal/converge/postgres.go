@@ -91,12 +91,21 @@ func (s PostgresDesired) For(ctx context.Context, panelID string) ([]DesiredConf
 	return out, nil
 }
 
+// LinksCapturedEvent is the outbox type a capture is announced under
+// (F-111-l): automation pushes it on the owner's `user:` channel and an open
+// My services re-reads that Grant's configs. Declared in
+// contracts/realtime/events.json.
+const LinksCapturedEvent = "network.grant.linksCaptured"
+
 // recordSQL writes one outcome over the desired state it was judged against,
 // in the same statement: an action that wrote in between leaves no row to
 // update, and the next pass judges what it wrote. The lines move only with a
 // capture ($8), and then with their key and time together
-// (`config_links_captured_from_a_client`).
+// (`config_links_captured_from_a_client`). A capture is announced in the same
+// statement, so the event and the lines commit or fail together (ADR-0021);
+// a dropped outcome updates no row and announces nothing.
 const recordSQL = `
+WITH recorded AS (
 UPDATE network.config
    SET "remoteId" = NULLIF($2, ''),
        "enforcementState" = $3::network."EnforcementState",
@@ -106,7 +115,17 @@ UPDATE network.config
        "linksUuid" = CASE WHEN $8 THEN $11 ELSE "linksUuid" END,
        "linksCapturedAt" = CASE WHEN $8 THEN $12 ELSE "linksCapturedAt" END
  WHERE id = $1::uuid
-   AND uuid = $5 AND "desiredEnabled" = $6 AND ("desiredRemote" = 'present') = $7`
+   AND uuid = $5 AND "desiredEnabled" = $6 AND ("desiredRemote" = 'present') = $7
+RETURNING id, "tenantId", "userId", "grantId")
+INSERT INTO automation.outbox_event (id, aggregate, "aggregateId", type, payload)
+SELECT gen_random_uuid(), 'network.config', r.id::text, $13::text,
+       jsonb_build_object(
+         'tenantId', r."tenantId"::text,
+         'userId', r."userId"::text,
+         'grantId', r."grantId"::text,
+         'configId', r.id::text)
+  FROM recorded r
+ WHERE $8`
 
 // Record writes each outcome on its own: a capture carries an array per row,
 // which one set-based statement cannot. An outcome whose row moved on is
@@ -127,7 +146,7 @@ func (s PostgresDesired) Record(ctx context.Context, rows []Outcome) error {
 		if _, err := s.DB.Exec(ctx, recordSQL,
 			o.ConfigID, o.RemoteID, string(o.State), o.At,
 			o.UUID, o.Enabled, o.Present,
-			captured, lines, linksRemote, linksUUID, linksAt); err != nil {
+			captured, lines, linksRemote, linksUUID, linksAt, LinksCapturedEvent); err != nil {
 			return fmt.Errorf("recording config %s: %w", o.ConfigID, err)
 		}
 	}

@@ -118,6 +118,7 @@ export function MyServicesView() {
               row={row}
               name={serviceName(state.texts, row)}
               capabilities={capabilityNames(state.texts, row)}
+              configsAsked={state.configsAsked[row.id]}
             />
           ))}
         </ul>

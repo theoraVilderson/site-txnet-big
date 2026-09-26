@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 17
-updated: 2026-09-24
+updated: 2026-09-26
 ---
 
 # Link capture: what a panel gives one client (F-027-bi)
@@ -75,6 +75,13 @@ that should exist and does not, which is drift (`contract.drift.md`).
    with both. Empty lines with a time is a panel that gives none (rule 2); no
    time is a client never captured. `/sub` can tell a stale capture from a
    fresh one by `linksUuid = uuid`.
+7a. **A capture is announced in the statement that writes it** (F-111-l).
+   `recordSQL` returns the row and inserts `network.grant.linksCaptured`
+   (`{tenantId, userId, grantId, configId}`) into the outbox only when the
+   outcome carries lines, so the event and the lines commit together
+   (ADR-0021) and a dropped outcome announces nothing. One event per captured
+   config; rule 6 already keeps a steady config from being captured again.
+   Automation pushes it to the owner (`automation/contract.notices.md`).
 8. **A failed read keeps what is stored.** It is a `links_unread` finding with
    the driver's fault, not a refused write; the re-key or state change the
    pass made is still recorded, and the capture is retried on the next pass

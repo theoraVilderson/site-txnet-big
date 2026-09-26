@@ -138,3 +138,16 @@ export function readGrantSettled(payload: unknown): { grantId: string } | null {
   if (p.type !== RealtimeEvents.grantDelivered && p.type !== RealtimeEvents.grantRefunded) return null;
   return typeof p.grantId === "string" && p.grantId !== "" ? { grantId: p.grantId } : null;
 }
+
+/**
+ * The Grant whose configs' lines were just captured, off the owner's `user:`
+ * channel — or `null` for anything else on it (F-111-l,
+ * `automation/contract.outbox.md`, "Live-only pushes"). The lines themselves
+ * are never in the payload: the open list reads them from billing.
+ */
+export function readLinksCaptured(payload: unknown): { grantId: string } | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Record<string, unknown>;
+  if (p.type !== RealtimeEvents.grantLinksCaptured) return null;
+  return typeof p.grantId === "string" && p.grantId !== "" ? { grantId: p.grantId } : null;
+}

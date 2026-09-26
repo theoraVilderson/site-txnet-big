@@ -228,6 +228,46 @@ describe("a config card", () => {
   });
 });
 
+describe("a config list told its lines are captured (F-111-l)", () => {
+  const WAITING = { ...CONFIG, lines: [], linksCapturedAt: null };
+
+  it("re-reads when its count moves, keeping the list up while it asks", async () => {
+    grantConfigs.mockResolvedValue({ grantId: "g1", rows: [WAITING] });
+    const user = userEvent.setup();
+    const { rerender } = render(<GrantConfigs grantId="g1" asked={0} />);
+    await user.click(screen.getByRole("button", { name: "myServices.configs.show" }));
+    await screen.findByText("myServices.lines.notCaptured");
+
+    grantConfigs.mockResolvedValue({ grantId: "g1", rows: [{ ...CONFIG, lines: [VLESS] }] });
+    rerender(<GrantConfigs grantId="g1" asked={1} />);
+    // No skeleton over the card while it is asked again.
+    expect(screen.getByText("myServices.lines.notCaptured")).toBeInTheDocument();
+
+    await waitFor(() => expect(screen.queryByText("myServices.lines.notCaptured")).not.toBeInTheDocument());
+    expect(screen.getAllByRole("listitem").filter((li) => li.hasAttribute("data-line"))).toHaveLength(1);
+    expect(grantConfigs).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps what it shows when that read fails", async () => {
+    grantConfigs.mockResolvedValue({ grantId: "g1", rows: [WAITING] });
+    const user = userEvent.setup();
+    const { rerender } = render(<GrantConfigs grantId="g1" asked={0} />);
+    await user.click(screen.getByRole("button", { name: "myServices.configs.show" }));
+    await screen.findByText("myServices.lines.notCaptured");
+
+    grantConfigs.mockRejectedValue(new Error("down"));
+    rerender(<GrantConfigs grantId="g1" asked={1} />);
+    await waitFor(() => expect(grantConfigs).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("myServices.lines.notCaptured")).toBeInTheDocument();
+  });
+
+  it("reads nothing while closed", () => {
+    const { rerender } = render(<GrantConfigs grantId="g1" asked={0} />);
+    rerender(<GrantConfigs grantId="g1" asked={3} />);
+    expect(grantConfigs).not.toHaveBeenCalled();
+  });
+});
+
 describe("the subscription link, folded below", () => {
   it("is closed until asked for, and still read only when a copy or the QR needs it", async () => {
     const user = userEvent.setup();

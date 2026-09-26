@@ -42,11 +42,14 @@ export function ServiceRow({
   row,
   name,
   capabilities,
+  configsAsked = 0,
 }: {
   row: GrantRow;
   name: string | null;
   /** `capabilityNames` of this row — a name where one is published, else the key (F-114-f-c). */
   capabilities: CapabilityName[];
+  /** `useGrantsPage().configsAsked` for this row: its open config list re-reads when it moves (F-111-l). */
+  configsAsked?: number;
 }) {
   const { t, lang } = useLocale();
   const toMessage = useApiErrorMessage();
@@ -210,7 +213,7 @@ export function ServiceRow({
         </ul>
       )}
 
-      <GrantConfigs grantId={row.id} />
+      <GrantConfigs grantId={row.id} asked={configsAsked} />
 
       <button
         type="button"

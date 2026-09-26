@@ -6,7 +6,7 @@ import { catalogApi } from "@/lib/catalog-api";
 import { userChannel } from "@/lib/realtime";
 import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
 import { usePanelSession } from "../../_context/PanelSessionContext";
-import { PENDING_POLL_MS, useGrantsPage } from "./useGrantsPage";
+import { useGrantsPage } from "./useGrantsPage";
 
 /**
  * A purchase's last step, seen from "my services" (F-111-f):
@@ -170,65 +170,23 @@ describe("useGrantsPage — a pending Grant turning live (F-111-f)", () => {
     expect(grants).toHaveBeenCalledTimes(1);
   });
 
-  describe("when the socket is not live — the gateway never answered", () => {
-    // Nothing is published to a socket that does not exist, and `onMissed`
-    // needs a reconnect that never comes. So while a row is pending and the
-    // socket is not live, the page asks billing on a slow clock; with a live
-    // socket the clock asks nothing, and the GRANT_LIST budget is left alone.
-    beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }));
-    afterEach(() => vi.useRealTimers());
-
-    it("asks on the slow clock while a row is pending, and stops once it is not", async () => {
-      const { result } = renderHook(() => useGrantsPage(1, "en"));
-      await waitFor(() => expect(result.current.rows?.[0].status).toBe("pending"));
-
-      grants.mockResolvedValue(page({ id: "g1", status: "active" }) as never);
-      await act(async () => {
-        vi.advanceTimersByTime(PENDING_POLL_MS);
-      });
-      await waitFor(() => expect(result.current.rows?.[0].status).toBe("active"));
-      expect(result.current.isLoading).toBe(false);
-      expect(grants).toHaveBeenCalledTimes(2);
-
-      await act(async () => {
-        vi.advanceTimersByTime(PENDING_POLL_MS * 3);
-      });
-      expect(grants).toHaveBeenCalledTimes(2);
-    });
-
-    it("asks nothing on the clock while the socket is live", async () => {
-      client.live = { connectionId: "c1", userId: "u-1" };
-      const { result } = renderHook(() => useGrantsPage(1, "en"));
-      await waitFor(() => expect(result.current.rows?.[0].status).toBe("pending"));
-
-      await act(async () => {
-        vi.advanceTimersByTime(PENDING_POLL_MS * 3);
-      });
-      expect(grants).toHaveBeenCalledTimes(1);
-    });
-
-    it("asks on the clock with no socket configured at all", async () => {
+  it("asks nothing on any clock, even with the socket down — reconnecting is the socket's job", async () => {
+    // F-111-l (user, 2026-09-26): no request is sent on a timer. A socket that
+    // is down reconnects on its own backoff, and `onMissed` above re-reads once
+    // it is back; until then the page shows billing's last answer.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
       realtime.mockReturnValue(null);
       const { result } = renderHook(() => useGrantsPage(1, "en"));
       await waitFor(() => expect(result.current.rows?.[0].status).toBe("pending"));
 
       await act(async () => {
-        vi.advanceTimersByTime(PENDING_POLL_MS);
-      });
-      await waitFor(() => expect(grants).toHaveBeenCalledTimes(2));
-    });
-
-    it("asks nothing on the clock while the tab is hidden", async () => {
-      const { result } = renderHook(() => useGrantsPage(1, "en"));
-      await waitFor(() => expect(result.current.rows?.[0].status).toBe("pending"));
-      const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
-
-      await act(async () => {
-        vi.advanceTimersByTime(PENDING_POLL_MS * 2);
+        vi.advanceTimersByTime(10 * 60_000);
       });
       expect(grants).toHaveBeenCalledTimes(1);
-      visibility.mockRestore();
-    });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("still reads the page with no socket at all", async () => {
@@ -237,5 +195,44 @@ describe("useGrantsPage — a pending Grant turning live (F-111-f)", () => {
 
     await waitFor(() => expect(result.current.rows?.length).toBe(2));
     expect(client.subscribe).not.toHaveBeenCalled();
+  });
+});
+
+describe("useGrantsPage — a Grant's configs ready (F-111-l)", () => {
+  // `network.grant.linksCaptured` says a config's lines exist now — a minute or
+  // two after "delivered" turned the row active. The lines are in the config
+  // list a row opens (`GrantConfigs`), not in this page's rows, so the event
+  // asks nothing here: it bumps that Grant's counter, and an open list re-reads.
+  it("bumps the named Grant's configs whatever its status, and reads no list", async () => {
+    const { result } = renderHook(() => useGrantsPage(1, "en"));
+    await waitFor(() => expect(result.current.rows).not.toBeNull());
+    expect(result.current.configsAsked).toEqual({});
+
+    await hear({ type: RealtimeEvents.grantLinksCaptured, grantId: "g2" });
+    await hear({ type: RealtimeEvents.grantLinksCaptured, grantId: "g2" });
+
+    expect(result.current.configsAsked).toEqual({ g2: 2 });
+    expect(grants).toHaveBeenCalledTimes(1);
+  });
+
+  it("bumps nothing for a Grant not on the page, or with no grantId", async () => {
+    const { result } = renderHook(() => useGrantsPage(1, "en"));
+    await waitFor(() => expect(result.current.rows).not.toBeNull());
+
+    await hear({ type: RealtimeEvents.grantLinksCaptured, grantId: "elsewhere" });
+    await hear({ type: RealtimeEvents.grantLinksCaptured });
+
+    expect(result.current.configsAsked).toEqual({});
+  });
+
+  it("bumps every row's configs after a reconnect — a capture may have been sent to nobody", async () => {
+    const { result } = renderHook(() => useGrantsPage(1, "en"));
+    await waitFor(() => expect(result.current.rows).not.toBeNull());
+
+    await act(async () => {
+      for (const onMissed of client.missed) onMissed();
+    });
+
+    expect(result.current.configsAsked).toEqual({ g1: 1, g2: 1 });
   });
 });

@@ -310,3 +310,28 @@ func TestInboundsRecordWritesTheReadAndNeverThePick(t *testing.T) {
 		t.Error("the read is not stamped: every pass would read again")
 	}
 }
+
+// F-111-l: a capture is announced to the Grant's owner in the statement that
+// writes it (ADR-0021), so an open My services re-reads the lines the moment
+// they exist instead of asking on a clock. Only a capture is announced: a
+// pass that confirmed a client and read nothing new tells nobody anything.
+func TestDesiredRecordAnnouncesACaptureInTheSameStatement(t *testing.T) {
+	at := time.Date(2026, 9, 26, 10, 0, 0, 0, time.UTC)
+	f := &pgDB{}
+	err := PostgresDesired{DB: f}.Record(context.Background(), []Outcome{
+		{ConfigID: pgConfig, RemoteID: "r-1", State: StateComplete, At: at, UUID: "uuid-1", Enabled: true, Present: true,
+			Links: &CapturedLinks{Lines: []string{"vless://x"}, RemoteID: "r-1", UUID: "uuid-1", At: at}},
+	})
+	if err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	sql := f.sql[0]
+	for _, part := range []string{"INSERT INTO automation.outbox_event", "RETURNING", `"grantId"`, `"userId"`, `"tenantId"`, "WHERE $8"} {
+		if !strings.Contains(sql, part) {
+			t.Errorf("the capture's announcement is missing %q", part)
+		}
+	}
+	if got := f.args[0][len(f.args[0])-1]; got != LinksCapturedEvent {
+		t.Errorf("announced as %v, want %s", got, LinksCapturedEvent)
+	}
+}

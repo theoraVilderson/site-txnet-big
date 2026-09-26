@@ -3,7 +3,7 @@ id: automation
 layer: domain
 status: active
 version: 8
-updated: 2026-09-25
+updated: 2026-09-26
 ---
 
 # Contract — automation: telling a person about an event
@@ -24,6 +24,19 @@ is the same for every consumer: `EventNoticeSender`
 | A failed step does not stop the others; the sender rethrows after all ran, and the event or the flush dead-letters | one broken seam does not starve the rest |
 | Markers were renamed from `'<consumer>'` to `'<consumer>:<channel>'` at F-067-o | an event in flight at that deploy may be told twice through one channel, once (ADR-0084 consequences) |
 | At F-067-p the per-event `inbox` / `bot` markers became one `person` marker. An event holding either old marker is **not** joined: the channel it still owes is told alone, under its old marker (`owedBeforeBursts`) | ADR-0084 accepts a rename once, at F-067-o. Dead code once those markers expire, 7 days after deploy |
+
+## Live-only pushes (F-111-l)
+
+`LivePushConsumer`, queue `AUTOMATION_LIVE_PUSH_QUEUE`, consumer `live-push`:
+the events an open page re-reads on and nobody is told about. A type is a row
+in `LIVE_PUSH_FIELDS` plus its binding in `BrokerService`, and
+`OUTBOX_EVENT_BINDER` names worker-service for it.
+
+| Rule | Why |
+|---|---|
+| `live` only, on `user:<payload.userId>`; never `person` | a Grant with three configs captured would be three bot messages about one purchase |
+| The body is `{type}` plus exactly the fields the row names — `network.grant.linksCaptured` carries `grantId` | a payload holds what its producer needed; that is not the browser's |
+| A payload without `userId` or a named field, or a type with no row, throws and dead-letters | whose page it is is never guessed |
 
 ## A burst is told once (F-067-p, ADR-0084 decision 3)
 
