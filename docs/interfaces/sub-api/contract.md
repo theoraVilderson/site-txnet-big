@@ -64,7 +64,12 @@ reach the body only when all of these hold:
    panel, so cached renders are rebuilt.
 
 Order: configs oldest first (`createdAt`, then `id`), each config's lines in
-the panel's order. The body is those lines joined by `\n` in standard padded
+the panel's order. **Each line is named** (F-307-h, ADR-0089) as billing's
+config list names it: the buyer's `userLabel`, else the panel's `region`; a
+name given earlier in the Grant gets ` 2`, ` 3`. Numbered over configs not
+retired with `linksUuid = uuid`, before 1 and 4 drop any, so a line reads
+the same in both (`sub/line_names.go`, held to
+`contracts/network/line-names.json`). The body is those lines joined by `\n` in standard padded
 base64, `text/plain; charset=utf-8`. No lines is an empty body.
 
 **Only an `active` Grant is served.** Any other status (`pending`, `suspended`,
@@ -177,9 +182,10 @@ which client apps show as used, remaining and expiry. An app reads
 3. **No live listener in this process: no cache.** Nothing is read or
    written. Redis failing is a miss, never an error answer.
 4. A render that starts reading a column no trigger watches adds it to the
-   trigger in the same row (ADR-0083 revisit trigger).
+   trigger in the same row (ADR-0083 revisit trigger): `config."userLabel"`
+   and `panel.region` since F-307-h.
 5. `renderRevision` is bumped when the same lines render differently, or an
-   entry's stored Grant gains a field (`r5`, F-111-s), so a rolling deploy
+   entry's stored Grant gains a field (`r5`, F-111-s; `r6`, lines named, F-307-h), so a rolling deploy
    cannot serve one version's bodies to the other.
 
 ## Emits (events)

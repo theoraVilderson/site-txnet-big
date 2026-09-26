@@ -55,7 +55,7 @@ func (s Store) GrantByTokenHash(ctx context.Context, hash string) (sub.Grant, bo
 func (s Store) ConfigsOfGrant(ctx context.Context, grantID string) ([]sub.Config, error) {
 	rows, err := s.DB.Query(ctx,
 		`SELECT c."panelId"::text, p."panelState"::text, c.status::text, c."desiredRemote"::text, c.uuid,
-		        COALESCE(c."linksUuid", ''), c."linkLines",
+		        COALESCE(c."linksUuid", ''), c."linkLines", COALESCE(c."userLabel", ''), p.region,
 		        EXISTS (SELECT 1 FROM entitlement."grant" g
 		                  JOIN catalog.product_variant v ON v.id = g."variantId"
 		                  JOIN network.panel_group_member m ON m."groupId" = v."panelGroupId" AND m."panelId" = c."panelId"
@@ -70,7 +70,7 @@ func (s Store) ConfigsOfGrant(ctx context.Context, grantID string) ([]sub.Config
 	var configs []sub.Config
 	for rows.Next() {
 		var c sub.Config
-		if err := rows.Scan(&c.PanelID, &c.PanelState, &c.Status, &c.DesiredRemote, &c.UUID, &c.LinksUUID, &c.LinkLines, &c.Draining); err != nil {
+		if err := rows.Scan(&c.PanelID, &c.PanelState, &c.Status, &c.DesiredRemote, &c.UUID, &c.LinksUUID, &c.LinkLines, &c.UserLabel, &c.Region, &c.Draining); err != nil {
 			return nil, err
 		}
 		configs = append(configs, c)

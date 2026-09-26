@@ -38,8 +38,8 @@ var RequiredColumns = map[string]map[string][]string{
 	},
 	// The Grant's configs, their stored lines and their panel's state (F-113-b).
 	"network": {
-		"config": {"id", "grantId", "panelId", "status", "desiredRemote", "uuid", "linkLines", "linksUuid", "createdAt"},
-		"panel":  {"id", "panelState"},
+		"config": {"id", "grantId", "panelId", "status", "desiredRemote", "uuid", "linkLines", "linksUuid", "createdAt", "userLabel"},
+		"panel":  {"id", "panelState", "region"},
 		// Whether a config's panel is draining in its Grant's group (F-027-bm).
 		"panel_group_member": {"groupId", "panelId", "role"},
 	},

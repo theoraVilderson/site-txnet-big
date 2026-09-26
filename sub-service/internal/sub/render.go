@@ -19,6 +19,10 @@ type Config struct {
 	// was never captured (network contract.links.md rule 7).
 	LinksUUID string
 	LinkLines []string
+	// UserLabel is the buyer's name for it, empty for the default; Region is
+	// its panel's, the default name (F-307-h, ADR-0089).
+	UserLabel string
+	Region    string
 	// Draining: the panel is a `drain` member of the Grant's panel group
 	// (network contract.groups.md rule 13).
 	Draining bool
@@ -47,7 +51,8 @@ func serves(c Config) bool {
 }
 
 // servedLines is every line of every served config, configs in the store's
-// order and each config's lines in the panel's.
+// order and each config's lines in the panel's, each named by
+// lineNamesOfGrant over the whole Grant before anything is left out.
 //
 // A draining panel's lines are left out while the Grant has another served
 // config (network contract.groups.md rule 13): the drain waits two
@@ -62,10 +67,16 @@ func servedLines(configs []Config) []string {
 			break
 		}
 	}
+	names := lineNamesOfGrant(configs)
 	var lines []string
-	for _, c := range configs {
+	for i, c := range configs {
 		if serves(c) && !(replaced && c.Draining) {
-			lines = append(lines, c.LinkLines...)
+			for j, line := range c.LinkLines {
+				if name := names[i][j]; name != nil {
+					line = nameLine(line, *name)
+				}
+				lines = append(lines, line)
+			}
 		}
 	}
 	return lines
