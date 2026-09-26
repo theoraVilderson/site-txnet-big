@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, Gauge, PackageOpen, Search, X } from "lucide-react";
+import { AlertCircle, ClipboardPaste, Gauge, PackageOpen, Search, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
@@ -10,7 +10,7 @@ import { billingApi } from "@/lib/billing-api";
 import { Pagination } from "../../_components/kit/Pagination";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { useGrantsPage } from "../_hooks/useGrantsPage";
-import { capabilityNames, serviceName } from "../_lib/my-services";
+import { capabilityNames, PASTE_MAX_LINES, pastedLines, serviceName } from "../_lib/my-services";
 import { ServiceRow } from "./ServiceRow";
 
 const S = FrontendI18nKeys.common.myServices;
@@ -32,6 +32,8 @@ const SEARCH_SETTLE_MS = 350;
 /** Billing's own ceiling on `q` (`billing/contract.gift.md`). */
 const SEARCH_MAX = 100;
 
+const NO_LINES: readonly string[] = [];
+
 /**
  * The "my services" page (F-502-s): one row per Grant, with the reissue button
  * on each.
@@ -52,6 +54,12 @@ const SEARCH_MAX = 100;
  * over F-307-m): one box, written to `?q=` once typing rests, back at page 1.
  * Paging and "show ended" keep it. A page filtered here would come back short,
  * as the ended filter would.
+ *
+ * **A pasted config is a credential, so it never reaches the URL** (F-307-q
+ * over F-307-p). A paste holding `://` is read as up to 20 config links,
+ * held by this page alone and sent to billing's `by-lines` in a POST body;
+ * the box shows how many, not the links. Paging and "show ended" keep them,
+ * a reload, typing a name or clearing drops them.
  */
 export function MyServicesView() {
   const { t, lang } = useLocale();
@@ -84,10 +92,30 @@ export function MyServicesView() {
   // what this box sent, or a letter typed meanwhile would be wiped.
   const [draft, setDraft] = useState(q);
   const [sent, setSent] = useState(q);
+  // Pasted config links (F-307-q): in this state and nowhere else.
+  const [pasted, setPasted] = useState<ReturnType<typeof pastedLines> | null>(null);
   if (q !== sent) {
     setSent(q);
-    setDraft(q);
+    // A paste drops `?q=`, and the URL losing it later is that write landing,
+    // not a navigation: only a name arriving in the URL replaces the paste.
+    if (pasted == null || q !== "") {
+      setDraft(q);
+      setPasted(null);
+    }
   }
+  // A paste replaces a name search and starts at page 1.
+  const takePaste = (text: string): boolean => {
+    const found = pastedLines(text);
+    if (found.lines.length === 0) return false;
+    setPasted(found);
+    setDraft("");
+    if (q !== "" || page > 1) go(1, all, "", "replace");
+    return true;
+  };
+  const clearSearch = () => {
+    setDraft("");
+    setPasted(null);
+  };
   useEffect(() => {
     const wanted = draft.trim();
     if (wanted === sent) return;
@@ -99,7 +127,7 @@ export function MyServicesView() {
     return () => clearTimeout(timer);
   }, [draft, sent, all, go]);
 
-  const state = useGrantsPage(page, lang, all ? "all" : "current", q);
+  const state = useGrantsPage(page, lang, all ? "all" : "current", pasted ? "" : q, pasted?.lines ?? NO_LINES);
 
   // Whether anything is metering the user's configs (F-027-w). A stalled
   // collector reads exactly like a broken service, so the page says which it
@@ -137,26 +165,48 @@ export function MyServicesView() {
         </p>
       )}
 
-      {(q !== "" || state.total + state.hidden > 0) && (
+      {(q !== "" || pasted != null || state.total + state.hidden > 0) && (
         <div className="flex items-center gap-2 rounded-2xl border border-card-border bg-card-bg px-3 focus-within:border-primary">
           <Search size={16} className="shrink-0 text-text-secondary" aria-hidden />
+          {pasted != null && (
+            <span className="flex shrink-0 items-center gap-1.5 rounded-lg bg-leaf-bg px-2 py-1 text-xs font-medium text-text-primary">
+              <ClipboardPaste size={14} aria-hidden />
+              {t("common", S.serviceSearch.pasted, { count: pasted.lines.length })}
+            </span>
+          )}
           <input
             type="search"
             value={draft}
             maxLength={SEARCH_MAX}
-            onChange={(e) => setDraft(e.target.value)}
+            // The clipboard's own text: a single-line box drops the line
+            // breaks, which would run two links into one.
+            onPaste={(e) => {
+              const text = e.clipboardData.getData("text");
+              if (text.includes("://") && takePaste(text)) e.preventDefault();
+            }}
+            onChange={(e) => {
+              const value = e.target.value;
+              // A link that arrived some other way (a drop) is a paste too,
+              // and one that is no config is refused: `://` never reaches `?q=`.
+              if (value.includes("://")) {
+                takePaste(value);
+                return;
+              }
+              setPasted(null);
+              setDraft(value);
+            }}
             onKeyDown={(e) => {
-              if (e.key === "Escape") setDraft("");
+              if (e.key === "Escape") clearSearch();
             }}
             placeholder={t("common", S.serviceSearch.placeholder)}
             aria-label={t("common", S.serviceSearch.label)}
             dir="auto"
             className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-text-primary outline-none [&::-webkit-search-cancel-button]:hidden"
           />
-          {draft !== "" && (
+          {(draft !== "" || pasted != null) && (
             <button
               type="button"
-              onClick={() => setDraft("")}
+              onClick={clearSearch}
               aria-label={t("common", S.serviceSearch.clear)}
               title={t("common", S.serviceSearch.clear)}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
@@ -165,6 +215,12 @@ export function MyServicesView() {
             </button>
           )}
         </div>
+      )}
+
+      {pasted?.capped && (
+        <p role="status" className="px-1 text-xs text-text-secondary">
+          {t("common", S.serviceSearch.pastedCapped, { max: PASTE_MAX_LINES })}
+        </p>
       )}
 
       {state.isLoading && <TableSkeleton rows={3} columns={3} withPagination />}
@@ -194,7 +250,9 @@ export function MyServicesView() {
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-card-border bg-card-bg px-4 py-10 text-center">
           <PackageOpen size={28} className="text-text-secondary" aria-hidden />
           <p className="text-sm text-text-secondary">
-            {q !== ""
+            {pasted != null
+              ? t("common", state.hidden > 0 ? S.serviceSearch.pastedNoneCurrent : S.serviceSearch.pastedNone)
+              : q !== ""
               ? t("common", state.hidden > 0 ? S.serviceSearch.noneCurrent : S.serviceSearch.none, { query: q })
               : t("common", state.hidden > 0 ? S.noCurrent : S.empty)}
           </p>

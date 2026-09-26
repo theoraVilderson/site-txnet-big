@@ -151,3 +151,21 @@ export function readLinksCaptured(payload: unknown): { grantId: string } | null 
   if (p.type !== RealtimeEvents.grantLinksCaptured) return null;
   return typeof p.grantId === "string" && p.grantId !== "" ? { grantId: p.grantId } : null;
 }
+
+/** Billing's ceilings on a paste (`billing/contract.gift.md`, `by-lines`). */
+export const PASTE_MAX_LINES = 20;
+const PASTE_MAX_LENGTH = 4096;
+
+/**
+ * The config links in a paste (F-307-q): every piece holding `://`, split on
+ * line breaks and spaces — an app's "copy all" joins with either, and a link
+ * holds neither — each once, in order. A piece longer than billing takes is
+ * no config and is dropped rather than refusing the whole paste. Past 20 the
+ * rest are left out and `capped` says so.
+ */
+export function pastedLines(text: string): { lines: string[]; capped: boolean } {
+  const found = [
+    ...new Set(text.split(/\s+/).filter((l) => l.includes("://") && l.length <= PASTE_MAX_LENGTH)),
+  ];
+  return { lines: found.slice(0, PASTE_MAX_LINES), capped: found.length > PASTE_MAX_LINES };
+}

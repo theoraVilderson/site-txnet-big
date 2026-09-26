@@ -29,7 +29,7 @@ vi.mock("../../_context/PanelSessionContext", () => ({ usePanelSession: vi.fn() 
 vi.mock("../../_context/PanelRealtimeContext", () => ({ usePanelRealtime: vi.fn() }));
 vi.mock("@/lib/billing-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/billing-api")>()),
-  billingApi: { grants: vi.fn() },
+  billingApi: { grants: vi.fn(), grantsByLines: vi.fn() },
 }));
 vi.mock("@/lib/catalog-api", () => ({ catalogApi: { texts: vi.fn() } }));
 
@@ -269,5 +269,21 @@ describe("useGrantsPage — which Grants (user, 2026-09-26)", () => {
     rerender({ q: "de-1" });
     expect(result.current.isLoading).toBe(true);
     await waitFor(() => expect(grants).toHaveBeenLastCalledWith(1, 20, "current", "de-1"));
+  });
+
+  it("hands billing pasted lines over by-lines, never as q, and reads again when they change (F-307-q)", async () => {
+    const byLines = vi.mocked(billingApi.grantsByLines);
+    byLines.mockResolvedValue({ rows: [], total: 0, page: 1, pageSize: 20, hidden: 0 } as never);
+    const { result, rerender } = renderHook(({ lines }) => useGrantsPage(1, "en", "all", "", lines), {
+      initialProps: { lines: [] as string[] },
+    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(byLines).not.toHaveBeenCalled();
+    grants.mockClear();
+
+    rerender({ lines: ["trojan://s@h:443"] });
+    expect(result.current.isLoading).toBe(true);
+    await waitFor(() => expect(byLines).toHaveBeenLastCalledWith(["trojan://s@h:443"], 1, 20, "all"));
+    expect(grants).not.toHaveBeenCalled();
   });
 });

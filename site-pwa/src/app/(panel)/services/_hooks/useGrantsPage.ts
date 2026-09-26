@@ -12,6 +12,15 @@ import { readGrantSettled, readLinksCaptured } from "../_lib/my-services";
 /** Billing's own default page size (`GrantService.listForUser`), sent explicitly. */
 export const PAGE_SIZE = 20;
 
+const NO_LINES: readonly string[] = [];
+
+/** One page, by pasted lines when there are any, else by `q`. */
+function readPage(page: number, scope: GrantScope, q: string, lines: readonly string[]) {
+  return lines.length > 0
+    ? billingApi.grantsByLines([...lines], page, PAGE_SIZE, scope)
+    : billingApi.grants(page, PAGE_SIZE, scope, q);
+}
+
 export interface GrantsPageState {
   rows: GrantRow[] | null;
   total: number;
@@ -36,7 +45,8 @@ export interface GrantsPageState {
  * (F-502-s) — in billing's `current` scope unless `all` is asked (F-502-u).
  * `hidden` is how many `current` left out. `q` is billing's search (F-307-n,
  * F-307-m): only the Grants holding a live config named like it, and `hidden`
- * then counts the ended ones that match.
+ * then counts the ended ones that match. Pasted config `lines` replace `q`
+ * (F-307-q): the same page, asked of billing's `by-lines` in a POST body.
  *
  * **The names are a second read, and a failing one costs only the names.**
  * Billing answers a `nameKey`, not a translated string
@@ -75,6 +85,7 @@ export function useGrantsPage(
   lang: string,
   scope: GrantScope = "current",
   q = "",
+  lines: readonly string[] = NO_LINES,
 ): GrantsPageState {
   const [rows, setRows] = useState<GrantRow[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -88,7 +99,8 @@ export function useGrantsPage(
   // What this read *is*, as one string: loading is derived rather than stored,
   // so the skeleton is up in the render that changed the page rather than one
   // render later (`contract.financial.md`'s hook has the longer note).
-  const key = `${page}|${lang}|${scope}|${q}|${asked}`;
+  const pasted = lines.join("\n");
+  const key = `${page}|${lang}|${scope}|${q}|${pasted}|${asked}`;
   const [loaded, setLoaded] = useState<string | null>(null);
   const isLoading = loaded !== key;
 
@@ -105,19 +117,15 @@ export function useGrantsPage(
 
   // The page the quiet read asks for, synced after render as `pendingIds` is:
   // it is read only from a socket event or the clock, never while rendering.
-  const pageRef = useRef({ page, scope, q });
+  const pageRef = useRef({ page, scope, q, lines });
   useEffect(() => {
-    pageRef.current = { page, scope, q };
-  }, [page, scope, q]);
+    pageRef.current = { page, scope, q, lines };
+  }, [page, scope, q, lines]);
   const quietRead = useCallback(async () => {
     const mine = ++seq.current;
     try {
-      const answer = await billingApi.grants(
-        pageRef.current.page,
-        PAGE_SIZE,
-        pageRef.current.scope,
-        pageRef.current.q,
-      );
+      const { page: p, scope: s, q: search, lines: pastedLines } = pageRef.current;
+      const answer = await readPage(p, s, search, pastedLines);
       if (mine !== seq.current) return;
       setRows(answer.rows);
       setTotal(answer.total);
@@ -169,7 +177,7 @@ export function useGrantsPage(
     (async () => {
       try {
         const [answer, catalogTexts] = await Promise.all([
-          billingApi.grants(page, PAGE_SIZE, scope, q),
+          readPage(page, scope, q, lines),
           catalogApi.texts(lang).then(flattenTexts).catch(() => ({})),
         ]);
         if (!alive || mine !== seq.current) return;
@@ -193,7 +201,10 @@ export function useGrantsPage(
     return () => {
       alive = false;
     };
-  }, [page, lang, scope, q, key]);
+    // `lines` is read through `pasted`, its content: a new array holding the
+    // same lines is not a new search.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, lang, scope, q, pasted, key]);
 
   return { rows, total, pageSize: PAGE_SIZE, hidden, texts, isLoading, configsAsked, error, retry };
 }

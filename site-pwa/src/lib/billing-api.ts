@@ -802,6 +802,19 @@ export const billingApi = {
   },
 
   /**
+   * The same page, narrowed to the Grants holding a config one of `lines` is
+   * (F-307-p) — by its uuid, or its captured line with the name left out.
+   * **A body, never a query string:** a line is a credential, and a URL lands
+   * in access logs and history. Its own bucket, 60 per 900s per user.
+   */
+  async grantsByLines(lines: string[], page: number, pageSize: number, scope: GrantScope): Promise<GrantsPage> {
+    return call<GrantsPage>("/gift/grants/by-lines", {
+      method: "POST",
+      body: JSON.stringify({ lines, page, pageSize, scope }),
+    });
+  },
+
+  /**
    * One Grant's `/sub` link (F-114-e-b, ADR-0085): `https://<tenant subscription
    * domain>/sub/<token>`, the same on every call — billing keeps the token
    * sealed, so the link is asked for whenever it is wanted, never stored here.

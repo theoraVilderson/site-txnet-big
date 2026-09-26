@@ -189,11 +189,8 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
     "manage" by name, label, protocol or region (ی/ي, ک/ك and ۲/2 alike);
     "copy all", "select all" and a bulk action reach only the configs shown.
     The list is the Grant's whole list, so this never shortens a page.
-19. **A service is found by its configs, and billing finds it** (F-307-n over
-    billing's `q`, F-307-m). One box above the list, shown once there is a
-    service or a search, written to `?q=` beside `?page=`/`?all=1` when typing
-    rests (a `replace`, back to page 1); paging and "show ended" keep it. No
-    match names the query — never "no services". ي/ك fold (F-307-o).
+19. **A service is found by its configs, or by pasting them** — the box above
+    the list is [contract.service-search.md](contract.service-search.md).
 
 ## Proof
 
@@ -234,9 +231,7 @@ asked. F-307-i: one rename per config, a save that re-reads and copies the
 line billing named, an empty name clearing to the default, Escape writing
 nothing, and a refusal keeping the field. F-307-l: the matcher's folding,
 no box under 6 configs, the lines narrowed with a "none" sentence, and a
-bulk delete reaching only the configs shown. F-307-n: `services/search.test.tsx`
-— the URL's `q` asked for, a settled write at page 1, paging and "show
-ended" keeping it, the no-match sentence; `useGrantsPage` hands `q` to billing.
+bulk delete reaching only the configs shown.
 
 ## Not covered
 
