@@ -81,7 +81,7 @@ func newWakeRig(t *testing.T, ids ...string) *wakeRig {
 		Ceilings: r.turns,
 		Turns:    r.locks,
 	}
-	r.waker = &collect.Waker{Loop: loop, Panels: func() []collect.Panel { return offered }, Debounce: wakeDebounce}
+	r.waker = &collect.Waker{Loop: loop, Panels: func() []collect.Panel { return offered }, Debounce: wakeDebounce, MinGap: time.Millisecond}
 	return r
 }
 
@@ -215,5 +215,35 @@ func TestAWakeAndAConfirmInOneWindowAreOneOrdinaryTurn(t *testing.T) {
 	// Ordinary, so a write it makes for the new desired state is confirmed in turn.
 	if got := r.turns.confirming("panel-1"); len(got) != 1 || got[0] {
 		t.Fatalf("turns = %v, want one ordinary turn", got)
+	}
+}
+
+// F-111-o: however busy a panel is, woken turns read its whole client list at
+// most once per MinGap; what arrives in between folds into the next turn.
+
+func TestWokenTurnsOnOnePanelAreSpacedByTheMinimumGap(t *testing.T) {
+	r := newWakeRig(t, "panel-1", "panel-2")
+	r.waker.MinGap = 20 * wakeDebounce
+	r.waker.Wake(context.Background(), "panel-1")
+	settle() // the first turn ran
+	r.waker.Confirm(context.Background(), "panel-1")
+	r.waker.Wake(context.Background(), "panel-1")
+	r.waker.Wake(context.Background(), "panel-2")
+	settle()
+	if got := r.turns.count("panel-1"); got != 1 {
+		t.Fatalf("panel-1 converged %d times inside its gap, want 1", got)
+	}
+	if got := r.turns.count("panel-2"); got != 1 {
+		t.Fatalf("panel-2 converged %d times, want 1: one panel's gap is not another's", got)
+	}
+	time.Sleep(20 * wakeDebounce)
+	if got := r.turns.count("panel-1"); got != 2 {
+		t.Fatalf("panel-1 converged %d times after its gap, want 2: the wakes inside it fold into one turn", got)
+	}
+}
+
+func TestTheDefaultGapIsTenSeconds(t *testing.T) {
+	if collect.DefaultWakeMinGap != 10*time.Second {
+		t.Fatalf("DefaultWakeMinGap = %v, want 10s (user, 2026-09-26)", collect.DefaultWakeMinGap)
 	}
 }

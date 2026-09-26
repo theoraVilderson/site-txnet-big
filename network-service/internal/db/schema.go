@@ -66,6 +66,8 @@ var RequiredColumns = map[string][]string{
 		"ceilingAppliedAt", "walletBackedCeilingBytes",
 		// The lines `/sub` renders, and the client they were read from (F-027-bj).
 		"linkLines", "linksRemoteId", "linksUuid", "linksCapturedAt",
+		// The first confirmation, announced once (F-111-o).
+		"confirmedAt",
 		// The inbound fulfilment placed it on (F-114-b).
 		"inboundRemoteId",
 	},

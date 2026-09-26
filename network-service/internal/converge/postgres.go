@@ -109,9 +109,12 @@ const ConfirmedEvent = "network.config.confirmed"
 // (`config_links_captured_from_a_client`). A capture ($8) and a confirmation
 // of a Grant's config ($15) are announced in the same statement, so the event
 // and the row commit or fail together (ADR-0021); a dropped outcome updates no
-// row and announces nothing.
+// row and announces nothing. Only a config's first confirmation is announced
+// (`confirmedAt`, F-111-o): `prior` is the row before this statement, so a
+// later disable, rotation or repair has no Grant waiting on it and is silent.
 const recordSQL = `
-WITH recorded AS (
+WITH prior AS (SELECT "confirmedAt" FROM network.config WHERE id = $1::uuid),
+recorded AS (
 UPDATE network.config
    SET "remoteId" = NULLIF($2, ''),
        "enforcementState" = $3::network."EnforcementState",
@@ -119,7 +122,8 @@ UPDATE network.config
        "linkLines" = CASE WHEN $8 THEN $9::text[] ELSE "linkLines" END,
        "linksRemoteId" = CASE WHEN $8 THEN $10 ELSE "linksRemoteId" END,
        "linksUuid" = CASE WHEN $8 THEN $11 ELSE "linksUuid" END,
-       "linksCapturedAt" = CASE WHEN $8 THEN $12 ELSE "linksCapturedAt" END
+       "linksCapturedAt" = CASE WHEN $8 THEN $12 ELSE "linksCapturedAt" END,
+       "confirmedAt" = CASE WHEN $15 THEN COALESCE("confirmedAt", $4) ELSE "confirmedAt" END
  WHERE id = $1::uuid
    AND uuid = $5 AND "desiredEnabled" = $6 AND ("desiredRemote" = 'present') = $7
 RETURNING id, "tenantId", "userId", "grantId")
@@ -131,8 +135,9 @@ SELECT gen_random_uuid(), 'network.config', r.id::text, e.type,
          'grantId', r."grantId"::text,
          'configId', r.id::text)
   FROM recorded r
+ CROSS JOIN prior
  CROSS JOIN (VALUES ($13::text, $8::boolean, false), ($14::text, $15::boolean, true)) AS e(type, due, confirm)
- WHERE e.due AND (NOT e.confirm OR r."grantId" IS NOT NULL)`
+ WHERE e.due AND (NOT e.confirm OR (r."grantId" IS NOT NULL AND prior."confirmedAt" IS NULL))`
 
 // Record writes each outcome on its own: a capture carries an array per row,
 // which one set-based statement cannot. An outcome whose row moved on is

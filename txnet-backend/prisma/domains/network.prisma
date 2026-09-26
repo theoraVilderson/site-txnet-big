@@ -454,6 +454,10 @@ model Config {
   linksRemoteId            String?
   linksUuid                String?
   linksCapturedAt          DateTime?
+  /// The first read that found this client on its panel holding its desired
+  /// state (F-111-o). Set once; the read that sets it is the one that announces
+  /// `network.config.confirmed`, so a later disable or rotation announces nothing.
+  confirmedAt              DateTime?
   /// Set by a drain's retire only (F-027-bm/bp): such a row no longer covers
   /// its panel, so a member re-added to the group is placed again.
   drainedAt                DateTime?

@@ -348,6 +348,13 @@ func TestDesiredRecordAnnouncesAConfirmationOfAGrantsConfigInTheSameStatement(t 
 	if !strings.Contains(f.sql[0], `r."grantId" IS NOT NULL`) {
 		t.Error("a confirmation is announced for a config with no Grant: nothing to activate")
 	}
+	// F-111-o: only the first confirmation — a disable, a rotation or a
+	// repair confirmed later has no Grant waiting on it.
+	for _, part := range []string{`"confirmedAt" = CASE WHEN $15 THEN COALESCE("confirmedAt", $4)`, `prior."confirmedAt" IS NULL`} {
+		if !strings.Contains(f.sql[0], part) {
+			t.Errorf("the confirmation is not held to the first one: missing %q", part)
+		}
+	}
 	args := f.args[0]
 	if args[len(args)-2] != ConfirmedEvent || args[len(args)-1] != true {
 		t.Errorf("args end %v, want the confirmation announced as %s", args[len(args)-2:], ConfirmedEvent)

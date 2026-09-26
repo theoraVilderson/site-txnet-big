@@ -109,6 +109,11 @@ loop is proved against.
    debounce. A confirming turn never asks again: a panel that does not hold
    what we write costs one extra client list, then the minute loop. A wake in
    the same window makes it an ordinary turn.
+7. **Woken turns on one panel start at least 10s apart** (`DefaultWakeMinGap`,
+   F-111-o, user 2026-09-26). Each lists every client, so without a floor a
+   panel busy with purchases is read every 2s — load that grows with buyers,
+   on a server that is not ours. Wakes and confirms inside the gap fold into
+   the turn after it: a Grant activates within ~10s under a rush.
 
 Each pass logs one line, plus one per panel that did not complete, with its
 `Op`. The hot loop reads through the same panels, drivers and cursors, and

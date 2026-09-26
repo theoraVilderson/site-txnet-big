@@ -107,8 +107,9 @@ rows are written through `ConfigActionsService.provisionForGroup`
     and named again next tick. Answer: `scanned`, `configsPlaced`,
     `grantsActivated`, `grantsFailed`.
 11a. **A confirmed config activates its Grant at once** (F-111-n). The read
-    that finds a present client `complete` — where the row said otherwise —
-    writes `network.config.confirmed` `{tenantId, userId, grantId, configId}`
+    that first finds a present client `complete` — `confirmedAt` null, set by
+    it (F-111-o), so a later disable, rotation or repair is silent — writes
+    `network.config.confirmed` `{tenantId, userId, grantId, configId}`
     in the statement that records it (`PostgresDesired.Record`, ADR-0021);
     a config with no Grant announces nothing. `worker-service`'s
     `GrantCreatedConsumer` asks `POST …/network/grants/:grantId/fulfil`

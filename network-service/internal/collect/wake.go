@@ -11,6 +11,14 @@ import (
 // member, committed together — cost the panel one turn, not one each.
 const DefaultWakeDebounce = 2 * time.Second
 
+// DefaultWakeMinGap is the least time between two woken turns on one panel
+// (F-111-o, user 2026-09-26). Each turn lists every client the panel holds, so
+// without it a panel busy with purchases is read every debounce window — a
+// load that grows with the buyers, on a server that is not ours. What arrives
+// inside the gap folds into the turn after it: under a rush a Grant activates
+// within ~10s instead of ~5s, and the panel is read at a fixed worst case.
+const DefaultWakeMinGap = 10 * time.Second
+
 // Waker runs one panel's convergence turn when its desired state changed,
 // instead of leaving the change to the next bulk pass (F-111-j). A purchase
 // otherwise waited up to a whole interval before its client existed on the
@@ -33,9 +41,13 @@ type Waker struct {
 	Panels func() []Panel
 	// Debounce is the per-panel window wakes fold into (DefaultWakeDebounce).
 	Debounce time.Duration
+	// MinGap is the least time between two woken turns' starts on one panel
+	// (DefaultWakeMinGap).
+	MinGap time.Duration
 
 	mu    sync.Mutex
 	state map[string]*wakeState
+	last  map[string]time.Time
 }
 
 // wakeState is one panel with a turn armed. `running` is set once the turn
@@ -88,7 +100,13 @@ func (w *Waker) armLocked(ctx context.Context, panelID string, confirming bool) 
 	}
 	s := &wakeState{confirming: confirming}
 	w.state[panelID] = s
-	time.AfterFunc(w.debounce(), func() {
+	delay := w.debounce()
+	if last, ok := w.last[panelID]; ok {
+		if wait := time.Until(last.Add(w.minGap())); wait > delay {
+			delay = wait
+		}
+	}
+	time.AfterFunc(delay, func() {
 		w.turn(ctx, panelID, s)
 		w.mu.Lock()
 		defer w.mu.Unlock()
@@ -120,6 +138,12 @@ func (w *Waker) turn(ctx context.Context, panelID string, s *wakeState) {
 		// that told us to stop. The pass after the cool-off converges it.
 		return
 	}
+	w.mu.Lock()
+	if w.last == nil {
+		w.last = map[string]time.Time{}
+	}
+	w.last[p.ID] = time.Now()
+	w.mu.Unlock()
 	l.log().Debug("panel woken", "panel", p.ID)
 	l.converge(ctx, p, Result{PanelID: p.ID, OwnershipType: p.OwnershipType, TenantID: p.TenantID, ObservedAt: l.now(), Confirming: confirming})
 }
@@ -134,6 +158,13 @@ func (w *Waker) offered(panelID string) (Panel, bool) {
 		}
 	}
 	return Panel{}, false
+}
+
+func (w *Waker) minGap() time.Duration {
+	if w.MinGap > 0 {
+		return w.MinGap
+	}
+	return DefaultWakeMinGap
 }
 
 func (w *Waker) debounce() time.Duration {

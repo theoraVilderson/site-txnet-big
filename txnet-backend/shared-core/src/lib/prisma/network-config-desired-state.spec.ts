@@ -80,6 +80,7 @@ const CONFIG_COLUMNS = [
   'linksRemoteId',
   'linksUuid',
   'linksCapturedAt',
+  'confirmedAt',
 ];
 
 describe('network.Config carries its desired state, its drift and its ceiling', () => {
