@@ -2252,7 +2252,6 @@
     "register": {
       "open": "Register a panel",
       "title": "Register a panel",
-      "hint": "The panel is saved as waiting for its connection test. The test runs on the next pass, answers the acceptance questionnaire, and accepts or refuses the panel here — never later, when someone is being billed.",
       "submit": "Register",
       "cancel": "Cancel",
       "sent": "Registered. Its verdict appears after the next connection test.",
@@ -2422,27 +2421,20 @@
     },
     "panels": {
       "title": "Panels",
-      "empty": "No panels are registered yet.",
+      "empty": "No panel registered yet. Start with \"Register a panel\".",
       "tested": "Tested",
       "notTested": "Not tested yet",
       "lastHealthy": "Last healthy",
       "lastCollected": "Last collected",
       "openDrift": "Open drift events: {{count}}",
       "halted": "Collection halted",
-      "showMatrix": "Capabilities",
-      "hideMatrix": "Hide capabilities",
-      "showInbounds": "Inbounds",
-      "hideInbounds": "Hide inbounds",
-      "edit": "Edit",
       "more": "More actions",
       "showArchived": "Show archived ({{n}})",
       "hideArchived": "Hide archived",
       "archived": "Archived",
       "archivedHint": "Archived {{when}}. Not tested or collected; its usage and history are kept.",
       "restore": "Restore",
-      "restored": "Restored. It is tested again on the next pass, and collected once it passes.",
-      "details": "Details",
-      "address": "Address"
+      "restored": "Restored. It is tested again on the next pass, and collected once it passes."
     },
     "review": {
       "pending": "Waiting for its test",
@@ -2688,8 +2680,6 @@
         "ttlMinutes": "A whole number of minutes, from 1 to 10080 (a week).",
         "unchanged": "Nothing was changed."
       },
-      "variants": "Sold by {{n}} variant(s)",
-      "ttl": "Refresh every {{wait}}",
       "health": {
         "ok": "{{placeable}} member(s) take new configs; {{min}} needed.",
         "short": "Only {{placeable}} member(s) take new configs, and {{min}} are needed: a Grant sold now waits until more are accepted and healthy."
@@ -2709,7 +2699,6 @@
       },
       "remove": "Remove",
       "drain": {
-        "action": "Drain",
         "confirmTitle": "Drain {{panel}}?",
         "confirmHint": "It takes no new configs. Each user is given another member's line first; this panel's configs go no sooner than {{wait}} after that, and the member leaves the group on its own. No user is cut off.",
         "submit": "Drain",
@@ -2728,25 +2717,9 @@
       },
       "settings": {
         "action": "Selling settings",
-        "title": "How this group sells on {{panel}}",
-        "hint": "What you leave empty follows the panel's own setting, or the platform default where the panel sets none. A change reaches the next buyer; configs already placed stay where they are.",
-        "placement": "How a buyer is placed",
-        "inherit": "Inherit",
-        "inheritValue": "Inherit — {{value}}",
-        "cap": "Most users on this panel through this group",
-        "capHint": "Empty inherits. A member cannot lift a capped panel to no cap: empty takes the panel's cap.",
-        "noCap": "no cap",
-        "save": "Save settings",
-        "saved": "Saved. The next buyer is placed this way.",
-        "inbounds": "Inbounds this group sells here",
-        "inboundsHint": "With none ticked this group sells the panel's pool. Ticking one takes it out of the pool: then only this group places on it, and this group places only on what it ticked.",
-        "pool": "sells the panel's pool",
-        "own": "sells {{count}} inbound(s) of its own",
         "heldBy": "held by {{group}}",
         "takesNobody": "not on sale on the panel, or disabled there — takes nobody",
         "sellsNobody": "Nothing this group sells here is on sale and enabled: it places nobody on this panel.",
-        "saveInbounds": "Save inbounds",
-        "savedInbounds": "Saved. The next buyer of this group is placed on these inbounds.",
         "loading": "Reading the panel's inbounds…"
       }
     },
@@ -2787,7 +2760,6 @@
       "poolHint": "An inbound a group has taken is sold only by that group; the rest are the pool every other group on this panel shares."
     },
     "edit": {
-      "title": "Edit {{panel}}",
       "basics": "Name and region",
       "addresses": "Addresses",
       "budget": "Request budget",
@@ -2820,7 +2792,6 @@
       "submit": "Delete group",
       "deleted": "Group deleted."
     },
-    "groupsMembersCount": "{{n}} member(s)",
     "layer": {
       "member": "set on this member",
       "panel": "the panel's default",
@@ -2830,6 +2801,150 @@
       "panel_already_registered": "This API address is already registered as “{{panel}}”. Edit or restore that panel instead of registering it again.",
       "inbound_assigned_elsewhere": "Inbound #{{inbound}} is already sold only by group “{{group}}”. Take it off that group's member first.",
       "inbound_has_configs": "Buyers of another group still have {{configs}} configs on inbound #{{inbound}}. Drain that group's member on this panel first, so they are moved."
+    },
+    "guide": {
+      "title": "Start selling VPN in 4 steps",
+      "intro": "Someone can buy VPN once these four steps are done, in order. Each step ticks itself when it is done.",
+      "show": "Getting started",
+      "hide": "Close the guide",
+      "allDone": "All four steps are done and sales are running. From now on, just check the tabs that show a red number.",
+      "state": {
+        "done": "Done",
+        "current": "Next step",
+        "todo": "Later"
+      },
+      "steps": {
+        "register": {
+          "title": "Register a panel",
+          "body": "Tell us about the server your VPN panel (3x-ui, Marzban…) runs on: its address and an admin account.",
+          "action": "Register a panel"
+        },
+        "accepted": {
+          "title": "Pass the connection test",
+          "body": "After you register, we connect to the panel and test it — usually under a minute. Nothing to do unless it is refused.",
+          "action": "See panels"
+        },
+        "group": {
+          "title": "Create a group and add the panel",
+          "body": "A group is a set of panels that sell one product together. Create one and add an accepted panel to it.",
+          "action": "Go to groups"
+        },
+        "product": {
+          "title": "Link a product to the group",
+          "body": "In the catalog, pick this group for a VPN product. From then on every purchase creates configs on the group's panels.",
+          "action": "Go to the catalog"
+        }
+      },
+      "glossary": {
+        "title": "What do these words mean?",
+        "panel": {
+          "term": "Panel",
+          "body": "The VPN management software on your server (3x-ui, Marzban or a MikroTik router). We create buyers' configs and read their usage through it."
+        },
+        "test": {
+          "term": "Connection test",
+          "body": "After you register, we connect to the panel and check we can create users and read usage. Nothing is sold on it until it passes."
+        },
+        "inbound": {
+          "term": "Inbound",
+          "body": "An entry point on the panel with a set protocol and port, e.g. vless on port 443. Each buyer's config is created on one or more inbounds."
+        },
+        "group": {
+          "term": "Panel group",
+          "body": "Several panels that sell one product together. Each purchase gets a config on every healthy panel in the group, so if one fails the others keep working."
+        },
+        "shared": {
+          "term": "Shared and dedicated inbounds",
+          "body": "By default every group on a panel sells on that panel's ticked inbounds (shared). Give a group dedicated inbounds and those belong to that group alone."
+        },
+        "drain": {
+          "term": "Drain",
+          "body": "Taking a panel out of a group gently: it gets no new configs, its users move to the group's other panels without being cut off, and then it leaves the group."
+        }
+      }
+    },
+    "tabs": {
+      "panels": "Panels",
+      "groups": "Groups",
+      "reports": "Reports",
+      "attention": "{{n}} need attention",
+      "panelsHint": "The servers you registered. Open a panel's \"Settings\" to see and change its address, the inbounds it sells and its login.",
+      "reportsHint": "Changes seen on panels and usage held back for review. Usually empty; if a number shows, take a look."
+    },
+    "status": {
+      "ready": {
+        "label": "Ready to sell",
+        "hint": "The panel is accepted and healthy; new configs are created on it."
+      },
+      "limited": {
+        "label": "Ready, with limits",
+        "hint": "Accepted, but it did not answer yes to every test question; metered sales may be off on it. Details: Settings → Test result."
+      },
+      "testing": {
+        "label": "Being tested",
+        "hint": "Give it under a minute; the result shows up here by itself."
+      },
+      "refused": {
+        "label": "Refused",
+        "hint": "This panel failed the connection test and nothing is sold on it. Why is under Settings → Test result."
+      },
+      "problem": {
+        "label": "Needs attention",
+        "hint": "Accepted, but something is stopping it right now:"
+      },
+      "archived": {
+        "label": "Archived",
+        "hint": "No longer tested or collected."
+      }
+    },
+    "panelSheet": {
+      "open": "Settings",
+      "title": "{{panel}} settings",
+      "tabs": {
+        "general": "Details & connection",
+        "sales": "Inbounds & sales",
+        "capabilities": "Test result",
+        "status": "Status"
+      },
+      "salesIntro": "Choose which of this panel's inbounds buyers are created on. This applies to every group the panel is in, unless you set a group apart (Groups → Selling settings).",
+      "pushNoSales": "This is a push (RADIUS) panel: we never connect to it, so it has no inbounds to choose.",
+      "loginHint": "If you changed the panel's password, give the new login here."
+    },
+    "member": {
+      "title": "Selling \"{{group}}\" on {{panel}}",
+      "intro": "By default this group sells on this panel exactly as the panel's own settings say. Pick \"own\" only where this group should differ here. A change applies from the next buyer; existing configs are untouched.",
+      "placement": "How many inbounds does a config go on?",
+      "cap": "Most users of this group on this panel",
+      "inbounds": "On which inbounds?",
+      "samePanel": "Same as the panel",
+      "samePanelValue": "Same as the panel — now: {{value}}",
+      "own": "Set for this group",
+      "noCap": "No cap",
+      "capHint": "This group's cap cannot go above the panel's own.",
+      "pool": "The panel's shared inbounds",
+      "poolHint": "The inbounds ticked for sale in the panel's settings, except those another group has taken as dedicated.",
+      "ownInbounds": "Inbounds dedicated to this group",
+      "ownInboundsHint": "The inbounds you tick belong to this group alone; other groups stop selling on them.",
+      "save": "Save",
+      "saved": "Saved. This group's next buyer is created with these settings.",
+      "summary": {
+        "same": "Sells as the panel does",
+        "custom": "Has its own selling settings"
+      },
+      "leave": {
+        "title": "Take this panel out of the group",
+        "hint": "\"Remove\" works only while no user has a config on this panel. If some do, \"Drain\" moves them to the group's other panels without cutting them off."
+      },
+      "invalid": {
+        "cap": "Write a whole number from 1 to 1,000,000, or pick \"Same as the panel\".",
+        "pickOne": "Tick at least one inbound, or pick \"The panel's shared inbounds\"."
+      }
+    },
+    "groupCard": {
+      "meta": "{{members}} panels · {{variants}} products · subscription refresh every {{wait}}",
+      "noProduct": "No product is sold on this group yet. To start selling, pick this group for a VPN product in the catalog.",
+      "toCatalog": "Go to the catalog",
+      "addOpen": "Add a panel"
     }
   },
   "shop": {

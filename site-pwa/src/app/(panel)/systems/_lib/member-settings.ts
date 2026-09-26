@@ -22,32 +22,68 @@ export const LAYER_KEYS: Record<SellingLayer, string> = {
 const MAX_CAP = 1_000_000;
 
 /**
- * The two settings `mirror` reads. `priority` / `weight` are not asked — no
- * fulfilled strategy reads them (panel-web rule 11). Empty = inherit (null):
- * a member cannot set "no cap" under a capped panel (network rule 4a).
+ * The member sheet (F-027-ck): each setting says outright whether it follows
+ * the panel or is this group's own, instead of an empty field meaning
+ * "inherit". `priority` / `weight` are not asked — no fulfilled strategy reads
+ * them (panel-web rule 11). "Same as the panel" is null on the wire; there is
+ * no "no cap" of the member's own, since a member cannot lift a capped panel
+ * (network rule 4a). Inbounds: the panel's shared ones (`[]`) or this group's
+ * own set, which then only it sells on (billing rule 24c).
  */
-export type MemberForm = { placement: InboundPlacement | ""; maxClients: string };
+export type MemberChoice = {
+  placementMode: "panel" | "own";
+  placement: InboundPlacement;
+  capMode: "panel" | "own";
+  maxClients: string;
+  inboundsMode: "pool" | "own";
+  picked: string[];
+};
 
-export function memberFormOf(member: PanelGroupMember): MemberForm {
-  return { placement: member.inboundPlacement ?? "", maxClients: member.maxClients === null ? "" : String(member.maxClients) };
+/** What the member holds; an "own" value starts from what is in force (the panel's, once read), so switching to it changes nothing yet. */
+export function memberChoiceOf(member: PanelGroupMember, panel: PanelInbounds | null): MemberChoice {
+  return {
+    placementMode: member.inboundPlacement === null ? "panel" : "own",
+    placement: member.inboundPlacement ?? panel?.effective.inboundPlacement.value ?? member.effective.inboundPlacement.value,
+    capMode: member.maxClients === null ? "panel" : "own",
+    maxClients: member.maxClients === null ? "" : String(member.maxClients),
+    inboundsMode: member.inbounds.length > 0 ? "own" : "pool",
+    picked: member.inbounds,
+  };
 }
 
-export type MemberValidation = { ok: true; body: MemberSellingBody } | { ok: false; errors: Partial<Record<keyof MemberForm | "form", string>> };
+export type MemberChoiceErrors = Partial<Record<"maxClients" | "inbounds" | "form", string>>;
 
-/** billing's member `PATCH` over what changed: an untouched setting is never re-sent, and an edit changing nothing is refused here. */
-export function validateMember(form: MemberForm, member: PanelGroupMember): MemberValidation {
-  const body: MemberSellingBody = {};
-  const placement = form.placement === "" ? null : form.placement;
-  if (placement !== member.inboundPlacement) body.inboundPlacement = placement;
+/** Two writes behind one save: the settings `PATCH` (only what differs) and the inbounds `PUT` (the whole set), each null when unchanged. */
+export type MemberChoiceValidation =
+  | { ok: true; settings: MemberSellingBody | null; inbounds: string[] | null }
+  | { ok: false; errors: MemberChoiceErrors };
 
-  const text = form.maxClients.trim();
-  const n = Number(text);
-  if (text !== "" && !(Number.isInteger(n) && n >= 1 && n <= MAX_CAP)) return { ok: false, errors: { maxClients: K.inbounds.invalid.cap } };
-  const cap = text === "" ? null : n;
-  if (cap !== member.maxClients) body.maxClients = cap;
+const byRemoteId = (a: string, b: string) => a.localeCompare(b, "en", { numeric: true });
 
-  if (Object.keys(body).length === 0) return { ok: false, errors: { form: K.inbounds.invalid.unchanged } };
-  return { ok: true, body };
+export function validateMemberChoice(form: MemberChoice, member: PanelGroupMember): MemberChoiceValidation {
+  const errors: MemberChoiceErrors = {};
+  const settings: MemberSellingBody = {};
+
+  const placement = form.placementMode === "panel" ? null : form.placement;
+  if (placement !== member.inboundPlacement) settings.inboundPlacement = placement;
+
+  let cap: number | null = null;
+  if (form.capMode === "own") {
+    const n = Number(form.maxClients.trim());
+    if (form.maxClients.trim() === "" || !(Number.isInteger(n) && n >= 1 && n <= MAX_CAP)) errors.maxClients = K.member.invalid.cap;
+    else cap = n;
+  }
+  if (!errors.maxClients && cap !== member.maxClients) settings.maxClients = cap;
+
+  const next = form.inboundsMode === "pool" ? [] : [...new Set(form.picked)].sort(byRemoteId);
+  if (form.inboundsMode === "own" && next.length === 0) errors.inbounds = K.member.invalid.pickOne;
+  const held = [...member.inbounds].sort(byRemoteId);
+  const inboundsChanged = next.length !== held.length || next.some((id, i) => id !== held[i]);
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  const hasSettings = Object.keys(settings).length > 0;
+  if (!hasSettings && !inboundsChanged) return { ok: false, errors: { form: K.inbounds.invalid.unchanged } };
+  return { ok: true, settings: hasSettings ? settings : null, inbounds: inboundsChanged ? next : null };
 }
 
 export type InboundChoice = {
@@ -71,18 +107,6 @@ export function inboundChoices(view: PanelInbounds, groupId: string): InboundCho
       heldBy: i.assignedTo && i.assignedTo.id !== groupId ? i.assignedTo : null,
       takesNobody: !i.sold || !i.enabled || !sellable(i),
     }));
-}
-
-export type MemberInboundsValidation = { ok: true; inbounds: string[] } | { ok: false; error: string };
-
-const byRemoteId = (a: string, b: string) => a.localeCompare(b, "en", { numeric: true });
-
-/** The `PUT` is the whole set; `[]` is the pool again, always allowed. One equal to what the member holds is refused here. */
-export function validateMemberInbounds(picked: readonly string[], member: PanelGroupMember): MemberInboundsValidation {
-  const next = [...new Set(picked)].sort(byRemoteId);
-  const held = [...member.inbounds].sort(byRemoteId);
-  if (next.length === held.length && next.every((id, i) => id === held[i])) return { ok: false, error: K.inbounds.invalid.unchanged };
-  return { ok: true, inbounds: next };
 }
 
 /**

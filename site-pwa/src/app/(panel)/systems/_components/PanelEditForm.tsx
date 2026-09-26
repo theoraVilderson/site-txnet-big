@@ -4,20 +4,21 @@ import { useState, type ReactNode } from "react";
 import { Globe, KeyRound, SlidersHorizontal, Tag, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type SystemsPanel } from "@/lib/billing-api";
-import { Alert, Field, Sheet, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
+import { Alert, Field, input, primaryButton } from "../../catalog/_components/catalog-ui";
 import { addressChanged, panelEditFormOf, validatePanelEdit, type PanelEditForm } from "../_lib/panel-lifecycle";
 import { SYSTEMS_KEYS as K, resubmitOutcome } from "../_lib/systems";
 import { BAD, useSystemsError } from "./parts";
 
 /**
- * Every setting of one panel in one sheet (F-027-cb -> billing F-027-by),
+ * Every setting of one panel in one form (F-027-cb -> billing F-027-by), the
+ * first section of the panel's settings sheet (F-027-ck),
  * grouped as the admin thinks of them: name and region, where it is reached,
  * how hard we may poll it, and its login. Only what differs is sent
  * (`validatePanelEdit`); a changed address is warned about before the save,
  * since it re-tests the panel and pauses its collection. A new login goes to
  * its own route after the settings, and is cleared from state with the sheet.
  */
-export function PanelEditSheet({ panel, onClose, onSaved }: { panel: SystemsPanel; onClose: () => void; onSaved: (sentence: string) => Promise<void> }) {
+export function PanelEditForm({ panel, onSaved }: { panel: SystemsPanel; onSaved: (sentence: string) => Promise<void> }) {
   const { t } = useLocale();
   const message = useSystemsError();
   const [form, setForm] = useState<PanelEditForm>(() => panelEditFormOf(panel));
@@ -56,20 +57,7 @@ export function PanelEditSheet({ panel, onClose, onSaved }: { panel: SystemsPane
   };
 
   return (
-    <Sheet
-      title={t("common", K.edit.title, { panel: panel.name })}
-      onClose={onClose}
-      footer={
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <button type="button" onClick={onClose} className={quietButton}>
-            {t("common", K.groups.cancel)}
-          </button>
-          <button type="button" disabled={busy} onClick={() => void save()} className={primaryButton}>
-            {t("common", K.edit.submit)}
-          </button>
-        </div>
-      }
-    >
+    <div className="flex flex-col gap-4">
       <Group icon={<Tag size={14} aria-hidden />} title={t("common", K.edit.basics)}>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t("common", K.register.field.name)} error={error("name")}>
@@ -127,7 +115,12 @@ export function PanelEditSheet({ panel, onClose, onSaved }: { panel: SystemsPane
 
       {errors.form && <Alert>{t("common", errors.form)}</Alert>}
       {failure && <Alert>{failure}</Alert>}
-    </Sheet>
+      <div className="flex justify-end">
+        <button type="button" disabled={busy} onClick={() => void save()} className={primaryButton}>
+          {t("common", K.edit.submit)}
+        </button>
+      </div>
+    </div>
   );
 }
 

@@ -2,7 +2,7 @@
 id: panel-web
 layer: interface
 status: active
-version: 33
+version: 34
 updated: 2026-09-26
 ---
 
@@ -10,8 +10,8 @@ updated: 2026-09-26
 
 A topic file of [contract.md](contract.md) (§10). One page, `/systems`
 (`PANEL_SYSTEMS`), under `(panel)/systems/`: `page.tsx` is a server shell,
-`_components/SystemsView.tsx` the screen (register form, panel list with its
-capability matrix, drift report, holds queue), and `_lib/systems.ts` its rules.
+`_components/SystemsView.tsx` the screen (guide, then tabs: panels, groups,
+reports — drift and holds), and `_lib/systems.ts` its rules.
 It is the panel end of billing's systems routes — the routes, the scope and
 every write are [billing/contract.systems.md](../../domains/billing/contract.systems.md)'s
 (F-027-ar/as/at), and the panel groups section (`PanelGroups.tsx`, rules
@@ -96,8 +96,9 @@ The *why* is **ADR-0080**.
    pair's (network `contract.groups.md` rule 6), never as on / off.
 
 11. **Panel groups: where a VPN variant's Grants are placed** (F-027-bx,
-   network `contract.groups.md`). A group lists its members with their
-   panel's review and state, and says how many fulfilment can place on —
+   network `contract.groups.md`). A group lists its members — whether new
+   configs go on each and, when not, the review or state that stops it — and
+   says how many fulfilment can place on —
    `memberPlaceable` is groups rule 8's own test (not `drain`, accepted,
    `healthy`) — against `minHealthyPanels`; a group short of it is an error
    tone, since a Grant sold there never activates. The form mirrors
@@ -109,9 +110,10 @@ The *why* is **ADR-0080**.
    schema is never re-sent untouched, and one that changes nothing is refused
    here. The add picker offers registered panels the group does not hold,
    never a refused one (`addablePanels`). **Drain, not remove, is the answer
-   to a member in use:** both are offered only on a member not already
-   draining (`canDrain`, `canRemove`); a remove answered 409
-   `member_has_configs` says so. Drain asks once, states the least wait
+   to a member in use:** both sit in one "take out of the group" sheet, said
+   side by side, only on a member not already draining (`canDrain`,
+   `canRemove`); a remove answered 409 `member_has_configs` says so. Drain
+   states the least wait
    (`DRAIN_TTL_MULTIPLE × subscriptionTtlSeconds`, the sweep's constant,
    `waitOf` rounding up), and a draining member reads "no sooner than"
    `drainEarliestAt` — never "at", since a Grant whose replacement is served
@@ -120,8 +122,9 @@ The *why* is **ADR-0080**.
    A group names no protocol: its panels' picked inbounds do (rule 12).
 12. **A panel's inbounds: which ones a buyer is placed on** (F-114-b,
    `PanelInbounds.tsx`, billing rule 25, network `contract.inbounds.md`).
-   "Inbounds" on a pull panel's row (a push panel is never called, so has
-   none) opens what the last read found, when, and the panel's users. The
+   The settings sheet's "Inbounds & sales" on a pull panel (a push panel is
+   never called, so has none, and says so) shows what the last read found,
+   when, and the panel's users. The
    admin ticks inbounds, picks `all` or `spread` (each said in a sentence),
    and sets the panel's and each inbound's user cap, empty = none. Only a
    sellable inbound can be ticked — a gone one, or one of a protocol we do
@@ -136,16 +139,18 @@ The *why* is **ADR-0080**.
    an inbound a group has taken names it (`assignedTo`): only it sells there.
 
 13. **A panel is edited in one sheet** (F-027-cb -> billing F-027-by,
-   `PanelEditSheet.tsx`, rules `_lib/panel-lifecycle.ts`). "Edit" on the card
-   opens name and region, addresses, request budget and login, grouped; a
+   `PanelSheet.tsx` -> `PanelEditForm.tsx`, rules `_lib/panel-lifecycle.ts`).
+   "Settings" on the card opens it on details and connection — name and
+   region, addresses, request budget and login, grouped — beside the
+   inbounds (rule 12), the test's answer (rule 3) and the health; a
    push panel is asked only its NAS IP (billing `not_for_transport`).
    `validatePanelEdit` mirrors `updatePanelSchema` and sends **only what
    differs** — an untouched form is refused here — and a changed API or link
    address is warned about before the save (`addressChanged`): it re-tests
    the panel and pauses its collection. A typed login goes to rule 8's route
-   after the settings; blank keeps the stored one. The card keeps edit,
-   inbounds and capabilities in view; a new login, a RADIUS secret and delete
-   sit behind "more" (`ActionsMenu`).
+   after the settings; blank keeps the stored one. A new login, a RADIUS
+   secret and delete sit behind the card's "more" (`ActionsMenu`), each in
+   its own sheet.
 14. **Delete says what it will do** (F-027-cb -> billing F-027-bz). The
    sheet says a panel with no history is deleted and one with history
    archived; a panel a group holds gets no button — the groups are named
@@ -155,30 +160,42 @@ The *why* is **ADR-0080**.
    their count (`visiblePanels`), read as archived with when, and offer only
    restore; the add-member picker never offers one (`addablePanels`).
 15. **A group is created, edited and deleted in a sheet** (F-027-cb ->
-   billing F-027-ca). The card names members, variants and refresh as pills;
+   billing F-027-ca). The card names members, variants and refresh in a line,
+   and a group no variant names says so, linking to the catalog;
    delete is offered with its blocker said first (`groupDeleteBlock`:
    members, then variants), and the button only on an empty, unsold group.
 16. **How one group sells on one panel** (F-027-ci -> billing rules 24b–24c,
-   `_lib/member-settings.ts`). Every member shows its placement, cap and
-   inbounds **with the layer each comes from** — member, panel, platform —
-   so an admin changes the right one. "Selling settings" reads the panel's
-   inbounds and offers the member's own placement and cap, **empty =
-   inherit** (null), with the inherited value and its layer shown; there is
-   no "no cap" for a member, which cannot lift a capped panel (network rule
-   4a). `priority` / `weight` stay unasked (rule 11). The save sends only what
-   differs (`validateMember`). Below it, the membership's inbounds: none
-   ticked sells the panel's pool; ticking takes an inbound out of it. One
+   `_lib/member-settings.ts`). Every member says whether it sells as its
+   panel does or has its own settings. "Selling settings" is one sheet with
+   one save that reads the panel's inbounds and asks each setting **as a
+   choice — "same as the panel" (null, with the panel's value in force shown)
+   or this group's own** (F-027-ck; never an empty field meaning inherit).
+   There is no "no cap" for a member, which cannot lift a capped panel
+   (network rule 4a). `priority` / `weight` stay unasked (rule 11). The
+   inbounds are the same choice: the panel's shared ones (`[]`), or this
+   group's own, at least one ticked, which takes each out of the pool.
+   `validateMemberChoice` sends the settings `PATCH` only for what differs,
+   then the inbounds `PUT` only when the set changed. One
    another group holds is shown with that group and never offered, a gone one
    only while held (to let it go), and one not on sale or disabled on the
-   panel is marked as taking nobody (`inboundChoices`). The save is the whole
-   set (`validateMemberInbounds`); a membership whose set — or pool — has
-   nothing live says it places nobody (`sellsNobody`). Both re-read.
+   panel is marked as taking nobody (`inboundChoices`); a choice whose set —
+   or pool — has nothing live says it places nobody (`sellsNobody`), as the
+   ticks change. A save or a refusal re-reads.
 17. **A refusal names its holder** (F-027-ci). Billing sends the holder of
    `panel_already_registered`, `inbound_assigned_elsewhere` and
    `inbound_has_configs` as `facts` ids only; `refusalSentence` names it from
    the panels and groups the page read (`HolderNamesContext`), so a holder
    outside the reader's scope (billing F-027-cj) or none sent reads as the
    plain sentence. A refused duplicate's card names `review.duplicateOf`.
+18. **Learnable by someone who has never used it** (F-027-ck,
+   `_lib/systems-guide.ts`). A guide of four steps — register, accepted,
+   a group with a member, a variant on a group — each ticked only by what the
+   page read (`guideOf`), the first undone one leading to where it is done,
+   and the page's words explained once. Closing it is remembered per browser
+   and never needed. Each tab is badged with what needs a hand
+   (`attentionOf`: refused or stopped panels, short groups, open drift). A
+   panel card is one status (`panelStatusOf`, the worst first) and the
+   sentence behind it.
 ## Proof
 
 `systems/register-wizard.test.ts` — rule 10: the steps, each blocking on its own fields, the family profiles (the ready set read out of `opener.go`), the composed login, the IP an address names.
@@ -190,6 +207,7 @@ billing's `SystemsRejection` / `PanelScopeRejection` / `ResubmitRejection`),
 `refusedBecause`, `canResubmit`, `validateLogin`, `resubmitOutcome`, the
 RADIUS secret's predicates and limits, the hold
 and drift predicates, `validateNote`, the menu entry, every key in `en` and `fa`.
-`systems/member-settings.test.ts` — rules 16–17: `LAYER_KEYS` against billing's `SellingLayer`, `validateMember` (inherit as null, only what changed), `inboundChoices`, `validateMemberInbounds`, `sellsNobody`, `refusalSentence` named and plain.
+`systems/member-settings.test.ts` — rules 16–17: `LAYER_KEYS` against billing's `SellingLayer`, `inboundChoices`, `sellsNobody`, `refusalSentence` named and plain.
+`systems/systems-guide.test.ts` — rules 16 and 18: `guideOf`, `panelStatusOf`, `attentionOf`; `memberChoiceOf` / `validateMemberChoice` ("same as the panel" as null, an own cap, own inbounds needing one, only what changed).
 `systems/panel-lifecycle.test.ts` — rules 13–15: only what changed is sent, the untouched form refused, the address warning, a push panel's fields, `groupsHolding`, both delete outcomes, `groupDeleteBlock`, `visiblePanels`.
 `systems/panel-groups.test.ts` — rule 11: `ConfigProtocol` and `PanelGroupMemberRole` read out of `network.prisma`; rule 12: `InboundPlacement` and the two inbound refusals from their homes, `validateInbounds` (only what changed, caps, never an unsellable tick), `inboundNote`, `nothingPicked`; the drain multiple out of `group-drain.ts`, `validateGroup` (create, limits, an edit sending only what changed), `memberPlaceable`, `groupHealth`, `addablePanels`, `canDrain` / `canRemove`, `drainEarliestAt`, `waitOf`.

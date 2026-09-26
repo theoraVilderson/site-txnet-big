@@ -1,22 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Layers, Loader2, Pencil, Plus, SlidersHorizontal, Trash2, TriangleAlert } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { ArrowLeft, Layers, Loader2, LogOut, Pencil, Plus, SlidersHorizontal, Trash2, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
+import { PANEL_CATALOG } from "@/lib/routes";
 import { billingApi, type PanelGroup, type PanelGroupMember, type PanelInbounds, type SystemsPanel } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
 import { Alert, Field, Sheet, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { groupDeleteBlock } from "../_lib/panel-lifecycle";
 import { INBOUND_PLACEMENTS, PLACEMENT_KEYS } from "../_lib/panel-inbounds";
-import {
-  LAYER_KEYS,
-  inboundChoices,
-  memberFormOf,
-  sellsNobody,
-  validateMember,
-  validateMemberInbounds,
-  type MemberForm,
-} from "../_lib/member-settings";
+import { inboundChoices, memberChoiceOf, sellsNobody, validateMemberChoice, type MemberChoice, type MemberChoiceErrors } from "../_lib/member-settings";
 import {
   DRAIN_TTL_MULTIPLE,
   MEMBER_ROLE_KEYS,
@@ -33,13 +27,12 @@ import {
   type GroupForm,
 } from "../_lib/panel-groups";
 import { PANEL_STATE_KEYS, REVIEW_KEYS, SYSTEMS_KEYS } from "../_lib/systems";
-import { BAD, CardButton, GOOD, ListState, Notice, Pill, QUIET, REVIEW_TONE, STATE_TONE, Section, useSystemsError } from "./parts";
+import { ActionsMenu, BAD, CardButton, GOOD, ListState, Notice, Pill, QUIET, REVIEW_TONE, STATE_TONE, Section, useSystemsError } from "./parts";
 
 const K = SYSTEMS_KEYS.groups;
 
 const INPUT = "rounded-xl border border-card-border bg-card-bg px-3 py-2 text-sm text-text-primary";
 const PRIMARY = "rounded-xl bg-primary px-4 py-2 text-xs font-bold text-text-on-accent disabled:opacity-50";
-const SECONDARY = "rounded-xl px-4 py-2 text-xs font-medium text-text-secondary hover:bg-leaf-bg";
 
 /** "2 h", "3 days" — a wait as the sweep counts it, never rounded down. */
 function useWait(): (seconds: number) => string {
@@ -264,19 +257,22 @@ function GroupCard({
             <Layers size={14} className="text-primary" aria-hidden />
             {group.name}
           </span>
-          <span className="flex flex-wrap gap-2">
-            <Pill tone={QUIET}>{t("common", SYSTEMS_KEYS.groupsMembersCount, { n: String(group.members.length) })}</Pill>
-            <Pill tone={QUIET}>{t("common", K.variants, { n: String(group.variantCount) })}</Pill>
-            <Pill tone={QUIET}>{t("common", K.ttl, { wait: wait(group.subscriptionTtlSeconds) })}</Pill>
+          <span className="text-[11px] text-text-secondary">
+            {t("common", SYSTEMS_KEYS.groupCard.meta, {
+              members: String(group.members.length),
+              variants: String(group.variantCount),
+              wait: wait(group.subscriptionTtlSeconds),
+            })}
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           <CardButton icon={<Pencil size={14} aria-hidden />} onClick={() => setSheet("edit")}>
             {t("common", K.edit)}
           </CardButton>
-          <CardButton icon={<Trash2 size={14} aria-hidden />} tone="error" onClick={() => setSheet("delete")}>
-            {t("common", SYSTEMS_KEYS.groupsRemove.action)}
-          </CardButton>
+          <ActionsMenu
+            label={t("common", SYSTEMS_KEYS.panels.more)}
+            items={[{ label: t("common", SYSTEMS_KEYS.groupsRemove.action), icon: <Trash2 size={14} aria-hidden />, tone: "error", onSelect: () => setSheet("delete") }]}
+          />
         </div>
       </div>
 
@@ -284,6 +280,15 @@ function GroupCard({
         {health.short && <TriangleAlert size={14} className="mt-0.5 shrink-0" aria-hidden />}
         {t("common", health.short ? K.health.short : K.health.ok, { placeable: String(health.placeable), min: String(health.min) })}
       </p>
+      {group.variantCount === 0 && (
+        <div className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs leading-5 ${QUIET}`}>
+          <span className="min-w-0 flex-1">{t("common", SYSTEMS_KEYS.groupCard.noProduct)}</span>
+          <Link href={PANEL_CATALOG} className="inline-flex items-center gap-1 font-bold text-primary">
+            {t("common", SYSTEMS_KEYS.groupCard.toCatalog)}
+            <ArrowLeft size={14} className="ltr:rotate-180" aria-hidden />
+          </Link>
+        </div>
+      )}
 
       {sheet === "edit" && (
         <GroupEditor
@@ -324,33 +329,22 @@ function GroupCard({
   );
 }
 
+/** Whether the member overrides anything of its panel's (billing rules 24b–24c). */
+const isCustom = (m: PanelGroupMember) => m.inboundPlacement !== null || m.maxClients !== null || m.inbounds.length > 0;
+
+/**
+ * One member in a line (F-027-ck): whether new configs go on it and, when
+ * not, why; whether it sells as its panel does. Its selling settings open in
+ * a sheet; taking it out of the group — remove or drain — in another.
+ */
 function MemberRow({ group, member, onChanged }: { group: PanelGroup; member: PanelGroupMember; onChanged: () => Promise<void> }) {
   const { lang, t } = useLocale();
-  const message = useSystemsError();
   const wait = useWait();
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-  const [started, setStarted] = useState<number | null>(null);
-  const [settings, setSettings] = useState(false);
-
-  const run = async (call: () => Promise<unknown>) => {
-    setBusy(true);
-    setFailure(null);
-    try {
-      await call();
-      setConfirming(false);
-    } catch (e) {
-      setFailure(message(e));
-    } finally {
-      // A refusal re-reads too: `already_draining` or `member_not_found` means the list is stale.
-      await onChanged();
-      setBusy(false);
-    }
-  };
-
+  const [sheet, setSheet] = useState<"settings" | "leave" | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const earliest = drainEarliestAt(member, group);
   const placeable = memberPlaceable(member);
+  const leaving = canDrain(member) || canRemove(member);
 
   return (
     <li className="flex flex-col gap-2 py-3 text-xs">
@@ -358,267 +352,355 @@ function MemberRow({ group, member, onChanged }: { group: PanelGroup; member: Pa
         <div className="flex min-w-0 flex-col gap-1">
           <span className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-bold text-text-primary">{member.panelName}</span>
-            <Pill tone={member.role === "drain" ? BAD : QUIET}>{t("common", MEMBER_ROLE_KEYS[member.role])}</Pill>
-            <Pill tone={REVIEW_TONE[member.reviewState]}>{t("common", REVIEW_KEYS[member.reviewState])}</Pill>
-            <Pill tone={STATE_TONE[member.panelState]}>{t("common", PANEL_STATE_KEYS[member.panelState])}</Pill>
+            {member.role === "drain" ? (
+              <Pill tone={BAD}>{t("common", MEMBER_ROLE_KEYS.drain)}</Pill>
+            ) : (
+              <Pill tone={placeable ? GOOD : QUIET}>{t("common", placeable ? K.members.placed : K.members.waiting)}</Pill>
+            )}
+            {/* Why it waits: only the column that is not yet well. */}
+            {member.role !== "drain" && !placeable && member.reviewState !== "accepted" && member.reviewState !== "accepted_low_trust" && (
+              <Pill tone={REVIEW_TONE[member.reviewState]}>{t("common", REVIEW_KEYS[member.reviewState])}</Pill>
+            )}
+            {member.role !== "drain" && !placeable && member.panelState !== "healthy" && (
+              <Pill tone={STATE_TONE[member.panelState]}>{t("common", PANEL_STATE_KEYS[member.panelState])}</Pill>
+            )}
           </span>
-          {member.role !== "drain" && (
-            <span className={placeable ? "text-primary" : "text-text-secondary"}>
-              {t("common", placeable ? K.members.placed : K.members.waiting)}
-            </span>
-          )}
-          {earliest && member.drainingSince && (
+          {earliest && member.drainingSince ? (
             <span className="text-text-secondary">
               {t("common", K.drain.since, { since: formatInstant(member.drainingSince, lang) ?? member.drainingSince, at: formatInstant(earliest, lang) ?? earliest })}
             </span>
+          ) : (
+            <span className={isCustom(member) ? "font-bold text-primary" : "text-text-secondary"}>
+              {t("common", isCustom(member) ? SYSTEMS_KEYS.member.summary.custom : SYSTEMS_KEYS.member.summary.same)}
+            </span>
           )}
-          <MemberSummary member={member} />
         </div>
-        {!confirming && (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              aria-pressed={settings}
-              onClick={() => setSettings((open) => !open)}
-              className="inline-flex items-center gap-1 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg"
-            >
-              <SlidersHorizontal size={14} aria-hidden />
-              {t("common", K.settings.action)}
-            </button>
-            {canDrain(member) && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setConfirming(true)}
-                className="rounded-xl border border-error-border px-3 py-2 text-xs font-bold text-error hover:bg-error-bg disabled:opacity-50"
-              >
-                {t("common", K.drain.action)}
-              </button>
-            )}
-            {canRemove(member) && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void run(() => billingApi.removePanelGroupMember(group.id, member.panelId))}
-                className="rounded-xl px-3 py-2 text-xs font-medium text-text-secondary hover:bg-leaf-bg disabled:opacity-50"
-              >
-                {t("common", K.remove)}
-              </button>
-            )}
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <CardButton icon={<SlidersHorizontal size={14} aria-hidden />} onClick={() => (setSheet("settings"), setNotice(null))}>
+            {t("common", K.settings.action)}
+          </CardButton>
+          {leaving && (
+            <ActionsMenu
+              label={t("common", SYSTEMS_KEYS.panels.more)}
+              items={[{ label: t("common", SYSTEMS_KEYS.member.leave.title), icon: <LogOut size={14} aria-hidden />, tone: "error", onSelect: () => (setSheet("leave"), setNotice(null)) }]}
+            />
+          )}
+        </div>
       </div>
-      {settings && <MemberSettings group={group} member={member} onChanged={onChanged} />}
-      {confirming && (
-        <div className="flex flex-col gap-3 rounded-2xl border border-error-border bg-bg-inner p-4">
-          <p className="text-sm font-bold text-error">{t("common", K.drain.confirmTitle, { panel: member.panelName })}</p>
-          <p className="leading-5 text-text-secondary">{t("common", K.drain.confirmHint, { wait: wait(DRAIN_TTL_MULTIPLE * group.subscriptionTtlSeconds) })}</p>
-          <div className="flex flex-wrap gap-2">
+      {notice && <Notice tone="good">{notice}</Notice>}
+      {sheet === "settings" && (
+        <MemberSheet
+          group={group}
+          member={member}
+          onClose={() => setSheet(null)}
+          onSaved={async () => {
+            setSheet(null);
+            setNotice(t("common", SYSTEMS_KEYS.member.saved));
+            await onChanged();
+          }}
+          onChanged={onChanged}
+        />
+      )}
+      {sheet === "leave" && (
+        <LeaveSheet
+          group={group}
+          member={member}
+          onClose={() => setSheet(null)}
+          onDone={async (sentence) => {
+            setSheet(null);
+            if (sentence) setNotice(sentence);
+            await onChanged();
+          }}
+          onChanged={onChanged}
+          wait={wait}
+        />
+      )}
+    </li>
+  );
+}
+
+/**
+ * Taking a member out of its group, both ways said side by side (rule 11):
+ * remove while nothing is on it, drain — with its least wait — while users
+ * are. A refusal re-reads too: `already_draining` or `member_not_found`
+ * means the list is stale.
+ */
+function LeaveSheet({
+  group,
+  member,
+  onClose,
+  onDone,
+  onChanged,
+  wait,
+}: {
+  group: PanelGroup;
+  member: PanelGroupMember;
+  onClose: () => void;
+  onDone: (sentence: string | null) => Promise<void>;
+  onChanged: () => Promise<void>;
+  wait: (seconds: number) => string;
+}) {
+  const { t } = useLocale();
+  const message = useSystemsError();
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const run = async (call: () => Promise<string | null>) => {
+    setBusy(true);
+    setFailure(null);
+    try {
+      await onDone(await call());
+    } catch (e) {
+      setFailure(message(e));
+      await onChanged();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Sheet title={t("common", K.drain.confirmTitle, { panel: member.panelName })} onClose={onClose}>
+      <p className="text-sm leading-6 text-text-secondary">{t("common", SYSTEMS_KEYS.member.leave.hint)}</p>
+      {canDrain(member) && (
+        <div className="flex flex-col gap-2 rounded-2xl border border-error-border bg-bg-inner p-4">
+          <p className="text-xs leading-5 text-text-secondary">{t("common", K.drain.confirmHint, { wait: wait(DRAIN_TTL_MULTIPLE * group.subscriptionTtlSeconds) })}</p>
+          <div>
             <button
               type="button"
               disabled={busy}
               onClick={() =>
                 void run(async () => {
                   const answer = await billingApi.drainPanelGroupMember(group.id, member.panelId);
-                  setStarted(answer.waitSeconds);
+                  return t("common", K.drain.started, { wait: wait(answer.waitSeconds) });
                 })
               }
               className="rounded-xl border border-error-border bg-error-bg px-4 py-2 text-xs font-bold text-error disabled:opacity-50"
             >
               {t("common", K.drain.submit)}
             </button>
-            <button type="button" onClick={() => setConfirming(false)} className={SECONDARY}>
-              {t("common", K.cancel)}
-            </button>
           </div>
         </div>
       )}
-      {started !== null && member.role === "drain" && (
-        <p role="status" className="font-bold text-primary">
-          {t("common", K.drain.started, { wait: wait(started) })}
-        </p>
+      {canRemove(member) && (
+        <div>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void run(async () => (await billingApi.removePanelGroupMember(group.id, member.panelId), null))}
+            className="rounded-xl border border-card-border px-4 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:opacity-50"
+          >
+            {t("common", K.remove)}
+          </button>
+        </div>
       )}
-      {failure && (
-        <p role="alert" className="font-bold text-error">
-          {failure}
-        </p>
-      )}
-    </li>
+      {failure && <Notice tone="bad">{failure}</Notice>}
+    </Sheet>
   );
 }
 
-/** What the member sells with, each value beside the layer it comes from (billing rule 24b), and whose inbounds (rule 24c). */
-function MemberSummary({ member }: { member: PanelGroupMember }) {
-  const { t } = useLocale();
-  const { inboundPlacement: placement, maxClients: cap } = member.effective;
-  const layer = (l: keyof typeof LAYER_KEYS) => t("common", LAYER_KEYS[l]);
+/** "Same as the panel" or this group's own, said as a choice (F-027-ck), with what "the panel" means right now. */
+function Choice({ name, value, onChange, same, own, children }: { name: string; value: "panel" | "own"; onChange: (v: "panel" | "own") => void; same: string; own: string; children?: ReactNode }) {
   return (
-    <span className="flex flex-wrap gap-2">
-      <Pill tone={placement.layer === "member" ? GOOD : QUIET}>
-        {t("common", PLACEMENT_KEYS[placement.value].label)} · {layer(placement.layer)}
-      </Pill>
-      <Pill tone={cap.layer === "member" ? GOOD : QUIET}>
-        {t("common", SYSTEMS_KEYS.inbounds.cap)}: {cap.value === null ? t("common", K.settings.noCap) : cap.value} · {layer(cap.layer)}
-      </Pill>
-      <Pill tone={member.inbounds.length > 0 ? GOOD : QUIET}>
-        {member.inbounds.length > 0 ? t("common", K.settings.own, { count: String(member.inbounds.length) }) : t("common", K.settings.pool)}
-      </Pill>
-    </span>
+    <div className="flex flex-col gap-2">
+      {(["panel", "own"] as const).map((v) => (
+        <label key={v} className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs ${value === v ? "border-primary/40 bg-leaf-bg" : "border-card-border"}`}>
+          <input type="radio" name={name} checked={value === v} onChange={() => onChange(v)} className="mt-0.5 accent-primary" />
+          <span className="font-bold text-text-primary">{v === "panel" ? same : own}</span>
+        </label>
+      ))}
+      {value === "own" && children && <div className="flex flex-col gap-2 ps-6">{children}</div>}
+    </div>
   );
 }
 
 /**
- * How this group sells on this member's panel (F-027-ci): its own placement
- * and cap over the panel's, and the inbounds its membership holds. The
- * panel's inbounds are read when opened — they carry the panel's layer, which
- * is what "inherit" means here, and which group holds each inbound.
+ * How this group sells on this member's panel (F-027-ci, rule 16), in one
+ * sheet with one save (F-027-ck). Each setting is a choice — the panel's,
+ * read from its inbounds view with the value in force, or this group's own —
+ * so nothing hides behind an empty field. The two writes (settings, then
+ * inbounds) run only when changed; a refusal re-reads, since another group
+ * may have taken an inbound meanwhile.
  */
-function MemberSettings({ group, member, onChanged }: { group: PanelGroup; member: PanelGroupMember; onChanged: () => Promise<void> }) {
+function MemberSheet({
+  group,
+  member,
+  onClose,
+  onSaved,
+  onChanged,
+}: {
+  group: PanelGroup;
+  member: PanelGroupMember;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+  onChanged: () => Promise<void>;
+}) {
   const { t } = useLocale();
   const message = useSystemsError();
+  const M = SYSTEMS_KEYS.member;
   const [view, setView] = useState<PanelInbounds | null>(null);
-  const [form, setForm] = useState<MemberForm>(() => memberFormOf(member));
-  const [picked, setPicked] = useState<string[]>(member.inbounds);
-  const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
+  const [form, setForm] = useState<MemberChoice | null>(null);
+  const [errors, setErrors] = useState<MemberChoiceErrors>({});
   const [failure, setFailure] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const read = () => billingApi.panelInbounds(member.panelId).then(setView, (e: unknown) => setFailure(message(e)));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => void read(), [member.panelId]);
+  useEffect(() => {
+    let live = true;
+    billingApi.panelInbounds(member.panelId).then(
+      (v) => {
+        if (!live) return;
+        setView(v);
+        setForm((f) => f ?? memberChoiceOf(member, v));
+      },
+      (e: unknown) => live && setFailure(message(e)),
+    );
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [member.panelId]);
 
-  const act = async (work: () => Promise<unknown>, saved: string) => {
-    setBusy(true);
+  const save = async () => {
+    if (!form) return;
+    const checked = validateMemberChoice(form, member);
+    if (!checked.ok) return setErrors(checked.errors);
+    setErrors({});
     setFailure(null);
-    setStatus(null);
+    setBusy(true);
     try {
-      await work();
-      setStatus(saved);
+      if (checked.settings) await billingApi.updatePanelGroupMember(group.id, member.panelId, checked.settings);
+      if (checked.inbounds) await billingApi.setPanelGroupMemberInbounds(group.id, member.panelId, checked.inbounds);
+      await onSaved();
     } catch (e) {
       setFailure(message(e));
+      await Promise.all([onChanged(), billingApi.panelInbounds(member.panelId).then(setView, () => undefined)]);
     } finally {
-      // A refusal re-reads too: another group may have taken an inbound meanwhile.
-      await Promise.all([onChanged(), read()]);
       setBusy(false);
     }
   };
 
-  const saveSettings = () => {
-    const checked = validateMember(form, member);
-    if (!checked.ok) return setErrors(checked.errors);
-    setErrors({});
-    void act(() => billingApi.updatePanelGroupMember(group.id, member.panelId, checked.body), K.settings.saved);
-  };
-
-  const saveInbounds = () => {
-    const checked = validateMemberInbounds(picked, member);
-    if (!checked.ok) return setErrors({ inbounds: checked.error });
-    setErrors({});
-    void act(() => billingApi.setPanelGroupMemberInbounds(group.id, member.panelId, checked.inbounds), K.settings.savedInbounds);
-  };
-
-  const inherited = view?.effective;
-  const toggle = (remoteId: string, on: boolean) => setPicked((p) => (on ? [...p, remoteId] : p.filter((id) => id !== remoteId)));
+  const set = (change: Partial<MemberChoice>) => setForm((f) => (f ? { ...f, ...change } : f));
+  const panelPlacement = view && t("common", PLACEMENT_KEYS[view.effective.inboundPlacement.value].label);
+  const panelCap = view && (view.effective.maxClients.value === null ? t("common", M.noCap) : String(view.effective.maxClients.value));
+  // What the form would sell right now, so the warning follows the ticks, not the saved row.
+  const preview = form && { ...member, inbounds: form.inboundsMode === "pool" ? [] : form.picked };
 
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-card-border bg-bg-inner p-4">
-      <p className="text-sm font-bold text-text-primary">{t("common", K.settings.title, { panel: member.panelName })}</p>
-      <p className="leading-5 text-text-secondary">{t("common", K.settings.hint)}</p>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-text-secondary">
-          {t("common", K.settings.placement)}
-          <select value={form.placement} onChange={(e) => setForm({ ...form, placement: e.target.value as MemberForm["placement"] })} className={INPUT}>
-            <option value="">
-              {inherited
-                ? t("common", K.settings.inheritValue, { value: `${t("common", PLACEMENT_KEYS[inherited.inboundPlacement.value].label)} (${t("common", LAYER_KEYS[inherited.inboundPlacement.layer])})` })
-                : t("common", K.settings.inherit)}
-            </option>
-            {INBOUND_PLACEMENTS.map((p) => (
-              <option key={p} value={p}>
-                {t("common", PLACEMENT_KEYS[p].label)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-text-secondary">
-          {t("common", K.settings.cap)}
-          <input
-            dir="ltr"
-            inputMode="numeric"
-            value={form.maxClients}
-            placeholder={inherited ? (inherited.maxClients.value === null ? t("common", K.settings.noCap) : String(inherited.maxClients.value)) : ""}
-            onChange={(e) => setForm({ ...form, maxClients: e.target.value })}
-            className={INPUT}
-          />
-          <span className="leading-5">{t("common", K.settings.capHint)}</span>
-          {errors.maxClients && <span className="text-error">{t("common", errors.maxClients)}</span>}
-        </label>
-      </div>
-      {errors.form && <p className="text-error">{t("common", errors.form)}</p>}
-      <div>
-        <button type="button" disabled={busy} onClick={saveSettings} className={PRIMARY}>
-          {t("common", K.settings.save)}
-        </button>
-      </div>
-
-      <p className="border-t border-card-border pt-3 font-bold text-text-primary">{t("common", K.settings.inbounds)}</p>
-      <p className="leading-5 text-text-secondary">{t("common", K.settings.inboundsHint)}</p>
-      {!view ? (
-        <p className="flex items-center gap-2 text-text-secondary">
-          <Loader2 size={14} className="animate-spin" aria-hidden />
-          {t("common", K.settings.loading)}
-        </p>
+    <Sheet
+      title={t("common", M.title, { group: group.name, panel: member.panelName })}
+      onClose={onClose}
+      footer={
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" onClick={onClose} className={quietButton}>
+            {t("common", K.cancel)}
+          </button>
+          <button type="button" disabled={busy || !form} onClick={() => void save()} className={primaryButton}>
+            {t("common", M.save)}
+          </button>
+        </div>
+      }
+    >
+      <p className="text-xs leading-5 text-text-secondary">{t("common", M.intro)}</p>
+      {!view || !form ? (
+        failure ? (
+          <Alert>{failure}</Alert>
+        ) : (
+          <p className="flex items-center gap-2 text-xs text-text-secondary">
+            <Loader2 size={14} className="animate-spin" aria-hidden />
+            {t("common", K.settings.loading)}
+          </p>
+        )
       ) : (
         <>
-          {sellsNobody(view, member) && (
-            <p className={`flex items-start gap-1 rounded-xl border px-3 py-2 leading-5 ${BAD}`}>
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-2 text-xs font-bold text-text-primary">{t("common", M.placement)}</legend>
+            <Choice
+              name={`placement-${member.panelId}`}
+              value={form.placementMode}
+              onChange={(v) => set({ placementMode: v })}
+              same={t("common", M.samePanelValue, { value: panelPlacement ?? "" })}
+              own={t("common", M.own)}
+            >
+              {INBOUND_PLACEMENTS.map((p) => (
+                <label key={p} className="flex items-start gap-2 text-xs">
+                  <input type="radio" name={`placement-own-${member.panelId}`} checked={form.placement === p} onChange={() => set({ placement: p })} className="mt-0.5 accent-primary" />
+                  <span className="flex flex-col">
+                    <span className="font-bold text-text-primary">{t("common", PLACEMENT_KEYS[p].label)}</span>
+                    <span className="leading-5 text-text-secondary">{t("common", PLACEMENT_KEYS[p].hint)}</span>
+                  </span>
+                </label>
+              ))}
+            </Choice>
+          </fieldset>
+
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-2 text-xs font-bold text-text-primary">{t("common", M.cap)}</legend>
+            <Choice
+              name={`cap-${member.panelId}`}
+              value={form.capMode}
+              onChange={(v) => set({ capMode: v })}
+              same={t("common", M.samePanelValue, { value: panelCap ?? "" })}
+              own={t("common", M.own)}
+            >
+              <input
+                dir="ltr"
+                inputMode="numeric"
+                value={form.maxClients}
+                onChange={(e) => set({ maxClients: e.target.value })}
+                aria-label={t("common", M.cap)}
+                className={`${input} sm:max-w-40`}
+              />
+              <span className="text-[11px] leading-5 text-text-secondary">{t("common", M.capHint)}</span>
+              {errors.maxClients && <Alert>{t("common", errors.maxClients)}</Alert>}
+            </Choice>
+          </fieldset>
+
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-2 text-xs font-bold text-text-primary">{t("common", M.inbounds)}</legend>
+            <Choice
+              name={`inbounds-${member.panelId}`}
+              value={form.inboundsMode === "pool" ? "panel" : "own"}
+              onChange={(v) => set({ inboundsMode: v === "panel" ? "pool" : "own" })}
+              same={t("common", M.pool)}
+              own={t("common", M.ownInbounds)}
+            >
+              <span className="text-[11px] leading-5 text-text-secondary">{t("common", M.ownInboundsHint)}</span>
+              <ul className="divide-y divide-card-border">
+                {inboundChoices(view, group.id).map(({ inbound: i, heldBy, takesNobody }) => (
+                  <li key={i.remoteId} className="flex flex-wrap items-center gap-2 py-2 text-xs">
+                    <label className="flex min-w-0 flex-1 items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={form.picked.includes(i.remoteId)}
+                        disabled={heldBy !== null}
+                        onChange={(e) => set({ picked: e.target.checked ? [...form.picked, i.remoteId] : form.picked.filter((id) => id !== i.remoteId) })}
+                        className="accent-primary"
+                      />
+                      <span dir="ltr" className="min-w-0 truncate font-mono text-text-primary">
+                        {i.protocol ?? "?"} · {i.port}
+                        {i.tag && ` · ${i.tag}`}
+                      </span>
+                    </label>
+                    {heldBy && <Pill tone={QUIET}>{t("common", K.settings.heldBy, { group: heldBy.name })}</Pill>}
+                    {!heldBy && takesNobody && <Pill tone={BAD}>{t("common", K.settings.takesNobody)}</Pill>}
+                  </li>
+                ))}
+              </ul>
+              {errors.inbounds && <Alert>{t("common", errors.inbounds)}</Alert>}
+            </Choice>
+            {form.inboundsMode === "pool" && <span className="text-[11px] leading-5 text-text-secondary">{t("common", M.poolHint)}</span>}
+          </fieldset>
+
+          {preview && sellsNobody(view, preview) && (
+            <p className={`flex items-start gap-1 rounded-xl border px-3 py-2 text-xs leading-5 ${BAD}`}>
               <TriangleAlert size={14} className="mt-0.5 shrink-0" aria-hidden />
               {t("common", K.settings.sellsNobody)}
             </p>
           )}
-          <ul className="divide-y divide-card-border">
-            {inboundChoices(view, group.id).map(({ inbound: i, heldBy, takesNobody }) => (
-              <li key={i.remoteId} className="flex flex-wrap items-center gap-3 py-2">
-                <label className="flex min-w-0 flex-1 items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={picked.includes(i.remoteId)}
-                    disabled={heldBy !== null}
-                    onChange={(e) => toggle(i.remoteId, e.target.checked)}
-                    className="accent-primary"
-                  />
-                  <span dir="ltr" className="min-w-0 truncate font-mono text-text-primary">
-                    #{i.remoteId} · {i.protocol ?? "?"} · {i.port}
-                    {i.tag && ` · ${i.tag}`}
-                  </span>
-                </label>
-                {heldBy && <Pill tone={QUIET}>{t("common", K.settings.heldBy, { group: heldBy.name })}</Pill>}
-                {!heldBy && takesNobody && <Pill tone={BAD}>{t("common", K.settings.takesNobody)}</Pill>}
-              </li>
-            ))}
-          </ul>
-          {errors.inbounds && <p className="text-error">{t("common", errors.inbounds)}</p>}
-          <div>
-            <button type="button" disabled={busy} onClick={saveInbounds} className={PRIMARY}>
-              {t("common", K.settings.saveInbounds)}
-            </button>
-          </div>
+          {errors.form && <Alert>{t("common", errors.form)}</Alert>}
+          {failure && <Alert>{failure}</Alert>}
         </>
       )}
-
-      {failure && (
-        <p role="alert" className="font-bold text-error">
-          {failure}
-        </p>
-      )}
-      {status && (
-        <p role="status" className="font-bold text-primary">
-          {t("common", status)}
-        </p>
-      )}
-    </div>
+    </Sheet>
   );
 }
 

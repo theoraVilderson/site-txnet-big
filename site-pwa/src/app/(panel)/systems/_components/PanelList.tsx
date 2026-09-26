@@ -1,37 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Archive, ChevronDown, ChevronUp, KeyRound, ListChecks, Loader2, Pencil, RotateCcw, Trash2, TriangleAlert } from "lucide-react";
+import { useState } from "react";
+import { Archive, KeyRound, Loader2, RotateCcw, Settings2, Trash2, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { billingApi, type CapabilityMatrix, type PanelGroup, type SystemsPanel } from "@/lib/billing-api";
+import { billingApi, type PanelGroup, type SystemsPanel } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
 import { Sheet, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { DELETE_OUTCOME_KEYS, groupsHolding, isArchived, visiblePanels } from "../_lib/panel-lifecycle";
+import { PANEL_STATUS_KEYS, panelStatusOf, type PanelStatus } from "../_lib/systems-guide";
 import {
   driverLabel,
   FAULT_KEYS,
   PANEL_STATE_KEYS,
-  REVIEW_KEYS,
   SYSTEMS_KEYS as K,
   canResubmit,
   canResubmitRadiusSecret,
-  capabilityText,
   radiusSecretMissing,
-  refusedBecause,
   resubmitOutcome,
   validateLogin,
   validateRadiusSecret,
   verdictOf,
 } from "../_lib/systems";
-import { ActionsMenu, BAD, CardButton, ListState, Notice, Pill, QUIET, REVIEW_TONE, STATE_TONE, Section, useSystemsError, type MenuItem } from "./parts";
-import { PanelEditSheet } from "./PanelEditSheet";
-import { PanelInbounds } from "./PanelInbounds";
+import { ActionsMenu, BAD, CardButton, GOOD, ListState, Notice, Pill, QUIET, Section, useSystemsError, type MenuItem } from "./parts";
+import { PanelSheet } from "./PanelSheet";
 
 /**
- * The registered panels as cards (F-027-cb). The everyday actions — edit,
- * inbounds, capabilities — sit on the card; the rarer ones (a new RADIUS
- * secret, delete) behind "more". Archived panels (F-027-bz) are out of the way
- * unless asked for, and read as archived, with restore as their one action.
+ * The registered panels as cards (F-027-cb, F-027-ck). A card is a line or
+ * two — status and "Settings"; the rarer actions (a new login or RADIUS
+ * secret, delete) behind "more". Archived panels (F-027-bz) are out of the
+ * way unless asked for, and read as archived, with restore as their one action.
  */
 export function PanelList({
   panels,
@@ -56,6 +53,7 @@ export function PanelList({
   return (
     <Section
       title={t("common", K.panels.title)}
+      hint={t("common", K.tabs.panelsHint)}
       actions={
         archived > 0 && (
           <CardButton icon={<Archive size={14} aria-hidden />} pressed={showArchived} onClick={() => setShowArchived((v) => !v)}>
@@ -80,8 +78,13 @@ export function PanelList({
   );
 }
 
-type Open = "inbounds" | "matrix" | null;
+const STATUS_TONE: Record<PanelStatus, string> = { ready: GOOD, limited: QUIET, testing: QUIET, refused: BAD, problem: BAD, archived: QUIET };
 
+/**
+ * One panel as a card (F-027-ck): its name, one status and the sentence
+ * that explains it, and "Settings", which opens everything else. A new
+ * login, a RADIUS secret and delete sit behind "more" (rule 13).
+ */
 function PanelItem({
   panel,
   groups,
@@ -93,137 +96,58 @@ function PanelItem({
   onChanged: () => Promise<void>;
   onNotice: (sentence: string) => void;
 }) {
-  const { lang, t } = useLocale();
-  // One panel below the card at a time: inbounds or capabilities.
-  const [open, setOpen] = useState<Open>(null);
-  const [sheet, setSheet] = useState<"edit" | "delete" | null>(null);
-  // A push panel is never called, so it has no inbounds to read or pick (F-114-b).
-  const hasInbounds = panel.transport !== "push";
-  // The RADIUS secret has its own form; the login is in the edit sheet (F-027-az / F-027-by).
-  const [editing, setEditing] = useState<Secret | null>(null);
+  const { t } = useLocale();
+  const [sheet, setSheet] = useState<"settings" | "delete" | Secret | null>(null);
   // The sentence for the last answer; the row itself is read again, never patched.
   const [saved, setSaved] = useState<string | null>(null);
-  const verdict = verdictOf(panel);
-  const when = (iso: string | null) => formatInstant(iso, lang) ?? t("common", K.never);
-  const toggle = (which: Exclude<Open, null>) => setOpen((o) => (o === which ? null : which));
+  const status = panelStatusOf(panel);
+  const address = panel.apiBaseUrl ?? panel.ipAddress;
 
-  const openSecret = (secret: Secret) => {
-    setEditing(secret);
-    setSaved(null);
-  };
-  const openSheet = (which: "edit" | "delete") => {
+  const open = (which: NonNullable<typeof sheet>) => {
     setSheet(which);
     setSaved(null);
   };
+  const done = async (sentence: string) => {
+    setSheet(null);
+    setSaved(sentence);
+    await onChanged();
+  };
   const more: MenuItem[] = [
-    ...(canResubmit(panel) ? [{ label: t("common", K.resubmit.open), icon: <KeyRound size={14} aria-hidden />, onSelect: () => openSecret("login") }] : []),
+    ...(canResubmit(panel) ? [{ label: t("common", K.resubmit.open), icon: <KeyRound size={14} aria-hidden />, onSelect: () => open("login") }] : []),
     ...(canResubmitRadiusSecret(panel)
-      ? [{ label: t("common", K.radiusSecret.open), icon: <KeyRound size={14} aria-hidden />, onSelect: () => openSecret("radiusSecret") }]
+      ? [{ label: t("common", K.radiusSecret.open), icon: <KeyRound size={14} aria-hidden />, onSelect: () => open("radiusSecret") }]
       : []),
-    { label: t("common", K.remove.action), icon: <Trash2 size={14} aria-hidden />, tone: "error", onSelect: () => openSheet("delete") },
+    { label: t("common", K.remove.action), icon: <Trash2 size={14} aria-hidden />, tone: "error", onSelect: () => open("delete") },
   ];
 
   return (
     <li className="flex flex-col gap-3 rounded-2xl border border-card-border p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <span className="text-sm font-bold text-text-primary">{panel.name}</span>
-          <span dir="ltr" className="font-mono text-[11px] text-text-secondary">
-            {driverLabel(panel.driverType)} · {panel.transport} · {panel.role} · {panel.region}
-            {(panel.apiBaseUrl ?? panel.ipAddress) && <span className="ms-2 break-all">{panel.apiBaseUrl ?? panel.ipAddress}</span>}
-          </span>
+        <div className="flex min-w-0 flex-col gap-1">
           <span className="flex flex-wrap items-center gap-2">
-            <Pill tone={REVIEW_TONE[verdict.state]}>{t("common", REVIEW_KEYS[verdict.state])}</Pill>
-            <Pill tone={STATE_TONE[panel.health.panelState]}>{t("common", PANEL_STATE_KEYS[panel.health.panelState])}</Pill>
-            {panel.health.collectionHalted && (
-              <Pill tone={BAD}>
-                <TriangleAlert size={10} aria-hidden />
-                {t("common", K.panels.halted)}
-              </Pill>
-            )}
-            {radiusSecretMissing(panel) && <Pill tone={BAD}>{t("common", K.radiusSecret.missing)}</Pill>}
-            {panel.health.openDriftEvents > 0 && (
-              <Pill tone={BAD}>{t("common", K.panels.openDrift, { count: String(panel.health.openDriftEvents) })}</Pill>
-            )}
+            <span className="text-sm font-bold text-text-primary">{panel.name}</span>
+            <Pill tone={STATUS_TONE[status]}>{t("common", PANEL_STATUS_KEYS[status].label)}</Pill>
+          </span>
+          <span dir="ltr" className="truncate text-start font-mono text-[11px] text-text-secondary">
+            {driverLabel(panel.driverType)}
+            {panel.region && ` · ${panel.region}`}
+            {address && ` · ${address}`}
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <CardButton icon={<Pencil size={14} aria-hidden />} onClick={() => openSheet("edit")}>
-            {t("common", K.panels.edit)}
-          </CardButton>
-          {hasInbounds && (
-            <CardButton icon={<ListChecks size={14} aria-hidden />} pressed={open === "inbounds"} onClick={() => toggle("inbounds")}>
-              {t("common", K.panels.showInbounds)}
-            </CardButton>
-          )}
-          <CardButton
-            icon={open === "matrix" ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
-            pressed={open === "matrix"}
-            onClick={() => toggle("matrix")}
-          >
-            {t("common", K.panels.showMatrix)}
+        <div className="flex items-center gap-2">
+          <CardButton icon={<Settings2 size={14} aria-hidden />} onClick={() => open("settings")}>
+            {t("common", K.panelSheet.open)}
           </CardButton>
           <ActionsMenu label={t("common", K.panels.more)} items={more} />
         </div>
       </div>
 
       {saved && <Notice tone="good">{t("common", saved)}</Notice>}
-      {editing !== null && (editing === "login" ? canResubmit(panel) : canResubmitRadiusSecret(panel)) && (
-        <SecretForm
-          panelId={panel.id}
-          secret={editing}
-          onDone={async (sentence) => {
-            setEditing(null);
-            setSaved(sentence);
-            await onChanged();
-          }}
-          onCancel={() => setEditing(null)}
-        />
-      )}
+      <StatusLine panel={panel} status={status} />
 
-      <VerdictLine panel={panel} />
-
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-1 rounded-xl bg-bg-inner px-3 py-2 text-xs text-text-secondary sm:grid-cols-4">
-        <div>
-          <dt className="inline">{t("common", K.panels.tested)}: </dt>
-          <dd className="inline" dir="ltr">
-            {formatInstant(panel.review.connectionTestedAt, lang) ?? t("common", K.panels.notTested)}
-          </dd>
-        </div>
-        <div>
-          <dt className="inline">{t("common", K.panels.lastHealthy)}: </dt>
-          <dd className="inline" dir="ltr">{when(panel.health.lastHealthyAt)}</dd>
-        </div>
-        <div>
-          <dt className="inline">{t("common", K.panels.lastCollected)}: </dt>
-          <dd className="inline" dir="ltr">{when(panel.health.lastSuccessfulCollectionAt)}</dd>
-        </div>
-        <div>
-          <dt className="inline">{t("common", K.edit.budget)}: </dt>
-          <dd className="inline">
-            {t("common", K.budget.perMinute, { count: String(panel.budget.maxRequestsPerMinute) })}
-            {panel.budget.blockedSince && (
-              <span className="ms-2 text-error">
-                {t("common", K.budget.blockedSince)}: <span dir="ltr">{formatInstant(panel.budget.blockedSince, lang)}</span>
-              </span>
-            )}
-          </dd>
-        </div>
-      </dl>
-
-      {hasInbounds && open === "inbounds" && <PanelInbounds panelId={panel.id} />}
-      {open === "matrix" && <Matrix panelId={panel.id} />}
-
-      {sheet === "edit" && (
-        <PanelEditSheet
-          panel={panel}
-          onClose={() => setSheet(null)}
-          onSaved={async (sentence) => {
-            setSheet(null);
-            setSaved(sentence);
-            await onChanged();
-          }}
-        />
+      {sheet === "settings" && <PanelSheet panel={panel} onClose={() => setSheet(null)} onSaved={done} />}
+      {(sheet === "login" || sheet === "radiusSecret") && (
+        <SecretForm panelId={panel.id} secret={sheet} onDone={done} onCancel={() => setSheet(null)} />
       )}
       {sheet === "delete" && (
         <DeleteSheet
@@ -238,6 +162,38 @@ function PanelItem({
         />
       )}
     </li>
+  );
+}
+
+/**
+ * The status in a sentence, only when it is not simply "ready": what the
+ * test answered (`VerdictLine`), or what is stopping an accepted panel.
+ */
+function StatusLine({ panel, status }: { panel: SystemsPanel; status: PanelStatus }) {
+  const { lang, t } = useLocale();
+  if (status === "ready") return null;
+  if (status === "testing" || status === "refused") return <VerdictLine panel={panel} />;
+  const reasons = [
+    panel.health.collectionHalted && t("common", K.panels.halted),
+    (panel.health.panelState === "down" || panel.health.panelState === "throttled_or_blocked") && t("common", PANEL_STATE_KEYS[panel.health.panelState]),
+    panel.budget.blockedSince && `${t("common", K.budget.blockedSince)} ${formatInstant(panel.budget.blockedSince, lang) ?? ""}`,
+    radiusSecretMissing(panel) && t("common", K.radiusSecret.missing),
+  ].filter((r): r is string => Boolean(r));
+  return (
+    <div className={`flex flex-col gap-1 rounded-xl border px-3 py-2 text-xs leading-5 ${status === "problem" ? BAD : QUIET}`}>
+      <p className="flex items-start gap-1.5">
+        {status === "problem" && <TriangleAlert size={14} className="mt-0.5 shrink-0" aria-hidden />}
+        {t("common", PANEL_STATUS_KEYS[status].hint)}
+      </p>
+      {reasons.length > 0 && (
+        <ul className="list-inside list-disc ps-5 font-bold">
+          {reasons.map((r) => (
+            <li key={r}>{r}</li>
+          ))}
+        </ul>
+      )}
+      {panel.health.openDriftEvents > 0 && <p>{t("common", K.panels.openDrift, { count: String(panel.health.openDriftEvents) })}</p>}
+    </div>
   );
 }
 
@@ -376,8 +332,8 @@ const SECRET_FORM = {
 } satisfies Record<Secret, unknown>;
 
 /**
- * A new secret for this panel. A password input, sent once and cleared from
- * state with the form. For the login, the answer's `retest` decides the
+ * A new secret for this panel, in a sheet. A password input, sent once and
+ * cleared from state with the form. For the login, the answer's `retest` decides the
  * sentence; a RADIUS secret re-tests nothing.
  */
 function SecretForm({
@@ -418,8 +374,8 @@ function SecretForm({
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3 rounded-2xl border border-card-border bg-bg-inner p-4">
-      <p className="text-sm font-bold text-text-primary">{t("common", copy.title)}</p>
+    <Sheet title={t("common", copy.title)} onClose={onCancel}>
+    <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
       <p className="text-xs leading-5 text-text-secondary">{t("common", copy.hint)}</p>
       <label className="flex flex-col gap-1 text-xs text-text-secondary">
         {t("common", copy.field)}
@@ -443,6 +399,7 @@ function SecretForm({
         </button>
       </div>
     </form>
+    </Sheet>
   );
 }
 
@@ -470,107 +427,5 @@ function VerdictLine({ panel }: { panel: SystemsPanel }) {
         </span>
       )}
     </p>
-  );
-}
-
-const CELL_TONE: Record<string, string> = { supported: "text-primary", unsupported: "text-error", unanswered: "text-text-secondary", not_asked: "text-text-secondary" };
-
-/** One panel's questionnaire, fetched when opened. The question and the cost of a `no` are said here, by key. */
-function Matrix({ panelId }: { panelId: string }) {
-  const { lang, t } = useLocale();
-  const message = useSystemsError();
-  const [matrix, setMatrix] = useState<CapabilityMatrix | null>(null);
-  const [error, setError] = useState<unknown>(null);
-
-  useEffect(() => {
-    let live = true;
-    billingApi.panelCapabilities(panelId).then(
-      (m) => live && setMatrix(m),
-      (e: unknown) => live && setError(e),
-    );
-    return () => {
-      live = false;
-    };
-  }, [panelId]);
-
-  if (error) {
-    return (
-      <p role="alert" className="text-xs font-bold text-error">
-        {message(error)}
-      </p>
-    );
-  }
-  if (!matrix) {
-    return (
-      <p className="flex items-center gap-2 text-xs text-text-secondary">
-        <Loader2 size={14} className="animate-spin" aria-hidden />
-        {t("common", K.loading)}
-      </p>
-    );
-  }
-
-  const why = refusedBecause(matrix.rows);
-  const names = (keys: string[]) => keys.map((k) => capabilityText(k)?.question ?? k);
-
-  return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-card-border bg-bg-inner p-4">
-      <p className="text-sm font-bold text-text-primary">
-        {t("common", K.matrix.title)}
-        {matrix.answeredAt && (
-          <span className="ms-2 text-xs font-normal text-text-secondary">
-            {t("common", K.matrix.answeredAt)}: <span dir="ltr">{formatInstant(matrix.answeredAt, lang)}</span>
-          </span>
-        )}
-      </p>
-      {!matrix.current && matrix.documentVersion !== null && <p className="text-xs text-text-secondary">{t("common", K.matrix.stale)}</p>}
-      {matrix.reviewState === "refused" && why.refused.length > 0 && (
-        <div className="text-xs text-error">
-          <p className="font-bold">{t("common", K.matrix.refusedBecause)}</p>
-          <ul className="list-inside list-disc">
-            {names(why.refused).map((q) => (
-              <li key={q}>{t("common", q)}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {matrix.reviewState !== "refused" && why.noMeteredSale.length > 0 && (
-        <div className="text-xs text-text-primary">
-          <p className="font-bold">{t("common", K.matrix.noMeteredSale)}</p>
-          <ul className="list-inside list-disc">
-            {names(why.noMeteredSale).map((q) => (
-              <li key={q}>{t("common", q)}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <ul className="divide-y divide-card-border">
-        {matrix.rows.map((row) => {
-          const text = capabilityText(row.key);
-          const state = row.state in K.matrix.state ? K.matrix.state[row.state as keyof typeof K.matrix.state] : null;
-          const severity = row.severity in K.matrix.severity ? K.matrix.severity[row.severity as keyof typeof K.matrix.severity] : null;
-          return (
-            <li key={row.key} className="flex flex-col gap-1 py-2 text-xs">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <span className="min-w-0 text-text-primary">{text ? t("common", text.question) : <span dir="ltr" className="font-mono">{row.key}</span>}</span>
-                <span className="flex shrink-0 items-center gap-2">
-                  {severity && <span className="text-[10px] text-text-secondary">{t("common", severity)}</span>}
-                  <span className={`font-bold ${CELL_TONE[row.state] ?? "text-text-secondary"}`}>{state ? t("common", state) : row.state}</span>
-                </span>
-              </div>
-              {row.state === "unsupported" && text && (
-                <p className="text-text-secondary">
-                  {t("common", K.matrix.unmetLabel)}: {t("common", text.unmet)}
-                  {row.detail && (
-                    <span dir="ltr" className="ms-2 font-mono">
-                      ({row.detail})
-                    </span>
-                  )}
-                </p>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
   );
 }

@@ -6,10 +6,7 @@ import type { PanelGroupMember, PanelInbound, PanelInbounds } from "@/lib/billin
 import {
   LAYER_KEYS,
   inboundChoices,
-  memberFormOf,
   sellsNobody,
-  validateMember,
-  validateMemberInbounds,
 } from "./_lib/member-settings";
 import { REFUSAL_KEYS, SYSTEMS_KEYS as K, refusalSentence } from "./_lib/systems";
 
@@ -89,32 +86,6 @@ describe("the layer a value comes from", () => {
   });
 });
 
-describe("a member's overrides", () => {
-  it("opens on the member's own values, empty where it inherits", () => {
-    expect(memberFormOf(member())).toEqual({ placement: "", maxClients: "" });
-    expect(memberFormOf(member({ inboundPlacement: "spread", maxClients: 40 }))).toEqual({ placement: "spread", maxClients: "40" });
-  });
-
-  it("sends only what changed, and refuses an untouched form here", () => {
-    const m = member({ inboundPlacement: "spread", maxClients: 40 });
-    expect(validateMember({ placement: "spread", maxClients: "40" }, m)).toEqual({ ok: false, errors: { form: K.inbounds.invalid.unchanged } });
-    expect(validateMember({ placement: "spread", maxClients: "50" }, m)).toEqual({ ok: true, body: { maxClients: 50 } });
-    expect(validateMember({ placement: "all", maxClients: " 40 " }, m)).toEqual({ ok: true, body: { inboundPlacement: "all" } });
-  });
-
-  it("empty is inherit (null) — never a cap of none, which a member cannot set under a capped panel", () => {
-    const m = member({ inboundPlacement: "spread", maxClients: 40 });
-    expect(validateMember({ placement: "", maxClients: "" }, m)).toEqual({ ok: true, body: { inboundPlacement: null, maxClients: null } });
-  });
-
-  it("holds the cap to the schema: a whole number from 1 to a million", () => {
-    for (const bad of ["0", "-1", "2.5", "x", "1000001"]) {
-      expect(validateMember({ placement: "", maxClients: bad }, member())).toEqual({ ok: false, errors: { maxClients: K.inbounds.invalid.cap } });
-    }
-    expect(validateMember({ placement: "", maxClients: "1000000" }, member())).toEqual({ ok: true, body: { maxClients: 1_000_000 } });
-  });
-});
-
 describe("the inbounds a membership sells", () => {
   it("offers what a buyer can be placed on, and what it holds even once gone, so it can be let go", () => {
     const v = view([inbound("1"), inbound("2", { goneAt: "2026-09-25T11:00:00.000Z" }), inbound("3", { protocol: null }), inbound("4", { goneAt: "2026-09-25T11:00:00.000Z", assignedTo: { id: "g-1", name: "Germany" } })]);
@@ -131,14 +102,6 @@ describe("the inbounds a membership sells", () => {
   it("marks one fulfilment will not place on: not ticked for sale on the panel, or disabled there", () => {
     const v = view([inbound("1"), inbound("2", { sold: false }), inbound("3", { enabled: false })]);
     expect(inboundChoices(v, "g-1").map((c) => c.takesNobody)).toEqual([false, true, true]);
-  });
-
-  it("sends the whole set, sorted, and refuses one that changes nothing", () => {
-    const m = member({ inbounds: ["2", "10"] });
-    expect(validateMemberInbounds(["10", "2"], m)).toEqual({ ok: false, error: K.inbounds.invalid.unchanged });
-    expect(validateMemberInbounds(["10", "3", "2"], m)).toEqual({ ok: true, inbounds: ["2", "3", "10"] });
-    // Nothing ticked is the pool again — always allowed.
-    expect(validateMemberInbounds([], m)).toEqual({ ok: true, inbounds: [] });
   });
 
   it("says when a membership places nobody on the panel: its own set, or the pool, has nothing live", () => {
