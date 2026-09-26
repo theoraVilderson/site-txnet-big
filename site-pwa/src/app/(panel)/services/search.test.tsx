@@ -256,6 +256,16 @@ describe("pasted config links (F-307-q)", () => {
     expect(hook).toHaveBeenLastCalledWith(1, "en", "current", "", []);
   });
 
+  it("takes a subscription link the same way — to billing, never to the URL (F-307-r)", () => {
+    const SUB = "https://sub.reseller.example/sub/Zm9vYmFyYmF6cXV4Zm9vYmFyYmF6cXV4Zm9vYmFyYmF6";
+    at("");
+    render(<MyServicesView />);
+    paste(SUB);
+    expect(hook).toHaveBeenLastCalledWith(1, "en", "current", "", [SUB]);
+    act(() => vi.advanceTimersByTime(400));
+    expect(written().some((u) => u.includes("sub"))).toBe(false);
+  });
+
   it("keeps a paste when a name typed just before it lands in the URL late", () => {
     at("");
     const { rerender } = render(<MyServicesView />);

@@ -21,7 +21,7 @@ import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { ConfigStatus, GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 import { RATE_LIMIT_KEY, RateLimitBucket, type RateLimitOptions, runWithTenant } from '@txnet-backend/shared-core';
 
-import { GrantService } from '../../entitlement/grant';
+import { GrantService, hashSubscriptionToken } from '../../entitlement/grant';
 import { GrantListController } from './grant-list.controller';
 import { GRANT_LIST_QUERY_MAX, GRANTS_BY_LINES_MAX, PASTED_LINE_MAX, grantListSchema, grantsByLinesSchema } from './grant-list.schema';
 
@@ -393,6 +393,31 @@ describe('GrantService.listForUser with pasted lines (F-307-p)', () => {
 
     expect(asked.where?.status).toEqual({ notIn: [GrantStatus.cancelled, GrantStatus.exhausted] });
     expect(answer.hidden).toBe(3);
+  });
+
+  it('keeps the caller’s Grant a pasted subscription link belongs to, by its token’s hash (F-307-r)', async () => {
+    const token = 'Zm9vYmFyYmF6cXV4Zm9vYmFyYmF6cXV4Zm9vYmFyYmF6';
+    const { byLines, asked } = build();
+
+    await byLines([`https://sub.reseller.example/sub/${token}`]);
+
+    expect(asked.where?.userId).toBe(USER);
+    expect(asked.where?.OR).toEqual([{ subscriptionTokenHash: { in: [hashSubscriptionToken(token)] } }]);
+    // No config line was pasted: the configs are neither read nor asked about.
+    expect(asked.where?.configs).toBeUndefined();
+    expect(asked.configReads).toEqual([]);
+  });
+
+  it('a subscription link and a config line pasted together keep the Grants either finds', async () => {
+    const token = 'Zm9vYmFyYmF6cXV4Zm9vYmFyYmF6cXV4Zm9vYmFyYmF6';
+    const { byLines, asked } = build();
+
+    await byLines([`https://h.example/sub/${token}/?x=1`, `vless://${UUID}@h:443`]);
+
+    expect(asked.where?.OR).toEqual([
+      { subscriptionTokenHash: { in: [hashSubscriptionToken(token)] } },
+      { configs: { some: { status: { not: ConfigStatus.retired }, OR: [{ uuid: { in: [UUID], mode: 'insensitive' } }] } } },
+    ]);
   });
 
   it('a paste that names no config matches no Grant — never the whole list', async () => {

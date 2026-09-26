@@ -2227,14 +2227,14 @@
     },
     "serviceSearch": {
       "label": "Search services",
-      "placeholder": "Find a service by a config's name or region, or paste its link",
+      "placeholder": "Find a service by a config's name or region, or paste a config or subscription link",
       "clear": "Clear search",
       "none": "No service has a config matching “{{query}}”.",
       "noneCurrent": "No current service has a config matching “{{query}}”; ended services are hidden.",
-      "pasted": "Pasted configs: {{count}}",
-      "pastedCapped": "Only the first {{max}} pasted configs are searched.",
-      "pastedNone": "None of the pasted configs belongs to one of your services.",
-      "pastedNoneCurrent": "None of the pasted configs belongs to a current service; ended services are hidden."
+      "pasted": "Pasted links: {{count}}",
+      "pastedCapped": "Only the first {{max}} pasted links are searched.",
+      "pastedNone": "None of the pasted links belongs to one of your services.",
+      "pastedNoneCurrent": "None of the pasted links belongs to a current service; ended services are hidden."
     }
   },
   "systems": {

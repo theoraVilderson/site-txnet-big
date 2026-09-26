@@ -135,6 +135,14 @@ export function grantFromVariant(input: { source: GrantSource; startsAt: Date },
 /** SHA-256 of a subscription token, lowercase hex — what `/sub` looks a Grant up by. */
 export const hashSubscriptionToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 
+/** `/sub/{token}` in a pasted link, whatever its host (a reseller's own domain), trailing `/` or query. */
+const SUB_PATH = /^https?:\/\/[^/?#\s]+\/sub\/([A-Za-z0-9_-]{16,})\/?(?:[?#]|$)/i;
+
+/** The token of a pasted subscription link (F-307-r), or `null` for any other line. */
+export function subscriptionTokenOf(pasted: string): string | null {
+  return SUB_PATH.exec(pasted.trim())?.[1] ?? null;
+}
+
 /** 32 random bytes as base64url, and its hash. The token itself is written only sealed (ADR-0085). */
 export function newSubscriptionToken(): { token: string; hash: string } {
   const token = randomBytes(32).toString('base64url');
@@ -298,6 +306,20 @@ async function configHoldingLines(tx: Prisma.TransactionClient, userId: string, 
   return { status: live, OR };
 }
 
+/**
+ * The caller's Grants any pasted line finds: a subscription link by its
+ * token's hash (F-307-r), every other line through `configHoldingLines`. A
+ * paste of config lines alone asks only the configs, as before.
+ */
+async function grantHoldingLines(tx: Prisma.TransactionClient, userId: string, pasted: readonly string[]): Promise<Prisma.GrantWhereInput> {
+  const tokens = pasted.map(subscriptionTokenOf).filter((t) => t !== null);
+  const lines = pasted.filter((l) => subscriptionTokenOf(l) === null);
+  if (!tokens.length) return { userId, configs: { some: await configHoldingLines(tx, userId, lines) } };
+  const OR: Prisma.GrantWhereInput[] = [{ subscriptionTokenHash: { in: [...new Set(tokens.map(hashSubscriptionToken))] } }];
+  if (lines.length) OR.push({ configs: { some: await configHoldingLines(tx, userId, lines) } });
+  return { userId, OR };
+}
+
 function soldLimitOf(r: GrantViewRow): bigint | null {
   if (r.billingMode !== VariantBillingMode.prepaid || r.trafficUnlimited) return null;
   const traffic = trafficQuotaOf(r.quotas);
@@ -459,7 +481,10 @@ export class GrantService {
    * **`q` keeps the Grants holding a live config named like it** (F-307-m):
    * `configNamedLike`. `hidden` then counts the ended Grants that match.
    * **`lines` keeps the Grants holding a config any pasted line is** (F-307-p):
-   * `configHoldingLines`, the same way; it wins over `q`.
+   * `configHoldingLines`, the same way; it wins over `q`. A pasted
+   * subscription link (`…/sub/{token}`, F-307-r) keeps the caller's Grant whose
+   * current token it carries, by the token's hash — a reset link finds nothing,
+   * as `/sub` serves nothing from it.
    */
   listForUser(
     userId: string,
@@ -470,12 +495,11 @@ export class GrantService {
     const all = request.scope === 'all';
     const q = request.q?.trim() ?? '';
     return tenantTransaction(this.prisma, async (tx) => {
-      const configs = request.lines
-        ? await configHoldingLines(tx, userId, request.lines)
+      const mine: Prisma.GrantWhereInput = request.lines
+        ? await grantHoldingLines(tx, userId, request.lines)
         : q === ''
-          ? null
-          : await configNamedLike(tx, userId, q);
-      const mine: Prisma.GrantWhereInput = configs ? { userId, configs: { some: configs } } : { userId };
+          ? { userId }
+          : { userId, configs: { some: await configNamedLike(tx, userId, q) } };
       const where: Prisma.GrantWhereInput = all ? mine : { ...mine, status: { notIn: [...SETTLED_GRANT_STATUSES] } };
       const [rows, total, everything] = await Promise.all([
         tx.grant.findMany({

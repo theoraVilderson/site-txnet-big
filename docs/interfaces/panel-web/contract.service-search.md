@@ -34,7 +34,7 @@ narrows one service's configs is that contract's rule 18 (F-307-l).
    name search and goes to page 1; paging and "show ended" keep it. Typing a
    name, clearing, Escape or a name arriving in the URL drop it, and a reload
    forgets it. A `://` that arrives without a paste (a drop) is the same paste,
-   and one holding no config is refused, so `?q=` never carries a link. No
+   and one holding no config is refused, so `?q=` never carries a link. A subscription link (`…/sub/<token>`) is pasted the same way and finds its service by billing's token match (F-307-r); the box counts "links", either kind. No
    match says none of the pasted configs is theirs. A 429 from its own bucket
    (60 per 900s) is the page's failed-read sentence with retry
    ([contract.errors.md](contract.errors.md)).
@@ -55,7 +55,7 @@ F-307-q: `pastedLines` splitting, dedupe, the 4096 drop and the 20 cap; the
 lines handed to billing and none of them, nor `q=`, in any URL written; the
 count shown; paging and "show ended" keeping them; the capped sentence; the
 pasted no-match sentence; clear, Escape and typing a name each dropping them;
-a drop read as a paste. Rule 3: a late or overtaken write leaving the box and a
+a drop read as a paste; a subscription link handed over the same way. Rule 3: a late or overtaken write leaving the box and a
 paste alone, back/forward still resetting it, typing not re-rendering the page.
 `useGrantsPage.test.ts` hands `q` to billing's list and
 pasted lines to `by-lines`, never as `q`.
