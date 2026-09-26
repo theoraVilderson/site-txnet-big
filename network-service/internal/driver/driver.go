@@ -146,9 +146,14 @@ type CreateClientRequest struct {
 	// limit and a ceiling applied afterwards — the gap between the two is
 	// unpaid traffic.
 	DataLimitBytes int64
-	RateLimitBps   int64
-	ExpiresAt      time.Time
-	Enabled        bool
+	// NoDataLimit creates the client with no limit at all, and DataLimitBytes
+	// is ignored: an unlimited Grant's config (F-111-r). Never read off a 0 —
+	// a 0 ceiling is a real one of no traffic — and written in whatever the
+	// family calls no limit, or its stand-in figure where it has none.
+	NoDataLimit  bool
+	RateLimitBps int64
+	ExpiresAt    time.Time
+	Enabled      bool
 }
 
 // UpdateClientRequest changes a client that already exists. Every field is
@@ -161,9 +166,11 @@ type UpdateClientRequest struct {
 	UUID            string
 	InboundRemoteID string
 	DataLimitBytes  int64
-	RateLimitBps    int64
-	ExpiresAt       time.Time
-	Enabled         bool
+	// NoDataLimit is CreateClientRequest's: no limit, DataLimitBytes ignored.
+	NoDataLimit  bool
+	RateLimitBps int64
+	ExpiresAt    time.Time
+	Enabled      bool
 }
 
 // ClientUsage is one reading of one client's counter, as the panel reports it

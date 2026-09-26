@@ -562,3 +562,12 @@ func TestADisabledUserManagerFailsTheConnectionTest(t *testing.T) {
 		t.Errorf("verdict = %+v, want accepted with metered sale", v)
 	}
 }
+
+// An unlimited Grant's client (F-111-r) is created and rewritten with no limit,
+// never under the one-byte stand-in a zero ceiling gets.
+func TestAnUnlimitedClientCarriesNoLimit(t *testing.T) {
+	_, d := open(t)
+	conformance.NoLimitRoundTrip(t, d, driver.CreateClientRequest{
+		ClaimTag: "cfg_7f3a", UUID: testUUID, Protocol: "pppoe", Enabled: true,
+	}, 0)
+}

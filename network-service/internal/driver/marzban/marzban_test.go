@@ -463,3 +463,12 @@ func TestClientLinksAreTheLinesMarzbanBuilt(t *testing.T) {
 		t.Error("a user the panel does not hold gave no error: a failed read is not a user with no links")
 	}
 }
+
+// An unlimited Grant's client (F-111-r) is created and rewritten with no limit,
+// never under the one-byte stand-in a zero ceiling gets.
+func TestAnUnlimitedClientCarriesNoLimit(t *testing.T) {
+	_, d := open(t)
+	conformance.NoLimitRoundTrip(t, d, driver.CreateClientRequest{
+		ClaimTag: "cfg_7f3a", UUID: "8a3c1e2b-0000-4000-8000-00000000abcd", InboundRemoteID: "VLESS TCP", Protocol: "vless", Enabled: true,
+	}, 0)
+}

@@ -70,6 +70,8 @@ var RequiredColumns = map[string][]string{
 		"confirmedAt",
 		// The inbound fulfilment placed it on (F-114-b).
 		"inboundRemoteId",
+		// Its Grant sold no limit (F-111-r).
+		"trafficUnlimited",
 	},
 	// Where the counter was, so that a figure going backward is a reset and
 	// never negative usage (invariant 20, ADR-0074).

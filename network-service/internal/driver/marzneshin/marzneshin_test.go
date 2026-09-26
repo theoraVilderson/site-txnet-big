@@ -707,3 +707,12 @@ func TestClientLinksAreTheWholeSubscription(t *testing.T) {
 		t.Errorf("%d subscription reads carried the admin token", f.subAuth)
 	}
 }
+
+// An unlimited Grant's client (F-111-r) is created and rewritten with no limit,
+// never under the one-byte stand-in a zero ceiling gets.
+func TestAnUnlimitedClientCarriesNoLimit(t *testing.T) {
+	_, d, _ := open(t, "https://sub.example.com/")
+	conformance.NoLimitRoundTrip(t, d, driver.CreateClientRequest{
+		ClaimTag: "cfg_7f3a", UUID: "8a3c1e2b-0000-4000-8000-00000000abcd", InboundRemoteID: "2", Protocol: "trojan", Enabled: true,
+	}, 0)
+}

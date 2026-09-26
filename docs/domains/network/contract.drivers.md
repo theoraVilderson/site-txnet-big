@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 16
-updated: 2026-09-24
+updated: 2026-09-26
 ---
 
 # Real drivers: one family per package
@@ -30,6 +30,10 @@ after the first, uses pages of at least `driver.MinPageSize`, and serves
 A family that reports one byte total, not an up/down split, puts it in
 `DownBytes` (`driver.ClientUsage`). The suite accepts either shape as the far
 end's figure (`readsAs`); it accepts no third one.
+
+**No limit is asked for, never read off a 0** (F-111-r): `NoDataLimit` on a create or update writes the family's own —
+`0` on Marzban, Marzneshin, the x-ui families and User Manager; Hiddify has none and gets 1,000,000 GB (the user's
+call, 2026-09-26). Each family's test calls `conformance.NoLimitRoundTrip`.
 
 Building a driver from a `panel` row — `driverType`, `apiBaseUrl` and the login
 in the owner's vault — is not a family's job. That is `internal/opener`

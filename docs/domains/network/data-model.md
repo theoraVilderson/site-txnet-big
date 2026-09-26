@@ -1,7 +1,7 @@
 ---
 id: network
 layer: domain
-updated: 2026-09-25
+updated: 2026-09-26
 ---
 
 # Data model — network
@@ -78,7 +78,7 @@ wrote, which is free traffic at the far end of it and nothing red anywhere.
 `observedRateBps` sizes the horizon (F-027-u); `driftState`/`driftRepairCount`/
 `driftRepairedAt` are the verdict and 24 h stop (F-027-ab); `credentialGroupId`
 is one group placement, one row per panel (`config_group_panel_once`, F-027-bl) but a drained (`drainedAt`) one, F-027-bp; `walletBackedCeilingBytes` ≥ allocation is a shutdown's
-ceiling (ADR-0078); `linkLines` is what `/sub` serves (contract.links.md).
+ceiling (ADR-0078); `linkLines` is what `/sub` serves (contract.links.md); `trafficUnlimited` is its Grant's, copied at create, and such a row holds no ceiling (`config_unlimited_has_no_ceiling`, F-111-r).
 
 Five CHECK constraints, for the same reason the Panel has its five:
 `config_ceiling_bytes_not_negative`, `config_observed_rate_not_negative`,

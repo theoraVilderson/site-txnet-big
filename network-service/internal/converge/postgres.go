@@ -52,7 +52,8 @@ SELECT c.id::text, coalesce(c."remoteId", ''), c."claimTag", c.uuid, c.protocol:
        c."desiredEnabled", c."desiredRemote" = 'present', c."allocatedCeilingBytes",
        coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0)::bigint,
        c."enforcementState"::text, c."driftState"::text, c."driftRepairCount", c."driftRepairedAt",
-       c."linkLines", coalesce(c."linksRemoteId", ''), coalesce(c."linksUuid", ''), c."linksCapturedAt"
+       c."linkLines", coalesce(c."linksRemoteId", ''), coalesce(c."linksUuid", ''), c."linksCapturedAt",
+       c."trafficUnlimited"
   FROM network.config c
   LEFT JOIN network.config_counter_state s ON s."configId" = c.id
  WHERE c."panelId" = $1::uuid
@@ -73,7 +74,7 @@ func (s PostgresDesired) For(ctx context.Context, panelID string) ([]DesiredConf
 		if err := rows.Scan(&d.ConfigID, &d.RemoteID, &d.ClaimTag, &d.UUID, &d.Protocol, &d.InboundRemoteID,
 			&d.Enabled, &d.Present, &d.AllocatedBytes, &d.ServedBytes,
 			&state, &drift, &d.RepairCount, &repairedAt,
-			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt); err != nil {
+			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt, &d.Unlimited); err != nil {
 			return nil, fmt.Errorf("reading panel %s desired state: %w", panelID, err)
 		}
 		d.State, d.Drift = EnforcementState(state), DriftState(drift)

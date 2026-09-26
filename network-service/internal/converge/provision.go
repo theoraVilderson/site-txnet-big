@@ -28,7 +28,9 @@ import (
 //   - **A client is never created without its ceiling.** The first block goes
 //     in with the create, in the counter's own origin, and a config with no
 //     allocation or none left is not created at all — the gap between a
-//     create and a later ceiling is unpaid traffic.
+//     create and a later ceiling is unpaid traffic. The one exception is a
+//     config of an unlimited Grant, which is created with no limit because
+//     no limit is what was sold (F-111-r).
 //   - **One read per pass.** The `Converger` below reads the population once
 //     and hands it to this pass and to the ceiling pass.
 //
@@ -80,7 +82,12 @@ type DesiredConfig struct {
 	// ceiling is what is left, not the whole share again.
 	AllocatedBytes *int64
 	ServedBytes    int64
-	State          EnforcementState
+	// Unlimited is `trafficUnlimited`, copied from its Grant (F-111-r): the
+	// client carries no limit, so there is no allocation to wait for, and
+	// AllocatedBytes is nil by construction (CHECK
+	// `config_unlimited_has_no_ceiling`).
+	Unlimited bool
+	State     EnforcementState
 	// Drift is `driftState` as the row holds it; empty reads as synced.
 	Drift DriftState
 	// RepairCount and RepairedAt are `driftRepairCount` and
@@ -387,13 +394,15 @@ func (v *Provisioning) one(
 		// the panel holds, because sizing it is the ceiling pass's and it runs
 		// next — except on a rebuilt client, which holds none: that one gets
 		// the first block a create would, in its new counter's origin.
-		limit := client.DataLimitBytes
-		if rebuilt && row.AllocatedBytes != nil {
+		limit, none := client.DataLimitBytes, false
+		if rebuilt && row.Unlimited {
+			none = true
+		} else if rebuilt && row.AllocatedBytes != nil {
 			limit = PanelCeiling(*row.AllocatedBytes, row.ServedBytes)
 		}
 		err := p.Driver.UpdateClient(ctx, driver.UpdateClientRequest{
 			RemoteID: client.RemoteID, ClaimTag: row.ClaimTag, UUID: row.UUID,
-			InboundRemoteID: client.InboundRemoteID, DataLimitBytes: limit,
+			InboundRemoteID: client.InboundRemoteID, DataLimitBytes: limit, NoDataLimit: none,
 			RateLimitBps: client.RateLimitBps, ExpiresAt: client.ExpiresAt, Enabled: row.Enabled,
 		})
 		if err != nil {
@@ -430,16 +439,22 @@ func (v *Provisioning) create(
 	found func(Action, string, error) *ProvisionFinding,
 	refused func(string, error) (*Outcome, *ProvisionFinding),
 ) (*Outcome, *ProvisionFinding) {
-	if row.AllocatedBytes == nil {
+	var ceiling int64
+	switch {
+	case row.Unlimited:
+		// No limit is what was sold (F-111-r): nothing to wait for, and
+		// nothing to run out of.
+	case row.AllocatedBytes == nil:
 		report.Skipped++
 		return nil, found(ActionAwaitingAllocation, "", nil)
-	}
-	// A new client's counter starts at zero, so everything the config has
-	// already carried is the offset.
-	ceiling := PanelCeiling(*row.AllocatedBytes, row.ServedBytes)
-	if ceiling == 0 {
-		report.Skipped++
-		return nil, found(ActionAllowanceExhausted, "", nil)
+	default:
+		// A new client's counter starts at zero, so everything the config
+		// has already carried is the offset.
+		ceiling = PanelCeiling(*row.AllocatedBytes, row.ServedBytes)
+		if ceiling == 0 {
+			report.Skipped++
+			return nil, found(ActionAllowanceExhausted, "", nil)
+		}
 	}
 
 	inbound, ok, err := inbounds.named(ctx, row.InboundRemoteID, row.Protocol)
@@ -453,7 +468,7 @@ func (v *Provisioning) create(
 
 	created, err := p.Driver.CreateClient(ctx, driver.CreateClientRequest{
 		ClaimTag: row.ClaimTag, UUID: row.UUID, InboundRemoteID: inbound.RemoteID,
-		Protocol: row.Protocol, DataLimitBytes: ceiling, Enabled: row.Enabled,
+		Protocol: row.Protocol, DataLimitBytes: ceiling, NoDataLimit: row.Unlimited, Enabled: row.Enabled,
 	})
 	if err != nil {
 		return refused("", err)

@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 14
-updated: 2026-09-23
+updated: 2026-09-26
 ---
 
 # Drift — which remote client is which config, and what the panel did to it
@@ -66,7 +66,8 @@ counter in fact survived.
 the panel still holds the figure it last confirmed: ours, and stale. So the
 ceiling pass blames somebody else only when the panel's figure differs from
 `appliedCeilingBytes` too (`Allocation.AppliedBytes`, `Finding.Overridden`).
-No confirmed figure, no blame.
+No confirmed figure, no blame. An unlimited config holds no ceiling at all
+(F-111-r), so its client's no limit is never judged: only identity drift is.
 
 **`orphan` is a client's verdict, not a config's.** No row carries it. The
 client is left alone whatever the panel's `orphanPolicy` says: `report_only`

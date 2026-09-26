@@ -215,6 +215,16 @@ func ceiling(bytes int64) *int64 {
 	return &bytes
 }
 
+// limitOf is the figure a create or an update writes: Marzneshin's own 0 for a
+// client wanted with no limit (F-111-r), a ceiling otherwise.
+func limitOf(none bool, bytes int64) *int64 {
+	if none {
+		var zero int64
+		return &zero
+	}
+	return ceiling(bytes)
+}
+
 // withExpiry sets the expiry fields: `never` clears the date, and a date is
 // only kept under `fixed_date`.
 func (b *userBody) withExpiry(at time.Time) {
@@ -559,11 +569,11 @@ func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientReques
 			fmt.Errorf("marzneshin has no %q proxy we sell", req.Protocol))
 	}
 	return d.create(ctx, op, keyOf(req.UUID), req.UUID, req.InboundRemoteID, nil, req.ClaimTag,
-		req.DataLimitBytes, req.ExpiresAt, req.Enabled)
+		limitOf(req.NoDataLimit, req.DataLimitBytes), req.ExpiresAt, req.Enabled)
 }
 
 func (d *Driver) create(ctx context.Context, op, username, uuid, inboundID string, services []int,
-	claimTag string, limit int64, expires time.Time, enabled bool) (driver.RemoteClient, error) {
+	claimTag string, limit *int64, expires time.Time, enabled bool) (driver.RemoteClient, error) {
 	if len(username) < 3 || len(username) > 32 {
 		return driver.RemoteClient{}, driver.NewFault(driver.FaultProtocol, op, 0,
 			fmt.Errorf("%q does not make a 3-32 character username", username))
@@ -578,7 +588,7 @@ func (d *Driver) create(ctx context.Context, op, username, uuid, inboundID strin
 	note := claimTag
 	body := userBody{
 		Username: username, Key: keyOf(uuid), ServiceIDs: services,
-		DataLimit: ceiling(limit), DataLimitResetStrategy: noReset, Note: &note,
+		DataLimit: limit, DataLimitResetStrategy: noReset, Note: &note,
 	}
 	body.withExpiry(expires)
 	var created user
@@ -610,12 +620,12 @@ func (d *Driver) UpdateClient(ctx context.Context, req driver.UpdateClientReques
 			return err
 		}
 		_, err := d.create(ctx, op, req.RemoteID, req.UUID, req.InboundRemoteID, current.ServiceIDs,
-			req.ClaimTag, req.DataLimitBytes, req.ExpiresAt, req.Enabled)
+			req.ClaimTag, limitOf(req.NoDataLimit, req.DataLimitBytes), req.ExpiresAt, req.Enabled)
 		return err
 	}
 	note := req.ClaimTag
 	body := userBody{
-		Username: req.RemoteID, DataLimit: ceiling(req.DataLimitBytes),
+		Username: req.RemoteID, DataLimit: limitOf(req.NoDataLimit, req.DataLimitBytes),
 		DataLimitResetStrategy: noReset, Note: &note,
 	}
 	body.withExpiry(req.ExpiresAt)

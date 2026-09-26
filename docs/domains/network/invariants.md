@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-updated: 2026-09-24
+updated: 2026-09-26
 ---
 
 # Invariants — network
@@ -69,6 +69,7 @@ F-027-l, its push half as of F-027-af (`internal/radius`).
 | 47 | A Grant's panel-group placement is one config per panel, a drained one aside (F-027-bp), and the Grant activates only on `minHealthyPanels` configs the panel confirmed (`complete`) on a serving panel | partial unique `config_group_panel_once` + `planFulfilment` + `group-fulfilment.spec.ts` | two clients on one panel split the bag; a Grant active with no working server |
 | 48 | A drained member's config is retired only `2 × subscriptionTtlSeconds` after `/sub` stopped serving it, and never while it is an active Grant's only served line; `drainingSince` is the database's clock | trigger `panel_group_member_drain_clock` + CHECK `panel_group_member_draining_since_iff_drain` + `planDrain` + sub `servedLines` (F-027-bm), asserted by `group-drain.spec.ts` and `render_test.go` | a user whose app still holds the drain line is cut off ([contract.groups.md](contract.groups.md)) |
 | 49 | An archived panel (`retiredAt` set) is read, tested, allowlisted and expected by the watchdog by nothing, and takes no config and no group; it is archived only with no group and no live config | `retiredAt IS NULL` in `panelsSQL`, `pendingSQL`, `nasSQL` and `collection_watchdog()` + triggers `config_panel_not_retired`, `panel_group_member_panel_not_retired` + billing `PanelLifecycleService.remove` (F-027-bz), asserted by `panel-retire.spec.ts` | a panel taken out of service still polled and alerting, or users placed on a server nobody runs any more |
+| 50 | A config of an unlimited Grant carries `trafficUnlimited` and never a ceiling; its client is created with no limit, in the family's own no-limit (Hiddify: 1,000,000 GB), never a 0 read as one | CHECK `config_unlimited_has_no_ceiling`; `ConfigActionsService.create`, `Provisioning.create`, `NoDataLimit` per driver (F-111-r, `provision_test.go`, `conformance.NoLimitRoundTrip`) | an unlimited buyer never placed and refunded an hour later, or cut off at a 1-byte ceiling |
 
 ## How to test
 

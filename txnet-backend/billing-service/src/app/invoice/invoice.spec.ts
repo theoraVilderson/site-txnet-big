@@ -246,7 +246,6 @@ describe('InvoiceService.create', () => {
     ['a network service with no panel group', variantRow({ panelGroupId: null })],
     // F-111-p: a prepaid network Grant with no traffic is a 0-byte bag, refunded an hour later.
     ['a network service that states no traffic (VI_PI_AN_PRV-30D)', variantRow({ quotas: {} })],
-    ['a network service with unlimited traffic, until the panels carry it (F-111-r)', variantRow({ quotas: traffic(0) })],
   ])('refuses a variant that is %s, and writes nothing', async (_what, variant) => {
     const { service, calls } = buildCreate({ variant });
 
@@ -501,7 +500,7 @@ describe('InvoiceService.forSale — what the shop lists (F-111-e)', () => {
     expect(offers.map((o) => o.variantId)).toEqual([VARIANT]);
   });
 
-  it('leaves out a prepaid network variant with no traffic or unlimited traffic, keeping a metered one (F-111-p)', async () => {
+  it('leaves out a prepaid network variant with no traffic, keeping an unlimited (F-111-r) and a metered one (F-111-p)', async () => {
     const METERED = '88888888-8888-4888-8888-888888888888';
     const { service } = buildList([
       variantRow({ quotas: {} }),
@@ -509,7 +508,7 @@ describe('InvoiceService.forSale — what the shop lists (F-111-e)', () => {
       { ...variantRow({ quotas: {}, billingMode: 'metered' }), id: METERED },
     ]);
     const offers = await asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')));
-    expect(offers.map((o) => o.variantId)).toEqual([METERED]);
+    expect(offers.map((o) => o.variantId)).toEqual([INVOICE_2, METERED]);
   });
 
   it('leaves out an unlisted variant: a direct link sells it, the list does not show it', async () => {

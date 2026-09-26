@@ -87,14 +87,30 @@ func New(baseURL string, creds Credentials, client *http.Client) (*Driver, error
 // row is one RouterOS row. Every value on this API is a string, both ways.
 type row map[string]string
 
-func limitationBody(ceilingBytes, rateBps int64) row {
-	if ceilingBytes < 1 {
-		ceilingBytes = 1 // 0 is no limit on the router (package doc)
-	}
+func limitationBody(transfer string, rateBps int64) row {
 	body := rateBody(rateBps)
-	body["transfer-limit"] = strconv.FormatInt(ceilingBytes, 10)
+	body["transfer-limit"] = transfer
 	body["reset-counters-interval"] = "disabled"
 	return body
+}
+
+// transferLimit is a `transfer-limit` as the router must be told it: 0, its no
+// limit, only for a client wanted with none (F-111-r); a ceiling is never
+// below one byte (package doc).
+func transferLimit(none bool, ceilingBytes int64) string {
+	if none {
+		return "0"
+	}
+	return strconv.FormatInt(max(ceilingBytes, 1), 10)
+}
+
+// createdLimit is what a create answers for the limit it wrote: none reads as
+// 0, as ListClients reads it.
+func createdLimit(req driver.CreateClientRequest) int64 {
+	if req.NoDataLimit {
+		return 0
+	}
+	return max(req.DataLimitBytes, 1)
 }
 
 // rateBody writes one rate both ways. 0 is no cap, on the router as here.
@@ -267,9 +283,9 @@ func (d *Driver) ensureLink(ctx context.Context, op, menu string, fields row) er
 // then the user's link to the profile when the user exists. The order is the
 // safe one: until the last link a user has no profile, and User Manager
 // refuses a login with none, so a half-made client carries no traffic.
-func (d *Driver) ensureChain(ctx context.Context, op, user string, ceilingBytes, rateBps int64, withUser func() error) error {
+func (d *Driver) ensureChain(ctx context.Context, op, user, transfer string, rateBps int64, withUser func() error) error {
 	chain := chainName(user)
-	if err := d.ensureNamed(ctx, op, "limitation", chain, limitationBody(ceilingBytes, rateBps)); err != nil {
+	if err := d.ensureNamed(ctx, op, "limitation", chain, limitationBody(transfer, rateBps)); err != nil {
 		return err
 	}
 	if err := d.ensureNamed(ctx, op, "profile", chain, profileBody()); err != nil {
@@ -448,7 +464,7 @@ func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientReques
 	if name == "" {
 		return driver.RemoteClient{}, driver.NewFault(driver.FaultProtocol, op, 0, errors.New("a client needs a uuid to be named after"))
 	}
-	err := d.ensureChain(ctx, op, name, req.DataLimitBytes, req.RateLimitBps, func() error {
+	err := d.ensureChain(ctx, op, name, transferLimit(req.NoDataLimit, req.DataLimitBytes), req.RateLimitBps, func() error {
 		return d.ensureNamed(ctx, op, "user", name, userBody(req.UUID, req.ClaimTag, req.Enabled))
 	})
 	if err != nil {
@@ -456,7 +472,7 @@ func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientReques
 	}
 	return driver.RemoteClient{
 		RemoteID: name, Label: req.ClaimTag, UUID: req.UUID, Enabled: req.Enabled,
-		DataLimitBytes: max(req.DataLimitBytes, 1), RateLimitBps: max(req.RateLimitBps, 0),
+		DataLimitBytes: createdLimit(req), RateLimitBps: max(req.RateLimitBps, 0),
 	}, nil
 }
 
@@ -465,7 +481,7 @@ func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientReques
 // that is a delete, reported as the router's not-found.
 func (d *Driver) UpdateClient(ctx context.Context, req driver.UpdateClientRequest) error {
 	const op = "UpdateClient"
-	return d.ensureChain(ctx, op, req.RemoteID, req.DataLimitBytes, req.RateLimitBps, func() error {
+	return d.ensureChain(ctx, op, req.RemoteID, transferLimit(req.NoDataLimit, req.DataLimitBytes), req.RateLimitBps, func() error {
 		return d.patch(ctx, op, "user", req.RemoteID, userBody(req.UUID, req.ClaimTag, req.Enabled))
 	})
 }
@@ -511,7 +527,7 @@ func (d *Driver) DeleteClient(ctx context.Context, remoteID string) error {
 
 // SetClientDataLimit writes the user's own limitation, one request.
 func (d *Driver) SetClientDataLimit(ctx context.Context, remoteID string, ceilingBytes int64) error {
-	body := limitationBody(ceilingBytes, 0)
+	body := limitationBody(transferLimit(false, ceilingBytes), 0)
 	delete(body, "rate-limit-rx")
 	delete(body, "rate-limit-tx")
 	return d.patch(ctx, "SetClientDataLimit", "limitation", chainName(remoteID), body)

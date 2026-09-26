@@ -119,8 +119,10 @@ a bag emptying while they are offline.
 **An unlimited Grant has no split at all** (F-111-q). Its `purchasedBytes` is 0
 by construction and `trafficUnlimited` says why; `rebalance` returns
 `unlimited: true`, no ceilings, and writes nothing — split, a 0 bag would hand
-every config a 0-byte ceiling. Its configs keep `allocatedCeilingBytes = null`;
-creating them on the panel with no limit is F-111-r.
+every config a 0-byte ceiling. Its configs keep `allocatedCeilingBytes = null`
+(CHECK `config_unlimited_has_no_ceiling`), so this pass and the shutdown
+extension never read them, and a client with no limit is never taken for
+`no_limit_on_panel`: provisioning creates it that way (F-111-r).
 
 ## The convergence loop — carrying the number to the panel (F-027-t)
 

@@ -213,6 +213,15 @@ func ceiling(bytes int64) int64 {
 	return bytes
 }
 
+// limit is the figure a create or an update writes: x-ui's own 0 for a client
+// wanted with no limit (F-111-r), a ceiling otherwise.
+func limit(none bool, bytes int64) int64 {
+	if none {
+		return 0
+	}
+	return ceiling(bytes)
+}
+
 func expiry(at time.Time) int64 {
 	if at.IsZero() {
 		return 0
@@ -529,7 +538,7 @@ func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientReques
 	c := client{
 		Email:      strings.ReplaceAll(req.UUID, "-", ""),
 		Enable:     req.Enabled,
-		TotalGB:    ceiling(req.DataLimitBytes),
+		TotalGB:    limit(req.NoDataLimit, req.DataLimitBytes),
 		ExpiryTime: expiry(req.ExpiresAt),
 		Comment:    req.ClaimTag,
 		SubID:      subID,
@@ -557,7 +566,7 @@ func (d *Driver) UpdateClient(ctx context.Context, req driver.UpdateClientReques
 	next := f.client
 	credential(&next, f.protocol, req.UUID)
 	next.Enable = req.Enabled
-	next.TotalGB = ceiling(req.DataLimitBytes)
+	next.TotalGB = limit(req.NoDataLimit, req.DataLimitBytes)
 	next.ExpiryTime = expiry(req.ExpiresAt)
 	next.Comment = req.ClaimTag
 	return d.write(ctx, op, []string{"xui", "API", "inbounds", "updateClient", key}, f.inbound.ID, next)

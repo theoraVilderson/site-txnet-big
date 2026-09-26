@@ -28,8 +28,8 @@ export const mustStateTraffic = (kind: FulfilmentKind, mode: VariantBillingMode)
 /**
  * Whether a sale of this variant can be delivered on traffic today: invoice
  * create refuses, and the shop leaves out, what this answers `false` for.
- * Unlimited waits on the panels (F-111-r lifts it).
+ * Unlimited is sold: its configs are placed with no limit (F-111-r).
  */
 export function sellsTrafficToday(v: { fulfilmentKind: FulfilmentKind; billingMode: VariantBillingMode; quotas: unknown }): boolean {
-  return !mustStateTraffic(v.fulfilmentKind, v.billingMode) || trafficQuotaOf(v.quotas).kind === 'limited';
+  return !mustStateTraffic(v.fulfilmentKind, v.billingMode) || trafficQuotaOf(v.quotas).kind !== 'missing';
 }

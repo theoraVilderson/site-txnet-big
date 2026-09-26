@@ -35,7 +35,7 @@ function matches(row: Row, where: Record<string, unknown>) {
   return Object.entries(where).every(([key, want]) => row[key] === want);
 }
 
-function build(grantStatus: GrantStatus = GrantStatus.active) {
+function build(grantStatus: GrantStatus = GrantStatus.active, trafficUnlimited = false) {
   const configs: Row[] = [];
   const logs: Row[] = [];
   const rebalanced: string[] = [];
@@ -44,7 +44,7 @@ function build(grantStatus: GrantStatus = GrantStatus.active) {
   const tx = {
     grant: {
       findUnique: async ({ where }: { where: { id: string } }) =>
-        where.id === GRANT ? { id: GRANT, tenantId: TENANT, userId: USER, status: grantStatus } : null,
+        where.id === GRANT ? { id: GRANT, tenantId: TENANT, userId: USER, status: grantStatus, trafficUnlimited } : null,
     },
     panel: {
       findUnique: async ({ where }: { where: { id: string } }) =>
@@ -128,6 +128,24 @@ describe('ConfigActionsService', () => {
     expect(configs[0].claimTag).not.toContain(made.uuid.replace(/-/g, ''));
     expect(rebalanced).toEqual([GRANT]);
     expect(logs).toEqual([expect.objectContaining({ configId: made.configId, action: 'provision', actorType: ActorType.user })]);
+  });
+
+  it("copies an unlimited Grant's flag onto every config it makes, one by one or by a group (F-111-r)", async () => {
+    const limited = build();
+    await limited.service.provision(limited.tx, { grantId: GRANT, panelId: PANEL_A, protocol: 'vless', actor: OWNER });
+    expect(limited.configs[0].trafficUnlimited).toBe(false);
+
+    const { service, tx, configs } = build(GrantStatus.pending, true);
+    await service.provisionForGroup(tx, {
+      grantId: GRANT,
+      credentialGroupId: '55555555-5555-4555-8555-555555555555',
+      placements: [
+        { panelId: PANEL_A, protocol: 'vless', inboundRemoteId: '1' },
+        { panelId: PANEL_B, protocol: 'vless', inboundRemoteId: '2' },
+      ],
+      actor: ADMIN,
+    });
+    expect(configs.map((c) => c.trafficUnlimited)).toEqual([true, true]);
   });
 
   it('refuses a Grant that cannot carry service, and a panel another tenant owns', async () => {

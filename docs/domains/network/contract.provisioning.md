@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 14
-updated: 2026-09-25
+updated: 2026-09-26
 ---
 
 # Provisioning — every action is desired state, and one pass carries it
@@ -117,6 +117,11 @@ lowest picked one of its protocol) is not listed enabled with its protocol, or
 that has none, is `no_inbound` — never the first enabled inbound
 (`contract.inbounds.md` rule 7). None of the three creates anything. The same
 pass writes the panel's inventory of inbounds when it is due (rule 1 there).
+
+**An unlimited config is created with no limit** (F-111-r). `trafficUnlimited`,
+copied from its Grant at create, is what was sold, so there is no allocation to
+wait for and none to run out of: `CreateClient` goes out with `NoDataLimit`, and
+a rebuilt client gets no limit back where a limited one gets its first block.
 
 **Staging.** Desired state is read through `converge.Desired` and shares
 through `converge.Allocations`; `PostgresDesired` and `PostgresAllocations`

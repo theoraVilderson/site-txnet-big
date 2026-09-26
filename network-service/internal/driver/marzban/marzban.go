@@ -163,6 +163,16 @@ func ceiling(bytes int64) *int64 {
 	return &bytes
 }
 
+// limitOf is the figure a create or an update writes: Marzban's own 0 for a
+// client wanted with no limit (F-111-r), a ceiling otherwise.
+func limitOf(none bool, bytes int64) *int64 {
+	if none {
+		var zero int64
+		return &zero
+	}
+	return ceiling(bytes)
+}
+
 func expiry(at time.Time) *int64 {
 	var s int64
 	if !at.IsZero() {
@@ -408,7 +418,7 @@ func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientReques
 		Username:               username,
 		Proxies:                map[string]proxy{req.Protocol: credential(req.Protocol, req.UUID)},
 		Inbounds:               map[string][]string{req.Protocol: {req.InboundRemoteID}},
-		DataLimit:              ceiling(req.DataLimitBytes),
+		DataLimit:              limitOf(req.NoDataLimit, req.DataLimitBytes),
 		Expire:                 expiry(req.ExpiresAt),
 		Note:                   &note,
 		Status:                 "active",
@@ -445,7 +455,7 @@ func (d *Driver) UpdateClient(ctx context.Context, req driver.UpdateClientReques
 	note := req.ClaimTag
 	body := userBody{
 		Proxies:                map[string]proxy{proto: credential(proto, req.UUID)},
-		DataLimit:              ceiling(req.DataLimitBytes),
+		DataLimit:              limitOf(req.NoDataLimit, req.DataLimitBytes),
 		Expire:                 expiry(req.ExpiresAt),
 		Note:                   &note,
 		Status:                 status(req.Enabled),

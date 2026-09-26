@@ -69,8 +69,14 @@ const (
 	// noExpiry is package_days for a client we give no expiry: Hiddify caps
 	// remaining_days at this figure, and it is 27 years.
 	noExpiry = 10000
-	day      = 24 * time.Hour
-	date     = "2006-01-02"
+	// unlimitedGB is usage_limit_GB for a client wanted with no limit
+	// (F-111-r, the user's call 2026-09-26): Hiddify has no "no limit", its 0
+	// is a real zero, so the stand-in is 1,000,000 GB. Nothing reads it back
+	// as a limit — the config's own flag says unlimited, and the ceiling pass
+	// never writes to it.
+	unlimitedGB = 1_000_000
+	day         = 24 * time.Hour
+	date        = "2006-01-02"
 )
 
 // New builds a driver over the panel at baseURL: the scheme, host and admin
@@ -147,6 +153,15 @@ func gb(b int64) *float64 {
 	return &v
 }
 
+// usageLimit is usage_limit_GB for a create or an update.
+func usageLimit(none bool, bytes int64) *float64 {
+	if none {
+		v := float64(unlimitedGB)
+		return &v
+	}
+	return gb(bytes)
+}
+
 func bytesOf(v float64) int64 { return int64(math.Round(v * gigabyte)) }
 
 func (u user) remote() driver.RemoteClient {
@@ -195,12 +210,12 @@ func (d *Driver) schedule(expires time.Time) (string, int) {
 	return start.Format(date), int(last.Sub(start) / day)
 }
 
-func (d *Driver) desired(claimTag string, ceiling int64, expires time.Time, enabled bool) body {
+func (d *Driver) desired(claimTag string, limitGB *float64, expires time.Time, enabled bool) body {
 	start, days := d.schedule(expires)
 	tag := claimTag
 	return body{
 		Comment:      &tag,
-		UsageLimitGB: gb(ceiling),
+		UsageLimitGB: limitGB,
 		PackageDays:  &days,
 		StartDate:    start,
 		Mode:         noReset,
@@ -453,7 +468,7 @@ func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientReques
 	if name == "" {
 		return driver.RemoteClient{}, driver.NewFault(driver.FaultProtocol, op, 0, errors.New("no uuid to create the client under"))
 	}
-	b := d.desired(req.ClaimTag, req.DataLimitBytes, req.ExpiresAt, req.Enabled)
+	b := d.desired(req.ClaimTag, usageLimit(req.NoDataLimit, req.DataLimitBytes), req.ExpiresAt, req.Enabled)
 	b.UUID, b.Name = req.UUID, name
 	var created user
 	if err := d.call(ctx, op, http.MethodPost, "user/", b, &created); err != nil {
@@ -467,7 +482,7 @@ func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientReques
 // the same PATCH: Hiddify changes it on the same row (add_or_update with
 // old_uuid), so the name, the counter and the ceiling stay.
 func (d *Driver) UpdateClient(ctx context.Context, req driver.UpdateClientRequest) error {
-	b := d.desired(req.ClaimTag, req.DataLimitBytes, req.ExpiresAt, req.Enabled)
+	b := d.desired(req.ClaimTag, usageLimit(req.NoDataLimit, req.DataLimitBytes), req.ExpiresAt, req.Enabled)
 	b.UUID = req.UUID
 	_, err := d.patch(ctx, "UpdateClient", req.RemoteID, b)
 	return err

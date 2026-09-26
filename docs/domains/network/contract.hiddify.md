@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 17
-updated: 2026-09-24
+updated: 2026-09-26
 ---
 
 # Hiddify Manager (F-027-be)
@@ -62,7 +62,9 @@ The rules:
    (`internal_credit_disablable`), and a field left out takes Hiddify's
    default (1000 GB, 90 days).
 6. **Zero is a real ceiling.** Hiddify serves a user until usage is *above*
-   the limit and tests the field `is not None`, so 0 is written as 0.
+   the limit and tests the field `is not None`, so 0 is written as 0. No
+   limit (`NoDataLimit`, F-111-r) is therefore 1,000,000 GB: a stand-in, never
+   read back as a limit — the config's flag says unlimited.
 7. **A name two users hold is neither written nor counted.** Writing either
    could be writing someone else's client, and two counters under one remote
    id would read as resets. Both still appear in `ListClients`.

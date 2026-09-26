@@ -82,9 +82,9 @@ func TestDesiredForReadsTheRowAsTheProvisioningPassNeedsIt(t *testing.T) {
 	captured := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	f := &pgDB{rows: []pgRow{
 		{pgConfig, "r-1", "txn-abc", "uuid-1", "vless", "7", true, true, int64(5_000), int64(1_200),
-			"partial", "renamed", 1, repaired, []string{"vless://a"}, "r-1", "uuid-1", captured},
+			"partial", "renamed", 1, repaired, []string{"vless://a"}, "r-1", "uuid-1", captured, false},
 		{"88888888-8888-4888-8888-888888888888", "", "txn-def", "uuid-2", "vmess", "", true, true, nil, int64(0),
-			"pending", "synced", 0, nil, []string{}, "", "", nil},
+			"pending", "synced", 0, nil, []string{}, "", "", nil, true},
 	}}
 	got, err := PostgresDesired{DB: f}.For(context.Background(), pgPanel)
 	if err != nil {
@@ -122,6 +122,9 @@ func TestDesiredForReadsTheRowAsTheProvisioningPassNeedsIt(t *testing.T) {
 	second := got[1]
 	if second.InboundRemoteID != "" {
 		t.Errorf("nothing picked read as inbound %q", second.InboundRemoteID)
+	}
+	if first.Unlimited || !second.Unlimited {
+		t.Errorf("unlimited read %v, %v; want false, true (F-111-r)", first.Unlimited, second.Unlimited)
 	}
 	if second.AllocatedBytes != nil {
 		t.Error("no share yet read as a share: the pass would create a client with no ceiling")

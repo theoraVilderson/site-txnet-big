@@ -45,8 +45,8 @@ describe('sellsTrafficToday — what the shop and invoice create let through', (
     expect(sellsTrafficToday(network({}))).toBe(false);
   });
 
-  it('refuses unlimited until the panels can carry it (F-111-r)', () => {
-    expect(sellsTrafficToday(network(traffic(0)))).toBe(false);
+  it('sells unlimited: the panels place its configs with no limit (F-111-r)', () => {
+    expect(sellsTrafficToday(network(traffic(0)))).toBe(true);
   });
 
   it('leaves a metered network variant and a feature variant alone', () => {

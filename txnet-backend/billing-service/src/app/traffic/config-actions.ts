@@ -91,7 +91,7 @@ export class ConfigActionsService {
     tx: Prisma.TransactionClient,
     input: { grantId: string; panelId: string; protocol: ConfigProtocol | `${ConfigProtocol}`; actor: ConfigActor },
   ): Promise<{ configId: string; uuid: string }> {
-    const grant = await tx.grant.findUnique({ where: { id: input.grantId }, select: { id: true, tenantId: true, userId: true, status: true } });
+    const grant = await tx.grant.findUnique({ where: { id: input.grantId }, select: { id: true, tenantId: true, userId: true, status: true, trafficUnlimited: true } });
     if (!grant || !this.owns(input.actor, grant.userId)) throw new ConfigActionRefused('grant_not_found', input.grantId);
     if (grant.status !== GrantStatus.active) throw new ConfigActionRefused('grant_not_active', grant.status);
     await this.panelFor(tx, input.panelId, grant.tenantId);
@@ -117,7 +117,7 @@ export class ConfigActionsService {
     tx: Prisma.TransactionClient,
     input: { grantId: string; placements: InboundPlacementTarget[]; credentialGroupId: string; actor: ConfigActor },
   ): Promise<{ configId: string; uuid: string }[]> {
-    const grant = await tx.grant.findUnique({ where: { id: input.grantId }, select: { id: true, tenantId: true, userId: true, status: true } });
+    const grant = await tx.grant.findUnique({ where: { id: input.grantId }, select: { id: true, tenantId: true, userId: true, status: true, trafficUnlimited: true } });
     if (!grant) throw new ConfigActionRefused('grant_not_found', input.grantId);
     if (grant.status !== GrantStatus.active && grant.status !== GrantStatus.pending) throw new ConfigActionRefused('grant_not_active', grant.status);
     if (input.placements.length === 0) return [];
@@ -132,7 +132,7 @@ export class ConfigActionsService {
 
   private async create(
     tx: Prisma.TransactionClient,
-    grant: { id: string; tenantId: string; userId: string },
+    grant: { id: string; tenantId: string; userId: string; trafficUnlimited: boolean },
     panelId: string,
     protocol: ConfigProtocol,
     credentialGroupId: string | null,
@@ -151,6 +151,9 @@ export class ConfigActionsService {
         claimTag: claimTag(),
         credentialGroupId,
         inboundRemoteId,
+        // Copied, never re-read: the Grant's flag is set at issue and never
+        // changes, and network-service reads only this row (F-111-r).
+        trafficUnlimited: grant.trafficUnlimited,
         desiredRemote: DesiredRemote.present,
         desiredEnabled: true,
         enforcementState: EnforcementState.pending,

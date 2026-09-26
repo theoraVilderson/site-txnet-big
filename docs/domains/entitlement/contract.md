@@ -88,9 +88,8 @@ request-serving process (ADR-0027, `automation/contract.worker.md`).
 number, because downstream 0 means empty. Such a Grant gets no ceiling
 (network `contract.ceiling.md`), is never suspended as exhausted
 (`suspendIfExhausted` → `unlimited`), never buys a block, and its usage is
-still recorded. A purchase of one stays refused (`sellsTrafficToday`) until
-network places its configs with no limit (F-111-r); a coupon or an admin issue
-is not gated, and its configs wait on F-111-r too.
+still recorded. It is sold: its configs carry the flag and are placed with no
+limit (network `contract.provisioning.md`, F-111-r).
 
 Issue rules: a `purchase` needs a `public` or `unlisted` variant; any other
 source may assign any live variant, `admin_only` included (F-506). A purchase

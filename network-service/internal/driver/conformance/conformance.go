@@ -513,6 +513,38 @@ func limitOf(t *testing.T, d driver.Driver, remoteID string) int64 {
 	return 0
 }
 
+// NoLimitRoundTrip is F-111-r's check, called from each family's own test
+// rather than run as a scenario: a create needs that family's inbound and
+// protocol, which only its test knows. A client created, and later rewritten,
+// with NoDataLimit reads back as `want` — 0, "no limit", on every family that
+// has one, and the family's stand-in figure on one that does not. A limit
+// written in between is taken off again by the update.
+func NoLimitRoundTrip(t *testing.T, d driver.Driver, req driver.CreateClientRequest, want int64) {
+	t.Helper()
+	ctx := context.Background()
+	req.NoDataLimit, req.DataLimitBytes = true, 0
+	created, err := d.CreateClient(ctx, req)
+	if err != nil {
+		t.Fatalf("CreateClient with no limit: %v", err)
+	}
+	if got := limitOf(t, d, created.RemoteID); got != want {
+		t.Fatalf("created with no limit, the panel reads %d, want %d: 0 here is a real ceiling of no traffic", got, want)
+	}
+	if err := d.SetClientDataLimit(ctx, created.RemoteID, 5<<30); err != nil {
+		t.Fatalf("SetClientDataLimit: %v", err)
+	}
+	err = d.UpdateClient(ctx, driver.UpdateClientRequest{
+		RemoteID: created.RemoteID, ClaimTag: req.ClaimTag, UUID: req.UUID,
+		InboundRemoteID: req.InboundRemoteID, NoDataLimit: true, Enabled: req.Enabled,
+	})
+	if err != nil {
+		t.Fatalf("UpdateClient with no limit: %v", err)
+	}
+	if got := limitOf(t, d, created.RemoteID); got != want {
+		t.Errorf("rewritten with no limit, the panel reads %d, want %d", got, want)
+	}
+}
+
 // rateLimitedVsServerFault: 429 is not 5xx. Asking too often leaves a healthy
 // panel that wants a slower caller; a 5xx is the panel failing. Conflating
 // them either quarantines a panel we were rude to, or keeps hammering one that

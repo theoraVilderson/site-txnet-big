@@ -465,6 +465,10 @@ model Config {
   /// by fulfilment from the panel's picks (F-114-b). Null on a row placed
   /// before: the pass then uses the lowest picked inbound of its protocol.
   inboundRemoteId          String?
+  /// Its Grant sold no limit (F-111-r), copied at create from
+  /// `grant.trafficUnlimited`: the client is created with none, and the row
+  /// never holds a ceiling (CHECK `config_unlimited_has_no_ceiling`, raw SQL).
+  trafficUnlimited         Boolean   @default(false)
 
   panel Panel @relation(fields: [panelId], references: [id])
   grant Grant @relation(fields: [grantId], references: [id])

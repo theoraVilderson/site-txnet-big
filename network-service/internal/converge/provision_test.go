@@ -155,6 +155,37 @@ func TestNoClientIsCreatedWithoutAnAllowanceToCreateItUnder(t *testing.T) {
 	}
 }
 
+func TestAnUnlimitedConfigIsCreatedWithNoLimitAndLeftThat(t *testing.T) {
+	// F-111-r: an unlimited Grant has no allocation by construction (F-111-q),
+	// so waiting for one would leave its configs off the panel for good. No
+	// limit is the whole of what it bought, and it is not a money hole.
+	r := newProvRig(t, fake.Config{})
+	row := wanted("c1")
+	row.Unlimited, row.AllocatedBytes, row.ServedBytes = true, nil, 400*gb
+	r.desired.Put("panel-1", row)
+
+	onlyAction(t, r.pass(t), converge.ActionCreated)
+	got := r.row(t, "c1")
+	client, ok := r.client(t, got.RemoteID)
+	if !ok {
+		t.Fatal("the panel holds no client for the unlimited config")
+	}
+	if client.DataLimitBytes != 0 {
+		t.Fatalf("created under a %d-byte limit, want none", client.DataLimitBytes)
+	}
+
+	report := r.pass(t)
+	if len(report.Findings) != 0 || r.row(t, "c1").State != converge.StateComplete {
+		t.Fatalf("the confirming read: findings %+v state %s, want none and complete", report.Findings, r.row(t, "c1").State)
+	}
+	if n := r.panel.CallCount("SetClientDataLimit"); n != 0 {
+		t.Fatalf("SetClientDataLimit called %d times on a client that should carry no limit", n)
+	}
+	if d := r.row(t, "c1").Drift; d != "" && d != converge.DriftSynced {
+		t.Fatalf("drift = %s, want synced", d)
+	}
+}
+
 func TestACreateThatLandedIsAdoptedNotRepeated(t *testing.T) {
 	r := newProvRig(t, fake.Config{})
 	// The first create reached the panel and its answer did not reach us.
