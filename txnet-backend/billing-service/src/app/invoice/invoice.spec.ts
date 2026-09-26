@@ -11,6 +11,9 @@
  *  - the coupons are validated against **this** variant and product, and held
  *    under the invoice's own id, so the pay step (F-111-b) confirms exactly
  *    them and the sweep releases exactly them;
+ *  - a network variant is sold only while its group has enough panels that
+ *    could ever place it (F-111-i): a paid Grant nothing can place is only
+ *    refunded an hour later;
  *  - the sweep's flip is guarded by the row's status, like the top-up sweep:
  *    an invoice paid between the scan and the write keeps its holds.
  */
@@ -34,6 +37,10 @@ const INVOICE_1 = '88888888-8888-4888-8888-888888888881';
 const INVOICE_2 = '88888888-8888-4888-8888-888888888882';
 
 const D = (v: string) => new Prisma.Decimal(v);
+
+/** A panel group as `deliverableGroupIds` reads it: the members its filter kept (F-111-i). */
+type GroupRow = { id: string; minHealthyPanels: number; members: Array<{ panelId: string }> };
+const groupRow = (o: Partial<GroupRow> = {}): GroupRow => ({ id: GROUP, minHealthyPanels: 1, members: [{ panelId: 'panel-1' }], ...o });
 const asTenant = <T>(fn: () => Promise<T>, id = TENANT) => runWithTenant({ id }, fn);
 
 type VariantOverrides = {
@@ -83,6 +90,8 @@ type CreateSetup = {
   refuseReservation?: boolean;
   /** Discount rules in the tenant (F-114-h), as `discountRule.findMany` returns them. */
   rules?: Array<Record<string, unknown>>;
+  /** The panel groups the filter answers (F-111-i); default: one group with one deliverable panel. */
+  groups?: GroupRow[];
 };
 
 function buildCreate(setup: CreateSetup = {}) {
@@ -91,10 +100,17 @@ function buildCreate(setup: CreateSetup = {}) {
     created: [] as Array<Record<string, unknown>>,
     validated: [] as Array<Record<string, unknown>>,
     reserved: [] as Array<Record<string, unknown>>,
+    groupQueries: [] as unknown[],
   };
   const tx = {
     $executeRaw: async () => 0,
     productVariant: { findUnique: async () => variant },
+    panelGroup: {
+      findMany: async (q: unknown) => {
+        calls.groupQueries.push(q);
+        return setup.groups ?? [groupRow()];
+      },
+    },
     discountRule: { findMany: async () => setup.rules ?? [] },
     productCategoryLink: { findMany: async () => [] },
     invoice: {
@@ -231,6 +247,46 @@ describe('InvoiceService.create', () => {
     );
     expect(calls.created).toEqual([]);
     expect(calls.reserved).toEqual([]);
+  });
+
+  it.each([
+    ['whose group has no panel left (its only one deleted)', [groupRow({ members: [] })]],
+    ['whose group has fewer deliverable panels than minHealthyPanels', [groupRow({ minHealthyPanels: 2 })]],
+    ['whose group is gone', []],
+  ])('refuses a network variant %s, and writes nothing (F-111-i)', async (_what, groups) => {
+    const { service, calls } = buildCreate({ groups });
+
+    await expect(asTenant(() => service.create({ userId: USER, variantId: VARIANT, couponCodes: ['SPRING'] }))).rejects.toBeInstanceOf(
+      InvoiceVariantNotFound,
+    );
+    expect(calls.created).toEqual([]);
+    expect(calls.reserved).toEqual([]);
+  });
+
+  it('counts a member only if it could ever place: not drain, not retired, accepted, one sold inbound — never its health (F-111-i)', async () => {
+    const { service, calls } = buildCreate();
+    await asTenant(() => service.create({ userId: USER, variantId: VARIANT, couponCodes: [] }));
+
+    expect(calls.groupQueries).toHaveLength(1);
+    const q = calls.groupQueries[0] as { where: unknown; select: { members: { where: Record<string, unknown> } } };
+    expect(q.where).toEqual({ id: { in: [GROUP] } });
+    const members = q.select.members.where;
+    expect(members).toEqual({
+      role: { not: 'drain' },
+      panel: {
+        retiredAt: null,
+        reviewState: { in: ['accepted', 'accepted_low_trust'] },
+        inbounds: { some: { sold: true, enabled: true, goneAt: null, protocol: { not: null } } },
+      },
+    });
+    expect(JSON.stringify(members)).not.toContain('panelState');
+  });
+
+  it('does not ask about panels for a feature variant', async () => {
+    const { service, calls } = buildCreate({ variant: variantRow({ fulfilmentKind: FulfilmentKind.feature_access, panelGroupId: null }) });
+    await asTenant(() => service.create({ userId: USER, variantId: VARIANT, couponCodes: [] }));
+    expect(calls.created).toHaveLength(1);
+    expect(calls.groupQueries).toEqual([]);
   });
 
   it('sells an unlisted variant: a direct link is a way to buy it', async () => {
@@ -385,10 +441,11 @@ describe('InvoiceService.get — the invoice the shop comes back to (F-111-e)', 
 });
 
 describe('InvoiceService.forSale — what the shop lists (F-111-e)', () => {
-  function buildList(rows: Array<ReturnType<typeof variantRow>>) {
+  function buildList(rows: Array<ReturnType<typeof variantRow>>, groups: GroupRow[] = [groupRow()]) {
     const asked: unknown[] = [];
     const tx = {
       $executeRaw: async () => 0,
+      panelGroup: { findMany: async () => groups },
       productVariant: {
         findMany: async (q: unknown) => {
           asked.push(q);
@@ -424,6 +481,16 @@ describe('InvoiceService.forSale — what the shop lists (F-111-e)', () => {
       { ...variantRow({ fulfilmentKind: FulfilmentKind.external_order }), id: INVOICE_2 },
     ]);
     await expect(asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')))).resolves.toEqual([]);
+  });
+
+  it('leaves out a network variant whose group has no deliverable panel, keeping the one that has (F-111-i)', async () => {
+    const OTHER_GROUP = '99999999-9999-4999-8999-999999999999';
+    const { service } = buildList(
+      [variantRow(), { ...variantRow({ panelGroupId: OTHER_GROUP }), id: INVOICE_2 }],
+      [groupRow(), groupRow({ id: OTHER_GROUP, members: [] })],
+    );
+    const offers = await asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')));
+    expect(offers.map((o) => o.variantId)).toEqual([VARIANT]);
   });
 
   it('leaves out an unlisted variant: a direct link sells it, the list does not show it', async () => {

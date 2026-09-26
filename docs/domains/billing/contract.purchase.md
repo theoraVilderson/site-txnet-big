@@ -40,6 +40,7 @@ the gate like every billing route ("Request edge" in `contract.md`).
 | `expiresAt` = creation + 30 minutes (`INVOICE_TTL_MS`) | `InvoiceService.create` |
 | Per user, `INVOICE_CREATE` bucket, `INVOICE_CREATE_RATE_LIMIT` (20) per 15 min | `@RateLimit` |
 | **Only what can be delivered is sold** (F-111-d): a kind with no delivery handler — `external_order` (retired until a real provider exists — F-111-h), `wallet_topup` (retired, never built: no new product of it is created — F-111-g; money comes in through the deposit page only), a `network_access` variant with no panel group — is the same neutral `404 variantNotFound` | `deliveryRouteOf` (entitlement `delivery.ts`); the user's call 2026-09-25 — a paid Grant nothing can deliver could only be refunded |
+| **Nor what no panel could place** (F-111-i): a `network_access` variant whose group has fewer than `minHealthyPanels` (at least 1) members that are not `drain`, not retired, review-accepted and have one sold inbound is the same `404`, and the shop list leaves it out. Health (`panelState`) is **not** counted — a panel down for a minute is delivery's clock to wait out, and must not flap the shop | `deliverableGroupIds` (`traffic/group-fulfilment.ts`); the user's call 2026-09-26, after a Grant bought 15 s after its group's only panel was deleted was refunded an hour later |
 | **Not yet checked:** governance restrictions and the reseller cap (F-904) — added here once their units exist | — |
 
 ## The clock (built — F-111-a)

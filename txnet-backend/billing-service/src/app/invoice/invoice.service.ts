@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 
 import { CatalogOffer, listOffersIn, sellableOfferById } from '../catalog/catalog-reads';
 import { deliveryRouteOf } from '../entitlement/delivery';
+import { deliverableGroupIds } from '../traffic/group-fulfilment';
 import { discountRuleFor } from './discount/discount-rule';
 import { PrismaService } from '../prisma/prisma.service';
 import { CouponReservationService } from '../payment/coupon/coupon-reservation';
@@ -114,7 +115,13 @@ export class InvoiceService {
       // Nothing is sold that nothing can deliver (F-111-d, the user's call
       // 2026-09-25): a paid Grant with no handler could only be refunded.
       const routed = await tx.productVariant.findUnique({ where: { id: offer.variantId }, select: { panelGroupId: true } });
-      if (deliveryRouteOf(offer.fulfilmentKind, routed?.panelGroupId ?? null) === null) throw new InvoiceVariantNotFound(variantId);
+      const groupId = routed?.panelGroupId ?? null;
+      const route = deliveryRouteOf(offer.fulfilmentKind, groupId);
+      if (route === null) throw new InvoiceVariantNotFound(variantId);
+      // ...nor what no panel of its group could ever place (F-111-i).
+      if (route === 'panel_group' && groupId && !(await deliverableGroupIds(tx, [groupId])).has(groupId)) {
+        throw new InvoiceVariantNotFound(variantId);
+      }
 
       const amount = new Prisma.Decimal(offer.price.amount);
       // The best rule with no code comes first; the coupons see what it left (D-45).
@@ -177,13 +184,20 @@ export class InvoiceService {
 
   /**
    * What the shop lists (F-111-e): every listed variant with a price in
-   * effect, less those nothing can deliver — the rule {@link create} refuses
+   * effect, less those nothing can deliver — no handler, or a group with no
+   * panel that could place it (F-111-i) — the rule {@link create} refuses
    * with, so the list never offers a buy that answers `variantNotFound`.
    */
   forSale(at: Date = new Date()): Promise<CatalogOffer[]> {
     return tenantTransaction(this.prisma, async (tx) => {
-      const offers = await listOffersIn(tx, at);
-      return offers.filter((o) => deliveryRouteOf(o.fulfilmentKind, o.panelGroupId) !== null);
+      const routed = (await listOffersIn(tx, at))
+        .map((offer) => ({ offer, route: deliveryRouteOf(offer.fulfilmentKind, offer.panelGroupId) }))
+        .filter((r) => r.route !== null);
+      const deliverable = await deliverableGroupIds(
+        tx,
+        routed.flatMap((r) => (r.route === 'panel_group' && r.offer.panelGroupId ? [r.offer.panelGroupId] : [])),
+      );
+      return routed.filter((r) => r.route !== 'panel_group' || deliverable.has(r.offer.panelGroupId ?? '')).map((r) => r.offer);
     });
   }
 

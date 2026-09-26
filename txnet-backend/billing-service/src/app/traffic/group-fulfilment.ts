@@ -97,6 +97,36 @@ type MemberFacts = { panelId: string; role: PanelGroupMemberRole; panel: PanelFa
  */
 export const placeableMember = (m: { role: PanelGroupMemberRole; panel: Pick<PanelFacts, 'reviewState' | 'panelState'> }): boolean =>
   m.role !== PanelGroupMemberRole.drain && PLACEABLE_REVIEW_STATES.includes(m.panel.reviewState) && PLACEABLE_PANEL_STATES.includes(m.panel.panelState);
+/**
+ * The groups among `groupIds` that can deliver a new sale (F-111-i): at least
+ * `minHealthyPanels` members that could ever place one — not `drain`, not
+ * retired, accepted, with one sold inbound. Health is left out on purpose: a
+ * panel down for a minute is waited for by delivery's clock, and must not take
+ * the variant out of the shop and put it back each minute.
+ */
+export async function deliverableGroupIds(tx: Prisma.TransactionClient, groupIds: readonly string[]): Promise<Set<string>> {
+  if (groupIds.length === 0) return new Set();
+  const groups = await tx.panelGroup.findMany({
+    where: { id: { in: [...new Set(groupIds)] } },
+    select: {
+      id: true,
+      minHealthyPanels: true,
+      members: {
+        where: {
+          role: { not: PanelGroupMemberRole.drain },
+          panel: {
+            retiredAt: null,
+            reviewState: { in: [...PLACEABLE_REVIEW_STATES] },
+            inbounds: { some: { sold: true, enabled: true, goneAt: null, protocol: { not: null } } },
+          },
+        },
+        select: { panelId: true },
+      },
+    },
+  });
+  return new Set(groups.filter((g) => g.members.length >= Math.max(1, g.minHealthyPanels)).map((g) => g.id));
+}
+
 type ConfigFacts = {
   panelId: string;
   inboundRemoteId: string | null;
