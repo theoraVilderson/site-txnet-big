@@ -60,8 +60,9 @@ export type AllocationInput = {
   /**
    * The floor in seconds of each config's line (ADR-0091): `lineRateBps / 8 ×
    * floorSeconds`, at least `floorBytes`, at most an even share of what pass 1
-   * left; an even share where the line rate is unknown. Absent is `floorBytes`
-   * flat, the floor before ADR-0091.
+   * left — of half of it, among the idle ones, when a hot config is named
+   * (F-027-cr); that share where the line rate is unknown. Absent is
+   * `floorBytes` flat, the floor before ADR-0091.
    */
   floorSeconds?: number;
   /** The config the hot loop says is consuming (F-027-u). It is first in line for everything. */
@@ -192,14 +193,32 @@ export function allocateCeilings(input: AllocationInput): Allocation {
  */
 function floors(input: AllocationInput, floorBytes: bigint, left: bigint): (config: ConfigDemand) => bigint {
   if (input.floorSeconds === undefined) return () => floorBytes;
-  const even = input.configs.length > 0 ? left / BigInt(input.configs.length) : BigInt(0);
+  const even = shareOf(input, left);
   const seconds = BigInt(Math.max(0, Math.floor(input.floorSeconds)));
   return (config) => {
+    // Pass 3 hands the hot config everything left, so its floor adds nothing.
+    if (config.configId === input.hotConfigId) return BigInt(0);
     const rate = config.lineRateBps;
     if (rate === null || rate === undefined || rate <= BigInt(0)) return even;
     const line = (rate / BigInt(8)) * seconds;
     return min(even, line > floorBytes ? line : floorBytes);
   };
+}
+
+/**
+ * The most one config's floor may take. On a bulk pass, an even share of what
+ * pass 1 left. With a hot config named, the idle ones share **half** of it
+ * (F-027-cr, ADR-0091 amendment): an even share over N configs gave the one
+ * actually consuming 1/N per re-split — a fifth at five gigabit inbounds — and
+ * a fast user near the end of a bag was re-split and cut inside the guard band
+ * (F-027-co) over and over. Half converges in a handful of re-splits whatever N.
+ */
+function shareOf(input: AllocationInput, left: bigint): bigint {
+  const count = input.configs.length;
+  if (count === 0) return BigInt(0);
+  const hot = input.hotConfigId != null && input.configs.some((config) => config.configId === input.hotConfigId);
+  if (!hot) return left / BigInt(count);
+  return count > 1 ? left / BigInt(2) / BigInt(count - 1) : BigInt(0);
 }
 
 export type RebalanceGrant = {

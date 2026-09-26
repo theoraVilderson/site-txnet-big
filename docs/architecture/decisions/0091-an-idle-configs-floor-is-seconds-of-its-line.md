@@ -55,3 +55,29 @@ rest goes to the hot config, then the heaviest.
 Per-config rates are measured well enough to replace the panel's line rate, or
 the bulk interval (`collect.DefaultInterval`) or `HORIZON_SECONDS` changes —
 `IDLE_FLOOR_SECONDS` is their sum.
+
+## Amendment 2026-09-26 — the hot config is not held to an even share (F-027-cr)
+
+**Context.** "At most an even share of what pass 1 left" counted the hot
+config among the N. At five gigabit configs a 100 GB bag is under 5 × 22.5 GB,
+so every floor was the even share and the config actually consuming got 1/5 per
+re-split. With the guard band (F-027-co, 875 MB at 25 MB/s) that became a fast
+user re-split and cut over and over through the last ~4 GB (worked out with the
+user, 2026-09-26).
+
+**Decision** (user, 2026-09-26). With a hot config named, the idle configs'
+floors together take at most **half** of what pass 1 left — each at most
+`left / 2 / (N - 1)` — and the hot config's own floor is nothing, pass 3 giving
+it the rest. Idle floors stay seconds of line; a bulk pass (no hot config)
+keeps the even share. At two configs this is the old rule.
+
+**Consequences.** The hot config holds at least half the rest whatever N, so a
+bag converges in a handful of re-splits; the tail inside the band shrinks from
+~4 GB to ~1.75 GB in the case above. An idle config holds less (12.5 GB of
+100 at five gigabit inbounds, was 20) — still more than its 180 s of line in
+most bags. The floors stay monotone in the bag, so the shutdown figure still
+extends (F-027-w); the property test holds the half.
+
+**Rejected.** A 100 MiB floor for a config idle for an hour: it concentrates
+harder, but the switch to a backup inbound after a filtering is exactly a
+long-idle config starting at line rate — the cut this ADR was written against.

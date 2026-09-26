@@ -80,7 +80,9 @@ left:
    horizon), at least 100 MiB (`DEFAULT_CONFIG_FLOOR_BYTES`), at most an even
    share of what pass 1 left — so a small bag splits evenly. A panel that
    declares no line rate gives the even share. An idle config on a gigabit
-   panel keeps 22.5 GB; at 100 Mbps, 2.25 GB. The floors together
+   panel keeps 22.5 GB; at 100 Mbps, 2.25 GB. **With a hot config named, the
+   idle floors together take at most half** (F-027-cr, ADR-0091 amendment),
+   so the one consuming holds at least half the rest at any N. The floors
    never exceed what pass 1 left, so the split stays monotone in the bag.
 3. **everything left**, hot config first. That is the concentration: the config
    actually consuming gets the bag, and the others keep their floor.

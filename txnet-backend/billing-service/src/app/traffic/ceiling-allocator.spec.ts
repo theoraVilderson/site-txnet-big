@@ -208,6 +208,34 @@ describe('allocateCeilings', () => {
     });
   });
 
+  describe('a consuming config is not held to an even share (F-027-cr, ADR-0091 amendment)', () => {
+    const seconds = { floorBytes, floorSeconds: IDLE_FLOOR_SECONDS };
+    const five = ['a', 'b', 'c', 'd', 'e'].map((id) => demand(id, BigInt(0), null, GBIT));
+
+    it('gives the hot one of five gigabit configs half a 100 GB bag, not a fifth', () => {
+      // At a fifth, a user at 25 MB/s was re-split over and over and cut
+      // inside the 875 MB guard band through the last ~4 GB (F-027-co).
+      const bag = BigInt(100) * GIB_BYTES;
+      const ceilings = byId(allocateCeilings({ purchasedBytes: bag, ...seconds, hotConfigId: 'a', configs: five }));
+      expect(ceilings.get('a')).toBe(bag / BigInt(2));
+      for (const idle of ['b', 'c', 'd', 'e']) expect(ceilings.get(idle)).toBe(bag / BigInt(8));
+    });
+
+    it('still keeps an idle config its seconds of line where that is the smaller', () => {
+      const bag = BigInt(500) * GIB_BYTES;
+      const ceilings = byId(allocateCeilings({ purchasedBytes: bag, ...seconds, hotConfigId: 'a', configs: five }));
+      const line = (GBIT / BigInt(8)) * BigInt(IDLE_FLOOR_SECONDS);
+      expect(ceilings.get('b')).toBe(line);
+      expect(ceilings.get('a')).toBe(bag - BigInt(4) * line);
+    });
+
+    it('splits evenly on a bulk pass, where nothing is hotter than the rest', () => {
+      const bag = BigInt(100) * GIB_BYTES;
+      const ceilings = byId(allocateCeilings({ purchasedBytes: bag, ...seconds, hotConfigId: null, configs: five }));
+      for (const id of ['a', 'b', 'c', 'd', 'e']) expect(ceilings.get(id)).toBe(bag / BigInt(5));
+    });
+  });
+
   describe('over generated Grants (ADR-0072 rule 1)', () => {
     /** Mulberry32 — a seeded PRNG in four lines, so no dependency and no flake. */
     const rng = (seed: number) => () => {
@@ -268,6 +296,13 @@ describe('allocateCeilings', () => {
         // A bag big enough for everyone covers everyone: no config is starved
         // below what it has already served while bytes sit unallocated.
         const owed = sum(configs.map((c) => (c.capBytes === null ? c.servedBytes : c.servedBytes < c.capBytes ? c.servedBytes : c.capBytes)));
+        // F-027-cr: an uncapped hot config gets at least half of what pass 1
+        // left, however many idle configs share the bag with it.
+        const hot = configs.find((c) => c.configId === hotConfigId);
+        if (floorSeconds !== undefined && hot && hot.capBytes === null && owed <= purchasedBytes) {
+          const headroom = (ceilings.get(hot.configId) as bigint) - hot.servedBytes;
+          expect(headroom >= (purchasedBytes - owed) / BigInt(2), `${where} hot keeps half`).toBe(true);
+        }
         if (owed <= purchasedBytes) {
           for (const config of configs) {
             const floorOf = config.capBytes === null ? config.servedBytes : config.servedBytes < config.capBytes ? config.servedBytes : config.capBytes;
