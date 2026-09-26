@@ -33,9 +33,19 @@ const ROLE_NAMES = ['user', 'Support', 'Admin', 'SuperAdmin'];
 // the gate (dev-docker/docker-compose.main.yml). `subdomain` rather than
 // `custom_domain` because the platform issued them — a custom domain would need
 // verifying before it routed (tenant invariant 5).
+// `sub.<domain>` is the platform's `subscription` door: a Grant's `/sub` link
+// is built only on a `subscription` domain of its own tenant, and the domain
+// route refuses every host under the platform's base, so nothing else can
+// give the platform one. Resellers bring their own (a verified custom domain).
 function platformHosts() {
   const domain = (process.env.DOMAIN_NAME || '').trim().toLowerCase();
-  return domain ? [`api.${domain}`, `panel.${domain}`] : [];
+  return domain
+    ? [
+        { host: `api.${domain}`, purpose: 'panel' },
+        { host: `panel.${domain}`, purpose: 'panel' },
+        { host: `sub.${domain}`, purpose: 'subscription' },
+      ]
+    : [];
 }
 
 // Idempotent, and never re-points an existing row: `domainValue` is unique, so
@@ -49,7 +59,7 @@ async function seedPlatformDomains(tenantId) {
     return;
   }
 
-  for (const host of hosts) {
+  for (const { host, purpose } of hosts) {
     const existing = await prisma.tenantDomain.findUnique({
       where: { domainValue: host },
     });
@@ -63,9 +73,9 @@ async function seedPlatformDomains(tenantId) {
         tenantId,
         domainType: 'subdomain',
         domainValue: host,
-        // The platform owner's hosts serve the panel routes; `subscription`
-        // and `assets` doors serve none of them (F-066-q).
-        purpose: 'panel',
+        // `panel` hosts serve the panel routes; the `subscription` door
+        // serves none of them, only `/sub` (F-066-q).
+        purpose,
         verificationStatus: 'verified',
         verifiedAt: new Date(),
       },
