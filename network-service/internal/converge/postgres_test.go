@@ -225,8 +225,8 @@ func TestDesiredRecordDriftWritesTheVerdictWithItsRepairCount(t *testing.T) {
 
 func TestAllocationsReadOnlyWhatTheCeilingPassCanWriteTo(t *testing.T) {
 	f := &pgDB{rows: []pgRow{
-		{pgConfig, "r-1", int64(5_000), int64(4_000)},
-		{"88888888-8888-4888-8888-888888888888", "r-2", int64(3_000), nil},
+		{pgConfig, "r-1", int64(5_000), int64(4_000), int64(4_500)},
+		{"88888888-8888-4888-8888-888888888888", "r-2", int64(3_000), nil, nil},
 	}}
 	got, err := PostgresAllocations{DB: f}.For(context.Background(), pgPanel)
 	if err != nil {
@@ -243,9 +243,13 @@ func TestAllocationsReadOnlyWhatTheCeilingPassCanWriteTo(t *testing.T) {
 	if got[0].AppliedBytes == nil || *got[0].AppliedBytes != 4_000 {
 		t.Errorf("applied read %v, want 4000", got[0].AppliedBytes)
 	}
+	// What we wrote is read beside it, so our own figure is not foreign (F-027-cu).
+	if got[0].WrittenBytes == nil || *got[0].WrittenBytes != 4_500 {
+		t.Errorf("written read %v, want 4500", got[0].WrittenBytes)
+	}
 	// No read ever confirmed one: that is not a ceiling of zero, and the
 	// override check tells the two apart.
-	if got[1].AppliedBytes != nil {
+	if got[1].AppliedBytes != nil || got[1].WrittenBytes != nil {
 		t.Error("a ceiling never confirmed read as one")
 	}
 }
@@ -281,6 +285,9 @@ func TestPostgresStoresWriteNothingForNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := (PostgresAllocations{DB: f}).Record(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := (PostgresAllocations{DB: f}).Wrote(ctx, nil); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.sql) != 0 {

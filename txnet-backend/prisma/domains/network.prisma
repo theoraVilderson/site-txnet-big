@@ -452,6 +452,10 @@ model Config {
   /// loop's remaining work, and what the panel UI shows as `in queue`
   /// (ADR-0072).
   appliedCeilingBytes   BigInt?
+  /// The last figure the ceiling pass wrote and the panel accepted — never a
+  /// confirmation. A panel holding it holds ours, so a lowering raised the
+  /// next pass is not somebody else's (F-027-cu).
+  writtenCeilingBytes   BigInt?
   /// The measured rate the time-based horizon is sized from (F-027-u).
   observedRateBps       BigInt?
   ceilingAppliedAt      DateTime?

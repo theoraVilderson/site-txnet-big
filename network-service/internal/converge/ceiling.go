@@ -106,6 +106,12 @@ type Allocation struct {
 	// panel last confirmed. Nil where no read ever has. It is what tells a
 	// ceiling somebody else wrote from one that is merely ours and stale.
 	AppliedBytes *int64
+	// WrittenBytes is `config.writtenCeilingBytes`, in the same basis: the
+	// last figure this loop wrote and the panel accepted. Nil where we never
+	// have. A panel holding it holds ours, whatever it last confirmed
+	// (F-027-cu): a lowering written one pass and raised the next is read
+	// back as this, never as the older confirmed figure.
+	WrittenBytes *int64
 	// RateBps is `config.observedRateBps`, what the guard band is sized on
 	// (F-027-co). Zero where no rate was ever measured.
 	RateBps int64
@@ -120,12 +126,21 @@ type AppliedCeiling struct {
 	At       time.Time
 }
 
+// WrittenCeiling is a figure this loop wrote and the panel accepted, in the
+// allocation's basis. It is never a confirmation — that is AppliedCeiling,
+// read back — only what tells our own figure from somebody else's (F-027-cu).
+type WrittenCeiling struct {
+	ConfigID string
+	Bytes    int64
+}
+
 // Allocations is where the shares come from and where the confirmations go —
 // `network.config` behind an interface, so the loop is proved against scripted
 // panels the way the collection loop is.
 type Allocations interface {
 	For(ctx context.Context, panelID string) ([]Allocation, error)
 	Record(ctx context.Context, rows []AppliedCeiling) error
+	Wrote(ctx context.Context, rows []WrittenCeiling) error
 }
 
 // Finding is one config the pass did something about. A config whose panel
@@ -140,9 +155,9 @@ type Finding struct {
 	HaveBytes int64
 	// Err is set on ReasonRefused and is always a *driver.Fault.
 	Err error
-	// Overridden says the panel's ceiling is neither ours nor the one it last
-	// confirmed: somebody else wrote it (`limit_overridden`, F-027-aa). A top-up
-	// leaves the panel on its old confirmed figure, which is ours and stale.
+	// Overridden says the panel's ceiling is neither the one it last confirmed
+	// nor the last one we wrote: somebody else wrote it (`limit_overridden`,
+	// F-027-aa, F-027-cu). A top-up leaves the panel on a figure of ours, stale.
 	Overridden bool
 }
 
@@ -241,6 +256,7 @@ func (c *Ceilings) pass(
 
 	quiet := quietSet(c.Counters, p, res)
 	var confirmed []AppliedCeiling
+	var written []WrittenCeiling
 	for _, allocation := range allocations {
 		report.Checked++
 		client, onPanel := enforcing[allocation.RemoteID]
@@ -294,6 +310,7 @@ func (c *Ceilings) pass(
 			continue
 		}
 		report.Written++
+		written = append(written, WrittenCeiling{ConfigID: allocation.ConfigID, Bytes: want + offset})
 		report.Findings = append(report.Findings, Finding{
 			ConfigID: allocation.ConfigID, RemoteID: allocation.RemoteID,
 			Reason: reason, WantBytes: want, HaveBytes: have, Overridden: overridden,
@@ -302,6 +319,11 @@ func (c *Ceilings) pass(
 
 	if len(confirmed) > 0 {
 		if err := c.Allocations.Record(ctx, confirmed); err != nil {
+			return report, err
+		}
+	}
+	if len(written) > 0 {
+		if err := c.Allocations.Wrote(ctx, written); err != nil {
 			return report, err
 		}
 	}
@@ -329,11 +351,13 @@ func (c *Ceilings) reason(p collect.Panel, remoteID string, res collect.Result, 
 
 // overridden asks whether the ceiling being corrected is somebody else's. Only
 // a drift reason can be: an exhausted allowance and a reset are ours to
-// explain. With no confirmed figure to compare against, nothing is blamed.
+// explain. With no confirmed figure to compare against, nothing is blamed, and
+// a figure we wrote is ours even before a read confirms it (F-027-cu).
 func overridden(reason Reason, allocation Allocation, have, offset int64) bool {
 	switch reason {
 	case ReasonNoLimit, ReasonAboveAllocation, ReasonBelowAllocation:
-		return allocation.AppliedBytes != nil && have+offset != *allocation.AppliedBytes
+		return allocation.AppliedBytes != nil && have+offset != *allocation.AppliedBytes &&
+			(allocation.WrittenBytes == nil || have+offset != *allocation.WrittenBytes)
 	}
 	return false
 }

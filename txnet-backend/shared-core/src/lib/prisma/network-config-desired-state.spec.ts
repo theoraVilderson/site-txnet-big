@@ -73,6 +73,7 @@ const CONFIG_COLUMNS = [
   'lastReconciledAt',
   'allocatedCeilingBytes',
   'appliedCeilingBytes',
+  'writtenCeilingBytes',
   'observedRateBps',
   'ceilingAppliedAt',
   'walletBackedCeilingBytes',
@@ -105,7 +106,7 @@ describe('network.Config carries its desired state, its drift and its ceiling', 
   it('counts bytes and bit rates in 64 bits', () => {
     // A 32-bit byte counter wraps at 4 GB — the RADIUS Gigawords trap
     // (ADR-0074) arriving a second time, in our own storage.
-    for (const column of ['allocatedCeilingBytes', 'appliedCeilingBytes', 'observedRateBps', 'walletBackedCeilingBytes']) {
+    for (const column of ['allocatedCeilingBytes', 'appliedCeilingBytes', 'writtenCeilingBytes', 'observedRateBps', 'walletBackedCeilingBytes']) {
       expect(config).toMatch(new RegExp(`^\\s*${column}\\s+BigInt`, 'm'));
     }
   });

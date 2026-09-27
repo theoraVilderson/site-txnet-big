@@ -285,3 +285,28 @@ func TestOurOwnNewAllocationIsNotAnOverride(t *testing.T) {
 
 	r.drift(t, converge.DriftSynced)
 }
+
+// A figure we wrote is ours even before a read confirms it (F-027-cu). A
+// re-split lowers the ceiling and the very next pass raises it again — the
+// guard band does exactly that on a live download — and the panel is then
+// holding our lowering, not the figure it last confirmed. Counted as foreign,
+// each raise was a repair and the third one was held for good.
+func TestOurOwnLoweringRaisedInTheNextPassIsNotARepair(t *testing.T) {
+	r := newDriftRig(t, fake.Config{})
+	row := r.established(t)
+	r.pass(t)
+
+	for i, share := range []int64{5 * gb, 8 * gb, 6 * gb, 9 * gb} {
+		row.AllocatedBytes = bytes(share)
+		r.desired.Put("panel-1", row)
+		r.pass(t)
+
+		got := r.drift(t, converge.DriftSynced)
+		if got.RepairCount != 0 {
+			t.Fatalf("re-split %d: repair count %d, want 0 — our own write read as somebody else's", i, got.RepairCount)
+		}
+		if held := r.clients(t)[0].DataLimitBytes; held != share {
+			t.Fatalf("re-split %d: panel holds %d, want %d", i, held, share)
+		}
+	}
+}

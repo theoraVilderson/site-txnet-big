@@ -237,7 +237,9 @@ client belongs to is F-027-aa's. It holds one write the anti-flap stop bounds
 lowering (`contract.drift.md`). A config whose `remoteId` names no client on the panel
 is skipped here and gets its verdict there (`contract.drift.md`).
 
-It does flag one verdict: a drift write whose panel figure is neither ours nor
-the `appliedCeilingBytes` it last confirmed (`Allocation.AppliedBytes`) is
-`Finding.Overridden` — `limit_overridden`. A top-up is not: the panel still
-holds its last confirmed figure, which is ours and stale.
+It does flag one verdict: a drift write whose panel figure is neither the
+`appliedCeilingBytes` it last confirmed (`Allocation.AppliedBytes`) nor the
+`writtenCeilingBytes` we last wrote and it accepted (`Allocation.WrittenBytes`,
+F-027-cu) is `Finding.Overridden` — `limit_overridden`. A top-up is not: the
+panel still holds a figure of ours, stale. `writtenCeilingBytes` is never a
+confirmation — nothing enforces from it — only what tells ours from theirs.

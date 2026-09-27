@@ -68,7 +68,7 @@ var RequiredColumns = map[string][]string{
 		"remoteId", "claimTag", "credentialGroupId",
 		"desiredEnabled", "desiredRemote", "enforcementState",
 		"driftState", "driftRepairCount", "driftRepairedAt", "lastReconciledAt",
-		"allocatedCeilingBytes", "appliedCeilingBytes", "observedRateBps",
+		"allocatedCeilingBytes", "appliedCeilingBytes", "writtenCeilingBytes", "observedRateBps",
 		"ceilingAppliedAt", "walletBackedCeilingBytes",
 		// The lines `/sub` renders, and the client they were read from (F-027-bj).
 		"linkLines", "linksRemoteId", "linksUuid", "linksCapturedAt",

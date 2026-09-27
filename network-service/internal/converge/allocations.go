@@ -12,12 +12,14 @@ type MemoryAllocations struct {
 	mu       sync.Mutex
 	byPanel  map[string][]Allocation
 	byConfig map[string]AppliedCeiling
+	written  map[string]int64
 }
 
 func NewMemoryAllocations() *MemoryAllocations {
 	return &MemoryAllocations{
 		byPanel:  map[string][]Allocation{},
 		byConfig: map[string]AppliedCeiling{},
+		written:  map[string]int64{},
 	}
 }
 
@@ -47,6 +49,9 @@ func (m *MemoryAllocations) For(_ context.Context, panelID string) ([]Allocation
 			bytes := applied.Bytes
 			row.AppliedBytes = &bytes
 		}
+		if bytes, ok := m.written[row.ConfigID]; ok {
+			row.WrittenBytes = &bytes
+		}
 		out[i] = row
 	}
 	return out, nil
@@ -57,6 +62,15 @@ func (m *MemoryAllocations) Record(_ context.Context, rows []AppliedCeiling) err
 	defer m.mu.Unlock()
 	for _, row := range rows {
 		m.byConfig[row.ConfigID] = row
+	}
+	return nil
+}
+
+func (m *MemoryAllocations) Wrote(_ context.Context, rows []WrittenCeiling) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, row := range rows {
+		m.written[row.ConfigID] = row.Bytes
 	}
 	return nil
 }

@@ -266,7 +266,7 @@ var _ Allocations = PostgresAllocations{}
 // client, and still wanted on the panel. One being deleted is provisioning's.
 const allocationsSQL = `
 SELECT c.id::text, c."remoteId", c."allocatedCeilingBytes", c."appliedCeilingBytes",
-       coalesce(c."observedRateBps", 0)::bigint
+       c."writtenCeilingBytes", coalesce(c."observedRateBps", 0)::bigint
   FROM network.config c
  WHERE c."panelId" = $1::uuid
    AND c."allocatedCeilingBytes" IS NOT NULL
@@ -283,7 +283,7 @@ func (s PostgresAllocations) For(ctx context.Context, panelID string) ([]Allocat
 	var out []Allocation
 	for rows.Next() {
 		var a Allocation
-		if err := rows.Scan(&a.ConfigID, &a.RemoteID, &a.AllocatedBytes, &a.AppliedBytes, &a.RateBps); err != nil {
+		if err := rows.Scan(&a.ConfigID, &a.RemoteID, &a.AllocatedBytes, &a.AppliedBytes, &a.WrittenBytes, &a.RateBps); err != nil {
 			return nil, fmt.Errorf("reading panel %s allocations: %w", panelID, err)
 		}
 		out = append(out, a)
@@ -313,6 +313,28 @@ func (s PostgresAllocations) Record(ctx context.Context, rows []AppliedCeiling) 
 	}
 	if _, err := s.DB.Exec(ctx, appliedSQL, ids, bytes, at); err != nil {
 		return fmt.Errorf("recording applied ceilings: %w", err)
+	}
+	return nil
+}
+
+// writtenSQL remembers the figure we wrote, so the next pass knows it for ours
+// (F-027-cu). It is never `appliedCeilingBytes`: a write is not a read.
+const writtenSQL = `
+UPDATE network.config c
+   SET "writtenCeilingBytes" = v.bytes
+  FROM unnest($1::text[], $2::bigint[]) AS v(id, bytes)
+ WHERE c.id = v.id::uuid`
+
+func (s PostgresAllocations) Wrote(ctx context.Context, rows []WrittenCeiling) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	ids, bytes := make([]string, len(rows)), make([]int64, len(rows))
+	for i, r := range rows {
+		ids[i], bytes[i] = r.ConfigID, r.Bytes
+	}
+	if _, err := s.DB.Exec(ctx, writtenSQL, ids, bytes); err != nil {
+		return fmt.Errorf("recording written ceilings: %w", err)
 	}
 	return nil
 }

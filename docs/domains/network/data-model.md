@@ -74,7 +74,7 @@ deleted** (ADR-0075), because desired state is what makes a rebuild a button.
 (ADR-0072): the first is what the allocator decided, the second what the panel
 confirmed, and the gap is the loop's remaining work — what the panel UI shows
 as `in queue`. Collapsed into one, the system believes a ceiling it never
-wrote, which is free traffic at the far end of it and nothing red anywhere.
+wrote, which is free traffic at the far end of it and nothing red anywhere. `writtenCeilingBytes` (F-027-cu) is our last accepted write, never a confirmation: only what tells ours from a foreign figure.
 `observedRateBps` sizes the horizon (F-027-u) and the guard band (F-027-co); `driftState`/`driftRepairCount`/
 `driftRepairedAt` are the verdict and 24 h stop (F-027-ab); `credentialGroupId`
 is one group placement, one row per panel (`config_group_panel_once`, F-027-bl) but a drained (`drainedAt`) one, F-027-bp; `walletBackedCeilingBytes` ≥ allocation is a shutdown's

@@ -114,7 +114,11 @@ lowering and goes out. A contested `rebuilt` client is still re-keyed and
 still gets a ceiling if it has none, but not its tag; its next rename reads
 `rebuilt` again. A raise is held only when it is somebody else's — overridden
 now, or the row already `contested` — so our own top-up over our own stale
-figure is never held.
+figure is never held. **Ours** means the panel's last confirmed figure *or*
+the last one we wrote (`writtenCeilingBytes`, F-027-cu): the confirmation is
+recorded before the pass writes, so a lowering raised the very next pass — the
+guard band does it on every live download — would otherwise read as foreign,
+count as a repair, and turn the config `contested` after two.
 
 ### The panel-wide event
 
