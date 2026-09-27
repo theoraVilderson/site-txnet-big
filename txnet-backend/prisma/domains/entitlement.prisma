@@ -164,6 +164,10 @@ model Grant {
   /// A period that no longer matches it can be told again; written
   /// conditionally on the value read, so each period is told once.
   forecastNoticeFor     DateTime?
+  /// When a timed admin freeze ends by itself (F-311-h): the hourly sweep
+  /// unfreezes it then. Null = not frozen, or frozen until the admin unfreezes
+  /// it. Only on a frozen Grant (`grant_frozen_until_is_frozen`).
+  frozenUntil           DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @default(now()) @updatedAt
 
@@ -187,6 +191,8 @@ model Grant {
   @@index([status, idleCheckAt], map: "grant_status_idleCheckAt_idx")
   /// The same sweep's other question: which held usage notices are 24 h old (F-601-n).
   @@index([status, usageNoticeSince], map: "grant_status_usageNoticeSince_idx")
+  /// The unfreeze sweep's only question: which timed freezes are due (F-311-h).
+  @@index([status, frozenUntil], map: "grant_status_frozenUntil_idx")
   @@map("grant")
   @@schema("entitlement")
 }

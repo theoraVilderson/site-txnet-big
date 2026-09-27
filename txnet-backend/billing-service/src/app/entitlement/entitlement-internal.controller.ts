@@ -4,6 +4,7 @@ import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 import { DeliverDueResult, DeliveryOutcome, GrantDeliveryService } from './delivery';
 import { EndNoticeResult, GrantEndNoticeService } from './end-notice';
 import { ForecastResult, GrantExhaustionForecastService } from './exhaustion-forecast';
+import { GrantUnfreezeService } from './freeze';
 import { GrantIdleNoticeService, IdleNoticeResult } from './idle-notice';
 import { GrantPurgeService, PurgeResult } from './purge';
 import { GrantPurgeNoticeService } from './purge-notice';
@@ -41,13 +42,16 @@ export class EntitlementInternalController {
     private readonly purgeNotice: GrantPurgeNoticeService,
     private readonly idle: GrantIdleNoticeService,
     private readonly forecast: GrantExhaustionForecastService,
+    private readonly unfreeze: GrantUnfreezeService,
   ) {}
 
   /**
    * Set `desiredRemote = absent` on every config of every suspended Grant past
    * its `purgeAfterDays`, one batch, releasing the panel seats — then tell
    * each suspended Grant whose purge is within a day (F-601-j, `told`). After,
-   * not before: a Grant purged in this call is not told it will be.
+   * not before: a Grant purged in this call is not told it will be. First of
+   * all, every timed freeze whose `frozenUntil` has come is unfrozen
+   * (F-311-h, `unfrozen`); a frozen Grant is never purged either way.
    *
    * Answers the raw counts rather than this service's usual envelope, for the
    * reason the deposit seam gives: the only caller is a job that records them
@@ -55,10 +59,11 @@ export class EntitlementInternalController {
    */
   @Post('purge-due')
   @HttpCode(200)
-  async purgeDue(): Promise<PurgeResult & { told: number }> {
+  async purgeDue(): Promise<PurgeResult & { told: number; unfrozen: number }> {
+    const { unfrozen } = await this.unfreeze.unfreezeDue();
     const purged = await this.purge.purgeDue();
     const { told } = await this.purgeNotice.noticeDue();
-    return { ...purged, told };
+    return { ...purged, told, unfrozen };
   }
 
   /**

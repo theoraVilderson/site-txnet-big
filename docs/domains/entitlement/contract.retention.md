@@ -152,6 +152,7 @@ purge (`purge-due` answers `told` beside its counts).
 | Rule | Why |
 |---|---|
 | Due at `suspendedAt + (window - 1) days`, the window resolved as the purge resolves it, live; `0` is never scanned | purge off is never told; a 1-day window is told at the suspension |
+| A frozen Grant (`admin_frozen`, F-311-h) is never scanned | it is never purged, and a renewal would not unfreeze it |
 | Only while a config is still `present` | a Grant the purge got to first is not told "within a day" |
 | The clock is `purgeNoticeFor`, the `suspendedAt` told for; the write is conditional on the value read; `period` = `suspendedAt` | once per suspension; a revival clears `suspendedAt`, so the next one is due again with nothing reset |
 | Prepaid: `entitlement.grant.purge_soon` ("renew"); metered: `.purge_soon_metered` ("top up") | a metered renewal adds days alone and revives nothing (as "Cutoff") |

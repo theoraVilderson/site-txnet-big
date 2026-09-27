@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   ConflictException,
   Controller,
@@ -19,9 +20,11 @@ import type { Request } from 'express';
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
+import { EntitlementRefused, EntitlementRejection } from '../../entitlement/grant';
 import { ConfigActionRefused } from '../../traffic/config-actions';
 import type { AdminConfigCommand } from '../../traffic/user-configs';
 import { AdminConfigActionBody, adminConfigActionSchema } from '../../traffic/user-configs.schema';
+import { GrantFreezeBody, grantFreezeSchema } from './grant-freeze.schema';
 import { GrantListQuery, grantListSchema } from './grant-list.schema';
 import {
   ResellerUserGrantsRefused,
@@ -38,6 +41,14 @@ const STATUS: Record<ResellerUserGrantsRejection, 403 | 404 | 409> = {
   reseller_suspended: 403,
   reseller_terminated: 409,
   user_not_found: 404,
+};
+
+/** A freeze's refusals (F-311-h); any other `EntitlementRefused` is not this surface's and passes through. */
+const FREEZE_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
+  grant_not_active: 409,
+  grant_not_frozen: 409,
+  grant_moved: 409,
+  freeze_until_not_future: 400,
 };
 
 /** One bucket for all four: expanding one Grant asks three of them at once. */
@@ -130,6 +141,40 @@ export class ResellerUserGrantsController {
   }
 
   /**
+   * An admin freezes one of this user's Grants (F-311-h): its configs off, its
+   * clock stopped, kept — never purged. `until` unfreezes it by itself.
+   * The config actions' bucket: both are an admin's writes on a user's service.
+   */
+  @Post('grants/:grantId/freeze')
+  @HttpCode(HttpStatus.OK)
+  @actionLimit
+  async freeze(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Body(new ZodValidationPipe(grantFreezeSchema)) body: GrantFreezeBody,
+    @Req() req: Request,
+  ) {
+    const until = body.until ? new Date(body.until) : null;
+    const done = await this.refusing(() => this.service.freeze(actorOf(req), tenantId, userId, grantId, until));
+    return { grantId, frozenUntil: done.frozenUntil?.toISOString() ?? null, configsDisabled: done.configsDisabled };
+  }
+
+  /** And unfreezes it: its end moves by the time it stood still. */
+  @Post('grants/:grantId/unfreeze')
+  @HttpCode(HttpStatus.OK)
+  @actionLimit
+  async unfreeze(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Req() req: Request,
+  ) {
+    const done = await this.refusing(() => this.service.unfreeze(actorOf(req), tenantId, userId, grantId));
+    return { grantId, endsAt: done.endsAt?.toISOString() ?? null, configsRestored: done.configsRestored };
+  }
+
+  /**
    * The door's refusals travel as `reason`, as on the other reseller surfaces;
    * a missing Grant is the owner routes' own 404. The link's two 409s
    * (`SubscriptionLinkService`) are already HTTP errors and pass through.
@@ -140,6 +185,13 @@ export class ResellerUserGrantsController {
     } catch (e) {
       if (e instanceof ConfigActionRefused && e.reason === 'grant_not_found') {
         throw new NotFoundException({ i18nKey: E.grant.notFound, reason: e.reason, message: `${e.name}: ${e.message}` });
+      }
+      if (e instanceof EntitlementRefused) {
+        const payload = { reason: e.reason, message: e.message };
+        if (e.reason === 'grant_not_found') throw new NotFoundException({ i18nKey: E.grant.notFound, ...payload });
+        if (FREEZE_STATUS[e.reason] === 400) throw new BadRequestException(payload);
+        if (FREEZE_STATUS[e.reason] === 409) throw new ConflictException(payload);
+        throw e;
       }
       if (!(e instanceof ResellerUserGrantsRefused)) throw e;
       const payload = { reason: e.reason, message: e.message };

@@ -155,6 +155,8 @@ describe('GrantService.listForUser', () => {
           trafficCapBytes: null,
           suspendedAt: null,
           purgeAt: null,
+          frozen: false,
+          frozenUntil: null,
           lastTrafficAt: null,
         },
       ],

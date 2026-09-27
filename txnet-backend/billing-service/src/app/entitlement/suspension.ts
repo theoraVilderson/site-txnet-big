@@ -9,6 +9,12 @@ import { GrantStatus, Prisma } from '@prisma/client';
  */
 export const QUOTA_EXHAUSTED = 'quota_exhausted';
 
+/**
+ * `grant.statusReason` for a Grant an admin froze (F-311-h, `freeze.ts`): the
+ * other meaning. Only `unfreezeGrant` lifts it, and it is never purged.
+ */
+export const ADMIN_FROZEN = 'admin_frozen';
+
 export type Suspension = {
   /** False where the Grant was no longer `active` when the write reached it. Nothing was written. */
   suspended: boolean;

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import {
   ResellerAccess,
   ResellerAccessRefused,
@@ -7,7 +8,8 @@ import {
   tenantTransaction,
 } from '@txnet-backend/shared-core';
 
-import { GrantService } from '../../entitlement/grant';
+import { Freeze, freezeGrant, Unfreeze, unfreezeGrant } from '../../entitlement/freeze';
+import { EntitlementRefused, GrantService } from '../../entitlement/grant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GrantUsageService, GrantUsageView } from '../../traffic/grant-usage';
 import { AdminConfigCommand, UserConfigOutcome, UserConfigsService, UserConfigView } from '../../traffic/user-configs';
@@ -81,6 +83,29 @@ export class ResellerUserGrantsService {
    */
   act(actor: ResellerActor, tenantId: string, userId: string, command: AdminConfigCommand): Promise<UserConfigOutcome[]> {
     return this.run(actor, tenantId, userId, () => this.configService.actAsAdmin(actor.userId, userId, command), 'staffWrite');
+  }
+
+  /**
+   * An admin freezes this user's Grant (F-311-h), until `until` or until
+   * unfrozen: `staffWrite`, as for a config action. A Grant of another user
+   * is `grant_not_found`, never frozen.
+   */
+  freeze(actor: ResellerActor, tenantId: string, userId: string, grantId: string, until: Date | null): Promise<Freeze> {
+    return this.run(actor, tenantId, userId, () => this.onGrant(userId, grantId, (tx) => freezeGrant(tx, grantId, { at: new Date(), until })), 'staffWrite');
+  }
+
+  /** An admin unfreezes it: the frozen time is added to its end (F-311-h). */
+  unfreeze(actor: ResellerActor, tenantId: string, userId: string, grantId: string): Promise<Unfreeze> {
+    return this.run(actor, tenantId, userId, () => this.onGrant(userId, grantId, (tx) => unfreezeGrant(tx, grantId, new Date())), 'staffWrite');
+  }
+
+  /** `work` on the Grant, in one transaction, only if it is the path's user's. */
+  private onGrant<T>(userId: string, grantId: string, work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    return tenantTransaction(this.prisma, async (tx) => {
+      const mine = await tx.grant.findFirst({ where: { id: grantId, userId }, select: { id: true } });
+      if (!mine) throw new EntitlementRefused('grant_not_found');
+      return work(tx);
+    });
   }
 
   /** Admit, run in the reseller's scope, check the user is its own, then `work`; the door's refusal becomes this surface's one type. */

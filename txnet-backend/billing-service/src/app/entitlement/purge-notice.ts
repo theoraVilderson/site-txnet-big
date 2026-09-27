@@ -7,6 +7,7 @@ import type { EnvConfig } from '../config/env.validation';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GRANT_AGGREGATE } from './delivered';
+import { ADMIN_FROZEN } from './suspension';
 
 type PurgeNotice = typeof OutboxEventType.GRANT_PURGE_SOON | typeof OutboxEventType.GRANT_PURGE_SOON_METERED;
 
@@ -72,6 +73,7 @@ export class GrantPurgeNoticeService {
         JOIN "tenant"."tenant" t ON t."id" = g."tenantId"
        WHERE g."status" = ${GrantStatus.suspended}::"entitlement"."GrantStatus"
          AND g."suspendedAt" IS NOT NULL
+         AND g."statusReason" IS DISTINCT FROM ${ADMIN_FROZEN}
          AND COALESCE(g."purgeAfterDays", t."purgeAfterDays") > 0
          AND g."suspendedAt" + make_interval(days => COALESCE(g."purgeAfterDays", t."purgeAfterDays") - 1) <= ${now}
          AND g."purgeNoticeFor" IS DISTINCT FROM g."suspendedAt"

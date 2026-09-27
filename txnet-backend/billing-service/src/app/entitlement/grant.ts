@@ -8,6 +8,7 @@ import { isSellableBySku, meteredRateAt, type MeteredRateRow, type OfferFacts } 
 import { trafficQuotaOf } from '../catalog/traffic-quota';
 import { PrismaService } from '../prisma/prisma.service';
 import { GrantTokenSeal, NO_TOKEN_SEAL, type SealedToken } from './grant-token-seal';
+import { ADMIN_FROZEN } from './suspension';
 import { unusedClockOf } from './unused-clock';
 import { configIdentityOf, storedLineIdentity } from '../traffic/config-identity';
 import { foldConfigText } from '../traffic/config-text';
@@ -49,8 +50,12 @@ export type EntitlementRejection =
   | 'traffic_not_renewable'
   /** Renewal: neither bytes nor days. */
   | 'nothing_to_renew'
-  /** Renewal: the Grant's Quota or end moved between the read and the write; retry. */
-  | 'grant_moved';
+  /** Renewal or unfreeze: the Grant's Quota or end moved between the read and the write; retry. */
+  | 'grant_moved'
+  /** Unfreeze (F-311-h): the Grant is not frozen — never a suspension for quota, which a top-up lifts. */
+  | 'grant_not_frozen'
+  /** Freeze: an unfreeze time that has already come. */
+  | 'freeze_until_not_future';
 
 export class EntitlementRefused extends Error {
   constructor(
@@ -197,8 +202,12 @@ export type GrantView = {
   trafficCapBytes: string | null;
   /** When the bag ran empty; `null` unless the Grant is suspended (ADR-0075). */
   suspendedAt: string | null;
-  /** When the purge releases its panel seats; `null` when nothing is due — not suspended, or a window of `0` (never). */
+  /** When the purge releases its panel seats; `null` when nothing is due — not suspended, frozen (never purged), or a window of `0` (never). */
   purgeAt: string | null;
+  /** An admin froze it (F-311-h): `suspended`, kept, its clock stopped. */
+  frozen: boolean;
+  /** When a timed freeze ends by itself; `null` when not frozen or frozen until the admin unfreezes it. */
+  frozenUntil: string | null;
   /**
    * When traffic last moved, to within one usage push (F-307-u): metering's
    * `usagePushedAt`, which only a charged, non-zero delta writes, at most once
@@ -243,6 +252,8 @@ const GRANT_VIEW_COLUMNS = {
   trafficUnlimited: true,
   quotas: true,
   suspendedAt: true,
+  statusReason: true,
+  frozenUntil: true,
   purgeAfterDays: true,
   usagePushedAt: true,
 } satisfies Prisma.GrantSelect;
@@ -347,6 +358,7 @@ function grantViewOf(r: GrantViewRow, tenantPurgeDays: number | null, adjustedBy
   const limit = soldLimitOf(r);
   const cap = limit === null ? null : limit + adjustedBytes;
   const suspended = r.status === GrantStatus.suspended ? r.suspendedAt : null;
+  const frozen = r.status === GrantStatus.suspended && r.statusReason === ADMIN_FROZEN;
   return {
     id: r.id,
     status: r.status,
@@ -360,7 +372,9 @@ function grantViewOf(r: GrantViewRow, tenantPurgeDays: number | null, adjustedBy
     trafficUnlimited: r.trafficUnlimited,
     trafficCapBytes: cap === null ? null : (cap > BigInt(0) ? cap : BigInt(0)).toString(),
     suspendedAt: suspended?.toISOString() ?? null,
-    purgeAt: purgeAtOf(suspended, r.purgeAfterDays, tenantPurgeDays)?.toISOString() ?? null,
+    purgeAt: frozen ? null : (purgeAtOf(suspended, r.purgeAfterDays, tenantPurgeDays)?.toISOString() ?? null),
+    frozen,
+    frozenUntil: frozen ? (r.frozenUntil?.toISOString() ?? null) : null,
     lastTrafficAt: r.usagePushedAt?.toISOString() ?? null,
   };
 }
@@ -539,7 +553,7 @@ export class GrantService {
       const hidden = everything === null ? 0 : everything - total;
       // The tenant's window is read only when a row needs it: a suspended
       // Grant with no window of its own.
-      const needsTenant = rows.some((r) => r.status === GrantStatus.suspended && r.purgeAfterDays === null);
+      const needsTenant = rows.some((r) => r.status === GrantStatus.suspended && r.statusReason !== ADMIN_FROZEN && r.purgeAfterDays === null);
       const tenant = needsTenant
         ? await tx.tenant.findUnique({ where: { id: TenantContext.current('grant list').id }, select: { purgeAfterDays: true } })
         : null;

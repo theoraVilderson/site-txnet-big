@@ -72,6 +72,7 @@ function build(setup: { due?: Due[]; batchSize?: number; configsPerTenant?: numb
     $queryRaw: async (
       _sql: TemplateStringsArray,
       _status: string,
+      _frozen: string,
       now: Date,
       _present: string,
       take: number,

@@ -6,7 +6,7 @@ import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 import type { EnvConfig } from '../config/env.validation';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { QUOTA_EXHAUSTED } from './suspension';
+import { ADMIN_FROZEN, QUOTA_EXHAUSTED } from './suspension';
 
 /**
  * The second and third stages of ADR-0075 (F-027-y): the clock a suspension
@@ -81,6 +81,7 @@ export class GrantPurgeService {
         JOIN "tenant"."tenant" t ON t."id" = g."tenantId"
        WHERE g."status" = ${GrantStatus.suspended}::"entitlement"."GrantStatus"
          AND g."suspendedAt" IS NOT NULL
+         AND g."statusReason" IS DISTINCT FROM ${ADMIN_FROZEN}
          AND COALESCE(g."purgeAfterDays", t."purgeAfterDays") > 0
          AND g."suspendedAt" + make_interval(days => COALESCE(g."purgeAfterDays", t."purgeAfterDays")) <= ${now}
          AND EXISTS (

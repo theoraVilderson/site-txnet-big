@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-version: 10
+version: 11
 updated: 2026-09-27
 ---
 
@@ -29,7 +29,7 @@ and changes its quota only through `quota_adjustment` rows.
 | `adjustQuota(tx, …)` | grantId, metric, delta, source, capPercent?, expiresAt?, reason? | QuotaAdjustment | caller's transaction | `grant_not_found`, `grant_not_active` |
 | `rotateToken(tx, id, userId)` | grantId, its user | the new token, kept sealed; the old link stops working | caller's transaction | `grant_not_found` (also for another user's) |
 | `subscriptionTokenFor(tx, id, userId)` | grantId, its user | the current token, as often as asked; `null` when none is kept (a Grant from before F-114-e-a, or issued with no KEK) — resetting keeps one | caller's transaction | `grant_not_found` (also for another user's); throws if the opened token does not hash to the row |
-| `listForUser(userId, {page?, pageSize?})` | the user, paging | one page of that user's Grants — id, status, period, feature keys, variant `{id, sku, nameKey}`, billing mode, consumed/purchased bytes, `suspendedAt` and `purgeAt` (F-027-ac, `purgeAtOf`); never the token or its hash | own tenant transaction | — |
+| `listForUser(userId, {page?, pageSize?})` | the user, paging | one page of that user's Grants — id, status, period, feature keys, variant `{id, sku, nameKey}`, billing mode, consumed/purchased bytes, `suspendedAt` and `purgeAt` (F-027-ac, `purgeAtOf`); never the token or its hash; `frozen` + `frozenUntil` (F-311-h), and no `purgeAt` for a frozen one | own tenant transaction | — |
 
 **Exhaustion suspends (F-027-x, ADR-0075)** — `suspendForExhaustion(tx,
 grantId, at)` in `entitlement/suspension.ts`, a function rather than a
@@ -107,6 +107,20 @@ Quota or end (rule 25). Refused: `grant_not_renewable` (not `active` or
 on a metered or unlimited Grant, which renew by days alone),
 `nothing_to_renew`, `grant_moved` (Quota or end changed since the read: retry,
 so no debt is forgiven twice). Callers arrive with F-305 and F-311-d.
+
+**Freeze (F-311-h)** — `freezeGrant(tx, id, {at, until?})` and
+`unfreezeGrant(tx, id, at)` in `entitlement/freeze.ts`, proved by `freeze.spec.ts`.
+A freeze moves an `active` Grant to `suspended`, `statusReason = admin_frozen`
+(`ADMIN_FROZEN`), `suspendedAt = at`, every config `desiredEnabled = false`.
+**Kept** (user, 2026-09-27): the purge and its day-ahead notice skip it, so an
+unfreeze turns on the lines the user already holds. **The clock stops**: unfreeze
+moves `endsAt` by `at - suspendedAt` (permanent stays permanent) and restores
+configs as `reviveOnTopUp` does. `until` (`frozenUntil`) ends it by itself: the
+hourly `purge-due` tick unfreezes each due one first (`GrantUnfreezeService`,
+answer `unfrozen`). Refused: `grant_not_active` (a quota stop stays the top-up's),
+`grant_not_frozen`, `freeze_until_not_future`, `grant_moved` (the end moved: retry).
+A top-up or renewal never lifts it (both key on `quota_exhausted`). Its HTTP
+route is billing's `contract.gift.md` (F-311-h).
 
 **Unlimited traffic (F-111-q).** A prepaid variant sold with
 `traffic_bytes.limit = 0` (catalog invariant 10) is issued with
