@@ -14,6 +14,8 @@ import { bytesAffordable } from './block-purchase';
  * and each one would look correct on the panel it sits on. That is the hole
  * ADR-0072 closes, so the split is an invariant with a property test
  * (`ceiling-allocator.spec.ts`, entitlement invariant 8) and not a tuning.
+ * The one exception is a metered Grant's reserve (F-027-cs): headroom the
+ * wallet backs, which does not thin with the config count.
  *
  * It decides; it never buys. `BlockPurchaseService` advances `purchasedBytes`
  * and this hands out what that bought — the bound and the split move in one
@@ -67,6 +69,14 @@ export type AllocationInput = {
   floorSeconds?: number;
   /** The config the hot loop says is consuming (F-027-u). It is first in line for everything. */
   hotConfigId?: string | null;
+  /**
+   * What the wallet would still buy, on a metered Grant (F-027-cs, ADR-0091
+   * amendment): the most a config may hold **above what it served** past its
+   * share of the bag. Each config is raised to `served + min(this, its floor
+   * of line)`, however many share the bag — so here, and only here, `Σ
+   * ceilings` may pass `purchasedBytes`. Absent or zero, none: a prepaid bag.
+   */
+  reserveBytes?: bigint;
   configs: ConfigDemand[];
 };
 
@@ -139,6 +149,9 @@ const capOf = (config: ConfigDemand, bag: bigint) => (config.capBytes === null ?
  * pass 1 is an overrun the holds queue settles (ADR-0074): the ceilings stop at
  * the bag, in the order above, and the panels cut the rest off themselves.
  *
+ * On a metered Grant, a fourth step raises each config to `served + min(the
+ * reserve, its seconds of line)` — past the bag, out of nobody's share.
+ *
  * `min(share, sub-account cap)` is applied inside every pass, not over the
  * result — the smaller cap wins (F-608), and the bytes it refuses stay in the
  * bag for the next config rather than being stranded on a config that cannot
@@ -175,6 +188,18 @@ export function allocateCeilings(input: AllocationInput): Allocation {
   pass((config) => config.servedBytes + floorOf(config));
   pass(() => bag);
 
+  // The reserve, after the bag is spent and out of nobody's share: the
+  // ceilings it raises are backed by the wallet, not by `remaining`.
+  const reserve = input.reserveBytes !== undefined && input.reserveBytes > BigInt(0) ? input.reserveBytes : BigInt(0);
+  if (reserve > BigInt(0)) {
+    for (const config of order) {
+      const line = lineFloor(config, floorBytes, input.floorSeconds);
+      const target = config.servedBytes + min(reserve, line);
+      const capped = config.capBytes === null ? target : min(config.capBytes, target);
+      if (capped > (given.get(config.configId) as bigint)) given.set(config.configId, capped);
+    }
+  }
+
   return {
     // In the order they were decided in, hot config first: the same input
     // gives the same allocation, row for row, whatever order the rows arrived.
@@ -194,15 +219,25 @@ export function allocateCeilings(input: AllocationInput): Allocation {
 function floors(input: AllocationInput, floorBytes: bigint, left: bigint): (config: ConfigDemand) => bigint {
   if (input.floorSeconds === undefined) return () => floorBytes;
   const even = shareOf(input, left);
-  const seconds = BigInt(Math.max(0, Math.floor(input.floorSeconds)));
   return (config) => {
     // Pass 3 hands the hot config everything left, so its floor adds nothing.
     if (config.configId === input.hotConfigId) return BigInt(0);
     const rate = config.lineRateBps;
     if (rate === null || rate === undefined || rate <= BigInt(0)) return even;
-    const line = (rate / BigInt(8)) * seconds;
-    return min(even, line > floorBytes ? line : floorBytes);
+    return min(even, lineFloor(config, floorBytes, input.floorSeconds));
   };
+}
+
+/**
+ * Seconds of the config's own line, at least `floorBytes` (ADR-0091). A panel
+ * that declares no line rate — or no `floorSeconds` — is `floorBytes`: nothing
+ * says how fast it drains.
+ */
+function lineFloor(config: ConfigDemand, floorBytes: bigint, floorSeconds: number | undefined): bigint {
+  const rate = config.lineRateBps;
+  if (floorSeconds === undefined || rate === null || rate === undefined || rate <= BigInt(0)) return floorBytes;
+  const line = (rate / BigInt(8)) * BigInt(Math.max(0, Math.floor(floorSeconds)));
+  return line > floorBytes ? line : floorBytes;
 }
 
 /**
@@ -307,7 +342,11 @@ export class CeilingAllocatorService {
       configs: demands,
     };
 
-    const allocation = allocateCeilings({ purchasedBytes: grant.purchasedBytes, ...split });
+    // What the wallet would still buy is both the metered reserve (F-027-cs)
+    // and the shutdown extension (F-027-w). Zero for a prepaid Grant, whose
+    // bag is all there is.
+    const walletBackedBytes = await this.affordableBytes(tx, grant);
+    const allocation = allocateCeilings({ purchasedBytes: grant.purchasedBytes, reserveBytes: walletBackedBytes, ...split });
 
     // The shutdown figure: the **same split** over a bag of what was bought
     // plus what the wallet would still buy (F-027-w, ADR-0078). The same
@@ -315,8 +354,8 @@ export class CeilingAllocatorService {
     // rather than a second opinion about the allocation — which is what
     // `config_wallet_backed_ceiling_extends` refuses to hold otherwise. Every
     // other rule survives it: a sub-account cap is still a cap, and a config
-    // that cannot carry traffic is still out of the split.
-    const walletBackedBytes = await this.affordableBytes(tx, grant);
+    // that cannot carry traffic is still out of the split. No reserve on it:
+    // the max below already keeps it over the reserve the allocation holds.
     const backed =
       walletBackedBytes > BigInt(0) ? allocateCeilings({ purchasedBytes: grant.purchasedBytes + walletBackedBytes, ...split }) : allocation;
 

@@ -236,6 +236,62 @@ describe('allocateCeilings', () => {
     });
   });
 
+  describe('a metered Grant keeps each config a reserve the wallet backs (F-027-cs, ADR-0091 amendment)', () => {
+    const seconds = { floorBytes, floorSeconds: IDLE_FLOOR_SECONDS };
+    const MBIT100 = BigInt(100_000_000);
+    const lineSeconds = (rateBps: bigint) => (rateBps / BigInt(8)) * BigInt(IDLE_FLOOR_SECONDS);
+    const hundred = Array.from({ length: 100 }, (unused, i) => demand(`c${String(i).padStart(3, '0')}`, BigInt(0), null, MBIT100));
+
+    it('does not thin with the config count: 100 inbounds on 1 GiB each keep their seconds of line', () => {
+      // Reported 2026-09-26: 5.4 MB each after a re-split, cut on the first connect.
+      const ceilings = byId(
+        allocateCeilings({ purchasedBytes: GIB_BYTES, ...seconds, hotConfigId: 'c000', reserveBytes: BigInt(10) * GIB_BYTES, configs: hundred }),
+      );
+      for (const [id, ceiling] of ceilings) if (id !== 'c000') expect(ceiling, id).toBe(lineSeconds(MBIT100));
+    });
+
+    it('holds no more above what a config served than the wallet would buy', () => {
+      const reserve = BigInt(50) * MIB;
+      const served = BigInt(7) * MIB;
+      const configs = [...hundred.slice(0, 99), demand('c099', served, null, MBIT100)];
+      const ceilings = byId(allocateCeilings({ purchasedBytes: GIB_BYTES, ...seconds, hotConfigId: 'c000', reserveBytes: reserve, configs }));
+      expect(ceilings.get('c001')).toBe(reserve);
+      expect(ceilings.get('c099')).toBe(served + reserve);
+    });
+
+    it('never lowers what the bag already gave, and gives the hot config the reserve too', () => {
+      const bag = BigInt(50) * GIB_BYTES;
+      const two = [demand('a', BigInt(0), null, MBIT100), demand('b', BigInt(0), null, MBIT100)];
+      const without = byId(allocateCeilings({ purchasedBytes: bag, ...seconds, hotConfigId: 'a', configs: two }));
+      const withReserve = byId(allocateCeilings({ purchasedBytes: bag, ...seconds, hotConfigId: 'a', reserveBytes: GIB_BYTES, configs: two }));
+      expect(withReserve).toEqual(without);
+
+      const tiny = byId(allocateCeilings({ purchasedBytes: BigInt(10) * MIB, ...seconds, hotConfigId: 'a', reserveBytes: BigInt(10) * GIB_BYTES, configs: two }));
+      expect(tiny.get('a')).toBe(lineSeconds(MBIT100));
+    });
+
+    it('takes the fixed floor where the panel declares no line rate', () => {
+      const ceilings = byId(
+        allocateCeilings({ purchasedBytes: BigInt(10) * MIB, ...seconds, hotConfigId: 'a', reserveBytes: GIB_BYTES, configs: [demand('a', BigInt(0)), demand('b', BigInt(0))] }),
+      );
+      expect(ceilings.get('b')).toBe(floorBytes);
+    });
+
+    it('stops at the sub-account cap', () => {
+      const cap = BigInt(20) * MIB;
+      const ceilings = byId(
+        allocateCeilings({ purchasedBytes: BigInt(10) * MIB, ...seconds, hotConfigId: 'a', reserveBytes: GIB_BYTES, configs: [demand('a', BigInt(0), null, MBIT100), demand('b', BigInt(0), cap, MBIT100)] }),
+      );
+      expect(ceilings.get('b')).toBe(cap);
+    });
+
+    it('reports the same unallocated bytes: the reserve is not the bag', () => {
+      const configs = [demand('a', BigInt(0), BigInt(10) * MIB, MBIT100)];
+      const allocation = allocateCeilings({ purchasedBytes: GIB_BYTES, ...seconds, hotConfigId: 'a', reserveBytes: GIB_BYTES, configs });
+      expect(allocation.unallocatedBytes).toBe(GIB_BYTES - BigInt(10) * MIB);
+    });
+  });
+
   describe('over generated Grants (ADR-0072 rule 1)', () => {
     /** Mulberry32 — a seeded PRNG in four lines, so no dependency and no flake. */
     const rng = (seed: number) => () => {
@@ -308,6 +364,21 @@ describe('allocateCeilings', () => {
             const floorOf = config.capBytes === null ? config.servedBytes : config.servedBytes < config.capBytes ? config.servedBytes : config.capBytes;
             expect((ceilings.get(config.configId) as bigint) >= floorOf, `${where} ${config.configId} keeps what it served`).toBe(true);
           }
+        }
+
+        // F-027-cs: a metered Grant's reserve only ever raises a ceiling, by
+        // at most the reserve above what the config served, never past a cap,
+        // and leaves what the bag could not place exactly where it was.
+        const reserveBytes = BigInt(pick(3_000)) * MIB;
+        const reserved = allocateCeilings({ purchasedBytes, floorBytes: configFloor, floorSeconds, hotConfigId, reserveBytes, configs });
+        expect(reserved.unallocatedBytes, where).toBe(allocation.unallocatedBytes);
+        const raised = byId(reserved);
+        for (const config of configs) {
+          const base = ceilings.get(config.configId) as bigint;
+          const ceiling = raised.get(config.configId) as bigint;
+          expect(ceiling >= base, `${where} ${config.configId} reserve only raises`).toBe(true);
+          if (ceiling > base) expect(ceiling <= config.servedBytes + reserveBytes, `${where} ${config.configId} by the reserve at most`).toBe(true);
+          if (config.capBytes !== null) expect(ceiling <= config.capBytes, `${where} ${config.configId} reserve under its cap`).toBe(true);
         }
       }
     });
@@ -586,5 +657,43 @@ describe('CeilingAllocatorService.rebalance', () => {
     const idle = (GBIT / BigInt(8)) * BigInt(IDLE_FLOOR_SECONDS);
     expect(rows.find((r) => r.id === 'b')?.allocatedCeilingBytes).toBe(idle);
     expect(rows.find((r) => r.id === 'a')?.allocatedCeilingBytes).toBe(bag - idle);
+  });
+
+  describe('the reserve a metered wallet backs (F-027-cs)', () => {
+    const rate = BigInt(100_000_000);
+    const line = (rate / BigInt(8)) * BigInt(IDLE_FLOOR_SECONDS);
+
+    it('keeps an idle config its seconds of line past a small bag, while the wallet would buy them', async () => {
+      const { tx, rows } = fakeTx({
+        purchasedBytes: BigInt(100) * MIB,
+        configs: [config('a'), config('b')],
+        served: { a: BigInt(0), b: BigInt(0) },
+        rates: { a: rate, b: rate },
+        balance: '10.00',
+      });
+
+      await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
+
+      const b = rows.find((r) => r.id === 'b');
+      expect(b?.allocatedCeilingBytes).toBe(line);
+      // The CHECK `config_wallet_backed_ceiling_extends` still holds.
+      expect((b?.walletBackedCeilingBytes as bigint) >= line).toBe(true);
+    });
+
+    it('gives a prepaid Grant none: its bag is all there is', async () => {
+      const bag = BigInt(100) * MIB;
+      const { tx, rows } = fakeTx({
+        purchasedBytes: bag,
+        configs: [config('a'), config('b')],
+        served: { a: BigInt(0), b: BigInt(0) },
+        rates: { a: rate, b: rate },
+        meteredRate: null,
+        balance: '10.00',
+      });
+
+      await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
+
+      expect(sum(rows.map((r) => r.allocatedCeilingBytes as bigint))).toBeLessThanOrEqual(bag);
+    });
   });
 });

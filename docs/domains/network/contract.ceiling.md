@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 15
-updated: 2026-09-26
+updated: 2026-09-27
 ---
 
 # The ceiling — one bag, split across the configs that draw on it
@@ -14,9 +14,9 @@ carry. Read it before changing how a share is sized, before adding a second
 writer of `config.allocatedCeilingBytes`, or before giving a config a ceiling
 from anywhere else.
 
-**`Σ ceilings ≤ purchasedBytes`, across every config of a Grant, always**
-(entitlement invariant 8). One bag spread over five panels needs one ceiling
-split five ways; five full ceilings would serve five times what was bought, and
+**`Σ ceilings ≤ purchasedBytes`, across every config of a Grant** (entitlement
+invariant 8), past it only by a metered Grant's wallet-backed reserve
+([contract.reserve.md](contract.reserve.md)). One bag over five panels needs one ceiling split five ways; five full ceilings would serve five times what was bought, and
 each one would look correct on the panel it sits on. That is why the split is
 proved by a property test over generated Grants and not by three cases.
 
@@ -86,8 +86,10 @@ left:
    never exceed what pass 1 left, so the split stays monotone in the bag.
 3. **everything left**, hot config first. That is the concentration: the config
    actually consuming gets the bag, and the others keep their floor.
+4. **a metered Grant's reserve**, past the bag and backed by the wallet, which
+   does not thin with N (F-027-cs, [contract.reserve.md](contract.reserve.md)).
 
-`Σ ceilings ≤ purchasedBytes` therefore holds **by construction** and not by a
+Passes 1–3 therefore keep `Σ ceilings ≤ purchasedBytes` **by construction**, not by a
 check at the end — no pass can hand out what no pass has left.
 
 A bag too small for pass 1 is an overrun, not a bug: a panel whose limit was

@@ -1,7 +1,7 @@
 ---
 id: adr-0091
 status: active
-updated: 2026-09-26
+updated: 2026-09-27
 ---
 
 # ADR 0091 — an idle config's floor is seconds of its line, not a fixed figure
@@ -81,3 +81,30 @@ extends (F-027-w); the property test holds the half.
 **Rejected.** A 100 MiB floor for a config idle for an hour: it concentrates
 harder, but the switch to a backup inbound after a filtering is exactly a
 long-idle config starting at line rate — the cut this ADR was written against.
+
+## Amendment 2026-09-27 — a metered Grant's reserve does not thin with N (F-027-cs)
+
+**Context.** The floors come out of the bag, so they divide by the config
+count: 100 inbounds on 1 GiB kept 5.4 MB each after a re-split, and a first
+connect or a switch to a backup inbound was cut in under a second. This ADR
+holds only for a bag ≥ `2(N-1) × rate × 180 s`. A metered bag is small by
+design, the horizon buying ~120 s ahead. A panel enforces its own client, so a
+reserve shared by N configs has to be written onto all N: it is an overcommit
+or it is nothing.
+
+**Decision** (user, 2026-09-27). On a **metered** Grant only, every config's
+ceiling is at least `served + min(wallet-affordable bytes, its seconds of
+line)`, applied after the split and out of nobody's share. Entitlement
+invariant 8 is amended to allow it. A prepaid Grant is unchanged.
+
+**Consequences.** The reserve does not depend on N. One config drawing it takes the Grant
+past its bag, and the hot loop buys the block that covers it. Several drawing
+at once from a nearly empty wallet is an uncharged overrun, bounded by
+`N × min(wallet, 180 s of line)` per reaction window. On a low wallet, every
+top-up moves every idle ceiling (a panel write each; F-027-ct orders them).
+
+**Rejected.** A reserve for every Grant: on a prepaid bag nothing pays it back,
+and sharing inbounds among many people would turn it into up to (N-1)× the bag
+free, a leak that grows with resellers. Closing the row as a known limit
+(keeping invariant 8 strict) would leave every metered Grant with many inbounds cut on
+its first connect.

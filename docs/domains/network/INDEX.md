@@ -24,7 +24,7 @@ real-time rate limiting (Redis, deliberately no table), product definitions
 |---|---|
 | [contract.md](contract.md) | using or changing network from outside |
 | [contract.collection.md](contract.collection.md) | the bulk collection loop and the RADIUS receiver: the delta maths, reset detection, Gigawords, the plausibility cap, quarantine |
-| [contract.ceiling.md](contract.ceiling.md) | a Grant's purchased bytes are split across its configs, and the share is carried to the panel that enforces it |
+| [contract.ceiling.md](contract.ceiling.md), [contract.reserve.md](contract.reserve.md) | a Grant's purchased bytes are split across its configs, and the share is carried to the panel that enforces it; a metered Grant's idle configs keep a reserve the wallet backs, past the bag |
 | [contract.provisioning.md](contract.provisioning.md), [contract.groups.md](contract.groups.md), [contract.inbounds.md](contract.inbounds.md) | creating, regenerating, enabling, disabling, moving or deleting a config: the desired-state writers and the one pass that carries them; which panels a variant is provisioned on: panel groups, member roles, their tenancy, fulfilment, activation and draining; which inbounds of a panel a buyer is placed on: the read, the pick, `all`/`spread`, the caps |
 | [contract.drift.md](contract.drift.md) | a client was renamed, rebuilt or deleted on the panel, or matches no config: the three-key match and the drift verdicts |
 | [contract.budget.md](contract.budget.md) | how often a panel may be asked, what a `429`/`403` means, and the rate a pass writes back |
