@@ -129,6 +129,13 @@ model Grant {
   /// When that period opened; null = at `startsAt`. The ledger's `period` for
   /// a usage threshold (notification `contract.retention.md`).
   usagePeriodStartedAt  DateTime?
+  /// The `endsAt` the time-threshold clock was last set for (F-601-e). A
+  /// Grant whose end no longer matches it — renewed, or never checked — is
+  /// due again from the new end's levels; nothing else resets the clock.
+  endNoticeFor          DateTime?
+  /// The next 7 / 3 / 1-day level of that end (F-601-e); null once the last
+  /// is told. Read only while `endNoticeFor = endsAt`.
+  endNoticeAt           DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @default(now()) @updatedAt
 
@@ -146,6 +153,8 @@ model Grant {
   @@index([status, nextDeliveryAt], map: "grant_status_nextDeliveryAt_idx")
   /// The "not connected yet?" sweep's only question: which active Grants are due a check (F-601-c).
   @@index([status, unusedCheckAt], map: "grant_status_unusedCheckAt_idx")
+  /// The time-threshold sweep's question: which active Grants end within 7 days (F-601-e).
+  @@index([status, endsAt], map: "grant_status_endsAt_idx")
   @@map("grant")
   @@schema("entitlement")
 }

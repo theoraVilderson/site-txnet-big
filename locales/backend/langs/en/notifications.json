@@ -81,6 +81,14 @@
     "usageThreshold": "📊 You have used {{percent}}% of your service's volume; {{remaining}} is left. To keep it running without a break, renew it from My services.",
     "usageThresholdMany": "📊 {{count}} of your services are running low on volume. Check what is left in My services and renew them to keep them running.",
     "usageThresholdManyTitle": "{{count}} services running low on volume",
+    "endsSoonTitle": "Your service ends in {{days}} days",
+    "endsSoon": "⏳ Your service ends in {{days}} days. To keep it running without a break, renew it from My services.",
+    "endsSoonMany": "⏳ {{count}} of your services end within a week. See when each one ends in My services and renew them to keep them running.",
+    "endsSoonManyTitle": "{{count}} services ending soon",
+    "endsWithinADayTitle": "Your service ends within a day",
+    "endsWithinADay": "⏰ Your service ends within a day. Renew it now from My services so it does not stop.",
+    "endsWithinADayMany": "⏰ {{count}} of your services end within a day. Renew them now from My services so they do not stop.",
+    "endsWithinADayManyTitle": "{{count}} services end within a day",
     "supportLine": "🛟 Support: {{supportUrl}}"
   }
 }

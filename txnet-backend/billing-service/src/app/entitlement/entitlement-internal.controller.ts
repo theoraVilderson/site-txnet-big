@@ -2,6 +2,7 @@ import { Controller, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@ne
 import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 
 import { DeliverDueResult, DeliveryOutcome, GrantDeliveryService } from './delivery';
+import { EndNoticeResult, GrantEndNoticeService } from './end-notice';
 import { GrantPurgeService, PurgeResult } from './purge';
 import { GrantUnusedNoticeService, UnusedNoticeResult } from './unused-notice';
 
@@ -33,6 +34,7 @@ export class EntitlementInternalController {
     private readonly purge: GrantPurgeService,
     private readonly delivery: GrantDeliveryService,
     private readonly unused: GrantUnusedNoticeService,
+    private readonly ends: GrantEndNoticeService,
   ) {}
 
   /**
@@ -71,6 +73,18 @@ export class EntitlementInternalController {
   @HttpCode(200)
   unusedDue(): Promise<UnusedNoticeResult> {
     return this.unused.noticeDue();
+  }
+
+  /**
+   * Time thresholds (F-601-e): every active Grant within 7 days of its end
+   * whose clock is due, or was set for another end, is checked once — told,
+   * or moved to its next level. Safe to run twice: each write is conditional
+   * on the clock and the end it read.
+   */
+  @Post('end-due')
+  @HttpCode(200)
+  endDue(): Promise<EndNoticeResult> {
+    return this.ends.noticeDue();
   }
 
   /**

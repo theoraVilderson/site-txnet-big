@@ -28,4 +28,8 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   [OutboxEventType.GRANT_USAGE_50]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'] },
   [OutboxEventType.GRANT_USAGE_80]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'] },
   [OutboxEventType.GRANT_USAGE_95]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'] },
+  // F-601-e: 7 / 3 / 1 day(s) before a Grant's end — the whole days left; the last level reads "within a day".
+  [OutboxEventType.GRANT_ENDS_IN_7D]: { template: 'serviceEndsSoon', params: ['days'] },
+  [OutboxEventType.GRANT_ENDS_IN_3D]: { template: 'serviceEndsSoon', params: ['days'] },
+  [OutboxEventType.GRANT_ENDS_IN_1D]: { template: 'serviceEndsWithinADay', params: [] },
 };

@@ -19,6 +19,8 @@ export const NOTIFY_TEMPLATES = [
   'serviceNotConnected',
   'serviceStillNotConnected',
   'serviceUsageThreshold',
+  'serviceEndsSoon',
+  'serviceEndsWithinADay',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -162,6 +164,27 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.retention?.usageThresholdMany,
       fallback: '📊 {{count}} of your services are running low on volume. Check what is left in My services and renew them to keep them running.',
       inbox: { read: (ns) => ns?.retention?.usageThresholdManyTitle, fallback: '{{count}} services running low on volume' },
+    },
+  },
+  // F-601-e: 7 and 3 days before a Grant's end, with the whole days actually left; the last level has its own text.
+  serviceEndsSoon: {
+    read: (ns) => ns?.retention?.endsSoon,
+    fallback: '⏳ Your service ends in {{days}} days. To keep it running without a break, renew it from My services.',
+    inbox: { read: (ns) => ns?.retention?.endsSoonTitle, fallback: 'Your service ends in {{days}} days' },
+    many: {
+      read: (ns) => ns?.retention?.endsSoonMany,
+      fallback: '⏳ {{count}} of your services end within a week. See when each one ends in My services and renew them to keep them running.',
+      inbox: { read: (ns) => ns?.retention?.endsSoonManyTitle, fallback: '{{count}} services ending soon' },
+    },
+  },
+  serviceEndsWithinADay: {
+    read: (ns) => ns?.retention?.endsWithinADay,
+    fallback: '⏰ Your service ends within a day. Renew it now from My services so it does not stop.',
+    inbox: { read: (ns) => ns?.retention?.endsWithinADayTitle, fallback: 'Your service ends within a day' },
+    many: {
+      read: (ns) => ns?.retention?.endsWithinADayMany,
+      fallback: '⏰ {{count}} of your services end within a day. Renew them now from My services so they do not stop.',
+      inbox: { read: (ns) => ns?.retention?.endsWithinADayManyTitle, fallback: '{{count}} services end within a day' },
     },
   },
 };

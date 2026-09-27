@@ -62,6 +62,12 @@ export const OutboxEventType = {
   GRANT_USAGE_80: 'entitlement.grant.usage_80',
   /** F-601-d: the same at 95 %. */
   GRANT_USAGE_95: 'entitlement.grant.usage_95',
+  /** F-601-e: an active Grant is 7 days from its end — one per end (`GrantEndNoticeService`). */
+  GRANT_ENDS_IN_7D: 'entitlement.grant.ends_in_7d',
+  /** F-601-e: the same, 3 days out. */
+  GRANT_ENDS_IN_3D: 'entitlement.grant.ends_in_3d',
+  /** F-601-e: the same, 1 day out — the last. */
+  GRANT_ENDS_IN_1D: 'entitlement.grant.ends_in_1d',
 } as const;
 export type OutboxEventType = (typeof OutboxEventType)[keyof typeof OutboxEventType];
 
@@ -94,6 +100,9 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.GRANT_USAGE_50]: 'worker-service',
   [OutboxEventType.GRANT_USAGE_80]: 'worker-service',
   [OutboxEventType.GRANT_USAGE_95]: 'worker-service',
+  [OutboxEventType.GRANT_ENDS_IN_7D]: 'worker-service',
+  [OutboxEventType.GRANT_ENDS_IN_3D]: 'worker-service',
+  [OutboxEventType.GRANT_ENDS_IN_1D]: 'worker-service',
 };
 
 /** Every tick routing key starts with this. The suffix is the worker key. */
