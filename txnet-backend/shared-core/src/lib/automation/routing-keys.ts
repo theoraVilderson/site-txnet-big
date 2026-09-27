@@ -74,6 +74,10 @@ export const OutboxEventType = {
   GRANT_VOLUME_SPENT: 'entitlement.grant.volume_spent',
   /** F-601-b: a metered Grant was suspended because its wallet cannot buy the next block — a top-up brings it back, a renewal does not (`suspendIfExhausted`). */
   GRANT_WALLET_SPENT: 'entitlement.grant.wallet_spent',
+  /** F-601-j: a suspended prepaid Grant's configs are dropped from its panel within a day (`purgeAfterDays`) — renewing keeps them. Never muted (F-601-m). */
+  GRANT_PURGE_SOON: 'entitlement.grant.purge_soon',
+  /** F-601-j: the same for a metered Grant — a top-up keeps them, a renewal does not. */
+  GRANT_PURGE_SOON_METERED: 'entitlement.grant.purge_soon_metered',
   /** F-601-g: a metered Grant's wallet now buys less than a GB at its rate — once per crossing; a top-up is what keeps it running (spec 9.3 `wallet.low_balance`). */
   GRANT_LOW_BALANCE: 'entitlement.grant.low_balance',
   /** F-601-i: a paid Grant still `pending` 5 minutes on — the buyer is told it is being prepared, the tenant's owner why; once per Grant. */
@@ -116,6 +120,8 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.GRANT_ENDED]: 'worker-service',
   [OutboxEventType.GRANT_VOLUME_SPENT]: 'worker-service',
   [OutboxEventType.GRANT_WALLET_SPENT]: 'worker-service',
+  [OutboxEventType.GRANT_PURGE_SOON]: 'worker-service',
+  [OutboxEventType.GRANT_PURGE_SOON_METERED]: 'worker-service',
   [OutboxEventType.GRANT_LOW_BALANCE]: 'worker-service',
   [OutboxEventType.GRANT_DELIVERY_DELAYED]: 'worker-service',
 };

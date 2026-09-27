@@ -43,7 +43,7 @@ export class GrantPurgeJob implements Job {
   readonly key = 'grant_config_purge';
   readonly name = 'Suspended Grant purge';
   readonly description =
-    'Releases the panel seats of suspended Grants past their purgeAfterDays, without deleting our rows (ADR-0075).';
+    'Releases the panel seats of suspended Grants past their purgeAfterDays, without deleting our rows (ADR-0075), and tells those a day away (F-601-j).';
   readonly category = BotWorkerCategory.other;
   /** Unscheduled, a spent Grant's clients hold their panel seats for ever. Hourly: the window is days; twenty past, off the hour. */
   readonly defaultSchedule: DefaultSchedule = { scheduleType: 'cron_expression', cronExpression: '20 * * * *' };
@@ -80,7 +80,7 @@ export class GrantPurgeJob implements Job {
     };
   }
 
-  private async purgeDue(): Promise<{ scanned: number; grantsPurged: number; configsPurged: number }> {
+  private async purgeDue(): Promise<{ scanned: number; grantsPurged: number; configsPurged: number; told: number }> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
@@ -103,12 +103,13 @@ export class GrantPurgeJob implements Job {
 
       // billing answers `{ ok, msg, data }` (`envelopeData`).
       const body = envelopeData(await response.json());
-      const counts = ['scanned', 'grantsPurged', 'configsPurged'].map((k) => body?.[k]);
+      // `told`: the suspended Grants told their purge is within a day (F-601-j), swept in the same call.
+      const counts = ['scanned', 'grantsPurged', 'configsPurged', 'told'].map((k) => body?.[k]);
       if (!counts.every((v) => typeof v === 'number')) {
-        throw new Error(`billing answered ${PURGE_DUE_PATH} without its three counts`);
+        throw new Error(`billing answered ${PURGE_DUE_PATH} without its four counts`);
       }
-      const [scanned, grantsPurged, configsPurged] = counts as number[];
-      return { scanned, grantsPurged, configsPurged };
+      const [scanned, grantsPurged, configsPurged, told] = counts as number[];
+      return { scanned, grantsPurged, configsPurged, told };
     } finally {
       clearTimeout(timer);
     }

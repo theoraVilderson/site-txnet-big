@@ -105,3 +105,18 @@ proved by `cut-off.spec.ts`. Payload `tenantId, userId, grantId, period`.
 | A close stands only while its Quota **and** end are the Grant's (`network/contract.lease.md` rule 25); one a renewal moved is `reopened`, untold | a late close never suspends, nor tells, a renewed Grant |
 | `period` = the end for `ended`, the suspension's instant otherwise; nothing is emitted when nothing stopped (a redelivered close finds it `suspended`) | notification's ledger holds each stop once (invariant 14); a renewal or revival opens a new one |
 | Never muted, never held for quiet hours (F-601-m) | a user whose service stopped must hear it |
+
+**Before purge (F-601-j, beyond the catalog)** — a suspended Grant is told,
+a day before `purgeAfterDays` drops its configs from the panel ([contract.md](contract.md)
+"Purge and restore"), what keeps them. `entitlement/purge-notice.ts`, proved by
+`purge-notice.spec.ts`; swept by the purge's own hourly call, **after** the
+purge (`purge-due` answers `told` beside its counts).
+
+| Rule | Why |
+|---|---|
+| Due at `suspendedAt + (window - 1) days`, the window resolved as the purge resolves it, live; `0` is never scanned | purge off is never told; a 1-day window is told at the suspension |
+| Only while a config is still `present` | a Grant the purge got to first is not told "within a day" |
+| The clock is `purgeNoticeFor`, the `suspendedAt` told for; the write is conditional on the value read; `period` = `suspendedAt` | once per suspension; a revival clears `suspendedAt`, so the next one is due again with nothing reset |
+| Prepaid: `entitlement.grant.purge_soon` ("renew"); metered: `.purge_soon_metered` ("top up") | a metered renewal adds days alone and revives nothing (as "Cutoff") |
+| Never muted, never held for quiet hours (F-601-m) | the last chance to keep a config as it is |
+

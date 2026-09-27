@@ -8,6 +8,7 @@ import { EntitlementInternalController } from './entitlement-internal.controller
 import { GrantService } from './grant';
 import { GrantTokenSeal } from './grant-token-seal';
 import { GrantPurgeService } from './purge';
+import { GrantPurgeNoticeService } from './purge-notice';
 import { GrantUnusedNoticeService } from './unused-notice';
 import { GrantEndNoticeService } from './end-notice';
 
@@ -27,7 +28,7 @@ import { GrantEndNoticeService } from './end-notice';
 @Module({
   imports: [TrafficModule, WalletModule],
   controllers: [EntitlementInternalController],
-  providers: [KekService, GrantTokenSeal, GrantService, GrantPurgeService, GrantDeliveryService, GrantUnusedNoticeService, GrantEndNoticeService],
+  providers: [KekService, GrantTokenSeal, GrantService, GrantPurgeService, GrantDeliveryService, GrantUnusedNoticeService, GrantEndNoticeService, GrantPurgeNoticeService],
   exports: [GrantService, GrantPurgeService],
 })
 export class EntitlementModule {}

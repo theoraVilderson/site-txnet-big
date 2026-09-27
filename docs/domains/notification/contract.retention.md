@@ -63,6 +63,7 @@ together:
 | `entitlement.grant.ends_in_7d` / `_3d` / `_1d` | `serviceEndsSoon` (7, 3) / `serviceEndsWithinADay` (1), param `days` | entitlement's hourly sweep, 7 / 3 / 1 day(s) before `endsAt`; period = `endsAt`, so a renewal opens a new one (F-601-e) |
 | a usage type above, carrying `endNotice`, `endPeriod`, `days` | `serviceUsageAndEndsSoon` (`days` > 1) / `serviceUsageAndEndsWithinADay` (`days` = 1), params `percent`, `remaining` (+ `days`) | billing's metering at the crossing, or entitlement's end sweep, when both are due (F-601-n, below) |
 | `entitlement.grant.low_balance` | `serviceWalletLow`, param `remaining` (what the wallet still buys, "819 MB") | billing's block request, after the purchase whose balance buys under 1 GB at a metered Grant's rate; period = the crossing's instant, re-armed by a balance back over it (F-601-g, entitlement `contract.retention.md` "Wallet low") |
+| `entitlement.grant.purge_soon` / `.purge_soon_metered` | `servicePurgeSoon` ("renew") / `servicePurgeSoonTopUp` ("top up") | entitlement's purge sweep, a day before a suspended Grant's configs are dropped; period = `suspendedAt` (F-601-j, entitlement `contract.retention.md` "Before purge") |
 | `entitlement.grant.ended` / `.volume_spent` / `.wallet_spent` | `serviceEnded` / `serviceVolumeSpent` ("renew") / `serviceWalletSpent` ("top up", never "renew") | billing, in the transaction that stops the Grant: a standing close on a passed end, a prepaid bag's suspension, a metered wallet's; period = the end, or the suspension's instant (F-601-b, entitlement `contract.retention.md` "Cutoff") |
 
 ## Two notices due the same day are one message (F-601-f, F-601-n)
@@ -107,5 +108,6 @@ service the user has. It rides the purchase's own notices (automation
 
 - Muting and quiet hours (F-601-m): they will be read at the claim, which is
   why the ledger is this unit's — ADR-0084's revisit trigger. The three
-  cutoff types above (F-601-b) are never muted nor held for quiet hours.
+  cutoff types above (F-601-b) and the two before-purge ones (F-601-j) are
+  never muted nor held for quiet hours.
 - Retention of ledger rows: one per Grant, notice and period, kept.

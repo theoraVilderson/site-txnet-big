@@ -4,6 +4,7 @@ import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 import { DeliverDueResult, DeliveryOutcome, GrantDeliveryService } from './delivery';
 import { EndNoticeResult, GrantEndNoticeService } from './end-notice';
 import { GrantPurgeService, PurgeResult } from './purge';
+import { GrantPurgeNoticeService } from './purge-notice';
 import { GrantUnusedNoticeService, UnusedNoticeResult } from './unused-notice';
 
 /**
@@ -35,11 +36,14 @@ export class EntitlementInternalController {
     private readonly delivery: GrantDeliveryService,
     private readonly unused: GrantUnusedNoticeService,
     private readonly ends: GrantEndNoticeService,
+    private readonly purgeNotice: GrantPurgeNoticeService,
   ) {}
 
   /**
    * Set `desiredRemote = absent` on every config of every suspended Grant past
-   * its `purgeAfterDays`, one batch, releasing the panel seats.
+   * its `purgeAfterDays`, one batch, releasing the panel seats — then tell
+   * each suspended Grant whose purge is within a day (F-601-j, `told`). After,
+   * not before: a Grant purged in this call is not told it will be.
    *
    * Answers the raw counts rather than this service's usual envelope, for the
    * reason the deposit seam gives: the only caller is a job that records them
@@ -47,8 +51,10 @@ export class EntitlementInternalController {
    */
   @Post('purge-due')
   @HttpCode(200)
-  purgeDue(): Promise<PurgeResult> {
-    return this.purge.purgeDue();
+  async purgeDue(): Promise<PurgeResult & { told: number }> {
+    const purged = await this.purge.purgeDue();
+    const { told } = await this.purgeNotice.noticeDue();
+    return { ...purged, told };
   }
 
   /**

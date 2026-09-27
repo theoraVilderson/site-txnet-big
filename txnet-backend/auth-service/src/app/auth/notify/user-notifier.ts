@@ -31,6 +31,8 @@ export const NOTIFY_TEMPLATES = [
   'serviceVolumeSpent',
   'serviceWalletSpent',
   'serviceWalletLow',
+  'servicePurgeSoon',
+  'servicePurgeSoonTopUp',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -306,6 +308,28 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.retention?.walletLowMany,
       fallback: '💳 Your wallet is running low for {{count}} of your services. Top up your wallet so they keep running without a break.',
       inbox: { read: (ns) => ns?.retention?.walletLowManyTitle, fallback: 'Wallet running low for {{count}} services' },
+    },
+  },
+  // F-601-j: a suspended Grant's config is dropped from the panel within a day (purgeAfterDays) — never muted (F-601-m).
+  // What keeps it: a renewal, or a top-up for a metered Grant. After the purge a revival rebuilds it (a new config).
+  servicePurgeSoon: {
+    read: (ns) => ns?.retention?.purgeSoon,
+    fallback: '🗑️ Your stopped service will be removed from the server within a day. Renew it from My services before then to keep its config as it is — after that, a config you added by hand has to be added again.',
+    inbox: { read: (ns) => ns?.retention?.purgeSoonTitle, fallback: "Your service's config is removed within a day" },
+    many: {
+      read: (ns) => ns?.retention?.purgeSoonMany,
+      fallback: '🗑️ {{count}} of your stopped services will be removed from the server within a day. Renew them from My services before then to keep their configs as they are.',
+      inbox: { read: (ns) => ns?.retention?.purgeSoonManyTitle, fallback: '{{count}} services removed within a day' },
+    },
+  },
+  servicePurgeSoonTopUp: {
+    read: (ns) => ns?.retention?.purgeSoonTopUp,
+    fallback: '🗑️ Your stopped service will be removed from the server within a day. Top up your wallet before then to keep its config as it is — after that, a config you added by hand has to be added again.',
+    inbox: { read: (ns) => ns?.retention?.purgeSoonTitle, fallback: "Your service's config is removed within a day" },
+    many: {
+      read: (ns) => ns?.retention?.purgeSoonTopUpMany,
+      fallback: '🗑️ {{count}} of your stopped services will be removed from the server within a day. Top up your wallet before then to keep their configs as they are.',
+      inbox: { read: (ns) => ns?.retention?.purgeSoonManyTitle, fallback: '{{count}} services removed within a day' },
     },
   },
 };

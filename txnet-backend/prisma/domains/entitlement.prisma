@@ -151,6 +151,10 @@ model Grant {
   /// set by the block purchase that saw the crossing, cleared by the first one
   /// that sees the balance buy a GB again. Null = armed. The notice's `period`.
   lowBalanceNoticeAt    DateTime?
+  /// The `suspendedAt` whose purge the owner was told of, a day before it
+  /// (F-601-j). A suspension that no longer matches it is due again; nothing
+  /// resets it. Written conditionally on the value read, so it is told once.
+  purgeNoticeFor        DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @default(now()) @updatedAt
 

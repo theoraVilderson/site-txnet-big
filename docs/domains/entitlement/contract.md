@@ -85,7 +85,8 @@ its configs, which leases the reserve and asks for the block (F-027-dc).
 The clock is not here. `worker-service` holds it and asks hourly over `POST
 /api/internal/billing/entitlement/purge-due` (`ServiceOnlyGuard`, key
 `grant_config_purge`), because background work does not run in a
-request-serving process (ADR-0027, `automation/contract.worker.md`).
+request-serving process (ADR-0027, `automation/contract.worker.md`). The same
+call tells the Grants a day from their purge (F-601-j, `contract.retention.md`).
 
 **Renewal is `Quota += X` on the same Grant (F-027-dg, SPEC weakness #30)** —
 `renewGrant(tx, {grantId, bytes, days, source, …})` in
@@ -184,6 +185,7 @@ Through the outbox (ADR-0021); the first two also live on the buyer's `user:` ch
 | `entitlement.grant.usage_50` / `_80` / `_95` | `tenantId, userId, grantId, period`, `percent`, `remaining` (e.g. `5.3 GB`); optional `endNotice`, `endPeriod`, `days` — a time level due with it, told as one message (F-601-f, F-601-n) | a charge crossed that share of the usage period (F-601-d), emitted by billing's metering; retention events, like the next row |
 | `entitlement.grant.ends_in_7d` / `_3d` / `_1d` | `tenantId, userId, grantId, period` (= `endsAt`), `days` (whole days left) | an active Grant 7 / 3 / 1 day(s) before its end (F-601-e); retention events, like the next row |
 | `entitlement.grant.ended` / `.volume_spent` / `.wallet_spent` | `tenantId, userId, grantId, period` (= the end, or the suspension's instant) | a Grant stopped: time ran out, a prepaid bag spent, a metered wallet spent (F-601-b); retention events, like the next row |
+| `entitlement.grant.purge_soon` / `.purge_soon_metered` | `tenantId, userId, grantId, period` (= `suspendedAt`) | a suspended Grant a day from its purge; prepaid "renew", metered "top up" (F-601-j); retention events, like the next row |
 | `entitlement.grant.not_connected` / `.still_not_connected` | `tenantId, userId, grantId, period` (= `activatedAt`), `supportUrl?` | nothing consumed 24 h / 72 h after activation (F-601-c); retention events, told by `RetentionNoticeConsumer` — not on any channel |
 
 ## Consumes
