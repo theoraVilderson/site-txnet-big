@@ -119,6 +119,11 @@ type Learned struct {
 	// LagSamples crossings; both zero with no sample.
 	LagMeanSec, LagVarianceSec2 float64
 	LagSamples                  int
+	// The outage history (`quota.Outages`, F-027-dh): the count as of
+	// OutageAt (`outageWeight`, `outageWeightAt`); 0 and the zero time with
+	// none. Its decay is computed, so only an outage moves it.
+	OutageWeight float64
+	OutageAt     time.Time
 }
 
 // Equal compares two by value, the mask included.
@@ -127,11 +132,13 @@ func (l Learned) Equal(o Learned) bool {
 		return false
 	}
 	return l.TickPeriod == o.TickPeriod && l.LagMeanSec == o.LagMeanSec &&
-		l.LagVarianceSec2 == o.LagVarianceSec2 && l.LagSamples == o.LagSamples
+		l.LagVarianceSec2 == o.LagVarianceSec2 && l.LagSamples == o.LagSamples &&
+		l.OutageWeight == o.OutageWeight && l.OutageAt.Equal(o.OutageAt)
 }
 
 func learnedOf(st *quota.PanelState) Learned {
-	l := Learned{TickPeriod: st.Clock.J, LagMeanSec: st.Lag.Mean, LagVarianceSec2: st.Lag.Var, LagSamples: st.Lag.N}
+	l := Learned{TickPeriod: st.Clock.J, LagMeanSec: st.Lag.Mean, LagVarianceSec2: st.Lag.Var, LagSamples: st.Lag.N,
+		OutageWeight: st.Outages.Weight, OutageAt: st.Outages.At}
 	if mask, ok := st.Clock.Mask(); ok {
 		l.TickMask = &mask
 	}
@@ -233,6 +240,9 @@ type Planner struct {
 	// first read (F-027-de).
 	pollBy map[string]time.Time
 	probed map[string]time.Time
+	// down is each panel's first failed read since it last answered: the
+	// start of an outage the next answer measures (F-027-dh).
+	down map[string]time.Time
 }
 
 var _ collect.Planner = (*Planner)(nil)
@@ -243,6 +253,20 @@ func (s *Planner) Observe(ctx context.Context, p collect.Panel, readings []drive
 	plans, err := s.Plan(ctx, p, readings, at)
 	s.logPlans(p, plans)
 	return err
+}
+
+// Failed is told that a read of the panel failed at at. The first failure
+// since the panel last answered starts an outage; the next read that answers
+// ends it and adds it to the panel's history (`contract.lease.md` rule 27).
+// Memory only: a restart mid-outage forgets its start, and that outage is
+// not counted.
+func (s *Planner) Failed(panelID string, at time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.init()
+	if _, ok := s.down[panelID]; !ok {
+		s.down[panelID] = at
+	}
 }
 
 // Allocate is the woken turn's hook (`contract.lease.md` rule 18): a turn
@@ -404,6 +428,16 @@ func (s *Planner) planLocked(p collect.Panel, snap Snapshot, got map[string]driv
 		if prev := s.lastRead[p.ID]; !prev.IsZero() {
 			here.PollInterval = at.Sub(prev)
 		}
+		if since, ok := s.down[p.ID]; ok {
+			here.Outages.Add(at.Sub(since), at, s.params())
+		}
+	}
+	if read {
+		delete(s.down, p.ID)
+	}
+	for id := range snap.Panels {
+		st := s.panels[id]
+		st.Reliability = st.Outages.Reliability(at, s.params())
 	}
 
 	// The seen side is the row's; the want side is the planner's own, kept
@@ -627,6 +661,7 @@ func (s *Planner) init() {
 	s.asked = map[string]asked{}
 	s.pollBy = map[string]time.Time{}
 	s.probed = map[string]time.Time{}
+	s.down = map[string]time.Time{}
 }
 
 // panel keeps one PanelState per panel, so what it learns outlives a pass. A
@@ -646,7 +681,8 @@ func (s *Planner) panel(pn Panel) {
 		if pn.Learned.LagSamples > 0 {
 			lag.Mean, lag.Var, lag.N = pn.Learned.LagMeanSec, pn.Learned.LagVarianceSec2, pn.Learned.LagSamples
 		}
-		st = &quota.PanelState{ID: pn.ID, JobInterval: j, Lag: lag, Clock: clock, Reliability: 1}
+		st = &quota.PanelState{ID: pn.ID, JobInterval: j, Lag: lag, Clock: clock, Reliability: 1,
+			Outages: quota.Outages{Weight: pn.Learned.OutageWeight, At: pn.Learned.OutageAt}}
 		s.panels[pn.ID] = st
 		s.saved[pn.ID] = learnedOf(st)
 	}

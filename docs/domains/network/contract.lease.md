@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 5
+version: 6
 updated: 2026-09-27
 ---
 
@@ -31,7 +31,7 @@ planner that loses it on a deploy boots blind and overshoots while it relearns.
 | `panels` | `network.panel` | — |
 | `job_interval_ms` | `tickPeriodMs`, the `J` its phase mask is cut from; null = the family's interval | planner |
 | `lag_mean_s`, `lag_var`, `lag_n` | `lagMeanSec`, `lagVarianceSec2`, `lagSamples` | planner |
-| `reliability` | not yet (F-027-dh) | — |
+| `reliability` | `outageWeight` at `outageWeightAt`, read as 1/(1+weight) (rule 27) | planner |
 | `owner_node`, `credentials`, `base_url` | not needed / `panelApiCredentials` / `apiBaseUrl` | — |
 | `replicas` (`quota.Replica`) | `network.config` | — |
 | `counter` | `config_counter_state` | collector |
@@ -238,3 +238,13 @@ once can lease past the balance by one reaction window.
     poll mid-tick. Memory only: a restart has no hint, and the bulk pass reads
     the panel until a plan gives one. `collect.Poller` runs it; the rules are
     `contract.hot-loop.md` "The collector's half".
+
+## Reliability (F-027-dh, SPEC weakness #21)
+
+27. **A panel's outage history scales its MaxLease.** The collector tells
+    the planner of every failed read but our own shutdown (`Planner.Failed`);
+    the first since the panel answered starts an outage, the next answer ends
+    it and adds its length in `OutageUnit` (5 min), at most 1, to a count
+    that halves every `OutageHalfLife` (24 h). The cap is MaxLease/(1+count),
+    never under `MinLease`. Only an outage writes the row (rule 11). The start
+    is memory only: a restart mid-outage forgets it, uncounted.

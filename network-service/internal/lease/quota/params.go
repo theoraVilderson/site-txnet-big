@@ -39,6 +39,9 @@ type Params struct {
 	DriftAfter  time.Duration
 
 	LagZ float64 // lag reserve = mean + LagZ·σ (see Lag.Reserve)
+
+	OutageUnit     time.Duration // an outage this long counts as one (see Outages)
+	OutageHalfLife time.Duration // a panel's outage count halves this often
 }
 
 func DefaultParams() Params {
@@ -76,6 +79,9 @@ func DefaultParams() Params {
 		DriftAfter:  2 * time.Minute,
 
 		LagZ: 0,
+
+		OutageUnit:     5 * time.Minute,
+		OutageHalfLife: 24 * time.Hour,
 	}
 }
 

@@ -52,6 +52,8 @@ describe('network.panel: what the planner learns about a panel', () => {
     ['lagMeanSec', 'Float\\?', 'DOUBLE PRECISION'],
     ['lagVarianceSec2', 'Float\\?', 'DOUBLE PRECISION'],
     ['lagSamples', 'Int\\s+@default\\(0\\)', 'INTEGER NOT NULL DEFAULT 0'],
+    ['outageWeight', 'Float\\s+@default\\(0\\)', 'DOUBLE PRECISION NOT NULL DEFAULT 0'],
+    ['outageWeightAt', 'DateTime\\?', 'TIMESTAMP(3)'],
   ])('declares %s on both sides', (column, prisma, pg) => {
     expect(panel).toMatch(new RegExp(`^\\s*${column}\\s+${prisma}`, 'm'));
     expect(sql).toContain(`ADD COLUMN "${column}" ${pg}`);
@@ -60,6 +62,10 @@ describe('network.panel: what the planner learns about a panel', () => {
   it('holds the phase mask to 32 bins and the lag to a sample count', () => {
     expect(sql).toContain('panel_tick_phase_needs_period');
     expect(sql).toContain('panel_lag_matches_samples');
+  });
+
+  it('dates an outage history exactly when there is one (F-027-dh)', () => {
+    expect(sql).toContain('panel_outage_weight_has_time');
   });
 });
 

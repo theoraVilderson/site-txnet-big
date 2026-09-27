@@ -398,6 +398,12 @@ model Panel {
   lagMeanSec                 Float?
   lagVarianceSec2            Float?
   lagSamples                 Int                @default(0)
+  /// Its outage history (`quota.Outages`, F-027-dh): a count of outages as of
+  /// `outageWeightAt` that halves every day; reliability is 1/(1+count) and
+  /// scales the panel's MaxLease. 0 and null with none
+  /// (CHECK `panel_outage_weight_has_time`).
+  outageWeight               Float              @default(0)
+  outageWeightAt             DateTime?
 
   pairedPanel Panel?  @relation("PanelHAPair", fields: [pairedPanelId], references: [id])
   pairedWith  Panel[]  @relation("PanelHAPair")

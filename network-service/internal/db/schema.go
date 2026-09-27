@@ -61,6 +61,8 @@ var RequiredColumns = map[string][]string{
 		"inboundsReadAt",
 		// What the lease planner learned of it (F-027-cz).
 		"tickPeriodMs", "tickPhaseMask", "lagMeanSec", "lagVarianceSec2", "lagSamples",
+		// Its outage history (F-027-dh).
+		"outageWeight", "outageWeightAt",
 	},
 	// The panel's inbounds as last read, and the admin's pick (F-114-b).
 	"panel_inbound": {

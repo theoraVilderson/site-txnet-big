@@ -66,7 +66,8 @@ SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresA
          AND coalesce((p.capabilities->'answers'->'per_client_data_limit'->>'supported')::boolean, false),
        p."panelState" = 'healthy',
        p."tickPeriodMs", p."tickPhaseMask",
-       coalesce(p."lagMeanSec", 0), coalesce(p."lagVarianceSec2", 0), p."lagSamples"
+       coalesce(p."lagMeanSec", 0), coalesce(p."lagVarianceSec2", 0), p."lagSamples",
+       p."outageWeight", p."outageWeightAt"
   FROM touched t
   JOIN entitlement."grant" g ON g.id = t."grantId"
   LEFT JOIN billing.wallet w ON w."ownerUserId" = g."userId"
@@ -100,10 +101,12 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 			pn                  Panel
 			tickMs              *int32
 			tickMask            *int64
+			outageAt            *time.Time
 		)
 		if err := rows.Scan(&grantID, &quota, &endsAt, &closedQuota, &closedEnd, &closed, &metered, &rate, &balance, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
 			&applied, &c.Enabled, &c.Allocated, &c.Peak, &c.Pending, &driverType, &pn.CanSetLimit, &pn.Healthy,
-			&tickMs, &tickMask, &pn.Learned.LagMeanSec, &pn.Learned.LagVarianceSec2, &pn.Learned.LagSamples); err != nil {
+			&tickMs, &tickMask, &pn.Learned.LagMeanSec, &pn.Learned.LagVarianceSec2, &pn.Learned.LagSamples,
+			&pn.Learned.OutageWeight, &outageAt); err != nil {
 			return Snapshot{}, fmt.Errorf("reading a Grant's config: %w", err)
 		}
 		if n := len(snap.Grants); n == 0 || snap.Grants[n-1].ID != grantID {
@@ -139,6 +142,9 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 		if tickMask != nil {
 			mask := uint32(*tickMask) // CHECK panel_tick_phase_needs_period: 0..2^32-1
 			pn.Learned.TickMask = &mask
+		}
+		if outageAt != nil {
+			pn.Learned.OutageAt = *outageAt
 		}
 		snap.Panels[pn.ID] = pn
 	}
@@ -208,13 +214,16 @@ func (s PostgresStore) SaveClosure(ctx context.Context, grantID string, c *Closu
 const saveLearnedSQL = `
 UPDATE network.panel
    SET "tickPeriodMs" = $2, "tickPhaseMask" = $3,
-       "lagMeanSec" = $4, "lagVarianceSec2" = $5, "lagSamples" = $6
+       "lagMeanSec" = $4, "lagVarianceSec2" = $5, "lagSamples" = $6,
+       "outageWeight" = $7, "outageWeightAt" = $8
  WHERE id = $1::uuid
-   AND ("tickPeriodMs", "tickPhaseMask", "lagMeanSec", "lagVarianceSec2", "lagSamples")
-       IS DISTINCT FROM ($2::int, $3::bigint, $4::float8, $5::float8, $6::int)`
+   AND ("tickPeriodMs", "tickPhaseMask", "lagMeanSec", "lagVarianceSec2", "lagSamples",
+        "outageWeight", "outageWeightAt")
+       IS DISTINCT FROM ($2::int, $3::bigint, $4::float8, $5::float8, $6::int, $7::float8, $8::timestamp)`
 
 // SaveLearned keeps what the planner learned of a panel (F-027-cz). The lag
-// is null with no sample (CHECK `panel_lag_matches_samples`).
+// is null with no sample (CHECK `panel_lag_matches_samples`), and the outage
+// time with no outage (CHECK `panel_outage_weight_has_time`).
 func (s PostgresStore) SaveLearned(ctx context.Context, panelID string, l Learned) error {
 	var period *int32
 	if l.TickPeriod > 0 {
@@ -230,8 +239,14 @@ func (s PostgresStore) SaveLearned(ctx context.Context, panelID string, l Learne
 	if l.LagSamples > 0 {
 		mean, variance = &l.LagMeanSec, &l.LagVarianceSec2
 	}
-	if _, err := s.DB.Exec(ctx, saveLearnedSQL, panelID, period, mask, mean, variance, l.LagSamples); err != nil {
-		return fmt.Errorf("saving panel %s's tick and lag: %w", panelID, err)
+	var outageAt *time.Time
+	if l.OutageWeight > 0 {
+		at := l.OutageAt.UTC()
+		outageAt = &at
+	}
+	if _, err := s.DB.Exec(ctx, saveLearnedSQL, panelID, period, mask, mean, variance, l.LagSamples,
+		l.OutageWeight, outageAt); err != nil {
+		return fmt.Errorf("saving panel %s's tick, lag and outages: %w", panelID, err)
 	}
 	return nil
 }

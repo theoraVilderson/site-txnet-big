@@ -54,8 +54,9 @@ type PanelState struct {
 	PollInterval time.Duration
 
 	// Reliability in (0,1]; flaky panels get smaller max leases so an outage
-	// freezes less budget. 0 is treated as 1.
+	// freezes less budget. 0 is treated as 1. Read from Outages each plan.
 	Reliability float64
+	Outages     Outages
 }
 
 // Replica is one meter on one panel for one subscription:

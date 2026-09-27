@@ -58,10 +58,13 @@ type PassConverger interface {
 // writer of a config's ceiling since F-027-db. It is handed the raw readings
 // of a turn that completed, writes the ceilings to the rows, and has no way
 // to the panel: the convergence step right after it carries them. Allocate is
-// the woken turn's: no readings, only configs with no ceiling yet.
+// the woken turn's: no readings, only configs with no ceiling yet. Failed is
+// told of a read that failed, which starts an outage the next read ends: a
+// panel's outage history scales its MaxLease (F-027-dh).
 type Planner interface {
 	Observe(ctx context.Context, p Panel, readings []driver.ClientUsage, at time.Time) error
 	Allocate(ctx context.Context, p Panel, at time.Time) error
+	Failed(panelID string, at time.Time)
 }
 
 // PanelHealth is told how each panel's turn went and says whether a panel may
@@ -293,6 +296,10 @@ func (l *Loop) collect(ctx context.Context, p Panel, minWindow time.Duration) (R
 
 	readings, err := p.Driver.GetUsage(panelCtx)
 	l.observe(ctx, p.ID, err)
+	if err != nil && l.Planner != nil && ctx.Err() == nil {
+		// Our own shutdown is not the panel's outage.
+		l.Planner.Failed(p.ID, l.now())
+	}
 	if err != nil {
 		// Nothing is billed from a reading that does not exist, and the
 		// cursor is untouched: the next pass reads the same bytes.
