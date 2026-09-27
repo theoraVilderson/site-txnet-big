@@ -58,6 +58,13 @@ scrape_configs:
     static_configs:
       - targets: ["postgres-exporter:9187"]
 
+  # The lease planner's in-process counters (F-027-dm): planned writes by
+  # panel and reason, and false-cut config-seconds. Private network only, no
+  # published port; everything the planner keeps on a row is the `postgres`
+  # job's, so it stays readable while this target is down.
+  - job_name: "network-service"
+    static_configs:
+      - targets: ["network-service:8090"]
   - job_name: "rabbitmq-queues"
     metrics_path: /metrics/detailed
     params:

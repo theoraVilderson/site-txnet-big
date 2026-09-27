@@ -1,11 +1,13 @@
 // Package httpapi serves this service's only HTTP surface: a health endpoint
-// for the container and the external watchdog. Nothing here answers a user
-// request, and nothing here is routed through the gateway (ADR-0071).
+// for the container and the external watchdog, and `/metrics` for Prometheus
+// on the private network (F-027-dm). Nothing here answers a user request, and
+// nothing here is routed through the gateway (ADR-0071).
 package httpapi
 
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -60,5 +62,16 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(body); err != nil {
 		h.log.Error("writing health response failed", "error", err)
+	}
+}
+
+// Metrics serves what src writes, as the Prometheus text format. A failed
+// write is the scraper gone; it is logged, and there is no status left to set.
+func (h *Handler) Metrics(src io.WriterTo) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		if _, err := src.WriteTo(w); err != nil {
+			h.log.Warn("writing metrics failed", "error", err)
+		}
 	}
 }

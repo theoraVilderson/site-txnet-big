@@ -157,3 +157,65 @@ network_collection:
     - panels_never_collected:
         usage: "GAUGE"
         description: "Accepted panels that have never completed a collection pass. A newly registered panel sits here until its first pass."
+
+# network — the lease planner's learned figures, per panel (F-027-dm, SPEC §10).
+# `network.planner_panels()` is SECURITY DEFINER for the watchdog's reason
+# above: under RLS this role would see only the platform's panels. Lag is -1
+# while a panel has no sample; `tick_known` is 1 once the planner has pinned
+# the panel's tick phase (quota.TickClock.Known). The planner's in-process
+# counters are on network-service's `/metrics`, not here.
+# Metrics: `network_planner_panel_lag_mean_seconds`, `..._lag_stddev_seconds`,
+# `..._lag_samples`, `..._tick_known`.
+network_planner_panel:
+  master: true
+  cache_seconds: 60
+  query: >-
+    SELECT panel, family, lag_mean_seconds, lag_stddev_seconds, lag_samples, tick_known
+    FROM network.planner_panels()
+  metrics:
+    - panel:
+        usage: "LABEL"
+        description: "Panel id."
+    - family:
+        usage: "LABEL"
+        description: "The panel's driverType."
+    - lag_mean_seconds:
+        usage: "GAUGE"
+        description: "The planner's learned lag mean for the panel, seconds. -1 until the first sample."
+    - lag_stddev_seconds:
+        usage: "GAUGE"
+        description: "The square root of the planner's learned lag variance, seconds. -1 until the first sample."
+    - lag_samples:
+        usage: "GAUGE"
+        description: "Samples behind the panel's learned lag."
+    - tick_known:
+        usage: "GAUGE"
+        description: "1 when the planner has pinned the panel's tick phase, 0 while it has not."
+
+# network — overshoot of the Grants the planner closed, per panel family
+# (F-027-dm, SPEC §10). Closed 5 min to 7 days ago; (served − quota at close) /
+# quota at close, signed. No row for a family with no close in the window.
+# Metrics: `network_planner_overshoot_closed_grants`, `..._ratio_p50`,
+# `..._ratio_p95`, `..._ratio_max`.
+network_planner_overshoot:
+  master: true
+  cache_seconds: 300
+  query: >-
+    SELECT family, closed_grants, overshoot_ratio_p50, overshoot_ratio_p95, overshoot_ratio_max
+    FROM network.planner_overshoot()
+  metrics:
+    - family:
+        usage: "LABEL"
+        description: "The driverType of the Grant's panels, or `mixed`."
+    - closed_grants:
+        usage: "GAUGE"
+        description: "Grants closed by the planner in the window."
+    - overshoot_ratio_p50:
+        usage: "GAUGE"
+        description: "Median of (served − quota at close) / quota at close. Negative: the close left bytes."
+    - overshoot_ratio_p95:
+        usage: "GAUGE"
+        description: "95th percentile of the same ratio."
+    - overshoot_ratio_max:
+        usage: "GAUGE"
+        description: "Largest overshoot ratio in the window."

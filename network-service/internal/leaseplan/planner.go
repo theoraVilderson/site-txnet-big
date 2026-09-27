@@ -225,6 +225,9 @@ type Planner struct {
 	// Blocks carries a metered Grant's block requests to billing; nil asks
 	// for nothing.
 	Blocks BlockRequester
+	// Metrics counts the planned writes and the false cut (F-027-dm); nil
+	// counts nothing.
+	Metrics *Metrics
 
 	mu       sync.Mutex
 	panels   map[string]*quota.PanelState
@@ -243,6 +246,8 @@ type Planner struct {
 	// down is each panel's first failed read since it last answered: the
 	// start of an outage the next answer measures (F-027-dh).
 	down map[string]time.Time
+	// cuts is each Grant's last plan, for Metrics' false-cut interval.
+	cuts map[string]cutState
 }
 
 var _ collect.Planner = (*Planner)(nil)
@@ -544,6 +549,7 @@ func (s *Planner) planLocked(p collect.Panel, snap Snapshot, got map[string]driv
 				pl.Leases = append(pl.Leases, l)
 			}
 		}
+		s.record(pl, at)
 		plans = append(plans, pl)
 	}
 	sort.Slice(plans, func(i, j int) bool { return plans[i].GrantID < plans[j].GrantID })
@@ -662,6 +668,7 @@ func (s *Planner) init() {
 	s.pollBy = map[string]time.Time{}
 	s.probed = map[string]time.Time{}
 	s.down = map[string]time.Time{}
+	s.cuts = map[string]cutState{}
 }
 
 // panel keeps one PanelState per panel, so what it learns outlives a pass. A

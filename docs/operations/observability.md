@@ -1,7 +1,7 @@
 ---
 id: ops-observability
 status: active
-updated: 2026-09-12
+updated: 2026-09-27
 ---
 
 # Observability
@@ -19,7 +19,7 @@ independently (and, in Swarm, run global-mode agents on every node).
 | Promtail | — | ships container logs (labelled `txnet.logging=true`) to Loki; `deploy.mode: global` in Swarm |
 | node-exporter | — | host metrics; global |
 | cAdvisor | 8080 | container metrics; global |
-| postgres-exporter | — | the outbox gauge and the FX gate's gauges (F-067-c, F-0605); default collectors off |
+| postgres-exporter | — | the outbox gauge, the FX gate's gauges, the collector watchdog and the lease planner's row-held figures (F-067-c, F-0605, F-027-w, F-027-dm); default collectors off |
 | Alertmanager | 9094 | routes alerts (config incl. a `bale_token.txt` for Bale notifications) |
 
 Config lives in `dev-docker/monitoring/config-dev/` (`prometheus.yml`,
@@ -115,9 +115,10 @@ client. Compose caps json-file logs at 10m x 3.
 
 ## Gaps
 
-- No metrics endpoint exposed by auth-service / auth-handler / locale-service yet
-  (Prometheus has nothing app-level to scrape). No Node or Go Prometheus client
-  is installed anywhere in the repo. Every number the automation alerts read
+- No metrics endpoint exposed by auth-service / auth-handler / locale-service yet.
+  The one app-level `/metrics` is network-service's (F-027-dm): two planner
+  counters, text written by hand, no Prometheus client library — see
+  `docs/domains/network/contract.metrics.md` for why it is the only one. Every number the automation alerts read
   came off the broker instead, which is why they could ship without one; F-0605
   took the Postgres route rather than adding the first one, because a worker's
   run log is already in a table.

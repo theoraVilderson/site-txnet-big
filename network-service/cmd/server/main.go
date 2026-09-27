@@ -129,7 +129,10 @@ func main() {
 	// The lease planner (ADR-0093): the only writer of a config's ceiling
 	// since F-027-db; the convergence step carries it. It also says when each
 	// panel is read next (F-027-de).
-	planner := &leaseplan.Planner{Store: leaseplan.PostgresStore{DB: pool}, Log: log, Blocks: publish.BlockRequests{Transport: broker}}
+	// Its in-process counters are served on /metrics (F-027-dm).
+	plannerMetrics := &leaseplan.Metrics{}
+	planner := &leaseplan.Planner{Store: leaseplan.PostgresStore{DB: pool}, Log: log, Blocks: publish.BlockRequests{Transport: broker},
+		Metrics: plannerMetrics}
 	collector := &collect.Loop{
 		Source:      panels,
 		Sink:        publish.Publisher{Transport: broker},
@@ -199,7 +202,9 @@ func main() {
 	}()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", httpapi.New(pool, log).Health)
+	api := httpapi.New(pool, log)
+	mux.HandleFunc("/health", api.Health)
+	mux.HandleFunc("/metrics", api.Metrics(plannerMetrics))
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
