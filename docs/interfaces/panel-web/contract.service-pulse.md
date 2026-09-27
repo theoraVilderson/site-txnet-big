@@ -53,12 +53,13 @@ should say so; the usage bar is confusing".
 4. **The meter leads with what is left** (user: the used-bar read both ways).
    There are two tiles, traffic left and time left. Each has a big figure, a
    percent pill, a tank and one plain sentence (used-of-bought; until when).
-   The tank is a glossy capsule whose fill is what is left, with ticks at the
-   quarters. It fills up when the page opens, a glint crosses it every 5 s,
-   and a glowing head rides its edge. A live traffic tank runs a current
-   toward the head and beats it, and each push sends a ring out of the head.
+   The tank is a glossy capsule whose fill is what is used, climbing toward
+   the bound (user: a shrinking bar reads backwards); unlimited stays full.
+   Ticks at the quarters. It fills up when the page opens and a glowing head
+   rides its edge. Only a live traffic tank moves: a glint every 5 s, a head
+   that beats, and a ring out of the head on each push; no stripes.
    The tank turns gold under a quarter left and red under a tenth; red also
-   tints the tile and makes the fill breathe. The percent is whole, never 100
+   tints the tile, and makes the fill breathe only while live. The percent is whole, never 100
    once a byte is used and never 0 while one is left. The bound is rule 15's:
    unlimited reads "unlimited", and a prepaid Grant with no cap shows what it
    used. An `active` Grant under a tenth of its traffic, or under a day of its
@@ -74,7 +75,7 @@ should say so; the usage bar is confusing".
    page watched on its way shows "ready" for 10 s once it lands. A row that
    was already ready shows no "ready".
 6. **Motion is decoration, never the message.** Every state has its words.
-   Under `prefers-reduced-motion` the fill-up, glint, current, beat, ripple,
+   Under `prefers-reduced-motion` the fill-up, glint, beat, ripple,
    bump, ring and sweep stop, and nothing else changes (`globals.css`, "My services").
 
 ## Proof
@@ -86,7 +87,7 @@ A live row's seconds count up, it says "probably stopped" at 50 s and idle at
 config with lines and a panel that gives none. A row that is live from
 billing's stamp falls idle when the window closes and turns on the minute. A
 never-used row. A push that makes a row live, shows "+100 MB", runs the
-tank's current and sends its ring. A critical tank. Nothing shown
+tank's ring. A critical tank. Nothing shown
 while metering is down or on a non-active Grant. The meter's figure, its "of",
 its percent and the red line. Unlimited traffic. The steps while pending. The
 links step after delivery, then "ready". `useGrantsPage.test.ts` checks that a

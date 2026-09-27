@@ -32,8 +32,10 @@ const TILE: Record<Level, string> = {
 /**
  * A service's traffic and time, side by side, each leading with **what is
  * left** (F-307-u; user, 2026-09-27: the old bar of what was used read both
- * ways). The bar is the tank, and it drains: full when bought, empty when
- * spent, green, then gold under a quarter, red under a tenth. Under it, the
+ * ways). The bar is the tank, and it fills with what is used, climbing toward
+ * the bound (user, 2026-09-27: a bar that shrinks reads backwards): empty when
+ * bought, full when spent, green, then gold under a quarter left, red under a
+ * tenth. Under it, the
  * plain sentence of used-of-bought, so no figure has to be decoded.
  *
  * The bound is the row's (contract.my-services.md rule 15): what a metered
@@ -43,8 +45,9 @@ const TILE: Record<Level, string> = {
  * here reads anything.
  *
  * The bar is a tank (`Tank`, `globals.css` "My services"): it fills up when
- * the page opens, a glint crosses it, a glowing head rides its edge. `live`
- * runs a current through the traffic tank and beats its head; `splash` (the
+ * the page opens and a glowing head rides its edge. `live` (in use) runs a
+ * glint through the traffic tank, beats its head and lets a red tank breathe —
+ * a service not in use, or spent, stays still; no stripes (user, 2026-09-27); `splash` (the
  * latest push's number) sends a ring out of the head as the bytes land.
  * `warn` asks for the running-out lines — only a live-state Grant gets them;
  * a suspended one already says what to do.
@@ -101,7 +104,7 @@ export function UsageMeter({ row, live, warn, splash }: { row: GrantRow; live: b
               </span>
             </div>
             <Tank
-              left={trafficLeft}
+              used={share}
               level={trafficLevel}
               live={live}
               splash={splash}
@@ -115,7 +118,7 @@ export function UsageMeter({ row, live, warn, splash }: { row: GrantRow; live: b
               <Unlimited size={22} aria-hidden />
               {t("common", M.unlimited)}
             </p>
-            <Tank left={1} level="ok" live={live} splash={splash} />
+            <Tank used={1} level="ok" live={live} splash={splash} />
             <p className="text-[11px] text-text-secondary">{t("common", S.usageUnlimited, { consumed })}</p>
           </Tile>
         ) : (
@@ -123,7 +126,7 @@ export function UsageMeter({ row, live, warn, splash }: { row: GrantRow; live: b
             <p className="meter-figure text-xl font-black tabular-nums leading-tight text-text-primary" dir="ltr">
               {consumed}
             </p>
-            <Tank left={1} level="ok" live={live} splash={splash} />
+            <Tank used={1} level="ok" live={live} splash={splash} />
           </Tile>
         )}
 
@@ -135,7 +138,7 @@ export function UsageMeter({ row, live, warn, splash }: { row: GrantRow; live: b
                 <Unlimited size={22} aria-hidden />
                 {t("common", M.unlimited)}
               </p>
-              <Tank left={1} level="ok" />
+              <Tank used={1} level="ok" />
               <p className="text-[11px] text-text-secondary">{t("common", S.periodUnlimited, { from })}</p>
             </>
           ) : (
@@ -143,7 +146,7 @@ export function UsageMeter({ row, live, warn, splash }: { row: GrantRow; live: b
               <p className={`meter-figure text-base font-black leading-tight ${FIGURE[timeLevel]}`} title={until ?? undefined}>
                 {days}
               </p>
-              <Tank left={timeLeftShare} level={timeLevel} />
+              <Tank used={time.spent} level={timeLevel} />
               {until && <p className="text-[11px] text-text-secondary">{t("common", M.until, { at: until })}</p>}
             </>
           )}
@@ -177,25 +180,26 @@ function Tile({ icon, label, level = "ok", children }: { icon: ReactNode; label:
 }
 
 /**
- * A tank that drains: the fill is what is left, in `--tank`, with a head of
- * light on its leading edge. A sliver stays while anything is left, so
- * "almost empty" never reads as "empty"; an empty tank has no head. Ticks at
+ * A tank that fills toward its bound: the fill is what is used, in `--tank`,
+ * with a head of light on its leading edge. A sliver shows once anything is
+ * used, so "barely touched" never reads as "untouched"; an unused tank has no
+ * head. Unlimited has no bound to near, so its tank stays full and green. Ticks at
  * the quarters give the eye a scale without a single number.
  */
 function Tank({
-  left,
+  used,
   level,
   live = false,
   splash,
   label,
 }: {
-  left: number;
+  used: number;
   level: Level;
   live?: boolean;
   splash?: number;
   label?: string;
 }) {
-  const width = left <= 0 ? 0 : Math.max(left, 0.04) * 100;
+  const width = used <= 0 ? 0 : Math.min(Math.max(used, 0.04), 1) * 100;
   const head = `max(0px, calc(${width}% - 0.6rem))`;
   return (
     <div
@@ -211,9 +215,8 @@ function Tank({
       ))}
       {width > 0 && (
         <>
-          <div className={`tank-fill ${level === "critical" ? "tank-critical" : ""}`} style={{ width: `${width}%` }}>
-            {live && <span className="tank-flow" aria-hidden />}
-            <span className="tank-glint" aria-hidden />
+          <div className={`tank-fill ${live && level === "critical" ? "tank-critical" : ""}`} style={{ width: `${width}%` }}>
+            {live && <span className="tank-glint" aria-hidden />}
           </div>
           <span className="tank-head" style={{ insetInlineStart: head }} aria-hidden />
           {live && splash !== undefined && (

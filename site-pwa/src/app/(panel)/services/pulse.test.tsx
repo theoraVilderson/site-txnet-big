@@ -172,11 +172,13 @@ describe("a service row's pulse", () => {
     );
     expect(screen.getByRole("status", { name: "myServices.pulse.live" })).toBeInTheDocument();
     expect(screen.getByText("+100 MB")).toBeInTheDocument();
-    // The traffic tank runs its current and sends a ring out as the bytes land.
+    // The traffic tank sends a ring out as the bytes land.
     const tank = screen.getByRole("img", { name: /myServices\.ring\.label/ });
     expect(tank).toHaveClass("tank-live");
-    expect(tank.querySelector(".tank-flow")).not.toBeNull();
+    // No stripes: the current was dropped (user, 2026-09-27).
+    expect(tank.querySelector(".tank-flow")).toBeNull();
     expect(tank.querySelector(".tank-ripple")).not.toBeNull();
+    expect(tank.querySelector(".tank-glint")).not.toBeNull();
   });
 
   it("claims nothing while metering is down, and nothing for a service that is not active", () => {
@@ -196,11 +198,20 @@ describe("the traffic meter", () => {
     expect(screen.getByText("512 MB")).toBeInTheDocument();
     expect(screen.getByText("myServices.meter.of:2 GB")).toBeInTheDocument();
     expect(screen.getByText("myServices.meter.percentLeft:25")).toBeInTheDocument();
+    // The bar fills with what is used, climbing toward the bound.
+    const fill = screen.getByRole("img", { name: /myServices\.ring\.label/ }).querySelector<HTMLElement>(".tank-fill");
+    expect(fill?.style.width).toBe("75%");
+    // Not in use: no glint of light crosses it.
+    expect(fill?.querySelector(".tank-glint")).toBeNull();
     expect(screen.queryByText("myServices.meter.lowTraffic")).toBeNull();
     unmount();
     render(<ServiceRow row={{ ...GRANT, consumedBytes: "2040109466" }} name="VPN" capabilities={[]} />);
     expect(screen.getByText("myServices.meter.lowTraffic")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /myServices\.ring\.label/ })).toHaveAttribute("data-level", "critical");
+    const spent = screen.getByRole("img", { name: /myServices\.ring\.label/ });
+    expect(spent).toHaveAttribute("data-level", "critical");
+    // Red, but still: not in use, so it neither breathes nor glints.
+    expect(spent.querySelector(".tank-critical")).toBeNull();
+    expect(spent.querySelector(".tank-glint")).toBeNull();
   });
 
   it("says unlimited for a Grant sold without a traffic bound", () => {

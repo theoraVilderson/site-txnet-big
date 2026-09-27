@@ -883,16 +883,16 @@ div:has(> .password-field-input:autofill) > .password-field-label {
 }
 
 /* ── My services: a service that looks alive (F-307-u) ──────────────────────
-   The meter is a tank (`.tank`): a glossy capsule whose fill is what is LEFT.
-   It fills up once when the page opens (`tankGrow`), a glint of light crosses
-   it every few seconds, and a glowing head rides its leading edge. While the
-   service is in use a current flows toward the head and the head beats; a
-   usage push splashes it. Nearly empty, the whole fill breathes red.
+   The meter is a tank (`.tank`): a glossy capsule whose fill is what is USED.
+   It fills up once when the page opens (`tankGrow`) and a glowing head rides
+   its leading edge. Only while the service is in use does a glint of light
+   cross it every few seconds and the head beat (no stripes, by request); a
+   usage push splashes it. Nearly at its bound and in use, the fill breathes red.
 
    Colour is one variable, `--tank`, set from a theme token by the component
    (primary / gold / error — gold is a tone here, never a control), so all
    three themes work without a raw colour. Logical properties and `[dir=rtl]`
-   make the tank drain toward the reading start in both directions.
+   make the tank fill from the reading start in both directions.
    Reduced motion keeps every state and drops only the movement. */
 
 .tank {
@@ -951,19 +951,6 @@ div:has(> .password-field-input:autofill) > .password-field-label {
 
 [dir="rtl"] .tank-glint {
   animation-name: tankGlintRtl;
-}
-
-.tank-flow {
-  position: absolute;
-  inset: 0;
-  background-image: repeating-linear-gradient(-45deg, rgb(255 255 255 / 0.3) 0 6px, transparent 6px 12px);
-  background-size: 17px 17px;
-  animation: tankFlow 0.8s linear infinite;
-}
-
-[dir="rtl"] .tank-flow {
-  background-image: repeating-linear-gradient(45deg, rgb(255 255 255 / 0.3) 0 6px, transparent 6px 12px);
-  animation-name: tankFlowRtl;
 }
 
 /* The head rides the fill's leading edge; the component sets its
@@ -1048,16 +1035,6 @@ div:has(> .password-field-input:autofill) > .password-field-label {
   35%, 100% { transform: translateX(-120%); }
 }
 
-@keyframes tankFlow {
-  from { background-position: 0 0; }
-  to { background-position: 17px 0; }
-}
-
-@keyframes tankFlowRtl {
-  from { background-position: 0 0; }
-  to { background-position: -17px 0; }
-}
-
 @keyframes tankBeat {
   0%, 100% { transform: scale(1); box-shadow: 0 0 6px 2px color-mix(in oklab, var(--tank) 70%, white); }
   50% { transform: scale(1.35); box-shadow: 0 0 12px 5px color-mix(in oklab, var(--tank) 60%, white); }
@@ -1119,7 +1096,6 @@ div:has(> .password-field-input:autofill) > .password-field-label {
   }
 
   .tank-glint,
-  .tank-flow,
   .tank-ripple {
     display: none;
   }
