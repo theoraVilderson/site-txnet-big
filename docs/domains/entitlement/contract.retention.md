@@ -141,6 +141,7 @@ proved by `cut-off.spec.ts`. Payload `tenantId, userId, grantId, period`.
 | A close stands only while its Quota **and** end are the Grant's (`network/contract.lease.md` rule 25); one a renewal moved is `reopened`, untold | a late close never suspends, nor tells, a renewed Grant |
 | `period` = the end for `ended`, the suspension's instant otherwise; nothing is emitted when nothing stopped (a redelivered close finds it `suspended`) | notification's ledger holds each stop once (invariant 14); a renewal or revival opens a new one |
 | Never muted, never held for quiet hours (F-601-m) | a user whose service stopped must hear it |
+| No grace period: a Grant stops at its end, volume or wallet at once; the warning is the 1-day notice ("Time thresholds") | bytes past the end are traffic nobody bought (F-603 dropped, user 2026-09-27) |
 
 **Before purge (F-601-j, beyond the catalog)** — a suspended Grant is told,
 a day before `purgeAfterDays` drops its configs from the panel ([contract.md](contract.md)
