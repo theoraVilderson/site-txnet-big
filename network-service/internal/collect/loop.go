@@ -57,12 +57,15 @@ type PassConverger interface {
 // Planner is the lease planner (ADR-0093), `leaseplan.Planner`: the only
 // writer of a config's ceiling since F-027-db. It is handed the raw readings
 // of a turn that completed, writes the ceilings to the rows, and has no way
-// to the panel: the convergence step right after it carries them. Allocate is
+// to the panel: the convergence step right after it carries them. Observe
+// says whether its plan left the panel anything to carry — a write, a lease,
+// a close, or a write still waiting to be read back — which is what lets a
+// planned poll skip the convergence step (F-027-ds). Allocate is
 // the woken turn's: no readings, only configs with no ceiling yet. Failed is
 // told of a read that failed, which starts an outage the next read ends: a
 // panel's outage history scales its MaxLease (F-027-dh).
 type Planner interface {
-	Observe(ctx context.Context, p Panel, readings []driver.ClientUsage, at time.Time) error
+	Observe(ctx context.Context, p Panel, readings []driver.ClientUsage, at time.Time) (bool, error)
 	Allocate(ctx context.Context, p Panel, at time.Time) error
 	Failed(panelID string, at time.Time)
 }
@@ -242,7 +245,7 @@ func (l *Loop) Pass(ctx context.Context) (PassReport, error) {
 				defer l.Turns.Hold(p.ID)()
 			}
 
-			res, op, err := l.collect(ctx, p, l.interval())
+			res, op, err := l.collect(ctx, p, l.interval(), false)
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -266,8 +269,9 @@ func (l *Loop) Pass(ctx context.Context) (PassReport, error) {
 // move the cursor. The order is the invariant — a cursor moved before a
 // successful publish is bytes nobody will read again (invariant 18).
 // minWindow floors the plausibility cap's window: the bulk interval on a bulk
-// pass, PollMinWindow on a planned poll (F-027-de).
-func (l *Loop) collect(ctx context.Context, p Panel, minWindow time.Duration) (Result, string, error) {
+// pass, PollMinWindow on a planned poll (F-027-de). A polled turn converges
+// only what its plan owes (F-027-ds); the bulk pass converges every turn.
+func (l *Loop) collect(ctx context.Context, p Panel, minWindow time.Duration, polled bool) (Result, string, error) {
 	if l.Health != nil && !l.Health.Ask(p.ID, l.now()) {
 		// A panel that answered `429` or `403` is not asked again inside its
 		// cool-off: retrying through a ban is what makes the ban permanent
@@ -326,8 +330,10 @@ func (l *Loop) collect(ctx context.Context, p Panel, minWindow time.Duration) (R
 		return Result{}, "Apply", err
 	}
 	l.record(ctx, rates)
-	l.plan(ctx, p, readings, res.ObservedAt)
-	l.converge(ctx, p, res)
+	owed := l.plan(ctx, p, readings, res.ObservedAt)
+	if !polled || owed || sawReset(res) {
+		l.converge(ctx, p, res)
+	}
 	return res, "", nil
 }
 
@@ -348,14 +354,31 @@ func (l *Loop) converge(ctx context.Context, p Panel, res Result) {
 // plan runs the planner over the turn, after the bytes are billed and the
 // cursors moved, and before the convergence step, so what it writes reaches
 // the panel in the same turn. A failure is logged: the bytes are billed, and
-// the ceilings stay where the last plan left them.
-func (l *Loop) plan(ctx context.Context, p Panel, readings []driver.ClientUsage, at time.Time) {
+// the ceilings stay where the last plan left them. It says whether the panel
+// is owed a convergence: no planner, or a plan that failed, owes one, since
+// nothing then says the panel already holds what the rows do.
+func (l *Loop) plan(ctx context.Context, p Panel, readings []driver.ClientUsage, at time.Time) bool {
 	if l.Planner == nil {
-		return
+		return true
 	}
-	if err := l.Planner.Observe(ctx, p, readings, at); err != nil {
+	owed, err := l.Planner.Observe(ctx, p, readings, at)
+	if err != nil {
 		l.log().Error("lease plan failed", "panel", p.ID, "error", err)
+		return true
 	}
+	return owed
+}
+
+// sawReset: a counter on this turn went backward. The ceiling the panel holds
+// is then in the counter's old origin, and it is restated on this turn
+// whatever the plan did (ADR-0072, `converge.Ceilings`).
+func sawReset(res Result) bool {
+	for _, a := range res.Advances {
+		if !a.Counter.LastResetAt.IsZero() && a.Counter.LastResetAt.Equal(res.ObservedAt) {
+			return true
+		}
+	}
+	return false
 }
 
 // observe hands one panel's outcome to the health tracker. A tracker that

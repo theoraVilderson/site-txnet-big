@@ -31,9 +31,10 @@ type Schedule interface {
 	NextPoll(panelID string, minPoll time.Duration) (time.Time, bool)
 }
 
-// PollRequests is what one planned poll asks a panel for: the usage read and
-// the convergence step's `ListClients`. A paged read costs more, and `Paced`
-// holds that to the budget regardless.
+// PollRequests is what one planned poll asks a panel for at most: the usage
+// read and the convergence step's `ListClients`, which a poll whose plan owed
+// nothing skips (F-027-ds). A paged read costs more, and `Paced` holds that to
+// the budget regardless.
 const PollRequests = 2
 
 // PollGap is the least time between two planned polls of one panel: polls
@@ -64,7 +65,10 @@ func WriteRate(p Panel) float64 {
 // replacing the hot loop's one interval for every panel. A planned poll is
 // the bulk pass's own turn — one whole-panel read, publish, plan, converge —
 // so the planner sees every counter on the panel, and its tick clock learns
-// from reads less than a tick apart, which a minute's pass never is.
+// from reads less than a tick apart, which a minute's pass never is. Its
+// converge runs only when the plan owes the panel something or a counter
+// reset (F-027-ds): a poll can come every 5 s near a Grant's end, and the
+// step is a whole-panel `ListClients` plus the writes it repeats.
 //
 // The bulk pass stays the safety net: a panel no plan hinted, a poll that
 // found the panel busy, and a process that just started are all read by it.
@@ -141,7 +145,7 @@ func (p *Poller) turn(ctx context.Context, panel Panel) {
 		}
 		defer release()
 	}
-	_, op, err := l.collect(ctx, panel, PollMinWindow)
+	_, op, err := l.collect(ctx, panel, PollMinWindow, true)
 	if err == nil {
 		return
 	}

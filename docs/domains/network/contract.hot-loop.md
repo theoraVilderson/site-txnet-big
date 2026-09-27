@@ -65,6 +65,15 @@ less than a tick apart, which a minute's pass never is.
    is skipped, and that turn's plan moves its next poll.
 6. **The plausibility cap is floored at `PollMinWindow` (2 s)** on a poll,
    not the bulk minute, as the hot loop's was.
+7. **A poll converges only what its plan owes** (F-027-ds). A poll can come
+   every 5 s near a Grant's end, and the convergence step is a whole-panel
+   `ListClients` plus every write it repeats, so a polled turn converges
+   only when `Planner.Observe` says the panel is owed — an action, a Grant
+   closed or reopened, or a replica still `writePending` (its read-back is
+   that `ListClients`, `contract.lease.md` rule 17) — or when a counter on
+   the turn reset (the ceiling is restated in the new origin, ADR-0072).
+   No planner, or a plan that failed, owes. The bulk pass converges every
+   turn: it is what catches an override, a missing client or a stale write.
 
 ## The money half — the block request (F-027-dc)
 

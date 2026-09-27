@@ -253,11 +253,34 @@ type Planner struct {
 var _ collect.Planner = (*Planner)(nil)
 
 // Observe is the usage turn's hook: plan, write, and log each plan and each
-// action.
-func (s *Planner) Observe(ctx context.Context, p collect.Panel, readings []driver.ClientUsage, at time.Time) error {
+// action. It says whether the panel is owed a convergence (F-027-ds): see
+// owes.
+func (s *Planner) Observe(ctx context.Context, p collect.Panel, readings []driver.ClientUsage, at time.Time) (bool, error) {
 	plans, err := s.Plan(ctx, p, readings, at)
 	s.logPlans(p, plans)
-	return err
+	return s.owes(p.ID, plans), err
+}
+
+// owes: the plans left the panel something to carry — an action (a ceiling,
+// an enable, a create), a Grant closed or reopened — or one of its replicas
+// still waits on a write's read-back, which only the convergence step's
+// `ListClients` gives (`contract.lease.md` rule 17). Anything else is a panel
+// already holding what the rows say, and a poll that converged it would only
+// read the whole panel to repeat it.
+func (s *Planner) owes(panelID string, plans []Plan) bool {
+	for _, pl := range plans {
+		if len(pl.Actions) > 0 || pl.ClosureMoved {
+			return true
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, r := range s.replicas {
+		if r.Panel != nil && r.Panel.ID == panelID && r.Pending() {
+			return true
+		}
+	}
+	return false
 }
 
 // Failed is told that a read of the panel failed at at. The first failure

@@ -238,3 +238,52 @@ func TestANewConfigGetsItsFirstShareOnAWokenTurn(t *testing.T) {
 		t.Errorf("row holds %d, want the planner's %d plus the 300 MiB offset", got, plans[0].Actions[0].Limit)
 	}
 }
+
+// A turn owes the panel a convergence only for what its plan left to carry
+// (F-027-ds): an action, or a write still waiting to be read back. A panel
+// already holding every figure is owed nothing, so a planned poll skips the
+// whole-panel `ListClients` and the writes it would repeat.
+func TestATurnOwesThePanelOnlyWhatThePlanMoved(t *testing.T) {
+	b := newBench(t, quota.GB, "c1", "c2")
+	owes := func() bool {
+		t.Helper()
+		var readings []driver.ClientUsage
+		for _, id := range b.ids {
+			readings = append(readings, reading(id, b.counter[id]))
+		}
+		owed, err := b.pl.Observe(context.Background(), panel(b.ids...), readings, b.at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b.at = b.at.Add(time.Minute)
+		return owed
+	}
+	if !owes() {
+		t.Fatal("the first shares were planned, and nothing was owed")
+	}
+	for i := 0; i < 8; i++ { // every write lands
+		b.turn(nil)
+	}
+	for id, q := range b.inflight {
+		if len(q) > 0 {
+			t.Fatalf("%s still has %d write(s) in flight after 8 idle turns", id, len(q))
+		}
+	}
+	if owes() {
+		t.Fatal("a settled panel was owed a convergence")
+	}
+
+	// A shrink written and not yet shown: owed on every turn until it is.
+	for i := 0; i < 20 && !b.row("c2").Pending && !b.row("c1").Pending; i++ {
+		b.counter["c1"] += 40 * quota.MB
+		b.row("c1").Counter = b.counter["c1"]
+		b.s.grants[0].Used = b.counter["c1"] + b.counter["c2"]
+		owes()
+	}
+	if !b.row("c2").Pending && !b.row("c1").Pending {
+		t.Fatal("no write was left in flight in 20 turns of one config running")
+	}
+	if !owes() {
+		t.Fatal("a write waiting on its read-back was owed nothing")
+	}
+}
