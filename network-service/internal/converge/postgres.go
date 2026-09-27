@@ -47,6 +47,10 @@ var _ Desired = PostgresDesired{}
 // group the row is for lives outside `network.*` (ADR-0071), so it is never
 // placed on its own group's either; the pass writes down where its client is
 // (recordSQL), and such a row is a guess only until then.
+//
+// Enabled is `desiredEnabled` while the lease planner has not closed the
+// Grant (`network.lease_close`, F-027-dd): a closed Grant's clients are
+// disabled, and billing's own switch is left as it was.
 const desiredSQL = `
 SELECT c.id::text, coalesce(c."remoteId", ''), c."claimTag", c.uuid, c.protocol::text,
        coalesce(c."inboundRemoteId",
@@ -56,7 +60,8 @@ SELECT c.id::text, coalesce(c."remoteId", ''), c."claimTag", c.uuid, c.protocol:
                                      WHERE a."panelId" = i."panelId" AND a."inboundRemoteId" = i."remoteId")
                   ORDER BY length(i."remoteId"), i."remoteId" LIMIT 1),
                 ''),
-       c."desiredEnabled", c."desiredRemote" = 'present', c."allocatedCeilingBytes",
+       c."desiredEnabled" AND NOT EXISTS (SELECT 1 FROM network.lease_close l WHERE l."grantId" = c."grantId"),
+       c."desiredRemote" = 'present', c."allocatedCeilingBytes",
        coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0)::bigint,
        c."enforcementState"::text, c."driftState"::text, c."driftRepairCount", c."driftRepairedAt",
        c."linkLines", coalesce(c."linksRemoteId", ''), coalesce(c."linksUuid", ''), c."linksCapturedAt",
@@ -143,7 +148,9 @@ UPDATE network.config
                              AND o."inboundRemoteId" = $16 AND o."credentialGroupId" IS NOT NULL AND o."drainedAt" IS NULL)
          THEN $16 ELSE "inboundRemoteId" END
  WHERE id = $1::uuid
-   AND uuid = $5 AND "desiredEnabled" = $6 AND ("desiredRemote" = 'present') = $7
+   AND uuid = $5
+   AND ("desiredEnabled" AND NOT EXISTS (SELECT 1 FROM network.lease_close l WHERE l."grantId" = config."grantId")) = $6
+   AND ("desiredRemote" = 'present') = $7
 RETURNING id, "tenantId", "userId", "grantId")
 INSERT INTO automation.outbox_event (id, aggregate, "aggregateId", type, payload)
 SELECT gen_random_uuid(), 'network.config', r.id::text, e.type,

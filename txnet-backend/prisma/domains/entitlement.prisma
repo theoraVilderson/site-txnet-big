@@ -118,6 +118,7 @@ model Grant {
   variant          ProductVariant?   @relation(fields: [variantId], references: [id], onDelete: Restrict)
   quotaAdjustments QuotaAdjustment[]
   configs          Config[]
+  leaseClose       LeaseClose?
 
   @@index([tenantId, userId])
   @@index([userId, status])

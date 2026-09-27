@@ -41,14 +41,15 @@ var _ Store = PostgresStore{}
 // already moved. A config is a replica while it can carry traffic — the
 // split's own rule (`contract.ceiling.md` "Who is in the split"). The counter
 // a ceiling is measured on is the panel's last figure on a cumulative panel,
-// and the lifetime sum where a read zeroes it.
+// and the lifetime sum where a read zeroes it. A Grant the planner closed
+// carries its `lease_close` row, and its configs read disabled (F-027-dd).
 const loadSQL = `
 WITH touched AS (
   SELECT DISTINCT c."grantId" FROM network.config c
    WHERE c.id = ANY($2::uuid[])
       OR (c."panelId" = $1::uuid AND c."allocatedCeilingBytes" IS NULL AND NOT c."trafficUnlimited"
           AND c.status = 'active' AND c."desiredEnabled" AND c."desiredRemote" = 'present'))
-SELECT g.id::text, g."purchasedBytes", g."endsAt",
+SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresAt", lc."grantId" IS NOT NULL,
        g."billingMode" = 'metered' AND g."meteredRate" IS NOT NULL,
        coalesce(g."meteredRate"::text, ''), coalesce(w."cachedBalance"::text, ''),
        c.id::text, c."panelId"::text,
@@ -58,7 +59,7 @@ SELECT g.id::text, g."purchasedBytes", g."endsAt",
             THEN coalesce(s."lastUpBytes" + s."lastDownBytes", 0)
             ELSE coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0) END::bigint,
        coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0)::bigint,
-       coalesce(c."appliedCeilingBytes", 0)::bigint, c."desiredEnabled",
+       coalesce(c."appliedCeilingBytes", 0)::bigint, c."desiredEnabled" AND lc."grantId" IS NULL,
        c."allocatedCeilingBytes", c."limitPeakBytes", c."writePending",
        p."driverType"::text,
        p."counterSemantics" = 'cumulative'
@@ -69,6 +70,7 @@ SELECT g.id::text, g."purchasedBytes", g."endsAt",
   FROM touched t
   JOIN entitlement."grant" g ON g.id = t."grantId"
   LEFT JOIN billing.wallet w ON w."ownerUserId" = g."userId"
+  LEFT JOIN network.lease_close lc ON lc."grantId" = g.id
   JOIN network.config c ON c."grantId" = g.id
   JOIN network.panel p ON p.id = c."panelId"
   LEFT JOIN network.config_counter_state s ON s."configId" = c.id
@@ -90,13 +92,16 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 			quota, lifetime     int64
 			applied             int64
 			endsAt              *time.Time
+			closedQuota         *int64
+			closedEnd           *time.Time
+			closed              bool
 			live                bool
 			c                   Config
 			pn                  Panel
 			tickMs              *int32
 			tickMask            *int64
 		)
-		if err := rows.Scan(&grantID, &quota, &endsAt, &metered, &rate, &balance, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
+		if err := rows.Scan(&grantID, &quota, &endsAt, &closedQuota, &closedEnd, &closed, &metered, &rate, &balance, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
 			&applied, &c.Enabled, &c.Allocated, &c.Peak, &c.Pending, &driverType, &pn.CanSetLimit, &pn.Healthy,
 			&tickMs, &tickMask, &pn.Learned.LagMeanSec, &pn.Learned.LagVarianceSec2, &pn.Learned.LagSamples); err != nil {
 			return Snapshot{}, fmt.Errorf("reading a Grant's config: %w", err)
@@ -108,6 +113,12 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 			}
 			if endsAt != nil {
 				g.ExpiresAt = *endsAt
+			}
+			if closed {
+				g.Closure = &Closure{Quota: *closedQuota}
+				if closedEnd != nil {
+					g.Closure.ExpiresAt = *closedEnd
+				}
 			}
 			snap.Grants = append(snap.Grants, g)
 		}
@@ -158,6 +169,35 @@ func (s PostgresStore) SaveLeases(ctx context.Context, leases []Lease) error {
 	}
 	if _, err := s.DB.Exec(ctx, saveLeasesSQL, ids, allocated, peaks, pending); err != nil {
 		return fmt.Errorf("writing %d lease(s): %w", len(leases), err)
+	}
+	return nil
+}
+
+// saveClosureSQL writes a Grant's close (F-027-dd); deleteClosureSQL reopens
+// it. The planner is the only writer of `network.lease_close`.
+const (
+	saveClosureSQL = `
+INSERT INTO network.lease_close ("grantId", "quotaBytes", "expiresAt", "closedAt")
+VALUES ($1::uuid, $2, $3, now())
+ON CONFLICT ("grantId") DO UPDATE
+   SET "quotaBytes" = excluded."quotaBytes", "expiresAt" = excluded."expiresAt", "closedAt" = excluded."closedAt"`
+	deleteClosureSQL = `DELETE FROM network.lease_close WHERE "grantId" = $1::uuid`
+)
+
+// SaveClosure writes or deletes one Grant's close.
+func (s PostgresStore) SaveClosure(ctx context.Context, grantID string, c *Closure) error {
+	var err error
+	if c == nil {
+		_, err = s.DB.Exec(ctx, deleteClosureSQL, grantID)
+	} else {
+		var end *time.Time
+		if !c.ExpiresAt.IsZero() {
+			end = &c.ExpiresAt
+		}
+		_, err = s.DB.Exec(ctx, saveClosureSQL, grantID, c.Quota, end)
+	}
+	if err != nil {
+		return fmt.Errorf("writing the close of Grant %s: %w", grantID, err)
 	}
 	return nil
 }

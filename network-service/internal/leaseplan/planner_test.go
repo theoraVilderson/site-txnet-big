@@ -24,6 +24,8 @@ type store struct {
 	panels map[string]leaseplan.Panel
 	asked  [][]string
 	leases []leaseplan.Lease
+	// closures is `network.lease_close`, by Grant id.
+	closures map[string]leaseplan.Closure
 }
 
 func (s *store) Load(_ context.Context, _ string, configIDs []string) (leaseplan.Snapshot, error) {
@@ -34,6 +36,13 @@ func (s *store) Load(_ context.Context, _ string, configIDs []string) (leaseplan
 	for i, g := range s.grants {
 		grants[i] = g
 		grants[i].Configs = append([]leaseplan.Config(nil), g.Configs...)
+		// A closed Grant's configs read disabled, as PostgresStore reads them.
+		if c, ok := s.closures[g.ID]; ok {
+			grants[i].Closure = &c
+			for ci := range grants[i].Configs {
+				grants[i].Configs[ci].Enabled = false
+			}
+		}
 	}
 	return leaseplan.Snapshot{Grants: grants, Panels: s.panels}, nil
 }
@@ -64,6 +73,29 @@ func (s *store) SaveLeases(_ context.Context, leases []leaseplan.Lease) error {
 }
 
 func (s *store) SaveLearned(context.Context, string, leaseplan.Learned) error { return nil }
+
+func (s *store) SaveClosure(_ context.Context, grantID string, c *leaseplan.Closure) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closures == nil {
+		s.closures = map[string]leaseplan.Closure{}
+	}
+	if c == nil {
+		delete(s.closures, grantID)
+	} else {
+		s.closures[grantID] = *c
+	}
+	return nil
+}
+
+func (s *store) closure(grantID string) *leaseplan.Closure {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if c, ok := s.closures[grantID]; ok {
+		return &c
+	}
+	return nil
+}
 
 func (s *store) set(used int64, configs ...leaseplan.Config) {
 	s.mu.Lock()

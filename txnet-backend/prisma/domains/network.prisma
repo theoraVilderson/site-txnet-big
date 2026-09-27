@@ -543,6 +543,25 @@ model Config {
   @@schema("network")
 }
 
+/// A Grant the lease planner closed (F-027-dd, SPEC §6-2). While the row
+/// stands every config of the Grant is desired disabled on its panel — the
+/// client is dropped at once, not a tick after its counter meets the ceiling —
+/// beside, never instead of, billing's `desiredEnabled`. It keeps the Quota
+/// and end the Grant closed on: only a renewal past them, with ReopenMin
+/// available, deletes it. The planner is its only writer.
+model LeaseClose {
+  grantId    String    @id @db.Uuid
+  quotaBytes BigInt
+  /// The Grant's `endsAt` at the close; null = no end.
+  expiresAt  DateTime?
+  closedAt   DateTime  @default(now())
+
+  grant Grant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@map("lease_close")
+  @@schema("network")
+}
+
 /// Where a variant's Grants are provisioned (§7.3, F-027-bk). `tenantId` null
 /// is a platform group: it holds platform panels only and serves anyone's
 /// variants. A tenant's group holds its own panels and platform ones, and

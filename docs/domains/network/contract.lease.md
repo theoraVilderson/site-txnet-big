@@ -81,8 +81,8 @@ it writes rows, and the convergence step carries them (rule 18).
 6. **Each turn: tick, then ledger, then plan** (SPEC §4). The planner's
    Observation takes Counter from the reading (up + down, or the running sum
    on a `reset_on_read` panel), Limit from `appliedCeilingBytes` less the
-   offset (rule 16), and Enabled
-   from `desiredEnabled`, because the bulk read carries no enable flag.
+   offset (rule 16), and Enabled from `desiredEnabled` with no
+   `lease_close` row (rule 24), because the bulk read carries no enable flag.
    `CanSetLimit` means the panel is `cumulative` and answers yes to
    `per_client_data_limit`. `Healthy` means `panelState = healthy`. J is the
    row's `tickPeriodMs`, or the family's (`leaseplan.JobInterval`) when null.
@@ -140,7 +140,7 @@ the row held before each plan.
     next one. A gap over `MaxTurnGap` (10 min) counts nothing — the service
     was down, not the cut long.
 15. **Divergence is Σ|want − allocated| of one plan, over Quota**, and only
-    while bytes are left: past the bag the planner's close (limit = counter)
+    while bytes are left: past the bag the planner's close (rule 24)
     against a split nobody moves any more is noise.
 
 ## The writer (F-027-db)
@@ -205,3 +205,26 @@ the money, so it decides whether one is bought (`billing/contract.traffic-block.
 The reserve is the whole wallet for each metered Grant of one owner, as it
 was in billing's split (`contract.reserve.md`); two metered Grants drawing at
 once can lease past the balance by one reaction window.
+
+## Close by disable (F-027-dd, SPEC §6-2)
+
+24. **A closed Grant is disabled, not only capped.** The planner closes a
+    Grant when it has expired, when `Quota − Used ≤ 0`, or when every active
+    replica is blocked and `avail < max(FinishMin, ΣvNow × FinishTime)` —
+    never on `avail ≤ 0` alone, which is only the rest being eaten inside the
+    panel's lag (SPEC weakness #7). The close is a row on
+    `network.lease_close` — the Quota and end it closed on — written by the
+    planner alone. While it stands, the convergence pass desires every config
+    of the Grant disabled (`desiredEnabled AND NOT EXISTS lease_close`, the
+    same test in its record guard), so the panel drops the client at once
+    rather than a tick after its counter meets the ceiling; the ceiling is
+    still written at the counter beside it. The shutdown extension skips a
+    closed Grant. `desiredEnabled` stays billing's — a suspension, the user's
+    own switch and a revive never meet the planner's close (user, 2026-09-27).
+25. **Only a renewal reopens it**: Quota or the end moved since the close,
+    and `avail ≥ ReopenMin` (8 MB). A process restarted onto a closed Grant
+    restores the close from the row (`Account.RestoreClosed`), so forgetting
+    is never a reopen; a close row that cannot be written drops the account,
+    and the next turn restores it from what was written. A disabled client
+    on 3x-ui is `RemoveUser`'d, which keeps its open connections unless the
+    panel restarts Xray on disable (F-027-cm, open-questions 2026-09-26).

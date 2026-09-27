@@ -28,6 +28,7 @@ Source of truth: `txnet-backend/prisma/domains/network.prisma` (Postgres schema
 | panel_group | where a variant's Grants are provisioned: `strategy`, `minHealthyPanels`, `subscriptionTtlSeconds` ([contract.groups.md](contract.groups.md)) | `tenantId` nullable (null = platform), shared-read | permanent |
 | panel_group_member | a panel in a group, once: its layer of the selling settings (`inboundPlacement`, `maxClients`, `priority`, `weight`; null = the panel's), `role` (`primary \| replica \| drain`), `drainingSince` | `tenantId` = its group's (trigger), shared-read | removed after draining |
 | panel_inbound | a panel's inbound as last read (`goneAt` once unlisted), and the admin's pick `sold` / `maxClients`; with the panel's selling settings (null = platform default), `config.inboundRemoteId` ([contract.inbounds.md](contract.inbounds.md)) | `tenantId` = its panel's (trigger), shared-read | with its panel |
+| lease_close | a Grant the lease planner closed, and the Quota and end it closed on: while it stands the Grant's configs are desired disabled ([contract.lease.md](contract.lease.md) rule 24, F-027-dd) | via Grant | until a renewal reopens it; cascades with the Grant |
 
 ## The Panel declaration (F-027-a, ADR-0074)
 
@@ -201,6 +202,7 @@ rows individually correct, which is what made it invisible.
 |---|---|---|---|
 | config.userId | -> | identity.user.id | a config belongs to a user |
 | config.grantId | -> | entitlement.grant.id | the Grant it was provisioned for (F-026-b; was `servicePlanId`) |
+| lease_close.grantId | -> | entitlement.grant.id | the planner's close of that Grant (F-027-dd); `desiredEnabled` stays billing's |
 | config.tenantId, panel.tenantId | -> | tenant.tenant.id | dedicated pools / per-tenant scoping |
 | config (referenced) | <- | billing.sub_account.configId | sub-account funds a config |
 
@@ -219,16 +221,14 @@ rather than altered — a value added by `ALTER TYPE` cannot be used in the
 transaction that added it, and `prisma migrate` runs a file as one. It is
 destructive, and asserts both tables are empty before it starts.
 
-`20260921000200_config_carries_its_desired_state` adds the desired state
-above. It is additive — every column nullable or defaulted — and adds a unique
-index on `(panelId, remoteId)` plus scan indexes on `(panelId,
-enforcementState)` and `credentialGroupId`.
+`20260921000200_config_carries_its_desired_state` adds the desired state above. It is additive — every
+column nullable or defaulted — and adds a unique index on `(panelId, remoteId)` plus scan indexes on
+`(panelId, enforcementState)` and `credentialGroupId`.
 
 `20260921000300_usage_is_billed_held_or_quarantined` adds the six tables
 above with five new types. It is purely additive — nothing existing is altered
 — and every byte column is `BIGINT`, because a 32-bit counter wraps at 4 GB,
 which is the Gigawords trap arriving a second time in our own storage.
-
 `20260921000400_a_radius_session_is_closed_not_abandoned` adds
 `radius_session` and one new type. Additive in the same way, with three CHECK
 constraints and the `(nasId, acctSessionId)` unique index.

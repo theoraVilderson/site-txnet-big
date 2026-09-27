@@ -22,3 +22,17 @@ func RestoreTickClock(j time.Duration, mask uint32) TickClock {
 // and the planner re-emits, while LimitPeak stays pessimistic until the panel
 // shows the figure.
 func (r *Replica) RestorePending(pending bool) { r.writePending = pending }
+
+// RestoreClosed marks an account the planner closed before the process
+// stopped (F-027-dd, `network.lease_close`), at the Quota and expiry it
+// closed on: only a renewal past them reopens it, as it would have in the
+// process that closed it.
+func (a *Account) RestoreClosed(quota Bytes, expiresAt time.Time) {
+	a.Closed, a.closedQuota, a.closedExpiry = true, quota, expiresAt
+}
+
+// ClosedOn is the Quota and expiry the account closed on; ok is false while
+// it is open.
+func (a *Account) ClosedOn() (quota Bytes, expiresAt time.Time, ok bool) {
+	return a.closedQuota, a.closedExpiry, a.Closed
+}

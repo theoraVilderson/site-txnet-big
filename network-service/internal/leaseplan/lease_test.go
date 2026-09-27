@@ -33,6 +33,7 @@ type bench struct {
 	at       time.Time
 	n        int
 	rng      *rand.Rand
+	plans    []leaseplan.Plan
 }
 
 // landing is a figure written to a panel, enforced from turn `at` on.
@@ -87,9 +88,11 @@ func (b *bench) turn(served map[string]int64) {
 		c.Exists, c.Counter, c.LimitSeen = b.applied[id] > 0, b.counter[id], b.applied[id]
 	}
 	b.s.grants[0].Used = used
-	if _, err := b.pl.Plan(context.Background(), panel(b.ids...), readings, b.at); err != nil {
+	plans, err := b.pl.Plan(context.Background(), panel(b.ids...), readings, b.at)
+	if err != nil {
 		b.t.Fatal(err)
 	}
+	b.plans = append(b.plans, plans...)
 	for _, id := range b.ids { // the convergence step: queued, in order
 		a := b.row(id).Allocated
 		if a == nil {

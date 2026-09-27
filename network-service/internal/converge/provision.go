@@ -82,7 +82,8 @@ type DesiredConfig struct {
 	// clients on the panel are one account (F-114-n). Empty is a config of
 	// no group.
 	CredentialGroupID string
-	// Enabled is `desiredEnabled`; Present is `desiredRemote = present`.
+	// Enabled is `desiredEnabled`, false while the lease planner holds the
+	// Grant closed (F-027-dd); Present is `desiredRemote = present`.
 	Enabled bool
 	Present bool
 	// AllocatedBytes is `allocatedCeilingBytes`, nil until the allocator has

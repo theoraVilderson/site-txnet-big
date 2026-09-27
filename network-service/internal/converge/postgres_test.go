@@ -158,7 +158,7 @@ func TestDesiredRecordIsHeldToTheDesiredStateItWasJudgedAgainst(t *testing.T) {
 	// A regenerate or a disable landing mid-pass changes the row under the
 	// verdict. Without the guard a `complete` would be written over a state
 	// nobody read — and group fulfilment activates a Grant on `complete`.
-	for _, clause := range []string{`uuid = $`, `"desiredEnabled" = $`, `("desiredRemote" = 'present') = $`} {
+	for _, clause := range []string{`uuid = $`, `("desiredEnabled" AND NOT EXISTS (SELECT 1 FROM network.lease_close l WHERE l."grantId" = config."grantId")) = $`, `("desiredRemote" = 'present') = $`} {
 		if !strings.Contains(f.sql[0], clause) {
 			t.Errorf("the record is not held to %q", clause)
 		}

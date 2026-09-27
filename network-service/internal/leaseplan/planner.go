@@ -39,6 +39,18 @@ type Grant struct {
 	Purchased int64
 	ExpiresAt time.Time // zero = no end
 	Configs   []Config
+	// Closure is the Grant's row on `network.lease_close`; nil = open.
+	Closure *Closure
+}
+
+// Closure is a Grant the planner closed (F-027-dd, SPEC §6-2): the Quota and
+// end it closed on. While it stands every config of the Grant is desired
+// disabled — the panel drops the client at once rather than a tick after the
+// counter meets its ceiling — and only a renewal past these figures, with at
+// least ReopenMin available, deletes it (`contract.lease.md` rule 24).
+type Closure struct {
+	Quota     int64
+	ExpiresAt time.Time // zero = no end
 }
 
 // Config is one of the Grant's configs, as its row holds it.
@@ -60,8 +72,9 @@ type Config struct {
 	// LimitSeen is `appliedCeilingBytes` less Offset, the ceiling the panel
 	// enforces on its own counter; 0 when none is applied.
 	LimitSeen int64
-	// Enabled is `desiredEnabled`. The bulk read carries no enable flag, so
-	// what was asked for is the best figure there is.
+	// Enabled is `desiredEnabled` and no close on the Grant (F-027-dd). The
+	// bulk read carries no enable flag, so what was asked for is the best
+	// figure there is.
 	Enabled bool
 	// Allocated is `allocatedCeilingBytes` and Peak `limitPeakBytes`, in the
 	// row's basis; nil when the row holds none. Pending is `writePending`.
@@ -139,6 +152,8 @@ type Store interface {
 	Load(ctx context.Context, panelID string, configIDs []string) (Snapshot, error)
 	SaveLeases(ctx context.Context, leases []Lease) error
 	SaveLearned(ctx context.Context, panelID string, l Learned) error
+	// SaveClosure writes a Grant's close, or deletes it when c is nil.
+	SaveClosure(ctx context.Context, grantID string, c *Closure) error
 }
 
 // Plan is what the planner decided for one Grant on one pass.
@@ -158,6 +173,10 @@ type Plan struct {
 	// Block is the block this plan asks billing for; nil = none due, or
 	// the same bag was asked for inside BlockRetry.
 	Block *BlockRequest
+	// Closure is the Grant's close after this plan, and ClosureMoved says
+	// it differs from the row: a close or a reopen to write.
+	Closure      *Closure
+	ClosureMoved bool
 }
 
 // ReplicaView is one replica on one plan: the counter, what the panel
@@ -308,6 +327,17 @@ func (s *Planner) plan(ctx context.Context, p collect.Panel, readings []driver.C
 			return plans, nil, fmt.Errorf("writing %d lease(s) for panel %s: %w", len(leases), p.ID, err)
 		}
 	}
+	for _, pl := range plans {
+		if !pl.ClosureMoved {
+			continue
+		}
+		if err := s.Store.SaveClosure(ctx, pl.GrantID, pl.Closure); err != nil {
+			// The account in memory is ahead of its row: drop it, so the
+			// next turn restores the close as it was written.
+			s.forgetAccount(pl.GrantID)
+			return plans, nil, fmt.Errorf("writing the close of Grant %s: %w", pl.GrantID, err)
+		}
+	}
 	s.requestBlocks(ctx, plans)
 	return plans, learned, nil
 }
@@ -402,7 +432,7 @@ func (s *Planner) planLocked(p collect.Panel, snap Snapshot, got map[string]driv
 
 	plans := make([]Plan, 0, len(snap.Grants))
 	for _, g := range snap.Grants {
-		a := s.account(g.ID)
+		a := s.account(g)
 		for _, c := range g.Configs {
 			r := s.replicas[c.ID]
 			if _, ok := counters[c.ID]; !ok || r == nil || r.Panel.ID != p.ID {
@@ -425,6 +455,7 @@ func (s *Planner) planLocked(p collect.Panel, snap Snapshot, got map[string]driv
 		if !a.Closed {
 			pl.Block = s.blockLocked(g, a, at)
 		}
+		pl.Closure, pl.ClosureMoved = closureOf(g, a)
 		byID := map[string]Config{}
 		for _, c := range g.Configs {
 			byID[c.ID] = c
@@ -576,13 +607,35 @@ func (s *Planner) replica(c Config) *quota.Replica {
 	return r
 }
 
-func (s *Planner) account(grantID string) *quota.Account {
-	a := s.accounts[grantID]
+// account keeps one Account per Grant. One first seen by this process
+// starts closed if its row on `network.lease_close` says so (F-027-dd).
+func (s *Planner) account(g Grant) *quota.Account {
+	a := s.accounts[g.ID]
 	if a == nil {
-		a = &quota.Account{ID: grantID}
-		s.accounts[grantID] = a
+		a = &quota.Account{ID: g.ID}
+		if g.Closure != nil {
+			a.RestoreClosed(g.Closure.Quota, g.Closure.ExpiresAt)
+		}
+		s.accounts[g.ID] = a
 	}
 	return a
+}
+
+func (s *Planner) forgetAccount(grantID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.accounts, grantID)
+}
+
+// closureOf is the Grant's close after a plan, and whether it differs from
+// the row the snapshot read.
+func closureOf(g Grant, a *quota.Account) (*Closure, bool) {
+	q, end, closed := a.ClosedOn()
+	if !closed {
+		return nil, g.Closure != nil
+	}
+	c := &Closure{Quota: q, ExpiresAt: end}
+	return c, g.Closure == nil || g.Closure.Quota != c.Quota || !g.Closure.ExpiresAt.Equal(c.ExpiresAt)
 }
 
 func (s *Planner) params() quota.Params {
