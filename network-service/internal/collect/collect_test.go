@@ -898,3 +898,25 @@ func TestAFailedStampDoesNotFailThePass(t *testing.T) {
 		t.Errorf("collected = %d, want 1", report.Collected)
 	}
 }
+
+// A reopened driver keeps what its Pacer learned on the same budget, and the
+// planner is told half of what it allows now (F-027-df).
+func TestAReopenKeepsThePacerAndThePlannerSeesItsRate(t *testing.T) {
+	first := collect.Paced(collect.Panel{Driver: fake.New(fake.Config{}), MaxRequestsPerMinute: 60})
+	if got := collect.WriteRate(first); got != 0.5 {
+		t.Fatalf("WriteRate = %v, want half of 60/min = 0.5/s", got)
+	}
+	pc, _ := driver.PacerOf(first.Driver)
+
+	again := collect.Repaced(collect.Panel{Driver: fake.New(fake.Config{}), MaxRequestsPerMinute: 60}, first.Driver)
+	if got, _ := driver.PacerOf(again.Driver); got != pc {
+		t.Fatal("a reopen on the same budget started a fresh Pacer")
+	}
+	raised := collect.Repaced(collect.Panel{Driver: fake.New(fake.Config{}), MaxRequestsPerMinute: 120}, first.Driver)
+	if got, _ := driver.PacerOf(raised.Driver); got == pc {
+		t.Fatal("a changed budget kept the old Pacer")
+	}
+	if got := collect.WriteRate(collect.Panel{Driver: fake.New(fake.Config{})}); got != 0 {
+		t.Fatalf("an unpaced driver's WriteRate = %v, want 0", got)
+	}
+}

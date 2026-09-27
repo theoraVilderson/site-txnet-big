@@ -26,6 +26,19 @@ import (
 // CHECKed positive (invariant 12), so a zero here is the constraint having
 // been bypassed rather than a panel to handle gently.
 func Paced(p Panel) Panel {
+	return Repaced(p, nil)
+}
+
+// Repaced is Paced for a driver reopened in place of prev: on the same budget
+// it keeps prev's Pacer, so the requests already spent, a rate a 429 halved
+// and an open breaker all survive the reopen (F-027-df). A reopen falls due
+// every cool-off (DefaultReopenAfter), exactly when a halved rate matters. A
+// changed budget is a new agreement and starts fresh.
+func Repaced(p Panel, prev driver.Driver) Panel {
+	if pc, ok := driver.PacerOf(prev); ok && pc.Budget().MaxRequests == p.MaxRequestsPerMinute {
+		p.Driver = pc.Wrap(p.Driver)
+		return p
+	}
 	p.Driver = driver.Pace(p.Driver, driver.Budget{MaxRequests: p.MaxRequestsPerMinute})
 	return p
 }

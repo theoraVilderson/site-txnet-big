@@ -18,8 +18,19 @@
 // driver calls NextPage before each page after it. A family that reads in one
 // request never calls it, and nothing changes for it.
 //
+// The owner's figure is a ceiling, not a target (F-027-df, SPEC weakness #15,
+// #20). A `429` or a `5xx` halves the rate the Pacer allows, down to an eighth
+// of the figure, and each answer earns a sliver back, so a halved panel is at
+// its owner's figure again after RecoverAfter answers. BreakAfter `5xx` in a
+// row open a breaker: the calls behind them fail at once instead of each
+// waiting out a timeout on a dead machine, and one probe goes after a wait
+// that doubles from BreakerCooldown and never passes MaxBreakerCooldown — a
+// bulk pass, so a panel that came back is seen by the next pass. The state
+// lives on the Pacer rather than the wrapper, so a driver reopened on the
+// same budget starts where the last one left off.
+//
 // What is *not* here is the per-panel wiring: reading `maxRequestsPerMinute`
-// off the panel row, recording the observed rate, backing off on a 429 and
+// off the panel row, recording the observed rate, the cool-off after a 429 and
 // alerting the owner on a 403. That is F-027-v, and it builds a Budget from
 // the row and wraps the family's driver in this.
 
@@ -27,6 +38,8 @@ package driver
 
 import (
 	"context"
+	"errors"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -49,7 +62,7 @@ type pacerKey struct{}
 // and it returns at once.
 func NextPage(ctx context.Context, op string) error {
 	if p, ok := ctx.Value(pacerKey{}).(*paced); ok {
-		return p.acquire(ctx, op)
+		return p.pacer.acquire(ctx, op, true)
 	}
 	return nil
 }
@@ -66,8 +79,32 @@ type Budget struct {
 	Window time.Duration
 }
 
+// The adaptive rate and the breaker (F-027-df).
+const (
+	// BreakAfter is how many `unavailable` faults in a row open the breaker.
+	BreakAfter = 5
+	// BreakerCooldown is the first wait before a probe; each failed probe
+	// doubles it.
+	BreakerCooldown = 15 * time.Second
+	// MaxBreakerCooldown is one bulk pass. A longer wait would hide a panel
+	// that came back from the pass after, and while the breaker is open no
+	// ceiling reaches the panel (user, 2026-09-27).
+	MaxBreakerCooldown = time.Minute
+	// RecoverAfter is how many answers take a halved rate back to the
+	// owner's figure.
+	RecoverAfter = 16
+	// floorShare is the least share of the owner's figure a run of refusals
+	// can take the rate to: three halvings. Below it a planned poll (two
+	// requests) would no longer fit the budget it keeps to.
+	floorShare = 8
+)
+
+// ErrCircuitOpen is what a call the breaker stopped wraps. It arrives as an
+// `unavailable` fault, because that is what the breaker knows of the panel.
+var ErrCircuitOpen = errors.New("driver: circuit open")
+
 // Pace wraps a driver so that it holds its panel's request budget and shares
-// one whole-panel read between concurrent callers.
+// one whole-panel read between concurrent callers. It is NewPacer(b).Wrap(d).
 //
 // It panics on a non-positive MaxRequests. That figure comes from a column the
 // database CHECKs (invariant 12), so a zero here is not a panel to be handled
@@ -75,6 +112,33 @@ type Budget struct {
 // readings are "ask without limit" and "never ask again", both of which are
 // worse when discovered later.
 func Pace(d Driver, b Budget) Driver {
+	return NewPacer(b).Wrap(d)
+}
+
+// Pacer is one panel's budget and what it has learned of the panel: the rate
+// it allows now, and the breaker. Wrap a reopened driver in the same Pacer and
+// neither is forgotten.
+type Pacer struct {
+	budget Budget
+
+	mu sync.Mutex
+	// sent holds the times of the requests still inside the window, oldest
+	// first, and never grows past MaxRequests entries.
+	sent []time.Time
+	// rate is the requests per window allowed now, in [floor, MaxRequests].
+	rate float64
+	// fails counts `unavailable` in a row; at BreakAfter the breaker is open
+	// until openUntil, then lets one probe through.
+	fails     int
+	openUntil time.Time
+	cooldown  time.Duration
+	probing   bool
+
+	now func() time.Time
+}
+
+// NewPacer starts a panel at its owner's figure. It panics as Pace does.
+func NewPacer(b Budget) *Pacer {
 	if b.MaxRequests <= 0 {
 		panic("driver.Pace: a request budget must be positive (network invariant 12); " +
 			"zero would stop collection on this panel in silence")
@@ -82,12 +146,80 @@ func Pace(d Driver, b Budget) Driver {
 	if b.Window <= 0 {
 		b.Window = time.Minute
 	}
-	return &paced{
-		Driver:  d,
-		budget:  b,
-		sent:    make([]time.Time, 0, b.MaxRequests),
-		flights: map[string]*flight{},
+	return &Pacer{
+		budget:   b,
+		sent:     make([]time.Time, 0, b.MaxRequests),
+		rate:     float64(b.MaxRequests),
+		cooldown: BreakerCooldown,
+		now:      time.Now,
 	}
+}
+
+// Wrap paces d on this Pacer's budget.
+func (pc *Pacer) Wrap(d Driver) Driver {
+	return &paced{Driver: d, pacer: pc, flights: map[string]*flight{}}
+}
+
+// PacerOf is the Pacer a driver was wrapped in, if it was.
+func PacerOf(d Driver) (*Pacer, bool) {
+	p, ok := d.(*paced)
+	if !ok {
+		return nil, false
+	}
+	return p.pacer, true
+}
+
+// Budget is the owner's figure this Pacer holds to.
+func (pc *Pacer) Budget() Budget { return pc.budget }
+
+// Rate is the requests per Budget().Window the Pacer allows now.
+func (pc *Pacer) Rate() float64 {
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+	return pc.rate
+}
+
+// report is what one call's outcome teaches the Pacer. A timeout, and an error
+// that is not a Fault, say nothing of the panel; any other answer closes the
+// breaker, because the panel answered.
+func (pc *Pacer) report(err error) {
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+	var f *Fault
+	kind := FaultKind("")
+	if errors.As(err, &f) {
+		kind = f.Kind
+	}
+	most := float64(pc.budget.MaxRequests)
+	switch {
+	case err == nil:
+		pc.rate = math.Min(most, pc.rate+most/(2*RecoverAfter))
+		pc.close()
+	case kind == FaultRateLimited:
+		pc.halve()
+		pc.close()
+	case kind == FaultUnavailable:
+		pc.halve()
+		pc.probing = false
+		pc.fails++
+		if pc.fails >= BreakAfter {
+			pc.openUntil = pc.now().Add(pc.cooldown)
+			pc.cooldown = min(2*pc.cooldown, MaxBreakerCooldown)
+		}
+	case kind == FaultTimeout || kind == "":
+		pc.probing = false
+	default:
+		pc.close()
+	}
+}
+
+func (pc *Pacer) halve() {
+	floor := math.Max(1, float64(pc.budget.MaxRequests)/floorShare)
+	pc.rate = math.Max(floor, pc.rate/2)
+}
+
+func (pc *Pacer) close() {
+	pc.fails, pc.probing, pc.cooldown, pc.openUntil = 0, false, BreakerCooldown, time.Time{}
 }
 
 // paced embeds the family's driver, so a method it does not pace passes
@@ -95,12 +227,9 @@ func Pace(d Driver, b Budget) Driver {
 // nothing, is the only one.
 type paced struct {
 	Driver
-	budget Budget
+	pacer *Pacer
 
-	mu sync.Mutex
-	// sent holds the times of the requests still inside the window, oldest
-	// first, and never grows past MaxRequests entries.
-	sent    []time.Time
+	mu      sync.Mutex
 	flights map[string]*flight
 }
 
@@ -114,25 +243,35 @@ type flight struct {
 // acquire blocks until this request fits inside the budget, or the caller's
 // deadline passes. It waits rather than failing: a dropped read is a gap in a
 // counter somebody is billed from, and the panel would have answered it a
-// moment later (invariant 18).
-func (p *paced) acquire(ctx context.Context, op string) error {
+// moment later (invariant 18). The one exception is an open breaker, which
+// fails the call at once. A later page of a call already admitted is not
+// asked again — it is the same call, and may be the probe.
+func (pc *Pacer) acquire(ctx context.Context, op string, page bool) error {
 	for {
-		p.mu.Lock()
-		now := time.Now()
-		kept := p.sent[:0]
-		for _, at := range p.sent {
-			if now.Sub(at) < p.budget.Window {
+		pc.mu.Lock()
+		now := pc.now()
+		broken := pc.fails >= BreakAfter
+		if !page && broken && (now.Before(pc.openUntil) || pc.probing) {
+			pc.mu.Unlock()
+			return NewFault(FaultUnavailable, op, 0, ErrCircuitOpen)
+		}
+		kept := pc.sent[:0]
+		for _, at := range pc.sent {
+			if now.Sub(at) < pc.budget.Window {
 				kept = append(kept, at)
 			}
 		}
-		p.sent = kept
-		if len(p.sent) < p.budget.MaxRequests {
-			p.sent = append(p.sent, now)
-			p.mu.Unlock()
+		pc.sent = kept
+		if len(pc.sent) < max(1, int(pc.rate)) {
+			pc.sent = append(pc.sent, now)
+			if !page && broken {
+				pc.probing = true
+			}
+			pc.mu.Unlock()
 			return nil
 		}
-		wait := p.budget.Window - now.Sub(p.sent[0])
-		p.mu.Unlock()
+		wait := pc.budget.Window - now.Sub(pc.sent[0])
+		pc.mu.Unlock()
 
 		timer := time.NewTimer(wait)
 		select {
@@ -172,9 +311,10 @@ func share[T any](ctx context.Context, p *paced, op, key string, call func(conte
 	// The flight is registered before the budget is waited on, so callers
 	// arriving while the leader waits for its slot join it instead of queuing
 	// behind it for a second request.
-	val, err := zero, p.acquire(ctx, op)
+	val, err := zero, p.pacer.acquire(ctx, op, false)
 	if err == nil {
 		val, err = call(context.WithValue(ctx, pacerKey{}, p))
+		p.pacer.report(err)
 	}
 
 	p.mu.Lock()
@@ -189,10 +329,12 @@ func share[T any](ctx context.Context, p *paced, op, key string, call func(conte
 // the budget and goes. Two identical writes are two intentions and are never
 // collapsed — the second one is not the first one happening again.
 func (p *paced) spend(ctx context.Context, op string, call func(context.Context) error) error {
-	if err := p.acquire(ctx, op); err != nil {
+	if err := p.pacer.acquire(ctx, op, false); err != nil {
 		return err
 	}
-	return call(context.WithValue(ctx, pacerKey{}, p))
+	err := call(context.WithValue(ctx, pacerKey{}, p))
+	p.pacer.report(err)
+	return err
 }
 
 // ---- the shared reads ------------------------------------------------------

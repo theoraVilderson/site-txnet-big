@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 12
+version: 13
 updated: 2026-09-27
 ---
 
@@ -47,6 +47,32 @@ Two properties come with the wrapper and neither is a family's to reimplement:
 The column is CHECKed positive (invariant 12), so a zero is the constraint
 having been bypassed, and the two readings available — *ask without limit* and
 *never ask again* — are both worse when found later.
+
+## The figure is a ceiling, not a target (F-027-df)
+
+SPEC weakness #15 and #20 (user, 2026-09-27). The owner's figure is the most
+we ever ask; how much of it we use is learned from the panel's answers. It
+lives on `driver.Pacer`, which a reopened driver keeps on the same budget
+(`collect.Repaced`) — a reopen falls due every cool-off, exactly when a halved
+rate matters. A changed budget is a new agreement and starts fresh.
+
+- **A `429` or a `5xx` halves the rate**, to no less than an eighth of the
+  figure: below that a planned poll no longer fits the half it keeps to.
+- **Each answer earns a sliver back** — a halved rate is at the owner's figure
+  after `RecoverAfter` (16) answers, never past it. A panel that `429`s at 60
+  comes out of its cool-off at 30, not 60.
+- **`BreakAfter` (5) `unavailable` in a row open a breaker.** The calls behind
+  them fail at once as `unavailable` (`ErrCircuitOpen`) instead of each
+  waiting out a timeout on a dead machine — a ceiling pass of 100 writes was
+  100 timeouts. One probe goes after 15 s, doubling to at most
+  `MaxBreakerCooldown`, one bulk pass, so the row below still holds: a panel
+  that came back is read by the next pass. Any answer, even a refusal, closes
+  it; a timeout says nothing and lets the next caller probe.
+- **The planner is told**: `collect.WriteRate` (half the rate now, per second)
+  and the consuming replicas on the panel stretch the lease horizon
+  (`quota.Params.horizon`), so a slow or refusing panel is asked for fewer
+  writes. The vendored `lease/gate` is the reference, not wired: `Pace` was
+  already the one place every call passes.
 
 ## A refusal is not a failure
 
@@ -136,9 +162,10 @@ pass rewrites anyway.
 
 ## What it will not do
 
-It does not back off below the panel's declared budget on a `429` — the budget
-is the agreement, and a panel that refuses inside its own figure is one to tell
-its owner about rather than to negotiate with silently. It does not extend a
+It does not ask past the panel's declared budget to make up a halved rate —
+the figure is the agreement, and the owner is still told of a refusal once,
+however slowly we then ask (reversed from "never below the budget",
+F-027-df). It does not extend a
 ceiling on shutdown or run the collector's watchdog: that is
 [contract.resilience.md](contract.resilience.md) (F-027-w). And it
 does not decide the rate the **next block** is sized at, which extrapolates up

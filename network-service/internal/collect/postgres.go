@@ -204,7 +204,11 @@ func (s *PostgresSource) driverFor(ctx context.Context, row panelRow) (driver.Dr
 	if err != nil {
 		return nil, err
 	}
-	paced := Paced(Panel{Driver: d, MaxRequestsPerMinute: row.perMinute}).Driver
+	var prev driver.Driver
+	if ok {
+		prev = kept.driver
+	}
+	paced := Repaced(Panel{Driver: d, MaxRequestsPerMinute: row.perMinute}, prev).Driver
 
 	s.mu.Lock()
 	if s.drivers == nil {

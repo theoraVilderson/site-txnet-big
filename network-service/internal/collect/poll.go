@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"network-service/internal/driver"
 )
 
 const (
@@ -43,6 +45,19 @@ func PollGap(p Panel) time.Duration {
 		return 0
 	}
 	return 2 * PollRequests * time.Minute / time.Duration(p.MaxRequestsPerMinute)
+}
+
+// WriteRate is the writes a second the planner may plan on (`quota.PanelState`
+// .WriteRate, F-027-df): the half of the rate the Pacer allows now that polls
+// leave (PollGap), per second. It stretches the lease horizon on a slow or
+// refusing panel, so fewer writes are asked of it. Zero for an unpaced
+// driver, which the planner reads as no stretch.
+func WriteRate(p Panel) float64 {
+	pc, ok := driver.PacerOf(p.Driver)
+	if !ok {
+		return 0
+	}
+	return pc.Rate() / 2 / pc.Budget().Window.Seconds()
 }
 
 // Poller reads each panel when the lease planner asks for it (F-027-de),

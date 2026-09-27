@@ -437,6 +437,17 @@ func (s *Planner) planLocked(p collect.Panel, snap Snapshot, got map[string]driv
 		// This read's plans hint the panel afresh; an older hint is stale.
 		delete(s.pollBy, p.ID)
 	}
+	if here != nil {
+		// The horizon stretch (quota.Params.horizon): the writes the panel
+		// takes now, over the replicas consuming on it (F-027-df).
+		here.WriteRate = collect.WriteRate(p)
+		here.ActiveReplicas = 0
+		for _, r := range s.replicas {
+			if r.Panel != nil && r.Panel.ID == p.ID && r.Rate.Now() > s.params().IdleRate {
+				here.ActiveReplicas++
+			}
+		}
+	}
 
 	plans := make([]Plan, 0, len(snap.Grants))
 	for _, g := range snap.Grants {
