@@ -120,3 +120,17 @@ purge (`purge-due` answers `told` beside its counts).
 | Prepaid: `entitlement.grant.purge_soon` ("renew"); metered: `.purge_soon_metered` ("top up") | a metered renewal adds days alone and revives nothing (as "Cutoff") |
 | Never muted, never held for quiet hours (F-601-m) | the last chance to keep a config as it is |
 
+
+**Active again (F-601-k, beyond the catalog)** — the answer to a cutoff: a
+stopped Grant that runs again is told so, in the transaction that brought it
+back. `entitlement/reactivated.ts` (`emitReactivated`), called by `renewGrant`
+and `reviveFundedGrants`; proved by `reactivated.spec.ts`. Payload `tenantId,
+userId, grantId, period`; template `serviceReactivated`.
+
+| Rule | Why |
+|---|---|
+| A suspension revived (`reviveOnTopUp`) by a renewal or a wallet top-up: told, `period` = the `suspendedAt` it cleared | once per suspension; the revival's conditional write lets one racing caller through |
+| An active Grant whose close stood as read (`standingClose`: the close's end is the Grant's, and its Quota for a bag; a bagless one's only on a passed end), renewed with room: told, `period` = the close's `closedAt` | an unlimited or metered Grant past its end is stopped though nothing suspends it; the planner reopens it on the moved end (`network/contract.lease.md` rule 25) |
+| Nothing when the Grant still cannot run: its end, after the write, passed; a bag with no room (a carried debt); a metered close on its bag, which a renewal of days leaves closed | "active again" while it is off is the one false notice here |
+| Nothing for a Grant that never stopped: active with no close, or a close on another end | there was no cutoff to answer |
+| Told at the write, not at the panel: the text says it reconnects within minutes, the link unchanged | the convergence loop and the planner re-enable the configs after the commit |

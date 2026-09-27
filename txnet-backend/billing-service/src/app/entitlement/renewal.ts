@@ -2,6 +2,7 @@ import { GrantSource, GrantStatus, Prisma, QuotaMetric, VariantBillingMode } fro
 
 import { EntitlementRefused } from './grant';
 import { reviveOnTopUp } from './purge';
+import { emitReactivated, runs, standingClose } from './reactivated';
 import { QUOTA_EXHAUSTED } from './suspension';
 
 /**
@@ -83,7 +84,7 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
 
   const grant = await tx.grant.findUnique({
     where: { id: input.grantId },
-    select: { id: true, tenantId: true, status: true, statusReason: true, billingMode: true, trafficUnlimited: true, purchasedBytes: true, endsAt: true, consumedBytes: true },
+    select: { id: true, tenantId: true, userId: true, suspendedAt: true, status: true, statusReason: true, billingMode: true, trafficUnlimited: true, purchasedBytes: true, endsAt: true, consumedBytes: true },
   });
   if (!grant) throw new EntitlementRefused('grant_not_found', input.grantId);
   if (!RENEWABLE.has(grant.status)) throw new EntitlementRefused('grant_not_renewable', `${grant.id} is ${grant.status}`);
@@ -144,6 +145,18 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
     grant.status === GrantStatus.suspended && grant.statusReason === QUOTA_EXHAUSTED && bagged && purchasedBytes > usedBytes
       ? (await reviveOnTopUp(tx, grant.id)).revived
       : false;
+
+  // F-601-k: a stop this renewal undid is told, once the Grant can run again.
+  // The close is read only for an active Grant — a suspended one is back by
+  // the revival or not at all.
+  if (runs(endsAt, at)) {
+    const owner = { grantId: grant.id, tenantId: grant.tenantId, userId: grant.userId };
+    if (revived && grant.suspendedAt) await emitReactivated(tx, owner, grant.suspendedAt);
+    else if (grant.status === GrantStatus.active && (!bagged || purchasedBytes > usedBytes)) {
+      const closedAt = await standingClose(tx, grant, bagged, at);
+      if (closedAt) await emitReactivated(tx, owner, closedAt);
+    }
+  }
 
   return { grantId: grant.id, ...carry, purchasedBytes, endsAt, revived };
 }

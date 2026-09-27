@@ -46,7 +46,7 @@ for a prepaid one (F-027-dw, ADR-0096) by `suspendIfClosed` under the Grant's
 row lock, asked by `network.grant.closed` — the lease planner's close, read
 again against Quota and end, so a renewal that reopened it is never undone.
 Each stop is told to the user (F-601-b, `contract.retention.md` "Cutoff"). A renewal
-(`renewal.ts`) revives it; a wallet top-up does not. `transition()` cannot do this: it writes no
+(`renewal.ts`) revives it; a wallet top-up does not. That revival, and a top-up's of a metered Grant, is told (F-601-k, `contract.retention.md` "Active again"). `transition()` cannot do this: it writes no
 `suspendedAt`, which `grant_suspended_has_a_clock` refuses.
 
 **Purge and restore (F-027-y, ADR-0075)** — `entitlement/purge.ts`. A
@@ -185,6 +185,7 @@ Through the outbox (ADR-0021); the first two also live on the buyer's `user:` ch
 | `entitlement.grant.usage_50` / `_80` / `_95` | `tenantId, userId, grantId, period`, `percent`, `remaining` (e.g. `5.3 GB`); optional `endNotice`, `endPeriod`, `days` — a time level due with it, told as one message (F-601-f, F-601-n) | a charge crossed that share of the usage period (F-601-d), emitted by billing's metering; retention events, like the next row |
 | `entitlement.grant.ends_in_7d` / `_3d` / `_1d` | `tenantId, userId, grantId, period` (= `endsAt`), `days` (whole days left) | an active Grant 7 / 3 / 1 day(s) before its end (F-601-e); retention events, like the next row |
 | `entitlement.grant.ended` / `.volume_spent` / `.wallet_spent` | `tenantId, userId, grantId, period` (= the end, or the suspension's instant) | a Grant stopped: time ran out, a prepaid bag spent, a metered wallet spent (F-601-b); retention events, like the next row |
+| `entitlement.grant.reactivated` | `tenantId, userId, grantId, period` (= the `suspendedAt` cleared, or the broken close's `closedAt`) | a stopped Grant runs again: a renewal or top-up revived it, or a renewal broke its standing close (F-601-k); retention events, like the next row |
 | `entitlement.grant.purge_soon` / `.purge_soon_metered` | `tenantId, userId, grantId, period` (= `suspendedAt`) | a suspended Grant a day from its purge; prepaid "renew", metered "top up" (F-601-j); retention events, like the next row |
 | `entitlement.grant.not_connected` / `.still_not_connected` | `tenantId, userId, grantId, period` (= `activatedAt`), `supportUrl?` | nothing consumed 24 h / 72 h after activation (F-601-c); retention events, told by `RetentionNoticeConsumer` — not on any channel |
 

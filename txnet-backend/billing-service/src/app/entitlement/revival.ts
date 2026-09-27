@@ -2,6 +2,7 @@ import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 
 import { walletCanBuy } from '../traffic/exhaustion';
 import { reviveOnTopUp } from './purge';
+import { emitReactivated, runs } from './reactivated';
 import { QUOTA_EXHAUSTED } from './suspension';
 
 /**
@@ -60,6 +61,7 @@ export async function reviveFundedGrants(
   tx: Prisma.TransactionClient,
   userId: string,
   balance: Prisma.Decimal,
+  at: Date = new Date(),
 ): Promise<Revivals> {
   if (balance.lte(0)) return { scanned: 0, revived: 0 };
 
@@ -74,7 +76,7 @@ export async function reviveFundedGrants(
       billingMode: VariantBillingMode.metered,
       meteredRate: { not: null },
     },
-    select: { id: true, meteredRate: true },
+    select: { id: true, tenantId: true, meteredRate: true, suspendedAt: true, endsAt: true },
   });
   if (suspended.length === 0) return { scanned: 0, revived: 0 };
 
@@ -82,7 +84,13 @@ export async function reviveFundedGrants(
   for (const grant of suspended) {
     if (!walletCanBuy(grant.meteredRate as Prisma.Decimal, balance)) continue;
     const revival = await reviveOnTopUp(tx, grant.id);
-    if (revival.revived) revived++;
+    if (!revival.revived) continue;
+    revived++;
+    // F-601-k: told once per suspension undone, unless its end has passed —
+    // the planner keeps that one closed, and "active again" would be false.
+    if (grant.suspendedAt && runs(grant.endsAt, at)) {
+      await emitReactivated(tx, { grantId: grant.id, tenantId: grant.tenantId, userId }, grant.suspendedAt);
+    }
   }
 
   return { scanned: suspended.length, revived };

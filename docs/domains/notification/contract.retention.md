@@ -65,6 +65,7 @@ together:
 | `entitlement.grant.low_balance` | `serviceWalletLow`, param `remaining` (what the wallet still buys, "819 MB") | billing's block request, after the purchase whose balance buys under 1 GB at a metered Grant's rate; period = the crossing's instant, re-armed by a balance back over it (F-601-g, entitlement `contract.retention.md` "Wallet low") |
 | `entitlement.grant.purge_soon` / `.purge_soon_metered` | `servicePurgeSoon` ("renew") / `servicePurgeSoonTopUp` ("top up") | entitlement's purge sweep, a day before a suspended Grant's configs are dropped; period = `suspendedAt` (F-601-j, entitlement `contract.retention.md` "Before purge") |
 | `entitlement.grant.ended` / `.volume_spent` / `.wallet_spent` | `serviceEnded` / `serviceVolumeSpent` ("renew") / `serviceWalletSpent` ("top up", never "renew") | billing, in the transaction that stops the Grant: a standing close on a passed end, a prepaid bag's suspension, a metered wallet's; period = the end, or the suspension's instant (F-601-b, entitlement `contract.retention.md` "Cutoff") |
+| `entitlement.grant.reactivated` | `serviceReactivated` | billing, in the transaction that brings a stopped Grant back: a revival by renewal or top-up, or a renewal breaking a standing close; period = the cleared `suspendedAt`, or the close's `closedAt` (F-601-k, entitlement `contract.retention.md` "Active again") |
 
 ## Two notices due the same day are one message (F-601-f, F-601-n)
 

@@ -33,6 +33,7 @@ export const NOTIFY_TEMPLATES = [
   'serviceWalletLow',
   'servicePurgeSoon',
   'servicePurgeSoonTopUp',
+  'serviceReactivated',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -330,6 +331,17 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.retention?.purgeSoonTopUpMany,
       fallback: '🗑️ {{count}} of your stopped services will be removed from the server within a day. Top up your wallet before then to keep their configs as they are.',
       inbox: { read: (ns) => ns?.retention?.purgeSoonManyTitle, fallback: '{{count}} services removed within a day' },
+    },
+  },
+  // F-601-k: a stopped Grant runs again — a renewal or a top-up brought it back; the link is the same one.
+  serviceReactivated: {
+    read: (ns) => ns?.retention?.reactivated,
+    fallback: '✅ Your service is active again. It reconnects within a few minutes — its link stays the same, so there is nothing to change in your app.',
+    inbox: { read: (ns) => ns?.retention?.reactivatedTitle, fallback: 'Your service is active again' },
+    many: {
+      read: (ns) => ns?.retention?.reactivatedMany,
+      fallback: '✅ {{count}} of your services are active again. They reconnect within a few minutes — their links stay the same.',
+      inbox: { read: (ns) => ns?.retention?.reactivatedManyTitle, fallback: '{{count}} services are active again' },
     },
   },
 };
