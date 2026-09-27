@@ -273,7 +273,7 @@ func (c *Ceilings) pass(
 
 		offset := OffsetBytes(c.Counters, p, allocation.RemoteID)
 		served := ServedBytes(c.Counters, p, allocation.RemoteID)
-		band := NearBand(allocation.AllocatedBytes, served, allocation.RateBps, p.DriverType.EnforcementLag())
+		band := NearBand(allocation.AllocatedBytes, served, allocation.RateBps, p.EnforcementLag())
 		band = releasedBand(band, allocation.AllocatedBytes, served, quiet(allocation.RemoteID))
 		want := PanelCeiling(GuardedAllowance(allocation.AllocatedBytes, served, band), offset)
 		have := client.DataLimitBytes

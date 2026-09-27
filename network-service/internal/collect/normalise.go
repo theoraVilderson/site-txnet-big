@@ -63,6 +63,11 @@ type Panel struct {
 	// DriverType is the family, carried for its enforcement lag — how long
 	// the panel serves past a ceiling (F-027-co, the guard band).
 	DriverType driver.DriverType
+	// The panel's own enforcement lag as the lease planner measured it
+	// (F-027-cz): `lagMeanSec`, `lagVarianceSec2` over `lagSamples`
+	// crossings, zero with none. EnforcementLag prefers it to the family's.
+	LagMeanSec, LagVarianceSec2 float64
+	LagSamples                  int
 	// MaxLineRateBps is `panel.maxLineRateBps`, the ceiling on what the far
 	// end could physically have carried. The column is nullable, so zero is
 	// **unknown**, not zero: a panel that has not declared a line rate gets no

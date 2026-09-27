@@ -185,14 +185,14 @@ it serves in between is past the share and billed by nobody
 (`open-questions.md`, 2026-09-26). So the figure written is
 
 ```
-band    = observedRateBps / 8 × the family's enforcement lag
+band    = observedRateBps / 8 × the panel's enforcement lag
 allowed = max(allocatedCeilingBytes - band, min(served, allocatedCeilingBytes))
 ```
 
-and then translated as above. The lag is **seconds, per family**
-(`driver.DriverType.EnforcementLag`, user 2026-09-26): 3x-ui and both forks
-are 35 s — a 5 s traffic check plus a Xray restart of up to 30 s. A family not
-yet measured takes the same 35 s: no band is its whole lag served free. At
+and then translated as above. The lag (`collect.Panel.EnforcementLag`) is the
+panel's own once the lease planner measured it (`lagSamples > 0`: mean + LagZ·σ,
+F-027-cz, `contract.lease.md`); until then **seconds per family**, 35 s for 3x-ui
+and both forks (5 s check + a 30 s Xray restart), and 35 s for the rest. At
 25 MB/s the band is ~875 MB; a config with no measured rate has none.
 **Never below what it served** — a band wider than what is left cuts it now.
 

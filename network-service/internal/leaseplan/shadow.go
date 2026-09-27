@@ -4,8 +4,9 @@
 // It is the shadow (F-027-cy): each collection pass builds a `quota.Account`
 // per Grant the pass touched, feeds the readings through `Observe`, runs
 // `Plan`, and logs what it would write. It holds no driver and writes no row,
-// so it cannot be a second writer of a ceiling (ADR-0093 rule 3). The state it
-// learns — rates, lag, the tick — lives in memory until F-027-cz persists it.
+// so it cannot be a second writer of a ceiling (ADR-0093 rule 3). What it
+// learns of a panel — the tick and the lag — is kept on the panel's row
+// (F-027-cz, `Learned`); a replica's rates are relearned in memory.
 package leaseplan
 
 import (
@@ -59,6 +60,42 @@ type Panel struct {
 	CanSetLimit bool
 	// Healthy is `panelState = healthy`.
 	Healthy bool
+	// Learned is what an earlier process saved of it.
+	Learned Learned
+}
+
+// Learned is what the planner learned of one panel and keeps across a restart,
+// on `network.panel` (F-027-cz, `contract.lease.md`). A panel's lag takes
+// crossings to learn and its tick minutes of polls; a planner that lost them
+// on a deploy would overshoot while it relearned.
+type Learned struct {
+	// TickPeriod is the J the clock's bins are cut from (`tickPeriodMs`);
+	// zero = the family's (JobInterval).
+	TickPeriod time.Duration
+	// TickMask is the clock's feasible phase bins (`tickPhaseMask`); nil =
+	// no poll observed yet.
+	TickMask *uint32
+	// The lag estimate (`quota.Lag`): EWMA mean and variance in seconds over
+	// LagSamples crossings; both zero with no sample.
+	LagMeanSec, LagVarianceSec2 float64
+	LagSamples                  int
+}
+
+// Equal compares two by value, the mask included.
+func (l Learned) Equal(o Learned) bool {
+	if (l.TickMask == nil) != (o.TickMask == nil) || (l.TickMask != nil && *l.TickMask != *o.TickMask) {
+		return false
+	}
+	return l.TickPeriod == o.TickPeriod && l.LagMeanSec == o.LagMeanSec &&
+		l.LagVarianceSec2 == o.LagVarianceSec2 && l.LagSamples == o.LagSamples
+}
+
+func learnedOf(st *quota.PanelState) Learned {
+	l := Learned{TickPeriod: st.Clock.J, LagMeanSec: st.Lag.Mean, LagVarianceSec2: st.Lag.Var, LagSamples: st.Lag.N}
+	if mask, ok := st.Clock.Mask(); ok {
+		l.TickMask = &mask
+	}
+	return l
 }
 
 // Snapshot is one read: the touched Grants, and every panel their configs are on.
@@ -68,9 +105,11 @@ type Snapshot struct {
 }
 
 // Store loads the Grants that hold any of the given configs, each with all
-// its configs — `PostgresStore` in a running process.
+// its configs, and keeps what the planner learned of a panel —
+// `PostgresStore` in a running process.
 type Store interface {
 	Load(ctx context.Context, configIDs []string) (Snapshot, error)
+	SaveLearned(ctx context.Context, panelID string, l Learned) error
 }
 
 // Plan is what the planner decided for one Grant on one pass.
@@ -110,6 +149,7 @@ type Shadow struct {
 	replicas map[string]*quota.Replica // by config id
 	configOf map[int64]string          // replica id -> config id
 	accounts map[string]*quota.Account // by Grant id
+	saved    map[string]Learned        // by panel id: what the row holds
 }
 
 var _ collect.Shadow = (*Shadow)(nil)
@@ -117,9 +157,6 @@ var _ collect.Shadow = (*Shadow)(nil)
 // Observe is the loop's hook: plan, and log each plan and each action.
 func (s *Shadow) Observe(ctx context.Context, p collect.Panel, readings []driver.ClientUsage, at time.Time) error {
 	plans, err := s.Plan(ctx, p, readings, at)
-	if err != nil {
-		return err
-	}
 	for _, pl := range plans {
 		s.log().Info("lease shadow plan", "panel", p.ID, "grant", pl.GrantID, "quota", pl.Quota, "used", pl.Used,
 			"avail", pl.Avail, "endgame", pl.Endgame, "closed", pl.Closed, "actions", len(pl.Actions))
@@ -132,12 +169,41 @@ func (s *Shadow) Observe(ctx context.Context, p collect.Panel, readings []driver
 			s.log().Info("lease shadow action", attrs...)
 		}
 	}
-	return nil
+	return err
 }
 
 // Plan runs one pass of SPEC §4 for the panel just read: the tick, the ledger,
-// then a plan per touched Grant. It returns the plans ordered by Grant id.
+// then a plan per touched Grant. It returns the plans ordered by Grant id,
+// then saves what the pass taught it of the panel if that moved. A failed
+// save still returns the plans, beside the error.
 func (s *Shadow) Plan(ctx context.Context, p collect.Panel, readings []driver.ClientUsage, at time.Time) ([]Plan, error) {
+	plans, learned, err := s.plan(ctx, p, readings, at)
+	if err != nil || learned == nil {
+		return plans, err
+	}
+	if err := s.Store.SaveLearned(ctx, p.ID, *learned); err != nil {
+		return plans, fmt.Errorf("saving what panel %s taught the planner: %w", p.ID, err)
+	}
+	s.mu.Lock()
+	s.saved[p.ID] = *learned
+	s.mu.Unlock()
+	return plans, nil
+}
+
+// Learned is what the shadow holds of a panel now; false before it has seen one.
+func (s *Shadow) Learned(panelID string) (Learned, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := s.panels[panelID]
+	if st == nil {
+		return Learned{}, false
+	}
+	return learnedOf(st), true
+}
+
+// plan is Plan under the lock; learned is non-nil when the panel's state
+// differs from what its row holds.
+func (s *Shadow) plan(ctx context.Context, p collect.Panel, readings []driver.ClientUsage, at time.Time) ([]Plan, *Learned, error) {
 	read := map[string]driver.ClientUsage{} // config id -> reading
 	ids := make([]string, 0, len(readings))
 	for _, r := range readings {
@@ -147,12 +213,12 @@ func (s *Shadow) Plan(ctx context.Context, p collect.Panel, readings []driver.Cl
 		}
 	}
 	if len(ids) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	sort.Strings(ids)
 	snap, err := s.Store.Load(ctx, ids)
 	if err != nil {
-		return nil, fmt.Errorf("loading the Grants of panel %s: %w", p.ID, err)
+		return nil, nil, fmt.Errorf("loading the Grants of panel %s: %w", p.ID, err)
 	}
 
 	s.mu.Lock()
@@ -235,7 +301,12 @@ func (s *Shadow) Plan(ctx context.Context, p collect.Panel, readings []driver.Cl
 		plans = append(plans, pl)
 	}
 	sort.Slice(plans, func(i, j int) bool { return plans[i].GrantID < plans[j].GrantID })
-	return plans, nil
+	if here != nil {
+		if l := learnedOf(here); !l.Equal(s.saved[p.ID]) {
+			return plans, &l, nil
+		}
+	}
+	return plans, nil, nil
 }
 
 // counter is the figure a panel ceiling is measured against. A cumulative
@@ -258,15 +329,29 @@ func (s *Shadow) init() {
 	s.replicas = map[string]*quota.Replica{}
 	s.configOf = map[int64]string{}
 	s.accounts = map[string]*quota.Account{}
+	s.saved = map[string]Learned{}
 }
 
-// panel keeps one PanelState per panel, so what it learns outlives a pass.
+// panel keeps one PanelState per panel, so what it learns outlives a pass. A
+// panel first seen by this process starts from what its row holds.
 func (s *Shadow) panel(pn Panel) {
 	st := s.panels[pn.ID]
 	if st == nil {
-		j := JobInterval(pn.DriverType)
-		st = &quota.PanelState{ID: pn.ID, JobInterval: j, Lag: quota.NewLag(j), Clock: quota.NewTickClock(j), Reliability: 1}
+		j := pn.Learned.TickPeriod
+		if j <= 0 {
+			j = JobInterval(pn.DriverType)
+		}
+		clock := quota.NewTickClock(j)
+		if pn.Learned.TickMask != nil {
+			clock = quota.RestoreTickClock(j, *pn.Learned.TickMask)
+		}
+		lag := quota.NewLag(j)
+		if pn.Learned.LagSamples > 0 {
+			lag.Mean, lag.Var, lag.N = pn.Learned.LagMeanSec, pn.Learned.LagVarianceSec2, pn.Learned.LagSamples
+		}
+		st = &quota.PanelState{ID: pn.ID, JobInterval: j, Lag: lag, Clock: clock, Reliability: 1}
 		s.panels[pn.ID] = st
+		s.saved[pn.ID] = learnedOf(st)
 	}
 	st.CanSetLimit, st.Healthy = pn.CanSetLimit, pn.Healthy
 }
@@ -312,8 +397,7 @@ func (s *Shadow) log() *slog.Logger {
 }
 
 // JobInterval is how often a family refreshes its counters and checks its
-// ceilings — the planner's J until F-027-cz learns it per panel
-// (`tickPeriodMs`). 3x-ui and its forks run their traffic job every 5 s
+// ceilings — the planner's J for a panel whose row holds no `tickPeriodMs`. 3x-ui and its forks run their traffic job every 5 s
 // (`driver/lag.go`); every other family is given 10 s, the figure the
 // planner's simulator was tuned on.
 func JobInterval(t driver.DriverType) time.Duration {

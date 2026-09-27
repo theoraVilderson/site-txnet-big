@@ -250,7 +250,7 @@ func (e *Extender) extend(ctx context.Context, p collect.Panel) Report {
 
 		offset := converge.OffsetBytes(e.Counters, p, ext.RemoteID)
 		served := converge.ServedBytes(e.Counters, p, ext.RemoteID)
-		band := converge.NearBand(e.allowance(ext), served, ext.RateBps, p.DriverType.EnforcementLag())
+		band := converge.NearBand(e.allowance(ext), served, ext.RateBps, p.EnforcementLag())
 		want := converge.PanelCeiling(converge.GuardedAllowance(e.allowance(ext), served, band), offset)
 		if want <= 0 || want <= have {
 			// Nothing to give, or the panel already holds more. Either way the

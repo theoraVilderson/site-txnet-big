@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"network-service/internal/db"
 	"network-service/internal/driver"
 )
@@ -12,6 +14,7 @@ import (
 // DB is what the store needs of the pool: db.Pool satisfies it.
 type DB interface {
 	Query(ctx context.Context, sql string, args ...any) (db.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
 // PostgresStore is Store over `network.config` and `entitlement.grant`, the
@@ -44,7 +47,9 @@ SELECT g.id::text, g."purchasedBytes", g."endsAt",
        p."driverType"::text,
        p."counterSemantics" = 'cumulative'
          AND coalesce((p.capabilities->'answers'->'per_client_data_limit'->>'supported')::boolean, false),
-       p."panelState" = 'healthy'
+       p."panelState" = 'healthy',
+       p."tickPeriodMs", p."tickPhaseMask",
+       coalesce(p."lagMeanSec", 0), coalesce(p."lagVarianceSec2", 0), p."lagSamples"
   FROM touched t
   JOIN entitlement."grant" g ON g.id = t."grantId"
   JOIN network.config c ON c."grantId" = g.id
@@ -68,9 +73,12 @@ func (s PostgresStore) Load(ctx context.Context, configIDs []string) (Snapshot, 
 			live                bool
 			c                   Config
 			pn                  Panel
+			tickMs              *int32
+			tickMask            *int64
 		)
 		if err := rows.Scan(&grantID, &quota, &endsAt, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
-			&c.LimitSeen, &c.Enabled, &c.Allocated, &driverType, &pn.CanSetLimit, &pn.Healthy); err != nil {
+			&c.LimitSeen, &c.Enabled, &c.Allocated, &driverType, &pn.CanSetLimit, &pn.Healthy,
+			&tickMs, &tickMask, &pn.Learned.LagMeanSec, &pn.Learned.LagVarianceSec2, &pn.Learned.LagSamples); err != nil {
 			return Snapshot{}, fmt.Errorf("reading a Grant's config: %w", err)
 		}
 		if n := len(snap.Grants); n == 0 || snap.Grants[n-1].ID != grantID {
@@ -87,7 +95,48 @@ func (s PostgresStore) Load(ctx context.Context, configIDs []string) (Snapshot, 
 		}
 		g.Configs = append(g.Configs, c)
 		pn.ID, pn.DriverType = c.PanelID, driver.DriverType(driverType)
+		if tickMs != nil {
+			pn.Learned.TickPeriod = time.Duration(*tickMs) * time.Millisecond
+		}
+		if tickMask != nil {
+			mask := uint32(*tickMask) // CHECK panel_tick_phase_needs_period: 0..2^32-1
+			pn.Learned.TickMask = &mask
+		}
 		snap.Panels[pn.ID] = pn
 	}
 	return snap, rows.Err()
+}
+
+// saveLearnedSQL writes the panel's learned state, and only when it differs
+// from the row: the pass that learned nothing new writes nothing. No trigger
+// reads these columns (`sub_panel_changed` is on `panelState` and `region`).
+const saveLearnedSQL = `
+UPDATE network.panel
+   SET "tickPeriodMs" = $2, "tickPhaseMask" = $3,
+       "lagMeanSec" = $4, "lagVarianceSec2" = $5, "lagSamples" = $6
+ WHERE id = $1::uuid
+   AND ("tickPeriodMs", "tickPhaseMask", "lagMeanSec", "lagVarianceSec2", "lagSamples")
+       IS DISTINCT FROM ($2::int, $3::bigint, $4::float8, $5::float8, $6::int)`
+
+// SaveLearned keeps what the planner learned of a panel (F-027-cz). The lag
+// is null with no sample (CHECK `panel_lag_matches_samples`).
+func (s PostgresStore) SaveLearned(ctx context.Context, panelID string, l Learned) error {
+	var period *int32
+	if l.TickPeriod > 0 {
+		ms := int32(l.TickPeriod.Milliseconds())
+		period = &ms
+	}
+	var mask *int64
+	if l.TickMask != nil && period != nil {
+		m := int64(*l.TickMask)
+		mask = &m
+	}
+	var mean, variance *float64
+	if l.LagSamples > 0 {
+		mean, variance = &l.LagMeanSec, &l.LagVarianceSec2
+	}
+	if _, err := s.DB.Exec(ctx, saveLearnedSQL, panelID, period, mask, mean, variance, l.LagSamples); err != nil {
+		return fmt.Errorf("saving panel %s's tick and lag: %w", panelID, err)
+	}
+	return nil
 }

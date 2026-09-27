@@ -32,6 +32,8 @@ func (s *store) Load(_ context.Context, configIDs []string) (leaseplan.Snapshot,
 	return leaseplan.Snapshot{Grants: s.grants, Panels: s.panels}, nil
 }
 
+func (s *store) SaveLearned(context.Context, string, leaseplan.Learned) error { return nil }
+
 func (s *store) set(used int64, configs ...leaseplan.Config) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
