@@ -44,6 +44,13 @@ import { GRANT_AGGREGATE, markDelivered } from './delivered';
  * money revives what it funds like any credit (F-027-ap); and
  * `entitlement.grant.refunded` in the outbox. The coupon uses stay used — the
  * discount was not money the user paid, and `total` is what they did.
+ *
+ * **A purchase still waiting is announced once** (F-601-i): the first check
+ * that finds it `pending` `GRANT_DELIVERY_DELAYED_AFTER_MS` after purchase
+ * sets `deliveryDelayedAt` and writes `entitlement.grant.delivery_delayed` —
+ * the buyer is told it is being prepared, the tenant's owner why
+ * ({@link DeliveryDelay}). Only a check that leaves it waiting; one that
+ * delivers or refunds it has its own notice.
  */
 
 /** How a kind is delivered; `null` is no handler — refunded at the first check. */
@@ -75,6 +82,17 @@ export function nextDeliveryAt(attempts: number, now: Date, policy: DeliveryPoli
   if (attempts > policy.retries) return null;
   return new Date(now.getTime() + policy.firstRetryMs * 2 ** (attempts - 1));
 }
+
+/**
+ * Declared once (C-09): why a paid Grant is still waiting, as its owner is told
+ * (F-601-i). `panel_unavailable`: a panel owed a config cannot take one — not
+ * accepted or not serving, nothing picked to sell, or full. `write_unconfirmed`:
+ * every owed panel has its config and too few have confirmed it — a write the
+ * panel refused, or one not read back yet. `strategy_not_built`: the group's
+ * strategy has no fulfilment (network `contract.groups.md` rule 7).
+ */
+export const DELIVERY_DELAYS = ['panel_unavailable', 'write_unconfirmed', 'strategy_not_built'] as const;
+export type DeliveryDelay = (typeof DELIVERY_DELAYS)[number];
 
 /** Declared once (C-09): why a paid Grant was cancelled and refunded, written to `statusReason`. */
 export const DELIVERY_FAILURES = ['no_delivery_route', 'delivery_timed_out'] as const;
@@ -120,6 +138,8 @@ export class GrantDeliveryService {
       select: {
         status: true,
         deliveryAttempts: true,
+        createdAt: true,
+        deliveryDelayedAt: true,
         variant: { select: { panelGroupId: true, product: { select: { fulfilmentKind: true } } } },
       },
     });
@@ -133,12 +153,17 @@ export class GrantDeliveryService {
       return (await markDelivered(tx, grantId)) ? 'delivered' : 'skipped';
     }
 
+    let delay: { reason: DeliveryDelay; waitingPanels: number };
     try {
-      if ((await this.groups.fulfil(tx, grantId)).activated) return 'delivered';
+      const fulfilment = await this.groups.fulfil(tx, grantId);
+      if (fulfilment.activated) return 'delivered';
+      const waitingPanels = fulfilment.waiting.length;
+      delay = { reason: waitingPanels > 0 ? 'panel_unavailable' : 'write_unconfirmed', waitingPanels };
     } catch (e) {
       // A group set to a strategy with no fulfilment is an attempt that failed:
       // an operator may switch it back before the clock runs out.
       if (!(e instanceof GroupFulfilmentRefused) || e.reason !== 'strategy_not_built') throw e;
+      delay = { reason: 'strategy_not_built', waitingPanels: 0 };
     }
 
     const next = nextDeliveryAt(attempts, now, this.policy);
@@ -147,7 +172,43 @@ export class GrantDeliveryService {
       where: { id: grantId, status: GrantStatus.pending },
       data: { deliveryAttempts: attempts, nextDeliveryAt: next },
     });
-    return moved.count === 1 ? 'waiting' : 'skipped';
+    if (moved.count !== 1) return 'skipped';
+
+    const delayedAfterMs = this.config.get('GRANT_DELIVERY_DELAYED_AFTER_MS', { infer: true });
+    if (grant.deliveryDelayedAt === null && now.getTime() - grant.createdAt.getTime() >= delayedAfterMs) {
+      await this.announceDelay(tx, grantId, now, delay);
+    }
+    return 'waiting';
+  }
+
+  /** F-601-i: once per Grant — the write that sets `deliveryDelayedAt` is the one that emits. */
+  private async announceDelay(tx: Prisma.TransactionClient, grantId: string, now: Date, delay: { reason: DeliveryDelay; waitingPanels: number }): Promise<void> {
+    const marked = await tx.grant.updateMany({
+      where: { id: grantId, status: GrantStatus.pending, deliveryDelayedAt: null },
+      data: { deliveryDelayedAt: now },
+    });
+    if (marked.count !== 1) return;
+
+    const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { tenantId: true, userId: true, sourceReferenceId: true } });
+    if (!grant) return;
+    const tenant = await tx.tenant.findUnique({ where: { id: grant.tenantId }, select: { ownerUserId: true } });
+    await tx.outboxEvent.create({
+      data: {
+        aggregate: GRANT_AGGREGATE,
+        aggregateId: grantId,
+        type: OutboxEventType.GRANT_DELIVERY_DELAYED,
+        payload: {
+          tenantId: grant.tenantId,
+          userId: grant.userId,
+          grantId,
+          invoiceId: grant.sourceReferenceId,
+          ownerUserId: tenant?.ownerUserId ?? null,
+          reason: delay.reason,
+          waitingPanels: String(delay.waitingPanels),
+        },
+      },
+      select: { id: true },
+    });
   }
 
   private async refund(tx: Prisma.TransactionClient, grantId: string, attempts: number, reason: DeliveryFailure): Promise<DeliveryOutcome> {

@@ -324,12 +324,13 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       await this.channel.bindQueue(this.tenantSubscriptionNoticeQueue, this.exchange, outboxRoutingKey(type));
     }
     // F-111-d: a paid Grant delivered or refunded, told to its buyer — one
-    // queue, because both are the end of the same purchase.
+    // queue, because both are the end of the same purchase. F-601-i: one still
+    // waiting 5 minutes on is the same purchase's news, in the same line.
     await this.channel.assertQueue(this.grantDeliveryNoticeQueue, {
       durable: true,
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
     });
-    for (const type of [OutboxEventType.GRANT_DELIVERED, OutboxEventType.GRANT_REFUNDED]) {
+    for (const type of [OutboxEventType.GRANT_DELIVERED, OutboxEventType.GRANT_REFUNDED, OutboxEventType.GRANT_DELIVERY_DELAYED]) {
       await this.channel.bindQueue(this.grantDeliveryNoticeQueue, this.exchange, outboxRoutingKey(type));
     }
     // F-114-i: a purchase delivered at once. Its own queue, apart from the

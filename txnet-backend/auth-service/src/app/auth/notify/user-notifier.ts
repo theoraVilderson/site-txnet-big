@@ -16,6 +16,10 @@ export const NOTIFY_TEMPLATES = [
   'panelRefused',
   'purchaseDelivered',
   'purchaseRefunded',
+  'purchaseDelayed',
+  'purchaseStuckPanelUnavailable',
+  'purchaseStuckWriteUnconfirmed',
+  'purchaseStuckStrategyNotBuilt',
   'serviceNotConnected',
   'serviceStillNotConnected',
   'serviceUsageThreshold',
@@ -139,6 +143,51 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
     },
   },
   // F-601-c: an active service with nothing used 24 h, then 72 h, after it was ready.
+  // F-601-i: a paid Grant still waiting 5 minutes on — the buyer that it is being prepared, the tenant's owner why.
+  purchaseDelayed: {
+    read: (ns) => ns?.purchase?.delayed,
+    fallback:
+      '⏳ Your purchase is paid and your service is still being prepared — this is taking a little longer than usual. You will get a message the moment it is ready; if it cannot be delivered, the full price goes back to your wallet.',
+    inbox: { read: (ns) => ns?.purchase?.delayedTitle, fallback: 'Your service is being prepared' },
+    many: {
+      read: (ns) => ns?.purchase?.delayedMany,
+      fallback: '⏳ {{count}} of your purchases are paid and still being prepared. You will get a message the moment each one is ready.',
+      inbox: { read: (ns) => ns?.purchase?.delayedManyTitle, fallback: '{{count}} services being prepared' },
+    },
+  },
+  purchaseStuckPanelUnavailable: {
+    read: (ns) => ns?.purchase?.stuckPanelUnavailable,
+    fallback:
+      '⚠️ A paid purchase has waited over 5 minutes for its service: {{panels}} panel(s) of its group cannot take a new user — not accepted or down, no inbound selected for sale, or full. Check the systems page; it is refunded if not delivered within the hour.',
+    inbox: { read: (ns) => ns?.purchase?.stuckPanelUnavailableTitle, fallback: 'A purchase is waiting for a panel' },
+    many: {
+      read: (ns) => ns?.purchase?.stuckPanelUnavailableMany,
+      fallback: '⚠️ {{count}} paid purchases have waited over 5 minutes because panels of their groups cannot take a new user. Check the systems page.',
+      inbox: { read: (ns) => ns?.purchase?.stuckPanelUnavailableManyTitle, fallback: '{{count}} purchases waiting for a panel' },
+    },
+  },
+  purchaseStuckWriteUnconfirmed: {
+    read: (ns) => ns?.purchase?.stuckWriteUnconfirmed,
+    fallback:
+      '⚠️ A paid purchase has waited over 5 minutes for its service: its config was sent to the panels, but too few have confirmed it — a write the panel refused, or a panel not answering. Check the systems page; it is refunded if not delivered within the hour.',
+    inbox: { read: (ns) => ns?.purchase?.stuckWriteUnconfirmedTitle, fallback: 'A purchase is not confirmed by its panels' },
+    many: {
+      read: (ns) => ns?.purchase?.stuckWriteUnconfirmedMany,
+      fallback: '⚠️ {{count}} paid purchases have waited over 5 minutes because their panels have not confirmed their configs. Check the systems page.',
+      inbox: { read: (ns) => ns?.purchase?.stuckWriteUnconfirmedManyTitle, fallback: '{{count}} purchases not confirmed by panels' },
+    },
+  },
+  purchaseStuckStrategyNotBuilt: {
+    read: (ns) => ns?.purchase?.stuckStrategyNotBuilt,
+    fallback:
+      "⚠️ A paid purchase has waited over 5 minutes for its service: its panel group is set to a strategy that cannot deliver yet. Set the group back to mirror; it is refunded if not delivered within the hour.",
+    inbox: { read: (ns) => ns?.purchase?.stuckStrategyNotBuiltTitle, fallback: "A purchase's panel group cannot deliver" },
+    many: {
+      read: (ns) => ns?.purchase?.stuckStrategyNotBuiltMany,
+      fallback: '⚠️ {{count}} paid purchases have waited over 5 minutes because their panel group is set to a strategy that cannot deliver yet. Set it back to mirror.',
+      inbox: { read: (ns) => ns?.purchase?.stuckStrategyNotBuiltManyTitle, fallback: "{{count}} purchases: panel group cannot deliver" },
+    },
+  },
   serviceNotConnected: {
     read: (ns) => ns?.retention?.notConnected,
     fallback:

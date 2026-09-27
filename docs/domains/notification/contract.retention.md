@@ -96,6 +96,13 @@ panel adds. So there is no ready type in `RETENTION_NOTICES`: billing puts
 `entitlement.grant.delivered`, and the notice ends with it
 ([automation/contract.outbox.md](../automation/contract.outbox.md)).
 
+## "Being prepared" is not a retention notice either (F-601-i)
+
+A purchase still `pending` 5 minutes on is told once, by the Grant's own
+`deliveryDelayedAt` — not by this ledger, which counts per period of a
+service the user has. It rides the purchase's own notices (automation
+`contract.outbox.md` "A purchase's end, told"), with its tenant owner's alert.
+
 ## Not built here
 
 - Muting and quiet hours (F-601-m): they will be read at the claim, which is

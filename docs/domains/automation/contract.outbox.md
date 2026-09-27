@@ -220,14 +220,14 @@ Both in `outbox/tenant-renewal.consumers.ts`. The producers are tenant's:
 ## A purchase's end, told (F-111-d)
 
 `GrantDeliveryConsumer`, queue `AUTOMATION_GRANT_DELIVERY_NOTICE_QUEUE` bound to
-`outbox.entitlement.grant.delivered` and `.refunded`, consumer
+`outbox.entitlement.grant.delivered`, `.refunded` and `.delivery_delayed`, consumer
 `grant-delivery-notify`. The producer is entitlement's delivery
 (`domains/entitlement/contract.md`).
 
 | Rule | Why |
 |---|---|
 | Live on `user:<userId>` under the event's own name — `{type, grantId}`, a refund adding `invoiceId, amount` — then template `purchaseDelivered` (`{servicesUrl}` when the payload has it, F-601-h) / `purchaseRefunded` (`{amount}`) to the buyer's inbox and bot | an open My services turns the Grant live (F-111-f) and the top bar re-reads the balance; every purchase ends in exactly one of the two |
-| A payload without tenant, user or Grant, or a refund without `amount`, throws and dead-letters | whose purchase it is is never guessed |
+| A payload without tenant, user or Grant, a refund without `amount`, or a delay without `ownerUserId` or a known `reason`, throws and dead-letters. A delay (F-601-i) has no live push: `purchaseDelayed` to the buyer, and `purchaseStuck…` by `reason` to the owner under consumer `grant-delivery-alert`; both sent before either failure is rethrown | whose purchase it is is never guessed; a replay repeats only what is owed |
 
 ## A purchase delivered at once (F-114-i)
 

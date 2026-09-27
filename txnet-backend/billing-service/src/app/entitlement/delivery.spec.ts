@@ -16,7 +16,10 @@
  *  - **a cancelled Grant leaves nothing on a panel**: every config it was given
  *    while it waited is retired, or the refund would come with free service;
  *  - **both ends tell the user**: `entitlement.grant.delivered` or
- *    `entitlement.grant.refunded` in the outbox, in the same transaction.
+ *    `entitlement.grant.refunded` in the outbox, in the same transaction;
+ *  - **a purchase still waiting 5 minutes on is announced once** (F-601-i):
+ *    `entitlement.grant.delivery_delayed`, naming why and the tenant's owner,
+ *    written only by the check that sets `deliveryDelayedAt`.
  *
  * What the database holds rather than this file: `grant_status_one_way` is
  * `entitlement-schema.int.spec.ts`'s.
@@ -24,6 +27,7 @@
 import { FulfilmentKind, GrantSource, GrantStatus, InvoiceStatus, Prisma, TenantDomainPurpose, TenantDomainType, TenantType, WalletReasonType } from '@prisma/client';
 import { OutboxEventType } from '@txnet-backend/shared-core';
 
+import { GroupFulfilmentRefused } from '../traffic/group-fulfilment';
 import { deliveryRouteOf, GrantDeliveryService, nextDeliveryAt } from './delivery';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
@@ -32,8 +36,10 @@ const GRANT = '99999999-9999-4999-8999-999999999991';
 const INVOICE = '88888888-8888-4888-8888-888888888881';
 const VARIANT = '77777777-7777-4777-8777-777777777771';
 const GROUP = '66666666-6666-4666-8666-666666666661';
+const OWNER = '55555555-5555-4555-8555-555555555551';
 
 const POLICY = { retries: 6, firstRetryMs: 60_000 };
+const DELAYED_AFTER_MS = 5 * 60_000;
 const NOW = new Date('2026-09-25T10:00:00.000Z');
 const minutes = (n: number) => new Date(NOW.getTime() + n * 60_000);
 
@@ -42,19 +48,31 @@ type GrantFacts = {
   kind: FulfilmentKind;
   panelGroupId: string | null;
   deliveryAttempts: number;
+  createdAt: Date;
+  deliveryDelayedAt: Date | null;
 };
 
 type Door = { domainValue: string; domainType: TenantDomainType };
 
 function build(
   facts: Partial<GrantFacts> = {},
-  opts: { invoice?: { status: InvoiceStatus; total: string }; activated?: boolean; configs?: string[]; doors?: Door[]; tenantType?: TenantType } = {},
+  opts: {
+    invoice?: { status: InvoiceStatus; total: string };
+    activated?: boolean;
+    configs?: string[];
+    doors?: Door[];
+    tenantType?: TenantType;
+    waiting?: string[];
+    refused?: Error;
+  } = {},
 ) {
   const grant = {
     status: GrantStatus.pending,
     kind: FulfilmentKind.feature_access,
     panelGroupId: null,
     deliveryAttempts: 0,
+    createdAt: minutes(-1),
+    deliveryDelayedAt: null,
     ...facts,
   };
   const invoice = opts.invoice ?? { status: InvoiceStatus.paid, total: '12.50' };
@@ -79,13 +97,18 @@ function build(
         sourceReferenceId: INVOICE,
         status: grant.status,
         deliveryAttempts: grant.deliveryAttempts,
+        createdAt: grant.createdAt,
+        deliveryDelayedAt: grant.deliveryDelayedAt,
         variant: { panelGroupId: grant.panelGroupId, product: { fulfilmentKind: grant.kind } },
       }),
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         seen.grantWrites.push({ where, data });
-        // Conditional on the status read: moved only while still `pending`.
-        const matches = where['status'] === undefined || where['status'] === grant.status;
+        // Conditional on the status read: moved only while still `pending`; the delay once, while unset.
+        const matches =
+          (where['status'] === undefined || where['status'] === grant.status) &&
+          (!('deliveryDelayedAt' in where) || grant.deliveryDelayedAt === null);
         if (matches && typeof data['status'] === 'string') grant.status = data['status'] as GrantStatus;
+        if (matches && data['deliveryDelayedAt'] instanceof Date) grant.deliveryDelayedAt = data['deliveryDelayedAt'];
         return { count: matches ? 1 : 0 };
       },
     },
@@ -99,7 +122,7 @@ function build(
         return opts.doors ?? [];
       },
     },
-    tenant: { findUnique: async () => ({ tenantType: opts.tenantType ?? TenantType.platform_owner }) },
+    tenant: { findUnique: async () => ({ tenantType: opts.tenantType ?? TenantType.platform_owner, ownerUserId: OWNER }) },
     // The invoice's row lock.
     $queryRaw: async () => [{ id: INVOICE, userId: USER, total: new Prisma.Decimal(invoice.total), status: invoice.status }],
     invoice: {
@@ -119,8 +142,9 @@ function build(
   const groups = {
     fulfil: async (_tx: unknown, grantId: string) => {
       seen.fulfilled.push(grantId);
+      if (opts.refused) throw opts.refused;
       if (opts.activated) grant.status = GrantStatus.active;
-      return { placed: 0, waiting: [], activated: opts.activated ?? false };
+      return { placed: 0, waiting: opts.waiting ?? [], activated: opts.activated ?? false };
     },
   };
   const actions = { retire: async (_tx: unknown, input: { configId: string }) => void seen.retired.push(input.configId) };
@@ -130,7 +154,12 @@ function build(
       return { id: 'wt1' };
     },
   };
-  const config = { get: (k: string) => (k === 'GRANT_DELIVERY_RETRIES' ? POLICY.retries : k === 'GRANT_DELIVERY_FIRST_RETRY_MS' ? POLICY.firstRetryMs : 200) };
+  const settings: Record<string, number> = {
+    GRANT_DELIVERY_RETRIES: POLICY.retries,
+    GRANT_DELIVERY_FIRST_RETRY_MS: POLICY.firstRetryMs,
+    GRANT_DELIVERY_DELAYED_AFTER_MS: DELAYED_AFTER_MS,
+  };
+  const config = { get: (k: string) => settings[k] ?? 200 };
 
   const service = new GrantDeliveryService(
     {} as never,
@@ -288,6 +317,74 @@ describe('GrantDeliveryService.deliver', () => {
     expect(seen.credits).toEqual([]);
     expect(seen.invoiceWrites).toEqual([]);
     expect(seen.outbox).toEqual([]);
+  });
+});
+
+describe('a purchase still waiting is announced once (F-601-i)', () => {
+  const network = { kind: FulfilmentKind.network_access, panelGroupId: GROUP };
+  const delayed = () => ({
+    type: OutboxEventType.GRANT_DELIVERY_DELAYED,
+    payload: expect.objectContaining({ tenantId: TENANT, userId: USER, grantId: GRANT, invoiceId: INVOICE, ownerUserId: OWNER }),
+  });
+
+  it('says nothing to a purchase paid under 5 minutes ago', async () => {
+    const { service, tx, seen } = build({ ...network, createdAt: minutes(-4) });
+
+    await expect(service.deliver(tx, GRANT, NOW)).resolves.toBe('waiting');
+    expect(seen.outbox).toEqual([]);
+    expect(seen.grantWrites.some((w) => 'deliveryDelayedAt' in w.data)).toBe(false);
+  });
+
+  it('announces it at the first check 5 minutes on, naming the panels that cannot take it yet', async () => {
+    const { service, tx, seen, grant } = build({ ...network, deliveryAttempts: 3, createdAt: minutes(-7) }, { waiting: ['p1', 'p2'] });
+
+    await expect(service.deliver(tx, GRANT, NOW)).resolves.toBe('waiting');
+
+    expect(grant.deliveryDelayedAt).toEqual(NOW);
+    expect(seen.grantWrites).toContainEqual({ where: { id: GRANT, status: GrantStatus.pending, deliveryDelayedAt: null }, data: { deliveryDelayedAt: NOW } });
+    expect(seen.outbox).toEqual([delayed()]);
+    expect(seen.outbox[0]!.payload).toMatchObject({ reason: 'panel_unavailable', waitingPanels: '2' });
+  });
+
+  it('calls it an unconfirmed write when every owed panel has its config and too few confirmed it', async () => {
+    const { service, tx, seen } = build({ ...network, createdAt: minutes(-7) });
+
+    await service.deliver(tx, GRANT, NOW);
+    expect(seen.outbox[0]!.payload).toMatchObject({ reason: 'write_unconfirmed' });
+  });
+
+  it('calls it the group\'s strategy when fulfilment refused it', async () => {
+    const { service, tx, seen } = build({ ...network, createdAt: minutes(-7) }, { refused: new GroupFulfilmentRefused('strategy_not_built', 'priority') });
+
+    await expect(service.deliver(tx, GRANT, NOW)).resolves.toBe('waiting');
+    expect(seen.outbox[0]!.payload).toMatchObject({ reason: 'strategy_not_built' });
+  });
+
+  it('announces it once: a later check, or one that lost the race to set it, says nothing', async () => {
+    const told = build({ ...network, createdAt: minutes(-15), deliveryDelayedAt: minutes(-8) });
+    await told.service.deliver(told.tx, GRANT, NOW);
+    expect(told.seen.outbox).toEqual([]);
+
+    const raced = build({ ...network, createdAt: minutes(-7) });
+    const read = raced.grant.deliveryDelayedAt;
+    const original = (raced.tx as never as { grant: { findUnique: () => Promise<Record<string, unknown>> } }).grant.findUnique;
+    (raced.tx as never as { grant: { findUnique: () => Promise<Record<string, unknown>> } }).grant.findUnique = async () => {
+      const row = await original();
+      raced.grant.deliveryDelayedAt = minutes(-1); // another check set it after this one read it
+      return { ...row, deliveryDelayedAt: read };
+    };
+    await raced.service.deliver(raced.tx, GRANT, NOW);
+    expect(raced.seen.outbox).toEqual([]);
+  });
+
+  it('never announces a purchase that was delivered or refunded at this check', async () => {
+    const delivered = build({ ...network, createdAt: minutes(-7) }, { activated: true });
+    await expect(delivered.service.deliver(delivered.tx, GRANT, NOW)).resolves.toBe('delivered');
+    expect(delivered.seen.outbox).toEqual([]);
+
+    const refunded = build({ ...network, deliveryAttempts: 6, createdAt: minutes(-63) });
+    await expect(refunded.service.deliver(refunded.tx, GRANT, NOW)).resolves.toBe('refunded');
+    expect(refunded.seen.outbox.map((e) => e.type)).toEqual([OutboxEventType.GRANT_REFUNDED]);
   });
 });
 

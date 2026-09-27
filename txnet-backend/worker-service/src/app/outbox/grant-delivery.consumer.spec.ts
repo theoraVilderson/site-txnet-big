@@ -7,7 +7,10 @@
  *    own My services page, billing's to work out — is passed to the template,
  *    so the notice ends with it; a tenant with no panel address has none, and
  *    the notice reads whole without it;
- *  - **a refund carries no link**: only `amount`, whatever else the payload says.
+ *  - **a refund carries no link**: only `amount`, whatever else the payload says;
+ *  - **a purchase still waiting tells two people** (F-601-i): the buyer that
+ *    it is being prepared, and the tenant's owner why — each under its own
+ *    consumer name, so a redelivery repeats only the one that failed.
  */
 import { OutboxEventType, type OutboxMessage } from '@txnet-backend/shared-core';
 
@@ -32,10 +35,10 @@ function event(type: string, payload: Record<string, unknown> = {}): OutboxMessa
 function build() {
   const config = { get: (_k: string, fallback?: unknown) => fallback };
   const consumer = new GrantDeliveryConsumer({} as never, {} as never, { publish: vi.fn() } as never, config as never);
-  const send = vi.fn(async () => undefined);
+  const send = vi.fn(async (_notice: { consumer: string; person?: { userId: string; template: string; params: Record<string, string> } }) => undefined);
   (consumer as unknown as { notices: { send: typeof send } }).notices = { send };
   const person = () => (send.mock.calls[0] as unknown as [{ person: { template: string; params: Record<string, string> } }])[0].person;
-  return { consumer, person };
+  return { consumer, person, send };
 }
 
 describe('GrantDeliveryConsumer — where a delivered service is (F-601-h)', () => {
@@ -56,5 +59,46 @@ describe('GrantDeliveryConsumer — where a delivered service is (F-601-h)', () 
     await consumer.handle(event(OutboxEventType.GRANT_REFUNDED, { amount: '12.50', servicesUrl: URL }));
     expect(person()).toMatchObject({ template: 'purchaseRefunded', params: { amount: '12.50' } });
     expect(person().params).not.toHaveProperty('servicesUrl');
+  });
+});
+
+describe('GrantDeliveryConsumer — a purchase still waiting (F-601-i)', () => {
+  const OWNER = '55555555-5555-4555-8555-555555555551';
+  const delayed = (payload: Record<string, unknown> = {}) =>
+    event(OutboxEventType.GRANT_DELIVERY_DELAYED, { ownerUserId: OWNER, reason: 'panel_unavailable', waitingPanels: '2', ...payload });
+
+  it('tells the buyer it is being prepared, and the owner why, each under its own marker', async () => {
+    const { consumer, send } = build();
+    await consumer.handle(delayed());
+
+    const told = send.mock.calls.map(([n]) => ({ consumer: n.consumer, userId: n.person?.userId, template: n.person?.template, params: n.person?.params }));
+    expect(told).toEqual([
+      { consumer: 'grant-delivery-notify', userId: USER, template: 'purchaseDelayed', params: {} },
+      { consumer: 'grant-delivery-alert', userId: OWNER, template: 'purchaseStuckPanelUnavailable', params: { panels: '2' } },
+    ]);
+  });
+
+  it('names each reason with its own owner template', async () => {
+    const { consumer, send } = build();
+    await consumer.handle(delayed({ reason: 'write_unconfirmed' }));
+    await consumer.handle(delayed({ reason: 'strategy_not_built' }));
+    expect([send.mock.calls[1]![0].person?.template, send.mock.calls[3]![0].person?.template]).toEqual([
+      'purchaseStuckWriteUnconfirmed',
+      'purchaseStuckStrategyNotBuilt',
+    ]);
+  });
+
+  it('still tells the owner when the buyer\'s send failed, then throws so the event is owed', async () => {
+    const { consumer, send } = build();
+    send.mockRejectedValueOnce(new Error('auth-service down'));
+    await expect(consumer.handle(delayed())).rejects.toThrow('auth-service down');
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws on a reason it has no words for, or a payload without its owner — before telling anyone', async () => {
+    const { consumer, send } = build();
+    await expect(consumer.handle(delayed({ reason: 'bored' }))).rejects.toThrow();
+    await expect(consumer.handle(delayed({ ownerUserId: undefined }))).rejects.toThrow();
+    expect(send).not.toHaveBeenCalled();
   });
 });

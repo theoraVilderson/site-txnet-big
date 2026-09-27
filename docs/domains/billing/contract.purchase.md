@@ -133,6 +133,7 @@ paid Grant". What it means for the invoice:
 |---|---|
 | Delivered: the Grant `active`, the invoice stays `paid`; `entitlement.grant.delivered` tells the buyer (inbox, bot, live) | the sale stood |
 | Not delivered — no handler at the first check, or still `pending` after 6 retries at 1, 2, 4, 8, 16, 32 minutes: the Grant `cancelled`, the invoice `paid -> refunded`, one `product_refund` credit of the whole `total` (`referenceId` = the invoice), `entitlement.grant.refunded` with `amount` | the user's call, 2026-09-25. The refund is a credit like any other, so it revives what it funds (F-027-ap) |
+| Still `pending` 5 minutes after purchase: announced once, `entitlement.grant.delivery_delayed` — the buyer told it is being prepared, the tenant's owner why (F-601-i, entitlement `contract.md` "Delivery") | the hour's refund is the backstop, not the first the buyer or the seller hears of it |
 | `product_refund` undoes a `product_purchase` in a reseller's sales (`contract.revenue.md`) and shows on `/wallet/history` (`contract.history.md`) | money back belongs where the user and the reseller see it |
 | The coupon uses stay confirmed | the refund is `total`, which is what was paid |
 

@@ -115,6 +115,10 @@ model Grant {
   /// Only a `pending` Grant is ever checked; the clock is left as it stood.
   deliveryAttempts      Int                @default(0)
   nextDeliveryAt        DateTime?
+  /// The check that found it still `pending` 5 minutes after purchase and
+  /// announced it (F-601-i): set once, conditionally on null, so the buyer and
+  /// the tenant's owner hear once however many checks follow.
+  deliveryDelayedAt     DateTime?
   /// When it first turned `active` — at delivery for a purchase, at `startsAt`
   /// for any other source (F-601-c). Null for a Grant from before it.
   activatedAt           DateTime?

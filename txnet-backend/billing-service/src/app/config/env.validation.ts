@@ -240,6 +240,16 @@ export const envSchema = z.object({
     (v) => (v === '' ? undefined : v),
     z.coerce.number().int().positive().default(60_000),
   ),
+  /**
+   * F-601-i: a paid Grant still undelivered this long after purchase is
+   * announced once, at the first check past it — the buyer that it is being
+   * prepared, the tenant's owner why. 5 minutes: under the retry clock above,
+   * the check at 7 minutes, well before the hour's refund.
+   */
+  GRANT_DELIVERY_DELAYED_AFTER_MS: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(300_000),
+  ),
 
   /**
    * How long an expired top-up keeps its coupon holds before the sweep gives
