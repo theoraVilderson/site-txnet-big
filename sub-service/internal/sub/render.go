@@ -40,14 +40,27 @@ var servingPanelStates = map[string]bool{
 	"throttled_or_blocked": true,
 }
 
-// serves reports whether a config's lines go into the body: a live config,
-// on a serving panel, whose lines were captured from the client it is now.
-// A regenerated uuid makes the old lines dead links, so they wait for the
-// next capture rather than being served.
+// serves reports whether a config's lines go into the body: a usable config
+// on a serving panel.
 func serves(c Config) bool {
-	return servingPanelStates[c.PanelState] &&
-		c.Status == "active" && c.DesiredRemote == "present" &&
+	return servingPanelStates[c.PanelState] && usable(c)
+}
+
+// usable is a live config whose lines were captured from the client it is
+// now. A regenerated uuid makes the old lines dead links, so they wait for
+// the next capture rather than being served.
+func usable(c Config) bool {
+	return c.Status == "active" && c.DesiredRemote == "present" &&
 		c.LinksUUID != "" && c.LinksUUID == c.UUID
+}
+
+// lastResort is a usable config on a `down` panel (F-027-dq). `down` judges
+// the panel's admin API only, so its users may still reach it, and an empty
+// body wipes every server the app had: its lines are served when no config
+// of the Grant serves, and never beside one that does. `maintenance` is the
+// owner taking the panel out, and stays out.
+func lastResort(c Config) bool {
+	return c.PanelState == "down" && usable(c)
 }
 
 // servedLines is every line of every served config, each config's lines in
@@ -64,19 +77,21 @@ func serves(c Config) bool {
 // config (network contract.groups.md rule 13): the drain waits two
 // subscription lifetimes from then before deleting the client, so no client
 // still holds the line when it goes. A Grant whose only served lines are on
-// draining panels keeps them — dropping them would cut the user off.
+// draining panels keeps them — dropping them would cut the user off. A
+// Grant with none at all keeps its `down` panels' lines (lastResort).
 func servedLines(configs []Config, naming LineNaming) []string {
-	replaced := false
+	replaced, anyServed := false, false
 	for _, c := range configs {
-		if serves(c) && !c.Draining {
-			replaced = true
-			break
+		if serves(c) {
+			anyServed = true
+			replaced = replaced || !c.Draining
 		}
 	}
 	names := lineNamesOfGrant(configs, naming)
 	var healthy, struggling []string
 	for i, c := range configs {
-		if !serves(c) || (replaced && c.Draining) {
+		include := (serves(c) && !(replaced && c.Draining)) || (!anyServed && lastResort(c))
+		if !include {
 			continue
 		}
 		for j, line := range c.LinkLines {

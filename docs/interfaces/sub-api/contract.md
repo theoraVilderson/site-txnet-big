@@ -49,8 +49,11 @@ reach the body only when all of these hold:
 1. **Its panel still serves users:** `panelState` is `healthy`, `degraded` or
    `throttled_or_blocked`. Every state is judged from the panel's *admin API*
    (network `contract.budget.md`); the last two are a working panel that
-   answered oddly or refused us. `down` and `maintenance` are left out, and so
-   is any state added later until it is named in `servingPanelStates`.
+   answered oddly or refused us. `maintenance` is left out, and so is any
+   state added later until it is named in `servingPanelStates`. **`down` is
+   the last resort** (F-027-dq): its lines are served only when no config
+   passes 1-4 — a draining one included — since `down` judges the admin API
+   alone and an empty body wipes the app's servers (`sub.lastResort`).
 2. **It is live:** `status = active` and `desiredRemote = present`. A frozen
    or disabled client is disabled on the panel, so its lines are dead links.
 3. **Its lines are from the client it is now:** `linksUuid = uuid`. After a

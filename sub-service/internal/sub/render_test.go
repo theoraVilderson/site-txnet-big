@@ -78,7 +78,9 @@ func TestOnlyPanelsStillServingUsersContribute(t *testing.T) {
 		// our admin calls, is still serving its users (contract.budget.md).
 		{"degraded", true},
 		{"throttled_or_blocked", true},
-		{"down", false},
+		// `down` is judged from the admin API alone: as the Grant's only
+		// line it is served rather than an empty body (F-027-dq).
+		{"down", true},
 		{"maintenance", false},
 		{"a-state-added-later", false},
 	}
@@ -112,7 +114,7 @@ func TestOnlyALiveConfigCapturedFromItsCurrentClientContributes(t *testing.T) {
 }
 
 func TestNothingToServeIsAnEmptyValidBody(t *testing.T) {
-	res := get(t, storeWith(live("down", "u1", "vless://x")), "/sub/"+token, "")
+	res := get(t, storeWith(live("maintenance", "u1", "vless://x")), "/sub/"+token, "")
 	if got := decoded(t, res); got != nil {
 		t.Fatalf("lines = %q, want an empty body", got)
 	}
@@ -207,5 +209,33 @@ func TestAStrugglingPanelsLinesComeAfterEveryHealthyOne(t *testing.T) {
 	named := servedLines([]Config{cfg("degraded", "vless://a@h:1#x"), cfg("healthy", "vless://b@h:1#x")}, LineNaming{})
 	if want := []string{"vless://b@h:1#de%202", "vless://a@h:1#de"}; strings.Join(named, "|") != strings.Join(want, "|") {
 		t.Fatalf("named = %q, want %q", named, want)
+	}
+}
+
+// F-027-dq: `down` means the panel's admin API failed, not that its users are
+// cut off, and an empty body wipes every server the app had. So a `down`
+// panel's lines are served only when nothing on a serving panel is — a
+// draining one included — and never a `maintenance` panel's.
+func TestADownPanelsLinesAreTheLastResort(t *testing.T) {
+	draining := func(c Config) Config { c.Draining = true; return c }
+	cases := []struct {
+		name    string
+		configs []Config
+		want    []string
+	}{
+		{"only down", []Config{live("down", "u1", "vless://d1"), live("down", "u2", "vless://d2")}, []string{"vless://d1", "vless://d2"}},
+		{"beside healthy", []Config{live("down", "u1", "vless://dead"), live("healthy", "u2", "vless://ok")}, []string{"vless://ok"}},
+		{"beside degraded", []Config{live("down", "u1", "vless://dead"), live("degraded", "u2", "vless://odd")}, []string{"vless://odd"}},
+		{"beside draining", []Config{live("down", "u1", "vless://dead"), draining(live("healthy", "u2", "vless://drain"))}, []string{"vless://drain"}},
+		{"beside maintenance", []Config{live("maintenance", "u1", "vless://m"), live("down", "u2", "vless://d")}, []string{"vless://d"}},
+		{"down but frozen", []Config{func() Config { c := live("down", "u1", "vless://f"); c.Status = "frozen"; return c }()}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := decoded(t, get(t, storeWith(tc.configs...), "/sub/"+token, ""))
+			if strings.Join(got, "|") != strings.Join(tc.want, "|") {
+				t.Fatalf("lines = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
