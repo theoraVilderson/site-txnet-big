@@ -9,9 +9,10 @@ import type { GrantRow } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
 import { useGrantConfigs } from "../_hooks/useGrantConfigs";
 import { useSubscriptionLink } from "../_hooks/useSubscriptionLink";
+import { useTimeLeft } from "../_hooks/useTimeLeft";
 import { GRANT_TONES, type CapabilityName } from "../_lib/my-services";
 import { formatBytes, matchesConfig, purgeCountdown } from "../_lib/service-configs";
-import { remainingBytes, timeLeft, usedShare } from "../_lib/usage";
+import { remainingBytes, usedShare } from "../_lib/usage";
 import { ConfigLines } from "./ConfigLines";
 import { GrantConfigs } from "./GrantConfigs";
 import { QrDialog } from "./QrDialog";
@@ -107,13 +108,17 @@ export const ServiceRow = memo(function ServiceRow({
 
   const from = formatInstant(row.startsAt, lang) ?? row.startsAt;
   const until = row.endsAt ? formatInstant(row.endsAt, lang) : null;
-  const time = timeLeft(row.startsAt, row.endsAt);
+  const time = useTimeLeft(row.startsAt, row.endsAt);
   const days =
     time === null
       ? t("common", S.periodUnlimited, { from })
-      : time.days === 0
+      : time.spent >= 1
         ? t("common", S.left.ended)
-        : t("common", S.left.days, { days: time.days });
+        : time.days > 0
+          ? t("common", S.left.dayHours, { days: time.days, hours: time.hours })
+          : time.hours > 0
+            ? t("common", S.left.hourMinutes, { hours: time.hours, minutes: time.minutes })
+            : t("common", S.left.minutes, { minutes: time.minutes });
   const full = share !== null && share >= 1;
 
   async function openQr() {

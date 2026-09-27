@@ -80,26 +80,28 @@ export function windowTotal(bars: DayBar[]): string {
   return bars.reduce((sum, b) => sum + BigInt(b.totalBytes), ZERO).toString();
 }
 
-const DAY_MS = 86_400_000;
+const MINUTE_MS = 60_000;
 
 /**
- * How much of a Grant's period is left: whole days (a part day counts as
- * one, so the last day reads "1 day left", not "0"), and the share of the
- * period already spent for the bar. `null` for a Grant with no end or an
- * instant that does not parse; `days: 0` once the end has passed.
+ * How much of a Grant's period is left, in days, hours and minutes (F-307-s):
+ * a part minute counts as one, so the last seconds read "1 minute", not
+ * "ended"; and the share of the period already spent for the bar. `null` for
+ * a Grant with no end or an instant that does not parse; all zeros once the
+ * end has passed.
  */
 export function timeLeft(
   startsAt: string,
   endsAt: string | null,
   now: Date = new Date(),
-): { days: number; spent: number } | null {
+): { days: number; hours: number; minutes: number; spent: number } | null {
   if (!endsAt) return null;
   const start = new Date(startsAt).getTime();
   const end = new Date(endsAt).getTime();
   if (Number.isNaN(start) || Number.isNaN(end)) return null;
   const left = end - now.getTime();
-  if (left <= 0) return { days: 0, spent: 1 };
+  if (left <= 0) return { days: 0, hours: 0, minutes: 0, spent: 1 };
   const length = end - start;
   const spent = length > 0 ? Math.min(1, Math.max(0, (now.getTime() - start) / length)) : 0;
-  return { days: Math.ceil(left / DAY_MS), spent };
+  const total = Math.ceil(left / MINUTE_MS);
+  return { days: Math.floor(total / 1440), hours: Math.floor((total % 1440) / 60), minutes: total % 60, spent };
 }

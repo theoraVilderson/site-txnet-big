@@ -2211,7 +2211,9 @@
       "nameCancel": "Cancel"
     },
     "left": {
-      "days": "{{days}} days left",
+      "dayHours": "{{days}} days and {{hours}} hours left",
+      "hourMinutes": "{{hours}} hours and {{minutes}} minutes left",
+      "minutes": "{{minutes}} minutes left",
       "ended": "Ended"
     },
     "manage": {

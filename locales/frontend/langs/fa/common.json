@@ -2211,7 +2211,9 @@
       "nameCancel": "انصراف"
     },
     "left": {
-      "days": "{{days}} روز مانده",
+      "dayHours": "{{days}} روز و {{hours}} ساعت مانده",
+      "hourMinutes": "{{hours}} ساعت و {{minutes}} دقیقه مانده",
+      "minutes": "{{minutes}} دقیقه مانده",
       "ended": "تمام شده"
     },
     "manage": {

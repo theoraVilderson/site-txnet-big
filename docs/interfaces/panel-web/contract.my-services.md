@@ -154,7 +154,9 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
 
 15. **A row reads like a subscription page** (F-307-c; user 2026-09-26:
     "take the idea from Marzban's"). One column: name and status; one usage
-    bar with used-of-bought and days left, from the row, no read — a metered
+    bar with used-of-bought and time left, from the row, no read (days and
+    hours, under a day hours and minutes, recounted in the browser as the
+    minute turns — F-307-s, `useTimeLeft`) — a metered
     Grant against what it bought, a capped prepaid one against its cap
     (F-111-t), no bar for unlimited traffic; then the configs, every line a
     row with copy and QR icons and "copy all" (one line each); then the

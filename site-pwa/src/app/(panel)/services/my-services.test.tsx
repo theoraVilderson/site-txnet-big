@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type GrantRow } from "@/lib/billing-api";
@@ -253,11 +253,42 @@ describe("usage and the purge clock", () => {
     expect(formatBytes("18014398509481984", "en")).toBe("16 PB");
   });
 
-  it("counts the days left, a part day as one, and none once the end has passed", () => {
+  it("counts the time left in days, hours and minutes, a part minute as one, and none once the end has passed (F-307-s)", () => {
     const now = new Date("2026-09-10T12:00:00Z");
-    expect(timeLeft("2026-09-01T00:00:00Z", "2026-09-11T00:00:00Z", now)).toEqual({ days: 1, spent: 0.95 });
-    expect(timeLeft("2026-09-01T00:00:00Z", "2026-09-10T00:00:00Z", now)).toEqual({ days: 0, spent: 1 });
+    expect(timeLeft("2026-09-01T00:00:00Z", "2026-09-13T17:30:00Z", now)).toMatchObject({ days: 3, hours: 5, minutes: 30 });
+    // The last day is hours and minutes, never "1 day" until the end.
+    expect(timeLeft("2026-09-01T00:00:00Z", "2026-09-11T00:00:00Z", now)).toEqual({ days: 0, hours: 12, minutes: 0, spent: 0.95 });
+    expect(timeLeft("2026-09-01T00:00:00Z", "2026-09-10T12:00:01Z", now)).toMatchObject({ days: 0, hours: 0, minutes: 1 });
+    expect(timeLeft("2026-09-01T00:00:00Z", "2026-09-10T00:00:00Z", now)).toEqual({ days: 0, hours: 0, minutes: 0, spent: 1 });
     expect(timeLeft("2026-09-01T00:00:00Z", null, now)).toBeNull();
+  });
+
+  it("says days and hours, under a day hours and minutes, and counts down in the browser with no read (F-307-s)", () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    try {
+      vi.setSystemTime(new Date("2026-09-27T10:00:30Z"));
+      const far = show({ endsAt: "2026-09-30T15:00:30Z" });
+      expect(screen.getByText("myServices.left.dayHours:3,5")).toBeInTheDocument();
+      far.unmount();
+      show({ endsAt: "2026-09-28T00:20:30Z" });
+      expect(screen.getByText("myServices.left.hourMinutes:14,20")).toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(60_000));
+      expect(screen.getByText("myServices.left.hourMinutes:14,19")).toBeInTheDocument();
+      // A tab asleep for hours: the next tick counts from the clock, not from ticks.
+      act(() => {
+        vi.setSystemTime(new Date("2026-09-28T00:00:30Z"));
+        vi.advanceTimersByTime(60_000);
+      });
+      expect(screen.getByText("myServices.left.minutes:19")).toBeInTheDocument();
+      act(() => {
+        vi.setSystemTime(new Date("2026-09-28T00:20:00Z"));
+        vi.advanceTimersByTime(60_000);
+      });
+      expect(screen.getByText("myServices.left.ended")).toBeInTheDocument();
+      expect(billingApi.grantUsage).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("shows the countdown only when billing answered a purge instant", () => {
