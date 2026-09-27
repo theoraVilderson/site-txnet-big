@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { ActorType, ConfigProtocol, ConfigStatus, DesiredRemote, EnforcementState, GrantStatus, Prisma } from '@prisma/client';
 
-import { CeilingAllocatorService } from './ceiling-allocator';
 
 /**
  * The second matching key (network F-027-aa): written into the client's label
@@ -67,10 +66,10 @@ type ConfigRow = {
  * compares the desired state as it is when it looks. A change made twice, or
  * undone before the pass arrives, is therefore simply what the pass finds.
  *
- * Each runs in the caller's transaction, writes one `config_action_log` row,
- * and rebalances the Grant's ceilings in the same transaction: a disabled or
- * retired config leaves the split, and a new one is given its share before
- * the pass creates its client — a client is never created without one.
+ * Each runs in the caller's transaction and writes one `config_action_log`
+ * row. None sizes a share: the lease planner gives a new config its ceiling
+ * before the pass creates its client, and drops a disabled or retired one from
+ * the split on its next turn (network `contract.lease.md` rule 5, F-027-dk).
  *
  * **Retired is not purged.** Both write `desiredRemote = absent`; only
  * `status = retired` (CHECK `config_retired_is_absent`) tells the top-up that
@@ -85,8 +84,6 @@ type ConfigRow = {
  */
 @Injectable()
 export class ConfigActionsService {
-  constructor(private readonly allocator: CeilingAllocatorService) {}
-
   async provision(
     tx: Prisma.TransactionClient,
     input: { grantId: string; panelId: string; protocol: ConfigProtocol | `${ConfigProtocol}`; actor: ConfigActor },
@@ -97,14 +94,12 @@ export class ConfigActionsService {
     await this.panelFor(tx, input.panelId, grant.tenantId);
 
     const made = await this.create(tx, grant, input.panelId, input.protocol as ConfigProtocol, null, input.actor);
-    await this.allocator.rebalance(tx, { grantId: grant.id });
     return made;
   }
 
   /**
    * A panel group's placement (F-027-bl): one row per placement — a panel and
-   * the picked inbound it is on (F-114-b) — all under one `credentialGroupId`,
-   * and one rebalance for the lot. The caller is `GroupFulfilmentService`,
+   * the picked inbound it is on (F-114-b) — all under one `credentialGroupId`. The caller is `GroupFulfilmentService`,
    * which chose them from the group's members and their panels' picks — the
    * member triggers already held their tenancy (network `contract.groups.md`
    * rule 2), so no panel is re-checked here.
@@ -126,7 +121,6 @@ export class ConfigActionsService {
     for (const p of input.placements) {
       made.push(await this.create(tx, grant, p.panelId, p.protocol, input.credentialGroupId, input.actor, p.inboundRemoteId));
     }
-    await this.allocator.rebalance(tx, { grantId: grant.id });
     return made;
   }
 
@@ -201,7 +195,6 @@ export class ConfigActionsService {
     const status = input.actor.actorType === ActorType.admin ? ConfigStatus.disabled_by_admin : ConfigStatus.disabled_by_system;
     await this.write(tx, config, { status, disabledReason: input.reason, desiredEnabled: false });
     await this.log(tx, config.id, input.actor, 'disable');
-    await this.allocator.rebalance(tx, { grantId: config.grantId });
   }
 
   /** Back to `active`. Served again only while the Grant is: a suspended Grant's configs wait for its revive. */
@@ -211,14 +204,12 @@ export class ConfigActionsService {
     const grant = await tx.grant.findUnique({ where: { id: config.grantId }, select: { status: true } });
     await this.write(tx, config, { status: ConfigStatus.active, disabledReason: null, desiredEnabled: grant?.status === GrantStatus.active });
     await this.log(tx, config.id, input.actor, 'enable');
-    await this.allocator.rebalance(tx, { grantId: config.grantId });
   }
 
   /** Delete, as desired state: the row stays, the pass deletes the client. */
   async retire(tx: Prisma.TransactionClient, input: { configId: string; actor: ConfigActor }): Promise<void> {
     const config = await this.live(tx, input.configId, input.actor);
     await this.retireRow(tx, config, input.actor, 'retire');
-    await this.allocator.rebalance(tx, { grantId: config.grantId });
   }
 
   /**
@@ -229,7 +220,6 @@ export class ConfigActionsService {
   async drain(tx: Prisma.TransactionClient, input: { configId: string; actor: ConfigActor }): Promise<void> {
     const config = await this.live(tx, input.configId, input.actor);
     await this.retireRow(tx, config, input.actor, 'drain', { drainedAt: new Date() });
-    await this.allocator.rebalance(tx, { grantId: config.grantId });
   }
 
   async move(
@@ -242,7 +232,7 @@ export class ConfigActionsService {
 
     await this.retireRow(tx, config, input.actor, 'move_out');
     // Provisioned for the Grant's owner whoever asked: the new row is theirs,
-    // and `provision` rebalances once for both rows.
+    // and the planner splits the bag over it on its next turn.
     const made = await this.provision(tx, {
       grantId: config.grantId,
       panelId: input.toPanelId,

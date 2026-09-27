@@ -33,15 +33,15 @@ and changes its quota only through `quota_adjustment` rows.
 
 **Exhaustion suspends (F-027-x, ADR-0075)** — `suspendForExhaustion(tx,
 grantId, at)` in `entitlement/suspension.ts`, a function rather than a
-`GrantService` method so the hot loop calls it without a module import. It
+`GrantService` method so billing's exhaustion check calls it without a module import. It
 moves an `active` Grant to `suspended` with `statusReason = 'quota_exhausted'`
 (`QUOTA_EXHAUSTED`) and `suspendedAt = at`, and sets `desiredEnabled = false`
 on **every** config of the Grant — desired state, carried to each panel by the
 convergence loop (F-027-z), never a command. The write is conditional on
 `active`: a Grant that moved on is left alone and a repeat is a no-op
 (`suspended: false`). It does not decide exhaustion — that is money, and
-billing's `traffic/exhaustion.ts` decides it under a wallet lock
-(`network/contract.hot-loop.md`). `transition()` cannot do this: it writes no
+billing's `traffic/exhaustion.ts` decides it under a wallet lock, asked by a
+refused block request (`network/contract.hot-loop.md`). `transition()` cannot do this: it writes no
 `suspendedAt`, which `grant_suspended_has_a_clock` refuses.
 
 **Purge and restore (F-027-y, ADR-0075)** — `entitlement/purge.ts`. A
@@ -74,8 +74,8 @@ only where `walletCanBuy` — the predicate `suspendIfExhausted` suspended on �
 is true at that Grant's own locked rate. Writing it as a second rule about
 money would let the two drift, and the drift lands on the purge clock. A
 revived Grant is `active` with its configs `present` and enabled, and **no
-ceiling until something buys it a block** — the hot loop, on the next
-collection pass that carries one of its configs (F-027-cl, ADR-0092).
+ceiling until the lease planner gives it one** — on its next turn over one of
+its configs, which leases the reserve and asks for the block (F-027-dc).
 
 The clock is not here. `worker-service` holds it and asks hourly over `POST
 /api/internal/billing/entitlement/purge-due` (`ServiceOnlyGuard`, key
@@ -184,7 +184,7 @@ Through the outbox (ADR-0021), both also live on the buyer's `user:` channel
 | Unit | What it reads |
 |---|---|
 | network | `config.grantId`: a config draws on its Grant's quota (F-027); group fulfilment moves a grouped `pending` Grant to `active` (F-027-bl) |
-| billing | issues a Grant for a `free_grant` coupon (F-502-l) and, later, a purchase; the hot loop suspends a spent one (F-027-x) |
+| billing | issues a Grant for a `free_grant` coupon (F-502-l) and, later, a purchase; a refused block request suspends a spent one (F-027-x) |
 | automation | holds the purge clock: `grant_config_purge` asks `purge-due` hourly (F-027-y), and the delivery clock: `grant_delivery` asks `deliver-due` every minute (F-111-d), and `grant-created` asks `grants/:grantId/deliver` on each purchase (F-114-i); tells the buyer on either event |
 
 ## Guarantees (built — `entitlement-schema.int.spec.ts`)

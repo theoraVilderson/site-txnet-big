@@ -113,7 +113,7 @@ type VariantShape = {
  * to what the user owes. A metered variant with no rate at all resolves to
  * `null` too; `issue` is what refuses that, with the variant in the message.
  *
- * `purchasedBytes` is the bag the allocator splits into panel ceilings
+ * `purchasedBytes` is the bag the lease planner splits into panel ceilings
  * (ADR-0072). A prepaid package *is* a bag with a fixed ceiling, so it is
  * filled here with the sold `traffic_bytes` limit; a metered Grant starts
  * empty and buys blocks. Left at 0, a prepaid config is born with a 0-byte
@@ -121,7 +121,7 @@ type VariantShape = {
  *
  * A prepaid variant sold with `traffic_bytes.limit = 0` is unlimited
  * (F-111-q): the bag stays 0 and `trafficUnlimited` says why, so nothing
- * downstream ever reads 0 as unlimited — to the allocator and to exhaustion
+ * downstream ever reads 0 as unlimited — to the lease planner and to exhaustion
  * 0 is empty.
  */
 export function grantFromVariant(input: { source: GrantSource; startsAt: Date }, v: VariantShape) {

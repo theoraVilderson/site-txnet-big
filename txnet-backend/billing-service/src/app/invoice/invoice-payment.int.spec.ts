@@ -104,12 +104,11 @@ beforeAll(async () => {
   app = base.$extends(withTenant(base)) as unknown as PrismaService;
   payments = new InvoicePaymentService(app, new WalletLedgerService(), new GrantService(app), reservations);
   const policy = { get: (k: string) => (k === 'GRANT_DELIVERY_RETRIES' ? 6 : 60_000) };
-  const allocator = { rebalance: async () => ({}) };
   delivery = new GrantDeliveryService(
     app,
     {} as never,
     {} as never,
-    new ConfigActionsService(allocator as never),
+    new ConfigActionsService(),
     new WalletCreditService(new WalletLedgerService()),
     policy as never,
   );

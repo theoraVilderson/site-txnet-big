@@ -10,7 +10,7 @@ import { join } from 'node:path';
  *
  * The failure worth a spec is again the silent one. `allocatedCeilingBytes`
  * and `appliedCeilingBytes` are deliberately two columns: the first is what
- * the allocator decided, the second is what the panel confirmed, and the gap
+ * the lease planner decided, the second is what the panel confirmed, and the gap
  * between them is the work the loop has left to do (ADR-0072). Collapse them
  * into one and nothing goes red — the system simply believes a ceiling it
  * never managed to write, which is free traffic at the far end of it.
@@ -56,7 +56,7 @@ function enumValues(name: string): string[] {
 }
 
 /**
- * The columns the allocator, the convergence loop and the purge job read. A
+ * The columns the lease planner, the convergence loop and the purge job read. A
  * name removed here is a `network-service` that refuses to boot (ADR-0071),
  * so the list is the contract between the two languages.
  */

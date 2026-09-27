@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"network-service/internal/collect"
-	"network-service/internal/hot"
 )
 
 // The guard band (F-027-co). A panel cuts a client some seconds after it
@@ -25,14 +24,20 @@ func GuardBandBytes(rateBps int64, lag time.Duration) int64 {
 	return rateBps / 8 * lag.Milliseconds() / 1000
 }
 
+// NearHorizon is how near its allowance, in seconds of its own rate, a config
+// is given the band (F-027-cq). Two minutes, the horizon the retired hot loop
+// judged membership on (F-027-dk): a config that cannot reach its allowance
+// inside it is read by the bulk pass before it gets there.
+const NearHorizon = 120 * time.Second
+
 // NearBand is the band a config needs now: GuardBandBytes while it is within
-// the hot horizon of its own rate from its allowance, and zero further out
+// NearHorizon of its own rate from its allowance, and zero further out
 // (F-027-cq). The lag only matters at the moment the panel cuts, and a far
 // config reaches that moment through this window first — while a band on
 // every running config is a write on every move of its rate (invariant 34).
 func NearBand(allowance, served, rateBps int64, lag time.Duration) int64 {
 	band := GuardBandBytes(rateBps, lag)
-	if band == 0 || allowance-served > GuardBandBytes(rateBps, hot.DefaultHorizon) {
+	if band == 0 || allowance-served > GuardBandBytes(rateBps, NearHorizon) {
 		return 0
 	}
 	return band

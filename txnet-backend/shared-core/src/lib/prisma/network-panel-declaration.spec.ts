@@ -56,7 +56,7 @@ function enumValues(name: string): string[] {
 }
 
 /**
- * The columns the collector, the allocator and the convergence loop read. A
+ * The columns the collector, the lease planner and the convergence loop read. A
  * name removed here is a `network-service` that refuses to boot (ADR-0071),
  * so the list is the contract between the two languages.
  */

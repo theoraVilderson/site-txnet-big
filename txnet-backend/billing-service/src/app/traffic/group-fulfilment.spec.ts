@@ -69,7 +69,6 @@ function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minH
   const configs: Row[] = [];
   /** Other buyers' configs: they fill inbounds and panels, and are never this Grant's. */
   const others: Row[] = opts.others ?? [];
-  const rebalanced: string[] = [];
   const outbox: Array<{ type: string; payload: Record<string, unknown> }> = [];
   const locked: string[] = [];
   let next = 0;
@@ -118,15 +117,9 @@ function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minH
     },
   };
 
-  const allocator = {
-    rebalance: async (_tx: unknown, input: { grantId: string }) => {
-      rebalanced.push(input.grantId);
-      return {};
-    },
-  };
   const prisma = { $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx) };
-  const service = new GroupFulfilmentService(new ConfigActionsService(allocator as never), prisma as never, crossTenant as never);
-  return { service, tx: tx as unknown as Prisma.TransactionClient, grant, group, configs, rebalanced, outbox, locked };
+  const service = new GroupFulfilmentService(new ConfigActionsService(), prisma as never, crossTenant as never);
+  return { service, tx: tx as unknown as Prisma.TransactionClient, grant, group, configs, outbox, locked };
 }
 
 /** A member as `planFulfilment` takes it: loaded, nobody on it yet. */
@@ -139,7 +132,7 @@ const taken = (panelId: string, inboundRemoteId: string, grantId = `other-${pane
 
 describe('GroupFulfilmentService.fulfil (mirror)', () => {
   it('places one config on every non-drain healthy accepted member, all in one credential group', async () => {
-    const { service, tx, configs, rebalanced } = build({
+    const { service, tx, configs } = build({
       members: [
         member(A),
         member(B, PanelState.healthy, PanelGroupMemberRole.replica),
@@ -158,7 +151,6 @@ describe('GroupFulfilmentService.fulfil (mirror)', () => {
     // A pending Grant is provisioned: it activates on what the panels confirm.
     expect(result).toMatchObject({ placed: 2, waiting: [D, E], activated: false });
     // Once for the whole placement, so every new config has its share before the pass creates it.
-    expect(rebalanced).toEqual([GRANT]);
   });
 
   it('is convergent: a second run places nothing, and a member healthy again is filled in the same group', async () => {

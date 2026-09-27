@@ -6,7 +6,6 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
 import { PrismaService } from '../prisma/prisma.service';
 import { BlockPurchaseRefused, BlockPurchaseService, type BlockPurchaseRejection, type PurchasedBlock } from './block-purchase';
 import { type Exhaustion, isShortOfFunds, suspendIfExhausted } from './exhaustion';
-import { MIN_BLOCK_SECONDS } from './horizon';
 
 /**
  * A metered Grant's next block, asked for by the lease planner (F-027-dc,
@@ -26,9 +25,21 @@ import { MIN_BLOCK_SECONDS } from './horizon';
  *
  * **The planner sizes it, this floors it.** The target is a horizon of the
  * measured rate less what is left, so a bag already past its end buys the
- * overrun with it. `MIN_BLOCK_SECONDS` of the same rate floors it here, as it
- * did in the hot loop, and `purchase()` still never clamps a target up.
+ * overrun with it. `MIN_BLOCK_SECONDS` of the same rate floors it here, and
+ * `purchase()` still never clamps a target up.
  */
+
+/**
+ * The block floor, in seconds of the requested rate (F-027-am).
+ *
+ * Every block is a `traffic_consumption` row, and a target with no floor under
+ * it buys one on every request: a Grant a second inside the horizon would buy
+ * one second of traffic, over and over, for as long as the user stays near its
+ * end. Flooring the **target** bounds that at one row a minute per Grant,
+ * whatever the line speed, because a faster user's minute is a bigger block
+ * rather than a more frequent one.
+ */
+export const MIN_BLOCK_SECONDS = 60;
 
 /** Why nothing was asked of the wallet. Nothing was written. */
 export type BlockRequestSkip = 'grant_not_found' | 'not_active' | 'not_metered' | 'stale' | 'target_not_positive';
@@ -61,8 +72,8 @@ export class BlockRequestService {
   constructor(
     private readonly prisma: PrismaService,
     /**
-     * Cross-tenant because the read **produces** the tenant, as the hot loop's
-     * config read does: the message names a Grant and no tenant.
+     * Cross-tenant because the read **produces** the tenant: the message
+     * names a Grant and no tenant.
      */
     private readonly crossTenant: CrossTenantPrismaService,
     private readonly blocks: BlockPurchaseService,

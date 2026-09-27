@@ -41,7 +41,7 @@ export type UserConfigView = {
   status: ConfigStatus;
   /** Where it is served from — the panel's region, never its name or address. */
   region: string;
-  /** Bytes as decimal strings; `null` until the allocator has given it a share. */
+  /** Bytes as decimal strings; `null` until the lease planner has given it a share. */
   allocatedCeilingBytes: string | null;
   /** What the panel confirmed. A gap to `allocated` is work still queued. */
   appliedCeilingBytes: string | null;

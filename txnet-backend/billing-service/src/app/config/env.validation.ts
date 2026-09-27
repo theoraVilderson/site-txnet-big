@@ -173,7 +173,10 @@ export const envSchema = z.object({
   AUTOMATION_EXCHANGE: z.string().min(1).default(AUTOMATION_EXCHANGE_DEFAULT),
   /** Where a failed pass goes (F-067-d) — the platform's one dead-letter exchange. */
   AUTOMATION_DLX: z.string().min(1).default('txnet.automation.dlx'),
-  /** Its own queue, not `metering-service`'s: both need every pass. */
+  /**
+   * The block-request queue (`block-request.queue.ts`). Named for the hot loop it
+   * outlived (F-027-dk): renaming it would orphan the durable queue on the broker.
+   */
   HOT_LOOP_QUEUE: z.string().min(1).default('txnet.billing.hot-loop'),
 
   /**

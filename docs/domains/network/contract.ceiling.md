@@ -2,98 +2,43 @@
 id: network
 layer: domain
 status: draft
-version: 16
+version: 17
 updated: 2026-09-27
 ---
 
 # The ceiling — one bag, split across the configs that draw on it
 
 What governs how much of a Grant's purchased bytes each of its configs may
-carry, and the pass that carries it to the panel. **Since F-027-db the share is
-the lease planner's alone** (ADR-0093, [contract.lease.md](contract.lease.md)):
-`CeilingAllocatorService` below still computes billing's split, but writes
-nothing, until F-027-dk retires it. Read it before adding a writer of
-`config.allocatedCeilingBytes`, or giving a config a ceiling from anywhere else.
+carry, and the pass that carries it to the panel. **The share is the lease
+planner's alone** (F-027-db, ADR-0093): `leaseplan.Planner` is the only writer
+of `config.allocatedCeilingBytes`, sized and written as
+[contract.lease.md](contract.lease.md) says. Billing's split
+(`CeilingAllocatorService`, F-027-s) is gone since F-027-dk, and nothing in
+`billing-service` sizes a share. Read this before adding a writer of that
+column, or giving a config a ceiling from anywhere else.
 
-**`Σ ceilings ≤ purchasedBytes`, across every config of a Grant** (entitlement
-invariant 8), past it only by a metered Grant's wallet-backed reserve
-([contract.reserve.md](contract.reserve.md)). One bag over five panels needs one ceiling split five ways; five full ceilings would serve five times what was bought, and
-each one would look correct on the panel it sits on. That is why the split is
-proved by a property test over generated Grants and not by three cases.
+**`Σ ceilings ≤ Quota`, across every config of a Grant** (entitlement
+invariant 8). Quota is `purchasedBytes`, plus the wallet's reserve on a metered
+Grant ([contract.reserve.md](contract.reserve.md)). One bag over five panels
+needs one ceiling split five ways; five full ceilings would serve five times
+what was bought, and each one would look correct on the panel it sits on. That
+is why the planner's split is proved over a moving consumer and restarts
+(`leaseplan/lease_test.go`), not by three cases.
 
-## The call
+## What is split, and by whom
 
-In-process only, inside `billing-service`. `rebalance(tx, input)` runs in the
-caller's transaction — the hot loop's, which buys the next block and rebalances
-in one (F-027-u) — and `rebalanceForGrant(input)` opens one for a caller with
-nothing else to commit. Either way the transaction comes from
-`tenantTransaction`, because the purchase it commits beside writes a registered
-model (`tenant-context/contract.md` rule 5).
-
-| in | |
+| | |
 |---|---|
-| `grantId` | the Grant whose bag is being split |
-| `hotConfigId` | the config the hot loop says is consuming. First in line for everything left; null on a bulk pass |
-| `floorBytes` | headroom every other config keeps. Defaults to `DEFAULT_CONFIG_FLOOR_BYTES` (100 MiB) |
+| the bag | `purchasedBytes` — advanced only by `BlockPurchaseService`, in the transaction that debits the wallet (billing `contract.traffic-block.md`) |
+| the reserve | on a metered Grant, what the balance still buys at its rate; part of Quota since F-027-dc |
+| a share | `allocatedCeilingBytes`, the planner's, in lifetime bytes; grown only from what is free, a shrink freed only once the panel confirms it (`contract.lease.md` rules 16–19) |
+| the shutdown figure | `walletBackedCeilingBytes`, the planner's, equal to the share ([contract.resilience.md](contract.resilience.md)) |
+| a new block | the planner's request, bought by billing's `traffic/block-request.ts` (`contract.lease.md` rules 20–23) |
 
-| out | |
-|---|---|
-| `ceilings` | one row per config in the split — `ceilingBytes` and whether a sub-account was the smaller authority — in the order they were decided, hot first |
-| `unallocatedBytes` | bought, and no config can carry it: every one is capped. F-027-u's signal to stop buying |
-| `written` | always 0 since F-027-db: nothing is written |
-
-## It decides; it never buys
-
-`BlockPurchaseService` advances `purchasedBytes` and this hands out what that
-bought. The bound and the split move in one direction only, so a bug here can
-strand bytes but cannot invent them. Nothing here reads the catalog, and the
-wallet and the Grant's rate are read for one figure only, below.
-
-**It also computes the shutdown figure** (F-027-w, ADR-0078): the same split,
-same order, over a bag of `purchasedBytes + bytesAffordable(rate, balance)` —
-zero added for a prepaid Grant — never under the allocation. Out:
-`walletBacked` and `walletBackedBytes`, beside `ceilings`. Since F-027-db the
-column `walletBackedCeilingBytes` is the planner's, equal to the share, which
-holds the reserve since F-027-dc ([contract.resilience.md](contract.resilience.md)).
-
-It never writes to a panel: `SetClientDataLimit`, `appliedCeilingBytes`, and
-the rewrite in the pass that detects a counter reset are the convergence
-loop's, below.
-
-## Three passes, in one order
-
-The configs are ordered once — the hot config, then the heaviest, then by id,
-so the same input gives the same allocation whatever order the rows arrived —
-and raised towards three targets in turn, each pass handing out only what is
-left:
-
-1. **what it has already served.** A ceiling under that is a byte already
-   carried with no ceiling covering it — the guarantee failing after the fact
-   rather than a byte saved.
-2. **the floor above it**, so no config is starved to zero headroom while
-   another one runs. A user's phone still connects while their desktop pulls.
-   The floor is **seconds of the config's own panel line** (ADR-0091):
-   `maxLineRateBps / 8 × IDLE_FLOOR_SECONDS` (180 s — the bulk interval, the
-   longest a config that starts drawing goes unseen, plus the hot loop's
-   horizon), at least 100 MiB (`DEFAULT_CONFIG_FLOOR_BYTES`), at most an even
-   share of what pass 1 left — so a small bag splits evenly. A panel that
-   declares no line rate gives the even share. An idle config on a gigabit
-   panel keeps 22.5 GB; at 100 Mbps, 2.25 GB. **With a hot config named, the
-   idle floors together take at most half** (F-027-cr, ADR-0091 amendment),
-   so the one consuming holds at least half the rest at any N. The floors
-   never exceed what pass 1 left, so the split stays monotone in the bag.
-3. **everything left**, hot config first. That is the concentration: the config
-   actually consuming gets the bag, and the others keep their floor.
-4. **a metered Grant's reserve**, past the bag and backed by the wallet, which
-   does not thin with N (F-027-cs, [contract.reserve.md](contract.reserve.md)).
-
-Passes 1–3 therefore keep `Σ ceilings ≤ purchasedBytes` **by construction**, not by a
-check at the end — no pass can hand out what no pass has left.
-
-A bag too small for pass 1 is an overrun, not a bug: a panel whose limit was
-overridden reports past its ceiling (ADR-0074), and the holds queue settles the
-gap. The ceilings stop at the bag, in the order above, and the panels cut the
-rest off by themselves.
+A config action (provision, disable, retire, move) writes desired state and
+sizes nothing: the planner gives a new config its first ceiling before the
+pass creates its client (`contract.lease.md` rule 5), and a config that leaves
+the split is dropped on its next turn.
 
 ## Lifetime bytes, not the panel's counter
 
@@ -108,31 +53,25 @@ today is the convergence loop's, in the same pass that sees the reset. ADR-0072
 names that rewrite as the thing without which a reset button is a way around
 the decision.
 
-## The smaller cap wins
-
-A config carrying an **active** `billing.SubAccount` is capped by its
-`dataCapBytes` (F-608), and where the two disagree the sub-account is the
-smaller authority: the share is cut to the cap. That is applied inside every
-pass rather than over the result, so the bytes a cap refuses stay in the bag for
-the next config instead of being stranded on one that cannot carry them.
-
-A **deactivated** sub-account is not a cap of zero — it is no cap at all, and
-the config draws on the bag like any other.
-
 ## Who is in the split
 
 Only configs that can carry traffic: `status = active` with
-`desiredEnabled = true`. A disabled or purged config holding a share would be
-bytes the bag has spent that no panel can serve, and the user would read it as
-a bag emptying while they are offline.
+`desiredEnabled = true` and `desiredRemote = present`. A disabled or purged
+config holding a share would be bytes the bag has spent that no panel can
+serve, and the user would read it as a bag emptying while they are offline.
 
 **An unlimited Grant has no split at all** (F-111-q). Its `purchasedBytes` is 0
-by construction and `trafficUnlimited` says why; `rebalance` returns
-`unlimited: true`, no ceilings, and writes nothing — split, a 0 bag would hand
-every config a 0-byte ceiling. Its configs keep `allocatedCeilingBytes = null`
-(CHECK `config_unlimited_has_no_ceiling`), so this pass and the shutdown
-extension never read them, and a client with no limit is never taken for
-`no_limit_on_panel`: provisioning creates it that way (F-111-r).
+by construction and `trafficUnlimited` says why; the planner never loads it
+(`leaseplan/postgres.go`) — split, a 0 bag would hand every config a 0-byte
+ceiling. Its configs keep `allocatedCeilingBytes = null` (CHECK
+`config_unlimited_has_no_ceiling`), so no pass reads them, and a client with no
+limit is never taken for `no_limit_on_panel`: provisioning creates it that way
+(F-111-r).
+
+**A sub-account cap is not held today.** Billing's split cut a config carrying
+an active `billing.SubAccount` to its `dataCapBytes` (F-608); the planner reads
+no such cap. Nothing writes `sub_account` yet, so no config carries one —
+`open-questions.md` has the row for when F-608 is built.
 
 ## The convergence loop — carrying the number to the panel (F-027-t)
 
@@ -140,7 +79,7 @@ extension never read them, and a client with no limit is never taken for
 is ours until a panel is enforcing it, and the panel is the enforcement point
 that keeps working while this service is down. It runs at the end of each
 panel's turn in the collection pass (`collect.PassConverger`) — and on a woken
-turn seconds after the allocator moves a share (F-027-cp, `contract.collection.md`
+turn seconds after the planner moves a share (F-027-cp, `contract.collection.md`
 rule 5), so a re-split is not a 60 s cut mid-download — costs **one**
 `ListClients` for the whole population, and writes `SetClientDataLimit` only to
 the configs that disagree — shrinks first, then nearest crossing
@@ -209,7 +148,7 @@ user off for real is the Grant suspension (F-027-x) and `desiredEnabled`
 
 ### What it will not do
 
-It writes one number and reads it back. Sizing a share is the allocator's,
+It writes one number and reads it back. Sizing a share is the planner's,
 creating or enabling a client is F-027-z's, deciding which config a remote
 client belongs to is F-027-aa's. It holds one write the anti-flap stop bounds
 — raising a ceiling somebody else lowered, `ReasonContested` — and never a

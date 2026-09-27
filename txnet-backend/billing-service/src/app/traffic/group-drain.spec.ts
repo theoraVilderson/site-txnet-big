@@ -105,9 +105,8 @@ describe('GroupDrainService.drainDue', () => {
       },
       configActionLog: { create: async () => ({}) },
     };
-    const allocator = { rebalance: async () => ({}) };
     const prisma = { $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx) };
-    const service = new GroupDrainService(new ConfigActionsService(allocator as never), prisma as never, crossTenant as never);
+    const service = new GroupDrainService(new ConfigActionsService(), prisma as never, crossTenant as never);
     service.now = () => at(10);
     return { service, statements, retired, tx: tx as unknown as Prisma.TransactionClient };
   }

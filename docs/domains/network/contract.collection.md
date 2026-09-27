@@ -23,10 +23,10 @@ stalls must not spend another's turn. A panel that fails is a row in the
 `PassReport`, never the end of the pass.
 
 One minute is right for almost every user and far too slow for one: a gigabit
-line empties its headroom inside an interval. `internal/hot` reads that few
-sooner, on its own interval and through this same normaliser, sink and cursors
-— `contract.hot-loop.md` (F-027-u). Nothing below this line can tell the two
-passes apart.
+line empties its headroom inside an interval. The planned poll reads that
+panel sooner, when the lease planner asks, as this same turn through this same
+normaliser, sink and cursors — `contract.hot-loop.md` (F-027-de). Nothing below
+this line can tell the two apart.
 
 One `Normaliser` holds all three arithmetics, and past it nothing knows which
 family a byte came from (ADR-0074):

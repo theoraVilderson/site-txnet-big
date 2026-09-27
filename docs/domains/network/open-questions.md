@@ -1,7 +1,7 @@
 ---
 id: network
 layer: domain
-updated: 2026-09-26
+updated: 2026-09-27
 ---
 
 # Open questions — network
@@ -19,3 +19,4 @@ updated: 2026-09-26
 | 2026-09-24 | On a User Manager deployment the NAS logs users in against User Manager. How does its accounting also reach `RADIUS_ACCT_ADDR`: a second `/radius` entry on the NAS, or forwarding from User Manager? A NAS that sends accounting only to the server that logged the user in would leave our receiver silent. | no (opened by F-027-az; nothing yet shows whether a NAS's packets arrive) | ASSUMED(2026-09-24, F-027-ag): the operator adds our receiver as an accounting server on the NAS; the driver's `GetUsage` still reads open sessions from User Manager | -> a row of its own: the systems page showing a push panel's last packet |
 | 2026-09-26 | A config over its ceiling keeps its open connections (F-027-cm). Xray's `RemoveUser`, which both 3x-ui forks call on disable, drops the credential only; per-user close (XTLS/Xray-core#5844) is unmerged. 3x-ui ≥ v3.8.5 has `restartXrayOnClientDisable` (default on): a full restart that drops every user on the panel, on every disable. How do we cut the one config? | no | DECIDED(2026-09-26, user): left to the panel. We build nothing; the panel's own setting cuts or does not. F-027-cm dropped | -> reopen if Xray-core#5844 ships (the panel's disable then cuts the one config) or overshoot is reported again |
 | 2026-09-26 | Bytes a panel serves past a share (its enforcement lag, or an open connection) land in `consumedBytes` and are billed by nobody: a metered block never buys negative headroom, a prepaid Grant is never suspended by us. Charge them? | no | DECIDED(2026-09-26, user): no. Shrunk instead by the guard band (F-027-co) and the prompt wake (F-027-cp); no warning on a panel's restart setting | -> reopen if overrun is reported as a cost |
+| 2026-09-27 | A sub-account (F-608) caps its config at `dataCapBytes`. Billing's split held that cap (and stopped the reserve at it); F-027-dk deleted the split, and the lease planner reads no cap. Where does the cap live once F-608 is built: a per-replica bound in the planner's Quota split, or a cap billing writes onto the config? | no — nothing writes `billing.sub_account` (0 rows, no code) | ASSUMED(2026-09-27): no config carries a cap, so none is applied | -> F-608's ingest; `contract.ceiling.md` "Who is in the split" |

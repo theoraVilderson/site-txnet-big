@@ -11,10 +11,8 @@
  *    panel's counter against the old panel's cursor;
  *  - **the regenerate limit is enforced where the count moves**, in the
  *    write's own `where`, so two concurrent regenerates cannot both pass a
- *    check made before either wrote (invariant 4);
- *  - **every action rebalances the Grant in the same transaction**, so a
- *    disabled or retired config's share goes back to the bag and a new one
- *    gets its own before the loop creates it.
+ *    check made before either wrote (invariant 4).
+ * No action sizes a share: that is the lease planner's (F-027-db, F-027-dk).
  */
 import { ActorType, ConfigStatus, DesiredRemote, EnforcementState, GrantStatus, Prisma } from '@prisma/client';
 
@@ -38,7 +36,6 @@ function matches(row: Row, where: Record<string, unknown>) {
 function build(grantStatus: GrantStatus = GrantStatus.active, trafficUnlimited = false) {
   const configs: Row[] = [];
   const logs: Row[] = [];
-  const rebalanced: string[] = [];
   let next = 0;
 
   const tx = {
@@ -91,21 +88,15 @@ function build(grantStatus: GrantStatus = GrantStatus.active, trafficUnlimited =
     },
   };
 
-  const allocator = {
-    rebalance: async (_tx: unknown, input: { grantId: string }) => {
-      rebalanced.push(input.grantId);
-      return {};
-    },
-  };
-  const service = new ConfigActionsService(allocator as never);
-  return { service, tx: tx as unknown as Prisma.TransactionClient, configs, logs, rebalanced };
+  const service = new ConfigActionsService();
+  return { service, tx: tx as unknown as Prisma.TransactionClient, configs, logs };
 }
 
 const refusal = (reason: string) => expect.objectContaining({ name: 'ConfigActionRefused', reason });
 
 describe('ConfigActionsService', () => {
-  it('provisions a row the loop will create, and asks the allocator for its share', async () => {
-    const { service, tx, configs, logs, rebalanced } = build();
+  it('provisions a row the loop will create', async () => {
+    const { service, tx, configs, logs } = build();
 
     const made = await service.provision(tx, { grantId: GRANT, panelId: PANEL_A, protocol: 'vless', actor: OWNER });
 
@@ -126,7 +117,6 @@ describe('ConfigActionsService', () => {
     // orphans the usage. Ours, global, and never the credential.
     expect(configs[0].claimTag).toMatch(/^txn-[0-9a-f]{32}$/);
     expect(configs[0].claimTag).not.toContain(made.uuid.replace(/-/g, ''));
-    expect(rebalanced).toEqual([GRANT]);
     expect(logs).toEqual([expect.objectContaining({ configId: made.configId, action: 'provision', actorType: ActorType.user })]);
   });
 
@@ -232,7 +222,7 @@ describe('ConfigActionsService', () => {
   });
 
   it('deletes by retiring the row, never by removing it', async () => {
-    const { service, tx, configs, rebalanced } = build();
+    const { service, tx, configs } = build();
     const { configId } = await service.provision(tx, { grantId: GRANT, panelId: PANEL_A, protocol: 'vless', actor: OWNER });
     configs[0].remoteId = 'remote-7';
 
@@ -247,7 +237,6 @@ describe('ConfigActionsService', () => {
       // Cleared by the loop once the panel confirms the delete, never here.
       remoteId: 'remote-7',
     });
-    expect(rebalanced).toEqual([GRANT, GRANT]);
     await expect(service.enable(tx, { configId, actor: ADMIN })).rejects.toEqual(refusal('config_retired'));
     await expect(service.regenerate(tx, { configId, actor: OWNER })).rejects.toEqual(refusal('config_retired'));
   });

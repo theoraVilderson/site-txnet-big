@@ -3,8 +3,8 @@
  *
  * What breaks without anyone seeing it:
  *  - **a byte served that nobody paid for.** `purchasedBytes` advances only in
- *    the transaction that debited the wallet for it, so the number the ceiling
- *    allocator (F-027-s) is bounded by can never run ahead of the money;
+ *    the transaction that debited the wallet for it, so the number the lease
+ *    planner (F-027-db) is bounded by can never run ahead of the money;
  *  - **a sub-cent amount reaching the ledger.** The block is sized from its
  *    price — the smallest whole number of cents covering the target — and
  *    `WalletLedgerService` refuses anything finer (`C-02`, ADR-0002);

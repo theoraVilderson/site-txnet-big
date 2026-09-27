@@ -4,12 +4,11 @@
  *
  * Everywhere downstream of the catalog 0 means *empty*, so what breaks without
  * the flag is quiet:
- *  - **a 0-byte ceiling on every config.** The allocator splits a bag of 0,
- *    and the panel is told the user may carry nothing (F-111-r places them);
  *  - **suspended at the first byte.** A spent bag is `consumed ≥ purchased`,
  *    which an empty bag is from the start;
- *  - **a block bought for traffic that was never metered.** The hot loop sizes
- *    a block for any Grant inside its horizon, and a 0 bag is always inside.
+ *  - **a block bought for traffic that was never metered** — held by
+ *    `block-request.spec.ts`. A 0-byte ceiling is the lease planner's to
+ *    refuse (network `contract.lease.md` rule 5).
  * Usage is not in here: the delta consumer increments `consumedBytes` for every
  * Grant alike (metering-service), which is what keeps the panel's figure true.
  */
@@ -19,9 +18,7 @@ import { join } from 'node:path';
 import { GrantSource, GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 
 import { grantFromVariant } from '../entitlement/grant';
-import { CeilingAllocatorService } from './ceiling-allocator';
 import { suspendIfExhausted } from './exhaustion';
-import { HotLoopService } from './horizon';
 
 const GRANT = '77777777-7777-4777-8777-777777777777';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -105,29 +102,10 @@ describe('an unlimited Grant', () => {
     expect(sql).toMatch(/grant_traffic_unlimited_is_prepaid[\s\S]*"billingMode" = 'prepaid'[\s\S]*"purchasedBytes" = 0/);
   });
 
-  it('gets no ceiling: nothing is split and nothing written', async () => {
-    const { tx, writes } = fakeTx();
-    const out = await new CeilingAllocatorService({} as never).rebalance(tx, { grantId: GRANT });
-    expect(out.unlimited).toBe(true);
-    expect(out.ceilings).toEqual([]);
-    expect(out.written).toBe(0);
-    expect(writes).toEqual([]);
-  });
-
   it('is never suspended as exhausted, however far past its empty bag', async () => {
     const { tx, writes } = fakeTx();
     const out = await suspendIfExhausted(tx, GRANT, new Date('2026-09-26T10:00:00Z'));
     expect(out.verdict).toBe('unlimited');
-    expect(writes).toEqual([]);
-  });
-
-  it('never buys a block and never asks exhaustion, even running hot', async () => {
-    const { tx, writes } = fakeTx();
-    const ceilings = { rebalance: async () => void writes.push('rebalance') };
-    const hot = new HotLoopService({} as never, ceilings as never);
-    const out = await hot.topUpIn(tx, { grantId: GRANT, atMs: Date.parse('2026-09-26T10:00:00Z') });
-    expect(out.bought).toBeNull();
-    expect(out.exhausted).toBeNull();
     expect(writes).toEqual([]);
   });
 });

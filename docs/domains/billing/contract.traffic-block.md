@@ -58,7 +58,7 @@ sold and not paid for.
 what a balance would buy, rounded down. It bounds the ceiling a shutdown raises
 a panel to (network `contract.resilience.md`, ADR-0078), and it answers an
 unpriceable rate with **zero** rather than `rate_not_priceable` — the refusal
-belongs on the path that moves money, and here it would fail the rebalance.
+belongs on the path that moves money, and here it would fail the shutdown figure.
 
 ## Short balance buys a smaller block, not nothing
 
@@ -158,8 +158,9 @@ here rather than read as free traffic.
 `traffic/block-request.ts` is the only caller that buys a metered block. The
 lease planner in `network-service` publishes `network.lease.block_request`
 (`contracts/network/block-request.json`) when what a Grant bought runs out
-inside its horizon; `HotLoopQueue` routes it to `BlockRequestService` on the
-same queue at prefetch one. The hot loop's `topUp` buys nothing since.
+inside its horizon; `BlockRequestQueue` (`traffic/block-request.queue.ts`)
+routes it to `BlockRequestService` at prefetch one. The hot loop that bought
+before it is deleted (F-027-dk).
 
 1. **The bag it names is the guard.** It buys only while `purchasedBytes`
    still equals the message's; otherwise `stale`, nothing written. Two turns

@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 56
+version: 57
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -41,7 +41,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260925001500_a_discount_without_a_code/**
 owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_tenant, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
-updated: 2026-09-26
+updated: 2026-09-27
 ---
 
 # Billing
@@ -76,9 +76,9 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-27 | v57 (F-027-dk): `billing-service` sizes no share and consumes no collection pass — `CeilingAllocatorService`, `HotLoopService`, the hot-loop consumer and the internal `hot-loop/sweep-due` route are deleted; `BlockRequestQueue` unbinds `network.usage.#` from `HOT_LOOP_QUEUE`. `MIN_BLOCK_SECONDS` is in `block-request.ts` |
 | 2026-09-26 | contract v56 (F-311-g): `POST /api/billing/tenants/:tenantId/users/:userId/configs/actions` — an admin's regenerate / disable / enable / retire / move on 1..50 of that user's configs, `staffWrite`, one outcome per id; an admin's regenerate no longer counts against the user's cap. Additive. [contract.gift.md](contract.gift.md). Consumers: F-311-v, F-311-y |
 | 2026-09-26 | contract v55 (F-311-f): `GET /api/billing/tenants/:tenantId/users/:userId/grants` and a Grant's `configs`, `usage`, `subscription-link` under it — the owner reads for a reseller's admin, 404 `user_not_found` for another tenant's user. Additive. [contract.gift.md](contract.gift.md). Consumers: F-311-v, F-311-y |
 | 2026-09-26 | contract v54 (F-027-ci): the holder of 409 `panel_already_registered` / `inbound_assigned_elsewhere` / `inbound_has_configs` travels as `facts` ids (`panelId`; `remoteId`, `groupId`, `configs`) — the envelope had dropped the old body fields, so no client ever received them |
-| 2026-09-26 | contract v53 (F-027-ch): `PUT …/members/:panelId/inbounds` is new (409 `inbound_assigned_elsewhere` / `inbound_has_configs`); a member answers `inbounds`, a panel's inbound `assignedTo`. Additive. [contract.systems.md](contract.systems.md) rule 24c. Consumer panel-web: F-027-ci |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

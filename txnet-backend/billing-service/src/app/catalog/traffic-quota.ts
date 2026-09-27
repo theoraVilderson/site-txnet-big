@@ -5,7 +5,7 @@ import { FulfilmentKind, VariantBillingMode } from '@prisma/client';
  * 2026-09-26): a network variant must state it, and `0` means unlimited.
  *
  * Only here does 0 mean unlimited. Everywhere downstream 0 means *empty* —
- * the allocator's ceilings, exhaustion, a config's create — so a sold 0 is
+ * the planner's ceilings, exhaustion, a config's create — so a sold 0 is
  * carried on as an explicit flag (F-111-q), never as the number.
  */
 export type TrafficQuota = { kind: 'missing' } | { kind: 'unlimited' } | { kind: 'limited'; bytes: bigint };

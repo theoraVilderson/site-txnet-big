@@ -45,7 +45,7 @@ page when one is built.
 
 **`sales.total` counts only products bought from the wallet** (`product_purchase`,
 F-111-b, once the panel's shop — F-111-e — calls it). A `traffic_consumption`
-row is written by the hot loop since F-027-cl gave it a caller (ADR-0092), and
+row is written by the lease planner's block request (F-027-dc), and
 is not counted here yet — the gap F-311-d closes.
 
 `topUps` is real today. A consumer built before `entitlement` lands — F-311-c is

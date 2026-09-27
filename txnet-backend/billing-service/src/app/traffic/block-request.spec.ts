@@ -22,8 +22,7 @@ import {
 } from '@txnet-backend/shared-core';
 
 import { BlockPurchaseRefused, bytesAffordable } from './block-purchase';
-import { BlockRequestService } from './block-request';
-import { MIN_BLOCK_SECONDS } from './horizon';
+import { BlockRequestService, MIN_BLOCK_SECONDS } from './block-request';
 
 const FIXTURE = join(__dirname, '../../../../../contracts/network/block-request.json');
 type Fixture = {
