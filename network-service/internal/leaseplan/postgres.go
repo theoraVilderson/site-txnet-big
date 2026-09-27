@@ -17,8 +17,9 @@ type DB interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-// PostgresStore is Store over `network.config` and `entitlement.grant`, the
-// one read ADR-0094 allows outside `network.*` (`db.ForeignColumns`).
+// PostgresStore is Store over `network.config`, `entitlement.grant` and the
+// owner's `billing.wallet` — the reads ADR-0094 allows outside `network.*`
+// (`db.ForeignColumns`).
 type PostgresStore struct {
 	DB DB
 }
@@ -32,7 +33,10 @@ var _ Store = PostgresStore{}
 // `active`, or `pending` — a group's Grant activates on what its panels
 // confirm, so its configs need a ceiling first — and only if it sold a limit.
 //
-// Quota is `purchasedBytes`, read. Used is summed in Go from each config's
+// Quota is `purchasedBytes`, read; on a metered Grant with a locked rate the
+// wallet's reserve is added to it (F-027-dc): what the owner's balance still
+// buys at that rate (BytesAffordable), computed from the columns' decimal
+// text. A user with no wallet row has a reserve of nothing. Used is summed in Go from each config's
 // lifetime counter (`contract.lease.md`), which the pass that called us has
 // already moved. A config is a replica while it can carry traffic — the
 // split's own rule (`contract.ceiling.md` "Who is in the split"). The counter
@@ -45,6 +49,8 @@ WITH touched AS (
       OR (c."panelId" = $1::uuid AND c."allocatedCeilingBytes" IS NULL AND NOT c."trafficUnlimited"
           AND c.status = 'active' AND c."desiredEnabled" AND c."desiredRemote" = 'present'))
 SELECT g.id::text, g."purchasedBytes", g."endsAt",
+       g."billingMode" = 'metered' AND g."meteredRate" IS NOT NULL,
+       coalesce(g."meteredRate"::text, ''), coalesce(w."cachedBalance"::text, ''),
        c.id::text, c."panelId"::text,
        c.status = 'active' AND c."desiredEnabled" AND c."desiredRemote" = 'present',
        c."remoteId" IS NOT NULL,
@@ -62,6 +68,7 @@ SELECT g.id::text, g."purchasedBytes", g."endsAt",
        coalesce(p."lagMeanSec", 0), coalesce(p."lagVarianceSec2", 0), p."lagSamples"
   FROM touched t
   JOIN entitlement."grant" g ON g.id = t."grantId"
+  LEFT JOIN billing.wallet w ON w."ownerUserId" = g."userId"
   JOIN network.config c ON c."grantId" = g.id
   JOIN network.panel p ON p.id = c."panelId"
   LEFT JOIN network.config_counter_state s ON s."configId" = c.id
@@ -78,6 +85,8 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 	for rows.Next() {
 		var (
 			grantID, driverType string
+			metered             bool
+			rate, balance       string
 			quota, lifetime     int64
 			applied             int64
 			endsAt              *time.Time
@@ -87,13 +96,16 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 			tickMs              *int32
 			tickMask            *int64
 		)
-		if err := rows.Scan(&grantID, &quota, &endsAt, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
+		if err := rows.Scan(&grantID, &quota, &endsAt, &metered, &rate, &balance, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
 			&applied, &c.Enabled, &c.Allocated, &c.Peak, &c.Pending, &driverType, &pn.CanSetLimit, &pn.Healthy,
 			&tickMs, &tickMask, &pn.Learned.LagMeanSec, &pn.Learned.LagVarianceSec2, &pn.Learned.LagSamples); err != nil {
 			return Snapshot{}, fmt.Errorf("reading a Grant's config: %w", err)
 		}
 		if n := len(snap.Grants); n == 0 || snap.Grants[n-1].ID != grantID {
-			g := Grant{ID: grantID, Quota: quota}
+			g := Grant{ID: grantID, Quota: quota, Purchased: quota, Metered: metered}
+			if metered {
+				g.Quota += BytesAffordable(rate, balance)
+			}
 			if endsAt != nil {
 				g.ExpiresAt = *endsAt
 			}
@@ -124,10 +136,9 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 
 // saveLeasesSQL writes each lease in one statement, its rows locked in id
 // order as every other writer of `network.config` does (invariant 54). The
-// shutdown figure is the share itself until the reserve joins Quota
-// (F-027-dc): CHECK `config_wallet_backed_ceiling_extends` holds it at least
-// the share, and a stale wallet figure would extend over money that may be
-// gone. A lease with no allocation leaves both as they are; only a lease that
+// shutdown figure is the share itself: since F-027-dc the reserve is part of
+// Quota, so the share already holds what the wallet backs, and CHECK
+// `config_wallet_backed_ceiling_extends` holds it at least the share. A lease with no allocation leaves both as they are; only a lease that
 // moved is sent (leaseOf).
 var saveLeasesSQL = db.OrderedConfigUpdate(`"allocatedCeilingBytes" = coalesce(v.allocated, c."allocatedCeilingBytes"),
        "walletBackedCeilingBytes" = CASE WHEN v.allocated IS NULL THEN c."walletBackedCeilingBytes" ELSE v.allocated END,

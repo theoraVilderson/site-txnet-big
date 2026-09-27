@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigStatus, GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
+import { ConfigStatus, GrantStatus, Prisma } from '@prisma/client';
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { BlockPurchaseRefused, BlockPurchaseService, type BlockPurchaseRejection, type PurchasedBlock } from './block-purchase';
+import { type BlockPurchaseRejection, type PurchasedBlock } from './block-purchase';
 import { CeilingAllocatorService, type RebalancedGrant } from './ceiling-allocator';
-import { type Exhaustion, isShortOfFunds, suspendIfExhausted } from './exhaustion';
+import { type Exhaustion, suspendIfExhausted } from './exhaustion';
 
 /**
  * The hot loop's horizon — how much to buy next, and when (F-027-u, ADR-0072).
@@ -22,10 +22,11 @@ import { type Exhaustion, isShortOfFunds, suspendIfExhausted } from './exhaustio
  * rate this half sizes a block from is a fresh one. Both are described in
  * `docs/domains/network/contract.hot-loop.md`.
  *
- * It buys and splits in **one** transaction: `BlockPurchaseService.purchase`
- * and `CeilingAllocatorService.rebalance` on the caller's `tx`, so there is no
- * window where `purchasedBytes` has advanced and no ceiling covers it, nor one
- * where a ceiling was written against money that failed to leave the wallet.
+ * **Since F-027-dc it buys nothing.** The lease planner asks for a metered
+ * block when the bag runs out inside its horizon, and `block-request.ts` buys
+ * it; the delta stream's guess here was a second buyer of one bag. What is
+ * left is the rate measurement, the re-split call (a no-op since F-027-db)
+ * and exhaustion. The file goes with F-027-dk.
  */
 
 /**
@@ -217,7 +218,7 @@ export type TopUpOutcome = Horizon & {
    * neither.
    */
   hotConfigId: string | null;
-  /** Null where nothing was bought: the Grant is not near its ceiling, has no rate to size a block from, or does not buy blocks. */
+  /** Always null since F-027-dc: the lease planner's block request is the only buyer (`block-request.ts`). */
   bought: PurchasedBlock | null;
   /**
    * Set on a buy with nothing bought (F-027-u), and on a split with nothing
@@ -225,7 +226,7 @@ export type TopUpOutcome = Horizon & {
    * bag still holds bytes elsewhere (F-027-cl).
    */
   rebalanced: RebalancedGrant | null;
-  /** A short wallet with bytes still in the bag: nothing bought and nothing suspended — reported, not thrown. */
+  /** Always null since F-027-dc, with `bought`. */
   refused: BlockPurchaseRejection | null;
   /**
    * Asked only when the bag is spent and nothing was bought (F-027-x): whether
@@ -249,7 +250,6 @@ export class HotLoopService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly blocks: BlockPurchaseService,
     private readonly ceilings: CeilingAllocatorService,
   ) {}
 
@@ -259,8 +259,8 @@ export class HotLoopService {
   }
 
   /**
-   * Measures the Grant's rate, sizes the next block from it, and buys and
-   * splits it in the caller's transaction.
+   * Measures the Grant's rate and sizes the horizon from it, in the caller's
+   * transaction. It buys nothing (F-027-dc); a spent bag asks exhaustion.
    *
    * The per-config rates are measured here rather than read off a column,
    * because the interval between two of this loop's passes is the only window
@@ -363,33 +363,9 @@ export class HotLoopService {
         ? this.ceilings.rebalance(tx, { grantId: grant.id, hotConfigId })
         : Promise.resolve(null);
 
-    // Only an active metered Grant buys. A prepaid bag is fixed at purchase,
-    // so for it the hot loop is the split alone — asking `purchase()` would be
-    // refused (`grant_not_metered`) and roll the split back with it.
-    const buys = grant.status === GrantStatus.active && grant.billingMode === VariantBillingMode.metered && grant.meteredRate !== null;
-    if (!buys || !horizon.hot || horizon.targetBytes <= BigInt(0)) {
-      return { ...nothingBought, rebalanced: await resplit(), exhausted: await exhaustion() };
-    }
-
-    // One transaction, both halves. A purchase committed without the
-    // rebalance that spends it is bytes bought and no ceiling covering them;
-    // a rebalance committed without the purchase is a ceiling over money that
-    // never left the wallet.
-    let bought: PurchasedBlock;
-    try {
-      bought = await this.blocks.purchase(tx, { grantId: grant.id, targetBytes: horizon.targetBytes });
-    } catch (error) {
-      if (!isShortOfFunds(error)) throw error;
-      // `purchase()` refuses before it writes, so the transaction is clean.
-      // A short wallet with bytes still in the bag is not exhaustion yet: it
-      // is reported, and the split still moves; the pass that finds the bag
-      // spent suspends.
-      const refused = (error as BlockPurchaseRefused).reason;
-      if (headroomBytes > BigInt(0)) return { ...nothingBought, refused, rebalanced: await resplit(), exhausted: null };
-      return { ...nothingBought, refused, rebalanced: null, exhausted: await exhaustion() };
-    }
-    const rebalanced = await this.ceilings.rebalance(tx, { grantId: grant.id, hotConfigId });
-
-    return { ...horizon, grantId: grant.id, hotConfigId, bought, rebalanced, refused: null, exhausted: null };
+    // Nothing is bought here since F-027-dc: the lease planner asks for the
+    // block (`block-request.ts`). A spent bag still asks exhaustion, which
+    // suspends only when the wallet cannot buy a block either.
+    return { ...nothingBought, rebalanced: await resplit(), exhausted: await exhaustion() };
   }
 }

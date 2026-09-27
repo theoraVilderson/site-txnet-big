@@ -26,10 +26,10 @@ On `SIGTERM`, before the HTTP server drains, `shutdown.Extender` raises every
 active config's panel ceiling to `config.walletBackedCeilingBytes` — the
 config's share of a bag of `purchasedBytes` plus what the wallet would buy at
 the Grant's locked rate. Since F-027-db the lease planner writes that column
-beside `allocatedCeilingBytes`, **equal to it** until the reserve joins Quota
-(F-027-dc): a metered Grant keeps no wallet extension at exit meanwhile,
-because a stale wallet figure would extend over money that may be gone. Why a
-column and not a call is ADR-0078.
+beside `allocatedCeilingBytes`, **equal to it**: since F-027-dc the reserve
+is part of the planner's Quota, so a metered config's share already holds
+what the wallet backs, as of the last plan. Why a column and not a call is
+ADR-0078.
 
 | rule | why it is a refusal and not a preference |
 |---|---|

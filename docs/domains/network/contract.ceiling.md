@@ -53,8 +53,8 @@ wallet and the Grant's rate are read for one figure only, below.
 same order, over a bag of `purchasedBytes + bytesAffordable(rate, balance)` —
 zero added for a prepaid Grant — never under the allocation. Out:
 `walletBacked` and `walletBackedBytes`, beside `ceilings`. Since F-027-db the
-column `walletBackedCeilingBytes` is the planner's, equal to the share until
-F-027-dc ([contract.resilience.md](contract.resilience.md)).
+column `walletBackedCeilingBytes` is the planner's, equal to the share, which
+holds the reserve since F-027-dc ([contract.resilience.md](contract.resilience.md)).
 
 It never writes to a panel: `SetClientDataLimit`, `appliedCeilingBytes`, and
 the rewrite in the pass that detects a counter reset are the convergence

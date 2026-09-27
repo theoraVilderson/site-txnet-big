@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 1
+version: 2
 updated: 2026-09-27
 ---
 
@@ -22,7 +22,20 @@ case this hurts most. A panel enforces its own client's figure, so N panels
 cannot share one pool: a reserve every config can draw on has to be written
 onto every one of them.
 
-## The rule
+## Since F-027-dc: the reserve is part of Quota
+
+The lease planner is the only writer of a ceiling (F-027-db), so the
+per-config step below — billing's `allocateCeilings` — no longer reaches a
+panel. The reserve now enters as a term of the planner's Quota:
+`purchasedBytes + bytesAffordable(meteredRate, balance)`, read by
+`network-service` itself ([contract.lease.md](contract.lease.md) rule 20).
+The planner splits it like the bag, so `Σ ceilings ≤ Quota` holds with no
+N × reserve on top, and its block request buys the bag back up before the
+reserve is spent (rule 21). Rules 1 and 4 still hold; 2, 3, 5 and 6 describe
+billing's split until F-027-dk retires it. The exposure below shrinks to one
+reaction window of the whole wallet, not N of them.
+
+## The rule (billing's split, until F-027-dk)
 
 1. **Metered only.** The reserve is what the wallet would still buy
    (`bytesAffordable(meteredRate, balance)`, the shutdown extension's figure).

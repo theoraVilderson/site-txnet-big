@@ -1,0 +1,49 @@
+{
+  "$comment": [
+    "The block request wire (F-027-dc, ADR-0093 amendment 2026-09-27) — the",
+    "declared home of the routing key the lease planner asks billing for a",
+    "metered block under, of every field in that message, and of the figures",
+    "the wallet reserve is computed to on both sides.",
+    "",
+    "network-service writes it in Go and billing-service reads it in",
+    "TypeScript; neither can import the other, so this fixture plus a test on",
+    "each side replaces the import that does not exist (ADR-0036, C-08). The Go",
+    "half is network-service/internal/publish/block_request_test.go; the",
+    "TypeScript half is billing-service/src/app/traffic/block-request.spec.ts.",
+    "",
+    "Its own prefix, not network.usage.: metering-service binds network.usage.#",
+    "and dead-letters any key there that is not a pass or a release.",
+    "",
+    "purchasedBytes is the bag the planner saw. Billing buys only while the",
+    "Grant still holds exactly that figure: a request that arrives after another",
+    "block was bought is stale, and is dropped rather than bought twice.",
+    "",
+    "affordable is bytesAffordable(meteredRate, cachedBalance): whole cents of",
+    "the balance, floored, over the rate per 2^30 bytes, floored. Go computes the",
+    "reserve it adds to Quota with it (ADR-0094 amendment); billing prices the",
+    "block with it. Both sides are checked against these rows."
+  ],
+  "version": 1,
+  "routingKeys": {
+    "prefix": "network.lease.",
+    "blockRequest": "network.lease.block_request"
+  },
+  "message": [
+    { "name": "version", "type": "integer" },
+    { "name": "grantId", "type": "uuid" },
+    { "name": "purchasedBytes", "type": "bytes" },
+    { "name": "targetBytes", "type": "bytes" },
+    { "name": "rateBps", "type": "bytes" },
+    { "name": "requestedAt", "type": "timestamp" }
+  ],
+  "affordable": [
+    { "rate": "0.50000000", "balance": "5.00", "bytes": "10737418240" },
+    { "rate": "0.50000000", "balance": "0.00", "bytes": "0" },
+    { "rate": "0.50000000", "balance": "-2.00", "bytes": "0" },
+    { "rate": "1.25000000", "balance": "0.01", "bytes": "8589934" },
+    { "rate": "3.33333333", "balance": "10.00", "bytes": "3221225475" },
+    { "rate": "0.00000001", "balance": "1.00", "bytes": "107374182400000000" },
+    { "rate": "999999.99999999", "balance": "0.01", "bytes": "10" },
+    { "rate": "0", "balance": "5.00", "bytes": "0" }
+  ]
+}

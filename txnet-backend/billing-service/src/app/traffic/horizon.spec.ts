@@ -18,7 +18,6 @@
  */
 import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 
-import { BlockPurchaseRefused } from './block-purchase';
 
 import {
   HORIZON_SECONDS,
@@ -210,39 +209,33 @@ const config = (
   share: bigint | null = null,
 ): ConfigRow => ({ id, served, observedRateBps, panelRateBps, share });
 
-function service(refuse?: BlockPurchaseRefused) {
-  const purchases: { grantId: string; targetBytes: bigint }[] = [];
+function service() {
   const rebalances: { grantId: string; hotConfigId?: string | null }[] = [];
-  const blocks = {
-    purchase: async (_tx: unknown, input: { grantId: string; targetBytes: bigint }) => {
-      purchases.push(input);
-      if (refuse) throw refuse;
-      return { grantId: input.grantId, bytes: input.targetBytes, amount: new Prisma.Decimal(1), walletTransactionId: 'w', purchasedBytes: BigInt(0), billedBytes: BigInt(0) };
-    },
-  };
   const ceilings = {
     rebalance: async (_tx: unknown, input: { grantId: string; hotConfigId?: string | null }) => {
       rebalances.push(input);
       return { grantId: input.grantId, ceilings: [], unallocatedBytes: BigInt(0), written: 1 };
     },
   };
-  return { hot: new HotLoopService({} as never, blocks as never, ceilings as never), purchases, rebalances };
+  return { hot: new HotLoopService({} as never, ceilings as never), rebalances };
 }
 
 describe('HotLoopService.topUpIn', () => {
-  it('buys the next block and rebalances it in one transaction', async () => {
+  it('buys nothing on a hot metered Grant since F-027-dc: the lease planner asks for the block', async () => {
     const { tx } = fakeTx({
       purchasedBytes: secondsOf(GIGABIT, 30),
       consumedBytes: BigInt(0),
       configs: [config('hot', BigInt(0), GIGABIT)],
     });
-    const { hot, purchases, rebalances } = service();
+    const { hot, rebalances } = service();
 
     const outcome = await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
 
-    expect(outcome.bought?.bytes).toBe(secondsOf(GIGABIT, HORIZON_SECONDS - 30));
-    expect(purchases).toHaveLength(1);
-    expect(rebalances).toEqual([{ grantId: GRANT, hotConfigId: 'hot' }]);
+    expect(outcome.hot).toBe(true);
+    expect(outcome.targetBytes).toBe(secondsOf(GIGABIT, HORIZON_SECONDS - 30));
+    expect(outcome.bought).toBeNull();
+    expect(outcome.refused).toBeNull();
+    expect(rebalances).toHaveLength(0);
   });
 
   it('names the fastest config as the hot one, so the bag concentrates where it is being spent', async () => {
@@ -251,11 +244,11 @@ describe('HotLoopService.topUpIn', () => {
       consumedBytes: BigInt(0),
       configs: [config('idle', BigInt(0), MEGABIT), config('busy', BigInt(0), BigInt(500) * MEGABIT)],
     });
-    const { hot, rebalances } = service();
+    const { hot } = service();
 
-    await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
+    const outcome = await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
 
-    expect(rebalances[0]?.hotConfigId).toBe('busy');
+    expect(outcome.hotConfigId).toBe('busy');
   });
 
   it('measures each config rate from the last pass and writes it back', async () => {
@@ -277,12 +270,11 @@ describe('HotLoopService.topUpIn', () => {
       consumedBytes: BigInt(0),
       configs: [config('a', BigInt(0), MEGABIT)],
     });
-    const { hot, purchases, rebalances } = service();
+    const { hot, rebalances } = service();
 
     const outcome = await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
 
-    expect(outcome.bought).toBeNull();
-    expect(purchases).toHaveLength(0);
+    expect(outcome.hot).toBe(false);
     expect(rebalances).toHaveLength(0);
   });
 
@@ -293,18 +285,17 @@ describe('HotLoopService.topUpIn', () => {
       // Measured idle, on a panel that declares no line rate: nothing to size a block from.
       configs: [config('a', GB, BigInt(0), null)],
     });
-    const { hot, purchases } = service();
+    const { hot } = service();
 
     const outcome = await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
 
-    expect(purchases).toHaveLength(0);
     expect(outcome.exhausted).toEqual({ grantId: GRANT, verdict: 'suspended', configsDisabled: 1 });
     expect(suspensions).toEqual([{ status: GrantStatus.suspended, statusReason: 'quota_exhausted', suspendedAt: new Date(1_000) }]);
   });
 
-  it('suspends, rather than throws, when the bag is spent and the purchase is refused for money', async () => {
+  it('suspends a running Grant whose bag is spent and whose wallet cannot buy a block', async () => {
     const { tx } = fakeTx({ purchasedBytes: GB, consumedBytes: GB, configs: [config('a', GB, GIGABIT)] });
-    const { hot, rebalances } = service(new BlockPurchaseRefused('insufficient_funds', '0.00'));
+    const { hot, rebalances } = service();
 
     const outcome = await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
 
@@ -313,26 +304,14 @@ describe('HotLoopService.topUpIn', () => {
     expect(rebalances).toHaveLength(0);
   });
 
-  it('reports, rather than throws, a short wallet while the bag still holds bytes — not yet exhaustion', async () => {
-    const { tx, suspensions } = fakeTx({ purchasedBytes: secondsOf(GIGABIT, 30), consumedBytes: BigInt(0), configs: [config('a', BigInt(0), GIGABIT)] });
-    const { hot } = service(new BlockPurchaseRefused('insufficient_funds', '0.00'));
-
-    const outcome = await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
-
-    expect(outcome.bought).toBeNull();
-    expect(outcome.refused).toBe('insufficient_funds');
-    expect(outcome.exhausted).toBeNull();
-    expect(suspensions).toHaveLength(0);
-  });
-
-  it('never asks about exhaustion on a pass that bought a block', async () => {
+  it('leaves a spent bag running while the wallet can still buy: the planner leases the reserve and asks for the block', async () => {
     const { tx, suspensions } = fakeTx({ purchasedBytes: GB, consumedBytes: GB, configs: [config('a', GB, GIGABIT)], balance: '5.00' });
     const { hot } = service();
 
     const outcome = await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
 
-    expect(outcome.bought).not.toBeNull();
-    expect(outcome.exhausted).toBeNull();
+    expect(outcome.bought).toBeNull();
+    expect(outcome.exhausted?.verdict).toBe('wallet_can_buy');
     expect(suspensions).toHaveLength(0);
   });
 
@@ -357,11 +336,10 @@ describe('HotLoopService.topUpIn', () => {
       consumedBytes: BigInt(500) * MiB,
       configs: [config('idle', BigInt(0), BigInt(0), GIGABIT, BigInt(512) * MiB), config('busy', BigInt(500) * MiB, HUNDRED_MEGABIT, GIGABIT, BigInt(512) * MiB)],
     });
-    const { hot, purchases, rebalances } = service();
+    const { hot, rebalances } = service();
 
     const outcome = await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
 
-    expect(purchases).toHaveLength(0);
     expect(rebalances).toEqual([{ grantId: GRANT, hotConfigId: 'busy' }]);
     expect(outcome.bought).toBeNull();
     expect(outcome.rebalanced).not.toBeNull();
@@ -373,11 +351,10 @@ describe('HotLoopService.topUpIn', () => {
       consumedBytes: GB,
       configs: [config('busy', GB, GIGABIT, GIGABIT, GB + BigInt(10) * MiB), config('idle', BigInt(0), BigInt(0), GIGABIT, BigInt(50) * GB)],
     });
-    const { hot, purchases, rebalances } = service();
+    const { hot, rebalances } = service();
 
     await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
 
-    expect(purchases).toHaveLength(0);
     expect(rebalances).toEqual([{ grantId: GRANT, hotConfigId: 'busy' }]);
   });
 

@@ -63,3 +63,21 @@ Asked while building the cutover; the user took the recommendation both times.
   rate × Lag; a band on top pays the lag twice and leaves a panel enforcing a
   figure the planner never wrote, which never reads as a landed write. The
   band stays on the shutdown extension only.
+
+## Amendment 2026-09-27 — a metered Grant (F-027-dc)
+Asked while building F-027-dc; the user took the recommendation both times.
+- **The block request rides the broker** (`network.lease.block_request`,
+  `contracts/network/block-request.json`), not an HTTP call to billing. A
+  planner turn never waits on billing being up, which is ADR-0094's reason
+  for refusing a call per pass. The request names the bag the planner saw,
+  and billing buys only while the Grant still holds it, so a repeat or a
+  late one is dropped, never bought twice.
+- **The reserve joins Quota by a read, not a copy.** `network-service`
+  reads the wallet balance and the Grant's rate and computes
+  `bytesAffordable` itself (ADR-0094 amendment). A column billing kept in
+  step would need every wallet writer — deposit, purchase, refund, block —
+  to refresh it for each metered Grant, and would lag in a bag's last minute.
+  The formula lives in two languages, held to one set of figures by the
+  fixture.
+- `horizon.ts` buys nothing from then on; `walletBackedCeilingBytes` stays the
+  share, which now holds the reserve.

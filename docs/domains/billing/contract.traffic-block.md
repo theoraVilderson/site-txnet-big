@@ -23,7 +23,7 @@ never reprices a block already bought.
 ## The call
 
 In-process only, inside `billing-service`. `purchase(tx, input)` runs in the
-caller's transaction — the ceiling allocator's, or the Grant close's — and
+caller's transaction — the block request's, or the Grant close's — and
 `purchaseForGrant(input)` opens one for a caller with nothing else to commit.
 Either way the transaction must come from `tenantTransaction`, because the
 debit writes a registered model (`tenant-context/contract.md` rule 5).
@@ -31,7 +31,7 @@ debit writes a registered model (`tenant-context/contract.md` rule 5).
 | in | |
 |---|---|
 | `grantId` | the Grant the block is for. `active`, `metered`, with a rate |
-| `targetBytes` | the headroom the caller wants covered — the hot loop's horizon (F-027-u) |
+| `targetBytes` | the headroom the caller wants covered — the lease planner's horizon (F-027-dc, below) |
 
 | out | |
 |---|---|
@@ -93,9 +93,10 @@ the bytes do, so there is no row to defer (ADR-0072).
   reason type — `traffic_refund` included — unless the caller names traffic
   (`contract.history.md` rule 1). The ledger keeps every row; only the
   unnarrowed page is quieter.
-- **The target carries a floor, and the floor is the caller's.** F-027-u sizes
-  the horizon and is where a minimum block belongs, so the write rate is bounded
-  at the one place that knows the user's line rate. `purchase()` never clamps a
+- **The target carries a floor, and the floor is the caller's.** The block
+  request carries the planner's measured rate, and floors the target at
+  `MIN_BLOCK_SECONDS` (60) of it, so the write rate is bounded at the one place
+  that knows the user's line rate. `purchase()` never clamps a
   target **up**: spending more of a wallet than was asked for is the caller's
   decision to make and not this service's, and a purchaser that quietly bought
   a bigger block would move money no ceiling had asked to cover.
@@ -151,3 +152,23 @@ Each throws `BlockPurchaseRefused` and writes nothing: `grant_not_found`,
 `rate_not_priceable` — a zero rate, or one finer than `Decimal(18, 8)`. A free
 byte is a catalog decision, not an arithmetic one, so a zero rate is refused
 here rather than read as free traffic.
+
+## Who asks for a block (F-027-dc, ADR-0093 amendment 2026-09-27)
+
+`traffic/block-request.ts` is the only caller that buys a metered block. The
+lease planner in `network-service` publishes `network.lease.block_request`
+(`contracts/network/block-request.json`) when what a Grant bought runs out
+inside its horizon; `HotLoopQueue` routes it to `BlockRequestService` on the
+same queue at prefetch one. The hot loop's `topUp` buys nothing since.
+
+1. **The bag it names is the guard.** It buys only while `purchasedBytes`
+   still equals the message's; otherwise `stale`, nothing written. Two turns
+   asking for one bag buy once.
+2. **Skipped without a write**: a Grant not found, not metered or unlimited,
+   not `active`, or a target of nothing after the floor.
+3. **A short wallet is reported, not thrown**; when the bag is also spent,
+   `suspendIfExhausted` is asked in the same transaction (F-027-x). A lost
+   `WalletVersionConflict` is `raced`, and acked: the planner asks again.
+4. **The planner's target includes any overrun.** It is a horizon of the rate
+   less `purchasedBytes − Used`, so bytes served from the reserve past the bag
+   are bought with the next block rather than left uncharged.

@@ -132,7 +132,10 @@ var RequiredColumns = map[string][]string{
 // a copy of it is a second figure that disagrees in a bag's last minute
 // (ADR-0093 rule 4).
 var ForeignColumns = map[string][]string{
-	"entitlement.grant": {"id", "status", "purchasedBytes", "endsAt", "trafficUnlimited"},
+	"entitlement.grant": {"id", "status", "purchasedBytes", "endsAt", "trafficUnlimited", "userId", "billingMode", "meteredRate"},
+	// The metered reserve (F-027-dc, ADR-0094 amendment): what the owner's
+	// balance still buys is part of the planner's Quota.
+	"billing.wallet": {"ownerUserId", "cachedBalance"},
 }
 
 // MissingColumns reports every required column the database does not have,

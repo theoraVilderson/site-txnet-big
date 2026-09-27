@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: draft
-version: 15
-updated: 2026-09-26
+version: 16
+updated: 2026-09-27
 ---
 
 # The hot loop — the few configs near their ceiling, in seconds
@@ -43,7 +43,7 @@ Three readings of it are fixed, and each is a refusal to guess:
 |---|---|
 | **no headroom** | zero, at any speed. A spent allowance is hot even on a panel nothing has ever measured |
 | **no rate at all** | *unknown*, not *about to run out*. Never measured, on a panel declaring no `maxLineRateBps` — zero there means unknown, the same reading the plausibility cap gives the column. The bulk pass keeps it and nothing is bought |
-| **never measured, line rate known** | judged at the panel's line rate. Until a pass has measured this config, the safe assumption is that it is at line speed — which is also the first block's size, below |
+| **never measured, line rate known** | judged at the panel's line rate. Until a pass has measured this config, the safe assumption is that it is at line speed |
 
 ## The collector's half — membership and the interval
 
@@ -75,19 +75,17 @@ still moves only after the publish succeeds (invariant 18).
 
 ## The money half — the horizon and the block
 
-`horizon.ts` sizes what to buy and calls `BlockPurchaseService.purchase` and
-`CeilingAllocatorService.rebalance` **in one transaction**. There is no window
-where `purchasedBytes` has advanced and no ceiling covers it, nor one where a
-ceiling was written against money that failed to leave the wallet.
-**Since F-027-db `rebalance` writes nothing**: the purchase raises
-`purchasedBytes`, and the lease planner hands it out on the Grant's next plan
-([contract.lease.md](contract.lease.md)). The re-split calls below still run
-and move no ceiling, until F-027-dc/F-027-dk replace them.
+**Since F-027-dc `horizon.ts` buys nothing.** The lease planner asks for a
+metered block when the bag runs out inside its horizon, over
+`network.lease.block_request`, and `traffic/block-request.ts` buys it
+([contract.lease.md](contract.lease.md) rules 20–23). The delta stream's
+guess here was a second buyer of one bag. Since F-027-db `rebalance` writes
+nothing either. What still runs below is the rate measurement, the sizing
+(reported, never spent), and exhaustion; F-027-dk retires the rest.
 
-A hot Grant is topped back up to `HORIZON_SECONDS` (120) of its projected rate.
-The target is the deficit — what a full horizon needs, less the headroom it
-already holds. **Only an active metered Grant buys.** A prepaid bag is fixed
-at purchase, so for it the loop is the split alone.
+`sizeHorizon` still reports the target a hot Grant would be topped up to —
+`HORIZON_SECONDS` (120) of its projected rate, less its headroom — and
+`MIN_BLOCK_SECONDS` still floors a real purchase, now in the block request.
 
 **A config is hot on its own share too** (F-027-cl). The panel cuts a config
 off at its share, not at the bag, so a Grant far from spent can still have one
@@ -96,8 +94,6 @@ config seconds from its cut. When a config is inside `HORIZON_SECONDS` of its
 bytes, the pass re-splits (`rebalance`) with nothing bought. The concentrated
 config is the fastest one. If nothing measurably runs, it is the one nearest
 the end of its share, because a config the panel has cut measures no rate.
-A short wallet with bytes still in the bag is reported (`refused`) rather than
-thrown, and the split still moves.
 
 **The rate is measured, then extrapolated up but never down.** A rate still
 climbing is extrapolated one more step of the same climb: a user who went from
@@ -111,12 +107,10 @@ between two of its passes is the only window a rate means anything over. What
 is written back is `config.observedRateBps`, which is what the collector's half
 reads and what the service page shows.
 
-**The first block is sized at `panel.maxLineRateBps`.** A Grant with nothing
-bought has no measured rate and zero headroom, so it is hot at once; treating
-an unmeasured config as idle is a user who stalls on their first download. The
-cost of the assumption is bounded on both sides: a short balance buys a smaller
-block rather than nothing (`contract.traffic-block.md`), and what was never
-served comes back at close (F-027-r).
+**No first block is guessed** (F-027-dc). A Grant with nothing measured is
+leased from the reserve, which is part of the planner's Quota; the first pass
+that measures a rate asks for the block, overrun included, so the line-rate
+assumption that once sized a first block is no longer needed.
 
 ### The block floor, and why it is here
 
@@ -127,20 +121,18 @@ pass, for as long as the user stays hot. Flooring the target bounds that at one
 row a minute per Grant at any line speed — a faster user's minute is a bigger
 block, not a more frequent one.
 
-It is here and not in `BlockPurchaseService` because this is the one place that
-knows the user's rate. `purchase()` never clamps a target **up**: spending more
-of a wallet than was asked for is the caller's decision (F-027-am, decided with
-the user 2026-09-22).
+It is in `traffic/block-request.ts`, over the rate the planner measured, and
+not in `BlockPurchaseService`. `purchase()` never clamps a target **up**:
+spending more of a wallet than was asked for is the caller's decision
+(F-027-am, decided with the user 2026-09-22).
 
 ## When the bag is spent and nothing can be bought (F-027-x)
 
-A pass that finds `purchasedBytes - consumedBytes ≤ 0` and buys nothing asks
-`suspendIfExhausted` (`traffic/exhaustion.ts`), in the same transaction. That is
-two branches: no rate to size a block from — which is where a user the panel
-has already stopped arrives, pass after pass — and a purchase refused for money
-(`insufficient_funds`, `block_below_one_byte`), which is then answered as the
-verdict rather than thrown. The same refusal with bytes still in the bag is
-thrown as before: a short wallet is not yet an empty bag.
+A pass that finds `purchasedBytes - consumedBytes ≤ 0` asks
+`suspendIfExhausted` (`traffic/exhaustion.ts`), in the same transaction — as
+does a block request the wallet refused on a spent bag. A wallet that can
+still buy answers `wallet_can_buy`: the planner leases the reserve and its
+request buys the block.
 
 It locks the wallet row, re-reads the cursors, and suspends only if the bag is
 spent **and** no block is affordable — entitlement's `suspendForExhaustion`,

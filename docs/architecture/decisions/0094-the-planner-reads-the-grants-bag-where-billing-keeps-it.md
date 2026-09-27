@@ -40,3 +40,16 @@ billing being up.
   planning on a null.
 - Configs on a push (session) panel are not in `config_counter_state`, so
   their bytes are missing from Used until the planner covers push panels.
+
+## Amendment 2026-09-27 — the metered reserve (F-027-dc)
+Asked while building F-027-dc; the user answered "read it directly".
+- `db.ForeignColumns` adds `entitlement.grant`: `userId`, `billingMode`,
+  `meteredRate`, and `billing.wallet`: `ownerUserId`, `cachedBalance`. Read
+  only, asserted at boot like the rest.
+- Quota on a metered Grant with a rate is `purchasedBytes +
+  BytesAffordable(meteredRate, cachedBalance)`: whole cents of the balance
+  over the rate per 2^30 bytes, from the columns' decimal text, never a float
+  (C-02). `contracts/network/block-request.json` holds the Go and TypeScript
+  copies of the formula to the same figures.
+- A copy kept by billing was refused for rule 3's reason: every wallet writer
+  would have to refresh it, and it would trail in the endgame.

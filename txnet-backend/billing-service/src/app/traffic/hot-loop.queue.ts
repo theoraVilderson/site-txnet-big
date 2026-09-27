@@ -1,8 +1,16 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as amqp from 'amqplib';
-import { NETWORK_USAGE_ROUTING_PREFIX, USAGE_DELTA_ROUTING_KEY, topicBindingAll, usageDeltaMessageSchema } from '@txnet-backend/shared-core';
+import {
+  BLOCK_REQUEST_ROUTING_KEY,
+  NETWORK_USAGE_ROUTING_PREFIX,
+  USAGE_DELTA_ROUTING_KEY,
+  blockRequestMessageSchema,
+  topicBindingAll,
+  usageDeltaMessageSchema,
+} from '@txnet-backend/shared-core';
 
+import { BlockRequestService } from './block-request';
 import { HotLoopConsumer } from './hot-loop.consumer';
 
 /**
@@ -24,6 +32,11 @@ import { HotLoopConsumer } from './hot-loop.consumer';
  * owed by a dead-lettered pass here — the next one re-reads the same rows —
  * but it is kept as the evidence of what failed. A message that does not parse
  * dead-letters at once; redelivery cannot make it parse.
+ *
+ * **The lease planner's block requests ride the same queue** (F-027-dc), bound
+ * by their own key: one consumer at prefetch one, so a request and the pass
+ * that measured it are never handled at once. A request is the only thing
+ * that buys a metered block (`block-request.ts`).
  */
 @Injectable()
 export class HotLoopQueue implements OnApplicationBootstrap, OnApplicationShutdown {
@@ -39,6 +52,7 @@ export class HotLoopQueue implements OnApplicationBootstrap, OnApplicationShutdo
   constructor(
     config: ConfigService,
     private readonly consumer: HotLoopConsumer,
+    private readonly blockRequests: BlockRequestService,
   ) {
     this.url = config.getOrThrow<string>('RABBITMQ_URL');
     this.exchange = config.getOrThrow<string>('AUTOMATION_EXCHANGE');
@@ -58,6 +72,7 @@ export class HotLoopQueue implements OnApplicationBootstrap, OnApplicationShutdo
     await channel.assertExchange(this.deadExchange, 'topic', { durable: true });
     await channel.assertQueue(this.queue, { durable: true, arguments: { 'x-dead-letter-exchange': this.deadExchange } });
     await channel.bindQueue(this.queue, this.exchange, topicBindingAll(NETWORK_USAGE_ROUTING_PREFIX));
+    await channel.bindQueue(this.queue, this.exchange, BLOCK_REQUEST_ROUTING_KEY);
     await channel.prefetch(1);
 
     // Fatal rather than retried, for metering-service's reason: a consumer that
@@ -71,6 +86,23 @@ export class HotLoopQueue implements OnApplicationBootstrap, OnApplicationShutdo
 
     await channel.consume(this.queue, async (message) => {
       if (message === null) return;
+      if (message.fields.routingKey === BLOCK_REQUEST_ROUTING_KEY) {
+        const request = blockRequestMessageSchema.safeParse(safeJson(message.content));
+        if (!request.success) {
+          this.logger.error(`dead-lettering a block request that is not valid: ${request.error.message}`);
+          channel.nack(message, false, false);
+          return;
+        }
+        try {
+          const handled = await this.blockRequests.handle(request.data);
+          if (handled.outcome !== 'handled') this.logger.debug(`block request for grant ${handled.grantId}: ${handled.outcome}`);
+          channel.ack(message);
+        } catch (err) {
+          this.logger.error(`block request for grant ${request.data.grantId} failed: ${err instanceof Error ? err.message : String(err)}`);
+          channel.nack(message, false, false);
+        }
+        return;
+      }
       // Only a collection pass is the hot loop's. Anything else under the
       // prefix is another consumer's, and is acked unread.
       if (message.fields.routingKey !== USAGE_DELTA_ROUTING_KEY) {
@@ -94,7 +126,7 @@ export class HotLoopQueue implements OnApplicationBootstrap, OnApplicationShutdo
     });
 
     this.logger.log(
-      `hot loop consuming ${this.queue}; exchange=${this.exchange} binding=${topicBindingAll(NETWORK_USAGE_ROUTING_PREFIX)} prefetch=1 dlx=${this.deadExchange}`,
+      `hot loop consuming ${this.queue}; exchange=${this.exchange} binding=${topicBindingAll(NETWORK_USAGE_ROUTING_PREFIX)},${BLOCK_REQUEST_ROUTING_KEY} prefetch=1 dlx=${this.deadExchange}`,
     );
   }
 

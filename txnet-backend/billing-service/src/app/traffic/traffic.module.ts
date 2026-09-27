@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { WalletModule } from '../wallet/wallet.module';
 import { BlockPurchaseService } from './block-purchase';
+import { BlockRequestService } from './block-request';
 import { CeilingAllocatorService } from './ceiling-allocator';
 import { CollectionHealthController } from './collection-health.controller';
 import { CollectionHealthService } from './collection-health';
@@ -26,10 +27,12 @@ import { GrantUsageService } from './grant-usage';
  * (F-027-w), which reads the collector's progress mark, and a Grant's configs
  * with the two actions a user may take on them (F-027-ac). None moves money.
  *
- * `HotLoopService` is the hot loop's money half: it sizes the next block from
- * the measured rate and calls the other two in one transaction. `HotLoopQueue`
- * is its caller — this service's own queue on `network.usage.#`, one top-up
- * per Grant a pass touched (F-027-cl, ADR-0092). `HotLoopSweepService` is its
+ * `BlockRequestService` buys a metered Grant's next block when the lease
+ * planner asks for it (F-027-dc) — the only path that buys one.
+ * `HotLoopService` measures rates and asks exhaustion; it buys nothing since
+ * F-027-dc. `HotLoopQueue` is the caller of both — this service's own queue
+ * on `network.usage.#` and the planner's block requests, one top-up per Grant
+ * a pass touched (F-027-cl, ADR-0092). `HotLoopSweepService` is its
  * second, for the Grants no pass touches: a config cut off at its share, asked
  * by `worker-service` over `hot-loop/sweep-due` (F-027-cn).
  *
@@ -43,7 +46,7 @@ import { GrantUsageService } from './grant-usage';
 @Module({
   imports: [WalletModule],
   controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController, HotLoopSweepController],
-  providers: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, HotLoopConsumer, HotLoopQueue, HotLoopSweepService, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GroupFulfilmentService, GroupDrainService],
+  providers: [BlockPurchaseService, BlockRequestService, RemainderCreditService, CeilingAllocatorService, HotLoopService, HotLoopConsumer, HotLoopQueue, HotLoopSweepService, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GroupFulfilmentService, GroupDrainService],
   exports: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, ConfigActionsService, GroupFulfilmentService, UserConfigsService, GrantUsageService],
 })
 export class TrafficModule {}

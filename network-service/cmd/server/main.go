@@ -135,7 +135,7 @@ func main() {
 		Turns:       turns,
 		// The lease planner (ADR-0093): the only writer of a config's
 		// ceiling since F-027-db; the convergence step carries it.
-		Planner: &leaseplan.Planner{Store: leaseplan.PostgresStore{DB: pool}, Log: log},
+		Planner: &leaseplan.Planner{Store: leaseplan.PostgresStore{DB: pool}, Log: log, Blocks: publish.BlockRequests{Transport: broker}},
 		Log:     log,
 	}
 

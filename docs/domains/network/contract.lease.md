@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 3
+version: 4
 updated: 2026-09-27
 ---
 
@@ -26,7 +26,7 @@ planner that loses it on a deploy boots blind and overshoots while it relearns.
 | quotaengine | here | written by |
 |---|---|---|
 | `subscriptions` (`quota.Account`) | `entitlement.grant` | billing |
-| `quota_bytes` (Quota) | `entitlement.grant.purchasedBytes`, read directly on every pass (ADR-0094); the metered reserve is added to it in F-027-dc | billing, never copied |
+| `quota_bytes` (Quota) | `entitlement.grant.purchasedBytes`, read directly on every pass (ADR-0094); on a metered Grant plus the reserve, `BytesAffordable(meteredRate, wallet.cachedBalance)` (rule 20) | billing, never copied |
 | `used_bytes` (Used) | Σ `lifetimeUp+DownBytes` of `config_counter_state` over every config of the Grant, retired ones included (ADR-0094) | the collector, never copied |
 | `panels` | `network.panel` | — |
 | `job_interval_ms` | `tickPeriodMs`, the `J` its phase mask is cut from; null = the family's interval | planner |
@@ -152,8 +152,8 @@ the row held before each plan.
     planner's `LimitSeen`. A figure passed through both is unchanged.
 17. **An action moves the allocation; every confirmation moves the peak.**
     An action writes `allocatedCeilingBytes`, and `walletBackedCeilingBytes`
-    equal to it until the reserve joins Quota (F-027-dc: a stale wallet
-    figure would extend over money that may be gone, and CHECK
+    equal to it: since F-027-dc the reserve is part of Quota, so the share
+    already holds what the wallet backs (CHECK
     `config_wallet_backed_ceiling_extends` holds it at least the share).
     `limitPeakBytes` and `writePending` follow the ledger on every turn. A
     replica with no ceiling and no action writes nothing. One ordered UPDATE
@@ -172,3 +172,36 @@ the row held before each plan.
     enforcing exactly the want is what lets a write read as landed. Shrinks
     go before grows: a shrunk share is freed only on confirmation, so a
     shrink queued behind a grow holds the next grow back a turn.
+
+## A metered Grant (F-027-dc, ADR-0093 amendment 2026-09-27)
+
+The planner sees the counter, so it says when a block is due; billing keeps
+the money, so it decides whether one is bought (`billing/contract.traffic-block.md`
+"Who asks for a block"). The hot loop's guess from the delta stream is gone.
+
+20. **Quota is the bag plus the reserve.** On a Grant with `billingMode =
+    metered` and a `meteredRate`, `PostgresStore` adds what the owner's
+    `billing.wallet.cachedBalance` still buys (`leaseplan.BytesAffordable`,
+    whole cents over the rate per 2^30, from the columns' decimal text — never
+    a float, C-02). No wallet row is a reserve of 0. `Purchased` keeps the bag
+    alone. ADR-0094's amendment lists the columns. The figures are held to
+    billing's by `contracts/network/block-request.json`.
+21. **A block is due when the bag runs out inside the horizon**:
+    `(Purchased − Used) / ΣRate.Now < Params.Horizon`, a spent bag at any
+    speed. The target is `ΣRate.Demand × Horizon − (Purchased − Used)`, so an
+    overrun served from the reserve is bought with it. No rate and bytes left
+    is not due; no rate past the bag asks for the overrun alone. A closed
+    account asks for nothing.
+22. **One bag is asked for once per `BlockRetry` (30 s).** The request names
+    `purchasedBytes`; billing buys only while the Grant holds it, so a second
+    request for the same bag is dropped there. A request is remembered only
+    once it has left: a failed publish is sent on the next turn, logged,
+    failing nothing (rule 8).
+23. **It rides the broker, not a call** (`network.lease.block_request`,
+    `publish.BlockRequests`): a planner turn never waits on billing. Its own
+    prefix, because metering dead-letters any other key under
+    `network.usage.#`.
+
+The reserve is the whole wallet for each metered Grant of one owner, as it
+was in billing's split (`contract.reserve.md`); two metered Grants drawing at
+once can lease past the balance by one reaction window.

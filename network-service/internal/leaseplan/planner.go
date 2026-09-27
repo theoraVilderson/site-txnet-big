@@ -26,10 +26,17 @@ import (
 
 // Grant is one Grant as the planner is built from it (`contract.lease.md`):
 // Quota is billing's bag, read, and Used is what its configs' counters served.
+//
+// On a metered Grant Quota is the bag plus the wallet's reserve — what the
+// balance would still buy at the Grant's rate (F-027-dc) — and Purchased is
+// the bag alone: the planner leases the whole of Quota, and asks billing for
+// a block when Purchased runs out inside the horizon (BlockRequest).
 type Grant struct {
 	ID        string
 	Quota     int64
 	Used      int64
+	Metered   bool
+	Purchased int64
 	ExpiresAt time.Time // zero = no end
 	Configs   []Config
 }
@@ -148,6 +155,9 @@ type Plan struct {
 	Replicas []ReplicaView
 	// Leases is what the plan wrote back to the rows.
 	Leases []Lease
+	// Block is the block this plan asks billing for; nil = none due, or
+	// the same bag was asked for inside BlockRetry.
+	Block *BlockRequest
 }
 
 // ReplicaView is one replica on one plan: the counter, what the panel
@@ -186,6 +196,9 @@ type Planner struct {
 	// Params are the planner's (quota.DefaultParams when zero).
 	Params quota.Params
 	Log    *slog.Logger
+	// Blocks carries a metered Grant's block requests to billing; nil asks
+	// for nothing.
+	Blocks BlockRequester
 
 	mu       sync.Mutex
 	panels   map[string]*quota.PanelState
@@ -194,6 +207,7 @@ type Planner struct {
 	configOf map[int64]string          // replica id -> config id
 	accounts map[string]*quota.Account // by Grant id
 	saved    map[string]Learned        // by panel id: what the row holds
+	asked    map[string]asked          // by Grant id: the last block request sent
 	next     int64                     // the last replica id handed out
 }
 
@@ -294,7 +308,52 @@ func (s *Planner) plan(ctx context.Context, p collect.Panel, readings []driver.C
 			return plans, nil, fmt.Errorf("writing %d lease(s) for panel %s: %w", len(leases), p.ID, err)
 		}
 	}
+	s.requestBlocks(ctx, plans)
 	return plans, learned, nil
+}
+
+// blockLocked is the block a Grant's plan asks for, unless the same bag was
+// asked for inside BlockRetry. The rates are the replicas' own, summed: the
+// fast one for when, the demand for how much, as the planner reads them.
+func (s *Planner) blockLocked(g Grant, a *quota.Account, at time.Time) *BlockRequest {
+	var now, demand float64
+	for _, r := range a.Replicas {
+		now += r.Rate.Now()
+		demand += r.Rate.Demand()
+	}
+	req, due := blockDue(g, now, demand, s.params().Horizon, at)
+	if !due {
+		return nil
+	}
+	if prev, ok := s.asked[g.ID]; ok && prev.purchased == g.Purchased && at.Sub(prev.at) < BlockRetry {
+		return nil
+	}
+	return &req
+}
+
+// requestBlocks sends each plan's block request. A request is remembered
+// only once it has left, so one the broker refused is sent again on the
+// next turn; a failure is logged and fails nothing (rule 8), because the
+// reserve is still leased and billing's next answer is only late.
+func (s *Planner) requestBlocks(ctx context.Context, plans []Plan) {
+	if s.Blocks == nil {
+		return
+	}
+	for _, pl := range plans {
+		if pl.Block == nil {
+			continue
+		}
+		b := *pl.Block
+		if err := s.Blocks.RequestBlock(ctx, b); err != nil {
+			s.log().Warn("lease block request not sent", "grant", b.GrantID, "purchased", b.PurchasedBytes, "err", err)
+			continue
+		}
+		s.log().Info("lease block request", "grant", b.GrantID, "purchased", b.PurchasedBytes,
+			"target", b.TargetBytes, "rate_bps", b.RateBps)
+		s.mu.Lock()
+		s.asked[b.GrantID] = asked{purchased: b.PurchasedBytes, at: b.RequestedAt}
+		s.mu.Unlock()
+	}
 }
 
 func (s *Planner) planLocked(p collect.Panel, snap Snapshot, got map[string]driver.ClientUsage, at time.Time, read bool) ([]Plan, *Learned) {
@@ -363,6 +422,9 @@ func (s *Planner) planLocked(p collect.Panel, snap Snapshot, got map[string]driv
 		}
 		res := a.Plan(at, s.params())
 		pl := Plan{GrantID: g.ID, Quota: a.Quota, Used: a.Used, Avail: res.Avail, Endgame: res.Endgame, Closed: a.Closed}
+		if !a.Closed {
+			pl.Block = s.blockLocked(g, a, at)
+		}
 		byID := map[string]Config{}
 		for _, c := range g.Configs {
 			byID[c.ID] = c
@@ -459,6 +521,7 @@ func (s *Planner) init() {
 	s.configOf = map[int64]string{}
 	s.accounts = map[string]*quota.Account{}
 	s.saved = map[string]Learned{}
+	s.asked = map[string]asked{}
 }
 
 // panel keeps one PanelState per panel, so what it learns outlives a pass. A

@@ -123,12 +123,9 @@ describe('an unlimited Grant', () => {
 
   it('never buys a block and never asks exhaustion, even running hot', async () => {
     const { tx, writes } = fakeTx();
-    const purchases: unknown[] = [];
-    const blocks = { purchase: async (_tx: unknown, input: unknown) => void purchases.push(input) };
     const ceilings = { rebalance: async () => void writes.push('rebalance') };
-    const hot = new HotLoopService({} as never, blocks as never, ceilings as never);
+    const hot = new HotLoopService({} as never, ceilings as never);
     const out = await hot.topUpIn(tx, { grantId: GRANT, atMs: Date.parse('2026-09-26T10:00:00Z') });
-    expect(purchases).toEqual([]);
     expect(out.bought).toBeNull();
     expect(out.exhausted).toBeNull();
     expect(writes).toEqual([]);
