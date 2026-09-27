@@ -261,8 +261,15 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
   },
 };
 
-/** A notice given the tenant's support link (`supportUrl`, F-601-c) ends with this line; one without it reads whole. */
-const SUPPORT_LINE: Text = { read: (ns) => ns?.retention?.supportLine, fallback: '🛟 Support: {{supportUrl}}' };
+/**
+ * Lines a notice ends with when it was given their param; one without it reads
+ * whole. A delivered purchase's My services page (`servicesUrl`, F-601-h), the
+ * tenant's support link (`supportUrl`, F-601-c).
+ */
+const TRAILING_LINES: ReadonlyArray<Text & { param: string }> = [
+  { param: 'servicesUrl', read: (ns) => ns?.purchase?.servicesLine, fallback: '👉 Open it: {{servicesUrl}}' },
+  { param: 'supportUrl', read: (ns) => ns?.retention?.supportLine, fallback: '🛟 Support: {{supportUrl}}' },
+];
 
 function interpolate(template: string, vars: Record<string, string>): string {
   return Object.entries(vars).reduce(
@@ -310,7 +317,7 @@ export class UserNotifier {
     const spec = combined ? TEMPLATE_TEXT[request.template].many : TEMPLATE_TEXT[request.template];
     const params = combined ? { ...request.params, count: String(request.count) } : request.params;
     const body = interpolate(spec.read(ns) ?? spec.fallback, params);
-    const text = params['supportUrl'] ? `${body}\n\n${interpolate(SUPPORT_LINE.read(ns) ?? SUPPORT_LINE.fallback, params)}` : body;
+    const text = [body, ...TRAILING_LINES.filter((l) => params[l.param]).map((l) => interpolate(l.read(ns) ?? l.fallback, params))].join('\n\n');
 
     if (request.channel === 'inbox') {
       // Throws: the row is owed until it lands.

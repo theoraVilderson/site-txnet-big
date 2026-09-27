@@ -21,7 +21,7 @@
  * What the database holds rather than this file: `grant_status_one_way` is
  * `entitlement-schema.int.spec.ts`'s.
  */
-import { FulfilmentKind, GrantSource, GrantStatus, InvoiceStatus, Prisma, WalletReasonType } from '@prisma/client';
+import { FulfilmentKind, GrantSource, GrantStatus, InvoiceStatus, Prisma, TenantDomainPurpose, TenantDomainType, TenantType, WalletReasonType } from '@prisma/client';
 import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import { deliveryRouteOf, GrantDeliveryService, nextDeliveryAt } from './delivery';
@@ -44,7 +44,12 @@ type GrantFacts = {
   deliveryAttempts: number;
 };
 
-function build(facts: Partial<GrantFacts> = {}, opts: { invoice?: { status: InvoiceStatus; total: string }; activated?: boolean; configs?: string[] } = {}) {
+type Door = { domainValue: string; domainType: TenantDomainType };
+
+function build(
+  facts: Partial<GrantFacts> = {},
+  opts: { invoice?: { status: InvoiceStatus; total: string }; activated?: boolean; configs?: string[]; doors?: Door[]; tenantType?: TenantType } = {},
+) {
   const grant = {
     status: GrantStatus.pending,
     kind: FulfilmentKind.feature_access,
@@ -60,6 +65,7 @@ function build(facts: Partial<GrantFacts> = {}, opts: { invoice?: { status: Invo
     credits: [] as Array<{ userId: string; amount: Prisma.Decimal; reasonType: WalletReasonType; referenceId?: string }>,
     retired: [] as string[],
     fulfilled: [] as string[],
+    doorQueries: [] as Array<Record<string, unknown>>,
   };
 
   const tx = {
@@ -86,6 +92,14 @@ function build(facts: Partial<GrantFacts> = {}, opts: { invoice?: { status: Invo
     config: {
       findMany: async () => (opts.configs ?? []).map((id) => ({ id })),
     },
+    // The tenant's proven panel doors, as the query asked for them (F-601-h).
+    tenantDomain: {
+      findMany: async ({ where }: { where: Record<string, unknown> }) => {
+        seen.doorQueries.push(where);
+        return opts.doors ?? [];
+      },
+    },
+    tenant: { findUnique: async () => ({ tenantType: opts.tenantType ?? TenantType.platform_owner }) },
     // The invoice's row lock.
     $queryRaw: async () => [{ id: INVOICE, userId: USER, total: new Prisma.Decimal(invoice.total), status: invoice.status }],
     invoice: {
@@ -166,6 +180,28 @@ describe('GrantDeliveryService.deliver', () => {
       { type: OutboxEventType.GRANT_DELIVERED, payload: expect.objectContaining({ tenantId: TENANT, userId: USER, grantId: GRANT, invoiceId: INVOICE }) },
     ]);
     expect(seen.credits).toEqual([]);
+  });
+
+  // F-601-h: "ready" says where — the tenant's own My services page, on the host a payer returns to.
+  it('names the tenant\'s My services page in the delivered event, and asks only for proven panel doors', async () => {
+    const { service, tx, seen } = build({}, { doors: [{ domainValue: 'vpn.example', domainType: TenantDomainType.custom_domain }] });
+
+    await service.deliver(tx, GRANT, NOW);
+
+    expect(seen.outbox[0]!.payload['servicesUrl']).toBe('https://vpn.example/services');
+    expect(seen.doorQueries[0]).toMatchObject({ tenantId: TENANT, purpose: TenantDomainPurpose.panel });
+  });
+
+  it('names no page for a reseller with only its platform subdomain, which serves nothing (ADR-0063)', async () => {
+    const { service, tx, seen } = build(
+      {},
+      { tenantType: TenantType.reseller, doors: [{ domainValue: 'shop.txnet.app', domainType: TenantDomainType.subdomain }] },
+    );
+
+    await service.deliver(tx, GRANT, NOW);
+
+    expect(seen.outbox[0]!.type).toBe(OutboxEventType.GRANT_DELIVERED);
+    expect(seen.outbox[0]!.payload).not.toHaveProperty('servicesUrl');
   });
 
   it('counts a network Grant the panels have not confirmed yet, and pushes the next check out', async () => {

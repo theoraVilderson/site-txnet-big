@@ -66,7 +66,8 @@
     "deliveredMany": "✅ {{count}} خرید شما آمادهٔ استفاده است. آنها را در «سرویس‌های من» می‌بینید.",
     "deliveredManyTitle": "{{count}} خرید آماده است",
     "refundedMany": "↩️ {{count}} خرید شما تحویل نشد؛ برای همین لغو شدند و تمام مبلغشان به کیف پول شما برگشت.",
-    "refundedManyTitle": "وجه {{count}} خرید برگشت داده شد"
+    "refundedManyTitle": "وجه {{count}} خرید برگشت داده شد",
+    "servicesLine": "👉 باز کردن سرویس: {{servicesUrl}}"
   },
   "retention": {
     "notConnectedTitle": "هنوز وصل نشده‌اید؟",

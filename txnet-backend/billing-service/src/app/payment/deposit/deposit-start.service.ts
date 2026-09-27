@@ -9,10 +9,11 @@ import {
   TenantDomainType,
   WalletReasonType,
 } from '@prisma/client';
-import { TenantContext, panelHostOf, tenantTransaction } from '@txnet-backend/shared-core';
+import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import type { EnvConfig } from '../../config/env.validation';
+import { panelUrlOf } from '../../request/panel-url';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WalletCreditService } from '../../wallet/wallet-credit.service';
@@ -446,10 +447,9 @@ export class DepositStartService {
    * (ADR-0020), never the platform's and never a header the client set.
    *
    * A proven custom domain wins: it is the brand the user chose to pay on, and
-   * a bank's redirect back to a different host reads as a failed payment. A
-   * platform subdomain is issued by us, so matching the row is the whole proof;
-   * a custom one is only the tenant's once ownership has been shown, which is
-   * the same rule `auth-service`'s resolver applies to an incoming Host.
+   * a bank's redirect back to a different host reads as a failed payment
+   * (`panelUrlOf` holds the rule). With no host, the deposit is refused before
+   * a payment exists (F-018-aj).
    *
    * `PAYMENT_CALLBACK_ORIGIN` overrides all of it with one origin for every
    * tenant — a development and test affordance, where no tenant owns a host
@@ -462,26 +462,6 @@ export class DepositStartService {
     const override = this.config.get('PAYMENT_CALLBACK_ORIGIN', { infer: true });
     if (override) return `${override.replace(/\/+$/, '')}${path}`;
 
-    const rows = await tx.tenantDomain.findMany({
-      where: {
-        tenantId,
-        purpose: TenantDomainPurpose.panel,
-        OR: [
-          { domainType: TenantDomainType.subdomain },
-          { verificationStatus: DomainVerificationStatus.verified },
-        ],
-      },
-      select: { domainValue: true, domainType: true },
-      // Deterministic, so two payments of one tenant never disagree about the
-      // host: proven custom domains first, then alphabetically.
-      orderBy: [{ domainType: 'desc' }, { domainValue: 'asc' }],
-    });
-    // A reseller's platform subdomain serves nothing (ADR-0063), so a payer is
-    // returned only to its own domain; with none, the deposit is refused before
-    // a payment exists (F-018-aj).
-    const owner = await tx.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
-    if (!owner) return null;
-    const host = panelHostOf(rows, owner.tenantType);
-    return host ? `https://${host}${path}` : null;
+    return panelUrlOf(tx, tenantId, path);
   }
 }

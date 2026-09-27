@@ -66,7 +66,8 @@
     "deliveredMany": "✅ {{count}} of your purchases are ready to use. You will find them under My services.",
     "deliveredManyTitle": "{{count}} purchases ready",
     "refundedMany": "↩️ {{count}} of your purchases could not be delivered, so they were cancelled and their full price was returned to your wallet.",
-    "refundedManyTitle": "{{count}} purchases refunded"
+    "refundedManyTitle": "{{count}} purchases refunded",
+    "servicesLine": "👉 Open it: {{servicesUrl}}"
   },
   "retention": {
     "notConnectedTitle": "Not connected yet?",

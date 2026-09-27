@@ -94,6 +94,9 @@ function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minH
     },
     configActionLog: { create: async ({ data }: { data: Record<string, unknown> }) => data },
     outboxEvent: { create: async ({ data }: { data: { type: string; payload: Record<string, unknown> } }) => void outbox.push(data) },
+    // A delivery's "open it" link (F-601-h): no panel host here, so none.
+    tenantDomain: { findMany: async () => [] },
+    tenant: { findUnique: async () => ({ tenantType: 'platform_owner' }) },
   };
 
   // The load query, answered from the rows: per (panel, inbound) and per panel, live configs only.

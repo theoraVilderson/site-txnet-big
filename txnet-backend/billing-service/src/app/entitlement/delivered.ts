@@ -1,6 +1,7 @@
 import { GrantSource, GrantStatus, Prisma } from '@prisma/client';
 import { OutboxEventType } from '@txnet-backend/shared-core';
 
+import { PANEL_MY_SERVICES_PATH, panelUrlOf } from '../request/panel-url';
 import { unusedClockOf } from './unused-clock';
 
 /** `aggregate` of every Grant event in the outbox (ADR-0021). */
@@ -9,7 +10,8 @@ export const GRANT_AGGREGATE = 'entitlement.grant';
 /**
  * A `pending` Grant is delivered: `active`, and `entitlement.grant.delivered`
  * in the outbox beside it (F-111-d, spec §5.8 step 3), so the user is told and
- * an open panel turns it live.
+ * an open panel turns it live. "Ready" says where (F-601-h): `servicesUrl`,
+ * the tenant's own My services page, when it has a host to send a user to.
  *
  * A function rather than a `GrantService` method, as `suspendForExhaustion`
  * is: every handler that delivers calls it — group fulfilment when the panels
@@ -34,6 +36,7 @@ export async function markDelivered(tx: Prisma.TransactionClient, grantId: strin
     select: { tenantId: true, userId: true, variantId: true, source: true, sourceReferenceId: true },
   });
   if (!grant) throw new Error(`grant ${grantId} vanished inside its own delivery`);
+  const servicesUrl = await panelUrlOf(tx, grant.tenantId, PANEL_MY_SERVICES_PATH);
 
   await tx.outboxEvent.create({
     data: {
@@ -47,6 +50,7 @@ export async function markDelivered(tx: Prisma.TransactionClient, grantId: strin
         variantId: grant.variantId,
         source: grant.source,
         invoiceId: grant.source === GrantSource.purchase ? grant.sourceReferenceId : null,
+        ...(servicesUrl ? { servicesUrl } : {}),
       },
     },
     select: { id: true },

@@ -606,6 +606,23 @@ describe('UserNotifier', () => {
     expect(bodies).toEqual(['Not connected?\n\nSupport: https://t.me/help', 'Not connected?']);
   });
 
+  // F-601-h: "your service is ready" ends with where it is, when the tenant has a panel address to give.
+  it('ends a delivered purchase with the My services line only when it was given a servicesUrl', async () => {
+    const inbox = { put: vi.fn(async () => undefined) };
+    const notifier = new UserNotifier(
+      notifierPrisma() as unknown as PrismaService,
+      registry(null),
+      localeService({ purchase: { delivered: 'Ready.', servicesLine: 'Open it: {{servicesUrl}}' } }),
+      inbox as unknown as NotificationInboxClient,
+    );
+    await inTenant(() =>
+      notifier.notify({ userId: 'user-1', channel: 'inbox', template: 'purchaseDelivered', params: { servicesUrl: 'https://vpn.example/services' } }),
+    );
+    await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'inbox', template: 'purchaseDelivered', params: {} }));
+    const bodies = inbox.put.mock.calls.map((c) => (c as unknown as [{ body: string }])[0].body);
+    expect(bodies).toEqual(['Ready.\n\nOpen it: https://vpn.example/services', 'Ready.']);
+  });
+
   // F-067-p (ADR-0084 decision 3): the worker combines a burst and asks once with its count.
   it('a combined notice tells the summary with its count, in the inbox title and body, for every template', async () => {
     const inbox = { put: vi.fn(async () => undefined) };

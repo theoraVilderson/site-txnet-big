@@ -226,7 +226,7 @@ Both in `outbox/tenant-renewal.consumers.ts`. The producers are tenant's:
 
 | Rule | Why |
 |---|---|
-| Live on `user:<userId>` under the event's own name — `{type, grantId}`, a refund adding `invoiceId, amount` — then template `purchaseDelivered` / `purchaseRefunded` (`{amount}`) to the buyer's inbox and bot | an open My services turns the Grant live (F-111-f) and the top bar re-reads the balance; every purchase ends in exactly one of the two |
+| Live on `user:<userId>` under the event's own name — `{type, grantId}`, a refund adding `invoiceId, amount` — then template `purchaseDelivered` (`{servicesUrl}` when the payload has it, F-601-h) / `purchaseRefunded` (`{amount}`) to the buyer's inbox and bot | an open My services turns the Grant live (F-111-f) and the top bar re-reads the balance; every purchase ends in exactly one of the two |
 | A payload without tenant, user or Grant, or a refund without `amount`, throws and dead-letters | whose purchase it is is never guessed |
 
 ## A purchase delivered at once (F-114-i)

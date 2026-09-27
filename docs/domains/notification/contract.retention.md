@@ -84,6 +84,18 @@ Still two messages within 24 h: two urgent levels (95 % and the last day),
 or a held level told when its 24 h ran out and an urgent one soon after — an
 urgent notice is never delayed.
 
+## "Your service is ready" is not a retention notice (F-601-h, user 2026-09-27)
+
+The ready moment already has its notice: F-111-d's `purchaseDelivered`, told
+once when the Grant turns `active` — which, for a network Grant, is its
+configs confirmed at the group's minimum. A second one on
+`network.config.confirmed` would say "ready" twice within seconds, before
+activation when the minimum is above one, and again for every config a later
+panel adds. So there is no ready type in `RETENTION_NOTICES`: billing puts
+`servicesUrl` (the tenant's My services page, absent with no panel host) on
+`entitlement.grant.delivered`, and the notice ends with it
+([automation/contract.outbox.md](../automation/contract.outbox.md)).
+
 ## Not built here
 
 - Muting and quiet hours (F-601-m): they will be read at the claim, which is

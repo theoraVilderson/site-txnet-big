@@ -56,13 +56,20 @@ export class GrantDeliveryConsumer implements OnApplicationBootstrap {
         tenantId: grant.tenantId,
         userId: grant.userId,
         template: refunded ? 'purchaseRefunded' : 'purchaseDelivered',
-        params: refunded ? { amount: grant.amount ?? '' } : {},
+        params: refunded ? { amount: grant.amount ?? '' } : grant.servicesUrl ? { servicesUrl: grant.servicesUrl } : {},
       },
     });
   }
 }
 
-type GrantEvent = { tenantId: string; userId: string; grantId: string; invoiceId: string | null; amount: string | null };
+type GrantEvent = {
+  tenantId: string;
+  userId: string;
+  grantId: string;
+  invoiceId: string | null;
+  amount: string | null;
+  servicesUrl: string | null;
+};
 
 /** The payload, or a throw: an event that does not say whose Grant it is is not one to guess about. */
 function grantOf(event: OutboxMessage): GrantEvent {
@@ -77,5 +84,5 @@ function grantOf(event: OutboxMessage): GrantEvent {
   const amount = str('amount');
   if (!tenantId || !userId || !grantId) throw new Error(`outbox event ${event.id} has a payload without its tenant, user or Grant`);
   if (event.type === OutboxEventType.GRANT_REFUNDED && !amount) throw new Error(`outbox event ${event.id} is a refund without its amount`);
-  return { tenantId, userId, grantId, invoiceId: str('invoiceId'), amount };
+  return { tenantId, userId, grantId, invoiceId: str('invoiceId'), amount, servicesUrl: str('servicesUrl') };
 }
