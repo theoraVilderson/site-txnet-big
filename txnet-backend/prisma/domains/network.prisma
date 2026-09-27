@@ -386,8 +386,20 @@ model Panel {
   /// canary created through it, seen here. Set only with `refused`
   /// (CHECK `panel_duplicate_is_refused`); cleared when it is re-tested.
   duplicateOfPanelId         String?            @db.Uuid
+  /// The lease planner's clock for this panel (ADR-0093, F-027-cx): the
+  /// counter-refresh period `J` it learned, and the feasible phase bins as a
+  /// 32-bit mask (`quota.TickClock`). Null = not learned yet; the planner then
+  /// starts from the family's job interval and reads poll time as the tick.
+  tickPeriodMs               Int?
+  tickPhaseMask              BigInt?
+  /// Its enforcement-lag estimate (`quota.Lag`): EWMA mean and variance in
+  /// seconds over `lagSamples` crossings. Null with 0 samples: the planner
+  /// uses the family's initial lag (CHECK `panel_lag_matches_samples`).
+  lagMeanSec                 Float?
+  lagVarianceSec2            Float?
+  lagSamples                 Int                @default(0)
 
-  pairedPanel Panel?   @relation("PanelHAPair", fields: [pairedPanelId], references: [id])
+  pairedPanel Panel?  @relation("PanelHAPair", fields: [pairedPanelId], references: [id])
   pairedWith  Panel[]  @relation("PanelHAPair")
   duplicateOf Panel?   @relation("PanelDuplicate", fields: [duplicateOfPanelId], references: [id], onDelete: SetNull)
   duplicates  Panel[]  @relation("PanelDuplicate")
@@ -496,6 +508,16 @@ model Config {
   /// billing's list and `/sub`, never written to a panel. Null is the default
   /// name. Trimmed, 1..40 characters (CHECK `config_user_label_shape`, raw SQL).
   userLabel                String?
+  /// The lease planner's replica state (ADR-0093, F-027-cx). `limitPeakBytes`
+  /// is the pessimistic limit: the highest of the figure the panel showed and
+  /// every write not yet confirmed, so a shrink frees budget only once seen.
+  /// Null = never planned. `writePending`: a write we sent has not been read
+  /// back. The rates are `quota.Rate` — fast (30 s decay) and slow (10 min
+  /// EWMA), bytes/s. The Grant's Quota and Used are read, never copied here.
+  limitPeakBytes           BigInt?
+  writePending             Boolean   @default(false)
+  rateFastBps              Float     @default(0)
+  rateSlowBps              Float     @default(0)
 
   panel Panel @relation(fields: [panelId], references: [id])
   grant Grant @relation(fields: [grantId], references: [id])
