@@ -35,8 +35,11 @@ var _ Store = PostgresStore{}
 //
 // Quota is `purchasedBytes`, read; on a metered Grant with a locked rate the
 // wallet's reserve is added to it (F-027-dc): what the owner's balance still
-// buys at that rate (BytesAffordable), computed from the columns' decimal
-// text. A user with no wallet row has a reserve of nothing. Used is summed in Go from each config's
+// buys at that rate, computed from the columns' decimal text. One wallet is
+// one reserve (F-027-dt): its cents are split evenly over every metered Grant
+// of the owner the planner plans, touched or not, so two Grants cannot lease
+// past the balance (ReserveShare). A user with no wallet row has a reserve of
+// nothing. Used is summed in Go from each config's
 // lifetime counter (`contract.lease.md`), which the pass that called us has
 // already moved. A config is a replica while it can carry traffic — the
 // split's own rule (`contract.ceiling.md` "Who is in the split"). The counter
@@ -52,6 +55,9 @@ WITH touched AS (
 SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresAt", lc."grantId" IS NOT NULL,
        g."billingMode" = 'metered' AND g."meteredRate" IS NOT NULL,
        coalesce(g."meteredRate"::text, ''), coalesce(w."cachedBalance"::text, ''),
+       (SELECT count(*) FROM entitlement."grant" o
+         WHERE o."userId" = g."userId" AND o."billingMode" = 'metered' AND o."meteredRate" IS NOT NULL
+           AND o.status IN ('active', 'pending') AND NOT o."trafficUnlimited"),
        c.id::text, c."panelId"::text,
        c.status = 'active' AND c."desiredEnabled" AND c."desiredRemote" = 'present',
        c."remoteId" IS NOT NULL,
@@ -90,6 +96,7 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 			grantID, driverType string
 			metered             bool
 			rate, balance       string
+			sharers             int64
 			quota, lifetime     int64
 			applied             int64
 			endsAt              *time.Time
@@ -103,7 +110,7 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 			tickMask            *int64
 			outageAt            *time.Time
 		)
-		if err := rows.Scan(&grantID, &quota, &endsAt, &closedQuota, &closedEnd, &closed, &metered, &rate, &balance, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
+		if err := rows.Scan(&grantID, &quota, &endsAt, &closedQuota, &closedEnd, &closed, &metered, &rate, &balance, &sharers, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
 			&applied, &c.Enabled, &c.Allocated, &c.Peak, &c.Pending, &driverType, &pn.CanSetLimit, &pn.Healthy,
 			&tickMs, &tickMask, &pn.Learned.LagMeanSec, &pn.Learned.LagVarianceSec2, &pn.Learned.LagSamples,
 			&pn.Learned.OutageWeight, &outageAt); err != nil {
@@ -112,7 +119,7 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 		if n := len(snap.Grants); n == 0 || snap.Grants[n-1].ID != grantID {
 			g := Grant{ID: grantID, Quota: quota, Purchased: quota, Metered: metered}
 			if metered {
-				g.Quota += BytesAffordable(rate, balance)
+				g.Quota += ReserveShare(rate, balance, sharers)
 			}
 			if endsAt != nil {
 				g.ExpiresAt = *endsAt

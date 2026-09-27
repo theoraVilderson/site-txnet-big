@@ -181,3 +181,26 @@ func TestTheReserveIsWhatTheWalletBuys(t *testing.T) {
 		}
 	}
 }
+
+// One wallet, one reserve (F-027-dt): an owner's metered Grants split the
+// balance's cents evenly, each converting its share at its own rate, so the
+// shares together never buy past the wallet.
+func TestAnOwnersMeteredGrantsSplitOneReserve(t *testing.T) {
+	cases := []struct {
+		rate, balance string
+		grants        int64
+		want          int64
+	}{
+		{"0.50000000", "5.00", 1, 10 * quota.GB},
+		{"0.50000000", "5.00", 2, 5 * quota.GB},
+		{"1.00000000", "5.00", 2, 5 * quota.GB / 2},
+		{"1.00000000", "0.10", 3, 3 * quota.GB / 100}, // 10 cents over 3 is 3 each, floored
+		{"1.00000000", "0.02", 3, 0},                  // under a cent each buys nothing
+		{"0.50000000", "5.00", 0, 10 * quota.GB},      // no count read is the Grant alone
+	}
+	for _, c := range cases {
+		if got := leaseplan.ReserveShare(c.rate, c.balance, c.grants); got != c.want {
+			t.Errorf("ReserveShare(%q, %q, %d) = %d, want %d", c.rate, c.balance, c.grants, got, c.want)
+		}
+	}
+}

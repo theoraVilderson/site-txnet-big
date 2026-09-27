@@ -30,7 +30,7 @@ is why the planner's split is proved over a moving consumer and restarts
 | | |
 |---|---|
 | the bag | `purchasedBytes` — advanced only by `BlockPurchaseService`, in the transaction that debits the wallet (billing `contract.traffic-block.md`) |
-| the reserve | on a metered Grant, what the balance still buys at its rate; part of Quota since F-027-dc |
+| the reserve | on a metered Grant, its even share of what the balance still buys at its rate (F-027-dt); part of Quota since F-027-dc |
 | a share | `allocatedCeilingBytes`, the planner's, in lifetime bytes; grown only from what is free, a shrink freed only once the panel confirms it (`contract.lease.md` rules 16–19) |
 | the shutdown figure | `walletBackedCeilingBytes`, the planner's, equal to the share ([contract.resilience.md](contract.resilience.md)) |
 | a new block | the planner's request, bought by billing's `traffic/block-request.ts` (`contract.lease.md` rules 20–23) |
