@@ -33,11 +33,11 @@ const CLAIM_PATH = '/api/internal/notifications/retention/claim';
  * claim: a period claimed for a notice never told is that notice lost.
  *
  * **Two notices due the same day are one message** (F-601-f). A usage event
- * may carry the time level due within 24 h; once its own row is claimed, the
+ * may carry a time level due with it — the producers hold a non-urgent one up
+ * to 24 h for the other kind (F-601-n); once its own row is claimed, the
  * carried one is claimed for the same event, and both are told in one
- * combined text. The sweep's own event for that level later finds the row
- * held and tells nothing. A carried row already told leaves the usage notice
- * told alone.
+ * combined text; any other event for that level later finds its row held.
+ * A carried row already told leaves the usage notice told alone.
  */
 @Injectable()
 export class RetentionNoticeConsumer implements OnApplicationBootstrap {

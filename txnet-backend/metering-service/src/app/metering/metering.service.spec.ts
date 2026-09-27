@@ -70,6 +70,10 @@ function grantRow(over: Record<string, unknown> = {}) {
     startsAt: GRANT_STARTS_AT,
     activatedAt: null,
     endsAt: null,
+    endNoticeFor: null,
+    endNoticeAt: null,
+    usageNoticeLevel: null,
+    usageNoticeSince: null,
     ...over,
   };
 }
@@ -83,6 +87,8 @@ function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> 
   const consumed = new Map<string, bigint>([[GRANT, 0n]]);
   const pushedAt = new Map<string, Date>();
   const outbox: Array<Record<string, unknown>> = [];
+  /** The Grant's retention state as the charges left it (F-601-n): the held usage level and the end clock. */
+  const notice: Record<string, unknown> = {};
   /** What `SET LOCAL app.tenant_id` bound, per transaction — the RLS scope. */
   const bound: Array<string | null> = [];
 
@@ -114,15 +120,24 @@ function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> 
       },
     },
     grant: {
-      update: async ({ where, data }: { where: { id: string }; data: { consumedBytes: { increment: bigint } } }) => {
+      update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> & { consumedBytes?: { increment: bigint } } }) => {
+        if (!data.consumedBytes) {
+          Object.assign(notice, data);
+          return { id: where.id };
+        }
         consumed.set(where.id, (consumed.get(where.id) ?? 0n) + data.consumedBytes.increment);
-        return { ...grantRow(grant), id: where.id, consumedBytes: consumed.get(where.id) as bigint, userId: USER };
+        return { ...grantRow(grant), ...notice, id: where.id, consumedBytes: consumed.get(where.id) as bigint, userId: USER };
       },
       // The usage announcement's slot (F-307-t): taken only when the last one is older than the cutoff.
-      updateMany: async ({ where, data }: { where: { id: string; OR: [unknown, { usagePushedAt: { lt: Date } }] }; data: { usagePushedAt: Date } }) => {
+      // The end clock (F-601-n): moved by a charge that tells a time level with its usage level.
+      updateMany: async ({ where, data }: { where: { id: string; OR?: [unknown, { usagePushedAt: { lt: Date } }] }; data: Record<string, unknown> }) => {
+        if (!where.OR) {
+          Object.assign(notice, data);
+          return { count: 1 };
+        }
         const last = pushedAt.get(where.id);
         if (last && !(last < where.OR[1].usagePushedAt.lt)) return { count: 0 };
-        pushedAt.set(where.id, data.usagePushedAt);
+        pushedAt.set(where.id, data['usagePushedAt'] as Date);
         return { count: 1 };
       },
     },
@@ -195,7 +210,7 @@ function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> 
     $transaction: async <R>(fn: (tx: unknown) => Promise<R>): Promise<R> => fn(client),
   };
 
-  return { client, seen, rawLog, holds, quarantines, unattributed, consumed, bound, outbox };
+  return { client, seen, rawLog, holds, quarantines, unattributed, consumed, bound, outbox, notice };
 }
 
 /** One pass, with whatever the caller wants in it. Bytes are decimal strings on the wire. */
@@ -269,63 +284,84 @@ describe('MeteringService', () => {
     }
   });
 
-  // F-601-d: the crossing is seen by the charge that moves the bytes, in its transaction.
-  it("emits a usage threshold once, on the charge that crosses it, named by the Grant's period", async () => {
-    const renewedAt = new Date('2026-09-20T00:00:00Z');
-    const store = fakeStore([{ id: CONFIG, tenantId: TENANT, grantId: GRANT, remoteId: 'client-a' }], [], {
-      purchasedBytes: 10_000n,
-      usagePeriodFromBytes: 0n,
-      usagePeriodStartedAt: renewedAt,
-    });
-    const metering = service(store);
-    // 3000 of 10 000: under 50 %. Then 6000 (over 50 %), 9000 (over 80 %).
-    await metering.apply(pass({ deltas: [delta()] }));
-    await metering.apply(pass({ deltas: [delta({ deltaId: '66666666-6666-4666-8666-666666666667' })] }));
-    await metering.apply(pass({ deltas: [delta({ deltaId: '66666666-6666-4666-8666-666666666668' })] }));
+  // F-601-d, F-601-n: the crossing is seen by the charge that moves the bytes, in its transaction; 50 and 80 % wait for a time level.
+  describe('usage thresholds', () => {
+    const at = new Date('2026-09-27T10:00:00Z');
+    const config = [{ id: CONFIG, tenantId: TENANT, grantId: GRANT, remoteId: 'client-a' }];
+    const thresholds = (outbox: Array<Record<string, unknown>>) => outbox.filter((e) => e['type'] !== 'entitlement.grant.usage');
+    const withClock = async (run: () => Promise<void>) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(at);
+        await run();
+      } finally {
+        vi.useRealTimers();
+      }
+    };
 
-    const thresholds = store.outbox.filter((e) => e['type'] !== 'entitlement.grant.usage');
-    expect(thresholds.map((e) => e['type'])).toEqual(['entitlement.grant.usage_50', 'entitlement.grant.usage_80']);
-    expect(thresholds[1]).toEqual({
-      aggregate: 'entitlement.grant',
-      aggregateId: GRANT,
-      type: 'entitlement.grant.usage_80',
-      payload: { tenantId: TENANT, userId: USER, grantId: GRANT, period: renewedAt.toISOString(), percent: '80', remaining: '1 MB' },
-    });
-  });
+    it('holds 50 and 80 % on the Grant — a higher level replaces the lower, the wait keeps its start — and tells nothing yet', () =>
+      withClock(async () => {
+        const renewedAt = new Date('2026-09-20T00:00:00Z');
+        const store = fakeStore(config, [], { purchasedBytes: 10_000n, usagePeriodStartedAt: renewedAt });
+        const metering = service(store);
+        // 3000 of 10 000: under 50 %. Then 6000 (over 50 %), 9000 (over 80 %).
+        await metering.apply(pass({ deltas: [delta()] }));
+        await metering.apply(pass({ deltas: [delta({ deltaId: '66666666-6666-4666-8666-666666666667' })] }));
+        expect(store.notice).toEqual({ usageNoticeLevel: 50, usageNoticeSince: at });
+        vi.setSystemTime(new Date(at.getTime() + 3_600_000));
+        await metering.apply(pass({ deltas: [delta({ deltaId: '66666666-6666-4666-8666-666666666668' })] }));
 
-  // F-601-f: a time level due within 24 h rides on the usage notice, so the user is told both in one message.
-  it('carries the time level due within the next 24 h on the usage threshold, and none further out', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    try {
-      vi.setSystemTime(new Date('2026-09-27T10:00:00Z'));
-      const endsAt = new Date('2026-09-30T22:00:00Z'); // 3.5 days: the 3-day level is 12 h away
-      const store = fakeStore([{ id: CONFIG, tenantId: TENANT, grantId: GRANT, remoteId: 'client-a' }], [], { purchasedBytes: 5_000n, endsAt });
-      await service(store).apply(pass({ deltas: [delta()] }));
+        expect(store.notice).toEqual({ usageNoticeLevel: 80, usageNoticeSince: at });
+        expect(thresholds(store.outbox)).toEqual([]);
+      }));
 
-      const [threshold] = store.outbox.filter((e) => e['type'] !== 'entitlement.grant.usage');
-      expect(threshold['payload']).toEqual({
-        tenantId: TENANT,
-        userId: USER,
-        grantId: GRANT,
-        period: GRANT_STARTS_AT.toISOString(),
-        percent: '50',
-        remaining: '1 MB',
-        endNotice: 'entitlement.grant.ends_in_3d',
-        endPeriod: endsAt.toISOString(),
-        days: '4',
-      });
+    it('tells 95 % at once, named by the period, and clears the held level', () =>
+      withClock(async () => {
+        const store = fakeStore(config, [], { purchasedBytes: 3_100n, usageNoticeLevel: 80, usageNoticeSince: at });
+        await service(store).apply(pass({ deltas: [delta()] }));
 
-      const later = fakeStore([{ id: CONFIG, tenantId: TENANT, grantId: GRANT, remoteId: 'client-a' }], [], {
-        purchasedBytes: 5_000n,
-        endsAt: new Date('2026-10-02T10:00:00Z'), // 5 days: the 7-day level fell before activation, the 3-day one is 2 days away
-        activatedAt: new Date('2026-09-26T10:00:00Z'),
-      });
-      await service(later).apply(pass({ deltas: [delta()] }));
-      const [told] = later.outbox.filter((e) => e['type'] !== 'entitlement.grant.usage');
-      expect(Object.keys(told['payload'] as object)).not.toContain('endNotice');
-    } finally {
-      vi.useRealTimers();
-    }
+        expect(thresholds(store.outbox)).toEqual([
+          {
+            aggregate: 'entitlement.grant',
+            aggregateId: GRANT,
+            type: 'entitlement.grant.usage_95',
+            payload: { tenantId: TENANT, userId: USER, grantId: GRANT, period: GRANT_STARTS_AT.toISOString(), percent: '95', remaining: '1 MB' },
+          },
+        ]);
+        expect(store.notice).toEqual({ usageNoticeLevel: null, usageNoticeSince: null });
+      }));
+
+    it('tells a time level already due with the usage level, as one event, and moves the end clock past it', () =>
+      withClock(async () => {
+        const endsAt = new Date('2026-09-30T04:00:00Z'); // the 3-day level fell due 6 h ago, held by the sweep
+        const store = fakeStore(config, [], { purchasedBytes: 5_000n, endsAt, endNoticeFor: endsAt, endNoticeAt: new Date('2026-09-27T04:00:00Z') });
+        await service(store).apply(pass({ deltas: [delta()] }));
+
+        expect(thresholds(store.outbox).map((e) => e['payload'])).toEqual([
+          {
+            tenantId: TENANT,
+            userId: USER,
+            grantId: GRANT,
+            period: GRANT_STARTS_AT.toISOString(),
+            percent: '50',
+            remaining: '1 MB',
+            endNotice: 'entitlement.grant.ends_in_3d',
+            endPeriod: endsAt.toISOString(),
+            days: '3',
+          },
+        ]);
+        expect(store.notice).toEqual({ endNoticeFor: endsAt, endNoticeAt: new Date('2026-09-29T04:00:00Z') });
+      }));
+
+    it('never pulls forward a time level not yet due — nothing is told early', () =>
+      withClock(async () => {
+        const endsAt = new Date('2026-09-30T22:00:00Z'); // the 3-day level is 12 h away
+        const store = fakeStore(config, [], { purchasedBytes: 5_000n, endsAt, endNoticeFor: endsAt, endNoticeAt: new Date('2026-09-27T22:00:00Z') });
+        await service(store).apply(pass({ deltas: [delta()] }));
+
+        expect(thresholds(store.outbox)).toEqual([]);
+        expect(store.notice).toEqual({ usageNoticeLevel: 50, usageNoticeSince: at });
+      }));
   });
 
   it('bills a delta: a raw-log row, the Grant cursor, and a seen row under the config tenant', async () => {

@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-version: 9
+version: 10
 updated: 2026-09-27
 ---
 
@@ -41,7 +41,7 @@ charge that makes it: billing's `MeteringService.charge`, in its transaction
 
 | Rule | Why |
 |---|---|
-| One charge past two levels tells the higher alone; none once `consumedBytes ≥ purchasedBytes` | the user hears the latest truth; a spent bag is the cutoff notice (F-601-b) |
+| One charge past two levels tells the higher alone; none once `consumedBytes ≥ purchasedBytes`. 50 / 80 % are held, 95 % is not ("The 24 h hold") | the user hears the latest truth; a spent bag is the cutoff notice (F-601-b) |
 | Only `active`, prepaid, not unlimited, and a period that opened with bytes to spend | an unlimited Grant has no bag; a metered one is F-601-g |
 | `period` = `usagePeriodStartedAt ?? startsAt`; one type per level | notification's ledger lets each level through once per period (invariant 14) |
 
@@ -60,7 +60,21 @@ by `grant_end_notice`; answer `scanned`, `told`.
 | A level that fell due before `activatedAt ?? startsAt` passes untold | a 5-day service is not "ending soon" the minute it is bought |
 | 7 and 3 days: `serviceEndsSoon`; 1 day: `serviceEndsWithinADay` | a day's notice is the last one, and "1 days" is not a sentence |
 | The write is conditional on the end and the clock read; `period` = `endsAt`, one type per level | two sweeps, or a renewal between read and write, emit once; notification's ledger holds each level once per end (invariant 14) |
-| A level due within 24 h of a usage crossing is carried on that usage event (`endNoticeAhead`, F-601-f) and told with it, up to a day early; the sweep's event then tells nothing. The levels live in shared-core `end-notice-levels.ts`, one list for both | two notices due the same day are one message (notification `contract.retention.md`) |
+
+**The 24 h hold (F-601-n, user 2026-09-27)** — a usage and a time level
+due the same day reach the user as one message, and none is told early. The
+rules are shared-core `retention-levels.ts` (`retentionToTell`, proved by
+`retention-levels.spec.ts`), applied by metering at the crossing and by
+`GrantEndNoticeService.check` hourly (`end-notice.spec.ts`).
+
+| Rule | Why |
+|---|---|
+| 50 / 80 % and 7 / 3 days wait up to 24 h from when they fell due; both kinds due is one event, now — the usage type carrying the time level | the user hears them together, and neither is told before its moment |
+| 95 % and the last day are never held, and take a held one of the other kind with them | an urgent notice is never delayed |
+| A held usage level lives on the Grant (`usageNoticeLevel`, `usageNoticeSince`); a higher level replaces it and keeps its start. A held time level is the clock left unmoved, due again next hour | the hold survives restarts; the sweep drains both |
+| Told late, the words are as of the telling: the days left from `endsAt`, the volume left from the Grant | a notice held a day says "6 days", never a stale "7" |
+| A held usage level of a closed period (a renewal that added bytes), or of a spent bag, is dropped untold | it is no longer true — the spent bag has its cutoff notice |
+| The sweep asks two questions, each its own batch of 500: Grants ending within 7 days whose clock is due, and held usage levels 24 h old; every write is conditional on the clock and held level read | a charge, a renewal or a second sweep between read and write emits nothing twice |
 
 **Cutoff (F-601-b, spec 9.5)** — the user is told their service stopped,
 and what brings it back. Emitted by billing's `traffic/exhaustion.ts` through

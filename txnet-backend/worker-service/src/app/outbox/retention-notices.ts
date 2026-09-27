@@ -15,7 +15,7 @@ export type RetentionNotice = { template: string; params: readonly string[]; opt
  */
 export type AheadNotice = { types: readonly string[]; told: (days: string) => { template: string; params: readonly string[] } };
 
-/** F-601-f: the time level due within 24 h, carried by a usage threshold (billing's metering, `endNoticeAhead`). */
+/** F-601-f: a time level due, carried by a usage threshold told with it (F-601-n: metering, or entitlement's end sweep). */
 const USAGE_WITH_END: AheadNotice = {
   types: [OutboxEventType.GRANT_ENDS_IN_7D, OutboxEventType.GRANT_ENDS_IN_3D, OutboxEventType.GRANT_ENDS_IN_1D],
   told: (days) =>
@@ -40,7 +40,7 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   [OutboxEventType.GRANT_NOT_CONNECTED]: { template: 'serviceNotConnected', params: [], optional: ['supportUrl'] },
   [OutboxEventType.GRANT_STILL_NOT_CONNECTED]: { template: 'serviceStillNotConnected', params: [], optional: ['supportUrl'] },
   // F-601-d: a prepaid Grant's period crossed 50 / 80 / 95 % of its bytes — the level and what is left;
-  // with the time level due within 24 h when one is (F-601-f).
+  // with a time level due the same day when there is one (F-601-f, F-601-n).
   [OutboxEventType.GRANT_USAGE_50]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'], ahead: USAGE_WITH_END },
   [OutboxEventType.GRANT_USAGE_80]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'], ahead: USAGE_WITH_END },
   [OutboxEventType.GRANT_USAGE_95]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'], ahead: USAGE_WITH_END },

@@ -1,16 +1,5 @@
 import { GrantStatus, VariantBillingMode } from '@prisma/client';
-import { OutboxEventType } from '@txnet-backend/shared-core';
-
-/** The levels a prepaid Grant's period is told at (F-601-d, spec 9.5), highest first. */
-export const USAGE_LEVELS = [95, 80, 50] as const;
-export type UsageLevel = (typeof USAGE_LEVELS)[number];
-
-/** One event type per level, so notification's `(Grant, notice, period)` ledger lets each through once. */
-export const USAGE_LEVEL_EVENT: Record<UsageLevel, OutboxEventType> = {
-  50: OutboxEventType.GRANT_USAGE_50,
-  80: OutboxEventType.GRANT_USAGE_80,
-  95: OutboxEventType.GRANT_USAGE_95,
-};
+import { USAGE_LEVELS, type UsageLevel } from '@txnet-backend/shared-core';
 
 export type UsageThresholdGrant = {
   status: GrantStatus;
@@ -45,18 +34,4 @@ export function usageThresholdCrossed(g: UsageThresholdGrant, chargedBytes: bigi
     if (before < mark && after >= mark) return { level, remainingBytes: g.purchasedBytes - g.consumedBytes };
   }
   return null;
-}
-
-const MIB = BigInt(1024 ** 2);
-const GIB = BigInt(1024 ** 3);
-
-/** What is left, as the notice says it: whole GB from 10, one decimal under, whole MB (at least 1) under 1 GB. */
-export function remainingLabel(bytes: bigint): string {
-  if (bytes >= BigInt(10) * GIB) return `${bytes / GIB} GB`;
-  if (bytes >= GIB) {
-    const tenths = (bytes * BigInt(10)) / GIB;
-    return `${tenths / BigInt(10)}.${tenths % BigInt(10)} GB`;
-  }
-  const mb = bytes / MIB;
-  return `${mb > BigInt(0) ? mb : BigInt(1)} MB`;
 }

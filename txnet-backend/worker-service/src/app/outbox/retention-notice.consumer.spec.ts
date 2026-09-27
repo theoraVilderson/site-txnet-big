@@ -147,7 +147,7 @@ describe('RetentionNoticeConsumer.handle', () => {
     expect(calls.fetched).toEqual([]);
   });
 
-  // F-601-f: a usage level and the time level due within 24 h are one message — both ledger rows held by this event.
+  // F-601-f: a usage level and a time level due the same day are one message — both ledger rows held by this event.
   describe('a time level carried on a usage notice', () => {
     const END = 'entitlement.grant.ends_in_3d';
     const END_PERIOD = '2026-09-30T22:00:00.000Z';

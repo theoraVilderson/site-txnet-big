@@ -1,6 +1,7 @@
 import { GrantStatus, VariantBillingMode } from '@prisma/client';
+import { remainingLabel } from '@txnet-backend/shared-core';
 
-import { remainingLabel, usageThresholdCrossed } from './usage-threshold';
+import { usageThresholdCrossed } from './usage-threshold';
 
 /**
  * Usage thresholds (F-601-d): which level, if any, one charge crossed.

@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-version: 9
+version: 10
 updated: 2026-09-27
 ---
 
@@ -179,7 +179,7 @@ Through the outbox (ADR-0021); the first two also live on the buyer's `user:` ch
 |---|---|---|
 | `entitlement.grant.delivered` | `tenantId, userId, grantId, variantId, source, invoiceId` | a `pending` Grant turned `active` (F-111-d) |
 | `entitlement.grant.refunded` | `tenantId, userId, grantId, invoiceId, amount, reason` | a paid Grant cancelled, its invoice refunded whole (F-111-d) |
-| `entitlement.grant.usage_50` / `_80` / `_95` | `tenantId, userId, grantId, period`, `percent`, `remaining` (e.g. `5.3 GB`); optional `endNotice`, `endPeriod`, `days` — the time level due within 24 h (F-601-f) | a charge crossed that share of the usage period (F-601-d), emitted by billing's metering; retention events, like the next row |
+| `entitlement.grant.usage_50` / `_80` / `_95` | `tenantId, userId, grantId, period`, `percent`, `remaining` (e.g. `5.3 GB`); optional `endNotice`, `endPeriod`, `days` — a time level due with it, told as one message (F-601-f, F-601-n) | a charge crossed that share of the usage period (F-601-d), emitted by billing's metering; retention events, like the next row |
 | `entitlement.grant.ends_in_7d` / `_3d` / `_1d` | `tenantId, userId, grantId, period` (= `endsAt`), `days` (whole days left) | an active Grant 7 / 3 / 1 day(s) before its end (F-601-e); retention events, like the next row |
 | `entitlement.grant.ended` / `.volume_spent` / `.wallet_spent` | `tenantId, userId, grantId, period` (= the end, or the suspension's instant) | a Grant stopped: time ran out, a prepaid bag spent, a metered wallet spent (F-601-b); retention events, like the next row |
 | `entitlement.grant.not_connected` / `.still_not_connected` | `tenantId, userId, grantId, period` (= `activatedAt`), `supportUrl?` | nothing consumed 24 h / 72 h after activation (F-601-c); retention events, told by `RetentionNoticeConsumer` — not on any channel |

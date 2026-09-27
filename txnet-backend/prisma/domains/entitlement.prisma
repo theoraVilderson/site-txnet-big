@@ -136,6 +136,13 @@ model Grant {
   /// The next 7 / 3 / 1-day level of that end (F-601-e); null once the last
   /// is told. Read only while `endNoticeFor = endsAt`.
   endNoticeAt           DateTime?
+  /// A usage level crossed and not yet told (F-601-n): 50 or 80, held up to
+  /// 24 h for a time level, so two due the same day are one message. 95 is
+  /// never held. Null when nothing is held.
+  usageNoticeLevel      Int?
+  /// When the period's first untold crossing happened: the hold's start. A
+  /// value before the current usage period opened is stale, never told.
+  usageNoticeSince      DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @default(now()) @updatedAt
 
@@ -155,6 +162,8 @@ model Grant {
   @@index([status, unusedCheckAt], map: "grant_status_unusedCheckAt_idx")
   /// The time-threshold sweep's question: which active Grants end within 7 days (F-601-e).
   @@index([status, endsAt], map: "grant_status_endsAt_idx")
+  /// The same sweep's other question: which held usage notices are 24 h old (F-601-n).
+  @@index([status, usageNoticeSince], map: "grant_status_usageNoticeSince_idx")
   @@map("grant")
   @@schema("entitlement")
 }

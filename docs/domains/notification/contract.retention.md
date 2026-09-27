@@ -61,26 +61,27 @@ together:
 | `entitlement.grant.not_connected` / `.still_not_connected` | `serviceNotConnected` / `serviceStillNotConnected`, optional `supportUrl` | entitlement, 24 h / 72 h after activation with nothing consumed; period = `activatedAt` (F-601-c) |
 | `entitlement.grant.usage_50` / `_80` / `_95` | `serviceUsageThreshold`, params `percent`, `remaining` | billing's metering, on the charge that crosses the level of a prepaid Grant's usage period; period = `usagePeriodStartedAt ?? startsAt` (F-601-d, entitlement `contract.retention.md`) |
 | `entitlement.grant.ends_in_7d` / `_3d` / `_1d` | `serviceEndsSoon` (7, 3) / `serviceEndsWithinADay` (1), param `days` | entitlement's hourly sweep, 7 / 3 / 1 day(s) before `endsAt`; period = `endsAt`, so a renewal opens a new one (F-601-e) |
-| a usage type above, carrying `endNotice`, `endPeriod`, `days` | `serviceUsageAndEndsSoon` (`days` > 1) / `serviceUsageAndEndsWithinADay` (`days` = 1), params `percent`, `remaining` (+ `days`) | billing's metering, when a time level falls due within 24 h of the crossing (F-601-f, below) |
+| a usage type above, carrying `endNotice`, `endPeriod`, `days` | `serviceUsageAndEndsSoon` (`days` > 1) / `serviceUsageAndEndsWithinADay` (`days` = 1), params `percent`, `remaining` (+ `days`) | billing's metering at the crossing, or entitlement's end sweep, when both are due (F-601-n, below) |
 | `entitlement.grant.ended` / `.volume_spent` / `.wallet_spent` | `serviceEnded` / `serviceVolumeSpent` ("renew") / `serviceWalletSpent` ("top up", never "renew") | billing, in the transaction that stops the Grant: a standing close on a passed end, a prepaid bag's suspension, a metered wallet's; period = the end, or the suspension's instant (F-601-b, entitlement `contract.retention.md` "Cutoff") |
 
-## Two notices due the same day are one message (F-601-f, user 2026-09-27)
+## Two notices due the same day are one message (F-601-f, F-601-n)
 
-A usage level is told the moment a charge crosses it; a time level is
-predictable. So the **usage** event carries the time level due within the next
-24 h — a rolling window, never a calendar day — and the user hears both at
-once (the user chose this over holding the time notice, 2026-09-27).
+A usage level and a time level due within the same 24 h (a rolling window) are
+told as one message: the **usage** event carries the time level (`endNotice`,
+`endPeriod`, `days`). The producers decide when (entitlement
+`contract.retention.md` "The 24 h hold", user 2026-09-27): a non-urgent level
+waits up to 24 h for the other kind, never is told before it is due, and its
+words are computed when told. This unit and the consumer only hold the line:
 
 | Rule | Why |
 |---|---|
-| The producer names the level with `endNoticeAhead` (shared-core `end-notice-levels.ts`): the nearest level due by now + 24 h and not before activation; `endPeriod` = `endsAt`, the sweep's period for it | the same row the sweep's event would claim, by the sweep's own rules |
 | The consumer claims the usage row first; only if it holds it does it claim the carried row, **for the same event** | a usage notice already told never swallows a time level |
-| Both held: the combined text. The carried row refused (the sweep told it): the usage text alone | the ledger, not a timer, decides; nothing is held back |
-| The sweep's own event for that level later finds its row held, and tells nothing | invariant 14; one message, not two |
+| Both held: the combined text. The carried row refused (told by another event): the usage text alone | the ledger, not the consumer, is the last word on "once" |
 | A carried type the usage notice does not accept, or one without `endPeriod` or `days`, throws before any claim | a half-named row would be claimed and never told |
 
-The one case still told twice: a time level told first, then a usage level
-crossed within the same 24 h — a crossing cannot be foreseen.
+Still two messages within 24 h: two urgent levels (95 % and the last day),
+or a held level told when its 24 h ran out and an urgent one soon after — an
+urgent notice is never delayed.
 
 ## Not built here
 

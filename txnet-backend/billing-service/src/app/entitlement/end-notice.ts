@@ -1,6 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GrantStatus, Prisma } from '@prisma/client';
-import { END_NOTICE_LEVELS, endNoticeDaysLeft, runWithTenant, tenantTransaction, type EndNotice } from '@txnet-backend/shared-core';
+import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
+import {
+  END_NOTICE_LEVELS,
+  endNoticeStep,
+  heldUsageNotice,
+  remainingLabel,
+  RETENTION_HOLD_MS,
+  retentionEvent,
+  retentionToTell,
+  runWithTenant,
+  tenantTransaction,
+  type OutboxEventType,
+} from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -8,45 +19,11 @@ import { GRANT_AGGREGATE } from './delivered';
 
 const DAY_MS = 86_400_000;
 
-/** Due Grants one sweep reads. The scan drains itself: every check sets the clock for the end it read. */
+/** Due Grants each of the sweep's two questions reads. A told check clears what it told, so the scan drains itself. */
 const END_NOTICE_BATCH = 500;
 
-/** The levels, farthest first (F-601-e, spec 9.5) — shared with metering, which carries one into a usage notice (F-601-f). */
-const END_LEVELS = END_NOTICE_LEVELS;
-
 /** How far ahead the sweep looks: the farthest level. */
-const END_HORIZON_MS = END_LEVELS[0].days * DAY_MS;
-
-/**
- * One due check: the level to tell (with the whole days actually left), and
- * the instant of the next level (`null` = none left for this end).
- *
- * The levels already handled for this end are those before `endNoticeAt`,
- * while `endNoticeFor` is this end. For an end seen for the first time —
- * renewed, or never checked — they are those before `activeSince`: a level
- * that fell due before the Grant was active is not news, it is the product.
- */
-export function endNoticeStep(
-  g: { endsAt: Date; activeSince: Date; endNoticeFor: Date | null; endNoticeAt: Date | null },
-  now: Date,
-): { notice: { type: EndNotice; days: number } | null; next: Date | null } {
-  const end = g.endsAt.getTime();
-  const t = now.getTime();
-  if (end <= t) return { notice: null, next: null };
-
-  const sameEnd = g.endNoticeFor?.getTime() === end;
-  if (sameEnd && g.endNoticeAt === null) return { notice: null, next: null };
-  const floor = sameEnd && g.endNoticeAt ? g.endNoticeAt.getTime() : g.activeSince.getTime();
-
-  const at = (days: number) => end - days * DAY_MS;
-  // The nearest level due: a sweep late past two tells the latest truth alone.
-  const due = END_LEVELS.filter((l) => at(l.days) <= t && at(l.days) >= floor).pop();
-  const upcoming = END_LEVELS.find((l) => at(l.days) > t);
-  return {
-    notice: due ? { type: due.type, days: endNoticeDaysLeft(g.endsAt, now) } : null,
-    next: upcoming ? new Date(at(upcoming.days)) : null,
-  };
-}
+const END_HORIZON_MS = END_NOTICE_LEVELS[0].days * DAY_MS;
 
 export type EndNoticeResult = { scanned: number; told: number };
 
@@ -56,13 +33,21 @@ export type EndNoticeResult = { scanned: number; told: number };
  * how long is left (notification `contract.retention.md`). Unlimited and
  * metered Grants alike — only a permanent one (`endsAt = null`) has no end.
  *
+ * **Two due the same day are one message (F-601-n).** A 7- or 3-day level,
+ * and a 50 / 80 % usage level billing's metering held on the Grant, wait up to
+ * 24 h for the other kind (`retentionToTell`); both due is one event, now —
+ * the usage type carrying the time level. The last day and 95 % are never
+ * held. What is told is computed when it is told: the days left, and what is
+ * left of the volume.
+ *
  * **The clock belongs to the end it was set for.** `endNoticeFor` records
  * that end and `endNoticeAt` its next level; a renewal moves `endsAt`, and the
  * sweep finds the mismatch by itself, so no writer of `endsAt` has to reset
- * anything. The write is conditional on everything it read: two sweeps racing,
- * or a renewal landing between read and write, emit nothing twice, and the
- * ledger's `(Grant, level, period)` row — the period is the end — holds the
- * line past that.
+ * anything. A held level leaves the clock where it is, so the next hour reads
+ * it due again. The write is conditional on everything it read: two sweeps
+ * racing, a charge, or a renewal landing between read and write, emit nothing
+ * twice, and the ledger's `(Grant, level, period)` row holds the line past
+ * that.
  *
  * Cross-tenant scan, per-tenant write, as `unused-notice.ts` does.
  */
@@ -77,56 +62,102 @@ export class GrantEndNoticeService {
 
   async noticeDue(now: Date = new Date()): Promise<EndNoticeResult> {
     const fields = this.crossTenant.grant.fields;
-    const due = await this.crossTenant.grant.findMany({
-      where: {
-        status: GrantStatus.active,
-        endsAt: { gt: now, lte: new Date(now.getTime() + END_HORIZON_MS) },
-        // Never checked, set for another end (renewed), or its next level due.
-        OR: [{ endNoticeFor: null }, { NOT: { endNoticeFor: { equals: fields.endsAt } } }, { endNoticeAt: { lte: now } }],
-      },
-      select: { id: true, tenantId: true },
-      orderBy: { endsAt: 'asc' },
-      take: END_NOTICE_BATCH,
-    });
+    const select = { id: true, tenantId: true } as const;
+    // Two questions, each its own batch, so held time levels never starve a usage notice's 24 h.
+    const [ending, held] = await Promise.all([
+      this.crossTenant.grant.findMany({
+        where: {
+          status: GrantStatus.active,
+          endsAt: { gt: now, lte: new Date(now.getTime() + END_HORIZON_MS) },
+          // Never checked, set for another end (renewed), or its next level due.
+          OR: [{ endNoticeFor: null }, { NOT: { endNoticeFor: { equals: fields.endsAt } } }, { endNoticeAt: { lte: now } }],
+        },
+        select,
+        orderBy: { endsAt: 'asc' },
+        take: END_NOTICE_BATCH,
+      }),
+      this.crossTenant.grant.findMany({
+        where: { status: GrantStatus.active, usageNoticeSince: { lte: new Date(now.getTime() - RETENTION_HOLD_MS) } },
+        select,
+        orderBy: { usageNoticeSince: 'asc' },
+        take: END_NOTICE_BATCH,
+      }),
+    ]);
+    const due = [...new Map([...ending, ...held].map((g) => [g.id, g])).values()];
     let told = 0;
     for (const grant of due) {
       const notice = await runWithTenant({ id: grant.tenantId }, () => tenantTransaction(this.prisma, (tx) => this.check(tx, grant.id, now)));
       if (notice) told += 1;
     }
-    if (told > 0) this.logger.log(`told ${told} of ${due.length} due Grant(s) their end is near`);
+    if (told > 0) this.logger.log(`told ${told} of ${due.length} due Grant(s) their end is near or their volume is running low`);
     return { scanned: due.length, told };
   }
 
-  /** One Grant's check, in the caller's tenant transaction. Answers the notice it emitted, if any. */
-  async check(tx: Prisma.TransactionClient, grantId: string, now: Date): Promise<EndNotice | null> {
+  /** One Grant's check, in the caller's tenant transaction. Answers the event type it emitted, if any. */
+  async check(tx: Prisma.TransactionClient, grantId: string, now: Date): Promise<OutboxEventType | null> {
     const grant = await tx.grant.findFirst({
       where: { id: grantId, status: GrantStatus.active },
-      select: { id: true, tenantId: true, userId: true, startsAt: true, activatedAt: true, endsAt: true, endNoticeFor: true, endNoticeAt: true },
-    });
-    if (!grant?.endsAt) return null;
-
-    const step = endNoticeStep({ ...grant, endsAt: grant.endsAt, activeSince: grant.activatedAt ?? grant.startsAt }, now);
-    const moved = await tx.grant.updateMany({
-      where: { id: grant.id, status: GrantStatus.active, endsAt: grant.endsAt, endNoticeFor: grant.endNoticeFor, endNoticeAt: grant.endNoticeAt },
-      data: { endNoticeFor: grant.endsAt, endNoticeAt: step.next },
-    });
-    if (moved.count !== 1 || !step.notice) return null;
-
-    await tx.outboxEvent.create({
-      data: {
-        aggregate: GRANT_AGGREGATE,
-        aggregateId: grant.id,
-        type: step.notice.type,
-        payload: {
-          tenantId: grant.tenantId,
-          userId: grant.userId,
-          grantId: grant.id,
-          period: grant.endsAt.toISOString(),
-          days: String(step.notice.days),
-        },
+      select: {
+        id: true,
+        tenantId: true,
+        userId: true,
+        startsAt: true,
+        activatedAt: true,
+        endsAt: true,
+        endNoticeFor: true,
+        endNoticeAt: true,
+        billingMode: true,
+        trafficUnlimited: true,
+        purchasedBytes: true,
+        consumedBytes: true,
+        usagePeriodStartedAt: true,
+        usageNoticeLevel: true,
+        usageNoticeSince: true,
       },
-      select: { id: true },
     });
-    return step.notice.type;
+    if (!grant) return null;
+
+    const step = grant.endsAt
+      ? endNoticeStep({ ...grant, endsAt: grant.endsAt, activeSince: grant.activatedAt ?? grant.startsAt }, now)
+      : { notice: null, next: null };
+    const usagePeriod = grant.usagePeriodStartedAt ?? grant.startsAt;
+    // A held level is told only while it is still true: a bag, not yet spent (that is the cutoff notice, F-601-b).
+    const bag =
+      grant.billingMode === VariantBillingMode.prepaid && !grant.trafficUnlimited && grant.consumedBytes < grant.purchasedBytes;
+    const usage = bag ? heldUsageNotice({ ...grant, usagePeriod }) : null;
+    const tell = retentionToTell({ time: step.notice, usage }, now);
+
+    const data: Prisma.GrantUpdateManyMutationInput = {};
+    // The clock moves past a level only once it is told; a held one stays due. No level due: set it for this end.
+    if (grant.endsAt && (tell.time || !step.notice)) Object.assign(data, { endNoticeFor: grant.endsAt, endNoticeAt: step.next });
+    // A held usage level leaves once told, or once it is no longer true.
+    if (grant.usageNoticeSince && (tell.usage || !usage)) Object.assign(data, { usageNoticeLevel: null, usageNoticeSince: null });
+    if (Object.keys(data).length === 0) return null;
+
+    const moved = await tx.grant.updateMany({
+      where: {
+        id: grant.id,
+        status: GrantStatus.active,
+        endsAt: grant.endsAt,
+        endNoticeFor: grant.endNoticeFor,
+        endNoticeAt: grant.endNoticeAt,
+        usageNoticeLevel: grant.usageNoticeLevel,
+        usageNoticeSince: grant.usageNoticeSince,
+      },
+      data,
+    });
+    if (moved.count !== 1) return null;
+
+    const event = retentionEvent(
+      { tenantId: grant.tenantId, userId: grant.userId, grantId: grant.id, usagePeriod, endsAt: grant.endsAt },
+      {
+        usage: tell.usage && usage ? { level: usage.level, remaining: remainingLabel(grant.purchasedBytes - grant.consumedBytes) } : null,
+        time: tell.time ? step.notice : null,
+      },
+      now,
+    );
+    if (!event) return null;
+    await tx.outboxEvent.create({ data: { aggregate: GRANT_AGGREGATE, aggregateId: grant.id, type: event.type, payload: event.payload }, select: { id: true } });
+    return event.type;
   }
 }

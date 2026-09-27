@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HoldReason, Prisma, UsageDispositionState } from '@prisma/client';
 import {
-  endNoticeAhead,
+  endNoticeStep,
+  heldUsageNotice,
+  remainingLabel,
+  retentionEvent,
+  retentionToTell,
   OutboxEventType,
   runWithTenant,
   tenantTransaction,
@@ -17,7 +21,7 @@ import {
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubUsagePublisher } from './sub-usage.publisher';
-import { remainingLabel, USAGE_LEVEL_EVENT, usageThresholdCrossed, type UsageThresholdGrant } from './usage-threshold';
+import { usageThresholdCrossed, type UsageThresholdGrant } from './usage-threshold';
 
 /** How often a Grant's owner is told its total, at most (F-307-t; user, 2026-09-27). */
 export const USAGE_PUSH_EVERY_MS = 30_000;
@@ -292,6 +296,10 @@ export class MeteringService {
         startsAt: true,
         activatedAt: true,
         endsAt: true,
+        endNoticeFor: true,
+        endNoticeAt: true,
+        usageNoticeLevel: true,
+        usageNoticeSince: true,
       },
     });
     await this.announceUsage(tx, c.config, grant.userId, grant.consumedBytes);
@@ -300,42 +308,73 @@ export class MeteringService {
   }
 
   /**
-   * A charge that crossed 50 / 80 / 95 % of a prepaid Grant's period emits
-   * that level's retention event (F-601-d), in this transaction: it commits
-   * with the bytes that crossed it, and the Grant row the update holds locked
+   * A charge that crossed 50 / 80 / 95 % of a prepaid Grant's period (F-601-d)
+   * tells it — or holds it (F-601-n) — in this transaction: it commits with
+   * the bytes that crossed it, and the Grant row the update holds locked
    * orders two replicas' charges, so exactly one of them sees each crossing.
+   *
+   * **Two due the same day are one message.** A time level already due and
+   * held by entitlement's sweep is told with it, now, the usage event
+   * carrying it (`endNotice`, `endPeriod`, `days`). With none, 50 and 80 %
+   * are held on the Grant (`usageNoticeLevel`, `usageNoticeSince`) for up to
+   * 24 h, and the sweep tells them — with a time level that falls due
+   * meanwhile, or alone. 95 % is never held. A time level not yet due is
+   * never pulled forward: nothing is told early.
+   *
    * notification's ledger still lets a level through once per period
    * (`contract.retention.md`); the period is when it opened.
-   *
-   * A time level due within the next 24 h rides along (F-601-f): `endNotice`,
-   * `endPeriod` (the end, the sweep's period for it) and `days`, so the user
-   * is told both in one message and the sweep's own event later finds its
-   * ledger row held.
    */
   private async announceThreshold(
     tx: Prisma.TransactionClient,
     config: Omit<ConfigAttribution, 'remoteId'>,
-    grant: UsageThresholdGrant & { userId: string; usagePeriodStartedAt: Date | null; startsAt: Date; activatedAt: Date | null; endsAt: Date | null },
+    grant: UsageThresholdGrant & {
+      userId: string;
+      usagePeriodStartedAt: Date | null;
+      startsAt: Date;
+      activatedAt: Date | null;
+      endsAt: Date | null;
+      endNoticeFor: Date | null;
+      endNoticeAt: Date | null;
+      usageNoticeLevel: number | null;
+      usageNoticeSince: Date | null;
+    },
     charged: bigint,
   ): Promise<void> {
     const crossed = usageThresholdCrossed(grant, charged);
     if (!crossed) return;
-    const ahead = grant.endsAt ? endNoticeAhead({ endsAt: grant.endsAt, activeSince: grant.activatedAt ?? grant.startsAt }, new Date()) : null;
+    const now = new Date();
+    const usagePeriod = grant.usagePeriodStartedAt ?? grant.startsAt;
+    // The hold began at the period's first untold crossing; a higher level replaces the lower, never restarts the wait.
+    const since = heldUsageNotice({ ...grant, usagePeriod })?.since ?? now;
+    const step = grant.endsAt
+      ? endNoticeStep({ endsAt: grant.endsAt, activeSince: grant.activatedAt ?? grant.startsAt, endNoticeFor: grant.endNoticeFor, endNoticeAt: grant.endNoticeAt }, now)
+      : null;
+    let time = step?.notice ?? null;
+    const tell = retentionToTell({ time, usage: { level: crossed.level, since } }, now);
+
+    if (tell.time && step && grant.endsAt) {
+      // The time level leaves the sweep's clock as the sweep would move it; a sweep that told it first wins.
+      const moved = await tx.grant.updateMany({
+        where: { id: config.grantId, endsAt: grant.endsAt, endNoticeFor: grant.endNoticeFor, endNoticeAt: grant.endNoticeAt },
+        data: { endNoticeFor: grant.endsAt, endNoticeAt: step.next },
+      });
+      if (moved.count !== 1) time = null;
+    }
+    if (!tell.usage || (!time && crossed.level !== 95)) {
+      await tx.grant.update({ where: { id: config.grantId }, data: { usageNoticeLevel: crossed.level, usageNoticeSince: since }, select: { id: true } });
+      return;
+    }
+    if (grant.usageNoticeSince) {
+      await tx.grant.update({ where: { id: config.grantId }, data: { usageNoticeLevel: null, usageNoticeSince: null }, select: { id: true } });
+    }
+    const event = retentionEvent(
+      { tenantId: config.tenantId, userId: grant.userId, grantId: config.grantId, usagePeriod, endsAt: grant.endsAt },
+      { usage: { level: crossed.level, remaining: remainingLabel(crossed.remainingBytes) }, time: tell.time ? time : null },
+      now,
+    );
+    if (!event) return;
     await tx.outboxEvent.create({
-      data: {
-        aggregate: 'entitlement.grant',
-        aggregateId: config.grantId,
-        type: USAGE_LEVEL_EVENT[crossed.level],
-        payload: {
-          tenantId: config.tenantId,
-          userId: grant.userId,
-          grantId: config.grantId,
-          period: (grant.usagePeriodStartedAt ?? grant.startsAt).toISOString(),
-          percent: String(crossed.level),
-          remaining: remainingLabel(crossed.remainingBytes),
-          ...(ahead && grant.endsAt ? { endNotice: ahead.type, endPeriod: grant.endsAt.toISOString(), days: String(ahead.days) } : {}),
-        },
-      },
+      data: { aggregate: 'entitlement.grant', aggregateId: config.grantId, type: event.type, payload: event.payload },
       select: { id: true },
     });
   }

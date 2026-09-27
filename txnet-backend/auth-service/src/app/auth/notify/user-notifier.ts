@@ -192,7 +192,7 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       inbox: { read: (ns) => ns?.retention?.endsWithinADayManyTitle, fallback: '{{count}} services end within a day' },
     },
   },
-  // F-601-f: a usage threshold and the time level due within 24 h, told as one message; the days left pick the text.
+  // F-601-f, F-601-n: a usage and a time threshold due the same day, told as one message; the days left pick the text.
   serviceUsageAndEndsSoon: {
     read: (ns) => ns?.retention?.usageAndEndsSoon,
     fallback:

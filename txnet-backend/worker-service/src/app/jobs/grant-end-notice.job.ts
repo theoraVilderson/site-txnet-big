@@ -29,7 +29,7 @@ export class GrantEndNoticeJob implements Job {
   readonly key = 'grant_end_notice';
   readonly name = 'Service ending soon';
   readonly description =
-    'Tells the owner of an active Grant 7, 3 and 1 day(s) before it ends how long is left, once each per end (F-601-e).';
+    'Tells the owner of an active Grant 7, 3 and 1 day(s) before it ends how long is left, once each per end (F-601-e), and a held usage level with it or after 24 h (F-601-n).';
   readonly category = BotWorkerCategory.other;
   /** Unscheduled, nobody is told their service is ending. Hourly, at fifty past. */
   readonly defaultSchedule: DefaultSchedule = { scheduleType: 'cron_expression', cronExpression: '50 * * * *' };
