@@ -18,9 +18,10 @@
  *  - **the words are auth-service's**: the template and exactly the params
  *    the table names, nothing else from the payload.
  */
-import { UnscopedRedisKeys, RequestHeaders, type OutboxMessage } from '@txnet-backend/shared-core';
+import { RETENTION_KIND_OF, UnscopedRedisKeys, RequestHeaders, type OutboxMessage } from '@txnet-backend/shared-core';
 
 import { RetentionNoticeConsumer } from './retention-notice.consumer';
+import { RETENTION_NOTICES } from './retention-notices';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -43,7 +44,7 @@ function build({
   claimed = true,
   claimStatus = 200,
   notificationUrl = 'http://notification:3000/',
-  claims = undefined as Record<string, boolean> | undefined,
+  claims = undefined as Record<string, boolean | Record<string, unknown>> | undefined,
 } = {}) {
   const calls = {
     fetched: [] as Array<{ url: string; headers: Record<string, string>; body: unknown }>,
@@ -70,8 +71,11 @@ function build({
     vi.fn(async (url: string, init: { headers: Record<string, string>; body: string }) => {
       const body = JSON.parse(init.body) as { notice: string };
       calls.fetched.push({ url, headers: init.headers, body });
+      if (url.endsWith('/retention/hold')) return { ok: true, status: 200, json: async () => ({ ok: true, msg: 'ok', data: { held: true } }) };
       const answer = claims?.[body.notice] ?? claimed;
-      return { ok: claimStatus < 400, status: claimStatus, json: async () => ({ ok: true, msg: 'ok', data: { claimed: answer } }) };
+      // `true` is F-601-a's plain claim, told now; an object is the ledger's whole answer (F-601-m).
+      const data = typeof answer === 'boolean' ? (answer ? { claimed: true, deliver: 'now' } : { claimed: false }) : answer;
+      return { ok: claimStatus < 400, status: claimStatus, json: async () => ({ ok: true, msg: 'ok', data }) };
     }),
   );
   const consumer = new RetentionNoticeConsumer(broker as never, redis as never, { publish: vi.fn() } as never, config as never);
@@ -162,6 +166,7 @@ describe('RetentionNoticeConsumer.handle', () => {
             told: (days) => (days === '1' ? { template: 'testThresholdAndLastDay', params: [] } : { template: 'testThresholdAndEnd', params: ['days'] }),
           },
         },
+        [END]: { template: 'testEnd', params: ['days'] },
       };
     };
 
@@ -228,6 +233,62 @@ describe('RetentionNoticeConsumer.handle', () => {
 
       expect(calls.fetched).toHaveLength(1);
       expect(calls.joined.map((j) => j.burst)).toEqual([UnscopedRedisKeys.noticeBurst(TENANT, USER, 'testThreshold')]);
+    });
+  });
+
+  /**
+   * F-601-m: the ledger says how. `muted` tells nobody; `held` writes the
+   * inbox row now and keeps the bot message on the ledger row for `botAt` —
+   * never joined to a burst, whose flush would tell the bot at once.
+   */
+  describe('muted and quiet hours', () => {
+    const BOT_AT = '2026-09-28T04:30:00.000Z';
+    const told = (calls: ReturnType<typeof build>['calls']) => calls.fetched.filter((f) => f.url.includes('/notify/user')).map((f) => f.body);
+
+    it('tells nobody when its kind is muted', async () => {
+      const { consumer, calls } = build({ claims: { [TYPE]: { claimed: true, deliver: 'muted' } } });
+
+      await consumer.handle(event());
+
+      expect(calls.fetched).toHaveLength(1);
+      expect(calls.joined).toEqual([]);
+    });
+
+    it('in quiet hours, keeps the bot message on the row first, then tells the inbox alone', async () => {
+      const { consumer, calls } = build({ claims: { [TYPE]: { claimed: true, deliver: 'held', botAt: BOT_AT } } });
+
+      await consumer.handle(event());
+
+      expect(calls.fetched[1]).toMatchObject({
+        url: 'http://notification:3000/api/internal/notifications/retention/hold',
+        body: { eventId: EVENT, grantId: GRANT, notice: TYPE, period: '2026-09-01T00:00:00.000Z', tenantId: TENANT, template: 'testThreshold', params: { level: '80' }, botAt: BOT_AT },
+      });
+      expect(told(calls)).toEqual([{ userId: USER, channel: 'inbox', template: 'testThreshold', params: { level: '80' } }]);
+      expect(calls.joined).toEqual([]);
+    });
+
+    it('throws on an answer that claims without saying how, before telling anyone', async () => {
+      const { consumer, calls } = build({ claims: { [TYPE]: { claimed: true } } });
+
+      await expect(consumer.handle(event())).rejects.toThrow(/how to tell/);
+      expect(calls.joined).toEqual([]);
+    });
+
+    it('a muted usage level still tells the time level it carries, alone and in its own words', async () => {
+      const END = 'entitlement.grant.ends_in_3d';
+      const { consumer, calls } = build({ claims: { [TYPE]: { claimed: true, deliver: 'muted' } } });
+      consumer.notices = {
+        [TYPE]: { template: 'testThreshold', params: ['level'], ahead: { types: [END], told: () => ({ template: 'testThresholdAndEnd', params: ['days'] }) } },
+        [END]: { template: 'testEnd', params: ['days'] },
+      };
+
+      await consumer.handle(event({ endNotice: END, endPeriod: 'e1', days: '3' }));
+
+      expect(calls.joined).toEqual([{ burst: UnscopedRedisKeys.noticeBurst(TENANT, USER, 'testEnd'), eventId: EVENT, params: { days: '3' } }]);
+    });
+
+    it('every notice it tells has a kind the ledger reads its mute by', () => {
+      expect(Object.keys(RETENTION_NOTICES).filter((type) => !(type in RETENTION_KIND_OF))).toEqual([]);
     });
   });
 });

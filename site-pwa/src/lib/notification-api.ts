@@ -67,6 +67,22 @@ export interface InboxQuery {
   unreadOnly?: boolean;
 }
 
+/**
+ * The retention notice kinds a user may mute (F-601-m) — shared-core's
+ * `RETENTION_MUTABLE_KINDS`, spelled here in the same order. A stopped
+ * service is not one: it is always told.
+ */
+export const NOTICE_KINDS = ["usage", "ending", "connect", "reactivated"] as const;
+export type NoticeKind = (typeof NOTICE_KINDS)[number];
+
+/** The caller's notice settings, read and replaced whole. Times are `HH:MM`; the window may wrap midnight. */
+export interface NoticePreferences {
+  muted: NoticeKind[];
+  quietHours: { start: string; end: string } | null;
+  /** IANA zone the window is read in. */
+  timezone: string;
+}
+
 export const notificationApi = {
   /** A page of the caller's own inbox, newest first. */
   inbox(query: InboxQuery = {}): Promise<NotificationPage> {
@@ -88,5 +104,15 @@ export const notificationApi = {
       method: "POST",
       body: JSON.stringify(ids === undefined ? {} : { ids }),
     });
+  },
+
+  /** The caller's own notice settings (F-601-m); a user who never saved any reads the defaults. */
+  preferences(): Promise<NoticePreferences> {
+    return call<NoticePreferences>("/preferences", { method: "GET" });
+  },
+
+  /** Replace them whole; the answer is what was stored. */
+  savePreferences(preferences: NoticePreferences): Promise<NoticePreferences> {
+    return call<NoticePreferences>("/preferences", { method: "PUT", body: JSON.stringify(preferences) });
   },
 };

@@ -11,7 +11,7 @@ updated: 2026-09-27
 F-035-d, #3 since F-035-e for Telegram/Bale, F-035-f for SMS and F-035-h for
 email. #5–#6 since F-035-a, #7–#8 since F-035-c, #9 since F-035-e, #10 since
 F-035-f (email since F-035-h, a reseller's own SMS line since F-035-i-a), #11 since F-035-h,
-#13 since F-313-d, #14 since F-601-a.
+#13 since F-313-d, #14 since F-601-a, #15 since F-601-m.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -29,6 +29,7 @@ F-035-f (email since F-035-h, a reseller's own SMS line since F-035-i-a), #11 si
 | 12 | A campaign leaves `sending` for `stopped` only through `stopTenant` (the platform owner, F-018-x — the internal route left with F-018-w), and returns only through `resume`, never while its tenant is suspended or terminated; stopping touches no recipient row (F-018-q) | `stopTenant` and `resume`'s `where` + tenant check in `campaign-admin.service.ts` | a stop fails or loses who was never reached; a suspension's stop reopened beside it |
 | 13 | A reseller-named campaign route acts only for the reseller its **path** names, admitted by `ResellerAccess` and run in that reseller's tenant scope; the caller's own session tenant is never the campaign's, and no query inside names a tenant by hand. The audience count uses `audienceWhere`, so the size a reseller confirms is the size the fan-out then writes | `reseller-campaign.service.ts` `run()` (the delegated actor) + `RESELLER_ACCESS_READER` on the app pool; `TENANT_SCOPED_MODELS` and RLS behind it | a reseller broadcasts to the platform's users — every tenant's — or confirms one audience and sends to another |
 | 14 | A retention notice is told at most once per `(grantId, notice, period)`: the ledger row is claimed before anything is told, and only the event that wrote it claims it again | unique `(grantId, notice, period)` + `RetentionLedgerService.claim`'s `eventId` check; worker's `RetentionNoticeConsumer` claims first | a user is told the same threshold twice in a period, or a failed send is never retried; a usage event claiming a carried time row (F-601-f) holds it the same way |
+| 15 | A user's notice settings are read and written only through the gate's `userId`; a `cutoff` notice (ended, volume or wallet spent, purge soon) is always answered `now`; a muted notice still writes its ledger row; a held notice's bot message is told once, after `botAt` | `NotificationPreferencesService` (no `tenantId`, no RLS behind it); `RetentionLedgerService.claim` (`retentionKindOf`, the `botTemplate` check), `take`'s lease; worker's per-row `retention-held:bot` marker | a user silences "your service stopped", mutes another's notices, is told a past period after unmuting, or hears one notice twice on the bot |
 
 ## How to test
 
@@ -43,3 +44,4 @@ asserts #5 and #6 on the queries built;
 `notification-service/src/app/campaigns/reseller-campaign.spec.ts` asserts #13 (F-313-d);
 `notification-service/src/app/notifications/notification-inbox.spec.ts` (`RetentionLedgerService.claim`) and
 `worker-service/src/app/outbox/retention-notice.consumer.spec.ts` assert #14 (F-601-a).
+`notification-service/src/app/notifications/notification-preferences.spec.ts` asserts #15 (F-601-m).

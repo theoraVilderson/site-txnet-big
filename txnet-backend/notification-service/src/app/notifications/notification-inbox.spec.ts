@@ -179,15 +179,17 @@ describe('RetentionLedgerService.claim', () => {
   function ledger({ inserted, heldBy }: { inserted: number; heldBy?: string }) {
     const retentionNotice = {
       createMany: vi.fn().mockResolvedValue({ count: inserted }),
-      findUnique: vi.fn().mockResolvedValue(heldBy ? { eventId: heldBy } : null),
+      findUnique: vi.fn().mockResolvedValue(heldBy ? { eventId: heldBy, botAt: null, botTemplate: null } : null),
     };
-    return { retentionNotice, service: new RetentionLedgerService({ retentionNotice } as never) };
+    // No preferences row: nothing muted, no quiet hours (F-601-m, its own spec).
+    const preferences = { stored: vi.fn().mockResolvedValue(null) };
+    return { retentionNotice, service: new RetentionLedgerService({ retentionNotice } as never, preferences as never) };
   }
 
   it('writes the row once, skipping a duplicate rather than failing on it', async () => {
     const { retentionNotice, service } = ledger({ inserted: 1 });
 
-    await expect(service.claim(claim)).resolves.toEqual({ claimed: true });
+    await expect(service.claim(claim)).resolves.toEqual({ claimed: true, deliver: 'now' });
     expect(retentionNotice.createMany).toHaveBeenCalledWith({ data: [claim], skipDuplicates: true });
     expect(retentionNotice.findUnique).not.toHaveBeenCalled();
   });
@@ -198,14 +200,14 @@ describe('RetentionLedgerService.claim', () => {
     await expect(service.claim(claim)).resolves.toEqual({ claimed: false });
     expect(retentionNotice.findUnique).toHaveBeenCalledWith({
       where: { grantId_notice_period: { grantId: GRANT, notice: claim.notice, period: 'p1' } },
-      select: { eventId: true },
+      select: { eventId: true, botAt: true, botTemplate: true },
     });
   });
 
   it('answers the same event again, so its redelivery still tells', async () => {
     const { service } = ledger({ inserted: 0, heldBy: EVENT });
 
-    await expect(service.claim(claim)).resolves.toEqual({ claimed: true });
+    await expect(service.claim(claim)).resolves.toEqual({ claimed: true, deliver: 'now' });
   });
 
   it('refuses a claim without its period, or with an unknown key', () => {

@@ -15,6 +15,7 @@ const NOTIFY_PATH = '/api/internal/notify/user';
 
 /** The seam's channels, in the order they are tried after the live push. */
 const PERSON_CHANNELS = ['inbox', 'bot'] as const;
+export type PersonChannel = (typeof PERSON_CHANNELS)[number];
 
 /** The marker segment of a combined notice's channels; the flush id is the "event" (F-067-p). */
 const BURST_CONSUMER = 'notice-burst';
@@ -46,7 +47,7 @@ if redis.call('EXISTS', KEYS[3]) == 0 then
 end
 return redis.call('HGETALL', KEYS[3])`;
 
-type Person = { tenantId: string; userId: string; template: string; params: Record<string, string> };
+export type Person = { tenantId: string; userId: string; template: string; params: Record<string, string> };
 
 /**
  * One event, told (F-067-o, ADR-0084 decision 2). `consumer` is the notice's
@@ -54,12 +55,17 @@ type Person = { tenantId: string; userId: string; template: string; params: Reco
  * `person` is the one user told in their inbox and on their bot — for a
  * tenant-audience event, the tenant's `ownerUserId`. The words are
  * auth-service's, in that user's language.
+ *
+ * `only` names the person's channels to tell, each on its own and never
+ * joined to a burst: a retention notice in the user's quiet hours is told to
+ * the inbox now and to the bot when they end (F-601-m).
  */
 export type EventNotice = {
   consumer: string;
   eventId: string;
   live?: { channel: `user:${string}` | `tenant:${string}`; body: Record<string, unknown> };
   person?: Person;
+  only?: readonly PersonChannel[];
 };
 
 /**
@@ -102,7 +108,9 @@ export class EventNoticeSender {
     const failures: unknown[] = [];
     const { live, person } = notice;
     if (live) await this.once(notice, 'live', () => this.realtime.publish(live.channel, live.body), failures);
-    if (person) {
+    if (person && notice.only) {
+      for (const channel of notice.only) await this.once(notice, channel, () => this.tell(channel, person), failures);
+    } else if (person) {
       const owed = await this.owedBeforeBursts(notice);
       if (owed === null) await this.once(notice, 'person', () => this.join(notice.eventId, person), failures);
       for (const channel of owed ?? []) await this.once(notice, channel, () => this.tell(channel, person), failures);
@@ -117,7 +125,7 @@ export class EventNoticeSender {
    * rename is accepted once). `null` is every other event. Dead code once
    * those markers expire (`RedisTtl.outboxProcessed`, 7 days after deploy).
    */
-  private async owedBeforeBursts(notice: EventNotice): Promise<(typeof PERSON_CHANNELS)[number][] | null> {
+  private async owedBeforeBursts(notice: EventNotice): Promise<PersonChannel[] | null> {
     const told = await this.redis.present(
       PERSON_CHANNELS.map((channel) => UnscopedRedisKeys.outboxProcessed(`${notice.consumer}:${channel}`, notice.eventId)),
     );
@@ -188,7 +196,7 @@ export class EventNoticeSender {
   }
 
   /** Throws on an unset seam or a refusal, so that channel stays owed. */
-  private async tell(channel: (typeof PERSON_CHANNELS)[number], person: Person, count?: number): Promise<void> {
+  private async tell(channel: PersonChannel, person: Person, count?: number): Promise<void> {
     if (!this.baseUrl) throw new Error('AUTH_API_BASE_URL is not set');
     if (!this.serviceToken) throw new Error('SERVICE_AUTH_TOKEN is not set');
 

@@ -4,8 +4,8 @@ import { ServiceOnlyGuard } from '@txnet-backend/shared-core';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { CreateNotification, NotificationInboxService } from './notification-inbox.service';
 import { createNotificationSchema } from './notification-inbox.schema';
-import { RetentionClaim, RetentionLedgerService } from './retention-ledger.service';
-import { retentionClaimSchema } from './retention-ledger.schema';
+import { RetentionClaim, RetentionHold, RetentionLedgerService } from './retention-ledger.service';
+import { heldTakeSchema, heldToldSchema, retentionClaimSchema, retentionHoldSchema } from './retention-ledger.schema';
 
 /**
  * How another unit puts a row in a user's inbox (F-035-a): an Nx app cannot
@@ -20,7 +20,10 @@ import { retentionClaimSchema } from './retention-ledger.schema';
  * the platform's own notifications.
  *
  * `retention/claim` is the retention ledger (F-601-a): worker-service asks it
- * before telling a retention notice, so each is told once per Grant period.
+ * before telling a retention notice, so each is told once per Grant period,
+ * and the answer says how — now, muted, or held for quiet hours (F-601-m).
+ * `retention/hold` keeps a held notice's bot message; `retention/held/take`
+ * and `retention/held/told` are worker-service's job releasing them.
  */
 @Controller('internal/notifications')
 @UseGuards(ServiceOnlyGuard)
@@ -39,5 +42,23 @@ export class NotificationInternalController {
   @HttpCode(200)
   claimRetention(@Body(new ZodValidationPipe(retentionClaimSchema)) body: RetentionClaim) {
     return this.retention.claim(body);
+  }
+
+  @Post('retention/hold')
+  @HttpCode(200)
+  holdRetention(@Body(new ZodValidationPipe(retentionHoldSchema)) body: RetentionHold) {
+    return this.retention.hold(body);
+  }
+
+  @Post('retention/held/take')
+  @HttpCode(200)
+  async takeHeld(@Body(new ZodValidationPipe(heldTakeSchema)) body: { limit: number }) {
+    return { items: await this.retention.take(body.limit) };
+  }
+
+  @Post('retention/held/told')
+  @HttpCode(200)
+  toldHeld(@Body(new ZodValidationPipe(heldToldSchema)) body: { ids: string[] }) {
+    return this.retention.told(body.ids);
   }
 }

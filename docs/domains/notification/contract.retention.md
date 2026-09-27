@@ -2,7 +2,7 @@
 id: notification
 layer: domain
 status: active
-version: 7
+version: 8
 updated: 2026-09-27
 ---
 
@@ -22,14 +22,14 @@ one notice path of ADR-0084 — not a second one inside `notification-service`
 |---|---|---|
 | emit | the producing domain (entitlement, billing, network) | an outbox row (ADR-0021) in the transaction that saw the moment |
 | route | `worker-service` `RetentionNoticeConsumer`, queue `AUTOMATION_RETENTION_NOTICE_QUEUE` | bound to every type in `RETENTION_NOTICES` (`outbox/retention-notices.ts`) |
-| once per period | **this unit**: `POST internal/notifications/retention/claim` | the ledger below; asked before anything is told |
+| once per period, and how | **this unit**: `POST internal/notifications/retention/claim` | the ledger below; asked before anything is told; its answer carries the user's mute and quiet hours (F-601-m) |
 | tell | `EventNoticeSender` -> auth-service `/internal/notify/user` | inbox (a `notification` row through this unit's `create`) and bot, in the user's language — [automation/contract.notices.md](../automation/contract.notices.md) |
 
 ## The claim
 
 | Operation | Route | Input | Output | Errors |
 |---|---|---|---|---|
-| claim a notice for a period | `POST internal/notifications/retention/claim` (`SERVICE_AUTH_TOKEN`) | `{ eventId, userId, grantId: uuid, notice: <outbox type>, period: 1..100 chars }`, strict | `{ claimed }`, 200 | 400 `validation.failed`; 404 on a wrong token |
+| claim a notice for a period | `POST internal/notifications/retention/claim` (`SERVICE_AUTH_TOKEN`) | `{ eventId, userId, grantId: uuid, notice: <outbox type>, period: 1..100 chars }`, strict | `{ claimed: false }`, or `{ claimed: true, deliver: now \| muted }`, or `{ claimed: true, deliver: held, botAt }` (ISO), 200 — "Mute and quiet hours" below | 400 `validation.failed`; 404 on a wrong token |
 
 - One `retention_notice` row per `(grantId, notice, period)`. The first event
   to claim it writes it and is answered `claimed: true`.
@@ -42,6 +42,30 @@ one notice path of ADR-0084 — not a second one inside `notification-service`
   **before** it claims, and a failure after the claim dead-letters the event
   (F-067-d), where a replay under the same id is still owed.
 - Not rate-limited, like every internal seam here.
+
+## Mute and quiet hours (F-601-m, spec 9.4, user 2026-09-27)
+
+A user mutes **kinds** of notice and sets one quiet window, in the panel's
+settings (panel-web `panel-settings-notifications`; the bot's side is F-319,
+over the same row). The claim reads them, so no producer knows they exist.
+
+| Operation | Route | Input | Output | Errors |
+|---|---|---|---|---|
+| read my settings | `GET notifications/preferences` (gated) | — | `{ muted: kind[], quietHours: { start, end } \| null, timezone }`; no row reads `{ [], null, 'Asia/Tehran' }` | 401; 429 (inbox read bucket) |
+| replace them | `PUT notifications/preferences` (gated, open while suspended) | the same, strict; `start`/`end` `HH:MM` and different, `timezone` an IANA zone | what was stored | 400 `validation.failed`; 401; 429 (inbox write bucket) |
+| keep a held bot message | `POST internal/notifications/retention/hold` (token) | `{ eventId, grantId, notice, period, tenantId, template, params, botAt }`, strict | `{ held }` | 400; 500 on a `botAt` over a day away |
+| take due held messages | `POST internal/notifications/retention/held/take` (token) | `{ limit: 1..500 }` | `{ items: [{ id, tenantId, userId, template, params }] }`, each leased 10 min | 400 |
+| mark them told | `POST internal/notifications/retention/held/told` (token) | `{ ids: uuid[1..500] }` | `{ cleared }` | 400 |
+
+| Rule | Why |
+|---|---|
+| Kinds (shared-core `RETENTION_KIND_OF`): `usage` (50/80/95 %, wallet low), `ending` (7/3/1 days), `connect` (not connected, idle), `reactivated`. `cutoff` — ended, volume or wallet spent, purge soon — is always `now` and has no switch | a user whose service stopped, or whose configs are about to go, must hear it (entitlement `contract.retention.md`) |
+| A type missing from the table is told as `cutoff` | a new notice is never silently muted |
+| `muted` still writes the ledger row | unmuting never tells a period already past |
+| Quiet hours hold the **bot**, never the inbox: `held` means the inbox row now and the bot message at `botAt`, the window's next end in the user's zone, on the minute; a window may wrap midnight | the inbox makes no sound; a morning bot message is still news. Asked 2026-09-27: hold all, silent send, or this — silent send exists on Telegram only |
+| The first `hold` for a row stands; a claim by the same event on a row already holding one answers `held` with its `botAt` | a redelivery after the window ends never tells the bot beside the held message |
+| A take leases rows 10 min (`FOR UPDATE SKIP LOCKED`); the worker marks each tell per row id, then `told` clears it | two runs never take one row; a run that died between the tell and `told` repeats nothing |
+| Minutes from the local clock: a DST jump inside the window moves the release by that hour | Asia/Tehran has kept none since 2022 |
 
 ## What a producer writes
 
@@ -108,8 +132,6 @@ service the user has. It rides the purchase's own notices (automation
 
 ## Not built here
 
-- Muting and quiet hours (F-601-m): they will be read at the claim, which is
-  why the ledger is this unit's — ADR-0084's revisit trigger. The three
-  cutoff types above (F-601-b) and the two before-purge ones (F-601-j) are
-  never muted nor held for quiet hours.
+- A mute per Grant, or per channel (bot vs inbox): a kind is muted everywhere.
+- The bot's own settings screen: F-319, over the same `notification_preference` row.
 - Retention of ledger rows: one per Grant, notice and period, kept.

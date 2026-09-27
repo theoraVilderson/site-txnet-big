@@ -18,3 +18,26 @@ export const retentionClaimSchema = z
     period: z.string({ message: invalid }).min(1, { message: invalid }).max(100, { message: invalid }),
   })
   .strict();
+
+/**
+ * A claimed notice's bot message, kept for the end of the user's quiet hours
+ * (F-601-m): the row's key and the event holding it, the words to tell, and
+ * the `botAt` the claim answered.
+ */
+export const retentionHoldSchema = retentionClaimSchema
+  .omit({ userId: true })
+  .extend({
+    tenantId: z.string({ message: invalid }).uuid({ message: invalid }),
+    template: z.string({ message: invalid }).regex(/^[A-Za-z0-9]+$/, { message: invalid }).max(100, { message: invalid }),
+    params: z.record(z.string({ message: invalid }), z.string({ message: invalid }).max(2000, { message: invalid }), { message: invalid }),
+    botAt: z.string({ message: invalid }).datetime({ message: invalid }),
+  })
+  .strict();
+
+/** A take of held bot messages now due (F-601-m). */
+export const heldTakeSchema = z.object({ limit: z.number({ message: invalid }).int({ message: invalid }).min(1, { message: invalid }).max(500, { message: invalid }) }).strict();
+
+/** The held messages a take told. */
+export const heldToldSchema = z
+  .object({ ids: z.array(z.string({ message: invalid }).uuid({ message: invalid }), { message: invalid }).min(1, { message: invalid }).max(500, { message: invalid }) })
+  .strict();

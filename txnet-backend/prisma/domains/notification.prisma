@@ -143,8 +143,30 @@ model RetentionNotice {
   period    String
   eventId   String   @db.Uuid
   createdAt DateTime @default(now())
+  /// F-601-m: the bot message held for the user's quiet hours — told at `botAt` (a take leases it forward), then all
+  /// four cleared. The inbox row was written when claimed. Null `botAt` = nothing held.
+  botTenantId String?   @db.Uuid
+  botAt       DateTime?
+  botTemplate String?
+  botParams   Json?
 
   @@unique([grantId, notice, period])
+  @@index([botAt])
   @@map("retention_notice")
+  @@schema("notification")
+}
+
+/// F-601-m: a user's retention notice preferences (spec 9.4). `mutedKinds` are `RETENTION_MUTABLE_KINDS`; the quiet
+/// window is minutes after local midnight in `timezone` (IANA), both set or both null, and may wrap midnight. No row =
+/// nothing muted, no quiet hours. Keyed by user like `notification`: no `tenantId`, no RLS (invariant 15).
+model NotificationPreference {
+  userId     String   @id @db.Uuid
+  mutedKinds String[] @default([])
+  quietStart Int?
+  quietEnd   Int?
+  timezone   String   @default("Asia/Tehran")
+  updatedAt  DateTime @updatedAt
+
+  @@map("notification_preference")
   @@schema("notification")
 }

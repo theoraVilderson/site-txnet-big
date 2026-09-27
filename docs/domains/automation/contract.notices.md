@@ -73,4 +73,7 @@ every type in `RETENTION_NOTICES` (`outbox/retention-notices.ts`), consumer
 | A payload without tenant, user, Grant, `period` or a named param, or a type with no row, throws **before** the claim | a claimed period whose notice never went out is lost until the next period |
 | A row's `optional` params (`supportUrl`, F-601-c) are passed when the payload has them, and their absence is never a throw | a tenant with no support link still tells the notice |
 | A refused claim or an unset `NOTIFICATION_API_BASE_URL` throws and dead-letters | the same event id claims again on a replay |
+| The claim answers how (F-601-m): `muted` acks and tells nobody; `held` first `POST …/retention/hold` (the words and `botAt`), then tells the **inbox only**; a claim with no `deliver` throws before anything is told | the user's mute and quiet hours are the ledger's, one rule for every producer; the bot message is `retention_held_notice`'s ([contract.worker.md](contract.worker.md)) |
+| A usage level muted while its carried time level (F-601-f) is not: the time level is told alone, in its own row's words | a muted kind never swallows one that is not |
+| `only: [...]` on `EventNoticeSender.send` tells just those person channels, each on its own marker, never joined to a burst | a burst's flush would tell the bot at once, inside the quiet hours |
 

@@ -114,9 +114,29 @@ envelope and refresh of `lib/api-request.ts`. Two calls, `inbox` and
 is refused there rather than quietly meaning the same thing, so this client
 never sends one.
 
+## Notice settings on `/settings` (F-601-m)
+
+`settings/_components/NotificationsSection.tsx`, below the email section, over
+`notificationApi.preferences` / `savePreferences`
+([notification/contract.retention.md](../../domains/notification/contract.retention.md)
+"Mute and quiet hours").
+
+1. **A switch that is on means "tell me"**, one per `NOTICE_KINDS` entry, words
+   from an exhaustive `Record<NoticeKind, …>`. There is no switch for a stopped
+   service: the subtitle says it is always told, and the server enforces it.
+2. **Quiet hours are one switch, two `time` fields and a zone.** Switched on,
+   the window reads 23:00–08:00 until moved; the zone list is the browser's
+   `Intl.supportedValuesOf`, keeping the saved zone even if the browser lacks
+   it. Equal ends block the save with a line — the server refuses them too.
+3. **Saved whole with one button, and the answer is what is shown after**, so
+   a value the server normalised (kind order, duplicates) reads as stored. A
+   failed load shows one line and no form: an empty form saved would reset
+   everything the user set.
+
 ## Consumes
 
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
 | notification | `GET /api/notifications`, `POST /api/notifications/read` | the last good page stays with an error line and a retry; the bell still opens |
+| notification | `GET` / `PUT /api/notifications/preferences` | the settings section shows one error line and no form; the rest of `/settings` works |
 | realtime | `notification.created` on `user:<userId>` | no live badge; the count is right again on the next page load, because the row is durable and the push only spares a reload (D-15) |

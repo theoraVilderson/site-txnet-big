@@ -5,6 +5,7 @@ export * from './lib/automation/bot-update';
 export * from './lib/automation/outbox';
 export * from './lib/automation/routing-keys';
 export * from './lib/automation/retention-levels';
+export * from './lib/automation/retention-kinds';
 export * from './lib/automation/block-request';
 export * from './lib/automation/usage-delta';
 export * from './lib/automation/usage-release';

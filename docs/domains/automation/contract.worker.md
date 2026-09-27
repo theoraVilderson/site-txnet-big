@@ -76,6 +76,7 @@ Why each of those is the answer — and what a Redis that cannot be reached does
 | `grant_group_fulfilment` | places a config on every non-drain healthy member of a Grant's panel group and activates it at `minHealthyPanels` — asks `fulfil-due` (F-027-bl, `domains/network/contract.groups.md` rule 11), then `drain-due`: retires a drained member's configs after 2 × TTL and removes it (F-027-bm, rules 13-15); a platform tick, seeded `* * * * *` | `BILLING_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `grant_delivery` | checks paid `pending` Grants whose `nextDeliveryAt` is due — delivered, retried at 1, 2, 4, 8, 16, 32 min, or cancelled and refunded in full — asks `deliver-due` (F-111-d, `domains/entitlement/contract.md`); the backstop since `entitlement.grant.created` delivers at once (F-114-i, `contract.outbox.md`); a platform tick, seeded `* * * * *` | `BILLING_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `grant_unused_notice` / `grant_end_notice` / `grant_idle_notice` | the retention clocks: ask `unused-due` — active Grants with nothing consumed 24 h / 72 h after activation emit "not connected yet?" (F-601-c) — and `end-due` — active Grants 7 / 3 / 1 day(s) before their end emit a time threshold, once per level per end (F-601-e), and held usage levels are told, alone after 24 h or with a time level (F-601-n) — and `idle-due` — a used Grant idle 7 days is checked in on once per stretch (F-601-l); all in `domains/entitlement/contract.retention.md`; platform ticks, seeded `40 * * * *` / `50 * * * *` / `30 * * * *` | `BILLING_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
+| `retention_held_notice` | the end of quiet hours: takes the bot messages of retention notices held for their owner's quiet hours and now due (a 10 min lease), tells each on the bot only, marked per ledger row, then `told` (F-601-m, `domains/notification/contract.retention.md`); a platform tick, seeded `*/5 * * * *`; a failed tell is an error, taken again after the lease | `NOTIFICATION_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `network_traffic_rollup` | rolls raw traffic into `traffic_daily_aggregate` and drops a raw month only once its aggregate matches it (F-027-o, `domains/network/contract.rollup.md`); a platform tick, seeded `15 3 * * *`; a refused drop fails the run | — (it calls `network.*` functions through its own pool) |
 | `tenant_domain_verification` | proves `verifying` custom domains and re-validates `verified` ones' TXT records; a platform tick, seeded `*/5`; a domain whose check threw is an error (F-018-i, `domains/tenant/contract.domains.md`) | `TENANT_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 
@@ -84,8 +85,7 @@ how a job reaches code it cannot import.
 
 **A job calls another service over the internal seam.** The Credential Vault is
 `tenant`'s code, its seams in `tenant-service` (F-018-ab); an Nx application cannot import another
-Nx application. So the job asks over
-`POST /api/internal/vault/destroy-expired` behind `ServiceOnlyGuard` — the door
+Nx application. So the job asks over `POST /api/internal/vault/destroy-expired` behind `ServiceOnlyGuard` — the door
 F-066-i built — rather than the vault moving into a workspace library, which
 would drag its Prisma models, its KEK service and its audit trail across an app
 boundary to serve one caller. `worker-service` therefore holds

@@ -1569,6 +1569,39 @@
       "sent": "Email sent",
       "failed": "We could not send the email. Try again in a moment.",
       "saved": "Your email address is saved."
+    },
+    "notifications": {
+      "title": "Service notices",
+      "subtitle": "Choose what we tell you about your services, on the bot and in your inbox. A service that stops, or whose configs are about to be removed, is always told.",
+      "kinds": {
+        "usage": {
+          "label": "Usage and wallet",
+          "hint": "50, 80 and 95% of your volume used, or a wallet running low"
+        },
+        "ending": {
+          "label": "Before a service ends",
+          "hint": "7, 3 and 1 day before it ends"
+        },
+        "connect": {
+          "label": "Help connecting",
+          "hint": "A service not used after buying it, or quiet for a week"
+        },
+        "reactivated": {
+          "label": "Service running again",
+          "hint": "After a renewal or a top-up brings it back"
+        }
+      },
+      "quiet": {
+        "label": "Quiet hours",
+        "hint": "In these hours a notice goes to your inbox only; the bot tells you when they end.",
+        "from": "From",
+        "to": "To",
+        "timezone": "Time zone",
+        "sameTimes": "Start and end must be different times."
+      },
+      "save": "Save",
+      "saved": "Your notice settings are saved.",
+      "loadFailed": "We could not load your notice settings."
     }
   },
   "tenantBilling": {

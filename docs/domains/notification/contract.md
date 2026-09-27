@@ -31,6 +31,7 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 |---|---|---|---|---|
 | read the inbox | `GET notifications` (gated) | `page`, `pageSize` (≤100, default 1/20), `unreadOnly=true\|false` | `{ items[], page, pageSize, total, unreadCount }`; item = `id, type, title, body, readAt, createdAt` (ISO), newest first | 400 `validation.failed`, 401 |
 | mark read | `POST notifications/read` (gated) | `{ ids?: uuid[1..100] }` — absent = all | `{ marked, unreadCount }` | 400, 401 |
+| my notice settings | `GET` / `PUT notifications/preferences` (gated) | muted kinds, quiet hours, timezone | the stored settings — [contract.retention.md](contract.retention.md) "Mute and quiet hours" (F-601-m) | 400, 401 |
 | create | `POST internal/notifications` (`SERVICE_AUTH_TOKEN`) | `{ userId, type, title ≤200, body ≤2000 }` | the item, 201 | 400; 404 on a missing or wrong token |
 | draft a campaign | `POST notifications/campaigns` (gated, `campaign.manage`) | `{ channel, messageBody ≤4000, subject?: ≤200\|null, sourceLang?: Language\|null, audience, tenantId?: uuid\|null }` | the campaign, 201 | 400; 403 no permission or `not_platform_owner`; 404 `tenant_not_found`; 409 `sms_not_available`, `email_not_available` |
 | list campaigns | `GET notifications/campaigns` | `page`, `pageSize` ≤100, `status?`, `tenantId?: uuid\|platform` (owner only) | `{ items[], page, pageSize, total }`, newest first | 400, 403 |
@@ -47,7 +48,7 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | fan out | `POST internal/notifications/campaigns/fan-out` (`SERVICE_AUTH_TOKEN`) | — | `{ campaigns, recipients, finished, unreadable }` | 404 on a wrong token |
 | deliver | `POST internal/notifications/campaigns/deliver` (token) | — | `{ claimed, sent, failed, deferred, stalled }` | 404 on a wrong token |
 | record an outcome | `POST internal/notifications/campaigns/recipients/:id/outcome` (token) | `{ outcome: sent\|failed }` | `{ changed }` | 400; 404 `recipient_not_found` |
-| claim a retention notice | `POST internal/notifications/retention/claim` (token) | `{ eventId, userId, grantId, notice, period }` | `{ claimed }` — once per Grant period ([contract.retention.md](contract.retention.md), F-601-a) | 400; 404 on a wrong token |
+| claim a retention notice | `POST internal/notifications/retention/claim` (token) | `{ eventId, userId, grantId, notice, period }` | `{ claimed, deliver?, botAt? }` — once per Grant period, and how (mute, quiet hours); `hold`, `held/take`, `held/told` beside it ([contract.retention.md](contract.retention.md), F-601-a, F-601-m) | 400; 404 on a wrong token |
 
 - `unreadCount` is over the whole inbox, whatever the page or filter.
 - `marked` counts rows that changed. An id that is read already, does not exist
