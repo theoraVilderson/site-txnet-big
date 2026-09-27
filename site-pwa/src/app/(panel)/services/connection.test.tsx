@@ -83,6 +83,7 @@ const GRANT: GrantRow = {
   trafficCapBytes: null,
   suspendedAt: null,
   purgeAt: null,
+  lastTrafficAt: null,
 };
 
 function usage(days: { uploadBytes: string; downloadBytes: string }[]): GrantUsage {
@@ -331,28 +332,32 @@ describe("a config list told its lines are captured (F-111-l)", () => {
     <ServiceRow row={GRANT} name="VPN" capabilities={[]} configsAsked={asked} autoOpen={open} />
   );
 
-  it("re-reads when its count moves, keeping the list up while it asks", async () => {
+  // While every config waits for its first lines, the row shows the purchase's
+  // "links" step instead of a list of waits (F-307-u).
+  const waitingStep = () => document.querySelector('[data-step="links"]')?.getAttribute("data-state");
+
+  it("re-reads when its count moves, keeping what it shows while it asks", async () => {
     const { rerender } = await openRow([WAITING]);
-    await screen.findByText("myServices.lines.notCaptured");
+    await waitFor(() => expect(waitingStep()).toBe("current"));
 
     grantConfigs.mockResolvedValue({ grantId: "g1", rows: [{ ...CONFIG, lines: [VLESS] }] });
     rerender(row(1));
     // No skeleton over the card while it is asked again.
-    expect(screen.getByText("myServices.lines.notCaptured")).toBeInTheDocument();
+    expect(waitingStep()).toBe("current");
 
-    await waitFor(() => expect(screen.queryByText("myServices.lines.notCaptured")).not.toBeInTheDocument());
+    await waitFor(() => expect(waitingStep()).toBeUndefined());
     expect(screen.getAllByRole("listitem").filter((li) => li.hasAttribute("data-line"))).toHaveLength(1);
     expect(grantConfigs).toHaveBeenCalledTimes(2);
   });
 
   it("keeps what it shows when that read fails", async () => {
     const { rerender } = await openRow([WAITING]);
-    await screen.findByText("myServices.lines.notCaptured");
+    await waitFor(() => expect(waitingStep()).toBe("current"));
 
     grantConfigs.mockRejectedValue(new Error("down"));
     rerender(row(1));
     await waitFor(() => expect(grantConfigs).toHaveBeenCalledTimes(2));
-    expect(screen.getByText("myServices.lines.notCaptured")).toBeInTheDocument();
+    expect(waitingStep()).toBe("current");
   });
 
   it("reads nothing while closed", () => {

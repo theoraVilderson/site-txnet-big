@@ -2239,6 +2239,39 @@
       "pastedCapped": "Only the first {{max}} pasted links are searched.",
       "pastedNone": "None of the pasted links belongs to one of your services.",
       "pastedNoneCurrent": "None of the pasted links belongs to a current service; ended services are hidden."
+    },
+    "pulse": {
+      "live": "In use",
+      "liveHint": "Moving data right now",
+      "idle": "Idle",
+      "idleSince": "Last used {{ago}}",
+      "never": "Not used yet",
+      "added": "just added"
+    },
+    "ago": {
+      "now": "just now",
+      "minutes": "{{n}} min ago",
+      "hours": "{{n}} h ago",
+      "days": "{{n}} days ago"
+    },
+    "meter": {
+      "traffic": "Traffic left",
+      "time": "Time left",
+      "trafficUsed": "Traffic used",
+      "of": "of {{total}}",
+      "percentLeft": "{{percent}}% left",
+      "unlimited": "Unlimited",
+      "until": "until {{at}}",
+      "lowTraffic": "This service is almost out of traffic; it disconnects when it runs out.",
+      "lowTime": "Less than a day is left on this service."
+    },
+    "build": {
+      "title": "Getting your service ready",
+      "paid": "Payment received",
+      "server": "Setting it up on the server",
+      "links": "Making your connection links",
+      "linksHint": "The service is built; its connection links appear here within a minute or two.",
+      "ready": "Your service is ready! The configs are just below — copy one and connect."
     }
   },
   "systems": {

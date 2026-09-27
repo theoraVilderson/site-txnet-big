@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 10
-updated: 2026-09-26
+updated: 2026-09-27
 ---
 
 # Contract — billing / gift code
@@ -86,7 +86,7 @@ closed had no way back.
 
 | Route | Query | Answers `data` |
 |---|---|---|
-| `GET /api/billing/gift/grants` | `page`, `pageSize` (≤ 100), `scope` (`current` default, `all`), `q` (≤ 100, trimmed; blank is none) | `{total, page, pageSize, hidden, rows[{id, status, startsAt, endsAt, featureKeys, variant{id, sku, nameKey} \| null, billingMode, consumedBytes, purchasedBytes, trafficUnlimited, trafficCapBytes, suspendedAt, purgeAt}]}` |
+| `GET /api/billing/gift/grants` | `page`, `pageSize` (≤ 100), `scope` (`current` default, `all`), `q` (≤ 100, trimmed; blank is none) | `{total, page, pageSize, hidden, rows[{id, status, startsAt, endsAt, featureKeys, variant{id, sku, nameKey} \| null, billingMode, consumedBytes, purchasedBytes, trafficUnlimited, trafficCapBytes, suspendedAt, purgeAt, lastTrafficAt}]}` |
 | `POST /api/billing/gift/grants/by-lines` | body: `lines` (1–20, each trimmed, ≤ 4096), `page`, `pageSize`, `scope` as above | the same page, narrowed to the Grants holding a config any line is (F-307-p), or whose subscription link a line is (F-307-r) |
 
 | Rule | Why |
@@ -102,6 +102,7 @@ closed had no way back.
 | Its own bucket, `GRANT_LIST`, default **120** per 900s; the `subscriptionLink` capability, as above | it reads no secret and destroys nothing, so it is no security control — but sharing `GRANT_ROTATE_TOKEN`'s five calls would spend a user's recovery budget on looking at the list that offers the recovery |
 | Bytes are decimal strings. `purgeAt` is `suspendedAt` + `coalesce(grant.purgeAfterDays, tenant.purgeAfterDays)` days, and `null` when the Grant is not suspended or the window is `0` (F-027-ac) | a Grant's bytes pass 2^53; and it is the SQL `entitlement/purge.ts` runs, so the panel's countdown is the instant the hourly job acts after. The tenant is read only when a suspended row has no window of its own |
 | `trafficUnlimited` is the Grant's flag (F-111-s). `trafficCapBytes` is a capped prepaid Grant's `quotas.traffic_bytes.limit` plus its unexpired `traffic_bytes` adjustments, floored at 0, from one `groupBy` per page read only when a row has a cap; `null` for metered, unlimited or no quota (F-111-t) | the same sum `/sub` answers as `total` (sub-api `contract.md`), so the panel and the app never show two caps for one Grant |
+| `lastTrafficAt` is the Grant's `usagePushedAt`, or `null` (F-307-u) | metering writes it only for a charged, non-zero delta, at most every 30 s, so it is when traffic last moved to within one push; it is the panel's "in use" on first paint (panel-web `contract.service-pulse.md`) |
 
 **Not covered:** searching by product name, or any scope but these two; a pasted `/sub` link (a Grant's token, not a config line). Its consumer since
 2026-09-20 is the panel's "my services" page (F-502-s,

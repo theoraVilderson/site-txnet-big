@@ -237,6 +237,7 @@ export function MyServicesView() {
               capabilities={capabilities}
               configsAsked={state.configsAsked[row.id]}
               autoOpen={autoOpen}
+              meteringDown={meteringDown}
             />
           ))}
         </ul>

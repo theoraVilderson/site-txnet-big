@@ -79,7 +79,8 @@ export interface GrantsPageState {
  * **Used bytes follow the panels without a read (F-307-t).**
  * `entitlement.grant.usage` carries a Grant's committed total, at most every
  * 30 s; the row shown for it takes the figure, and only a larger one — an
- * older push landing late never moves the bar back. No other row changes
+ * older push landing late never moves the bar back. A rise also stamps the
+ * row's `lastTrafficAt`, which is what reads it "in use" (F-307-u). No other row changes
  * identity, so no other row renders.
  *
  * **Nothing is asked on a clock** (user, 2026-09-26). A socket that is down
@@ -217,12 +218,16 @@ export function useGrantsPage(
   return { rows, total, pageSize: PAGE_SIZE, hidden, texts, isLoading, configsAsked, error, retry };
 }
 
-/** The rows with one Grant's `consumedBytes` raised to a pushed total; the same array when nothing moves. */
+/**
+ * The rows with one Grant's `consumedBytes` raised to a pushed total, and its
+ * `lastTrafficAt` stamped now — a rise is traffic that just moved (F-307-u);
+ * the same array when nothing moves.
+ */
 function withUsage(rows: GrantRow[] | null, usage: { grantId: string; consumedBytes: string }): GrantRow[] | null {
   if (!rows) return rows;
   const at = rows.findIndex((r) => r.id === usage.grantId);
   if (at < 0 || BigInt(usage.consumedBytes) <= BigInt(rows[at].consumedBytes)) return rows;
   const next = [...rows];
-  next[at] = { ...rows[at], consumedBytes: usage.consumedBytes };
+  next[at] = { ...rows[at], consumedBytes: usage.consumedBytes, lastTrafficAt: new Date().toISOString() };
   return next;
 }

@@ -47,6 +47,7 @@ function grantRow(overrides: Record<string, unknown> = {}) {
     quotas: {},
     suspendedAt: null,
     purgeAfterDays: null,
+    usagePushedAt: null,
     ...overrides,
   };
 }
@@ -154,11 +155,21 @@ describe('GrantService.listForUser', () => {
           trafficCapBytes: null,
           suspendedAt: null,
           purgeAt: null,
+          lastTrafficAt: null,
         },
       ],
     });
     // No suspended row, so the tenant's window is never asked for.
     expect(asked.tenantReads).toBe(0);
+  });
+
+  it('answers when traffic last moved — the last usage push, which only a charged delta makes (F-307-u)', async () => {
+    const at = new Date('2026-09-27T09:58:30Z');
+    const { list } = build([grantRow({ usagePushedAt: at }), grantRow({ id: 'g-quiet' })], 2);
+
+    const { rows } = await list();
+
+    expect(rows.map((r) => r.lastTrafficAt)).toEqual(['2026-09-27T09:58:30.000Z', null]);
   });
 
   it('answers when a suspended Grant is purged — its own window, else the tenant’s, and 0 is never (F-027-ac)', async () => {

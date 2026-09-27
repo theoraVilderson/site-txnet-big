@@ -184,6 +184,8 @@ export interface GrantRow {
   suspendedAt: string | null;
   /** When the panel seats are released; `null` when nothing is due (not suspended, or a window of 0). */
   purgeAt: string | null;
+  /** When traffic last moved, to within one usage push; `null` when it never has (F-307-u). */
+  lastTrafficAt: string | null;
 }
 
 /**

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { AlertCircle, Check, ChevronDown, Copy, Link2, Loader2, QrCode, RotateCcw, Search, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -9,14 +9,16 @@ import type { GrantRow } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
 import { useGrantConfigs } from "../_hooks/useGrantConfigs";
 import { useSubscriptionLink } from "../_hooks/useSubscriptionLink";
-import { useTimeLeft } from "../_hooks/useTimeLeft";
 import { GRANT_TONES, type CapabilityName } from "../_lib/my-services";
-import { formatBytes, matchesConfig, purgeCountdown } from "../_lib/service-configs";
-import { remainingBytes, usedShare } from "../_lib/usage";
+import { buildStage } from "../_lib/pulse";
+import { matchesConfig, purgeCountdown } from "../_lib/service-configs";
 import { ConfigLines } from "./ConfigLines";
 import { GrantConfigs } from "./GrantConfigs";
 import { QrDialog } from "./QrDialog";
+import { ServiceBuilding, ServiceReady } from "./ServiceBuilding";
+import { ServicePulse, useServicePulse } from "./ServicePulse";
 import { UsageBars } from "./UsageBars";
+import { UsageMeter } from "./UsageMeter";
 
 const S = FrontendI18nKeys.common.myServices;
 const L = S.link;
@@ -28,15 +30,20 @@ const L = S.link;
  */
 const SEARCH_FROM = 6;
 
+/** How long "your service is ready" stays up after a purchase this page watched turns usable. */
+const READY_MS = 10_000;
+
 /**
  * One Grant on the "my services" page (F-502-s), laid out like a subscription
  * page (user, 2026-09-26: "confusing, not responsive, copying a config is
  * not simple — take the idea from Marzban's subscription page"). One column,
  * top to bottom:
  *
- * 1. **Name and status.**
- * 2. **Usage** — one bar, used against bought, and the days left beside it,
- *    from the row itself (no read).
+ * 1. **Name and status**, and on a live Grant whether it is moving data now
+ *    (`ServicePulse`, F-307-u).
+ * 2. **Usage** — traffic left and time left, side by side (`UsageMeter`),
+ *    from the row itself (no read). A purchase still on its way shows its
+ *    steps here instead (`ServiceBuilding`), and "ready" when it lands.
  * 3. **Configs** — every line a row with copy and QR icons, and "copy all"
  *    (`ConfigLines`). Open from the start on a live row the page chose
  *    (`autoOpen`); one tap on any other.
@@ -60,6 +67,7 @@ export const ServiceRow = memo(function ServiceRow({
   capabilities,
   configsAsked = 0,
   autoOpen = false,
+  meteringDown = false,
 }: {
   row: GrantRow;
   name: string | null;
@@ -69,6 +77,8 @@ export const ServiceRow = memo(function ServiceRow({
   configsAsked?: number;
   /** Show the configs without a tap — the page gives this to its first few live rows. */
   autoOpen?: boolean;
+  /** Collection is stalled (F-027-w): silence then means nothing, so no "in use" or "idle" is claimed. */
+  meteringDown?: boolean;
 }) {
   const { t, lang } = useLocale();
   const toMessage = useApiErrorMessage();
@@ -86,83 +96,59 @@ export const ServiceRow = memo(function ServiceRow({
   const tone = GRANT_TONES[row.status];
   const countdown = purgeCountdown(row.purgeAt);
 
-  // Traffic is measured against a bound: a metered Grant's is what it has
-  // bought (ADR-0072), a capped prepaid one's the cap billing answers — the
-  // `total` `/sub` gives the app, rollover included (F-111-t). A Grant sold
-  // with unlimited traffic says so: its 0 bought bounds nothing (F-111-s,
-  // entitlement invariant 15). No bound at all shows what was used alone.
-  const consumed = formatBytes(row.consumedBytes, lang) ?? row.consumedBytes;
-  const bound = row.trafficUnlimited
-    ? null
-    : row.billingMode === "metered"
-      ? row.purchasedBytes
-      : row.trafficCapBytes;
-  const share = bound !== null ? usedShare(row.consumedBytes, bound) : null;
-  const boundText = bound !== null ? (formatBytes(bound, lang) ?? bound) : "";
-  const remaining = bound !== null ? (formatBytes(remainingBytes(row.consumedBytes, bound), lang) ?? "") : "";
-  const usage = row.trafficUnlimited
-    ? t("common", S.usageUnlimited, { consumed })
-    : share !== null
-      ? t("common", S.usage, { consumed, purchased: boundText })
-      : t("common", S.usageUnmetered, { consumed });
+  // "In use" is claimed only for a Grant that can move data, and only while
+  // something is metering it (F-307-u).
+  const pulse = useServicePulse(row.lastTrafficAt, row.consumedBytes);
+  const showPulse = row.status === "active" && !meteringDown;
+  const live = showPulse && pulse.live;
 
-  const from = formatInstant(row.startsAt, lang) ?? row.startsAt;
-  const until = row.endsAt ? formatInstant(row.endsAt, lang) : null;
-  const time = useTimeLeft(row.startsAt, row.endsAt);
-  const days =
-    time === null
-      ? t("common", S.periodUnlimited, { from })
-      : time.spent >= 1
-        ? t("common", S.left.ended)
-        : time.days > 0
-          ? t("common", S.left.dayHours, { days: time.days, hours: time.hours })
-          : time.hours > 0
-            ? t("common", S.left.hourMinutes, { hours: time.hours, minutes: time.minutes })
-            : t("common", S.left.minutes, { minutes: time.minutes });
-  const full = share !== null && share >= 1;
+  // A purchase on its way: its steps until a line to connect with exists,
+  // then "ready" for a moment — only for one this page saw on its way.
+  const stage = buildStage(row.status, configs.rows);
+  const [wasBuilding, setWasBuilding] = useState(stage !== null);
+  const [ready, setReady] = useState(false);
+  if (stage !== null && !wasBuilding) setWasBuilding(true);
+  if (stage === null && wasBuilding) {
+    setWasBuilding(false);
+    if (row.status === "active") setReady(true);
+  }
+  useEffect(() => {
+    if (!ready) return;
+    const timer = setTimeout(() => setReady(false), READY_MS);
+    return () => clearTimeout(timer);
+  }, [ready]);
 
   async function openQr() {
     if (await sub.readLink()) setQrOpen(true);
   }
 
   return (
-    <li className="overflow-hidden rounded-3xl border border-card-border bg-card-bg">
+    <li
+      className={`overflow-hidden rounded-3xl border bg-card-bg transition-[border-color,box-shadow] duration-500 ${
+        live ? "border-primary/40 shadow-[0_0_0_4px_var(--color-leaf-bg)]" : "border-card-border"
+      }`}
+    >
       <div className="space-y-4 p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="min-w-0 break-words text-base font-bold text-text-primary">{name ?? t("common", S.unnamed)}</h2>
+          <div className="min-w-0 space-y-1">
+            <h2 className="break-words text-base font-bold text-text-primary">{name ?? t("common", S.unnamed)}</h2>
+            {showPulse && <ServicePulse pulse={pulse} />}
+          </div>
           <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${tone.className}`}>
             <tone.icon size={14} aria-hidden />
             {t("common", tone.labelKey)}
           </span>
         </div>
 
-        <div>
-          {share !== null && bound !== null && (
-            <div
-              role="img"
-              aria-label={t("common", S.ring.label, { used: consumed, bought: boundText, remaining })}
-              className="mb-2 h-2.5 w-full overflow-hidden rounded-full bg-bg-inner"
-            >
-              <div
-                className={`h-full rounded-full ${full ? "bg-error" : "bg-primary"}`}
-                style={{ width: `${share === 0 ? 0 : Math.max(share, 0.02) * 100}%` }}
-              />
-            </div>
-          )}
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs">
-            <span className="font-medium text-text-primary">{usage}</span>
-            <span className="text-text-secondary" title={until ?? undefined}>
-              {days}
-            </span>
-          </div>
-        </div>
-
-        {/* Paid and not yet delivered (F-111-f). The page re-reads on its own
-            when delivery ends, so the sentence says there is nothing to do. */}
-        {row.status === "pending" && (
-          <p role="status" className="rounded-2xl border border-gold/20 bg-gold-bg px-3 py-2 text-xs font-medium text-gold">
-            {t("common", S.preparing)}
-          </p>
+        {/* Paid and not yet usable (F-111-f, F-111-l). The page moves the
+            steps on by itself when delivery and capture end. */}
+        {stage !== null ? (
+          <ServiceBuilding stage={stage} />
+        ) : (
+          <>
+            {ready && <ServiceReady />}
+            <UsageMeter row={row} live={live} warn={row.status === "active"} />
+          </>
         )}
 
         {countdown !== null && (
@@ -234,7 +220,7 @@ export const ServiceRow = memo(function ServiceRow({
           </div>
         )}
 
-        {configsOpen ? (
+        {stage !== null ? null : configsOpen ? (
           <>
             {configs.isLoading && configs.rows === null && (
               <p className="flex items-center gap-2 text-xs text-text-secondary">

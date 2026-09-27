@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 32
-updated: 2026-09-26
+updated: 2026-09-27
 ---
 
 # Contract — panel-web: the "my services" page (F-502-s)
@@ -156,10 +156,10 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
     fallback (rule 6's reason). A named chip keeps the key as its `title`.
 
 15. **A row reads like a subscription page** (F-307-c; user 2026-09-26:
-    "take the idea from Marzban's"). One column: name and status; one usage
-    bar with used-of-bought and time left, from the row, no read (days and
-    hours, under a day hours and minutes, recounted in the browser as the
-    minute turns — F-307-s, `useTimeLeft`) — a metered
+    "take the idea from Marzban's"). One column: name, status and whether it is
+    in use; traffic left and time left ([contract.service-pulse.md](contract.service-pulse.md),
+    F-307-u), from the row, no read (time as days and hours, then hours and
+    minutes — F-307-s, `useTimeLeft`) — a metered
     Grant against what it bought, a capped prepaid one against its cap
     (F-111-t), no bar for unlimited traffic; then the configs, every line a
     row with copy and QR icons and "copy all" (one line each); then the

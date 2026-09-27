@@ -198,6 +198,13 @@ export type GrantView = {
   suspendedAt: string | null;
   /** When the purge releases its panel seats; `null` when nothing is due — not suspended, or a window of `0` (never). */
   purgeAt: string | null;
+  /**
+   * When traffic last moved, to within one usage push (F-307-u): metering's
+   * `usagePushedAt`, which only a charged, non-zero delta writes, at most once
+   * per 30 s. `null` when nothing was ever charged. What the panel's "in use"
+   * reads on first paint, before the socket has pushed anything.
+   */
+  lastTrafficAt: string | null;
 };
 
 /** `hidden`: the user's Grants the scope left out — 0 on `all` (user, 2026-09-26). */
@@ -236,6 +243,7 @@ const GRANT_VIEW_COLUMNS = {
   quotas: true,
   suspendedAt: true,
   purgeAfterDays: true,
+  usagePushedAt: true,
 } satisfies Prisma.GrantSelect;
 
 /** What an absent page means, decided here and nowhere else; the schema bounds `pageSize` at 100 when it is sent. */
@@ -352,6 +360,7 @@ function grantViewOf(r: GrantViewRow, tenantPurgeDays: number | null, adjustedBy
     trafficCapBytes: cap === null ? null : (cap > BigInt(0) ? cap : BigInt(0)).toString(),
     suspendedAt: suspended?.toISOString() ?? null,
     purgeAt: purgeAtOf(suspended, r.purgeAfterDays, tenantPurgeDays)?.toISOString() ?? null,
+    lastTrafficAt: r.usagePushedAt?.toISOString() ?? null,
   };
 }
 

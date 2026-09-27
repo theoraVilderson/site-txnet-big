@@ -110,6 +110,7 @@ const GRANT: GrantRow = {
   trafficCapBytes: null,
   suspendedAt: null,
   purgeAt: null,
+  lastTrafficAt: null,
 };
 
 const CONFIG: UserConfigRow = {
@@ -233,7 +234,9 @@ describe("usage and the purge clock", () => {
     unlimited.unmount();
     // A prepaid Grant billing answers no cap for says only what it used.
     show({ billingMode: "prepaid", trafficUnlimited: false });
-    expect(screen.getByText("myServices.usageUnmetered:1.5 GB")).toBeInTheDocument();
+    expect(screen.getByText("myServices.meter.trafficUsed")).toBeInTheDocument();
+    expect(screen.getByText("1.5 GB")).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /myServices\.ring\.label/ })).toBeNull();
   });
 
   it("shows a capped prepaid Grant used against its cap, with a ring — the cap /sub gives the app (F-111-t)", () => {

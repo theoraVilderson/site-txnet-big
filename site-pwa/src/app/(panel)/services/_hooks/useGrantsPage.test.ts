@@ -51,6 +51,7 @@ const ROW: GrantRow = {
   trafficCapBytes: null,
   suspendedAt: null,
   purgeAt: null,
+  lastTrafficAt: null,
 };
 
 const page = (...rows: Partial<GrantRow>[]) => ({
@@ -251,6 +252,9 @@ describe("useGrantsPage — used bytes, live (F-307-t)", () => {
     await hear({ type: RealtimeEvents.grantUsage, grantId: "g2", consumedBytes: "1302694783" });
     expect(result.current.rows?.find((r) => r.id === "g2")?.consumedBytes).toBe("1302694783");
     expect(result.current.rows?.find((r) => r.id === "g1")?.consumedBytes).toBe("0");
+    // A rise is traffic that just moved: the row reads "in use" (F-307-u).
+    expect(result.current.rows?.find((r) => r.id === "g2")?.lastTrafficAt).not.toBeNull();
+    expect(result.current.rows?.find((r) => r.id === "g1")?.lastTrafficAt).toBeNull();
 
     await hear({ type: RealtimeEvents.grantUsage, grantId: "g2", consumedBytes: "1000" });
     expect(result.current.rows?.find((r) => r.id === "g2")?.consumedBytes).toBe("1302694783");
