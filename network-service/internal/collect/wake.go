@@ -158,7 +158,7 @@ func (w *Waker) turn(ctx context.Context, panelID string, s *wakeState) {
 		// No read, but a push panel's ceilings are translated by the
 		// baseline its client was last created at (F-027-du): refresh it,
 		// or a client re-made since the last pass is raised by the old one.
-		if _, err := l.Sessions.Totals(ctx, p.ID); err != nil {
+		if _, err := l.Sessions.Totals(ctx, p.ID, nil); err != nil {
 			l.log().Error("session totals not read; the pass converges it", "panel", p.ID, "error", err)
 			return
 		}

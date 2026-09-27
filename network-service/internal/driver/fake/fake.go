@@ -615,6 +615,23 @@ func (p *Panel) GetUsage(ctx context.Context) ([]driver.ClientUsage, error) {
 	return p.readLocked(nil), nil
 }
 
+// ClientTotals is driver.TotalsReader: each client's own running total, in
+// full precision, which a Remove and a Given start again — a client made
+// again by hand (F-027-du).
+func (p *Panel) ClientTotals(ctx context.Context) ([]driver.ClientUsage, error) {
+	if err := p.gate(ctx, "ClientTotals"); err != nil {
+		return nil, err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]driver.ClientUsage, 0, len(p.order))
+	for _, id := range p.order {
+		c := p.clients[id]
+		out = append(out, driver.ClientUsage{RemoteID: id, UpBytes: c.up, DownBytes: c.down, ObservedAt: time.Now().UTC()})
+	}
+	return out, nil
+}
+
 // GetUsageFor serves the named subset. A panel without the row still answers
 // in one call, from the bulk pass — the loop reads the declared answer to
 // decide what a pass costs, never the shape of this method.

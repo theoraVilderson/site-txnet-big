@@ -368,6 +368,18 @@ func (p *paced) GetUsage(ctx context.Context) ([]ClientUsage, error) {
 	})
 }
 
+// ClientTotals is the family's TotalsReader, paced (TotalsOf says whether it
+// has one).
+func (p *paced) ClientTotals(ctx context.Context) ([]ClientUsage, error) {
+	return share(ctx, p, "ClientTotals", "ClientTotals", func(ctx context.Context) ([]ClientUsage, error) {
+		r, ok := p.Driver.(TotalsReader)
+		if !ok {
+			return nil, NewFault(FaultUnsupported, "ClientTotals", 0, errors.New("this family keeps no per-client total"))
+		}
+		return r.ClientTotals(ctx)
+	})
+}
+
 func (p *paced) GetUsageFor(ctx context.Context, remoteIDs []string) ([]ClientUsage, error) {
 	return share(ctx, p, "GetUsageFor", usageForKey(remoteIDs), func(ctx context.Context) ([]ClientUsage, error) {
 		return p.Driver.GetUsageFor(ctx, remoteIDs)

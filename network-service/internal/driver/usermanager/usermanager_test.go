@@ -92,6 +92,31 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch {
+	case menu == "user" && ref == "monitor" && r.Method == http.MethodPost:
+		// `/user-manager/user monitor numbers=a,b once`: one answer per
+		// user, in the order asked; an unknown name fails the whole command.
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body["once"] != "" {
+			routerError(w, http.StatusBadRequest, "monitor wants numbers and once")
+			return
+		}
+		out := []map[string]string{}
+		for _, name := range strings.Split(body["numbers"], ",") {
+			u := f.find("user", name)
+			if u == nil {
+				routerError(w, http.StatusBadRequest, "no such item ("+name+")")
+				return
+			}
+			up, down := u["total-upload"], u["total-download"]
+			if up == "" {
+				up = "0"
+			}
+			if down == "" {
+				down = "0"
+			}
+			out = append(out, map[string]string{"total-upload": up, "total-download": down, "total-uptime": "0s"})
+		}
+		writeJSON(w, out)
 	case ref == "" && r.Method == http.MethodGet:
 		out := []map[string]string{}
 		for _, row := range f.tables[menu] {
@@ -156,6 +181,9 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func matches(row map[string]string, query map[string][]string) bool {
 	for k, vs := range query {
+		if k == ".proplist" {
+			continue // which fields come back, not which rows
+		}
 		if len(vs) > 0 && row[k] != vs[0] {
 			return false
 		}
@@ -255,6 +283,14 @@ func (h *harness) Serve(remoteID string, up, down int64) {
 	add("upload", up)
 	add("download", down)
 	open["status"] = "start,interim"
+	if u := h.f.find("user", remoteID); u != nil {
+		// User Manager's own total is the user's: it restarts with the user.
+		for field, n := range map[string]int64{"total-upload": up, "total-download": down} {
+			var have int64
+			fmt.Sscan(u[field], &have)
+			u[field] = fmt.Sprint(have + n)
+		}
+	}
 }
 
 // ZeroCounter is the session ending: the next traffic opens a new one.
@@ -570,4 +606,51 @@ func TestAnUnlimitedClientCarriesNoLimit(t *testing.T) {
 	conformance.NoLimitRoundTrip(t, d, driver.CreateClientRequest{
 		ClaimTag: "cfg_7f3a", UUID: testUUID, Protocol: "pppoe", Enabled: true,
 	}, 0)
+}
+
+// A push panel's limit is checked against User Manager's own per-user total,
+// not ours (F-027-du). It is read for every user in two requests whatever
+// their number, and a user deleted and made again by hand reads from zero —
+// which is how a re-made user is seen at all.
+func TestClientTotalsAreUserManagersOwnAndStartAgainWithTheUser(t *testing.T) {
+	f, d := open(t)
+	h := &harness{f: f, d: d}
+	a := create(t, d, true)
+	h.Given("other")
+	h.Serve(a.RemoteID, 100, 2_000)
+	h.Serve("other", 5, 7)
+
+	before := h.TotalCalls()
+	got, err := d.ClientTotals(context.Background())
+	if err != nil {
+		t.Fatalf("ClientTotals: %v", err)
+	}
+	if n := h.TotalCalls() - before; n != 2 {
+		t.Fatalf("%d requests, want 2: the users, then one monitor over all of them", n)
+	}
+	totals := map[string]int64{}
+	for _, u := range got {
+		totals[u.RemoteID] = u.UpBytes + u.DownBytes
+	}
+	if totals[a.RemoteID] != 2_100 || totals["other"] != 12 {
+		t.Fatalf("totals = %v", totals)
+	}
+
+	f.mu.Lock()
+	remade := f.find("user", a.RemoteID)
+	fresh := map[string]string{"name": remade["name"], "password": remade["password"], "comment": remade["comment"], "disabled": "false"}
+	f.mu.Unlock()
+	if err := d.DeleteClient(context.Background(), a.RemoteID); err != nil {
+		t.Fatalf("DeleteClient: %v", err)
+	}
+	f.put("user", fresh) // an operator, by hand, under the same name
+	got, err = d.ClientTotals(context.Background())
+	if err != nil {
+		t.Fatalf("ClientTotals: %v", err)
+	}
+	for _, u := range got {
+		if u.RemoteID == a.RemoteID && u.UpBytes+u.DownBytes != 0 {
+			t.Fatalf("a re-made user reads %d, want 0", u.UpBytes+u.DownBytes)
+		}
+	}
 }

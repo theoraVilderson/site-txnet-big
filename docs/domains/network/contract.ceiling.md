@@ -111,11 +111,24 @@ under `reset_on_read` (the read spent it) — the conservative reading.
 Under `session` (User Manager) the lifetime is the Σ of the config's
 `radius_session` marks, and the counter is User Manager's per-user total,
 which starts at zero when the user is created. So the offset is
-`sessionBaselineBytes`: that Σ as it stood when provisioning last created the
-client (F-027-du). A create sizes its first ceiling past it and records it;
-the planner, the ceiling pass and the shutdown extension all read it through
-`collect.SessionCounter`. A user deleted on the router and re-made by us is
-therefore never served its allocation twice.
+`sessionBaselineBytes`: what our Σ holds beyond the router's total
+(F-027-du). The planner, the ceiling pass and the shutdown extension all
+read it through `collect.SessionCounter`. It moves at two moments only:
+
+- **A create** by provisioning sizes the first ceiling past our Σ, records
+  that Σ, and forgets `sessionCounterBytes`, the router's last total.
+- **A drop** in the router's total. Each push turn reads it
+  (`driver.TotalsReader`: User Manager's users, then one `user/monitor ...
+  once` over all of them). A total below the last one, or the first since a
+  create, is a user made again, by us or by hand, and the baseline becomes
+  our Σ less that total (`rebaseSQL`).
+
+It only rises, and never on the gap alone. The two totals are read a moment
+apart, so a gap that shrinks is the router counting a packet we have not
+yet, and a baseline chasing the gap would climb by a packet a turn. So a
+re-made user is never served its allocation twice. Accounting that reaches
+only User Manager makes its total run ahead of ours, and the user is cut
+early: the safe direction.
 
 **The translation only ever lowers** — that is what the two `max`es are for,
 and it is why `Σ ceilings ≤ purchasedBytes` survives it. Bytes the far end's

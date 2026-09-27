@@ -89,6 +89,31 @@ type Driver interface {
 	ClientLinks(ctx context.Context, client RemoteClient) ([]string, error)
 }
 
+// TotalsReader is what a push family adds (F-027-du): every client's own
+// running total on the panel, the figure its per-user limit is checked
+// against. A push panel's bytes reach us as RADIUS packets, so this is never
+// billed from; it is read only to see the panel's counter restart — a user
+// deleted and made again by hand — which our own Σ cannot show. A reading's
+// UpBytes and DownBytes are that total, never a session's.
+//
+// It is optional, so ask through TotalsOf: a paced driver hides its family's.
+type TotalsReader interface {
+	ClientTotals(ctx context.Context) ([]ClientUsage, error)
+}
+
+// TotalsOf is the driver's TotalsReader, if its family has one — looked up
+// through the pacing wrapper, which paces it like any other request.
+func TotalsOf(d Driver) (TotalsReader, bool) {
+	if p, ok := d.(*paced); ok {
+		if _, has := p.Driver.(TotalsReader); !has {
+			return nil, false
+		}
+		return p, true
+	}
+	r, ok := d.(TotalsReader)
+	return r, ok
+}
+
 // Inbound is one listener on the panel: the thing a client's link points at.
 type Inbound struct {
 	// RemoteID is the panel's own identifier for the inbound.

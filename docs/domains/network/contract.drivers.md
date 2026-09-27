@@ -223,9 +223,9 @@ The rules:
    limit: the money-hole finding of ADR-0072 rule 2. It is not our ceiling
    hiding the extra profile. A profile in state `used` grants nothing and is
    ignored.
-5. **`GetUsage` reads open sessions only.** A closed session's last figure came
-   in its `Stop` to the receiver, so reading it again here would count the same
-   bytes twice. `GetUsageFor` is served from the same single request.
+5. **`GetUsage` reads open sessions only**: a closed one's `Stop` reached the
+   receiver. `GetUsageFor` shares that request. `ClientTotals` is each user's
+   own total, in two requests (`contract.ceiling.md`, F-027-du).
 6. **Disabling refuses the next login.** User Manager does not cut a session
    that is already open. The ceiling is what ends that session's traffic.
 7. **Some calls have nothing to do.** `ResetUsage` and `BuildLink` return

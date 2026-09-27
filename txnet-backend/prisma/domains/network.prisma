@@ -534,6 +534,11 @@ model Config {
   /// is our Σ less this, and this is its offset. 0 on a pull panel. CHECK
   /// `config_session_baseline_not_negative` (raw SQL).
   sessionBaselineBytes     BigInt    @default(0)
+  /// User Manager's own total for this client as the push turn last read it
+  /// (F-027-du): a lower one is a user made again on the router, and moves
+  /// the baseline. Null until read since the client was created. CHECK
+  /// `config_session_counter_not_negative` (raw SQL).
+  sessionCounterBytes      BigInt?
 
   panel Panel @relation(fields: [panelId], references: [id])
   grant Grant @relation(fields: [grantId], references: [id])

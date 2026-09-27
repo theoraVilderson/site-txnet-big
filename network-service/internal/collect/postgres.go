@@ -600,14 +600,42 @@ SELECT c."remoteId", rs."in", rs."out", c."sessionBaselineBytes"
    AND c."remoteId" IS NOT NULL
  ORDER BY c."remoteId"`
 
+// rebaseSQL takes the router's own totals (F-027-du). A config whose total
+// went down since the last read — or that has none yet, being new since our
+// create — was made on the router since: its baseline becomes what our Σ
+// holds beyond the router's figure. It only ever rises: a gap that shrinks is
+// the router counting a packet we have not yet, and a baseline lowered on it
+// would serve those bytes twice. It moves on a drop only, never on the gap
+// alone, because the two figures are read a moment apart and a baseline
+// chasing that moment would climb by a packet a turn.
+var rebaseSQL = db.OrderedConfigUpdate(`"sessionBaselineBytes" = CASE
+         WHEN c."sessionCounterBytes" IS NULL OR v.total < c."sessionCounterBytes"
+         THEN greatest(c."sessionBaselineBytes",
+                       (SELECT coalesce(sum(r."highWaterInBytes" + r."highWaterOutBytes"), 0)
+                          FROM network.radius_session r WHERE r."configId" = c.id) - v.total)
+         ELSE c."sessionBaselineBytes" END,
+       "sessionCounterBytes" = v.total`,
+	`(SELECT c.id::text AS id, t.total FROM unnest($2::text[], $3::bigint[]) AS t(remote, total)
+          JOIN network.config c ON c."panelId" = $1::uuid AND c."remoteId" = t.remote) AS x`)
+
 // Totals is SessionTotals: a push panel's reading, one per claimed client,
-// the figure the panel's own limit is checked against (SessionCounter). It
+// the figure the panel's own limit is checked against (SessionCounter),
+// after rebasing on the router's own totals where the turn read them. It
 // folds the same counters into the map through Merge, so the convergence
 // step right after it translates each ceiling by the baseline as it now
 // stands — a client re-made since the last bulk pass included.
-func (c *PostgresCursors) Totals(ctx context.Context, panelID string) ([]driver.ClientUsage, error) {
+func (c *PostgresCursors) Totals(ctx context.Context, panelID string, router []driver.ClientUsage) ([]driver.ClientUsage, error) {
 	var out []driver.ClientUsage
 	err := c.Merge(func() (map[CursorKey]Counter, error) {
+		if len(router) > 0 {
+			remotes, totals := make([]string, len(router)), make([]int64, len(router))
+			for i, u := range router {
+				remotes[i], totals[i] = u.RemoteID, u.UpBytes+u.DownBytes
+			}
+			if _, err := c.DB.Exec(ctx, rebaseSQL, panelID, remotes, totals); err != nil {
+				return nil, fmt.Errorf("rebasing panel %s on its own totals: %w", panelID, err)
+			}
+		}
 		rows, err := c.DB.Query(ctx, totalsSQL, panelID)
 		if err != nil {
 			return nil, fmt.Errorf("reading the session totals of panel %s: %w", panelID, err)

@@ -583,6 +583,47 @@ func (d *Driver) usage(ctx context.Context, op string, want map[string]bool) ([]
 	return out, nil
 }
 
+var _ driver.TotalsReader = (*Driver)(nil)
+
+// ClientTotals reads User Manager's own total for every user — the figure a
+// limitation's `transfer-limit` is checked against — in two requests: the
+// users' names, then one `monitor ... once` over all of them (F-027-du). The
+// answer comes back in the order asked. Names are listed first because an
+// unknown name fails the whole command, and a user deleted on the router
+// must not stop every other user being read. The total restarts with the
+// user, which is the point: it shows a user made again by hand.
+func (d *Driver) ClientTotals(ctx context.Context) ([]driver.ClientUsage, error) {
+	const op = "ClientTotals"
+	users, err := d.list(ctx, op, "user", url.Values{".proplist": {"name"}})
+	if err != nil || len(users) == 0 {
+		return nil, err
+	}
+	names := make([]string, len(users))
+	for i, u := range users {
+		names[i] = u["name"]
+	}
+	var answers []row
+	body := row{"numbers": strings.Join(names, ","), "once": ""}
+	if err := d.call(ctx, op, http.MethodPost, []string{"user", "monitor"}, nil, body, &answers); err != nil {
+		return nil, err
+	}
+	if len(answers) != len(names) {
+		return nil, driver.NewFault(driver.FaultProtocol, op, 0,
+			fmt.Errorf("monitor answered %d users for %d asked", len(answers), len(names)))
+	}
+	at := time.Now()
+	out := make([]driver.ClientUsage, len(names))
+	for i, a := range answers {
+		up, errUp := quantity(a["total-upload"], 1024)
+		down, errDown := quantity(a["total-download"], 1024)
+		if err := errors.Join(errUp, errDown); err != nil {
+			return nil, driver.NewFault(driver.FaultProtocol, op, 0, fmt.Errorf("user %q: %w", names[i], err))
+		}
+		out[i] = driver.ClientUsage{RemoteID: names[i], UpBytes: up, DownBytes: down, ObservedAt: at}
+	}
+	return out, nil
+}
+
 // ResetUsage: a session's counters end with the session, and nothing here
 // zeroes one.
 func (d *Driver) ResetUsage(context.Context, string) error {
