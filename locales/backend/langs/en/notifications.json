@@ -140,6 +140,10 @@
     "reactivated": "✅ Your service is active again. It reconnects within a few minutes — its link stays the same, so there is nothing to change in your app.",
     "reactivatedMany": "✅ {{count}} of your services are active again. They reconnect within a few minutes — their links stay the same.",
     "reactivatedManyTitle": "{{count}} services are active again",
-    "supportLine": "🛟 Support: {{supportUrl}}"
+    "supportLine": "🛟 Support: {{supportUrl}}",
+    "idleTitle": "Trouble connecting?",
+    "idle": "🔌 Your service has not been used for a week. If it stopped connecting: open My services, copy the subscription link again and update it in your VPN app — its servers may have changed. If you simply did not need it, there is nothing to do.",
+    "idleMany": "🔌 {{count}} of your services have not been used for a week. If they stopped connecting: copy their subscription links again from My services and update them in your VPN app.",
+    "idleManyTitle": "{{count}} services unused for a week"
   }
 }

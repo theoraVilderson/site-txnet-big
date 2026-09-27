@@ -3,6 +3,7 @@ import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 
 import { DeliverDueResult, DeliveryOutcome, GrantDeliveryService } from './delivery';
 import { EndNoticeResult, GrantEndNoticeService } from './end-notice';
+import { GrantIdleNoticeService, IdleNoticeResult } from './idle-notice';
 import { GrantPurgeService, PurgeResult } from './purge';
 import { GrantPurgeNoticeService } from './purge-notice';
 import { GrantUnusedNoticeService, UnusedNoticeResult } from './unused-notice';
@@ -37,6 +38,7 @@ export class EntitlementInternalController {
     private readonly unused: GrantUnusedNoticeService,
     private readonly ends: GrantEndNoticeService,
     private readonly purgeNotice: GrantPurgeNoticeService,
+    private readonly idle: GrantIdleNoticeService,
   ) {}
 
   /**
@@ -79,6 +81,17 @@ export class EntitlementInternalController {
   @HttpCode(200)
   unusedDue(): Promise<UnusedNoticeResult> {
     return this.unused.noticeDue();
+  }
+
+  /**
+   * "Trouble connecting?" (F-601-l): every active Grant whose `idleCheckAt`
+   * is due is checked once — told or not, its clock is cleared until the
+   * next consumed byte. Safe to run twice: the write is conditional on it.
+   */
+  @Post('idle-due')
+  @HttpCode(200)
+  idleDue(): Promise<IdleNoticeResult> {
+    return this.idle.noticeDue();
   }
 
   /**

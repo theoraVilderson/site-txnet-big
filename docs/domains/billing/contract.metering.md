@@ -170,3 +170,12 @@ what the share is of, which Grants, which level — is entitlement's
    to the Grant (`usageNoticeLevel`, `usageNoticeSince`) for entitlement's
    sweep. A time level not yet due is never pulled forward (entitlement
    `contract.retention.md` "The 24 h hold").
+
+## The idle clock (F-601-l)
+
+The same update that moves `consumedBytes` sets `grant.idleCheckAt` to 7 days
+from now (`idleCheckOf`, shared-core) when the charge consumed a byte; a
+zero-byte delta leaves it. Entitlement's hourly sweep reads it and asks
+"trouble connecting?" once per idle stretch (entitlement `contract.retention.md`
+"Idle check-in"). Processing time, not the delta's `observedAt`: a hold
+released late (ADR-0080) never moves the clock back.

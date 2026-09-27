@@ -187,6 +187,7 @@ Through the outbox (ADR-0021); the first two also live on the buyer's `user:` ch
 | `entitlement.grant.ended` / `.volume_spent` / `.wallet_spent` | `tenantId, userId, grantId, period` (= the end, or the suspension's instant) | a Grant stopped: time ran out, a prepaid bag spent, a metered wallet spent (F-601-b); retention events, like the next row |
 | `entitlement.grant.reactivated` | `tenantId, userId, grantId, period` (= the `suspendedAt` cleared, or the broken close's `closedAt`) | a stopped Grant runs again: a renewal or top-up revived it, or a renewal broke its standing close (F-601-k); retention events, like the next row |
 | `entitlement.grant.purge_soon` / `.purge_soon_metered` | `tenantId, userId, grantId, period` (= `suspendedAt`) | a suspended Grant a day from its purge; prepaid "renew", metered "top up" (F-601-j); retention events, like the next row |
+| `entitlement.grant.idle` | `tenantId, userId, grantId, period` (= `idleCheckAt`), `supportUrl?` | a used Grant idle 7 days, once per stretch (F-601-l, [contract.retention.md](contract.retention.md)); retention events, like the next row |
 | `entitlement.grant.not_connected` / `.still_not_connected` | `tenantId, userId, grantId, period` (= `activatedAt`), `supportUrl?` | nothing consumed 24 h / 72 h after activation (F-601-c); retention events, told by `RetentionNoticeConsumer` — not on any channel |
 
 ## Consumes
@@ -203,7 +204,7 @@ Through the outbox (ADR-0021); the first two also live on the buyer's `user:` ch
 |---|---|
 | network | `config.grantId`: a config draws on its Grant's quota (F-027); group fulfilment moves a grouped `pending` Grant to `active` (F-027-bl) |
 | billing | issues a Grant for a `free_grant` coupon (F-502-l) and, later, a purchase; a refused block request suspends a spent one (F-027-x) |
-| automation | holds the purge clock: `grant_config_purge` asks `purge-due` hourly (F-027-y), and the delivery clock: `grant_delivery` asks `deliver-due` every minute (F-111-d), and `grant-created` asks `grants/:grantId/deliver` on each purchase (F-114-i); tells the buyer on either event; holds the "not connected yet?" clock, `grant_unused_notice` asks `unused-due` hourly (F-601-c), and the time-threshold clock, `grant_end_notice` asks `end-due` hourly (F-601-e) |
+| automation | holds the purge clock: `grant_config_purge` asks `purge-due` hourly (F-027-y), and the delivery clock: `grant_delivery` asks `deliver-due` every minute (F-111-d), and `grant-created` asks `grants/:grantId/deliver` on each purchase (F-114-i); tells the buyer on either event; holds the "not connected yet?" clock, `grant_unused_notice` asks `unused-due` hourly (F-601-c), and the time-threshold clock, `grant_end_notice` asks `end-due` hourly (F-601-e), and the idle clock, `grant_idle_notice` asks `idle-due` hourly (F-601-l) |
 
 ## Guarantees (built — `entitlement-schema.int.spec.ts`)
 

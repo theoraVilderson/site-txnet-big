@@ -3,6 +3,7 @@ import { HoldReason, Prisma, UsageDispositionState } from '@prisma/client';
 import {
   endNoticeStep,
   heldUsageNotice,
+  idleCheckOf,
   remainingLabel,
   retentionEvent,
   retentionToTell,
@@ -283,7 +284,9 @@ export class MeteringService {
     const charged = c.up + c.down;
     const grant = await tx.grant.update({
       where: { id: c.config.grantId },
-      data: { consumedBytes: { increment: charged } },
+      // A consumed byte restarts the "trouble connecting?" clock (F-601-l):
+      // processing time, not `observedAt`, so a hold released late never moves it back.
+      data: { consumedBytes: { increment: charged }, ...(charged > 0n ? { idleCheckAt: idleCheckOf(new Date()) } : {}) },
       select: {
         consumedBytes: true,
         userId: true,

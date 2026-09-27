@@ -9,6 +9,7 @@ import {
   VariantBillingMode,
 } from '@prisma/client';
 import {
+  IDLE_CHECK_AFTER_MS,
   USAGE_DELTA_MESSAGE_VERSION,
   usageReleaseDeltaId,
   type UsageDeltaMessage,
@@ -89,6 +90,8 @@ function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> 
   const outbox: Array<Record<string, unknown>> = [];
   /** The Grant's retention state as the charges left it (F-601-n): the held usage level and the end clock. */
   const notice: Record<string, unknown> = {};
+  /** The "trouble connecting?" clock as the charges left it (F-601-l). */
+  const idle: { at?: Date } = {};
   /** What `SET LOCAL app.tenant_id` bound, per transaction — the RLS scope. */
   const bound: Array<string | null> = [];
 
@@ -126,6 +129,8 @@ function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> 
           return { id: where.id };
         }
         consumed.set(where.id, (consumed.get(where.id) ?? 0n) + data.consumedBytes.increment);
+        // The idle check-in (F-601-l), moved by a charge that consumed a byte.
+        if ('idleCheckAt' in data) idle.at = data['idleCheckAt'] as Date;
         return { ...grantRow(grant), ...notice, id: where.id, consumedBytes: consumed.get(where.id) as bigint, userId: USER };
       },
       // The usage announcement's slot (F-307-t): taken only when the last one is older than the cutoff.
@@ -210,7 +215,7 @@ function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> 
     $transaction: async <R>(fn: (tx: unknown) => Promise<R>): Promise<R> => fn(client),
   };
 
-  return { client, seen, rawLog, holds, quarantines, unattributed, consumed, bound, outbox, notice };
+  return { client, seen, rawLog, holds, quarantines, unattributed, consumed, bound, outbox, notice, idle };
 }
 
 /** One pass, with whatever the caller wants in it. Bytes are decimal strings on the wire. */
@@ -382,6 +387,19 @@ describe('MeteringService', () => {
     // The write went through a transaction that bound the config's tenant —
     // without it the RLS policy on `traffic_raw_log` refuses the insert.
     expect(store.bound).toContain(TENANT);
+  });
+
+  it('moves the idle check-in to 7 days after a charge that consumed a byte, and leaves it for one that did not (F-601-l)', async () => {
+    const store = fakeStore([{ id: CONFIG, tenantId: TENANT, grantId: GRANT, remoteId: 'client-a' }]);
+    const before = Date.now();
+
+    await service(store).apply(pass({ deltas: [delta({ deltaId: '66666666-6666-4666-8666-666666666601', upBytes: '0', downBytes: '0' })] }));
+    expect(store.idle.at).toBeUndefined();
+
+    await service(store).apply(pass({ deltas: [delta()] }));
+    const due = (store.idle.at as Date).getTime() - IDLE_CHECK_AFTER_MS;
+    expect(due).toBeGreaterThanOrEqual(before);
+    expect(due).toBeLessThanOrEqual(Date.now());
   });
 
   it('applies a redelivered pass exactly once, whether or not the seen row was read first', async () => {

@@ -34,6 +34,7 @@ export const NOTIFY_TEMPLATES = [
   'servicePurgeSoon',
   'servicePurgeSoonTopUp',
   'serviceReactivated',
+  'serviceIdle',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -342,6 +343,18 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.retention?.reactivatedMany,
       fallback: '✅ {{count}} of your services are active again. They reconnect within a few minutes — their links stay the same.',
       inbox: { read: (ns) => ns?.retention?.reactivatedManyTitle, fallback: '{{count}} services are active again' },
+    },
+  },
+  // F-601-l: used, then nothing for 7 days — one check-in per idle stretch.
+  serviceIdle: {
+    read: (ns) => ns?.retention?.idle,
+    fallback:
+      '🔌 Your service has not been used for a week. If it stopped connecting: open My services, copy the subscription link again and update it in your VPN app — its servers may have changed. If you simply did not need it, there is nothing to do.',
+    inbox: { read: (ns) => ns?.retention?.idleTitle, fallback: 'Trouble connecting?' },
+    many: {
+      read: (ns) => ns?.retention?.idleMany,
+      fallback: '🔌 {{count}} of your services have not been used for a week. If they stopped connecting: copy their subscription links again from My services and update them in your VPN app.',
+      inbox: { read: (ns) => ns?.retention?.idleManyTitle, fallback: '{{count}} services unused for a week' },
     },
   },
 };

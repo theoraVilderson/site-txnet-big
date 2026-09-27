@@ -155,6 +155,10 @@ model Grant {
   /// (F-601-j). A suspension that no longer matches it is due again; nothing
   /// resets it. Written conditionally on the value read, so it is told once.
   purgeNoticeFor        DateTime?
+  /// The "trouble connecting?" check-in (F-601-l): 7 days after the last
+  /// charge that consumed a byte, moved by every such charge (metering), and
+  /// cleared by the check. Null = never used, or already asked this stretch.
+  idleCheckAt           DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @default(now()) @updatedAt
 
@@ -174,6 +178,8 @@ model Grant {
   @@index([status, unusedCheckAt], map: "grant_status_unusedCheckAt_idx")
   /// The time-threshold sweep's question: which active Grants end within 7 days (F-601-e).
   @@index([status, endsAt], map: "grant_status_endsAt_idx")
+  /// The idle check-in sweep's only question: which active Grants are due one (F-601-l).
+  @@index([status, idleCheckAt], map: "grant_status_idleCheckAt_idx")
   /// The same sweep's other question: which held usage notices are 24 h old (F-601-n).
   @@index([status, usageNoticeSince], map: "grant_status_usageNoticeSince_idx")
   @@map("grant")

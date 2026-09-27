@@ -59,4 +59,6 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   [OutboxEventType.GRANT_PURGE_SOON_METERED]: { template: 'servicePurgeSoonTopUp', params: [] },
   // F-601-k: a stopped Grant runs again — told once per stop undone, the link unchanged.
   [OutboxEventType.GRANT_REACTIVATED]: { template: 'serviceReactivated', params: [] },
+  // F-601-l: used, then nothing for 7 days — one check-in per idle stretch, and the tenant's support.
+  [OutboxEventType.GRANT_IDLE]: { template: 'serviceIdle', params: [], optional: ['supportUrl'] },
 };

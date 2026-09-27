@@ -8,6 +8,19 @@ const DAY_MS = 86_400_000;
  */
 export const RETENTION_HOLD_MS = DAY_MS;
 
+/**
+ * "Trouble connecting?" (F-601-l): a Grant that consumed something is checked
+ * in on once when this long passes with nothing more. Each charge that
+ * consumes a byte moves the check to its own instant plus this
+ * (`idleCheckOf`), so an idle stretch is counted from its last use.
+ */
+export const IDLE_CHECK_AFTER_MS = 7 * DAY_MS;
+
+/** The check-in a charge at `at` sets — metering writes it, entitlement's sweep reads it. */
+export function idleCheckOf(at: Date): Date {
+  return new Date(at.getTime() + IDLE_CHECK_AFTER_MS);
+}
+
 export type EndNotice = typeof OutboxEventType.GRANT_ENDS_IN_7D | typeof OutboxEventType.GRANT_ENDS_IN_3D | typeof OutboxEventType.GRANT_ENDS_IN_1D;
 
 /**

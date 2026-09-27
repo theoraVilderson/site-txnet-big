@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-version: 10
+version: 11
 updated: 2026-09-27
 ---
 
@@ -91,6 +91,23 @@ debit's `balanceAfter` (`traffic/low-balance.ts`, proved by
 | The whole balance at each Grant's rate, not its reserve share | two Grants at two rates cross at two balances; each is told its own |
 | Nothing when the balance buys no byte, or no block was bought | a wallet that cannot buy the next block is the cutoff notice (`wallet_spent`), never this |
 | A balance lowered elsewhere (a product paid from the wallet) is seen by the Grant's next block | the moment that matters is while it is served; an idle Grant spends nothing |
+
+**Idle check-in (F-601-l, beyond the catalog)** — an active Grant that was
+used, then consumed nothing for 7 days, is asked "trouble connecting?" once per
+idle stretch. `entitlement/idle-notice.ts`, proved by `idle-notice.spec.ts`.
+The clock is `idleCheckAt`: every charge that consumes a byte sets it to its
+own instant + 7 days (`idleCheckOf`, shared-core; billing `contract.metering.md`).
+`GrantIdleNoticeService.noticeDue` checks each active Grant whose clock is due,
+over `POST /api/internal/billing/entitlement/idle-due` (`ServiceOnlyGuard`),
+asked hourly by `grant_idle_notice`; answer `scanned`, `told`.
+
+| Rule | Why |
+|---|---|
+| The check clears the clock, told or not; only the next consumed byte sets it again | one ask per stretch — a month idle hears once, a Grant used again can hear again a week later |
+| A Grant never used has no clock | "not connected yet?" (F-601-c) is that Grant's |
+| Told only if it can run: not past its end (`runs`), no standing close (`standingClose`), a prepaid bag not spent, a config confirmed on a panel; otherwise the stretch passes untold | idle because it stopped is the cutoff notice's (F-601-b), and with no config there is nothing to connect to |
+| Metering sets the clock from processing time, not the delta's `observedAt` | a hold released late never moves the clock back |
+| The write is conditional on the clock read; `period` = that clock; `supportUrl` when branding has one | a charge or a second sweep in between emits nothing; notification's ledger holds each stretch once (invariant 14) |
 
 **Cutoff (F-601-b, spec 9.5)** — the user is told their service stopped,
 and what brings it back. Emitted by billing's `traffic/exhaustion.ts` through
