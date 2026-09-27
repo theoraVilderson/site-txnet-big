@@ -7,7 +7,7 @@ import { userChannel } from "@/lib/realtime";
 import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { flattenTexts } from "../../catalog/_lib/catalog-form";
-import { readGrantSettled, readLinksCaptured } from "../_lib/my-services";
+import { readGrantSettled, readGrantUsage, readLinksCaptured } from "../_lib/my-services";
 
 /** Billing's own default page size (`GrantService.listForUser`), sent explicitly. */
 export const PAGE_SIZE = 20;
@@ -75,6 +75,12 @@ export interface GrantsPageState {
  * names the Grant. The lines are in the config list a row opens, not in these
  * rows, so the event reads nothing here: it bumps `configsAsked[grantId]` and
  * an open list re-reads. A reconnect bumps every row, for the same reason.
+ *
+ * **Used bytes follow the panels without a read (F-307-t).**
+ * `entitlement.grant.usage` carries a Grant's committed total, at most every
+ * 30 s; the row shown for it takes the figure, and only a larger one — an
+ * older push landing late never moves the bar back. No other row changes
+ * identity, so no other row renders.
  *
  * **Nothing is asked on a clock** (user, 2026-09-26). A socket that is down
  * reconnects on its own backoff (`lib/realtime.ts`), and `onMissed` is the
@@ -160,6 +166,8 @@ export function useGrantsPage(
         if (settled && pendingIds.current.has(settled.grantId)) void quietRead();
         const captured = readLinksCaptured(payload);
         if (captured && shownIds.current.includes(captured.grantId)) askConfigs([captured.grantId]);
+        const usage = readGrantUsage(payload);
+        if (usage) setRows((before) => withUsage(before, usage));
       },
       // A delivery or a capture that happened while the socket was down was
       // told to nobody, so the page asks again once it is back: the rows while
@@ -207,4 +215,14 @@ export function useGrantsPage(
   }, [page, lang, scope, q, pasted, key]);
 
   return { rows, total, pageSize: PAGE_SIZE, hidden, texts, isLoading, configsAsked, error, retry };
+}
+
+/** The rows with one Grant's `consumedBytes` raised to a pushed total; the same array when nothing moves. */
+function withUsage(rows: GrantRow[] | null, usage: { grantId: string; consumedBytes: string }): GrantRow[] | null {
+  if (!rows) return rows;
+  const at = rows.findIndex((r) => r.id === usage.grantId);
+  if (at < 0 || BigInt(usage.consumedBytes) <= BigInt(rows[at].consumedBytes)) return rows;
+  const next = [...rows];
+  next[at] = { ...rows[at], consumedBytes: usage.consumedBytes };
+  return next;
 }

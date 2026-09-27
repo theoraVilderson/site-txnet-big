@@ -133,3 +133,20 @@ After a charge commits — a collected delta or a released hold — the Grant's
    `/sub` means the render's own figure is at least as fresh.
 
 A duplicate delta commits nothing and publishes nothing.
+
+## Live usage for the owner's page (F-307-t)
+
+The same charge tells the Grant's owner its total: `entitlement.grant.usage`
+`{tenantId, userId, grantId, consumedBytes}` on the outbox, to the `user:`
+channel through worker-service's live-push consumer, and My services raises
+the row's figure (`panel-web/contract.my-services.md` 13b). Three rules:
+
+1. **At most once per 30 s per Grant** (`USAGE_PUSH_EVERY_MS`). The slot is
+   `grant.usagePushedAt`, claimed by a conditional update on the row the
+   charge already holds locked, so two replicas announce once.
+2. **In the charge's transaction** (ADR-0021): the event commits or rolls back
+   with the bytes it reports. A duplicate delta announces nothing.
+3. **The committed total, never a delta.** A push skipped by the window costs
+   nothing, because the next one carries it. A window's last bytes wait for the
+   Grant's next charge or a reload. With a ~20 s collection pass, pushes land
+   about every 40 s (measured on dev, 2026-09-27).

@@ -55,4 +55,5 @@ export const RealtimeEvents = {
   "grantRefunded": "entitlement.grant.refunded",
   "grantLinksCaptured": "network.grant.linksCaptured",
   "walletChanged": "billing.wallet.changed",
+  "grantUsage": "entitlement.grant.usage",
 } as const;

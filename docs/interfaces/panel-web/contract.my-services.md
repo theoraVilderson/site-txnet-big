@@ -141,6 +141,8 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
     shown. A closed list reads nothing; opening reads anyway. A reconnect
     bumps every row's.
 
+13b. **Used bytes follow the panels** (F-307-t): `entitlement.grant.usage` (metering, at most once per
+    30 s per Grant) raises a shown row's used figure — never lowers it — and reads nothing.
 14. **A capability reads by its name, and by its key only where none is
     published** (F-114-f-c, ADR-0086). A Grant's `featureKeys` resolve against
     the `catalog` texts the page already reads, at

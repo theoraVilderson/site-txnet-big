@@ -97,6 +97,10 @@ model Grant {
   /// unlimited; here the bag stays 0 and this says why. Only on a prepaid
   /// Grant, and only with `purchasedBytes = 0` (`grant_traffic_unlimited_is_prepaid`).
   trafficUnlimited      Boolean            @default(false)
+  /// When the owner's open page was last told `consumedBytes`
+  /// (`entitlement.grant.usage`, F-307-t). A throttle, not a record: metering
+  /// claims the next slot in the charge's own transaction, 30 s after this.
+  usagePushedAt         DateTime?
   /// When the bag ran empty (ADR-0075). Starts the purge clock; cleared when a
   /// top-up returns the Grant to `active`.
   suspendedAt           DateTime?

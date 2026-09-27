@@ -40,8 +40,10 @@ function store(startingAt = 5_000n) {
     grant: {
       update: async ({ data }: { data: { consumedBytes: { increment: bigint } } }) => {
         consumed += data.consumedBytes.increment;
-        return { consumedBytes: consumed };
+        return { consumedBytes: consumed, userId: 'u' };
       },
+      // The page's usage push (F-307-t) is metering.service.spec.ts's; here it is never due.
+      updateMany: async () => ({ count: 0 }),
     },
     usageDeltaQuarantine: { findMany: async () => [], createMany: async () => ({ count: 0 }) },
     $executeRaw: async () => 1,

@@ -85,6 +85,21 @@ describe('LivePushConsumer.handle', () => {
 
   // F-111-m: the top bar re-reads the balance on any event of the owner's; the
   // body names no amount, so an out-of-order pair can never show an old one.
+  it("pushes a Grant's committed total on the owner's channel, the tenant left behind (F-307-t)", async () => {
+    const { consumer, published } = build();
+
+    await consumer.handle({
+      ...event(),
+      aggregate: 'entitlement.grant',
+      type: OutboxEventType.GRANT_USAGE,
+      payload: { tenantId: TENANT, userId: USER, grantId: GRANT, consumedBytes: '1302694783' },
+    });
+
+    expect(published).toEqual([
+      { channel: `user:${USER}`, payload: { type: OutboxEventType.GRANT_USAGE, grantId: GRANT, consumedBytes: '1302694783' } },
+    ]);
+  });
+
   it("pushes a wallet movement on the owner's channel with nothing but its type", async () => {
     const { consumer, published, fetch } = build();
 

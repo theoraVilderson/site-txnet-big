@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HoldReason, Prisma, UsageDispositionState } from '@prisma/client';
 import {
+  OutboxEventType,
   runWithTenant,
   tenantTransaction,
   USAGE_DELTA_MESSAGE_VERSION,
@@ -15,6 +16,9 @@ import {
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubUsagePublisher } from './sub-usage.publisher';
+
+/** How often a Grant's owner is told its total, at most (F-307-t; user, 2026-09-27). */
+export const USAGE_PUSH_EVERY_MS = 30_000;
 
 /** What one pass became. Every figure the message carried is in exactly one of these. */
 export interface MeteringOutcome {
@@ -273,9 +277,37 @@ export class MeteringService {
     const grant = await tx.grant.update({
       where: { id: c.config.grantId },
       data: { consumedBytes: { increment: c.up + c.down } },
-      select: { consumedBytes: true },
+      select: { consumedBytes: true, userId: true },
     });
+    await this.announceUsage(tx, c.config, grant.userId, grant.consumedBytes);
     return grant.consumedBytes;
+  }
+
+  /**
+   * Tell the owner's open My services the total this transaction committed
+   * (F-307-t), at most once per {@link USAGE_PUSH_EVERY_MS} per Grant. The
+   * slot is claimed on the Grant row the charge already holds locked, so two
+   * replicas charging one Grant announce once, and the event commits or rolls
+   * back with the bytes it reports (ADR-0021). The figure is the committed
+   * total, never a delta: a push lost or skipped costs nothing, the next one
+   * carries everything. A window's last bytes wait for the next charge.
+   */
+  private async announceUsage(tx: Prisma.TransactionClient, config: Omit<ConfigAttribution, 'remoteId'>, userId: string, consumedBytes: bigint): Promise<void> {
+    const now = new Date();
+    const slot = await tx.grant.updateMany({
+      where: { id: config.grantId, OR: [{ usagePushedAt: null }, { usagePushedAt: { lt: new Date(now.getTime() - USAGE_PUSH_EVERY_MS) } }] },
+      data: { usagePushedAt: now },
+    });
+    if (slot.count !== 1) return;
+    await tx.outboxEvent.create({
+      data: {
+        aggregate: 'entitlement.grant',
+        aggregateId: config.grantId,
+        type: OutboxEventType.GRANT_USAGE,
+        payload: { tenantId: config.tenantId, userId, grantId: config.grantId, consumedBytes: consumedBytes.toString() },
+      },
+      select: { id: true },
+    });
   }
 
   /** Hold one delta, for the same price as billing it: the seen row is written either way. */

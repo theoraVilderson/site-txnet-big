@@ -20,6 +20,8 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, readonly string[]
   [OutboxEventType.GRANT_LINKS_CAPTURED]: ['grantId'],
   /** F-111-m: a wallet balance moved — the top bar re-reads it; no amount rides along. */
   [OutboxEventType.WALLET_CHANGED]: [],
+  /** F-307-t: a Grant's committed total — the row's used figure follows it, no read. */
+  [OutboxEventType.GRANT_USAGE]: ['grantId', 'consumedBytes'],
 };
 
 /**

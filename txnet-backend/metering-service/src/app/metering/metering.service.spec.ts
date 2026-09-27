@@ -39,6 +39,7 @@ const TENANT = '22222222-2222-4222-8222-222222222222';
 const CONFIG = '33333333-3333-4333-8333-333333333333';
 const GRANT = '44444444-4444-4444-8444-444444444444';
 const OTHER_CONFIG = '55555555-5555-4555-8555-555555555555';
+const USER = '77777777-7777-4777-8777-777777777777';
 
 type ConfigRow = {
   id: string;
@@ -54,6 +55,8 @@ function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> 
   const quarantines: Array<Record<string, unknown>> = [];
   const unattributed = new Map<string, { upBytes: bigint; downBytes: bigint; observationCount: number; lastSeenAt: Date }>();
   const consumed = new Map<string, bigint>([[GRANT, 0n]]);
+  const pushedAt = new Map<string, Date>();
+  const outbox: Array<Record<string, unknown>> = [];
   /** What `SET LOCAL app.tenant_id` bound, per transaction — the RLS scope. */
   const bound: Array<string | null> = [];
 
@@ -87,7 +90,20 @@ function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> 
     grant: {
       update: async ({ where, data }: { where: { id: string }; data: { consumedBytes: { increment: bigint } } }) => {
         consumed.set(where.id, (consumed.get(where.id) ?? 0n) + data.consumedBytes.increment);
-        return { id: where.id, consumedBytes: consumed.get(where.id) as bigint };
+        return { id: where.id, consumedBytes: consumed.get(where.id) as bigint, userId: USER };
+      },
+      // The usage announcement's slot (F-307-t): taken only when the last one is older than the cutoff.
+      updateMany: async ({ where, data }: { where: { id: string; OR: [unknown, { usagePushedAt: { lt: Date } }] }; data: { usagePushedAt: Date } }) => {
+        const last = pushedAt.get(where.id);
+        if (last && !(last < where.OR[1].usagePushedAt.lt)) return { count: 0 };
+        pushedAt.set(where.id, data.usagePushedAt);
+        return { count: 1 };
+      },
+    },
+    outboxEvent: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        outbox.push(data);
+        return { id: 'e' };
       },
     },
     usageHold: {
@@ -153,7 +169,7 @@ function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> 
     $transaction: async <R>(fn: (tx: unknown) => Promise<R>): Promise<R> => fn(client),
   };
 
-  return { client, seen, rawLog, holds, quarantines, unattributed, consumed, bound };
+  return { client, seen, rawLog, holds, quarantines, unattributed, consumed, bound, outbox };
 }
 
 /** One pass, with whatever the caller wants in it. Bytes are decimal strings on the wire. */
@@ -197,6 +213,36 @@ function service(store: ReturnType<typeof fakeStore>) {
 }
 
 describe('MeteringService', () => {
+  it("tells the owner's open page the committed total, at most once per 30 s per Grant (F-307-t)", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-09-27T10:00:00Z'));
+      const store = fakeStore([{ id: CONFIG, tenantId: TENANT, grantId: GRANT, remoteId: 'client-a' }]);
+      const metering = service(store);
+      await metering.apply(pass({ deltas: [delta()] }));
+      expect(store.outbox).toEqual([
+        {
+          aggregate: 'entitlement.grant',
+          aggregateId: GRANT,
+          type: 'entitlement.grant.usage',
+          payload: { tenantId: TENANT, userId: USER, grantId: GRANT, consumedBytes: '3000' },
+        },
+      ]);
+      // Inside the window: billed, not announced.
+      vi.setSystemTime(new Date('2026-09-27T10:00:29Z'));
+      await metering.apply(pass({ deltas: [delta({ deltaId: '66666666-6666-4666-8666-666666666667' })] }));
+      expect(store.consumed.get(GRANT)).toBe(6000n);
+      expect(store.outbox).toHaveLength(1);
+      // Past it: the next delta carries the total as committed, both deltas in it.
+      vi.setSystemTime(new Date('2026-09-27T10:00:31Z'));
+      await metering.apply(pass({ deltas: [delta({ deltaId: '66666666-6666-4666-8666-666666666668' })] }));
+      expect(store.outbox).toHaveLength(2);
+      expect(store.outbox[1]['payload']).toMatchObject({ consumedBytes: '9000' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('bills a delta: a raw-log row, the Grant cursor, and a seen row under the config tenant', async () => {
     const store = fakeStore([{ id: CONFIG, tenantId: TENANT, grantId: GRANT, remoteId: 'client-a' }]);
 

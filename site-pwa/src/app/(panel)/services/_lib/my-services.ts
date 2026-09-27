@@ -152,6 +152,19 @@ export function readLinksCaptured(payload: unknown): { grantId: string } | null 
   return typeof p.grantId === "string" && p.grantId !== "" ? { grantId: p.grantId } : null;
 }
 
+/**
+ * `entitlement.grant.usage` (F-307-t): a Grant's committed total, as metering
+ * wrote it. A total that is not a whole decimal byte count is no event.
+ */
+export function readGrantUsage(payload: unknown): { grantId: string; consumedBytes: string } | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Record<string, unknown>;
+  if (p.type !== RealtimeEvents.grantUsage) return null;
+  if (typeof p.grantId !== "string" || p.grantId === "") return null;
+  if (typeof p.consumedBytes !== "string" || !/^\d+$/.test(p.consumedBytes)) return null;
+  return { grantId: p.grantId, consumedBytes: p.consumedBytes };
+}
+
 /** Billing's ceilings on a paste (`billing/contract.gift.md`, `by-lines`). */
 export const PASTE_MAX_LINES = 20;
 const PASTE_MAX_LENGTH = 4096;

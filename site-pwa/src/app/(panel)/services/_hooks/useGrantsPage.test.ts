@@ -240,6 +240,36 @@ describe("useGrantsPage — a Grant's configs ready (F-111-l)", () => {
   });
 });
 
+describe("useGrantsPage — used bytes, live (F-307-t)", () => {
+  // `entitlement.grant.usage` carries a Grant's committed total, at most every
+  // 30 s. The row's figure follows it with no read; a total is never smaller
+  // than one already shown, so an older push landing late changes nothing.
+  it("patches the named row's consumedBytes, reads nothing, and never goes back", async () => {
+    const { result } = renderHook(() => useGrantsPage(1, "en"));
+    await waitFor(() => expect(result.current.rows).not.toBeNull());
+
+    await hear({ type: RealtimeEvents.grantUsage, grantId: "g2", consumedBytes: "1302694783" });
+    expect(result.current.rows?.find((r) => r.id === "g2")?.consumedBytes).toBe("1302694783");
+    expect(result.current.rows?.find((r) => r.id === "g1")?.consumedBytes).toBe("0");
+
+    await hear({ type: RealtimeEvents.grantUsage, grantId: "g2", consumedBytes: "1000" });
+    expect(result.current.rows?.find((r) => r.id === "g2")?.consumedBytes).toBe("1302694783");
+    expect(grants).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a Grant not on the page, and a total that is not a byte count", async () => {
+    const { result } = renderHook(() => useGrantsPage(1, "en"));
+    await waitFor(() => expect(result.current.rows).not.toBeNull());
+    const before = result.current.rows;
+
+    await hear({ type: RealtimeEvents.grantUsage, grantId: "elsewhere", consumedBytes: "5" });
+    await hear({ type: RealtimeEvents.grantUsage, grantId: "g2", consumedBytes: "1.5e9" });
+    await hear({ type: RealtimeEvents.grantUsage, grantId: "g2" });
+
+    expect(result.current.rows).toBe(before);
+  });
+});
+
 describe("useGrantsPage — which Grants (user, 2026-09-26)", () => {
   it("asks billing for the current Grants by default and answers how many it left out", async () => {
     grants.mockResolvedValue({ ...page({ id: "g2", status: "expired" }), hidden: 3 } as never);
