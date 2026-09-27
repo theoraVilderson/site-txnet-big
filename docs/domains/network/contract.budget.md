@@ -66,6 +66,20 @@ added later cannot fall through to "nothing happened":
 
 A clean pass is `healthy`, and that is the only evidence a refusal is over.
 
+## A pass writes its hottest config first (F-027-ct)
+
+Every ceiling write waits for its slot, so the order a pass writes in is the
+order the panel learns its figures in. A re-split moves every idle ceiling as
+well as the one that matters, and in `createdAt` order the consuming config on
+a 100-inbound panel waited ~100 s behind 99 idle shrinks, cut at its old
+ceiling. So the ceiling pass (`converge.Ceilings`) decides every write first,
+then writes by **seconds to crossing** at the config's own `observedRateBps`:
+to the panel's ceiling where ours is higher (it cuts there first), to ours
+where it is lower or the panel holds none (past it is traffic nobody bought).
+Already past is first; **no measured rate is last**, in the order read — an
+idle shrink costs neither money nor service while it waits. It changes no
+count: the same writes, reordered.
+
 ## The ban carries a clock, and the clock is not restarted
 
 `blockedSince` is set exactly while the state is `throttled_or_blocked`

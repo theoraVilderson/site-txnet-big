@@ -39,6 +39,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
+	"sort"
 	"time"
 
 	"network-service/internal/collect"
@@ -257,6 +259,7 @@ func (c *Ceilings) pass(
 	quiet := quietSet(c.Counters, p, res)
 	var confirmed []AppliedCeiling
 	var written []WrittenCeiling
+	var writes []pendingWrite
 	for _, allocation := range allocations {
 		report.Checked++
 		client, onPanel := enforcing[allocation.RemoteID]
@@ -301,19 +304,30 @@ func (c *Ceilings) pass(
 			})
 			continue
 		}
-		if err := p.Driver.SetClientDataLimit(ctx, allocation.RemoteID, want); err != nil {
+		writes = append(writes, pendingWrite{
+			allocation: allocation, reason: reason, overridden: overridden,
+			want: want, have: have, offset: offset,
+			seconds: secondsToCrossing(want, have, served-offset, allocation.RateBps),
+		})
+	}
+
+	// Every write waits on the panel's budget, so the order is the order the
+	// panels learn their figures in (F-027-ct).
+	sort.SliceStable(writes, func(i, j int) bool { return writes[i].seconds < writes[j].seconds })
+	for _, w := range writes {
+		if err := p.Driver.SetClientDataLimit(ctx, w.allocation.RemoteID, w.want); err != nil {
 			report.Failed++
 			report.Findings = append(report.Findings, Finding{
-				ConfigID: allocation.ConfigID, RemoteID: allocation.RemoteID,
-				Reason: ReasonRefused, WantBytes: want, HaveBytes: have, Err: err, Overridden: overridden,
+				ConfigID: w.allocation.ConfigID, RemoteID: w.allocation.RemoteID,
+				Reason: ReasonRefused, WantBytes: w.want, HaveBytes: w.have, Err: err, Overridden: w.overridden,
 			})
 			continue
 		}
 		report.Written++
-		written = append(written, WrittenCeiling{ConfigID: allocation.ConfigID, Bytes: want + offset})
+		written = append(written, WrittenCeiling{ConfigID: w.allocation.ConfigID, Bytes: w.want + w.offset})
 		report.Findings = append(report.Findings, Finding{
-			ConfigID: allocation.ConfigID, RemoteID: allocation.RemoteID,
-			Reason: reason, WantBytes: want, HaveBytes: have, Overridden: overridden,
+			ConfigID: w.allocation.ConfigID, RemoteID: w.allocation.RemoteID,
+			Reason: w.reason, WantBytes: w.want, HaveBytes: w.have, Overridden: w.overridden,
 		})
 	}
 
@@ -328,6 +342,35 @@ func (c *Ceilings) pass(
 		}
 	}
 	return report, nil
+}
+
+// pendingWrite is one decided write, held until the pass knows every write it
+// owes and can order them.
+type pendingWrite struct {
+	allocation Allocation
+	reason     Reason
+	overridden bool
+	want, have int64
+	offset     int64
+	seconds    float64
+}
+
+// secondsToCrossing is how long, at its own rate, a config has before it
+// crosses the figure that matters (F-027-ct): the ceiling the panel holds
+// where ours is higher, because the panel cuts there first, and ours where it
+// is lower or the panel holds none, because past it is traffic nobody bought.
+// All in the panel's basis. Already past it is negative, and first; a config
+// with no measured rate crosses nothing and goes last — an idle shrink costs
+// no money and no service while it waits.
+func secondsToCrossing(want, have, counter, rateBps int64) float64 {
+	if rateBps <= 0 {
+		return math.Inf(1)
+	}
+	crossing := want
+	if have > 0 && have < want {
+		crossing = have
+	}
+	return float64(crossing-counter) * 8 / float64(rateBps)
 }
 
 // reason names what this write is about. The order is the order of how much

@@ -145,7 +145,7 @@ panel's turn in the collection pass (`collect.PassConverger`) — and on a woken
 turn seconds after the allocator moves a share (F-027-cp, `contract.collection.md`
 rule 5), so a re-split is not a 60 s cut mid-download — costs **one**
 `ListClients` for the whole population, and writes `SetClientDataLimit` only to
-the configs that disagree.
+the configs that disagree — nearest crossing first (`contract.budget.md`).
 
 **`applied` is what the panel confirmed, never what we sent.** Families take a
 ceiling late, so a write that returned `nil` is not a ceiling being enforced,
