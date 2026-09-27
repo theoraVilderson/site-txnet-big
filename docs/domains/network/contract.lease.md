@@ -88,10 +88,12 @@ it holds no driver.
    of the replicas. Without this, one logged want would read as a write that
    never lands. The next turn would then say nothing until `DriftAfter`.
 8. **Output is two log lines, `lease shadow plan`** (per Grant: quota, used,
-   avail, endgame, closed) **and `lease shadow action`** (per action: config,
-   limit, enable, priority, reason, and `allocated`, the live split beside
-   it). F-027-da reads these lines. A shadow failure is logged and never fails
-   the turn.
+   avail, endgame, closed, and `replicas`: per config `counter`, `seen` +
+   `seen_enabled` as enforced, `want` + `want_enabled` as the planner would
+   write, `allocated` as billing split it) **and `lease shadow action`** (per
+   action: config, limit, enable, priority, reason, `allocated`). A config
+   with no action wants what it has. A shadow failure is logged and never
+   fails the turn.
 9. **A replica's rates live in memory**, re-seeded from the counters on a
    restart: the fast rate forgets in 30 s, so a stored one is stale by the
    time it is read. `rate*` stay unwritten; the panel's state is kept (below).
@@ -114,3 +116,24 @@ it holds no driver.
     (mean + LagZ·σ, no floor, the 10 min ceiling), so the band and the
     planner budget the same seconds; with none it is the family's 35 s,
     never the planner's 0.75·J, which is a guess and would under-cover.
+
+## The shadow report (F-027-da)
+
+`go run ./cmd/shadowreport < log` (`leaseplan.ReadReport`) reads only the
+`lease shadow plan` lines and prints one row per Grant. It is the gate for
+F-027-db (ADR-0093 rule 3): the planner takes the ceiling only once a live
+1 GiB split reads within the simulator's p95 (+0.37 %).
+
+13. **Overshoot is the live figure**: Used past Quota at the last plan. Only
+    the live ceilings are enforced, so the planner's side is what it
+    *commits*: Used plus every enabled config's room under its ceiling
+    (`want` for the planner, `seen` live), the most either side ever
+    committed past Quota. A ceiling of 0 bounds nothing and adds no room.
+14. **A false cut is config-seconds with bytes left**: a config disabled or
+    at its ceiling while Used < Quota, counted from its plan to the Grant's
+    next one. A gap over `MaxTurnGap` (10 min) counts nothing — the service
+    was down, not the cut long.
+15. **Divergence is Σ|want − allocated| of one plan, over Quota**, and only
+    while bytes are left: past the bag the planner's close (limit = counter)
+    against a split nobody moves any more is noise.
+

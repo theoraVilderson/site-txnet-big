@@ -107,6 +107,21 @@ func TestAPlanIsBuiltFromQuotaAndTheCounters(t *testing.T) {
 	if balance := plan.Quota - plan.Used; lease > balance {
 		t.Errorf("leases %d exceed the balance %d: %+v", lease, balance, plan.Actions)
 	}
+
+	// The report's view: every replica, the live ceiling beside the planner's.
+	if len(plan.Replicas) != 2 {
+		t.Fatalf("replicas = %+v, want both configs", plan.Replicas)
+	}
+	for _, v := range plan.Replicas {
+		if v.Counter != counters[v.Config] || v.Seen != 500*quota.MB {
+			t.Errorf("view %+v: counter or seen is not what was read", v)
+		}
+		for _, a := range plan.Actions {
+			if a.ConfigID == v.Config && (v.Want != a.Limit || v.WantEnabled != a.Enable) {
+				t.Errorf("view %+v does not carry its action %+v", v, a)
+			}
+		}
+	}
 }
 
 // Only the configs this pass read are asked about: an unattributed client is

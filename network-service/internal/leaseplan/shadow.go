@@ -121,6 +121,26 @@ type Plan struct {
 	Endgame bool
 	Closed  bool
 	Actions []Action
+	// Replicas is every replica of the Grant after the plan, the live figures
+	// beside the planner's: what F-027-da's report is read from.
+	Replicas []ReplicaView
+}
+
+// ReplicaView is one replica on one plan: the counter, what the panel
+// enforces and the live split asked for, and what the planner would write.
+// A config the planner leaves alone wants what it has.
+type ReplicaView struct {
+	Config  string `json:"config"`
+	Panel   string `json:"panel"`
+	Counter int64  `json:"counter"`
+	// Seen is `appliedCeilingBytes` and SeenEnabled `desiredEnabled`; 0 = no
+	// ceiling applied.
+	Seen        int64 `json:"seen"`
+	SeenEnabled bool  `json:"seen_enabled"`
+	Want        int64 `json:"want"`
+	WantEnabled bool  `json:"want_enabled"`
+	// Allocated is `allocatedCeilingBytes`, billing's split; nil = none.
+	Allocated *int64 `json:"allocated,omitempty"`
 }
 
 // Action is one write the planner would make, and the live split beside it.
@@ -159,7 +179,8 @@ func (s *Shadow) Observe(ctx context.Context, p collect.Panel, readings []driver
 	plans, err := s.Plan(ctx, p, readings, at)
 	for _, pl := range plans {
 		s.log().Info("lease shadow plan", "panel", p.ID, "grant", pl.GrantID, "quota", pl.Quota, "used", pl.Used,
-			"avail", pl.Avail, "endgame", pl.Endgame, "closed", pl.Closed, "actions", len(pl.Actions))
+			"avail", pl.Avail, "endgame", pl.Endgame, "closed", pl.Closed, "actions", len(pl.Actions),
+			"replicas", pl.Replicas)
 		for _, a := range pl.Actions {
 			attrs := []any{"grant", pl.GrantID, "config", a.ConfigID, "panel", a.PanelID, "limit", a.Limit,
 				"enable", a.Enable, "create", a.Create, "priority", a.Priority, "reason", a.Reason}
@@ -291,12 +312,29 @@ func (s *Shadow) plan(ctx context.Context, p collect.Panel, readings []driver.Cl
 		}
 		res := a.Plan(at, s.params())
 		pl := Plan{GrantID: g.ID, Quota: a.Quota, Used: a.Used, Avail: res.Avail, Endgame: res.Endgame, Closed: a.Closed}
+		acted := map[string]Action{}
 		for _, act := range res.Actions {
 			id := s.configOf[act.ReplicaID]
-			pl.Actions = append(pl.Actions, Action{
+			pa := Action{
 				ConfigID: id, PanelID: act.PanelID, Create: act.Create, Limit: act.Limit, Enable: act.Enable,
 				Priority: act.Priority.String(), Reason: act.Reason, Allocated: byID[id].Allocated,
-			})
+			}
+			pl.Actions = append(pl.Actions, pa)
+			acted[id] = pa
+		}
+		for _, c := range g.Configs {
+			if s.replicas[c.ID] == nil {
+				continue
+			}
+			v := ReplicaView{Config: c.ID, Panel: c.PanelID, Counter: c.Counter, Seen: c.LimitSeen,
+				SeenEnabled: c.Enabled, Want: c.LimitSeen, WantEnabled: c.Enabled, Allocated: c.Allocated}
+			if n, ok := counters[c.ID]; ok {
+				v.Counter = n
+			}
+			if act, ok := acted[c.ID]; ok {
+				v.Want, v.WantEnabled = act.Limit, act.Enable
+			}
+			pl.Replicas = append(pl.Replicas, v)
 		}
 		plans = append(plans, pl)
 	}
