@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-updated: 2026-09-26
+updated: 2026-09-27
 ---
 
 # Invariants — entitlement
@@ -32,6 +32,7 @@ database — the shapes are proved by
 | 13 | A purge never deletes one of our rows — it writes `desiredRemote = absent` and nothing else; `remoteId` is cleared only by the loop that confirmed the delete | `GrantPurgeService.purgeDue` writes that column alone (F-027-y, `purge.spec.ts`, ADR-0075) | a rebuild becomes a reconstruction, and the history of what a user held is gone |
 | 14 | A paid Grant ends delivered or refunded, never both and never neither: `pending` only until one of them, each conditional on `pending`, and a refund is the invoice's whole `total`, once | `markDelivered` and `GrantDeliveryService.refund` both write `where status = pending`; the invoice flips `paid -> refunded` under its row lock or the refund rolls back (F-111-d, `delivery.spec.ts`, `invoice-payment.int.spec.ts`) | a user charged for nothing, or given the service and the money back |
 | 15 | Unlimited traffic is the flag `trafficUnlimited`, never a 0 read as unlimited: set only at issue from a sold `limit = 0`, only on a prepaid Grant, with `purchasedBytes = 0`; such a Grant gets no ceiling, is never suspended as exhausted and never buys a block | CHECK `grant_traffic_unlimited_is_prepaid`; `grantFromVariant`, `CeilingAllocatorService.rebalance`, `suspendIfExhausted`, `HotLoopService.topUpIn` (F-111-q, `traffic/unlimited-grant.spec.ts`) | a user who bought everything handed a 0-byte ceiling, or suspended at the first byte |
+| 16 | A renewal lands on the Grant it renews: Quota and Used stay cumulative, a debt up to 2 GiB is forgiven by an adjustment row, a larger one is carried whole | `renewGrant`, conditional on the Quota and end it read (F-027-dg, `renewal.spec.ts`) | a new Grant per period drops every debt and credit; a debt forgiven twice by two racing renewals |
 
 ## How to test
 

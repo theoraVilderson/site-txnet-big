@@ -1,0 +1,142 @@
+import { GrantSource, GrantStatus, Prisma, QuotaMetric, VariantBillingMode } from '@prisma/client';
+
+import { EntitlementRefused } from './grant';
+import { reviveOnTopUp } from './purge';
+import { QUOTA_EXHAUSTED } from './suspension';
+
+/**
+ * A renewal is `Quota += X` on the same Grant (F-027-dg; SPEC weakness #30).
+ *
+ * Quota is `purchasedBytes` and Used is Σ lifetime counters over every config
+ * of the Grant, retired ones included — both cumulative, both what the lease
+ * planner reads (`network/contract.lease.md` rule 1). So a renewal on the same
+ * Grant carries a period's over- or under-delivery to the next by arithmetic
+ * alone: a credit is bytes still under Quota, a debt is Used already past it.
+ * A new Grant per period would start Used at zero and drop both.
+ *
+ * The one rule on top is the user's (2026-09-27): **a debt of up to 2 GiB is
+ * forgiven** — it is the panel's tick lag (±`v·J/√12`), which happens to
+ * everyone and is nobody's doing — by raising Quota by the debt as well, as its
+ * own `quota_adjustment` row. A debt above that is carried whole.
+ *
+ * The planner reopens a closed Grant when its Quota or end moved
+ * (`contract.lease.md` rule 25), so this writes nothing on the network side.
+ * An `expired` Grant is not renewed here: `grant_status_one_way` makes expiry
+ * terminal (F-027-do).
+ */
+
+const GIB = BigInt(1024 ** 3);
+const DAY_MS = 86_400_000;
+
+/** The largest debt a renewal forgives (user, 2026-09-27). */
+export const DEBT_FORGIVEN_UP_TO = BigInt(2) * GIB;
+
+/** `quota_adjustment.reason` of the row that forgives a debt. */
+export const DEBT_FORGIVEN = 'debt_forgiven';
+
+export type CarryOver = {
+  /** Used past Quota at the renewal; zero when there was a credit. */
+  debtBytes: bigint;
+  /** The part of the debt added to Quota: all of it up to the bound, none above it. */
+  forgivenBytes: bigint;
+  /** What Quota rises by: the renewal's bytes plus what was forgiven. */
+  raiseBytes: bigint;
+};
+
+/** How a renewal of `bytes` lands on a Grant at `purchasedBytes` / `usedBytes`. */
+export function carryOver(input: { purchasedBytes: bigint; usedBytes: bigint; bytes: bigint }): CarryOver {
+  const over = input.usedBytes - input.purchasedBytes;
+  const debtBytes = over > BigInt(0) ? over : BigInt(0);
+  const forgivenBytes = debtBytes <= DEBT_FORGIVEN_UP_TO ? debtBytes : BigInt(0);
+  return { debtBytes, forgivenBytes, raiseBytes: input.bytes + forgivenBytes };
+}
+
+export type RenewGrant = {
+  grantId: string;
+  /** Traffic added; 0 for a renewal of days alone (the only kind a metered or unlimited Grant takes). */
+  bytes: bigint;
+  /** Days added to the end, from now when the end has already passed; a permanent Grant stays permanent. */
+  days: number;
+  source: GrantSource;
+  at?: Date;
+  reason?: string | null;
+  createdByAdminId?: string | null;
+};
+
+export type Renewal = CarryOver & {
+  grantId: string;
+  purchasedBytes: bigint;
+  endsAt: Date | null;
+  /** A Grant suspended for quota that the raise gave room again. */
+  revived: boolean;
+};
+
+const RENEWABLE: ReadonlySet<GrantStatus> = new Set([GrantStatus.active, GrantStatus.suspended]);
+
+/** Renews a Grant in place, inside the caller's transaction. */
+export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant): Promise<Renewal> {
+  const at = input.at ?? new Date();
+  if (input.bytes < BigInt(0) || input.days < 0 || !Number.isInteger(input.days)) {
+    throw new RangeError(`a renewal adds: bytes ${input.bytes}, days ${input.days}`);
+  }
+  if (input.bytes === BigInt(0) && input.days === 0) throw new EntitlementRefused('nothing_to_renew', input.grantId);
+
+  const grant = await tx.grant.findUnique({
+    where: { id: input.grantId },
+    select: { id: true, tenantId: true, status: true, statusReason: true, billingMode: true, trafficUnlimited: true, purchasedBytes: true, endsAt: true },
+  });
+  if (!grant) throw new EntitlementRefused('grant_not_found', input.grantId);
+  if (!RENEWABLE.has(grant.status)) throw new EntitlementRefused('grant_not_renewable', `${grant.id} is ${grant.status}`);
+
+  // A metered Grant's bytes are bought by its blocks, an unlimited one has no
+  // bag: neither carries a debt, and both renew by days alone.
+  const bagged = grant.billingMode === VariantBillingMode.prepaid && !grant.trafficUnlimited;
+  if (!bagged && input.bytes > BigInt(0)) throw new EntitlementRefused('traffic_not_renewable', grant.id);
+
+  const configs = await tx.config.findMany({
+    where: { grantId: grant.id },
+    select: { counterState: { select: { lifetimeUpBytes: true, lifetimeDownBytes: true } } },
+  });
+  const usedBytes = configs.reduce(
+    (sum, c) => sum + (c.counterState ? c.counterState.lifetimeUpBytes + c.counterState.lifetimeDownBytes : BigInt(0)),
+    BigInt(0),
+  );
+  const carry = bagged
+    ? carryOver({ purchasedBytes: grant.purchasedBytes, usedBytes, bytes: input.bytes })
+    : { debtBytes: BigInt(0), forgivenBytes: BigInt(0), raiseBytes: BigInt(0) };
+
+  const purchasedBytes = grant.purchasedBytes + carry.raiseBytes;
+  const from = grant.endsAt && grant.endsAt.getTime() > at.getTime() ? grant.endsAt : at;
+  const endsAt = grant.endsAt === null ? null : new Date(from.getTime() + input.days * DAY_MS);
+
+  // Conditional on what was read: two renewals racing would each forgive the
+  // same debt, and a block purchase between would be overwritten.
+  const moved = await tx.grant.updateMany({
+    where: { id: grant.id, status: grant.status, purchasedBytes: grant.purchasedBytes, endsAt: grant.endsAt },
+    data: { purchasedBytes, endsAt },
+  });
+  if (moved.count === 0) throw new EntitlementRefused('grant_moved', grant.id);
+
+  // Invariant 3: a quota changes only by an adjustment row, never edited.
+  const row = (delta: bigint, reason: string | null) =>
+    tx.quotaAdjustment.create({
+      data: {
+        tenantId: grant.tenantId,
+        grantId: grant.id,
+        metric: QuotaMetric.traffic_bytes,
+        delta,
+        source: input.source,
+        reason,
+        createdByAdminId: input.createdByAdminId ?? null,
+      },
+    });
+  if (input.bytes > BigInt(0)) await row(input.bytes, input.reason ?? null);
+  if (carry.forgivenBytes > BigInt(0)) await row(carry.forgivenBytes, DEBT_FORGIVEN);
+
+  const revived =
+    grant.status === GrantStatus.suspended && grant.statusReason === QUOTA_EXHAUSTED && bagged && purchasedBytes > usedBytes
+      ? (await reviveOnTopUp(tx, grant.id)).revived
+      : false;
+
+  return { grantId: grant.id, ...carry, purchasedBytes, endsAt, revived };
+}

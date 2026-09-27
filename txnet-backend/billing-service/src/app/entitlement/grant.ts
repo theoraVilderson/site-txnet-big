@@ -41,7 +41,15 @@ export type EntitlementRejection =
   /** A `metered` variant with no rate in effect at the sale: nothing would price its bytes (F-027-p). */
   | 'metered_rate_missing'
   /** The rate in effect is zero: a block priced at nothing cannot be bought, so the Grant would stall (F-027-al). */
-  | 'metered_rate_not_positive';
+  | 'metered_rate_not_positive'
+  /** Renewal (F-027-dg): only an `active` Grant, or one `suspended`, is renewed in place. */
+  | 'grant_not_renewable'
+  /** Renewal: bytes on a metered Grant (its blocks buy them) or an unlimited one. */
+  | 'traffic_not_renewable'
+  /** Renewal: neither bytes nor days. */
+  | 'nothing_to_renew'
+  /** Renewal: the Grant's Quota or end moved between the read and the write; retry. */
+  | 'grant_moved';
 
 export class EntitlementRefused extends Error {
   constructor(

@@ -2,8 +2,8 @@
 id: entitlement
 layer: domain
 status: draft
-version: 4
-updated: 2026-09-26
+version: 5
+updated: 2026-09-27
 ---
 
 # Contract — entitlement
@@ -81,6 +81,26 @@ The clock is not here. `worker-service` holds it and asks hourly over `POST
 /api/internal/billing/entitlement/purge-due` (`ServiceOnlyGuard`, key
 `grant_config_purge`), because background work does not run in a
 request-serving process (ADR-0027, `automation/contract.worker.md`).
+
+**Renewal is `Quota += X` on the same Grant (F-027-dg, SPEC weakness #30)** —
+`renewGrant(tx, {grantId, bytes, days, source, …})` in
+`entitlement/renewal.ts`, in the caller's transaction. It raises
+`purchasedBytes` and moves `endsAt` by `days` (from now if already past; a
+permanent Grant stays permanent) on the Grant the user already holds, so its
+link and configs stay. Quota and Used are cumulative — Used is Σ lifetime
+counters over every config, retired ones included, the planner's own sum
+(`network/contract.lease.md` rule 1) — so a credit carries by itself and a
+debt is Used already past Quota. **A debt up to 2 GiB is forgiven**
+(`DEBT_FORGIVEN_UP_TO`, user 2026-09-27: panel tick lag, not the user's
+doing): Quota rises by it too, as its own `quota_adjustment` row with reason
+`debt_forgiven`. A larger debt is carried whole. Each raise is an adjustment
+row (invariant 3). A Grant suspended for quota is revived (`reviveOnTopUp`)
+when the raise leaves room; the planner reopens a closed one on the moved
+Quota or end (rule 25). Refused: `grant_not_renewable` (not `active` or
+`suspended` — an `expired` Grant is F-027-do), `traffic_not_renewable` (bytes
+on a metered or unlimited Grant, which renew by days alone),
+`nothing_to_renew`, `grant_moved` (Quota or end changed since the read: retry,
+so no debt is forgiven twice). Callers arrive with F-305 and F-311-d.
 
 **Unlimited traffic (F-111-q).** A prepaid variant sold with
 `traffic_bytes.limit = 0` (catalog invariant 10) is issued with
