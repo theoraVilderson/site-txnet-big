@@ -173,3 +173,8 @@ before it is deleted (F-027-dk).
 4. **The planner's target includes any overrun.** It is a horizon of the rate
    less `purchasedBytes − Used`, so bytes served from the reserve past the bag
    are bought with the next block rather than left uncharged.
+5. **The balance a block leaves is read for the wallet-low notice** (F-601-g).
+   `noticeLowBalance` (`traffic/low-balance.ts`) takes the debit's
+   `balanceAfter` in the same transaction: under 1 GB at the Grant's rate it
+   tells once per crossing, at or over it re-arms (entitlement
+   `contract.retention.md` "Wallet low"). A refused block tells nothing here.

@@ -52,4 +52,6 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   [OutboxEventType.GRANT_ENDED]: { template: 'serviceEnded', params: [] },
   [OutboxEventType.GRANT_VOLUME_SPENT]: { template: 'serviceVolumeSpent', params: [] },
   [OutboxEventType.GRANT_WALLET_SPENT]: { template: 'serviceWalletSpent', params: [] },
+  // F-601-g: a metered Grant's wallet buys under a GB at its rate — what it still buys; once per crossing.
+  [OutboxEventType.GRANT_LOW_BALANCE]: { template: 'serviceWalletLow', params: ['remaining'] },
 };

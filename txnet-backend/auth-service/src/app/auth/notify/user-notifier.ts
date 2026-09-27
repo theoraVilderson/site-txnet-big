@@ -26,6 +26,7 @@ export const NOTIFY_TEMPLATES = [
   'serviceEnded',
   'serviceVolumeSpent',
   'serviceWalletSpent',
+  'serviceWalletLow',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -245,6 +246,17 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.retention?.walletSpentMany,
       fallback: '⛔ {{count}} of your services used up what your wallet could buy and have stopped. Top up your wallet and they turn back on by themselves.',
       inbox: { read: (ns) => ns?.retention?.walletSpentManyTitle, fallback: '{{count}} services stopped: wallet empty' },
+    },
+  },
+  // F-601-g: a metered Grant's wallet buys under a GB at its rate — once per crossing; the top-up keeps it running.
+  serviceWalletLow: {
+    read: (ns) => ns?.retention?.walletLow,
+    fallback: "💳 Your wallet now buys only about {{remaining}} more of your service's traffic. Top up your wallet so it keeps running without a break.",
+    inbox: { read: (ns) => ns?.retention?.walletLowTitle, fallback: 'Your wallet is running low' },
+    many: {
+      read: (ns) => ns?.retention?.walletLowMany,
+      fallback: '💳 Your wallet is running low for {{count}} of your services. Top up your wallet so they keep running without a break.',
+      inbox: { read: (ns) => ns?.retention?.walletLowManyTitle, fallback: 'Wallet running low for {{count}} services' },
     },
   },
 };

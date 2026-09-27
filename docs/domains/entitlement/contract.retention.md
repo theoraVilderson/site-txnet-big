@@ -42,7 +42,7 @@ charge that makes it: billing's `MeteringService.charge`, in its transaction
 | Rule | Why |
 |---|---|
 | One charge past two levels tells the higher alone; none once `consumedBytes ≥ purchasedBytes`. 50 / 80 % are held, 95 % is not ("The 24 h hold") | the user hears the latest truth; a spent bag is the cutoff notice (F-601-b) |
-| Only `active`, prepaid, not unlimited, and a period that opened with bytes to spend | an unlimited Grant has no bag; a metered one is F-601-g |
+| Only `active`, prepaid, not unlimited, and a period that opened with bytes to spend | an unlimited Grant has no bag; a metered one's volume is its wallet ("Wallet low") |
 | `period` = `usagePeriodStartedAt ?? startsAt`; one type per level | notification's ledger lets each level through once per period (invariant 14) |
 
 **Time thresholds (F-601-e, spec 9.5)** — `entitlement/end-notice.ts`, proved
@@ -75,6 +75,22 @@ rules are shared-core `retention-levels.ts` (`retentionToTell`, proved by
 | Told late, the words are as of the telling: the days left from `endsAt`, the volume left from the Grant | a notice held a day says "6 days", never a stale "7" |
 | A held usage level of a closed period (a renewal that added bytes), or of a spent bag, is dropped untold | it is no longer true — the spent bag has its cutoff notice |
 | The sweep asks two questions, each its own batch of 500: Grants ending within 7 days whose clock is due, and held usage levels 24 h old; every write is conditional on the clock and held level read | a charge, a renewal or a second sweep between read and write emits nothing twice |
+
+**Wallet low (F-601-g, spec 9.3 `wallet.low_balance`)** — a metered
+Grant's volume left is what its wallet buys (network `contract.reserve.md`), so
+it is told when the balance buys under **1 GB at its own rate**
+(`LOW_BALANCE_BYTES`, the platform default decided in the row). Seen by
+billing's block request after each purchase, in its transaction, from the
+debit's `balanceAfter` (`traffic/low-balance.ts`, proved by
+`low-balance.spec.ts`; billing `contract.traffic-block.md` rule 5).
+
+| Rule | Why |
+|---|---|
+| Under the threshold and `lowBalanceNoticeAt` null: the write that sets it emits `entitlement.grant.low_balance`, `period` its instant, `remaining` what the balance buys | once per crossing; a racing purchase finds it set and emits nothing |
+| A purchase whose balance buys ≥ 1 GB clears it | a top-up re-arms the next crossing, seen by the next block, not by the top-up |
+| The whole balance at each Grant's rate, not its reserve share | two Grants at two rates cross at two balances; each is told its own |
+| Nothing when the balance buys no byte, or no block was bought | a wallet that cannot buy the next block is the cutoff notice (`wallet_spent`), never this |
+| A balance lowered elsewhere (a product paid from the wallet) is seen by the Grant's next block | the moment that matters is while it is served; an idle Grant spends nothing |
 
 **Cutoff (F-601-b, spec 9.5)** — the user is told their service stopped,
 and what brings it back. Emitted by billing's `traffic/exhaustion.ts` through

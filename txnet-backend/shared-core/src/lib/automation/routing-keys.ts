@@ -74,6 +74,8 @@ export const OutboxEventType = {
   GRANT_VOLUME_SPENT: 'entitlement.grant.volume_spent',
   /** F-601-b: a metered Grant was suspended because its wallet cannot buy the next block — a top-up brings it back, a renewal does not (`suspendIfExhausted`). */
   GRANT_WALLET_SPENT: 'entitlement.grant.wallet_spent',
+  /** F-601-g: a metered Grant's wallet now buys less than a GB at its rate — once per crossing; a top-up is what keeps it running (spec 9.3 `wallet.low_balance`). */
+  GRANT_LOW_BALANCE: 'entitlement.grant.low_balance',
 } as const;
 export type OutboxEventType = (typeof OutboxEventType)[keyof typeof OutboxEventType];
 
@@ -112,6 +114,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.GRANT_ENDED]: 'worker-service',
   [OutboxEventType.GRANT_VOLUME_SPENT]: 'worker-service',
   [OutboxEventType.GRANT_WALLET_SPENT]: 'worker-service',
+  [OutboxEventType.GRANT_LOW_BALANCE]: 'worker-service',
 };
 
 /** Every tick routing key starts with this. The suffix is the worker key. */

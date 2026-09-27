@@ -6,6 +6,7 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
 import { PrismaService } from '../prisma/prisma.service';
 import { BlockPurchaseRefused, BlockPurchaseService, type BlockPurchaseRejection, type PurchasedBlock } from './block-purchase';
 import { type Exhaustion, isShortOfFunds, suspendIfExhausted } from './exhaustion';
+import { noticeLowBalance } from './low-balance';
 
 /**
  * A metered Grant's next block, asked for by the lease planner (F-027-dc,
@@ -60,6 +61,8 @@ export type BlockRequestOutcome = {
   refused: BlockPurchaseRejection | null;
   /** Asked only when the wallet refused and the bag is spent (F-027-x). */
   exhausted: Exhaustion | null;
+  /** After a purchase: the wallet's low-balance notice told, or re-armed by a balance back over it (F-601-g). */
+  lowBalance: 'told' | 'rearmed' | null;
 };
 
 /** What one message came to. `raced` is a purchase another transaction won: routine, not a failure. */
@@ -98,10 +101,21 @@ export class BlockRequestService {
   }
 
   async buyIn(tx: Prisma.TransactionClient, message: BlockRequestMessage): Promise<BlockRequestOutcome> {
-    const none = { grantId: message.grantId, bought: null, refused: null, exhausted: null };
+    const none = { grantId: message.grantId, bought: null, refused: null, exhausted: null, lowBalance: null };
     const grant = await tx.grant.findUnique({
       where: { id: message.grantId },
-      select: { id: true, status: true, billingMode: true, meteredRate: true, trafficUnlimited: true, purchasedBytes: true, consumedBytes: true },
+      select: {
+        id: true,
+        tenantId: true,
+        userId: true,
+        status: true,
+        billingMode: true,
+        meteredRate: true,
+        trafficUnlimited: true,
+        purchasedBytes: true,
+        consumedBytes: true,
+        lowBalanceNoticeAt: true,
+      },
     });
     if (!grant) return { ...none, skipped: 'grant_not_found' };
     if (grant.trafficUnlimited || grant.billingMode !== VariantBillingMode.metered || grant.meteredRate === null) {
@@ -117,7 +131,8 @@ export class BlockRequestService {
 
     try {
       const bought = await this.blocks.purchase(tx, { grantId: grant.id, targetBytes });
-      return { ...none, bought, skipped: null };
+      // The balance the debit left, seen while the user is still served (F-601-g).
+      return { ...none, bought, skipped: null, lowBalance: await noticeLowBalance(tx, grant, bought.balanceAfter) };
     } catch (error) {
       if (!isShortOfFunds(error)) throw error;
       // `purchase()` refuses before it writes, so the transaction is clean. A

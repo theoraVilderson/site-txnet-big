@@ -143,6 +143,10 @@ model Grant {
   /// When the period's first untold crossing happened: the hold's start. A
   /// value before the current usage period opened is stale, never told.
   usageNoticeSince      DateTime?
+  /// When a metered Grant's wallet was last told it buys under a GB (F-601-g):
+  /// set by the block purchase that saw the crossing, cleared by the first one
+  /// that sees the balance buy a GB again. Null = armed. The notice's `period`.
+  lowBalanceNoticeAt    DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @default(now()) @updatedAt
 

@@ -83,8 +83,10 @@ type GrantRow = {
 
 function fakeTx(row: GrantRow | null) {
   const suspensions: Record<string, unknown>[] = [];
+  const events: { type: string }[] = [];
   const grant = row && {
     id: GRANT,
+    tenantId: 't',
     userId: 'u',
     status: row.status ?? GrantStatus.active,
     billingMode: row.prepaid ? VariantBillingMode.prepaid : VariantBillingMode.metered,
@@ -92,6 +94,7 @@ function fakeTx(row: GrantRow | null) {
     trafficUnlimited: row.unlimited ?? false,
     purchasedBytes: row.purchasedBytes ?? BigInt(400) * MB,
     consumedBytes: row.consumedBytes ?? BigInt(0),
+    lowBalanceNoticeAt: null,
   };
   const tx = {
     grant: {
@@ -103,18 +106,23 @@ function fakeTx(row: GrantRow | null) {
     },
     $queryRaw: async () => [{ cachedBalance: new Prisma.Decimal('0.00') }],
     config: { updateMany: async () => ({ count: 1 }) },
-    outboxEvent: { create: async () => ({ id: 'e1' }) },
+    outboxEvent: {
+      create: async ({ data }: { data: { type: string } }) => {
+        events.push(data);
+        return { id: 'e1' };
+      },
+    },
   };
-  return { tx: tx as unknown as Prisma.TransactionClient, suspensions };
+  return { tx: tx as unknown as Prisma.TransactionClient, suspensions, events };
 }
 
-function service(refuse?: Error) {
+function service(refuse?: Error, balanceAfter = new Prisma.Decimal('100.00')) {
   const purchases: { grantId: string; targetBytes: bigint }[] = [];
   const blocks = {
     purchase: async (_tx: unknown, input: { grantId: string; targetBytes: bigint }) => {
       purchases.push(input);
       if (refuse) throw refuse;
-      return { grantId: input.grantId, bytes: input.targetBytes, amount: new Prisma.Decimal(1), walletTransactionId: 'w', purchasedBytes: BigInt(0), billedBytes: BigInt(0) };
+      return { grantId: input.grantId, bytes: input.targetBytes, amount: new Prisma.Decimal(1), walletTransactionId: 'w', purchasedBytes: BigInt(0), billedBytes: BigInt(0), balanceAfter };
     },
   };
   return { requests: new BlockRequestService({} as never, {} as never, blocks as never), purchases };
@@ -128,6 +136,14 @@ describe('BlockRequestService.buyIn', () => {
     expect(purchases).toEqual([{ grantId: GRANT, targetBytes: BigInt(2_000) * MB }]);
     expect(outcome.bought?.bytes).toBe(BigInt(2_000) * MB);
     expect(outcome.skipped).toBeNull();
+  });
+
+  it('tells the wallet low when the block leaves a balance that buys under a GB at the rate (F-601-g)', async () => {
+    const { tx, events } = fakeTx({});
+    const { requests } = service(undefined, new Prisma.Decimal('0.20'));
+    const outcome = await requests.buyIn(tx, message({}));
+    expect(outcome.lowBalance).toBe('told');
+    expect(events.map((e) => e.type)).toEqual(['entitlement.grant.low_balance']);
   });
 
   it('raises a target under the block floor to a minute of the rate, so the ledger gets one row a minute at most', async () => {

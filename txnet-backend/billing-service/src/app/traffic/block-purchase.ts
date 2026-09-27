@@ -154,6 +154,8 @@ export type PurchasedBlock = BlockSizing & {
   /** The cursors as they stand after this purchase. */
   purchasedBytes: bigint;
   billedBytes: bigint;
+  /** The wallet's balance after the debit — what the low-balance notice reads (F-601-g). */
+  balanceAfter: Prisma.Decimal;
 };
 
 @Injectable()
@@ -218,6 +220,7 @@ export class BlockPurchaseService {
       walletTransactionId: movement.id,
       purchasedBytes: advanced.purchasedBytes,
       billedBytes: advanced.billedBytes,
+      balanceAfter: movement.balanceAfter,
     };
   }
 }
