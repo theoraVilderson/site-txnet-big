@@ -61,4 +61,7 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   [OutboxEventType.GRANT_REACTIVATED]: { template: 'serviceReactivated', params: [] },
   // F-601-l: used, then nothing for 7 days — one check-in per idle stretch, and the tenant's support.
   [OutboxEventType.GRANT_IDLE]: { template: 'serviceIdle', params: [], optional: ['supportUrl'] },
+  // F-602: at the last 72 h's rate, what is left of the period runs out within 5 days (or a day) — once per usage period.
+  [OutboxEventType.GRANT_RUNS_OUT_SOON]: { template: 'serviceRunsOutSoon', params: ['days', 'remaining'] },
+  [OutboxEventType.GRANT_RUNS_OUT_WITHIN_A_DAY]: { template: 'serviceRunsOutWithinADay', params: ['remaining'] },
 };

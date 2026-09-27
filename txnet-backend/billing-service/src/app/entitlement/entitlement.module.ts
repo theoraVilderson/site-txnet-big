@@ -12,14 +12,15 @@ import { GrantPurgeNoticeService } from './purge-notice';
 import { GrantUnusedNoticeService } from './unused-notice';
 import { GrantEndNoticeService } from './end-notice';
 import { GrantIdleNoticeService } from './idle-notice';
+import { GrantExhaustionForecastService } from './exhaustion-forecast';
 
 /**
  * Entitlement, as a module inside billing-service (ADR-0049). In-process only:
  * a coupon (F-502-l) or a purchase issues a Grant inside its own transaction.
  *
- * Five sweeps, and none faces a user: purge (F-027-y), "not connected yet?"
- * (F-601-c), time thresholds (F-601-e) and "trouble connecting?" (F-601-l),
- * asked hourly, and delivery
+ * Six sweeps, and none faces a user: purge (F-027-y), "not connected yet?"
+ * (F-601-c), time thresholds (F-601-e), "trouble connecting?" (F-601-l) and
+ * the exhaustion forecast (F-602), asked hourly, and delivery
  * (F-111-d), every minute, all by
  * `worker-service` over the internal seam. ADR-0027 is why the clocks are not
  * here — background work does not run inside a request-serving process.
@@ -30,7 +31,7 @@ import { GrantIdleNoticeService } from './idle-notice';
 @Module({
   imports: [TrafficModule, WalletModule],
   controllers: [EntitlementInternalController],
-  providers: [KekService, GrantTokenSeal, GrantService, GrantPurgeService, GrantDeliveryService, GrantUnusedNoticeService, GrantEndNoticeService, GrantPurgeNoticeService, GrantIdleNoticeService],
+  providers: [KekService, GrantTokenSeal, GrantService, GrantPurgeService, GrantDeliveryService, GrantUnusedNoticeService, GrantEndNoticeService, GrantPurgeNoticeService, GrantIdleNoticeService, GrantExhaustionForecastService],
   exports: [GrantService, GrantPurgeService],
 })
 export class EntitlementModule {}

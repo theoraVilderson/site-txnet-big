@@ -144,6 +144,14 @@
     "idleTitle": "Trouble connecting?",
     "idle": "🔌 Your service has not been used for a week. If it stopped connecting: open My services, copy the subscription link again and update it in your VPN app — its servers may have changed. If you simply did not need it, there is nothing to do.",
     "idleMany": "🔌 {{count}} of your services have not been used for a week. If they stopped connecting: copy their subscription links again from My services and update them in your VPN app.",
-    "idleManyTitle": "{{count}} services unused for a week"
+    "idleManyTitle": "{{count}} services unused for a week",
+    "runsOutSoonTitle": "Your volume runs out in about {{days}} days",
+    "runsOutSoon": "📉 At the rate you have used it over the last few days, the {{remaining}} left on your service runs out within {{days}} days. To keep it running without a break, renew it or add volume from My services.",
+    "runsOutSoonMany": "📉 At your recent rate, {{count}} of your services run out of volume within a few days. See each one in My services and renew them to keep them running.",
+    "runsOutSoonManyTitle": "{{count}} services running low on volume",
+    "runsOutWithinADayTitle": "Your volume runs out within a day",
+    "runsOutWithinADay": "📉 At the rate you have used it over the last few days, the {{remaining}} left on your service runs out within a day. Renew it or add volume now from My services so it does not stop.",
+    "runsOutWithinADayMany": "📉 At your recent rate, {{count}} of your services run out of volume within a day. Renew them now from My services so they do not stop.",
+    "runsOutWithinADayManyTitle": "{{count}} services run out of volume within a day"
   }
 }

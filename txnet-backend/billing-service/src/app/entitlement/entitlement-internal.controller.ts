@@ -3,6 +3,7 @@ import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 
 import { DeliverDueResult, DeliveryOutcome, GrantDeliveryService } from './delivery';
 import { EndNoticeResult, GrantEndNoticeService } from './end-notice';
+import { ForecastResult, GrantExhaustionForecastService } from './exhaustion-forecast';
 import { GrantIdleNoticeService, IdleNoticeResult } from './idle-notice';
 import { GrantPurgeService, PurgeResult } from './purge';
 import { GrantPurgeNoticeService } from './purge-notice';
@@ -39,6 +40,7 @@ export class EntitlementInternalController {
     private readonly ends: GrantEndNoticeService,
     private readonly purgeNotice: GrantPurgeNoticeService,
     private readonly idle: GrantIdleNoticeService,
+    private readonly forecast: GrantExhaustionForecastService,
   ) {}
 
   /**
@@ -92,6 +94,18 @@ export class EntitlementInternalController {
   @HttpCode(200)
   idleDue(): Promise<IdleNoticeResult> {
     return this.idle.noticeDue();
+  }
+
+  /**
+   * Exhaustion forecast (F-602): every active prepaid Grant used in the last
+   * 72 h and not yet told this usage period is checked — told when its recent
+   * rate spends what is left within 5 days. Safe to run twice: the write is
+   * conditional on the period told for.
+   */
+  @Post('forecast-due')
+  @HttpCode(200)
+  forecastDue(): Promise<ForecastResult> {
+    return this.forecast.noticeDue();
   }
 
   /**

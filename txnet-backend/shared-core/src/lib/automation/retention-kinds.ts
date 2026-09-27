@@ -22,6 +22,8 @@ export const RETENTION_KIND_OF: Readonly<Partial<Record<OutboxEventType, Retenti
   [OutboxEventType.GRANT_USAGE_80]: 'usage',
   [OutboxEventType.GRANT_USAGE_95]: 'usage',
   [OutboxEventType.GRANT_LOW_BALANCE]: 'usage',
+  [OutboxEventType.GRANT_RUNS_OUT_SOON]: 'usage',
+  [OutboxEventType.GRANT_RUNS_OUT_WITHIN_A_DAY]: 'usage',
   [OutboxEventType.GRANT_ENDS_IN_7D]: 'ending',
   [OutboxEventType.GRANT_ENDS_IN_3D]: 'ending',
   [OutboxEventType.GRANT_ENDS_IN_1D]: 'ending',

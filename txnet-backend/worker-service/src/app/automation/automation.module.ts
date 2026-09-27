@@ -16,6 +16,7 @@ import { GrantPurgeJob } from '../jobs/grant-purge.job';
 import { GrantUnusedNoticeJob } from '../jobs/grant-unused-notice.job';
 import { GrantEndNoticeJob } from '../jobs/grant-end-notice.job';
 import { GrantIdleNoticeJob } from '../jobs/grant-idle-notice.job';
+import { GrantExhaustionForecastJob } from '../jobs/grant-exhaustion-forecast.job';
 import { RetentionHeldNoticeJob } from '../jobs/retention-held-notice.job';
 import { GrantDeliveryJob } from '../jobs/grant-delivery.job';
 import { GrantGroupFulfilmentJob } from '../jobs/grant-group-fulfilment.job';
@@ -55,6 +56,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     GrantUnusedNoticeJob,
     GrantEndNoticeJob,
     GrantIdleNoticeJob,
+    GrantExhaustionForecastJob,
     RetentionHeldNoticeJob,
     DepositExpiryJob,
     InvoiceExpiryJob,

@@ -159,6 +159,11 @@ model Grant {
   /// charge that consumed a byte, moved by every such charge (metering), and
   /// cleared by the check. Null = never used, or already asked this stretch.
   idleCheckAt           DateTime?
+  /// The usage period (`usagePeriodStartedAt ?? startsAt`) whose exhaustion
+  /// forecast was told (F-602): "at this rate, your volume runs out in N days".
+  /// A period that no longer matches it can be told again; written
+  /// conditionally on the value read, so each period is told once.
+  forecastNoticeFor     DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @default(now()) @updatedAt
 

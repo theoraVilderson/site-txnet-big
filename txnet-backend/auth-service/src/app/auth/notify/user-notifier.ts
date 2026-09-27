@@ -35,6 +35,8 @@ export const NOTIFY_TEMPLATES = [
   'servicePurgeSoonTopUp',
   'serviceReactivated',
   'serviceIdle',
+  'serviceRunsOutSoon',
+  'serviceRunsOutWithinADay',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -355,6 +357,29 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.retention?.idleMany,
       fallback: '🔌 {{count}} of your services have not been used for a week. If they stopped connecting: copy their subscription links again from My services and update them in your VPN app.',
       inbox: { read: (ns) => ns?.retention?.idleManyTitle, fallback: '{{count}} services unused for a week' },
+    },
+  },
+  // F-602: at the last 72 h's rate, what is left runs out within N days — once per usage period.
+  serviceRunsOutSoon: {
+    read: (ns) => ns?.retention?.runsOutSoon,
+    fallback:
+      '📉 At the rate you have used it over the last few days, the {{remaining}} left on your service runs out within {{days}} days. To keep it running without a break, renew it or add volume from My services.',
+    inbox: { read: (ns) => ns?.retention?.runsOutSoonTitle, fallback: 'Your volume runs out in about {{days}} days' },
+    many: {
+      read: (ns) => ns?.retention?.runsOutSoonMany,
+      fallback: '📉 At your recent rate, {{count}} of your services run out of volume within a few days. See each one in My services and renew them to keep them running.',
+      inbox: { read: (ns) => ns?.retention?.runsOutSoonManyTitle, fallback: '{{count}} services running low on volume' },
+    },
+  },
+  serviceRunsOutWithinADay: {
+    read: (ns) => ns?.retention?.runsOutWithinADay,
+    fallback:
+      '📉 At the rate you have used it over the last few days, the {{remaining}} left on your service runs out within a day. Renew it or add volume now from My services so it does not stop.',
+    inbox: { read: (ns) => ns?.retention?.runsOutWithinADayTitle, fallback: 'Your volume runs out within a day' },
+    many: {
+      read: (ns) => ns?.retention?.runsOutWithinADayMany,
+      fallback: '📉 At your recent rate, {{count}} of your services run out of volume within a day. Renew them now from My services so they do not stop.',
+      inbox: { read: (ns) => ns?.retention?.runsOutWithinADayManyTitle, fallback: '{{count}} services run out of volume within a day' },
     },
   },
 };

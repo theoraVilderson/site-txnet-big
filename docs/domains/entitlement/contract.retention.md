@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-version: 11
+version: 12
 updated: 2026-09-27
 ---
 
@@ -108,6 +108,25 @@ asked hourly by `grant_idle_notice`; answer `scanned`, `told`.
 | Told only if it can run: not past its end (`runs`), no standing close (`standingClose`), a prepaid bag not spent, a config confirmed on a panel; otherwise the stretch passes untold | idle because it stopped is the cutoff notice's (F-601-b), and with no config there is nothing to connect to |
 | Metering sets the clock from processing time, not the delta's `observedAt` | a hold released late never moves the clock back |
 | The write is conditional on the clock read; `period` = that clock; `supportUrl` when branding has one | a charge or a second sweep in between emits nothing; notification's ledger holds each stretch once (invariant 14) |
+
+**Exhaustion forecast (F-602, spec 9.5)** — "at this rate, your volume runs
+out in N days": a prepaid Grant whose last 72 h spend what is left of its
+usage period within 5 days is told once per period (window, horizon and
+independence from the usage levels: user, 2026-09-27).
+`entitlement/exhaustion-forecast.ts`, proved by `exhaustion-forecast.spec.ts`.
+`GrantExhaustionForecastService.noticeDue` checks each active prepaid Grant
+used in the last 72 h (`idleCheckAt` past now + 4 days, F-601-l's clock) and
+not yet told this period, over `POST /api/internal/billing/entitlement/forecast-due`
+(`ServiceOnlyGuard`), asked hourly by `grant_exhaustion_forecast`; answer
+`scanned`, `told`.
+
+| Rule | Why |
+|---|---|
+| The rate is the Grant's configs' `traffic_raw_log` over the last 72 h (retired configs too), divided by the part of the window after `activatedAt ?? startsAt`; under 24 h of it says nothing | recent usage, not the period's average — and one busy hour is not a habit |
+| Told when the bytes left last ≤ 5 days at that rate, and run out **before** `endsAt`; the days rounded up; 1 is `.runs_out_within_a_day`, else `.runs_out_soon` with `days` | a Grant that ends first hears its time notice (F-601-e), never a false "your volume runs out" |
+| Only a bag below 95 % of its period and not spent: never unlimited, metered, past 95 % or spent | 95 % is the urgent notice; a metered volume is its wallet's ("Wallet low"); a spent bag is the cutoff |
+| Its own notice: not held, not combined (F-601-n); kind `usage` for a mute (F-601-m) | a rate is a different fact from a level |
+| `forecastNoticeFor` = the period told for (`usagePeriodStartedAt ?? startsAt`); the write is conditional on it and the period read; `period` = that period. A forecast not due writes nothing | once per period; a renewal that adds bytes opens one that can be told again; the next hour asks again |
 
 **Cutoff (F-601-b, spec 9.5)** — the user is told their service stopped,
 and what brings it back. Emitted by billing's `traffic/exhaustion.ts` through
