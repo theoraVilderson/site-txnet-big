@@ -116,3 +116,27 @@ func (c *TickClock) AlignPoll(want, lastPoll time.Time, guard time.Duration) tim
 	}
 	return t
 }
+
+// MidTick is the first time after `after` that lies halfway between two
+// ticks: where a poll still observes something once polls are aligned (SPEC
+// §5 — an aligned poll only ever sees the tick it was aligned to, so a phase
+// that moved goes unseen). Returns `after` while the phase is unknown.
+func (c *TickClock) MidTick(after time.Time) time.Time {
+	if !c.Known() {
+		return after
+	}
+	t := c.lastTick(after, c.phase()).Add(c.J / 2)
+	if !t.After(after) {
+		t = t.Add(c.J)
+	}
+	return t
+}
+
+// SinceTick is how far t lies past the last tick; false while the phase is
+// unknown.
+func (c *TickClock) SinceTick(t time.Time) (time.Duration, bool) {
+	if !c.Known() {
+		return 0, false
+	}
+	return t.Sub(c.lastTick(t, c.phase())), true
+}

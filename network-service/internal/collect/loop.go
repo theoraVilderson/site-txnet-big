@@ -239,7 +239,7 @@ func (l *Loop) Pass(ctx context.Context) (PassReport, error) {
 				defer l.Turns.Hold(p.ID)()
 			}
 
-			res, op, err := l.collect(ctx, p)
+			res, op, err := l.collect(ctx, p, l.interval())
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -262,7 +262,9 @@ func (l *Loop) Pass(ctx context.Context) (PassReport, error) {
 // collect is one panel's turn: one request, normalise, publish, and only then
 // move the cursor. The order is the invariant — a cursor moved before a
 // successful publish is bytes nobody will read again (invariant 18).
-func (l *Loop) collect(ctx context.Context, p Panel) (Result, string, error) {
+// minWindow floors the plausibility cap's window: the bulk interval on a bulk
+// pass, PollMinWindow on a planned poll (F-027-de).
+func (l *Loop) collect(ctx context.Context, p Panel, minWindow time.Duration) (Result, string, error) {
 	if l.Health != nil && !l.Health.Ask(p.ID, l.now()) {
 		// A panel that answered `429` or `403` is not asked again inside its
 		// cool-off: retrying through a ban is what makes the ban permanent
@@ -297,7 +299,7 @@ func (l *Loop) collect(ctx context.Context, p Panel) (Result, string, error) {
 		return Result{}, "GetUsage", err
 	}
 
-	res := Normaliser{Panel: p, Cursors: l.Cursors, MinWindow: l.interval()}.Pass(readings, l.now())
+	res := Normaliser{Panel: p, Cursors: l.Cursors, MinWindow: minWindow}.Pass(readings, l.now())
 	// Measured before the cursors move: the window a rate means anything over
 	// starts at the previous reading, and after Apply that figure is gone.
 	rates := ObservedRates(l.Cursors, res)

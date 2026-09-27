@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 18
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
 # Contract — network
@@ -58,7 +58,8 @@ quirk from reaching the normaliser as a special case (ADR-0074).
 ADR-0072 possible at all: it is the one enforcement point that still works
 while this service is down. `SetClientRateLimit` is the same for bandwidth.
 `GetUsageFor` takes a named subset, so the hot loop over the few configs near
-their ceiling does not cost a pass over all 5000 (F-027-u).
+their ceiling did not cost a pass over all 5000 (F-027-u); since F-027-de the
+planned poll reads the whole panel, at the planner's pace, instead.
 
 `GetUsage` reads every client in a **bounded** number of requests: one, or one
 per page of at least 100, each paid for in the budget (ADR-0081). That is the

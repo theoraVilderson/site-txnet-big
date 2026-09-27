@@ -2,14 +2,14 @@
 id: network
 layer: domain
 status: draft
-version: 16
+version: 17
 updated: 2026-09-27
 ---
 
 # The hot loop — the few configs near their ceiling, in seconds
 
-A topic file of `contract.md` (§10). What governs `network-service/internal/hot`
-and `billing-service/src/app/traffic/horizon.ts` (F-027-u, ADR-0072) with its
+A topic file of `contract.md` (§10). What governs `collect.Poller` (F-027-de),
+which replaced `network-service/internal/hot`, and `billing-service/src/app/traffic/horizon.ts` (F-027-u, ADR-0072) with its
 callers `traffic/hot-loop.consumer.ts` (F-027-cl, ADR-0092) and
 `traffic/hot-loop.sweep.ts` (F-027-cn): when a
 config is read sooner than the bulk pass reads it, and how much traffic is
@@ -45,33 +45,39 @@ Three readings of it are fixed, and each is a refusal to guess:
 | **no rate at all** | *unknown*, not *about to run out*. Never measured, on a panel declaring no `maxLineRateBps` — zero there means unknown, the same reading the plausibility cap gives the column. The bulk pass keeps it and nothing is bought |
 | **never measured, line rate known** | judged at the panel's line rate. Until a pass has measured this config, the safe assumption is that it is at line speed |
 
-## The collector's half — membership and the interval
+## The collector's half — the planned poll (F-027-de)
 
-`internal/hot` re-reads the hot few on its own interval. A pass is **one
-request per panel**: `GetUsageFor` takes the named subset, and a family with no
-subset endpoint serves it from its bulk call (invariant 34, `contract.md`). It
-publishes the same delta stream a bulk pass does, through the same normaliser,
-sink and cursors — nothing downstream can tell the two apart, and the cursor
-still moves only after the publish succeeds (invariant 18).
+**Since F-027-de nothing runs `internal/hot`.** Its one interval for every
+panel — the nearest time to ceiling, quartered, clamped to `[2s, 60s]` — is
+replaced by the lease planner's own schedule, per panel (SPEC §5, §6-6,
+weaknesses #11, #12). The package stays until F-027-dk retires it.
 
-- **Membership** is `time to ceiling ≤ DefaultHorizon` (120s), re-read every
-  pass. A user who starts a download joins on the next one and one who stops
-  leaves on it; there is no list to keep in sync.
-- **The interval** is the **nearest** time to ceiling in the set, quartered,
-  clamped to `[2s, 60s]`. The nearest and not the average: the loop runs for
-  whoever is closest to their ceiling, and the rest are read early rather than
-  late. A quarter bounds how much of what a member has left can run unseen
-  between two readings.
-- **The clamp is two refusals.** Below two seconds the loop is a request rate
-  on a machine we do not own (F-027-v), and the panel's own ceiling is already
-  enforcing underneath it. Above sixty it is slower than the bulk pass it
-  exists to beat, so `MaxInterval` *is* `collect.DefaultInterval` rather than a
-  number that happens to match it.
-- **Nobody hot is no request at all.** A pass that called every panel to learn
-  that would be the bulk pass again at a fraction of its interval.
-- **The plausibility cap is floored at the hot interval**, not the bulk one. A
-  hot pass two seconds after the last must be capped over two seconds, or the
-  cap it applies is thirty times looser than the traffic it is checking.
+`collect.Poller` sweeps every 250 ms and reads a panel when
+`leaseplan.Planner.NextPoll` says it is due. A poll is **the bulk pass's own
+turn** — one whole-panel read, publish, cursor move, plan, converge — so the
+planner sees every counter it bills from, and its tick clock learns from reads
+less than a tick apart, which a minute's pass never is.
+
+1. **When is the planner's figure.** Each plan's `PollBy` hint per panel
+   (active: a third of the seconds its hold lasts, idle: half the seconds at
+   `BurstRate`, a write in flight: `WriteLatency` + 1 s, endgame: a third of
+   `tEnd`). A panel's read drops its old hints; the earliest since is kept.
+2. **Then aligned**: `PollGuard` (1 s) after the panel's tick
+   (`TickClock.AlignPoll`) — a read between two ticks sees nothing new — and
+   no sooner than `max(MinPoll, PollGap)` after the last read.
+3. **`PollGap` is the panel's own budget**: polls spend at most half of
+   `maxRequestsPerMinute`, two requests each (`GetUsage` + `ListClients`), so
+   `4 min / maxRequestsPerMinute`. `Paced` still holds every request.
+4. **A mid-tick probe every `ProbeEvery` (5 min)**: aligned polls cannot see a
+   phase that moved, so one extra poll lands halfway into the tick after a
+   read — inside J of it, or the pair teaches nothing. It skips `MinPoll`,
+   never `PollGap`: a budget that cannot pay two reads in one tick is not
+   probed. A read mid-tick, from any loop, counts as the probe.
+5. **No hint is no poll**: the bulk pass is then the panel's only read. A
+   failed poll waits `PollRetry` (15 s, SPEC §4); a panel another turn holds
+   is skipped, and that turn's plan moves its next poll.
+6. **The plausibility cap is floored at `PollMinWindow` (2 s)** on a poll,
+   not the bulk minute, as the hot loop's was.
 
 ## The money half — the horizon and the block
 
@@ -184,34 +190,17 @@ it served, so the next scan skips it (ADR-0027: safe twice). It runs beside
 the consumer in the same process, so a sweep may add a rate sample between
 two passes; an idle Grant measures zero either way.
 
-## Running it — `cmd/server` (F-027-bu)
+## Running it — `cmd/server` (F-027-bu, F-027-de)
 
-`cmd` starts `hot.Loop` beside the bulk pass, and it owns nothing of its own:
-
-1. **Candidates are `hot.PostgresSource`**: every config on a panel the bulk
-   pass last offered (`collect.PostgresSource.Offered`) with a share, a client,
-   `present` and enabled. Headroom is the share less the cursor's lifetime,
-   up and down. Membership is still `IsHot`, in Go, in one place.
-2. **One driver per panel.** The candidate rides the bulk pass's driver and
-   so its request budget; a panel no bulk pass has offered is read by nobody.
-   Its `Configs` are the statement's, so a config created since the bulk pass
-   is billed here rather than written down as unattributed.
-3. **Its cursors are read in the same statement**, under the cursors' lock
-   (`PostgresCursors.Merge`): a client re-keyed since the bulk pass keeps its
-   cursor instead of being adopted from zero, which would restart its
-   lifetime and the ceiling offset built on it.
-4. **One turn per panel at a time** (`collect.TurnLocks`). Two loops
-   normalising one panel against the same cursor would publish the same bytes
-   under two delta ids, which `usage_delta_seen` cannot absorb. The bulk pass
-   waits for a hot turn; a hot turn finding the bulk pass there steps aside
-   (`PassReport.Busy`), because that read covers the hot clients too.
-5. **No converger.** It writes to no panel, per the next section: a client
-   list every two seconds would spend the panel's budget on nothing.
+`cmd` starts `collect.Poller` beside the bulk pass, over the pass's offered
+panels (`PostgresSource.Offered`) and its planner; `hot.Loop` is no longer
+started. A poll holds the panel's turn (`collect.TurnLocks`) like any turn,
+and one finding it held steps aside — the holder's read covers it.
 
 ## What it will not do
 
-It does not write to a panel — that is the convergence loop's (F-027-t). It
-does not decide a share — that is the allocator's (F-027-s). The per-panel
+A poll writes to a panel only through the turn's convergence step (F-027-t),
+and decides no share — that is the lease planner's (F-027-db). The per-panel
 request budget it runs under, and the ban it refuses to retry through, are
 [contract.budget.md](contract.budget.md) (F-027-v) — built with this loop
 rather than after it, because an unbudgeted hot loop is a denial of service on

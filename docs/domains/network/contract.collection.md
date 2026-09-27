@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 15
-updated: 2026-09-24
+updated: 2026-09-27
 ---
 
 # Contract — network / the collection loop
@@ -117,9 +117,9 @@ loop is proved against.
    the turn after it: a Grant activates within ~10s under a rush.
 
 Each pass logs one line, plus one per panel that did not complete, with its
-`Op`. The hot loop reads through the same panels, drivers and cursors, and
-the two never hold one panel's turn at once (`contract.hot-loop.md` "Running
-it", F-027-bu).
+`Op`. The planned poll (F-027-de) runs this same turn on one panel when the
+lease planner asks, and no two turns hold one panel at once
+(`contract.hot-loop.md` "Running it", F-027-bu).
 
 ## Where a pass goes (F-027-m)
 

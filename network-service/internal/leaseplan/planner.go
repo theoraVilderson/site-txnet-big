@@ -228,6 +228,11 @@ type Planner struct {
 	saved    map[string]Learned        // by panel id: what the row holds
 	asked    map[string]asked          // by Grant id: the last block request sent
 	next     int64                     // the last replica id handed out
+	// pollBy is each panel's earliest `PollBy` hint since its last read
+	// (SPEC §6-6), and probed its last read that landed mid-tick, or its
+	// first read (F-027-de).
+	pollBy map[string]time.Time
+	probed map[string]time.Time
 }
 
 var _ collect.Planner = (*Planner)(nil)
@@ -426,8 +431,11 @@ func (s *Planner) planLocked(p collect.Panel, snap Snapshot, got map[string]driv
 		}
 		if here != nil {
 			here.Clock.Observe(s.lastRead[p.ID], at, changed, active)
+			s.markProbe(p.ID, &here.Clock, at)
 		}
 		s.lastRead[p.ID] = at
+		// This read's plans hint the panel afresh; an older hint is stale.
+		delete(s.pollBy, p.ID)
 	}
 
 	plans := make([]Plan, 0, len(snap.Grants))
@@ -451,6 +459,11 @@ func (s *Planner) planLocked(p collect.Panel, snap Snapshot, got map[string]driv
 			}
 		}
 		res := a.Plan(at, s.params())
+		for id, t := range res.PollBy {
+			if cur, ok := s.pollBy[id]; !ok || t.Before(cur) {
+				s.pollBy[id] = t
+			}
+		}
 		pl := Plan{GrantID: g.ID, Quota: a.Quota, Used: a.Used, Avail: res.Avail, Endgame: res.Endgame, Closed: a.Closed}
 		if !a.Closed {
 			pl.Block = s.blockLocked(g, a, at)
@@ -495,6 +508,54 @@ func (s *Planner) planLocked(p collect.Panel, snap Snapshot, got map[string]driv
 		}
 	}
 	return plans, nil
+}
+
+// markProbe keeps when the panel was last read mid-tick: a read in the middle
+// half of a tick is one the clock can still learn from. The first read counts
+// as one, so the first probe is ProbeEvery after it.
+func (s *Planner) markProbe(panelID string, c *quota.TickClock, at time.Time) {
+	if _, ok := s.probed[panelID]; !ok {
+		s.probed[panelID] = at
+		return
+	}
+	if off, ok := c.SinceTick(at); ok && off >= c.J/4 && off <= 3*c.J/4 {
+		s.probed[panelID] = at
+	}
+}
+
+// NextPoll is when the panel should next be read (SPEC §6-6, F-027-de): the
+// earliest `PollBy` hint of the plans since its last read, moved to
+// PollGuard after the panel's tick (`TickClock.AlignPoll`) and no sooner
+// than max(MinPoll, minPoll) after that read — minPoll is the panel's own
+// budget (`collect.PollGap`). Every ProbeEvery one poll lands mid-tick
+// instead, inside one tick of the last read, where only minPoll holds it.
+// False when no plan hinted the panel: the bulk pass reads it.
+func (s *Planner) NextPoll(panelID string, minPoll time.Duration) (time.Time, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	want, ok := s.pollBy[panelID]
+	st := s.panels[panelID]
+	if !ok || st == nil {
+		return time.Time{}, false
+	}
+	last := s.lastRead[panelID]
+	var lo time.Time
+	if !last.IsZero() {
+		lo = last.Add(max(s.params().MinPoll, minPoll))
+	}
+	if want.Before(lo) {
+		want = lo
+	}
+	next := st.Clock.AlignPoll(want, last, PollGuard)
+	for st.Clock.Known() && next.Before(lo) {
+		next = next.Add(st.Clock.J)
+	}
+	if probed, ok := s.probed[panelID]; ok && st.Clock.Known() && last.Sub(probed) >= ProbeEvery {
+		if mid := st.Clock.MidTick(last); mid.Sub(last) >= minPoll && mid.Before(next) {
+			next = mid
+		}
+	}
+	return next, true
 }
 
 // leaseOf is what the replica's row should hold after a plan, in the row's
@@ -553,6 +614,8 @@ func (s *Planner) init() {
 	s.accounts = map[string]*quota.Account{}
 	s.saved = map[string]Learned{}
 	s.asked = map[string]asked{}
+	s.pollBy = map[string]time.Time{}
+	s.probed = map[string]time.Time{}
 }
 
 // panel keeps one PanelState per panel, so what it learns outlives a pass. A
@@ -651,6 +714,15 @@ func (s *Planner) log() *slog.Logger {
 	}
 	return slog.Default()
 }
+
+const (
+	// PollGuard is how long after the panel's tick a poll lands: the tick's
+	// write has landed by then, and the next tick is J away (SPEC §5).
+	PollGuard = time.Second
+	// ProbeEvery is how often a mid-tick poll re-checks the phase that the
+	// aligned polls can no longer see move (SPEC §5).
+	ProbeEvery = 5 * time.Minute
+)
 
 // JobInterval is how often a family refreshes its counters and checks its
 // ceilings — the planner's J for a panel whose row holds no `tickPeriodMs`. 3x-ui and its forks run their traffic job every 5 s

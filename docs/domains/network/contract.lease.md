@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 4
+version: 5
 updated: 2026-09-27
 ---
 
@@ -228,3 +228,13 @@ once can lease past the balance by one reaction window.
     and the next turn restores it from what was written. A disabled client
     on 3x-ui is `RemoveUser`'d, which keeps its open connections unless the
     panel restarts Xray on disable (F-027-cm, open-questions 2026-09-26).
+
+## The poll schedule (F-027-de, SPEC §6-6)
+
+26. **The planner says when a panel is read next.** Each plan's `PollBy`
+    hints are kept per panel, the earliest since that panel's last read;
+    `NextPoll` aligns it to `PollGuard` after the tick, floors it at
+    `max(MinPoll, PollGap)` after the read, and every `ProbeEvery` puts one
+    poll mid-tick. Memory only: a restart has no hint, and the bulk pass reads
+    the panel until a plan gives one. `collect.Poller` runs it; the rules are
+    `contract.hot-loop.md` "The collector's half".

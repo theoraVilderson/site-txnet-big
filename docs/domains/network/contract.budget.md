@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: draft
-version: 11
-updated: 2026-09-24
+version: 12
+updated: 2026-09-27
 ---
 
 # The request budget, and what a refusal means
@@ -107,9 +107,10 @@ arithmetic rather than by decision.
   a failed write leaves the tracker where it was, because a ban only this
   process knows about is invisible to everything else.
 
-Both loops gate on it — the bulk pass and the hot one. The hot loop matters
-most here: it runs every two seconds, so retrying through a ban from there is
-the fastest way to make the ban permanent. A skipped panel is a `PanelFailure`
+Every turn gates on it — the bulk pass and the planned poll (F-027-de). The
+poll matters most here: it runs every few seconds, so retrying through a ban
+from there is the fastest way to make the ban permanent. The poll also keeps
+to half the budget by itself (`collect.PollGap`, `contract.hot-loop.md`). A skipped panel is a `PanelFailure`
 row with `Op: skipped`, never a silent absence.
 
 ## The rate a pass measured

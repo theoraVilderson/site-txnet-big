@@ -21,7 +21,6 @@ import (
 	"network-service/internal/config"
 	"network-service/internal/converge"
 	"network-service/internal/db"
-	"network-service/internal/hot"
 	"network-service/internal/httpapi"
 	"network-service/internal/leaseplan"
 	"network-service/internal/opener"
@@ -123,6 +122,10 @@ func main() {
 		Ceilings: &converge.Ceilings{Allocations: converge.PostgresAllocations{DB: pool}, Counters: cursors, Log: log},
 		Log:      log,
 	}
+	// The lease planner (ADR-0093): the only writer of a config's ceiling
+	// since F-027-db; the convergence step carries it. It also says when each
+	// panel is read next (F-027-de).
+	planner := &leaseplan.Planner{Store: leaseplan.PostgresStore{DB: pool}, Log: log, Blocks: publish.BlockRequests{Transport: broker}}
 	collector := &collect.Loop{
 		Source:      panels,
 		Sink:        publish.Publisher{Transport: broker},
@@ -133,10 +136,8 @@ func main() {
 		Progress:    collect.PostgresProgress{DB: pool},
 		Containment: containment,
 		Turns:       turns,
-		// The lease planner (ADR-0093): the only writer of a config's
-		// ceiling since F-027-db; the convergence step carries it.
-		Planner: &leaseplan.Planner{Store: leaseplan.PostgresStore{DB: pool}, Log: log, Blocks: publish.BlockRequests{Transport: broker}},
-		Log:     log,
+		Planner:     planner,
+		Log:         log,
 	}
 
 	// A config whose desired state changed wakes its panel's convergence turn
@@ -156,24 +157,13 @@ func main() {
 	}
 	go wakes.Run(runCtx)
 
-	// The hot loop (F-027-bu): the few configs near their ceiling, read on
-	// their own interval through the bulk pass's panels, drivers, cursors,
-	// sink, health, rates and containment — nothing downstream can tell the
-	// two apart (`contract.hot-loop.md`). It shares the per-panel turn lock,
-	// so the two never normalise one panel's counters at once, and it writes
-	// to no panel: that is the convergence pass's, once a minute, because a
-	// client list every two seconds is a denial of service on the panel.
-	hotLoop := &hot.Loop{
-		Source:      &hot.PostgresSource{DB: pool, Panels: panels, Cursors: cursors},
-		Sink:        publish.Publisher{Transport: broker},
-		Cursors:     cursors,
-		Health:      health,
-		Rates:       collect.PostgresRates{DB: pool},
-		Containment: containment,
-		Turns:       turns,
-		Log:         log,
-	}
-	go func() { _ = hotLoop.Run(runCtx) }()
+	// The planned poll (F-027-de) replaces the hot loop's one interval: each
+	// panel is read when the planner's PollBy asks, one second after its tick,
+	// a mid-tick probe every 5 min, never sooner than half its request budget
+	// allows (`contract.hot-loop.md` "The planned poll"). A poll is the bulk
+	// pass's own turn, so the planner sees every counter it bills from.
+	poller := &collect.Poller{Loop: collector, Panels: panels.Offered, Schedule: planner}
+	go poller.Run(runCtx)
 
 	// The RADIUS accounting receiver (F-027-af): the push half of
 	// collection, and the one surface here reachable from outside. The
