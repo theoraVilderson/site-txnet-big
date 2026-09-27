@@ -256,7 +256,6 @@ func (c *Ceilings) pass(
 		enforcing[client.RemoteID] = client
 	}
 
-	quiet := quietSet(c.Counters, p, res)
 	var confirmed []AppliedCeiling
 	var written []WrittenCeiling
 	var writes []pendingWrite
@@ -273,9 +272,10 @@ func (c *Ceilings) pass(
 
 		offset := OffsetBytes(c.Counters, p, allocation.RemoteID)
 		served := ServedBytes(c.Counters, p, allocation.RemoteID)
-		band := NearBand(allocation.AllocatedBytes, served, allocation.RateBps, p.EnforcementLag())
-		band = releasedBand(band, allocation.AllocatedBytes, served, quiet(allocation.RemoteID))
-		want := PanelCeiling(GuardedAllowance(allocation.AllocatedBytes, served, band), offset)
+		// The planner's figure is the cut itself: its budget already holds
+		// the panel's lag (`contract.lease.md` rule 19), so no band comes
+		// off it here.
+		want := PanelCeiling(allocation.AllocatedBytes, offset)
 		have := client.DataLimitBytes
 
 		if have > 0 {
@@ -289,7 +289,7 @@ func (c *Ceilings) pass(
 			})
 		}
 
-		if (have == want && want > 0) || withinBand(have, want, band) {
+		if have == want && want > 0 {
 			report.Synced++
 			continue
 		}
@@ -312,8 +312,15 @@ func (c *Ceilings) pass(
 	}
 
 	// Every write waits on the panel's budget, so the order is the order the
-	// panels learn their figures in (F-027-ct).
-	sort.SliceStable(writes, func(i, j int) bool { return writes[i].seconds < writes[j].seconds })
+	// panels learn their figures in (F-027-ct). Shrinks go first (F-027-db):
+	// the planner frees a shrunk share only once a panel confirms it, so a
+	// shrink queued behind a grow holds the bag's next grow back a turn.
+	sort.SliceStable(writes, func(i, j int) bool {
+		if si, sj := writes[i].shrinks(), writes[j].shrinks(); si != sj {
+			return si
+		}
+		return writes[i].seconds < writes[j].seconds
+	})
 	for _, w := range writes {
 		if err := p.Driver.SetClientDataLimit(ctx, w.allocation.RemoteID, w.want); err != nil {
 			report.Failed++
@@ -354,6 +361,9 @@ type pendingWrite struct {
 	offset     int64
 	seconds    float64
 }
+
+// shrinks: the panel holds a ceiling and ours is lower.
+func (w pendingWrite) shrinks() bool { return w.have > 0 && w.want < w.have }
 
 // secondsToCrossing is how long, at its own rate, a config has before it
 // crosses the figure that matters (F-027-ct): the ceiling the panel holds

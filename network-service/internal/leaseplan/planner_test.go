@@ -23,13 +23,44 @@ type store struct {
 	grants []leaseplan.Grant
 	panels map[string]leaseplan.Panel
 	asked  [][]string
+	leases []leaseplan.Lease
 }
 
-func (s *store) Load(_ context.Context, configIDs []string) (leaseplan.Snapshot, error) {
+func (s *store) Load(_ context.Context, _ string, configIDs []string) (leaseplan.Snapshot, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.asked = append(s.asked, append([]string(nil), configIDs...))
-	return leaseplan.Snapshot{Grants: s.grants, Panels: s.panels}, nil
+	grants := make([]leaseplan.Grant, len(s.grants))
+	for i, g := range s.grants {
+		grants[i] = g
+		grants[i].Configs = append([]leaseplan.Config(nil), g.Configs...)
+	}
+	return leaseplan.Snapshot{Grants: grants, Panels: s.panels}, nil
+}
+
+// SaveLeases is the row write: each lease lands on its config, as
+// `PostgresStore` writes `network.config`.
+func (s *store) SaveLeases(_ context.Context, leases []leaseplan.Lease) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.leases = append(s.leases, leases...)
+	for _, l := range leases {
+		for gi := range s.grants {
+			for ci := range s.grants[gi].Configs {
+				c := &s.grants[gi].Configs[ci]
+				if c.ID != l.ConfigID {
+					continue
+				}
+				if l.Allocated != nil {
+					v := *l.Allocated
+					c.Allocated = &v
+				}
+				peak := l.Peak
+				c.Peak, c.Pending = &peak, l.Pending
+			}
+		}
+	}
+	return nil
 }
 
 func (s *store) SaveLearned(context.Context, string, leaseplan.Learned) error { return nil }
@@ -65,7 +96,7 @@ func reading(remoteID string, total int64) driver.ClientUsage {
 // than the balance left.
 func TestAPlanIsBuiltFromQuotaAndTheCounters(t *testing.T) {
 	s := newStore()
-	sh := &leaseplan.Shadow{Store: s}
+	sh := &leaseplan.Planner{Store: s}
 	t0 := time.Date(2026, 9, 27, 10, 0, 0, 0, time.UTC)
 	p := panel("c1", "c2")
 
@@ -129,7 +160,7 @@ func TestAPlanIsBuiltFromQuotaAndTheCounters(t *testing.T) {
 func TestOnlyTheConfigsReadAreLoaded(t *testing.T) {
 	s := newStore()
 	s.set(0)
-	sh := &leaseplan.Shadow{Store: s}
+	sh := &leaseplan.Planner{Store: s}
 	_, err := sh.Plan(context.Background(), panel("c1"),
 		[]driver.ClientUsage{reading("c1", 1), reading("stranger", 1)}, time.Now())
 	if err != nil {
@@ -140,38 +171,15 @@ func TestOnlyTheConfigsReadAreLoaded(t *testing.T) {
 	}
 }
 
-// Nothing the shadow wants is ever written, so a want it logged must not
-// count as a write in flight: the next pass plans against what the panel
-// enforces, and logs the action again.
-func TestAnUnwrittenWantIsNotAWriteInFlight(t *testing.T) {
-	s := newStore()
-	sh := &leaseplan.Shadow{Store: s}
-	t0 := time.Date(2026, 9, 27, 10, 0, 0, 0, time.UTC)
-	p := panel("c1")
-	// The live writer cut c1 at 300 MiB of a 1 GiB bag: every pass, the
-	// planner would regrant it.
-	const counter = 300 * quota.MB
-	s.set(counter, leaseplan.Config{ID: "config-c1", PanelID: panelID, Exists: true, Counter: counter, LimitSeen: counter, Enabled: true})
-	for i := 0; i < 4; i++ {
-		plans, err := sh.Plan(context.Background(), p, []driver.ClientUsage{reading("c1", counter)}, t0.Add(time.Duration(i)*time.Minute))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(plans) != 1 || len(plans[0].Actions) != 1 || plans[0].Actions[0].Priority != "regrant" {
-			t.Fatalf("pass %d: %+v, want the regrant again", i+1, plans)
-		}
-	}
-}
-
-// ADR-0093 rule 3: the shadow has no path to a panel. Run through the real
-// loop, the only call the panel sees is the read, and the actions are in the
-// log.
-func TestTheShadowWritesNothingToAPanel(t *testing.T) {
+// The planner has no path to a panel: it writes rows, and the convergence
+// step carries them. Run through the real loop with no convergence, the only
+// call the panel sees is the read, and the actions are in the log.
+func TestThePlannerNeverCallsAPanel(t *testing.T) {
 	far := fake.New(fake.Config{})
 	far.Given("c1")
 	s := newStore()
 	var buf bytes.Buffer
-	sh := &leaseplan.Shadow{Store: s, Log: slog.New(slog.NewTextHandler(&buf, nil))}
+	sh := &leaseplan.Planner{Store: s, Log: slog.New(slog.NewTextHandler(&buf, nil))}
 	p := panel("c1")
 	p.Driver = far
 	p.Transport = driver.TransportPull
@@ -183,7 +191,7 @@ func TestTheShadowWritesNothingToAPanel(t *testing.T) {
 		Source:  collect.PanelsFunc(func(context.Context) ([]collect.Panel, error) { return []collect.Panel{p}, nil }),
 		Sink:    sinkFunc(func(context.Context, collect.Result) error { return nil }),
 		Cursors: collect.NewMemoryCursors(),
-		Shadow:  sh,
+		Planner: sh,
 		Clock:   func() time.Time { return now },
 	}
 	for i := 0; i < 3; i++ {
@@ -197,7 +205,7 @@ func TestTheShadowWritesNothingToAPanel(t *testing.T) {
 	}
 
 	if reads := far.CallCount("GetUsage"); far.TotalCalls() != reads {
-		t.Errorf("panel saw %d calls, %d of them reads: the shadow reached the panel", far.TotalCalls(), reads)
+		t.Errorf("panel saw %d calls, %d of them reads: the planner reached the panel", far.TotalCalls(), reads)
 	}
 	if !strings.Contains(buf.String(), "lease shadow action") {
 		t.Errorf("no action was logged:\n%s", buf.String())

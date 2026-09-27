@@ -11,7 +11,7 @@ Held by the database since F-026-b; proved by
 `billing-service/src/app/entitlement/entitlement-schema.int.spec.ts`. Rule 1 is
 the service's, with F-026-e. Rules 8–13 arrive with F-027-f's columns
 (ADR-0072, ADR-0073, ADR-0075); rule 10 is held by `GrantService.issue` since
-F-027-p and rule 8 by `CeilingAllocatorService` since F-027-s, the rest by the
+F-027-p and rule 8 by network's lease planner since F-027-db, the rest by the
 database — the shapes are proved by
 `shared-core/src/lib/prisma/entitlement-grant-purchase-and-purge.spec.ts`.
 
@@ -24,7 +24,7 @@ database — the shapes are proved by
 | 5 | A Grant, its adjustments and its configs are one tenant's; its variant the platform's or that tenant's | trigger `same_tenant` + strict RLS | one tenant reads or sells into another's customers |
 | 6 | The subscription token is stored in clear nowhere: only its SHA-256 and a copy sealed under a key derived from the KEK, which lives outside the database (ADR-0085) | CHECK `grant_token_hash_shape`, `grant_token_sealed_shape` | a database leak hands out every working link |
 | 7 | One cause issues one Grant | partial unique `(source, sourceReferenceId)` | a retried coupon or payment grants twice |
-| 8 | No byte is served that has not been paid for: `Σ ceilings ≤ purchasedBytes` across every config of a Grant — on a metered Grant, plus a per-config reserve no larger than what the wallet would still buy (F-027-cs, ADR-0091 amendment 2026-09-27) | `CeilingAllocatorService` splits the bag so it holds by construction, proved over generated Grants by `ceiling-allocator.spec.ts` (F-027-s, [network/contract.ceiling.md](../network/contract.ceiling.md), [network/contract.reserve.md](../network/contract.reserve.md)) | free traffic at the far end of a ceiling nobody bounded |
+| 8 | No byte is served that has not been paid for: `Σ ceilings ≤ purchasedBytes` across every config of a Grant — on a metered Grant, plus a per-config reserve no larger than what the wallet would still buy (F-027-cs, ADR-0091 amendment 2026-09-27) | network's lease planner grows a share only from what is free and frees a shrink only on confirmation (F-027-db), proved by `leaseplan/lease_test.go` over a moving consumer and restarts; until F-027-dc its Quota is `purchasedBytes` alone, with no reserve ([network/contract.lease.md](../network/contract.lease.md), [network/contract.ceiling.md](../network/contract.ceiling.md)) | free traffic at the far end of a ceiling nobody bounded |
 | 9 | No byte counter is ever negative — a counter going backward is a reset, never negative usage | CHECK `grant_byte_counters_not_negative` | a reset read as negative usage, and a refund of traffic nobody bought |
 | 10 | A byte is priced by the rate locked at issue, never by the catalog's rate today | `grant.meteredRate` copied by `issue` from the rate in effect at `startsAt`, and a metered variant with none is refused (F-027-p, `grant.spec.ts`); CHECK `grant_metered_rate_is_metered` | a price change reprices blocks already bought — ledger and cursor disagree |
 | 11 | A suspended Grant always carries the clock it will be purged by | CHECK `grant_suspended_has_a_clock` | a panel seat held forever, with nothing red anywhere |

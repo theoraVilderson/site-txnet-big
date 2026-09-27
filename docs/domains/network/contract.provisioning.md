@@ -25,9 +25,10 @@ on a panel (`ResetUsage`), which is not an action on a config.
 
 `billing-service/src/app/traffic/config-actions.ts`, in-process, every method in
 the caller's transaction. Each writes one `config_action_log` row and — except
-`regenerate`, which moves no bytes — rebalances the Grant's ceilings in the same
-transaction (`contract.ceiling.md`): a disabled or retired config leaves the
-split, and a new one has its share before the pass creates its client.
+`regenerate`, which moves no bytes — calls the re-split, which writes nothing
+since F-027-db: the lease planner takes a disabled or retired config out of the
+split on its next plan, and gives a new one its first share on the woken turn,
+before the pass creates its client (`contract.lease.md` rules 5, 18).
 
 | action | writes | refused with |
 |---|---|---|

@@ -79,6 +79,10 @@ still moves only after the publish succeeds (invariant 18).
 `CeilingAllocatorService.rebalance` **in one transaction**. There is no window
 where `purchasedBytes` has advanced and no ceiling covers it, nor one where a
 ceiling was written against money that failed to leave the wallet.
+**Since F-027-db `rebalance` writes nothing**: the purchase raises
+`purchasedBytes`, and the lease planner hands it out on the Grant's next plan
+([contract.lease.md](contract.lease.md)). The re-split calls below still run
+and move no ceiling, until F-027-dc/F-027-dk replace them.
 
 A hot Grant is topped back up to `HORIZON_SECONDS` (120) of its projected rate.
 The target is the deficit — what a full horizon needs, less the headroom it

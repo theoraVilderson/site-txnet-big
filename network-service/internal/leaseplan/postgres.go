@@ -25,25 +25,35 @@ type PostgresStore struct {
 
 var _ Store = PostgresStore{}
 
-// loadSQL is every config of every active, metered-by-bytes Grant holding one
-// of $1, retired ones included: their counters served bytes of the same bag.
+// loadSQL is every config of every Grant holding one of $2, or holding a
+// config on panel $1 that no plan has given a ceiling yet (F-027-db: its
+// first share is the planner's). Retired configs are included: their
+// counters served bytes of the same bag. A Grant is planned while it is
+// `active`, or `pending` — a group's Grant activates on what its panels
+// confirm, so its configs need a ceiling first — and only if it sold a limit.
 //
 // Quota is `purchasedBytes`, read. Used is summed in Go from each config's
 // lifetime counter (`contract.lease.md`), which the pass that called us has
-// already moved. A config is a replica only while it is meant to be on its
-// panel. The counter a ceiling is measured on is the panel's last figure on a
-// cumulative panel, and the lifetime sum where a read zeroes it.
+// already moved. A config is a replica while it can carry traffic — the
+// split's own rule (`contract.ceiling.md` "Who is in the split"). The counter
+// a ceiling is measured on is the panel's last figure on a cumulative panel,
+// and the lifetime sum where a read zeroes it.
 const loadSQL = `
-WITH touched AS (SELECT DISTINCT c."grantId" FROM network.config c WHERE c.id = ANY($1::uuid[]))
+WITH touched AS (
+  SELECT DISTINCT c."grantId" FROM network.config c
+   WHERE c.id = ANY($2::uuid[])
+      OR (c."panelId" = $1::uuid AND c."allocatedCeilingBytes" IS NULL AND NOT c."trafficUnlimited"
+          AND c.status = 'active' AND c."desiredEnabled" AND c."desiredRemote" = 'present'))
 SELECT g.id::text, g."purchasedBytes", g."endsAt",
        c.id::text, c."panelId"::text,
-       c.status <> 'retired' AND c."desiredRemote" = 'present',
+       c.status = 'active' AND c."desiredEnabled" AND c."desiredRemote" = 'present',
        c."remoteId" IS NOT NULL,
        CASE WHEN p."counterSemantics" = 'cumulative'
             THEN coalesce(s."lastUpBytes" + s."lastDownBytes", 0)
             ELSE coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0) END::bigint,
        coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0)::bigint,
-       coalesce(c."appliedCeilingBytes", 0)::bigint, c."desiredEnabled", c."allocatedCeilingBytes",
+       coalesce(c."appliedCeilingBytes", 0)::bigint, c."desiredEnabled",
+       c."allocatedCeilingBytes", c."limitPeakBytes", c."writePending",
        p."driverType"::text,
        p."counterSemantics" = 'cumulative'
          AND coalesce((p.capabilities->'answers'->'per_client_data_limit'->>'supported')::boolean, false),
@@ -55,13 +65,13 @@ SELECT g.id::text, g."purchasedBytes", g."endsAt",
   JOIN network.config c ON c."grantId" = g.id
   JOIN network.panel p ON p.id = c."panelId"
   LEFT JOIN network.config_counter_state s ON s."configId" = c.id
- WHERE g.status = 'active' AND NOT g."trafficUnlimited"
+ WHERE g.status IN ('active', 'pending') AND NOT g."trafficUnlimited"
  ORDER BY g.id, c.id`
 
-func (s PostgresStore) Load(ctx context.Context, configIDs []string) (Snapshot, error) {
-	rows, err := s.DB.Query(ctx, loadSQL, configIDs)
+func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []string) (Snapshot, error) {
+	rows, err := s.DB.Query(ctx, loadSQL, panelID, configIDs)
 	if err != nil {
-		return Snapshot{}, fmt.Errorf("reading the Grants of %d config(s): %w", len(configIDs), err)
+		return Snapshot{}, fmt.Errorf("reading the Grants of %d config(s) on panel %s: %w", len(configIDs), panelID, err)
 	}
 	defer rows.Close()
 	snap := Snapshot{Panels: map[string]Panel{}}
@@ -69,6 +79,7 @@ func (s PostgresStore) Load(ctx context.Context, configIDs []string) (Snapshot, 
 		var (
 			grantID, driverType string
 			quota, lifetime     int64
+			applied             int64
 			endsAt              *time.Time
 			live                bool
 			c                   Config
@@ -77,7 +88,7 @@ func (s PostgresStore) Load(ctx context.Context, configIDs []string) (Snapshot, 
 			tickMask            *int64
 		)
 		if err := rows.Scan(&grantID, &quota, &endsAt, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
-			&c.LimitSeen, &c.Enabled, &c.Allocated, &driverType, &pn.CanSetLimit, &pn.Healthy,
+			&applied, &c.Enabled, &c.Allocated, &c.Peak, &c.Pending, &driverType, &pn.CanSetLimit, &pn.Healthy,
 			&tickMs, &tickMask, &pn.Learned.LagMeanSec, &pn.Learned.LagVarianceSec2, &pn.Learned.LagSamples); err != nil {
 			return Snapshot{}, fmt.Errorf("reading a Grant's config: %w", err)
 		}
@@ -93,6 +104,10 @@ func (s PostgresStore) Load(ctx context.Context, configIDs []string) (Snapshot, 
 		if !live {
 			continue
 		}
+		c.Offset = max(lifetime-c.Counter, 0)
+		if applied > 0 {
+			c.LimitSeen = max(applied-c.Offset, 0)
+		}
 		g.Configs = append(g.Configs, c)
 		pn.ID, pn.DriverType = c.PanelID, driver.DriverType(driverType)
 		if tickMs != nil {
@@ -105,6 +120,35 @@ func (s PostgresStore) Load(ctx context.Context, configIDs []string) (Snapshot, 
 		snap.Panels[pn.ID] = pn
 	}
 	return snap, rows.Err()
+}
+
+// saveLeasesSQL writes each lease in one statement, its rows locked in id
+// order as every other writer of `network.config` does (invariant 54). The
+// shutdown figure is the share itself until the reserve joins Quota
+// (F-027-dc): CHECK `config_wallet_backed_ceiling_extends` holds it at least
+// the share, and a stale wallet figure would extend over money that may be
+// gone. A lease with no allocation leaves both as they are; only a lease that
+// moved is sent (leaseOf).
+var saveLeasesSQL = db.OrderedConfigUpdate(`"allocatedCeilingBytes" = coalesce(v.allocated, c."allocatedCeilingBytes"),
+       "walletBackedCeilingBytes" = CASE WHEN v.allocated IS NULL THEN c."walletBackedCeilingBytes" ELSE v.allocated END,
+       "limitPeakBytes" = v.peak, "writePending" = v.pending`,
+	`unnest($1::text[], $2::bigint[], $3::bigint[], $4::boolean[]) AS v(id, allocated, peak, pending)`)
+
+// SaveLeases writes what one turn's plans decided (F-027-db). A peak below
+// zero cannot happen — the planner's figures are counters plus a hold — and
+// CHECK `config_lease_state_not_negative` would refuse one.
+func (s PostgresStore) SaveLeases(ctx context.Context, leases []Lease) error {
+	ids := make([]string, len(leases))
+	allocated := make([]*int64, len(leases))
+	peaks := make([]int64, len(leases))
+	pending := make([]bool, len(leases))
+	for i, l := range leases {
+		ids[i], allocated[i], peaks[i], pending[i] = l.ConfigID, l.Allocated, l.Peak, l.Pending
+	}
+	if _, err := s.DB.Exec(ctx, saveLeasesSQL, ids, allocated, peaks, pending); err != nil {
+		return fmt.Errorf("writing %d lease(s): %w", len(leases), err)
+	}
+	return nil
 }
 
 // saveLearnedSQL writes the panel's learned state, and only when it differs

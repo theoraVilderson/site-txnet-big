@@ -185,11 +185,11 @@ does not match — is [contract.rollup.md](contract.rollup.md).
 
 ## The ceiling (F-027-s, F-027-t)
 
-`CeilingAllocatorService` in `billing-service` splits a Grant's
-`purchasedBytes` across the configs that draw on it and writes each share to
-`config.allocatedCeilingBytes` — `Σ ceilings ≤ purchasedBytes`, always
-(ADR-0072 rule 1). How a share is sized, which configs are in the split, and
-why the sub-account cap wins are [contract.ceiling.md](contract.ceiling.md).
+The lease planner in `network-service` (ADR-0093, since F-027-db) splits a
+Grant's `purchasedBytes` across the configs that draw on it and writes each
+share to `config.allocatedCeilingBytes` — `Σ ceilings ≤ purchasedBytes`, always;
+billing's split no longer writes. Where it keeps its state and how it writes:
+[contract.lease.md](contract.lease.md); who is in the split: [contract.ceiling.md](contract.ceiling.md).
 `internal/converge` carries that number to the panel enforcing it, on the same
 pass that read its counters — so a ceiling the reset invalidated is rewritten
 before another interval runs under it. Same file. Extending it on shutdown,

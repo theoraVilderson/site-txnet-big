@@ -6,7 +6,7 @@ updated: 2026-09-22
 
 # ADR 0072 — traffic is paid for before it is served
 
-- **Status:** accepted
+- **Status:** accepted; rule 1's writer is network's lease planner since F-027-db (ADR-0093) — the bound stands, billing no longer writes the split
 - **Date:** 2026-09-21
 - **Affects units:** network, entitlement, billing, catalog
 

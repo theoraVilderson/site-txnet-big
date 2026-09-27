@@ -133,10 +133,10 @@ func main() {
 		Progress:    collect.PostgresProgress{DB: pool},
 		Containment: containment,
 		Turns:       turns,
-		// The lease planner in shadow (F-027-cy, ADR-0093 rule 3): it plans
-		// every completed turn and logs; it writes nothing.
-		Shadow: &leaseplan.Shadow{Store: leaseplan.PostgresStore{DB: pool}, Log: log},
-		Log:    log,
+		// The lease planner (ADR-0093): the only writer of a config's
+		// ceiling since F-027-db; the convergence step carries it.
+		Planner: &leaseplan.Planner{Store: leaseplan.PostgresStore{DB: pool}, Log: log},
+		Log:     log,
 	}
 
 	// A config whose desired state changed wakes its panel's convergence turn

@@ -1,10 +1,12 @@
 // Package leaseplan runs the lease planner (`internal/lease/quota`, ADR-0093)
 // over this service's own rows: panels, configs, and the Grant's bag.
 //
-// It is the shadow (F-027-cy): each collection pass builds a `quota.Account`
-// per Grant the pass touched, feeds the readings through `Observe`, runs
-// `Plan`, and logs what it would write. It holds no driver and writes no row,
-// so it cannot be a second writer of a ceiling (ADR-0093 rule 3). What it
+// Since F-027-db it is the only writer of a config's ceiling
+// (`allocatedCeilingBytes`, ADR-0093 rule 1): each collection turn builds a
+// `quota.Account` per Grant the turn touched, feeds the readings through
+// `Observe`, runs `Plan`, and writes each action's limit to the config's row,
+// with the pessimistic `limitPeakBytes` and `writePending` beside it. It holds
+// no driver: the convergence pass carries the figure to the panel. What it
 // learns of a panel — the tick and the lag — is kept on the panel's row
 // (F-027-cz, `Learned`); a replica's rates are relearned in memory.
 package leaseplan
@@ -32,7 +34,12 @@ type Grant struct {
 	Configs   []Config
 }
 
-// Config is one of the Grant's configs, as the live writer left it.
+// Config is one of the Grant's configs, as its row holds it.
+//
+// Two bases meet here (`contract.lease.md` rule 16). The planner counts on
+// the panel's counter; the row counts in lifetime bytes, the basis the
+// convergence pass translates from (`contract.ceiling.md`). Offset is the
+// difference, so a planner figure plus Offset is the row's.
 type Config struct {
 	ID      string
 	PanelID string
@@ -40,15 +47,28 @@ type Config struct {
 	Exists bool
 	// Counter is the panel's own figure at the last read, up plus down.
 	Counter int64
-	// LimitSeen is `appliedCeilingBytes`, the ceiling the panel enforces; 0
-	// when none is applied.
+	// Offset is max(0, lifetime served − Counter): what the convergence
+	// pass subtracts from a row figure, so what the planner adds back.
+	Offset int64
+	// LimitSeen is `appliedCeilingBytes` less Offset, the ceiling the panel
+	// enforces on its own counter; 0 when none is applied.
 	LimitSeen int64
 	// Enabled is `desiredEnabled`. The bulk read carries no enable flag, so
-	// what the live writer asked for is the best figure there is.
+	// what was asked for is the best figure there is.
 	Enabled bool
-	// Allocated is the live split (`allocatedCeilingBytes`), logged beside
-	// the planner's figure for F-027-da; nil when there is none.
+	// Allocated is `allocatedCeilingBytes` and Peak `limitPeakBytes`, in the
+	// row's basis; nil when the row holds none. Pending is `writePending`.
+	Allocated, Peak *int64
+	Pending         bool
+}
+
+// Lease is what one plan writes back to one config's row, in the row's
+// basis. Allocated nil leaves `allocatedCeilingBytes` as it is.
+type Lease struct {
+	ConfigID  string
 	Allocated *int64
+	Peak      int64
+	Pending   bool
 }
 
 // Panel is what the planner needs of a panel row.
@@ -104,11 +124,13 @@ type Snapshot struct {
 	Panels map[string]Panel
 }
 
-// Store loads the Grants that hold any of the given configs, each with all
-// its configs, and keeps what the planner learned of a panel —
-// `PostgresStore` in a running process.
+// Store loads the Grants that hold any of the given configs, or a config on
+// the panel that no plan has given a ceiling yet, each with all its configs;
+// it writes the leases a plan decided and keeps what the planner learned of
+// a panel — `PostgresStore` in a running process.
 type Store interface {
-	Load(ctx context.Context, configIDs []string) (Snapshot, error)
+	Load(ctx context.Context, panelID string, configIDs []string) (Snapshot, error)
+	SaveLeases(ctx context.Context, leases []Lease) error
 	SaveLearned(ctx context.Context, panelID string, l Learned) error
 }
 
@@ -121,14 +143,15 @@ type Plan struct {
 	Endgame bool
 	Closed  bool
 	Actions []Action
-	// Replicas is every replica of the Grant after the plan, the live figures
-	// beside the planner's: what F-027-da's report is read from.
+	// Replicas is every replica of the Grant after the plan, what the panel
+	// enforces beside what the planner wants: what the report is read from.
 	Replicas []ReplicaView
+	// Leases is what the plan wrote back to the rows.
+	Leases []Lease
 }
 
 // ReplicaView is one replica on one plan: the counter, what the panel
-// enforces and the live split asked for, and what the planner would write.
-// A config the planner leaves alone wants what it has.
+// enforces, what the row held before the plan, and what the planner wants.
 type ReplicaView struct {
 	Config  string `json:"config"`
 	Panel   string `json:"panel"`
@@ -139,11 +162,12 @@ type ReplicaView struct {
 	SeenEnabled bool  `json:"seen_enabled"`
 	Want        int64 `json:"want"`
 	WantEnabled bool  `json:"want_enabled"`
-	// Allocated is `allocatedCeilingBytes`, billing's split; nil = none.
+	// Allocated is `allocatedCeilingBytes` as the row held it before this
+	// plan; nil = none.
 	Allocated *int64 `json:"allocated,omitempty"`
 }
 
-// Action is one write the planner would make, and the live split beside it.
+// Action is one write the planner made, and the row's figure before it.
 type Action struct {
 	ConfigID  string
 	PanelID   string
@@ -155,9 +179,9 @@ type Action struct {
 	Allocated *int64
 }
 
-// Shadow is the planner run beside the live allocator. The zero value needs
-// only a Store.
-type Shadow struct {
+// Planner is the lease planner over this service's rows. The zero value
+// needs only a Store.
+type Planner struct {
 	Store Store
 	// Params are the planner's (quota.DefaultParams when zero).
 	Params quota.Params
@@ -170,13 +194,30 @@ type Shadow struct {
 	configOf map[int64]string          // replica id -> config id
 	accounts map[string]*quota.Account // by Grant id
 	saved    map[string]Learned        // by panel id: what the row holds
+	next     int64                     // the last replica id handed out
 }
 
-var _ collect.Shadow = (*Shadow)(nil)
+var _ collect.Planner = (*Planner)(nil)
 
-// Observe is the loop's hook: plan, and log each plan and each action.
-func (s *Shadow) Observe(ctx context.Context, p collect.Panel, readings []driver.ClientUsage, at time.Time) error {
+// Observe is the usage turn's hook: plan, write, and log each plan and each
+// action.
+func (s *Planner) Observe(ctx context.Context, p collect.Panel, readings []driver.ClientUsage, at time.Time) error {
 	plans, err := s.Plan(ctx, p, readings, at)
+	s.logPlans(p, plans)
+	return err
+}
+
+// Allocate is the woken turn's hook (`contract.lease.md` rule 18): a turn
+// that reads no usage plans only the Grants with a config on this panel that
+// has no ceiling yet, so a new config gets its first share before the same
+// turn's convergence looks for it. No tick and no counter is observed.
+func (s *Planner) Allocate(ctx context.Context, p collect.Panel, at time.Time) error {
+	plans, _, err := s.plan(ctx, p, nil, at, false)
+	s.logPlans(p, plans)
+	return err
+}
+
+func (s *Planner) logPlans(p collect.Panel, plans []Plan) {
 	for _, pl := range plans {
 		s.log().Info("lease shadow plan", "panel", p.ID, "grant", pl.GrantID, "quota", pl.Quota, "used", pl.Used,
 			"avail", pl.Avail, "endgame", pl.Endgame, "closed", pl.Closed, "actions", len(pl.Actions),
@@ -190,15 +231,14 @@ func (s *Shadow) Observe(ctx context.Context, p collect.Panel, readings []driver
 			s.log().Info("lease shadow action", attrs...)
 		}
 	}
-	return err
 }
 
 // Plan runs one pass of SPEC §4 for the panel just read: the tick, the ledger,
-// then a plan per touched Grant. It returns the plans ordered by Grant id,
-// then saves what the pass taught it of the panel if that moved. A failed
-// save still returns the plans, beside the error.
-func (s *Shadow) Plan(ctx context.Context, p collect.Panel, readings []driver.ClientUsage, at time.Time) ([]Plan, error) {
-	plans, learned, err := s.plan(ctx, p, readings, at)
+// then a plan per touched Grant, whose leases it writes. It returns the plans
+// ordered by Grant id, then saves what the pass taught it of the panel if
+// that moved. A failed save still returns the plans, beside the error.
+func (s *Planner) Plan(ctx context.Context, p collect.Panel, readings []driver.ClientUsage, at time.Time) ([]Plan, error) {
+	plans, learned, err := s.plan(ctx, p, readings, at, true)
 	if err != nil || learned == nil {
 		return plans, err
 	}
@@ -211,8 +251,8 @@ func (s *Shadow) Plan(ctx context.Context, p collect.Panel, readings []driver.Cl
 	return plans, nil
 }
 
-// Learned is what the shadow holds of a panel now; false before it has seen one.
-func (s *Shadow) Learned(panelID string) (Learned, bool) {
+// Learned is what the planner holds of a panel now; false before it has seen one.
+func (s *Planner) Learned(panelID string) (Learned, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := s.panels[panelID]
@@ -222,26 +262,42 @@ func (s *Shadow) Learned(panelID string) (Learned, bool) {
 	return learnedOf(st), true
 }
 
-// plan is Plan under the lock; learned is non-nil when the panel's state
-// differs from what its row holds.
-func (s *Shadow) plan(ctx context.Context, p collect.Panel, readings []driver.ClientUsage, at time.Time) ([]Plan, *Learned, error) {
-	read := map[string]driver.ClientUsage{} // config id -> reading
+// plan loads, plans under the lock, then writes the leases. read says the
+// turn read usage: only then is the tick observed and are the readings
+// charged. learned is non-nil when the panel's state differs from its row.
+func (s *Planner) plan(ctx context.Context, p collect.Panel, readings []driver.ClientUsage, at time.Time, read bool) ([]Plan, *Learned, error) {
+	got := map[string]driver.ClientUsage{} // config id -> reading
 	ids := make([]string, 0, len(readings))
 	for _, r := range readings {
 		if ref, ok := p.Configs[r.RemoteID]; ok {
-			read[ref.ConfigID] = r
+			got[ref.ConfigID] = r
 			ids = append(ids, ref.ConfigID)
 		}
 	}
-	if len(ids) == 0 {
-		return nil, nil, nil
-	}
 	sort.Strings(ids)
-	snap, err := s.Store.Load(ctx, ids)
+	snap, err := s.Store.Load(ctx, p.ID, ids)
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading the Grants of panel %s: %w", p.ID, err)
 	}
+	plans, learned := s.planLocked(p, snap, got, at, read)
 
+	var leases []Lease
+	for _, pl := range plans {
+		leases = append(leases, pl.Leases...)
+	}
+	if len(leases) > 0 {
+		if err := s.Store.SaveLeases(ctx, leases); err != nil {
+			// The rows still hold the last figures, and the replicas in
+			// memory are ahead of them: forget them, so the next turn
+			// restores from what was actually written.
+			s.forget(leases)
+			return plans, nil, fmt.Errorf("writing %d lease(s) for panel %s: %w", len(leases), p.ID, err)
+		}
+	}
+	return plans, learned, nil
+}
+
+func (s *Planner) planLocked(p collect.Panel, snap Snapshot, got map[string]driver.ClientUsage, at time.Time, read bool) ([]Plan, *Learned) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.init()
@@ -249,52 +305,48 @@ func (s *Shadow) plan(ctx context.Context, p collect.Panel, readings []driver.Cl
 		s.panel(pn)
 	}
 	here := s.panels[p.ID]
-	if here != nil {
+	if here != nil && read {
 		here.Healthy = true // it has just answered
 		if prev := s.lastRead[p.ID]; !prev.IsZero() {
 			here.PollInterval = at.Sub(prev)
 		}
 	}
 
-	// The learned replicas, their want side mirrored from the live writer:
-	// the shadow's own wants are never written, so a want left on the
-	// replica would read as a write in flight that never lands.
-	byID := map[string]Config{}
+	// The seen side is the row's; the want side is the planner's own, kept
+	// in memory and restored from the row by replica() after a restart.
 	for _, g := range snap.Grants {
 		for _, c := range g.Configs {
-			byID[c.ID] = c
-			r := s.replica(c)
-			if r == nil {
-				continue
+			if r := s.replica(c); r != nil {
+				r.LimitSeen, r.EnabledSeen = c.LimitSeen, c.Enabled
 			}
-			r.LimitSeen, r.EnabledSeen = c.LimitSeen, c.Enabled
-			r.LimitWant, r.LimitPeak, r.WantEnabled = c.LimitSeen, c.LimitSeen, c.Enabled
 		}
 	}
 
 	// The tick: any counter moved, while any client was consuming.
-	changed, active := false, false
 	counters := map[string]int64{}
-	for id, rd := range read {
-		r := s.replicas[id]
-		if r == nil {
-			continue
+	if read {
+		changed, active := false, false
+		for id, rd := range got {
+			r := s.replicas[id]
+			if r == nil {
+				continue
+			}
+			counters[id] = counter(p.CounterSemantics, r, rd)
+			changed = changed || counters[id] != r.Counter
+			active = active || r.Rate.Now() > s.params().IdleRate
 		}
-		counters[id] = counter(p.CounterSemantics, r, rd)
-		changed = changed || counters[id] != r.Counter
-		active = active || r.Rate.Now() > s.params().IdleRate
+		if here != nil {
+			here.Clock.Observe(s.lastRead[p.ID], at, changed, active)
+		}
+		s.lastRead[p.ID] = at
 	}
-	if here != nil {
-		here.Clock.Observe(s.lastRead[p.ID], at, changed, active)
-	}
-	s.lastRead[p.ID] = at
 
 	plans := make([]Plan, 0, len(snap.Grants))
 	for _, g := range snap.Grants {
 		a := s.account(g.ID)
 		for _, c := range g.Configs {
 			r := s.replicas[c.ID]
-			if _, ok := read[c.ID]; !ok || r == nil || r.Panel.ID != p.ID {
+			if _, ok := counters[c.ID]; !ok || r == nil || r.Panel.ID != p.ID {
 				continue
 			}
 			a.Observe(r, quota.Observation{Counter: counters[c.ID], Limit: c.LimitSeen, Enabled: c.Enabled, At: at},
@@ -306,12 +358,15 @@ func (s *Shadow) plan(ctx context.Context, p collect.Panel, readings []driver.Cl
 		a.Replicas = a.Replicas[:0]
 		for _, c := range g.Configs {
 			if r := s.replicas[c.ID]; r != nil {
-				copied := *r // Plan writes its wants on the copy, never on what was learned
-				a.Replicas = append(a.Replicas, &copied)
+				a.Replicas = append(a.Replicas, r)
 			}
 		}
 		res := a.Plan(at, s.params())
 		pl := Plan{GrantID: g.ID, Quota: a.Quota, Used: a.Used, Avail: res.Avail, Endgame: res.Endgame, Closed: a.Closed}
+		byID := map[string]Config{}
+		for _, c := range g.Configs {
+			byID[c.ID] = c
+		}
 		acted := map[string]Action{}
 		for _, act := range res.Actions {
 			id := s.configOf[act.ReplicaID]
@@ -323,28 +378,64 @@ func (s *Shadow) plan(ctx context.Context, p collect.Panel, readings []driver.Cl
 			acted[id] = pa
 		}
 		for _, c := range g.Configs {
-			if s.replicas[c.ID] == nil {
+			r := s.replicas[c.ID]
+			if r == nil {
 				continue
 			}
 			v := ReplicaView{Config: c.ID, Panel: c.PanelID, Counter: c.Counter, Seen: c.LimitSeen,
-				SeenEnabled: c.Enabled, Want: c.LimitSeen, WantEnabled: c.Enabled, Allocated: c.Allocated}
+				SeenEnabled: c.Enabled, Want: r.LimitWant, WantEnabled: r.WantEnabled, Allocated: c.Allocated}
 			if n, ok := counters[c.ID]; ok {
 				v.Counter = n
 			}
-			if act, ok := acted[c.ID]; ok {
-				v.Want, v.WantEnabled = act.Limit, act.Enable
-			}
 			pl.Replicas = append(pl.Replicas, v)
+			_, wrote := acted[c.ID]
+			if l, moved := leaseOf(c, r, wrote); moved {
+				pl.Leases = append(pl.Leases, l)
+			}
 		}
 		plans = append(plans, pl)
 	}
 	sort.Slice(plans, func(i, j int) bool { return plans[i].GrantID < plans[j].GrantID })
-	if here != nil {
+	if here != nil && read {
 		if l := learnedOf(here); !l.Equal(s.saved[p.ID]) {
-			return plans, &l, nil
+			return plans, &l
 		}
 	}
-	return plans, nil, nil
+	return plans, nil
+}
+
+// leaseOf is what the replica's row should hold after a plan, in the row's
+// basis, and whether that differs from what it holds. The allocation moves
+// only on an action — a replica the plan left alone keeps the figure it has,
+// even a null one — while the peak and the pending flag follow every
+// confirmation the ledger saw.
+func leaseOf(c Config, r *quota.Replica, wrote bool) (Lease, bool) {
+	l := Lease{ConfigID: c.ID, Peak: r.LimitPeak + c.Offset, Pending: r.Pending()}
+	moved := c.Pending != l.Pending || c.Peak == nil || *c.Peak != l.Peak
+	if wrote {
+		want := r.LimitWant + c.Offset
+		l.Allocated = &want
+		moved = moved || c.Allocated == nil || *c.Allocated != want
+	}
+	if c.Allocated == nil && !wrote {
+		// No ceiling yet, and none given: nothing on the row to be
+		// pessimistic about.
+		return l, false
+	}
+	return l, moved
+}
+
+// forget drops the replicas whose lease could not be written, so the next
+// turn restores them from their rows.
+func (s *Planner) forget(leases []Lease) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, l := range leases {
+		if r := s.replicas[l.ConfigID]; r != nil {
+			delete(s.configOf, r.ID)
+			delete(s.replicas, l.ConfigID)
+		}
+	}
 }
 
 // counter is the figure a panel ceiling is measured against. A cumulative
@@ -358,7 +449,7 @@ func counter(sem driver.CounterSemantics, r *quota.Replica, rd driver.ClientUsag
 	return total
 }
 
-func (s *Shadow) init() {
+func (s *Planner) init() {
 	if s.panels != nil {
 		return
 	}
@@ -372,7 +463,7 @@ func (s *Shadow) init() {
 
 // panel keeps one PanelState per panel, so what it learns outlives a pass. A
 // panel first seen by this process starts from what its row holds.
-func (s *Shadow) panel(pn Panel) {
+func (s *Planner) panel(pn Panel) {
 	st := s.panels[pn.ID]
 	if st == nil {
 		j := pn.Learned.TickPeriod
@@ -396,8 +487,10 @@ func (s *Shadow) panel(pn Panel) {
 
 // replica keeps one learned Replica per config. One first seen is adopted at
 // the counter the store holds — the planner's own reading of a client it did
-// not create — so its whole counter is never charged as one delta.
-func (s *Shadow) replica(c Config) *quota.Replica {
+// not create — so its whole counter is never charged as one delta. Its want
+// side is restored from the row (`contract.lease.md` rule 17): the last
+// figure written, the peak not yet confirmed down, and a write in flight.
+func (s *Planner) replica(c Config) *quota.Replica {
 	if r := s.replicas[c.ID]; r != nil {
 		return r
 	}
@@ -405,13 +498,22 @@ func (s *Shadow) replica(c Config) *quota.Replica {
 	if st == nil {
 		return nil
 	}
-	id := int64(len(s.configOf) + 1)
-	r := &quota.Replica{ID: id, Panel: st, Exists: c.Exists, Counter: c.Counter}
-	s.replicas[c.ID], s.configOf[id] = r, c.ID
+	s.next++
+	r := &quota.Replica{ID: s.next, Panel: st, Exists: c.Exists, Counter: c.Counter,
+		LimitSeen: c.LimitSeen, EnabledSeen: c.Enabled, LimitWant: c.LimitSeen, WantEnabled: c.Enabled}
+	if c.Allocated != nil {
+		r.LimitWant = max(*c.Allocated-c.Offset, 0)
+	}
+	r.LimitPeak = max(r.LimitWant, r.LimitSeen)
+	if c.Peak != nil {
+		r.LimitPeak = max(*c.Peak-c.Offset, r.LimitSeen)
+	}
+	r.RestorePending(c.Pending)
+	s.replicas[c.ID], s.configOf[s.next] = r, c.ID
 	return r
 }
 
-func (s *Shadow) account(grantID string) *quota.Account {
+func (s *Planner) account(grantID string) *quota.Account {
 	a := s.accounts[grantID]
 	if a == nil {
 		a = &quota.Account{ID: grantID}
@@ -420,14 +522,14 @@ func (s *Shadow) account(grantID string) *quota.Account {
 	return a
 }
 
-func (s *Shadow) params() quota.Params {
+func (s *Planner) params() quota.Params {
 	if s.Params.Horizon > 0 {
 		return s.Params
 	}
 	return quota.DefaultParams()
 }
 
-func (s *Shadow) log() *slog.Logger {
+func (s *Planner) log() *slog.Logger {
 	if s.Log != nil {
 		return s.Log
 	}

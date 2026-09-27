@@ -15,3 +15,10 @@ func (c TickClock) Mask() (uint32, bool) { return c.mask, c.init }
 func RestoreTickClock(j time.Duration, mask uint32) TickClock {
 	return TickClock{J: j, mask: mask, init: mask != 0}
 }
+
+// RestorePending marks a replica whose last write had not been seen on its
+// panel when the previous process stopped (F-027-db, `writePending`). Its
+// LastWriteAt is unknown, so the first poll past DriftAfter gives up waiting
+// and the planner re-emits, while LimitPeak stays pessimistic until the panel
+// shows the figure.
+func (r *Replica) RestorePending(pending bool) { r.writePending = pending }

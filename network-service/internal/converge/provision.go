@@ -418,7 +418,7 @@ func (v *Provisioning) one(
 		// usually has none: that is the exception, written and not counted.
 		// The row still follows its client, because a re-key writes nothing.
 		if row.AllocatedBytes != nil {
-			want := guardedCeiling(p, row)
+			want := firstCeiling(row)
 			if have := client.DataLimitBytes; have == 0 || have > want {
 				if err := p.Driver.SetClientDataLimit(ctx, client.RemoteID, want); err != nil {
 					return refused(client.RemoteID, err)
@@ -439,7 +439,7 @@ func (v *Provisioning) one(
 		if rebuilt && row.Unlimited {
 			none = true
 		} else if rebuilt && row.AllocatedBytes != nil {
-			limit = guardedCeiling(p, row)
+			limit = firstCeiling(row)
 		}
 		err := p.Driver.UpdateClient(ctx, driver.UpdateClientRequest{
 			RemoteID: client.RemoteID, ClaimTag: row.ClaimTag, UUID: row.UUID,
@@ -491,7 +491,7 @@ func (v *Provisioning) create(
 	default:
 		// A new client's counter starts at zero, so everything the config
 		// has already carried is the offset.
-		ceiling = guardedCeiling(p, row)
+		ceiling = firstCeiling(row)
 		if ceiling == 0 {
 			report.Skipped++
 			return nil, found(ActionAllowanceExhausted, "", nil)
@@ -671,10 +671,9 @@ func (v *Provisioning) log() *slog.Logger {
 	return slog.Default()
 }
 
-// guardedCeiling is the first ceiling a created or rebuilt client gets: the
-// share less the guard band, in a counter that starts at zero (F-027-co). It is
-// the ceiling pass's figure, so the pass after it finds nothing to lower.
-func guardedCeiling(p collect.Panel, row DesiredConfig) int64 {
-	band := NearBand(*row.AllocatedBytes, row.ServedBytes, row.RateBps, p.EnforcementLag())
-	return PanelCeiling(GuardedAllowance(*row.AllocatedBytes, row.ServedBytes, band), row.ServedBytes)
+// firstCeiling is the first ceiling a created or rebuilt client gets: the
+// planner's share in a counter that starts at zero. It is the ceiling pass's
+// figure, so the pass after it finds nothing to lower.
+func firstCeiling(row DesiredConfig) int64 {
+	return PanelCeiling(*row.AllocatedBytes, row.ServedBytes)
 }

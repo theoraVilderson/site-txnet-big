@@ -10,7 +10,7 @@ updated: 2026-09-27
 - **Date:** 2026-09-27
 - **Affects units:** network (`contract.ceiling.md`, `contract.hot-loop.md`, `contract.reserve.md`), billing (`traffic/ceiling-allocator.ts`, `traffic/horizon.ts`, `traffic/hot-loop.*`)
 - **Decision row:** asked 2026-09-27; the user answered "replace the planner". Rows `F-027-cw`..`F-027-dn`
-- **Supersedes in part:** ADR-0072 rule 1 (the split is billing's), ADR-0092 (the hot loop's re-split is called by the delta stream). Both stand until `F-027-db` flips the writer.
+- **Supersedes in part:** ADR-0072 rule 1 (the split is billing's), ADR-0092 (the hot loop's re-split is called by the delta stream). Both stood until `F-027-db` flipped the writer, 2026-09-27.
 
 ## Context
 The split of a Grant's bag across its configs is decided in `billing-service`
@@ -47,3 +47,19 @@ broken). Its `SPEC.md` (Persian) lists thirty weaknesses and their fixes.
   as a doc (C-01); contracts written from it are English.
 - Revisit if the shadow run disagrees with the current split by more than the
   simulator's p95 on live panels: the model is wrong somewhere, not the panel.
+
+## Amendment 2026-09-27 — the cutover (F-027-db)
+Asked while building the cutover; the user took the recommendation both times.
+- **A config no panel has read gets its first share from the planner**, not
+  from billing at creation. A woken turn plans the Grants of configs with no
+  ceiling before its convergence step, so a purchase is still created in one
+  turn, and there is one writer. The cheaper answer — billing writes the first
+  share only — keeps two writers splitting one bag.
+- **`walletBackedCeilingBytes` is the share itself until F-027-dc.** Billing
+  refreshed it in the split it no longer writes; a stale wallet figure would
+  extend a panel over money that may be gone at exit. A metered user loses
+  the exit extension until the reserve joins Quota.
+- **No guard band on the planner's figure.** Its invariant already holds
+  rate × Lag; a band on top pays the lag twice and leaves a panel enforcing a
+  figure the planner never wrote, which never reads as a landed write. The
+  band stays on the shutdown extension only.

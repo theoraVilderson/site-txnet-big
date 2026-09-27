@@ -2,17 +2,18 @@
 id: network
 layer: domain
 status: draft
-version: 15
+version: 16
 updated: 2026-09-27
 ---
 
 # The ceiling — one bag, split across the configs that draw on it
 
-What governs `CeilingAllocatorService` (ADR-0072 rule 1, F-027-s): the only
-code that decides how much of a Grant's purchased bytes each of its configs may
-carry. Read it before changing how a share is sized, before adding a second
-writer of `config.allocatedCeilingBytes`, or before giving a config a ceiling
-from anywhere else.
+What governs how much of a Grant's purchased bytes each of its configs may
+carry, and the pass that carries it to the panel. **Since F-027-db the share is
+the lease planner's alone** (ADR-0093, [contract.lease.md](contract.lease.md)):
+`CeilingAllocatorService` below still computes billing's split, but writes
+nothing, until F-027-dk retires it. Read it before adding a writer of
+`config.allocatedCeilingBytes`, or giving a config a ceiling from anywhere else.
 
 **`Σ ceilings ≤ purchasedBytes`, across every config of a Grant** (entitlement
 invariant 8), past it only by a metered Grant's wallet-backed reserve
@@ -39,7 +40,7 @@ model (`tenant-context/contract.md` rule 5).
 |---|---|
 | `ceilings` | one row per config in the split — `ceilingBytes` and whether a sub-account was the smaller authority — in the order they were decided, hot first |
 | `unallocatedBytes` | bought, and no config can carry it: every one is capped. F-027-u's signal to stop buying |
-| `written` | how many shares actually moved — the convergence loop's remaining work |
+| `written` | always 0 since F-027-db: nothing is written |
 
 ## It decides; it never buys
 
@@ -48,19 +49,16 @@ bought. The bound and the split move in one direction only, so a bug here can
 strand bytes but cannot invent them. Nothing here reads the catalog, and the
 wallet and the Grant's rate are read for one figure only, below.
 
-**It also writes the shutdown figure** (F-027-w, ADR-0078):
-`walletBackedCeilingBytes` is the same split, same order, over a bag of
-`purchasedBytes + bytesAffordable(rate, balance)` — zero added for a prepaid
-Grant. It is taken as the larger of it and the allocation, so the CHECK
-`config_wallet_backed_ceiling_extends` never refuses a rebalance, and a row is
-written when **either** column moved: a top-up moves the wallet while
-`purchasedBytes` stands still. Out: `walletBacked` and `walletBackedBytes`,
-beside `ceilings`. What the collector does with it is
-[contract.resilience.md](contract.resilience.md).
+**It also computes the shutdown figure** (F-027-w, ADR-0078): the same split,
+same order, over a bag of `purchasedBytes + bytesAffordable(rate, balance)` —
+zero added for a prepaid Grant — never under the allocation. Out:
+`walletBacked` and `walletBackedBytes`, beside `ceilings`. Since F-027-db the
+column `walletBackedCeilingBytes` is the planner's, equal to the share until
+F-027-dc ([contract.resilience.md](contract.resilience.md)).
 
-It never writes to a panel. These two columns are where it stops;
-`SetClientDataLimit`, `appliedCeilingBytes`, and the rewrite in the pass that
-detects a counter reset are the convergence loop's, below.
+It never writes to a panel: `SetClientDataLimit`, `appliedCeilingBytes`, and
+the rewrite in the pass that detects a counter reset are the convergence
+loop's, below.
 
 ## Three passes, in one order
 
@@ -138,14 +136,15 @@ extension never read them, and a client with no limit is never taken for
 
 ## The convergence loop — carrying the number to the panel (F-027-t)
 
-`network-service/internal/converge` is the other half: the allocator's number
+`network-service/internal/converge` is the other half: the planner's number
 is ours until a panel is enforcing it, and the panel is the enforcement point
 that keeps working while this service is down. It runs at the end of each
 panel's turn in the collection pass (`collect.PassConverger`) — and on a woken
 turn seconds after the allocator moves a share (F-027-cp, `contract.collection.md`
 rule 5), so a re-split is not a 60 s cut mid-download — costs **one**
 `ListClients` for the whole population, and writes `SetClientDataLimit` only to
-the configs that disagree — nearest crossing first (`contract.budget.md`).
+the configs that disagree — shrinks first, then nearest crossing
+(`contract.lease.md` rule 19, `contract.budget.md`).
 
 **`applied` is what the panel confirmed, never what we sent.** Families take a
 ceiling late, so a write that returned `nil` is not a ceiling being enforced,
@@ -154,7 +153,7 @@ served with nothing red anywhere. `appliedCeilingBytes` is therefore read back
 off `ListClients` and set with `ceilingAppliedAt` in the same write
 (invariant 14). A panel reporting **zero** confirms nothing: zero read means
 *no limit* there, so it is never recorded as an applied ceiling.
-The write locks its rows in id order, as billing's re-split does, or the two
+The write locks its rows in id order, as the planner's lease write does, or the two
 deadlock and the pass's confirmations are lost (invariant 54, F-027-cv).
 
 ### From a lifetime allowance to the figure that counter needs today
@@ -178,39 +177,15 @@ watching, a figure the plausibility cap quarantined — get **no** headroom.
 Covering them would serve traffic against nobody's purchase; refusing to is a
 user who stalls, which is ADR-0072's accepted worst failure in every direction.
 
-### The guard band — the panel's lag lands inside the bag (F-027-co)
+### No guard band on the planner's figure (F-027-db)
 
-A panel cuts a client some seconds **after** it crosses its ceiling, and what
-it serves in between is past the share and billed by nobody
-(`open-questions.md`, 2026-09-26). So the figure written is
-
-```
-band    = observedRateBps / 8 × the panel's enforcement lag
-allowed = max(allocatedCeilingBytes - band, min(served, allocatedCeilingBytes))
-```
-
-and then translated as above. The lag (`collect.Panel.EnforcementLag`) is the
-panel's own once the lease planner measured it (`lagSamples > 0`: mean + LagZ·σ,
-F-027-cz, `contract.lease.md`); until then **seconds per family**, 35 s for 3x-ui
-and both forks (5 s check + a 30 s Xray restart), and 35 s for the rest. At
-25 MB/s the band is ~875 MB; a config with no measured rate has none.
-**Never below what it served** — a band wider than what is left cuts it now.
-
-**Only near the cut** (F-027-cq, `NearBand`): a config more than the hot
-horizon (120 s) of its own rate from its share keeps the whole share. The lag
-matters only when the panel cuts, and a band on every running config was a
-write on every move of its rate (invariant 34). Near it, a panel holding
-**1×–1.25× the band** is left alone (`withinBand`) — a quarter is under the
-smallest block (60 s of rate), so a top-up is never absorbed.
-
-**A quiet config inside its band gets it back**: read in a usage pass with no
-delta, it is cut and not moving, and its rate — measured only off traffic —
-would hold the band for ever, stranding what a prepaid user bought. The cost
-is one more lag past the share, at most one band. A convergence-only turn
-reads no usage, so it never finds anyone quiet.
-
-The same band rides on provisioning's first ceiling and on the shutdown
-extension (`contract.resilience.md`). Overrun stays uncharged.
+F-027-co took the panel's lag off the share (`rate × lag`, near the cut only).
+The planner's invariant already holds that lag, so the pass and provisioning's
+first ceiling write the share as it is (`contract.lease.md` rule 19); a band
+here would pay the lag twice and leave a panel enforcing a figure the planner
+never wrote, which never reads as landed. The band (`NearBand`,
+`GuardedAllowance`) rides only on the shutdown extension
+(`contract.resilience.md`). Overrun stays uncharged.
 
 ### What a write says about itself
 

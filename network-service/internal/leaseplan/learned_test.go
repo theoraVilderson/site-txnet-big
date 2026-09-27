@@ -41,7 +41,7 @@ func moving(counter int64) leaseplan.Config {
 // family's blank figures.
 func TestWhatAPanelLearnedSurvivesARestart(t *testing.T) {
 	k := &keeper{store: newStore()}
-	before := &leaseplan.Shadow{Store: k}
+	before := &leaseplan.Planner{Store: k}
 	p := panel("c1")
 	t0 := time.Date(2026, 9, 27, 10, 0, 0, 0, time.UTC)
 
@@ -69,7 +69,7 @@ func TestWhatAPanelLearnedSurvivesARestart(t *testing.T) {
 	}
 
 	// The restart: a new shadow over the same rows.
-	after := &leaseplan.Shadow{Store: k}
+	after := &leaseplan.Planner{Store: k}
 	k.set(10*quota.MB, moving(10*quota.MB))
 	if _, err := after.Plan(context.Background(), p, []driver.ClientUsage{reading("c1", 10*quota.MB)}, t0.Add(time.Hour)); err != nil {
 		t.Fatal(err)
@@ -89,7 +89,7 @@ func TestALoadedLagIsKeptAndAnUnchangedPanelIsNotWritten(t *testing.T) {
 	pn.Learned = leaseplan.Learned{TickPeriod: 5 * time.Second, TickMask: &mask, LagMeanSec: 21, LagVarianceSec2: 4, LagSamples: 3}
 	k.store.panels[panelID] = pn
 
-	sh := &leaseplan.Shadow{Store: k}
+	sh := &leaseplan.Planner{Store: k}
 	k.set(0, moving(0))
 	if _, err := sh.Plan(context.Background(), panel("c1"), []driver.ClientUsage{reading("c1", 0)}, time.Now()); err != nil {
 		t.Fatal(err)

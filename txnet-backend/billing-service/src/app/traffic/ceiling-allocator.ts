@@ -266,7 +266,7 @@ export type RebalanceGrant = {
 
 export type RebalancedGrant = Allocation & {
   grantId: string;
-  /** How many configs had either ceiling column moved — the convergence loop's work (F-027-t). */
+  /** Always 0 since F-027-db: the lease planner writes the ceilings, and this writes none. */
   written: number;
   /**
    * The same split over the larger bag: what a graceful shutdown raises each
@@ -289,8 +289,10 @@ export class CeilingAllocatorService {
   }
 
   /**
-   * Reads the Grant's bag and its configs, splits one across the other, and
-   * writes the shares that moved.
+   * Reads the Grant's bag and its configs and splits one across the other.
+   * **It writes nothing since F-027-db**: the lease planner in network-service
+   * is the only writer of a config's ceiling (ADR-0093 rule 1). What it
+   * returns is what this split would have written, kept until F-027-dk.
    *
    * It runs in the **caller's** transaction, as the purchase does: F-027-u buys
    * the next block and rebalances in one, so there is no window where
@@ -319,8 +321,6 @@ export class CeilingAllocatorService {
       where: { grantId: grant.id, status: ConfigStatus.active, desiredEnabled: true },
       select: {
         id: true,
-        allocatedCeilingBytes: true,
-        walletBackedCeilingBytes: true,
         counterState: { select: { lifetimeUpBytes: true, lifetimeDownBytes: true } },
         subAccount: { select: { dataCapBytes: true, isActive: true } },
         panel: { select: { maxLineRateBps: true } },
@@ -370,27 +370,12 @@ export class CeilingAllocatorService {
         return [ceiling.configId, ceiling.ceilingBytes > floor ? ceiling.ceilingBytes : floor];
       }),
     );
-    const current = new Map(configs.map((config) => [config.id, config]));
-    // Either column moving is a write. The wallet moves far more often than
-    // `purchasedBytes` does — every top-up changes it — so a write gated on the
-    // allocation alone would leave the collector extending to yesterday's
-    // balance on its way out.
-    // Written in id order, the order network-service's passes lock these rows
-    // in (F-027-cv): two writers taking them in different orders deadlock.
-    const moved = allocation.ceilings
-      .filter((ceiling) => {
-        const row = current.get(ceiling.configId);
-        return row?.allocatedCeilingBytes !== ceiling.ceilingBytes || row?.walletBackedCeilingBytes !== backedById.get(ceiling.configId);
-      })
-      .sort((a, b) => (a.configId < b.configId ? -1 : a.configId > b.configId ? 1 : 0));
-    for (const ceiling of moved) {
-      await tx.config.update({
-        where: { id: ceiling.configId },
-        data: { allocatedCeilingBytes: ceiling.ceilingBytes, walletBackedCeilingBytes: backedById.get(ceiling.configId) as bigint },
-      });
-    }
-
-    return { ...allocation, grantId: grant.id, written: moved.length, walletBacked: backed.ceilings, walletBackedBytes, unlimited: false };
+    // Nothing is written (F-027-db, ADR-0093 rule 2): network-service's lease
+    // planner is the only writer of `allocatedCeilingBytes` and of the
+    // shutdown figure beside it. The split is still computed for the hot
+    // loop's counters until F-027-dk retires it with its callers.
+    const walletBacked = backed.ceilings.map((ceiling) => ({ ...ceiling, ceilingBytes: backedById.get(ceiling.configId) as bigint }));
+    return { ...allocation, grantId: grant.id, written: 0, walletBacked, walletBackedBytes, unlimited: false };
   }
 
   /**

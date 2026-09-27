@@ -54,12 +54,14 @@ type PassConverger interface {
 	Converge(ctx context.Context, p Panel, res Result) error
 }
 
-// Shadow is the lease planner run beside the live split (F-027-cy,
-// ADR-0093 rule 3) — `leaseplan.Shadow`. It is handed the raw readings of a
-// turn that completed and has no way back to the panel: what it decides is
-// logged, never written, so it cannot be a second writer of a ceiling.
-type Shadow interface {
+// Planner is the lease planner (ADR-0093), `leaseplan.Planner`: the only
+// writer of a config's ceiling since F-027-db. It is handed the raw readings
+// of a turn that completed, writes the ceilings to the rows, and has no way
+// to the panel: the convergence step right after it carries them. Allocate is
+// the woken turn's: no readings, only configs with no ceiling yet.
+type Planner interface {
 	Observe(ctx context.Context, p Panel, readings []driver.ClientUsage, at time.Time) error
+	Allocate(ctx context.Context, p Panel, at time.Time) error
 }
 
 // PanelHealth is told how each panel's turn went and says whether a panel may
@@ -131,9 +133,9 @@ type Loop struct {
 	// (F-027-bu). Nil takes no lock, which is right only while no other loop
 	// reads the same panels.
 	Turns *TurnLocks
-	// Shadow plans each completed turn without writing (F-027-cy). Nil plans
-	// nothing.
-	Shadow Shadow
+	// Planner plans each completed turn and writes its ceilings (F-027-db).
+	// Nil plans nothing.
+	Planner Planner
 
 	// Interval is the gap between passes (DefaultInterval).
 	Interval time.Duration
@@ -315,8 +317,8 @@ func (l *Loop) collect(ctx context.Context, p Panel) (Result, string, error) {
 		return Result{}, "Apply", err
 	}
 	l.record(ctx, rates)
+	l.plan(ctx, p, readings, res.ObservedAt)
 	l.converge(ctx, p, res)
-	l.shadow(ctx, p, readings, res.ObservedAt)
 	return res, "", nil
 }
 
@@ -334,15 +336,16 @@ func (l *Loop) converge(ctx context.Context, p Panel, res Result) {
 	}
 }
 
-// shadow runs the planner over the turn. It is last, after the bytes are
-// billed and the ceilings carried, and a failure is logged: the shadow's
-// output is a log line, and nothing is owed to it.
-func (l *Loop) shadow(ctx context.Context, p Panel, readings []driver.ClientUsage, at time.Time) {
-	if l.Shadow == nil {
+// plan runs the planner over the turn, after the bytes are billed and the
+// cursors moved, and before the convergence step, so what it writes reaches
+// the panel in the same turn. A failure is logged: the bytes are billed, and
+// the ceilings stay where the last plan left them.
+func (l *Loop) plan(ctx context.Context, p Panel, readings []driver.ClientUsage, at time.Time) {
+	if l.Planner == nil {
 		return
 	}
-	if err := l.Shadow.Observe(ctx, p, readings, at); err != nil {
-		l.log().Error("lease shadow failed", "panel", p.ID, "error", err)
+	if err := l.Planner.Observe(ctx, p, readings, at); err != nil {
+		l.log().Error("lease plan failed", "panel", p.ID, "error", err)
 	}
 }
 

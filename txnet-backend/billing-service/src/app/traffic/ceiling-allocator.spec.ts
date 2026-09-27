@@ -21,7 +21,7 @@
  */
 import { Prisma } from '@prisma/client';
 
-import { CeilingAllocatorService, DEFAULT_CONFIG_FLOOR_BYTES, IDLE_FLOOR_SECONDS, allocateCeilings, type ConfigDemand } from './ceiling-allocator';
+import { CeilingAllocatorService, DEFAULT_CONFIG_FLOOR_BYTES, IDLE_FLOOR_SECONDS, allocateCeilings, type ConfigDemand, type RebalancedGrant } from './ceiling-allocator';
 
 const MIB = BigInt(1024 * 1024);
 const GRANT = '77777777-7777-4777-8777-777777777777';
@@ -440,12 +440,15 @@ function fakeTx(options: {
   return { tx: tx as unknown as Prisma.TransactionClient, rows, updated };
 }
 
+const share = (a: RebalancedGrant, id: string) => a.ceilings.find((c) => c.configId === id)?.ceilingBytes;
+const backed = (a: RebalancedGrant, id: string) => a.walletBacked.find((c) => c.configId === id)?.ceilingBytes;
+
 describe('CeilingAllocatorService.rebalance', () => {
   const service = () => new CeilingAllocatorService({} as never);
   const config = (id: string): ConfigRow => ({ id, grantId: GRANT, status: 'active', allocatedCeilingBytes: null, walletBackedCeilingBytes: null });
 
-  it('writes each config its share of what the Grant bought', async () => {
-    const { tx, rows } = fakeTx({
+  it('splits what the Grant bought across its configs', async () => {
+    const { tx } = fakeTx({
       purchasedBytes: BigInt(1000) * MIB,
       configs: [config('hot'), config('cold')],
       served: { hot: BigInt(200) * MIB, cold: BigInt(50) * MIB },
@@ -456,65 +459,61 @@ describe('CeilingAllocatorService.rebalance', () => {
     const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'hot', floorBytes: BigInt(100) * MIB });
 
     expect(sum(allocation.ceilings.map((c) => c.ceilingBytes))).toBe(BigInt(1000) * MIB);
-    expect(rows.find((r) => r.id === 'cold')?.allocatedCeilingBytes).toBe(BigInt(150) * MIB);
-    expect(rows.find((r) => r.id === 'hot')?.allocatedCeilingBytes).toBe(BigInt(850) * MIB);
+    expect(share(allocation, 'cold')).toBe(BigInt(150) * MIB);
+    expect(share(allocation, 'hot')).toBe(BigInt(850) * MIB);
   });
 
   it('counts a config with no counter row yet as having served nothing', async () => {
-    const { tx, rows } = fakeTx({ purchasedBytes: BigInt(300) * MIB, configs: [config('fresh')], served: {} });
+    const { tx } = fakeTx({ purchasedBytes: BigInt(300) * MIB, configs: [config('fresh')], served: {} });
 
-    await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'fresh' });
+    const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'fresh' });
 
-    expect(rows[0]?.allocatedCeilingBytes).toBe(BigInt(300) * MIB);
+    expect(allocation.ceilings[0]?.ceilingBytes).toBe(BigInt(300) * MIB);
   });
 
   it('lets an active sub-account cap the config it is attached to', async () => {
-    const { tx, rows } = fakeTx({
+    const { tx } = fakeTx({
       purchasedBytes: BigInt(1000) * MIB,
       configs: [config('capped'), config('hot')],
       served: { capped: BigInt(0), hot: BigInt(0) },
       caps: { capped: { dataCapBytes: BigInt(20) * MIB, isActive: true } },
     });
 
-    await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'hot' });
+    const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'hot' });
 
-    expect(rows.find((r) => r.id === 'capped')?.allocatedCeilingBytes).toBe(BigInt(20) * MIB);
+    expect(share(allocation, 'capped')).toBe(BigInt(20) * MIB);
   });
 
   it('ignores a deactivated sub-account rather than reading its cap as zero', async () => {
-    const { tx, rows } = fakeTx({
+    const { tx } = fakeTx({
       purchasedBytes: BigInt(400) * MIB,
       configs: [config('a')],
       served: { a: BigInt(0) },
       caps: { a: { dataCapBytes: BigInt(20) * MIB, isActive: false } },
     });
 
-    await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
+    const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
 
-    expect(rows[0]?.allocatedCeilingBytes).toBe(BigInt(400) * MIB);
+    expect(allocation.ceilings[0]?.ceilingBytes).toBe(BigInt(400) * MIB);
   });
 
-  it('writes only the configs whose share moved', async () => {
-    const { tx, rows } = fakeTx({ purchasedBytes: BigInt(300) * MIB, configs: [config('a')], served: { a: BigInt(0) } });
-    rows[0].allocatedCeilingBytes = BigInt(300) * MIB;
-    // Both columns, because either one moving is a write (F-027-w).
-    rows[0].walletBackedCeilingBytes = BigInt(300) * MIB;
+  it('writes no row: the lease planner is the only writer of a ceiling (F-027-db)', async () => {
+    const { tx, rows, updated } = fakeTx({
+      purchasedBytes: BigInt(900) * MIB,
+      configs: [config('a'), config('b')],
+      served: { a: BigInt(0), b: BigInt(0) },
+      balance: '2.00',
+    });
 
     const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
 
+    expect(allocation.ceilings).toHaveLength(2);
     expect(allocation.written).toBe(0);
-  });
-
-  it("writes a Grant's configs in id order, the order network-service locks them in (F-027-cv)", async () => {
-    const { tx, updated } = fakeTx({
-      purchasedBytes: BigInt(900) * MIB,
-      configs: [config('c'), config('a'), config('b')],
-      served: { a: BigInt(0), b: BigInt(0), c: BigInt(0) },
-    });
-
-    await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'c' });
-
-    expect(updated).toEqual(['a', 'b', 'c']);
+    expect(updated).toEqual([]);
+    expect(rows.map((r) => [r.allocatedCeilingBytes, r.walletBackedCeilingBytes ?? null])).toEqual([
+      [null, null],
+      [null, null],
+    ]);
   });
 
   it('answers a missing Grant as a refusal, not a crash', async () => {
@@ -534,7 +533,7 @@ describe('CeilingAllocatorService.rebalance', () => {
     it('extends the share by what the wallet would still buy', async () => {
       // 1 dollar per GiB, 4 dollars in the wallet: the bag the shutdown figure
       // is split over is what was bought plus four more gibibytes.
-      const { tx, rows } = fakeTx({
+      const { tx } = fakeTx({
         purchasedBytes: BigInt(1000) * MIB,
         configs: [config('a')],
         served: { a: BigInt(0) },
@@ -542,27 +541,27 @@ describe('CeilingAllocatorService.rebalance', () => {
         balance: '4.00',
       });
 
-      await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
+      const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
 
-      expect(rows[0]?.allocatedCeilingBytes).toBe(BigInt(1000) * MIB);
-      expect(rows[0]?.walletBackedCeilingBytes).toBe(BigInt(1000) * MIB + BigInt(4) * GIB_BYTES);
+      expect(allocation.ceilings[0]?.ceilingBytes).toBe(BigInt(1000) * MIB);
+      expect(allocation.walletBacked[0]?.ceilingBytes).toBe(BigInt(1000) * MIB + BigInt(4) * GIB_BYTES);
     });
 
-    it('never writes one below the allocation it extends', async () => {
+    it('never gives one below the allocation it extends', async () => {
       // The database CHECKs this (`config_wallet_backed_ceiling_extends`); a
       // row that got under it would have a shutdown lowering every ceiling on
       // its way out.
-      const { tx, rows } = fakeTx({
+      const { tx } = fakeTx({
         purchasedBytes: BigInt(1000) * MIB,
         configs: [config('a'), config('b')],
         served: { a: BigInt(0), b: BigInt(0) },
         balance: '0.00',
       });
 
-      await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
+      const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
 
-      for (const row of rows) {
-        expect(row.walletBackedCeilingBytes).toBe(row.allocatedCeilingBytes);
+      for (const c of allocation.ceilings) {
+        expect(backed(allocation, c.configId)).toBe(c.ceilingBytes);
       }
     });
 
@@ -570,7 +569,7 @@ describe('CeilingAllocatorService.rebalance', () => {
       // Nothing prices a byte for it (ADR-0073), and nothing tops it up
       // either: a prepaid ceiling is the quota, and the collector being down
       // does not shrink it.
-      const { tx, rows } = fakeTx({
+      const { tx } = fakeTx({
         purchasedBytes: BigInt(500) * MIB,
         configs: [config('a')],
         served: { a: BigInt(0) },
@@ -578,24 +577,24 @@ describe('CeilingAllocatorService.rebalance', () => {
         balance: '100.00',
       });
 
-      await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
+      const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
 
-      expect(rows[0]?.walletBackedCeilingBytes).toBe(rows[0]?.allocatedCeilingBytes);
+      expect(allocation.walletBacked[0]?.ceilingBytes).toBe(allocation.ceilings[0]?.ceilingBytes);
     });
 
     it('treats a user with no wallet row as a balance of zero', async () => {
-      const { tx, rows } = fakeTx({ purchasedBytes: BigInt(500) * MIB, configs: [config('a')], served: { a: BigInt(0) } });
+      const { tx } = fakeTx({ purchasedBytes: BigInt(500) * MIB, configs: [config('a')], served: { a: BigInt(0) } });
 
-      await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
+      const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
 
-      expect(rows[0]?.walletBackedCeilingBytes).toBe(BigInt(500) * MIB);
+      expect(allocation.walletBacked[0]?.ceilingBytes).toBe(BigInt(500) * MIB);
     });
 
     it('keeps the sub-account cap over the larger bag too', async () => {
       // A cap is a cap. Money the user has does not buy past a limit somebody
       // set on that config (F-608), and a shutdown is not where that stops
       // being true.
-      const { tx, rows } = fakeTx({
+      const { tx } = fakeTx({
         purchasedBytes: BigInt(100) * MIB,
         configs: [config('capped')],
         served: { capped: BigInt(0) },
@@ -603,34 +602,14 @@ describe('CeilingAllocatorService.rebalance', () => {
         balance: '50.00',
       });
 
-      await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'capped' });
+      const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'capped' });
 
-      expect(rows[0]?.walletBackedCeilingBytes).toBe(BigInt(150) * MIB);
-    });
-
-    it('writes the row when only the shutdown figure moved', async () => {
-      // The wallet changes far more often than the allocation does — every
-      // top-up moves it while `purchasedBytes` stands still. A write gated on
-      // the allocation alone would leave the shutdown figure at yesterday's
-      // balance.
-      const { tx, rows } = fakeTx({
-        purchasedBytes: BigInt(300) * MIB,
-        configs: [config('a')],
-        served: { a: BigInt(0) },
-        balance: '2.00',
-      });
-      rows[0].allocatedCeilingBytes = BigInt(300) * MIB;
-      rows[0].walletBackedCeilingBytes = BigInt(300) * MIB;
-
-      const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
-
-      expect(allocation.written).toBe(1);
-      expect(rows[0]?.walletBackedCeilingBytes).toBe(BigInt(300) * MIB + BigInt(2) * GIB_BYTES);
+      expect(allocation.walletBacked[0]?.ceilingBytes).toBe(BigInt(150) * MIB);
     });
   });
 
   it('uses the shipped floor when the caller names none', async () => {
-    const { tx, rows } = fakeTx({
+    const { tx } = fakeTx({
       purchasedBytes: DEFAULT_CONFIG_FLOOR_BYTES * BigInt(4),
       configs: [config('a'), config('b')],
       served: { a: BigInt(0), b: BigInt(0) },
@@ -638,25 +617,25 @@ describe('CeilingAllocatorService.rebalance', () => {
       rates: { a: BigInt(1_000_000), b: BigInt(1_000_000) },
     });
 
-    await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
+    const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
 
-    expect(rows.find((r) => r.id === 'b')?.allocatedCeilingBytes).toBe(DEFAULT_CONFIG_FLOOR_BYTES);
+    expect(share(allocation, 'b')).toBe(DEFAULT_CONFIG_FLOOR_BYTES);
   });
 
   it("sizes an idle config's floor by its own panel's line rate (ADR-0091)", async () => {
     const bag = BigInt(50) * GIB_BYTES;
-    const { tx, rows } = fakeTx({
+    const { tx } = fakeTx({
       purchasedBytes: bag,
       configs: [config('a'), config('b')],
       served: { a: BigInt(0), b: BigInt(0) },
       rates: { a: GBIT, b: GBIT },
     });
 
-    await service().rebalance(tx, { grantId: GRANT });
+    const allocation = await service().rebalance(tx, { grantId: GRANT });
 
     const idle = (GBIT / BigInt(8)) * BigInt(IDLE_FLOOR_SECONDS);
-    expect(rows.find((r) => r.id === 'b')?.allocatedCeilingBytes).toBe(idle);
-    expect(rows.find((r) => r.id === 'a')?.allocatedCeilingBytes).toBe(bag - idle);
+    expect(share(allocation, 'b')).toBe(idle);
+    expect(share(allocation, 'a')).toBe(bag - idle);
   });
 
   describe('the reserve a metered wallet backs (F-027-cs)', () => {
@@ -664,7 +643,7 @@ describe('CeilingAllocatorService.rebalance', () => {
     const line = (rate / BigInt(8)) * BigInt(IDLE_FLOOR_SECONDS);
 
     it('keeps an idle config its seconds of line past a small bag, while the wallet would buy them', async () => {
-      const { tx, rows } = fakeTx({
+      const { tx } = fakeTx({
         purchasedBytes: BigInt(100) * MIB,
         configs: [config('a'), config('b')],
         served: { a: BigInt(0), b: BigInt(0) },
@@ -672,17 +651,16 @@ describe('CeilingAllocatorService.rebalance', () => {
         balance: '10.00',
       });
 
-      await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
+      const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
 
-      const b = rows.find((r) => r.id === 'b');
-      expect(b?.allocatedCeilingBytes).toBe(line);
+      expect(share(allocation, 'b')).toBe(line);
       // The CHECK `config_wallet_backed_ceiling_extends` still holds.
-      expect((b?.walletBackedCeilingBytes as bigint) >= line).toBe(true);
+      expect((backed(allocation, 'b') as bigint) >= line).toBe(true);
     });
 
     it('gives a prepaid Grant none: its bag is all there is', async () => {
       const bag = BigInt(100) * MIB;
-      const { tx, rows } = fakeTx({
+      const { tx } = fakeTx({
         purchasedBytes: bag,
         configs: [config('a'), config('b')],
         served: { a: BigInt(0), b: BigInt(0) },
@@ -691,9 +669,9 @@ describe('CeilingAllocatorService.rebalance', () => {
         balance: '10.00',
       });
 
-      await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
+      const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
 
-      expect(sum(rows.map((r) => r.allocatedCeilingBytes as bigint))).toBeLessThanOrEqual(bag);
+      expect(sum(allocation.ceilings.map((c) => c.ceilingBytes))).toBeLessThanOrEqual(bag);
     });
   });
 });

@@ -145,6 +145,14 @@ func (w *Waker) turn(ctx context.Context, panelID string, s *wakeState) {
 	w.last[p.ID] = time.Now()
 	w.mu.Unlock()
 	l.log().Debug("panel woken", "panel", p.ID)
+	if l.Planner != nil {
+		// A config created since the last read has no ceiling, and
+		// provisioning waits for one: the planner gives it before the
+		// convergence below looks (F-027-db).
+		if err := l.Planner.Allocate(ctx, p, l.now()); err != nil {
+			l.log().Error("lease plan failed", "panel", p.ID, "error", err)
+		}
+	}
 	l.converge(ctx, p, Result{PanelID: p.ID, OwnershipType: p.OwnershipType, TenantID: p.TenantID, ObservedAt: l.now(), Confirming: confirming})
 }
 

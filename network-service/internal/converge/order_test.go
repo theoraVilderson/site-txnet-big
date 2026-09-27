@@ -25,7 +25,11 @@ func writtenOrder(report converge.Report) []string {
 	return order
 }
 
-func TestTheHotConfigIsWrittenBeforeTheIdleOnes(t *testing.T) {
+// Shrinks go first (F-027-db): the planner grows a share only from what is
+// already free and frees a shrunk one only once its panel confirms it, so a
+// shrink queued behind a grow holds the next grow back a whole turn. Among
+// the shrinks and among the grows, the order above stands.
+func TestAShrinkIsWrittenBeforeAGrow(t *testing.T) {
 	r := newRig(t, fake.Config{}, "idle-1", "idle-2", "hot")
 	for _, id := range []string{"idle-1", "idle-2", "hot"} {
 		r.allocateAt(id, 10*gb, 0)
@@ -41,13 +45,13 @@ func TestTheHotConfigIsWrittenBeforeTheIdleOnes(t *testing.T) {
 	report := r.pass(t)
 
 	order := writtenOrder(report)
-	want := []string{"config-hot", "config-idle-1", "config-idle-2"}
+	want := []string{"config-idle-1", "config-idle-2", "config-hot"}
 	if len(order) != len(want) {
 		t.Fatalf("wrote %v, want %v", order, want)
 	}
 	for i := range want {
 		if order[i] != want[i] {
-			t.Fatalf("wrote in the order %v, want %v: the hot config first, the idle in the order read", order, want)
+			t.Fatalf("wrote in the order %v, want %v: the shrinks first, in the order read, then the grow", order, want)
 		}
 	}
 }
