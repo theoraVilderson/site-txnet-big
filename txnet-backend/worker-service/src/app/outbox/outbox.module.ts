@@ -8,6 +8,7 @@ import { NotificationCreatedConsumer } from './notification-created.consumer';
 import { PanelTestedConsumer } from './panel-tested.consumer';
 import { PaymentConfirmedConsumer } from './payment-confirmed.consumer';
 import { PaymentReversedConsumer } from './payment-reversed.consumer';
+import { RetentionNoticeConsumer } from './retention-notice.consumer';
 import { TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer } from './tenant-renewal.consumers';
 
 /**
@@ -17,10 +18,11 @@ import { TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer } from 
  * row pushed to an open panel (F-035-b), a connection test's verdict pushed to
  * the systems page (F-027-bs), a purchase delivered at once (F-114-i), a Grant's configs ready pushed to an open My services (F-111-l), and a reseller's renewal on a credit
  * and its owner's renewal notices (F-019-c),
- * and a reseller's campaigns stopped with its suspension (F-018-q). Inbox and
+ * a reseller's campaigns stopped with its suspension (F-018-q), and the
+ * retention notices, once per Grant period (F-601-a). Inbox and
  * bot notices are combined per recipient and template, told by
  * `NoticeFlushConsumer` after the window (F-067-p). `BrokerService`, `RedisService` and `RealtimePublisher` are
  * global modules.
  */
-@Module({ providers: [PaymentConfirmedConsumer, PaymentReversedConsumer, NotificationCreatedConsumer, PanelTestedConsumer, TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer, GrantCreatedConsumer, GrantDeliveryConsumer, LivePushConsumer, NoticeFlushConsumer] })
+@Module({ providers: [PaymentConfirmedConsumer, PaymentReversedConsumer, NotificationCreatedConsumer, PanelTestedConsumer, TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer, GrantCreatedConsumer, GrantDeliveryConsumer, LivePushConsumer, RetentionNoticeConsumer, NoticeFlushConsumer] })
 export class OutboxModule {}

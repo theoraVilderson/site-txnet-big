@@ -2,7 +2,7 @@
 id: notification
 layer: domain
 status: active
-updated: 2026-09-17
+updated: 2026-09-27
 ---
 
 # Data model — notification
@@ -17,6 +17,7 @@ Source of truth: `txnet-backend/prisma/domains/notification.prisma` (Postgres sc
 | notification_campaign | broadcast: `channel`, `filterCriteria` JSON (strict schema, invariant 8), `messageBody`, `subject`, `sourceLang` (F-035-h), counts, send progress (`sendStartedAt`, `fanOutCursor`, `fannedOutAt`) | `tenantId` nullable (null = platform-wide); RLS shape B | long |
 | notification_campaign_recipient | per-user delivery record `queued`/`sent`/`failed`, unique `(campaignId, userId)`; `claimedUntil` is a delivery run's lease | via campaign — no RLS of its own | long |
 | notification_campaign_text | the campaign in one `Language` other than its source: `subject?`, `body`, `state` `draft`/`published`; unique `(campaignId, lang)`, cascades with the campaign (F-035-h, ADR-0055) | via campaign — no RLS of its own; reached only through `CampaignAdminService.managed` | as the campaign |
+| retention_notice | the retention ledger: one row per `(grantId, notice, period)`, `eventId` = the event holding it (F-601-a, invariant 14) | via user — no `tenantId`, no RLS; written only by the internal seam | kept |
 
 Enums: `NotificationType`, `NotificationChannel` (`push`, `sms`, `telegram_bot`,
 `bale_bot`, `email`), `CampaignStatus` (`draft`, `sending`, `completed`),
@@ -29,6 +30,7 @@ Enums: `NotificationType`, `NotificationChannel` (`push`, `sms`, `telegram_bot`,
 | notification.userId, notification_campaign_recipient.userId | -> | identity.user.id | notifications target users (no FK across schemas) |
 | notification_campaign.tenantId | -> | tenant.tenant.id | campaign scoped to a reseller's users |
 | notification_campaign.sourceLang, notification_campaign_text.lang | -> | identity `Language` enum | delivery matches `user.languagePreference` |
+| retention_notice.userId, retention_notice.grantId | -> | identity.user.id, entitlement.grant.id | whose notice, which Grant — named by the producer (no FK across schemas) |
 
 ## Access rules
 
@@ -50,5 +52,6 @@ Committed under `txnet-backend/prisma/domains/migrations/`: RLS for
 `20260917000700_campaign_email_texts` (the `email` channel, `subject`,
 `sourceLang`, `notification_campaign_text`), `20260917001800_campaign_stop`
 (`CampaignStatus.stopped`, `stoppedAt`, F-018-q), `20260917001900_campaign_stop_by_hand`
-(`AdminAction.campaign_stop`, F-018-x). Enum values added with
+(`AdminAction.campaign_stop`, F-018-x), `20260927001000_retention_notice_ledger`
+(`retention_notice`, F-601-a). Enum values added with
 `ADD VALUE` cannot be rolled back.

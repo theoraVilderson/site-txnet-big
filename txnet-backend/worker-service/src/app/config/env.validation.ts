@@ -133,6 +133,8 @@ export const envSchema = z.object({
   AUTOMATION_GRANT_CREATED_QUEUE: z.string().min(1).default('txnet.automation.outbox.grant-created'),
   /** F-111-l: the events only an open page needs, pushed live and told to no inbox or bot (`LIVE_PUSH_FIELDS`). */
   AUTOMATION_LIVE_PUSH_QUEUE: z.string().min(1).default('txnet.automation.outbox.live-push'),
+  /** F-601-a: every retention event (`RETENTION_NOTICES`), told to its user once per Grant period. */
+  AUTOMATION_RETENTION_NOTICE_QUEUE: z.string().min(1).default('txnet.automation.outbox.retention-notice'),
   /** Where a combined notice's flush waits out its window, consumed by nobody (F-067-p, ADR-0084 decision 3). */
   AUTOMATION_NOTICE_DELAY_QUEUE: z.string().min(1).default('txnet.automation.notice.delay'),
   /** Where that flush lands once the window has passed; the worker tells the burst from here. */

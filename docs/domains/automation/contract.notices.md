@@ -3,7 +3,7 @@ id: automation
 layer: domain
 status: active
 version: 8
-updated: 2026-09-26
+updated: 2026-09-27
 ---
 
 # Contract — automation: telling a person about an event
@@ -58,3 +58,18 @@ its own re-read (`panel-web/contract.systems.md` rule 2).
 **Accepted cost:** an inbox row or bot message arrives up to one window late,
 even when it was alone (ADR-0084 consequences). A payer on the success page is
 told by the live push, which is not delayed.
+
+## Retention notices (F-601-a)
+
+`RetentionNoticeConsumer`, queue `AUTOMATION_RETENTION_NOTICE_QUEUE` bound to
+every type in `RETENTION_NOTICES` (`outbox/retention-notices.ts`), consumer
+`retention-notice`. The producer side and the ledger are
+[notification/contract.retention.md](../notification/contract.retention.md).
+
+| Rule | Why |
+|---|---|
+| `person` only — template and the params the type's row names — to `userId`'s inbox and bot; no live push | the inbox row brings its own (F-035-b) |
+| First `POST notification internal/notifications/retention/claim`; `claimed: false` acks and tells nobody | once per Grant period, whoever emitted twice (notification invariant 14) |
+| A payload without tenant, user, Grant, `period` or a named param, or a type with no row, throws **before** the claim | a claimed period whose notice never went out is lost until the next period |
+| A refused claim or an unset `NOTIFICATION_API_BASE_URL` throws and dead-letters | the same event id claims again on a replay |
+

@@ -22,6 +22,8 @@ import { NotificationType } from '@prisma/client';
 import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import { NotificationInboxService } from './notification-inbox.service';
+import { RetentionLedgerService } from './retention-ledger.service';
+import { retentionClaimSchema } from './retention-ledger.schema';
 
 const USER = '44444444-4444-4444-8444-444444444444';
 const N1 = '66666666-6666-4666-8666-666666666666';
@@ -160,5 +162,55 @@ describe('NotificationInboxService', () => {
       },
       select: { id: true },
     });
+  });
+});
+
+/**
+ * The retention ledger (F-601-a, invariant 14): one (Grant, notice, period)
+ * row, held by the event that wrote it. A second event for the same period is
+ * refused — the user is told once — but the same event claims again, so a
+ * send that failed after its claim is still owed on redelivery.
+ */
+describe('RetentionLedgerService.claim', () => {
+  const GRANT = '99999999-9999-4999-8999-999999999991';
+  const EVENT = '88888888-8888-4888-8888-888888888888';
+  const claim = { eventId: EVENT, userId: USER, grantId: GRANT, notice: 'entitlement.grant.usage_threshold', period: 'p1' };
+
+  function ledger({ inserted, heldBy }: { inserted: number; heldBy?: string }) {
+    const retentionNotice = {
+      createMany: vi.fn().mockResolvedValue({ count: inserted }),
+      findUnique: vi.fn().mockResolvedValue(heldBy ? { eventId: heldBy } : null),
+    };
+    return { retentionNotice, service: new RetentionLedgerService({ retentionNotice } as never) };
+  }
+
+  it('writes the row once, skipping a duplicate rather than failing on it', async () => {
+    const { retentionNotice, service } = ledger({ inserted: 1 });
+
+    await expect(service.claim(claim)).resolves.toEqual({ claimed: true });
+    expect(retentionNotice.createMany).toHaveBeenCalledWith({ data: [claim], skipDuplicates: true });
+    expect(retentionNotice.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('refuses a second event for the same Grant, notice and period', async () => {
+    const { retentionNotice, service } = ledger({ inserted: 0, heldBy: '77777777-7777-4777-8777-777777777777' });
+
+    await expect(service.claim(claim)).resolves.toEqual({ claimed: false });
+    expect(retentionNotice.findUnique).toHaveBeenCalledWith({
+      where: { grantId_notice_period: { grantId: GRANT, notice: claim.notice, period: 'p1' } },
+      select: { eventId: true },
+    });
+  });
+
+  it('answers the same event again, so its redelivery still tells', async () => {
+    const { service } = ledger({ inserted: 0, heldBy: EVENT });
+
+    await expect(service.claim(claim)).resolves.toEqual({ claimed: true });
+  });
+
+  it('refuses a claim without its period, or with an unknown key', () => {
+    expect(retentionClaimSchema.safeParse({ ...claim, period: '' }).success).toBe(false);
+    expect(retentionClaimSchema.safeParse({ ...claim, tenantId: GRANT }).success).toBe(false);
+    expect(retentionClaimSchema.safeParse(claim).success).toBe(true);
   });
 });

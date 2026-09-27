@@ -47,6 +47,7 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | fan out | `POST internal/notifications/campaigns/fan-out` (`SERVICE_AUTH_TOKEN`) | — | `{ campaigns, recipients, finished, unreadable }` | 404 on a wrong token |
 | deliver | `POST internal/notifications/campaigns/deliver` (token) | — | `{ claimed, sent, failed, deferred, stalled }` | 404 on a wrong token |
 | record an outcome | `POST internal/notifications/campaigns/recipients/:id/outcome` (token) | `{ outcome: sent\|failed }` | `{ changed }` | 400; 404 `recipient_not_found` |
+| claim a retention notice | `POST internal/notifications/retention/claim` (token) | `{ eventId, userId, grantId, notice, period }` | `{ claimed }` — once per Grant period ([contract.retention.md](contract.retention.md), F-601-a) | 400; 404 on a wrong token |
 
 - `unreadCount` is over the whole inbox, whatever the page or filter.
 - `marked` counts rows that changed. An id that is read already, does not exist

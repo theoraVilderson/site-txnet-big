@@ -2,14 +2,14 @@
 id: notification
 layer: domain
 status: active
-version: 6
+version: 7
 keywords: [notification, campaign, delivery, push, sms, email, bulk send, reseller campaign, ارسال انبوه, stop a reseller's campaigns, stop sending campaigns, توقف ارسال کمپین‌های نماینده]
 source:
   - txnet-backend/notification-service/**
   - txnet-backend/prisma/domains/notification.prisma
-owns_tables: [notification, notification_campaign, notification_campaign_recipient, notification_campaign_text]
+owns_tables: [notification, notification_campaign, notification_campaign_recipient, notification_campaign_text, retention_notice]
 depends_on: [identity, tenant, automation]
-updated: 2026-09-20
+updated: 2026-09-27
 ---
 
 # Notification
@@ -22,6 +22,7 @@ updated: 2026-09-20
 |---|---|
 | [contract.md](contract.md) | using or changing notification from outside |
 | [contract.reseller.md](contract.reseller.md) | a reseller drafts, sizes or starts a campaign of its own (F-313-d) |
+| [contract.retention.md](contract.retention.md) | a domain emits a retention notice, or a row adds one (F-601) |
 | [invariants.md](invariants.md) | writing any code that touches it |
 | [data-model.md](data-model.md) | changing storage |
 | [open-questions.md](open-questions.md) | something is undecided |
@@ -29,10 +30,10 @@ updated: 2026-09-20
 ## Changelog
 | Date | Change |
 |---|---|
-| 2026-09-17 | `draft` -> `active`, v2: `notification-service` and the inbox (F-035-a, ADR-0052) |
 | 2026-09-17 | v2 -> **v3**: `TenantStatusGuard` judges every gated route — campaign writes `403 tenant.suspended`/`tenant.terminated` for a closed reseller (F-018-p) |
 | 2026-09-17 | v3 -> **v4**: `CampaignStatus.stopped` — a reseller's sends stop with its suspension; `resume`, `sending-summary`, internal `stop` (F-018-q) |
 | 2026-09-17 | v4 -> **v5** (**break**): the internal `tenants/:tenantId/stop` route is gone — the platform owner's own `campaigns/tenants/:tenantId/stop` is the only way in (F-018-w, ADR-0058 (5)) |
 | 2026-09-20 | v5 -> **v6** (additive, F-313-d): a reseller-named campaign surface — `tenants/:tenantId/campaigns…`, admitted by `ResellerAccess`, with an audience count so a segment is sized before it is sent ([contract.reseller.md](contract.reseller.md)) |
+| 2026-09-27 | v6 -> **v7** (additive, F-601-a): the retention ledger — `internal/notifications/retention/claim`, each retention notice told once per Grant period through ADR-0084's path ([contract.retention.md](contract.retention.md)) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

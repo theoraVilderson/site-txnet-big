@@ -131,3 +131,20 @@ model NotificationCampaignRecipient {
 }
 
 // =============================================================================
+
+/// F-601-a: the retention ledger — a notice told once per Grant period. `notice` is the outbox event type;
+/// `period` is the producer's name for the Grant's current period (a renewal opens a new one); `eventId` is the
+/// event that claimed the row, so its own redelivery claims again (invariant 14).
+model RetentionNotice {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  grantId   String   @db.Uuid
+  notice    String
+  period    String
+  eventId   String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  @@unique([grantId, notice, period])
+  @@map("retention_notice")
+  @@schema("notification")
+}

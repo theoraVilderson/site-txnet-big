@@ -2,7 +2,7 @@
 id: notification
 layer: domain
 status: active
-updated: 2026-09-20
+updated: 2026-09-27
 ---
 
 # Invariants — notification
@@ -11,7 +11,7 @@ updated: 2026-09-20
 F-035-d, #3 since F-035-e for Telegram/Bale, F-035-f for SMS and F-035-h for
 email. #5–#6 since F-035-a, #7–#8 since F-035-c, #9 since F-035-e, #10 since
 F-035-f (email since F-035-h, a reseller's own SMS line since F-035-i-a), #11 since F-035-h,
-#13 since F-313-d.
+#13 since F-313-d, #14 since F-601-a.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -28,6 +28,7 @@ F-035-f (email since F-035-h, a reseller's own SMS line since F-035-i-a), #11 si
 | 11 | A recipient receives only a `published` text in their language, else the source; a text exists only while its source is unchanged — `messageBody`, `subject` or `sourceLang` changing deletes them all in that transaction | `textFor` + the `state: published` read in `campaign-delivery.service.ts`; `update` in `campaign-admin.service.ts`; texts written only through `CampaignAdminService.managed({ draft: true })` | an unreviewed machine translation, or a translation of an older message, reaches users |
 | 12 | A campaign leaves `sending` for `stopped` only through `stopTenant` (the platform owner, F-018-x — the internal route left with F-018-w), and returns only through `resume`, never while its tenant is suspended or terminated; stopping touches no recipient row (F-018-q) | `stopTenant` and `resume`'s `where` + tenant check in `campaign-admin.service.ts` | a stop fails or loses who was never reached; a suspension's stop reopened beside it |
 | 13 | A reseller-named campaign route acts only for the reseller its **path** names, admitted by `ResellerAccess` and run in that reseller's tenant scope; the caller's own session tenant is never the campaign's, and no query inside names a tenant by hand. The audience count uses `audienceWhere`, so the size a reseller confirms is the size the fan-out then writes | `reseller-campaign.service.ts` `run()` (the delegated actor) + `RESELLER_ACCESS_READER` on the app pool; `TENANT_SCOPED_MODELS` and RLS behind it | a reseller broadcasts to the platform's users — every tenant's — or confirms one audience and sends to another |
+| 14 | A retention notice is told at most once per `(grantId, notice, period)`: the ledger row is claimed before anything is told, and only the event that wrote it claims it again | unique `(grantId, notice, period)` + `RetentionLedgerService.claim`'s `eventId` check; worker's `RetentionNoticeConsumer` claims first | a user is told the same threshold twice in a period, or a failed send is never retried |
 
 ## How to test
 
@@ -39,4 +40,6 @@ asserts #5 and #6 on the queries built;
 `notification-service/src/app/campaigns/campaign-texts.spec.ts` asserts #11;
 `notification-service/src/app/campaigns/campaign-stop.spec.ts` asserts #12;
 `notification-service/src/app/campaigns/sms-line.spec.ts` asserts #10 for a reseller's own line (F-035-i-a);
-`notification-service/src/app/campaigns/reseller-campaign.spec.ts` asserts #13 (F-313-d).
+`notification-service/src/app/campaigns/reseller-campaign.spec.ts` asserts #13 (F-313-d);
+`notification-service/src/app/notifications/notification-inbox.spec.ts` (`RetentionLedgerService.claim`) and
+`worker-service/src/app/outbox/retention-notice.consumer.spec.ts` assert #14 (F-601-a).

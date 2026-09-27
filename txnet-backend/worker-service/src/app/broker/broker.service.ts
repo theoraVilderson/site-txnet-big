@@ -22,6 +22,8 @@ import {
   type OutboxMessage,
 } from '@txnet-backend/shared-core';
 
+import { RETENTION_NOTICES } from '../outbox/retention-notices';
+
 /** What a consumer is handed. `key` is the `<key>` of `automation.tick.<key>`. */
 export interface TickMessage {
   key: string;
@@ -197,6 +199,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly grantDeliveryNoticeQueue: string;
   private readonly grantCreatedQueue: string;
   private readonly livePushQueue: string;
+  private readonly retentionNoticeQueue: string;
   private readonly noticeDelayQueue: string;
   private readonly noticeFlushQueue: string;
   private readonly outboxPrefetch: number;
@@ -224,6 +227,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     this.grantDeliveryNoticeQueue = config.getOrThrow<string>('AUTOMATION_GRANT_DELIVERY_NOTICE_QUEUE');
     this.grantCreatedQueue = config.getOrThrow<string>('AUTOMATION_GRANT_CREATED_QUEUE');
     this.livePushQueue = config.getOrThrow<string>('AUTOMATION_LIVE_PUSH_QUEUE');
+    this.retentionNoticeQueue = config.getOrThrow<string>('AUTOMATION_RETENTION_NOTICE_QUEUE');
     this.noticeDelayQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_DELAY_QUEUE');
     this.noticeFlushQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_FLUSH_QUEUE');
     this.outboxPrefetch = config.getOrThrow<number>('AUTOMATION_OUTBOX_PREFETCH');
@@ -348,6 +352,15 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     });
     for (const type of [OutboxEventType.GRANT_LINKS_CAPTURED, OutboxEventType.WALLET_CHANGED, OutboxEventType.GRANT_USAGE]) {
       await this.channel.bindQueue(this.livePushQueue, this.exchange, outboxRoutingKey(type));
+    }
+    // F-601-a: the retention notices — one queue for every type in
+    // `RETENTION_NOTICES`, each told once per Grant period.
+    await this.channel.assertQueue(this.retentionNoticeQueue, {
+      durable: true,
+      arguments: { 'x-dead-letter-exchange': this.deadExchange },
+    });
+    for (const type of Object.keys(RETENTION_NOTICES)) {
+      await this.channel.bindQueue(this.retentionNoticeQueue, this.exchange, outboxRoutingKey(type));
     }
     // F-067-p: a combined notice's flush waits out its window in a queue nobody
     // consumes; the broker dead-letters it on expiry onto the flush key. A
@@ -606,6 +619,11 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   /** Start consuming the live-only events (F-111-l), by the same rules. */
   async consumeLivePushes(handle: OutboxHandler): Promise<void> {
     await this.consumeOutbox(this.livePushQueue, handle);
+  }
+
+  /** Start consuming the retention events (F-601-a), by the same rules. */
+  async consumeRetentionNotices(handle: OutboxHandler): Promise<void> {
+    await this.consumeOutbox(this.retentionNoticeQueue, handle);
   }
 
   /**
