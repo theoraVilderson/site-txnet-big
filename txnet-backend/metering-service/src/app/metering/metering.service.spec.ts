@@ -1,4 +1,13 @@
-import { ConfigProtocol, HoldReason, PanelOwnershipType, Prisma, QuarantineReason, UsageDispositionState } from '@prisma/client';
+import {
+  ConfigProtocol,
+  GrantStatus,
+  HoldReason,
+  PanelOwnershipType,
+  Prisma,
+  QuarantineReason,
+  UsageDispositionState,
+  VariantBillingMode,
+} from '@prisma/client';
 import {
   USAGE_DELTA_MESSAGE_VERSION,
   usageReleaseDeltaId,
@@ -48,7 +57,22 @@ type ConfigRow = {
   remoteId: string | null;
 };
 
-function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> = []) {
+/** The Grant a charge lands on: by default a prepaid one with no bag, which no threshold is told for. */
+const GRANT_STARTS_AT = new Date('2026-09-01T00:00:00Z');
+function grantRow(over: Record<string, unknown> = {}) {
+  return {
+    status: GrantStatus.active,
+    billingMode: VariantBillingMode.prepaid,
+    trafficUnlimited: false,
+    purchasedBytes: 0n,
+    usagePeriodFromBytes: 0n,
+    usagePeriodStartedAt: null,
+    startsAt: GRANT_STARTS_AT,
+    ...over,
+  };
+}
+
+function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> = [], grant: Record<string, unknown> = {}) {
   const seen = new Map<string, Record<string, unknown>>();
   const rawLog: Array<Record<string, unknown>> = [];
   const holds: Array<Record<string, unknown>> = [...stored];
@@ -90,7 +114,7 @@ function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> 
     grant: {
       update: async ({ where, data }: { where: { id: string }; data: { consumedBytes: { increment: bigint } } }) => {
         consumed.set(where.id, (consumed.get(where.id) ?? 0n) + data.consumedBytes.increment);
-        return { id: where.id, consumedBytes: consumed.get(where.id) as bigint, userId: USER };
+        return { ...grantRow(grant), id: where.id, consumedBytes: consumed.get(where.id) as bigint, userId: USER };
       },
       // The usage announcement's slot (F-307-t): taken only when the last one is older than the cutoff.
       updateMany: async ({ where, data }: { where: { id: string; OR: [unknown, { usagePushedAt: { lt: Date } }] }; data: { usagePushedAt: Date } }) => {
@@ -241,6 +265,30 @@ describe('MeteringService', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // F-601-d: the crossing is seen by the charge that moves the bytes, in its transaction.
+  it("emits a usage threshold once, on the charge that crosses it, named by the Grant's period", async () => {
+    const renewedAt = new Date('2026-09-20T00:00:00Z');
+    const store = fakeStore([{ id: CONFIG, tenantId: TENANT, grantId: GRANT, remoteId: 'client-a' }], [], {
+      purchasedBytes: 10_000n,
+      usagePeriodFromBytes: 0n,
+      usagePeriodStartedAt: renewedAt,
+    });
+    const metering = service(store);
+    // 3000 of 10 000: under 50 %. Then 6000 (over 50 %), 9000 (over 80 %).
+    await metering.apply(pass({ deltas: [delta()] }));
+    await metering.apply(pass({ deltas: [delta({ deltaId: '66666666-6666-4666-8666-666666666667' })] }));
+    await metering.apply(pass({ deltas: [delta({ deltaId: '66666666-6666-4666-8666-666666666668' })] }));
+
+    const thresholds = store.outbox.filter((e) => e['type'] !== 'entitlement.grant.usage');
+    expect(thresholds.map((e) => e['type'])).toEqual(['entitlement.grant.usage_50', 'entitlement.grant.usage_80']);
+    expect(thresholds[1]).toEqual({
+      aggregate: 'entitlement.grant',
+      aggregateId: GRANT,
+      type: 'entitlement.grant.usage_80',
+      payload: { tenantId: TENANT, userId: USER, grantId: GRANT, period: renewedAt.toISOString(), percent: '80', remaining: '1 MB' },
+    });
   });
 
   it('bills a delta: a raw-log row, the Grant cursor, and a seen row under the config tenant', async () => {

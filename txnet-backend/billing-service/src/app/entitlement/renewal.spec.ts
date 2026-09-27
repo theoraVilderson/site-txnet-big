@@ -29,6 +29,7 @@ type Row = {
   trafficUnlimited: boolean;
   purchasedBytes: bigint;
   endsAt: Date | null;
+  consumedBytes: bigint;
 };
 
 function build(row: Partial<Row> | null, usedPerConfig: bigint[], opts: { moved?: boolean } = {}) {
@@ -41,6 +42,7 @@ function build(row: Partial<Row> | null, usedPerConfig: bigint[], opts: { moved?
     trafficUnlimited: false,
     purchasedBytes: BigInt(10) * GIB,
     endsAt: new Date(AT.getTime() + 3 * DAY_MS),
+    consumedBytes: BigInt(7) * GIB,
     ...row,
   };
   const updates: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }> = [];
@@ -112,10 +114,23 @@ describe('renewGrant', () => {
 
     expect(r).toMatchObject({ debtBytes: BigInt(0), forgivenBytes: BigInt(0), purchasedBytes: BigInt(20) * GIB, revived: false });
     expect(updates[0].where).toEqual({ id: GRANT, status: GrantStatus.active, purchasedBytes: BigInt(10) * GIB, endsAt: new Date(AT.getTime() + 3 * DAY_MS) });
-    expect(updates[0].data).toEqual({ purchasedBytes: BigInt(20) * GIB, endsAt: new Date(AT.getTime() + 33 * DAY_MS) });
+    // Bytes bought open a usage period, measured from what was consumed (F-601-d).
+    expect(updates[0].data).toEqual({
+      purchasedBytes: BigInt(20) * GIB,
+      endsAt: new Date(AT.getTime() + 33 * DAY_MS),
+      usagePeriodFromBytes: BigInt(7) * GIB,
+      usagePeriodStartedAt: AT,
+    });
     expect(adjustments).toEqual([
       expect.objectContaining({ grantId: GRANT, tenantId: TENANT, delta: BigInt(10) * GIB, source: GrantSource.purchase, reason: null }),
     ]);
+  });
+
+  it('leaves the usage period alone on a renewal of days alone (F-601-d)', async () => {
+    const { tx, updates } = build({}, [BigInt(7) * GIB]);
+    await renew(tx, BigInt(0), 30);
+    expect(updates[0].data).not.toHaveProperty('usagePeriodFromBytes');
+    expect(updates[0].data).not.toHaveProperty('usagePeriodStartedAt');
   });
 
   it('adds a forgiven debt to Quota as its own adjustment row', async () => {

@@ -16,6 +16,7 @@ import {
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubUsagePublisher } from './sub-usage.publisher';
+import { remainingLabel, USAGE_LEVEL_EVENT, usageThresholdCrossed, type UsageThresholdGrant } from './usage-threshold';
 
 /** How often a Grant's owner is told its total, at most (F-307-t; user, 2026-09-27). */
 export const USAGE_PUSH_EVERY_MS = 30_000;
@@ -274,13 +275,59 @@ export class MeteringService {
     await tx.trafficRawLog.create({
       data: { tenantId: c.config.tenantId, configId: c.config.id, uploadBytes: c.up, downloadBytes: c.down, recordedAt: c.observedAt },
     });
+    const charged = c.up + c.down;
     const grant = await tx.grant.update({
       where: { id: c.config.grantId },
-      data: { consumedBytes: { increment: c.up + c.down } },
-      select: { consumedBytes: true, userId: true },
+      data: { consumedBytes: { increment: charged } },
+      select: {
+        consumedBytes: true,
+        userId: true,
+        status: true,
+        billingMode: true,
+        trafficUnlimited: true,
+        purchasedBytes: true,
+        usagePeriodFromBytes: true,
+        usagePeriodStartedAt: true,
+        startsAt: true,
+      },
     });
     await this.announceUsage(tx, c.config, grant.userId, grant.consumedBytes);
+    await this.announceThreshold(tx, c.config, grant, charged);
     return grant.consumedBytes;
+  }
+
+  /**
+   * A charge that crossed 50 / 80 / 95 % of a prepaid Grant's period emits
+   * that level's retention event (F-601-d), in this transaction: it commits
+   * with the bytes that crossed it, and the Grant row the update holds locked
+   * orders two replicas' charges, so exactly one of them sees each crossing.
+   * notification's ledger still lets a level through once per period
+   * (`contract.retention.md`); the period is when it opened.
+   */
+  private async announceThreshold(
+    tx: Prisma.TransactionClient,
+    config: Omit<ConfigAttribution, 'remoteId'>,
+    grant: UsageThresholdGrant & { userId: string; usagePeriodStartedAt: Date | null; startsAt: Date },
+    charged: bigint,
+  ): Promise<void> {
+    const crossed = usageThresholdCrossed(grant, charged);
+    if (!crossed) return;
+    await tx.outboxEvent.create({
+      data: {
+        aggregate: 'entitlement.grant',
+        aggregateId: config.grantId,
+        type: USAGE_LEVEL_EVENT[crossed.level],
+        payload: {
+          tenantId: config.tenantId,
+          userId: grant.userId,
+          grantId: config.grantId,
+          period: (grant.usagePeriodStartedAt ?? grant.startsAt).toISOString(),
+          percent: String(crossed.level),
+          remaining: remainingLabel(crossed.remainingBytes),
+        },
+      },
+      select: { id: true },
+    });
   }
 
   /**

@@ -83,7 +83,7 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
 
   const grant = await tx.grant.findUnique({
     where: { id: input.grantId },
-    select: { id: true, tenantId: true, status: true, statusReason: true, billingMode: true, trafficUnlimited: true, purchasedBytes: true, endsAt: true },
+    select: { id: true, tenantId: true, status: true, statusReason: true, billingMode: true, trafficUnlimited: true, purchasedBytes: true, endsAt: true, consumedBytes: true },
   });
   if (!grant) throw new EntitlementRefused('grant_not_found', input.grantId);
   if (!RENEWABLE.has(grant.status)) throw new EntitlementRefused('grant_not_renewable', `${grant.id} is ${grant.status}`);
@@ -113,7 +113,14 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
   // same debt, and a block purchase between would be overwritten.
   const moved = await tx.grant.updateMany({
     where: { id: grant.id, status: grant.status, purchasedBytes: grant.purchasedBytes, endsAt: grant.endsAt },
-    data: { purchasedBytes, endsAt },
+    data: {
+      purchasedBytes,
+      endsAt,
+      // Bytes bought open a new usage period (F-601-d): its thresholds are a
+      // share of what it starts with, measured from here. Days alone do not —
+      // the bag is the one already being counted.
+      ...(input.bytes > BigInt(0) ? { usagePeriodFromBytes: grant.consumedBytes, usagePeriodStartedAt: at } : {}),
+    },
   });
   if (moved.count === 0) throw new EntitlementRefused('grant_moved', grant.id);
 

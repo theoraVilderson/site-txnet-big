@@ -56,6 +56,12 @@ export const OutboxEventType = {
   GRANT_NOT_CONNECTED: 'entitlement.grant.not_connected',
   /** F-601-c: the same, 72 h after activation — the second and last ask. */
   GRANT_STILL_NOT_CONNECTED: 'entitlement.grant.still_not_connected',
+  /** F-601-d: a prepaid Grant's usage crossed 50 % of its period's bytes (`MeteringService.charge`). One type per level: notification's ledger holds each once. */
+  GRANT_USAGE_50: 'entitlement.grant.usage_50',
+  /** F-601-d: the same at 80 %. */
+  GRANT_USAGE_80: 'entitlement.grant.usage_80',
+  /** F-601-d: the same at 95 %. */
+  GRANT_USAGE_95: 'entitlement.grant.usage_95',
 } as const;
 export type OutboxEventType = (typeof OutboxEventType)[keyof typeof OutboxEventType];
 
@@ -85,6 +91,9 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.GRANT_CLOSED]: 'worker-service',
   [OutboxEventType.GRANT_NOT_CONNECTED]: 'worker-service',
   [OutboxEventType.GRANT_STILL_NOT_CONNECTED]: 'worker-service',
+  [OutboxEventType.GRANT_USAGE_50]: 'worker-service',
+  [OutboxEventType.GRANT_USAGE_80]: 'worker-service',
+  [OutboxEventType.GRANT_USAGE_95]: 'worker-service',
 };
 
 /** Every tick routing key starts with this. The suffix is the worker key. */

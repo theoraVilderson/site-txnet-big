@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 1
-updated: 2026-09-24
+updated: 2026-09-27
 ---
 
 # Metering — a collection pass becomes usage
@@ -150,3 +150,17 @@ the row's figure (`panel-web/contract.my-services.md` 13b). Three rules:
    nothing, because the next one carries it. A window's last bytes wait for the
    Grant's next charge or a reload. With a ~20 s collection pass, pushes land
    about every 40 s (measured on dev, 2026-09-27).
+
+## Usage thresholds (F-601-d)
+
+The same charge tells a prepaid Grant's owner when its usage period crosses 50,
+80 or 95 % of its bytes: `entitlement.grant.usage_50` / `_80` / `_95` on the
+outbox, a retention event (notification `contract.retention.md`). The rule —
+what the share is of, which Grants, which level — is entitlement's
+(`contract.md` "Usage thresholds"); `usage-threshold.ts` is its arithmetic.
+
+1. **In the charge's transaction**, after the update that moved
+   `consumedBytes`: the row lock orders two replicas' charges, so exactly one
+   sees each crossing, and the event commits with the bytes that crossed it.
+2. **No window.** Unlike the page's push, a crossing is told on the charge
+   that makes it; a duplicate delta commits nothing and tells nothing.

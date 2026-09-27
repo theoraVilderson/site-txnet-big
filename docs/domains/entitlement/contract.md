@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-version: 7
+version: 8
 updated: 2026-09-27
 ---
 
@@ -173,6 +173,21 @@ Grant whose clock is due, over `POST /api/internal/billing/entitlement/unused-du
 | The clock moves conditionally on the value read; the event's `period` is `activatedAt` | two racing sweeps emit once; notification's ledger holds it past that (invariant 14) |
 | `supportUrl` from the tenant's branding, only when set | the notice's support line (auth-api `/internal/notify/user`) |
 
+**Usage thresholds (F-601-d, spec 9.5)** — a prepaid Grant told at 50, 80
+and 95 % of its **usage period's** bytes. The period opens at issue and again at
+each renewal that adds bytes (`renewGrant` writes `usagePeriodFromBytes` =
+`consumedBytes` and `usagePeriodStartedAt`; days alone open none), and the share
+is `(consumedBytes - from) / (purchasedBytes - from)` — never of the cumulative
+Quota, which a renewal at 96 % would read as 48 %. The crossing is seen by the
+charge that makes it: billing's `MeteringService.charge`, in its transaction
+(`usage-threshold.ts`, billing `contract.metering.md`), emits the level's event.
+
+| Rule | Why |
+|---|---|
+| One charge past two levels tells the higher alone; none once `consumedBytes ≥ purchasedBytes` | the user hears the latest truth; a spent bag is the cutoff notice (F-601-b) |
+| Only `active`, prepaid, not unlimited, and a period that opened with bytes to spend | an unlimited Grant has no bag; a metered one is F-601-g |
+| `period` = `usagePeriodStartedAt ?? startsAt`; one type per level | notification's ledger lets each level through once per period (invariant 14) |
+
 In-process calls from `billing-service` modules (ADR-0049); HTTP routes are
 added only when a row needs them. Three do: `subscriptionTokenFor` over `GET
 /api/billing/gift/grants/:id/subscription-link` and `rotateToken` over `POST
@@ -190,6 +205,7 @@ Through the outbox (ADR-0021); the first two also live on the buyer's `user:` ch
 |---|---|---|
 | `entitlement.grant.delivered` | `tenantId, userId, grantId, variantId, source, invoiceId` | a `pending` Grant turned `active` (F-111-d) |
 | `entitlement.grant.refunded` | `tenantId, userId, grantId, invoiceId, amount, reason` | a paid Grant cancelled, its invoice refunded whole (F-111-d) |
+| `entitlement.grant.usage_50` / `_80` / `_95` | `tenantId, userId, grantId, period`, `percent`, `remaining` (e.g. `5.3 GB`) | a charge crossed that share of the usage period (F-601-d), emitted by billing's metering; retention events, like the next row |
 | `entitlement.grant.not_connected` / `.still_not_connected` | `tenantId, userId, grantId, period` (= `activatedAt`), `supportUrl?` | nothing consumed 24 h / 72 h after activation (F-601-c); retention events, told by `RetentionNoticeConsumer` — not on any channel |
 
 ## Consumes

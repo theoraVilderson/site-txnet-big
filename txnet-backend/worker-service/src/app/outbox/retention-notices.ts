@@ -24,4 +24,8 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   // F-601-c: nothing consumed 24 h, then 72 h, after activation — the steps, and the tenant's support.
   [OutboxEventType.GRANT_NOT_CONNECTED]: { template: 'serviceNotConnected', params: [], optional: ['supportUrl'] },
   [OutboxEventType.GRANT_STILL_NOT_CONNECTED]: { template: 'serviceStillNotConnected', params: [], optional: ['supportUrl'] },
+  // F-601-d: a prepaid Grant's period crossed 50 / 80 / 95 % of its bytes — the level and what is left.
+  [OutboxEventType.GRANT_USAGE_50]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'] },
+  [OutboxEventType.GRANT_USAGE_80]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'] },
+  [OutboxEventType.GRANT_USAGE_95]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'] },
 };

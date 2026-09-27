@@ -122,6 +122,13 @@ model Grant {
   /// then 72 h; null once told twice, once anything was consumed, or never for
   /// a `migration` / `rollover` Grant. A clock, as `nextDeliveryAt` is.
   unusedCheckAt         DateTime?
+  /// `consumedBytes` when the current usage period opened (F-601-d): 0 at
+  /// issue, set by a renewal that adds bytes. A usage threshold is a share of
+  /// `purchasedBytes - usagePeriodFromBytes`, never of the cumulative Quota.
+  usagePeriodFromBytes  BigInt             @default(0)
+  /// When that period opened; null = at `startsAt`. The ledger's `period` for
+  /// a usage threshold (notification `contract.retention.md`).
+  usagePeriodStartedAt  DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @default(now()) @updatedAt
 

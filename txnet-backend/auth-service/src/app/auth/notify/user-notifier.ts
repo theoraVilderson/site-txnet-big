@@ -18,6 +18,7 @@ export const NOTIFY_TEMPLATES = [
   'purchaseRefunded',
   'serviceNotConnected',
   'serviceStillNotConnected',
+  'serviceUsageThreshold',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -150,6 +151,17 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.retention?.stillNotConnectedMany,
       fallback: '🤔 {{count}} of your services still have not been used, three days after they were ready. Copy their links again from My services; if they still do not connect, support will help you.',
       inbox: { read: (ns) => ns?.retention?.stillNotConnectedManyTitle, fallback: '{{count}} services still not connected' },
+    },
+  },
+  // F-601-d: a prepaid service crossed 50 / 80 / 95 % of its period's volume.
+  serviceUsageThreshold: {
+    read: (ns) => ns?.retention?.usageThreshold,
+    fallback: "📊 You have used {{percent}}% of your service's volume; {{remaining}} is left. To keep it running without a break, renew it from My services.",
+    inbox: { read: (ns) => ns?.retention?.usageThresholdTitle, fallback: '{{percent}}% of your volume used' },
+    many: {
+      read: (ns) => ns?.retention?.usageThresholdMany,
+      fallback: '📊 {{count}} of your services are running low on volume. Check what is left in My services and renew them to keep them running.',
+      inbox: { read: (ns) => ns?.retention?.usageThresholdManyTitle, fallback: '{{count}} services running low on volume' },
     },
   },
 };

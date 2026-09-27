@@ -77,6 +77,10 @@
     "stillNotConnected": "🤔 Your service still has not been used, three days after it was ready. Copy the subscription link again from My services and import it into your VPN app. If it still does not connect, support will help you.",
     "stillNotConnectedMany": "🤔 {{count}} of your services still have not been used, three days after they were ready. Copy their links again from My services; if they still do not connect, support will help you.",
     "stillNotConnectedManyTitle": "{{count}} services still not connected",
+    "usageThresholdTitle": "{{percent}}% of your volume used",
+    "usageThreshold": "📊 You have used {{percent}}% of your service's volume; {{remaining}} is left. To keep it running without a break, renew it from My services.",
+    "usageThresholdMany": "📊 {{count}} of your services are running low on volume. Check what is left in My services and renew them to keep them running.",
+    "usageThresholdManyTitle": "{{count}} services running low on volume",
     "supportLine": "🛟 Support: {{supportUrl}}"
   }
 }
