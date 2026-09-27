@@ -115,10 +115,15 @@ func (v Vault) read(ctx context.Context, panelID, secret string) (string, error)
 // Opener is register.Opener over the families this service has drivers for.
 type Opener struct {
 	Logins LoginSource
-	// HTTP is the client every driver it builds speaks through. Nil is
-	// egress's guarded client with nothing allowed (F-027-dl): a panel is
-	// never dialed unguarded, even by an Opener someone forgot to configure.
+	// HTTP is the client a tenant's panel is dialed through: the bare guard.
+	// Nil is egress's guarded client with nothing allowed (F-027-dl): a panel
+	// is never dialed unguarded, even by an Opener someone forgot to configure.
 	HTTP *http.Client
+	// Platform is the client a platform panel (TenantID "") is dialed
+	// through, the only one PANEL_EGRESS_ALLOW_CIDRS opens (ADR-0095). Nil is
+	// HTTP, so a missing allowlist fails closed. The choice is made here,
+	// from the panel row; a driver never sees which guard it got.
+	Platform *http.Client
 }
 
 // unconfigured is the client an Opener with no HTTP uses; one, so its
@@ -150,6 +155,9 @@ func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, er
 		return nil, err
 	}
 	hc := o.HTTP
+	if p.TenantID == "" && o.Platform != nil {
+		hc = o.Platform
+	}
 	if hc == nil {
 		hc = unconfigured
 	}

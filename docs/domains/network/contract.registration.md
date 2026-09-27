@@ -220,5 +220,7 @@ through — the test, the collection pass, a subscription fetch
    a verdict is about what a panel can do.
 5. **`PANEL_EGRESS_ALLOW_CIDRS`** (comma-separated ranges, bare addresses
    refused) opens private ranges the operator vouches for, such as a router
-   behind the platform VPN. It applies to every panel, which is safe only
-   while registration is owner-only (ADR-0080 decision 2).
+   behind the platform VPN. **Only a platform panel (`tenantId` null) is
+   dialed with it** (ADR-0095, F-027-dr): `opener.Opener` picks `Platform`
+   or the bare `HTTP` client from the panel row; a tenant's panel at an
+   allowed address is refused. A nil `Platform` is the bare guard.

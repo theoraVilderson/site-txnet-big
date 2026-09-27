@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"network-service/internal/driver/threexui"
 	"network-service/internal/driver/usermanager"
 	"network-service/internal/driver/xuialireza"
+	"network-service/internal/egress"
 	"network-service/internal/register"
 )
 
@@ -217,6 +219,63 @@ func TestTheRadiusSecretIsAskedForByName(t *testing.T) {
 	}
 	if len(*asked) != 1 || (*asked)[0] != "radius_secret" {
 		t.Errorf("the vault was asked for %q, want exactly [radius_secret]", *asked)
+	}
+}
+
+// The allowlist is the platform owner's alone (ADR-0095): a range the
+// operator opened for a router behind the platform VPN is dialed for a panel
+// whose tenantId is null, and refused for a tenant's panel at the same address.
+func TestTheAllowlistOpensOnlyAPlatformPanel(t *testing.T) {
+	hits := 0
+	panel := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(panel.Close)
+	vault, _ := vaultStub(t, "admin:pa:ss", http.StatusOK, "")
+	loopback := []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}
+	o := Opener{
+		Logins:   Vault{BaseURL: vault.URL, ServiceToken: "svc-token"},
+		HTTP:     egress.Client(egress.Guard{}),
+		Platform: egress.Client(egress.Guard{Allow: loopback}),
+	}
+
+	for _, tc := range []struct {
+		tenantID string
+		reached  bool
+	}{{"", true}, {"22222222-2222-4222-8222-222222222222", false}} {
+		hits = 0
+		p := pending(driver.DriverMarzban)
+		p.APIBaseURL, p.TenantID = panel.URL, tc.tenantID
+		d, err := o.Open(context.Background(), p)
+		if err != nil {
+			t.Fatalf("Open(tenant %q): %v", tc.tenantID, err)
+		}
+		_ = d.HealthCheck(context.Background())
+		if (hits > 0) != tc.reached {
+			t.Errorf("tenant %q: panel reached = %v, want %v", tc.tenantID, hits > 0, tc.reached)
+		}
+	}
+}
+
+// With no Platform client, a platform panel gets the bare guard too: an
+// Opener someone forgot to configure fails closed, never open.
+func TestAnOpenerWithNoPlatformClientDialsEveryPanelBare(t *testing.T) {
+	hits := 0
+	panel := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { hits++ }))
+	t.Cleanup(panel.Close)
+	vault, _ := vaultStub(t, "admin:pa:ss", http.StatusOK, "")
+	o := Opener{Logins: Vault{BaseURL: vault.URL, ServiceToken: "svc-token"}, HTTP: egress.Client(egress.Guard{})}
+
+	p := pending(driver.DriverMarzban)
+	p.APIBaseURL = panel.URL
+	d, err := o.Open(context.Background(), p)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	_ = d.HealthCheck(context.Background())
+	if hits != 0 {
+		t.Errorf("a loopback panel was reached with no allowlist configured")
 	}
 }
 

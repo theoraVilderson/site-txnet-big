@@ -130,6 +130,7 @@ func (s *PostgresSource) Panels(ctx context.Context) ([]Panel, error) {
 		p.Transport = driver.TransportPull
 		p.ReviewState = driver.ReviewState(review)
 		row.PanelID, row.DriverType, row.Transport, row.CounterSemantics = p.ID, driver.DriverType(family), p.Transport, p.CounterSemantics
+		row.TenantID = p.TenantID
 		row.perMinute = p.MaxRequestsPerMinute
 		if s.States != nil {
 			rec := panelstate.Record{State: panelstate.State(state)}

@@ -76,6 +76,10 @@ type Pending struct {
 	// (`vault:<tenantId>:panel_credentials:panel:<panelId>`, F-027-ar), never
 	// the login. Only the Opener resolves it.
 	Credentials string
+	// TenantID is the reseller that owns the panel; "" is a platform panel
+	// (invariant 9), the only kind PANEL_EGRESS_ALLOW_CIDRS is dialed for
+	// (ADR-0095).
+	TenantID string
 }
 
 // Candidate is a pending panel and its last test, if it had one.

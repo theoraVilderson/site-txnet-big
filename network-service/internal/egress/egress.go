@@ -42,9 +42,8 @@ var ErrBodyTooLarge = errors.New("egress: response body past the cap")
 // and caps at DefaultMaxBody.
 type Guard struct {
 	// Allow opens private ranges the operator vouches for — a router reached
-	// over the platform's own VPN (PANEL_EGRESS_ALLOW_CIDRS). It applies to
-	// every panel, so it is safe only while every panel is the platform
-	// owner's (ADR-0080 decision 2).
+	// over the platform's own VPN (PANEL_EGRESS_ALLOW_CIDRS). Only a platform
+	// panel's guard carries it (ADR-0095); opener.Opener picks per panel.
 	Allow []netip.Prefix
 	// MaxBody is the cap on one answer; zero is DefaultMaxBody.
 	MaxBody int64
