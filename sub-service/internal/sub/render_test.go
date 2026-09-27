@@ -181,3 +181,31 @@ func TestADrainingPanelsLinesLeaveOnlyOnceAnotherLineServes(t *testing.T) {
 		})
 	}
 }
+
+// F-027-dj (SPEC weakness #23): a client app tries a subscription's lines
+// top-down, so a panel whose admin API answered oddly or refused us is served
+// after every healthy one — still served, since its users still reach it —
+// and each line keeps the name it had in the store's order.
+func TestAStrugglingPanelsLinesComeAfterEveryHealthyOne(t *testing.T) {
+	store := storeWith(
+		live("degraded", "u1", "vless://degraded"),
+		live("healthy", "u2", "vless://healthy-1"),
+		live("throttled_or_blocked", "u3", "vless://throttled"),
+		live("healthy", "u4", "vless://healthy-2a", "vless://healthy-2b"),
+	)
+	got := decoded(t, get(t, store, "/sub/"+token, ""))
+	want := []string{"vless://healthy-1", "vless://healthy-2a", "vless://healthy-2b", "vless://degraded", "vless://throttled"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("lines = %q, want %q (healthy first, each group in the store's order)", got, want)
+	}
+
+	// The name is the store order's: moving a line does not renumber it.
+	cfg := func(state, line string) Config {
+		return Config{PanelState: state, Status: "active", DesiredRemote: "present", UUID: "u", LinksUUID: "u",
+			Region: "de", LinkLines: []string{line}}
+	}
+	named := servedLines([]Config{cfg("degraded", "vless://a@h:1#x"), cfg("healthy", "vless://b@h:1#x")}, LineNaming{})
+	if want := []string{"vless://b@h:1#de%202", "vless://a@h:1#de"}; strings.Join(named, "|") != strings.Join(want, "|") {
+		t.Fatalf("named = %q, want %q", named, want)
+	}
+}

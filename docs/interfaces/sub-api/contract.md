@@ -3,7 +3,7 @@ id: sub-api
 layer: interface
 status: active
 version: 1
-updated: 2026-09-24
+updated: 2026-09-27
 ---
 
 # Contract — sub-api
@@ -63,13 +63,15 @@ reach the body only when all of these hold:
    13-14, F-027-bm). A role moving into or out of `drain` notifies as its
    panel, so cached renders are rebuilt.
 
-Order: configs oldest first (`createdAt`, then `id`), each config's lines in
-the panel's order. **Each line is named** (F-307-h, ADR-0089) as billing's
+Order: configs on a `healthy` panel first, then those on a `degraded` or
+`throttled_or_blocked` one, each group oldest first (`createdAt`, then `id`),
+each config's lines in the panel's order (F-027-dj, SPEC weakness #23: an app
+tries lines top-down). `panelState` already invalidates a cached render. **Each line is named** (F-307-h, ADR-0089) as billing's
 config list names it: the buyer's `userLabel`, else the tenant's
 `lineNameTemplate` (`{brand}`, `{region}`; tenant `contract.branding.md` rule 7,
 F-307-j), else the panel's `region`; a
 name given earlier in the Grant gets ` 2`, ` 3`. Numbered over configs not
-retired with `linksUuid = uuid`, before 1 and 4 drop any, so a line reads
+retired with `linksUuid = uuid`, before 1 and 4 drop any or the order moves any, so a line reads
 the same in both (`sub/line_names.go`, held to
 `contracts/network/line-names.json`). The body is those lines joined by `\n` in standard padded
 base64, `text/plain; charset=utf-8`. No lines is an empty body.

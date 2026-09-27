@@ -50,9 +50,15 @@ func serves(c Config) bool {
 		c.LinksUUID != "" && c.LinksUUID == c.UUID
 }
 
-// servedLines is every line of every served config, configs in the store's
-// order and each config's lines in the panel's, each named by
-// lineNamesOfGrant over the whole Grant before anything is left out.
+// servedLines is every line of every served config, each config's lines in
+// the panel's order and each named by lineNamesOfGrant over the whole Grant
+// before anything is left out or moved.
+//
+// Configs on a `healthy` panel come first, then those on a panel whose admin
+// API answered oddly or refused us, each group in the store's order (F-027-dj,
+// SPEC weakness #23): a client app tries its lines top-down, and a struggling
+// panel is the likelier to be failing its users too. `panelState` already
+// invalidates a cached render, so the order is never older than the state.
 //
 // A draining panel's lines are left out while the Grant has another served
 // config (network contract.groups.md rule 13): the drain waits two
@@ -68,18 +74,23 @@ func servedLines(configs []Config, naming LineNaming) []string {
 		}
 	}
 	names := lineNamesOfGrant(configs, naming)
-	var lines []string
+	var healthy, struggling []string
 	for i, c := range configs {
-		if serves(c) && !(replaced && c.Draining) {
-			for j, line := range c.LinkLines {
-				if name := names[i][j]; name != nil {
-					line = nameLine(line, *name)
-				}
-				lines = append(lines, line)
+		if !serves(c) || (replaced && c.Draining) {
+			continue
+		}
+		for j, line := range c.LinkLines {
+			if name := names[i][j]; name != nil {
+				line = nameLine(line, *name)
+			}
+			if c.PanelState == "healthy" {
+				healthy = append(healthy, line)
+			} else {
+				struggling = append(struggling, line)
 			}
 		}
 	}
-	return lines
+	return append(healthy, struggling...)
 }
 
 // Format is a body a client app reads. The set is closed and declared here once.
