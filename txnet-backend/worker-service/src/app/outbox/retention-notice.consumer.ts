@@ -116,5 +116,9 @@ function retentionOf(event: OutboxMessage, notice: RetentionNotice): Retention {
     if (value === null) throw new Error(`outbox event ${event.id} has a payload without '${name}'`);
     params[name] = value;
   }
+  for (const name of notice.optional ?? []) {
+    const value = str(name);
+    if (value !== null) params[name] = value;
+  }
   return { tenantId, userId, grantId, period, params };
 }

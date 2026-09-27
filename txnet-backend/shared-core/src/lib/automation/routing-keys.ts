@@ -52,6 +52,10 @@ export const OutboxEventType = {
   CONFIG_CONFIRMED: 'network.config.confirmed',
   /** F-027-dw: the lease planner closed a Grant — served reached Quota (`leaseplan.PostgresStore.SaveClosure`). */
   GRANT_CLOSED: 'network.grant.closed',
+  /** F-601-c: an active Grant consumed nothing in the 24 h after activation — "not connected yet?" (`GrantUnusedNoticeService`). */
+  GRANT_NOT_CONNECTED: 'entitlement.grant.not_connected',
+  /** F-601-c: the same, 72 h after activation — the second and last ask. */
+  GRANT_STILL_NOT_CONNECTED: 'entitlement.grant.still_not_connected',
 } as const;
 export type OutboxEventType = (typeof OutboxEventType)[keyof typeof OutboxEventType];
 
@@ -79,6 +83,8 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.GRANT_CREATED]: 'worker-service',
   [OutboxEventType.CONFIG_CONFIRMED]: 'worker-service',
   [OutboxEventType.GRANT_CLOSED]: 'worker-service',
+  [OutboxEventType.GRANT_NOT_CONNECTED]: 'worker-service',
+  [OutboxEventType.GRANT_STILL_NOT_CONNECTED]: 'worker-service',
 };
 
 /** Every tick routing key starts with this. The suffix is the worker key. */

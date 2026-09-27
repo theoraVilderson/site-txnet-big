@@ -67,5 +67,16 @@
     "deliveredManyTitle": "{{count}} purchases ready",
     "refundedMany": "↩️ {{count}} of your purchases could not be delivered, so they were cancelled and their full price was returned to your wallet.",
     "refundedManyTitle": "{{count}} purchases refunded"
+  },
+  "retention": {
+    "notConnectedTitle": "Not connected yet?",
+    "notConnected": "👋 Your service is ready but has not been used yet. To connect: open My services, copy the subscription link (or scan its QR code), add it to your VPN app — v2rayNG, Hiddify or Streisand — and connect.",
+    "notConnectedMany": "👋 {{count}} of your services are ready but have not been used yet. Open My services, copy each subscription link (or scan its QR code), add it to your VPN app and connect.",
+    "notConnectedManyTitle": "{{count}} services not connected yet",
+    "stillNotConnectedTitle": "Still not connected?",
+    "stillNotConnected": "🤔 Your service still has not been used, three days after it was ready. Copy the subscription link again from My services and import it into your VPN app. If it still does not connect, support will help you.",
+    "stillNotConnectedMany": "🤔 {{count}} of your services still have not been used, three days after they were ready. Copy their links again from My services; if they still do not connect, support will help you.",
+    "stillNotConnectedManyTitle": "{{count}} services still not connected",
+    "supportLine": "🛟 Support: {{supportUrl}}"
   }
 }

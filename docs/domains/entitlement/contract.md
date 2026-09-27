@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-version: 5
+version: 7
 updated: 2026-09-27
 ---
 
@@ -157,6 +157,22 @@ so a repeat is `skipped` and the minute sweep stays the backstop.
 | A refund, one transaction: `pending -> cancelled` conditional on `pending`; every config retired (`GRANT_DELIVERY_ACTOR`); the invoice `paid -> refunded` under its row lock — anything else rolls it all back; one `product_refund` credit of `total` through `WalletCreditService` (none for a free invoice); `entitlement.grant.refunded` | a delivery that won the race is never refunded, a refund is never paid twice, and no client outlives the money |
 | The coupon uses stay used | the refund is `total`, what the user paid |
 
+**"Not connected yet?" (F-601-c, spec 9.5)** — `entitlement/unused-notice.ts`,
+proved by `unused-notice.spec.ts`. Activation writes `activatedAt` and starts
+`unusedCheckAt` 24 h later: `markDelivered` for a purchase, `issue` (at
+`startsAt`) for a Grant born `active`; never for `migration` or `rollover`
+(`unused-clock.ts`). `GrantUnusedNoticeService.noticeDue` checks each active
+Grant whose clock is due, over `POST /api/internal/billing/entitlement/unused-due`
+(`ServiceOnlyGuard`), asked hourly by `grant_unused_notice`; answer `scanned`, `told`.
+
+| Rule | Why |
+|---|---|
+| Any consumed byte clears the clock, untold | a user who connected is not asked |
+| At 24 h: `entitlement.grant.not_connected`, next check at 72 h; at 72 h: `.still_not_connected`, clock cleared. A sweep late past 72 h tells only the second | two asks, then silence |
+| No live config confirmed on a panel (`confirmedAt`): the stage passes untold | nothing to connect to yet — F-601-i's notice, not this one |
+| The clock moves conditionally on the value read; the event's `period` is `activatedAt` | two racing sweeps emit once; notification's ledger holds it past that (invariant 14) |
+| `supportUrl` from the tenant's branding, only when set | the notice's support line (auth-api `/internal/notify/user`) |
+
 In-process calls from `billing-service` modules (ADR-0049); HTTP routes are
 added only when a row needs them. Three do: `subscriptionTokenFor` over `GET
 /api/billing/gift/grants/:id/subscription-link` and `rotateToken` over `POST
@@ -166,7 +182,7 @@ subscription domain), and `listForUser` over `GET /api/billing/gift/grants`
 
 ## Emits (events)
 
-Through the outbox (ADR-0021), both also live on the buyer's `user:` channel
+Through the outbox (ADR-0021); the first two also live on the buyer's `user:` channel
 (`contracts/realtime/events.json`); consumer `GrantDeliveryConsumer`
 (`automation/contract.outbox.md`).
 
@@ -174,6 +190,7 @@ Through the outbox (ADR-0021), both also live on the buyer's `user:` channel
 |---|---|---|
 | `entitlement.grant.delivered` | `tenantId, userId, grantId, variantId, source, invoiceId` | a `pending` Grant turned `active` (F-111-d) |
 | `entitlement.grant.refunded` | `tenantId, userId, grantId, invoiceId, amount, reason` | a paid Grant cancelled, its invoice refunded whole (F-111-d) |
+| `entitlement.grant.not_connected` / `.still_not_connected` | `tenantId, userId, grantId, period` (= `activatedAt`), `supportUrl?` | nothing consumed 24 h / 72 h after activation (F-601-c); retention events, told by `RetentionNoticeConsumer` — not on any channel |
 
 ## Consumes
 
@@ -189,7 +206,7 @@ Through the outbox (ADR-0021), both also live on the buyer's `user:` channel
 |---|---|
 | network | `config.grantId`: a config draws on its Grant's quota (F-027); group fulfilment moves a grouped `pending` Grant to `active` (F-027-bl) |
 | billing | issues a Grant for a `free_grant` coupon (F-502-l) and, later, a purchase; a refused block request suspends a spent one (F-027-x) |
-| automation | holds the purge clock: `grant_config_purge` asks `purge-due` hourly (F-027-y), and the delivery clock: `grant_delivery` asks `deliver-due` every minute (F-111-d), and `grant-created` asks `grants/:grantId/deliver` on each purchase (F-114-i); tells the buyer on either event |
+| automation | holds the purge clock: `grant_config_purge` asks `purge-due` hourly (F-027-y), and the delivery clock: `grant_delivery` asks `deliver-due` every minute (F-111-d), and `grant-created` asks `grants/:grantId/deliver` on each purchase (F-114-i); tells the buyer on either event; holds the "not connected yet?" clock, `grant_unused_notice` asks `unused-due` hourly (F-601-c) |
 
 ## Guarantees (built — `entitlement-schema.int.spec.ts`)
 

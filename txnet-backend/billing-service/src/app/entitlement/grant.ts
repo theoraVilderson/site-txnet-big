@@ -8,6 +8,7 @@ import { isSellableBySku, meteredRateAt, type MeteredRateRow, type OfferFacts } 
 import { trafficQuotaOf } from '../catalog/traffic-quota';
 import { PrismaService } from '../prisma/prisma.service';
 import { GrantTokenSeal, NO_TOKEN_SEAL, type SealedToken } from './grant-token-seal';
+import { unusedClockOf } from './unused-clock';
 import { configIdentityOf, storedLineIdentity } from '../traffic/config-identity';
 import { foldConfigText } from '../traffic/config-text';
 
@@ -428,10 +429,14 @@ export class GrantService {
     if (shape.meteredRate !== null && shape.meteredRate.lte(0)) {
       throw new EntitlementRefused('metered_rate_not_positive', input.variantId);
     }
+    // Born `active`, it is activated at its start (F-601-c); a purchase waits for `markDelivered`.
+    const activatedAt = shape.status === GrantStatus.active ? startsAt : null;
     try {
       const grant = await tx.grant.create({
         data: {
           ...shape,
+          activatedAt,
+          unusedCheckAt: activatedAt && unusedClockOf(input.source, activatedAt),
           quotas: shape.quotas as Prisma.InputJsonValue,
           tenantId: tenant.id,
           userId: input.userId,

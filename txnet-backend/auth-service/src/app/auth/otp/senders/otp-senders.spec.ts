@@ -591,6 +591,21 @@ describe('UserNotifier', () => {
     expect(titles.every((t) => t.length > 0)).toBe(true);
   });
 
+  // F-601-c: a notice given the tenant's support link ends with it; one without reads whole.
+  it('ends a notice with the support line only when it was given a supportUrl', async () => {
+    const inbox = { put: vi.fn(async () => undefined) };
+    const notifier = new UserNotifier(
+      notifierPrisma() as unknown as PrismaService,
+      registry(null),
+      localeService({ retention: { notConnected: 'Not connected?', supportLine: 'Support: {{supportUrl}}' } }),
+      inbox as unknown as NotificationInboxClient,
+    );
+    await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'inbox', template: 'serviceNotConnected', params: { supportUrl: 'https://t.me/help' } }));
+    await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'inbox', template: 'serviceNotConnected', params: {} }));
+    const bodies = inbox.put.mock.calls.map((c) => (c as unknown as [{ body: string }])[0].body);
+    expect(bodies).toEqual(['Not connected?\n\nSupport: https://t.me/help', 'Not connected?']);
+  });
+
   // F-067-p (ADR-0084 decision 3): the worker combines a burst and asks once with its count.
   it('a combined notice tells the summary with its count, in the inbox title and body, for every template', async () => {
     const inbox = { put: vi.fn(async () => undefined) };

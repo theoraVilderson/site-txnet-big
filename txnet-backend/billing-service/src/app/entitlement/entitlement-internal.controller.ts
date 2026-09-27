@@ -3,6 +3,7 @@ import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 
 import { DeliverDueResult, DeliveryOutcome, GrantDeliveryService } from './delivery';
 import { GrantPurgeService, PurgeResult } from './purge';
+import { GrantUnusedNoticeService, UnusedNoticeResult } from './unused-notice';
 
 /**
  * The seam `worker-service` reaches the purge clock through (F-027-y).
@@ -31,6 +32,7 @@ export class EntitlementInternalController {
   constructor(
     private readonly purge: GrantPurgeService,
     private readonly delivery: GrantDeliveryService,
+    private readonly unused: GrantUnusedNoticeService,
   ) {}
 
   /**
@@ -58,6 +60,17 @@ export class EntitlementInternalController {
   @HttpCode(200)
   deliverDue(): Promise<DeliverDueResult> {
     return this.delivery.deliverDue();
+  }
+
+  /**
+   * "Not connected yet?" (F-601-c): every active Grant whose `unusedCheckAt`
+   * is due is checked once — told, moved to its next check, or cleared.
+   * Safe to run twice: each write is conditional on the clock it read.
+   */
+  @Post('unused-due')
+  @HttpCode(200)
+  unusedDue(): Promise<UnusedNoticeResult> {
+    return this.unused.noticeDue();
   }
 
   /**

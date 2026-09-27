@@ -92,6 +92,17 @@ describe('RetentionNoticeConsumer.handle', () => {
     ]);
   });
 
+  // F-601-c: the tenant's support link rides along only when the tenant set one.
+  it('passes an optional param when the payload has it, and tells without it when not', async () => {
+    const { consumer, calls } = build();
+    consumer.notices = { [TYPE]: { template: 'testThreshold', params: ['level'], optional: ['supportUrl'] } };
+
+    await consumer.handle(event({ supportUrl: 'https://t.me/support' }));
+    await consumer.handle({ ...event(), id: '88888888-8888-4888-8888-888888888889' });
+
+    expect(calls.joined.map((j) => j.params)).toEqual([{ level: '80', supportUrl: 'https://t.me/support' }, { level: '80' }]);
+  });
+
   it('tells nobody when the period already had this notice', async () => {
     const { consumer, calls } = build({ claimed: false });
 

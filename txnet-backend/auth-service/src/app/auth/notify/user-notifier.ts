@@ -16,6 +16,8 @@ export const NOTIFY_TEMPLATES = [
   'panelRefused',
   'purchaseDelivered',
   'purchaseRefunded',
+  'serviceNotConnected',
+  'serviceStillNotConnected',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -28,7 +30,7 @@ export type NotifyRequest = { userId: string; channel: NotifyChannel; template: 
 export type NotifyResult = { sent: BotPlatform[] };
 
 type Texts = Partial<Record<string, string>>;
-type NotificationsNamespace = { payment?: Texts; subscription?: Texts; panel?: Texts; purchase?: Texts };
+type NotificationsNamespace = { payment?: Texts; subscription?: Texts; panel?: Texts; purchase?: Texts; retention?: Texts };
 type Text = { read: (ns: NotificationsNamespace | undefined) => string | undefined; fallback: string };
 type Notice = Text & { inbox: Text };
 
@@ -127,7 +129,33 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       inbox: { read: (ns) => ns?.purchase?.refundedManyTitle, fallback: '{{count}} purchases refunded' },
     },
   },
+  // F-601-c: an active service with nothing used 24 h, then 72 h, after it was ready.
+  serviceNotConnected: {
+    read: (ns) => ns?.retention?.notConnected,
+    fallback:
+      '👋 Your service is ready but has not been used yet. To connect: open My services, copy the subscription link (or scan its QR code), add it to your VPN app — v2rayNG, Hiddify or Streisand — and connect.',
+    inbox: { read: (ns) => ns?.retention?.notConnectedTitle, fallback: 'Not connected yet?' },
+    many: {
+      read: (ns) => ns?.retention?.notConnectedMany,
+      fallback: '👋 {{count}} of your services are ready but have not been used yet. Open My services, copy each subscription link (or scan its QR code), add it to your VPN app and connect.',
+      inbox: { read: (ns) => ns?.retention?.notConnectedManyTitle, fallback: '{{count}} services not connected yet' },
+    },
+  },
+  serviceStillNotConnected: {
+    read: (ns) => ns?.retention?.stillNotConnected,
+    fallback:
+      '🤔 Your service still has not been used, three days after it was ready. Copy the subscription link again from My services and import it into your VPN app. If it still does not connect, support will help you.',
+    inbox: { read: (ns) => ns?.retention?.stillNotConnectedTitle, fallback: 'Still not connected?' },
+    many: {
+      read: (ns) => ns?.retention?.stillNotConnectedMany,
+      fallback: '🤔 {{count}} of your services still have not been used, three days after they were ready. Copy their links again from My services; if they still do not connect, support will help you.',
+      inbox: { read: (ns) => ns?.retention?.stillNotConnectedManyTitle, fallback: '{{count}} services still not connected' },
+    },
+  },
 };
+
+/** A notice given the tenant's support link (`supportUrl`, F-601-c) ends with this line; one without it reads whole. */
+const SUPPORT_LINE: Text = { read: (ns) => ns?.retention?.supportLine, fallback: '🛟 Support: {{supportUrl}}' };
 
 function interpolate(template: string, vars: Record<string, string>): string {
   return Object.entries(vars).reduce(
@@ -174,7 +202,8 @@ export class UserNotifier {
     const combined = request.count !== undefined && request.count > 1;
     const spec = combined ? TEMPLATE_TEXT[request.template].many : TEMPLATE_TEXT[request.template];
     const params = combined ? { ...request.params, count: String(request.count) } : request.params;
-    const text = interpolate(spec.read(ns) ?? spec.fallback, params);
+    const body = interpolate(spec.read(ns) ?? spec.fallback, params);
+    const text = params['supportUrl'] ? `${body}\n\n${interpolate(SUPPORT_LINE.read(ns) ?? SUPPORT_LINE.fallback, params)}` : body;
 
     if (request.channel === 'inbox') {
       // Throws: the row is owed until it lands.

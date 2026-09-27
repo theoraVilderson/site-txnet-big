@@ -115,6 +115,13 @@ model Grant {
   /// Only a `pending` Grant is ever checked; the clock is left as it stood.
   deliveryAttempts      Int                @default(0)
   nextDeliveryAt        DateTime?
+  /// When it first turned `active` — at delivery for a purchase, at `startsAt`
+  /// for any other source (F-601-c). Null for a Grant from before it.
+  activatedAt           DateTime?
+  /// The next "not connected yet?" check (F-601-c): 24 h after activation,
+  /// then 72 h; null once told twice, once anything was consumed, or never for
+  /// a `migration` / `rollover` Grant. A clock, as `nextDeliveryAt` is.
+  unusedCheckAt         DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @default(now()) @updatedAt
 
@@ -130,6 +137,8 @@ model Grant {
   @@index([status, suspendedAt], map: "grant_status_suspendedAt_idx")
   /// The delivery sweep's only question: which `pending` Grants are due a check (F-111-d).
   @@index([status, nextDeliveryAt], map: "grant_status_nextDeliveryAt_idx")
+  /// The "not connected yet?" sweep's only question: which active Grants are due a check (F-601-c).
+  @@index([status, unusedCheckAt], map: "grant_status_unusedCheckAt_idx")
   @@map("grant")
   @@schema("entitlement")
 }

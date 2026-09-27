@@ -51,9 +51,14 @@ one notice path of ADR-0084 — not a second one inside `notification-service`
 | `tenantId`, `userId`, `grantId` | yes | whose Grant — never looked up by the consumer |
 | `period` | yes | the producer's name for the Grant's current period. **A renewal opens a new one** (the backlog row's rule), so the same notice may be told again after it; e.g. the period's start instant, ISO |
 | the params its row names | yes | strings, passed to the template as they are |
+| the row's `optional` params | no | passed only when present — `supportUrl`, the tenant's support link, which auth-service turns into the notice's last line |
 
-The table starts empty: F-601-a is the path, and each producing row
-(F-601-b..l) adds its type, its template and its producer together.
+Each producing row (F-601-b..l) adds its type, its template and its producer
+together:
+
+| Type | Template | Producer |
+|---|---|---|
+| `entitlement.grant.not_connected` / `.still_not_connected` | `serviceNotConnected` / `serviceStillNotConnected`, optional `supportUrl` | entitlement, 24 h / 72 h after activation with nothing consumed; period = `activatedAt` (F-601-c) |
 
 ## Not built here
 

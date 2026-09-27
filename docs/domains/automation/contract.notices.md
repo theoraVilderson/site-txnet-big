@@ -71,5 +71,6 @@ every type in `RETENTION_NOTICES` (`outbox/retention-notices.ts`), consumer
 | `person` only — template and the params the type's row names — to `userId`'s inbox and bot; no live push | the inbox row brings its own (F-035-b) |
 | First `POST notification internal/notifications/retention/claim`; `claimed: false` acks and tells nobody | once per Grant period, whoever emitted twice (notification invariant 14) |
 | A payload without tenant, user, Grant, `period` or a named param, or a type with no row, throws **before** the claim | a claimed period whose notice never went out is lost until the next period |
+| A row's `optional` params (`supportUrl`, F-601-c) are passed when the payload has them, and their absence is never a throw | a tenant with no support link still tells the notice |
 | A refused claim or an unset `NOTIFICATION_API_BASE_URL` throws and dead-letters | the same event id claims again on a replay |
 

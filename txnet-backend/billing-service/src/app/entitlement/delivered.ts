@@ -1,6 +1,8 @@
 import { GrantSource, GrantStatus, Prisma } from '@prisma/client';
 import { OutboxEventType } from '@txnet-backend/shared-core';
 
+import { unusedClockOf } from './unused-clock';
+
 /** `aggregate` of every Grant event in the outbox (ADR-0021). */
 export const GRANT_AGGREGATE = 'entitlement.grant';
 
@@ -18,9 +20,12 @@ export const GRANT_AGGREGATE = 'entitlement.grant';
  * writes nothing: `false` means this call did not deliver it.
  */
 export async function markDelivered(tx: Prisma.TransactionClient, grantId: string): Promise<boolean> {
+  // Delivery is activation: the "not connected yet?" clock starts here
+  // (F-601-c). Only a purchase is ever `pending`.
+  const activatedAt = new Date();
   const moved = await tx.grant.updateMany({
     where: { id: grantId, status: GrantStatus.pending },
-    data: { status: GrantStatus.active, nextDeliveryAt: null },
+    data: { status: GrantStatus.active, nextDeliveryAt: null, activatedAt, unusedCheckAt: unusedClockOf(GrantSource.purchase, activatedAt) },
   });
   if (moved.count !== 1) return false;
 
