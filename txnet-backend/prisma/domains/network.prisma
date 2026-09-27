@@ -98,6 +98,9 @@ enum PanelGroupStrategy {
 enum InboundPlacement {
   all
   spread
+  /// K of the picks by the Grant's rendezvous hash (F-027-di); K is
+  /// `inboundsPerBuyer`.
+  hrw
 
   @@schema("network")
 }
@@ -374,6 +377,8 @@ model Panel {
   priority                   Int?
   /// Null = 1.
   weight                     Int?
+  /// How many inbounds `hrw` places a buyer on (F-027-di); null = 2.
+  inboundsPerBuyer           Int?
   /// When `network-service` last read the panel's inbounds into
   /// `panel_inbound`. Null asks for a read on the next pass (the admin's refresh).
   inboundsReadAt             DateTime?
@@ -627,7 +632,7 @@ model PanelInbound {
 }
 
 /// A panel in a group, once. `tenantId` is its group's — a trigger holds it —
-/// so RLS reads it without a join. The four selling settings are the member's
+/// so RLS reads it without a join. The five selling settings are the member's
 /// layer (F-027-cg, ADR-0090): null = the panel's, then the platform default.
 /// `priority` and `weight` are for the strategies that choose among members;
 /// `mirror` reads neither.
@@ -640,6 +645,7 @@ model PanelGroupMember {
   /// Lower first.
   priority  Int?
   weight    Int?
+  inboundsPerBuyer Int?
   role      PanelGroupMemberRole @default(primary)
   /// When `role` became `drain`; the database's clock, set and held by trigger
   /// `panel_group_member_drain_clock` (F-027-bm). Null when not draining.

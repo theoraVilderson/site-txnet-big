@@ -18,6 +18,8 @@ export type SellingValues = {
   /** Lower first; read by strategies that choose among members, not `mirror`. */
   priority: number;
   weight: number;
+  /** How many inbounds `hrw` places a buyer on (F-027-di); read by no other placement. */
+  inboundsPerBuyer: number;
 };
 
 export type SellingSetting = keyof SellingValues;
@@ -28,18 +30,20 @@ export type SellingLayerValues = { [K in SellingSetting]?: SellingValues[K] | nu
 
 export type EffectiveSellingSettings = { [K in SellingSetting]: { value: SellingValues[K]; layer: SellingLayer } };
 
-export const SELLING_SETTINGS = ['inboundPlacement', 'maxClients', 'priority', 'weight'] as const satisfies readonly SellingSetting[];
+export const SELLING_SETTINGS = ['inboundPlacement', 'maxClients', 'priority', 'weight', 'inboundsPerBuyer'] as const satisfies readonly SellingSetting[];
 
 /**
  * What a panel sells by when neither it nor the membership says otherwise.
  * `network.panel`'s columns had these as defaults before F-027-cg; the
- * fulfilment scan's SQL reads the same two it needs through `COALESCE`.
+ * fulfilment scan's SQL reads the three it needs through `COALESCE`.
  */
 export const PLATFORM_SELLING_DEFAULTS: Readonly<SellingValues> = Object.freeze({
   inboundPlacement: InboundPlacement.all,
   maxClients: null,
   priority: 0,
   weight: 1,
+  // Two survive one inbound lost with no move at all (SPEC weakness #25).
+  inboundsPerBuyer: 2,
 });
 
 /** Each setting's effective value and the layer it came from. `member` is null for the panel's own view. */
@@ -56,6 +60,7 @@ export function effectiveSellingSettings(member: SellingLayerValues | null, pane
     maxClients: pick('maxClients'),
     priority: pick('priority'),
     weight: pick('weight'),
+    inboundsPerBuyer: pick('inboundsPerBuyer'),
   };
 }
 
@@ -66,6 +71,7 @@ export function sellingValues(effective: EffectiveSellingSettings): SellingValue
     maxClients: effective.maxClients.value,
     priority: effective.priority.value,
     weight: effective.weight.value,
+    inboundsPerBuyer: effective.inboundsPerBuyer.value,
   };
 }
 

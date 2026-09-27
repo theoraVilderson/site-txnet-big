@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 19
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
 # Inbounds: which ones a buyer is placed on (F-114-b)
@@ -24,8 +24,8 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
 |---|---|---|
 | `panel_inbound` | key `(panelId, remoteId)`; `tag`, `protocol` (null = one we do not sell), `port`, `host`, `enabled`, `goneAt`, `seenAt` | `network-service`'s read |
 | `panel_inbound` | `sold`, `maxClients` (null = no cap, else `>= 1`) | the admin, on billing's systems routes |
-| `panel` | the panel's layer of the selling settings (rule 4a): `inboundPlacement` (`all` \| `spread`), `maxClients` (`>= 1`), `priority` (`>= 0`), `weight` (`>= 1`); null = the platform default | the admin |
-| `panel_group_member` | the member's layer: the same four, null = the panel's | the admin |
+| `panel` | the panel's layer of the selling settings (rule 4a): `inboundPlacement` (`all` \| `spread` \| `hrw`), `maxClients` (`>= 1`), `priority` (`>= 0`), `weight` (`>= 1`), `inboundsPerBuyer` (`>= 1`, K under `hrw`); null = the platform default | the admin |
+| `panel_group_member` | the member's layer: the same five, null = the panel's | the admin |
 | `panel_group_member_inbound` | key `(groupId, panelId, inboundRemoteId)`, unique `(panelId, inboundRemoteId)`; `tenantId` = its member's (trigger); both FKs cascade (rule 3a) | the admin |
 | `panel` | `inboundsReadAt` — null = read on the next pass | the read sets it; the admin's refresh clears it |
 | `config` | `inboundRemoteId` — the inbound fulfilment placed it on | `ConfigActionsService.provisionForGroup` |
@@ -72,19 +72,34 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
 4. **The placement.** `all`: the Grant gets a config on every picked inbound
    it is not yet on — one link each, the bag split across them
    (`contract.ceiling.md`). `spread`: one config, on the picked inbound with
-   the fewest live configs that is under its cap (ties: the lower id). A
-   config's `protocol` is its inbound's.
+   the fewest live configs that is under its cap (ties: the lower id). `hrw`:
+   K of them (rule 4b). A config's `protocol` is its inbound's.
 4a. **Three layers, and always an answer** (F-027-cg, ADR-0090 decision 2).
    A selling setting resolves group membership -> panel -> platform default
    (`PLATFORM_SELLING_DEFAULTS` in billing's `traffic/selling-settings.ts`:
-   `all`, no cap, priority 0, weight 1); null at a layer is "not set here".
+   `all`, no cap, priority 0, weight 1, 2 per buyer); null at a layer is "not set here".
    So one panel can place `all` for one group and `spread` with a lower cap for
    another. Server facts — addresses, credentials, `maxRequestsPerMinute`,
    `maxLineRateBps` — have no member column and are never overridden. A member
    cannot set "no cap" under a capped panel: unset inherits the cap. The due
-   scan resolves the two `mirror` reads in SQL (`COALESCE`), which assumes the
+   scan resolves the three `mirror` reads in SQL (`COALESCE`), which assumes the
    platform cap is none; `placementSettings` does it in TypeScript, and rules 4
    and 5 read the effective values. Which inbounds a member sells is rule 3a.
+4b. **`hrw`: K of N by the Grant's rendezvous hash** (F-027-di, SPEC weakness
+   #24, #25). K is `inboundsPerBuyer` (rule 4a; platform 2, at most 16 — K = N
+   is `all`). Each picked inbound the Grant is not on, with a seat, is ranked
+   by weighted rendezvous hashing of `(grantId, remoteId)`, every weight 1
+   (billing `traffic/hrw.ts`), and the top `K - held` are placed. **Every
+   un-drained config of the Grant on the panel counts towards K, wherever it
+   is**, so an inbound disabled, gone or unticked moves nobody (rule 6): the
+   buyer keeps serving on the rest. Once that config is drained or retired,
+   the next run places that buyer alone on its next-ranked inbound — no other
+   buyer's rank changed. Fewer picks than K: one on each, nothing owed after.
+   The due scan asks the same "fewer than K" in SQL. The hash is the Go
+   reference's (`network-service/internal/lease/hrw`) bit for bit:
+   `contracts/network/hrw.json` holds cases it produced, read by `hrw.spec.ts`
+   and the Go `contract_test.go`. A row with no `inboundRemoteId` holds its
+   panel under `hrw` as under `all` (rule 7). `group-fulfilment.spec.ts` pins it.
 5. **The caps.** An inbound at `maxClients` live configs takes nobody. A panel
    at its effective `maxClients` (rule 4a) users — distinct Grants with a live config (`present`, not
    drained) — takes no **new** Grant; a Grant already on it still gets a pick

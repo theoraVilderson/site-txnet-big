@@ -20,7 +20,7 @@ import { InboundPlacement } from '@prisma/client';
 import { addPanelGroupMemberSchema, updatePanelGroupMemberSchema, updatePanelInboundsSchema } from '../systems/panel-registration.schema';
 import { effectiveSellingSettings, PLATFORM_SELLING_DEFAULTS, sellingValues } from './selling-settings';
 
-const UNSET = { inboundPlacement: null, maxClients: null, priority: null, weight: null };
+const UNSET = { inboundPlacement: null, maxClients: null, priority: null, weight: null, inboundsPerBuyer: null };
 
 describe('effectiveSellingSettings — member -> panel -> platform', () => {
   it('answers every setting from the platform when neither the member nor the panel sets one', () => {
@@ -30,18 +30,20 @@ describe('effectiveSellingSettings — member -> panel -> platform', () => {
       maxClients: { value: null, layer: 'platform' },
       priority: { value: 0, layer: 'platform' },
       weight: { value: 1, layer: 'platform' },
+      inboundsPerBuyer: { value: 2, layer: 'platform' },
     });
     expect(sellingValues(effective)).toEqual(PLATFORM_SELLING_DEFAULTS);
   });
 
   it('takes the panel over the platform, and the member over both, setting by setting', () => {
-    const panel = { inboundPlacement: InboundPlacement.spread, maxClients: 200, priority: null, weight: 5 };
-    const member = { inboundPlacement: null, maxClients: 50, priority: 3, weight: null };
+    const panel = { inboundPlacement: InboundPlacement.spread, maxClients: 200, priority: null, weight: 5, inboundsPerBuyer: 3 };
+    const member = { inboundPlacement: null, maxClients: 50, priority: 3, weight: null, inboundsPerBuyer: 4 };
     expect(effectiveSellingSettings(member, panel)).toEqual({
       inboundPlacement: { value: InboundPlacement.spread, layer: 'panel' },
       maxClients: { value: 50, layer: 'member' },
       priority: { value: 3, layer: 'member' },
       weight: { value: 5, layer: 'panel' },
+      inboundsPerBuyer: { value: 4, layer: 'member' },
     });
   });
 
@@ -60,7 +62,8 @@ describe('effectiveSellingSettings — member -> panel -> platform', () => {
 describe('what a member may override', () => {
   it('sets or clears each selling setting; null hands it back to the panel', () => {
     expect(updatePanelGroupMemberSchema.safeParse({ maxClients: 20, inboundPlacement: 'spread', priority: 2, weight: 3 }).success).toBe(true);
-    expect(updatePanelGroupMemberSchema.parse({ maxClients: null, inboundPlacement: null, priority: null, weight: null })).toEqual(UNSET);
+    expect(updatePanelGroupMemberSchema.parse({ maxClients: null, inboundPlacement: null, priority: null, weight: null, inboundsPerBuyer: null })).toEqual(UNSET);
+    expect(updatePanelGroupMemberSchema.safeParse({ inboundPlacement: 'hrw', inboundsPerBuyer: 3 }).success).toBe(true);
     expect(addPanelGroupMemberSchema.safeParse({ panelId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', maxClients: 5, inboundPlacement: 'all' }).success).toBe(true);
   });
 
@@ -72,6 +75,8 @@ describe('what a member may override', () => {
     expect(updatePanelGroupMemberSchema.safeParse({ maxClients: 0 }).success).toBe(false);
     expect(updatePanelGroupMemberSchema.safeParse({ weight: 0 }).success).toBe(false);
     expect(updatePanelGroupMemberSchema.safeParse({ priority: -1 }).success).toBe(false);
+    expect(updatePanelGroupMemberSchema.safeParse({ inboundsPerBuyer: 0 }).success).toBe(false);
+    expect(updatePanelGroupMemberSchema.safeParse({ inboundsPerBuyer: 17 }).success).toBe(false);
   });
 
   it('lets the panel layer set priority and weight, and hand any setting back to the platform', () => {

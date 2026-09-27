@@ -210,12 +210,15 @@ export type UpdatePanelGroupBody = z.infer<typeof updatePanelGroupSchema>;
 const capSchema = z.number().int().min(1).max(1_000_000).nullable();
 const prioritySchema = z.number().int().min(0).max(1000).nullable();
 const weightSchema = z.number().int().min(1).max(1000).nullable();
+/** K under `hrw` (F-027-di). The ceiling is SPEC weakness #24's: K = N is `all`, not a large K. */
+const inboundsPerBuyerSchema = z.number().int().min(1).max(16).nullable();
 
 const sellingFields = {
   inboundPlacement: z.nativeEnum(InboundPlacement).nullable().optional(),
   maxClients: capSchema.optional(),
   priority: prioritySchema.optional(),
   weight: weightSchema.optional(),
+  inboundsPerBuyer: inboundsPerBuyerSchema.optional(),
 };
 
 /**

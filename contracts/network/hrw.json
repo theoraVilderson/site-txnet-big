@@ -1,0 +1,229 @@
+{
+  "$comment": [
+    "Rendezvous (HRW) placement, K of N (F-027-di, SPEC weakness #24, #25).",
+    "",
+    "billing places a buyer (TypeScript, traffic/hrw.ts); network-service holds the",
+    "reference (Go, internal/lease/hrw, vendored from quotaengine, ADR-0093). A",
+    "later mover in Go must pick what billing picked, and nothing can be imported",
+    "across that boundary, so these cases plus a test on each side replace the",
+    "import that does not exist (the delta.json pattern). The TypeScript half is",
+    "billing-service/src/app/traffic/hrw.spec.ts; the Go half is",
+    "network-service/internal/lease/hrw/contract_test.go.",
+    "",
+    "score(key, id, w) = -w / ln(u), u = ((mix(fnv64a(key 0x00 id)) >> 11) + 0.5) / 2^53,",
+    "mix = the splitmix64 finaliser, w <= 0 counts as 1, ids as UTF-8 bytes.",
+    "Pick: drop unhealthy candidates, and full ones for a new user; highest score",
+    "first; at most k. `want` was produced by the Go package, not written by hand."
+  ],
+  "cases": [
+    {
+      "name": "k=2 of 5, equal weights", "key": "99999999-9999-4999-8999-999999999991", "k": 2, "newUser": true,
+      "candidates": [
+        {"id": "1", "weight": 1, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": true, "full": false},
+        {"id": "3", "weight": 1, "healthy": true, "full": false},
+        {"id": "4", "weight": 1, "healthy": true, "full": false},
+        {"id": "5", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["4", "1"]
+    },
+    {
+      "name": "k=1 of 10", "key": "99999999-9999-4999-8999-999999999991", "k": 1, "newUser": true,
+      "candidates": [
+        {"id": "1", "weight": 1, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": true, "full": false},
+        {"id": "3", "weight": 1, "healthy": true, "full": false},
+        {"id": "4", "weight": 1, "healthy": true, "full": false},
+        {"id": "5", "weight": 1, "healthy": true, "full": false},
+        {"id": "6", "weight": 1, "healthy": true, "full": false},
+        {"id": "7", "weight": 1, "healthy": true, "full": false},
+        {"id": "8", "weight": 1, "healthy": true, "full": false},
+        {"id": "9", "weight": 1, "healthy": true, "full": false},
+        {"id": "10", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["6"]
+    },
+    {
+      "name": "k larger than the candidates", "key": "99999999-9999-4999-8999-999999999991", "k": 5, "newUser": true,
+      "candidates": [
+        {"id": "1", "weight": 1, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": true, "full": false},
+        {"id": "3", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["1", "3", "2"]
+    },
+    {
+      "name": "k=2 of 5, equal weights", "key": "0b1e7c2a-5d3f-4c6e-9a8b-1f2e3d4c5b6a", "k": 2, "newUser": true,
+      "candidates": [
+        {"id": "1", "weight": 1, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": true, "full": false},
+        {"id": "3", "weight": 1, "healthy": true, "full": false},
+        {"id": "4", "weight": 1, "healthy": true, "full": false},
+        {"id": "5", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["3", "1"]
+    },
+    {
+      "name": "k=1 of 10", "key": "0b1e7c2a-5d3f-4c6e-9a8b-1f2e3d4c5b6a", "k": 1, "newUser": true,
+      "candidates": [
+        {"id": "1", "weight": 1, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": true, "full": false},
+        {"id": "3", "weight": 1, "healthy": true, "full": false},
+        {"id": "4", "weight": 1, "healthy": true, "full": false},
+        {"id": "5", "weight": 1, "healthy": true, "full": false},
+        {"id": "6", "weight": 1, "healthy": true, "full": false},
+        {"id": "7", "weight": 1, "healthy": true, "full": false},
+        {"id": "8", "weight": 1, "healthy": true, "full": false},
+        {"id": "9", "weight": 1, "healthy": true, "full": false},
+        {"id": "10", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["8"]
+    },
+    {
+      "name": "k larger than the candidates", "key": "0b1e7c2a-5d3f-4c6e-9a8b-1f2e3d4c5b6a", "k": 5, "newUser": true,
+      "candidates": [
+        {"id": "1", "weight": 1, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": true, "full": false},
+        {"id": "3", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["3", "1", "2"]
+    },
+    {
+      "name": "k=2 of 5, equal weights", "key": "user-7", "k": 2, "newUser": true,
+      "candidates": [
+        {"id": "1", "weight": 1, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": true, "full": false},
+        {"id": "3", "weight": 1, "healthy": true, "full": false},
+        {"id": "4", "weight": 1, "healthy": true, "full": false},
+        {"id": "5", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["3", "1"]
+    },
+    {
+      "name": "k=1 of 10", "key": "user-7", "k": 1, "newUser": true,
+      "candidates": [
+        {"id": "1", "weight": 1, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": true, "full": false},
+        {"id": "3", "weight": 1, "healthy": true, "full": false},
+        {"id": "4", "weight": 1, "healthy": true, "full": false},
+        {"id": "5", "weight": 1, "healthy": true, "full": false},
+        {"id": "6", "weight": 1, "healthy": true, "full": false},
+        {"id": "7", "weight": 1, "healthy": true, "full": false},
+        {"id": "8", "weight": 1, "healthy": true, "full": false},
+        {"id": "9", "weight": 1, "healthy": true, "full": false},
+        {"id": "10", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["3"]
+    },
+    {
+      "name": "k larger than the candidates", "key": "user-7", "k": 5, "newUser": true,
+      "candidates": [
+        {"id": "1", "weight": 1, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": true, "full": false},
+        {"id": "3", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["3", "1", "2"]
+    },
+    {
+      "name": "k=2 of 5, equal weights", "key": "", "k": 2, "newUser": true,
+      "candidates": [
+        {"id": "1", "weight": 1, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": true, "full": false},
+        {"id": "3", "weight": 1, "healthy": true, "full": false},
+        {"id": "4", "weight": 1, "healthy": true, "full": false},
+        {"id": "5", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["5", "1"]
+    },
+    {
+      "name": "k=1 of 10", "key": "", "k": 1, "newUser": true,
+      "candidates": [
+        {"id": "1", "weight": 1, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": true, "full": false},
+        {"id": "3", "weight": 1, "healthy": true, "full": false},
+        {"id": "4", "weight": 1, "healthy": true, "full": false},
+        {"id": "5", "weight": 1, "healthy": true, "full": false},
+        {"id": "6", "weight": 1, "healthy": true, "full": false},
+        {"id": "7", "weight": 1, "healthy": true, "full": false},
+        {"id": "8", "weight": 1, "healthy": true, "full": false},
+        {"id": "9", "weight": 1, "healthy": true, "full": false},
+        {"id": "10", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["10"]
+    },
+    {
+      "name": "k larger than the candidates", "key": "", "k": 5, "newUser": true,
+      "candidates": [
+        {"id": "1", "weight": 1, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": true, "full": false},
+        {"id": "3", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["1", "2", "3"]
+    },
+    {
+      "name": "weights", "key": "99999999-9999-4999-8999-999999999991", "k": 3, "newUser": true,
+      "candidates": [
+        {"id": "1", "weight": 3, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": true, "full": false},
+        {"id": "3", "weight": 0.5, "healthy": true, "full": false},
+        {"id": "4", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["1", "4", "2"]
+    },
+    {
+      "name": "zero weight counts as one", "key": "0b1e7c2a-5d3f-4c6e-9a8b-1f2e3d4c5b6a", "k": 2, "newUser": true,
+      "candidates": [
+        {"id": "a", "weight": 0, "healthy": true, "full": false},
+        {"id": "b", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["a", "b"]
+    },
+    {
+      "name": "an unhealthy candidate is never picked", "key": "99999999-9999-4999-8999-999999999991", "k": 5, "newUser": false,
+      "candidates": [
+        {"id": "1", "weight": 1, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": false, "full": false},
+        {"id": "3", "weight": 1, "healthy": true, "full": false},
+        {"id": "4", "weight": 1, "healthy": true, "full": false},
+        {"id": "5", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["4", "1", "5", "3"]
+    },
+    {
+      "name": "a full candidate is skipped for a new user", "key": "0b1e7c2a-5d3f-4c6e-9a8b-1f2e3d4c5b6a", "k": 5, "newUser": true,
+      "candidates": [
+        {"id": "1", "weight": 1, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": true, "full": false},
+        {"id": "3", "weight": 1, "healthy": true, "full": true},
+        {"id": "4", "weight": 1, "healthy": true, "full": false},
+        {"id": "5", "weight": 1, "healthy": true, "full": true}
+      ],
+      "want": ["1", "4", "2"]
+    },
+    {
+      "name": "and kept for an existing one", "key": "0b1e7c2a-5d3f-4c6e-9a8b-1f2e3d4c5b6a", "k": 5, "newUser": false,
+      "candidates": [
+        {"id": "1", "weight": 1, "healthy": true, "full": false},
+        {"id": "2", "weight": 1, "healthy": true, "full": false},
+        {"id": "3", "weight": 1, "healthy": true, "full": true},
+        {"id": "4", "weight": 1, "healthy": true, "full": false},
+        {"id": "5", "weight": 1, "healthy": true, "full": true}
+      ],
+      "want": ["3", "1", "5", "4", "2"]
+    },
+    {
+      "name": "nothing to pick", "key": "99999999-9999-4999-8999-999999999991", "k": 2, "newUser": true,
+      "candidates": [],
+      "want": []
+    },
+    {
+      "name": "non-ascii ids", "key": "گرنت-۱", "k": 3, "newUser": true,
+      "candidates": [
+        {"id": "inbound-ö", "weight": 1, "healthy": true, "full": false},
+        {"id": "۲", "weight": 2, "healthy": true, "full": false},
+        {"id": "x", "weight": 1, "healthy": true, "full": false}
+      ],
+      "want": ["۲", "x", "inbound-ö"]
+    }
+  ]
+}

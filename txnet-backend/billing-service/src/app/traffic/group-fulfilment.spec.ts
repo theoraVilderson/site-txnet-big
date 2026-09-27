@@ -15,13 +15,17 @@
  *  - **a config goes only on an inbound the panel's admin picked** (F-114-b,
  *    `contract.inbounds.md`): every pick under `all`, the emptiest under
  *    `spread`, none past an inbound's or the panel's cap, and nothing at all —
- *    never the first enabled inbound — on a panel with no pick.
+ *    never the first enabled inbound — on a panel with no pick;
+ *  - **under `hrw`, K of the picks by the Grant's rendezvous hash** (F-027-di):
+ *    a lost inbound moves nobody until its config is gone, and then only that
+ *    buyer, to its next-ranked inbound.
  */
 import { ActorType, ConfigProtocol, ConfigStatus, DesiredRemote, EnforcementState, GrantStatus, InboundPlacement, PanelGroupMemberRole, PanelGroupStrategy, PanelReviewState, PanelState, Prisma } from '@prisma/client';
 import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import { ConfigActionsService } from './config-actions';
 import { GroupFulfilmentService, planFulfilment } from './group-fulfilment';
+import { hrwPick } from './hrw';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '22222222-2222-4222-8222-222222222222';
@@ -30,15 +34,16 @@ const [A, B, C, D, E] = ['a', 'b', 'c', 'd', 'e'].map((x) => `${x.repeat(8)}-${x
 
 type Row = Record<string, unknown> & { id: string };
 type Inbound = { remoteId: string; protocol: ConfigProtocol; maxClients: number | null };
-type PanelOpts = { inboundPlacement?: InboundPlacement; maxClients?: number | null; inbounds?: Inbound[] };
+type PanelOpts = { inboundPlacement?: InboundPlacement; maxClients?: number | null; inboundsPerBuyer?: number | null; inbounds?: Inbound[] };
 type Member = {
   panelId: string;
   role: PanelGroupMemberRole;
   inboundPlacement?: InboundPlacement | null;
   maxClients?: number | null;
+  inboundsPerBuyer?: number | null;
   /** Assigned inbounds (F-027-ch); none = the panel's pool, `panel.inbounds`. */
   inbounds: { inbound: Inbound & { enabled: boolean; goneAt: Date | null } }[];
-  panel: { reviewState: PanelReviewState; panelState: PanelState; inboundPlacement: InboundPlacement; maxClients: number | null; inbounds: Inbound[] };
+  panel: { reviewState: PanelReviewState; panelState: PanelState; inboundPlacement: InboundPlacement; maxClients: number | null; inboundsPerBuyer: number | null; inbounds: Inbound[] };
 };
 
 const inbound = (remoteId: string, protocol: ConfigProtocol = ConfigProtocol.vless, maxClients: number | null = null): Inbound => ({ remoteId, protocol, maxClients });
@@ -54,7 +59,7 @@ const member = (
   panelId,
   role,
   inbounds: [],
-  panel: { reviewState, panelState, inboundPlacement: panel.inboundPlacement ?? InboundPlacement.all, maxClients: panel.maxClients ?? null, inbounds: panel.inbounds ?? [inbound('1')] },
+  panel: { reviewState, panelState, inboundPlacement: panel.inboundPlacement ?? InboundPlacement.all, maxClients: panel.maxClients ?? null, inboundsPerBuyer: panel.inboundsPerBuyer ?? null, inbounds: panel.inbounds ?? [inbound('1')] },
 });
 const on = (panelId: string, panel: PanelOpts) => member(panelId, PanelState.healthy, PanelGroupMemberRole.primary, PanelReviewState.accepted, panel);
 
@@ -232,6 +237,7 @@ describe('GroupFulfilmentService.fulfil (mirror)', () => {
 
   it('answers the same plan from the same facts, whatever order the members come in', () => {
     const facts = {
+      grantId: GRANT,
       grantStatus: GrantStatus.pending,
       group: { strategy: PanelGroupStrategy.mirror, minHealthyPanels: 1, members: [member(B), member(A, PanelState.maintenance)].map(withLoad) },
       configs: [{ panelId: B, inboundRemoteId: '1', status: ConfigStatus.active, desiredRemote: DesiredRemote.present, enforcementState: EnforcementState.pending, credentialGroupId: 'g', drainedAt: null }],
@@ -310,6 +316,52 @@ describe('placement on the picked inbounds (F-114-b)', () => {
 
     const inherited = build({ members: [{ ...on(A, panel), inboundPlacement: null, maxClients: null }], others });
     expect(await inherited.service.fulfil(inherited.tx, GRANT)).toMatchObject({ placed: 0, waiting: [A] });
+  });
+
+  it('under `hrw`, K of the picks, the ones the Grant\'s rendezvous hash names; K defaults to 2 (F-027-di)', async () => {
+    const picks = ['1', '2', '3', '4', '5', '6'].map((id) => inbound(id));
+    const ranked = hrwPick(GRANT, picks.map((i) => ({ id: i.remoteId, weight: 1, healthy: true, full: false })), 6, true);
+    const { service, tx, configs } = build({ members: [on(A, { inboundPlacement: InboundPlacement.hrw, inbounds: picks })] });
+
+    await service.fulfil(tx, GRANT);
+    expect(configs.map((c) => c.inboundRemoteId).sort()).toEqual(ranked.slice(0, 2).sort());
+    expect((await service.fulfil(tx, GRANT)).placed).toBe(0);
+
+    const three = build({ members: [{ ...on(A, { inboundPlacement: InboundPlacement.hrw, inboundsPerBuyer: 5, inbounds: picks }), inboundsPerBuyer: 3 }] });
+    await three.service.fulfil(three.tx, GRANT);
+    expect(three.configs.map((c) => c.inboundRemoteId).sort()).toEqual(ranked.slice(0, 3).sort());
+  });
+
+  it('under `hrw`, a lost inbound moves nobody while its config stands, then only its buyer, to the next-ranked pick', async () => {
+    const picks = ['1', '2', '3', '4', '5'].map((id) => inbound(id));
+    const ranked = hrwPick(GRANT, picks.map((i) => ({ id: i.remoteId, weight: 1, healthy: true, full: false })), 5, true);
+    const hrw = (inbounds: Inbound[]) => [on(A, { inboundPlacement: InboundPlacement.hrw, inbounds })];
+    const { service, tx, configs, group } = build({ members: hrw(picks) });
+    await service.fulfil(tx, GRANT);
+    for (const c of configs) c.desiredRemote = DesiredRemote.present;
+
+    // Its first inbound is disabled: the config there still holds one of the two (SPEC weakness #25).
+    const lost = ranked[0];
+    group.members = hrw(picks.filter((i) => i.remoteId !== lost));
+    expect((await service.fulfil(tx, GRANT)).placed).toBe(0);
+
+    // The platform drains it: exactly one new config, on the third-ranked, never on the one it keeps.
+    const gone = configs.find((c) => c.inboundRemoteId === lost);
+    if (gone) gone.drainedAt = new Date();
+    expect((await service.fulfil(tx, GRANT)).placed).toBe(1);
+    expect(configs.at(-1)).toMatchObject({ inboundRemoteId: ranked[2], credentialGroupId: configs[0].credentialGroupId });
+  });
+
+  it('under `hrw`, a full inbound is passed over for the next, and fewer picks than K place on each and owe no more', async () => {
+    const picks = ['1', '2', '3'].map((id) => inbound(id, ConfigProtocol.vless, 1));
+    const ranked = hrwPick(GRANT, picks.map((i) => ({ id: i.remoteId, weight: 1, healthy: true, full: false })), 3, true);
+    const full = build({ members: [on(A, { inboundPlacement: InboundPlacement.hrw, inbounds: picks })], others: [taken(A, ranked[0])] });
+    await full.service.fulfil(full.tx, GRANT);
+    expect(full.configs.map((c) => c.inboundRemoteId)).toEqual(ranked.slice(1, 3).sort());
+
+    const few = build({ members: [on(A, { inboundPlacement: InboundPlacement.hrw, inboundsPerBuyer: 4, inbounds: [inbound('1')] })] });
+    await few.service.fulfil(few.tx, GRANT);
+    expect(await few.service.fulfil(few.tx, GRANT)).toMatchObject({ placed: 0, waiting: [] });
   });
 
   it('a config placed before picks holds its panel, and counts once towards minHealthyPanels', async () => {

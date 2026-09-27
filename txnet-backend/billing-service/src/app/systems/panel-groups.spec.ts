@@ -217,6 +217,7 @@ describe('PanelGroupsService', () => {
       maxClients: { value: 40, layer: 'member' },
       priority: { value: 0, layer: 'member' },
       weight: { value: 1, layer: 'member' },
+      inboundsPerBuyer: { value: 2, layer: 'platform' },
     });
     expect(members[0]).toMatchObject({ drainingSince: null, role: 'primary' });
 

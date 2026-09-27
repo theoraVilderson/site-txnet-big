@@ -20,7 +20,7 @@ export type MemberSellingInput = SellingLayerValues;
 export type PanelGroupMemberInput = MemberSellingInput & { panelId: string };
 
 /** The panel's layer, beneath each member's. */
-const PANEL_SELLING_FIELDS = { inboundPlacement: true, maxClients: true, priority: true, weight: true } satisfies Prisma.PanelSelect;
+const PANEL_SELLING_FIELDS = { inboundPlacement: true, maxClients: true, priority: true, weight: true, inboundsPerBuyer: true } satisfies Prisma.PanelSelect;
 
 /** A member's panel, field by field: `panelApiCredentials` is on the same row. */
 const MEMBER_FIELDS = {
@@ -30,6 +30,7 @@ const MEMBER_FIELDS = {
   maxClients: true,
   priority: true,
   weight: true,
+  inboundsPerBuyer: true,
   role: true,
   drainingSince: true,
   createdAt: true,
@@ -241,8 +242,8 @@ export class PanelGroupsService {
 
 /** Only the keys the body named: absent leaves a layer's value, null clears it. */
 function sellingData(input: MemberSellingInput) {
-  const { inboundPlacement, maxClients, priority, weight } = input;
-  return Object.fromEntries(Object.entries({ inboundPlacement, maxClients, priority, weight }).filter(([, v]) => v !== undefined)) as MemberSellingInput;
+  const { inboundPlacement, maxClients, priority, weight, inboundsPerBuyer } = input;
+  return Object.fromEntries(Object.entries({ inboundPlacement, maxClients, priority, weight, inboundsPerBuyer }).filter(([, v]) => v !== undefined)) as MemberSellingInput;
 }
 
 /**

@@ -22,6 +22,7 @@ import { errorLine } from '../log-line';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionsService, ConfigActor, InboundPlacementTarget } from './config-actions';
+import { hrwPick } from './hrw';
 import { effectiveSellingSettings, PLATFORM_SELLING_DEFAULTS, sellingInbounds } from './selling-settings';
 
 /**
@@ -74,6 +75,7 @@ const MEMBER_PANEL_FIELDS = {
   panelState: true,
   inboundPlacement: true,
   maxClients: true,
+  inboundsPerBuyer: true,
   inbounds: { where: POOL_INBOUND, select: { remoteId: true, protocol: true, maxClients: true } },
 } satisfies Prisma.PanelSelect;
 
@@ -86,6 +88,7 @@ const MEMBER_FIELDS = {
   role: true,
   inboundPlacement: true,
   maxClients: true,
+  inboundsPerBuyer: true,
   inbounds: { select: { inbound: { select: { remoteId: true, protocol: true, maxClients: true, enabled: true, goneAt: true } } } },
   panel: { select: MEMBER_PANEL_FIELDS },
 } satisfies Prisma.PanelGroupMemberSelect;
@@ -95,12 +98,14 @@ type MemberRow = Prisma.PanelGroupMemberGetPayload<{ select: typeof MEMBER_FIELD
 /** A picked inbound as fulfilment reads it: `sold`, enabled, not gone, of a known protocol (F-114-b). */
 export type InboundFacts = { remoteId: string; protocol: ConfigProtocol; maxClients: number | null; clients: number };
 
-/** `inboundPlacement` and `maxClients` are the effective ones for this group: member -> panel -> platform (F-027-cg). */
+/** `inboundPlacement`, `maxClients` and `inboundsPerBuyer` are the effective ones for this group: member -> panel -> platform (F-027-cg). */
 type PanelFacts = {
   reviewState: PanelReviewState;
   panelState: PanelState;
   inboundPlacement: InboundPlacement;
   maxClients: number | null;
+  /** K under `hrw` (F-027-di). */
+  inboundsPerBuyer: number;
   /** Grants holding a live config on the panel — what `maxClients` caps. */
   users: number;
   inbounds: InboundFacts[];
@@ -111,17 +116,18 @@ type MemberFacts = { panelId: string; role: PanelGroupMemberRole; panel: PanelFa
 /**
  * How this group places on a member's panel: the member's own value, else the
  * panel's, else the platform default (F-027-cg, ADR-0090 decision 2). Only the
- * two `mirror` reads; `priority` / `weight` resolve the same way for the
+ * three `mirror` reads; `priority` / `weight` resolve the same way for the
  * strategies not built yet. The due-scan SQL in `fulfilDue` resolves the same
- * two with `COALESCE`, and assumes the platform cap is none.
+ * three with `COALESCE`, and assumes the platform cap is none.
  */
 export function placementSettings(m: {
   inboundPlacement?: InboundPlacement | null;
   maxClients?: number | null;
-  panel: { inboundPlacement?: InboundPlacement | null; maxClients?: number | null };
-}): Pick<PanelFacts, 'inboundPlacement' | 'maxClients'> {
+  inboundsPerBuyer?: number | null;
+  panel: { inboundPlacement?: InboundPlacement | null; maxClients?: number | null; inboundsPerBuyer?: number | null };
+}): Pick<PanelFacts, 'inboundPlacement' | 'maxClients' | 'inboundsPerBuyer'> {
   const effective = effectiveSellingSettings(m, m.panel);
-  return { inboundPlacement: effective.inboundPlacement.value, maxClients: effective.maxClients.value };
+  return { inboundPlacement: effective.inboundPlacement.value, maxClients: effective.maxClients.value, inboundsPerBuyer: effective.inboundsPerBuyer.value };
 }
 
 /**
@@ -173,6 +179,8 @@ type ConfigFacts = {
 };
 
 export type FulfilmentFacts = {
+  /** The key `hrw` ranks a member's inbounds by (F-027-di). */
+  grantId: string;
   grantStatus: GrantStatus;
   group: { strategy: PanelGroupStrategy; minHealthyPanels: number; members: MemberFacts[] };
   configs: ConfigFacts[];
@@ -200,9 +208,20 @@ const hasRoom = (i: InboundFacts) => i.maxClients === null || i.clients < i.maxC
  * `held`: the inbounds its un-drained configs on the panel are on — `null` for
  * a row placed before F-114-b, which holds the whole panel.
  */
-function placementsOn(m: MemberFacts, held: (string | null)[], live: boolean): { targets: InboundFacts[]; owed: boolean } {
+function placementsOn(grantId: string, m: MemberFacts, held: (string | null)[], live: boolean): { targets: InboundFacts[]; owed: boolean } {
   if (held.includes(null)) return { targets: [], owed: false };
   const picked = [...m.panel.inbounds].sort(byRemoteId);
+  if (m.panel.inboundPlacement === InboundPlacement.hrw) {
+    // K of the picks by the Grant's rank (F-027-di). Every un-drained config
+    // counts towards K wherever it is, so an inbound lost or unticked moves
+    // nobody (rule 6); its buyer is re-placed once that config is drained.
+    const missing = picked.filter((i) => !held.includes(i.remoteId));
+    if (held.length >= m.panel.inboundsPerBuyer || (missing.length === 0 && held.length > 0)) return { targets: [], owed: false };
+    const full = !live && m.panel.maxClients !== null && m.panel.users >= m.panel.maxClients;
+    // A config added is a new seat on its inbound, so a full one is passed over even for a buyer already placed.
+    const ranked = hrwPick(grantId, missing.map((i) => ({ id: i.remoteId, weight: 1, healthy: true, full: !hasRoom(i) })), m.panel.inboundsPerBuyer - held.length, true);
+    return { targets: full ? [] : missing.filter((i) => ranked.includes(i.remoteId)), owed: true };
+  }
   if (m.panel.inboundPlacement === InboundPlacement.spread) {
     if (held.length > 0) return { targets: [], owed: false };
     const open = picked.filter(hasRoom).sort((a, b) => a.clients - b.clients || byRemoteId(a, b));
@@ -242,7 +261,7 @@ export function planFulfilment(facts: FulfilmentFacts): FulfilmentPlan {
     if (m.role === PanelGroupMemberRole.drain) continue;
     const mine = kept.filter((c) => c.panelId === m.panelId);
     const live = mine.some((c) => c.desiredRemote === DesiredRemote.present);
-    const { targets, owed } = placementsOn(m, mine.map((c) => c.inboundRemoteId), live);
+    const { targets, owed } = placementsOn(facts.grantId, m, mine.map((c) => c.inboundRemoteId), live);
     if (!owed) continue;
     if (!placeableMember(m) || targets.length === 0) {
       waiting.push(m.panelId);
@@ -283,7 +302,8 @@ const FULFIL_BATCH_SIZE = 200;
 /**
  * Group fulfilment (F-027-bl, catalog §7.3): a Grant of a variant with a panel
  * group gets a config on every non-drain healthy member — one per picked
- * inbound under `all`, one on the emptiest under `spread` (F-114-b) — and
+ * inbound under `all`, one on the emptiest under `spread` (F-114-b), K by the
+ * Grant's rendezvous hash under `hrw` (F-027-di) — and
  * activates once `minHealthyPanels` of those panels confirm one.
  *
  * It writes desired state and nothing else — `ConfigActionsService` makes the
@@ -337,7 +357,7 @@ export class GroupFulfilmentService {
       select: { panelId: true, inboundRemoteId: true, status: true, desiredRemote: true, enforcementState: true, credentialGroupId: true, drainedAt: true },
     });
     const members = await this.withLoad(tx, group.members);
-    const plan = planFulfilment({ grantStatus: grant.status, group: { ...group, members }, configs });
+    const plan = planFulfilment({ grantId, grantStatus: grant.status, group: { ...group, members }, configs });
 
     const made = await this.actions.provisionForGroup(tx, {
       grantId,
@@ -441,6 +461,11 @@ export class GroupFulfilmentService {
                                     WHERE c."grantId" = g."id" AND c."panelId" = m."panelId" AND c."drainedAt" IS NULL
                                       AND (COALESCE(m."inboundPlacement", p."inboundPlacement", ${PLATFORM_SELLING_DEFAULTS.inboundPlacement}::"network"."InboundPlacement") = 'spread'
                                            OR c."inboundRemoteId" IS NULL OR c."inboundRemoteId" = i."remoteId"))
+                    -- under hrw, fewer than K un-drained configs of the Grant on the panel (F-027-di)
+                    AND (COALESCE(m."inboundPlacement", p."inboundPlacement", ${PLATFORM_SELLING_DEFAULTS.inboundPlacement}::"network"."InboundPlacement") <> 'hrw'
+                         OR COALESCE(m."inboundsPerBuyer", p."inboundsPerBuyer", ${PLATFORM_SELLING_DEFAULTS.inboundsPerBuyer}) > (
+                              SELECT count(*) FROM "network"."config" c
+                               WHERE c."grantId" = g."id" AND c."panelId" = m."panelId" AND c."drainedAt" IS NULL))
                     -- the inbound has a seat
                     AND (i."maxClients" IS NULL OR i."maxClients" > (
                            SELECT count(*) FROM "network"."config" c

@@ -26,7 +26,7 @@ Source of truth: `txnet-backend/prisma/domains/network.prisma` (Postgres schema
 | unattributed_usage | usage against a remote client that matches no config | via panel | one row per remote client |
 | radius_session | one RADIUS accounting session, its high-water bytes and how it closed | via config (nullable) / panel | permanent |
 | panel_group | where a variant's Grants are provisioned: `strategy`, `minHealthyPanels`, `subscriptionTtlSeconds` ([contract.groups.md](contract.groups.md)) | `tenantId` nullable (null = platform), shared-read | permanent |
-| panel_group_member | a panel in a group, once: its layer of the selling settings (`inboundPlacement`, `maxClients`, `priority`, `weight`; null = the panel's), `role` (`primary \| replica \| drain`), `drainingSince` | `tenantId` = its group's (trigger), shared-read | removed after draining |
+| panel_group_member | a panel in a group, once: its layer of the selling settings (`inboundPlacement`, `maxClients`, `priority`, `weight`, `inboundsPerBuyer`; null = the panel's), `role` (`primary \| replica \| drain`), `drainingSince` | `tenantId` = its group's (trigger), shared-read | removed after draining |
 | panel_inbound | a panel's inbound as last read (`goneAt` once unlisted), and the admin's pick `sold` / `maxClients`; with the panel's selling settings (null = platform default), `config.inboundRemoteId` ([contract.inbounds.md](contract.inbounds.md)) | `tenantId` = its panel's (trigger), shared-read | with its panel |
 | lease_close | a Grant the lease planner closed, and the Quota and end it closed on: while it stands the Grant's configs are desired disabled ([contract.lease.md](contract.lease.md) rule 24, F-027-dd) | via Grant | until a renewal reopens it; cascades with the Grant |
 

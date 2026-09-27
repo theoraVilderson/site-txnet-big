@@ -31,7 +31,7 @@ const INBOUND_FIELDS = {
   assignment: { select: { member: { select: { group: { select: { id: true, name: true } } } } } },
 } satisfies Prisma.PanelInboundSelect;
 
-const PANEL_FIELDS = { id: true, inboundPlacement: true, maxClients: true, priority: true, weight: true, inboundsReadAt: true } satisfies Prisma.PanelSelect;
+const PANEL_FIELDS = { id: true, inboundPlacement: true, maxClients: true, priority: true, weight: true, inboundsPerBuyer: true, inboundsReadAt: true } satisfies Prisma.PanelSelect;
 
 /**
  * A panel's inbounds on the systems surface (F-114-b, network
@@ -103,8 +103,8 @@ export class PanelInboundsService {
           });
         }
       }
-      const { inboundPlacement, maxClients, priority, weight } = input;
-      const settings = Object.fromEntries(Object.entries({ inboundPlacement, maxClients, priority, weight }).filter(([, v]) => v !== undefined));
+      const { inboundPlacement, maxClients, priority, weight, inboundsPerBuyer } = input;
+      const settings = Object.fromEntries(Object.entries({ inboundPlacement, maxClients, priority, weight, inboundsPerBuyer }).filter(([, v]) => v !== undefined));
       if (Object.keys(settings).length > 0) await tx.panel.update({ where: { id: panel.id }, data: settings });
     });
     this.logger.log(`panel ${panel.id} inbounds edited by ${actor.adminId}`);
