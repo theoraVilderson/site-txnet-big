@@ -21,6 +21,8 @@ export const NOTIFY_TEMPLATES = [
   'serviceUsageThreshold',
   'serviceEndsSoon',
   'serviceEndsWithinADay',
+  'serviceUsageAndEndsSoon',
+  'serviceUsageAndEndsWithinADay',
   'serviceEnded',
   'serviceVolumeSpent',
   'serviceWalletSpent',
@@ -189,7 +191,31 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       fallback: '⏰ {{count}} of your services end within a day. Renew them now from My services so they do not stop.',
       inbox: { read: (ns) => ns?.retention?.endsWithinADayManyTitle, fallback: '{{count}} services end within a day' },
     },
-  },  // F-601-b: the service stopped — cutoff notices, never muted (F-601-m). Each says what brings it back:
+  },
+  // F-601-f: a usage threshold and the time level due within 24 h, told as one message; the days left pick the text.
+  serviceUsageAndEndsSoon: {
+    read: (ns) => ns?.retention?.usageAndEndsSoon,
+    fallback:
+      "📊 You have used {{percent}}% of your service's volume ({{remaining}} left), and it ends in {{days}} days. To keep it running without a break, renew it from My services.",
+    inbox: { read: (ns) => ns?.retention?.usageAndEndsSoonTitle, fallback: '{{percent}}% used, {{days}} days left' },
+    many: {
+      read: (ns) => ns?.retention?.usageAndEndsSoonMany,
+      fallback: '📊 {{count}} of your services are running low on volume and ending soon. See each one in My services and renew them to keep them running.',
+      inbox: { read: (ns) => ns?.retention?.usageAndEndsSoonManyTitle, fallback: '{{count}} services running low and ending soon' },
+    },
+  },
+  serviceUsageAndEndsWithinADay: {
+    read: (ns) => ns?.retention?.usageAndEndsWithinADay,
+    fallback:
+      "⏰ You have used {{percent}}% of your service's volume ({{remaining}} left), and it ends within a day. Renew it now from My services so it does not stop.",
+    inbox: { read: (ns) => ns?.retention?.usageAndEndsWithinADayTitle, fallback: '{{percent}}% used, ends within a day' },
+    many: {
+      read: (ns) => ns?.retention?.usageAndEndsWithinADayMany,
+      fallback: '⏰ {{count}} of your services are running low on volume and end within a day. Renew them now from My services so they do not stop.',
+      inbox: { read: (ns) => ns?.retention?.usageAndEndsWithinADayManyTitle, fallback: '{{count}} services running low and ending within a day' },
+    },
+  },
+  // F-601-b: the service stopped — cutoff notices, never muted (F-601-m). Each says what brings it back:
   // a renewal for time or a prepaid volume, a wallet top-up for a metered Grant (a metered renewal adds days alone).
   serviceEnded: {
     read: (ns) => ns?.retention?.ended,

@@ -5,7 +5,22 @@ import { OutboxEventType } from '@txnet-backend/shared-core';
  * fields passed to it as params, and `optional` ones passed only when the
  * payload has them (the tenant's support link, which it may not have set).
  */
-export type RetentionNotice = { template: string; params: readonly string[]; optional?: readonly string[] };
+export type RetentionNotice = { template: string; params: readonly string[]; optional?: readonly string[]; ahead?: AheadNotice };
+
+/**
+ * A second notice the event may carry, told with it as one message (F-601-f):
+ * the payload's `endNotice` names it (one of `types`), `endPeriod` its period
+ * and `days` the whole days left, which pick the combined text and its extra
+ * params. Told combined only when the ledger gives this event both rows.
+ */
+export type AheadNotice = { types: readonly string[]; told: (days: string) => { template: string; params: readonly string[] } };
+
+/** F-601-f: the time level due within 24 h, carried by a usage threshold (billing's metering, `endNoticeAhead`). */
+const USAGE_WITH_END: AheadNotice = {
+  types: [OutboxEventType.GRANT_ENDS_IN_7D, OutboxEventType.GRANT_ENDS_IN_3D, OutboxEventType.GRANT_ENDS_IN_1D],
+  told: (days) =>
+    days === '1' ? { template: 'serviceUsageAndEndsWithinADay', params: [] } : { template: 'serviceUsageAndEndsSoon', params: ['days'] },
+};
 
 /**
  * Each retention event type (F-601, spec 9.5) and how it is told (F-601-a).
@@ -24,10 +39,11 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   // F-601-c: nothing consumed 24 h, then 72 h, after activation — the steps, and the tenant's support.
   [OutboxEventType.GRANT_NOT_CONNECTED]: { template: 'serviceNotConnected', params: [], optional: ['supportUrl'] },
   [OutboxEventType.GRANT_STILL_NOT_CONNECTED]: { template: 'serviceStillNotConnected', params: [], optional: ['supportUrl'] },
-  // F-601-d: a prepaid Grant's period crossed 50 / 80 / 95 % of its bytes — the level and what is left.
-  [OutboxEventType.GRANT_USAGE_50]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'] },
-  [OutboxEventType.GRANT_USAGE_80]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'] },
-  [OutboxEventType.GRANT_USAGE_95]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'] },
+  // F-601-d: a prepaid Grant's period crossed 50 / 80 / 95 % of its bytes — the level and what is left;
+  // with the time level due within 24 h when one is (F-601-f).
+  [OutboxEventType.GRANT_USAGE_50]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'], ahead: USAGE_WITH_END },
+  [OutboxEventType.GRANT_USAGE_80]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'], ahead: USAGE_WITH_END },
+  [OutboxEventType.GRANT_USAGE_95]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'], ahead: USAGE_WITH_END },
   // F-601-e: 7 / 3 / 1 day(s) before a Grant's end — the whole days left; the last level reads "within a day".
   [OutboxEventType.GRANT_ENDS_IN_7D]: { template: 'serviceEndsSoon', params: ['days'] },
   [OutboxEventType.GRANT_ENDS_IN_3D]: { template: 'serviceEndsSoon', params: ['days'] },

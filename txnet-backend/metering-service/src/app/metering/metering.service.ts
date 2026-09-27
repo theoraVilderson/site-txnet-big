@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HoldReason, Prisma, UsageDispositionState } from '@prisma/client';
 import {
+  endNoticeAhead,
   OutboxEventType,
   runWithTenant,
   tenantTransaction,
@@ -289,6 +290,8 @@ export class MeteringService {
         usagePeriodFromBytes: true,
         usagePeriodStartedAt: true,
         startsAt: true,
+        activatedAt: true,
+        endsAt: true,
       },
     });
     await this.announceUsage(tx, c.config, grant.userId, grant.consumedBytes);
@@ -303,15 +306,21 @@ export class MeteringService {
    * orders two replicas' charges, so exactly one of them sees each crossing.
    * notification's ledger still lets a level through once per period
    * (`contract.retention.md`); the period is when it opened.
+   *
+   * A time level due within the next 24 h rides along (F-601-f): `endNotice`,
+   * `endPeriod` (the end, the sweep's period for it) and `days`, so the user
+   * is told both in one message and the sweep's own event later finds its
+   * ledger row held.
    */
   private async announceThreshold(
     tx: Prisma.TransactionClient,
     config: Omit<ConfigAttribution, 'remoteId'>,
-    grant: UsageThresholdGrant & { userId: string; usagePeriodStartedAt: Date | null; startsAt: Date },
+    grant: UsageThresholdGrant & { userId: string; usagePeriodStartedAt: Date | null; startsAt: Date; activatedAt: Date | null; endsAt: Date | null },
     charged: bigint,
   ): Promise<void> {
     const crossed = usageThresholdCrossed(grant, charged);
     if (!crossed) return;
+    const ahead = grant.endsAt ? endNoticeAhead({ endsAt: grant.endsAt, activeSince: grant.activatedAt ?? grant.startsAt }, new Date()) : null;
     await tx.outboxEvent.create({
       data: {
         aggregate: 'entitlement.grant',
@@ -324,6 +333,7 @@ export class MeteringService {
           period: (grant.usagePeriodStartedAt ?? grant.startsAt).toISOString(),
           percent: String(crossed.level),
           remaining: remainingLabel(crossed.remainingBytes),
+          ...(ahead && grant.endsAt ? { endNotice: ahead.type, endPeriod: grant.endsAt.toISOString(), days: String(ahead.days) } : {}),
         },
       },
       select: { id: true },

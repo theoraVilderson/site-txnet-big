@@ -31,6 +31,13 @@ const CLAIM_PATH = '/api/internal/notifications/retention/claim';
  *
  * A payload that does not name its user, Grant or period throws before the
  * claim: a period claimed for a notice never told is that notice lost.
+ *
+ * **Two notices due the same day are one message** (F-601-f). A usage event
+ * may carry the time level due within 24 h; once its own row is claimed, the
+ * carried one is claimed for the same event, and both are told in one
+ * combined text. The sweep's own event for that level later finds the row
+ * held and tells nothing. A carried row already told leaves the usage notice
+ * told alone.
  */
 @Injectable()
 export class RetentionNoticeConsumer implements OnApplicationBootstrap {
@@ -64,18 +71,23 @@ export class RetentionNoticeConsumer implements OnApplicationBootstrap {
     if (!notice) throw new Error(`outbox event ${event.id} is ${event.type}, which has no retention notice`);
     const retention = retentionOf(event, notice);
 
-    if (!(await this.claim(event, retention))) {
+    if (!(await this.claim(event, retention, event.type, retention.period))) {
       this.logger.debug(`grant ${retention.grantId} already told ${event.type} this period`);
       return;
+    }
+    let told = { template: notice.template, params: retention.params };
+    const ahead = retention.ahead;
+    if (ahead && (await this.claim(event, retention, ahead.notice, ahead.period))) {
+      told = { template: ahead.template, params: { ...retention.params, ...ahead.params } };
     }
     await this.sender.send({
       consumer: CONSUMER,
       eventId: event.id,
-      person: { tenantId: retention.tenantId, userId: retention.userId, template: notice.template, params: retention.params },
+      person: { tenantId: retention.tenantId, userId: retention.userId, ...told },
     });
   }
 
-  private async claim(event: OutboxMessage, r: Retention): Promise<boolean> {
+  private async claim(event: OutboxMessage, r: Retention, notice: string, period: string): Promise<boolean> {
     if (!this.baseUrl) throw new Error('NOTIFICATION_API_BASE_URL is not set');
     if (!this.serviceToken) throw new Error('SERVICE_AUTH_TOKEN is not set');
     const controller = new AbortController();
@@ -84,7 +96,7 @@ export class RetentionNoticeConsumer implements OnApplicationBootstrap {
       const response = await fetch(`${this.baseUrl}${CLAIM_PATH}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', [RequestHeaders.serviceToken]: this.serviceToken },
-        body: JSON.stringify({ eventId: event.id, userId: r.userId, grantId: r.grantId, notice: event.type, period: r.period }),
+        body: JSON.stringify({ eventId: event.id, userId: r.userId, grantId: r.grantId, notice, period }),
         signal: controller.signal,
       });
       if (!response.ok) throw new Error(`notification answered ${response.status} to ${CLAIM_PATH}`);
@@ -97,7 +109,15 @@ export class RetentionNoticeConsumer implements OnApplicationBootstrap {
   }
 }
 
-type Retention = { tenantId: string; userId: string; grantId: string; period: string; params: Record<string, string> };
+type Retention = {
+  tenantId: string;
+  userId: string;
+  grantId: string;
+  period: string;
+  params: Record<string, string>;
+  /** The carried notice (F-601-f): its type and period, and the combined text told when both rows are held. */
+  ahead: { notice: string; period: string; template: string; params: Record<string, string> } | null;
+};
 
 /** The payload, or a throw: whose Grant and which period are never guessed. */
 function retentionOf(event: OutboxMessage, notice: RetentionNotice): Retention {
@@ -120,5 +140,24 @@ function retentionOf(event: OutboxMessage, notice: RetentionNotice): Retention {
     const value = str(name);
     if (value !== null) params[name] = value;
   }
-  return { tenantId, userId, grantId, period, params };
+  return { tenantId, userId, grantId, period, params, ahead: aheadOf(event, notice, str) };
+}
+
+/** The carried notice, all of it or a throw — a half-named one would claim a row it cannot tell. */
+function aheadOf(event: OutboxMessage, notice: RetentionNotice, str: (k: string) => string | null): Retention['ahead'] {
+  const type = str('endNotice');
+  if (!notice.ahead || type === null) return null;
+  const period = str('endPeriod');
+  const days = str('days');
+  if (!notice.ahead.types.includes(type) || period === null || days === null) {
+    throw new Error(`outbox event ${event.id} has a payload carrying '${type}' without a period and days it can tell`);
+  }
+  const told = notice.ahead.told(days);
+  const params: Record<string, string> = {};
+  for (const name of told.params) {
+    const value = str(name);
+    if (value === null) throw new Error(`outbox event ${event.id} has a payload without '${name}'`);
+    params[name] = value;
+  }
+  return { notice: type, period, template: told.template, params };
 }

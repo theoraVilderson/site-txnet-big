@@ -60,6 +60,7 @@ by `grant_end_notice`; answer `scanned`, `told`.
 | A level that fell due before `activatedAt ?? startsAt` passes untold | a 5-day service is not "ending soon" the minute it is bought |
 | 7 and 3 days: `serviceEndsSoon`; 1 day: `serviceEndsWithinADay` | a day's notice is the last one, and "1 days" is not a sentence |
 | The write is conditional on the end and the clock read; `period` = `endsAt`, one type per level | two sweeps, or a renewal between read and write, emit once; notification's ledger holds each level once per end (invariant 14) |
+| A level due within 24 h of a usage crossing is carried on that usage event (`endNoticeAhead`, F-601-f) and told with it, up to a day early; the sweep's event then tells nothing. The levels live in shared-core `end-notice-levels.ts`, one list for both | two notices due the same day are one message (notification `contract.retention.md`) |
 
 **Cutoff (F-601-b, spec 9.5)** — the user is told their service stopped,
 and what brings it back. Emitted by billing's `traffic/exhaustion.ts` through

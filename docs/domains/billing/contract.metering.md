@@ -164,3 +164,6 @@ what the share is of, which Grants, which level — is entitlement's
    sees each crossing, and the event commits with the bytes that crossed it.
 2. **No window.** Unlike the page's push, a crossing is told on the charge
    that makes it; a duplicate delta commits nothing and tells nothing.
+3. **A time level due within 24 h rides along** (F-601-f): `endNoticeAhead`
+   on the Grant's `endsAt` and `activatedAt ?? startsAt` adds `endNotice`,
+   `endPeriod`, `days` to the event, so the user hears both in one message.

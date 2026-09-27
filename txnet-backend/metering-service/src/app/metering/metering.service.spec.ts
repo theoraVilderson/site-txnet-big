@@ -68,6 +68,8 @@ function grantRow(over: Record<string, unknown> = {}) {
     usagePeriodFromBytes: 0n,
     usagePeriodStartedAt: null,
     startsAt: GRANT_STARTS_AT,
+    activatedAt: null,
+    endsAt: null,
     ...over,
   };
 }
@@ -289,6 +291,41 @@ describe('MeteringService', () => {
       type: 'entitlement.grant.usage_80',
       payload: { tenantId: TENANT, userId: USER, grantId: GRANT, period: renewedAt.toISOString(), percent: '80', remaining: '1 MB' },
     });
+  });
+
+  // F-601-f: a time level due within 24 h rides on the usage notice, so the user is told both in one message.
+  it('carries the time level due within the next 24 h on the usage threshold, and none further out', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-09-27T10:00:00Z'));
+      const endsAt = new Date('2026-09-30T22:00:00Z'); // 3.5 days: the 3-day level is 12 h away
+      const store = fakeStore([{ id: CONFIG, tenantId: TENANT, grantId: GRANT, remoteId: 'client-a' }], [], { purchasedBytes: 5_000n, endsAt });
+      await service(store).apply(pass({ deltas: [delta()] }));
+
+      const [threshold] = store.outbox.filter((e) => e['type'] !== 'entitlement.grant.usage');
+      expect(threshold['payload']).toEqual({
+        tenantId: TENANT,
+        userId: USER,
+        grantId: GRANT,
+        period: GRANT_STARTS_AT.toISOString(),
+        percent: '50',
+        remaining: '1 MB',
+        endNotice: 'entitlement.grant.ends_in_3d',
+        endPeriod: endsAt.toISOString(),
+        days: '4',
+      });
+
+      const later = fakeStore([{ id: CONFIG, tenantId: TENANT, grantId: GRANT, remoteId: 'client-a' }], [], {
+        purchasedBytes: 5_000n,
+        endsAt: new Date('2026-10-02T10:00:00Z'), // 5 days: the 7-day level fell before activation, the 3-day one is 2 days away
+        activatedAt: new Date('2026-09-26T10:00:00Z'),
+      });
+      await service(later).apply(pass({ deltas: [delta()] }));
+      const [told] = later.outbox.filter((e) => e['type'] !== 'entitlement.grant.usage');
+      expect(Object.keys(told['payload'] as object)).not.toContain('endNotice');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('bills a delta: a raw-log row, the Grant cursor, and a seen row under the config tenant', async () => {

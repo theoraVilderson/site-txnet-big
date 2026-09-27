@@ -39,7 +39,12 @@ function event(payload: Record<string, unknown> = {}): OutboxMessage {
   };
 }
 
-function build({ claimed = true, claimStatus = 200, notificationUrl = 'http://notification:3000/' } = {}) {
+function build({
+  claimed = true,
+  claimStatus = 200,
+  notificationUrl = 'http://notification:3000/',
+  claims = undefined as Record<string, boolean> | undefined,
+} = {}) {
   const calls = {
     fetched: [] as Array<{ url: string; headers: Record<string, string>; body: unknown }>,
     joined: [] as Array<{ burst: string; eventId: unknown; params: unknown }>,
@@ -63,8 +68,10 @@ function build({ claimed = true, claimStatus = 200, notificationUrl = 'http://no
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init: { headers: Record<string, string>; body: string }) => {
-      calls.fetched.push({ url, headers: init.headers, body: JSON.parse(init.body) });
-      return { ok: claimStatus < 400, status: claimStatus, json: async () => ({ ok: true, msg: 'ok', data: { claimed } }) };
+      const body = JSON.parse(init.body) as { notice: string };
+      calls.fetched.push({ url, headers: init.headers, body });
+      const answer = claims?.[body.notice] ?? claimed;
+      return { ok: claimStatus < 400, status: claimStatus, json: async () => ({ ok: true, msg: 'ok', data: { claimed: answer } }) };
     }),
   );
   const consumer = new RetentionNoticeConsumer(broker as never, redis as never, { publish: vi.fn() } as never, config as never);
@@ -138,5 +145,89 @@ describe('RetentionNoticeConsumer.handle', () => {
 
     await expect(consumer.handle({ ...event(), type: 'entitlement.grant.unknown' })).rejects.toThrow(/no retention notice/);
     expect(calls.fetched).toEqual([]);
+  });
+
+  // F-601-f: a usage level and the time level due within 24 h are one message — both ledger rows held by this event.
+  describe('a time level carried on a usage notice', () => {
+    const END = 'entitlement.grant.ends_in_3d';
+    const END_PERIOD = '2026-09-30T22:00:00.000Z';
+    const carried = (over: Record<string, unknown> = {}) => event({ endNotice: END, endPeriod: END_PERIOD, days: '4', ...over });
+    const withAhead = (consumer: RetentionNoticeConsumer) => {
+      consumer.notices = {
+        [TYPE]: {
+          template: 'testThreshold',
+          params: ['level'],
+          ahead: {
+            types: [END],
+            told: (days) => (days === '1' ? { template: 'testThresholdAndLastDay', params: [] } : { template: 'testThresholdAndEnd', params: ['days'] }),
+          },
+        },
+      };
+    };
+
+    it('claims both rows for this event and tells one combined notice', async () => {
+      const { consumer, calls } = build();
+      withAhead(consumer);
+
+      await consumer.handle(carried());
+
+      expect(calls.fetched.map((f) => f.body)).toEqual([
+        { eventId: EVENT, userId: USER, grantId: GRANT, notice: TYPE, period: '2026-09-01T00:00:00.000Z' },
+        { eventId: EVENT, userId: USER, grantId: GRANT, notice: END, period: END_PERIOD },
+      ]);
+      expect(calls.joined).toEqual([
+        { burst: UnscopedRedisKeys.noticeBurst(TENANT, USER, 'testThresholdAndEnd'), eventId: EVENT, params: { level: '80', days: '4' } },
+      ]);
+    });
+
+    it("picks the last day's text by the days left", async () => {
+      const { consumer, calls } = build();
+      withAhead(consumer);
+
+      await consumer.handle(carried({ days: '1' }));
+
+      expect(calls.joined).toEqual([
+        { burst: UnscopedRedisKeys.noticeBurst(TENANT, USER, 'testThresholdAndLastDay'), eventId: EVENT, params: { level: '80' } },
+      ]);
+    });
+
+    it('tells the usage notice alone when the time level was already told', async () => {
+      const { consumer, calls } = build({ claims: { [END]: false } });
+      withAhead(consumer);
+
+      await consumer.handle(carried());
+
+      expect(calls.fetched).toHaveLength(2);
+      expect(calls.joined).toEqual([{ burst: UnscopedRedisKeys.noticeBurst(TENANT, USER, 'testThreshold'), eventId: EVENT, params: { level: '80' } }]);
+    });
+
+    it('never claims the time level when the usage level was already told', async () => {
+      const { consumer, calls } = build({ claims: { [TYPE]: false } });
+      withAhead(consumer);
+
+      await consumer.handle(carried());
+
+      expect(calls.fetched.map((f) => (f.body as { notice: string }).notice)).toEqual([TYPE]);
+      expect(calls.joined).toEqual([]);
+    });
+
+    it('refuses, before claiming, a carried level it does not accept or one without its period or days', async () => {
+      for (const bad of [{ endNotice: 'entitlement.grant.usage_95' }, { endPeriod: undefined }, { days: undefined }]) {
+        const { consumer, calls } = build();
+        withAhead(consumer);
+        await expect(consumer.handle(carried(bad)), JSON.stringify(bad)).rejects.toThrow(/payload/);
+        expect(calls.fetched).toEqual([]);
+      }
+    });
+
+    it('tells the usage notice alone when nothing is carried', async () => {
+      const { consumer, calls } = build();
+      withAhead(consumer);
+
+      await consumer.handle(event());
+
+      expect(calls.fetched).toHaveLength(1);
+      expect(calls.joined.map((j) => j.burst)).toEqual([UnscopedRedisKeys.noticeBurst(TENANT, USER, 'testThreshold')]);
+    });
   });
 });

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GrantStatus, Prisma } from '@prisma/client';
-import { OutboxEventType, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { END_NOTICE_LEVELS, endNoticeDaysLeft, runWithTenant, tenantTransaction, type EndNotice } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,14 +11,8 @@ const DAY_MS = 86_400_000;
 /** Due Grants one sweep reads. The scan drains itself: every check sets the clock for the end it read. */
 const END_NOTICE_BATCH = 500;
 
-type EndNotice = typeof OutboxEventType.GRANT_ENDS_IN_7D | typeof OutboxEventType.GRANT_ENDS_IN_3D | typeof OutboxEventType.GRANT_ENDS_IN_1D;
-
-/** The levels, farthest first (F-601-e, spec 9.5). One type per level: notification's ledger holds each once per end. */
-const END_LEVELS: ReadonlyArray<{ days: number; type: EndNotice }> = [
-  { days: 7, type: OutboxEventType.GRANT_ENDS_IN_7D },
-  { days: 3, type: OutboxEventType.GRANT_ENDS_IN_3D },
-  { days: 1, type: OutboxEventType.GRANT_ENDS_IN_1D },
-];
+/** The levels, farthest first (F-601-e, spec 9.5) — shared with metering, which carries one into a usage notice (F-601-f). */
+const END_LEVELS = END_NOTICE_LEVELS;
 
 /** How far ahead the sweep looks: the farthest level. */
 const END_HORIZON_MS = END_LEVELS[0].days * DAY_MS;
@@ -49,7 +43,7 @@ export function endNoticeStep(
   const due = END_LEVELS.filter((l) => at(l.days) <= t && at(l.days) >= floor).pop();
   const upcoming = END_LEVELS.find((l) => at(l.days) > t);
   return {
-    notice: due ? { type: due.type, days: Math.ceil((end - t) / DAY_MS) } : null,
+    notice: due ? { type: due.type, days: endNoticeDaysLeft(g.endsAt, now) } : null,
     next: upcoming ? new Date(at(upcoming.days)) : null,
   };
 }
