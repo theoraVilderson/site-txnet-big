@@ -27,7 +27,7 @@ planner that loses it on a deploy boots blind and overshoots while it relearns.
 |---|---|---|
 | `subscriptions` (`quota.Account`) | `entitlement.grant` | billing |
 | `quota_bytes` (Quota) | `entitlement.grant.purchasedBytes`, read directly on every pass (ADR-0094); on a metered Grant plus its share of the reserve, `ReserveShare(meteredRate, wallet.cachedBalance, n)` (rule 20) | billing, never copied |
-| `used_bytes` (Used) | Σ `lifetimeUp+DownBytes` of `config_counter_state` over every config of the Grant, retired ones included (ADR-0094) | the collector, never copied |
+| `used_bytes` (Used) | Σ `lifetimeUp+DownBytes` of `config_counter_state`, plus a push config's Σ `radius_session` high-water marks (F-027-du), over every config of the Grant, retired ones included (ADR-0094) | the collectors, never copied |
 | `panels` | `network.panel` | — |
 | `job_interval_ms` | `tickPeriodMs`, the `J` its phase mask is cut from; null = the family's interval | planner |
 | `lag_mean_s`, `lag_var`, `lag_n` | `lagMeanSec`, `lagVarianceSec2`, `lagSamples` | planner |

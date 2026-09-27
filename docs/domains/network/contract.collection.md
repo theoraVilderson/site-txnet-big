@@ -219,3 +219,21 @@ packet on a closed row is still accounted for; it is a measurement.
 commit after it fails, the NAS retransmits. The receive clock then differs, so
 the `deltaId` differs. Re-reading is chosen over losing, exactly as a pull
 cursor that failed to advance.
+
+**A push panel still has a turn in the loop (F-027-du)**, for its plan and
+its convergence, never for its bytes. `PostgresSource` offers it beside the
+pull panels. Its turn:
+
+1. asks the router one thing, `HealthCheck`. The ceiling reaches User Manager
+   through its REST API, so a panel whose API does not answer is an outage
+   (`panelstate`, `Planner.Failed`), and nothing is planned on it;
+2. reads each claimed client's Σ `radius_session` high-water marks
+   (`PostgresSessions`) instead of `GetUsage`. Open and closed sessions are
+   summed, held bytes included: that is what the NAS counted and what User
+   Manager checks `transfer-limit` against;
+3. publishes nothing and moves no cursor, because the receiver already did.
+   Reading the router's sessions would offer the same bytes twice;
+4. plans and converges exactly as a pull turn does (`contract.lease.md`),
+   so a capped or metered Grant on the panel gets its ceiling written.
+
+The planner reads that Σ as a session panel's counter and adds it to Used.

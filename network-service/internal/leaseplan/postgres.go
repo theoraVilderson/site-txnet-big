@@ -41,10 +41,13 @@ var _ Store = PostgresStore{}
 // past the balance (ReserveShare). A user with no wallet row has a reserve of
 // nothing. Used is summed in Go from each config's
 // lifetime counter (`contract.lease.md`), which the pass that called us has
-// already moved. A config is a replica while it can carry traffic — the
-// split's own rule (`contract.ceiling.md` "Who is in the split"). The counter
-// a ceiling is measured on is the panel's last figure on a cumulative panel,
-// and the lifetime sum where a read zeroes it. A Grant the planner closed
+// already moved, plus, on a push panel, its sessions' high-water marks in
+// `radius_session` (F-027-du). A config is a replica while it can carry
+// traffic — the split's own rule (`contract.ceiling.md` "Who is in the
+// split"). The counter a ceiling is measured on is the panel's last figure on
+// a cumulative panel, the lifetime sum where a read zeroes it, and the
+// sessions' sum on a session panel, which is what User Manager checks its
+// limit against. A Grant the planner closed
 // carries its `lease_close` row, and its configs read disabled (F-027-dd).
 const loadSQL = `
 WITH touched AS (
@@ -61,14 +64,15 @@ SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresA
        c.id::text, c."panelId"::text,
        c.status = 'active' AND c."desiredEnabled" AND c."desiredRemote" = 'present',
        c."remoteId" IS NOT NULL,
-       CASE WHEN p."counterSemantics" = 'cumulative'
-            THEN coalesce(s."lastUpBytes" + s."lastDownBytes", 0)
+       CASE p."counterSemantics"
+            WHEN 'cumulative' THEN coalesce(s."lastUpBytes" + s."lastDownBytes", 0)
+            WHEN 'session' THEN coalesce(rs.bytes, 0)
             ELSE coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0) END::bigint,
-       coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0)::bigint,
+       (coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0) + coalesce(rs.bytes, 0))::bigint,
        coalesce(c."appliedCeilingBytes", 0)::bigint, c."desiredEnabled" AND lc."grantId" IS NULL,
        c."allocatedCeilingBytes", c."limitPeakBytes", c."writePending",
        p."driverType"::text,
-       p."counterSemantics" = 'cumulative'
+       p."counterSemantics" IN ('cumulative', 'session')
          AND coalesce((p.capabilities->'answers'->'per_client_data_limit'->>'supported')::boolean, false),
        p."panelState" = 'healthy',
        p."tickPeriodMs", p."tickPhaseMask",
@@ -81,6 +85,8 @@ SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresA
   JOIN network.config c ON c."grantId" = g.id
   JOIN network.panel p ON p.id = c."panelId"
   LEFT JOIN network.config_counter_state s ON s."configId" = c.id
+  LEFT JOIN LATERAL (SELECT sum(r."highWaterInBytes" + r."highWaterOutBytes") AS bytes
+                       FROM network.radius_session r WHERE r."configId" = c.id) rs ON true
  WHERE g.status IN ('active', 'pending') AND NOT g."trafficUnlimited"
  ORDER BY g.id, c.id`
 

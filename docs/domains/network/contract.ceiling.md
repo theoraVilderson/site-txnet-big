@@ -106,8 +106,12 @@ ceiling = max(0, allocatedCeilingBytes - offset)
 ```
 
 and "what the counter reads now" is the raw figure under `cumulative`, and zero
-under `reset_on_read` (the read spent it) and `session` (the panel counts per
-session, so there is nothing to subtract) — the conservative reading in both.
+under `reset_on_read` (the read spent it) — the conservative reading.
+
+Under `session` (User Manager) the offset is 0. The config has no
+`config_counter_state` row, and the planner reads its counter and its lifetime
+as the same Σ `radius_session` marks (F-027-du), the figure User Manager
+checks `transfer-limit` against. So the ceiling written is the allocation.
 
 **The translation only ever lowers** — that is what the two `max`es are for,
 and it is why `Σ ceilings ≤ purchasedBytes` survives it. Bytes the far end's

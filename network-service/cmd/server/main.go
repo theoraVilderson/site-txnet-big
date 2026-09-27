@@ -150,7 +150,10 @@ func main() {
 		Containment: containment,
 		Turns:       turns,
 		Planner:     planner,
-		Log:         log,
+		// A push panel's turn plans on what the RADIUS receiver accounted
+		// (F-027-du): it is in this loop for its plan and its convergence.
+		Sessions: collect.PostgresSessions{DB: pool},
+		Log:      log,
 	}
 
 	// A config whose desired state changed wakes its panel's convergence turn

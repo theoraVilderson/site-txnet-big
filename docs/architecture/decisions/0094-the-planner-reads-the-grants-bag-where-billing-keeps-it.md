@@ -39,7 +39,9 @@ billing being up.
 - A rename on `entitlement.grant` stops the service at boot rather than
   planning on a null.
 - Configs on a push (session) panel are not in `config_counter_state`, so
-  their bytes are missing from Used until the planner covers push panels.
+  their bytes were missing from Used until the planner covered push panels.
+  Since F-027-du Used adds their Σ `radius_session` high-water marks, and a
+  push panel has a turn in the collection loop (`contract.collection.md`).
 
 ## Amendment 2026-09-27 — the metered reserve (F-027-dc)
 Asked while building F-027-dc; the user answered "read it directly".

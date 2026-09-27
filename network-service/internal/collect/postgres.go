@@ -48,12 +48,15 @@ type StateRestorer interface {
 // that is never used. Fifteen minutes is the same wait a refusal gets.
 const DefaultReopenAfter = panelstate.DefaultCooloff
 
-// PostgresSource is Source over `network.panel`. It offers the accepted pull
+// PostgresSource is Source over `network.panel`. It offers the accepted
 // panels, each with its driver, its request budget and its configs, and it
 // reloads the cursors for them in the same breath (`PostgresCursors.reload`).
 //
-// A session panel is not offered: it is push, its high-water marks are
-// `radius_session`'s, and the RADIUS receiver is its collector.
+// A push panel is offered too (F-027-du), for its plan and its convergence:
+// the RADIUS receiver is still its collector, and its turn reads the
+// receiver's totals (`PostgresSessions`), not the router. A pull panel that
+// declares session counters has no reading either path could give, and is
+// not offered.
 type PostgresSource struct {
 	DB      DB
 	Opener  Opener
@@ -97,11 +100,11 @@ SELECT id::text, "driverType"::text, "counterSemantics"::text,
        "reviewState"::text, "ownershipType"::text, coalesce("tenantId"::text, ''),
        coalesce("maxLineRateBps", 0)::bigint, "maxRequestsPerMinute",
        "panelState"::text, "blockedSince",
-       coalesce("lagMeanSec", 0), coalesce("lagVarianceSec2", 0), "lagSamples"
+       coalesce("lagMeanSec", 0), coalesce("lagVarianceSec2", 0), "lagSamples",
+       transport::text
   FROM network.panel
  WHERE "reviewState" IN ('accepted', 'accepted_low_trust')
-   AND transport = 'pull'
-   AND "counterSemantics" <> 'session'
+   AND (transport = 'push' OR "counterSemantics" <> 'session')
    AND "retiredAt" IS NULL
  ORDER BY id`
 
@@ -115,19 +118,19 @@ func (s *PostgresSource) Panels(ctx context.Context) ([]Panel, error) {
 	for rows.Next() {
 		var p Panel
 		var row panelRow
-		var family, semantics, review, state string
+		var family, semantics, review, state, transport string
 		var blockedSince *time.Time
 		if err := rows.Scan(&p.ID, &family, &semantics,
 			&row.APIBaseURL, &row.ClientBaseURL, &row.Credentials,
 			&review, &p.OwnershipType, &p.TenantID,
 			&p.MaxLineRateBps, &p.MaxRequestsPerMinute, &state, &blockedSince,
-			&p.LagMeanSec, &p.LagVarianceSec2, &p.LagSamples); err != nil {
+			&p.LagMeanSec, &p.LagVarianceSec2, &p.LagSamples, &transport); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("reading panels: %w", err)
 		}
 		p.CounterSemantics = driver.CounterSemantics(semantics)
 		p.DriverType = driver.DriverType(family)
-		p.Transport = driver.TransportPull
+		p.Transport = driver.Transport(transport)
 		p.ReviewState = driver.ReviewState(review)
 		row.PanelID, row.DriverType, row.Transport, row.CounterSemantics = p.ID, driver.DriverType(family), p.Transport, p.CounterSemantics
 		row.TenantID = p.TenantID
@@ -556,4 +559,43 @@ func nullableTime(t time.Time) *time.Time {
 		return nil
 	}
 	return &t
+}
+
+// PostgresSessions is SessionTotals over `radius_session` (F-027-du): every
+// claimed client on the panel, with the high-water marks of all its sessions
+// summed — open and closed, held and quarantined bytes included, since the
+// mark is what the NAS counted and what User Manager checks its limit
+// against. A client with no session yet reads zero, so its Grant is planned
+// all the same. In is the user's upload, Out their download (RFC 2866).
+type PostgresSessions struct {
+	DB DB
+}
+
+var _ SessionTotals = PostgresSessions{}
+
+const sessionTotalsSQL = `
+SELECT c."remoteId", coalesce(sum(s."highWaterInBytes"), 0)::bigint, coalesce(sum(s."highWaterOutBytes"), 0)::bigint
+  FROM network.config c
+  LEFT JOIN network.radius_session s ON s."configId" = c.id
+ WHERE c."panelId" = $1::uuid
+   AND c."remoteId" IS NOT NULL
+ GROUP BY c.id, c."remoteId"
+ ORDER BY c."remoteId"`
+
+func (s PostgresSessions) Totals(ctx context.Context, panelID string) ([]driver.ClientUsage, error) {
+	rows, err := s.DB.Query(ctx, sessionTotalsSQL, panelID)
+	if err != nil {
+		return nil, fmt.Errorf("reading the session totals of panel %s: %w", panelID, err)
+	}
+	defer rows.Close()
+	at := time.Now().UTC()
+	var out []driver.ClientUsage
+	for rows.Next() {
+		u := driver.ClientUsage{ObservedAt: at}
+		if err := rows.Scan(&u.RemoteID, &u.UpBytes, &u.DownBytes); err != nil {
+			return nil, fmt.Errorf("reading the session totals of panel %s: %w", panelID, err)
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
 }
