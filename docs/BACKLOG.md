@@ -751,6 +751,24 @@ ingested rows reuse the catalog id verbatim as their row id.
 | F-311-w | Panel: the Grant actions on that sheet — freeze, days, traffic, reset, gift bytes, speed, rotate link, delete, issue — each with a confirm and a reason | panel-web | todo | F-311-v, F-311-h, F-311-i, F-311-j, F-311-k, F-311-m, F-311-n | F-311 |  | Ingested 2026-09-26. |
 | F-311-x | Panel: the history tab, search by pasted link and bulk actions on the admin's users page | panel-web | todo | F-311-w, F-311-r, F-311-t, F-311-u | F-311 |  | Ingested 2026-09-26. |
 | F-311-y | Bot: the same in the reseller panel of the bot (F-311-c) — open a user, see services, freeze, days, GB, reset, regenerate, delete | bot-app | todo | F-311-c, F-311-w | F-311 |  | Ingested 2026-09-26. |
+| F-601 | Retention notices: usage and time thresholds, and the other moments a user's service needs them told (umbrella) | notification | todo | F-601-a F-601-b F-601-c F-601-d F-601-e F-601-f F-601-g F-601-h F-601-i F-601-j F-601-k F-601-l F-601-m | F-601 |  | Split 2026-09-27 into F-601-a..m (user). -c, -g..-l are beyond the catalog, user-approved. Admin disabled a config / rotated the link = F-311-s. Grace period = F-603. |
+| F-601-a | Retention-notice delivery: notification-service consumes the domains' retention events and delivers each to the user's inbox and their tenant's bot, text by event key in the user's language; a ledger (Grant, notice, period) sends each notice once per Grant period | notification | todo | F-035-a F-035-e | F-601 |  | Domains emit, notification only delivers (spec 9.2). A renewal opens a new period. |
+| F-601-b | The user is told their service was cut: `network.grant.closed` (volume or time ran out) and a metered Grant's `quota_exhausted` suspension -> "renew" with the renewal action; cannot be muted | notification | todo | F-601-a | F-601 |  | Priority 4. The metered suspension has no event yet: entitlement emits one here. Text says renewal revives it, never a top-up (entitlement/contract.md). |
+| F-601-c | No use after purchase: an active Grant with nothing consumed 24h and again 72h after activation -> "not connected yet?" with the connection guide and support | entitlement | todo | F-601-a | F-601 |  | Priority 1. Beyond the catalog (user, 2026-09-27). |
+| F-601-d | Usage thresholds: a prepaid Grant crossing 50% / 80% / 95% of its purchased bytes emits one notice per level per period | entitlement | todo | F-601-a | F-601 |  | Priority 2. None for an unlimited Grant; a metered one is F-601-g. |
+| F-601-e | Time thresholds: 7 / 3 / 1 days before a Grant's end, one notice each per period, unlimited Grants included | entitlement | todo | F-601-a | F-601 |  | Priority 3. |
+| F-601-f | A usage and a time threshold due the same day reach the user as one combined message, not two | notification | todo | F-601-d F-601-e | F-601 |  |  |
+| F-601-g | Metered Grant, wallet low: the balance buys less than a threshold of GB at the Grant's rate -> one notice per crossing (`wallet.low_balance`, spec 9.3) | billing | todo | F-601-a | F-601 |  | Beyond the catalog. On a metered Grant the balance is the volume left (network/contract.reserve.md). Threshold default decided in the row. |
+| F-601-h | Service ready: a new Grant's first config confirmed on its panel (`network.config.confirmed`) -> "your service is ready" with its link | notification | todo | F-601-a | F-601 |  | Beyond the catalog. |
+| F-601-i | Purchase stuck: a paid Grant with no config confirmed after a delay (awaiting allocation, no inbound, a refused write) -> the user is told it is being prepared, the tenant's admins get an alert | network | todo | F-601-a | F-601 |  | Beyond the catalog. |
+| F-601-j | Before purge: a suspended Grant one day before its purge -> "your config is deleted tomorrow, renew to keep it"; never when purge is off; cannot be muted | entitlement | todo | F-601-a | F-601 |  | Beyond the catalog. Purge = F-027-y. |
+| F-601-k | A renewal that reopens a closed or suspended Grant -> "your service is active again" | entitlement | todo | F-601-a | F-601 |  | Beyond the catalog. |
+| F-601-l | An active Grant with no use for 7 days -> one check-in ("trouble connecting?") per idle stretch | entitlement | todo | F-601-a | F-601 |  | Beyond the catalog. Churn signal; F-611 / F-1519 not ingested. |
+| F-601-m | The user mutes retention notices and sets quiet hours in the panel (the bot's side is F-319); cutoff notices (F-601-b, F-601-j) ignore both | notification | todo | F-601-a | F-601 |  | Spec 9.4. |
+| F-602 | Exhaustion prediction: from recent usage, "at this rate your volume runs out in N days", once per period | entitlement | todo | F-601-d | F-602 |  |  |
+| F-603 | 24-hour post-expiry grace period with a notice, instead of an abrupt cutoff | network | todo | F-601-b | F-603 |  | needs-decision: the lease planner closes at once today, and grace bytes are free traffic. Own row (user, 2026-09-27). Catalog 'changed' names no C/D. |
+| F-1515 | An AI version of the exhaustion prediction, with one well-timed message | ai | todo | F-602 | F-1515 |  | later: the ai unit is draft. |
+| F-605 | Win-back: a Grant expired and N days of silence -> a dedicated coupon sent in the bot | billing | todo | F-601-a F-502-l | F-605 |  |  |
 
 ## Order of work — the F-027 network metering series
 
@@ -1007,6 +1025,13 @@ and published by a human. No languages are added by this series.
 
 In order: `F-1533-a` and `F-1533-b` in either order → `F-1533-c` →
 `F-1533-d` → `F-1533-e`.
+
+## Order of work — the F-601 retention notices series
+
+Opened 2026-09-27 (user). `F-601-a` first: every other row only emits.
+Then, by the user's priority: `F-601-c` → `F-601-d` → `F-601-e` →
+`F-601-b`. The rest in any order after their dependencies; `F-603` waits on
+its decision, `F-1515` on the ai unit.
 
 ## Rules
 
