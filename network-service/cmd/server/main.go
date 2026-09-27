@@ -23,6 +23,7 @@ import (
 	"network-service/internal/db"
 	"network-service/internal/hot"
 	"network-service/internal/httpapi"
+	"network-service/internal/leaseplan"
 	"network-service/internal/opener"
 	"network-service/internal/panelstate"
 	"network-service/internal/publish"
@@ -132,7 +133,10 @@ func main() {
 		Progress:    collect.PostgresProgress{DB: pool},
 		Containment: containment,
 		Turns:       turns,
-		Log:         log,
+		// The lease planner in shadow (F-027-cy, ADR-0093 rule 3): it plans
+		// every completed turn and logs; it writes nothing.
+		Shadow: &leaseplan.Shadow{Store: leaseplan.PostgresStore{DB: pool}, Log: log},
+		Log:    log,
 	}
 
 	// A config whose desired state changed wakes its panel's convergence turn

@@ -20,7 +20,12 @@ type ColumnRef struct {
 	Column string
 }
 
-func (c ColumnRef) String() string { return Schema + "." + c.Table + "." + c.Column }
+func (c ColumnRef) String() string {
+	if strings.Contains(c.Table, ".") {
+		return c.Table + "." + c.Column // a ForeignColumns table names its schema
+	}
+	return Schema + "." + c.Table + "." + c.Column
+}
 
 // ColumnSet is what the database actually has, as read at boot.
 type ColumnSet []ColumnRef
@@ -116,6 +121,16 @@ var RequiredColumns = map[string][]string{
 	},
 }
 
+// ForeignColumns is every column outside Schema this service reads, keyed
+// `schema.table`. Each is an exception ADR-0094 makes to ADR-0071, read-only
+// and listed here column by column so the boot assertion holds it the same
+// way: the lease planner reads a Grant's bag from billing's own row, because
+// a copy of it is a second figure that disagrees in a bag's last minute
+// (ADR-0093 rule 4).
+var ForeignColumns = map[string][]string{
+	"entitlement.grant": {"id", "status", "purchasedBytes", "endsAt", "trafficUnlimited"},
+}
+
 // MissingColumns reports every required column the database does not have,
 // ordered by table then column so the refusal reads the same way twice.
 func MissingColumns(required map[string][]string, present ColumnSet) []ColumnRef {
@@ -162,11 +177,18 @@ type Row interface {
 	Scan(dest ...any) error
 }
 
-// ReadColumns lists every column the database has in Schema.
+// ReadColumns lists every column the database has in Schema, and those of
+// the ForeignColumns tables under their `schema.table` name.
 func ReadColumns(ctx context.Context, q Querier) (ColumnSet, error) {
+	foreign := make([]string, 0, len(ForeignColumns))
+	for table := range ForeignColumns {
+		foreign = append(foreign, table)
+	}
 	rows, err := q.Query(ctx,
-		`SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = $1`,
-		Schema)
+		`SELECT CASE WHEN table_schema = $1 THEN table_name ELSE table_schema || '.' || table_name END, column_name
+		   FROM information_schema.columns
+		  WHERE table_schema = $1 OR table_schema || '.' || table_name = ANY($2::text[])`,
+		Schema, foreign)
 	if err != nil {
 		return nil, fmt.Errorf("read %s columns: %w", Schema, err)
 	}
@@ -193,7 +215,7 @@ func AssertColumns(ctx context.Context, q Querier) error {
 	if err != nil {
 		return err
 	}
-	missing := MissingColumns(RequiredColumns, present)
+	missing := append(MissingColumns(RequiredColumns, present), MissingColumns(ForeignColumns, present)...)
 	if len(missing) == 0 {
 		return nil
 	}

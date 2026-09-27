@@ -40,7 +40,8 @@ cross-tenant, so it connects as a role that bypasses `tenant_isolation`.
 We will build the network plane as **`network-service/`, a new Go module and a
 new `go.work` member**, owning the driver contract, the RADIUS receiver, the
 collection loops, the ceiling allocator, the convergence loop, and `pgx` access
-to `network.*` and nothing else.
+to `network.*` and nothing else. (ADR-0094 lets it read five columns of
+`entitlement.grant`, and write none.)
 
 **Go never touches a wallet.** It publishes usage deltas to RabbitMQ; the
 `billing-service` metering module consumes them, moves money, and writes the

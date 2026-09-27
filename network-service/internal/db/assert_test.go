@@ -55,9 +55,11 @@ func (f fakeDB) QueryRow(ctx context.Context, sql string, args ...any) Row { ret
 
 func everyRequiredColumn() [][2]string {
 	var all [][2]string
-	for table, columns := range RequiredColumns {
-		for _, column := range columns {
-			all = append(all, [2]string{table, column})
+	for _, manifest := range []map[string][]string{RequiredColumns, ForeignColumns} {
+		for table, columns := range manifest {
+			for _, column := range columns {
+				all = append(all, [2]string{table, column})
+			}
 		}
 	}
 	return all
