@@ -219,8 +219,8 @@ rule 5).
     same test in its record guard), so the panel drops the client at once
     rather than a tick after its counter meets the ceiling; the ceiling is
     still written at the counter beside it. The shutdown extension skips a
-    closed Grant. `desiredEnabled` stays billing's — a suspension, the user's
-    own switch and a revive never meet the planner's close (user, 2026-09-27).
+    closed Grant. `desiredEnabled` stays billing's. The close is announced in its own statement (`network.grant.closed`,
+    ADR-0096): billing suspends a prepaid Grant on it, and a renewal revives it.
 25. **Only a renewal reopens it**: Quota or the end moved since the close,
     and `avail ≥ ReopenMin` (8 MB). A process restarted onto a closed Grant
     restores the close from the row (`Account.RestoreClosed`), so forgetting

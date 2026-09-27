@@ -192,14 +192,35 @@ func (s PostgresStore) SaveLeases(ctx context.Context, leases []Lease) error {
 	return nil
 }
 
-// saveClosureSQL writes a Grant's close (F-027-dd); deleteClosureSQL reopens
-// it. The planner is the only writer of `network.lease_close`.
+// ClosedEvent is the outbox type a close is announced under (F-027-dw,
+// ADR-0096): worker-service asks billing to settle that Grant, and a prepaid
+// one still on its Quota becomes `suspended` for quota. Declared in
+// shared-core's `OutboxEventType.GRANT_CLOSED`.
+const ClosedEvent = "network.grant.closed"
+
+// saveClosureSQL writes a Grant's close (F-027-dd) and announces it in the
+// same statement ($4, ADR-0021), so the event and the row commit or fail
+// together. The owner is read from `entitlement.grant."userId"`, a column
+// ADR-0094 already lists; the tenant is not (billing finds it from the Grant).
+// deleteClosureSQL reopens it, silently — only a renewal reopens,
+// and the renewal revived the Grant itself. The planner is the only writer
+// of `network.lease_close`.
 const (
 	saveClosureSQL = `
+WITH saved AS (
 INSERT INTO network.lease_close ("grantId", "quotaBytes", "expiresAt", "closedAt")
 VALUES ($1::uuid, $2, $3, now())
 ON CONFLICT ("grantId") DO UPDATE
-   SET "quotaBytes" = excluded."quotaBytes", "expiresAt" = excluded."expiresAt", "closedAt" = excluded."closedAt"`
+   SET "quotaBytes" = excluded."quotaBytes", "expiresAt" = excluded."expiresAt", "closedAt" = excluded."closedAt"
+RETURNING "grantId", "quotaBytes")
+INSERT INTO automation.outbox_event (id, aggregate, "aggregateId", type, payload)
+SELECT gen_random_uuid(), 'network.lease_close', s."grantId"::text, $4::text,
+       jsonb_build_object(
+         'userId', g."userId"::text,
+         'grantId', s."grantId"::text,
+         'quotaBytes', s."quotaBytes"::text)
+  FROM saved s
+  JOIN entitlement."grant" g ON g.id = s."grantId"`
 	deleteClosureSQL = `DELETE FROM network.lease_close WHERE "grantId" = $1::uuid`
 )
 
@@ -213,7 +234,7 @@ func (s PostgresStore) SaveClosure(ctx context.Context, grantID string, c *Closu
 		if !c.ExpiresAt.IsZero() {
 			end = &c.ExpiresAt
 		}
-		_, err = s.DB.Exec(ctx, saveClosureSQL, grantID, c.Quota, end)
+		_, err = s.DB.Exec(ctx, saveClosureSQL, grantID, c.Quota, end, ClosedEvent)
 	}
 	if err != nil {
 		return fmt.Errorf("writing the close of Grant %s: %w", grantID, err)

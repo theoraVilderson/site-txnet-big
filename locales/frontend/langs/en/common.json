@@ -2087,6 +2087,8 @@
     "usageUnlimited": "{{consumed}} used",
     "purgeIn": "This service is paused. Top up your wallet within {{days}} days and {{hours}} hours ({{at}}) and everything comes back; otherwise its servers are removed for now. Nothing you bought is lost — a top-up brings it back.",
     "purgeDue": "This service is paused and its servers are being removed. Nothing you bought is lost — a top-up brings it back.",
+    "purgeInRenew": "This service's data is used up and it is paused. Renew it within {{days}} days and {{hours}} hours ({{at}}) and everything comes back; otherwise its servers are removed for now. A renewal later still brings it back.",
+    "purgeDueRenew": "This service's data is used up and its servers are being removed. A renewal brings it back.",
     "meteringUnavailable": "Your usage is not updating right now, but your service is still connected. The numbers catch up shortly.",
     "configs": {
       "loading": "Loading configs…",

@@ -92,7 +92,8 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
    prepaid one against billing's `trafficCapBytes` — the limit plus unexpired
    adjustments, `/sub`'s `total`, so panel and app agree (F-111-t). Bytes
    arrive as decimal strings and stay exact to the formatter. A suspended Grant with a `purgeAt` shows a days-and-hours
-   countdown and says a top-up brings it back; past the instant it says the
+   countdown and says a top-up brings it back — a prepaid one, spent and
+   suspended on the planner's close, a renewal (F-027-dw); past it, the
    configs are being removed — the hourly job acts *after* it, never at it.
 9a. **Unlimited is said, never inferred from a 0** (F-111-s). A Grant billing
     answers with `trafficUnlimited` shows what it used and "unlimited

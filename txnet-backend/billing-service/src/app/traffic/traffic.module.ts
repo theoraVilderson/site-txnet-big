@@ -6,6 +6,7 @@ import { BlockRequestService } from './block-request';
 import { CollectionHealthController } from './collection-health.controller';
 import { CollectionHealthService } from './collection-health';
 import { ConfigActionsService } from './config-actions';
+import { GrantCloseService } from './grant-close';
 import { GroupFulfilmentController } from './group-fulfilment.controller';
 import { GroupFulfilmentService } from './group-fulfilment';
 import { GroupDrainService } from './group-drain';
@@ -37,7 +38,7 @@ import { GrantUsageService } from './grant-usage';
 @Module({
   imports: [WalletModule],
   controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController],
-  providers: [BlockPurchaseService, BlockRequestService, RemainderCreditService, BlockRequestQueue, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GroupFulfilmentService, GroupDrainService],
+  providers: [BlockPurchaseService, BlockRequestService, RemainderCreditService, BlockRequestQueue, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GroupFulfilmentService, GroupDrainService, GrantCloseService],
   exports: [BlockPurchaseService, RemainderCreditService, ConfigActionsService, GroupFulfilmentService, UserConfigsService, GrantUsageService],
 })
 export class TrafficModule {}

@@ -167,9 +167,11 @@ export const ServiceRow = memo(function ServiceRow({
 
         {countdown !== null && (
           <p role="status" className="rounded-2xl border border-gold/20 bg-gold-bg px-3 py-2 text-xs font-medium text-gold">
+            {/* A metered Grant comes back on a top-up (F-027-ap); a prepaid one
+                only on a renewal (F-027-dw, ADR-0096). */}
             {countdown === "due"
-              ? t("common", S.purgeDue)
-              : t("common", S.purgeIn, {
+              ? t("common", row.billingMode === "prepaid" ? S.purgeDueRenew : S.purgeDue)
+              : t("common", row.billingMode === "prepaid" ? S.purgeInRenew : S.purgeIn, {
                   days: countdown.days,
                   hours: countdown.hours,
                   at: formatInstant(row.purgeAt, lang) ?? row.purgeAt ?? "",

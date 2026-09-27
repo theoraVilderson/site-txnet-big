@@ -48,6 +48,8 @@ export const OutboxEventType = {
   GRANT_CREATED: 'entitlement.grant.created',
   /** F-111-n: `network-service` read a Grant's config back from its panel — `complete` (`converge.PostgresDesired.Record`). */
   CONFIG_CONFIRMED: 'network.config.confirmed',
+  /** F-027-dw: the lease planner closed a Grant — served reached Quota (`leaseplan.PostgresStore.SaveClosure`). */
+  GRANT_CLOSED: 'network.grant.closed',
 } as const;
 export type OutboxEventType = (typeof OutboxEventType)[keyof typeof OutboxEventType];
 
@@ -73,6 +75,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.USAGE_RELEASE]: 'metering-service',
   [OutboxEventType.GRANT_CREATED]: 'worker-service',
   [OutboxEventType.CONFIG_CONFIRMED]: 'worker-service',
+  [OutboxEventType.GRANT_CLOSED]: 'worker-service',
 };
 
 /** Every tick routing key starts with this. The suffix is the worker key. */

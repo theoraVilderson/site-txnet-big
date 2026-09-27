@@ -40,8 +40,12 @@ on **every** config of the Grant — desired state, carried to each panel by the
 convergence loop (F-027-z), never a command. The write is conditional on
 `active`: a Grant that moved on is left alone and a repeat is a no-op
 (`suspended: false`). It does not decide exhaustion — that is money, and
-billing's `traffic/exhaustion.ts` decides it under a wallet lock, asked by a
-refused block request (`network/contract.hot-loop.md`). `transition()` cannot do this: it writes no
+billing's `traffic/exhaustion.ts` decides it: for a metered Grant under a
+wallet lock, asked by a refused block request (`network/contract.hot-loop.md`);
+for a prepaid one (F-027-dw, ADR-0096) by `suspendIfClosed` under the Grant's
+row lock, asked by `network.grant.closed` — the lease planner's close, read
+again against Quota, so a renewal that reopened it is never undone. A renewal
+(`renewal.ts`) revives it; a wallet top-up does not. `transition()` cannot do this: it writes no
 `suspendedAt`, which `grant_suspended_has_a_clock` refuses.
 
 **Purge and restore (F-027-y, ADR-0075)** — `entitlement/purge.ts`. A

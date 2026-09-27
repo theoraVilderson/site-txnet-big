@@ -97,3 +97,52 @@ export async function suspendIfExhausted(tx: Prisma.TransactionClient, grantId: 
   const suspension = await suspendForExhaustion(tx, grantId, at);
   return suspension.suspended ? verdict('suspended', suspension.configsDisabled) : verdict('not_active');
 }
+
+export type ClosedVerdict = 'suspended' | 'grant_not_found' | 'not_active' | 'unlimited' | 'not_prepaid' | 'reopened';
+
+export type Closed = {
+  grantId: string;
+  verdict: ClosedVerdict;
+  /** How many configs had `desiredEnabled` turned off. Zero unless `suspended`. */
+  configsDisabled: number;
+};
+
+/**
+ * A prepaid Grant the lease planner closed becomes `suspended` (F-027-dw,
+ * ADR-0096) — the prepaid half of this file's rule, asked by
+ * `network.grant.closed`.
+ *
+ * **The planner's close is the one rule for "spent".** It closes a Grant when
+ * what its panels served reaches Quota (`purchasedBytes`), and it has already
+ * disabled the configs on the panels (`network/contract.lease.md` rule 24).
+ * Deciding again here from `consumedBytes` would be a second rule, and the
+ * two would disagree for the length of the panels' lag. This only makes the
+ * close a state everyone reads, with the purge clock started and every
+ * config's desired state off, so that a renewal has something to revive
+ * (`renewal.ts`).
+ *
+ * **The close is read now, not taken from the event.** The Grant row is
+ * locked first: a renewal raising Quota either committed before — the close
+ * row no longer matches Quota, and this answers `reopened` — or waits and then
+ * finds the Grant suspended, which it revives. A metered Grant is the block
+ * path's (`suspendIfExhausted`): its close is a bag, not the end.
+ */
+export async function suspendIfClosed(tx: Prisma.TransactionClient, grantId: string, at: Date = new Date()): Promise<Closed> {
+  const verdict = (v: ClosedVerdict, configsDisabled = 0): Closed => ({ grantId, verdict: v, configsDisabled });
+
+  const [grant] = await tx.$queryRaw<{ status: GrantStatus; billingMode: VariantBillingMode; trafficUnlimited: boolean; purchasedBytes: bigint }[]>`
+    SELECT "status", "billingMode", "trafficUnlimited", "purchasedBytes" FROM "entitlement"."grant"
+     WHERE "id" = ${grantId}::uuid
+       FOR UPDATE`;
+  if (!grant) return verdict('grant_not_found');
+  if (grant.status !== GrantStatus.active) return verdict('not_active');
+  if (grant.trafficUnlimited) return verdict('unlimited');
+  if (grant.billingMode !== VariantBillingMode.prepaid) return verdict('not_prepaid');
+
+  const [close] = await tx.$queryRaw<{ quotaBytes: bigint }[]>`
+    SELECT "quotaBytes" FROM "network"."lease_close" WHERE "grantId" = ${grantId}::uuid`;
+  if (!close || close.quotaBytes !== grant.purchasedBytes) return verdict('reopened');
+
+  const suspension = await suspendForExhaustion(tx, grantId, at);
+  return suspension.suspended ? verdict('suspended', suspension.configsDisabled) : verdict('not_active');
+}

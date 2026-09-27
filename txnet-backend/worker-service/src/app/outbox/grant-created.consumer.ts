@@ -43,7 +43,7 @@ export class GrantCreatedConsumer implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     await this.broker.consumeGrantCreated((event) => this.handle(event));
-    this.logger.log('consuming entitlement.grant.created and network.config.confirmed to deliver at once');
+    this.logger.log('consuming entitlement.grant.created, network.config.confirmed and network.grant.closed to act at once');
   }
 
   async handle(event: OutboxMessage): Promise<void> {
@@ -52,10 +52,13 @@ export class GrantCreatedConsumer implements OnApplicationBootstrap {
     if (!this.baseUrl) throw new Error('BILLING_API_BASE_URL is not set');
     if (!this.serviceToken) throw new Error('SERVICE_AUTH_TOKEN is not set');
 
+    const id = encodeURIComponent(grantId);
     const path =
       event.type === OutboxEventType.CONFIG_CONFIRMED
-        ? `/api/internal/billing/network/grants/${encodeURIComponent(grantId)}/fulfil`
-        : `/api/internal/billing/entitlement/grants/${encodeURIComponent(grantId)}/deliver`;
+        ? `/api/internal/billing/network/grants/${id}/fulfil`
+        : event.type === OutboxEventType.GRANT_CLOSED
+          ? `/api/internal/billing/network/grants/${id}/closed`
+          : `/api/internal/billing/entitlement/grants/${id}/deliver`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
@@ -70,6 +73,7 @@ export class GrantCreatedConsumer implements OnApplicationBootstrap {
       if (typeof outcome !== 'string') throw new Error(`billing answered ${path} without an 'outcome'`);
       if (outcome === 'delivered' || outcome === 'refunded') this.logger.log(`grant ${grantId} ${outcome} on its purchase`);
       if (outcome === 'activated') this.logger.log(`grant ${grantId} activated on its config's confirmation`);
+      if (event.type === OutboxEventType.GRANT_CLOSED && outcome === 'suspended') this.logger.log(`grant ${grantId} suspended on its close`);
     } finally {
       clearTimeout(timer);
     }

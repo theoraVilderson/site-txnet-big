@@ -331,12 +331,13 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     // F-114-i: a purchase delivered at once. Its own queue, apart from the
     // notices: this one asks billing to act, and its depth means buyers waiting.
     // F-111-n: a config confirmed on its panel is the same ask for a network
-    // Grant — activate it now — so it waits in the same line.
+    // Grant — activate it now — so it waits in the same line. F-027-dw: a
+    // Grant the lease planner closed is one more ask — suspend it now.
     await this.channel.assertQueue(this.grantCreatedQueue, {
       durable: true,
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
     });
-    for (const type of [OutboxEventType.GRANT_CREATED, OutboxEventType.CONFIG_CONFIRMED]) {
+    for (const type of [OutboxEventType.GRANT_CREATED, OutboxEventType.CONFIG_CONFIRMED, OutboxEventType.GRANT_CLOSED]) {
       await this.channel.bindQueue(this.grantCreatedQueue, this.exchange, outboxRoutingKey(type));
     }
     // F-111-l: the events only an open page needs — one queue, because each is

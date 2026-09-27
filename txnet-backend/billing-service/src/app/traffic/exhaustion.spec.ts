@@ -16,7 +16,7 @@
 import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 
 import { QUOTA_EXHAUSTED } from '../entitlement/suspension';
-import { suspendIfExhausted, walletCanBuy } from './exhaustion';
+import { suspendIfClosed, suspendIfExhausted, walletCanBuy } from './exhaustion';
 
 const GRANT = '77777777-7777-4777-8777-777777777777';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -170,5 +170,85 @@ describe('walletCanBuy', () => {
 
   it('does not read an unpriceable rate as a short wallet — that refusal is the purchase path’s', () => {
     expect(() => walletCanBuy(new Prisma.Decimal(0), new Prisma.Decimal('5'))).toThrow(/rate_not_priceable/);
+  });
+});
+
+/**
+ * A prepaid Grant the planner closed is suspended (F-027-dw, ADR-0096).
+ *
+ * The planner already cut the user off (`network/contract.lease.md` rule 24);
+ * this makes the close a state billing, the panel, the bot and `/sub` all
+ * read. What breaks without anyone seeing it:
+ *  - **a renewal undone.** A renewal that raised Quota after the close was
+ *    written reopens it; the event arrives late and must not suspend a Grant
+ *    that has bytes again — the close row is read *now*, against Quota *now*;
+ *  - **a metered Grant suspended with money in the wallet.** Its exhaustion
+ *    is the block path's (`suspendIfExhausted`), never the close;
+ *  - **an unlimited Grant, or one no longer active, touched at all.**
+ */
+describe('suspendIfClosed', () => {
+  type Row = { status: GrantStatus; billingMode: VariantBillingMode; trafficUnlimited: boolean; purchasedBytes: bigint };
+
+  function closedTx(input: { grant: Partial<Row> | null; closedAt: bigint | null }) {
+    const grant: Row | null = input.grant
+      ? { status: GrantStatus.active, billingMode: VariantBillingMode.prepaid, trafficUnlimited: false, purchasedBytes: BigInt(1000), ...input.grant }
+      : null;
+    const calls: string[] = [];
+    const grantWrites: { where: unknown; data: Record<string, unknown> }[] = [];
+    const tx = {
+      $queryRaw: async (sql: TemplateStringsArray) => {
+        const text = sql.join('?');
+        if (text.includes('entitlement"."grant"')) {
+          calls.push(text.includes('FOR UPDATE') ? 'grant.lock' : 'grant.read');
+          return grant ? [grant] : [];
+        }
+        calls.push('close.read');
+        return input.closedAt === null ? [] : [{ quotaBytes: input.closedAt }];
+      },
+      grant: {
+        updateMany: async (args: { where: { status?: GrantStatus }; data: Record<string, unknown> }) => {
+          calls.push('grant.write');
+          grantWrites.push(args);
+          return { count: grant && grant.status === args.where.status ? 1 : 0 };
+        },
+      },
+      config: {
+        updateMany: async () => {
+          calls.push('config.write');
+          return { count: 2 };
+        },
+      },
+    };
+    return { tx: tx as unknown as Prisma.TransactionClient, calls, grantWrites };
+  }
+
+  it('suspends a prepaid Grant whose close stands on its Quota — quota_exhausted, with a clock, every config off', async () => {
+    const { tx, calls, grantWrites } = closedTx({ grant: {}, closedAt: BigInt(1000) });
+    await expect(suspendIfClosed(tx, GRANT, AT)).resolves.toEqual({ grantId: GRANT, verdict: 'suspended', configsDisabled: 2 });
+    expect(grantWrites[0].data).toEqual({ status: GrantStatus.suspended, statusReason: QUOTA_EXHAUSTED, suspendedAt: AT });
+    // The Grant row is locked before the close is read: a renewal waits, then finds it suspended and revives it.
+    expect(calls).toEqual(['grant.lock', 'close.read', 'grant.write', 'config.write']);
+  });
+
+  it('suspends nothing once a renewal moved Quota past the close, or the close was deleted', async () => {
+    for (const closedAt of [BigInt(900), null]) {
+      const { tx, grantWrites } = closedTx({ grant: {}, closedAt });
+      await expect(suspendIfClosed(tx, GRANT, AT)).resolves.toMatchObject({ verdict: 'reopened' });
+      expect(grantWrites).toEqual([]);
+    }
+  });
+
+  it('leaves a metered, an unlimited, a missing and a non-active Grant alone', async () => {
+    const cases: [Partial<Row> | null, string][] = [
+      [{ billingMode: VariantBillingMode.metered }, 'not_prepaid'],
+      [{ trafficUnlimited: true }, 'unlimited'],
+      [{ status: GrantStatus.suspended }, 'not_active'],
+      [null, 'grant_not_found'],
+    ];
+    for (const [grant, verdict] of cases) {
+      const { tx, grantWrites } = closedTx({ grant, closedAt: BigInt(1000) });
+      await expect(suspendIfClosed(tx, GRANT, AT)).resolves.toMatchObject({ verdict });
+      expect(grantWrites).toEqual([]);
+    }
   });
 });

@@ -232,7 +232,7 @@ Both in `outbox/tenant-renewal.consumers.ts`. The producers are tenant's:
 ## A purchase delivered at once (F-114-i)
 
 `GrantCreatedConsumer`, queue `AUTOMATION_GRANT_CREATED_QUEUE` bound to exactly
-`outbox.entitlement.grant.created` (the invoice payment) and `outbox.network.config.confirmed` (F-111-n).
+`outbox.entitlement.grant.created` (the invoice payment), `outbox.network.config.confirmed` (F-111-n) and `outbox.network.grant.closed` (F-027-dw: billing's `grants/:id/closed`).
 
 | Rule | Why |
 |---|---|

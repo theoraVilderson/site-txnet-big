@@ -298,6 +298,15 @@ describe("usage and the purge clock", () => {
     show({ status: "suspended", suspendedAt: "2026-09-20T00:00:00Z", purgeAt: "2020-01-01T00:00:00Z" });
     expect(screen.getByText("myServices.purgeDue")).toBeInTheDocument();
   });
+
+  it("tells a spent prepaid Grant that a renewal brings it back, never a top-up (F-027-dw)", () => {
+    const suspended = { status: "suspended", suspendedAt: "2026-09-27T10:00:00Z", billingMode: "prepaid", trafficCapBytes: "1073741824" } as const;
+    const { unmount } = show({ ...suspended, purgeAt: "2999-01-01T00:00:00Z" });
+    expect(screen.getByText(/^myServices\.purgeInRenew:/)).toBeInTheDocument();
+    unmount();
+    show({ ...suspended, purgeAt: "2020-01-01T00:00:00Z" });
+    expect(screen.getByText("myServices.purgeDueRenew")).toBeInTheDocument();
+  });
 });
 
 describe("a Grant's servers, under details", () => {
