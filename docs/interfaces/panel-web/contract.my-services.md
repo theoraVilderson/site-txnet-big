@@ -127,9 +127,9 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
     from the payload: delivery sets the period, and a refund ends in whatever
     status billing says (today `cancelled`). Only the latest read lands, so a
     quiet read of page 1 cannot overwrite page 2. A delivery that ended while the socket
-    was down went to nobody, so the same quiet read follows a reconnect
-    (`onMissed`, [contract.realtime.md](contract.realtime.md)) while a row is
-    still `pending`. **Nothing is asked on a clock** (F-111-l, user
+    was down went to nobody, so the same quiet read follows every reconnect
+    (`onMissed`, [contract.realtime.md](contract.realtime.md)) and the tab coming
+    back into view (F-307-w). **Nothing is asked on a clock** (F-111-l, user
     2026-09-26): a socket that is down reconnects on its own backoff, and
     until then the page shows billing's last answer.
 13a. **A Grant's configs turn usable without a reload** (F-111-l). Their lines

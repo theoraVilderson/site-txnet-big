@@ -12,6 +12,13 @@ import { readGrantSettled, readGrantUsage, readLinksCaptured } from "../_lib/my-
 /** Billing's own default page size (`GrantService.listForUser`), sent explicitly. */
 export const PAGE_SIZE = 20;
 
+/**
+ * The least time between two reads asked by the tab coming back into view:
+ * flicking between tabs is one read, and the list's `GRANT_LIST` bucket
+ * (120 per 15 min) is never what a restless user spends.
+ */
+const VISIBLE_READ_EVERY_MS = 15_000;
+
 const NO_LINES: readonly string[] = [];
 
 /** One page, by pasted lines when there are any, else by `q`. */
@@ -86,6 +93,14 @@ export interface GrantsPageState {
  * **Nothing is asked on a clock** (user, 2026-09-26). A socket that is down
  * reconnects on its own backoff (`lib/realtime.ts`), and `onMissed` is the
  * one read that follows; until then the page shows billing's last answer.
+ *
+ * **What a push sent to nobody carried is read back when the user can see it
+ * again** (F-307-w; user, 2026-09-27: "last used 34 min ago" until a refresh).
+ * A tab in the background — the VPN app in front, a phone that froze the
+ * page — loses its socket, and every usage push sent meanwhile is gone. So
+ * the page re-reads quietly after *any* reconnect, not only while a row is
+ * pending, and when the tab comes back into view (at most once per
+ * {@link VISIBLE_READ_EVERY_MS}). Both are events, not a clock.
  */
 export function useGrantsPage(
   page: number,
@@ -174,11 +189,25 @@ export function useGrantsPage(
       // told to nobody, so the page asks again once it is back: the rows while
       // one is pending, and every open config list.
       onMissed: () => {
-        if (pendingIds.current.size > 0) void quietRead();
+        void quietRead();
         askConfigs(shownIds.current);
       },
     });
   }, [client, userId, quietRead, askConfigs]);
+
+  // The tab coming back into view: what the user sees next is read now.
+  const lastVisibleRead = useRef(0);
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastVisibleRead.current < VISIBLE_READ_EVERY_MS) return;
+      lastVisibleRead.current = now;
+      void quietRead();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [quietRead]);
 
   useEffect(() => {
     let alive = true;

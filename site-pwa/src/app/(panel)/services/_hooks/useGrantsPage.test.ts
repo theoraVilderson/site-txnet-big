@@ -162,16 +162,52 @@ describe("useGrantsPage — a pending Grant turning live (F-111-f)", () => {
     await waitFor(() => expect(result.current.rows?.[0].status).toBe("active"));
   });
 
-  it("asks nothing after a reconnect when nothing on the page is pending", async () => {
+  it("re-reads quietly after any reconnect — a usage push may have been sent to nobody (F-307-w)", async () => {
     grants.mockResolvedValue(page({ id: "g2", status: "active" }) as never);
     const { result } = renderHook(() => useGrantsPage(1, "en"));
     await waitFor(() => expect(result.current.rows).not.toBeNull());
 
+    grants.mockResolvedValue(page({ id: "g2", status: "active", lastTrafficAt: "2026-09-27T12:00:00.000Z" }) as never);
     await act(async () => {
       for (const onMissed of client.missed) onMissed();
     });
 
-    expect(grants).toHaveBeenCalledTimes(1);
+    expect(result.current.isLoading).toBe(false);
+    await waitFor(() => expect(result.current.rows?.[0].lastTrafficAt).toBe("2026-09-27T12:00:00.000Z"));
+    expect(grants).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-reads quietly when the tab comes back into view, at most once per 15 s (F-307-w)", async () => {
+    // User, 2026-09-27: "last used 34 min ago" until a refresh. A tab in the
+    // background — the VPN app in front — loses its socket's pushes; coming
+    // back is the moment the user looks, so that is when the page asks.
+    const visible = (state: DocumentVisibilityState) => {
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
+      document.dispatchEvent(new Event("visibilitychange"));
+    };
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      grants.mockResolvedValue(page({ id: "g2", status: "active" }) as never);
+      const { result } = renderHook(() => useGrantsPage(1, "en"));
+      await waitFor(() => expect(result.current.rows).not.toBeNull());
+      await act(async () => vi.advanceTimersByTime(20_000));
+
+      await act(async () => visible("hidden"));
+      expect(grants).toHaveBeenCalledTimes(1);
+      await act(async () => visible("visible"));
+      expect(result.current.isLoading).toBe(false);
+      await waitFor(() => expect(grants).toHaveBeenCalledTimes(2));
+
+      // Flicking between tabs is one read, not one per flick.
+      await act(async () => visible("visible"));
+      expect(grants).toHaveBeenCalledTimes(2);
+      await act(async () => vi.advanceTimersByTime(15_000));
+      await act(async () => visible("visible"));
+      await waitFor(() => expect(grants).toHaveBeenCalledTimes(3));
+    } finally {
+      vi.useRealTimers();
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    }
   });
 
   it("asks nothing on any clock, even with the socket down — reconnecting is the socket's job", async () => {

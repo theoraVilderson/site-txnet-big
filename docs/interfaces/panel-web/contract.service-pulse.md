@@ -2,7 +2,7 @@
 id: panel-web
 layer: interface
 status: active
-version: 39
+version: 40
 updated: 2026-09-27
 ---
 
@@ -39,6 +39,14 @@ should say so; the usage bar is confusing".
    that never moved a byte reads "not used yet". The hover text says usage
    arrives about every 40 s, so a stop shows up late. Nothing is read on a
    clock; the timers only redraw.
+2a. **What the socket missed is read back when the user looks** (F-307-w;
+   user, 2026-09-27: "last used 34 min ago" until a refresh). A tab in the
+   background (the VPN app in front, a phone freezing the page) loses its
+   socket, and every push sent meanwhile reaches nobody. So `useGrantsPage`
+   re-reads the rows quietly after every reconnect, and when the tab comes back
+   into view, at most once per 15 s so the `GRANT_LIST` bucket is never what
+   tab-flicking spends. The rows carry `lastTrafficAt` and `consumedBytes`, so
+   one read restores both. These are events, not a clock.
 3. **Nothing is claimed that cannot be known.** The pulse shows only on an
    `active` Grant, and not while `collection-health` answers `unavailable`,
    because silence then means nothing. The page's banner already says why.
@@ -82,7 +90,8 @@ tank's current and sends its ring. A critical tank. Nothing shown
 while metering is down or on a non-active Grant. The meter's figure, its "of",
 its percent and the red line. Unlimited traffic. The steps while pending. The
 links step after delivery, then "ready". `useGrantsPage.test.ts` checks that a
-push stamps `lastTrafficAt`. `connection.test.tsx` checks the links step while
+push stamps `lastTrafficAt`, that any reconnect re-reads, and that the tab
+coming into view re-reads at most once per 15 s. `connection.test.tsx` checks the links step while
 every config waits. Billing's `grant-list.spec.ts` checks `lastTrafficAt`.
 
 ## Not covered
