@@ -239,7 +239,8 @@ describe('sanitizeError', () => {
       );
 
       expect(out.reason).toBeUndefined();
-      expect(outward(out)).not.toContain(String(reason));
+      // The random ref can hold any digits ("2e91fd4425"), so it is left out.
+      expect(outward({ ...out, ref: undefined })).not.toContain(String(reason));
     });
 
     it('passes the facts a reason carries — the figures a client acts on beside it (F-111-e)', () => {
