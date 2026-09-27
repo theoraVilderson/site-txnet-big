@@ -529,6 +529,11 @@ model Config {
   writePending             Boolean   @default(false)
   rateFastBps              Float     @default(0)
   rateSlowBps              Float     @default(0)
+  /// Σ `radius_session` high-water marks when provisioning last created this
+  /// client (F-027-du): a push panel counts from its create, so its counter
+  /// is our Σ less this, and this is its offset. 0 on a pull panel. CHECK
+  /// `config_session_baseline_not_negative` (raw SQL).
+  sessionBaselineBytes     BigInt    @default(0)
 
   panel Panel @relation(fields: [panelId], references: [id])
   grant Grant @relation(fields: [grantId], references: [id])

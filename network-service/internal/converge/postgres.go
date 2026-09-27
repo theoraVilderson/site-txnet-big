@@ -37,8 +37,9 @@ var _ Desired = PostgresDesired{}
 // desiredSQL is every row on the panel but a delete already confirmed:
 // `absent`, no `remoteId`, `complete` is finished until an action writes the
 // row again, and every action that does moves it off `complete`. Served bytes
-// are the counter cursor's lifetime figure, the basis the share is counted on;
-// a config never collected has served none.
+// are the counter cursor's lifetime figure, the basis the share is counted on,
+// plus the Σ of its `radius_session` marks on a push panel (F-027-du); a
+// config never collected has served none.
 //
 // The inbound is the config's own (F-114-b). A row placed before it names
 // none, and takes the lowest picked inbound of its protocol on the panel —
@@ -62,13 +63,16 @@ SELECT c.id::text, coalesce(c."remoteId", ''), c."claimTag", c.uuid, c.protocol:
                 ''),
        c."desiredEnabled" AND NOT EXISTS (SELECT 1 FROM network.lease_close l WHERE l."grantId" = c."grantId"),
        c."desiredRemote" = 'present', c."allocatedCeilingBytes",
-       coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0)::bigint,
+       (coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0) + coalesce(rs.bytes, 0))::bigint,
+       coalesce(rs.bytes, 0)::bigint, c."sessionBaselineBytes",
        c."enforcementState"::text, c."driftState"::text, c."driftRepairCount", c."driftRepairedAt",
        c."linkLines", coalesce(c."linksRemoteId", ''), coalesce(c."linksUuid", ''), c."linksCapturedAt",
        c."trafficUnlimited", c."inboundRemoteId" IS NULL, coalesce(c."credentialGroupId"::text, ''),
        coalesce(c."observedRateBps", 0)::bigint
   FROM network.config c
   LEFT JOIN network.config_counter_state s ON s."configId" = c.id
+  LEFT JOIN LATERAL (SELECT sum(r."highWaterInBytes" + r."highWaterOutBytes") AS bytes
+                       FROM network.radius_session r WHERE r."configId" = c.id) rs ON true
  WHERE c."panelId" = $1::uuid
    AND NOT (c."desiredRemote" = 'absent' AND c."remoteId" IS NULL AND c."enforcementState" = 'complete')
  ORDER BY c."createdAt", c.id`
@@ -85,7 +89,7 @@ func (s PostgresDesired) For(ctx context.Context, panelID string) ([]DesiredConf
 		var state, drift string
 		var repairedAt, capturedAt *time.Time
 		if err := rows.Scan(&d.ConfigID, &d.RemoteID, &d.ClaimTag, &d.UUID, &d.Protocol, &d.InboundRemoteID,
-			&d.Enabled, &d.Present, &d.AllocatedBytes, &d.ServedBytes,
+			&d.Enabled, &d.Present, &d.AllocatedBytes, &d.ServedBytes, &d.SessionBytes, &d.SessionBaselineBytes,
 			&state, &drift, &d.RepairCount, &repairedAt,
 			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt, &d.Unlimited, &d.InboundResolved, &d.CredentialGroupID, &d.RateBps); err != nil {
 			return nil, fmt.Errorf("reading panel %s desired state: %w", panelID, err)
@@ -129,6 +133,7 @@ const ConfirmedEvent = "network.config.confirmed"
 // The inbound a client was found on ($16, F-027-ch) is written only over none,
 // and not where another live row of the Grant holds it on the panel: that is
 // `config_group_panel_once`, and one row's guess must not fail the batch.
+// A create's session baseline ($17, F-027-du) is written with it; null keeps it.
 const recordSQL = `
 WITH prior AS (SELECT "confirmedAt" FROM network.config WHERE id = $1::uuid),
 recorded AS (
@@ -146,7 +151,8 @@ UPDATE network.config
           AND NOT EXISTS (SELECT 1 FROM network.config o
                            WHERE o."grantId" = config."grantId" AND o."panelId" = config."panelId" AND o.id <> config.id
                              AND o."inboundRemoteId" = $16 AND o."credentialGroupId" IS NOT NULL AND o."drainedAt" IS NULL)
-         THEN $16 ELSE "inboundRemoteId" END
+         THEN $16 ELSE "inboundRemoteId" END,
+       "sessionBaselineBytes" = coalesce($17::bigint, "sessionBaselineBytes")
  WHERE id = $1::uuid
    AND uuid = $5
    AND ("desiredEnabled" AND NOT EXISTS (SELECT 1 FROM network.lease_close l WHERE l."grantId" = config."grantId")) = $6
@@ -183,7 +189,7 @@ func (s PostgresDesired) Record(ctx context.Context, rows []Outcome) error {
 		if _, err := s.DB.Exec(ctx, recordSQL,
 			o.ConfigID, o.RemoteID, string(o.State), o.At,
 			o.UUID, o.Enabled, o.Present,
-			captured, lines, linksRemote, linksUUID, linksAt, LinksCapturedEvent, ConfirmedEvent, o.Confirmed, o.InboundRemoteID); err != nil {
+			captured, lines, linksRemote, linksUUID, linksAt, LinksCapturedEvent, ConfirmedEvent, o.Confirmed, o.InboundRemoteID, o.SessionBaseline); err != nil {
 			return fmt.Errorf("recording config %s: %w", o.ConfigID, err)
 		}
 	}

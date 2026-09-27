@@ -152,7 +152,7 @@ func main() {
 		Planner:     planner,
 		// A push panel's turn plans on what the RADIUS receiver accounted
 		// (F-027-du): it is in this loop for its plan and its convergence.
-		Sessions: collect.PostgresSessions{DB: pool},
+		Sessions: cursors,
 		Log:      log,
 	}
 

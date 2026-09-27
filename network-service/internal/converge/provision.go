@@ -92,6 +92,12 @@ type DesiredConfig struct {
 	// ceiling is what is left, not the whole share again.
 	AllocatedBytes *int64
 	ServedBytes    int64
+	// SessionBytes is the Σ of the config's `radius_session` marks, part of
+	// ServedBytes (F-027-du). SessionBaselineBytes is `sessionBaselineBytes`:
+	// that Σ when the client was last created. A push panel's own counter
+	// starts at a create, so a create records SessionBytes as the baseline.
+	SessionBytes         int64
+	SessionBaselineBytes int64
 	// RateBps is `observedRateBps`, what the guard band is sized on (F-027-co).
 	RateBps int64
 	// Unlimited is `trafficUnlimited`, copied from its Grant (F-111-r): the
@@ -134,6 +140,10 @@ type Outcome struct {
 	// writes it only over none: a row that names its inbound is never
 	// rewritten by a read (F-027-ch). Empty writes nothing.
 	InboundRemoteID string
+	// SessionBaseline is set by a create: the SessionBytes its first ceiling
+	// was sized past, which becomes the row's `sessionBaselineBytes`
+	// (F-027-du). Nil leaves the row's as it is.
+	SessionBaseline *int64
 	// Confirmed is the read that found a present client holding its desired
 	// state, where the row did not already say so (F-111-n): the panels' word
 	// a pending Grant activates on (contract.groups.md rule 10), announced.
@@ -522,6 +532,8 @@ func (v *Provisioning) create(
 	// empty until they are (F-111-k). The row stays `partial`; a read that
 	// fails is retried on the confirming read, whose key still differs.
 	o := outcome(created.RemoteID, StatePartial)
+	baseline := row.SessionBytes
+	o.SessionBaseline = &baseline
 	if row.InboundResolved {
 		o.InboundRemoteID = inbound.RemoteID
 	}

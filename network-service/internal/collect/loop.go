@@ -71,10 +71,11 @@ type Planner interface {
 }
 
 // SessionTotals is what a push panel's clients have been served, as the
-// receiver accounted it (`radius_session`, `PostgresSessions`): one reading
-// per claimed client, its sessions' high-water marks summed. It is the figure
-// the panel's own per-user limit is checked against, and the bytes are
-// already billed, so the turn plans on it and publishes nothing.
+// receiver accounted it (`radius_session`, `PostgresCursors.Totals`): one
+// reading per claimed client, its sessions' high-water marks summed less the
+// Σ its client was created at. It is the figure the panel's own per-user
+// limit is checked against, and the bytes are already billed, so the turn
+// plans on it and publishes nothing.
 type SessionTotals interface {
 	Totals(ctx context.Context, panelID string) ([]driver.ClientUsage, error)
 }

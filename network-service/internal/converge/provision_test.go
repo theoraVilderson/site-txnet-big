@@ -462,3 +462,48 @@ func TestARowThatNamesItsInboundIsNeverRewrittenByThePass(t *testing.T) {
 		t.Fatalf("row rewritten: %+v", got)
 	}
 }
+
+// A push panel counts a client's bytes from its create: User Manager's total
+// starts at zero with the user, and ours, the Σ of its `radius_session`
+// marks, does not. A client re-made after a delete on the router is created
+// under what is left, and the Σ it was made at is recorded as the offset
+// every later ceiling on it is translated by (F-027-du).
+func TestAClientMadeAgainOnAPushPanelCountsFromItsCreate(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	row := wanted("c1")
+	row.RemoteID = "gone-from-the-router"
+	row.SessionBytes, row.ServedBytes = 3*gb, 3*gb
+	r.desired.Put("panel-1", row)
+
+	onlyAction(t, r.pass(t), converge.ActionRecreated)
+
+	got := r.row(t, "c1")
+	client, ok := r.client(t, got.RemoteID)
+	if !ok || client.DataLimitBytes != 7*gb {
+		t.Fatalf("re-made under %d, want 7 GB: the allocation less the 3 GB already served", client.DataLimitBytes)
+	}
+	if got.SessionBaselineBytes != 3*gb {
+		t.Fatalf("baseline = %d, want 3 GB: the router's counter starts at this create", got.SessionBaselineBytes)
+	}
+}
+
+const mb = int64(1) << 20
+
+type oneCounter collect.Counter
+
+func (c oneCounter) Counter(string, string) (collect.Counter, bool) { return collect.Counter(c), true }
+
+// The ceiling pass translates a push client's allocation by the same
+// baseline: 3.3 GB served, 1 GB of it before the client was last made, so
+// User Manager's own total reads 2.3 GB and a 10 GB allocation is 9 GB on the
+// router — never 10 again, which is a re-made user served twice (F-027-du).
+func TestAPushClientsCeilingIsTranslatedByItsBaseline(t *testing.T) {
+	c := oneCounter(collect.SessionCounter(300*mb, 3000*mb, 1000*mb))
+	p := collect.Panel{ID: "panel-push", CounterSemantics: driver.CounterSession}
+	if off := converge.OffsetBytes(c, p, "c1"); off != 1000*mb {
+		t.Fatalf("offset = %d, want the 1000 MB baseline", off)
+	}
+	if got := converge.PanelCeiling(10_000*mb, converge.OffsetBytes(c, p, "c1")); got != 9_000*mb {
+		t.Fatalf("ceiling = %d, want 9000 MB", got)
+	}
+}

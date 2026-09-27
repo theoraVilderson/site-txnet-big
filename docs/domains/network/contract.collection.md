@@ -227,10 +227,11 @@ pull panels. Its turn:
 1. asks the router one thing, `HealthCheck`. The ceiling reaches User Manager
    through its REST API, so a panel whose API does not answer is an outage
    (`panelstate`, `Planner.Failed`), and nothing is planned on it;
-2. reads each claimed client's Σ `radius_session` high-water marks
-   (`PostgresSessions`) instead of `GetUsage`. Open and closed sessions are
-   summed, held bytes included: that is what the NAS counted and what User
-   Manager checks `transfer-limit` against;
+2. reads each claimed client's Σ `radius_session` high-water marks, less the
+   Σ its client was created at (`PostgresCursors.Totals`), instead of
+   `GetUsage`. Open and closed sessions are summed, held bytes included; that
+   is User Manager's own total (`contract.ceiling.md`). A wake turn refreshes
+   the same counters before it converges;
 3. publishes nothing and moves no cursor, because the receiver already did.
    Reading the router's sessions would offer the same bytes twice;
 4. plans and converges exactly as a pull turn does (`contract.lease.md`),

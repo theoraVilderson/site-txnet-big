@@ -2,6 +2,7 @@ package collect
 
 import (
 	"context"
+	"network-service/internal/driver"
 	"sync"
 	"time"
 )
@@ -151,6 +152,15 @@ func (w *Waker) turn(ctx context.Context, panelID string, s *wakeState) {
 		// convergence below looks (F-027-db).
 		if err := l.Planner.Allocate(ctx, p, l.now()); err != nil {
 			l.log().Error("lease plan failed", "panel", p.ID, "error", err)
+		}
+	}
+	if p.Transport == driver.TransportPush && l.Sessions != nil {
+		// No read, but a push panel's ceilings are translated by the
+		// baseline its client was last created at (F-027-du): refresh it,
+		// or a client re-made since the last pass is raised by the old one.
+		if _, err := l.Sessions.Totals(ctx, p.ID); err != nil {
+			l.log().Error("session totals not read; the pass converges it", "panel", p.ID, "error", err)
+			return
 		}
 	}
 	l.converge(ctx, p, Result{PanelID: p.ID, OwnershipType: p.OwnershipType, TenantID: p.TenantID, ObservedAt: l.now(), Confirming: confirming})

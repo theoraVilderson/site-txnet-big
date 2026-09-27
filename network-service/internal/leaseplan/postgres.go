@@ -46,8 +46,8 @@ var _ Store = PostgresStore{}
 // traffic — the split's own rule (`contract.ceiling.md` "Who is in the
 // split"). The counter a ceiling is measured on is the panel's last figure on
 // a cumulative panel, the lifetime sum where a read zeroes it, and the
-// sessions' sum on a session panel, which is what User Manager checks its
-// limit against. A Grant the planner closed
+// sessions' sum less the sum the client was created at on a session panel,
+// which is what User Manager checks its limit against. A Grant the planner closed
 // carries its `lease_close` row, and its configs read disabled (F-027-dd).
 const loadSQL = `
 WITH touched AS (
@@ -66,7 +66,7 @@ SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresA
        c."remoteId" IS NOT NULL,
        CASE p."counterSemantics"
             WHEN 'cumulative' THEN coalesce(s."lastUpBytes" + s."lastDownBytes", 0)
-            WHEN 'session' THEN coalesce(rs.bytes, 0)
+            WHEN 'session' THEN greatest(coalesce(rs.bytes, 0) - c."sessionBaselineBytes", 0)
             ELSE coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0) END::bigint,
        (coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0) + coalesce(rs.bytes, 0))::bigint,
        coalesce(c."appliedCeilingBytes", 0)::bigint, c."desiredEnabled" AND lc."grantId" IS NULL,

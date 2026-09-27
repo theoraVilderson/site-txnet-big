@@ -108,10 +108,14 @@ ceiling = max(0, allocatedCeilingBytes - offset)
 and "what the counter reads now" is the raw figure under `cumulative`, and zero
 under `reset_on_read` (the read spent it) — the conservative reading.
 
-Under `session` (User Manager) the offset is 0. The config has no
-`config_counter_state` row, and the planner reads its counter and its lifetime
-as the same Σ `radius_session` marks (F-027-du), the figure User Manager
-checks `transfer-limit` against. So the ceiling written is the allocation.
+Under `session` (User Manager) the lifetime is the Σ of the config's
+`radius_session` marks, and the counter is User Manager's per-user total,
+which starts at zero when the user is created. So the offset is
+`sessionBaselineBytes`: that Σ as it stood when provisioning last created the
+client (F-027-du). A create sizes its first ceiling past it and records it;
+the planner, the ceiling pass and the shutdown extension all read it through
+`collect.SessionCounter`. A user deleted on the router and re-made by us is
+therefore never served its allocation twice.
 
 **The translation only ever lowers** — that is what the two `max`es are for,
 and it is why `Σ ceilings ≤ purchasedBytes` survives it. Bytes the far end's

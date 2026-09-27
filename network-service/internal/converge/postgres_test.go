@@ -81,9 +81,9 @@ func TestDesiredForReadsTheRowAsTheProvisioningPassNeedsIt(t *testing.T) {
 	repaired := time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC)
 	captured := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	f := &pgDB{rows: []pgRow{
-		{pgConfig, "r-1", "txn-abc", "uuid-1", "vless", "7", true, true, int64(5_000), int64(1_200),
+		{pgConfig, "r-1", "txn-abc", "uuid-1", "vless", "7", true, true, int64(5_000), int64(1_200), int64(200), int64(100),
 			"partial", "renamed", 1, repaired, []string{"vless://a"}, "r-1", "uuid-1", captured, false, false},
-		{"88888888-8888-4888-8888-888888888888", "", "txn-def", "uuid-2", "vmess", "", true, true, nil, int64(0),
+		{"88888888-8888-4888-8888-888888888888", "", "txn-def", "uuid-2", "vmess", "", true, true, nil, int64(0), int64(0), int64(0),
 			"pending", "synced", 0, nil, []string{}, "", "", nil, true, true},
 	}}
 	got, err := PostgresDesired{DB: f}.For(context.Background(), pgPanel)
@@ -108,6 +108,9 @@ func TestDesiredForReadsTheRowAsTheProvisioningPassNeedsIt(t *testing.T) {
 	}
 	if first.AllocatedBytes == nil || *first.AllocatedBytes != 5_000 || first.ServedBytes != 1_200 {
 		t.Errorf("allocation read wrong: allocated %v served %d", first.AllocatedBytes, first.ServedBytes)
+	}
+	if first.SessionBytes != 200 || first.SessionBaselineBytes != 100 {
+		t.Errorf("session read wrong: %d since %d", first.SessionBytes, first.SessionBaselineBytes)
 	}
 	if first.State != StatePartial || first.Drift != DriftRenamed || first.RepairCount != 1 || !first.RepairedAt.Equal(repaired) {
 		t.Errorf("state read wrong: %+v", first)

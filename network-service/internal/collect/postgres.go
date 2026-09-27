@@ -54,7 +54,7 @@ const DefaultReopenAfter = panelstate.DefaultCooloff
 //
 // A push panel is offered too (F-027-du), for its plan and its convergence:
 // the RADIUS receiver is still its collector, and its turn reads the
-// receiver's totals (`PostgresSessions`), not the router. A pull panel that
+// receiver's totals (`PostgresCursors.Totals`), not the router. A pull panel that
 // declares session counters has no reading either path could give, and is
 // not offered.
 type PostgresSource struct {
@@ -296,11 +296,19 @@ SELECT c."panelId"::text, c.id::text, c."remoteId", c.protocol::text,
        s.id IS NOT NULL, coalesce(s."counterSemantics"::text, ''),
        coalesce(s."lastUpBytes", 0), coalesce(s."lastDownBytes", 0),
        coalesce(s."lifetimeUpBytes", 0), coalesce(s."lifetimeDownBytes", 0),
-       s."lastObservedAt", coalesce(s."resetCount", 0), s."lastResetAt"
+       s."lastObservedAt", coalesce(s."resetCount", 0), s."lastResetAt",
+       p.transport = 'push', rs."in", rs."out", c."sessionBaselineBytes"
   FROM network.config c
+  JOIN network.panel p ON p.id = c."panelId"
   LEFT JOIN network.config_counter_state s ON s."configId" = c.id
+  CROSS JOIN LATERAL (` + sessionSumSQL + `) rs
  WHERE c."panelId" = ANY($1::uuid[])
    AND c."remoteId" IS NOT NULL`
+
+// sessionSumSQL is one config's `radius_session` marks, summed (F-027-du).
+const sessionSumSQL = `SELECT coalesce(sum(r."highWaterInBytes"), 0)::bigint AS "in",
+       coalesce(sum(r."highWaterOutBytes"), 0)::bigint AS "out"
+  FROM network.radius_session r WHERE r."configId" = c.id`
 
 // reload replaces the map with what the table holds for these panels and
 // returns their configs, keyed by client id, for the pass's Panel.Configs.
@@ -320,15 +328,21 @@ func (c *PostgresCursors) reload(ctx context.Context, panelIDs []string) (map[st
 		var has bool
 		var cur Counter
 		var observed, reset *time.Time
+		var push bool
+		var in, out, baseline int64
 		if err := rows.Scan(&panelID, &ref.ConfigID, &remoteID, &ref.Protocol, &has, &semantics,
 			&cur.LastUpBytes, &cur.LastDownBytes, &cur.LifetimeUpBytes, &cur.LifetimeDownBytes,
-			&observed, &cur.ResetCount, &reset); err != nil {
+			&observed, &cur.ResetCount, &reset, &push, &in, &out, &baseline); err != nil {
 			return nil, fmt.Errorf("reading cursors: %w", err)
 		}
 		if configs[panelID] == nil {
 			configs[panelID] = map[string]ConfigRef{}
 		}
 		configs[panelID][remoteID] = ref
+		if push {
+			counters[key(panelID, remoteID)] = SessionCounter(in, out, baseline)
+			continue
+		}
 		if !has {
 			continue
 		}
@@ -561,41 +575,59 @@ func nullableTime(t time.Time) *time.Time {
 	return &t
 }
 
-// PostgresSessions is SessionTotals over `radius_session` (F-027-du): every
-// claimed client on the panel, with the high-water marks of all its sessions
-// summed — open and closed, held and quarantined bytes included, since the
-// mark is what the NAS counted and what User Manager checks its limit
-// against. A client with no session yet reads zero, so its Grant is planned
-// all the same. In is the user's upload, Out their download (RFC 2866).
-type PostgresSessions struct {
-	DB DB
+// SessionCounter is a push config's counter (F-027-du): its lifetime is the
+// Σ of its `radius_session` marks, and the panel's own figure — User
+// Manager's total, which starts at the client's create — is that Σ less the
+// Σ it was created at. The offset every ceiling on it is translated by is
+// therefore the baseline, as a pull panel's is the bytes its counter lost.
+func SessionCounter(in, out, baseline int64) Counter {
+	return Counter{
+		Semantics: driver.CounterSession, LifetimeUpBytes: in, LifetimeDownBytes: out,
+		LastDownBytes: max(in+out-baseline, 0),
+	}
 }
 
-var _ SessionTotals = PostgresSessions{}
+var _ SessionTotals = (*PostgresCursors)(nil)
 
-const sessionTotalsSQL = `
-SELECT c."remoteId", coalesce(sum(s."highWaterInBytes"), 0)::bigint, coalesce(sum(s."highWaterOutBytes"), 0)::bigint
+// totalsSQL is every claimed client on one push panel with its sessions'
+// marks summed and its baseline. A client with no session yet reads zero,
+// so its Grant is planned all the same.
+const totalsSQL = `
+SELECT c."remoteId", rs."in", rs."out", c."sessionBaselineBytes"
   FROM network.config c
-  LEFT JOIN network.radius_session s ON s."configId" = c.id
+  CROSS JOIN LATERAL (` + sessionSumSQL + `) rs
  WHERE c."panelId" = $1::uuid
    AND c."remoteId" IS NOT NULL
- GROUP BY c.id, c."remoteId"
  ORDER BY c."remoteId"`
 
-func (s PostgresSessions) Totals(ctx context.Context, panelID string) ([]driver.ClientUsage, error) {
-	rows, err := s.DB.Query(ctx, sessionTotalsSQL, panelID)
-	if err != nil {
-		return nil, fmt.Errorf("reading the session totals of panel %s: %w", panelID, err)
-	}
-	defer rows.Close()
-	at := time.Now().UTC()
+// Totals is SessionTotals: a push panel's reading, one per claimed client,
+// the figure the panel's own limit is checked against (SessionCounter). It
+// folds the same counters into the map through Merge, so the convergence
+// step right after it translates each ceiling by the baseline as it now
+// stands — a client re-made since the last bulk pass included.
+func (c *PostgresCursors) Totals(ctx context.Context, panelID string) ([]driver.ClientUsage, error) {
 	var out []driver.ClientUsage
-	for rows.Next() {
-		u := driver.ClientUsage{ObservedAt: at}
-		if err := rows.Scan(&u.RemoteID, &u.UpBytes, &u.DownBytes); err != nil {
+	err := c.Merge(func() (map[CursorKey]Counter, error) {
+		rows, err := c.DB.Query(ctx, totalsSQL, panelID)
+		if err != nil {
 			return nil, fmt.Errorf("reading the session totals of panel %s: %w", panelID, err)
 		}
-		out = append(out, u)
-	}
-	return out, rows.Err()
+		defer rows.Close()
+		at := time.Now().UTC()
+		got := map[CursorKey]Counter{}
+		for rows.Next() {
+			var remoteID string
+			var in, sent, baseline int64
+			if err := rows.Scan(&remoteID, &in, &sent, &baseline); err != nil {
+				return nil, fmt.Errorf("reading the session totals of panel %s: %w", panelID, err)
+			}
+			cur := SessionCounter(in, sent, baseline)
+			got[CursorKey{PanelID: panelID, RemoteID: remoteID}] = cur
+			// One total, in DownBytes: the split of what is left past a
+			// baseline is a number nobody measured (driver.ClientUsage).
+			out = append(out, driver.ClientUsage{RemoteID: remoteID, DownBytes: cur.LastDownBytes, ObservedAt: at})
+		}
+		return got, rows.Err()
+	})
+	return out, err
 }

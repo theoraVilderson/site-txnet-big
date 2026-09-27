@@ -80,7 +80,7 @@ var RequiredColumns = map[string][]string{
 		"allocatedCeilingBytes", "appliedCeilingBytes", "writtenCeilingBytes", "observedRateBps",
 		"ceilingAppliedAt", "walletBackedCeilingBytes",
 		// The lease planner's pessimistic ceiling and its write in flight (F-027-db).
-		"limitPeakBytes", "writePending",
+		"limitPeakBytes", "writePending", "sessionBaselineBytes",
 		// The lines `/sub` renders, and the client they were read from (F-027-bj).
 		"linkLines", "linksRemoteId", "linksUuid", "linksCapturedAt",
 		// The first confirmation, announced once (F-111-o).

@@ -463,11 +463,10 @@ func OffsetBytes(counters Counters, p collect.Panel, remoteID string) int64 {
 //
 //   - cumulative: the raw figure we just read off it.
 //   - reset_on_read: zero — the act of reading spent it.
-//   - session: the panel counts per session and not per client, so there is no
-//     figure here to subtract. Treating it as zero makes the ceiling the whole
-//     remaining allowance, which is the conservative direction.
+//   - session: User Manager's per-user total, which starts at the client's
+//     create — `collect.SessionCounter`, our Σ less its baseline (F-027-du).
 func panelCounterBytes(semantics driver.CounterSemantics, counter collect.Counter) int64 {
-	if semantics != driver.CounterCumulative {
+	if semantics == driver.CounterResetOnRead {
 		return 0
 	}
 	return counter.LastUpBytes + counter.LastDownBytes
