@@ -28,6 +28,7 @@ import (
 	"network-service/internal/driver/threexui"
 	"network-service/internal/driver/usermanager"
 	"network-service/internal/driver/xuialireza"
+	"network-service/internal/egress"
 	"network-service/internal/register"
 )
 
@@ -114,10 +115,15 @@ func (v Vault) read(ctx context.Context, panelID, secret string) (string, error)
 // Opener is register.Opener over the families this service has drivers for.
 type Opener struct {
 	Logins LoginSource
-	// HTTP is the client every driver it builds speaks through. Nil is a
-	// client with no timeout of its own: each call's context is the deadline.
+	// HTTP is the client every driver it builds speaks through. Nil is
+	// egress's guarded client with nothing allowed (F-027-dl): a panel is
+	// never dialed unguarded, even by an Opener someone forgot to configure.
 	HTTP *http.Client
 }
+
+// unconfigured is the client an Opener with no HTTP uses; one, so its
+// connections are pooled across the drivers it builds.
+var unconfigured = egress.Client(egress.Guard{})
 
 var _ register.Opener = Opener{}
 
@@ -143,10 +149,14 @@ func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, er
 	if err != nil {
 		return nil, err
 	}
+	hc := o.HTTP
+	if hc == nil {
+		hc = unconfigured
+	}
 	if p.DriverType == driver.DriverHiddify {
 		// Hiddify's API takes no username: the login is the admin's API key
 		// (its uuid), typed alone.
-		return hiddify.New(p.APIBaseURL, p.ClientBaseURL, login, o.HTTP)
+		return hiddify.New(p.APIBaseURL, p.ClientBaseURL, login, hc)
 	}
 	username, password, err := usernamePassword(login)
 	if err != nil {
@@ -155,17 +165,17 @@ func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, er
 	switch p.DriverType {
 	case driver.DriverMarzneshin:
 		// Its subscription may be served on another domain (F-027-bg).
-		return marzneshin.New(p.APIBaseURL, p.ClientBaseURL, marzneshin.Credentials{Username: username, Password: password}, o.HTTP)
+		return marzneshin.New(p.APIBaseURL, p.ClientBaseURL, marzneshin.Credentials{Username: username, Password: password}, hc)
 	case driver.DriverMikrotikUserManager:
-		return usermanager.New(p.APIBaseURL, usermanager.Credentials{Username: username, Password: password}, o.HTTP)
+		return usermanager.New(p.APIBaseURL, usermanager.Credentials{Username: username, Password: password}, hc)
 	case driver.DriverSanaee:
-		return sanaee.New(p.APIBaseURL, p.ClientBaseURL, sanaee.Credentials{Username: username, Password: password}, o.HTTP)
+		return sanaee.New(p.APIBaseURL, p.ClientBaseURL, sanaee.Credentials{Username: username, Password: password}, hc)
 	case driver.DriverThreeXUI:
-		return threexui.New(p.APIBaseURL, threexui.Credentials{Username: username, Password: password}, o.HTTP)
+		return threexui.New(p.APIBaseURL, threexui.Credentials{Username: username, Password: password}, hc)
 	case driver.DriverXUIAlireza:
-		return xuialireza.New(p.APIBaseURL, p.ClientBaseURL, xuialireza.Credentials{Username: username, Password: password}, o.HTTP)
+		return xuialireza.New(p.APIBaseURL, p.ClientBaseURL, xuialireza.Credentials{Username: username, Password: password}, hc)
 	}
-	return marzban.New(p.APIBaseURL, marzban.Credentials{Username: username, Password: password}, o.HTTP)
+	return marzban.New(p.APIBaseURL, marzban.Credentials{Username: username, Password: password}, hc)
 }
 
 // usernamePassword reads a login typed as `username:password`, split at the

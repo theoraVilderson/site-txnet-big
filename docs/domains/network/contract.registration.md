@@ -191,5 +191,34 @@ implementation, every `use` audited where the others are.
    and the Opener hands it to the families that serve links apart from their
    API — Hiddify and Marzneshin, today. One that is not an absolute url is `unopenable`.
    Pull only: CHECK `panel_client_base_url_is_pull_only`.
-5. The Opener paces nothing: a connection test is one call. Pacing a
+5. **A panel is dialed only through `internal/egress`** (F-027-dl, below).
+   An Opener with no `HTTP` uses the guarded client with nothing allowed —
+   it fails closed, like the review guard. The vault read keeps its own client.
+6. The Opener paces nothing: a connection test is one call. Pacing a
    collected panel by its `maxRequestsPerMinute` is `collect.PostgresSource`'s.
+
+## The address is dialed through the guard (F-027-dl)
+
+A panel's address is typed by whoever registers it, and this process holds
+the cross-tenant role. `egress.Client` is the one client every driver speaks
+through — the test, the collection pass, a subscription fetch
+(SPEC weakness #26, #27):
+
+1. **The address checked is the address connected.** `net.Dialer.Control`
+   runs after resolution, once per address tried, and refuses loopback,
+   private (incl. `fc00::/7`), link-local (`169.254.169.254`, every cloud's
+   metadata), unspecified, multicast, CGNAT `100.64.0.0/10` (Alibaba's
+   metadata), the reserved v4 ranges, and v6 forms that carry a v4 address
+   (mapped, NAT64, 6to4, Teredo). A name that resolves public at
+   registration and private later is refused on the dial, never resolved twice.
+2. **A redirect is only another dial**, so it is refused the same way; no
+   environment proxy is used, since the guard would then be checking the proxy.
+3. **Every answer is capped at 64 MiB** (`DefaultMaxBody`); the read past it
+   fails with `ErrBodyTooLarge`, so the driver's decode errors out.
+4. **A refused dial is `unavailable`**, its detail naming the address and
+   why — the panel stays `pending` and is retried (rule 4), never `refused`:
+   a verdict is about what a panel can do.
+5. **`PANEL_EGRESS_ALLOW_CIDRS`** (comma-separated ranges, bare addresses
+   refused) opens private ranges the operator vouches for, such as a router
+   behind the platform VPN. It applies to every panel, which is safe only
+   while registration is owner-only (ADR-0080 decision 2).

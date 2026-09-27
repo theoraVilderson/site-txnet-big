@@ -3,10 +3,12 @@ package config
 
 import (
 	"fmt"
+	"net/netip"
 	"os"
 	"strconv"
 	"time"
 
+	"network-service/internal/egress"
 	"network-service/internal/publish"
 )
 
@@ -52,6 +54,11 @@ type Config struct {
 	RadiusStaleAfter  time.Duration
 	RadiusRefresh     time.Duration
 	RadiusConcurrency int
+
+	// PanelEgressAllow opens private ranges a panel may be dialed at — the
+	// operator's own routers behind the platform VPN. Empty by default: every
+	// private, loopback, link-local and metadata address is refused (F-027-dl).
+	PanelEgressAllow []netip.Prefix
 }
 
 // Load reads configuration from the environment and validates it.
@@ -79,6 +86,11 @@ func Load() (Config, error) {
 		RadiusRefresh:        getEnvDuration("RADIUS_ALLOWLIST_REFRESH", time.Minute),
 		RadiusConcurrency:    getEnvInt("RADIUS_CONCURRENCY", 32),
 	}
+	allow, err := egress.ParseAllow(os.Getenv("PANEL_EGRESS_ALLOW_CIDRS"))
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.PanelEgressAllow = allow
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
 	}

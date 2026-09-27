@@ -21,6 +21,7 @@ import (
 	"network-service/internal/config"
 	"network-service/internal/converge"
 	"network-service/internal/db"
+	"network-service/internal/egress"
 	"network-service/internal/httpapi"
 	"network-service/internal/leaseplan"
 	"network-service/internal/opener"
@@ -91,9 +92,12 @@ func main() {
 	runCtx, stopLoops := context.WithCancel(ctx)
 	defer stopLoops()
 	vault := opener.Vault{BaseURL: cfg.TenantAPIBaseURL, ServiceToken: cfg.ServiceAuthToken}
+	// Every panel dial goes through the SSRF guard (F-027-dl); the vault read
+	// above is ours and inward on purpose, so it keeps its own client.
+	panelHTTP := egress.Client(egress.Guard{Allow: cfg.PanelEgressAllow})
 	registrar := &register.Registrar{
 		Store:  register.PostgresStore{DB: pool},
-		Opener: opener.Opener{Logins: vault},
+		Opener: opener.Opener{Logins: vault, HTTP: panelHTTP},
 		Log:    log,
 	}
 	go func() { _ = registrar.Run(runCtx) }()
@@ -109,7 +113,7 @@ func main() {
 	cursors := &collect.PostgresCursors{DB: pool}
 	health := &panelstate.Tracker{Writer: panelstate.PostgresWriter{DB: pool}, Log: log}
 	panels := &collect.PostgresSource{
-		DB: pool, Opener: opener.Opener{Logins: vault}, Cursors: cursors, States: health, Log: log,
+		DB: pool, Opener: opener.Opener{Logins: vault, HTTP: panelHTTP}, Cursors: cursors, States: health, Log: log,
 	}
 	turns := &collect.TurnLocks{}
 	driftEvents := collect.PostgresDriftEvents{DB: pool}
