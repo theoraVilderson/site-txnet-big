@@ -883,21 +883,133 @@ div:has(> .password-field-input:autofill) > .password-field-label {
 }
 
 /* ── My services: a service that looks alive (F-307-u) ──────────────────────
-   `.meter-flow` runs a current through the traffic bar while the service is
-   moving data; `.pulse-bump` floats up what a usage push just added. A
-   purchase on its way has `.build-sweep` crossing its track and `.build-orbit`
-   turning round its icon. Colours come from the element's own theme classes;
-   the stripes are white over whatever fill they sit on, in every theme.
+   The meter is a tank (`.tank`): a glossy capsule whose fill is what is LEFT.
+   It fills up once when the page opens (`tankGrow`), a glint of light crosses
+   it every few seconds, and a glowing head rides its leading edge. While the
+   service is in use a current flows toward the head and the head beats; a
+   usage push splashes it. Nearly empty, the whole fill breathes red.
+
+   Colour is one variable, `--tank`, set from a theme token by the component
+   (primary / gold / error — gold is a tone here, never a control), so all
+   three themes work without a raw colour. Logical properties and `[dir=rtl]`
+   make the tank drain toward the reading start in both directions.
    Reduced motion keeps every state and drops only the movement. */
 
-.meter-flow {
-  background-image: repeating-linear-gradient(
-    -45deg,
-    rgba(255, 255, 255, 0.28) 0 6px,
-    transparent 6px 12px
-  );
+.tank {
+  position: relative;
+  height: 0.8rem;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--color-card-border) 75%, transparent);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.14);
+}
+
+.tank-tick {
+  position: absolute;
+  inset-block: 3px;
+  width: 1px;
+  border-radius: 1px;
+  background: color-mix(in oklab, var(--color-text-secondary) 30%, transparent);
+  z-index: 0;
+}
+
+.tank-fill {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: 1;
+  border-radius: inherit;
+  overflow: hidden;
+  background: linear-gradient(to right, color-mix(in oklab, var(--tank) 55%, white), var(--tank));
+  box-shadow: 0 0 12px color-mix(in oklab, var(--tank) 45%, transparent);
+  transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: tankGrow 1.3s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+}
+
+[dir="rtl"] .tank-fill {
+  background: linear-gradient(to left, color-mix(in oklab, var(--tank) 55%, white), var(--tank));
+  animation-name: tankGrowRtl;
+}
+
+/* The upper half catches the light: what makes it read as glass, not paint. */
+.tank-fill::before {
+  content: "";
+  position: absolute;
+  inset-inline: 4px;
+  top: 2px;
+  height: 35%;
+  border-radius: 9999px;
+  background: linear-gradient(to bottom, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0));
+}
+
+.tank-glint {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.6) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: tankGlint 5s ease-in-out 1.4s infinite;
+}
+
+[dir="rtl"] .tank-glint {
+  animation-name: tankGlintRtl;
+}
+
+.tank-flow {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(-45deg, rgb(255 255 255 / 0.3) 0 6px, transparent 6px 12px);
   background-size: 17px 17px;
-  animation: meterFlow 0.9s linear infinite;
+  animation: tankFlow 0.8s linear infinite;
+}
+
+[dir="rtl"] .tank-flow {
+  background-image: repeating-linear-gradient(45deg, rgb(255 255 255 / 0.3) 0 6px, transparent 6px 12px);
+  animation-name: tankFlowRtl;
+}
+
+/* The head rides the fill's leading edge; the component sets its
+   inset-inline-start. It is a sibling of the fill, so its glow is never clipped. */
+.tank-head {
+  position: absolute;
+  top: 50%;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: -0.25rem;
+  border-radius: 9999px;
+  background: white;
+  box-shadow: 0 0 6px 2px color-mix(in oklab, var(--tank) 70%, white);
+  z-index: 2;
+  transition: inset-inline-start 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: tankHeadIn 0.4s ease-out 1.1s both;
+}
+
+.tank-live .tank-head {
+  animation: tankHeadIn 0.4s ease-out 1.1s both, tankBeat 1.2s ease-in-out 1.5s infinite;
+}
+
+/* A usage push landing: one ring out of the head. */
+.tank-ripple {
+  position: absolute;
+  top: 50%;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: -0.25rem;
+  border-radius: 9999px;
+  border: 2px solid var(--tank);
+  z-index: 2;
+  pointer-events: none;
+  animation: tankRipple 0.9s cubic-bezier(0.1, 0.6, 0.3, 1) both;
+}
+
+.tank-critical {
+  animation: tankGrow 1.3s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both, tankWarn 1.8s ease-in-out 1.4s infinite;
+}
+
+[dir="rtl"] .tank-critical {
+  animation-name: tankGrowRtl, tankWarn;
+}
+
+.meter-figure {
+  animation: meterRise 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
 }
 
 .pulse-bump {
@@ -908,13 +1020,67 @@ div:has(> .password-field-input:autofill) > .password-field-label {
   animation: buildSweep 1.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 
+[dir="rtl"] .build-sweep {
+  animation-name: buildSweepRtl;
+}
+
 .build-orbit {
   animation: buildOrbit 1.2s linear infinite;
 }
 
-@keyframes meterFlow {
+@keyframes tankGrow {
+  from { clip-path: inset(0 100% 0 0 round 9999px); }
+  to { clip-path: inset(0 0 0 0 round 9999px); }
+}
+
+@keyframes tankGrowRtl {
+  from { clip-path: inset(0 0 0 100% round 9999px); }
+  to { clip-path: inset(0 0 0 0 round 9999px); }
+}
+
+@keyframes tankGlint {
+  0% { transform: translateX(-120%); }
+  35%, 100% { transform: translateX(120%); }
+}
+
+@keyframes tankGlintRtl {
+  0% { transform: translateX(120%); }
+  35%, 100% { transform: translateX(-120%); }
+}
+
+@keyframes tankFlow {
   from { background-position: 0 0; }
   to { background-position: 17px 0; }
+}
+
+@keyframes tankFlowRtl {
+  from { background-position: 0 0; }
+  to { background-position: -17px 0; }
+}
+
+@keyframes tankBeat {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 6px 2px color-mix(in oklab, var(--tank) 70%, white); }
+  50% { transform: scale(1.35); box-shadow: 0 0 12px 5px color-mix(in oklab, var(--tank) 60%, white); }
+}
+
+@keyframes tankHeadIn {
+  from { opacity: 0; transform: scale(0.2); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes tankRipple {
+  from { opacity: 0.9; transform: scale(1); }
+  to { opacity: 0; transform: scale(4); }
+}
+
+@keyframes tankWarn {
+  0%, 100% { filter: none; }
+  50% { filter: brightness(1.25) saturate(1.2); }
+}
+
+@keyframes meterRise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
 }
 
 @keyframes pulseBump {
@@ -927,10 +1093,6 @@ div:has(> .password-field-input:autofill) > .password-field-label {
   to { transform: translateX(310%); }
 }
 
-[dir="rtl"] .build-sweep {
-  animation-name: buildSweepRtl;
-}
-
 @keyframes buildSweepRtl {
   from { transform: translateX(110%); }
   to { transform: translateX(-310%); }
@@ -941,10 +1103,25 @@ div:has(> .password-field-input:autofill) > .password-field-label {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .meter-flow,
+  .tank-fill,
+  .tank-critical,
+  .tank-head,
+  .tank-live .tank-head,
+  .meter-figure,
   .pulse-bump,
   .build-orbit {
     animation: none;
+  }
+
+  .tank-fill,
+  .tank-head {
+    transition: none;
+  }
+
+  .tank-glint,
+  .tank-flow,
+  .tank-ripple {
+    display: none;
   }
 
   .build-sweep {

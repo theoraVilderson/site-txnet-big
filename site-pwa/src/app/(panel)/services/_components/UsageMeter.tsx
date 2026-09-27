@@ -14,8 +14,20 @@ import { remainingBytes, usedShare } from "../_lib/usage";
 const S = FrontendI18nKeys.common.myServices;
 const M = S.meter;
 
-const FILL: Record<Level, string> = { ok: "bg-primary", low: "bg-gold", critical: "bg-error" };
+/** The tank's colour, a theme token per level (gold is a tone, never a control). */
+const TANK: Record<Level, string> = { ok: "var(--color-primary)", low: "var(--color-gold)", critical: "var(--color-error)" };
 const FIGURE: Record<Level, string> = { ok: "text-text-primary", low: "text-gold", critical: "text-error" };
+const PILL: Record<Level, string> = {
+  ok: "bg-leaf-bg text-primary",
+  low: "bg-gold-bg text-gold",
+  critical: "bg-error-bg text-error",
+};
+/** A tile nearly out is tinted, so the eye finds it before reading it. */
+const TILE: Record<Level, string> = {
+  ok: "border-transparent bg-bg-inner",
+  low: "border-transparent bg-bg-inner",
+  critical: "border-error-border bg-error-bg",
+};
 
 /**
  * A service's traffic and time, side by side, each leading with **what is
@@ -30,11 +42,14 @@ const FIGURE: Record<Level, string> = { ok: "text-text-primary", low: "text-gold
  * it used. Time counts down in the browser (`useTimeLeft`, F-307-s). Nothing
  * here reads anything.
  *
- * `live` runs the traffic bar's current, so a service in use looks it.
+ * The bar is a tank (`Tank`, `globals.css` "My services"): it fills up when
+ * the page opens, a glint crosses it, a glowing head rides its edge. `live`
+ * runs a current through the traffic tank and beats its head; `splash` (the
+ * latest push's number) sends a ring out of the head as the bytes land.
  * `warn` asks for the running-out lines — only a live-state Grant gets them;
  * a suspended one already says what to do.
  */
-export function UsageMeter({ row, live, warn }: { row: GrantRow; live: boolean; warn: boolean }) {
+export function UsageMeter({ row, live, warn, splash }: { row: GrantRow; live: boolean; warn: boolean; splash?: number }) {
   const { t, lang } = useLocale();
 
   const consumed = formatBytes(row.consumedBytes, lang) ?? row.consumedBytes;
@@ -73,61 +88,62 @@ export function UsageMeter({ row, live, warn }: { row: GrantRow; live: boolean; 
       <div className="grid grid-cols-2 gap-2">
         {/* Traffic */}
         {trafficLeft !== null && share !== null ? (
-          <Tile icon={<Gauge size={14} aria-hidden />} label={t("common", M.traffic)}>
-            <p className="flex flex-wrap items-baseline gap-x-1.5">
-              <span className={`text-xl font-black tabular-nums leading-tight ${FIGURE[trafficLevel]}`} dir="ltr">
-                {remaining}
-              </span>
-              <span className="text-xs text-text-secondary">{t("common", M.of, { total: boundText })}</span>
-            </p>
-            <Bar
-              left={trafficLeft}
-              level={trafficLevel}
-              flowing={live}
-              label={t("common", S.ring.label, { used: consumed, bought: boundText, remaining })}
-            />
-            <p className="flex flex-wrap items-center justify-between gap-x-2 text-[11px] text-text-secondary">
-              <span>{t("common", S.usage, { consumed, purchased: boundText })}</span>
-              <span className={`font-bold ${FIGURE[trafficLevel]}`}>
+          <Tile icon={<Gauge size={14} aria-hidden />} label={t("common", M.traffic)} level={trafficLevel}>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+              <p className="meter-figure flex flex-wrap items-baseline gap-x-1.5">
+                <span className={`text-xl font-black tabular-nums leading-tight ${FIGURE[trafficLevel]}`} dir="ltr">
+                  {remaining}
+                </span>
+                <span className="text-xs text-text-secondary">{t("common", M.of, { total: boundText })}</span>
+              </p>
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${PILL[trafficLevel]}`}>
                 {t("common", M.percentLeft, { percent: percentLeft(trafficLeft) })}
               </span>
-            </p>
+            </div>
+            <Tank
+              left={trafficLeft}
+              level={trafficLevel}
+              live={live}
+              splash={splash}
+              label={t("common", S.ring.label, { used: consumed, bought: boundText, remaining })}
+            />
+            <p className="text-[11px] text-text-secondary">{t("common", S.usage, { consumed, purchased: boundText })}</p>
           </Tile>
         ) : row.trafficUnlimited ? (
           <Tile icon={<Gauge size={14} aria-hidden />} label={t("common", M.traffic)}>
-            <p className="flex items-center gap-1.5 text-xl font-black leading-tight text-primary">
+            <p className="meter-figure flex items-center gap-1.5 text-xl font-black leading-tight text-primary">
               <Unlimited size={22} aria-hidden />
               {t("common", M.unlimited)}
             </p>
-            <Bar left={1} level="ok" flowing={live} />
+            <Tank left={1} level="ok" live={live} splash={splash} />
             <p className="text-[11px] text-text-secondary">{t("common", S.usageUnlimited, { consumed })}</p>
           </Tile>
         ) : (
           <Tile icon={<Gauge size={14} aria-hidden />} label={t("common", M.trafficUsed)}>
-            <p className="text-xl font-black tabular-nums leading-tight text-text-primary" dir="ltr">
+            <p className="meter-figure text-xl font-black tabular-nums leading-tight text-text-primary" dir="ltr">
               {consumed}
             </p>
-            <Bar left={1} level="ok" flowing={live} />
+            <Tank left={1} level="ok" live={live} splash={splash} />
           </Tile>
         )}
 
         {/* Time */}
-        <Tile icon={<CalendarClock size={14} aria-hidden />} label={t("common", M.time)}>
+        <Tile icon={<CalendarClock size={14} aria-hidden />} label={t("common", M.time)} level={timeLevel}>
           {time === null || timeLeftShare === null ? (
             <>
-              <p className="flex items-center gap-1.5 text-xl font-black leading-tight text-primary">
+              <p className="meter-figure flex items-center gap-1.5 text-xl font-black leading-tight text-primary">
                 <Unlimited size={22} aria-hidden />
                 {t("common", M.unlimited)}
               </p>
-              <Bar left={1} level="ok" />
+              <Tank left={1} level="ok" />
               <p className="text-[11px] text-text-secondary">{t("common", S.periodUnlimited, { from })}</p>
             </>
           ) : (
             <>
-              <p className={`text-base font-black leading-tight ${FIGURE[timeLevel]}`} title={until ?? undefined}>
+              <p className={`meter-figure text-base font-black leading-tight ${FIGURE[timeLevel]}`} title={until ?? undefined}>
                 {days}
               </p>
-              <Bar left={timeLeftShare} level={timeLevel} />
+              <Tank left={timeLeftShare} level={timeLevel} />
               {until && <p className="text-[11px] text-text-secondary">{t("common", M.until, { at: until })}</p>}
             </>
           )}
@@ -148,9 +164,9 @@ export function UsageMeter({ row, live, warn }: { row: GrantRow; live: boolean; 
   );
 }
 
-function Tile({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
+function Tile({ icon, label, level = "ok", children }: { icon: ReactNode; label: string; level?: Level; children: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-2xl bg-bg-inner p-3">
+    <div className={`flex min-w-0 flex-col gap-2 rounded-2xl border p-3 transition-colors duration-500 ${TILE[level]}`}>
       <p className="flex items-center gap-1.5 text-[11px] font-bold text-text-secondary">
         {icon}
         {label}
@@ -161,25 +177,50 @@ function Tile({ icon, label, children }: { icon: ReactNode; label: string; child
 }
 
 /**
- * A tank that drains: the fill is what is left. `flowing` runs a current
- * through it — the service is moving data now. A sliver stays visible while
- * anything is left, so "almost empty" never reads as "empty".
+ * A tank that drains: the fill is what is left, in `--tank`, with a head of
+ * light on its leading edge. A sliver stays while anything is left, so
+ * "almost empty" never reads as "empty"; an empty tank has no head. Ticks at
+ * the quarters give the eye a scale without a single number.
  */
-function Bar({ left, level, flowing = false, label }: { left: number; level: Level; flowing?: boolean; label?: string }) {
-  const width = left <= 0 ? 0 : Math.max(left, 0.03) * 100;
+function Tank({
+  left,
+  level,
+  live = false,
+  splash,
+  label,
+}: {
+  left: number;
+  level: Level;
+  live?: boolean;
+  splash?: number;
+  label?: string;
+}) {
+  const width = left <= 0 ? 0 : Math.max(left, 0.04) * 100;
+  const head = `max(0px, calc(${width}% - 0.6rem))`;
   return (
     <div
       role={label ? "img" : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
-      className="h-2.5 w-full overflow-hidden rounded-full bg-card-border/60"
+      data-level={level}
+      className={`tank ${live ? "tank-live" : ""}`}
+      style={{ ["--tank" as string]: TANK[level] }}
     >
-      <div
-        className={`relative h-full overflow-hidden rounded-full transition-[width] duration-700 ease-out ${FILL[level]}`}
-        style={{ width: `${width}%` }}
-      >
-        {flowing && <span className="meter-flow absolute inset-0" aria-hidden />}
-      </div>
+      {[25, 50, 75].map((at) => (
+        <span key={at} className="tank-tick" style={{ insetInlineStart: `${at}%` }} aria-hidden />
+      ))}
+      {width > 0 && (
+        <>
+          <div className={`tank-fill ${level === "critical" ? "tank-critical" : ""}`} style={{ width: `${width}%` }}>
+            {live && <span className="tank-flow" aria-hidden />}
+            <span className="tank-glint" aria-hidden />
+          </div>
+          <span className="tank-head" style={{ insetInlineStart: head }} aria-hidden />
+          {live && splash !== undefined && (
+            <span key={splash} className="tank-ripple" style={{ insetInlineStart: head }} aria-hidden />
+          )}
+        </>
+      )}
     </div>
   );
 }

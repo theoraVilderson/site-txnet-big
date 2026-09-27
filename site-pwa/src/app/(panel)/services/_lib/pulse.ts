@@ -6,31 +6,53 @@ import type { GrantStatus, UserConfigRow } from "@/lib/billing-api";
  */
 
 /**
- * How long after its last charged traffic a Grant still reads "in use":
- * two and a half bulk collection passes (`collect.DefaultInterval` is 60 s).
- * Traffic that keeps flowing is charged every pass and pushed at most every
- * 30 s, so a live service is re-stamped well inside this; one that stopped is
- * idle within three minutes of stopping.
+ * How often a Grant in use is told its bytes: measured on dev on 2026-09-27,
+ * 43 gaps between `entitlement.grant.usage` events of one Grant — median
+ * 40 s, p99 42.5 s. Recompute with the query in contract.service-pulse.md.
  */
-export const LIVE_WINDOW_MS = 150_000;
+export const PUSH_GAP_MS = 40_000;
 
 /**
- * `live` while the last traffic is inside {@link LIVE_WINDOW_MS}; `idleMs` is
- * how long ago it was, or `null` when the Grant never moved a byte. A stamp a
- * little ahead of this clock (the server's runs ahead) counts as now.
+ * Live while the next push is still due: one gap and ten seconds. Past it the
+ * push that traffic would have sent is late — the service has probably
+ * stopped, and the row stops saying "in use" (user, 2026-09-27: a service
+ * that stopped kept reading live, "don't let it fool the user").
  */
-export function activityOf(lastTrafficAt: string | null, now: Date): { live: boolean; idleMs: number | null } {
-  if (!lastTrafficAt) return { live: false, idleMs: null };
+export const LIVE_WINDOW_MS = PUSH_GAP_MS + 10_000;
+
+/** Two pushes missed: the service is idle, not late. */
+export const STOPPED_AFTER_MS = 2 * PUSH_GAP_MS + 10_000;
+
+export type ActivityState = "live" | "cooling" | "idle" | "never";
+
+/**
+ * Where a Grant is from its last charged traffic: `live` while the next push
+ * is due, `cooling` once one is missed (probably stopped — said as such),
+ * `idle` after two, `never` when it has moved no byte. `idleMs` is how long
+ * ago; a stamp a little ahead of this clock (the server's runs ahead) is now.
+ */
+export function activityOf(lastTrafficAt: string | null, now: Date): { state: ActivityState; idleMs: number | null } {
+  if (!lastTrafficAt) return { state: "never", idleMs: null };
   const at = new Date(lastTrafficAt).getTime();
-  if (Number.isNaN(at)) return { live: false, idleMs: null };
+  if (Number.isNaN(at)) return { state: "never", idleMs: null };
   const idleMs = Math.max(0, now.getTime() - at);
-  return { live: idleMs < LIVE_WINDOW_MS, idleMs };
+  const state = idleMs < LIVE_WINDOW_MS ? "live" : idleMs < STOPPED_AFTER_MS ? "cooling" : "idle";
+  return { state, idleMs };
 }
 
-/** "How long ago" in its largest whole unit; under a minute is `now`. */
-export function agoOf(ms: number): { unit: "now" | "minutes" | "hours" | "days"; n: number } {
+/** When the verdict can next change: the window's edge, else the next whole minute of idleness. */
+export function nextChangeIn(state: ActivityState, idleMs: number | null): number | null {
+  if (state === "never" || idleMs === null) return null;
+  if (state === "live") return LIVE_WINDOW_MS - idleMs;
+  if (state === "cooling") return STOPPED_AFTER_MS - idleMs;
+  return 60_000 - (idleMs % 60_000);
+}
+
+/** "How long ago" in its largest whole unit; under five seconds is `now`. */
+export function agoOf(ms: number): { unit: "now" | "seconds" | "minutes" | "hours" | "days"; n: number } {
+  if (ms < 5_000) return { unit: "now", n: 0 };
+  if (ms < 60_000) return { unit: "seconds", n: Math.floor(ms / 1000) };
   const minutes = Math.floor(ms / 60_000);
-  if (minutes < 1) return { unit: "now", n: 0 };
   if (minutes < 60) return { unit: "minutes", n: minutes };
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return { unit: "hours", n: hours };

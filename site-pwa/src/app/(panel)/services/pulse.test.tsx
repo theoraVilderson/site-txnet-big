@@ -3,7 +3,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type GrantRow, type UserConfigRow } from "@/lib/billing-api";
 import { ServiceRow } from "./_components/ServiceRow";
-import { LIVE_WINDOW_MS, activityOf, agoOf, buildStage, levelOf } from "./_lib/pulse";
+import { LIVE_WINDOW_MS, STOPPED_AFTER_MS, activityOf, agoOf, buildStage, levelOf, nextChangeIn } from "./_lib/pulse";
 
 /**
  * A service that looks alive when it is, and a purchase that shows its
@@ -82,16 +82,28 @@ beforeEach(() => {
 });
 
 describe("the numbers behind the pulse", () => {
-  it("is live inside the window, idle past it, and never-used with no traffic at all", () => {
-    expect(activityOf(ago(20_000), NOW)).toEqual({ live: true, idleMs: 20_000 });
-    expect(activityOf(ago(LIVE_WINDOW_MS + 1), NOW)).toEqual({ live: false, idleMs: LIVE_WINDOW_MS + 1 });
-    expect(activityOf(null, NOW)).toEqual({ live: false, idleMs: null });
+  it("is live while the next push is due, cooling once one is missed, idle after two, never with no traffic", () => {
+    // Pushes come every ~40 s while traffic flows (measured on dev, p99 42.5 s).
+    expect(LIVE_WINDOW_MS).toBe(50_000);
+    expect(STOPPED_AFTER_MS).toBe(90_000);
+    expect(activityOf(ago(20_000), NOW)).toEqual({ state: "live", idleMs: 20_000 });
+    expect(activityOf(ago(LIVE_WINDOW_MS), NOW)).toEqual({ state: "cooling", idleMs: LIVE_WINDOW_MS });
+    expect(activityOf(ago(STOPPED_AFTER_MS), NOW)).toEqual({ state: "idle", idleMs: STOPPED_AFTER_MS });
+    expect(activityOf(null, NOW)).toEqual({ state: "never", idleMs: null });
     // A clock a little ahead of the server's is not "in the future".
-    expect(activityOf(ago(-5_000), NOW)).toEqual({ live: true, idleMs: 0 });
+    expect(activityOf(ago(-5_000), NOW)).toEqual({ state: "live", idleMs: 0 });
+  });
+
+  it("wakes at each edge, then on the whole minute", () => {
+    expect(nextChangeIn("live", 20_000)).toBe(30_000);
+    expect(nextChangeIn("cooling", 60_000)).toBe(30_000);
+    expect(nextChangeIn("idle", 150_000)).toBe(30_000);
+    expect(nextChangeIn("never", null)).toBeNull();
   });
 
   it("says how long ago in the largest whole unit", () => {
-    expect(agoOf(30_000)).toEqual({ unit: "now", n: 0 });
+    expect(agoOf(3_000)).toEqual({ unit: "now", n: 0 });
+    expect(agoOf(30_000)).toEqual({ unit: "seconds", n: 30 });
     expect(agoOf(12 * 60_000)).toEqual({ unit: "minutes", n: 12 });
     expect(agoOf(5 * 3_600_000 + 1)).toEqual({ unit: "hours", n: 5 });
     expect(agoOf(3 * 86_400_000)).toEqual({ unit: "days", n: 3 });
@@ -124,17 +136,25 @@ describe("a service row's pulse", () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it("reads live from billing's last traffic, and falls idle when the window passes with nothing new", () => {
+  it("reads live from billing's last traffic, says so as soon as a push is late, then falls idle", () => {
     render(<ServiceRow row={{ ...GRANT, lastTrafficAt: ago(30_000) }} name="VPN" capabilities={[]} />);
     expect(screen.getByRole("status", { name: "myServices.pulse.live" })).toBeInTheDocument();
+    // The seconds since the last traffic count up in the open.
+    expect(screen.getByText("myServices.pulse.liveHint:myServices.ago.seconds:30")).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(5_000));
+    expect(screen.getByText("myServices.pulse.liveHint:myServices.ago.seconds:35")).toBeInTheDocument();
 
-    act(() => vi.advanceTimersByTime(LIVE_WINDOW_MS));
+    // 50 s: the push traffic would have sent is late — no longer "in use".
+    act(() => vi.advanceTimersByTime(15_000));
     expect(screen.queryByRole("status", { name: "myServices.pulse.live" })).toBeNull();
+    expect(screen.getByRole("status", { name: "myServices.pulse.cooling" })).toBeInTheDocument();
+
+    // 90 s: two missed — idle, and the text turns on the minute.
+    act(() => vi.advanceTimersByTime(40_000));
     expect(screen.getByRole("status", { name: "myServices.pulse.idle" })).toBeInTheDocument();
-    // Idle two and a half minutes when the window closes, and the text turns on the minute.
-    expect(screen.getByText("myServices.pulse.idleSince:myServices.ago.minutes:2")).toBeInTheDocument();
+    expect(screen.getByText("myServices.pulse.idleSince:myServices.ago.minutes:1")).toBeInTheDocument();
     act(() => vi.advanceTimersByTime(60_000));
-    expect(screen.getByText("myServices.pulse.idleSince:myServices.ago.minutes:3")).toBeInTheDocument();
+    expect(screen.getByText("myServices.pulse.idleSince:myServices.ago.minutes:2")).toBeInTheDocument();
   });
 
   it("says a service nobody has used yet is unused, not idle since some time", () => {
@@ -152,6 +172,11 @@ describe("a service row's pulse", () => {
     );
     expect(screen.getByRole("status", { name: "myServices.pulse.live" })).toBeInTheDocument();
     expect(screen.getByText("+100 MB")).toBeInTheDocument();
+    // The traffic tank runs its current and sends a ring out as the bytes land.
+    const tank = screen.getByRole("img", { name: /myServices\.ring\.label/ });
+    expect(tank).toHaveClass("tank-live");
+    expect(tank.querySelector(".tank-flow")).not.toBeNull();
+    expect(tank.querySelector(".tank-ripple")).not.toBeNull();
   });
 
   it("claims nothing while metering is down, and nothing for a service that is not active", () => {
@@ -175,6 +200,7 @@ describe("the traffic meter", () => {
     unmount();
     render(<ServiceRow row={{ ...GRANT, consumedBytes: "2040109466" }} name="VPN" capabilities={[]} />);
     expect(screen.getByText("myServices.meter.lowTraffic")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /myServices\.ring\.label/ })).toHaveAttribute("data-level", "critical");
   });
 
   it("says unlimited for a Grant sold without a traffic bound", () => {

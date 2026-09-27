@@ -2242,17 +2242,21 @@
     },
     "pulse": {
       "live": "In use",
-      "liveHint": "Moving data right now",
+      "liveHint": "last traffic {{ago}}",
       "idle": "Idle",
       "idleSince": "Last used {{ago}}",
       "never": "Not used yet",
-      "added": "just added"
+      "added": "just added",
+      "cooling": "No new traffic",
+      "coolingHint": "probably stopped; last traffic {{ago}}",
+      "cadence": "Usage arrives from the servers about every 40 seconds, so a stop shows up a little late."
     },
     "ago": {
       "now": "just now",
       "minutes": "{{n}} min ago",
       "hours": "{{n}} h ago",
-      "days": "{{n}} days ago"
+      "days": "{{n}} days ago",
+      "seconds": "{{n}} s ago"
     },
     "meter": {
       "traffic": "Traffic left",

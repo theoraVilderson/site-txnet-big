@@ -100,7 +100,7 @@ export const ServiceRow = memo(function ServiceRow({
   // something is metering it (F-307-u).
   const pulse = useServicePulse(row.lastTrafficAt, row.consumedBytes);
   const showPulse = row.status === "active" && !meteringDown;
-  const live = showPulse && pulse.live;
+  const live = showPulse && pulse.state === "live";
 
   // A purchase on its way: its steps until a line to connect with exists,
   // then "ready" for a moment — only for one this page saw on its way.
@@ -132,7 +132,7 @@ export const ServiceRow = memo(function ServiceRow({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <h2 className="break-words text-base font-bold text-text-primary">{name ?? t("common", S.unnamed)}</h2>
-            {showPulse && <ServicePulse pulse={pulse} />}
+            {showPulse && <ServicePulse pulse={pulse} lastTrafficAt={row.lastTrafficAt} />}
           </div>
           <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${tone.className}`}>
             <tone.icon size={14} aria-hidden />
@@ -147,7 +147,7 @@ export const ServiceRow = memo(function ServiceRow({
         ) : (
           <>
             {ready && <ServiceReady />}
-            <UsageMeter row={row} live={live} warn={row.status === "active"} />
+            <UsageMeter row={row} live={live} warn={row.status === "active"} splash={pulse.bump?.n} />
           </>
         )}
 
