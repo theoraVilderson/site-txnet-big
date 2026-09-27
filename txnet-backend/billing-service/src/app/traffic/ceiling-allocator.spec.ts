@@ -330,6 +330,7 @@ function fakeTx(options: {
   balance?: string;
 }) {
   const rows = options.configs.map((c) => ({ ...c }));
+  const updated: string[] = [];
   const metered = options.meteredRate === undefined ? '1.00000000' : options.meteredRate;
   const tx = {
     grant: {
@@ -358,13 +359,14 @@ function fakeTx(options: {
       update: async ({ where, data }: { where: { id: string }; data: { allocatedCeilingBytes?: bigint; walletBackedCeilingBytes?: bigint } }) => {
         const row = rows.find((r) => r.id === where.id);
         if (!row) throw new Error('no config');
+        updated.push(where.id);
         if (data.allocatedCeilingBytes !== undefined) row.allocatedCeilingBytes = data.allocatedCeilingBytes;
         if (data.walletBackedCeilingBytes !== undefined) row.walletBackedCeilingBytes = data.walletBackedCeilingBytes;
         return row;
       },
     },
   };
-  return { tx: tx as unknown as Prisma.TransactionClient, rows };
+  return { tx: tx as unknown as Prisma.TransactionClient, rows, updated };
 }
 
 describe('CeilingAllocatorService.rebalance', () => {
@@ -430,6 +432,18 @@ describe('CeilingAllocatorService.rebalance', () => {
     const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
 
     expect(allocation.written).toBe(0);
+  });
+
+  it("writes a Grant's configs in id order, the order network-service locks them in (F-027-cv)", async () => {
+    const { tx, updated } = fakeTx({
+      purchasedBytes: BigInt(900) * MIB,
+      configs: [config('c'), config('a'), config('b')],
+      served: { a: BigInt(0), b: BigInt(0), c: BigInt(0) },
+    });
+
+    await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'c' });
+
+    expect(updated).toEqual(['a', 'b', 'c']);
   });
 
   it('answers a missing Grant as a refusal, not a crash', async () => {

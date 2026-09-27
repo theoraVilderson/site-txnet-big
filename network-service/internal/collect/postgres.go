@@ -476,11 +476,9 @@ type PostgresRates struct {
 
 var _ Rates = PostgresRates{}
 
-const ratesSQL = `
-UPDATE network.config c
-   SET "observedRateBps" = v.rate
-  FROM unnest($1::text[], $2::bigint[]) AS v(id, rate)
- WHERE c.id = v.id::uuid`
+// In id order: the bulk and hot loops write the same panel's rates (F-027-cv).
+var ratesSQL = db.OrderedConfigUpdate(`"observedRateBps" = v.rate`,
+	`unnest($1::text[], $2::bigint[]) AS v(id, rate)`)
 
 func (s PostgresRates) Record(ctx context.Context, samples []RateSample) error {
 	if len(samples) == 0 {

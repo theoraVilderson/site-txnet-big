@@ -350,6 +350,12 @@ func TestPassSideWritesAreOneStatementEach(t *testing.T) {
 	if got := pool.executed(`"observedRateBps"`); len(got) != 1 || got[0][1].([]int64)[0] != 8_000 {
 		t.Fatalf("rate writes = %v", got)
 	}
+	// Bulk and hot passes write the same panel's rates: id order, or 40P01 (F-027-cv).
+	for _, sql := range pool.sql {
+		if strings.Contains(sql, `"observedRateBps" =`) && !strings.Contains(sql, "ORDER BY c.id") {
+			t.Errorf("the rate write takes its locks in plan order")
+		}
+	}
 	// Both counts, never the ratio (invariant 23).
 	if got := pool.executed(`INSERT INTO network.panel_drift_event`); len(got) != 1 || got[0][2].(*string) != nil || got[0][3] != 6 || got[0][4] != 10 {
 		t.Fatalf("drift event = %v", got)

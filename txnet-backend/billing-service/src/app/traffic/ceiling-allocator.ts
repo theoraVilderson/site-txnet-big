@@ -336,10 +336,14 @@ export class CeilingAllocatorService {
     // `purchasedBytes` does — every top-up changes it — so a write gated on the
     // allocation alone would leave the collector extending to yesterday's
     // balance on its way out.
-    const moved = allocation.ceilings.filter((ceiling) => {
-      const row = current.get(ceiling.configId);
-      return row?.allocatedCeilingBytes !== ceiling.ceilingBytes || row?.walletBackedCeilingBytes !== backedById.get(ceiling.configId);
-    });
+    // Written in id order, the order network-service's passes lock these rows
+    // in (F-027-cv): two writers taking them in different orders deadlock.
+    const moved = allocation.ceilings
+      .filter((ceiling) => {
+        const row = current.get(ceiling.configId);
+        return row?.allocatedCeilingBytes !== ceiling.ceilingBytes || row?.walletBackedCeilingBytes !== backedById.get(ceiling.configId);
+      })
+      .sort((a, b) => (a.configId < b.configId ? -1 : a.configId > b.configId ? 1 : 0));
     for (const ceiling of moved) {
       await tx.config.update({
         where: { id: ceiling.configId },

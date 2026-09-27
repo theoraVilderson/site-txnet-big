@@ -185,13 +185,10 @@ func (s PostgresDesired) Record(ctx context.Context, rows []Outcome) error {
 
 // driftSQL writes every verdict of a pass in one statement, with the repair
 // count and time the anti-flap stop reads back (F-027-ab).
-const driftSQL = `
-UPDATE network.config c
-   SET "driftState" = v.drift::network."DriftState",
+var driftSQL = db.OrderedConfigUpdate(`"driftState" = v.drift::network."DriftState",
        "driftRepairCount" = v.count,
-       "driftRepairedAt" = v.repaired
-  FROM unnest($1::text[], $2::text[], $3::int[], $4::timestamp(3)[]) AS v(id, drift, count, repaired)
- WHERE c.id = v.id::uuid`
+       "driftRepairedAt" = v.repaired`,
+	`unnest($1::text[], $2::text[], $3::int[], $4::timestamp(3)[]) AS v(id, drift, count, repaired)`)
 
 func (s PostgresDesired) RecordDrift(ctx context.Context, rows []Verdict) error {
 	if len(rows) == 0 {
@@ -295,13 +292,11 @@ func (s PostgresAllocations) For(ctx context.Context, panelID string) ([]Allocat
 }
 
 // appliedSQL records what the panel was read enforcing — a read, never our
-// write (invariant 36).
-const appliedSQL = `
-UPDATE network.config c
-   SET "appliedCeilingBytes" = v.bytes,
-       "ceilingAppliedAt" = v.at
-  FROM unnest($1::text[], $2::bigint[], $3::timestamp(3)[]) AS v(id, bytes, at)
- WHERE c.id = v.id::uuid`
+// write (invariant 36). In id order: a hot, bulk or woken turn and billing's
+// re-split all write these rows (F-027-cv).
+var appliedSQL = db.OrderedConfigUpdate(`"appliedCeilingBytes" = v.bytes,
+       "ceilingAppliedAt" = v.at`,
+	`unnest($1::text[], $2::bigint[], $3::timestamp(3)[]) AS v(id, bytes, at)`)
 
 func (s PostgresAllocations) Record(ctx context.Context, rows []AppliedCeiling) error {
 	if len(rows) == 0 {
@@ -319,11 +314,8 @@ func (s PostgresAllocations) Record(ctx context.Context, rows []AppliedCeiling) 
 
 // writtenSQL remembers the figure we wrote, so the next pass knows it for ours
 // (F-027-cu). It is never `appliedCeilingBytes`: a write is not a read.
-const writtenSQL = `
-UPDATE network.config c
-   SET "writtenCeilingBytes" = v.bytes
-  FROM unnest($1::text[], $2::bigint[]) AS v(id, bytes)
- WHERE c.id = v.id::uuid`
+var writtenSQL = db.OrderedConfigUpdate(`"writtenCeilingBytes" = v.bytes`,
+	`unnest($1::text[], $2::bigint[]) AS v(id, bytes)`)
 
 func (s PostgresAllocations) Wrote(ctx context.Context, rows []WrittenCeiling) error {
 	if len(rows) == 0 {

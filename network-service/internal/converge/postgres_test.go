@@ -383,3 +383,29 @@ func TestDesiredRecordAnnouncesAConfirmationOfAGrantsConfigInTheSameStatement(t 
 		t.Errorf("args %v, want the confirmation announced as %s", args[13:15], ConfirmedEvent)
 	}
 }
+
+// A pass's batched writes and billing's re-split meet on the same config
+// rows. Each takes its locks in id order, or two of them deadlock (40P01)
+// and the pass loses its confirmations (F-027-cv).
+func TestBatchedConfigWritesLockInIDOrder(t *testing.T) {
+	at := time.Date(2026, 9, 27, 10, 0, 0, 0, time.UTC)
+	f := &pgDB{}
+	ctx := context.Background()
+	if err := (PostgresAllocations{DB: f}).Record(ctx, []AppliedCeiling{{ConfigID: pgConfig, Bytes: 4_000, At: at}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := (PostgresAllocations{DB: f}).Wrote(ctx, []WrittenCeiling{{ConfigID: pgConfig, Bytes: 4_500}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := (PostgresDesired{DB: f}).RecordDrift(ctx, []Verdict{{ConfigID: pgConfig, Drift: "synced"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.sql) != 3 {
+		t.Fatalf("got %d statements, want 3", len(f.sql))
+	}
+	for _, sql := range f.sql {
+		if !strings.Contains(sql, "ORDER BY c.id") || !strings.Contains(sql, "FOR NO KEY UPDATE OF c") {
+			t.Errorf("a batched write takes its locks in plan order:\n%s", sql)
+		}
+	}
+}

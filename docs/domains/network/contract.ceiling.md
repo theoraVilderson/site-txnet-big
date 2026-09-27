@@ -152,6 +152,8 @@ served with nothing red anywhere. `appliedCeilingBytes` is therefore read back
 off `ListClients` and set with `ceilingAppliedAt` in the same write
 (invariant 14). A panel reporting **zero** confirms nothing: zero read means
 *no limit* there, so it is never recorded as an applied ceiling.
+The write locks its rows in id order, as billing's re-split does, or the two
+deadlock and the pass's confirmations are lost (invariant 54, F-027-cv).
 
 ### From a lifetime allowance to the figure that counter needs today
 
