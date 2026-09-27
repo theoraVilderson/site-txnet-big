@@ -68,6 +68,12 @@ export const OutboxEventType = {
   GRANT_ENDS_IN_3D: 'entitlement.grant.ends_in_3d',
   /** F-601-e: the same, 1 day out — the last. */
   GRANT_ENDS_IN_1D: 'entitlement.grant.ends_in_1d',
+  /** F-601-b: a Grant was cut off because its time ran out — renewing brings it back (`suspendIfClosed`). Cutoff notices are never muted (F-601-m). */
+  GRANT_ENDED: 'entitlement.grant.ended',
+  /** F-601-b: a prepaid Grant was suspended because its volume ran out — renewing brings it back (`suspendIfClosed`). */
+  GRANT_VOLUME_SPENT: 'entitlement.grant.volume_spent',
+  /** F-601-b: a metered Grant was suspended because its wallet cannot buy the next block — a top-up brings it back, a renewal does not (`suspendIfExhausted`). */
+  GRANT_WALLET_SPENT: 'entitlement.grant.wallet_spent',
 } as const;
 export type OutboxEventType = (typeof OutboxEventType)[keyof typeof OutboxEventType];
 
@@ -103,6 +109,9 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.GRANT_ENDS_IN_7D]: 'worker-service',
   [OutboxEventType.GRANT_ENDS_IN_3D]: 'worker-service',
   [OutboxEventType.GRANT_ENDS_IN_1D]: 'worker-service',
+  [OutboxEventType.GRANT_ENDED]: 'worker-service',
+  [OutboxEventType.GRANT_VOLUME_SPENT]: 'worker-service',
+  [OutboxEventType.GRANT_WALLET_SPENT]: 'worker-service',
 };
 
 /** Every tick routing key starts with this. The suffix is the worker key. */

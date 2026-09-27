@@ -21,6 +21,9 @@ export const NOTIFY_TEMPLATES = [
   'serviceUsageThreshold',
   'serviceEndsSoon',
   'serviceEndsWithinADay',
+  'serviceEnded',
+  'serviceVolumeSpent',
+  'serviceWalletSpent',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -185,6 +188,37 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.retention?.endsWithinADayMany,
       fallback: '⏰ {{count}} of your services end within a day. Renew them now from My services so they do not stop.',
       inbox: { read: (ns) => ns?.retention?.endsWithinADayManyTitle, fallback: '{{count}} services end within a day' },
+    },
+  },  // F-601-b: the service stopped — cutoff notices, never muted (F-601-m). Each says what brings it back:
+  // a renewal for time or a prepaid volume, a wallet top-up for a metered Grant (a metered renewal adds days alone).
+  serviceEnded: {
+    read: (ns) => ns?.retention?.ended,
+    fallback: "⛔ Your service's time has run out and it has stopped. Renew it from My services to turn it back on — its link stays the same.",
+    inbox: { read: (ns) => ns?.retention?.endedTitle, fallback: 'Your service has ended' },
+    many: {
+      read: (ns) => ns?.retention?.endedMany,
+      fallback: '⛔ {{count}} of your services have run out of time and stopped. Renew them from My services to turn them back on — their links stay the same.',
+      inbox: { read: (ns) => ns?.retention?.endedManyTitle, fallback: '{{count}} services have ended' },
+    },
+  },
+  serviceVolumeSpent: {
+    read: (ns) => ns?.retention?.volumeSpent,
+    fallback: "⛔ Your service's volume is used up and it has stopped. Renew it from My services to turn it back on — its link stays the same.",
+    inbox: { read: (ns) => ns?.retention?.volumeSpentTitle, fallback: "Your service's volume is used up" },
+    many: {
+      read: (ns) => ns?.retention?.volumeSpentMany,
+      fallback: '⛔ {{count}} of your services have used up their volume and stopped. Renew them from My services to turn them back on — their links stay the same.',
+      inbox: { read: (ns) => ns?.retention?.volumeSpentManyTitle, fallback: '{{count}} services out of volume' },
+    },
+  },
+  serviceWalletSpent: {
+    read: (ns) => ns?.retention?.walletSpent,
+    fallback: '⛔ Your service used up what your wallet could buy and has stopped. Top up your wallet and it turns back on by itself — its link stays the same.',
+    inbox: { read: (ns) => ns?.retention?.walletSpentTitle, fallback: 'Your wallet ran out' },
+    many: {
+      read: (ns) => ns?.retention?.walletSpentMany,
+      fallback: '⛔ {{count}} of your services used up what your wallet could buy and have stopped. Top up your wallet and they turn back on by themselves.',
+      inbox: { read: (ns) => ns?.retention?.walletSpentManyTitle, fallback: '{{count}} services stopped: wallet empty' },
     },
   },
 };

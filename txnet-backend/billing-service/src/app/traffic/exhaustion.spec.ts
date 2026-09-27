@@ -66,6 +66,8 @@ function fakeTx(input: { grant: Partial<GrantRow> | null; balance: string | null
         return { count: 3 };
       },
     },
+    // The cutoff notice (F-601-b) — cut-off.spec.ts holds what it says.
+    outboxEvent: { create: async () => ({ id: 'e1' }) },
     $queryRaw: async () => {
       calls.push('wallet.lock');
       return input.balance === null ? [] : [{ cachedBalance: new Prisma.Decimal(input.balance) }];
@@ -217,7 +219,7 @@ describe('suspendIfClosed', () => {
           calls.push('config.write');
           return { count: 2 };
         },
-      },
+      },      outboxEvent: { create: async () => ({ id: 'e1' }) },
     };
     return { tx: tx as unknown as Prisma.TransactionClient, calls, grantWrites };
   }

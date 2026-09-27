@@ -103,6 +103,7 @@ function fakeTx(row: GrantRow | null) {
     },
     $queryRaw: async () => [{ cachedBalance: new Prisma.Decimal('0.00') }],
     config: { updateMany: async () => ({ count: 1 }) },
+    outboxEvent: { create: async () => ({ id: 'e1' }) },
   };
   return { tx: tx as unknown as Prisma.TransactionClient, suspensions };
 }

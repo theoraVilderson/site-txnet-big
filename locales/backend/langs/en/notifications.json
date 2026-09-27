@@ -89,6 +89,18 @@
     "endsWithinADay": "⏰ Your service ends within a day. Renew it now from My services so it does not stop.",
     "endsWithinADayMany": "⏰ {{count}} of your services end within a day. Renew them now from My services so they do not stop.",
     "endsWithinADayManyTitle": "{{count}} services end within a day",
+    "endedTitle": "Your service has ended",
+    "ended": "⛔ Your service's time has run out and it has stopped. Renew it from My services to turn it back on — its link stays the same.",
+    "endedMany": "⛔ {{count}} of your services have run out of time and stopped. Renew them from My services to turn them back on — their links stay the same.",
+    "endedManyTitle": "{{count}} services have ended",
+    "volumeSpentTitle": "Your service's volume is used up",
+    "volumeSpent": "⛔ Your service's volume is used up and it has stopped. Renew it from My services to turn it back on — its link stays the same.",
+    "volumeSpentMany": "⛔ {{count}} of your services have used up their volume and stopped. Renew them from My services to turn them back on — their links stay the same.",
+    "volumeSpentManyTitle": "{{count}} services out of volume",
+    "walletSpentTitle": "Your wallet ran out",
+    "walletSpent": "⛔ Your service used up what your wallet could buy and has stopped. Top up your wallet and it turns back on by itself — its link stays the same.",
+    "walletSpentMany": "⛔ {{count}} of your services used up what your wallet could buy and have stopped. Top up your wallet and they turn back on by themselves.",
+    "walletSpentManyTitle": "{{count}} services stopped: wallet empty",
     "supportLine": "🛟 Support: {{supportUrl}}"
   }
 }

@@ -61,10 +61,12 @@ together:
 | `entitlement.grant.not_connected` / `.still_not_connected` | `serviceNotConnected` / `serviceStillNotConnected`, optional `supportUrl` | entitlement, 24 h / 72 h after activation with nothing consumed; period = `activatedAt` (F-601-c) |
 | `entitlement.grant.usage_50` / `_80` / `_95` | `serviceUsageThreshold`, params `percent`, `remaining` | billing's metering, on the charge that crosses the level of a prepaid Grant's usage period; period = `usagePeriodStartedAt ?? startsAt` (F-601-d, entitlement `contract.retention.md`) |
 | `entitlement.grant.ends_in_7d` / `_3d` / `_1d` | `serviceEndsSoon` (7, 3) / `serviceEndsWithinADay` (1), param `days` | entitlement's hourly sweep, 7 / 3 / 1 day(s) before `endsAt`; period = `endsAt`, so a renewal opens a new one (F-601-e) |
+| `entitlement.grant.ended` / `.volume_spent` / `.wallet_spent` | `serviceEnded` / `serviceVolumeSpent` ("renew") / `serviceWalletSpent` ("top up", never "renew") | billing, in the transaction that stops the Grant: a standing close on a passed end, a prepaid bag's suspension, a metered wallet's; period = the end, or the suspension's instant (F-601-b, entitlement `contract.retention.md` "Cutoff") |
 
 ## Not built here
 
 - Muting and quiet hours (F-601-m): they will be read at the claim, which is
-  why the ledger is this unit's — ADR-0084's revisit trigger.
+  why the ledger is this unit's — ADR-0084's revisit trigger. The three
+  cutoff types above (F-601-b) are never muted nor held for quiet hours.
 - Combining a usage and a time notice due the same day (F-601-f).
 - Retention of ledger rows: one per Grant, notice and period, kept.

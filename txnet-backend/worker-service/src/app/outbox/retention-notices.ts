@@ -32,4 +32,8 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   [OutboxEventType.GRANT_ENDS_IN_7D]: { template: 'serviceEndsSoon', params: ['days'] },
   [OutboxEventType.GRANT_ENDS_IN_3D]: { template: 'serviceEndsSoon', params: ['days'] },
   [OutboxEventType.GRANT_ENDS_IN_1D]: { template: 'serviceEndsWithinADay', params: [] },
+  // F-601-b: the service stopped — time, a prepaid volume, a metered wallet. Cutoff notices: never muted (F-601-m).
+  [OutboxEventType.GRANT_ENDED]: { template: 'serviceEnded', params: [] },
+  [OutboxEventType.GRANT_VOLUME_SPENT]: { template: 'serviceVolumeSpent', params: [] },
+  [OutboxEventType.GRANT_WALLET_SPENT]: { template: 'serviceWalletSpent', params: [] },
 };

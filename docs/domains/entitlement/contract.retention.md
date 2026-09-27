@@ -60,3 +60,17 @@ by `grant_end_notice`; answer `scanned`, `told`.
 | A level that fell due before `activatedAt ?? startsAt` passes untold | a 5-day service is not "ending soon" the minute it is bought |
 | 7 and 3 days: `serviceEndsSoon`; 1 day: `serviceEndsWithinADay` | a day's notice is the last one, and "1 days" is not a sentence |
 | The write is conditional on the end and the clock read; `period` = `endsAt`, one type per level | two sweeps, or a renewal between read and write, emit once; notification's ledger holds each level once per end (invariant 14) |
+
+**Cutoff (F-601-b, spec 9.5)** — the user is told their service stopped,
+and what brings it back. Emitted by billing's `traffic/exhaustion.ts` through
+`emitCutOff` (`entitlement/cut-off.ts`), in the transaction that saw the stop;
+proved by `cut-off.spec.ts`. Payload `tenantId, userId, grantId, period`.
+
+| Rule | Why |
+|---|---|
+| `suspendIfClosed` suspending a prepaid Grant: `ended` when the close was on its end, else `volume_spent`; both say "renew" | a renewal moves the end or raises Quota, and revives it |
+| `suspendIfExhausted` suspending a metered Grant: `wallet_spent`, which says "top up" | a top-up revives it (`reviveFundedGrants`); a metered renewal adds days alone and revives nothing |
+| An unlimited or metered Grant whose standing close is on a passed end: `ended`, and nothing written to the Grant | it has stopped though nothing here suspends it — the one way an unlimited Grant stops |
+| A close stands only while its Quota **and** end are the Grant's (`network/contract.lease.md` rule 25); one a renewal moved is `reopened`, untold | a late close never suspends, nor tells, a renewed Grant |
+| `period` = the end for `ended`, the suspension's instant otherwise; nothing is emitted when nothing stopped (a redelivered close finds it `suspended`) | notification's ledger holds each stop once (invariant 14); a renewal or revival opens a new one |
+| Never muted, never held for quiet hours (F-601-m) | a user whose service stopped must hear it |

@@ -44,7 +44,8 @@ billing's `traffic/exhaustion.ts` decides it: for a metered Grant under a
 wallet lock, asked by a refused block request (`network/contract.hot-loop.md`);
 for a prepaid one (F-027-dw, ADR-0096) by `suspendIfClosed` under the Grant's
 row lock, asked by `network.grant.closed` — the lease planner's close, read
-again against Quota, so a renewal that reopened it is never undone. A renewal
+again against Quota and end, so a renewal that reopened it is never undone.
+Each stop is told to the user (F-601-b, `contract.retention.md` "Cutoff"). A renewal
 (`renewal.ts`) revives it; a wallet top-up does not. `transition()` cannot do this: it writes no
 `suspendedAt`, which `grant_suspended_has_a_clock` refuses.
 
@@ -180,6 +181,7 @@ Through the outbox (ADR-0021); the first two also live on the buyer's `user:` ch
 | `entitlement.grant.refunded` | `tenantId, userId, grantId, invoiceId, amount, reason` | a paid Grant cancelled, its invoice refunded whole (F-111-d) |
 | `entitlement.grant.usage_50` / `_80` / `_95` | `tenantId, userId, grantId, period`, `percent`, `remaining` (e.g. `5.3 GB`) | a charge crossed that share of the usage period (F-601-d), emitted by billing's metering; retention events, like the next row |
 | `entitlement.grant.ends_in_7d` / `_3d` / `_1d` | `tenantId, userId, grantId, period` (= `endsAt`), `days` (whole days left) | an active Grant 7 / 3 / 1 day(s) before its end (F-601-e); retention events, like the next row |
+| `entitlement.grant.ended` / `.volume_spent` / `.wallet_spent` | `tenantId, userId, grantId, period` (= the end, or the suspension's instant) | a Grant stopped: time ran out, a prepaid bag spent, a metered wallet spent (F-601-b); retention events, like the next row |
 | `entitlement.grant.not_connected` / `.still_not_connected` | `tenantId, userId, grantId, period` (= `activatedAt`), `supportUrl?` | nothing consumed 24 h / 72 h after activation (F-601-c); retention events, told by `RetentionNoticeConsumer` — not on any channel |
 
 ## Consumes
