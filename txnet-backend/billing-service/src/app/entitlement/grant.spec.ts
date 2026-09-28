@@ -128,6 +128,7 @@ describe('grantFromVariant', () => {
       status: GrantStatus.active,
       startsAt: at('2026-09-01T10:00:00Z'),
       endsAt: at('2026-10-01T10:00:00Z'),
+      periodDays: 30,
       billingMode: VariantBillingMode.prepaid,
       quotas: variant.quotas,
       featureKeys: ['vpn.access'],

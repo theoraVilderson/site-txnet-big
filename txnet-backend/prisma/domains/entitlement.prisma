@@ -172,6 +172,11 @@ model Grant {
   /// A period that no longer matches it can be told again; written
   /// conditionally on the value read, so each period is told once.
   forecastNoticeFor     DateTime?
+  /// The plan's period in days, copied from the variant at issue as `quotas`
+  /// is (F-311-d): what an admin's renewal of "one more period" adds, so a
+  /// catalog edit after the sale never changes it. Null = permanent, or a
+  /// Grant issued without a variant (`migration`).
+  periodDays            Int?
   /// When a timed admin freeze ends by itself (F-311-h): the hourly sweep
   /// unfreezes it then. Null = not frozen, or frozen until the admin unfreezes
   /// it. Only on a frozen Grant (`grant_frozen_until_is_frozen`).
@@ -183,6 +188,7 @@ model Grant {
   variant          ProductVariant?   @relation(fields: [variantId], references: [id], onDelete: Restrict)
   quotaAdjustments QuotaAdjustment[]
   durationChanges  GrantDurationChange[]
+  renewals         GrantRenewal[]
   deletion         GrantDeletion?
   configs          Config[]
   leaseClose       LeaseClose?
@@ -226,6 +232,39 @@ model GrantDurationChange {
   @@index([grantId, createdAt])
   @@index([tenantId])
   @@map("grant_duration_change")
+  @@schema("entitlement")
+}
+
+/// An admin renewed a Grant in place (F-311-d): `renewGrant` with
+/// `source = admin_grant`. One row per request (`requestId` unique), so a
+/// repeat answers the first renewal instead of giving a second period. Days
+/// alone leave no `quota_adjustment` row, so this is the renewal's record:
+/// who, whether it was the plan's period or typed, what was added, what was
+/// forgiven, and the Grant before and after. History: a trigger refuses any
+/// update or delete. No foreign key on the actor (may be the platform's staff).
+model GrantRenewal {
+  id                   String    @id @default(uuid()) @db.Uuid
+  tenantId             String    @db.Uuid
+  grantId              String    @db.Uuid
+  requestId            String    @unique @db.Uuid
+  actorUserId          String    @db.Uuid
+  /// One period of the plan the user bought (true) or the amount the admin typed.
+  plan                 Boolean
+  bytes                BigInt
+  days                 Int
+  forgivenBytes        BigInt
+  purchasedBytesBefore BigInt
+  purchasedBytesAfter  BigInt
+  endsAtBefore         DateTime?
+  endsAtAfter          DateTime?
+  reason               String?
+  createdAt            DateTime  @default(now())
+
+  grant Grant @relation(fields: [grantId], references: [id])
+
+  @@index([grantId, createdAt])
+  @@index([tenantId])
+  @@map("grant_renewal")
   @@schema("entitlement")
 }
 

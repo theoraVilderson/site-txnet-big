@@ -197,3 +197,22 @@ fulfilment like a delivered purchase. A priced custom plan is F-506-a.
 | A repeat of `requestId` for the same user and variant is **200** with the first Grant | a double click or a repeated bot callback must not give a second free service |
 
 **Not covered:** a reason and the audit row (F-311-r; the Grant keeps `issuedByAdminId`), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
+
+## An admin renews one of a user's Grants (built — F-311-d)
+
+`POST …/users/:userId/grants/:grantId/renew`, body `{requestId, gb?, days?, reason?}`
+(`requestId` a uuid minted once per confirm; `gb` 0..100 000 GiB, `days` a whole
+0..3650) -> `{renewalId, grantId, plan, bytes, days, forgivenBytes,
+purchasedBytesBefore, purchasedBytesAfter, endsAtBefore, endsAtAfter, revived,
+renewed}` (bytes as decimal strings). Same controller, over `renewGrantByAdmin`
+(entitlement `contract.admin.md` "Renew"): the same Grant, link and configs kept,
+`admin_grant`, no money moves. With neither `gb` nor `days`, one period of the plan
+the user bought (user, 2026-09-28); with either, that amount, the other 0.
+
+| Rule | Why |
+|---|---|
+| Door `staffWrite`, the reseller's user (**404** `user_not_found`), then the Grant is that user's (**404**, never renewed); bucket `RESELLER_USER_CONFIG_ACTION` | the same fences as every admin write here |
+| **409** `grant_not_renewable`, `traffic_not_renewable`, `plan_period_unknown`, `request_reused`, `already_renewed`, `grant_moved`; **400** `nothing_to_renew` and a body out of range | a closed Grant is a new Grant's (F-311-o); a period nobody recorded is typed, never guessed |
+| A repeat of `requestId` on the same Grant is **200** with the first renewal, `renewed: false` | a double click or a repeated bot callback must not give a second free period |
+
+**Not covered:** charging the user's wallet (F-305 is the user's own renewal), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).

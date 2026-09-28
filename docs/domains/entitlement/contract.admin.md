@@ -2,14 +2,14 @@
 id: entitlement
 layer: domain
 status: draft
-version: 18
+version: 19
 updated: 2026-09-28
 ---
 
 # Contract — entitlement: an admin's actions on a Grant
 
 A §10 split of [contract.md](contract.md), which is at its ceiling. What a
-reseller's admin does to one of its users' Grants by hand (F-311). Each runs in
+reseller's admin does to one of its users' Grants by hand (F-311), renewal included. Each runs in
 the caller's transaction; the HTTP routes, their door and status codes are
 billing's [contract.reseller-grants.md](../billing/contract.reseller-grants.md).
 
@@ -101,3 +101,21 @@ traffic). **One request, one Grant**: a repeat of `requestId` answers that Grant
 Also refused: `variant_not_found`, `variant_not_assignable` (switched off),
 `metered_rate_missing` / `metered_rate_not_positive`, `already_issued` (a concurrent
 repeat: retry). Route: billing `contract.reseller-grants.md`.
+
+**Renew (F-311-d)** — `renewGrantByAdmin(tx, {grantId, requestId, actorUserId, at, reason, amount?})`
+in `entitlement/admin-renewal.ts`, proved by `admin-renewal.spec.ts`. `renewGrant`
+([contract.md](contract.md) "Renewal") on the same Grant, `source = admin_grant`, the
+admin on each adjustment row — **no invoice, no money** (user, 2026-09-28: the reseller
+collects outside the platform; a renewal from the wallet is the user's own, F-305).
+**Without `amount` it is one period of the plan the user bought**: the Grant's own bag
+(`quotas.traffic_bytes`) and `periodDays`, both copied at issue — never the variant as
+edited since. A metered or unlimited Grant's period is its days alone; a permanent one's
+its bytes alone. **With `amount` (`{bytes, days}`) it is what the admin typed.** Debt
+forgiven, usage period, revival of a lapsed Grant (F-027-do) and the refusals
+(`grant_not_renewable`, `traffic_not_renewable`, `nothing_to_renew`, `grant_moved`) are
+`renewGrant`'s. **One request, one renewal**: one `grant_renewal` row per `requestId`
+(unique) — actor, plan or typed, bytes, days, forgiven, Quota and end before and after,
+optional reason (invariant 27); a repeat answers it (`renewed: false`). Also refused:
+`plan_period_unknown` (a dated Grant issued without a variant: type the amount),
+`request_reused` (the id on another Grant), `already_renewed` (a concurrent repeat:
+retry). Route: billing `contract.reseller-grants.md`.

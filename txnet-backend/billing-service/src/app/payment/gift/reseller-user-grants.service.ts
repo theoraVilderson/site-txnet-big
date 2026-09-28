@@ -9,6 +9,7 @@ import {
 } from '@txnet-backend/shared-core';
 
 import { AdminIssued, issueGrantByAdmin } from '../../entitlement/admin-issue';
+import { AdminRenew, AdminRenewed, renewGrantByAdmin } from '../../entitlement/admin-renewal';
 import { deleteGrant, Deletion } from '../../entitlement/delete';
 import { changeGrantDuration, DurationChange, DurationMove } from '../../entitlement/duration';
 import { Freeze, freezeGrant, Unfreeze, unfreezeGrant } from '../../entitlement/freeze';
@@ -204,6 +205,27 @@ export class ResellerUserGrantsService {
         tenantTransaction(this.prisma, (tx) =>
           issueGrantByAdmin(tx, this.grantService, { userId, variantId, requestId, actorUserId: actor.userId, at: new Date() }),
         ),
+      'staffWrite',
+    );
+  }
+
+  /**
+   * An admin renews this user's Grant in place (F-311-d): one period of the
+   * plan the user bought, or the amount typed; `admin_grant`, no money.
+   * `staffWrite`, as for a freeze; a Grant of another user is `grant_not_found`.
+   */
+  renew(
+    actor: ResellerActor,
+    tenantId: string,
+    userId: string,
+    grantId: string,
+    input: Pick<AdminRenew, 'requestId' | 'reason' | 'amount'>,
+  ): Promise<AdminRenewed> {
+    return this.run(
+      actor,
+      tenantId,
+      userId,
+      () => this.onGrant(userId, grantId, (tx) => renewGrantByAdmin(tx, { ...input, grantId, actorUserId: actor.userId, at: new Date() })),
       'staffWrite',
     );
   }

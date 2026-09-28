@@ -74,8 +74,12 @@ export type EntitlementRejection =
   | 'duration_unchanged'
   /** Admin issue (F-311-o): nothing could deliver it — no handler, no placeable group, no stated traffic. */
   | 'variant_not_deliverable'
-  /** Admin issue: this request id already issued a Grant to another user or of another variant. */
-  | 'request_reused';
+  /** Admin issue or renewal: this request id already issued a Grant to another user or variant, or renewed another Grant. */
+  | 'request_reused'
+  /** Admin renewal (F-311-d): a dated Grant with no copied plan period — the admin types the amount. */
+  | 'plan_period_unknown'
+  /** Admin renewal: a concurrent repeat of the same request won; retry to read its renewal. */
+  | 'already_renewed';
 
 export class EntitlementRefused extends Error {
   constructor(
@@ -157,6 +161,7 @@ export function grantFromVariant(input: { source: GrantSource; startsAt: Date },
     status: input.source === GrantSource.purchase ? GrantStatus.pending : GrantStatus.active,
     startsAt: input.startsAt,
     endsAt: v.durationDays === null ? null : new Date(input.startsAt.getTime() + v.durationDays * DAY_MS),
+    periodDays: v.durationDays,
     billingMode: v.billingMode,
     quotas: structuredClone(v.quotas),
     featureKeys: [...v.product.featureKeys],

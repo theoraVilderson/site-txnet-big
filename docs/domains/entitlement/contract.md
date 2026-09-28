@@ -115,7 +115,7 @@ Quota or end (rule 25). Refused: `grant_not_renewable` (not `active` or
 `suspended`; a lapsed Grant is `suspended`, F-027-do), `traffic_not_renewable` (bytes
 on a metered or unlimited Grant, which renew by days alone),
 `nothing_to_renew`, `grant_moved` (Quota or end changed since the read: retry,
-so no debt is forgiven twice). Callers arrive with F-305 and F-311-d.
+so no debt is forgiven twice). An admin's renewal is F-311-d (contract.admin.md "Renew"); the user's arrives with F-305.
 
 **An admin's actions on a Grant (F-311-h, -i, -j)** — freeze, days, traffic:
 [contract.admin.md](contract.admin.md). Their routes are billing's `contract.reseller-grants.md`.
@@ -132,7 +132,7 @@ limit (network `contract.provisioning.md`, F-111-r).
 Issue rules: a `purchase` needs a `public` or `unlisted` variant; any other
 source may assign any live variant, `admin_only` included (F-506). A purchase
 starts `pending`; every other source `active`. Quotas, feature keys, billing
-mode and `endsAt = startsAt + durationDays` are copied at issue. A `pending`
+mode, `periodDays` and `endsAt = startsAt + durationDays` are copied at issue. A `pending`
 Grant of a variant with a panel group is moved to `active` by group fulfilment
 once `minHealthyPanels` of its configs are confirmed (network
 `contract.groups.md` rule 10, F-027-bl).

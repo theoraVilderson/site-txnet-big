@@ -29,6 +29,7 @@ import { GrantDurationBody, grantDurationSchema } from './grant-duration.schema'
 import { GrantFreezeBody, grantFreezeSchema } from './grant-freeze.schema';
 import { GrantIssueBody, grantIssueSchema } from './grant-issue.schema';
 import { GrantListQuery, grantListSchema } from './grant-list.schema';
+import { GrantRenewBody, grantRenewSchema } from './grant-renew.schema';
 import {
   bytesOfGb,
   GrantTrafficBody,
@@ -55,7 +56,7 @@ const STATUS: Record<ResellerUserGrantsRejection, 403 | 404 | 409> = {
   user_not_found: 404,
 };
 
-/** A freeze's (F-311-h), a change of days' (F-311-i), of traffic's (F-311-j, F-311-k, F-311-l), a delete's (F-311-m) and an issue's (F-311-o) refusals; any other `EntitlementRefused` is not this surface's and passes through. */
+/** A freeze's (F-311-h), a change of days' (F-311-i), of traffic's (F-311-j, F-311-k, F-311-l), a delete's (F-311-m), an issue's (F-311-o) and a renewal's (F-311-d) refusals; any other `EntitlementRefused` is not this surface's and passes through. */
 const GRANT_ACTION_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
   grant_not_active: 409,
   grant_not_frozen: 409,
@@ -75,6 +76,11 @@ const GRANT_ACTION_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
   metered_rate_not_positive: 409,
   request_reused: 409,
   already_issued: 409,
+  grant_not_renewable: 409,
+  traffic_not_renewable: 409,
+  nothing_to_renew: 400,
+  plan_period_unknown: 409,
+  already_renewed: 409,
 };
 
 /** One bucket for all four: expanding one Grant asks three of them at once. */
@@ -355,6 +361,35 @@ export class ResellerUserGrantsController {
   ) {
     const done = await this.refusing(() => this.service.issue(actorOf(req), tenantId, userId, body.variantId, body.requestId));
     return { ...done, startsAt: done.startsAt.toISOString(), endsAt: done.endsAt?.toISOString() ?? null };
+  }
+
+  /**
+   * An admin renews this Grant in place (F-311-d): one period of the plan the
+   * user bought, or `gb` / `days` typed; `admin_grant`, no money. `requestId`
+   * makes a repeat answer the first renewal (`renewed: false`).
+   */
+  @Post('grants/:grantId/renew')
+  @HttpCode(HttpStatus.OK)
+  @actionLimit
+  async renew(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Body(new ZodValidationPipe(grantRenewSchema)) body: GrantRenewBody,
+    @Req() req: Request,
+  ) {
+    const typed = body.gb !== undefined || body.days !== undefined;
+    const amount = typed ? { bytes: bytesOfGb(body.gb ?? 0), days: body.days ?? 0 } : undefined;
+    const done = await this.refusing(() => this.service.renew(actorOf(req), tenantId, userId, grantId, { requestId: body.requestId, reason: body.reason ?? null, amount }));
+    return {
+      ...done,
+      bytes: done.bytes.toString(),
+      forgivenBytes: done.forgivenBytes.toString(),
+      purchasedBytesBefore: done.purchasedBytesBefore.toString(),
+      purchasedBytesAfter: done.purchasedBytesAfter.toString(),
+      endsAtBefore: done.endsAtBefore?.toISOString() ?? null,
+      endsAtAfter: done.endsAtAfter?.toISOString() ?? null,
+    };
   }
 
   /**
