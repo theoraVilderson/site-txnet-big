@@ -49,23 +49,6 @@ vi.mock('../entitlement/admin-renewal', () => ({
   renewGrantByAdmin: vi.fn(async () => (log.push('act'), { renewalId: 'r1', grantId: GRANT, plan: true, bytes: BigInt(0), days: 30, forgivenBytes: BigInt(0), purchasedBytesBefore: BigInt(0), purchasedBytesAfter: BigInt(0), endsAtBefore: null, endsAtAfter: null, revived: false, renewed: !repeat })),
 }));
 
-/**
- * Without per-file isolation (`test:affected`, VITEST_ISOLATE=0) these mocks
- * would stay in the worker's registry and reach the next file — the bulk
- * spec's own mocks of the same acts among them: give it real modules.
- */
-afterAll(() => {
-  vi.doUnmock('../entitlement/freeze');
-  vi.doUnmock('../entitlement/duration');
-  vi.doUnmock('../entitlement/traffic');
-  vi.doUnmock('../traffic/gift-bytes');
-  vi.doUnmock('../traffic/grant-speed');
-  vi.doUnmock('../entitlement/devices');
-  vi.doUnmock('../entitlement/delete');
-  vi.doUnmock('../entitlement/admin-issue');
-  vi.doUnmock('../entitlement/admin-renewal');
-  vi.resetModules();
-});
 
 const PLATFORM = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';

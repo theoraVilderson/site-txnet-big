@@ -36,8 +36,10 @@ export function backendVitestConfig(root: string, name: string, test: TestOption
       // 238s -> 108s for the workspace, billing-service 79s -> 18s
       // (2026-09-23, user's choice). `npm test`, the int and e2e tiers and a
       // bare `vitest run` stay isolated, so a spec that leans on another's
-      // leftovers still fails there. The resets below keep shared workers clean.
+      // leftovers still fails there. The resets below, and `vitest.setup.mts`
+      // (a module cache dropped after each file), keep shared workers clean.
       isolate: process.env.VITEST_ISOLATE !== '0',
+      setupFiles: [`${import.meta.dirname}/vitest.setup.mts`],
       restoreMocks: true,
       unstubEnvs: true,
       unstubGlobals: true,

@@ -77,21 +77,6 @@ vi.mock('../../grant-audit/grant-audit', () => ({
   grantHistory: async () => ({ rows: [] }),
 }));
 
-/**
- * Without per-file isolation (`test:affected`, VITEST_ISOLATE=0) these mocks
- * would stay in the worker's registry, and `grant-audit.spec.ts` would get this
- * file's fake audit instead of the real one: give the next file real modules.
- */
-afterAll(() => {
-  vi.doUnmock('../../entitlement/freeze');
-  vi.doUnmock('../../entitlement/duration');
-  vi.doUnmock('../../entitlement/traffic');
-  vi.doUnmock('../../traffic/gift-bytes');
-  vi.doUnmock('../../traffic/grant-speed');
-  vi.doUnmock('../../entitlement/devices');
-  vi.doUnmock('../../grant-audit/grant-audit');
-  vi.resetModules();
-});
 
 const PLATFORM = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';
