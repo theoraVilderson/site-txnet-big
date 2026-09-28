@@ -24,6 +24,7 @@ import { EntitlementRefused, EntitlementRejection } from '../../entitlement/gran
 import { ConfigActionRefused } from '../../traffic/config-actions';
 import type { AdminConfigCommand } from '../../traffic/user-configs';
 import { AdminConfigActionBody, adminConfigActionSchema } from '../../traffic/user-configs.schema';
+import { GrantDeleteBody, grantDeleteSchema } from './grant-delete.schema';
 import { GrantDurationBody, grantDurationSchema } from './grant-duration.schema';
 import { GrantFreezeBody, grantFreezeSchema } from './grant-freeze.schema';
 import { GrantListQuery, grantListSchema } from './grant-list.schema';
@@ -53,7 +54,7 @@ const STATUS: Record<ResellerUserGrantsRejection, 403 | 404 | 409> = {
   user_not_found: 404,
 };
 
-/** A freeze's (F-311-h), a change of days' (F-311-i) and of traffic's (F-311-j, F-311-k, F-311-l) refusals; any other `EntitlementRefused` is not this surface's and passes through. */
+/** A freeze's (F-311-h), a change of days' (F-311-i), of traffic's (F-311-j, F-311-k, F-311-l) and a delete's (F-311-m) refusals; any other `EntitlementRefused` is not this surface's and passes through. */
 const GRANT_ACTION_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
   grant_not_active: 409,
   grant_not_frozen: 409,
@@ -291,6 +292,26 @@ export class ResellerUserGrantsController {
       usedBytes: done.usedBytes.toString(),
       revived: done.revived,
     };
+  }
+
+  /**
+   * An admin deletes this Grant (F-311-m): `cancelled`, every config released
+   * from its panel now rather than after the purge window, rows kept. `refund`
+   * is the admin's answer for the unserved remainder (F-027-r); `refundSkipped`
+   * says why a refund asked for credited nothing (a prepaid Grant, all served).
+   */
+  @Post('grants/:grantId/delete')
+  @HttpCode(HttpStatus.OK)
+  @actionLimit
+  async deleteGrant(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Body(new ZodValidationPipe(grantDeleteSchema)) body: GrantDeleteBody,
+    @Req() req: Request,
+  ) {
+    const done = await this.refusing(() => this.service.deleteGrant(actorOf(req), tenantId, userId, grantId, body.refund, body.reason));
+    return { grantId, ...done };
   }
 
   /**

@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 62
+version: 63
 updated: 2026-09-28
 ---
 
@@ -143,3 +143,23 @@ gifted byte back as money.
 | **409** `grant_not_metered`, `grant_closed`, `grant_not_active`, `grant_moved` | a prepaid bag is moved by `…/traffic`; a raced block is retried |
 
 **Not covered:** the audit row (F-311-r), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
+
+## An admin deletes one of a user's Grants (built — F-311-m)
+
+`POST …/users/:userId/grants/:grantId/delete`, body `{refund, reason}` — `refund`
+boolean, always asked (the admin's answer, user 2026-09-26); `reason` 1..500 chars
+-> `{grantId, deletionId, statusBefore, configsReleased, refund, refundedAmount,
+walletTransactionId, refundSkipped}` (`refundedAmount` a decimal string or null).
+Same controller, over `deleteGrant` (entitlement `contract.admin.md` "Delete") with
+`RemainderCreditService.credit` ([contract.traffic-block.md](contract.traffic-block.md)
+"The remainder") as its settler: `cancelled`, every config released from its panel
+now, rows kept; `refund` credits a metered Grant's unserved remainder as
+`traffic_refund`, and `refundSkipped` says why one asked for credited nothing.
+
+| Rule | Why |
+|---|---|
+| Door `staffWrite`, the reseller's user and the path user's Grant; bucket `RESELLER_USER_CONFIG_ACTION` — as for traffic | the same fences |
+| **409** `grant_closed`, `grant_not_active` (pending), `grant_moved` | a closed Grant is already off; a pending one is the delivery's |
+| A prepaid Grant's refund credits nothing (`grant_not_metered`): F-027-r prices only a metered bag | no pro-rata price for a prepaid bag exists yet |
+
+**Not covered:** the audit row beyond `grant_deletion` (F-311-r), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).

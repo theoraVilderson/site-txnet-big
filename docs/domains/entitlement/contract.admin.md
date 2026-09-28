@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-version: 16
+version: 18
 updated: 2026-09-28
 ---
 
@@ -68,3 +68,20 @@ a renewal's bytes do, F-601-d), so the usage levels are told again, and revives 
 is told as a raise (a frozen Grant stays frozen). Refused as Traffic, plus
 `nothing_to_reset` (nothing used since the last reset); `grant_moved` also on a
 moved cursor, so two resets racing add once. Route: billing `contract.reseller-grants.md`.
+
+**Delete (F-311-m)** — `deleteGrant(tx, id, {at, actorUserId, reason, refund}, settle)`
+in `entitlement/delete.ts`, proved by `delete.spec.ts`. An `active` or `suspended`
+Grant (frozen or out of quota) becomes `cancelled`, `statusReason = admin_deleted`
+(`ADMIN_DELETED`), `frozenUntil` cleared, and every config still `present` gets
+`desiredRemote = absent`, `desiredEnabled = false` **now** — the purge's write
+without `purgeAfterDays`. No row is deleted (invariant 13); `cancelled` is terminal,
+so a user who should have it back is issued a new Grant. **The remainder is the
+admin's answer** (user, 2026-09-26): `refund` runs billing's F-027-r credit
+(`settle` = `RemainderCreditService.credit`) after the cancel, in the same
+transaction; without it (fraud) no money moves. A refund F-027-r finds nothing
+for still deletes and says why — `refundSkipped`: `grant_not_metered` (prepaid:
+F-027-r prices only a metered bag), `nothing_to_credit`, `rate_not_priceable`.
+One `grant_deletion` row keeps the choice, reason, status before and what was
+credited (invariant 25). Refused: `grant_closed`, `grant_not_active` (pending:
+the delivery's, invariant 14), `grant_moved` (the status moved, or a block was
+bought before the credit — all rolled back). Route: billing `contract.reseller-grants.md`.

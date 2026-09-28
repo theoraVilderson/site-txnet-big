@@ -183,6 +183,7 @@ model Grant {
   variant          ProductVariant?   @relation(fields: [variantId], references: [id], onDelete: Restrict)
   quotaAdjustments QuotaAdjustment[]
   durationChanges  GrantDurationChange[]
+  deletion         GrantDeletion?
   configs          Config[]
   leaseClose       LeaseClose?
 
@@ -225,6 +226,34 @@ model GrantDurationChange {
   @@index([grantId, createdAt])
   @@index([tenantId])
   @@map("grant_duration_change")
+  @@schema("entitlement")
+}
+
+/// An admin deleted a Grant (F-311-m): it is `cancelled` (`admin_deleted`) and
+/// its configs `absent`; this is the record of the admin's choice — whether the
+/// remainder went back to the wallet (F-027-r), why, and what was credited
+/// (user, 2026-09-26). One per Grant; history: a trigger refuses any update or
+/// delete. No foreign key on the actor (may be the platform's staff) or the
+/// wallet row (another domain's).
+model GrantDeletion {
+  id                  String      @id @default(uuid()) @db.Uuid
+  tenantId            String      @db.Uuid
+  grantId             String      @unique @db.Uuid
+  actorUserId         String      @db.Uuid
+  reason              String
+  statusBefore        GrantStatus
+  refundRemainder     Boolean
+  /// Whole cents credited back; with `walletTransactionId`, only when asked.
+  refundedAmount      Decimal?    @db.Decimal(18, 2)
+  walletTransactionId String?     @db.Uuid
+  /// A refund asked for that credited nothing: F-027-r's reason (prepaid, all served).
+  refundSkipped       String?
+  createdAt           DateTime    @default(now())
+
+  grant Grant @relation(fields: [grantId], references: [id])
+
+  @@index([tenantId])
+  @@map("grant_deletion")
   @@schema("entitlement")
 }
 

@@ -139,9 +139,9 @@ user reads without narrowing. It also comes off the reseller's sales figure —
 Refusals, each writing nothing: `grant_not_found`, `grant_not_closed`,
 `grant_not_metered`, `rate_not_priceable`, `nothing_to_credit`, `cursor_moved`.
 
-**No caller yet.** The close that calls this is the expiry sweeper's and the
-cancel path's, and neither is built; `GrantService.transition` has no caller
-outside its own spec. A Grant closed today keeps its remainder until one lands.
+**One caller: an admin's delete** (entitlement F-311-m, `deleteGrant`), and only
+when the admin answers `refund` — its `cursor_moved` rolls the delete back. The
+expiry sweeper's close is not built; a Grant expired today keeps its remainder.
 
 ## An admin's gift — bytes nobody bought (F-311-l)
 

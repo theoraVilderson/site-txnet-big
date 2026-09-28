@@ -8,6 +8,7 @@ import {
   tenantTransaction,
 } from '@txnet-backend/shared-core';
 
+import { deleteGrant, Deletion } from '../../entitlement/delete';
 import { changeGrantDuration, DurationChange, DurationMove } from '../../entitlement/duration';
 import { Freeze, freezeGrant, Unfreeze, unfreezeGrant } from '../../entitlement/freeze';
 import { EntitlementRefused, GrantService } from '../../entitlement/grant';
@@ -15,6 +16,7 @@ import { adjustGrantTraffic, resetGrantTraffic, TrafficChange, TrafficReset } fr
 import { giftGrantBytes } from '../../traffic/gift-bytes';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GrantUsageService, GrantUsageView } from '../../traffic/grant-usage';
+import { RemainderCreditService } from '../../traffic/remainder-credit';
 import { AdminConfigCommand, UserConfigOutcome, UserConfigsService, UserConfigView } from '../../traffic/user-configs';
 import { GrantListQuery } from './grant-list.schema';
 import { SubscriptionLinkService } from './subscription-link.service';
@@ -60,6 +62,7 @@ export class ResellerUserGrantsService {
     private readonly configService: UserConfigsService,
     private readonly usageService: GrantUsageService,
     private readonly links: SubscriptionLinkService,
+    private readonly remainders: RemainderCreditService,
   ) {}
 
   grants(actor: ResellerActor, tenantId: string, userId: string, query: GrantListQuery) {
@@ -154,6 +157,24 @@ export class ResellerUserGrantsService {
       tenantId,
       userId,
       () => this.onGrant(userId, grantId, (tx) => giftGrantBytes(tx, grantId, { at: new Date(), actorUserId: actor.userId, bytes, reason })),
+      'staffWrite',
+    );
+  }
+
+  /**
+   * An admin deletes this user's Grant (F-311-m): cancelled, its configs
+   * released now, the remainder refunded or not as the admin answered, and the
+   * choice written down with the reason. `staffWrite`, as for a freeze.
+   */
+  deleteGrant(actor: ResellerActor, tenantId: string, userId: string, grantId: string, refund: boolean, reason: string): Promise<Deletion> {
+    return this.run(
+      actor,
+      tenantId,
+      userId,
+      () =>
+        this.onGrant(userId, grantId, (tx) =>
+          deleteGrant(tx, grantId, { at: new Date(), actorUserId: actor.userId, reason, refund }, (t, id) => this.remainders.credit(t, { grantId: id })),
+        ),
       'staffWrite',
     );
   }
