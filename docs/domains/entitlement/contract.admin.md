@@ -53,6 +53,8 @@ the change, whole. Used is `usedBytesOf` (`renewal.ts`), the renewal's own sum.
 Refused: `grant_closed`, `grant_not_active` (pending), `traffic_not_adjustable`
 (metered — its blocks buy its bytes — or unlimited), `quota_below_zero`, `grant_moved`
 (Quota changed since the read: retry). `adjustQuota` stays the bare row writer.
+A metered Grant's bag takes an admin's **gift** instead (billing F-311-l,
+`contract.traffic-block.md`): source `admin_gift`, never on a Grant's own `source`.
 
 **Reset (F-311-k)** — `resetGrantTraffic(tx, id, {at, actorUserId, reason})` in
 `entitlement/traffic.ts`, proved by `traffic-reset.spec.ts`. The full bag is left

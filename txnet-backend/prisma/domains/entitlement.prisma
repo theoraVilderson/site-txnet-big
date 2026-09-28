@@ -6,6 +6,9 @@
 enum GrantSource {
   purchase
   admin_grant
+  /// Only on a `quota_adjustment` row: bytes an admin gave a metered Grant,
+  /// with no wallet debit (F-311-l). Never a Grant's own source.
+  admin_gift
   coupon
   affiliate_reward
   migration

@@ -2,8 +2,8 @@
 id: billing
 layer: domain
 status: active
-version: 3
-updated: 2026-09-22
+version: 4
+updated: 2026-09-28
 ---
 
 # The traffic block — bytes bought before they are served
@@ -16,7 +16,7 @@ adding a second caller of either.
 
 **No byte is served that has not been paid for.** The ceiling written to a
 panel is bounded by `grant.purchasedBytes` (F-027-s), and this is the only
-writer of that column. Nothing here reads the catalog: the price comes from
+writer of that column that moves money. The other is an admin's gift (below). Nothing here reads the catalog: the price comes from
 `grant.meteredRate`, locked at issue (F-027-p, ADR-0073), so a rate change
 never reprices a block already bought.
 
@@ -142,6 +142,22 @@ Refusals, each writing nothing: `grant_not_found`, `grant_not_closed`,
 **No caller yet.** The close that calls this is the expiry sweeper's and the
 cancel path's, and neither is built; `GrantService.transition` has no caller
 outside its own spec. A Grant closed today keeps its remainder until one lands.
+
+## An admin's gift — bytes nobody bought (F-311-l)
+
+`giftGrantBytes(tx, grantId, {at, actorUserId, bytes, reason})`
+(`traffic/gift-bytes.ts`) raises `purchasedBytes` by `bytes` and **leaves
+`billedBytes` where it is**; no wallet row is written. One `quota_adjustment`
+row, source `admin_gift`, the admin and the reason. The planner sees a bigger
+bag and buys no block until it is spent; the remainder credit gives back
+`billedBytes - consumedBytes`, so the gift is never in it — every byte served
+counts against what was paid for first, and bytes unused at close are the
+gift's before they are the wallet's. A Grant served past `billedBytes` on a gift
+is therefore normal, and its close refuses `nothing_to_credit` as the overrun
+case does. A gift that leaves room revives a Grant suspended because its bag was
+spent. Only an `active` or `suspended`, metered Grant: `grant_not_metered`,
+`grant_closed`, `grant_not_active`; a block bought between the read and the
+write is `grant_moved`. Route: [contract.reseller-grants.md](contract.reseller-grants.md).
 
 ## Refusals of a purchase
 

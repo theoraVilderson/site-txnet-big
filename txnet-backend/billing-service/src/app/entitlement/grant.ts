@@ -60,6 +60,8 @@ export type EntitlementRejection =
   | 'grant_closed'
   /** Traffic (F-311-j): a metered Grant (its blocks buy its bytes) or an unlimited one has no bag an admin moves. */
   | 'traffic_not_adjustable'
+  /** Gift (F-311-l): only a metered, limited Grant takes gifted bytes — a prepaid bag is moved by Traffic. */
+  | 'grant_not_metered'
   /** Traffic: a cut past zero — a Quota is never negative. */
   | 'quota_below_zero'
   /** Traffic reset (F-311-k): nothing used since the last reset — the full bag is already left. */

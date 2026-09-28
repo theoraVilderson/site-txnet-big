@@ -49,6 +49,9 @@ async function adjustable(tx: Prisma.TransactionClient, grantId: string) {
 
 type Adjustable = Awaited<ReturnType<typeof adjustable>>;
 
+/** What `settle` reads of a Grant — also a metered one's, for a gift (F-311-l, `traffic/gift-bytes.ts`). */
+export type Settled = Pick<Adjustable, 'id' | 'tenantId' | 'userId' | 'status' | 'statusReason' | 'suspendedAt' | 'endsAt'>;
+
 /** The row beside the column (invariant 3): source `admin_grant`, the admin, the reason. */
 async function adjustmentRow(tx: Prisma.TransactionClient, grant: Adjustable, delta: bigint, input: { actorUserId: string; reason: string }) {
   const row = await tx.quotaAdjustment.create({
@@ -71,7 +74,7 @@ async function adjustmentRow(tx: Prisma.TransactionClient, grant: Adjustable, de
  * raise that leaves room — the revival of a Grant suspended for quota
  * (`reviveOnTopUp`, which leaves a frozen one frozen) and its telling (F-601-k).
  */
-async function settle(tx: Prisma.TransactionClient, grant: Adjustable, at: Date, before: bigint, after: bigint, usedBytes: bigint) {
+export async function settle(tx: Prisma.TransactionClient, grant: Settled, at: Date, before: bigint, after: bigint, usedBytes: bigint) {
   const spent = after <= usedBytes;
   const revived =
     !spent && grant.status === GrantStatus.suspended && grant.statusReason === QUOTA_EXHAUSTED

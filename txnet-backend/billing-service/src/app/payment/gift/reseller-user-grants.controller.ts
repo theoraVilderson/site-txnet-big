@@ -27,7 +27,15 @@ import { AdminConfigActionBody, adminConfigActionSchema } from '../../traffic/us
 import { GrantDurationBody, grantDurationSchema } from './grant-duration.schema';
 import { GrantFreezeBody, grantFreezeSchema } from './grant-freeze.schema';
 import { GrantListQuery, grantListSchema } from './grant-list.schema';
-import { bytesOfGb, GrantTrafficBody, GrantTrafficResetBody, grantTrafficResetSchema, grantTrafficSchema } from './grant-traffic.schema';
+import {
+  bytesOfGb,
+  GrantTrafficBody,
+  GrantTrafficGiftBody,
+  grantTrafficGiftSchema,
+  GrantTrafficResetBody,
+  grantTrafficResetSchema,
+  grantTrafficSchema,
+} from './grant-traffic.schema';
 import {
   ResellerUserGrantsRefused,
   ResellerUserGrantsRejection,
@@ -45,7 +53,7 @@ const STATUS: Record<ResellerUserGrantsRejection, 403 | 404 | 409> = {
   user_not_found: 404,
 };
 
-/** A freeze's (F-311-h), a change of days' (F-311-i) and of traffic's (F-311-j, F-311-k) refusals; any other `EntitlementRefused` is not this surface's and passes through. */
+/** A freeze's (F-311-h), a change of days' (F-311-i) and of traffic's (F-311-j, F-311-k, F-311-l) refusals; any other `EntitlementRefused` is not this surface's and passes through. */
 const GRANT_ACTION_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
   grant_not_active: 409,
   grant_not_frozen: 409,
@@ -58,6 +66,7 @@ const GRANT_ACTION_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
   traffic_not_adjustable: 409,
   quota_below_zero: 400,
   nothing_to_reset: 409,
+  grant_not_metered: 409,
 };
 
 /** One bucket for all four: expanding one Grant asks three of them at once. */
@@ -254,6 +263,32 @@ export class ResellerUserGrantsController {
       usedBytes: done.usedBytes.toString(),
       resetBytes: done.resetBytes.toString(),
       spent: done.spent,
+      revived: done.revived,
+    };
+  }
+
+  /**
+   * An admin gifts bytes to this metered Grant (F-311-l): `gb` (> 0 GiB) and
+   * the `reason` its adjustment row keeps. No wallet debit; the remainder
+   * credit at close never pays them back as money.
+   */
+  @Post('grants/:grantId/traffic/gift')
+  @HttpCode(HttpStatus.OK)
+  @actionLimit
+  async giftTraffic(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Body(new ZodValidationPipe(grantTrafficGiftSchema)) body: GrantTrafficGiftBody,
+    @Req() req: Request,
+  ) {
+    const done = await this.refusing(() => this.service.giftTraffic(actorOf(req), tenantId, userId, grantId, bytesOfGb(body.gb), body.reason));
+    return {
+      grantId,
+      adjustmentId: done.adjustmentId,
+      purchasedBytesBefore: done.purchasedBytesBefore.toString(),
+      purchasedBytesAfter: done.purchasedBytesAfter.toString(),
+      usedBytes: done.usedBytes.toString(),
       revived: done.revived,
     };
   }

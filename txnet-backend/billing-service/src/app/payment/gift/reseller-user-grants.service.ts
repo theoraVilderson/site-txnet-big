@@ -12,6 +12,7 @@ import { changeGrantDuration, DurationChange, DurationMove } from '../../entitle
 import { Freeze, freezeGrant, Unfreeze, unfreezeGrant } from '../../entitlement/freeze';
 import { EntitlementRefused, GrantService } from '../../entitlement/grant';
 import { adjustGrantTraffic, resetGrantTraffic, TrafficChange, TrafficReset } from '../../entitlement/traffic';
+import { giftGrantBytes } from '../../traffic/gift-bytes';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GrantUsageService, GrantUsageView } from '../../traffic/grant-usage';
 import { AdminConfigCommand, UserConfigOutcome, UserConfigsService, UserConfigView } from '../../traffic/user-configs';
@@ -139,6 +140,20 @@ export class ResellerUserGrantsService {
       tenantId,
       userId,
       () => this.onGrant(userId, grantId, (tx) => resetGrantTraffic(tx, grantId, { at: new Date(), actorUserId: actor.userId, reason })),
+      'staffWrite',
+    );
+  }
+
+  /**
+   * An admin gifts bytes to this user's metered Grant (F-311-l): the bag rises,
+   * nothing is debited, and the remainder credit never pays them out. `staffWrite`.
+   */
+  giftTraffic(actor: ResellerActor, tenantId: string, userId: string, grantId: string, bytes: bigint, reason: string): Promise<TrafficChange> {
+    return this.run(
+      actor,
+      tenantId,
+      userId,
+      () => this.onGrant(userId, grantId, (tx) => giftGrantBytes(tx, grantId, { at: new Date(), actorUserId: actor.userId, bytes, reason })),
       'staffWrite',
     );
   }

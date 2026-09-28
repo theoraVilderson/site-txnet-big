@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 61
+version: 62
 updated: 2026-09-28
 ---
 
@@ -124,5 +124,22 @@ the meter is never zeroed (user, 2026-09-26).
 |---|---|
 | Door `staffWrite`, the reseller's user and the path user's Grant; bucket `RESELLER_USER_CONFIG_ACTION` — as for traffic | the same fences |
 | **409** `grant_closed`, `grant_not_active`, `traffic_not_adjustable`, `nothing_to_reset`, `grant_moved` | only a prepaid, limited bag that was used since its last reset |
+
+**Not covered:** the audit row (F-311-r), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
+
+## An admin gifts bytes to one of a user's metered Grants (built — F-311-l)
+
+`POST …/users/:userId/grants/:grantId/traffic/gift`, body `{gb, reason}` — `gb`
+GiB given (> 0, fractions allowed, ≤ 100 000); `reason` 1..500 chars ->
+`{grantId, adjustmentId, purchasedBytesBefore, purchasedBytesAfter, usedBytes,
+revived}` (bytes as strings). Same controller, over `giftGrantBytes`
+([contract.traffic-block.md](contract.traffic-block.md) "An admin's gift"):
+the bag rises, no wallet debit, and the remainder credit at close never pays a
+gifted byte back as money.
+
+| Rule | Why |
+|---|---|
+| Door `staffWrite`, the reseller's user and the path user's Grant; bucket `RESELLER_USER_CONFIG_ACTION` — as for traffic | the same fences |
+| **409** `grant_not_metered`, `grant_closed`, `grant_not_active`, `grant_moved` | a prepaid bag is moved by `…/traffic`; a raced block is retried |
 
 **Not covered:** the audit row (F-311-r), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
