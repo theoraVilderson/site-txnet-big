@@ -178,7 +178,7 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
  * traffic is not. Its reason becomes the one the next bytes revive; the purge
  * clock keeps running, as the user has had no service since it started.
  */
-async function lapseToQuota(tx: Prisma.TransactionClient, grantId: string): Promise<void> {
+export async function lapseToQuota(tx: Prisma.TransactionClient, grantId: string): Promise<void> {
   await tx.grant.updateMany({
     where: { id: grantId, status: GrantStatus.suspended, statusReason: PERIOD_ENDED },
     data: { statusReason: QUOTA_EXHAUSTED },

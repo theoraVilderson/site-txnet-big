@@ -1,13 +1,23 @@
-import { GrantStatus, Prisma } from '@prisma/client';
+import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 
 import { EntitlementRefused } from './grant';
+import { reviveOnRenewal } from './purge';
+import { emitReactivated } from './reactivated';
+import { lapseToQuota, usedBytesOf } from './renewal';
+import { PERIOD_ENDED } from './suspension';
 
 const DAY_MS = 86_400_000;
 
 /** ±N whole days from the end it has, or a new end. */
 export type DurationMove = { days: number } | { endsAt: Date };
 
-export type DurationChange = { changeId: string; endsAtBefore: Date; endsAtAfter: Date };
+export type DurationChange = {
+  changeId: string;
+  endsAtBefore: Date;
+  endsAtAfter: Date;
+  /** A lapsed Grant (`period_ended`) the move returned to `active` (F-311-z). */
+  revived: boolean;
+};
 
 /** A Grant whose days only a renewal brings back (§4.4 one way, F-311-d). */
 const CLOSED: readonly GrantStatus[] = [GrantStatus.expired, GrantStatus.exhausted, GrantStatus.cancelled];
@@ -25,6 +35,12 @@ const CLOSED: readonly GrantStatus[] = [GrantStatus.expired, GrantStatus.exhaust
  * `contract.lease.md` rule 25) and what the time-threshold clock starts over
  * from (invariant 19), as for a renewal.
  *
+ * **Days given back to a lapsed Grant revive it** (F-311-z, user 2026-09-28):
+ * a Grant `suspended` as `period_ended` whose end the move puts ahead comes
+ * back exactly as a renewal of days brings it (`renewal.ts`) — `active` and
+ * told (F-601-k) when its bag has room or it has no bag, or waiting as
+ * `quota_exhausted` on a spent bag. Otherwise it would be purged with days on it.
+ *
  * The write is conditional on the status and end read, so a renewal or an
  * unfreeze in between is `grant_moved` — retry — and never an end moved twice.
  */
@@ -35,7 +51,19 @@ export async function changeGrantDuration(
 ): Promise<DurationChange> {
   const grant = await tx.grant.findFirst({
     where: { id: grantId },
-    select: { id: true, tenantId: true, status: true, startsAt: true, endsAt: true },
+    select: {
+      id: true,
+      tenantId: true,
+      userId: true,
+      status: true,
+      statusReason: true,
+      suspendedAt: true,
+      billingMode: true,
+      trafficUnlimited: true,
+      purchasedBytes: true,
+      startsAt: true,
+      endsAt: true,
+    },
   });
   if (!grant) throw new EntitlementRefused('grant_not_found');
   if (CLOSED.includes(grant.status)) throw new EntitlementRefused('grant_closed', grant.status);
@@ -57,5 +85,18 @@ export async function changeGrantDuration(
     data: { tenantId: grant.tenantId, grantId, actorUserId: input.actorUserId, endsAtBefore: before, endsAtAfter: after, reason: input.reason },
     select: { id: true },
   });
-  return { changeId: row.id, endsAtBefore: before, endsAtAfter: after };
+
+  // The new end is in the future (refused above otherwise), so a lapsed Grant
+  // has its time back; a bag must have room too, as for a renewal.
+  let revived = false;
+  if (grant.status === GrantStatus.suspended && grant.statusReason === PERIOD_ENDED) {
+    const bagged = grant.billingMode === VariantBillingMode.prepaid && !grant.trafficUnlimited;
+    if (!bagged || grant.purchasedBytes > (await usedBytesOf(tx, grant.id))) {
+      revived = (await reviveOnRenewal(tx, grant.id)).revived;
+      if (revived && grant.suspendedAt) {
+        await emitReactivated(tx, { grantId: grant.id, tenantId: grant.tenantId, userId: grant.userId }, grant.suspendedAt);
+      }
+    } else await lapseToQuota(tx, grant.id);
+  }
+  return { changeId: row.id, endsAtBefore: before, endsAtAfter: after, revived };
 }

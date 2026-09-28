@@ -36,6 +36,9 @@ duration is `endsAt`, not a quota metric (§4.5). Refused: `grant_closed`
 (expired / exhausted / cancelled: a renewal's, F-311-d), `grant_not_active`
 (pending), `grant_permanent`, `duration_unchanged`, `duration_end_not_future`
 (cutting off is a delete, F-311-m), `grant_moved`. Route: billing `contract.reseller-grants.md`.
+**A lapsed Grant's days revive it (F-311-z):** `suspended` as `period_ended`, its end
+moved ahead is a renewal of days (`reviveOnRenewal`, told F-601-k; a spent bag →
+`quota_exhausted`, purge clock running), so it is never purged with days left. `revived`.
 
 **Traffic (F-311-j)** — `adjustGrantTraffic(tx, id, {at, actorUserId, deltaBytes, reason})`
 in `entitlement/traffic.ts`, proved by `traffic.spec.ts`. Quota is `purchasedBytes`,

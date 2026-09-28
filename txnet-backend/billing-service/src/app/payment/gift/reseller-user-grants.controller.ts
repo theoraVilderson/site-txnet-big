@@ -241,7 +241,7 @@ export class ResellerUserGrantsController {
   ) {
     const change = body.endsAt !== undefined ? { endsAt: new Date(body.endsAt) } : { days: body.days as number };
     const done = await this.refusing(() => this.service.changeDuration(actorOf(req), tenantId, userId, grantId, change, body.reason));
-    return { grantId, changeId: done.changeId, endsAtBefore: done.endsAtBefore.toISOString(), endsAtAfter: done.endsAtAfter.toISOString() };
+    return { grantId, changeId: done.changeId, endsAtBefore: done.endsAtBefore.toISOString(), endsAtAfter: done.endsAtAfter.toISOString(), revived: done.revived };
   }
 
   /**

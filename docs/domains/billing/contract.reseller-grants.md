@@ -95,7 +95,7 @@ controller, over `freezeGrant` / `unfreezeGrant` (entitlement `contract.admin.md
 `POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/duration`, body
 `{days | endsAt, reason}` — exactly one of `days` (whole, ±1..3650) or `endsAt`
 (ISO instant with offset); `reason` 1..500 chars -> `{grantId, changeId,
-endsAtBefore, endsAtAfter}`. Same controller, over `changeGrantDuration`
+endsAtBefore, endsAtAfter, revived}` (`revived`: a lapsed Grant back, F-311-z). Same controller, over `changeGrantDuration`
 (entitlement `contract.admin.md` "Days").
 
 | Rule | Why |

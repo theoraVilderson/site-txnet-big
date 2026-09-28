@@ -14,28 +14,63 @@
  *  - **the new end is in the future**: cutting a service short is a delete
  *    (F-311-m), not a date in the past;
  *  - **the write is conditional on the end read** — a renewal or an unfreeze
- *    in between is `grant_moved`, never an end changed twice.
+ *    in between is `grant_moved`, never an end changed twice;
+ *  - **days given back to a lapsed Grant revive it** (F-311-z), as a renewal of
+ *    days does: a Grant `suspended` as `period_ended` whose end moves ahead is
+ *    `active` again and told so — or, on a spent bag, waits as
+ *    `quota_exhausted` — so it is never purged with days left on it.
  */
-import { GrantStatus } from '@prisma/client';
+import { GrantStatus, VariantBillingMode } from '@prisma/client';
+import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import { changeGrantDuration } from './duration';
 import { ADMIN_FROZEN } from './freeze';
 import { EntitlementRefused } from './grant';
+import { PERIOD_ENDED, QUOTA_EXHAUSTED } from './suspension';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const GRANT = '99999999-9999-4999-8999-999999999991';
 const ADMIN = '33333333-3333-4333-8333-333333333333';
+const USER = '44444444-4444-4444-8444-444444444444';
+const GIB = BigInt(1024 ** 3);
 const DAY = 86_400_000;
 const AT = new Date('2026-09-28T10:00:00.000Z');
 const START = new Date(AT.getTime() - 20 * DAY);
 const END = new Date(AT.getTime() + 10 * DAY);
 
-type Row = { id: string; tenantId: string; status: GrantStatus; statusReason: string | null; startsAt: Date; endsAt: Date | null };
+type Row = {
+  id: string;
+  tenantId: string;
+  userId: string;
+  status: GrantStatus;
+  statusReason: string | null;
+  suspendedAt: Date | null;
+  billingMode: VariantBillingMode;
+  trafficUnlimited: boolean;
+  purchasedBytes: bigint;
+  startsAt: Date;
+  endsAt: Date | null;
+};
 
-function build(row: Partial<Row> | null) {
+function build(row: Partial<Row> | null, usedBytes = BigInt(0)) {
   const grant: Row | null = row
-    ? { id: GRANT, tenantId: TENANT, status: GrantStatus.active, statusReason: null, startsAt: START, endsAt: END, ...row }
+    ? {
+        id: GRANT,
+        tenantId: TENANT,
+        userId: USER,
+        status: GrantStatus.active,
+        statusReason: null,
+        suspendedAt: null,
+        billingMode: VariantBillingMode.prepaid,
+        trafficUnlimited: false,
+        purchasedBytes: BigInt(50) * GIB,
+        startsAt: START,
+        endsAt: END,
+        ...row,
+      }
     : null;
+  const configs: Array<Record<string, unknown>> = [];
+  const events: Array<Record<string, unknown>> = [];
   const writes: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }> = [];
   const changes: Array<Record<string, unknown>> = [];
   const same = (a: unknown, b: unknown) => (a instanceof Date || b instanceof Date ? (a as Date | null)?.getTime() === (b as Date | null)?.getTime() : a === b);
@@ -49,6 +84,19 @@ function build(row: Partial<Row> | null) {
         return { count: 1 };
       },
     },
+    config: {
+      findMany: async () => [{ counterState: { lifetimeUpBytes: BigInt(0), lifetimeDownBytes: usedBytes } }],
+      updateMany: async ({ data }: { data: Record<string, unknown> }) => {
+        configs.push(data);
+        return { count: 1 };
+      },
+    },
+    outboxEvent: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        events.push(data);
+        return { id: 'event-1' };
+      },
+    },
     grantDurationChange: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         changes.push(data);
@@ -56,7 +104,7 @@ function build(row: Partial<Row> | null) {
       },
     },
   };
-  return { tx: tx as never, grant, writes, changes };
+  return { tx: tx as never, grant, writes, changes, configs, events };
 }
 
 const refusal = async (p: Promise<unknown>) => {
@@ -77,7 +125,7 @@ describe('changeGrantDuration', () => {
     const done = await changeGrantDuration(tx, GRANT, by(3));
 
     const after = new Date(END.getTime() + 3 * DAY);
-    expect(done).toEqual({ changeId: 'change-1', endsAtBefore: END, endsAtAfter: after });
+    expect(done).toEqual({ changeId: 'change-1', endsAtBefore: END, endsAtAfter: after, revived: false });
     expect(grant?.endsAt).toEqual(after);
     expect(changes).toEqual([
       { tenantId: TENANT, grantId: GRANT, actorUserId: ADMIN, endsAtBefore: END, endsAtAfter: after, reason: 'outage 2026-09-27' },
@@ -142,5 +190,54 @@ describe('changeGrantDuration', () => {
     expect(await refusal(changeGrantDuration(tx, GRANT, by(3)))).toBe('grant_moved');
     expect(writes[0].where).toMatchObject({ id: GRANT, status: GrantStatus.active, endsAt: END });
     expect(changes).toEqual([]);
+  });
+
+  describe('a lapsed Grant (F-311-z)', () => {
+    const LAPSED_AT = new Date(AT.getTime() - 5 * DAY);
+    const lapsed = (row: Partial<Row> = {}, used = BigInt(0)) =>
+      build({ status: GrantStatus.suspended, statusReason: PERIOD_ENDED, suspendedAt: LAPSED_AT, endsAt: LAPSED_AT, ...row }, used);
+
+    it('is revived by an end moved ahead — configs back, the purge clock cleared, the user told', async () => {
+      const { tx, grant, configs, events, changes } = lapsed({}, BigInt(10) * GIB);
+      const done = await changeGrantDuration(tx, GRANT, by(30));
+
+      expect(done.revived).toBe(true);
+      expect(grant).toMatchObject({ status: GrantStatus.active, statusReason: null, suspendedAt: null, endsAt: new Date(LAPSED_AT.getTime() + 30 * DAY) });
+      expect(configs).toEqual([expect.objectContaining({ desiredEnabled: true, desiredRemote: 'present' })]);
+      expect(events).toEqual([expect.objectContaining({ type: OutboxEventType.GRANT_REACTIVATED, payload: expect.objectContaining({ userId: USER, period: LAPSED_AT.toISOString() }) })]);
+      expect(changes).toHaveLength(1);
+    });
+
+    it('revives an unlimited or metered Grant on days alone — it has no bag to be spent', async () => {
+      for (const row of [{ trafficUnlimited: true }, { billingMode: VariantBillingMode.metered }]) {
+        const { tx, grant } = lapsed(row, BigInt(900) * GIB);
+        expect((await changeGrantDuration(tx, GRANT, to(new Date(AT.getTime() + 7 * DAY)))).revived).toBe(true);
+        expect(grant?.status).toBe(GrantStatus.active);
+      }
+    });
+
+    it('on a spent bag gets its days but waits as quota_exhausted, its purge clock still running, untold', async () => {
+      const { tx, grant, configs, events } = lapsed({}, BigInt(50) * GIB);
+      const done = await changeGrantDuration(tx, GRANT, by(30));
+
+      expect(done.revived).toBe(false);
+      expect(grant).toMatchObject({ status: GrantStatus.suspended, statusReason: QUOTA_EXHAUSTED, suspendedAt: LAPSED_AT });
+      expect(configs).toEqual([]);
+      expect(events).toEqual([]);
+    });
+
+    it('still refuses an end that stays in the past, and revives nothing', async () => {
+      const { tx, grant, changes } = lapsed();
+      expect(await refusal(changeGrantDuration(tx, GRANT, by(3)))).toBe('duration_end_not_future');
+      expect(grant).toMatchObject({ status: GrantStatus.suspended, statusReason: PERIOD_ENDED });
+      expect(changes).toEqual([]);
+    });
+
+    it('leaves a Grant suspended for another reason as it was', async () => {
+      const { tx, grant, events } = build({ status: GrantStatus.suspended, statusReason: QUOTA_EXHAUSTED, suspendedAt: LAPSED_AT });
+      expect((await changeGrantDuration(tx, GRANT, by(3))).revived).toBe(false);
+      expect(grant).toMatchObject({ status: GrantStatus.suspended, statusReason: QUOTA_EXHAUSTED });
+      expect(events).toEqual([]);
+    });
   });
 });
