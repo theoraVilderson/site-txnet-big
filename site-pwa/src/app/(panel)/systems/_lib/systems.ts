@@ -1,5 +1,6 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { RealtimeEvents } from "@/generated/wire";
+import { holdsPermission } from "@/lib/permissions";
 import { tenantChannel } from "@/lib/realtime";
 import type {
   CapabilityRow,
@@ -27,12 +28,11 @@ export const REALTIME_TENANT_READ = "realtime.tenant.read";
 /**
  * The channel a connection test's verdict or fault arrives on (F-027-bs), or
  * null when the gateway would refuse it — then the page reads on load, as it
- * always did. `*` holds every permission, as `visibleMenu` reads it.
+ * always did. `*` holds every permission (`holdsPermission`).
  */
 export function liveChannelOf(me: { tenant: { id: string }; permissions: readonly string[] } | null): string | null {
   if (!me) return null;
-  const held = me.permissions.includes("*") || me.permissions.includes(REALTIME_TENANT_READ);
-  return held ? tenantChannel(me.tenant.id) : null;
+  return holdsPermission(me.permissions, REALTIME_TENANT_READ) ? tenantChannel(me.tenant.id) : null;
 }
 
 /**

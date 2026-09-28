@@ -133,7 +133,10 @@ seeded role missing from the file is refused on every gated request (ADR-0037).
 entry lists `- *` is allowed any claimed permission, including one no line
 names. Only `SuperAdmin` may carry it, and only the bare `*` — `user.*` is an
 ordinary name. `X-User-Permissions` then reads `*`, so a consumer must ask
-through shared-core's `holdsPermission`; `contracts.py` fails on a TypeScript
-`permissions.includes(...)`, and follows `holdsPermission(held, CONSTANT)` to
+through shared-core's `holdsPermission` (the panel: its twin in
+`site-pwa/src/lib/permissions.ts`); `contracts.py` fails on a TypeScript
+`permissions.includes(...)`, an `.includes('*')` or a local `ALL_PERMISSIONS`
+in either tree (the panel's since 2026-09-28, when `/settings` hid the
+currency card from SuperAdmin), and follows `holdsPermission(held, CONSTANT)` to
 the constant's value — which is how `settlement.manage` (enforced, granted to
 nobody) was found and given to `Admin`.

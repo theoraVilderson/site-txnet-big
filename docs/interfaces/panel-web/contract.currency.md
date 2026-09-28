@@ -20,7 +20,7 @@ currency; every other screen shows money in the currency its answer names
 | Place | Whose currency | Shown to |
 |---|---|---|
 | `/my-resellers/:id`, under "more" | the path's reseller (`scope="reseller"`) | anyone who opens the workspace; tenant-service admits by the path (invariant 21) and the card shows its refusal otherwise |
-| `/settings`, last section | the platform's own tenant (`scope="platform"`) | a caller signed in to the `platform_owner` tenant **and** holding `tenant.manage` — a reseller can grant itself the key, so the type gates it too |
+| `/settings`, last section | the platform's own tenant (`scope="platform"`) | a caller signed in to the `platform_owner` tenant **and** holding `tenant.manage` or `*` (SuperAdmin; the service honours it too — `canSetPlatformCurrency`) — a reseller can grant itself either key, so the type gates it too |
 
 A reseller's currency is never on `/settings`: its owner's session carries
 the platform tenant on either domain (invariant 21), so `me.tenant` there is

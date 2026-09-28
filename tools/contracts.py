@@ -65,7 +65,17 @@ TS_HOLDS_RE = re.compile(
 # A check that bypasses the helper does not know what `*` means, and refuses
 # SuperAdmin silently.
 TS_RAW_CHECK_RE = re.compile(r"permissions\??\.(?:includes|indexOf|some)\(")
+# The same bypass under another name: `held.includes('*')`, or a file keeping
+# its own copy of the wildcard instead of importing the helper's.
+TS_WILDCARD_CHECK_RE = re.compile(
+    r"\.(?:includes|indexOf)\(\s*(?:ALL_PERMISSIONS|['\"]\*['\"])\s*\)"
+    r"|\bconst\s+ALL_PERMISSIONS\s*=")
 TS_PERMISSION_HELPER = "txnet-backend/shared-core/src/lib/http/permissions.ts"
+# The panel's twin of that helper (2026-09-28): `/settings` checked
+# `permissions.includes('tenant.manage')` and hid the currency card from
+# SuperAdmin, because this scan only looked at the backend.
+PANEL_PERMISSION_SOURCES = ["site-pwa/src/**/*.ts", "site-pwa/src/**/*.tsx"]
+PANEL_PERMISSION_HELPER = "site-pwa/src/lib/permissions.ts"
 # The one role the policy file may grant `*` (ADR-0043 as amended).
 ALL_PERMISSIONS = "*"
 ALL_PERMISSIONS_ROLE = "SuperAdmin"
@@ -253,7 +263,9 @@ def typescript_permissions() -> dict[str, list[str]]:
                         f"{rel} checks holdsPermission(..., {constant}) but "
                         f"{constant} is not a string constant in that file — "
                         f"this scan cannot see which permission it is")
-            if rel != TS_PERMISSION_HELPER and TS_RAW_CHECK_RE.search(text):
+            if rel != TS_PERMISSION_HELPER and (
+                    TS_RAW_CHECK_RE.search(text)
+                    or TS_WILDCARD_CHECK_RE.search(text)):
                 errors.append(
                     f"{rel} checks a permission list directly — use "
                     f"holdsPermission() from shared-core, or `*` (SuperAdmin) "
@@ -262,6 +274,23 @@ def typescript_permissions() -> dict[str, list[str]]:
                 found.setdefault(name, []).append(
                     str(path.relative_to(ROOT)))
     return found
+
+
+def check_panel_permission_checks() -> None:
+    """Every panel permission check goes through `holdsPermission` /
+    `holdsEveryPermission` in `@/lib/permissions`, which know what `*` means."""
+    for pattern in PANEL_PERMISSION_SOURCES:
+        for path in sorted(ROOT.glob(pattern)):
+            rel = str(path.relative_to(ROOT))
+            if ("node_modules" in path.parts or rel == PANEL_PERMISSION_HELPER
+                    or re.search(r"\.test\.tsx?$", path.name)):
+                continue
+            text = path.read_text(encoding="utf-8")
+            if TS_RAW_CHECK_RE.search(text) or TS_WILDCARD_CHECK_RE.search(text):
+                errors.append(
+                    f"{rel} checks a permission list directly — use "
+                    f"holdsPermission() from @/lib/permissions, or `*` "
+                    f"(SuperAdmin) is refused there")
 
 
 def check_permissions() -> None:
@@ -388,6 +417,7 @@ def main() -> int:
     check_strip(strip, identity + anonymous)
     check_forward(forward, fixture)
     check_permissions()
+    check_panel_permission_checks()
     check_default_role()
     check_generated_wire()
 

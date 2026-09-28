@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { holdsEveryPermission } from "@/lib/permissions";
 
 /** The shell's menu labels as generated constants (C-06). */
 const M = FrontendI18nKeys.common.shell.menu;
@@ -68,14 +69,6 @@ type PermissionGated = {
 };
 
 export type TenantType = "platform_owner" | "reseller";
-
-/**
- * The permission that stands for every other one — `SuperAdmin` holds it
- * instead of a list (F-101-d). The twin of shared-core's `ALL_PERMISSIONS`,
- * spelled again because this app has no path to shared-core (C-04). Only the
- * bare `*` is a wildcard.
- */
-const ALL_PERMISSIONS = "*";
 
 export interface PanelMenuLink extends PermissionGated {
   id: string;
@@ -228,8 +221,7 @@ export function visibleMenu(
     !hidden(e) &&
     (!e.tenantTypes || (tenantType !== null && e.tenantTypes.includes(tenantType))) &&
     ((isOwner && e.ownerSuffices === true) ||
-      held.includes(ALL_PERMISSIONS) ||
-      (e.requires ?? []).every((key) => held.includes(key)));
+      holdsEveryPermission(held, e.requires ?? []));
   const hasPage = (l: PanelMenuLink): l is VisibleMenuLink => l.href !== null;
   const out: VisibleMenuEntry[] = [];
   for (const entry of entries) {

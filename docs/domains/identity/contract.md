@@ -61,8 +61,8 @@ Access-token claims (consumed by `forward-auth` and upstream services):
 refused with `auth.permissionsChanged` once Redis holds a different fingerprint for
 `roleId`, or a different role for `sub`. A missing key refuses nothing.
 `permissions[]` may be `["*"]`: that is `SuperAdmin`, which holds every permission
-(v13, F-101-d). A consumer asks `holdsPermission(permissions, key)` and never
-`includes` — a check that does not know `*` refuses SuperAdmin.
+(v13, F-101-d). A consumer asks `holdsPermission` — shared-core's, or the panel's
+`@/lib/permissions` — and never `includes`: that refuses SuperAdmin (`contracts.py`).
 
 ## Emits (events)
 

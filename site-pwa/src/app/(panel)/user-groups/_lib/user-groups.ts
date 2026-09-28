@@ -1,4 +1,5 @@
 import type { Me } from "@/lib/auth-api";
+import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /** The page's strings as generated constants (C-06). */
@@ -11,7 +12,6 @@ export const USER_GROUP_MANAGE = "user_group.manage";
 const USER_SEARCH = "user.search";
 /** A reseller seat that holds this passes `ResellerAccess` for its own users (F-311-a). */
 const TENANT_MANAGE = "tenant.manage";
-const ALL_PERMISSIONS = "*";
 
 /** The schema's bounds; the spec reads both from `user-group.schema.ts`. */
 export const GROUP_NAME_MAX = 80;
@@ -41,7 +41,7 @@ export function refusalKey(e: unknown): string | null {
   return typeof reason === "string" && reason in REFUSAL_KEYS ? REFUSAL_KEYS[reason as UserGroupRefusal] : null;
 }
 
-const holds = (me: Me | null, key: string) => !!me && (me.permissions.includes(ALL_PERMISSIONS) || me.permissions.includes(key));
+const holds = (me: Me | null, key: string) => holdsPermission(me?.permissions, key);
 const onPlatform = (me: Me | null) => me?.tenant?.type === "platform_owner";
 
 /** Who may open the page — the menu entry's rule, for a visitor who typed the path. */

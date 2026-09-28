@@ -1,4 +1,5 @@
 import type { Me, UserSearchHit } from "@/lib/auth-api";
+import { holdsPermission } from "@/lib/permissions";
 import type { TenantLedgerDirection, TenantWalletAdjustBody } from "@/lib/billing-api";
 import type {
   CreateResellerBody,
@@ -25,7 +26,6 @@ export const WALLET_ADJUST = "tenant_billing.adjust";
  * not moving its balance, so a support role may hold this one alone.
  */
 export const WALLET_READ = "tenant_billing.read";
-const ALL_PERMISSIONS = "*";
 
 /** tenant-service's `BILLING_MODELS` (`reseller.schema.ts`); the spec holds the two together. */
 export const BILLING_MODELS = ["subscription_monthly", "subscription_yearly"] as const satisfies readonly ResellerBillingModel[];
@@ -69,7 +69,7 @@ export function refusalKey(e: unknown): string | null {
 /** The answer tenant-service gives a reseller not yet on a package. */
 export const isNoSubscription = (e: unknown) => (e as { reason?: unknown } | null)?.reason === "subscription_not_found";
 
-const holds = (me: Me | null, key: string) => !!me && (me.permissions.includes(ALL_PERMISSIONS) || me.permissions.includes(key));
+const holds = (me: Me | null, key: string) => holdsPermission(me?.permissions, key);
 const onPlatform = (me: Me | null) => me?.tenant?.type === "platform_owner";
 
 /**
