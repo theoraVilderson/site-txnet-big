@@ -48,3 +48,25 @@ export function insertSelection(tx: Prisma.TransactionClient, jobId: string, ten
      ORDER BY g."id"
      LIMIT ${limit}`;
 }
+
+/** A panel a filter can name (F-311-x1): where the reseller's Grants a bulk act can reach have a live config. */
+export type GrantBulkPanel = { id: string; name: string; region: string; own: boolean; retired: boolean; grants: number };
+
+/**
+ * The panels the reseller's `active` and `suspended` Grants have a live config
+ * on, each with how many such Grants — the panel picker of a bulk by filter.
+ * **Any panel, retired or drained included**: the one that was down is the
+ * one the admin is looking for. Fenced by the Grant's `tenantId` (C-15), as
+ * the selection is; a shared panel's name is all it says of it.
+ */
+export function panelsOfSelection(tx: Prisma.TransactionClient, tenantId: string): Promise<GrantBulkPanel[]> {
+  return tx.$queryRaw<GrantBulkPanel[]>`
+    SELECT p."id", p."name", p."region", (p."tenantId" IS NOT NULL) AS "own", (p."retiredAt" IS NOT NULL) AS "retired",
+           COUNT(DISTINCT g."id")::int AS "grants"
+      FROM "entitlement"."grant" g
+      JOIN "network"."config" c ON c."grantId" = g."id" AND c."desiredRemote" = ${DesiredRemote.present}::"network"."DesiredRemote"
+      JOIN "network"."panel" p ON p."id" = c."panelId"
+     WHERE g."tenantId" = ${tenantId}::uuid AND g."status"::text IN ('active', 'suspended')
+     GROUP BY p."id"
+     ORDER BY p."region", p."name"`;
+}

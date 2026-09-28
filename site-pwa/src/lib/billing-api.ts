@@ -740,7 +740,52 @@ export function resellerGrantsApi(tenantId: string) {
     /** One act on 1..50 Grants (F-311-u); a repeated `requestId` answers the first call (F-311-u1). */
     bulk: (body: Record<string, unknown>) =>
       call<{ action: string; results: BulkOutcomeRow[] }>(`${at}/bulk`, { method: "POST", body: JSON.stringify(body) }),
+    /** The panels holding the reseller's services, the retired included (F-311-x1): a filter's picker. */
+    bulkPanels: async () => (await call<{ panels: BulkPanel[] }>(`${at}/bulk-jobs/panels`, { method: "GET" })).panels,
+    /** How many Grants a filter matches now (F-311-u2): what the confirm shows. */
+    bulkCount: async (filter: object) =>
+      (await call<{ count: number }>(`${at}/bulk-jobs/count`, { method: "POST", body: JSON.stringify({ filter }) })).count,
+    /** Starts a job over the Grants the filter matches now; a repeated `requestId` answers the same job. */
+    bulkStart: (body: Record<string, unknown>) => call<BulkJob>(`${at}/bulk-jobs`, { method: "POST", body: JSON.stringify(body) }),
+    bulkJobs: (page: number, pageSize: number) =>
+      call<Paged<BulkJob>>(`${at}/bulk-jobs?${new URLSearchParams({ page: String(page), pageSize: String(pageSize) })}`, { method: "GET" }),
+    bulkJob: (jobId: string) => call<BulkJob>(`${at}/bulk-jobs/${encodeURIComponent(jobId)}`, { method: "GET" }),
+    /** The Grants a job reached, in order; `problems` keeps the refused and failed. No rows once purged. */
+    bulkOutcomes: (jobId: string, page: number, pageSize: number, problems: boolean) =>
+      call<{ rows: BulkOutcomeRow[]; page: number; pageSize: number; purgedAt: string | null }>(
+        `${at}/bulk-jobs/${encodeURIComponent(jobId)}/outcomes?${new URLSearchParams({ page: String(page), pageSize: String(pageSize), problems: String(problems) })}`,
+        { method: "GET" },
+      ),
+    bulkCancel: (jobId: string) => call<BulkJob>(`${at}/bulk-jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" }),
   };
+}
+
+/** A panel a bulk filter can name (F-311-x1); `grants` = the reseller's active and frozen services with a live config on it. */
+export interface BulkPanel {
+  id: string;
+  name: string;
+  region: string;
+  own: boolean;
+  retired: boolean;
+  grants: number;
+}
+
+/** A bulk act by a filter, run by the worker (F-311-u2); `total` was frozen at the confirm. */
+export interface BulkJob {
+  id: string;
+  requestId: string;
+  action: string;
+  command: Record<string, unknown>;
+  filter: { panelId?: string; productId?: string; variantId?: string; statuses: string[] };
+  status: "running" | "done" | "cancelled";
+  total: number;
+  processed: number;
+  ok: number;
+  refused: number;
+  failed: number;
+  createdAt: string;
+  finishedAt: string | null;
+  purgedAt: string | null;
 }
 
 /** One Grant's outcome of a bulk request; `result` is the single act's answer. */

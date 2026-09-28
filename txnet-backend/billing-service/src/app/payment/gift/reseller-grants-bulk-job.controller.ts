@@ -69,6 +69,7 @@ const readLimit = {
  * ids (`reseller-grants-bulk.controller.ts`). The confirm counts, then starts;
  * the worker acts in batches; the admin watches the counts and the outcomes.
  *
+ * - `GET …/bulk-jobs/panels` -> `{panels}`, the ones a filter can name (`read`, F-311-x1)
  * - `POST …/bulk-jobs/count` `{filter}` -> `{count}` (`read`)
  * - `POST …/bulk-jobs` a bulk body with `filter` for `grantIds` -> **202** the
  *   job; the same `requestId` again answers it (`staffWrite`)
@@ -89,6 +90,13 @@ export class ResellerGrantsBulkJobController {
   @RateLimit(readLimit)
   count(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(grantBulkCountSchema)) body: { filter: GrantBulkJobBody['filter'] }, @Req() req: Request) {
     return answer(async () => ({ count: await this.service.count(actorOf(req), tenantId, body.filter) }));
+  }
+
+  /** Before `:jobId`, which would take `panels` for an id and refuse it. */
+  @Get('panels')
+  @RateLimit(readLimit)
+  panels(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request) {
+    return answer(async () => ({ panels: await this.service.panels(actorOf(req), tenantId) }));
   }
 
   @Post()

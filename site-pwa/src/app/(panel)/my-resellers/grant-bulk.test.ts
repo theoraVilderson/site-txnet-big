@@ -9,7 +9,12 @@ import {
   BULK_ACTION_NAMES,
   BULK_MAX_GRANTS,
   HISTORY_ACTION_KEYS,
+  JOB_REFUSAL_KEYS,
   bulkBody,
+  bulkJobBody,
+  filterOf,
+  jobPercent,
+  jobRefusalKey,
   bulkRefusalKey,
   historyActionKey,
   toggleTicked,
@@ -121,5 +126,59 @@ describe("a history row", () => {
     expect(historyActionKey("grant_freeze")).toBe(HISTORY_ACTION_KEYS.grant_freeze);
     expect(historyActionKey("wallet_manual_adjust")).not.toBe(HISTORY_ACTION_KEYS.grant_freeze);
     expect(typeof historyActionKey("wallet_manual_adjust")).toBe("string");
+  });
+});
+
+/**
+ * Bulk by a filter, as a job (F-311-x1 over F-311-u2): the confirm counts the
+ * filter, then starts a job the admin watches. What breaks with nothing red
+ * elsewhere: a filter key or a job route billing does not have, a body its
+ * `.strict()` union refuses, and a job refusal with no sentence.
+ */
+describe("a bulk by filter", () => {
+  const PANEL = "66666666-6666-4666-8666-666666666666";
+  const controller = () => source(`${GIFT}/reseller-grants-bulk-job.controller.ts`);
+
+  it("reaches billing's job routes, the panels read before the job id that would swallow it", () => {
+    const c = controller();
+    expect(c).toMatch(/@Controller\('billing\/tenants\/:tenantId\/grants\/bulk-jobs'\)/);
+    for (const route of ["@Get('panels')", "@Post('count')", "@Post()", "@Get()", "@Get(':jobId')", "@Get(':jobId/outcomes')", "@Post(':jobId/cancel')"]) {
+      expect(c, route).toContain(route);
+    }
+    expect(c.indexOf("@Get('panels')")).toBeLessThan(c.indexOf("@Get(':jobId')"));
+  });
+
+  it("names only the keys billing's filter takes, with the statuses the act applies to", () => {
+    const schema = /grantBulkFilterSchema = z\s*\.object\(\{([\s\S]*?)\}\)\s*\.strict/.exec(source(`${GIFT}/grant-bulk-job.schema.ts`))?.[1] ?? "";
+    const keys = [...schema.matchAll(/^\s*([a-zA-Z]+):/gm)].map((m) => m[1]).sort();
+    expect(keys).toEqual(["panelId", "productId", "statuses", "variantId"]);
+    expect(filterOf({ kind: "all" }, "days")).toEqual({ statuses: ["active"] });
+    expect(filterOf({ kind: "panel", panelId: PANEL }, "days")).toEqual({ panelId: PANEL, statuses: ["active"] });
+    expect(filterOf({ kind: "variant", productId: "p", variantId: "v" }, "gift")).toEqual({ variantId: "v", statuses: ["active"] });
+    // An unfreeze reaches the frozen ones: an `active` Grant would only be refused.
+    expect(filterOf({ kind: "product", productId: "p" }, "unfreeze")).toEqual({ productId: "p", statuses: ["suspended"] });
+  });
+
+  it("is the bulk body with the filter where the ids were, or none while a pick is missing", () => {
+    const filter = filterOf({ kind: "panel", panelId: PANEL }, "days");
+    expect(bulkJobBody("days", filter, draft({ amount: "3", reason: "de-2 down" }))).toEqual({ requestId: REQUEST, action: "days", filter, days: 3, reason: "de-2 down" });
+    expect(bulkJobBody("days", filter, draft({ amount: "3", reason: "" }))).toBeNull();
+    expect(bulkJobBody("days", null, draft({ amount: "3", reason: "r" }))).toBeNull();
+    expect(bulkJobBody("reset", filter, draft({ reason: "r" }))).toMatchObject({ action: "traffic_reset" });
+  });
+
+  it("has a sentence for every refusal the job routes answer", () => {
+    const map = /const STATUS[^=]*=\s*\{([^}]*)\}/.exec(controller())?.[1] ?? "";
+    const reasons = [...map.matchAll(/([a-z_]+):/g)].map((m) => m[1]).sort();
+    expect(reasons).toContain("selection_too_large");
+    expect(Object.keys(JOB_REFUSAL_KEYS).sort()).toEqual(reasons);
+    expect(jobRefusalKey({ reason: "selection_empty" })).toBe(JOB_REFUSAL_KEYS.selection_empty);
+    expect(jobRefusalKey({ reason: "not_allowed" })).toBeNull();
+  });
+
+  it("shows progress over the frozen total", () => {
+    expect(jobPercent({ total: 8000, processed: 2000 })).toBe(25);
+    expect(jobPercent({ total: 3, processed: 3 })).toBe(100);
+    expect(jobPercent({ total: 0, processed: 0 })).toBe(100);
   });
 });

@@ -70,6 +70,10 @@ vi.mock('./grant-bulk-selection', () => ({
     await tx.grantBulkJobItem.createMany({ data: ids.map((grantId) => ({ jobId, tenantId, grantId })) });
     return ids.length;
   },
+  panelsOfSelection: async (_tx: unknown, tenantId: string) => {
+    const on = [...GRANTS.values()].filter((gr) => gr.tenantId === tenantId && ['active', 'suspended'].includes(gr.status)).flatMap((gr) => gr.panels);
+    return [...new Set(on)].map((id) => ({ id, name: 'de-2', region: 'de', own: false, retired: false, grants: on.filter((p) => p === id).length }));
+  },
 }));
 
 const PLATFORM = '11111111-1111-4111-8111-111111111111';
@@ -326,6 +330,13 @@ describe('bulk act by filter, as a job (F-311-u2)', () => {
     await drain.drain();
 
     expect(calls.map((c) => c.grantId)).toEqual([g(1)]);
+  });
+
+  it("names the panels holding the reseller's Grants, with their count, to a suspended reseller too (F-311-x1)", async () => {
+    const { service } = build();
+    expect(await service.panels(owner, RESELLER)).toEqual([expect.objectContaining({ id: PANEL, grants: 3 })]);
+    expect(await service.panels(owner, SUSPENDED)).toEqual([]);
+    await expect(service.panels({ ...owner, userId: randomUUID() }, RESELLER)).rejects.toMatchObject({ reason: 'not_allowed' });
   });
 
   it('lets a suspended reseller watch but not start, and hides another tenant job', async () => {

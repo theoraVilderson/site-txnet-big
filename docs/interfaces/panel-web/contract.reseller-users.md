@@ -6,7 +6,7 @@ version: 38
 updated: 2026-09-28
 ---
 
-# Contract — panel-web: a reseller's users and one user's services (F-311-v, -w, -x)
+# Contract — panel-web: a reseller's users and one user's services (F-311-v, -w, -x, -x1)
 
 A topic file of [contract.md](contract.md) (§10), and a screen pair of the
 reseller workspace described in [contract.resellers.md](contract.resellers.md)
@@ -15,7 +15,7 @@ Reached from the console's "More settings" (`OnboardingConsoleView`).
 
 | page | route | files |
 |---|---|---|
-| its users | `/my-resellers/[id]/users` (`myResellerUsersPath`) | `my-resellers/[id]/users/_components/ResellerUsersView.tsx`, `FindByLink.tsx` |
+| its users | `/my-resellers/[id]/users` (`myResellerUsersPath`) | `my-resellers/[id]/users/_components/ResellerUsersView.tsx`, `FindByLink.tsx`, `BulkByFilter.tsx` |
 | one user's services | `/my-resellers/[id]/users/[userId]` (`myResellerUserPath`) | `…/users/[userId]/_components/UserServicesView.tsx`, `AdminConfigs.tsx`, `GrantActions.tsx`, `GrantHistory.tsx`, `useUserMessage.ts` |
 
 Rules for both: `my-resellers/_lib/users.ts`; a Grant's acts: `my-resellers/_lib/grant-actions.ts`; search, bulk and history: `my-resellers/_lib/grant-bulk.ts`. Calls: `resellerUsersApi`
@@ -25,7 +25,7 @@ and `resellerUserGrantsApi(tenantId, userId)` (`lib/billing-api.ts`) over
 billing's [contract.reseller-grants.md](../../domains/billing/contract.reseller-grants.md)
 "One user's services", "An admin's actions on one user's configs" (F-311-f/g) and
 its Grant sections (F-311-d, -h..-q); across users, `resellerGrantsApi(tenantId)`
-over its "by a pasted line" (F-311-t) and [contract.reseller-grants-bulk.md](../../domains/billing/contract.reseller-grants-bulk.md) (F-311-u, -u1).
+over its "by a pasted line" (F-311-t) and [contract.reseller-grants-bulk.md](../../domains/billing/contract.reseller-grants-bulk.md) (F-311-u, -u1; its jobs and `panels`, F-311-u2/-u3/-x1).
 
 ## Rules
 
@@ -51,8 +51,10 @@ over its "by a pasted line" (F-311-t) and [contract.reseller-grants-bulk.md](../
 | 18 | **Find by a pasted link** (F-311-x, `FindByLink` on the users page): the paste split as `/services` splits it (`pastedLines`, ≤20, a POST body), billing's `current` scope; each found service names its user's sheet | support is handed a link, not a phone; a line is a credential, never in a URL |
 | 19 | **Bulk over the ticked found services** (≤50, `toggleTicked`): the Grant forms' own fields, a reason **always** (`bulkBody`, `grantBulkSchema`), no delete / renew / issue / link; one `requestId` per opened form; an outcome per Grant, a refusal named with its sentence (`bulkRefusalKey`, `grant_not_found` and `failed` the bulk's own); the ticks stay, the search is read again | a bad body refuses every Grant; a repeat answers the first call's outcomes (F-311-u1), so +3 days clicked twice is +3 |
 | 20 | **A Grant's history on its sheet** (`GrantHistory`): read when opened and after an act, newest first, 20 a page — the act (`historyActionKey`, a later one a plain label), whether on a config, when, a short actor id, the reason. No IP | billing answers none (audit `contract.md`); the spec holds the labels to `grant-audit.ts`'s two unions |
+| 21 | **Bulk by a filter, as a job** (F-311-x1, `BulkByFilter` on the users page): the same acts and fields as rule 19, over every active service, a panel (billing's `bulk-jobs/panels`, read when picked, retired ones marked), or a product / one of its plans (`catalogAdminApi(id)`, switched-off ones included). `filterOf` sends the statuses the act reaches — `suspended` for unfreeze, `active` otherwise. The form shows billing's **count for this pick and this form** (re-counted per opened form), and the start is off while it is 0 or over 100 000; `bulkJobBody` is the bulk body with `filter` for `grantIds`, one `requestId` per form | the selection is frozen at the confirm, so the number shown is the number acted on; a double click answers the same job (F-311-u2) |
+| 22 | **The jobs, newest first, 10 a page**: act, filter, status, a progress bar over the frozen `total` (`jobPercent`), ok / refused / failed; read again every `JOB_POLL_MS` (10s) **only while one on the page runs** — the reads share one 300/900s bucket. A running job's **stop** is confirmed (what was done stands); **show refused** reads `outcomes?problems=true`, 20 a page, each with its sentence (`bulkRefusalKey`) and a short id, and says so once billing purged them. A job route's refusal is its sentence (`JOB_REFUSAL_KEYS`, held to the controller's `STATUS`) | an outage job of 8 000 services must be watchable and stoppable without costing the page its other reads |
 
 **Not covered:** re-dating to a picked day (billing takes `endsAt`; the sheet
 sends ±days), the panels a speed cap's refusal names (not flat, so not in
 the envelope's `facts`), an actor's name in the history (no read of an admin
-by id; a short id is shown), and bulk by a filter (F-311-u2's jobs — no screen yet).
+by id; a short id is shown), and a job's refused service by name (its outcome has no user; a short id is shown).

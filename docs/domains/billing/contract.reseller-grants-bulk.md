@@ -65,6 +65,7 @@ request. `payment/gift/reseller-grants-bulk-job.controller.ts` over
 
 | Route | Door | Answers |
 |---|---|---|
+| `GET …/panels` (F-311-x1) | `read` | `{panels[{id, name, region, own, retired, grants}]}` — every panel the reseller's `active` / `suspended` Grants have a live config on, **retired included** (the one that was down), `grants` their count; `grant-bulk-selection.ts` `panelsOfSelection`. Declared before `:jobId` |
 | `POST …/count` `{filter}` | `read` | `{count}` — what the confirm shows |
 | `POST …` a bulk body with `filter` in place of `grantIds` | `staffWrite` | **202** the job; the same `requestId` again answers it |
 | `GET …?page&pageSize` | `read` | `{rows[job], page, pageSize, total}`, newest first |

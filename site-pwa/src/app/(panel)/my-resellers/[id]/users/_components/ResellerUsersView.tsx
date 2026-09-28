@@ -12,6 +12,7 @@ import { formatInstant } from "../../../../_lib/datetime";
 import { Alert, input, primaryButton, quietButton } from "../../../../catalog/_components/catalog-ui";
 import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, blockActionOf, usersQuery } from "../../../_lib/users";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
+import { BulkByFilter } from "./BulkByFilter";
 import { FindByLink } from "./FindByLink";
 
 /** How long typing rests before the list is asked again. */
@@ -38,7 +39,9 @@ const STATUS_TONE: Record<ResellerUser["status"], string> = {
  *    out everywhere. The row takes the user auth answers; a platform ban gets
  *    no button, since a reseller neither deepens nor lifts it;
  *  - **a service is found by a pasted link, and the ticked ones acted on at
- *    once** (F-311-x, `FindByLink`), across every user of the reseller.
+ *    once** (F-311-x, `FindByLink`), across every user of the reseller;
+ *  - **or chosen by a filter** — a panel, a product, every active service —
+ *    and run as a job the page watches (F-311-x1, `BulkByFilter`).
  */
 export function ResellerUsersView({ id }: { id: string }) {
   const { t, lang } = useLocale();
@@ -153,6 +156,7 @@ export function ResellerUsersView({ id }: { id: string }) {
       </div>
 
       <FindByLink id={id} />
+      <BulkByFilter id={id} />
 
       {blockError !== null && <Alert>{message(blockError)}</Alert>}
 

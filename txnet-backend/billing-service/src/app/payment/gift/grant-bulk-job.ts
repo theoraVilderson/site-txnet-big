@@ -9,7 +9,7 @@ import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.servi
 import { PrismaService } from '../../prisma/prisma.service';
 import { GrantBulkCommand } from './grant-bulk.schema';
 import { GrantBulkFilter, GrantBulkJobBody, GrantBulkPage } from './grant-bulk-job.schema';
-import { countSelection, insertSelection } from './grant-bulk-selection';
+import { countSelection, GrantBulkPanel, insertSelection, panelsOfSelection } from './grant-bulk-selection';
 import { actOnce, bulkFingerprint, GRANT_BULK_FAILED, GrantBulkOutcome } from './reseller-grants-bulk';
 import { AdminActor, ResellerUserGrantsRefused } from './reseller-user-grants.service';
 
@@ -96,6 +96,11 @@ export class ResellerGrantBulkJobService {
 
   count(actor: ResellerActor, tenantId: string, filter: GrantBulkFilter): Promise<number> {
     return this.admitted(actor, tenantId, 'read', () => tenantTransaction(this.prisma, (tx) => countSelection(tx, tenantId, filter)));
+  }
+
+  /** The panels a filter can name (F-311-x1): those holding the reseller's Grants, the retired one that was down included. */
+  panels(actor: ResellerActor, tenantId: string): Promise<GrantBulkPanel[]> {
+    return this.admitted(actor, tenantId, 'read', () => tenantTransaction(this.prisma, (tx) => panelsOfSelection(tx, tenantId)));
   }
 
   start(actor: AdminActor, tenantId: string, body: GrantBulkJobBody): Promise<GrantBulkJobView> {

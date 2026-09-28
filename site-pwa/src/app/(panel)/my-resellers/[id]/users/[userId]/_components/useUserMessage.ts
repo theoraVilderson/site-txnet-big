@@ -3,14 +3,15 @@
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { grantRefusalKey } from "../../../../_lib/grant-actions";
+import { jobRefusalKey } from "../../../../_lib/grant-bulk";
 import { userRefusalKey } from "../../../../_lib/users";
 
-/** The door's own sentence (`USER_REFUSAL_KEYS`), a Grant action's (`GRANT_REFUSAL_KEYS`), else the generic answer for that error. */
+/** The door's own sentence (`USER_REFUSAL_KEYS`), a Grant action's (`GRANT_REFUSAL_KEYS`), a bulk job's (`JOB_REFUSAL_KEYS`), else the generic answer for that error. */
 export function useUserMessage() {
   const { t } = useLocale();
   const errorMessage = useApiErrorMessage();
   return (e: unknown) => {
-    const key = userRefusalKey(e) ?? grantRefusalKey(e);
+    const key = userRefusalKey(e) ?? grantRefusalKey(e) ?? jobRefusalKey(e);
     return key ? t("common", key) : errorMessage(e);
   };
 }

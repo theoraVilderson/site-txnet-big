@@ -3408,6 +3408,59 @@
         "config_retire": "Config retired",
         "config_move": "Config moved to another panel"
       }
+    },
+    "bulkJob": {
+      "title": "Act on services by a filter",
+      "subtitle": "For many services at once — e.g. +3 days to everyone on a panel that was down. Pick which services, see how many, then confirm one act; it runs in the background.",
+      "scope": {
+        "label": "Which services",
+        "all": "Every active service",
+        "panel": "On a panel",
+        "product": "Of a product"
+      },
+      "panelPick": "Pick a panel",
+      "panelOption": "{{name}} · {{region}} — {{count}} services",
+      "own": "your own",
+      "retired": "retired",
+      "noPanels": "None of your services is on a panel.",
+      "productPick": "Pick a product",
+      "variantAll": "Every plan of this product",
+      "noProducts": "Your catalog has no products.",
+      "loading": "Loading…",
+      "counting": "Counting…",
+      "count": "{{count}} services match now.",
+      "countEmpty": "No service matches this.",
+      "tooLarge": "More than {{max}} services match; split it by panel or product.",
+      "unfreezeNote": "An unfreeze reaches only frozen services.",
+      "confirm": "The {{count}} services matched now are fixed at this confirm; a service that matches later is not included. Each one is acted on by itself, its user told and the reason logged on it.",
+      "submit": "Start on {{count}} services",
+      "jobsTitle": "Bulk jobs",
+      "jobsEmpty": "No bulk job yet.",
+      "status": {
+        "running": "Running",
+        "done": "Finished",
+        "cancelled": "Cancelled"
+      },
+      "progress": "{{processed}} of {{total}}",
+      "counts": "{{ok}} done, {{refused}} refused, {{failed}} failed",
+      "filterAll": "every active service",
+      "filterPanel": "panel {{name}}",
+      "filterProduct": "product {{name}}",
+      "filterVariant": "plan {{name}}",
+      "unfrozen": "frozen services",
+      "cancel": "Stop",
+      "cancelConfirm": "Stop this job? Services already acted on keep the change; the rest are left as they are.",
+      "showProblems": "Show refused",
+      "hideProblems": "Hide refused",
+      "problemsEmpty": "Nothing was refused.",
+      "problemLine": "Service {{id}}: {{reason}}",
+      "purged": "Per-service details were removed 30 days after the job ended; the totals stay.",
+      "refusal": {
+        "request_reused": "This confirm was already used for another act. Close the form and open it again.",
+        "selection_empty": "No service matches this any more.",
+        "selection_too_large": "Too many services match; split it by panel or product.",
+        "job_not_found": "This job is not one of yours."
+      }
     }
   }
 }
