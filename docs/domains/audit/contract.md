@@ -3,17 +3,19 @@ id: audit
 layer: domain
 status: active
 version: 3
-updated: 2026-09-18
+updated: 2026-09-28
 ---
 
 # Contract — audit
 
 **Partly implemented.** The account-switch group is live end to end for a
 user (`auth-service/src/app/account-switch/`): adding (F-0205), listing
-(F-0206), switching (F-0207) and removing (F-0208). The audit log and
-impersonation records are still **intent only**: they are *written* by
-identity's impersonation module, and no `audit` service reads or guards them
-yet. Rows below are marked accordingly.
+(F-0206), switching (F-0207) and removing (F-0208). **An admin's acts on a
+user's Grant and configs are audited and read back** (F-311-r,
+`billing-service/src/app/grant-audit/`) — see "A Grant's history" below. The
+rest of the audit log — each domain's own writes, and impersonation (written
+by identity's module) — has no `audit` read or guard yet. Rows below are marked
+accordingly.
 
 **Version 2 (2026-09-06, ADR-0015) is a breaking change to every switch-group
 operation.** A group is no longer a property of the person: it belongs to the
@@ -31,13 +33,32 @@ The privileged-action trail. `admin_audit_log` is absolutely append-only (not ev
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| append audit entry *(intent)* | adminId, action, target, old/new, ip | `admin_audit_log` row | sync (in caller tx) | — |
-| read audit trail *(intent)* | target ref / admin / date range | rows (read-only) | sync | — |
+| append audit entry *(each writer's own; a Grant's acts live, F-311-r)* | adminId, action, target, old/new, ip, `reason?` | `admin_audit_log` row | sync (in caller tx) | — |
+| read audit trail *(a Grant's only, F-311-r; by admin / date range intent)* | target ref | rows (read-only) | sync | — |
 | record impersonation start/end *(written by identity today)* | adminId, targetUserId, reason, ticket? | `impersonation_session` (+ audit row) | sync tx | (see identity invariants) |
 | add an account to a switch group **(live, F-0205)** | caller's session, **caller's scope**, target phone/username + an OTP to that account **or** its password | `linked_account_member` row carrying that scope, `verifiedViaOtp` set accordingly | sync | proof failed, already in a group *on this surface*, no resolvable scope (`accountSwitch.noScope`), rate-limited |
 | list the caller's switch group **(live, F-0206)** | caller's session, **caller's scope** | the caller, plus the members **the door admits** they may switch to **in this scope** — the door's tenant's accounts and, on a reseller's panel, its owner (ADR-0059 (5)); phone masked | sync | — (no scope and no group both answer `members: []`) |
 | switch to a member **(live, F-0207)** | caller's session, **caller's scope**, target member | the target's token pair + `refresh_token` cookie, the new session stamped with the same scope; the caller's session revoked `account_switched` | sync tx | not a member *of this scope's group*, another group, cross-tenant, target deleted/suspended, no scope — all one answer, `accountSwitch.notAMember` |
 | remove an account from the group **(live, F-0208)** | caller's session, **caller's scope**, target member — which may be the caller itself | that scope's member row gone; the removed account's sessions **in that scope** revoked `account_unlinked`; the group deleted if one member would be left | sync tx | not a member, no scope — both `accountSwitch.notAMember` |
+
+## A Grant's history (built — F-311-r)
+
+`grant-audit.ts` in `billing-service` — the second `audit` writer there after
+`settlement/`, for the same reason: the acts and their transaction are billing's.
+`ResellerUserGrantsService` (billing `contract.reseller-grants.md`) calls it on
+every write; the route is `GET …/users/:userId/grants/:grantId/history`.
+
+| Rule | Why |
+|---|---|
+| **One row per act, inside the act's transaction, after it** (invariant #12): the target's columns read before and after the act (`oldValue` / `newValue`), the act's result as `newValue.outcome`, `adminId`, `adminIpAddress`, `reason`, `tenantId` = the path's reseller | a row never claims a state the act did not leave; a refusal rolls it back with the act |
+| Actions `grant_freeze` / `grant_unfreeze` / `grant_duration_change` / `grant_traffic_change` / `grant_traffic_reset` / `grant_traffic_gift` / `grant_speed_set` / `grant_devices_set` / `grant_delete` / `grant_issue` / `grant_renew` / `grant_link_rotate` on target `grant`; `config_regenerate` / `_disable` / `_enable` / `_retire` / `_move` on target `config` | opposite acts (freeze / unfreeze) must stay tellable apart |
+| A repeat that changed nothing (`renewed: false`, `issued: false`) writes **no** row; an issue's target is the Grant it created, with no `oldValue` | the trail lists acts, not requests |
+| **No token or link is ever written**: the Grant's snapshot leaves out `subscriptionTokenHash`/`Sealed`, and a rotation's outcome is empty — `tokenRotatedAt` moving is the record | the row is readable by every admin of the reseller |
+| `reason` is the admin's text: required where the route requires it (days, traffic, speed, devices, delete), optional on freeze, unfreeze, rotate, issue, renew, and a config disable's own reason | a column, not a JSON field, so a history reads it without knowing each act |
+| The read: the Grant's rows **and every config it ever held** (a retired or moved one included), newest first, paged (≤100, default 20), each `{id, action, targetType, targetId, actorUserId, before, after, reason, at}`; door `read`, the path user's Grant (**404** otherwise); the admin's IP is not answered | the reader is the reseller; a suspended one still sees who did what |
+
+Not recorded: the system's own acts (the unfreeze sweep, a quota stop) — they
+are not an admin's. Telling the user is F-311-s.
 
 ## Emits (events)
 

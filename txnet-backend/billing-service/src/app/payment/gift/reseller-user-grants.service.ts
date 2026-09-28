@@ -18,6 +18,7 @@ import { EntitlementRefused, GrantService } from '../../entitlement/grant';
 import { adjustGrantTraffic, resetGrantTraffic, TrafficChange, TrafficReset } from '../../entitlement/traffic';
 import { giftGrantBytes } from '../../traffic/gift-bytes';
 import { setGrantSpeed, SpeedChange } from '../../traffic/grant-speed';
+import { AuditSpec, auditedConfigAct, auditedGrantAct, grantHistory } from '../../grant-audit/grant-audit';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GrantUsageService, GrantUsageView } from '../../traffic/grant-usage';
 import { RemainderCreditService } from '../../traffic/remainder-credit';
@@ -27,6 +28,9 @@ import { SubscriptionLinkService } from './subscription-link.service';
 
 /** The door's refusals, and the one this surface adds: the path's user is not the reseller's. */
 export type ResellerUserGrantsRejection = ResellerAccessRejection | 'user_not_found';
+
+/** The door's actor and the address the request came from: every write here is audited (F-311-r). */
+export type AdminActor = ResellerActor & { ip: string };
 
 export class ResellerUserGrantsRefused extends Error {
   constructor(
@@ -91,8 +95,15 @@ export class ResellerUserGrantsService {
    * transaction, the old link dead as the new one exists. `staffWrite`: a
    * suspended reseller reads the link but destroys none.
    */
-  rotateLink(actor: ResellerActor, tenantId: string, userId: string, grantId: string): Promise<string> {
-    return this.run(actor, tenantId, userId, () => this.links.reset(grantId, userId), 'staffWrite');
+  rotateLink(actor: AdminActor, tenantId: string, userId: string, grantId: string, reason: string | null): Promise<string> {
+    const spec: AuditSpec<string> = { action: 'grant_link_rotate', reason };
+    return this.run(
+      actor,
+      tenantId,
+      userId,
+      () => this.links.reset(grantId, userId, (tx, rotate) => auditedGrantAct(tx, actor, tenantId, grantId, spec, rotate)),
+      'staffWrite',
+    );
   }
 
   /**
@@ -101,8 +112,10 @@ export class ResellerUserGrantsService {
    * changes none. One outcome per config; the fence to this user's configs is
    * `actAsAdmin`'s.
    */
-  act(actor: ResellerActor, tenantId: string, userId: string, command: AdminConfigCommand): Promise<UserConfigOutcome[]> {
-    return this.run(actor, tenantId, userId, () => this.configService.actAsAdmin(actor.userId, userId, command), 'staffWrite');
+  act(actor: AdminActor, tenantId: string, userId: string, command: AdminConfigCommand): Promise<UserConfigOutcome[]> {
+    const audit = <T extends string | void>(tx: Prisma.TransactionClient, configId: string, step: () => Promise<T>) =>
+      auditedConfigAct(tx, actor, tenantId, configId, `config_${command.action}`, command.reason ?? null, step);
+    return this.run(actor, tenantId, userId, () => this.configService.actAsAdmin(actor.userId, userId, command, audit), 'staffWrite');
   }
 
   /**
@@ -110,26 +123,22 @@ export class ResellerUserGrantsService {
    * unfrozen: `staffWrite`, as for a config action. A Grant of another user
    * is `grant_not_found`, never frozen.
    */
-  freeze(actor: ResellerActor, tenantId: string, userId: string, grantId: string, until: Date | null): Promise<Freeze> {
-    return this.run(actor, tenantId, userId, () => this.onGrant(userId, grantId, (tx) => freezeGrant(tx, grantId, { at: new Date(), until })), 'staffWrite');
+  freeze(actor: AdminActor, tenantId: string, userId: string, grantId: string, until: Date | null, reason: string | null): Promise<Freeze> {
+    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_freeze', reason, outcome: (r) => r }, (tx) => freezeGrant(tx, grantId, { at: new Date(), until }));
   }
 
   /** An admin unfreezes it: the frozen time is added to its end (F-311-h). */
-  unfreeze(actor: ResellerActor, tenantId: string, userId: string, grantId: string): Promise<Unfreeze> {
-    return this.run(actor, tenantId, userId, () => this.onGrant(userId, grantId, (tx) => unfreezeGrant(tx, grantId, new Date())), 'staffWrite');
+  unfreeze(actor: AdminActor, tenantId: string, userId: string, grantId: string, reason: string | null): Promise<Unfreeze> {
+    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_unfreeze', reason, outcome: (r) => r }, (tx) => unfreezeGrant(tx, grantId, new Date()));
   }
 
   /**
    * An admin moves this user's Grant's end by ±N days or to a date (F-311-i),
    * written down with the admin and the reason: `staffWrite`, as for a freeze.
    */
-  changeDuration(actor: ResellerActor, tenantId: string, userId: string, grantId: string, change: DurationMove, reason: string): Promise<DurationChange> {
-    return this.run(
-      actor,
-      tenantId,
-      userId,
-      () => this.onGrant(userId, grantId, (tx) => changeGrantDuration(tx, grantId, { at: new Date(), actorUserId: actor.userId, change, reason })),
-      'staffWrite',
+  changeDuration(actor: AdminActor, tenantId: string, userId: string, grantId: string, change: DurationMove, reason: string): Promise<DurationChange> {
+    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_duration_change', reason, outcome: (r) => r }, (tx) =>
+      changeGrantDuration(tx, grantId, { at: new Date(), actorUserId: actor.userId, change, reason }),
     );
   }
 
@@ -137,13 +146,9 @@ export class ResellerUserGrantsService {
    * An admin moves this user's prepaid Grant's traffic by ±bytes (F-311-j),
    * written down with the admin and the reason: `staffWrite`, as for a freeze.
    */
-  changeTraffic(actor: ResellerActor, tenantId: string, userId: string, grantId: string, deltaBytes: bigint, reason: string): Promise<TrafficChange> {
-    return this.run(
-      actor,
-      tenantId,
-      userId,
-      () => this.onGrant(userId, grantId, (tx) => adjustGrantTraffic(tx, grantId, { at: new Date(), actorUserId: actor.userId, deltaBytes, reason })),
-      'staffWrite',
+  changeTraffic(actor: AdminActor, tenantId: string, userId: string, grantId: string, deltaBytes: bigint, reason: string): Promise<TrafficChange> {
+    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_traffic_change', reason, outcome: (r) => r }, (tx) =>
+      adjustGrantTraffic(tx, grantId, { at: new Date(), actorUserId: actor.userId, deltaBytes, reason }),
     );
   }
 
@@ -151,13 +156,9 @@ export class ResellerUserGrantsService {
    * An admin resets this user's prepaid Grant's traffic (F-311-k): Quota rises
    * by what was used since the last reset, the meter untouched. `staffWrite`.
    */
-  resetTraffic(actor: ResellerActor, tenantId: string, userId: string, grantId: string, reason: string): Promise<TrafficReset> {
-    return this.run(
-      actor,
-      tenantId,
-      userId,
-      () => this.onGrant(userId, grantId, (tx) => resetGrantTraffic(tx, grantId, { at: new Date(), actorUserId: actor.userId, reason })),
-      'staffWrite',
+  resetTraffic(actor: AdminActor, tenantId: string, userId: string, grantId: string, reason: string): Promise<TrafficReset> {
+    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_traffic_reset', reason, outcome: (r) => r }, (tx) =>
+      resetGrantTraffic(tx, grantId, { at: new Date(), actorUserId: actor.userId, reason }),
     );
   }
 
@@ -165,13 +166,9 @@ export class ResellerUserGrantsService {
    * An admin gifts bytes to this user's metered Grant (F-311-l): the bag rises,
    * nothing is debited, and the remainder credit never pays them out. `staffWrite`.
    */
-  giftTraffic(actor: ResellerActor, tenantId: string, userId: string, grantId: string, bytes: bigint, reason: string): Promise<TrafficChange> {
-    return this.run(
-      actor,
-      tenantId,
-      userId,
-      () => this.onGrant(userId, grantId, (tx) => giftGrantBytes(tx, grantId, { at: new Date(), actorUserId: actor.userId, bytes, reason })),
-      'staffWrite',
+  giftTraffic(actor: AdminActor, tenantId: string, userId: string, grantId: string, bytes: bigint, reason: string): Promise<TrafficChange> {
+    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_traffic_gift', reason, outcome: (r) => r }, (tx) =>
+      giftGrantBytes(tx, grantId, { at: new Date(), actorUserId: actor.userId, bytes, reason }),
     );
   }
 
@@ -180,13 +177,9 @@ export class ResellerUserGrantsService {
    * its panels' clients by the convergence pass, refused by name where a panel
    * cannot hold one. `staffWrite`, as for a gift.
    */
-  setSpeed(actor: ResellerActor, tenantId: string, userId: string, grantId: string, mbps: number | null, reason: string): Promise<SpeedChange> {
-    return this.run(
-      actor,
-      tenantId,
-      userId,
-      () => this.onGrant(userId, grantId, (tx) => setGrantSpeed(tx, grantId, { mbps, reason, actorUserId: actor.userId, at: new Date() })),
-      'staffWrite',
+  setSpeed(actor: AdminActor, tenantId: string, userId: string, grantId: string, mbps: number | null, reason: string): Promise<SpeedChange> {
+    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_speed_set', reason, outcome: (r) => r }, (tx) =>
+      setGrantSpeed(tx, grantId, { mbps, reason, actorUserId: actor.userId, at: new Date() }),
     );
   }
 
@@ -195,13 +188,9 @@ export class ResellerUserGrantsService {
    * Grant's `concurrent_devices` quota, written to its panels' clients by the
    * convergence pass where they hold one. `staffWrite`, as for a speed cap.
    */
-  setDevices(actor: ResellerActor, tenantId: string, userId: string, grantId: string, limit: number | null, reason: string): Promise<DeviceLimitChange> {
-    return this.run(
-      actor,
-      tenantId,
-      userId,
-      () => this.onGrant(userId, grantId, (tx) => setGrantDeviceLimit(tx, grantId, { limit, reason, actorUserId: actor.userId, at: new Date() })),
-      'staffWrite',
+  setDevices(actor: AdminActor, tenantId: string, userId: string, grantId: string, limit: number | null, reason: string): Promise<DeviceLimitChange> {
+    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_devices_set', reason, outcome: (r) => r }, (tx) =>
+      setGrantDeviceLimit(tx, grantId, { limit, reason, actorUserId: actor.userId, at: new Date() }),
     );
   }
 
@@ -210,16 +199,9 @@ export class ResellerUserGrantsService {
    * released now, the remainder refunded or not as the admin answered, and the
    * choice written down with the reason. `staffWrite`, as for a freeze.
    */
-  deleteGrant(actor: ResellerActor, tenantId: string, userId: string, grantId: string, refund: boolean, reason: string): Promise<Deletion> {
-    return this.run(
-      actor,
-      tenantId,
-      userId,
-      () =>
-        this.onGrant(userId, grantId, (tx) =>
-          deleteGrant(tx, grantId, { at: new Date(), actorUserId: actor.userId, reason, refund }, (t, id, clock) => this.remainders.settle(t, { grantId: id, ...clock })),
-        ),
-      'staffWrite',
+  deleteGrant(actor: AdminActor, tenantId: string, userId: string, grantId: string, refund: boolean, reason: string): Promise<Deletion> {
+    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_delete', reason, outcome: (r) => r }, (tx) =>
+      deleteGrant(tx, grantId, { at: new Date(), actorUserId: actor.userId, reason, refund }, (t, id, clock) => this.remainders.settle(t, { grantId: id, ...clock })),
     );
   }
 
@@ -228,14 +210,23 @@ export class ResellerUserGrantsService {
    * Grant of the variant, active at once and placed like a purchase, no
    * invoice. `staffWrite`, as for a freeze; the user is the reseller's (`run`).
    */
-  issue(actor: ResellerActor, tenantId: string, userId: string, variantId: string, requestId: string): Promise<AdminIssued> {
+  issue(actor: AdminActor, tenantId: string, userId: string, variantId: string, requestId: string, reason: string | null): Promise<AdminIssued> {
+    const spec: AuditSpec<AdminIssued> & { targetOf: (r: AdminIssued) => string } = {
+      action: 'grant_issue',
+      reason,
+      changed: (r) => r.issued,
+      targetOf: (r) => r.grantId,
+      outcome: (r) => ({ variantId: r.variantId, requestId }),
+    };
     return this.run(
       actor,
       tenantId,
       userId,
       () =>
         tenantTransaction(this.prisma, (tx) =>
-          issueGrantByAdmin(tx, this.grantService, { userId, variantId, requestId, actorUserId: actor.userId, at: new Date() }),
+          auditedGrantAct(tx, actor, tenantId, null, spec, () =>
+            issueGrantByAdmin(tx, this.grantService, { userId, variantId, requestId, actorUserId: actor.userId, at: new Date() }),
+          ),
         ),
       'staffWrite',
     );
@@ -247,19 +238,36 @@ export class ResellerUserGrantsService {
    * `staffWrite`, as for a freeze; a Grant of another user is `grant_not_found`.
    */
   renew(
-    actor: ResellerActor,
+    actor: AdminActor,
     tenantId: string,
     userId: string,
     grantId: string,
     input: Pick<AdminRenew, 'requestId' | 'reason' | 'amount'>,
   ): Promise<AdminRenewed> {
-    return this.run(
-      actor,
-      tenantId,
-      userId,
-      () => this.onGrant(userId, grantId, (tx) => renewGrantByAdmin(tx, { ...input, grantId, actorUserId: actor.userId, at: new Date() })),
-      'staffWrite',
+    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_renew', reason: input.reason, changed: (r) => r.renewed, outcome: (r) => r }, (tx) =>
+      renewGrantByAdmin(tx, { ...input, grantId, actorUserId: actor.userId, at: new Date() }),
     );
+  }
+
+  /**
+   * This user's Grant's history (F-311-r): every audited act on it and its
+   * configs, newest first. `read`, as for the Grant itself: a suspended
+   * reseller still sees who did what.
+   */
+  history(actor: ResellerActor, tenantId: string, userId: string, grantId: string, page: { page: number; pageSize: number }) {
+    return this.run(actor, tenantId, userId, () => this.onGrant(userId, grantId, (tx) => grantHistory(tx, grantId, page)));
+  }
+
+  /** `work` on this user's Grant as a `staffWrite`, written down in its transaction (F-311-r). */
+  private audited<T>(
+    actor: AdminActor,
+    tenantId: string,
+    userId: string,
+    grantId: string,
+    spec: AuditSpec<T>,
+    work: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.run(actor, tenantId, userId, () => this.onGrant(userId, grantId, (tx) => auditedGrantAct(tx, actor, tenantId, grantId, spec, () => work(tx))), 'staffWrite');
   }
 
   /** `work` on the Grant, in one transaction, only if it is the path's user's. */

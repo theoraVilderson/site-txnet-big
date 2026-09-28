@@ -26,7 +26,7 @@ const CUSTOMER = '66666666-6666-4666-8666-666666666666';
 const LATE_CUSTOMER = '77777777-7777-4777-8777-777777777777';
 const GRANT = '88888888-8888-4888-8888-888888888888';
 
-const owner = { userId: OWNER_USER, tenantId: PLATFORM, permissions: [] as string[] };
+const owner = { userId: OWNER_USER, tenantId: PLATFORM, permissions: [] as string[], ip: '203.0.113.7' };
 
 /** One call into `SubscriptionLinkService`: which, for whom, and the tenant in scope. */
 type Called = { what: 'read' | 'reset'; grantId: string; userId: string; scope: string | undefined };
@@ -77,7 +77,7 @@ describe('ResellerUserGrantsService.rotateLink', () => {
   it('resets the link as the path\'s user, inside the reseller\'s scope, and answers the new one', async () => {
     const { called, service } = build();
 
-    const url = await service.rotateLink(owner, RESELLER, CUSTOMER, GRANT);
+    const url = await service.rotateLink(owner, RESELLER, CUSTOMER, GRANT, null);
 
     expect(url).toBe('https://sub.acme.example/sub/new');
     expect(called).toEqual([{ what: 'reset', grantId: GRANT, userId: CUSTOMER, scope: RESELLER }]);
@@ -86,7 +86,7 @@ describe('ResellerUserGrantsService.rotateLink', () => {
   it('refuses a suspended reseller as reseller_suspended and rotates nothing — though it still reads the link', async () => {
     const { called, service } = build();
 
-    await expect(service.rotateLink(owner, SUSPENDED, LATE_CUSTOMER, GRANT)).rejects.toMatchObject({ reason: 'reseller_suspended' });
+    await expect(service.rotateLink(owner, SUSPENDED, LATE_CUSTOMER, GRANT, null)).rejects.toMatchObject({ reason: 'reseller_suspended' });
     expect(called).toEqual([]);
 
     await expect(service.subscriptionLink(owner, SUSPENDED, LATE_CUSTOMER, GRANT)).resolves.toBe('https://sub.acme.example/sub/old');
@@ -96,7 +96,7 @@ describe('ResellerUserGrantsService.rotateLink', () => {
   it('refuses a user of another tenant as user_not_found, before anything rotates', async () => {
     const { called, service } = build();
 
-    await expect(service.rotateLink(owner, RESELLER, LATE_CUSTOMER, GRANT)).rejects.toMatchObject({ reason: 'user_not_found' });
+    await expect(service.rotateLink(owner, RESELLER, LATE_CUSTOMER, GRANT, null)).rejects.toMatchObject({ reason: 'user_not_found' });
     expect(called).toEqual([]);
   });
 });

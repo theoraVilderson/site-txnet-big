@@ -3,16 +3,18 @@ id: audit
 layer: domain
 status: active
 version: 3
-keywords: [audit log, impersonation, settlement, payout, grant a gateway, withdraw a grant, what is owed, operator surface, account switch, account switching, multi account, multiple accounts, switch account, linked accounts, account group, switch scope, per device accounts, per chat accounts, remove an account, leave a group]
+keywords: [audit log, grant history, who froze this, admin action history, impersonation, settlement, payout, grant a gateway, withdraw a grant, what is owed, operator surface, account switch, account switching, multi account, multiple accounts, switch account, linked accounts, account group, switch scope, per device accounts, per chat accounts, remove an account, leave a group]
 source:
   - txnet-backend/prisma/domains/audit.prisma
   - txnet-backend/auth-service/src/app/account-switch/**
   - txnet-backend/billing-service/src/app/settlement/**
   - txnet-backend/prisma/domains/migrations/20260912000300_settlement_admin_actions/**
   - txnet-backend/prisma/domains/migrations/20260918000200_bot_scope_key_tenant/**
+  - txnet-backend/billing-service/src/app/grant-audit/**
+  - txnet-backend/prisma/domains/migrations/20260928000800_an_admin_action_on_a_grant_is_audited/**
 owns_tables: [admin_audit_log, impersonation_session, linked_account_group, linked_account_member]
 depends_on: [identity]
-updated: 2026-09-12
+updated: 2026-09-28
 ---
 
 # Audit

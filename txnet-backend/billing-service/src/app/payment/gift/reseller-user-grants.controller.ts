@@ -7,6 +7,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Ip,
   NotFoundException,
   Param,
   ParseUUIDPipe,
@@ -25,6 +26,7 @@ import { ConfigActionRefused } from '../../traffic/config-actions';
 import { SpeedCapRefused } from '../../traffic/grant-speed';
 import type { AdminConfigCommand } from '../../traffic/user-configs';
 import { AdminConfigActionBody, adminConfigActionSchema } from '../../traffic/user-configs.schema';
+import { GrantHistoryQuery, grantHistorySchema, GrantReasonBody, grantReasonSchema } from './grant-audit.schema';
 import { GrantDeleteBody, grantDeleteSchema } from './grant-delete.schema';
 import { GrantDevicesBody, grantDevicesSchema } from './grant-devices.schema';
 import { GrantDurationBody, grantDurationSchema } from './grant-duration.schema';
@@ -164,6 +166,23 @@ export class ResellerUserGrantsController {
   }
 
   /**
+   * This Grant's history (F-311-r): every admin act on it and on its configs —
+   * who, when, before, after, why — newest first. The reads' bucket.
+   */
+  @Get('grants/:grantId/history')
+  @readLimit
+  async history(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Query(new ZodValidationPipe(grantHistorySchema)) query: GrantHistoryQuery,
+    @Req() req: Request,
+  ) {
+    const page = { page: query.page ?? 1, pageSize: query.pageSize ?? 20 };
+    return { grantId, ...(await this.refusing(() => this.service.history(actorOf(req), tenantId, userId, grantId, page))) };
+  }
+
+  /**
    * An admin resets this Grant's `/sub` link (F-311-n): the old one stops at
    * once and the new one is answered — never a bare key. The config actions'
    * bucket, not the owner's `GRANT_ROTATE_TOKEN`: that one is the user's own.
@@ -175,9 +194,11 @@ export class ResellerUserGrantsController {
     @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Body(new ZodValidationPipe(grantReasonSchema)) body: GrantReasonBody,
     @Req() req: Request,
+    @Ip() ip: string,
   ) {
-    const subscriptionUrl = await this.refusing(() => this.service.rotateLink(actorOf(req), tenantId, userId, grantId));
+    const subscriptionUrl = await this.refusing(() => this.service.rotateLink(adminOf(req, ip), tenantId, userId, grantId, body.reason ?? null));
     return { grantId, subscriptionUrl };
   }
 
@@ -190,8 +211,9 @@ export class ResellerUserGrantsController {
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Body(new ZodValidationPipe(adminConfigActionSchema)) body: AdminConfigActionBody,
     @Req() req: Request,
+    @Ip() ip: string,
   ) {
-    return { action: body.action, results: await this.refusing(() => this.service.act(actorOf(req), tenantId, userId, body as AdminConfigCommand)) };
+    return { action: body.action, results: await this.refusing(() => this.service.act(adminOf(req, ip), tenantId, userId, body as AdminConfigCommand)) };
   }
 
   /**
@@ -208,9 +230,10 @@ export class ResellerUserGrantsController {
     @Param('grantId', new ParseUUIDPipe()) grantId: string,
     @Body(new ZodValidationPipe(grantFreezeSchema)) body: GrantFreezeBody,
     @Req() req: Request,
+    @Ip() ip: string,
   ) {
     const until = body.until ? new Date(body.until) : null;
-    const done = await this.refusing(() => this.service.freeze(actorOf(req), tenantId, userId, grantId, until));
+    const done = await this.refusing(() => this.service.freeze(adminOf(req, ip), tenantId, userId, grantId, until, body.reason ?? null));
     return { grantId, frozenUntil: done.frozenUntil?.toISOString() ?? null, configsDisabled: done.configsDisabled };
   }
 
@@ -222,9 +245,11 @@ export class ResellerUserGrantsController {
     @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Body(new ZodValidationPipe(grantReasonSchema)) body: GrantReasonBody,
     @Req() req: Request,
+    @Ip() ip: string,
   ) {
-    const done = await this.refusing(() => this.service.unfreeze(actorOf(req), tenantId, userId, grantId));
+    const done = await this.refusing(() => this.service.unfreeze(adminOf(req, ip), tenantId, userId, grantId, body.reason ?? null));
     return { grantId, endsAt: done.endsAt?.toISOString() ?? null, configsRestored: done.configsRestored };
   }
 
@@ -242,9 +267,10 @@ export class ResellerUserGrantsController {
     @Param('grantId', new ParseUUIDPipe()) grantId: string,
     @Body(new ZodValidationPipe(grantDurationSchema)) body: GrantDurationBody,
     @Req() req: Request,
+    @Ip() ip: string,
   ) {
     const change = body.endsAt !== undefined ? { endsAt: new Date(body.endsAt) } : { days: body.days as number };
-    const done = await this.refusing(() => this.service.changeDuration(actorOf(req), tenantId, userId, grantId, change, body.reason));
+    const done = await this.refusing(() => this.service.changeDuration(adminOf(req, ip), tenantId, userId, grantId, change, body.reason));
     return { grantId, changeId: done.changeId, endsAtBefore: done.endsAtBefore.toISOString(), endsAtAfter: done.endsAtAfter.toISOString(), revived: done.revived };
   }
 
@@ -262,8 +288,9 @@ export class ResellerUserGrantsController {
     @Param('grantId', new ParseUUIDPipe()) grantId: string,
     @Body(new ZodValidationPipe(grantTrafficSchema)) body: GrantTrafficBody,
     @Req() req: Request,
+    @Ip() ip: string,
   ) {
-    const done = await this.refusing(() => this.service.changeTraffic(actorOf(req), tenantId, userId, grantId, bytesOfGb(body.gb), body.reason));
+    const done = await this.refusing(() => this.service.changeTraffic(adminOf(req, ip), tenantId, userId, grantId, bytesOfGb(body.gb), body.reason));
     return {
       grantId,
       adjustmentId: done.adjustmentId,
@@ -289,8 +316,9 @@ export class ResellerUserGrantsController {
     @Param('grantId', new ParseUUIDPipe()) grantId: string,
     @Body(new ZodValidationPipe(grantTrafficResetSchema)) body: GrantTrafficResetBody,
     @Req() req: Request,
+    @Ip() ip: string,
   ) {
-    const done = await this.refusing(() => this.service.resetTraffic(actorOf(req), tenantId, userId, grantId, body.reason));
+    const done = await this.refusing(() => this.service.resetTraffic(adminOf(req, ip), tenantId, userId, grantId, body.reason));
     return {
       grantId,
       adjustmentId: done.adjustmentId,
@@ -317,8 +345,9 @@ export class ResellerUserGrantsController {
     @Param('grantId', new ParseUUIDPipe()) grantId: string,
     @Body(new ZodValidationPipe(grantTrafficGiftSchema)) body: GrantTrafficGiftBody,
     @Req() req: Request,
+    @Ip() ip: string,
   ) {
-    const done = await this.refusing(() => this.service.giftTraffic(actorOf(req), tenantId, userId, grantId, bytesOfGb(body.gb), body.reason));
+    const done = await this.refusing(() => this.service.giftTraffic(adminOf(req, ip), tenantId, userId, grantId, bytesOfGb(body.gb), body.reason));
     return {
       grantId,
       adjustmentId: done.adjustmentId,
@@ -343,8 +372,9 @@ export class ResellerUserGrantsController {
     @Param('grantId', new ParseUUIDPipe()) grantId: string,
     @Body(new ZodValidationPipe(grantSpeedSchema)) body: GrantSpeedBody,
     @Req() req: Request,
+    @Ip() ip: string,
   ) {
-    return this.refusing(() => this.service.setSpeed(actorOf(req), tenantId, userId, grantId, body.mbps, body.reason));
+    return this.refusing(() => this.service.setSpeed(adminOf(req, ip), tenantId, userId, grantId, body.mbps, body.reason));
   }
 
   /**
@@ -361,8 +391,9 @@ export class ResellerUserGrantsController {
     @Param('grantId', new ParseUUIDPipe()) grantId: string,
     @Body(new ZodValidationPipe(grantDevicesSchema)) body: GrantDevicesBody,
     @Req() req: Request,
+    @Ip() ip: string,
   ) {
-    return this.refusing(() => this.service.setDevices(actorOf(req), tenantId, userId, grantId, body.limit, body.reason));
+    return this.refusing(() => this.service.setDevices(adminOf(req, ip), tenantId, userId, grantId, body.limit, body.reason));
   }
 
   /**
@@ -380,8 +411,9 @@ export class ResellerUserGrantsController {
     @Param('grantId', new ParseUUIDPipe()) grantId: string,
     @Body(new ZodValidationPipe(grantDeleteSchema)) body: GrantDeleteBody,
     @Req() req: Request,
+    @Ip() ip: string,
   ) {
-    const done = await this.refusing(() => this.service.deleteGrant(actorOf(req), tenantId, userId, grantId, body.refund, body.reason));
+    const done = await this.refusing(() => this.service.deleteGrant(adminOf(req, ip), tenantId, userId, grantId, body.refund, body.reason));
     return { grantId, ...done };
   }
 
@@ -398,8 +430,9 @@ export class ResellerUserGrantsController {
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Body(new ZodValidationPipe(grantIssueSchema)) body: GrantIssueBody,
     @Req() req: Request,
+    @Ip() ip: string,
   ) {
-    const done = await this.refusing(() => this.service.issue(actorOf(req), tenantId, userId, body.variantId, body.requestId));
+    const done = await this.refusing(() => this.service.issue(adminOf(req, ip), tenantId, userId, body.variantId, body.requestId, body.reason ?? null));
     return { ...done, startsAt: done.startsAt.toISOString(), endsAt: done.endsAt?.toISOString() ?? null };
   }
 
@@ -417,10 +450,11 @@ export class ResellerUserGrantsController {
     @Param('grantId', new ParseUUIDPipe()) grantId: string,
     @Body(new ZodValidationPipe(grantRenewSchema)) body: GrantRenewBody,
     @Req() req: Request,
+    @Ip() ip: string,
   ) {
     const typed = body.gb !== undefined || body.days !== undefined;
     const amount = typed ? { bytes: bytesOfGb(body.gb ?? 0), days: body.days ?? 0 } : undefined;
-    const done = await this.refusing(() => this.service.renew(actorOf(req), tenantId, userId, grantId, { requestId: body.requestId, reason: body.reason ?? null, amount }));
+    const done = await this.refusing(() => this.service.renew(adminOf(req, ip), tenantId, userId, grantId, { requestId: body.requestId, reason: body.reason ?? null, amount }));
     return {
       ...done,
       bytes: done.bytes.toString(),
@@ -473,3 +507,6 @@ const actorOf = (req: Request) => {
   const { userId, tenantId, permissions } = identityOf(req);
   return { userId, tenantId, permissions };
 };
+
+/** A write's actor also carries the address its audit row keeps (F-311-r). */
+const adminOf = (req: Request, ip: string) => ({ ...actorOf(req), ip });

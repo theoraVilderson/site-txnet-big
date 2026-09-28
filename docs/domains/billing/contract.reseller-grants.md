@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 65
+version: 66
 updated: 2026-09-28
 ---
 
@@ -12,7 +12,8 @@ A §10 split of [contract.gift.md](contract.gift.md), which was at its ceiling.
 The routes under `/api/billing/tenants/:tenantId/users/:userId/…` (F-311): a
 reseller's admin reads one of its users' services and acts on them. The
 entitlement rules they call are entitlement's
-[contract.admin.md](../entitlement/contract.admin.md).
+[contract.admin.md](../entitlement/contract.admin.md). **Every write below writes
+one `admin_audit_log` row in its own transaction** (F-311-r, audit invariant #12).
 
 ## One user's services, read by a reseller's admin (built — F-311-f)
 
@@ -27,6 +28,7 @@ which asks the four owner reads of [contract.gift.md](contract.gift.md) — `Gra
 | `GET …/grants/:grantId/configs` | — | `{grantId, rows[]}`, the owner's config view, `lines` and `login` included |
 | `GET …/grants/:grantId/usage` | — | `{grantId, from, to, days[]}`, as there |
 | `GET …/grants/:grantId/subscription-link` | — | `{grantId, subscriptionUrl}`; its two 409s as there |
+| `GET …/grants/:grantId/history` (F-311-r) | `page`, `pageSize` (≤100, default 20) | `{grantId, rows[], page, pageSize, total}` — audit `contract.md` "a Grant's history" |
 
 | Rule | Why |
 |---|---|
@@ -37,12 +39,12 @@ which asks the four owner reads of [contract.gift.md](contract.gift.md) — `Gra
 | One bucket for all four, `RESELLER_USER_GRANTS_READ`, default **300**/900s per caller; none of the four writes or rotates | expanding one Grant asks three routes at once. Reset link and config actions are the next sections |
 
 **Not covered:** retired configs (the owner's view leaves them out), and an audit
-row for a read (F-311-r audits actions only). Its consumers are F-311-v (panel)
+row for a read (only acts are audited). Its consumers are F-311-v (panel)
 and F-311-y (bot).
 
 ## An admin resets one user's `/sub` link (built — F-311-n)
 
-`POST …/users/:userId/grants/:grantId/rotate-token`, no body -> `{grantId,
+`POST …/users/:userId/grants/:grantId/rotate-token`, `{reason?}` or no body -> `{grantId,
 subscriptionUrl}` — the new link, never a bare key. Same controller, over
 `SubscriptionLinkService.reset` ([contract.gift.md](contract.gift.md) "resetting
 it"), unchanged, asked as the path's user in the reseller's scope.
@@ -53,7 +55,7 @@ it"), unchanged, asked as the path's user in the reseller's scope.
 | The owner reset's rules hold as written: host before rotation, one transaction, the old link dead as the new exists; **409** `no_subscription_domain` leaves the old link working; status is not a gate | one reset, two callers |
 | Bucket `RESELLER_USER_CONFIG_ACTION`, not the owner's `GRANT_ROTATE_TOKEN` | the user's own budget is not spent by support |
 
-**Not covered:** a reason and the audit row (F-311-r), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
+**Not covered:** telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
 
 ## An admin's actions on one user's configs (built — F-311-g)
 
@@ -78,8 +80,8 @@ controller, over `ResellerUserGrantsService.act` -> `UserConfigsService.actAsAdm
 ## An admin freezes one of a user's Grants (built — F-311-h)
 
 `POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/freeze`, body
-`{until?}` (ISO instant with offset) -> `{grantId, frozenUntil, configsDisabled}`;
-`POST …/grants/:grantId/unfreeze` -> `{grantId, endsAt, configsRestored}`. Same
+`{until?, reason?}` (ISO instant with offset) -> `{grantId, frozenUntil, configsDisabled}`;
+`POST …/grants/:grantId/unfreeze`, `{reason?}` or no body -> `{grantId, endsAt, configsRestored}`. Same
 controller, over `freezeGrant` / `unfreezeGrant` (entitlement `contract.admin.md` "Freeze").
 
 | Rule | Why |
@@ -88,7 +90,7 @@ controller, over `freezeGrant` / `unfreezeGrant` (entitlement `contract.admin.md
 | **409** `grant_not_active` (freeze), `grant_not_frozen` / `grant_moved` (unfreeze); **400** `freeze_until_not_future` | a quota stop stays the top-up's; a raced end is retried, never shifted twice |
 | Bucket `RESELLER_USER_CONFIG_ACTION`, shared with the config actions | both are an admin's writes on a user's service |
 
-**Not covered:** a reason and the audit row (F-311-r), telling the user (F-311-s).
+**Not covered:** telling the user (F-311-s).
 
 ## An admin changes one of a user's Grants' days (built — F-311-i)
 
@@ -104,7 +106,7 @@ endsAtBefore, endsAtAfter, revived}` (`revived`: a lapsed Grant back, F-311-z). 
 | **409** `grant_closed`, `grant_not_active`, `grant_permanent`, `grant_moved`; **400** `duration_end_not_future`, `duration_unchanged` | a closed Grant is renewed, never re-dated |
 | Bucket `RESELLER_USER_CONFIG_ACTION`, shared with the freeze | one admin's writes on a user's service |
 
-**Not covered:** reading the history back (F-311-r), telling the user (F-311-s).
+**Not covered:** telling the user (F-311-s). The history is `GET …/history` (F-311-r).
 
 ## An admin changes one of a user's Grants' traffic (built — F-311-j)
 
@@ -121,8 +123,8 @@ planner closes it and it is suspended from that close (ADR-0096).
 | **409** `grant_closed`, `grant_not_active`, `traffic_not_adjustable`, `grant_moved`; **400** `quota_below_zero` | only a prepaid, limited bag moves |
 
 **Not covered:** a panel list for the admin to pick a move's target from (the
-owner's systems page has one; a reseller's admin has none yet), an audit row
-beyond `config_action_log` (F-311-r), telling the user (F-311-s). A move of a
+owner's systems page has one; a reseller's admin has none yet), telling the
+user (F-311-s). Each acted config is also one `config_*` audit row (F-311-r). A move of a
 panel group's config lands outside the group, as `move` always has. Consumers
 F-311-v (panel), F-311-y (bot).
 
@@ -140,7 +142,7 @@ the meter is never zeroed (user, 2026-09-26).
 | Door `staffWrite`, the reseller's user and the path user's Grant; bucket `RESELLER_USER_CONFIG_ACTION` — as for traffic | the same fences |
 | **409** `grant_closed`, `grant_not_active`, `traffic_not_adjustable`, `nothing_to_reset`, `grant_moved` | only a prepaid, limited bag that was used since its last reset |
 
-**Not covered:** the audit row (F-311-r), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
+**Not covered:** telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
 
 ## An admin gifts bytes to one of a user's metered Grants (built — F-311-l)
 
@@ -157,7 +159,7 @@ gifted byte back as money.
 | Door `staffWrite`, the reseller's user and the path user's Grant; bucket `RESELLER_USER_CONFIG_ACTION` — as for traffic | the same fences |
 | **409** `grant_not_metered`, `grant_closed`, `grant_not_active`, `grant_moved` | a prepaid bag is moved by `…/traffic`; a raced block is retried |
 
-**Not covered:** the audit row (F-311-r), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
+**Not covered:** telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
 
 ## An admin deletes one of a user's Grants (built — F-311-m)
 
@@ -179,7 +181,7 @@ of volume or time used, user 2026-09-28) as `product_refund` — and
 | **409** `grant_closed`, `grant_not_active` (pending), `grant_moved` | a closed Grant is already off; a pending one is the delivery's |
 | A Grant nobody paid for (admin, trial, coupon, free invoice) credits nothing (`nothing_paid`) | only money paid comes back |
 
-**Not covered:** the audit row beyond `grant_deletion` (F-311-r), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
+**Not covered:** telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
 
 ## An admin sets one of a user's Grants' speed (built — F-311-p)
 
@@ -193,7 +195,7 @@ Mbit/s both ways (1..100 000) or `null` to lift the cap; `reason` 1..500 chars -
 | Door `staffWrite`, the reseller's user and the path user's Grant; bucket `RESELLER_USER_CONFIG_ACTION` — as for traffic | the same fences |
 | **409** `rate_limit_unsupported` with `panels: [{id, name}]` — every panel of a live config must answer `per_client_rate_limit` yes; `no_configs`; `grant_closed`, `grant_not_active` (pending) | a cap is only promised where a panel enforces it; lifting one is never refused |
 
-**Not covered:** the audit row beyond the cap's own `reason` (F-311-r), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
+**Not covered:** telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
 
 ## An admin sets one of a user's Grants' device limit (built — F-311-q)
 
@@ -206,7 +208,7 @@ it is never refused by a panel: the ones that cannot hold it are named.
 
 ## An admin issues a user a service by hand (built — F-311-o)
 
-`POST …/users/:userId/grants`, body `{variantId, requestId}` (both uuids;
+`POST …/users/:userId/grants`, body `{variantId, requestId, reason?}` (uuids;
 `requestId` minted once per confirm) -> `{grantId, variantId, status, startsAt,
 endsAt, issued}` — `issued: false` is a repeat of the same request answering its
 Grant. Same controller, over `issueGrantByAdmin` (entitlement `contract.admin.md`
@@ -219,7 +221,7 @@ fulfilment like a delivered purchase. A priced custom plan is F-506-a.
 | **404** `variant_not_found` (not in the reseller's scope either); **409** `variant_not_assignable`, `variant_not_deliverable`, `metered_rate_missing`, `metered_rate_not_positive`, `request_reused`, `already_issued` | a Grant nothing could place is refused, never issued to wait silently |
 | A repeat of `requestId` for the same user and variant is **200** with the first Grant | a double click or a repeated bot callback must not give a second free service |
 
-**Not covered:** a reason and the audit row (F-311-r; the Grant keeps `issuedByAdminId`), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
+**Not covered:** telling the user (F-311-s). A repeat (`issued: false`) writes no audit row. Consumers F-311-w (panel), F-311-y (bot).
 
 ## An admin renews one of a user's Grants (built — F-311-d)
 

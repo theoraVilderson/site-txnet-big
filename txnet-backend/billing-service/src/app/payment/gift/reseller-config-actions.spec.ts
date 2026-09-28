@@ -35,7 +35,7 @@ const CFG_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const CFG_NEIGHBOUR = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const PANEL = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 
-const owner = { userId: OWNER_USER, tenantId: PLATFORM, permissions: [] as string[] };
+const owner = { userId: OWNER_USER, tenantId: PLATFORM, permissions: [] as string[], ip: '203.0.113.7' };
 
 /** One call into `ConfigActionsService`: the action, its input, and the tenant in scope. */
 type Called = { action: string; input: Record<string, unknown>; scope: string | undefined };
@@ -69,7 +69,10 @@ function build() {
     config: {
       findFirst: async ({ where }: { where: { id: string; userId: string } }) =>
         configUser[where.id] === where.userId ? { id: where.id } : null,
+      findUnique: async () => null,
     },
+    // Each acted config's audit row (F-311-r); `grant-audit.spec.ts` pins them.
+    adminAuditLog: { create: async () => ({}) },
   };
   const prisma = { $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx) };
 

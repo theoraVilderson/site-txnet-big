@@ -102,6 +102,26 @@ enum AdminAction {
   user_group_delete
   user_group_member_add
   user_group_member_remove
+  // F-311-r — an admin's acts on a user's Grant and its configs, one value
+  // each: the Grant's history answers "who froze this and why", and a freeze
+  // and an unfreeze are opposite acts the trail must tell apart.
+  grant_freeze
+  grant_unfreeze
+  grant_duration_change
+  grant_traffic_change
+  grant_traffic_reset
+  grant_traffic_gift
+  grant_speed_set
+  grant_devices_set
+  grant_delete
+  grant_issue
+  grant_renew
+  grant_link_rotate
+  config_regenerate
+  config_disable
+  config_enable
+  config_retire
+  config_move
 
   @@schema("audit")
 }
@@ -144,6 +164,8 @@ enum AuditTargetType {
   discount_rule
   // F-114-j. A user group.
   user_group
+  // F-311-r. A user's service (entitlement.grant); its configs are `config`.
+  grant
 
   @@schema("audit")
 }
@@ -159,6 +181,9 @@ model AdminAuditLog {
   oldValue         Json?
   newValue         Json?
   adminIpAddress   String
+  /// Why the admin did it, as they typed it (F-311-r). Null where the act
+  /// carries none — every row before it, and the acts whose reason is optional.
+  reason           String?
   createdAt        DateTime        @default(now())
 
   @@index([targetEntityId, createdAt(sort: Desc)])

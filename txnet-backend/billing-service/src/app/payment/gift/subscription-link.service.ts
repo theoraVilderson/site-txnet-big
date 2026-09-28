@@ -39,6 +39,9 @@ export function subscriptionHostOf(rows: ReadonlyArray<DomainRow>): string | nul
  * Another user's Grant is the same **404** as a missing one, and is decided
  * before a domain is read, so no other refusal says an id exists.
  */
+/** Runs around a reset's rotation, in its transaction: an admin's is audited there (F-311-r). */
+export type AroundRotate = (tx: Prisma.TransactionClient, rotate: () => Promise<string>) => Promise<string>;
+
 @Injectable()
 export class SubscriptionLinkService {
   constructor(
@@ -62,11 +65,11 @@ export class SubscriptionLinkService {
    * found no host would destroy the working link and answer nothing. Both are
    * one transaction, so the old link stops exactly when the new one exists.
    */
-  reset(grantId: string, userId: string): Promise<string> {
+  reset(grantId: string, userId: string, around: AroundRotate = (_tx, rotate) => rotate()): Promise<string> {
     return this.refusing(() =>
       tenantTransaction(this.prisma, async (tx) => {
         const host = await this.host(tx);
-        return `https://${host}/sub/${await this.grants.rotateToken(tx, grantId, userId)}`;
+        return around(tx, async () => `https://${host}/sub/${await this.grants.rotateToken(tx, grantId, userId)}`);
       }),
     );
   }

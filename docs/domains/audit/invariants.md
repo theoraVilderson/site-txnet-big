@@ -12,7 +12,8 @@ account switching (catalog 2.8, C-21/C-22) on 2026-09-06. **#3, #4, #6, #7 and
 #8 are enforced in code** as of F-0205 / F-0206 / F-0207 / F-0208. #1, #2 and
 #5 remain unenforced here — impersonation is written by identity.
 
-**#9–#11 arrived with F-096-e (2026-09-12)** and are the first invariants in
+**#12 arrived with F-311-r (2026-09-28)**, enforced in `billing-service` for
+the reason #9–#11 are. **#9–#11 arrived with F-096-e (2026-09-12)** and are the first invariants in
 this unit enforced outside `auth-service`: the settlement operator surface is
 `billing-service` code, for the reason `contract.settlement.md` gives.
 
@@ -34,6 +35,7 @@ see the ADR on why the *member row* carries the scope and not the group.
 | 9 | **No settlement operation runs for a caller whose tenant is not `platform_owner`** (ADR-0041, F-096-e). Every public method of `SettlementService` opens with `assertOperator`, which reads the caller's tenant on the application pool. The permission `settlement.manage` is *not* this invariant: a reseller administers its own roles and can grant itself that permission | `SettlementService.assertOperator`, called from every operation; asserted over every method from one list in `settlement.service.spec.ts` | a reseller reaching a pool whose RLS policy is `USING (true)` — every tenant's settlement ledger readable, and its own tenant grantable the platform's gateway |
 | 10 | A grant, a withdrawal and a payout each write their `admin_audit_log` row **inside the transaction that performs the act** (F-096-e). A withdrawal that lost its race writes none at all — the `updateMany` filter carries `isActive: true` | `SettlementService`, one `$transaction` per operation | a grant with nobody's name on it, or two audit rows each claiming to be the one that stopped a grant |
 | 11 | A payout never exceeds what is outstanding for that tenant, and is never zero or negative (ADR-0041 §5). Two payouts recorded at once cannot together exceed it either (F-096-g) | `SettlementService.recordPayout`, summed from the two ledgers **inside** the transaction that writes, behind `pg_advisory_xact_lock` on the tenant being paid | a negative balance the platform reads as a tenant owing *it* money, recorded through a settlement ledger |
+| 12 | **Every admin write on a user's Grant or config writes exactly one `admin_audit_log` row, inside the act's transaction and after it** (F-311-r); a refused act writes none, a repeat that changed nothing writes none, and no row carries a subscription token or link | `ResellerUserGrantsService` → `auditedGrantAct` / `auditedConfigAct` (`billing-service/src/app/grant-audit/`); asserted over every write method from one list in `grant-audit.spec.ts` | "who froze this and why" has no answer, or a row names a state the act never left |
 
 ## How to test
 
@@ -85,3 +87,9 @@ see the ADR on why the *member row* carries the scope and not the group.
    Mutation-checked 2026-09-12: dropping `isActive: true` from the withdrawal's
    `updateMany` filter turns the race case red, and removing `assertOperator`
    from `owed()` alone turns two cases red.
+
+12. `billing-service/src/app/grant-audit/grant-audit.spec.ts`. **Asserted from
+   the service's prototype**, not a list alone: every method not named as a read
+   must appear in `EVERY_WRITE`, so a write added later without its row is red
+   before anyone reads it. Each case expects `['act', 'audit']` in one fake
+   transaction, the reseller as `tenantId`, and the admin's IP and reason.

@@ -22,6 +22,12 @@ export type AdminConfigAction = (typeof ADMIN_CONFIG_ACTIONS)[number];
 /** An admin's bulk action. `reason` is a disable's, `toPanelId` a move's; the schema requires each for its action. */
 export type AdminConfigCommand = { action: AdminConfigAction; configIds: readonly string[]; reason?: string; toPanelId?: string };
 
+/**
+ * Runs around one config's admin step, inside its transaction and after the
+ * fence: the audit row is written here (F-311-r), so a refused step writes none.
+ */
+export type AroundConfigStep = (tx: Prisma.TransactionClient, configId: string, step: () => Promise<string | void>) => Promise<string | void>;
+
 /** How many configs one bulk request may name. */
 export const MAX_BULK_CONFIGS = 50;
 
@@ -202,28 +208,32 @@ export class UserConfigsService {
    * is not `userId`'s is `config_not_found` — read in the action's own
    * transaction — and is never acted on.
    */
-  actAsAdmin(adminId: string, userId: string, command: AdminConfigCommand): Promise<UserConfigOutcome[]> {
+  actAsAdmin(adminId: string, userId: string, command: AdminConfigCommand, around: AroundConfigStep = (_tx, _id, step) => step()): Promise<UserConfigOutcome[]> {
     const actor = { actorType: ActorType.admin, actorId: adminId };
     return this.each(command.action, command.configIds, async (tx, configId) => {
       const own = await tx.config.findFirst({ where: { id: configId, userId }, select: { id: true } });
       if (!own) throw new ConfigActionRefused('config_not_found', configId);
-      switch (command.action) {
-        case 'regenerate':
-          await this.actions.regenerate(tx, { configId, actor });
-          return;
-        case 'disable':
-          await this.actions.disable(tx, { configId, reason: command.reason ?? '', actor });
-          return;
-        case 'enable':
-          await this.actions.enable(tx, { configId, actor });
-          return;
-        case 'retire':
-          await this.actions.retire(tx, { configId, actor });
-          return;
-        case 'move':
-          return (await this.actions.move(tx, { configId, toPanelId: command.toPanelId ?? '', actor })).configId;
-      }
+      return around(tx, configId, () => this.adminStep(tx, configId, command, actor));
     });
+  }
+
+  private async adminStep(tx: Prisma.TransactionClient, configId: string, command: AdminConfigCommand, actor: { actorType: ActorType; actorId: string }): Promise<string | void> {
+    switch (command.action) {
+      case 'regenerate':
+        await this.actions.regenerate(tx, { configId, actor });
+        return;
+      case 'disable':
+        await this.actions.disable(tx, { configId, reason: command.reason ?? '', actor });
+        return;
+      case 'enable':
+        await this.actions.enable(tx, { configId, actor });
+        return;
+      case 'retire':
+        await this.actions.retire(tx, { configId, actor });
+        return;
+      case 'move':
+        return (await this.actions.move(tx, { configId, toPanelId: command.toPanelId ?? '', actor })).configId;
+    }
   }
 
   /**
