@@ -27,7 +27,7 @@ import { AdminConfigActionBody, adminConfigActionSchema } from '../../traffic/us
 import { GrantDurationBody, grantDurationSchema } from './grant-duration.schema';
 import { GrantFreezeBody, grantFreezeSchema } from './grant-freeze.schema';
 import { GrantListQuery, grantListSchema } from './grant-list.schema';
-import { bytesOfGb, GrantTrafficBody, grantTrafficSchema } from './grant-traffic.schema';
+import { bytesOfGb, GrantTrafficBody, GrantTrafficResetBody, grantTrafficResetSchema, grantTrafficSchema } from './grant-traffic.schema';
 import {
   ResellerUserGrantsRefused,
   ResellerUserGrantsRejection,
@@ -45,7 +45,7 @@ const STATUS: Record<ResellerUserGrantsRejection, 403 | 404 | 409> = {
   user_not_found: 404,
 };
 
-/** A freeze's (F-311-h), a change of days' (F-311-i) and of traffic's (F-311-j) refusals; any other `EntitlementRefused` is not this surface's and passes through. */
+/** A freeze's (F-311-h), a change of days' (F-311-i) and of traffic's (F-311-j, F-311-k) refusals; any other `EntitlementRefused` is not this surface's and passes through. */
 const GRANT_ACTION_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
   grant_not_active: 409,
   grant_not_frozen: 409,
@@ -57,6 +57,7 @@ const GRANT_ACTION_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
   duration_unchanged: 400,
   traffic_not_adjustable: 409,
   quota_below_zero: 400,
+  nothing_to_reset: 409,
 };
 
 /** One bucket for all four: expanding one Grant asks three of them at once. */
@@ -224,6 +225,34 @@ export class ResellerUserGrantsController {
       purchasedBytesBefore: done.purchasedBytesBefore.toString(),
       purchasedBytesAfter: done.purchasedBytesAfter.toString(),
       usedBytes: done.usedBytes.toString(),
+      spent: done.spent,
+      revived: done.revived,
+    };
+  }
+
+  /**
+   * An admin resets this Grant's traffic (F-311-k): the full bag is left
+   * again. Quota rises by `resetBytes`, what was used since the last reset;
+   * the meter is never zeroed.
+   */
+  @Post('grants/:grantId/traffic/reset')
+  @HttpCode(HttpStatus.OK)
+  @actionLimit
+  async resetTraffic(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Body(new ZodValidationPipe(grantTrafficResetSchema)) body: GrantTrafficResetBody,
+    @Req() req: Request,
+  ) {
+    const done = await this.refusing(() => this.service.resetTraffic(actorOf(req), tenantId, userId, grantId, body.reason));
+    return {
+      grantId,
+      adjustmentId: done.adjustmentId,
+      purchasedBytesBefore: done.purchasedBytesBefore.toString(),
+      purchasedBytesAfter: done.purchasedBytesAfter.toString(),
+      usedBytes: done.usedBytes.toString(),
+      resetBytes: done.resetBytes.toString(),
       spent: done.spent,
       revived: done.revived,
     };

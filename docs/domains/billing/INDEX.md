@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 60
+version: 61
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -61,7 +61,8 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 | [contract.webhook.md](contract.webhook.md) | a provider's signed webhook, and money that arrived for more, for less, or after the row was settled |
 | [contract.history.md](contract.history.md) | the panel's financial page: the wallet ledger and the top-up attempts |
 | [contract.verify.md](contract.verify.md) | a payment the gateway met with silence: the retry clock, the flag, manual confirmation |
-| [contract.gift.md](contract.gift.md) | the panel's gift-code box, and a user's Grants, configs, usage and `/sub` link — to their owner, or to a reseller's admin for one of its users |
+| [contract.gift.md](contract.gift.md) | the panel's gift-code box, and a user's own Grants, configs, usage and `/sub` link |
+| [contract.reseller-grants.md](contract.reseller-grants.md) | a reseller's admin on one of its users' services: reads, config actions, freeze, days, traffic, reset (F-311) |
 | [contract.coupon.md](contract.coupon.md) | whose a coupon is, whose users it serves, managing coupons and gift codes |
 | [contract.revenue.md](contract.revenue.md) | what one reseller sold and what its users paid in, over a period |
 | [contract.metering.md](contract.metering.md) | a collection pass becoming usage: what `metering-service` writes, and what it refuses to |
@@ -76,9 +77,8 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-28 | contract v61 (F-311-k): `POST …/users/:userId/grants/:grantId/traffic/reset` (`{reason}`) — Quota rises by Used since the last reset, the meter untouched; `staffWrite`. Additive. F-311 routes moved to [contract.reseller-grants.md](contract.reseller-grants.md). Consumers: F-311-w, F-311-y |
 | 2026-09-28 | contract v60 (F-311-j): `POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/traffic` (`{gb, reason}`) — an admin moves a user's prepaid Grant's Quota by ±GiB, an `admin_grant` `quota_adjustment`; `staffWrite`. Additive. [contract.gift.md](contract.gift.md). Consumers: F-311-w, F-311-y |
 | 2026-09-28 | contract v59 (F-311-i): `POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/duration` (`{days or endsAt, reason}`) — an admin moves a user's Grant's end, written to `grant_duration_change`; `staffWrite`. Additive. [contract.gift.md](contract.gift.md). Consumers: F-311-w, F-311-y |
-| 2026-09-27 | contract v58 (F-311-h): `POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/freeze` (`{until?}`) and `…/unfreeze` — an admin freezes a user's Grant, kept and its clock stopped; `staffWrite`. Additive. [contract.gift.md](contract.gift.md). Consumers: F-311-w, F-311-y |
-| 2026-09-27 | v57 (F-027-dk): `billing-service` sizes no share and consumes no collection pass — `CeilingAllocatorService`, `HotLoopService`, the hot-loop consumer and the internal `hot-loop/sweep-due` route are deleted; `BlockRequestQueue` unbinds `network.usage.#` from `HOT_LOOP_QUEUE`. `MIN_BLOCK_SECONDS` is in `block-request.ts` |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-version: 15
+version: 16
 updated: 2026-09-28
 ---
 
@@ -11,7 +11,7 @@ updated: 2026-09-28
 A §10 split of [contract.md](contract.md), which is at its ceiling. What a
 reseller's admin does to one of its users' Grants by hand (F-311). Each runs in
 the caller's transaction; the HTTP routes, their door and status codes are
-billing's [contract.gift.md](../billing/contract.gift.md).
+billing's [contract.reseller-grants.md](../billing/contract.reseller-grants.md).
 
 **Freeze (F-311-h)** — `freezeGrant(tx, id, {at, until?})` and
 `unfreezeGrant(tx, id, at)` in `entitlement/freeze.ts`, proved by `freeze.spec.ts`.
@@ -25,7 +25,7 @@ hourly `purge-due` tick unfreezes each due one first (`GrantUnfreezeService`,
 answer `unfrozen`). Refused: `grant_not_active` (a quota stop stays the top-up's),
 `grant_not_frozen`, `freeze_until_not_future`, `grant_moved` (the end moved: retry).
 A top-up or renewal never lifts it (both key on `quota_exhausted`). Its HTTP
-route is billing's `contract.gift.md` (F-311-h).
+route is billing's `contract.reseller-grants.md` (F-311-h).
 
 **Days (F-311-i)** — `changeGrantDuration(tx, id, {at, actorUserId, change, reason})`
 in `entitlement/duration.ts`, proved by `duration.spec.ts`. `change` is `{days}`
@@ -35,7 +35,7 @@ in `entitlement/duration.ts`, proved by `duration.spec.ts`. `change` is `{days}`
 duration is `endsAt`, not a quota metric (§4.5). Refused: `grant_closed`
 (expired / exhausted / cancelled: a renewal's, F-311-d), `grant_not_active`
 (pending), `grant_permanent`, `duration_unchanged`, `duration_end_not_future`
-(cutting off is a delete, F-311-m), `grant_moved`. Route: billing `contract.gift.md`.
+(cutting off is a delete, F-311-m), `grant_moved`. Route: billing `contract.reseller-grants.md`.
 
 **Traffic (F-311-j)** — `adjustGrantTraffic(tx, id, {at, actorUserId, deltaBytes, reason})`
 in `entitlement/traffic.ts`, proved by `traffic.spec.ts`. Quota is `purchasedBytes`,
@@ -53,3 +53,16 @@ the change, whole. Used is `usedBytesOf` (`renewal.ts`), the renewal's own sum.
 Refused: `grant_closed`, `grant_not_active` (pending), `traffic_not_adjustable`
 (metered — its blocks buy its bytes — or unlimited), `quota_below_zero`, `grant_moved`
 (Quota changed since the read: retry). `adjustQuota` stays the bare row writer.
+
+**Reset (F-311-k)** — `resetGrantTraffic(tx, id, {at, actorUserId, reason})` in
+`entitlement/traffic.ts`, proved by `traffic-reset.spec.ts`. The full bag is left
+again **without touching the meter** (user, 2026-09-26): `consumedBytes` and the
+lifetime counters are usage history and billing evidence, so Quota rises instead —
+by `resetBytes` = Used − `trafficResetFromBytes` (Used at the last reset, 0 = never),
+and the cursor moves to Used. So Quota − Used after any number of resets is the bag
+before the first; a second reset never re-adds the first's bytes. One `admin_grant`
+row, as Traffic. It opens a usage period (`usagePeriodFromBytes = consumedBytes`, as
+a renewal's bytes do, F-601-d), so the usage levels are told again, and revives and
+is told as a raise (a frozen Grant stays frozen). Refused as Traffic, plus
+`nothing_to_reset` (nothing used since the last reset); `grant_moved` also on a
+moved cursor, so two resets racing add once. Route: billing `contract.reseller-grants.md`.

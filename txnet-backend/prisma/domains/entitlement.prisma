@@ -87,6 +87,11 @@ model Grant {
   /// every config of this Grant — this is the number the allocator is bounded
   /// by, which is why it is not folded into `billedBytes`.
   purchasedBytes        BigInt             @default(0)
+  /// Used (Σ lifetime counters) at the last admin traffic reset (F-311-k); 0
+  /// = never reset. A reset adds `Used - this` to Quota and moves it to Used,
+  /// so a second reset adds only what was used since the first. A cursor, not
+  /// a meter: `consumedBytes` and the counters are never rewritten.
+  trafficResetFromBytes BigInt             @default(0)
   /// Price per 2^30 bytes, copied from the variant's rate history at issue
   /// (ADR-0073), exactly as `quotas` and `featureKeys` are. Null unless
   /// `billingMode = metered`. `(18, 8)` because a rate is not an amount: every

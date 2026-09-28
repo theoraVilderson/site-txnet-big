@@ -26,5 +26,14 @@ export const grantTrafficSchema = z
 
 export type GrantTrafficBody = z.infer<typeof grantTrafficSchema>;
 
+/** The body of `POST …/grants/:grantId/traffic/reset` (F-311-k): the `reason` its adjustment row keeps. */
+export const grantTrafficResetSchema = z
+  .object({
+    reason: z.string({ message: E.configActionInvalid }).trim().min(1, { message: E.configActionInvalid }).max(500, { message: E.configActionInvalid }),
+  })
+  .strict();
+
+export type GrantTrafficResetBody = z.infer<typeof grantTrafficResetSchema>;
+
 /** The body's GiB as the bytes the Grant is moved by. */
 export const bytesOfGb = (gb: number): bigint => BigInt(Math.round(gb * GIB));

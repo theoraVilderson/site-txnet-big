@@ -11,7 +11,7 @@ import {
 import { changeGrantDuration, DurationChange, DurationMove } from '../../entitlement/duration';
 import { Freeze, freezeGrant, Unfreeze, unfreezeGrant } from '../../entitlement/freeze';
 import { EntitlementRefused, GrantService } from '../../entitlement/grant';
-import { adjustGrantTraffic, TrafficChange } from '../../entitlement/traffic';
+import { adjustGrantTraffic, resetGrantTraffic, TrafficChange, TrafficReset } from '../../entitlement/traffic';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GrantUsageService, GrantUsageView } from '../../traffic/grant-usage';
 import { AdminConfigCommand, UserConfigOutcome, UserConfigsService, UserConfigView } from '../../traffic/user-configs';
@@ -125,6 +125,20 @@ export class ResellerUserGrantsService {
       tenantId,
       userId,
       () => this.onGrant(userId, grantId, (tx) => adjustGrantTraffic(tx, grantId, { at: new Date(), actorUserId: actor.userId, deltaBytes, reason })),
+      'staffWrite',
+    );
+  }
+
+  /**
+   * An admin resets this user's prepaid Grant's traffic (F-311-k): Quota rises
+   * by what was used since the last reset, the meter untouched. `staffWrite`.
+   */
+  resetTraffic(actor: ResellerActor, tenantId: string, userId: string, grantId: string, reason: string): Promise<TrafficReset> {
+    return this.run(
+      actor,
+      tenantId,
+      userId,
+      () => this.onGrant(userId, grantId, (tx) => resetGrantTraffic(tx, grantId, { at: new Date(), actorUserId: actor.userId, reason })),
       'staffWrite',
     );
   }

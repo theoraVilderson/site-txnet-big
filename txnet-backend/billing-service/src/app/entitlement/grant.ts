@@ -62,6 +62,8 @@ export type EntitlementRejection =
   | 'traffic_not_adjustable'
   /** Traffic: a cut past zero — a Quota is never negative. */
   | 'quota_below_zero'
+  /** Traffic reset (F-311-k): nothing used since the last reset — the full bag is already left. */
+  | 'nothing_to_reset'
   /** Days: a permanent Grant has no end to move. */
   | 'grant_permanent'
   /** Days: the new end is now or earlier — cutting a service off is a delete (F-311-m). */

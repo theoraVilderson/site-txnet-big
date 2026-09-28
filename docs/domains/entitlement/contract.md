@@ -109,7 +109,7 @@ on a metered or unlimited Grant, which renew by days alone),
 so no debt is forgiven twice). Callers arrive with F-305 and F-311-d.
 
 **An admin's actions on a Grant (F-311-h, -i, -j)** — freeze, days, traffic:
-[contract.admin.md](contract.admin.md). Their routes are billing's `contract.gift.md`.
+[contract.admin.md](contract.admin.md). Their routes are billing's `contract.reseller-grants.md`.
 
 **Unlimited traffic (F-111-q).** A prepaid variant sold with
 `traffic_bytes.limit = 0` (catalog invariant 10) is issued with
