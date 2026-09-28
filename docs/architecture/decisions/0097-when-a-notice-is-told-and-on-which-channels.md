@@ -26,9 +26,13 @@ updated: 2026-09-28
 
 ## Decision — part 1: an end notice is told only when it is news (F-601-r)
 1. **Span.** The time from when the current end was set to that end.
-   "Set" means activation, or the latest write that moved `endsAt`
+   "Set" means issue, or the latest write that moved `endsAt`
    (purchase renewal, admin days added or removed). A new Grant column holds
-   that moment. Rows from before it read `activatedAt ?? startsAt`.
+   that moment. At issue it is `startsAt`, not delivery: a purchase delivered
+   minutes later would otherwise fall under 14 days and lose its 7-day level
+   (F-601-r, 2026-09-28). The rule that no level due before activation is told
+   still applies. Older rows were backfilled from their last renewal or
+   duration change, else `startsAt`.
 2. **A level is told only if the end is nearer than the start.** A level of
    L days is told only when L ≤ span / 2. Before that point the user still
    knows how long the service has left, because they chose it recently.

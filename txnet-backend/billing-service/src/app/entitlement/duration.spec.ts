@@ -148,7 +148,7 @@ describe('changeGrantDuration', () => {
     const frozen = build({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN });
     await changeGrantDuration(frozen.tx, GRANT, by(5));
     expect(frozen.grant).toMatchObject({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, endsAt: new Date(END.getTime() + 5 * DAY) });
-    expect(Object.keys(frozen.writes[0].data)).toEqual(['endsAt']);
+    expect(frozen.writes[0].data).toEqual({ endsAt: new Date(END.getTime() + 5 * DAY), endSetAt: AT });
   });
 
   it.each([GrantStatus.expired, GrantStatus.exhausted, GrantStatus.cancelled])('refuses a %s Grant: that is a renewal, not a date', async (status) => {

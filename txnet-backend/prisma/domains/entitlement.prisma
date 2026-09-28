@@ -150,6 +150,11 @@ model Grant {
   /// Grant whose end no longer matches it — renewed, or never checked — is
   /// due again from the new end's levels; nothing else resets the clock.
   endNoticeFor          DateTime?
+  /// When the current `endsAt` was set (F-601-r, ADR-0097): at issue, and by
+  /// every write that moves the end — a renewal, an admin's days. An unfreeze
+  /// does not: it gives back time the user already had. Its span to `endsAt`
+  /// decides which time levels are news. Null only for a permanent Grant.
+  endSetAt              DateTime?
   /// The next 7 / 3 / 1-day level of that end (F-601-e); null once the last
   /// is told. Read only while `endNoticeFor = endsAt`.
   endNoticeAt           DateTime?

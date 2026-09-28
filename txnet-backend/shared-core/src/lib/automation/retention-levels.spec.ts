@@ -22,7 +22,7 @@ const before = (days: number) => new Date(END.getTime() - days * DAY);
 const after = (at: Date, hours: number) => new Date(at.getTime() + hours * 3_600_000);
 
 describe('endNoticeStep (F-601-e)', () => {
-  const fresh = { endsAt: END, activeSince: ACTIVE, endNoticeFor: null, endNoticeAt: null };
+  const fresh = { endsAt: END, endSetAt: ACTIVE, activeSince: ACTIVE, endNoticeFor: null, endNoticeAt: null };
   const told = (next: Date | null) => ({ ...fresh, endNoticeFor: END, endNoticeAt: next });
 
   it('is due at 7, then 3, then 1 day(s), naming the instant each fell due', () => {
@@ -64,6 +64,56 @@ describe('endNoticeStep (F-601-e)', () => {
       OutboxEventType.GRANT_ENDS_IN_7D,
     );
     expect(endNoticeStep(fresh, END)).toEqual({ notice: null, next: null });
+  });
+});
+
+describe('endNoticeStep — only news (F-601-r, ADR-0097)', () => {
+  const HOUR = 3_600_000;
+  // A Grant whose end was set `span` ms before END, active since then, never checked.
+  type Checked = Parameters<typeof endNoticeStep>[0];
+  const spanOf = (span: number): Checked => {
+    const set = new Date(END.getTime() - span);
+    return { endsAt: END, endSetAt: set, activeSince: set, endNoticeFor: null, endNoticeAt: null };
+  };
+  // Every notice a sweep running each hour over the whole span would tell, as ms before the end.
+  const toldOver = (span: number) => {
+    const out: Array<{ type: string; before: number }> = [];
+    let g = spanOf(span);
+    for (let t = END.getTime() - span; t < END.getTime(); t += HOUR / 4) {
+      const step = endNoticeStep(g, new Date(t));
+      if (step.notice) out.push({ type: step.notice.type, before: END.getTime() - step.notice.dueAt.getTime() });
+      g = { ...g, endNoticeFor: END, endNoticeAt: step.next };
+      if (step.next === null) break;
+    }
+    return out;
+  };
+  const { GRANT_ENDS_IN_7D: D7, GRANT_ENDS_IN_3D: D3, GRANT_ENDS_IN_1D: D1 } = OutboxEventType;
+
+  it('tells a level only when it is at most half the span — the ADR table', () => {
+    expect(toldOver(1 * DAY)).toEqual([{ type: D1, before: 6 * HOUR }]);
+    for (const days of [2, 5]) expect(toldOver(days * DAY)).toEqual([{ type: D1, before: DAY }]);
+    for (const days of [6, 13]) expect(toldOver(days * DAY)).toEqual([{ type: D3, before: 3 * DAY }, { type: D1, before: DAY }]);
+    for (const days of [14, 30]) {
+      expect(toldOver(days * DAY)).toEqual([{ type: D7, before: 7 * DAY }, { type: D3, before: 3 * DAY }, { type: D1, before: DAY }]);
+    }
+  });
+
+  it('never tells an N-day service its own length at activation', () => {
+    for (const days of [7, 3, 1]) expect(endNoticeStep(spanOf(days * DAY), new Date(END.getTime() - days * DAY)).notice).toBeNull();
+  });
+
+  it('a span under 2 days gets one last call at a quarter of it; under 6 h, none', () => {
+    expect(toldOver(40 * HOUR)).toEqual([{ type: D1, before: 10 * HOUR }]);
+    expect(toldOver(6 * HOUR)).toEqual([{ type: D1, before: 1.5 * HOUR }]);
+    expect(toldOver(6 * HOUR - 1)).toEqual([]);
+    expect(endNoticeStep(spanOf(5 * HOUR), new Date(END.getTime() - 5 * HOUR))).toEqual({ notice: null, next: null });
+  });
+
+  it('a renewal counts its span from when it moved the end', () => {
+    // A 30-day service renewed by 8 days with 1 day left: 9 days to go, so 3 and 1 — not 7 the next day.
+    const renewedAt = new Date(END.getTime() - 9 * DAY);
+    const g = { endsAt: END, endSetAt: renewedAt, activeSince: new Date(END.getTime() - 40 * DAY), endNoticeFor: null, endNoticeAt: null };
+    expect(endNoticeStep(g, after(renewedAt, 24))).toEqual({ notice: null, next: before(3) });
   });
 });
 

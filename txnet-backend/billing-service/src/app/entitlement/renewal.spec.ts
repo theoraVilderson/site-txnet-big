@@ -120,6 +120,7 @@ describe('renewGrant', () => {
     expect(updates[0].data).toEqual({
       purchasedBytes: BigInt(20) * GIB,
       endsAt: new Date(AT.getTime() + 33 * DAY_MS),
+      endSetAt: AT,
       usagePeriodFromBytes: BigInt(7) * GIB,
       usagePeriodStartedAt: AT,
     });

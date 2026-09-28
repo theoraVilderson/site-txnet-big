@@ -129,6 +129,8 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
     data: {
       purchasedBytes,
       endsAt,
+      // A moved end is set now: its notices are counted from here (F-601-r).
+      ...(endsAt === null ? {} : { endSetAt: at }),
       // Bytes bought open a new usage period (F-601-d): its thresholds are a
       // share of what it starts with, measured from here. Days alone do not —
       // the bag is the one already being counted.

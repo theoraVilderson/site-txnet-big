@@ -30,7 +30,9 @@ export type EndNoticeResult = { scanned: number; told: number };
 /**
  * Time thresholds (F-601-e, spec 9.5): an active Grant 7, 3 and 1 day(s)
  * from its end emits a retention event, and `worker-service` tells the user
- * how long is left (notification `contract.retention.md`). Unlimited and
+ * how long is left (notification `contract.retention.md`). Only a level that
+ * is news is told: at most half the span since the end was set (`endSetAt`,
+ * F-601-r, ADR-0097). Unlimited and
  * metered Grants alike — only a permanent one (`endsAt = null`) has no end.
  *
  * **Two due the same day are one message (F-601-n).** A 7- or 3-day level,
@@ -104,6 +106,7 @@ export class GrantEndNoticeService {
         startsAt: true,
         activatedAt: true,
         endsAt: true,
+        endSetAt: true,
         endNoticeFor: true,
         endNoticeAt: true,
         billingMode: true,
@@ -118,7 +121,7 @@ export class GrantEndNoticeService {
     if (!grant) return null;
 
     const step = grant.endsAt
-      ? endNoticeStep({ ...grant, endsAt: grant.endsAt, activeSince: grant.activatedAt ?? grant.startsAt }, now)
+      ? endNoticeStep({ ...grant, endsAt: grant.endsAt, endSetAt: grant.endSetAt ?? grant.startsAt, activeSince: grant.activatedAt ?? grant.startsAt }, now)
       : { notice: null, next: null };
     const usagePeriod = grant.usagePeriodStartedAt ?? grant.startsAt;
     // A held level is told only while it is still true: a bag, not yet spent (that is the cutoff notice, F-601-b).

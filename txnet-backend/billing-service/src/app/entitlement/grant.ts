@@ -163,6 +163,8 @@ export function grantFromVariant(input: { source: GrantSource; startsAt: Date },
     status: input.source === GrantSource.purchase ? GrantStatus.pending : GrantStatus.active,
     startsAt: input.startsAt,
     endsAt: v.durationDays === null ? null : new Date(input.startsAt.getTime() + v.durationDays * DAY_MS),
+    // The end is set now, from its start, not at delivery: a purchase's span is the days it bought (F-601-r).
+    endSetAt: v.durationDays === null ? null : input.startsAt,
     periodDays: v.durationDays,
     billingMode: v.billingMode,
     quotas: structuredClone(v.quotas),

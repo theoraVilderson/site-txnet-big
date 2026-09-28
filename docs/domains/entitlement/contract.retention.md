@@ -47,7 +47,7 @@ charge that makes it: billing's `MeteringService.charge`, in its transaction
 
 **Time thresholds (F-601-e, spec 9.5)** — `entitlement/end-notice.ts`, proved
 by `end-notice.spec.ts`. An active Grant is told 7, 3 and 1 day(s) before its
-`endsAt`: unlimited and metered alike, only a permanent one (`endsAt = null`)
+`endsAt`, those levels only that are news (F-601-r, below): unlimited and metered alike, only a permanent one (`endsAt = null`)
 never. `GrantEndNoticeService.noticeDue` checks each active Grant ending
 within 7 days whose clock is due or was set for another end, over `POST
 /api/internal/billing/entitlement/end-due` (`ServiceOnlyGuard`), asked hourly
@@ -58,6 +58,8 @@ by `grant_end_notice`; answer `scanned`, `told`.
 | The clock is `endNoticeFor` (the end it was set for) + `endNoticeAt` (that end's next level). An end that no longer matches `endNoticeFor` starts over from its own levels | a renewal moves `endsAt` and is due again by itself — no writer of `endsAt` resets anything |
 | A sweep late past two levels tells the lower alone; the `days` param is the whole days actually left | the latest truth, once — a Grant renewed to 4 days left hears "4 days", never "7" |
 | A level that fell due before `activatedAt ?? startsAt` passes untold | a 5-day service is not "ending soon" the minute it is bought |
+| **Only news (F-601-r, ADR-0097).** The span runs from `endSetAt` to `endsAt`; a level of L days is told only if L ≤ span / 2. A span under 2 days has one last call at span / 4 before the end, told as the 1-day type (never held); under 6 h, none — only `ended` | 14+ days: 7, 3, 1; 6–13: 3, 1; 2–5: 1; 1 day: 6 h before. Before the halfway point the user still knows what is left: they chose it recently. Proved by `retention-levels.spec.ts` |
+| `endSetAt` is written with `endsAt`: at issue (`startsAt` — a purchase's span is the days bought, not shortened by its delivery), by a renewal and an admin's days (the write's `at`). An unfreeze does not write it; null only when permanent | an unfreeze gives back time the user already had — a 30-day service frozen at day 20 still hears its 7 days. Older rows were backfilled from their last `grant_renewal` / `grant_duration_change` to that end, else `startsAt` |
 | 7 and 3 days: `serviceEndsSoon`; 1 day: `serviceEndsWithinADay` | a day's notice is the last one, and "1 days" is not a sentence |
 | The write is conditional on the end and the clock read; `period` = `endsAt`, one type per level | two sweeps, or a renewal between read and write, emit once; notification's ledger holds each level once per end (invariant 14) |
 

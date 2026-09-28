@@ -26,7 +26,8 @@ export type EndNotice = typeof OutboxEventType.GRANT_ENDS_IN_7D | typeof OutboxE
 /**
  * A Grant's time levels (F-601-e, spec 9.5), farthest first: 7, 3 and 1 day(s)
  * before its end. One type per level, so notification's ledger holds each
- * once per end. The last is urgent and never held (F-601-n).
+ * once per end. The last is urgent and never held (F-601-n). Which of them
+ * an end is told is its span's ({@link endNoticeStep}, F-601-r).
  */
 export const END_NOTICE_LEVELS: ReadonlyArray<{ days: number; type: EndNotice }> = [
   { days: 7, type: OutboxEventType.GRANT_ENDS_IN_7D },
@@ -42,10 +43,28 @@ export function endNoticeDaysLeft(end: Date, now: Date): number {
 /** A time level due and not yet told: its type, the whole days left now, and when it fell due. */
 export type DueEndNotice = { type: EndNotice; days: number; dueAt: Date };
 
+/** Under this span an end has no time notice at all, only `ended` (ADR-0097). */
+const END_NOTICE_MIN_SPAN_MS = 6 * 3_600_000;
+
+/**
+ * The instants an end is told at (F-601-r, ADR-0097), farthest first. The
+ * span is from when the end was set to the end. A level of L days is told
+ * only if L is at most half of it: before that the user still knows how long
+ * is left, because they chose it recently. A span under 2 days has one last
+ * call at a quarter of it, told as the last day; one under 6 h, none.
+ */
+function endNoticeInstants(end: number, setAt: number): Array<{ type: EndNotice; at: number }> {
+  const span = end - setAt;
+  if (span < END_NOTICE_MIN_SPAN_MS) return [];
+  if (span < 2 * DAY_MS) return [{ type: OutboxEventType.GRANT_ENDS_IN_1D, at: end - span / 4 }];
+  return END_NOTICE_LEVELS.filter((l) => l.days * DAY_MS <= span / 2).map((l) => ({ type: l.type, at: end - l.days * DAY_MS }));
+}
+
 /**
  * One due check (F-601-e): the level due now, if any, and the instant of the
  * next level (`null` = none left for this end).
  *
+ * Which levels an end has is its span's (`endSetAt` to `endsAt`, F-601-r).
  * The levels already handled for this end are those before `endNoticeAt`,
  * while `endNoticeFor` is this end. For an end seen for the first time —
  * renewed, or never checked — they are those before `activeSince`: a level
@@ -53,7 +72,7 @@ export type DueEndNotice = { type: EndNotice; days: number; dueAt: Date };
  * A level is never due before its instant: nothing here is told early.
  */
 export function endNoticeStep(
-  g: { endsAt: Date; activeSince: Date; endNoticeFor: Date | null; endNoticeAt: Date | null },
+  g: { endsAt: Date; endSetAt: Date; activeSince: Date; endNoticeFor: Date | null; endNoticeAt: Date | null },
   now: Date,
 ): { notice: DueEndNotice | null; next: Date | null } {
   const end = g.endsAt.getTime();
@@ -64,13 +83,13 @@ export function endNoticeStep(
   if (sameEnd && g.endNoticeAt === null) return { notice: null, next: null };
   const floor = sameEnd && g.endNoticeAt ? g.endNoticeAt.getTime() : g.activeSince.getTime();
 
-  const at = (days: number) => end - days * DAY_MS;
+  const levels = endNoticeInstants(end, g.endSetAt.getTime());
   // The nearest level due: a sweep late past two tells the latest truth alone.
-  const due = END_NOTICE_LEVELS.filter((l) => at(l.days) <= t && at(l.days) >= floor).pop();
-  const upcoming = END_NOTICE_LEVELS.find((l) => at(l.days) > t);
+  const due = levels.filter((l) => l.at <= t && l.at >= floor).pop();
+  const upcoming = levels.find((l) => l.at > t);
   return {
-    notice: due ? { type: due.type, days: endNoticeDaysLeft(g.endsAt, now), dueAt: new Date(at(due.days)) } : null,
-    next: upcoming ? new Date(at(upcoming.days)) : null,
+    notice: due ? { type: due.type, days: endNoticeDaysLeft(g.endsAt, now), dueAt: new Date(due.at) } : null,
+    next: upcoming ? new Date(upcoming.at) : null,
   };
 }
 

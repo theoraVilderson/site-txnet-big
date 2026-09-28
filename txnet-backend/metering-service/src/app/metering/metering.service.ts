@@ -298,6 +298,7 @@ export class MeteringService {
         usagePeriodStartedAt: true,
         startsAt: true,
         activatedAt: true,
+        endSetAt: true,
         endsAt: true,
         endNoticeFor: true,
         endNoticeAt: true,
@@ -336,6 +337,7 @@ export class MeteringService {
       startsAt: Date;
       activatedAt: Date | null;
       endsAt: Date | null;
+      endSetAt: Date | null;
       endNoticeFor: Date | null;
       endNoticeAt: Date | null;
       usageNoticeLevel: number | null;
@@ -350,7 +352,7 @@ export class MeteringService {
     // The hold began at the period's first untold crossing; a higher level replaces the lower, never restarts the wait.
     const since = heldUsageNotice({ ...grant, usagePeriod })?.since ?? now;
     const step = grant.endsAt
-      ? endNoticeStep({ endsAt: grant.endsAt, activeSince: grant.activatedAt ?? grant.startsAt, endNoticeFor: grant.endNoticeFor, endNoticeAt: grant.endNoticeAt }, now)
+      ? endNoticeStep({ endsAt: grant.endsAt, endSetAt: grant.endSetAt ?? grant.startsAt, activeSince: grant.activatedAt ?? grant.startsAt, endNoticeFor: grant.endNoticeFor, endNoticeAt: grant.endNoticeAt }, now)
       : null;
     let time = step?.notice ?? null;
     const tell = retentionToTell({ time, usage: { level: crossed.level, since } }, now);

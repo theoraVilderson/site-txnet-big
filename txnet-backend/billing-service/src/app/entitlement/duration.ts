@@ -78,7 +78,7 @@ export async function changeGrantDuration(
 
   const moved = await tx.grant.updateMany({
     where: { id: grantId, status: grant.status, endsAt: before },
-    data: { endsAt: after },
+    data: { endsAt: after, endSetAt: input.at },
   });
   if (moved.count === 0) throw new EntitlementRefused('grant_moved');
 
