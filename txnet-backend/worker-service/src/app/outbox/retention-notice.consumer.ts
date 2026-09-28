@@ -1,4 +1,4 @@
-import { RequestHeaders, type OutboxMessage } from '@txnet-backend/shared-core';
+import { noticeClassOf, RequestHeaders, type OutboxMessage } from '@txnet-backend/shared-core';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -59,6 +59,11 @@ type Told = { notice: string; period: string; template: string; params: Record<s
  * message; an urgent one keeps the 10 s burst. Either carries its Grant, so a
  * combined message names the services. A held patient notice's inbox row
  * joins an inbox-only hour lane (F-601-q); a held urgent one is told at once.
+ *
+ * **The type's class decides the channels** (F-601-s, ADR-0097): the sender
+ * is told the class of the types told, never of the template, since 50 % and
+ * 80 % share one; 50 % alone is the inbox's. A combined notice takes the
+ * stronger class, and is held when either of its rows is.
  */
 @Injectable()
 export class RetentionNoticeConsumer implements OnApplicationBootstrap {
@@ -104,6 +109,7 @@ export class RetentionNoticeConsumer implements OnApplicationBootstrap {
     let how: Claim = first;
     let told: Told = { notice: event.type, period: retention.period, template: notice.template, params: retention.params };
     let waits = patient;
+    let types = [event.type];
     const ahead = retention.ahead;
     if (ahead) {
       const aheadPatient = this.notices[ahead.notice]?.patient === true;
@@ -113,9 +119,13 @@ export class RetentionNoticeConsumer implements OnApplicationBootstrap {
           how = second;
           told = { notice: ahead.notice, period: ahead.period, ...ahead.alone };
           waits = aheadPatient;
+          types = [ahead.notice];
         } else {
+          // Either row held holds the one message: 50 % is never held itself (F-601-s), the time level it carries may be.
+          if (first.deliver !== 'held' && second.deliver === 'held') how = second;
           told = { ...told, template: ahead.template, params: { ...retention.params, ...ahead.params } };
           waits = patient && aheadPatient;
+          types = [event.type, ahead.notice];
         }
       }
     }
@@ -124,6 +134,8 @@ export class RetentionNoticeConsumer implements OnApplicationBootstrap {
       return;
     }
     const person = { tenantId: retention.tenantId, userId: retention.userId, template: told.template, params: told.params, grantId: retention.grantId };
+    // F-601-s: the types' class, not the template's — 50 % and 80 % share one; a combined notice takes the stronger.
+    const cls = noticeClassOf(types[0]!, ...types.slice(1));
     if (how.deliver === 'held') {
       await this.post(HOLD_PATH, {
         eventId: event.id,
@@ -138,7 +150,7 @@ export class RetentionNoticeConsumer implements OnApplicationBootstrap {
       await this.sender.send({ consumer: CONSUMER, eventId: event.id, person, only: ['inbox'], ...(waits ? { window: 'hour' as const } : {}) });
       return;
     }
-    await this.sender.send({ consumer: CONSUMER, eventId: event.id, person, ...(waits ? { window: 'hour' as const } : {}) });
+    await this.sender.send({ consumer: CONSUMER, eventId: event.id, person, class: cls, ...(waits ? { window: 'hour' as const } : {}) });
   }
 
   private async claim(event: OutboxMessage, r: Retention, notice: string, period: string, patient: boolean): Promise<Claim> {

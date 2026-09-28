@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { IdentityHeaders, RedisTtl, RequestHeaders, UnscopedRedisKeys } from '@txnet-backend/shared-core';
+import { IdentityHeaders, NoticeClass, noticeClassOf, RedisTtl, RequestHeaders, UnscopedRedisKeys } from '@txnet-backend/shared-core';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -79,6 +79,11 @@ type Entry = { params: Record<string, string>; grantId?: string };
  * and `only: ['inbox']` — a non-urgent notice held for quiet hours — the inbox
  * row joins an hour lane of its own whose flush tells the inbox alone, so the
  * same notice of several services is one row (F-601-q).
+ *
+ * `class` (F-601-s, ADR-0097): which channels the person is told on. Absent,
+ * it is the template's in shared-core's `NOTICE_CLASS_OF`; a consumer whose
+ * one template names several notices (50 % and 80 %) states it. An `info`
+ * notice is the inbox's alone, joined to an inbox-only burst of its window.
  */
 export type EventNotice = {
   consumer: string;
@@ -92,6 +97,7 @@ export type EventNotice = {
    * services, in a lane of its own. Absent: the 10 s burst.
    */
   window?: 'hour';
+  class?: NoticeClass;
 };
 
 /**
@@ -145,7 +151,8 @@ export class EventNoticeSender {
     const failures: unknown[] = [];
     const { live, person } = notice;
     if (live) await this.once(notice, 'live', () => this.realtime.publish(live.channel, live.body), failures);
-    if (person && notice.window && notice.only?.length === 1 && notice.only[0] === 'inbox') {
+    const inboxOnly = person && !notice.only && (notice.class ?? noticeClassOf(person.template)) === 'info';
+    if (person && (inboxOnly || (notice.window && notice.only?.length === 1 && notice.only[0] === 'inbox'))) {
       await this.once(notice, 'inbox', () => this.join(notice.eventId, person, notice.window, 'inbox'), failures);
     } else if (person && notice.only) {
       for (const channel of notice.only) await this.once(notice, channel, () => this.tell(channel, person), failures);

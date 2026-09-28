@@ -9,7 +9,7 @@ updated: 2026-09-28
 - **Status:** accepted
 - **Date:** 2026-09-28
 - **Affects units:** entitlement (`contract.retention.md`, F-601-e's levels), notification (`contract.retention.md`, the claim), automation (`contract.notices.md`, `EventNoticeSender`)
-- **Decision rows:** `F-601-r` (part 1), `F-601-s` (part 2); the user approved both on 2026-09-28
+- **Decision rows:** `F-601-r` (part 1), `F-601-s` (part 2; its SMS is `F-601-t` and the chosen messenger `F-601-u`, split 2026-09-28); the user approved both on 2026-09-28
 - **Amends:** F-601-e's fixed 7 / 3 / 1-day levels
 
 ## Context

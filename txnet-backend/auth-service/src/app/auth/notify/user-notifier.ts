@@ -659,7 +659,12 @@ function interpolate(template: string, vars: Record<string, string>): string {
 /**
  * Tell a user one notice through one channel (F-067-l, ADR-0045 decision 2;
  * F-067-o, ADR-0084 decision 2): `inbox` puts the rendered row in their panel
- * inbox, `bot` messages their linked chats. The worker asks once per channel.
+ * inbox, `bot` messages one of their linked chats. The worker asks once per channel.
+ *
+ * **One messenger, never both** (F-601-s, ADR-0097): the chat linked last
+ * is told; only when that send fails (a blocked bot) is the other tried. A
+ * tenant with no bot on the first platform goes to the next. The user's own
+ * choice of messenger is F-601-u.
  *
  * The OTP senders' neighbour and deliberately built from the same parts: the
  * tenant's primary bot per platform (`BotClientRegistry`), and only links whose
@@ -708,9 +713,9 @@ export class UserNotifier {
     const links = await this.prisma.linkedBotAccount.findMany({
       where: { userId: request.userId, contactVerifiedAt: { not: null } },
       select: { platform: true, platformUserId: true },
+      orderBy: { linkedAt: 'desc' },
     });
 
-    const sent: NotifyResult['sent'] = [];
     let lastError: unknown = null;
     for (const link of links) {
       const platform: BotPlatform = link.platform;
@@ -718,14 +723,14 @@ export class UserNotifier {
       if (!client) continue;
       try {
         await client.sendMessage(link.platformUserId, text);
-        if (!sent.includes(platform)) sent.push(platform);
+        return { sent: [platform] };
       } catch (err) {
         lastError = err;
         this.logger.warn(`${request.template} to user ${request.userId} on ${platform} failed: ${(err as Error).message}`);
       }
     }
-    if (sent.length === 0 && lastError) throw lastError;
-    return { sent };
+    if (lastError) throw lastError;
+    return { sent: [] };
   }
 
   /**

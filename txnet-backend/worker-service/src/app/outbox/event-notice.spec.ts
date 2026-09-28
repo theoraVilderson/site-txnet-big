@@ -86,7 +86,7 @@ const notice = (n: number, overrides: Partial<EventNotice['person']> = {}): Even
   consumer: 'panel-tested',
   eventId: event(n),
   live: { channel: `tenant:${TENANT}`, body: { type: 'network.panel.tested' } },
-  person: { tenantId: TENANT, userId: USER, template: 'panelAccepted', params: { panel: `edge-${n}` }, ...overrides },
+  person: { tenantId: TENANT, userId: USER, template: 'panelRefused', params: { panel: `edge-${n}` }, ...overrides },
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -110,7 +110,7 @@ describe('EventNoticeSender — a burst is told once', () => {
     expect(calls.published).toHaveLength(3);
     expect(calls.flushes).toHaveLength(1);
     expect(calls.flushes[0]!.delayMs).toBe(10_000);
-    expect(calls.flushes[0]!.flush).toMatchObject({ tenantId: TENANT, userId: USER, template: 'panelAccepted' });
+    expect(calls.flushes[0]!.flush).toMatchObject({ tenantId: TENANT, userId: USER, template: 'panelRefused' });
   });
 
   it('the flush tells one summary with its count, once in the inbox and once on the bot', async () => {
@@ -119,7 +119,7 @@ describe('EventNoticeSender — a burst is told once', () => {
     await sender.flush(calls.flushes[0]!.flush);
 
     expect(calls.fetched.map((f) => f.body.channel)).toEqual(['inbox', 'bot']);
-    expect(calls.fetched[0]!.body).toMatchObject({ userId: USER, template: 'panelAccepted', count: 3, params: {} });
+    expect(calls.fetched[0]!.body).toMatchObject({ userId: USER, template: 'panelRefused', count: 3, params: {} });
     expect(calls.fetched[0]!.headers[IdentityHeaders.tenantId]).toBe(TENANT);
   });
 
@@ -146,7 +146,7 @@ describe('EventNoticeSender — a burst is told once', () => {
     const { sender, calls } = build();
     await sender.send(notice(1));
     await sender.send(notice(2, { userId: OTHER_USER }));
-    await sender.send(notice(3, { template: 'panelRefused' }));
+    await sender.send(notice(3, { template: 'paymentCredited' }));
 
     expect(calls.flushes).toHaveLength(3);
   });
@@ -181,7 +181,7 @@ describe('EventNoticeSender — a burst is told once', () => {
 
   it('a flush with nothing to tell sends nothing', async () => {
     const { sender, calls } = build();
-    await sender.flush({ flushId: 'f', tenantId: TENANT, userId: USER, template: 'panelAccepted' });
+    await sender.flush({ flushId: 'f', tenantId: TENANT, userId: USER, template: 'panelRefused' });
     expect(calls.fetched).toEqual([]);
   });
 
@@ -196,7 +196,7 @@ describe('EventNoticeSender — a burst is told once', () => {
   });
 
   it('the markers are per channel and keyed by the flush', () => {
-    expect(UnscopedRedisKeys.noticeBurst(TENANT, USER, 'panelAccepted')).toContain(USER);
+    expect(UnscopedRedisKeys.noticeBurst(TENANT, USER, 'panelRefused')).toContain(USER);
     expect(UnscopedRedisKeys.noticeBurstBatch('f1')).toContain('f1');
   });
 
@@ -212,5 +212,32 @@ describe('EventNoticeSender — a burst is told once', () => {
 
     await sender.send(notice(1));
     expect(calls.fetched).toHaveLength(1);
+  });
+});
+
+describe('EventNoticeSender — a notice’s class decides its channels (F-601-s, ADR-0097)', () => {
+  it('an info notice joins an inbox-only burst: several are one inbox row, and no bot', async () => {
+    const { sender, calls } = build();
+    for (const n of [1, 2]) await sender.send(notice(n, { template: 'panelAccepted' }));
+
+    expect(calls.flushes).toHaveLength(1);
+    expect(calls.flushes[0]!.delayMs).toBe(10_000);
+    expect(calls.flushes[0]!.flush).toMatchObject({ template: 'panelAccepted', only: 'inbox' });
+    expect(calls.flushes[0]!.flush.window).toBeUndefined();
+
+    await sender.flush(calls.flushes[0]!.flush);
+    expect(calls.fetched.map((f) => f.body.channel)).toEqual(['inbox']);
+    expect(calls.fetched[0]!.body.count).toBe(2);
+  });
+
+  it('the class a consumer states wins over its template’s, both ways', async () => {
+    const { sender, calls } = build();
+    await sender.send({ ...notice(1), class: 'info' });
+    await sender.send({ ...notice(2, { template: 'panelAccepted' }), class: 'important' });
+
+    expect(calls.flushes.map((f) => [f.flush.template, f.flush.only])).toEqual([
+      ['panelRefused', 'inbox'],
+      ['panelAccepted', undefined],
+    ]);
   });
 });

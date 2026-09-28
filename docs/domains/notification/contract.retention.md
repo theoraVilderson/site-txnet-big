@@ -23,7 +23,7 @@ one notice path of ADR-0084 — not a second one inside `notification-service`
 | emit | the producing domain (entitlement, billing, network) | an outbox row (ADR-0021) in the transaction that saw the moment |
 | route | `worker-service` `RetentionNoticeConsumer`, queue `AUTOMATION_RETENTION_NOTICE_QUEUE` | bound to every type in `RETENTION_NOTICES` (`outbox/retention-notices.ts`) |
 | once per period, and how | **this unit**: `POST internal/notifications/retention/claim` | the ledger below; asked before anything is told; its answer carries the user's mute and quiet hours (F-601-m) and the Grant's own level (F-601-o) |
-| tell | `EventNoticeSender` -> auth-service `/internal/notify/user` | inbox (a `notification` row through this unit's `create`) and bot, in the user's language — [automation/contract.notices.md](../automation/contract.notices.md); several services' same notice as one message, naming them (F-601-p, below) |
+| tell | `EventNoticeSender` -> auth-service `/internal/notify/user` | inbox (a `notification` row through this unit's `create`) and one bot, as the notice's class says (F-601-s, below), in the user's language — [automation/contract.notices.md](../automation/contract.notices.md); several services' same notice as one message, naming them (F-601-p, below) |
 
 ## The claim
 
@@ -67,6 +67,23 @@ over the same row). The claim reads them, so no producer knows they exist.
 | A take leases rows 10 min (`FOR UPDATE SKIP LOCKED`); the worker marks each tell per row id, then `told` clears it | two runs never take one row; a run that died between the tell and `told` repeats nothing |
 | Minutes from the local clock: a DST jump inside the window moves the release by that hour | Asia/Tehran has kept none since 2022 |
 | A claim with `waitSec` is also `held` when the window **opens** inside that wait, until that window's end; `botAt` is then at most a day and an hour away (F-601-p) | a notice claimed at 22:30 and told at 23:30 is a night one |
+
+## A notice's class (F-601-s, ADR-0097 part 2, user 2026-09-28)
+
+shared-core `NOTICE_CLASS_OF` (`notice-classes.ts`, beside `RETENTION_KIND_OF`) is the one table of which channels a notice takes; ADR-0097 has the questions that pick a class.
+
+| Class | Retention types | Channels | Mute | Quiet hours |
+|---|---|---|---|---|
+| critical | every `cutoff`, and `reactivated` (an all-clear follows its alarm) | inbox + one bot | `cutoff` never; `reactivated` by its kind | ignored: the claim answers `now` |
+| important | `ending`, `connect`, `usage` but 50 % | inbox + one bot | by kind | the bot held (above) |
+| info | 50 % | inbox only | by kind | none: `now`, as there is no bot to hold |
+
+| Rule | Why |
+|---|---|
+| The claim holds only an `important` notice; `critical` and `info` answer `now` (or `muted`) | a service back on is news at night; 50 % has no bot message to keep |
+| A type is classed, not a template; a type missing from the table is `critical` | 50 % and 80 % share a template; a new notice never silently loses the bot |
+| One bot: the chat linked last, the other only when that send fails; never both (auth-api `/internal/notify/user`) | two messengers told the same thing twice |
+| Payment, purchase and panel notices are classed by template (user 2026-09-28): money or a service lost `critical`, something to do or received `important`, `panelAccepted` `info` | one table for every notice |
 
 ## One service, essentials only (F-601-o, user 2026-09-28)
 
@@ -173,6 +190,9 @@ service the user has. It rides the purchase's own notices (automation
 ## Not built here
 
 - A mute per channel (bot vs inbox): a kind or a Grant is muted on both.
+- SMS for a `security` notice, and for a `critical` one no bot reached: F-601-t. No notice is `security` yet.
+- The user's own choice of messenger (Telegram or Bale): F-601-u; until then, the one linked last.
+- Quiet hours for the payment, purchase and panel notices: they are not claimed, so nothing holds them.
 - The level of a service bought for someone else set at purchase: it is set afterwards, per service (F-601-o).
 - The bot's own settings screen: F-319, over the same `notification_preference` row.
 - Retention of ledger rows: one per Grant, notice and period, kept.

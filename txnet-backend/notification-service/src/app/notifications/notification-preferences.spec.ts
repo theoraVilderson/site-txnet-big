@@ -123,6 +123,16 @@ describe('RetentionLedgerService.claim — how a claimed notice is told', () => 
     }
   });
 
+  it('holds only an important notice: "active again" and 50 % are told now at night, and still muted by kind (F-601-s)', async () => {
+    const { service } = ledger({ mutedKinds: [], ...NIGHT });
+    await expect(service.claim(claim(OutboxEventType.GRANT_REACTIVATED), at)).resolves.toEqual({ claimed: true, deliver: 'now' });
+    await expect(service.claim(claim(OutboxEventType.GRANT_USAGE_50), at)).resolves.toEqual({ claimed: true, deliver: 'now' });
+
+    const muted = ledger({ mutedKinds: ['reactivated', 'usage'], ...NIGHT }).service;
+    await expect(muted.claim(claim(OutboxEventType.GRANT_REACTIVATED), at)).resolves.toEqual({ claimed: true, deliver: 'muted' });
+    await expect(muted.claim(claim(OutboxEventType.GRANT_USAGE_50), at)).resolves.toEqual({ claimed: true, deliver: 'muted' });
+  });
+
   it('answers a redelivery whose bot message is already held with that hold, even after the window', async () => {
     const botAt = new Date('2026-09-28T04:30:00Z');
     const { preferences, service } = ledger(null, { eventId: EVENT, botAt, botTemplate: 'serviceEndsSoon' });

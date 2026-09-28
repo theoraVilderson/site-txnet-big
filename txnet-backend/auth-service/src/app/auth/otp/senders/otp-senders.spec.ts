@@ -520,6 +520,27 @@ describe('UserNotifier', () => {
     );
   });
 
+  // F-601-s, ADR-0097: one messenger — the one linked last — and the other only when that send fails; never both.
+  it('messages the chat linked last alone, and the other only when that send fails', async () => {
+    const links = [
+      { platform: 'bale', platformUserId: '7' },
+      { platform: 'telegram', platformUserId: '5501' },
+    ];
+    const client = botClient();
+    const db = notifierPrisma({ links });
+    const notifier = new UserNotifier(db as unknown as PrismaService, registry(client), localeService(ns));
+    const tell = () => inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'paymentCredited', params: { amount: '1', reference: '2' } }));
+
+    expect(await tell()).toEqual({ sent: ['bale'] });
+    expect(client.sendMessage.mock.calls.map((c) => c[0])).toEqual(['7']);
+    expect(db.linkedBotAccount.findMany).toHaveBeenCalledWith(expect.objectContaining({ orderBy: { linkedAt: 'desc' } }));
+
+    client.sendMessage.mockClear();
+    client.sendMessage.mockRejectedValueOnce(new Error('bot was blocked by the user'));
+    expect(await tell()).toEqual({ sent: ['telegram'] });
+    expect(client.sendMessage.mock.calls.map((c) => c[0])).toEqual(['7', '5501']);
+  });
+
   it('sends nothing, and is not an error, for a user with no linked chat or no bot', async () => {
     const none = new UserNotifier(notifierPrisma() as unknown as PrismaService, registry(botClient()), localeService(ns));
     expect(await inTenant(() => none.notify({ userId: 'user-1', channel: 'bot', template: 'paymentCredited', params: {} }))).toEqual({ sent: [] });

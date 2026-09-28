@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { retentionKindOf } from '@txnet-backend/shared-core';
+import { noticeClassOf, retentionKindOf } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { GrantNoticeLevelService } from './grant-notice-level.service';
@@ -48,7 +48,8 @@ const MAX_HOLD_MS = 86_400_000 + 3_600_000;
  * `now`. A row whose bot message is already held answers `held` again, so a
  * redelivery after the window ended never tells the bot a second time beside
  * the held one. A notice that may wait (`waitSec`, F-601-p) is held also
- * when the window opens before its wait ends.
+ * when the window opens before its wait ends. Only an `important` notice is
+ * ever held (F-601-s, ADR-0097): `critical` and `info` are `now`.
  *
  * The app pool: the table has no `tenantId` and no RLS, and the caller is a
  * process on the internal seam, never a user.
@@ -76,6 +77,8 @@ export class RetentionLedgerService {
     if (kind === 'cutoff') return { claimed: true, deliver: 'now' };
     const [pref, level] = await Promise.all([this.preferences.stored(input.userId), this.levels.level(input.userId, input.grantId)]);
     if (level === 'essential' || pref?.mutedKinds.includes(kind)) return { claimed: true, deliver: 'muted' };
+    // F-601-s: quiet hours hold only an important notice's bot; a critical one ("active again") is told at once, and an info one has no bot to hold.
+    if (noticeClassOf(input.notice) !== 'important') return { claimed: true, deliver: 'now' };
     const until = quietWithin(pref, now, input.waitSec ?? 0);
     return until ? { claimed: true, deliver: 'held', botAt: until.toISOString() } : { claimed: true, deliver: 'now' };
   }

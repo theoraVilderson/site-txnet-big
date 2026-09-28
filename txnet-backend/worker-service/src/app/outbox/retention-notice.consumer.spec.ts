@@ -341,4 +341,45 @@ describe('RetentionNoticeConsumer.handle', () => {
       expect(Object.keys(RETENTION_NOTICES).filter((type) => !(type in RETENTION_KIND_OF))).toEqual([]);
     });
   });
+
+  // F-601-s, ADR-0097: the class of the type, not of the template (50 % and 80 % share one), decides the channels.
+  describe("a notice's class", () => {
+    const HALF = 'entitlement.grant.usage_50';
+    const END = 'entitlement.grant.ends_in_3d';
+    const BOT_AT = '2026-09-28T04:30:00.000Z';
+    const half = (consumer: RetentionNoticeConsumer) => {
+      consumer.notices = {
+        [HALF]: { template: 'testThreshold', params: ['level'], ahead: { types: [END], told: () => ({ template: 'testThresholdAndEnd', params: ['days'] }) } },
+        [END]: { template: 'testEnd', params: ['days'] },
+      };
+    };
+
+    it('50 % alone is told in the inbox only: it joins the inbox-only burst', async () => {
+      const { consumer, calls } = build();
+      half(consumer);
+
+      await consumer.handle({ ...event(), type: HALF });
+
+      expect(calls.joined.map((j) => j.burst)).toEqual([UnscopedRedisKeys.noticeBurst(TENANT, USER, 'testThreshold', undefined, 'inbox')]);
+    });
+
+    it('50 % carrying a time level takes the stronger class: inbox and bot', async () => {
+      const { consumer, calls } = build();
+      half(consumer);
+
+      await consumer.handle({ ...event({ endNotice: END, endPeriod: 'e1', days: '3' }), type: HALF });
+
+      expect(calls.joined.map((j) => j.burst)).toEqual([UnscopedRedisKeys.noticeBurst(TENANT, USER, 'testThresholdAndEnd')]);
+    });
+
+    it('a combined notice is held when its carried row is, though 50 % itself is never held', async () => {
+      const { consumer, calls } = build({ claims: { [END]: { claimed: true, deliver: 'held', botAt: BOT_AT } } });
+      half(consumer);
+
+      await consumer.handle({ ...event({ endNotice: END, endPeriod: 'e1', days: '3' }), type: HALF });
+
+      expect(calls.fetched[2]).toMatchObject({ url: expect.stringContaining('/retention/hold'), body: { template: 'testThresholdAndEnd', botAt: BOT_AT } });
+      expect(calls.fetched.filter((f) => f.url.includes('/notify/user')).map((f) => (f.body as { channel: string }).channel)).toEqual(['inbox']);
+    });
+  });
 });
