@@ -240,8 +240,8 @@ behind it.
 
 The consumers are `billing`'s: the rial deposit path and the staleness ladder,
 which reads `effectiveAt` (F-0607-a/b). **The first is connected** —
-`billing`'s `FxRateReader` (F-092-c) reads this key for a `useLiveRate` gateway
-and falls back to the table, into the `{snapshotId, rate}` pair F-0606-b made
+`billing`'s `FxRateReader` (F-092-c) reads this key through shared-core's
+`readFxRate` (F-116-c, `contract.md`) and falls back to the table, into the `{snapshotId, rate}` pair F-0606-b made
 `PriceRequest.liveRate`, so nothing prices without naming its row. Its rules are
 `billing/contract.deposit.md`'s; the age is still F-0607-a's.
 

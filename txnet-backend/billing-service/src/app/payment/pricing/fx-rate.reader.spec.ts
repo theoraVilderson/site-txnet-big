@@ -36,7 +36,7 @@ function reader(options: {
   hit?: string | null;
   redisError?: Error;
   currency?: { id: string } | null;
-  row?: { id: string; rate: Prisma.Decimal } | null;
+  row?: { id: string; rate: Prisma.Decimal; effectiveAt: Date } | null;
   code?: string;
 }) {
   const calls = { get: [] as string[], findFirst: 0 };
@@ -69,7 +69,7 @@ function reader(options: {
   };
 }
 
-const row = (rate: string) => ({ id: ROW_ID, rate: new Prisma.Decimal(rate) });
+const row = (rate: string) => ({ id: ROW_ID, rate: new Prisma.Decimal(rate), effectiveAt: new Date('2026-09-12T09:00:00.000Z') });
 
 describe('FxRateReader — the cache', () => {
   it('answers the cached snapshot without touching the table', async () => {

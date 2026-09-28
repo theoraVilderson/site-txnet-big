@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma } from '@prisma/client';
-import { UnscopedRedisKeys } from '@txnet-backend/shared-core';
+import { readFxRate } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
@@ -16,6 +15,9 @@ import { FxRateSnapshot } from './gateway-pricing';
  * between them was anybody reading the key. Until this class,
  * `DepositQuoteService` passed `liveRate: null` and every `useLiveRate` gateway
  * either fell back to its own `staticRate` or refused the quote.
+ *
+ * The read itself is shared-core's `readFxRate` since F-116-c; the rules
+ * below are that function's, kept here because this is where they were argued.
  *
  * **Cache first, table second, and it must be both** (`contract.fx-worker.md`).
  * `fx:rate:{code}` is a cache of a `currency.currency_exchange_rate` row, not a
@@ -58,62 +60,9 @@ export class FxRateReader {
 
   /** The rate the platform last accepted, or `null` when there is none to have. */
   async current(): Promise<FxRateSnapshot | null> {
-    const code = this.code();
-    return (await this.fromCache(code)) ?? (await this.fromTable(code));
+    // One reader for every service (F-116-c): the cache/table rules below live
+    // in shared-core's `readFxRate` now; this keeps the pricer's `{snapshotId, rate}`.
+    const snapshot = await readFxRate(this.prisma, this.redis, this.code(), this.logger);
+    return snapshot ? { snapshotId: snapshot.snapshotId, rate: snapshot.rate } : null;
   }
-
-  private async fromCache(code: string): Promise<FxRateSnapshot | null> {
-    try {
-      const hit = await this.redis.get(UnscopedRedisKeys.fxRate(code));
-      if (!hit) return null;
-      const { snapshotId, rate } = JSON.parse(hit) as Partial<{ snapshotId: string; rate: string }>;
-      return usable(snapshotId, rate);
-    } catch (err) {
-      // A cache that is unreadable, or holds something this build no longer
-      // understands, is a cache miss. Reporting "no rate" from here would drop
-      // every live-rate gateway to its `staticRate` for as long as Redis was
-      // down, quietly and at whatever price that column happens to name.
-      this.logger.warn(
-        `fx rate cache unusable, falling back to the snapshot table: ${(err as Error).message}`,
-      );
-      return null;
-    }
-  }
-
-  private async fromTable(code: string): Promise<FxRateSnapshot | null> {
-    // No tenant is bound for this read and none is needed: `currency_exchange_rate`
-    // has no `tenantId` and therefore no RLS policy — the rate is the platform's,
-    // and every tenant prices from the same one.
-    const currency = await this.prisma.currency.findUnique({ where: { code }, select: { id: true } });
-    if (!currency) {
-      // Reference data neither this service nor the worker will invent
-      // (`contract.fx-worker.md`). For the worker that is a failed run; here it
-      // is a gateway that cannot price, which is a 503 and not a 500.
-      this.logger.warn(`no currency row with code "${code}" — no live rate can be read`);
-      return null;
-    }
-
-    // "The current rate" is the newest `effectiveAt`, which the
-    // `[currencyId, effectiveAt desc]` index answers. The table is append-only
-    // (invariant #3), so this is a read of history's last row, never of a flag.
-    const latest = await this.prisma.currencyExchangeRate.findFirst({
-      where: { currencyId: currency.id, isActive: true },
-      orderBy: { effectiveAt: 'desc' },
-      select: { id: true, rate: true },
-    });
-
-    return latest ? usable(latest.id, latest.rate) : null;
-  }
-}
-
-/** A snapshot the pricer will accept, or nothing. Both halves or neither (ADR-0019). */
-function usable(snapshotId: string | undefined, rate: Prisma.Decimal | string | undefined): FxRateSnapshot | null {
-  if (!snapshotId || snapshotId.trim() === '' || rate === undefined || rate === null) return null;
-  let value: Prisma.Decimal;
-  try {
-    value = new Prisma.Decimal(rate);
-  } catch {
-    return null;
-  }
-  return value.gt(0) ? { snapshotId, rate: value } : null;
 }
