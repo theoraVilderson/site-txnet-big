@@ -46,6 +46,7 @@ function paymentRow(overrides: Record<string, unknown> = {}) {
     gatewayId: null,
     tenantGatewayConfigId: GATEWAY,
     amountCredited: d('10.00'),
+    currencyCode: 'USD',
     feeApplied: d('0.00'),
     chargedAmountMinor: BigInt(770),
     exchangeRateSnapshot: d('76.923076923076923077'),
@@ -203,7 +204,7 @@ describe('DepositInChatService.paid', () => {
 
   it('credits through the guarded settlement with the platform charge id', async () => {
     const { service, calls } = build(paymentRow({ gatewayTrackingCode: PAYMENT }));
-    await expect(service.paid(paid())).resolves.toEqual({ status: 'credited', credited: '10.00' });
+    await expect(service.paid(paid())).resolves.toEqual({ status: 'credited', credited: '10.00', currencyCode: 'USD' });
     expect(calls.credited).toEqual([{ referenceId: 'tg-charge-1', source: 'webhook_auto' }]);
   });
 
@@ -218,12 +219,14 @@ describe('DepositInChatService.paid', () => {
     await expect(repeat.service.paid(paid())).resolves.toEqual({
       status: 'already_settled',
       credited: '10.00',
+      currencyCode: 'USD',
     });
 
     const other = build();
     await expect(other.service.paid(paid({ currency: 'USD' }))).resolves.toEqual({
       status: 'unsettled',
       credited: null,
+      currencyCode: null,
     });
     expect(other.calls.credited).toEqual([]);
   });
@@ -233,13 +236,14 @@ describe('DepositInChatService.paid', () => {
     await expect(service.paid(paid({ paymentId: '99999999-9999-4999-8999-999999999999' }))).resolves.toEqual({
       status: 'not_found',
       credited: null,
+      currencyCode: null,
     });
     expect(calls.credited).toEqual([]);
   });
 
   it.each(NOT_THE_PAYER)('credits nothing for %s: the row stays verifying for a person', async (_name, row, r) => {
     const { service, calls } = build(row);
-    await expect(service.paid({ ...r, chargeId: 'tg-charge-1' })).resolves.toEqual({ status: 'unsettled', credited: null });
+    await expect(service.paid({ ...r, chargeId: 'tg-charge-1' })).resolves.toEqual({ status: 'unsettled', credited: null, currencyCode: null });
     expect(calls.credited).toEqual([]);
   });
 });

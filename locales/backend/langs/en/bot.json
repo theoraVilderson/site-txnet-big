@@ -153,7 +153,7 @@
   "topUp": {
     "pickGateway": "Which gateway would you like to pay with?",
     "none": "No payment gateway is available right now. Please try again a little later.",
-    "askAmount": "How much would you like to add? Pick an amount or type one.",
+    "askAmount": "How much would you like to add, in {{currency}}? Pick an amount or type one.",
     "quote": "Amount: {{amount}}\nFee: {{fee}}\nYou pay: {{payable}}\nAdded to your wallet: {{credited}}",
     "quoteTaxed": "Amount: {{amount}}\nFee: {{fee}}\nTax ({{taxRatePercent}}%): {{tax}}\nYou pay: {{payable}}\nAdded to your wallet: {{credited}}",
     "pay": "Your payment is ready. Tap the button below to pay — once it is confirmed, you will get a message here.",
@@ -198,5 +198,13 @@
     "listEmpty": "You have not sent a bulk message yet.",
     "row": "{{date}} · {{preview}}",
     "readOnly": "You cannot start a new broadcast right now, but here is what you have sent."
+  },
+  "money": {
+    "amount": "{{amount}} {{currency}}",
+    "currency": {
+      "IRT": "Toman",
+      "IRR": "rials",
+      "USD": "USD"
+    }
   }
 }

@@ -3,6 +3,7 @@ import { BotAction } from '@txnet-backend/messenger';
 import { BillingApiClient, BillingCallContext, DepositBody } from '../billing-api/billing-api.client';
 import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
 import { BotKeys } from '../locale/bot-keys';
+import { currencyName, money } from '../locale/money';
 import { ChatAccess } from '../session/chat-access';
 import { digitValue } from './phone-number';
 import { ACTIONS, ask, say, toMenu, view } from './views';
@@ -93,15 +94,18 @@ export class TopUpFlow {
     const gateway = listed.data.find((g) => `${g.source}:${g.id}` === picked);
     if (!gateway) return { view: say('topUp.gone', { key: BotKeys.common.tryAgain }), nextState: state };
 
+    const code = gateway.currencyCode;
     const presets: BotAction[][] = gateway.presets.map((amount) => [
-      { id: `${AMOUNT_ACTION_PREFIX}${amount}`, label: { raw: amount } },
+      { id: `${AMOUNT_ACTION_PREFIX}${amount}`, label: money(amount, code) },
     ]);
     return {
-      view: ask('topUp.amount', { key: BotKeys.topUp.askAmount }, presets),
+      view: ask('topUp.amount', { key: BotKeys.topUp.askAmount, values: { currency: currencyName(code) } }, presets),
       nextState: {
         flow: 'topUp',
         step: 'topUp.amount',
-        data: { gatewayId: gateway.id, source: gateway.source, gateway: gateway.displayName },
+        // The currency rides beside the gateway it came with, so the summary can say
+        // what the typed amount is in — navigation, not a price (ADR-0010).
+        data: { gatewayId: gateway.id, source: gateway.source, gateway: gateway.displayName, currencyCode: code },
       },
     };
   }
@@ -115,12 +119,14 @@ export class TopUpFlow {
     if (!quoted.ok || !quoted.data) return { view: say('topUp.refused', { raw: quoted.msg }), nextState: state };
 
     const q = quoted.data;
+    // Every figure in the currency the quote named (F-116-h4).
+    const m = (amount: string) => money(amount, q.currencyCode);
     // A taxed total must add up on screen, so the tax gets its own line; an
     // untaxed top-up keeps the message it always had (ADR-0076).
     const taxed = q.taxRatePercent != null && q.tax !== '0.00';
     const body = taxed
-      ? { key: BotKeys.topUp.quoteTaxed, values: { amount: q.amount, fee: q.fee, tax: q.tax, taxRatePercent: q.taxRatePercent, payable: q.payable, credited: q.credited } }
-      : { key: BotKeys.topUp.quote, values: { amount: q.amount, fee: q.fee, payable: q.payable, credited: q.credited } };
+      ? { key: BotKeys.topUp.quoteTaxed, values: { amount: m(q.amount), fee: m(q.fee), tax: m(q.tax), taxRatePercent: q.taxRatePercent, payable: m(q.payable), credited: m(q.credited) } }
+      : { key: BotKeys.topUp.quote, values: { amount: m(q.amount), fee: m(q.fee), payable: m(q.payable), credited: m(q.credited) } };
     return {
       view: ask(
         'topUp.confirm',
@@ -142,7 +148,10 @@ export class TopUpFlow {
     const s = started.data;
     if (s.free) {
       return {
-        view: say('topUp.credited', { key: BotKeys.topUp.credited, values: { credited: s.credited, balance: s.balance ?? '' } }),
+        view: say('topUp.credited', {
+          key: BotKeys.topUp.credited,
+          values: { credited: money(s.credited, s.currencyCode), balance: s.balance ? money(s.balance, s.currencyCode) : '' },
+        }),
         nextState: null,
       };
     }
@@ -152,7 +161,7 @@ export class TopUpFlow {
         nextState: null,
         invoice: {
           title: { key: BotKeys.topUp.invoiceTitle },
-          description: { key: BotKeys.topUp.invoiceDescription, values: { credited: s.credited } },
+          description: { key: BotKeys.topUp.invoiceDescription, values: { credited: money(s.credited, s.currencyCode) } },
           label: { key: BotKeys.topUp.invoiceLabel },
           payload: s.invoice.payload,
           currency: s.invoice.currency,

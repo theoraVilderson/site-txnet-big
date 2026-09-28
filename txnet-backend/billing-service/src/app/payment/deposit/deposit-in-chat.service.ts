@@ -80,8 +80,10 @@ export type PreCheckoutVerdict = { approved: true } | { approved: false; reason:
 
 export type InChatPaidResult = {
   status: 'credited' | 'already_settled' | 'unsettled' | 'not_found';
-  /** Base currency, what the wallet received — `null` unless the payment is settled. */
+  /** What the wallet received — `null` unless the payment is settled. */
   credited: string | null;
+  /** The payment's currency, what `credited` is in (F-116-h4); `null` beside a `null` credit. */
+  currencyCode: string | null;
 };
 
 const IN_CHAT_SELECT = { ...PAYMENT_SELECT, expiresAt: true } as const;
@@ -143,7 +145,7 @@ export class DepositInChatService {
     if (tenantId === undefined) {
       // The platform took money for a payment nobody here has.
       this.logger.error(`in-chat paid for unknown payment ${ref.paymentId} (charge ${ref.chargeId})`);
-      return { status: 'not_found', credited: null };
+      return { status: 'not_found', credited: null, currencyCode: null };
     }
     if (tenantId === null) {
       // Pre-checkout would have refused this sender. Money taken, nothing credited:
@@ -152,7 +154,7 @@ export class DepositInChatService {
         `in-chat paid for payment ${ref.paymentId} (charge ${ref.chargeId}) from ${ref.sender.platform}:${ref.sender.senderId} ` +
           `via tenant ${ref.sender.botTenantId}'s bot, not its payer's: not settled`,
       );
-      return { status: 'unsettled', credited: null };
+      return { status: 'unsettled', credited: null, currencyCode: null };
     }
     return runWithTenant({ id: tenantId }, () => this.settle(ref));
   }
@@ -161,13 +163,13 @@ export class DepositInChatService {
     const found = await this.find(ref);
     if (!found) {
       this.logger.error(`in-chat paid for payment ${ref.paymentId} at a gateway that does not settle in chat (charge ${ref.chargeId})`);
-      return { status: 'not_found', credited: null };
+      return { status: 'not_found', credited: null, currencyCode: null };
     }
     const { payment, provider } = found;
 
     if (ref.currency !== provider.chargeCurrency) {
       this.logger.error(`payment ${payment.id} paid in ${ref.currency}, charged in ${provider.chargeCurrency}: not settled`);
-      return { status: 'unsettled', credited: null };
+      return { status: 'unsettled', credited: null, currencyCode: null };
     }
     const received =
       ref.totalAmount === payment.chargedAmountMinor
@@ -185,6 +187,7 @@ export class DepositInChatService {
     return {
       status: credited ? 'credited' : settled ? 'already_settled' : 'unsettled',
       credited: settled && after ? money(after.amountCredited) : null,
+      currencyCode: settled && after ? after.currencyCode : null,
     };
   }
 

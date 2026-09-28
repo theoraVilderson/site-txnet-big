@@ -3,6 +3,7 @@ import { aBotIntegration } from '@txnet-backend/messenger';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { BillingApiClient } from '../billing-api/billing-api.client';
 import { BotKeys } from '../locale/bot-keys';
+import { money } from '../locale/money';
 import { ChatContext, NavState } from '../conversation/nav.types';
 import { BotSessionStore } from '../session/bot-session.store';
 import { ChatAccess } from '../session/chat-access';
@@ -16,7 +17,7 @@ const GW = 'a1b2c3d4-0000-4000-8000-000000000001';
 const GATEWAYS = [
   { id: GW, source: 'tenant', displayName: 'Zarinpal', providerName: 'zarinpal', category: 'ipg', minAmount: '10.00', maxAmount: null, presets: ['50.00', '100.00'] },
 ];
-const QUOTE = { gatewayId: GW, source: 'tenant', amount: '100.00', discount: '0.00', fee: '2.00', tax: '0.00', taxRatePercent: null, payable: '102.00', credited: '100.00', free: false };
+const QUOTE = { gatewayId: GW, source: 'tenant', amount: '100.00', discount: '0.00', fee: '2.00', tax: '0.00', taxRatePercent: null, payable: '102.00', credited: '100.00', free: false, currencyCode: 'IRT' };
 
 function harness(over: { session?: unknown; billing?: Partial<BillingApiClient> } = {}) {
   const auth = {
@@ -87,7 +88,7 @@ describe('TopUpFlow', () => {
     const result = await flow.handle({ ...ctx, text: '۱۰۰' }, onAmount, null);
 
     expect(billing.quote).toHaveBeenCalledWith({ gatewayId: GW, source: 'tenant', amount: '100' }, { lang: 'fa', accessToken: 'access-1', platform: 'telegram', botTenantId: ctx.integration.tenantId });
-    expect(result.view.body).toMatchObject({ values: { payable: '102.00', fee: '2.00', credited: '100.00' } });
+    expect(result.view.body).toMatchObject({ values: { payable: money('102.00', 'IRT'), fee: money('2.00', 'IRT'), credited: money('100.00', 'IRT') } });
     expect(ids(result)).toContain('topup:pay');
     expect(result.nextState).toMatchObject({ step: 'topUp.confirm', data: { amount: '100' } });
   });
@@ -101,7 +102,7 @@ describe('TopUpFlow', () => {
     const taxed = await flow.handle({ ...ctx, text: '100' }, onAmount, null);
     expect(taxed.view.body).toEqual({
       key: BotKeys.topUp.quoteTaxed,
-      values: { amount: '100.00', fee: '2.00', tax: '9.00', taxRatePercent: '9', payable: '111.00', credited: '100.00' },
+      values: { amount: money('100.00', 'IRT'), fee: money('2.00', 'IRT'), tax: money('9.00', 'IRT'), taxRatePercent: '9', payable: money('111.00', 'IRT'), credited: money('100.00', 'IRT') },
     });
   });
 
@@ -130,7 +131,7 @@ describe('TopUpFlow', () => {
     const { flow } = harness({
       billing: {
         start: vi.fn().mockResolvedValue(
-          ok({ paymentId: 'p-3', free: false, redirectUrl: null, invoice: { payload: 'p-3', currency: 'XTR', amountMinor: '770', providerToken: null }, amount: '10.00', discount: '0.00', fee: '0.00', payable: '10.00', credited: '10.00', balance: null }),
+          ok({ paymentId: 'p-3', free: false, redirectUrl: null, invoice: { payload: 'p-3', currency: 'XTR', amountMinor: '770', providerToken: null }, amount: '10.00', discount: '0.00', fee: '0.00', payable: '10.00', credited: '10.00', balance: null, currencyCode: 'USD' }),
         ),
       },
     });
@@ -138,7 +139,7 @@ describe('TopUpFlow', () => {
     const result = await flow.handle(ctx, onConfirm, 'topup:pay');
 
     expect(result.view.id).toBe('topUp.payInChat');
-    expect(result.invoice).toMatchObject({ payload: 'p-3', currency: 'XTR', amount: 770, description: { values: { credited: '10.00' } } });
+    expect(result.invoice).toMatchObject({ payload: 'p-3', currency: 'XTR', amount: 770, description: { values: { credited: money('10.00', 'USD') } } });
     expect(result.nextState).toBeNull();
   });
 
@@ -159,13 +160,13 @@ describe('TopUpFlow', () => {
   it('says the wallet was credited on a free top-up, with nowhere to send the user', async () => {
     const { flow } = harness({
       billing: {
-        start: vi.fn().mockResolvedValue(ok({ paymentId: 'p-2', free: true, redirectUrl: null, amount: '100.00', discount: '100.00', fee: '0.00', payable: '0.00', credited: '100.00', balance: '250.00' })),
+        start: vi.fn().mockResolvedValue(ok({ paymentId: 'p-2', free: true, redirectUrl: null, amount: '100.00', discount: '100.00', fee: '0.00', payable: '0.00', credited: '100.00', balance: '250.00', currencyCode: 'IRT' })),
       },
     });
 
     const result = await flow.handle(ctx, onConfirm, 'topup:pay');
 
-    expect(result.view).toMatchObject({ id: 'topUp.credited', body: { values: { credited: '100.00', balance: '250.00' } } });
+    expect(result.view).toMatchObject({ id: 'topUp.credited', body: { values: { credited: money('100.00', 'IRT'), balance: money('250.00', 'IRT') } } });
     expect(result.nextState).toBeNull();
   });
 

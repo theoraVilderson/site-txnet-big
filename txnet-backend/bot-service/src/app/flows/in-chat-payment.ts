@@ -4,6 +4,7 @@ import { BillingApiClient, InChatPaymentBody, PreCheckoutVerdict } from '../bill
 import { ChatContext } from '../conversation/nav.types';
 import { BotCopy } from '../locale/bot-copy';
 import { BotKeys } from '../locale/bot-keys';
+import { money } from '../locale/money';
 
 type Refusal = Extract<PreCheckoutVerdict, { approved: false }>['reason'];
 
@@ -91,7 +92,7 @@ export class InChatPayment {
       );
     }
     const text: BotText = settled
-      ? { key: BotKeys.topUp.paidCredited, values: { credited: answer.data.credited as string } }
+      ? { key: BotKeys.topUp.paidCredited, values: { credited: money(answer.data.credited as string, answer.data.currencyCode) } }
       : { key: BotKeys.topUp.paidPending };
     await client.sendMessage(ctx.chatId, this.copy.text(ctx.lang, text));
   }

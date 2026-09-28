@@ -13,8 +13,9 @@ export type InvoiceLinkRequest = {
   amountMinor: string;
   /** The gateway's `secretKey` (Bale's wallet). Leaves billing only on this internal call. */
   providerToken: string | null;
-  /** Base currency, for the invoice's description. */
+  /** For the invoice's description, in `currencyCode` — the payment's, not `currency` (the charge's). */
   credited: string;
+  currencyCode: string;
   lang: string;
 };
 

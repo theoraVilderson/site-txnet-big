@@ -17,13 +17,15 @@ export interface DepositGateway {
   maxAmount: string | null;
   /** The gateway's quick amounts (F-092-v); empty = none to offer. */
   presets: string[];
+  /** What the limits and presets are in (F-116-h2); the payment's currency, since only those are listed. */
+  currencyCode: string;
 }
 
 /** The quote's and the start's body — the same body, on purpose (F-0612). */
 export interface DepositBody {
   gatewayId: string;
   source: 'tenant' | 'platform';
-  /** Base currency, a decimal string (ADR-0019) — billing validates it. */
+  /** In the gateway's `currencyCode`, a decimal string — billing validates it. */
   amount: string;
 }
 
@@ -39,6 +41,8 @@ export interface DepositQuote {
   payable: string;
   credited: string;
   free: boolean;
+  /** What every figure above is in (F-116-h2) — shown beside each one (F-116-h4). */
+  currencyCode: string;
 }
 
 export interface DepositStarted extends DepositQuote {
@@ -77,6 +81,8 @@ export type PreCheckoutVerdict = { approved: true } | { approved: false; reason:
 export interface InChatPaid {
   status: 'credited' | 'already_settled' | 'unsettled' | 'not_found';
   credited: string | null;
+  /** The payment's currency, what `credited` is in (F-116-h4); absent from an older billing. */
+  currencyCode?: string | null;
 }
 
 /**

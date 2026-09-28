@@ -118,7 +118,8 @@ before this row — an update, unlike a tick, does not recur.
 
 Service-only and unpublished, like `dispatch`; its one caller is `billing`'s
 `start` for an in-chat gateway opened in a Mini App, which holds no bot token.
-Body `{tenantId, platform, paymentId, currency, amountMinor, providerToken, credited, lang}`.
+Body `{tenantId, platform, paymentId, currency, amountMinor, providerToken, credited, currencyCode?, lang}`;
+`credited` is in `currencyCode` (the payment's; `currency` is the charge's), named in the description (F-116-h4).
 The invoice is the chat's (F-104-m): the same three `topUp.invoice*` texts in
 `lang`, payload = the payment id, so its `pre_checkout_query` and
 `successful_payment` reach `InChatPayment` unchanged. Made by the tenant's

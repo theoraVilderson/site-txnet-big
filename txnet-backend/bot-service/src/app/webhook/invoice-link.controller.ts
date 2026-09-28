@@ -15,6 +15,7 @@ import { BotClientRegistry, isBotPlatform } from '@txnet-backend/messenger';
 import { ServiceOnlyGuard } from '../common/service-only.guard';
 import { BotCopy } from '../locale/bot-copy';
 import { BotKeys } from '../locale/bot-keys';
+import { money } from '../locale/money';
 
 const invoiceLinkSchema = z.object({
   tenantId: z.string().min(1),
@@ -24,6 +25,8 @@ const invoiceLinkSchema = z.object({
   amountMinor: z.string().regex(/^[1-9]\d*$/),
   providerToken: z.string().min(1).nullable(),
   credited: z.string().min(1),
+  /** What `credited` is in (F-116-h4); optional so an older billing's request still links. */
+  currencyCode: z.string().regex(/^[A-Z]{3}$/).optional(),
   lang: z.string().min(1),
 });
 
@@ -71,7 +74,7 @@ export class InvoiceLinkController {
     const t = (key: string, values?: Record<string, string>) => this.copy.text(body.lang, { key, ...(values ? { values } : {}) });
     const made = await client.createInvoiceLink({
       title: t(BotKeys.topUp.invoiceTitle),
-      description: t(BotKeys.topUp.invoiceDescription, { credited: body.credited }),
+      description: this.copy.text(body.lang, { key: BotKeys.topUp.invoiceDescription, values: { credited: money(body.credited, body.currencyCode) } }),
       payload: body.paymentId,
       currency: body.currency,
       prices: [{ label: t(BotKeys.topUp.invoiceLabel), amount: Number(body.amountMinor) }],

@@ -296,6 +296,7 @@ describe('DepositStartService.start', () => {
         amountMinor: '20200000',
         providerToken: 'bale-wallet-token',
         credited: started.credited,
+        currencyCode: started.currencyCode,
         lang: 'fa',
       },
     ]);

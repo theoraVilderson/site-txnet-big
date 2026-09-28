@@ -157,9 +157,15 @@ export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   [BotKeys.progress.topUp]: 'Topping up · step {{n}} of {{total}}',
   [BotKeys.field.gateway]: 'Gateway: {{value}} ✅',
   [BotKeys.field.amount]: 'Amount: {{value}} ✅',
+  // An amount and the currency it is in (F-116-h4): billing names the code, the
+  // chat says its name. A code with no name here prints as the code (`money.ts`).
+  [BotKeys.money.amount]: '{{amount}} {{currency}}',
+  [BotKeys.money.currency.IRT]: 'Toman',
+  [BotKeys.money.currency.IRR]: 'rials',
+  [BotKeys.money.currency.USD]: 'USD',
   [BotKeys.topUp.pickGateway]: 'Which gateway would you like to pay with?',
   [BotKeys.topUp.none]: 'No payment gateway is available right now. Please try again a little later.',
-  [BotKeys.topUp.askAmount]: 'How much would you like to add? Pick an amount or type one.',
+  [BotKeys.topUp.askAmount]: 'How much would you like to add, in {{currency}}? Pick an amount or type one.',
   [BotKeys.topUp.quote]: 'Amount: {{amount}}\nFee: {{fee}}\nYou pay: {{payable}}\nAdded to your wallet: {{credited}}',
   [BotKeys.topUp.quoteTaxed]: 'Amount: {{amount}}\nFee: {{fee}}\nTax ({{taxRatePercent}}%): {{tax}}\nYou pay: {{payable}}\nAdded to your wallet: {{credited}}',
   [BotKeys.topUp.pay]:

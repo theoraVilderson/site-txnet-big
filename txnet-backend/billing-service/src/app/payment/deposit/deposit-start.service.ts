@@ -347,6 +347,7 @@ export class DepositStartService {
         amountMinor: invoice.amountMinor,
         providerToken: invoice.providerToken,
         credited: answer.credited,
+        currencyCode: answer.currencyCode,
         lang: request.lang ?? 'en',
       });
       if (!link) {

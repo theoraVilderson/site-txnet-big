@@ -1,5 +1,6 @@
 import { BadGatewayException, BadRequestException, UnprocessableEntityException } from '@nestjs/common';
 import { BotKeys } from '../locale/bot-keys';
+import { money } from '../locale/money';
 import { InvoiceLinkController } from './invoice-link.controller';
 
 /**
@@ -14,6 +15,7 @@ const body = {
   amountMinor: '20200000',
   providerToken: 'bale-wallet-token',
   credited: '20.00',
+  currencyCode: 'IRT',
   lang: 'fa',
 };
 
@@ -56,7 +58,7 @@ describe('InvoiceLinkController', () => {
         providerToken: 'bale-wallet-token',
       },
     ]);
-    expect(seen.texts).toContainEqual({ lang: 'fa', key: BotKeys.topUp.invoiceDescription, values: { credited: '20.00' } });
+    expect(seen.texts).toContainEqual({ lang: 'fa', key: BotKeys.topUp.invoiceDescription, values: { credited: money('20.00', 'IRT') } });
   });
 
   it('sends no provider token for a provider that takes none (Stars)', async () => {

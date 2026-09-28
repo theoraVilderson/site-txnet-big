@@ -4,6 +4,7 @@ import { BillingApiClient } from '../billing-api/billing-api.client';
 import { ChatContext } from '../conversation/nav.types';
 import { BotCopy } from '../locale/bot-copy';
 import { BotKeys } from '../locale/bot-keys';
+import { money } from '../locale/money';
 import { InChatPayment } from './in-chat-payment';
 
 /**
@@ -44,7 +45,7 @@ const ok = <T>(data: T) => ({ ok: true, msg: 'ok', data });
 function harness(over: { billing?: Partial<BillingApiClient> } = {}) {
   const billing = {
     preCheckout: vi.fn().mockResolvedValue(ok({ approved: true })),
-    paid: vi.fn().mockResolvedValue(ok({ status: 'credited', credited: '10.00' })),
+    paid: vi.fn().mockResolvedValue(ok({ status: 'credited', credited: '10.00', currencyCode: 'USD' })),
     ...over.billing,
   } as unknown as Mocked<BillingApiClient>;
   const copy = {
@@ -99,7 +100,7 @@ describe('InChatPayment', () => {
     await handler.handle(succeeded, client);
 
     expect(billing.paid).toHaveBeenCalledWith({ ...relayed, chargeId: 'tg-charge-1' }, 'fa');
-    expect(client.sendMessage).toHaveBeenCalledWith('42', `${BotKeys.topUp.paidCredited}{"credited":"10.00"}`);
+    expect(client.sendMessage).toHaveBeenCalledWith('42', `${BotKeys.topUp.paidCredited}${JSON.stringify({ credited: money('10.00', 'USD') })}`);
   });
 
   it('never says credited for money that did not credit — it is being checked', async () => {

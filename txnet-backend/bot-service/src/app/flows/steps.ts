@@ -2,6 +2,7 @@ import { BotText } from '@txnet-backend/messenger';
 import { OtpChannelName } from '../auth-api/auth-api.types';
 import { BotFlow, NavState } from '../conversation/nav.types';
 import { BotKey, BotKeys } from '../locale/bot-keys';
+import { money } from '../locale/money';
 
 /**
  * Where a conversation is, and what the user has already said.
@@ -123,12 +124,15 @@ const ECHOED: Array<{ field: string; key: string }> = [
   { field: 'amount', key: BotKeys.field.amount },
 ];
 
+/** Echoed with the currency the gateway named (F-116-h4), rather than as typed. */
+const MONEY_FIELDS = new Set(['amount']);
+
 /** What the user has told this conversation so far, one line each. */
 export function summaryOf(state: NavState): BotText[] {
   const lines: BotText[] = [];
   for (const { field, key } of ECHOED) {
     const value = state.data[field];
-    if (value) lines.push({ key, values: { value } });
+    if (value) lines.push({ key, values: { value: MONEY_FIELDS.has(field) ? money(value, state.data.currencyCode) : value } });
   }
   // The channel is a choice, not typed text: its own key, so "Here, in this
   // chat" reads the same in the summary as it did on the button.
