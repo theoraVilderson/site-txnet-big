@@ -62,7 +62,7 @@ describe('RetentionLedgerService.claim — how a claimed notice is told', () => 
       count: vi.fn().mockResolvedValue(0),
     };
     const preferences = { stored: vi.fn().mockResolvedValue(stored) };
-    return { retentionNotice, preferences, service: new RetentionLedgerService({ retentionNotice } as never, preferences as never) };
+    return { retentionNotice, preferences, service: new RetentionLedgerService({ retentionNotice } as never, preferences as never, { level: async () => 'all' } as never) };
   }
 
   it('mutes a kind the user muted — and still writes the row', async () => {

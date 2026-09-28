@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { retentionKindOf } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { GrantNoticeLevelService } from './grant-notice-level.service';
 import { NotificationPreferencesService, quietUntil } from './notification-preferences.service';
 
 export type RetentionClaim = { eventId: string; userId: string; grantId: string; notice: string; period: string };
@@ -37,9 +38,11 @@ const MAX_HOLD_MS = 86_400_000;
  *
  * **The claim also says how** (F-601-m, invariant 15): the user's mute and
  * quiet hours are read here, so every producer and the bot's settings
- * (F-319) meet one rule. A `cutoff` kind is always `now`. A row whose bot
- * message is already held answers `held` again, so a redelivery after the
- * window ended never tells the bot a second time beside the held one.
+ * (F-319) meet one rule — and so is the Grant's own level (F-601-o): a Grant
+ * set to `essential` is muted for every kind. A `cutoff` kind is always
+ * `now`. A row whose bot message is already held answers `held` again, so a
+ * redelivery after the window ended never tells the bot a second time beside
+ * the held one.
  *
  * The app pool: the table has no `tenantId` and no RLS, and the caller is a
  * process on the internal seam, never a user.
@@ -49,6 +52,7 @@ export class RetentionLedgerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly preferences: NotificationPreferencesService,
+    private readonly levels: GrantNoticeLevelService,
   ) {}
 
   async claim(input: RetentionClaim, now = new Date()): Promise<ClaimAnswer> {
@@ -64,8 +68,8 @@ export class RetentionLedgerService {
     }
     const kind = retentionKindOf(input.notice);
     if (kind === 'cutoff') return { claimed: true, deliver: 'now' };
-    const pref = await this.preferences.stored(input.userId);
-    if (pref?.mutedKinds.includes(kind)) return { claimed: true, deliver: 'muted' };
+    const [pref, level] = await Promise.all([this.preferences.stored(input.userId), this.levels.level(input.userId, input.grantId)]);
+    if (level === 'essential' || pref?.mutedKinds.includes(kind)) return { claimed: true, deliver: 'muted' };
     const until = quietUntil(pref, now);
     return until ? { claimed: true, deliver: 'held', botAt: until.toISOString() } : { claimed: true, deliver: 'now' };
   }

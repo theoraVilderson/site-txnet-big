@@ -7,6 +7,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi } from "@/lib/billing-api";
+import { notificationApi, type GrantNoticeLevel } from "@/lib/notification-api";
 import { Pagination } from "../../_components/kit/Pagination";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { useGrantsPage } from "../_hooks/useGrantsPage";
@@ -53,6 +54,10 @@ const NO_LINES: readonly string[] = [];
  * held by this page alone and sent to billing's `by-lines` in a POST body;
  * the box shows how many, not the links. Paging and "show ended" keep them,
  * a reload, typing a name or clearing drops them.
+ *
+ * **Which services are told essentials only is read once per visit** (F-601-o):
+ * one list of ids from `notification`, not a read per row, and moved here when
+ * a row stores a choice.
  */
 export function MyServicesView() {
   const { t, lang } = useLocale();
@@ -140,6 +145,29 @@ export function MyServicesView() {
       alive = false;
     };
   }, []);
+  // The services told essentials only (F-601-o): null while read, "failed" if not.
+  const [essential, setEssential] = useState<ReadonlySet<string> | "failed" | null>(null);
+  useEffect(() => {
+    let alive = true;
+    notificationApi
+      .grantNoticeLevels()
+      .then((l) => alive && setEssential(new Set(l.essential)))
+      .catch(() => alive && setEssential("failed"));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const onNoticeLevel = useCallback((grantId: string, level: GrantNoticeLevel) => {
+    setEssential((prev) => {
+      const next = new Set(prev instanceof Set ? prev : []);
+      if (level === "essential") next.add(grantId);
+      else next.delete(grantId);
+      return next;
+    });
+  }, []);
+  const levelOf = (grantId: string): GrantNoticeLevel | null | undefined =>
+    essential === null ? undefined : essential === "failed" ? null : essential.has(grantId) ? "essential" : "all";
+
   const totalPages = Math.max(1, Math.ceil(state.total / state.pageSize));
   // Built once per answer, so a memoised row sees the same props on a
   // re-render that did not change it.
@@ -238,6 +266,8 @@ export function MyServicesView() {
               configsAsked={state.configsAsked[row.id]}
               autoOpen={autoOpen}
               meteringDown={meteringDown}
+              noticeLevel={levelOf(row.id)}
+              onNoticeLevel={onNoticeLevel}
             />
           ))}
         </ul>

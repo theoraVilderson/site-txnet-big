@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type GrantRow } from "@/lib/billing-api";
 import { ApiError } from "@/lib/api-error";
+import { notificationApi } from "@/lib/notification-api";
 import { copyText } from "../_lib/clipboard";
 import { ServiceRow } from "./_components/ServiceRow";
 import { GRANT_STATUSES, GRANT_TONES, capabilityNames } from "./_lib/my-services";
@@ -85,6 +86,11 @@ vi.mock("@/lib/billing-api", async (importOriginal) => ({
     grantUsage: vi.fn(() => new Promise(() => {})),
     configAction: vi.fn(),
   },
+}));
+
+vi.mock("@/lib/notification-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/notification-api")>()),
+  notificationApi: { setGrantNoticeLevel: vi.fn() },
 }));
 
 const subscriptionLink = vi.mocked(billingApi.subscriptionLink);
@@ -501,5 +507,48 @@ describe("resetting a link", () => {
 
     answer({ grantId: "g1", subscriptionUrl: LINK_2 });
     await waitFor(() => expect(resetSubscriptionLink).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("a service's notice level (F-601-o)", () => {
+  const N = "myServices.notices";
+  const setLevel = vi.mocked(notificationApi.setGrantNoticeLevel);
+  const radio = (name: string) => screen.getByRole("radio", { name: new RegExp(`^${name}`) });
+
+  it("marks an essential service beside its status, and offers the choice under manage", () => {
+    const onNoticeLevel = vi.fn();
+    render(<ServiceRow row={GRANT} name="VPN Pro" capabilities={[]} noticeLevel="essential" onNoticeLevel={onNoticeLevel} />);
+
+    expect(screen.getByText(`${N}.badge`)).toBeTruthy();
+    expect(screen.queryByRole("radio")).toBeNull();
+    details();
+    expect(radio(`${N}.essential`).getAttribute("aria-checked")).toBe("true");
+    expect(radio(`${N}.all`).getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("stores a tap for this Grant and hands the stored level to the page", async () => {
+    setLevel.mockResolvedValue({ grantId: "g1", level: "essential" });
+    const onNoticeLevel = vi.fn();
+    render(<ServiceRow row={GRANT} name="VPN Pro" capabilities={[]} noticeLevel="all" onNoticeLevel={onNoticeLevel} />);
+    details();
+
+    fireEvent.click(radio(`${N}.essential`));
+
+    await waitFor(() => expect(onNoticeLevel).toHaveBeenCalledWith("g1", "essential"));
+    expect(setLevel).toHaveBeenCalledWith("g1", "essential");
+  });
+
+  it("says so on a refused save, and draws no guess when the levels could not be read", async () => {
+    setLevel.mockRejectedValue(new Error("down"));
+    const { unmount } = render(<ServiceRow row={GRANT} name="VPN Pro" capabilities={[]} noticeLevel="all" onNoticeLevel={vi.fn()} />);
+    details();
+    fireEvent.click(radio(`${N}.essential`));
+    expect(await screen.findByText(`${N}.failed`)).toBeTruthy();
+    unmount();
+
+    render(<ServiceRow row={GRANT} name="VPN Pro" capabilities={[]} noticeLevel={null} onNoticeLevel={vi.fn()} />);
+    details();
+    expect(screen.getByText(`${N}.unavailable`)).toBeTruthy();
+    expect(screen.queryByRole("radio")).toBeNull();
   });
 });

@@ -2,8 +2,8 @@
 id: notification
 layer: domain
 status: active
-version: 8
-updated: 2026-09-27
+version: 9
+updated: 2026-09-28
 ---
 
 # Contract — notification: retention notices, once per Grant period
@@ -22,7 +22,7 @@ one notice path of ADR-0084 — not a second one inside `notification-service`
 |---|---|---|
 | emit | the producing domain (entitlement, billing, network) | an outbox row (ADR-0021) in the transaction that saw the moment |
 | route | `worker-service` `RetentionNoticeConsumer`, queue `AUTOMATION_RETENTION_NOTICE_QUEUE` | bound to every type in `RETENTION_NOTICES` (`outbox/retention-notices.ts`) |
-| once per period, and how | **this unit**: `POST internal/notifications/retention/claim` | the ledger below; asked before anything is told; its answer carries the user's mute and quiet hours (F-601-m) |
+| once per period, and how | **this unit**: `POST internal/notifications/retention/claim` | the ledger below; asked before anything is told; its answer carries the user's mute and quiet hours (F-601-m) and the Grant's own level (F-601-o) |
 | tell | `EventNoticeSender` -> auth-service `/internal/notify/user` | inbox (a `notification` row through this unit's `create`) and bot, in the user's language — [automation/contract.notices.md](../automation/contract.notices.md) |
 
 ## The claim
@@ -66,6 +66,24 @@ over the same row). The claim reads them, so no producer knows they exist.
 | The first `hold` for a row stands; a claim by the same event on a row already holding one answers `held` with its `botAt` | a redelivery after the window ends never tells the bot beside the held message |
 | A take leases rows 10 min (`FOR UPDATE SKIP LOCKED`); the worker marks each tell per row id, then `told` clears it | two runs never take one row; a run that died between the tell and `told` repeats nothing |
 | Minutes from the local clock: a DST jump inside the window moves the release by that hour | Asia/Tehran has kept none since 2022 |
+
+## One service, essentials only (F-601-o, user 2026-09-28)
+
+A buyer of five services for friends was told five of every notice. On each
+service in My services (panel-web `panel-my-services`) they pick **all
+notices** or **essential only**; the bot's side is F-319, over the same rows.
+
+| Operation | Route | Input | Output | Errors |
+|---|---|---|---|---|
+| my services told essentials only | `GET notifications/preferences/grants` (gated) | — | `{ essential: grantId[] }`; every other Grant is `all` | 401; 429 (inbox read bucket) |
+| set one service's level | `PUT notifications/preferences/grants/:grantId` (gated, open while suspended) | `{ level: all \| essential }`, strict | `{ grantId, level }` | 400 `validation.failed` (a non-uuid id too); 401; 429 (inbox write bucket) |
+
+| Rule | Why |
+|---|---|
+| `essential` = the `cutoff` kind alone: on that Grant the claim answers `muted` for every other kind, before quiet hours are read; `cutoff` is still `now` without reading either setting | "stopped" and "about to be removed" reach whoever pays, whatever they chose |
+| Beside the kinds muted on every Grant, never instead: a notice is muted when its kind is, **or** its Grant is essential | one switch per service, one per kind, and neither undoes the other |
+| Keyed `(userId, grantId)` under the gate's `userId`, and read by the claim with the event's `userId`: no ownership read of billing | a Grant id that is not the caller's names a row nothing reads; a Grant that changes hands starts at `all` for its new owner |
+| `all` deletes the row; a muted claim still writes the ledger row | no row is the default; switching back never tells a period already past |
 
 ## What a producer writes
 
@@ -134,6 +152,7 @@ service the user has. It rides the purchase's own notices (automation
 
 ## Not built here
 
-- A mute per Grant, or per channel (bot vs inbox): a kind is muted everywhere.
+- A mute per channel (bot vs inbox): a kind or a Grant is muted on both.
+- The level of a service bought for someone else set at purchase: it is set afterwards, per service (F-601-o).
 - The bot's own settings screen: F-319, over the same `notification_preference` row.
 - Retention of ledger rows: one per Grant, notice and period, kept.

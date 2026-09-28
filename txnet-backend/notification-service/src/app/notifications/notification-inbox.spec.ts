@@ -183,7 +183,7 @@ describe('RetentionLedgerService.claim', () => {
     };
     // No preferences row: nothing muted, no quiet hours (F-601-m, its own spec).
     const preferences = { stored: vi.fn().mockResolvedValue(null) };
-    return { retentionNotice, service: new RetentionLedgerService({ retentionNotice } as never, preferences as never) };
+    return { retentionNotice, service: new RetentionLedgerService({ retentionNotice } as never, preferences as never, { level: async () => 'all' } as never) };
   }
 
   it('writes the row once, skipping a duplicate rather than failing on it', async () => {

@@ -1,11 +1,12 @@
 "use client";
 
 import { memo, useEffect, useState } from "react";
-import { AlertCircle, Check, ChevronDown, Copy, Link2, Loader2, QrCode, RotateCcw, Search, X } from "lucide-react";
+import { AlertCircle, BellOff, Check, ChevronDown, Copy, Link2, Loader2, QrCode, RotateCcw, Search, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import type { GrantRow } from "@/lib/billing-api";
+import type { GrantNoticeLevel } from "@/lib/notification-api";
 import { formatInstant } from "../../_lib/datetime";
 import { useGrantConfigs } from "../_hooks/useGrantConfigs";
 import { useSubscriptionLink } from "../_hooks/useSubscriptionLink";
@@ -14,6 +15,7 @@ import { buildStage } from "../_lib/pulse";
 import { matchesConfig, purgeCountdown } from "../_lib/service-configs";
 import { ConfigLines } from "./ConfigLines";
 import { GrantConfigs } from "./GrantConfigs";
+import { NoticeLevel } from "./NoticeLevel";
 import { QrDialog } from "./QrDialog";
 import { ServiceBuilding, ServiceReady } from "./ServiceBuilding";
 import { ServicePulse, useServicePulse } from "./ServicePulse";
@@ -51,7 +53,9 @@ const READY_MS = 10_000;
  *    when a copy or the QR needs it.
  * 5. **Manage** — folded: the 30 days, each server with a new link and
  *    delete, and resetting the subscription link. Everything that can break a
- *    working setup is here, never above it.
+ *    working setup is here, never above it. Also how much this service's
+ *    notices tell (`NoticeLevel`, F-601-o); "essential only" shows as a chip
+ *    beside the status, so a muted service is never a surprise.
  *
  * The configs and the link are read once per row and shared by 3–5, so a
  * reset under "manage" replaces the link row 4 copies. So is the search over
@@ -68,6 +72,8 @@ export const ServiceRow = memo(function ServiceRow({
   configsAsked = 0,
   autoOpen = false,
   meteringDown = false,
+  noticeLevel,
+  onNoticeLevel,
 }: {
   row: GrantRow;
   name: string | null;
@@ -79,6 +85,10 @@ export const ServiceRow = memo(function ServiceRow({
   autoOpen?: boolean;
   /** Collection is stalled (F-027-w): silence then means nothing, so no "in use" or "idle" is claimed. */
   meteringDown?: boolean;
+  /** This service's notice level (F-601-o): `undefined` while the page reads it, `null` if that read failed. */
+  noticeLevel?: GrantNoticeLevel | null;
+  /** The page's own copy of the levels, moved once a choice is stored. Stable, so the memo holds. */
+  onNoticeLevel?: (grantId: string, level: GrantNoticeLevel) => void;
 }) {
   const { t, lang } = useLocale();
   const toMessage = useApiErrorMessage();
@@ -134,10 +144,18 @@ export const ServiceRow = memo(function ServiceRow({
             <h2 className="break-words text-base font-bold text-text-primary">{name ?? t("common", S.unnamed)}</h2>
             {showPulse && <ServicePulse pulse={pulse} lastTrafficAt={row.lastTrafficAt} />}
           </div>
-          <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${tone.className}`}>
-            <tone.icon size={14} aria-hidden />
-            {t("common", tone.labelKey)}
-          </span>
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${tone.className}`}>
+              <tone.icon size={14} aria-hidden />
+              {t("common", tone.labelKey)}
+            </span>
+            {noticeLevel === "essential" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-bg-inner px-2 py-0.5 text-[11px] text-text-secondary">
+                <BellOff size={12} aria-hidden />
+                {t("common", S.notices.badge)}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Paid and not yet usable (F-111-f, F-111-l). The page moves the
@@ -317,6 +335,7 @@ export const ServiceRow = memo(function ServiceRow({
         <div className="space-y-4 border-t border-card-border p-4 sm:p-5">
           <UsageBars grantId={row.id} />
           <GrantConfigs configs={configs} shown={shown} />
+          {noticeLevel !== undefined && onNoticeLevel && <NoticeLevel grantId={row.id} level={noticeLevel} onSaved={onNoticeLevel} />}
 
           <section aria-label={t("common", L.resetTitle)} className="rounded-2xl border border-card-border p-3">
             <p className="text-sm font-bold text-text-primary">{t("common", L.resetTitle)}</p>

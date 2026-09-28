@@ -170,3 +170,18 @@ model NotificationPreference {
   @@map("notification_preference")
   @@schema("notification")
 }
+
+/// F-601-o: how much a user is told about one of their Grants — a buyer of services for friends sets theirs to
+/// `essential` (cutoff and purge only, `GRANT_NOTICE_LEVELS`). Keyed by the user who set it: the claim reads
+/// `(userId, grantId)`, so a Grant id that is not the caller's names a row nothing reads, and a Grant that changes
+/// hands starts at `all` for its new owner. `all` is no row. No `tenantId`, no RLS, like `notification_preference`.
+model NotificationGrantPreference {
+  userId    String   @db.Uuid
+  grantId   String   @db.Uuid
+  level     String
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, grantId])
+  @@map("notification_grant_preference")
+  @@schema("notification")
+}

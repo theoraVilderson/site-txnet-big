@@ -2,7 +2,7 @@
 id: notification
 layer: domain
 status: active
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # Data model — notification
@@ -19,6 +19,7 @@ Source of truth: `txnet-backend/prisma/domains/notification.prisma` (Postgres sc
 | notification_campaign_text | the campaign in one `Language` other than its source: `subject?`, `body`, `state` `draft`/`published`; unique `(campaignId, lang)`, cascades with the campaign (F-035-h, ADR-0055) | via campaign — no RLS of its own; reached only through `CampaignAdminService.managed` | as the campaign |
 | retention_notice | the retention ledger: one row per `(grantId, notice, period)`, `eventId` = the event holding it (F-601-a, invariant 14); `botTenantId`, `botAt`, `botTemplate`, `botParams` hold a bot message kept for quiet hours, cleared once told (F-601-m) | via user — no `tenantId`, no RLS (`botTenantId` only names whose bot tells a held message); written only by the internal seam | kept |
 | notification_preference | a user's notice settings, PK `userId`: `mutedKinds` (shared-core `RETENTION_MUTABLE_KINDS`), `quietStart`/`quietEnd` (minutes after local midnight, both or neither), `timezone` (IANA, default `Asia/Tehran`) (F-601-m, invariant 15) | via user — no `tenantId`, no RLS; the gate's `userId` is the guard | as the user |
+| notification_grant_preference | a user's notice level for one Grant, PK `(userId, grantId)`: `level` (`GRANT_NOTICE_LEVELS`, only `essential` stored — `all` is no row) (F-601-o, invariant 15) | via user — no `tenantId`, no RLS; the gate's `userId` is the guard, and the claim reads it under the event's `userId` | as the user |
 
 Enums: `NotificationType`, `NotificationChannel` (`push`, `sms`, `telegram_bot`,
 `bale_bot`, `email`), `CampaignStatus` (`draft`, `sending`, `completed`),
@@ -55,5 +56,6 @@ Committed under `txnet-backend/prisma/domains/migrations/`: RLS for
 (`CampaignStatus.stopped`, `stoppedAt`, F-018-q), `20260917001900_campaign_stop_by_hand`
 (`AdminAction.campaign_stop`, F-018-x), `20260927001000_retention_notice_ledger`
 (`retention_notice`, F-601-a), `20260927001900_retention_notice_preferences`
-(`notification_preference`, the held bot message columns, F-601-m). Enum values added with
+(`notification_preference`, the held bot message columns, F-601-m),
+`20260928002000_a_service_told_essentials_only` (`notification_grant_preference`, F-601-o). Enum values added with
 `ADD VALUE` cannot be rolled back.

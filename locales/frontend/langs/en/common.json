@@ -2309,6 +2309,18 @@
       "links": "Making your connection links",
       "linksHint": "The service is built; its connection links appear here within a minute or two.",
       "ready": "Your service is ready! The configs are just below — copy one and connect."
+    },
+    "notices": {
+      "title": "Notices for this service",
+      "hint": "Bought it for someone else? Keep only what matters: you will still hear when it stops or its configs are about to go.",
+      "all": "All notices",
+      "allHint": "Usage, time left, help connecting and back online",
+      "essential": "Essential only",
+      "essentialHint": "Only when it stops or is about to be removed",
+      "badge": "Essential notices only",
+      "saving": "Saving…",
+      "failed": "Could not save. Try again.",
+      "unavailable": "Notice settings could not be read right now."
     }
   },
   "systems": {

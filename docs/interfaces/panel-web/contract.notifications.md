@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 25
-updated: 2026-09-20
+updated: 2026-09-28
 ---
 
 # Contract — panel-web: the notifications control (F-093-h)
@@ -133,10 +133,28 @@ never sends one.
    failed load shows one line and no form: an empty form saved would reset
    everything the user set.
 
+## A service's notice level on `/services` (F-601-o)
+
+`services/_components/NoticeLevel.tsx`, under each row's "manage", over
+`notificationApi.grantNoticeLevels` / `setGrantNoticeLevel`
+([notification/contract.retention.md](../../domains/notification/contract.retention.md)
+"One service, essentials only").
+
+1. **Read once per visit, by the page**: one list of essential ids, not a read
+   per row; a stored choice moves the page's copy. Loading shows nothing; a
+   failed read shows one line under "manage" and no choice — "all" drawn from
+   a failed read would be a guess shown as a fact.
+2. **Two options, words from an exhaustive `Record<GrantNoticeLevel, …>`**; a
+   tap saves at once, and the stored answer is what is shown after. A refused
+   save says so and leaves the old choice checked.
+3. **"Essential notices only" is a chip beside the status**, so a service
+   whose notices were quieted is never a surprise with "manage" folded.
+
 ## Consumes
 
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
 | notification | `GET /api/notifications`, `POST /api/notifications/read` | the last good page stays with an error line and a retry; the bell still opens |
 | notification | `GET` / `PUT /api/notifications/preferences` | the settings section shows one error line and no form; the rest of `/settings` works |
+| notification | `GET /api/notifications/preferences/grants`, `PUT …/grants/:grantId` | "manage" shows one line and no choice; the rest of `/services` works |
 | realtime | `notification.created` on `user:<userId>` | no live badge; the count is right again on the next page load, because the row is durable and the push only spares a reload (D-15) |

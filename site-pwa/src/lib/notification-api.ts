@@ -83,6 +83,14 @@ export interface NoticePreferences {
   timezone: string;
 }
 
+/**
+ * How much the caller is told about one service (F-601-o) — the service's
+ * `GRANT_NOTICE_LEVELS`, spelled here in the same order. `essential` is the
+ * cutoff notices alone: a stopped service, a purge, an admin's act.
+ */
+export const GRANT_NOTICE_LEVELS = ["all", "essential"] as const;
+export type GrantNoticeLevel = (typeof GRANT_NOTICE_LEVELS)[number];
+
 export const notificationApi = {
   /** A page of the caller's own inbox, newest first. */
   inbox(query: InboxQuery = {}): Promise<NotificationPage> {
@@ -114,5 +122,18 @@ export const notificationApi = {
   /** Replace them whole; the answer is what was stored. */
   savePreferences(preferences: NoticePreferences): Promise<NoticePreferences> {
     return call<NoticePreferences>("/preferences", { method: "PUT", body: JSON.stringify(preferences) });
+  },
+
+  /** The caller's services told essentials only (F-601-o); every other one of theirs is `all`. */
+  grantNoticeLevels(): Promise<{ essential: string[] }> {
+    return call<{ essential: string[] }>("/preferences/grants", { method: "GET" });
+  },
+
+  /** Set one service's level; the answer is what was stored. */
+  setGrantNoticeLevel(grantId: string, level: GrantNoticeLevel): Promise<{ grantId: string; level: GrantNoticeLevel }> {
+    return call<{ grantId: string; level: GrantNoticeLevel }>(`/preferences/grants/${encodeURIComponent(grantId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ level }),
+    });
   },
 };
