@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, RateSource } from '@prisma/client';
 
 import { UnscopedRedisKeys } from '../redis/keys';
 
@@ -16,6 +16,8 @@ export interface FxRateSnapshot {
   rate: Prisma.Decimal;
   /** F-0607-a's staleness ladder reads this; the reader does not judge it. */
   effectiveAt: Date;
+  /** Set when this is a person's pin (F-0608-a, ADR-0101), not a discovered rate. */
+  pinned?: { reason: string; expiresAt: Date };
 }
 
 /**
@@ -61,7 +63,11 @@ export async function readFxRate(
   code: string,
   log?: FxRateLog,
 ): Promise<FxRateSnapshot | null> {
-  return (await fromCache(cache, code, log)) ?? (await fromTable(db, code, log));
+  return (
+    (await fromPin(db, code, log)) ??
+    (await fromCache(cache, code, log)) ??
+    (await fromTable(db, code, log))
+  );
 }
 
 /**
@@ -93,6 +99,38 @@ export async function readFxPair(
   return { fromCode, toCode, rate: toRate.div(fromRate), from, to };
 }
 
+/**
+ * F-0608-a (ADR-0101 part 3) — a live pin wins over every discovered rate: a
+ * `manual_admin` row not yet expired and not ended, the newest if several.
+ * Read from the table on every call, not a cache: a pin that a Redis flush
+ * lost would sell at the rate the admin pinned against, silently. A failed
+ * read is a warning and falls through to the discovered rate — the reader
+ * never throws.
+ */
+async function fromPin(db: FxRateDb, code: string, log?: FxRateLog): Promise<FxRateSnapshot | null> {
+  try {
+    const currency = await db.currency.findUnique({ where: { code }, select: { id: true } });
+    if (!currency) return null;
+    const pin = await db.currencyExchangeRate.findFirst({
+      where: {
+        currencyId: currency.id,
+        source: RateSource.manual_admin,
+        isActive: true,
+        expiresAt: { gt: new Date() },
+        pinEnd: { is: null },
+      },
+      orderBy: { effectiveAt: 'desc' },
+      select: { id: true, rate: true, effectiveAt: true, reason: true, expiresAt: true },
+    });
+    if (!pin || !pin.expiresAt) return null;
+    const snap = usable(pin.id, code, pin.rate, pin.effectiveAt);
+    return snap ? { ...snap, pinned: { reason: pin.reason ?? '', expiresAt: pin.expiresAt } } : null;
+  } catch (err) {
+    log?.warn(`fx pin for ${code} unreadable, using the discovered rate: ${(err as Error).message}`);
+    return null;
+  }
+}
+
 async function fromCache(cache: FxRateCache, code: string, log?: FxRateLog): Promise<FxRateSnapshot | null> {
   try {
     const hit = await cache.get(UnscopedRedisKeys.fxRate(code));
@@ -117,9 +155,10 @@ async function fromTable(db: FxRateDb, code: string, log?: FxRateLog): Promise<F
     return null;
   }
   // Append-only (invariant #3): "current" is the newest `effectiveAt`, which
-  // the `[currencyId, effectiveAt desc]` index answers.
+  // the `[currencyId, effectiveAt desc]` index answers. Discovered rates only:
+  // a pin is `fromPin`'s, and an expired or ended one is history, not a rate.
   const latest = await db.currencyExchangeRate.findFirst({
-    where: { currencyId: currency.id, isActive: true },
+    where: { currencyId: currency.id, isActive: true, source: RateSource.external_api },
     orderBy: { effectiveAt: 'desc' },
     select: { id: true, rate: true, effectiveAt: true },
   });

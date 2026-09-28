@@ -46,6 +46,14 @@ model CurrencyExchangeRate {
   setByAdminId   String?    @db.Uuid // فقط اگر source=manual_admin
   effectiveAt    DateTime   @default(now())
   isActive       Boolean    @default(true)
+  /// F-0608-a (ADR-0101): why a person pinned this rate, and until when it
+  /// applies. Both set on a `manual_admin` row and only there (a CHECK holds
+  /// it); a discovered rate has neither.
+  reason         String?
+  expiresAt      DateTime?
+  /// Set when the pin was ended before `expiresAt` — its own row, so the
+  /// rate itself is never edited (invariant #3).
+  pinEnd         CurrencyRatePinEnd?
 
   currency Currency @relation(fields: [currencyId], references: [id])
   // The payments priced at this reading (F-0606-b), as the charge currency's
@@ -58,6 +66,21 @@ model CurrencyExchangeRate {
 
   @@index([currencyId, effectiveAt(sort: Desc)])
   @@map("currency_exchange_rate")
+  @@schema("currency")
+}
+
+/// F-0608-a (ADR-0101) — a pinned rate ended before its expiry. One per pin,
+/// insert-only: the pin row keeps its rate and its expiry as written, and this
+/// says who ended it and when.
+model CurrencyRatePinEnd {
+  id        String   @id @default(uuid()) @db.Uuid
+  rateId    String   @unique @db.Uuid
+  endedById String   @db.Uuid
+  endedAt   DateTime @default(now())
+
+  rate CurrencyExchangeRate @relation(fields: [rateId], references: [id], onDelete: Restrict)
+
+  @@map("currency_rate_pin_end")
   @@schema("currency")
 }
 

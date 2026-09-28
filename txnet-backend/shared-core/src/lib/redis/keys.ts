@@ -240,6 +240,14 @@ export const UnscopedRedisKeys = {
   fxRate: (currencyCode: string) => `fx:rate:${currencyCode}`,
 
   /**
+   * The FX worker's latest reading of one currency, accepted or not (F-0608-a,
+   * ADR-0101 part 4): `{rate, at, outcome, used, sources, reason}`. No TTL —
+   * it is what the manual-pin form offers when the sources have gone quiet,
+   * and it is **never a rate**: nothing prices from it unless a person pins it.
+   */
+  fxReading: (currencyCode: string) => `fx:reading:${currencyCode}`,
+
+  /**
    * An outbox event one consumer has already handled (ADR-0045, F-067-l). Taken
    * with `SET NX` before any side effect, because delivery is at-least-once
    * (ADR-0021); a consumer whose side effect fails deletes it before rethrowing.

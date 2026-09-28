@@ -15,6 +15,8 @@ export interface CurrencyRate {
   rate: string | null;
   snapshotId: string | null;
   effectiveAt: string | null;
+  /** Set while a person's pin is what prices this currency (F-0608-a). */
+  pinned: { reason: string; expiresAt: string } | null;
 }
 
 /**
@@ -43,11 +45,19 @@ export class CurrencyRatesService {
     const rows = await Promise.all(
       currencies.map(async (c): Promise<CurrencyRate> => {
         const base = { code: c.code, name: c.name, symbol: c.symbol, decimalPlaces: c.decimalPlaces, isBase: c.isBaseCurrency };
-        if (c.isBaseCurrency) return { ...base, rate: '1', snapshotId: null, effectiveAt: null };
+        if (c.isBaseCurrency) return { ...base, rate: '1', snapshotId: null, effectiveAt: null, pinned: null };
         const snapshot = await readFxRate(this.prisma as unknown as FxRateDb, this.redis, c.code, this.logger);
         return snapshot
-          ? { ...base, rate: snapshot.rate.toString(), snapshotId: snapshot.snapshotId, effectiveAt: snapshot.effectiveAt.toISOString() }
-          : { ...base, rate: null, snapshotId: null, effectiveAt: null };
+          ? {
+              ...base,
+              rate: snapshot.rate.toString(),
+              snapshotId: snapshot.snapshotId,
+              effectiveAt: snapshot.effectiveAt.toISOString(),
+              pinned: snapshot.pinned
+                ? { reason: snapshot.pinned.reason, expiresAt: snapshot.pinned.expiresAt.toISOString() }
+                : null,
+            }
+          : { ...base, rate: null, snapshotId: null, effectiveAt: null, pinned: null };
       }),
     );
     return rows.sort((a, b) => a.code.localeCompare(b.code));

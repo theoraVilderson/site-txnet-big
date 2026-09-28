@@ -2,7 +2,7 @@
 id: currency
 layer: domain
 status: active
-version: 3
+version: 4
 updated: 2026-09-28
 ---
 
@@ -21,7 +21,7 @@ converts to a display currency **only at render time**. Resolution order for whi
 user sees: user-lock policy -> global-lock policy -> `user_currency_preference`
 -> base currency.
 
-## Rate reader (built, F-116-c)
+## Rate reader (built, F-116-c; pins F-0608-a)
 
 `txnet-backend/shared-core/src/lib/currency/fx-rate.ts` — the **only** way a
 service reads a rate. A second hand-rolled read of `fx:rate:*` is drift.
@@ -45,7 +45,14 @@ Rules a caller may rely on:
 4. **The rate is not rounded.** The caller rounds the converted **amount** once,
    to the target currency's `decimalPlaces`, and records both legs'
    `snapshotId`s (F-116-e, F-116-g).
-5. **Age is not judged here** — F-0607-a's ladder reads `effectiveAt`.
+5. **Age is not judged here** — F-0607-a reads `effectiveAt`; a rate of any
+   age stays usable (ADR-0101).
+6. **A live pin answers first** (F-0608-a, ADR-0101 part 3): a `manual_admin`
+   row not expired and not ended, the newest if several, read from the table on
+   every call (a Redis flush must not drop a pin). The snapshot then carries
+   `pinned: {reason, expiresAt}`; its id is the pin row, so a price records it.
+   A failed pin read is a warning and falls through to the discovered rate.
+   The table fallback reads discovered (`external_api`) rows only.
 
 ## HTTP API (`currency-service`, ADR-0100)
 
@@ -53,7 +60,14 @@ Behind Traefik and ForwardAuth (`/api/currency/*`), the shared guards (C-11).
 
 | Route | Who | Answer | Errors |
 |---|---|---|---|
-| `GET /api/currency/rates` (F-116-k) | any signed-in caller | every active currency: `{code, name, symbol, decimalPlaces, isBase, rate, snapshotId, effectiveAt}`, `rate` a decimal string per USD from `readFxRate`, `null` when it has none; the base currency `"1"` | 401 from the gate; 429 (`CURRENCY_READ`, 120/min) |
+| `GET /api/currency/rates` (F-116-k) | any signed-in caller | every active currency: `{code, name, symbol, decimalPlaces, isBase, rate, snapshotId, effectiveAt, pinned}`, `rate` a decimal string per USD from `readFxRate`, `null` when it has none; the base currency `"1"`; `pinned` `{reason, expiresAt}` while a pin prices it | 401 from the gate; 429 (`CURRENCY_READ`, 120/min) |
+| `GET /api/currency/pins/:code` (F-0608-a) | `currency.pin`, platform owner | the pin form: `{current, lastAccepted, lastDownload}` — the live pin, the last discovered rate, the worker's last reading (`fx:reading:{code}`, a suggestion, never a rate) | 403; 404 `currency_not_found`; 409 `base_currency` |
+| `POST /api/currency/pins` (F-0608-a) | same | `{code, rate, reason, hours 1–720}` → the pin, rate rounded to 8 places; a `manual_admin` row + `admin_audit_log` (`currency_rate_pin`) in one tenant-bound transaction | 400 validation / `invalid_rate`; 403; 404; 409 `base_currency`; 429 (`CURRENCY_PIN_WRITE`, 30/15 min) |
+| `POST /api/currency/pins/:id/end` (F-0608-a) | same | the pin with `endedAt`; a `currency_rate_pin_end` row + audit (`currency_rate_pin_end`); the pin row is never edited | 404 `pin_not_found`; 409 `pin_over` (ended, expired, or ended concurrently) |
+
+**Access**: `currency.pin` at the door (granted to `Admin`), the platform-owner
+tenant inside; a tenant's own pin is F-116-j. A newer pin supersedes an older
+live one; nothing merges them.
 
 Age is not judged here (F-0607-a, ADR-0101). The service fetches no rate.
 

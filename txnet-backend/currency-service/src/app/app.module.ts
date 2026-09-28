@@ -8,6 +8,7 @@ import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { CurrencyPinsModule } from './pins/pins.module';
 import { CurrencyRatesModule } from './rates/rates.module';
 import { RedisModule } from './redis/redis.module';
 import { IdentityMiddleware } from './request/identity.middleware';
@@ -17,7 +18,7 @@ import { IdentityMiddleware } from './request/identity.middleware';
  * registers (C-11): a suspended tenant's routes are refused here as anywhere.
  */
 @Module({
-  imports: [ConfigModule.forRoot(envConfigOptions), PrismaModule, RedisModule, LocaleModule, CurrencyRatesModule],
+  imports: [ConfigModule.forRoot(envConfigOptions), PrismaModule, RedisModule, LocaleModule, CurrencyRatesModule, CurrencyPinsModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_GUARD, useClass: PublicRouteGuard },

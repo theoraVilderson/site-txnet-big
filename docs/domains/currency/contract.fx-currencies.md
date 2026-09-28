@@ -85,6 +85,11 @@ with what), `fx-source.ts` (every source and how its book reads),
                           cached?, deviationPercent?, failed? } } }
 ```
 
+Each run also writes every currency's reading to `fx:reading:{code}` —
+`{rate, at, outcome: accepted|refused|unavailable, used, sources, reason}`,
+the median even when refused — for the manual-pin form (F-0608-a, ADR-0101
+part 4). It is never a rate.
+
 `accepted` is `true` (published), `false` (refused by the gate) or **absent**
 (short, misconfigured, no row) — so a shortfall never counts as a refusal.
 `currency_fx` (`postgres-queries.yaml`) reads each entry with a `currency`

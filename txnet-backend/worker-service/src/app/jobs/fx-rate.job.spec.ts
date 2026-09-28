@@ -60,7 +60,11 @@ describe('FxRateJob — one loop per currency (F-116-i)', () => {
   /** A snapshot store with a baseline per code and a record of what was published. */
   const storeWith = (baselines: Record<string, string> = {}, missing: string[] = []) => {
     const published: Record<string, string> = {};
+    const readings: Record<string, { rate: string | null; outcome: string }> = {};
     const store = {
+      recordReading: vi.fn(async (code: string, r: { rate: string | null; outcome: string }) => {
+        readings[code] = r;
+      }),
       lastAccepted: vi.fn(async (code: string) => {
         if (missing.includes(code)) throw new FxQuoteCurrencyMissing(code);
         return baselines[code] ? D(baselines[code]) : null;
@@ -81,7 +85,7 @@ describe('FxRateJob — one loop per currency (F-116-i)', () => {
         };
       }),
     };
-    return { store: store as unknown as FxRateSnapshotStore, published, spy: store };
+    return { store: store as unknown as FxRateSnapshotStore, published, readings, spy: store };
   };
 
   const jobWith = (values: Record<string, unknown>, store: FxRateSnapshotStore) => {
@@ -163,7 +167,7 @@ describe('FxRateJob — one loop per currency (F-116-i)', () => {
     bodies[url('kraken-eur')] = kraken('0.8796', '0.8798');
     bodies[url('bitstamp-eur')] = book('0.8795', '0.8797');
     bodies[url('tgju-eur')] = tgju('2,784,091', '50,000');
-    const { store, published } = storeWith({ IRR: '1600000' });
+    const { store, published, readings } = storeWith({ IRR: '1600000' });
 
     const result = await jobWith(
       {
@@ -179,6 +183,9 @@ describe('FxRateJob — one loop per currency (F-116-i)', () => {
     expect(m.IRR.rejectedDeviationPercent).toBeGreaterThan(5);
     expect(published.IRR).toBeUndefined();
     expect(m.EUR.perSource['tgju-eur'].failed).toMatch(/USDT\/IRT/);
+    // the refused median is kept as the last download, never as a rate (F-0608-a)
+    expect(readings.IRR).toMatchObject({ rate: '2450000', outcome: 'refused' });
+    expect(readings.EUR).toMatchObject({ outcome: 'accepted' });
     // the foreign books still carry EUR
     expect(published.EUR).toBe('0.8796');
     expect(result.itemsProcessed).toBe(1);

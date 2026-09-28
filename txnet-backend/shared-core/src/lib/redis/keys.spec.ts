@@ -69,6 +69,7 @@ describe('the key catalogue', () => {
       tenantStatusChanged: UnscopedRedisKeys.tenantStatusChanged(),
       tenantRuns: UnscopedRedisKeys.tenantRuns('tenant-1'),
       fxRate: UnscopedRedisKeys.fxRate('IRR'),
+      fxReading: UnscopedRedisKeys.fxReading('IRR'),
       outboxProcessed: UnscopedRedisKeys.outboxProcessed('payment-credited-notify', 'evt-1'),
       noticeBurst: UnscopedRedisKeys.noticeBurst('tenant-1', 'user-1', 'panelAccepted'),
       noticeBurstScheduled: UnscopedRedisKeys.noticeBurstScheduled('tenant-1', 'user-1', 'panelAccepted'),

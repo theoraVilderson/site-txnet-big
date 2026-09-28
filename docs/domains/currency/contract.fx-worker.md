@@ -135,7 +135,7 @@ market keeps going: the gate does not re-baseline itself.
 start — the first poll after one **ungated** — and two replicas gated against
 their own histories. Both closed with the snapshot:
 `FxRateSnapshotStore.lastAccepted` reads `fx:rate:{code}` and falls back to the
-newest `CurrencyExchangeRate` row, and the job reads it at the top of every run
+newest discovered row (never a pin, F-0608-a); the job reads it every run
 rather than caching it in a field, which would rebuild the per-replica history
 this removed. The one remaining cold start is the real one: before the first
 snapshot the platform has ever written, where F-0604's quorum and band are the

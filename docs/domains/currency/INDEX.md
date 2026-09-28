@@ -3,7 +3,7 @@ id: currency
 layer: domain
 status: active
 version: 4
-keywords: [pound rate, dirham rate, yen rate, ecb, tcmb, currency, exchange rate, fx, display currency, usd rate, rial rate, dollar price, usdt, order book, exchange, euro rate, lira rate, eur, try, tgju]
+keywords: [manual rate, pin rate, fixed rate, emergency rate, pound rate, dirham rate, yen rate, ecb, tcmb, currency, exchange rate, fx, display currency, usd rate, rial rate, dollar price, usdt, order book, exchange, euro rate, lira rate, eur, try, tgju]
 source:
   - txnet-backend/currency-service/src/**
   - txnet-backend/worker-service/src/app/currency/**
@@ -31,16 +31,16 @@ billing-service's and not `billing`'s.
 | [contract.fx-worker.md](contract.fx-worker.md) | touching how a rate is discovered — poll, median, gate, snapshot (F-0603…F-0606) |
 | [contract.fx-currencies.md](contract.fx-currencies.md) | adding a currency or a source, or reading the run log per currency (F-116-i, F-116-i2) |
 | [invariants.md](invariants.md) | writing any code that touches it |
-| [data-model.md](data-model.md) | changing storage |
+| [data-model.md](data-model.md) | changing storage — rates, pins and their ends |
 | [open-questions.md](open-questions.md) | something is undecided |
 
 ## Changelog
 | Date | Change |
 |---|---|
-| 2026-09-12 | `contract.fx-worker.md` v4 — F-0606-a: **the unit publishes**. An accepted rate is an append-only `currency_exchange_rate` row cached under `fx:rate:{code}` (no TTL — F-0607-a's ladder reads its age), and the deviation baseline moved out of the job's memory into it. First published interface, so the Consumers section is no longer empty |
 | 2026-09-28 | `contract.md` v2 — F-116-c: **one rate reader for every service**, shared-core `readFxRate` / `readFxPair`: any pair through the USD pivot, `rate(to)/rate(from)` at one snapshot per leg (ADR-0098 part 6). Billing's `FxRateReader` delegates to it |
 | 2026-09-28 | `contract.fx-worker.md` v5 + new `contract.fx-currencies.md` — F-116-i: **the loop runs per currency** (`FX_CURRENCIES`, default IRR, EUR, TRY), domestic quotes divided into the tick's accepted USDT/IRT. Run-log shape changed to `metricsJson.currencies.<code>`; `currency_fx` and the alerts are labelled per currency. `FX_QUOTE_CURRENCY_CODE` removed |
 | 2026-09-28 | `contract.fx-currencies.md` v2 — F-116-i2: **23 currencies** by default; tgju, ECB and TCMB serve many currencies from one download a tick (per-unit counts, stale official tables refused); KuCoin/MEXC for EUR. `FX_SOURCES_EUR`/`_TRY` left the env schema (carried by pattern) |
 | 2026-09-28 | `contract.md` v3 — F-116-k: **`currency-service`**, the unit's HTTP home (ADR-0100); `GET /api/currency/rates` |
+| 2026-09-28 | `contract.md` v4 — F-0608-a: **the platform's manual rate** (ADR-0101): pin / end / form routes; `readFxRate` answers a live pin first and reads discovered rows only from the table; `currency_rate_pin_end`; `fx:reading:{code}` |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

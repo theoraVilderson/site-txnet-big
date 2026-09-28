@@ -37,6 +37,8 @@ export const envSchema = z.object({
   ),
   /** Reads of the rates, per caller per minute. */
   CURRENCY_READ_RATE_LIMIT: rateLimit(120),
+  /** Pins and early ends, per admin per 15 minutes (F-0608-a). */
+  CURRENCY_PIN_WRITE_RATE_LIMIT: rateLimit(30),
 
   TRUST_PROXY: z.string().default(''),
 });

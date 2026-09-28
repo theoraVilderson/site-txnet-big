@@ -12,16 +12,18 @@ import { FX_PIVOT_CURRENCY, readFxPair, readFxRate } from './fx-rate';
  * the single-currency read already held for billing: a leg with no snapshot
  * behind it makes the whole pair `null`, never a guess.
  */
-type Row = { id: string; rate: Prisma.Decimal; effectiveAt: Date };
+type Row = { id: string; rate: Prisma.Decimal; effectiveAt: Date; reason?: string; expiresAt?: Date };
 
 const AT = new Date('2026-09-28T09:00:00.000Z');
 
 function stores(options: {
   cache?: Record<string, string>;
   table?: Record<string, Row | null>;
+  /** A live pin per code (F-0608-a); `'throw'` makes the pin query fail. */
+  pins?: Record<string, Row | 'throw'>;
   redisDown?: boolean;
 }) {
-  const reads = { get: [] as string[], table: [] as string[] };
+  const reads = { get: [] as string[], table: [] as string[], pins: [] as string[], where: [] as unknown[] };
   const cache = {
     get: async (key: string) => {
       reads.get.push(key);
@@ -32,12 +34,21 @@ function stores(options: {
   const db = {
     currency: {
       findUnique: async ({ where }: { where: { code: string } }) =>
-        options.table && where.code in options.table ? { id: `cur-${where.code}` } : null,
+        (options.table && where.code in options.table) || (options.pins && where.code in options.pins)
+          ? { id: `cur-${where.code}` }
+          : null,
     },
     currencyExchangeRate: {
-      findFirst: async ({ where }: { where: { currencyId: string } }) => {
+      findFirst: async ({ where }: { where: { currencyId: string; source?: string } }) => {
         const code = where.currencyId.replace(/^cur-/, '');
+        if (where.source === RateSource.manual_admin) {
+          reads.pins.push(code);
+          const pin = options.pins?.[code];
+          if (pin === 'throw') throw new Error('db down');
+          return pin ?? null;
+        }
         reads.table.push(code);
+        reads.where.push(where);
         return options.table?.[code] ?? null;
       },
     },
@@ -70,6 +81,36 @@ describe('readFxRate — one currency, cache first', () => {
     const { db, cache } = stores({ cache: { 'fx:rate:EUR': cached('IRR', '1042500') }, table: { EUR: row('r-eur', '0.92') } });
 
     expect((await readFxRate(db, cache, 'EUR'))?.rate.toString()).toBe('0.92');
+  });
+
+  it('answers a live pin before the cache and the table, marked as pinned (F-0608-a)', async () => {
+    const until = new Date('2026-09-30T09:00:00.000Z');
+    const { db, cache, reads } = stores({
+      cache: { 'fx:rate:EUR': cached('EUR', '0.87') },
+      table: { EUR: row('r-eur', '0.87') },
+      pins: { EUR: { ...row('pin-eur', '0.95'), reason: 'sources down', expiresAt: until } },
+    });
+
+    const snap = await readFxRate(db, cache, 'EUR');
+
+    expect(snap).toMatchObject({ snapshotId: 'pin-eur', rate: new Prisma.Decimal('0.95'), pinned: { reason: 'sources down', expiresAt: until } });
+    expect(reads.get).toEqual([]);
+  });
+
+  it('reads only discovered rates from the table, never an expired or ended pin', async () => {
+    const { db, cache, reads } = stores({ redisDown: true, table: { EUR: row('r-eur', '0.87') } });
+
+    await readFxRate(db, cache, 'EUR');
+
+    expect(reads.where).toEqual([expect.objectContaining({ source: RateSource.external_api })]);
+  });
+
+  it('falls through to the live rate, with a warning, when the pin cannot be read', async () => {
+    const warn = vi.fn();
+    const { db, cache } = stores({ cache: { 'fx:rate:EUR': cached('EUR', '0.87') }, pins: { EUR: 'throw' } });
+
+    expect((await readFxRate(db, cache, 'EUR', { warn }))?.snapshotId).toBe('snap-EUR');
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/pin/));
   });
 
   it('answers null for a currency with no row and none published', async () => {

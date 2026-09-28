@@ -88,6 +88,9 @@ roles:
       # A reseller's billing top-up (F-019-b, ADR-0056). The service admits it
       # only inside a reseller; its owner needs no permission.
       - tenant_billing.topup
+      # A manual FX rate (F-0608-a, ADR-0101): pin one, end it early. Only the
+      # platform owner's Admin gets through today; a tenant's own pin is F-116-j.
+      - currency.pin
   Support:
     permissions:
       - user.read

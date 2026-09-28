@@ -1,7 +1,7 @@
 ---
 id: currency
 layer: domain
-updated: 2026-09-04
+updated: 2026-09-28
 ---
 
 # Data model — currency
@@ -13,7 +13,8 @@ Source of truth: `txnet-backend/prisma/domains/currency.prisma` (Postgres schema
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
 | currency | ISO-4217 or internal code, symbol, decimals, base/selectable flags | no | permanent |
-| currency_exchange_rate | append-only rate (base -> this currency) with `source`, `effectiveAt` | no | permanent |
+| currency_exchange_rate | append-only rate (USD -> this currency) with `source`, `effectiveAt`; a `manual_admin` row is a pin and also has `reason`, `expiresAt`, `setByAdminId` (CHECK `currency_exchange_rate_pin_shape`, F-0608-a) | no | permanent |
+| currency_rate_pin_end | a pin ended before its expiry: `rateId` (unique), `endedById`, `endedAt`; insert-only (services hold `SELECT, INSERT`) | no | permanent |
 | user_currency_preference | one active preferred display currency per user | via user | latest wins |
 | currency_policy | admin lock (global or per-user) forcing a display currency | user-scoped rows | until changed |
 
@@ -29,5 +30,7 @@ not read the tables directly.
 
 ## Migration notes
 
-Base-currency uniqueness and the `currency_policy` partial unique index are
+Migration `20260928003400_a_platform_admin_pins_a_rate` (F-0608-a) added the
+pin columns, the CHECK, `currency_rate_pin_end` and the `currency.pin`
+permission. Base-currency uniqueness and the `currency_policy` partial unique index are
 "section 99" manual SQL — not applied. Redis cache key `fx:rate:{code}`.

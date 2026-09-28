@@ -83,6 +83,9 @@ enum AdminAction {
   tenant_billing_adjust
   // F-116-f (ADR-0098 part 5). A tenant's operating currency changed and its live money was converted.
   tenant_currency_change
+  // F-0608-a (ADR-0101). A manual rate pinned for a currency, and one ended before its expiry.
+  currency_rate_pin
+  currency_rate_pin_end
   // F-018-c. The platform owner creates a reseller.
   tenant_create
   // F-018-d. A package the platform sells resellers. Never deleted; deactivation is an update.
@@ -173,6 +176,8 @@ enum AuditTargetType {
   user_group
   // F-311-r. A user's service (entitlement.grant); its configs are `config`.
   grant
+  // F-0608-a. One `currency.currency_exchange_rate` row — a pinned rate.
+  currency_exchange_rate
 
   @@schema("audit")
 }

@@ -74,6 +74,21 @@ export class FxQuoteCurrencyMissing extends Error {
  * one shared, durable baseline for every replica, which is what
  * `contract.fx-worker.md` said would happen here.
  */
+/**
+ * One currency's latest reading, accepted or not (F-0608-a, ADR-0101 part 4):
+ * what the manual-pin form offers when the sources have gone quiet. **Never a
+ * rate** — nothing prices from it unless a person pins it.
+ */
+export interface FxReading {
+  /** The median this tick, or null when too few sources answered. */
+  rate: string | null;
+  at: string;
+  outcome: 'accepted' | 'refused' | 'unavailable';
+  used: number;
+  sources: number;
+  reason: string | null;
+}
+
 /** `currency_exchange_rate.rate` is `DECIMAL(18, 8)`. */
 export const RATE_SCALE = 8;
 
@@ -174,10 +189,21 @@ export class FxRateSnapshotStore {
     if (!currency) throw new FxQuoteCurrencyMissing(code);
 
     const latest = await this.prisma.currencyExchangeRate.findFirst({
-      where: { currencyId: currency.id, isActive: true },
+      // Discovered rates only (F-0608-a): a pin is a person's decision, not the
+      // market, and gating against it would make the market look like a jump.
+      where: { currencyId: currency.id, isActive: true, source: RateSource.external_api },
       orderBy: { effectiveAt: 'desc' },
     });
 
     return latest ? new Prisma.Decimal(latest.rate) : null;
+  }
+
+  /** `fx:reading:{code}`, no TTL. A failed write is logged, never thrown: it is a hint, not a rate. */
+  async recordReading(code: string, reading: FxReading): Promise<void> {
+    try {
+      await this.redis.client.set(RedisKeys.fxReading(code), JSON.stringify(reading));
+    } catch (err) {
+      this.logger.warn(`${code} reading not recorded: ${(err as Error).message}`);
+    }
   }
 }

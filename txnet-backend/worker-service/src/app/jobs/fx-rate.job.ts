@@ -5,7 +5,7 @@ import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { accepted, gateFxDeviation } from '../currency/fx-rate.gate';
 import { answered, FxFetches, FxRatePoller } from '../currency/fx-rate.poller';
 import { reduceFxReads, reduced } from '../currency/fx-rate.reducer';
-import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
+import { FxReading, FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
 import { FX_DOMESTIC_CODE, fxCurrencies, fxCurrencyConfig } from '../currency/fx-currencies';
 
 /**
@@ -137,6 +137,11 @@ export class FxRateJob implements Job {
           .map((c) => this.rate(c, rialPerUsdt, fetches)),
       )),
     );
+
+    // Every currency's reading, accepted or not, for the manual-pin form
+    // (F-0608-a, ADR-0101 part 4). A hint, never a rate.
+    const at = new Date().toISOString();
+    await Promise.all(runs.map((r) => this.snapshots.recordReading(r.code, readingOf(r, at))));
 
     const published = runs.filter((r) => r.published).map((r) => r.code);
     return {
@@ -292,6 +297,21 @@ export class FxRateJob implements Job {
       this.config.get<string>('FX_MAX_DEVIATION_PERCENT', '5'),
     );
   }
+}
+
+/** What `fx:reading:{code}` says about one currency's loop this tick. */
+function readingOf(run: FxCurrencyRun, at: string): FxReading {
+  const m = run.metrics as {
+    rate?: string | null; accepted?: boolean; used?: number; sources?: number; failed?: string; rejected?: string;
+  };
+  return {
+    rate: m.rate ?? null,
+    at,
+    outcome: m.accepted === true ? 'accepted' : m.accepted === false ? 'refused' : 'unavailable',
+    used: m.used ?? 0,
+    sources: m.sources ?? 0,
+    reason: m.rejected ?? m.failed ?? null,
+  };
 }
 
 const reasonOf = (error: unknown): string =>

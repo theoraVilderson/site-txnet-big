@@ -408,6 +408,8 @@ export const RateLimitBucket = {
    * settings screen and the manual-rate form read them on every visit.
    */
   CURRENCY_READ: 'currency:read',
+  /** Pinning or ending a manual rate (F-0608-a), per admin. An emergency act, rare. */
+  CURRENCY_PIN_WRITE: 'currency:pin:write',
 
   /**
    * One of the caller's own payments (F-093-l), per user. Its own bucket, not
