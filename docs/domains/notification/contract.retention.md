@@ -84,7 +84,7 @@ shared-core `NOTICE_CLASS_OF` (`notice-classes.ts`, beside `RETENTION_KIND_OF`) 
 | The claim holds only an `important` notice; `critical` and `info` answer `now` (or `muted`) | a service back on is news at night; 50 % has no bot message to keep |
 | A type is classed, not a template; a type missing from the table is `critical` | 50 % and 80 % share a template; a new notice never silently loses the bot |
 | One bot: the chat linked last, the other only when that send fails; never both (auth-api `/internal/notify/user`) | two messengers told the same thing twice |
-| SMS (F-601-t): the recipient's tenant's line through `SmsLineResolver` (notification `POST internal/notifications/sms`), to the verified phone; a reseller with no own line sends none (D-41); "no bot reached" is no verified chat, no bot, or every send failed | SMS costs money: only security events and critical notices that reached no bot |
+| SMS (F-601-t): the recipient's tenant's line through `SmsLineResolver` (notification `POST internal/notifications/sms`), to the verified phone; a reseller with no own line sends none (D-41); "no bot reached" is no verified chat, no bot, or every send failed; a notice of no known class never goes by SMS | SMS costs money: only security events and critical notices that reached no bot |
 | Payment, purchase and panel notices are classed by template (user 2026-09-28): money or a service lost `critical`, something to do or received `important`, `panelAccepted` `info` | one table for every notice |
 
 ## One service, essentials only (F-601-o, user 2026-09-28)

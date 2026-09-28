@@ -105,8 +105,6 @@ const endsSoon = (n: number, window?: 'hour'): EventNotice => ({
   eventId: event(n),
   person: { tenantId: TENANT, userId: USER, template: 'serviceEndsSoon', params: { days: '7' }, grantId: grant(n) },
   window,
-  // As the retention consumer states it (F-601-s): a template alone is not in NOTICE_CLASS_OF, and would read as critical.
-  class: 'important',
 });
 
 afterEach(() => vi.unstubAllGlobals());

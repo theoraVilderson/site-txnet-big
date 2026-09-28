@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { IdentityHeaders, NOTICE_CLASSES, NoticeClass, noticeClassOf, RedisTtl, RequestHeaders, UnscopedRedisKeys } from '@txnet-backend/shared-core';
+import { IdentityHeaders, NOTICE_CLASS_OF, NOTICE_CLASSES, NoticeClass, noticeClassOf, RedisTtl, RequestHeaders, UnscopedRedisKeys } from '@txnet-backend/shared-core';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -125,6 +125,9 @@ export type EventNotice = {
  * so a redelivery asks the bot again before any SMS. `security`: the bot on
  * every linked chat, and SMS, each owed on its own. Any other class never
  * sends SMS. An answer that does not say who was reached counts as reached.
+ * A class nobody knows — none stated and the name not in `NOTICE_CLASS_OF`,
+ * such as a burst entry from before F-601-t — keeps the bot as `critical`
+ * but never sends SMS: SMS costs money, and is spent only on a known class.
  *
  * **Several services, named** (F-601-p). A retention notice carries its
  * Grant; a combined flush of them asks billing for the services' names once
@@ -211,12 +214,15 @@ export class EventNoticeSender {
     const person: Person = { tenantId, userId, template, params: count === 1 ? entries[0]!.params : {} };
     const services = count > 1 ? await this.names(tenantId, userId, entries) : undefined;
     const many = count > 1 ? count : undefined;
-    const cls = NOTICE_CLASSES[Math.min(...entries.map((e) => NOTICE_CLASSES.indexOf(e.class ?? noticeClassOf(template))))]!;
+    const strongest = (classes: NoticeClass[]) => NOTICE_CLASSES[Math.min(...classes.map((c) => NOTICE_CLASSES.indexOf(c)))];
+    const known = entries.map((e) => e.class ?? NOTICE_CLASS_OF[template]).filter((c): c is NoticeClass => !!c);
+    const cls = strongest(entries.map((e) => e.class ?? noticeClassOf(template)))!;
+    const smsCritical = cls === 'critical' && strongest(known) === 'critical';
     const failures: unknown[] = [];
     const told = { consumer: BURST_CONSUMER, eventId: flushId };
     for (const channel of only ? [only] : PERSON_CHANNELS) {
       const effect =
-        channel === 'bot' && cls === 'critical'
+        channel === 'bot' && smsCritical
           ? () => this.botElseSms(person, many, services)
           : () => this.tell(channel, person, many, services, channel === 'bot' && cls === 'security');
       await this.once(told, channel, effect, failures);

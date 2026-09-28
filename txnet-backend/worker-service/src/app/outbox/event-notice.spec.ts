@@ -316,6 +316,14 @@ describe('EventNoticeSender — SMS for a critical or security notice (F-601-t, 
     expect(calls.fetched[0]!.body.every).toBeUndefined();
   });
 
+  it('a notice of no known class — none stated, the name not in the table — keeps the bot but is never told by SMS', async () => {
+    const { sender, calls } = build({ sent: { bot: [], sms: ['sms'] } });
+    await sender.send(notice(1, { template: 'serviceEndsSoon', params: { days: '7' } }));
+    await sender.flush(calls.flushes[0]!.flush);
+
+    expect(channels(calls)).toEqual(['inbox', 'bot']);
+  });
+
   it('a burst takes its strongest notice’s class', async () => {
     const { sender, calls } = build({ sent: { bot: [], sms: ['sms'] } });
     await sender.send({ ...notice(1), class: 'important' });
