@@ -118,6 +118,7 @@ describe('adjustGrantTraffic (F-311-j)', () => {
       usedBytes: BigInt(3) * GIB,
       spent: false,
       revived: false,
+      reactivated: false,
     });
     expect(grant?.purchasedBytes).toBe(BigInt(15) * GIB);
     // Conditional on what was read: a renewal in between is not overwritten.
@@ -171,7 +172,9 @@ describe('adjustGrantTraffic (F-311-j)', () => {
     expect(done.revived).toBe(true);
     expect(grant?.status).toBe(GrantStatus.active);
     expect(configWrites).toHaveLength(1);
-    expect(events.map((e) => (e.payload as { period: string }).period)).toEqual([SUSPENDED_AT.toISOString()]);
+    // F-311-s: reported, and told inside the admin's own notice — never a second "active again".
+    expect(done.reactivated).toBe(true);
+    expect(events).toEqual([]);
   });
 
   it('does not revive a raise that still leaves the bag spent', async () => {

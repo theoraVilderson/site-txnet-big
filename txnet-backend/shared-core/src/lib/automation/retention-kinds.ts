@@ -36,16 +36,28 @@ export const RETENTION_KIND_OF: Readonly<Partial<Record<OutboxEventType, Retenti
   [OutboxEventType.GRANT_WALLET_SPENT]: 'cutoff',
   [OutboxEventType.GRANT_PURGE_SOON]: 'cutoff',
   [OutboxEventType.GRANT_PURGE_SOON_METERED]: 'cutoff',
-  // F-311-s: an admin's act — the service stopped, gone or its link dead is `cutoff`; the rest file under the kind they change.
+  // F-311-s: an admin's act on the service — a person decided it about this user, so it is always told, at once;
+  // and one that brought a stopped service back says so inside it, which a muted kind would swallow.
   [OutboxEventType.GRANT_ADMIN_FROZEN]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_UNFROZEN]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_DAYS_ADDED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_DAYS_REMOVED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_TRAFFIC_ADDED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_TRAFFIC_REMOVED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_TRAFFIC_RESET]: 'cutoff',
   [OutboxEventType.GRANT_ADMIN_DELETED]: 'cutoff',
   [OutboxEventType.GRANT_ADMIN_LINK_ROTATED]: 'cutoff',
-  [OutboxEventType.GRANT_ADMIN_UNFROZEN]: 'reactivated',
-  [OutboxEventType.GRANT_ADMIN_DAYS_ADDED]: 'ending',
-  [OutboxEventType.GRANT_ADMIN_DAYS_REMOVED]: 'ending',
-  [OutboxEventType.GRANT_ADMIN_TRAFFIC_ADDED]: 'usage',
-  [OutboxEventType.GRANT_ADMIN_TRAFFIC_REMOVED]: 'usage',
-  [OutboxEventType.GRANT_ADMIN_TRAFFIC_RESET]: 'usage',
+  [OutboxEventType.GRANT_ADMIN_SPEED_CAPPED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_SPEED_UNCAPPED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_DEVICES_LIMITED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_DEVICES_UNLIMITED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_ISSUED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_RENEWED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_CONFIG_REGENERATED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_CONFIG_DISABLED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_CONFIG_ENABLED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_CONFIG_RETIRED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_CONFIG_MOVED]: 'cutoff',
 };
 
 export function retentionKindOf(notice: string): RetentionKind {

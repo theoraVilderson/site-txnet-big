@@ -64,14 +64,26 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   // F-602: at the last 72 h's rate, what is left of the period runs out within 5 days (or a day) — once per usage period.
   [OutboxEventType.GRANT_RUNS_OUT_SOON]: { template: 'serviceRunsOutSoon', params: ['days', 'remaining'] },
   [OutboxEventType.GRANT_RUNS_OUT_WITHIN_A_DAY]: { template: 'serviceRunsOutWithinADay', params: ['remaining'] },
-  // F-311-s: an admin's act on the service, told once per act (period = its audit row). Frozen, deleted and a dead link are never muted.
+  // F-311-s: an admin's act on the service, told once per act (period = its audit row); never muted. `reactivated`: the act
+  // also brought a stopped service back, said as the message's closing line instead of a second "active again".
   [OutboxEventType.GRANT_ADMIN_FROZEN]: { template: 'serviceFrozenByAdmin', params: [] },
   [OutboxEventType.GRANT_ADMIN_UNFROZEN]: { template: 'serviceUnfrozenByAdmin', params: [] },
-  [OutboxEventType.GRANT_ADMIN_DAYS_ADDED]: { template: 'serviceDaysAddedByAdmin', params: ['days'] },
+  [OutboxEventType.GRANT_ADMIN_DAYS_ADDED]: { template: 'serviceDaysAddedByAdmin', params: ['days'], optional: ['reactivated'] },
   [OutboxEventType.GRANT_ADMIN_DAYS_REMOVED]: { template: 'serviceDaysRemovedByAdmin', params: ['days'] },
-  [OutboxEventType.GRANT_ADMIN_TRAFFIC_ADDED]: { template: 'serviceTrafficAddedByAdmin', params: ['amount'] },
+  [OutboxEventType.GRANT_ADMIN_TRAFFIC_ADDED]: { template: 'serviceTrafficAddedByAdmin', params: ['amount'], optional: ['reactivated'] },
   [OutboxEventType.GRANT_ADMIN_TRAFFIC_REMOVED]: { template: 'serviceTrafficRemovedByAdmin', params: ['amount'] },
-  [OutboxEventType.GRANT_ADMIN_TRAFFIC_RESET]: { template: 'serviceTrafficResetByAdmin', params: [] },
+  [OutboxEventType.GRANT_ADMIN_TRAFFIC_RESET]: { template: 'serviceTrafficResetByAdmin', params: [], optional: ['reactivated'] },
   [OutboxEventType.GRANT_ADMIN_DELETED]: { template: 'serviceDeletedByAdmin', params: [] },
   [OutboxEventType.GRANT_ADMIN_LINK_ROTATED]: { template: 'serviceLinkRotatedByAdmin', params: [] },
+  [OutboxEventType.GRANT_ADMIN_SPEED_CAPPED]: { template: 'serviceSpeedCappedByAdmin', params: ['mbps'] },
+  [OutboxEventType.GRANT_ADMIN_SPEED_UNCAPPED]: { template: 'serviceSpeedUncappedByAdmin', params: [] },
+  [OutboxEventType.GRANT_ADMIN_DEVICES_LIMITED]: { template: 'serviceDevicesLimitedByAdmin', params: ['limit'] },
+  [OutboxEventType.GRANT_ADMIN_DEVICES_UNLIMITED]: { template: 'serviceDevicesUnlimitedByAdmin', params: [] },
+  [OutboxEventType.GRANT_ADMIN_ISSUED]: { template: 'serviceIssuedByAdmin', params: [], optional: ['servicesUrl'] },
+  [OutboxEventType.GRANT_ADMIN_RENEWED]: { template: 'serviceRenewedByAdmin', params: [], optional: ['reactivated'] },
+  [OutboxEventType.GRANT_ADMIN_CONFIG_REGENERATED]: { template: 'configRegeneratedByAdmin', params: [] },
+  [OutboxEventType.GRANT_ADMIN_CONFIG_DISABLED]: { template: 'configDisabledByAdmin', params: [] },
+  [OutboxEventType.GRANT_ADMIN_CONFIG_ENABLED]: { template: 'configEnabledByAdmin', params: [] },
+  [OutboxEventType.GRANT_ADMIN_CONFIG_RETIRED]: { template: 'configRetiredByAdmin', params: [] },
+  [OutboxEventType.GRANT_ADMIN_CONFIG_MOVED]: { template: 'configMovedByAdmin', params: [] },
 };

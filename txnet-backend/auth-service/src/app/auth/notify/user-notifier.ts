@@ -46,6 +46,17 @@ export const NOTIFY_TEMPLATES = [
   'serviceTrafficResetByAdmin',
   'serviceDeletedByAdmin',
   'serviceLinkRotatedByAdmin',
+  'serviceSpeedCappedByAdmin',
+  'serviceSpeedUncappedByAdmin',
+  'serviceDevicesLimitedByAdmin',
+  'serviceDevicesUnlimitedByAdmin',
+  'serviceIssuedByAdmin',
+  'serviceRenewedByAdmin',
+  'configRegeneratedByAdmin',
+  'configDisabledByAdmin',
+  'configEnabledByAdmin',
+  'configRetiredByAdmin',
+  'configMovedByAdmin',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -481,15 +492,128 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       fallback: '🔗 Support changed the subscription links of {{count}} of your services. The old links no longer work: copy the new ones from My services and update them in your VPN app.',
       inbox: { read: (ns) => ns?.retention?.adminLinkRotatedManyTitle, fallback: 'Links of {{count}} services changed' },
     },
+  },  serviceSpeedCappedByAdmin: {
+    read: (ns) => ns?.retention?.adminSpeedCapped,
+    fallback: '🐢 Support limited your service\'s speed to {{mbps}} Mbps.',
+    inbox: { read: (ns) => ns?.retention?.adminSpeedCappedTitle, fallback: 'Your service\'s speed was limited to {{mbps}} Mbps' },
+    many: {
+      read: (ns) => ns?.retention?.adminSpeedCappedMany,
+      fallback: '🐢 Support limited the speed of {{count}} of your services.',
+      inbox: { read: (ns) => ns?.retention?.adminSpeedCappedManyTitle, fallback: 'Speed of {{count}} services limited' },
+    },
   },
+  serviceSpeedUncappedByAdmin: {
+    read: (ns) => ns?.retention?.adminSpeedUncapped,
+    fallback: '🚀 Support lifted the speed limit on your service.',
+    inbox: { read: (ns) => ns?.retention?.adminSpeedUncappedTitle, fallback: 'Your service\'s speed limit was lifted' },
+    many: {
+      read: (ns) => ns?.retention?.adminSpeedUncappedMany,
+      fallback: '🚀 Support lifted the speed limit on {{count}} of your services.',
+      inbox: { read: (ns) => ns?.retention?.adminSpeedUncappedManyTitle, fallback: 'Speed limit lifted on {{count}} services' },
+    },
+  },
+  serviceDevicesLimitedByAdmin: {
+    read: (ns) => ns?.retention?.adminDevicesLimited,
+    fallback: '📱 Support limited your service to {{limit}} device(s) at once. A device over the limit cannot connect until another disconnects.',
+    inbox: { read: (ns) => ns?.retention?.adminDevicesLimitedTitle, fallback: 'Your service is limited to {{limit}} device(s)' },
+    many: {
+      read: (ns) => ns?.retention?.adminDevicesLimitedMany,
+      fallback: '📱 Support limited how many devices can use {{count}} of your services at once.',
+      inbox: { read: (ns) => ns?.retention?.adminDevicesLimitedManyTitle, fallback: 'Device limit set on {{count}} services' },
+    },
+  },
+  serviceDevicesUnlimitedByAdmin: {
+    read: (ns) => ns?.retention?.adminDevicesUnlimited,
+    fallback: '📱 Support lifted the device limit on your service.',
+    inbox: { read: (ns) => ns?.retention?.adminDevicesUnlimitedTitle, fallback: 'Your service\'s device limit was lifted' },
+    many: {
+      read: (ns) => ns?.retention?.adminDevicesUnlimitedMany,
+      fallback: '📱 Support lifted the device limit on {{count}} of your services.',
+      inbox: { read: (ns) => ns?.retention?.adminDevicesUnlimitedManyTitle, fallback: 'Device limit lifted on {{count}} services' },
+    },
+  },
+  serviceIssuedByAdmin: {
+    read: (ns) => ns?.retention?.adminIssued,
+    fallback: '🎁 Support gave you a new service. It is in My services, and its connection is ready within a few minutes.',
+    inbox: { read: (ns) => ns?.retention?.adminIssuedTitle, fallback: 'You have a new service' },
+    many: {
+      read: (ns) => ns?.retention?.adminIssuedMany,
+      fallback: '🎁 Support gave you {{count}} new services. They are in My services, and their connections are ready within a few minutes.',
+      inbox: { read: (ns) => ns?.retention?.adminIssuedManyTitle, fallback: '{{count}} new services' },
+    },
+  },
+  serviceRenewedByAdmin: {
+    read: (ns) => ns?.retention?.adminRenewed,
+    fallback: '🔁 Support renewed your service. My services shows its new end date and volume.',
+    inbox: { read: (ns) => ns?.retention?.adminRenewedTitle, fallback: 'Your service was renewed' },
+    many: {
+      read: (ns) => ns?.retention?.adminRenewedMany,
+      fallback: '🔁 Support renewed {{count}} of your services. My services shows their new end dates and volume.',
+      inbox: { read: (ns) => ns?.retention?.adminRenewedManyTitle, fallback: '{{count}} services renewed' },
+    },
+  },
+  configRegeneratedByAdmin: {
+    read: (ns) => ns?.retention?.adminConfigRegenerated,
+    fallback: '🔧 Support rebuilt one of your service\'s configs. If you added it to your app by hand, copy it again from My services; a subscription link updates on its own.',
+    inbox: { read: (ns) => ns?.retention?.adminConfigRegeneratedTitle, fallback: 'A config of your service was rebuilt' },
+    many: {
+      read: (ns) => ns?.retention?.adminConfigRegeneratedMany,
+      fallback: '🔧 Support rebuilt {{count}} of your configs. If you added them to your app by hand, copy them again from My services; a subscription link updates on its own.',
+      inbox: { read: (ns) => ns?.retention?.adminConfigRegeneratedManyTitle, fallback: '{{count}} configs rebuilt' },
+    },
+  },
+  configDisabledByAdmin: {
+    read: (ns) => ns?.retention?.adminConfigDisabled,
+    fallback: '⏸️ Support turned off one of your service\'s configs; it no longer connects. Your other configs are unchanged.',
+    inbox: { read: (ns) => ns?.retention?.adminConfigDisabledTitle, fallback: 'A config of your service was turned off' },
+    many: {
+      read: (ns) => ns?.retention?.adminConfigDisabledMany,
+      fallback: '⏸️ Support turned off {{count}} of your configs; they no longer connect.',
+      inbox: { read: (ns) => ns?.retention?.adminConfigDisabledManyTitle, fallback: '{{count}} configs turned off' },
+    },
+  },
+  configEnabledByAdmin: {
+    read: (ns) => ns?.retention?.adminConfigEnabled,
+    fallback: '▶️ Support turned one of your service\'s configs back on; it connects again within a few minutes.',
+    inbox: { read: (ns) => ns?.retention?.adminConfigEnabledTitle, fallback: 'A config of your service is back on' },
+    many: {
+      read: (ns) => ns?.retention?.adminConfigEnabledMany,
+      fallback: '▶️ Support turned {{count}} of your configs back on; they connect again within a few minutes.',
+      inbox: { read: (ns) => ns?.retention?.adminConfigEnabledManyTitle, fallback: '{{count}} configs back on' },
+    },
+  },
+  configRetiredByAdmin: {
+    read: (ns) => ns?.retention?.adminConfigRetired,
+    fallback: '🗑️ Support removed one of your service\'s configs. My services shows the ones you still have.',
+    inbox: { read: (ns) => ns?.retention?.adminConfigRetiredTitle, fallback: 'A config of your service was removed' },
+    many: {
+      read: (ns) => ns?.retention?.adminConfigRetiredMany,
+      fallback: '🗑️ Support removed {{count}} of your configs. My services shows the ones you still have.',
+      inbox: { read: (ns) => ns?.retention?.adminConfigRetiredManyTitle, fallback: '{{count}} configs removed' },
+    },
+  },
+  configMovedByAdmin: {
+    read: (ns) => ns?.retention?.adminConfigMoved,
+    fallback: '🔀 Support moved one of your service\'s configs to another server. If you added it to your app by hand, copy it again from My services; a subscription link updates on its own.',
+    inbox: { read: (ns) => ns?.retention?.adminConfigMovedTitle, fallback: 'A config of your service moved server' },
+    many: {
+      read: (ns) => ns?.retention?.adminConfigMovedMany,
+      fallback: '🔀 Support moved {{count}} of your configs to other servers. If you added them to your app by hand, copy them again from My services; a subscription link updates on its own.',
+      inbox: { read: (ns) => ns?.retention?.adminConfigMovedManyTitle, fallback: '{{count}} configs moved server' },
+    },
+  },
+
 };
 
 /**
  * Lines a notice ends with when it was given their param; one without it reads
- * whole. A delivered purchase's My services page (`servicesUrl`, F-601-h), the
+ * whole. An admin's act that also brought a stopped service back
+ * (`reactivated`, F-311-s — one message, not a second "active again"), a
+ * delivered purchase's My services page (`servicesUrl`, F-601-h), the
  * tenant's support link (`supportUrl`, F-601-c).
  */
 const TRAILING_LINES: ReadonlyArray<Text & { param: string }> = [
+  { param: 'reactivated', read: (ns) => ns?.retention?.reactivatedLine, fallback: '✅ Your service is active again and reconnects within a few minutes — its link stays the same.' },
   { param: 'servicesUrl', read: (ns) => ns?.purchase?.servicesLine, fallback: '👉 Open it: {{servicesUrl}}' },
   { param: 'supportUrl', read: (ns) => ns?.retention?.supportLine, fallback: '🛟 Support: {{supportUrl}}' },
 ];

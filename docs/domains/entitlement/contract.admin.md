@@ -12,9 +12,10 @@ A §10 split of [contract.md](contract.md), which is at its ceiling. What a
 reseller's admin does to one of its users' Grants by hand (F-311), renewal included. Each runs in
 the caller's transaction; the HTTP routes, their door and status codes are
 billing's [contract.reseller-grants.md](../billing/contract.reseller-grants.md).
-Freeze, unfreeze, days, traffic (a gift too), reset, delete and a rotated link
-are told to the user once each, beside their audit row (F-311-s,
-notification [contract.retention.md](../notification/contract.retention.md)).
+Every act here, and each config act, is told to the user once, beside its audit
+row (F-311-s, audit `contract.md` "Emits"). One that also brings a stopped Grant
+back reports `reactivated` and writes no "active again" of its own: the admin's
+notice says it, in the same message.
 
 **Freeze (F-311-h)** — `freezeGrant(tx, id, {at, until?})` and
 `unfreezeGrant(tx, id, at)` in `entitlement/freeze.ts`, proved by `freeze.spec.ts`.
@@ -40,7 +41,7 @@ duration is `endsAt`, not a quota metric (§4.5). Refused: `grant_closed`
 (pending), `grant_permanent`, `duration_unchanged`, `duration_end_not_future`
 (cutting off is a delete, F-311-m), `grant_moved`. Route: billing `contract.reseller-grants.md`.
 **A lapsed Grant's days revive it (F-311-z):** `suspended` as `period_ended`, its end
-moved ahead is a renewal of days (`reviveOnRenewal`, told F-601-k; a spent bag →
+moved ahead is a renewal of days (`reviveOnRenewal`, told inside the days notice, F-311-s; a spent bag →
 `quota_exhausted`, purge clock running), so it is never purged with days left. `revived`.
 
 **Traffic (F-311-j)** — `adjustGrantTraffic(tx, id, {at, actorUserId, deltaBytes, reason})`
@@ -53,7 +54,7 @@ alone moves no ceiling; the planner reallocates on its next pass. An `active` or
 not refused** (`spent: true`), and not suspended here: the planner's close is the one
 rule for "spent" (ADR-0096) — it closes on the new Quota and `suspendIfClosed`
 suspends it as exhausted. A raise that leaves room revives a Grant suspended for
-quota (`reviveOnTopUp`; a frozen one stays frozen) and is told (F-601-k), as a renewal.
+quota (`reviveOnTopUp`; a frozen one stays frozen), told inside the traffic notice (F-311-s).
 Unlike a renewal it forgives no debt and opens no usage period: the admin's figure is
 the change, whole. Used is `usedBytesOf` (`renewal.ts`), the renewal's own sum.
 Refused: `grant_closed`, `grant_not_active` (pending), `traffic_not_adjustable`

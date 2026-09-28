@@ -63,8 +63,9 @@ are not an admin's. Telling the user is the next section's.
 ## Emits (events)
 
 **An admin's act, told to the Grant's owner (F-311-s, built).** `auditedGrantAct`
-writes, beside the row and in the same transaction, one retention outbox row
-(`grant-audit/admin-notice.ts`, proved by `admin-notice.spec.ts`):
+and `auditedConfigAct` write, beside the row and in the same transaction, one
+retention outbox row (`grant-audit/admin-notice.ts`, proved by `admin-notice.spec.ts`).
+Every act is told; a config's on its Grant:
 
 | Act | Type `entitlement.grant.…` | Params |
 |---|---|---|
@@ -72,11 +73,18 @@ writes, beside the row and in the same transaction, one retention outbox row
 | days | `admin_days_added` / `admin_days_removed` | `days`: whole, at least 1 |
 | traffic change, gift | `admin_traffic_added` / `admin_traffic_removed` | `amount` ("5.0 GB") |
 | reset / delete / link rotate | `admin_traffic_reset` / `admin_deleted` / `admin_link_rotated` | — |
+| speed cap set / lifted | `admin_speed_capped` / `admin_speed_uncapped` | `mbps` on a cap |
+| device limit set / lifted | `admin_devices_limited` / `admin_devices_unlimited` | `limit` on a limit |
+| issue / renew | `admin_issued` / `admin_renewed` | `servicesUrl?` on an issue |
+| config regenerate / disable / enable / retire / move | `admin_config_regenerated` / `_disabled` / `_enabled` / `_retired` / `_moved` | — |
 
-`period` is the audit row's id, so the ledger tells each act once. Never in
-the payload: the admin's `reason` (staff's words) or a link. Not told here: a
-speed cap, a device limit, an issue or a renewal (told by their own notices),
-a config act. How it is told: notification
+`period` is the audit row's id, so the ledger tells each act once. `reactivated`
+(optional) on days added, traffic added, reset and renew: the act also brought a
+stopped Grant back, and the notice closes with "active again" instead of a
+second message (entitlement `contract.retention.md` "Active again"). An issue
+is told here because its Grant is born `active`: the purchase's "ready" fires
+only on `pending → active`. Never in the payload: the admin's `reason` (staff's
+words) or a link. How it is told: notification
 [contract.retention.md](../notification/contract.retention.md).
 
 ## Consumes

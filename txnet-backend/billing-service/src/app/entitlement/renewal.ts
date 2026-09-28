@@ -65,6 +65,8 @@ export type RenewGrant = {
   at?: Date;
   reason?: string | null;
   createdByAdminId?: string | null;
+  /** False: the caller tells the revival in its own notice (an admin's renewal, F-311-s); `reactivated` reports it. */
+  tellReactivated?: boolean;
 };
 
 export type Renewal = CarryOver & {
@@ -73,6 +75,8 @@ export type Renewal = CarryOver & {
   endsAt: Date | null;
   /** A Grant suspended for quota that the raise gave room again. */
   revived: boolean;
+  /** A stop the user was told of is undone and the Grant runs (F-601-k's test). */
+  reactivated: boolean;
 };
 
 /** Used: Σ lifetime counters over every config of the Grant, retired ones included — the planner's sum. */
@@ -161,16 +165,15 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
   // F-601-k: a stop this renewal undid is told, once the Grant can run again.
   // The close is read only for an active Grant — a suspended one is back by
   // the revival or not at all.
+  let undone: Date | null = null;
   if (runs(endsAt, at)) {
-    const owner = { grantId: grant.id, tenantId: grant.tenantId, userId: grant.userId };
-    if (revived && grant.suspendedAt) await emitReactivated(tx, owner, grant.suspendedAt);
-    else if (grant.status === GrantStatus.active && room) {
-      const closedAt = await standingClose(tx, grant, bagged, at);
-      if (closedAt) await emitReactivated(tx, owner, closedAt);
-    }
+    if (revived && grant.suspendedAt) undone = grant.suspendedAt;
+    else if (grant.status === GrantStatus.active && room) undone = await standingClose(tx, grant, bagged, at);
   }
+  const owner = { grantId: grant.id, tenantId: grant.tenantId, userId: grant.userId };
+  if (undone && input.tellReactivated !== false) await emitReactivated(tx, owner, undone);
 
-  return { grantId: grant.id, ...carry, purchasedBytes, endsAt, revived };
+  return { grantId: grant.id, ...carry, purchasedBytes, endsAt, revived, reactivated: undone !== null };
 }
 
 /**

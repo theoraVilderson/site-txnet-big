@@ -1,6 +1,6 @@
 import { AdminAction, AuditTargetType, Prisma } from '@prisma/client';
 
-import { adminNoticeOf, emitAdminNotice } from './admin-notice';
+import { adminNoticeOf, configNoticeOf, emitAdminNotice } from './admin-notice';
 
 /**
  * An admin's act on a user's Grant or config, written down (F-311-r, audit
@@ -14,8 +14,9 @@ import { adminNoticeOf, emitAdminNotice } from './admin-notice';
  * what lives off the row (a quota's bytes, a speed cap, a refund). Neither
  * ever carries a token or a link: a rotation's outcome is the time, not the URL.
  *
- * The acts the user is told of (F-311-s) write their notice beside the row, in
- * the same transaction, the row's id its period (`admin-notice.ts`).
+ * Every act is told to the user (F-311-s): its notice is written beside the
+ * row, in the same transaction, the row's id its period (`admin-notice.ts`).
+ * A config's act is told on the config's Grant.
  */
 export type AuditActor = { userId: string; ip: string };
 
@@ -68,8 +69,7 @@ export async function auditedGrantAct<T>(
   const target = spec.targetOf ? spec.targetOf(result) : (grantId as string);
   const after = await tx.grant.findUnique({ where: { id: target }, select: GRANT_STATE });
   const auditId = await write(tx, actor, tenantId, spec.action, AuditTargetType.grant, target, before, { ...after, outcome: spec.outcome?.(result) }, spec.reason);
-  const notice = adminNoticeOf(spec.action, result);
-  if (notice) await emitAdminNotice(tx, tenantId, target, auditId, notice);
+  await emitAdminNotice(tx, tenantId, target, auditId, adminNoticeOf(spec.action, result));
   return result;
 }
 
@@ -86,7 +86,10 @@ export async function auditedConfigAct<T extends string | void>(
   const before = await tx.config.findUnique({ where: { id: configId }, select: CONFIG_STATE });
   const movedTo = await act();
   const after = await tx.config.findUnique({ where: { id: configId }, select: CONFIG_STATE });
-  await write(tx, actor, tenantId, action, AuditTargetType.config, configId, before, { ...after, outcome: movedTo ? { movedTo } : undefined }, reason);
+  const auditId = await write(tx, actor, tenantId, action, AuditTargetType.config, configId, before, { ...after, outcome: movedTo ? { movedTo } : undefined }, reason);
+  const grantId = after?.grantId ?? before?.grantId;
+  if (!grantId) throw new Error(`config ${configId} was audited and is gone`);
+  await emitAdminNotice(tx, tenantId, grantId, auditId, configNoticeOf(action));
   return movedTo;
 }
 

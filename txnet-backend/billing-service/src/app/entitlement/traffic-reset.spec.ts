@@ -135,6 +135,7 @@ describe('resetGrantTraffic (F-311-k)', () => {
       resetBytes: BigInt(3) * GIB,
       spent: false,
       revived: false,
+      reactivated: false,
     });
     // The full bag is left again: Quota - Used is the 10 GiB it started with.
     expect(grant?.purchasedBytes).toBe(BigInt(13) * GIB);
@@ -193,7 +194,9 @@ describe('resetGrantTraffic (F-311-k)', () => {
     expect(done).toMatchObject({ revived: true, spent: false, purchasedBytesAfter: BigInt(21) * GIB });
     expect(grant?.status).toBe(GrantStatus.active);
     expect(configWrites).toHaveLength(1);
-    expect(events.map((e) => (e.payload as { period: string }).period)).toEqual([SUSPENDED_AT.toISOString()]);
+    // F-311-s: reported, and told inside the admin's own notice — never a second "active again".
+    expect(done.reactivated).toBe(true);
+    expect(events).toEqual([]);
   });
 
   it('resets a frozen Grant and leaves it frozen', async () => {

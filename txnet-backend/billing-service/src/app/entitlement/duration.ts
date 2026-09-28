@@ -2,7 +2,6 @@ import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 
 import { EntitlementRefused } from './grant';
 import { reviveOnRenewal } from './purge';
-import { emitReactivated } from './reactivated';
 import { lapseToQuota, usedBytesOf } from './renewal';
 import { PERIOD_ENDED } from './suspension';
 
@@ -17,6 +16,8 @@ export type DurationChange = {
   endsAtAfter: Date;
   /** A lapsed Grant (`period_ended`) the move returned to `active` (F-311-z). */
   revived: boolean;
+  /** The move undid a stop the user was told of: the admin's notice says so, in the same message (F-311-s). */
+  reactivated: boolean;
 };
 
 /** A Grant whose days only a renewal brings back (§4.4 one way, F-311-d). */
@@ -93,10 +94,7 @@ export async function changeGrantDuration(
     const bagged = grant.billingMode === VariantBillingMode.prepaid && !grant.trafficUnlimited;
     if (!bagged || grant.purchasedBytes > (await usedBytesOf(tx, grant.id))) {
       revived = (await reviveOnRenewal(tx, grant.id)).revived;
-      if (revived && grant.suspendedAt) {
-        await emitReactivated(tx, { grantId: grant.id, tenantId: grant.tenantId, userId: grant.userId }, grant.suspendedAt);
-      }
     } else await lapseToQuota(tx, grant.id);
   }
-  return { changeId: row.id, endsAtBefore: before, endsAtAfter: after, revived };
+  return { changeId: row.id, endsAtBefore: before, endsAtAfter: after, revived, reactivated: revived };
 }

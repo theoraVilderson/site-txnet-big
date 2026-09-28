@@ -100,6 +100,8 @@ function build() {
       findMany: async (args: Row) => ((history.findMany = args), []),
       count: async () => 0,
     },
+    tenantDomain: { findMany: async () => [] },
+    tenant: { findUnique: async () => ({ tenantType: 'reseller' }) },
     outboxEvent: { create: async ({ data }: { data: Row }) => (notices.push({ ...data, scope: scope() }), data) },
   };
   const notices: Row[] = [];

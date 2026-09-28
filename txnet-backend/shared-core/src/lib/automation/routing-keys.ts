@@ -90,11 +90,11 @@ export const OutboxEventType = {
   GRANT_LOW_BALANCE: 'entitlement.grant.low_balance',
   /** F-601-i: a paid Grant still `pending` 5 minutes on — the buyer is told it is being prepared, the tenant's owner why; once per Grant. */
   GRANT_DELIVERY_DELAYED: 'entitlement.grant.delivery_delayed',
-  /** F-311-s: an admin froze the user's Grant — one per act, its audit row's id the period (`grant-audit/admin-notice.ts`). Never muted. */
+  /** F-311-s: an admin froze the user's Grant — one per act, its audit row's id the period (`grant-audit/admin-notice.ts`). Every admin notice is never muted. */
   GRANT_ADMIN_FROZEN: 'entitlement.grant.admin_frozen',
   /** F-311-s: an admin unfroze it; the frozen time was added to its end. */
   GRANT_ADMIN_UNFROZEN: 'entitlement.grant.admin_unfrozen',
-  /** F-311-s: an admin moved its end later — `days`, whole and never zero. */
+  /** F-311-s: an admin moved its end later — `days`, whole and never zero; `reactivated` when that brought a stopped Grant back (one message, not two). */
   GRANT_ADMIN_DAYS_ADDED: 'entitlement.grant.admin_days_added',
   /** F-311-s: an admin moved its end earlier — `days`. */
   GRANT_ADMIN_DAYS_REMOVED: 'entitlement.grant.admin_days_removed',
@@ -104,10 +104,32 @@ export const OutboxEventType = {
   GRANT_ADMIN_TRAFFIC_REMOVED: 'entitlement.grant.admin_traffic_removed',
   /** F-311-s: an admin reset its traffic; the full volume is left again. */
   GRANT_ADMIN_TRAFFIC_RESET: 'entitlement.grant.admin_traffic_reset',
-  /** F-311-s: an admin deleted it. Never muted. */
+  /** F-311-s: an admin deleted it. */
   GRANT_ADMIN_DELETED: 'entitlement.grant.admin_deleted',
-  /** F-311-s: an admin rotated its `/sub` link; the old one no longer answers. Never muted. */
+  /** F-311-s: an admin rotated its `/sub` link; the old one no longer answers. */
   GRANT_ADMIN_LINK_ROTATED: 'entitlement.grant.admin_link_rotated',
+  /** F-311-s: an admin capped its speed — `mbps`. */
+  GRANT_ADMIN_SPEED_CAPPED: 'entitlement.grant.admin_speed_capped',
+  /** F-311-s: an admin lifted its speed cap. */
+  GRANT_ADMIN_SPEED_UNCAPPED: 'entitlement.grant.admin_speed_uncapped',
+  /** F-311-s: an admin limited its devices at once — `limit`. */
+  GRANT_ADMIN_DEVICES_LIMITED: 'entitlement.grant.admin_devices_limited',
+  /** F-311-s: an admin lifted its device limit. */
+  GRANT_ADMIN_DEVICES_UNLIMITED: 'entitlement.grant.admin_devices_unlimited',
+  /** F-311-s: an admin issued the user a service — born `active`, so the purchase's "ready" never fires; optional `servicesUrl`. */
+  GRANT_ADMIN_ISSUED: 'entitlement.grant.admin_issued',
+  /** F-311-s: an admin renewed it in place. */
+  GRANT_ADMIN_RENEWED: 'entitlement.grant.admin_renewed',
+  /** F-311-s: an admin regenerated one of its configs — the line changed. Told on the config's Grant. */
+  GRANT_ADMIN_CONFIG_REGENERATED: 'entitlement.grant.admin_config_regenerated',
+  /** F-311-s: an admin turned one of its configs off. */
+  GRANT_ADMIN_CONFIG_DISABLED: 'entitlement.grant.admin_config_disabled',
+  /** F-311-s: an admin turned one of its configs back on. */
+  GRANT_ADMIN_CONFIG_ENABLED: 'entitlement.grant.admin_config_enabled',
+  /** F-311-s: an admin retired one of its configs. */
+  GRANT_ADMIN_CONFIG_RETIRED: 'entitlement.grant.admin_config_retired',
+  /** F-311-s: an admin moved one of its configs to another server. */
+  GRANT_ADMIN_CONFIG_MOVED: 'entitlement.grant.admin_config_moved',
 } as const;
 export type OutboxEventType = (typeof OutboxEventType)[keyof typeof OutboxEventType];
 
@@ -163,6 +185,17 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.GRANT_ADMIN_TRAFFIC_RESET]: 'worker-service',
   [OutboxEventType.GRANT_ADMIN_DELETED]: 'worker-service',
   [OutboxEventType.GRANT_ADMIN_LINK_ROTATED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_SPEED_CAPPED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_SPEED_UNCAPPED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_DEVICES_LIMITED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_DEVICES_UNLIMITED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_ISSUED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_RENEWED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_CONFIG_REGENERATED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_CONFIG_DISABLED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_CONFIG_ENABLED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_CONFIG_RETIRED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_CONFIG_MOVED]: 'worker-service',
 };
 
 /** Every tick routing key starts with this. The suffix is the worker key. */

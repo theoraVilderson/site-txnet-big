@@ -2,7 +2,7 @@ import { GrantSource, GrantStatus, Prisma, QuotaMetric, VariantBillingMode } fro
 
 import { EntitlementRefused } from './grant';
 import { reviveOnTopUp } from './purge';
-import { emitReactivated, runs, standingClose } from './reactivated';
+import { runs, standingClose } from './reactivated';
 import { usedBytesOf } from './renewal';
 import { QUOTA_EXHAUSTED } from './suspension';
 
@@ -16,6 +16,8 @@ export type TrafficChange = {
   spent: boolean;
   /** A Grant suspended for quota that the raise gave room again. */
   revived: boolean;
+  /** A stop the user was told of is undone and the Grant runs: the admin's notice says so, in the same message (F-311-s). */
+  reactivated: boolean;
 };
 
 /** A Grant whose traffic only a renewal brings back (§4.4 one way, F-311-d). */
@@ -72,7 +74,9 @@ async function adjustmentRow(tx: Prisma.TransactionClient, grant: Adjustable, de
 /**
  * After Quota moved from `before` to `after`: whether it is spent, and — for a
  * raise that leaves room — the revival of a Grant suspended for quota
- * (`reviveOnTopUp`, which leaves a frozen one frozen) and its telling (F-601-k).
+ * (`reviveOnTopUp`, which leaves a frozen one frozen), and whether a stop was
+ * undone (F-601-k's test) — reported, not told: every caller is an admin's act,
+ * whose own notice says it (F-311-s).
  */
 export async function settle(tx: Prisma.TransactionClient, grant: Settled, at: Date, before: bigint, after: bigint, usedBytes: bigint) {
   const spent = after <= usedBytes;
@@ -80,17 +84,16 @@ export async function settle(tx: Prisma.TransactionClient, grant: Settled, at: D
     !spent && grant.status === GrantStatus.suspended && grant.statusReason === QUOTA_EXHAUSTED
       ? (await reviveOnTopUp(tx, grant.id)).revived
       : false;
-  // F-601-k: a stop this raise undid is told — a revival, or a close that
+  // F-601-k's test: a stop this raise undid — a revival, or a close that
   // stood on the old Quota of a Grant not yet suspended for it (rule 25).
+  let reactivated = false;
   if (!spent && after > before && runs(grant.endsAt, at)) {
-    const owner = { grantId: grant.id, tenantId: grant.tenantId, userId: grant.userId };
-    if (revived && grant.suspendedAt) await emitReactivated(tx, owner, grant.suspendedAt);
+    if (revived && grant.suspendedAt) reactivated = true;
     else if (grant.status === GrantStatus.active) {
-      const closedAt = await standingClose(tx, { id: grant.id, purchasedBytes: before, endsAt: grant.endsAt }, true, at);
-      if (closedAt) await emitReactivated(tx, owner, closedAt);
+      reactivated = (await standingClose(tx, { id: grant.id, purchasedBytes: before, endsAt: grant.endsAt }, true, at)) !== null;
     }
   }
-  return { spent, revived };
+  return { spent, revived, reactivated };
 }
 
 /**
@@ -132,8 +135,8 @@ export async function adjustGrantTraffic(
 
   const adjustmentId = await adjustmentRow(tx, grant, input.deltaBytes, input);
   const usedBytes = await usedBytesOf(tx, grantId);
-  const { spent, revived } = await settle(tx, grant, input.at, before, after, usedBytes);
-  return { adjustmentId, purchasedBytesBefore: before, purchasedBytesAfter: after, usedBytes, spent, revived };
+  const settled = await settle(tx, grant, input.at, before, after, usedBytes);
+  return { adjustmentId, purchasedBytesBefore: before, purchasedBytesAfter: after, usedBytes, ...settled };
 }
 
 export type TrafficReset = TrafficChange & {
@@ -174,6 +177,6 @@ export async function resetGrantTraffic(
   if (moved.count === 0) throw new EntitlementRefused('grant_moved', grantId);
 
   const adjustmentId = await adjustmentRow(tx, grant, resetBytes, input);
-  const { spent, revived } = await settle(tx, grant, input.at, before, after, usedBytes);
-  return { adjustmentId, purchasedBytesBefore: before, purchasedBytesAfter: after, usedBytes, resetBytes, spent, revived };
+  const settled = await settle(tx, grant, input.at, before, after, usedBytes);
+  return { adjustmentId, purchasedBytesBefore: before, purchasedBytesAfter: after, usedBytes, resetBytes, ...settled };
 }

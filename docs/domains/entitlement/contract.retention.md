@@ -163,7 +163,10 @@ purge (`purge-due` answers `told` beside its counts).
 stopped Grant that runs again is told so, in the transaction that brought it
 back. `entitlement/reactivated.ts` (`emitReactivated`), called by `renewGrant`
 and `reviveFundedGrants`; proved by `reactivated.spec.ts`. Payload `tenantId,
-userId, grantId, period`; template `serviceReactivated`.
+userId, grantId, period`; template `serviceReactivated`. **Not for an admin's
+act** (F-311-s): the same test runs, but the act reports `reactivated` and its
+own notice closes with "active again" — one message, not two (`renewGrant`'s
+`tellReactivated: false`; days, traffic, reset and gift never emit it).
 
 | Rule | Why |
 |---|---|

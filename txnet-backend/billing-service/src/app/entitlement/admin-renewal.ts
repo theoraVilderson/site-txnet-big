@@ -28,13 +28,15 @@ export type AdminRenewed = {
   endsAtAfter: Date | null;
   /** A lapsed or spent Grant this renewal returned to `active`; false on a repeat. */
   revived: boolean;
+  /** A stop the user was told of is undone: said in the admin's own notice (F-311-s); false on a repeat. */
+  reactivated: boolean;
   /** False for a repeat of a request that already renewed this Grant. */
   renewed: boolean;
 };
 
-type RenewalRow = Omit<AdminRenewed, 'renewalId' | 'revived' | 'renewed'> & { id: string };
+type RenewalRow = Omit<AdminRenewed, 'renewalId' | 'revived' | 'reactivated' | 'renewed'> & { id: string };
 
-const renewedOf = (r: RenewalRow, revived: boolean, renewed: boolean): AdminRenewed => ({
+const renewedOf = (r: RenewalRow, revived: boolean, renewed: boolean, reactivated = false): AdminRenewed => ({
   renewalId: r.id,
   grantId: r.grantId,
   plan: r.plan,
@@ -46,6 +48,7 @@ const renewedOf = (r: RenewalRow, revived: boolean, renewed: boolean): AdminRene
   endsAtBefore: r.endsAtBefore,
   endsAtAfter: r.endsAtAfter,
   revived,
+  reactivated,
   renewed,
 });
 
@@ -91,6 +94,7 @@ export async function renewGrantByAdmin(tx: Prisma.TransactionClient, input: Adm
     at: input.at,
     reason: input.reason,
     createdByAdminId: input.actorUserId,
+    tellReactivated: false,
   });
 
   try {
@@ -111,7 +115,7 @@ export async function renewGrantByAdmin(tx: Prisma.TransactionClient, input: Adm
         reason: input.reason,
       },
     });
-    return renewedOf(row, done.revived, true);
+    return renewedOf(row, done.revived, true, done.reactivated);
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new EntitlementRefused('already_renewed', input.requestId);
     throw e;

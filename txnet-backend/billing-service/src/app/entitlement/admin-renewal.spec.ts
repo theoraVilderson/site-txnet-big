@@ -73,6 +73,7 @@ const renewed = (over: Partial<{ purchasedBytes: bigint; endsAt: Date | null; fo
   purchasedBytes: over.purchasedBytes ?? BigInt(100) * GIB,
   endsAt: over.endsAt === undefined ? new Date(AT.getTime() + 30 * 86_400_000) : over.endsAt,
   revived: over.revived ?? true,
+  reactivated: over.revived ?? true,
 });
 
 const input = (over: Partial<Parameters<typeof renewGrantByAdmin>[1]> = {}) => ({
@@ -101,6 +102,7 @@ describe('renewGrantByAdmin — one period of the plan the user bought, by defau
       at: AT,
       reason: 'paid cash',
       createdByAdminId: ADMIN,
+      tellReactivated: false,
     });
     expect(out).toMatchObject({ plan: true, bytes: BigInt(50) * GIB, days: 30, renewed: true, revived: true });
   });

@@ -125,7 +125,7 @@ describe('changeGrantDuration', () => {
     const done = await changeGrantDuration(tx, GRANT, by(3));
 
     const after = new Date(END.getTime() + 3 * DAY);
-    expect(done).toEqual({ changeId: 'change-1', endsAtBefore: END, endsAtAfter: after, revived: false });
+    expect(done).toEqual({ changeId: 'change-1', endsAtBefore: END, endsAtAfter: after, revived: false, reactivated: false });
     expect(grant?.endsAt).toEqual(after);
     expect(changes).toEqual([
       { tenantId: TENANT, grantId: GRANT, actorUserId: ADMIN, endsAtBefore: END, endsAtAfter: after, reason: 'outage 2026-09-27' },
@@ -197,14 +197,16 @@ describe('changeGrantDuration', () => {
     const lapsed = (row: Partial<Row> = {}, used = BigInt(0)) =>
       build({ status: GrantStatus.suspended, statusReason: PERIOD_ENDED, suspendedAt: LAPSED_AT, endsAt: LAPSED_AT, ...row }, used);
 
-    it('is revived by an end moved ahead — configs back, the purge clock cleared, the user told', async () => {
+    it('is revived by an end moved ahead — configs back, the purge clock cleared, the revival reported', async () => {
       const { tx, grant, configs, events, changes } = lapsed({}, BigInt(10) * GIB);
       const done = await changeGrantDuration(tx, GRANT, by(30));
 
       expect(done.revived).toBe(true);
       expect(grant).toMatchObject({ status: GrantStatus.active, statusReason: null, suspendedAt: null, endsAt: new Date(LAPSED_AT.getTime() + 30 * DAY) });
       expect(configs).toEqual([expect.objectContaining({ desiredEnabled: true, desiredRemote: 'present' })]);
-      expect(events).toEqual([expect.objectContaining({ type: OutboxEventType.GRANT_REACTIVATED, payload: expect.objectContaining({ userId: USER, period: LAPSED_AT.toISOString() }) })]);
+      // F-311-s: told once, in the admin's own notice, never as a second "active again".
+      expect(done.reactivated).toBe(true);
+      expect(events).toEqual([]);
       expect(changes).toHaveLength(1);
     });
 

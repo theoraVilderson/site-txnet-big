@@ -69,10 +69,12 @@ function build() {
     config: {
       findFirst: async ({ where }: { where: { id: string; userId: string } }) =>
         configUser[where.id] === where.userId ? { id: where.id } : null,
-      findUnique: async () => null,
+      findUnique: async () => ({ grantId: 'grant-1' }),
     },
-    // Each acted config's audit row (F-311-r); `grant-audit.spec.ts` pins them.
-    adminAuditLog: { create: async () => ({}) },
+    grant: { findUnique: async () => ({ userId: CUSTOMER }) },
+    // Each acted config's audit row (F-311-r) and its notice (F-311-s); `grant-audit.spec.ts` and `admin-notice.spec.ts` pin them.
+    adminAuditLog: { create: async () => ({ id: 'audit-1' }) },
+    outboxEvent: { create: async () => ({ id: 'event-1' }) },
   };
   const prisma = { $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx) };
 

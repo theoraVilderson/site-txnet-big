@@ -73,6 +73,6 @@ export async function giftGrantBytes(
     select: { id: true },
   });
   const usedBytes = await usedBytesOf(tx, grantId);
-  const { spent, revived } = await settle(tx, grant, input.at, before, after, usedBytes);
-  return { adjustmentId: row.id, purchasedBytesBefore: before, purchasedBytesAfter: after, usedBytes, spent, revived };
+  const settled = await settle(tx, grant, input.at, before, after, usedBytes);
+  return { adjustmentId: row.id, purchasedBytesBefore: before, purchasedBytesAfter: after, usedBytes, ...settled };
 }
