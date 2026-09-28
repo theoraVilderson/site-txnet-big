@@ -16,6 +16,8 @@ const N = FrontendI18nKeys.common.myServices.lines;
 /** The longest name billing takes (`MAX_CONFIG_LABEL_LENGTH`, ADR-0089). */
 const MAX_NAME = 40;
 
+const noop = () => undefined;
+
 /** How long a pressed copy shows its tick. */
 const TICK_MS = 2000;
 
@@ -48,7 +50,14 @@ function useTick(): [boolean, () => void] {
  * billing's to put on the lines, as `/sub` does, so a save re-reads
  * (`onRenamed`) and nothing is renamed here.
  */
-export function ConfigLines({ rows, onRenamed }: { rows: UserConfigRow[]; onRenamed: () => void }) {
+export function ConfigLines({
+  rows,
+  onRenamed,
+}: {
+  rows: UserConfigRow[];
+  /** Absent where the reader may not rename — an admin's sheet (F-311-v): then no pencil. */
+  onRenamed?: () => void;
+}) {
   const { t } = useLocale();
   const [allCopied, markAll] = useTick();
   const lines = rows.flatMap((r) => r.lines);
@@ -86,7 +95,7 @@ export function ConfigLines({ rows, onRenamed }: { rows: UserConfigRow[]; onRena
             </li>
           ) : (
             row.lines.map((line, i) => (
-              <Line key={`${row.id}:${i}`} line={line} config={i === 0 ? row : undefined} onRenamed={onRenamed} />
+              <Line key={`${row.id}:${i}`} line={line} config={i === 0 && onRenamed ? row : undefined} onRenamed={onRenamed ?? noop} />
             ))
           ),
         )}

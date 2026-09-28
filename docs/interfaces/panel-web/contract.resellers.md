@@ -158,8 +158,7 @@ the platform owner's administration, and this is the reseller's own. Each
 screen calls a route that names the reseller (`/api/tenants/:id/...`,
 `/api/<service>/tenants/:id/...`), never an ambient one. The console is its
 front page; the gateways screen (w4) is beside it, the bot screen (w6) is
-[contract.reseller-bot.md](contract.reseller-bot.md)'s and the catalog screen
-(w8) [contract.catalog.md](contract.catalog.md)'s.
+[contract.reseller-bot.md](contract.reseller-bot.md)'s and the catalog (w8) [contract.catalog.md](contract.catalog.md)'s.
 
 | page | route | files |
 |---|---|---|
@@ -169,6 +168,7 @@ front page; the gateways screen (w4) is beside it, the bot screen (w6) is
 | its bot | `/my-resellers/[id]/bot` (`myResellerBotPath`) | [contract.reseller-bot.md](contract.reseller-bot.md) (F-066-w6) |
 | its catalog | `/my-resellers/[id]/catalog` (`myResellerCatalogPath`) | [contract.catalog.md](contract.catalog.md) "The same page for a reseller a route names" (F-066-w8) |
 | its brand | `/my-resellers/[id]/branding` (`myResellerBrandingPath`) | [contract.branding.md](contract.branding.md) "Editing it" (F-307-k) |
+| its users | `/my-resellers/[id]/users[/:userId]` (`myResellerUsersPath`) | [contract.reseller-users.md](contract.reseller-users.md) (F-311-v) |
 
 Its calls are `resellerDomainsApi` (`lib/tenant-api.ts`): list, add, check —
 every rule behind them is [tenant/contract.domains.md](../../domains/tenant/contract.domains.md).

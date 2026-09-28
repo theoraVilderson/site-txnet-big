@@ -588,6 +588,58 @@ export function gatewayAdminApi(tenantId: string | null): GatewayAdminApi {
 /** The caller's own gateways — what `billingApi`'s six gateway calls have always been. */
 export const ambientGatewayApi = gatewayAdminApi(null);
 
+/**
+ * What a reseller's admin may take on a user's config (F-311-g): billing's
+ * `ADMIN_CONFIG_ACTIONS`. A `disable` carries its `reason` and a `move` its
+ * `toPanelId`, and nothing else carries either — the schema refuses the rest.
+ */
+export type AdminConfigAction = "regenerate" | "disable" | "enable" | "retire" | "move";
+export interface AdminConfigActionBody {
+  action: AdminConfigAction;
+  configIds: string[];
+  reason?: string;
+  toPanelId?: string;
+}
+export type AdminConfigActionOutcome =
+  | { configId: string; ok: true; movedTo?: string }
+  | { configId: string; ok: false; reason: ConfigActionRefusal };
+
+/**
+ * One user's services under a reseller the **path** names (F-311-f/g,
+ * `billing/contract.reseller-grants.md`): `/tenants/:tenantId/users/:userId`.
+ * Never the session's tenant — a reseller's owner signs in to the platform's
+ * (ADR-0059) — and never the caller's own Grants.
+ */
+export const resellerUserGrantsPath = (tenantId: string, userId: string) =>
+  `/tenants/${encodeURIComponent(tenantId)}/users/${encodeURIComponent(userId)}`;
+
+/** The owner's four reads and the config actions, as an admin asks them for one user. */
+export interface ResellerUserGrantsApi {
+  grants(page: number, pageSize: number, scope: GrantScope): Promise<GrantsPage>;
+  grantConfigs(grantId: string): Promise<{ grantId: string; rows: UserConfigRow[] }>;
+  grantUsage(grantId: string): Promise<GrantUsage>;
+  subscriptionLink(grantId: string): Promise<{ grantId: string; subscriptionUrl: string }>;
+  configAction(body: AdminConfigActionBody): Promise<{ action: AdminConfigAction; results: AdminConfigActionOutcome[] }>;
+}
+
+export function resellerUserGrantsApi(tenantId: string, userId: string): ResellerUserGrantsApi {
+  const at = resellerUserGrantsPath(tenantId, userId);
+  const grant = (grantId: string) => `${at}/grants/${encodeURIComponent(grantId)}`;
+  return {
+    grants: (page, pageSize, scope) =>
+      call<GrantsPage>(`${at}/grants?${new URLSearchParams({ page: String(page), pageSize: String(pageSize), scope })}`, { method: "GET" }),
+    grantConfigs: (grantId) => call<{ grantId: string; rows: UserConfigRow[] }>(`${grant(grantId)}/configs`, { method: "GET" }),
+    grantUsage: (grantId) => call<GrantUsage>(`${grant(grantId)}/usage`, { method: "GET" }),
+    subscriptionLink: (grantId) =>
+      call<{ grantId: string; subscriptionUrl: string }>(`${grant(grantId)}/subscription-link`, { method: "GET" }),
+    configAction: (body) =>
+      call<{ action: AdminConfigAction; results: AdminConfigActionOutcome[] }>(`${at}/configs/actions`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+  };
+}
+
 export const billingApi = {
   /**
    * The wallet's balance, and nothing else.

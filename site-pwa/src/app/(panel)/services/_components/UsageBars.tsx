@@ -21,15 +21,21 @@ const HEIGHT = 64;
  * every expand — its own bucket, beside the config list's. A failure costs the
  * chart only: the configs under it are what the user came for.
  */
-export function UsageBars({ grantId }: { grantId: string }) {
+export function UsageBars({
+  grantId,
+  read = billingApi.grantUsage,
+}: {
+  grantId: string;
+  /** Who is asked: the owner's route, or an admin's for the user a path names (F-311-v). Keep it stable — it is a dependency. */
+  read?: (grantId: string) => Promise<GrantUsage>;
+}) {
   const { t, lang } = useLocale();
   const [usage, setUsage] = useState<GrantUsage | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    billingApi
-      .grantUsage(grantId)
+    read(grantId)
       .then((answer) => alive && setUsage(answer))
       .catch((e) => {
         console.error(e);
@@ -38,7 +44,7 @@ export function UsageBars({ grantId }: { grantId: string }) {
     return () => {
       alive = false;
     };
-  }, [grantId]);
+  }, [grantId, read]);
 
   if (failed) return <p className="text-[11px] text-text-secondary">{t("common", G.unavailable)}</p>;
   if (!usage) {

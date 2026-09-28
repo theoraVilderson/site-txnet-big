@@ -3152,5 +3152,74 @@
       "member_not_found": "That member is no longer in this group.",
       "group_in_use": "A discount rule serves this group. Point the rule elsewhere first."
     }
+  },
+  "resellerUsers": {
+    "title": "{{slug}}'s users",
+    "titlePlain": "your reseller's users",
+    "subtitle": "Find a customer and open their services — their configs, links, usage and subscription link.",
+    "backToConsole": "back to the console",
+    "refresh": "refresh",
+    "reload": "try again",
+    "search": "search by name, username or phone",
+    "searchHint": "type at least 3 characters to search",
+    "empty": "this reseller has no users yet.",
+    "emptySearch": "no user matches this search.",
+    "open": "services",
+    "unnamed": "no name",
+    "columns": {
+      "joined": "joined"
+    },
+    "userStatus": {
+      "active": "active",
+      "suspended": "blocked",
+      "banned": "banned by the platform"
+    },
+    "moreUsers": {
+      "title": "users",
+      "hint": "find a customer, see their services and fix a config for them."
+    },
+    "services": {
+      "back": "back to the users",
+      "title": "{{name}}'s services",
+      "titlePlain": "a user's services",
+      "subtitle": "What this user holds, as they see it. Actions on a config here are logged in your name.",
+      "empty": "this user has no service.",
+      "noCurrent": "this user has no current service.",
+      "showEnded": "show ended services ({{count}})",
+      "hideEnded": "hide ended services",
+      "details": "open",
+      "close": "close",
+      "noPlan": "service without a plan",
+      "ends": "until {{date}}",
+      "permanent": "no end date",
+      "subscription": "subscription link",
+      "subscriptionCopy": "copy",
+      "subscriptionCopied": "copied",
+      "subscriptionQr": "QR code",
+      "configsTitle": "configs"
+    },
+    "actions": {
+      "regenerate": "new link",
+      "regenerateHint": "a new link from you does not use up one of the user's own.",
+      "disable": "disable",
+      "enable": "enable",
+      "retire": "delete",
+      "retireConfirm": "Delete {{count}} config(s) of this user? They stop working for good.",
+      "reason": "why (the user sees this on the config)",
+      "reasonPlaceholder": "e.g. the link was shared publicly",
+      "confirmDisable": "disable it",
+      "cancel": "cancel",
+      "selected": "{{count}} selected",
+      "done": "done for {{count}} config(s)."
+    },
+    "refusals": {
+      "not_allowed": "you cannot manage this reseller's users.",
+      "reseller_not_found": "this reseller does not exist.",
+      "reseller_suspended": "this reseller is suspended: you can see its users' services but not change them.",
+      "reseller_terminated": "this reseller has been closed.",
+      "user_not_found": "this user is not one of this reseller's users.",
+      "user_banned": "the platform has banned this account.",
+      "cannot_block_self": "you cannot block yourself."
+    }
   }
 }

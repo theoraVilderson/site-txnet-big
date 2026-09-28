@@ -136,6 +136,13 @@ export const myResellerBotPath = (id: string) => `${PANEL_MY_RESELLERS}/${encode
 export const myResellerCatalogPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/catalog`;
 /** A reseller's brand settings: today the default name of a config line in a buyer's app (F-307-k). */
 export const myResellerBrandingPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/branding`;
+/**
+ * A reseller's users (F-311-v, over F-311-a): find one, and open their
+ * services. By the path's reseller, never the session's tenant.
+ */
+export const myResellerUsersPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/users`;
+/** One user's services, as that reseller's admin reads and acts on them (F-311-v, over F-311-f/g). */
+export const myResellerUserPath = (id: string, userId: string) => `${myResellerUsersPath(id)}/${encodeURIComponent(userId)}`;
 /** Where that catalog's machine-drafted names are reviewed (F-1533-e on the reseller's surface). */
 export const myResellerCatalogTranslationsPath = (id: string) => `${myResellerCatalogPath(id)}/translations`;
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */

@@ -52,5 +52,5 @@ Both ids are `ParseUUIDPipe`d, so a malformed one is a 400 before any door runs.
 
 ## Consumers
 
-`bot-app` (F-311-c) is the first, and the reason this is data-only. A panel page
-would read the same three routes; none exists yet.
+`bot-app` (F-311-c) is the first, and the reason this is data-only. The panel's
+`/my-resellers/:id/users` (F-311-v, panel-web `contract.reseller-users.md`) reads the list; it does not block.

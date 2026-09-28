@@ -491,6 +491,23 @@ export type UserGroupMember = {
 /** One user as a reseller's own list answers it (F-311-a, `contract.reseller-users.md`). */
 export type ResellerUser = UserSearchHit & { createdAt: string };
 
+/** A reseller's own users, by the **path's** tenant (F-311-a) — never the session's, which is the platform's for its owner (ADR-0059). */
+export const resellerUsersApiPath = (tenantId: string) => `/auth/tenants/${encodeURIComponent(tenantId)}/users`;
+
+/**
+ * `GET /api/auth/tenants/:tenantId/users` (F-311-a,
+ * [auth-api/contract.reseller-users.md](../../../docs/interfaces/auth-api/contract.reseller-users.md)):
+ * newest first, `q` 3-64 characters or none. Admitted under `read`, so a
+ * suspended reseller still lists its customers. Block is not called here.
+ */
+export const resellerUsersApi = {
+  async list(tenantId: string, query: { q?: string; page: number; pageSize: number }) {
+    const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) });
+    if (query.q) params.set("q", query.q);
+    return request<{ items: ResellerUser[]; total: number; page: number; pageSize: number }>(`${resellerUsersApiPath(tenantId)}?${params}`, { method: "GET" });
+  },
+};
+
 const userGroupPath = (id: string) => `/auth/user-groups/${encodeURIComponent(id)}`;
 
 export const userGroupsApi = {

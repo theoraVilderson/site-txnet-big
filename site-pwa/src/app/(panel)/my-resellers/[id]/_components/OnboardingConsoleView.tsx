@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Circle, Clock, DoorClosed, DoorOpen, Palette, RefreshCw } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, Clock, DoorClosed, DoorOpen, Palette, RefreshCw, Users } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { authApi } from "@/lib/auth-api";
-import { myResellerBrandingPath } from "@/lib/routes";
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { myResellerBrandingPath, myResellerUsersPath } from "@/lib/routes";
 import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-api";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { Badge } from "../../../financial/_components/Badge";
@@ -21,6 +22,8 @@ import {
   stepHref,
   type ClosedCapability,
 } from "../../_lib/onboarding";
+
+const USERS = FrontendI18nKeys.common.resellerUsers.moreUsers;
 
 type Step = ResellerOnboarding["steps"][number];
 
@@ -169,6 +172,19 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
             </div>
           </div>
           <Link href={myResellerBrandingPath(id)} className={quietButton}>
+            {t("common", K.open)}
+            <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
+          </Link>
+        </section>
+        <section className="flex flex-col gap-3 rounded-2xl border border-card-border bg-card-bg p-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-3">
+            <Users size={20} className="mt-0.5 shrink-0 text-primary" aria-hidden />
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-text-primary">{t("common", USERS.title)}</h3>
+              <p className="text-xs text-text-secondary">{t("common", USERS.hint)}</p>
+            </div>
+          </div>
+          <Link href={myResellerUsersPath(id)} className={quietButton}>
             {t("common", K.open)}
             <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
           </Link>
