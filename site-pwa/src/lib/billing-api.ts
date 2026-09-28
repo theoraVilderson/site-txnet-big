@@ -163,6 +163,8 @@ export type GrantStatus = (typeof GRANT_STATUSES)[number];
  */
 export interface GrantRow {
   id: string;
+  /** The buyer's own name for it (F-307-x), shown before the catalog's; `null` = unnamed. */
+  label: string | null;
   /** Answered for every Grant; `cancelled` and `exhausted` come only on scope `all`. */
   status: GrantStatus;
   startsAt: string;
@@ -1087,6 +1089,18 @@ export const billingApi = {
    */
   async setConfigLabel(configId: string, label: string | null): Promise<{ configId: string; label: string | null }> {
     return call<{ configId: string; label: string | null }>(`/traffic/configs/${encodeURIComponent(configId)}/label`, {
+      method: "PUT",
+      body: JSON.stringify({ label }),
+    });
+  },
+
+  /**
+   * Names one of the user's services, or clears the name with `null`
+   * (F-307-x). Display only: My services, its search and the user's notices
+   * show it before the config names. Another user's service is a 404.
+   */
+  async setGrantLabel(grantId: string, label: string | null): Promise<{ grantId: string; label: string | null }> {
+    return call<{ grantId: string; label: string | null }>(`/gift/grants/${encodeURIComponent(grantId)}/label`, {
       method: "PUT",
       body: JSON.stringify({ label }),
     });

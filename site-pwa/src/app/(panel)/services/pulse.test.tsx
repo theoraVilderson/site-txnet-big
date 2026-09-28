@@ -41,6 +41,7 @@ const NOW = new Date("2026-09-27T10:00:00Z");
 
 const GRANT: GrantRow = {
   id: "g1",
+  label: null,
   status: "active",
   startsAt: "2026-09-01T00:00:00.000Z",
   endsAt: "2026-12-01T00:00:00.000Z",

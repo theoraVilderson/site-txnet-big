@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 32
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # Contract — panel-web: the "my services" page (F-502-s)
@@ -75,7 +75,8 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
    source-language fallback here, unlike `catalogText`, because the list
    answers no `sourceLang` and a SKU a user can quote to support beats a
    language they may not read. A Grant with no catalog item (`variant: null`)
-   has neither and shows "unnamed service".
+   has neither and shows "unnamed service". The buyer's own name (F-307-x)
+   heads the row above it, edited as rule 17 edits a config's (`billing-grant-label`).
 7. **The URL is the page.** `?page=` (and `?all=1`, `?q=`) is read from and written to the query
    string, so a page of services survives a reload and can be sent to support;
    nothing is mirrored into a store beside it. Page 1 writes no parameter.

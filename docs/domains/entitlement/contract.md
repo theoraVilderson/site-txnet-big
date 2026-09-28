@@ -180,8 +180,8 @@ In-process calls from `billing-service` modules (ADR-0049); HTTP routes are
 added only when a row needs them. Three do: `subscriptionTokenFor` over `GET
 /api/billing/gift/grants/:id/subscription-link` and `rotateToken` over `POST
 .../rotate-token` (F-114-e-b, each in the transaction that reads the tenant's
-subscription domain), and `listForUser` over `GET /api/billing/gift/grants`
-(F-502-r). All belong to `billing` and are written down in its `contract.gift.md`.
+subscription domain), `listForUser` over `GET /api/billing/gift/grants`
+(F-502-r), and `setLabel` over `PUT .../grants/:grantId/label` (F-307-x). All belong to `billing` and are written down in its `contract.gift.md`.
 
 ## Emits (events)
 

@@ -101,7 +101,7 @@ telling groups, per user and template.
 | The hour lane is its own burst key (`noticeBurst(…, 'hour')`) and its own delay queue (`AUTOMATION_NOTICE_HOUR_DELAY_QUEUE`) | 50 % and 95 % share `serviceUsageThreshold`; and a delay queue expires only its head, so one queue holds one window |
 | A patient claim sends `waitSec`, so quiet hours starting inside the hour hold its bot message (above); the inbox row of a held notice is still written at once, one per service | the inbox makes no sound |
 | Held bot messages due together are one message per `(user, template)`: `RetentionHeldNoticeJob` groups a take, marks each row on its own and tells the rest as one | five held overnight are one morning message; a repeat after a crash tells nothing twice |
-| A combined message **names** each service: billing's `POST internal/billing/entitlement/grants/names` (entitlement `contract.retention.md`) answers the product's name key, its sku and the buyer's live config labels (F-307-f); auth-service lists them under the summary, "• One month — Ali's phone", in the user's language, 20 at most then "…and N more" | five identical purchases are told apart only by their labels |
+| A combined message **names** each service: billing's `POST internal/billing/entitlement/grants/names` (entitlement `contract.retention.md`) answers the buyer's name for the service (F-307-x), the product's name key, its sku and the buyer's live config labels (F-307-f); auth-service lists them under the summary, "• Home (One month) — Ali's phone", in the user's language, 20 at most then "…and N more" | five identical purchases are told apart by the names their buyer gave them |
 | A names lookup that fails tells the summary without the list | a notice without its list beats one not told |
 
 ## What a producer writes
@@ -173,7 +173,6 @@ service the user has. It rides the purchase's own notices (automation
 
 - A mute per channel (bot vs inbox): a kind or a Grant is muted on both.
 - The level of a service bought for someone else set at purchase: it is set afterwards, per service (F-601-o).
-- A name of its own on a service (not on a config line): a combined notice names a service by its product and its configs' labels (F-601-p).
 - One inbox row for several held notices: during quiet hours the inbox gets one row per service; only the bot message is grouped (F-601-p).
 - The bot's own settings screen: F-319, over the same `notification_preference` row.
 - Retention of ledger rows: one per Grant, notice and period, kept.

@@ -71,6 +71,7 @@ const CONFIG: UserConfigRow = {
 
 const GRANT: GrantRow = {
   id: "g1",
+  label: null,
   status: "active",
   startsAt: "2026-09-01T00:00:00.000Z",
   endsAt: null,

@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-version: 12
+version: 13
 updated: 2026-09-28
 ---
 
@@ -181,7 +181,7 @@ one user's Grants are told the same notice as one message, the message names
 them. `entitlement/grant-names.ts`, proved by `grant.spec.ts`:
 `POST /api/internal/billing/entitlement/grants/names` (`ServiceOnlyGuard`),
 `{ tenantId, userId, grantIds: uuid[1..500] }` strict, answers
-`{ items: [{ grantId, nameKey, sku, labels }] }` in the usual envelope; asked by
+`{ items: [{ grantId, label, nameKey, sku, labels }] }` in the usual envelope; asked by
 worker's `EventNoticeSender` (notification `contract.retention.md` "Several
 services, one message").
 
@@ -189,5 +189,6 @@ services, one message").
 |---|---|
 | Read in the notice's tenant transaction, filtered by `userId`: an id that is not that user's Grant is left out, never an error | the caller knows the tenant, so no cross-tenant read is needed |
 | `nameKey` is My services' (the variant's own, else its product's); `null` with `sku` for a Grant issued without a catalog item | a notice names a service the way the page the user opens next does |
-| `labels`: the buyer's own names on the Grant's live configs (F-307-f), each once, oldest config first | five identical purchases are told apart only by these |
+| `label`: the buyer's own name for the service (`grant.userLabel`, F-307-x), `null` when unnamed; a notice lists it before the catalog name | a named service reads as the buyer wrote it, not as its product |
+| `labels`: the buyer's own names on the Grant's live configs (F-307-f), each once, oldest config first | five identical unnamed purchases are told apart only by these |
 | Keys, never text | the words are auth-service's, in the user's language |

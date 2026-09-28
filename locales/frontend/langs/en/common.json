@@ -2264,10 +2264,10 @@
     },
     "serviceSearch": {
       "label": "Search services",
-      "placeholder": "Find a service by a config's name or region, or paste a config or subscription link",
+      "placeholder": "Find a service by its name or a config's name or region, or paste a config or subscription link",
       "clear": "Clear search",
-      "none": "No service has a config matching “{{query}}”.",
-      "noneCurrent": "No current service has a config matching “{{query}}”; ended services are hidden.",
+      "none": "No service is named “{{query}}” or has a config matching it.",
+      "noneCurrent": "No current service is named “{{query}}” or has a config matching it; ended services are hidden.",
       "pasted": "Pasted links: {{count}}",
       "pastedCapped": "Only the first {{max}} pasted links are searched.",
       "pastedNone": "None of the pasted links belongs to one of your services.",
@@ -2321,6 +2321,13 @@
       "saving": "Saving…",
       "failed": "Could not save. Try again.",
       "unavailable": "Notice settings could not be read right now."
+    },
+    "serviceName": {
+      "rename": "Rename this service",
+      "field": "Service name",
+      "save": "Save name",
+      "cancel": "Cancel",
+      "hint": "Your own name for this service — shown here and in your notices."
     }
   },
   "systems": {

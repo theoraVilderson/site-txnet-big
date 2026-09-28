@@ -289,6 +289,9 @@ describe('GrantService.listForUser', () => {
 
 describe('GrantService.listForUser with q (F-307-m)', () => {
   const live = { not: ConfigStatus.retired };
+  /** The config half of q's match — the other half is the service's own name (F-307-x). */
+  const configsAsked = (where: Prisma.GrantWhereInput | undefined) =>
+    (where?.OR as Prisma.GrantWhereInput[])[1].configs as { some: Prisma.ConfigWhereInput & { OR: unknown } };
 
   it('keeps a Grant holding a live config whose label, or unlabelled its default line name, holds q — case aside', async () => {
     const { list, asked } = build([grantRow()], 1, 7, [], 0, {
@@ -301,12 +304,18 @@ describe('GrantService.listForUser with q (F-307-m)', () => {
     expect(asked.where).toEqual({
       userId: USER,
       status: { notIn: [GrantStatus.cancelled, GrantStatus.exhausted] },
-      configs: {
-        some: {
-          status: live,
-          OR: [{ userLabel: { contains: 'GERM', mode: 'insensitive' } }, { userLabel: null, panel: { region: { in: ['Germany'] } } }],
+      // The service's own name first (F-307-x), then its configs'.
+      OR: [
+        { userLabel: { contains: 'GERM', mode: 'insensitive' } },
+        {
+          configs: {
+            some: {
+              status: live,
+              OR: [{ userLabel: { contains: 'GERM', mode: 'insensitive' } }, { userLabel: null, panel: { region: { in: ['Germany'] } } }],
+            },
+          },
         },
-      },
+      ],
     });
     // Only the user's own unlabelled live configs are read to name them.
     expect(asked.configReads).toEqual([{ userId: USER, status: live, userLabel: null }]);
@@ -320,7 +329,7 @@ describe('GrantService.listForUser with q (F-307-m)', () => {
 
     await list(undefined, undefined, undefined, 'كرج 2');
 
-    expect(asked.where.configs.some.OR).toEqual([
+    expect(configsAsked(asked.where).some.OR).toEqual([
       { userLabel: { contains: 'کرج 2', mode: 'insensitive' } },
       { userLabel: null, panel: { region: { in: ['كرج ۲'] } } },
     ]);
@@ -334,7 +343,7 @@ describe('GrantService.listForUser with q (F-307-m)', () => {
 
     await list(undefined, undefined, undefined, 'leaf');
 
-    const some = (asked.where?.configs as { some: Prisma.ConfigWhereInput }).some;
+    const some = configsAsked(asked.where).some;
     expect(some.OR?.[1]).toEqual({ userLabel: null, panel: { region: { in: ['Germany', 'Netherlands'] } } });
   });
 
@@ -343,7 +352,7 @@ describe('GrantService.listForUser with q (F-307-m)', () => {
 
     await list(undefined, undefined, undefined, 'x');
 
-    const some = (asked.where?.configs as { some: Prisma.ConfigWhereInput }).some;
+    const some = configsAsked(asked.where).some;
     expect(some.OR?.[1]).toEqual({ userLabel: null, panel: { region: { in: [] } } });
   });
 
@@ -353,7 +362,7 @@ describe('GrantService.listForUser with q (F-307-m)', () => {
     const answer = await list(undefined, undefined, undefined, 'germany');
 
     expect(answer.hidden).toBe(2);
-    expect(asked.counted[1]).toEqual({ userId: USER, configs: asked.where?.configs });
+    expect(asked.counted[1]).toEqual({ userId: USER, OR: asked.where?.OR });
   });
 
   it('an absent or blank q filters nothing and reads no config', async () => {

@@ -85,6 +85,7 @@ vi.mock("@/lib/billing-api", async (importOriginal) => ({
     grantConfigs: vi.fn(),
     grantUsage: vi.fn(() => new Promise(() => {})),
     configAction: vi.fn(),
+    setGrantLabel: vi.fn(),
   },
 }));
 
@@ -104,6 +105,7 @@ const t = (_ns: string, key: string, vars?: Record<string, string | number>) =>
 
 const GRANT: GrantRow = {
   id: "g1",
+  label: null,
   status: "active",
   startsAt: "2026-09-01T00:00:00.000Z",
   endsAt: "2026-12-01T00:00:00.000Z",
@@ -385,6 +387,36 @@ describe("a Grant's servers, under details", () => {
   it("offers no new key once a config's allowance is spent", async () => {
     await open([{ ...CONFIG, regenerateUsedCount: 3 }]);
     expect(screen.getByRole("button", { name: "myServices.configs.regenerate" })).toBeDisabled();
+  });
+});
+
+describe("a service's own name (F-307-x)", () => {
+  it("heads the row with the buyer's name, the catalog's under it; unnamed is the catalog's alone", () => {
+    const { unmount } = show({ label: "Home" });
+    expect(screen.getByRole("heading", { name: "Home" })).toBeInTheDocument();
+    expect(screen.getByText("VPN Pro")).toBeInTheDocument();
+    unmount();
+    show();
+    expect(screen.getByRole("heading", { name: "VPN Pro" })).toBeInTheDocument();
+  });
+
+  it("renames in place with the name as billing saved it, and empty clears it", async () => {
+    const setGrantLabel = vi.mocked(billingApi.setGrantLabel);
+    setGrantLabel.mockResolvedValueOnce({ grantId: "g1", label: "Home 2" });
+    const user = userEvent.setup();
+    show();
+
+    await user.click(button("myServices.serviceName.rename"));
+    await user.type(screen.getByRole("textbox", { name: "myServices.serviceName.field" }), " Home ۲ {Enter}");
+    expect(setGrantLabel).toHaveBeenCalledWith("g1", "Home ۲");
+    expect(await screen.findByRole("heading", { name: "Home 2" })).toBeInTheDocument();
+
+    setGrantLabel.mockResolvedValueOnce({ grantId: "g1", label: null });
+    await user.click(button("myServices.serviceName.rename"));
+    await user.clear(screen.getByRole("textbox", { name: "myServices.serviceName.field" }));
+    await user.click(button("myServices.serviceName.save"));
+    expect(setGrantLabel).toHaveBeenLastCalledWith("g1", null);
+    expect(await screen.findByRole("heading", { name: "VPN Pro" })).toBeInTheDocument();
   });
 });
 

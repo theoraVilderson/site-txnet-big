@@ -19,6 +19,8 @@ const notifySchema = z
       .array(
         z
           .object({
+            // F-307-x: the buyer's name for the service; absent from an older sender.
+            label: z.string().max(40).nullable().optional(),
             nameKey: z.string().max(200).nullable(),
             sku: z.string().max(200).nullable(),
             labels: z.array(z.string().max(40)).max(50),

@@ -65,11 +65,12 @@ export const NOTIFY_CHANNELS = ['inbox', 'bot'] as const;
 export type NotifyChannel = (typeof NOTIFY_CHANNELS)[number];
 
 /**
- * One service a combined notice names (F-601-p): its catalog name key, read
- * here in the user's language, the sku when no language has it, and the
- * buyer's labels on its configs. `null`s: a service billing did not name.
+ * One service a combined notice names (F-601-p): the buyer's own name for it
+ * (F-307-x), its catalog name key, read here in the user's language, the sku
+ * when no language has it, and the buyer's labels on its configs. `null`s: a
+ * service billing did not name. `label` absent: a sender from before it.
  */
-export type NotifyService = { nameKey: string | null; sku: string | null; labels: string[] };
+export type NotifyService = { label?: string | null; nameKey: string | null; sku: string | null; labels: string[] };
 
 /**
  * `count` (F-067-p, ADR-0084 decision 3): the worker combined this many of one template into one notice; the summary text is told, with `{{count}}`.
@@ -642,6 +643,7 @@ const LISTED_SERVICES = 20;
 const SERVICE_LIST = {
   line: { read: (ns) => ns?.retention?.serviceLine, fallback: '• {{name}}' },
   labelled: { read: (ns) => ns?.retention?.serviceLineLabelled, fallback: '• {{name}} — {{labels}}' },
+  named: { read: (ns) => ns?.retention?.serviceNamed, fallback: '{{label}} ({{name}})' },
   separator: { read: (ns) => ns?.retention?.serviceLabelsSeparator, fallback: ', ' },
   unnamed: { read: (ns) => ns?.retention?.serviceUnnamed, fallback: 'A service' },
   more: { read: (ns) => ns?.retention?.servicesMore, fallback: '…and {{more}} more' },
@@ -728,8 +730,9 @@ export class UserNotifier {
 
   /**
    * The services a combined notice is about, one line each (F-601-p): the
-   * catalog name in the user's language, else the platform's default one,
-   * else the sku; then the buyer's labels, which tell identical purchases
+   * buyer's own name for the service first (F-307-x), then the catalog name
+   * in the user's language, else the platform's default one, else the sku;
+   * then the buyer's config labels. Either name tells identical purchases
    * apart. Past {@link LISTED_SERVICES}, one "and N more" line.
    */
   private serviceList(services: NotifyService[], lang: string, ns: NotificationsNamespace | undefined): string {
@@ -741,7 +744,8 @@ export class UserNotifier {
       return typeof text === 'string' && text !== '' ? text : undefined;
     };
     const lines = services.slice(0, LISTED_SERVICES).map((s) => {
-      const name = catalogName(s.nameKey) ?? s.sku ?? say(SERVICE_LIST.unnamed);
+      const catalog = catalogName(s.nameKey) ?? s.sku ?? say(SERVICE_LIST.unnamed);
+      const name = s.label ? say(SERVICE_LIST.named, { label: s.label, name: catalog }) : catalog;
       return s.labels.length > 0 ? say(SERVICE_LIST.labelled, { name, labels: s.labels.join(say(SERVICE_LIST.separator)) }) : say(SERVICE_LIST.line, { name });
     });
     if (services.length > LISTED_SERVICES) lines.push(say(SERVICE_LIST.more, { more: String(services.length - LISTED_SERVICES) }));

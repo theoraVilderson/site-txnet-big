@@ -75,6 +75,11 @@ model Grant {
   sharingPolicy         SharingPolicy      @default(exclusive)
   /// SHA-256 of the subscription token, lowercase hex: what `/sub` looks a Grant up by.
   subscriptionTokenHash String             @unique
+  /// The buyer's own name for this service (F-307-x): display only — My
+  /// services, its search and a combined notice show it before the config
+  /// labels. Null is the catalog's name. Trimmed, 1..40 characters (CHECK
+  /// `grant_user_label_shape`, raw SQL).
+  userLabel             String?
   /// The same token sealed, `{kekId, iv, authTag, ciphertext}` (AES-256-GCM under a
   /// key derived from the vault KEK, ADR-0085), so My services can show the link
   /// again. Null for a Grant from before it, or issued with no KEK loaded.

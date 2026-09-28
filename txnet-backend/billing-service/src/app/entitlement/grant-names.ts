@@ -18,12 +18,13 @@ export const grantNamesSchema = z
 export type GrantNamesBody = z.infer<typeof grantNamesSchema>;
 
 /**
- * One service as a notice names it (F-601-p): the catalog name key and sku My
+ * One service as a notice names it (F-601-p): the buyer's own name for it
+ * (F-307-x), listed first; the catalog name key and sku My
  * services shows it by (the variant's own wording, else its product's), and
  * the buyer's labels on its live configs (F-307-f) — what tells five
  * identical purchases apart. `null`s: a Grant issued without a catalog item.
  */
-export type GrantName = { grantId: string; nameKey: string | null; sku: string | null; labels: string[] };
+export type GrantName = { grantId: string; label: string | null; nameKey: string | null; sku: string | null; labels: string[] };
 
 /**
  * The names a combined retention notice lists (F-601-p, notification
@@ -44,7 +45,7 @@ export class GrantNamesService {
       tenantTransaction(this.prisma, async (tx) => {
         const grants = await tx.grant.findMany({
           where: { id: { in: grantIds }, userId },
-          select: { id: true, variant: { select: { sku: true, nameKey: true, product: { select: { nameKey: true } } } } },
+          select: { id: true, userLabel: true, variant: { select: { sku: true, nameKey: true, product: { select: { nameKey: true } } } } },
         });
         const configs = await tx.config.findMany({
           where: { grantId: { in: grants.map((g) => g.id) }, userId, status: { not: ConfigStatus.retired }, userLabel: { not: null } },
@@ -53,6 +54,7 @@ export class GrantNamesService {
         });
         return grants.map((g) => ({
           grantId: g.id,
+          label: g.userLabel,
           nameKey: g.variant ? (g.variant.nameKey ?? g.variant.product.nameKey) : null,
           sku: g.variant?.sku ?? null,
           labels: [...new Set(configs.filter((c) => c.grantId === g.id).map((c) => c.userLabel!))],

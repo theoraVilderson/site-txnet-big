@@ -2,13 +2,14 @@ import { BackendI18nKeys } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 import { GRANT_LIST_SCOPES } from '../../entitlement/grant';
+import { MAX_CONFIG_LABEL_LENGTH } from '../../traffic/line-names';
 
 const E = BackendI18nKeys.errors.billing;
 
 /**
  * The query of `GET /api/billing/gift/grants` (F-502-r): paging, the
  * scope — `current` or `all`, absent meaning `current` (`GrantService.listForUser`) —
- * and `q` (F-307-m), a piece of a config's name; blank is no search. **Whose Grants is not here** — the user is the gate's `X-User-Id`, so
+ * and `q` (F-307-m, F-307-x), a piece of a service's or a config's name; blank is no search. **Whose Grants is not here** — the user is the gate's `X-User-Id`, so
  * there is no id in this schema to authorise, exactly as on the financial page
  * (`wallet-history.schema.ts`).
  *
@@ -53,3 +54,20 @@ export const grantsByLinesSchema = z.object({
 });
 
 export type GrantsByLinesBody = z.infer<typeof grantsByLinesSchema>;
+
+/**
+ * The body of `PUT /api/billing/gift/grants/:grantId/label` (F-307-x): the
+ * buyer's name for a service, trimmed, 1..40 characters — a config label's
+ * rule (`configLabelSchema`), so either name fits wherever the other does. An
+ * empty or `null` label is the catalog's name again.
+ */
+export const grantLabelSchema = z.object({
+  label: z
+    .string({ message: E.serviceLabelInvalid })
+    .trim()
+    .max(MAX_CONFIG_LABEL_LENGTH, { message: E.serviceLabelInvalid })
+    .nullable()
+    .transform((label) => (label === '' ? null : label)),
+});
+
+export type GrantLabelBody = z.infer<typeof grantLabelSchema>;

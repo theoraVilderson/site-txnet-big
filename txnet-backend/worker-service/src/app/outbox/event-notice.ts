@@ -26,11 +26,12 @@ const NAMES_PATH = '/api/internal/billing/entitlement/grants/names';
 
 /**
  * One service of a combined notice, as auth-service renders it in the user's
- * language (F-601-p): its catalog name key (the sku when the language has no
- * text), and the buyer's labels on its live configs. `null`s: a Grant billing
+ * language (F-601-p): the buyer's own name for it (F-307-x), its catalog name
+ * key (the sku when the language has no text), and the buyer's labels on its
+ * live configs. `null`s: a Grant billing
  * did not name, told as "a service".
  */
-export type ServiceName = { nameKey: string | null; sku: string | null; labels: string[] };
+export type ServiceName = { label: string | null; nameKey: string | null; sku: string | null; labels: string[] };
 
 /**
  * Add one event to its burst and, if the burst had no flush yet, claim it.
@@ -288,7 +289,7 @@ export class EventNoticeSender {
         const byId = new Map((items as Array<ServiceName & { grantId: string }>).map((n) => [n.grantId, n]));
         return grantIds.map((id) => {
           const n = byId.get(id!);
-          return { nameKey: n?.nameKey ?? null, sku: n?.sku ?? null, labels: n?.labels ?? [] };
+          return { label: n?.label ?? null, nameKey: n?.nameKey ?? null, sku: n?.sku ?? null, labels: n?.labels ?? [] };
         });
       } finally {
         clearTimeout(timer);

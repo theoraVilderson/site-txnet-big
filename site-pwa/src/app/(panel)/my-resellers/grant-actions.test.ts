@@ -44,6 +44,7 @@ const draft = (over: Partial<GrantActionDraft>): GrantActionDraft => ({ ...empty
 
 const row = (over: Partial<GrantRow>): GrantRow => ({
   id: "g-1",
+  label: null,
   status: "active",
   startsAt: "2026-09-01T00:00:00Z",
   endsAt: "2026-10-01T00:00:00Z",

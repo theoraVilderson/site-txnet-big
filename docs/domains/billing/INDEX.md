@@ -80,8 +80,8 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-28 | contract.gift v12 (additive, F-307-x): `PUT /api/billing/gift/grants/:grantId/label` — a buyer names a service; the list answers `label` and `q` matches it. See [contract.gift.md](contract.gift.md) |
 | 2026-09-28 | contract v66 (F-311-r): `GET …/users/:userId/grants/:grantId/history` — the Grant's audited admin acts, its configs' included; an optional `reason` on freeze, unfreeze, rotate-token and issue. Every write on this surface writes one `admin_audit_log` row (audit invariant #12). Additive. Consumers: F-311-x, F-311-y |
 | 2026-09-28 | contract v65 (F-311-n): `POST …/users/:userId/grants/:grantId/rotate-token` — an admin resets a user's `/sub` link over the owner's `SubscriptionLinkService.reset`; door `staffWrite`. Additive. Consumers: F-311-w, F-311-y |
-| 2026-09-28 | contract v64 (F-311-m): a deleted prepaid Grant's `refund` credits `total × (1 − max(volume used, time gone))` of its invoice as `product_refund` (`RemainderCreditService.settle`); `refundSkipped` gains `nothing_paid`, `not_measurable`. Additive. |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

@@ -207,6 +207,8 @@ export type IssuedGrant = { grant: Grant; token: string | null };
 /** One Grant as its own user reads it (F-502-r). Never the subscription key, never its hash. */
 export type GrantView = {
   id: string;
+  /** The buyer's own name for it (F-307-x), shown before the catalog's; `null` = unnamed. */
+  label: string | null;
   status: GrantStatus;
   startsAt: string;
   /** `null` = permanent. */
@@ -272,6 +274,7 @@ export const SETTLED_GRANT_STATUSES: readonly GrantStatus[] = [GrantStatus.cance
 const GRANT_VIEW_COLUMNS = {
   id: true,
   userId: true,
+  userLabel: true,
   status: true,
   startsAt: true,
   endsAt: true,
@@ -399,6 +402,7 @@ function grantViewOf(r: GrantViewRow, tenantPurgeDays: number | null, adjustedBy
   const frozen = r.status === GrantStatus.suspended && r.statusReason === ADMIN_FROZEN;
   return {
     id: r.id,
+    label: r.userLabel,
     status: r.status,
     startsAt: r.startsAt.toISOString(),
     endsAt: r.endsAt?.toISOString() ?? null,
@@ -552,8 +556,10 @@ export class GrantService {
    * here, not in the reader, because a page of 20 filtered afterwards would
    * come back short or empty.
    *
-   * **`q` keeps the Grants holding a live config named like it** (F-307-m):
-   * `configNamedLike`. `hidden` then counts the ended Grants that match.
+   * **`q` keeps the Grants named like it, or holding a live config named
+   * like it** (F-307-x, F-307-m): the buyer's name for the service, folded as
+   * it is saved, and `configNamedLike`. `hidden` then counts the ended Grants
+   * that match.
    * **`lines` keeps the Grants holding a config any pasted line is** (F-307-p):
    * `configHoldingLines`, the same way; it wins over `q`. A pasted
    * subscription link (`…/sub/{token}`, F-307-r) keeps the caller's Grant whose
@@ -572,7 +578,13 @@ export class GrantService {
           ? grantHoldingLines(tx, { userId }, request.lines)
           : q === ''
             ? { userId }
-            : { userId, configs: { some: await configNamedLike(tx, userId, q) } },
+            : {
+                userId,
+                OR: [
+                  { userLabel: { contains: foldConfigText(q), mode: 'insensitive' } },
+                  { configs: { some: await configNamedLike(tx, userId, q) } },
+                ],
+              },
       (_row, view) => view,
     );
   }
@@ -639,6 +651,23 @@ export class GrantService {
   }
 
   /** Adds a signed change to one quota of an active Grant. History: never edited afterwards. */
+  /**
+   * Sets or clears the buyer's name for one of their services (F-307-x), in
+   * the one spelling a config's label is saved in (F-307-o), and answers it as
+   * saved. Display only: nothing is queued, `/sub` does not read it. Any
+   * status may be named — an ended service is still listed on `all`. Another
+   * user's Grant is `grant_not_found`, as a missing one: the fence is the
+   * `where`, not a read before it.
+   */
+  setLabel(userId: string, grantId: string, label: string | null): Promise<string | null> {
+    const saved = label === null ? null : foldConfigText(label);
+    return tenantTransaction(this.prisma, async (tx) => {
+      const { count } = await tx.grant.updateMany({ where: { id: grantId, userId }, data: { userLabel: saved } });
+      if (count === 0) throw new EntitlementRefused('grant_not_found', grantId);
+      return saved;
+    });
+  }
+
   async adjustQuota(tx: Prisma.TransactionClient, input: AdjustQuota): Promise<QuotaAdjustment> {
     const grant = await tx.grant.findUnique({ where: { id: input.grantId }, select: { status: true, tenantId: true } });
     if (!grant) throw new EntitlementRefused('grant_not_found', input.grantId);

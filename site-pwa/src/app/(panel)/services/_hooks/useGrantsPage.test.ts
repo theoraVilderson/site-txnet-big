@@ -39,6 +39,7 @@ const grants = vi.mocked(billingApi.grants);
 
 const ROW: GrantRow = {
   id: "g1",
+  label: null,
   status: "pending",
   startsAt: "2026-09-25T00:00:00.000Z",
   endsAt: null,

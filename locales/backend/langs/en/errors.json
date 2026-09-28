@@ -177,6 +177,7 @@
     "giftCodeInvalid": "Enter a valid gift code.",
     "configActionInvalid": "Choose a new key or delete, for between 1 and 50 of your configs.",
     "configLabelInvalid": "A config's name is 1 to 40 characters.",
+    "serviceLabelInvalid": "A service's name is 1 to 40 characters.",
     "configNotFound": "No such config in your account.",
     "coupon": {
       "notFound": "This discount code is not valid.",

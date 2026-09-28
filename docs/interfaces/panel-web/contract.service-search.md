@@ -16,8 +16,9 @@ narrows one service's configs is that contract's rule 18 (F-307-l).
 
 ## Rules
 
-1. **A service is found by its configs, and billing finds it** (F-307-n over
-   billing's `q`, F-307-m). The box shows once there is a service or a search.
+1. **A service is found by its own name or its configs', and billing finds
+   it** (F-307-n over billing's `q`, F-307-m; the service's own name since
+   F-307-x). The box shows once there is a service or a search.
    A name is written to `?q=` beside `?page=`/`?all=1` when typing rests (a
    `replace`, back to page 1), so it survives a reload and can be sent to
    support; paging and "show ended" keep it. The filter is billing's: a page of

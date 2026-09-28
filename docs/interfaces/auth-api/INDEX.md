@@ -51,9 +51,9 @@ See [contract.md](contract.md) (HTTP API), [contract.roles.md](contract.roles.md
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-28 | Contract v34 -> **v35** (additive, F-307-x): an entry of `services` on `POST /internal/notify/user` takes an optional `label` — the buyer's name for the service, told before the catalog name (`retention.serviceNamed`, fa + en). Sender `worker-service` in the same item |
 | 2026-09-28 | Contract v33 -> **v34** (additive, F-601-p): `POST /internal/notify/user` takes an optional `services` beside `count` — the services a combined retention notice is about, listed under its summary in the user's language (`retention.serviceLine…`, fa + en). Consumer `worker-service` in the same item |
 | 2026-09-25 | Contract v32 -> **v33** (additive, F-114-j): `/auth/user-groups` — a tenant's user groups and their members, `user_group.manage`; only the platform owner's may hold resellers or another tenant's users. [contract.user-groups.md](contract.user-groups.md). No consumer on the wire yet |
 | 2026-09-25 | Contract v31 -> **v32** (additive, F-067-p, ADR-0084 decision 3): `POST /internal/notify/user` takes an optional `count` (≥2) and tells the template's summary text; every template has one, fa + en. Consumer `worker-service` in the same item |
 | 2026-09-25 | Contract v30 -> **v31** (**break**, F-067-o, ADR-0084): `POST /internal/notify/user` requires `channel` (`inbox` \| `bot`), one per call, and every template has an inbox title; `panelAccepted`, `panelRefused` added. Its one consumer, `worker-service`, moved in the same item. [contract.versions.md](contract.versions.md) |
-| 2026-09-20 | Contract v28 -> **v29** (additive, F-311-a, ADR-0064): `GET /auth/tenants/:tenantId/users` and `POST`/`DELETE .../:userId/block` — a reseller's own users, admitted by `ResellerAccess` and never by a permission. [contract.reseller-users.md](contract.reseller-users.md). Consumer `bot-app` in F-311-c |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

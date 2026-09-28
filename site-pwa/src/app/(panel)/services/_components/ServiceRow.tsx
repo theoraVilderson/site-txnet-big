@@ -18,6 +18,7 @@ import { GrantConfigs } from "./GrantConfigs";
 import { NoticeLevel } from "./NoticeLevel";
 import { QrDialog } from "./QrDialog";
 import { ServiceBuilding, ServiceReady } from "./ServiceBuilding";
+import { ServiceName } from "./ServiceName";
 import { ServicePulse, useServicePulse } from "./ServicePulse";
 import { UsageBars } from "./UsageBars";
 import { UsageMeter } from "./UsageMeter";
@@ -41,7 +42,8 @@ const READY_MS = 10_000;
  * not simple — take the idea from Marzban's subscription page"). One column,
  * top to bottom:
  *
- * 1. **Name and status**, and on a live Grant whether it is moving data now
+ * 1. **Name and status** — the buyer's own name first, editable in place
+ *    (`ServiceName`, F-307-x) — and on a live Grant whether it is moving data now
  *    (`ServicePulse`, F-307-u).
  * 2. **Usage** — traffic left and time left, side by side (`UsageMeter`),
  *    from the row itself (no read). A purchase still on its way shows its
@@ -141,7 +143,7 @@ export const ServiceRow = memo(function ServiceRow({
       <div className="space-y-4 p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
-            <h2 className="break-words text-base font-bold text-text-primary">{name ?? t("common", S.unnamed)}</h2>
+            <ServiceName grantId={row.id} label={row.label} catalogName={name} />
             {showPulse && <ServicePulse pulse={pulse} lastTrafficAt={row.lastTrafficAt} />}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1.5">

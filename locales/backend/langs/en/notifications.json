@@ -236,6 +236,7 @@
     "reactivatedLine": "✅ Your service is active again and reconnects within a few minutes — its link stays the same.",
     "serviceLine": "• {{name}}",
     "serviceLineLabelled": "• {{name}} — {{labels}}",
+    "serviceNamed": "{{label}} ({{name}})",
     "serviceLabelsSeparator": ", ",
     "serviceUnnamed": "A service",
     "servicesMore": "…and {{more}} more"

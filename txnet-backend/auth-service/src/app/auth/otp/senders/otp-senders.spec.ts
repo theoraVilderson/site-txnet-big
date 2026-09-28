@@ -686,6 +686,31 @@ describe('UserNotifier', () => {
       expect(client.sendMessage).toHaveBeenCalledWith('5501', '4 ends\n\n• یک‌ماهه — علی، لپ‌تاپ\n• Yearly\n• G1\n• A service');
     });
 
+    it('puts the buyer’s name for a service first, the catalog name after it, then the config labels (F-307-x)', async () => {
+      const client = botClient();
+      const notifier = new UserNotifier(
+        notifierPrisma({ user: { languagePreference: 'fa' }, links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+        registry(client),
+        locale({ retention: { endsSoonMany: '{{count}} ends' } }),
+      );
+      await inTenant(() =>
+        notifier.notify({
+          userId: 'user-1',
+          channel: 'bot',
+          template: 'serviceEndsSoon',
+          params: {},
+          count: 3,
+          services: [
+            { label: 'خانه', nameKey: 'catalog.product.month.name', sku: 'M', labels: ['گوشی'] },
+            { label: 'دفتر', nameKey: null, sku: 'M', labels: [] },
+            { label: null, nameKey: 'catalog.product.month.name', sku: 'M', labels: [] },
+          ],
+        }),
+      );
+
+      expect(client.sendMessage).toHaveBeenCalledWith('5501', '3 ends\n\n• خانه (یک‌ماهه) — گوشی\n• دفتر (M)\n• یک‌ماهه');
+    });
+
     it('tells one notice as itself, with no list, and past twenty lists "and N more"', async () => {
       const client = botClient();
       const notifier = new UserNotifier(

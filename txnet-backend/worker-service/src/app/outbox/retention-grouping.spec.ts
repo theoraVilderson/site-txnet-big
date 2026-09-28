@@ -83,7 +83,7 @@ function build({ namesFail = false, held = [] as Array<Record<string, unknown>> 
         calls.names.push(body);
         if (namesFail) return { ok: false, status: 503, json: async () => ({}) };
         return ok({
-          items: body.grantIds.map((id: string, i: number) => ({ grantId: id, nameKey: 'catalog.product.month50.name', sku: 'M50', labels: [`friend-${i + 1}`] })),
+          items: body.grantIds.map((id: string, i: number) => ({ grantId: id, label: i === 0 ? 'Home' : null, nameKey: 'catalog.product.month50.name', sku: 'M50', labels: [`friend-${i + 1}`] })),
         });
       }
       if (url.endsWith('/held/take')) return ok({ items: held });
@@ -146,7 +146,8 @@ describe('F-601-p — a combined flush names the services', () => {
     expect(calls.told.map((t) => t.channel)).toEqual(['inbox', 'bot']);
     for (const told of calls.told) {
       expect(told).toMatchObject({ template: 'serviceEndsSoon', count: 3, params: {} });
-      expect(told.services).toEqual([1, 2, 3].map((i) => ({ nameKey: 'catalog.product.month50.name', sku: 'M50', labels: [`friend-${i}`] })));
+      // F-307-x: the buyer's name for a service rides beside its config labels.
+      expect(told.services).toEqual([1, 2, 3].map((i) => ({ label: i === 1 ? 'Home' : null, nameKey: 'catalog.product.month50.name', sku: 'M50', labels: [`friend-${i}`] })));
     }
   });
 
