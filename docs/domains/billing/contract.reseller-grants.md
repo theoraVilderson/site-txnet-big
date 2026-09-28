@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 64
+version: 65
 updated: 2026-09-28
 ---
 
@@ -34,11 +34,26 @@ which asks the four owner reads of [contract.gift.md](contract.gift.md) — `Gra
 | **The reseller is the path's**, and every read runs in its scope | the owner's session carries the platform's `X-Tenant-Id` (ADR-0059) |
 | **Only that reseller's users** (C-15): the user is read first, in the reseller's scope (`user` is RLS-strict and in `TENANT_SCOPED_MODELS`); another tenant's user or none is **404** `user_not_found`, and no Grant is read for them | the Grant reads fence only by `userId`, and `traffic_daily_aggregate` has no tenant at all |
 | The owner reads are asked **as the path's user**, so a Grant of another user of the same reseller is their own **404** `grant_not_found` | their ownership check is the only one that knows a Grant's user |
-| One bucket for all four, `RESELLER_USER_GRANTS_READ`, default **300**/900s per caller; none of the four writes or rotates | expanding one Grant asks three routes at once. Reset link is F-311-n; config actions are the next section |
+| One bucket for all four, `RESELLER_USER_GRANTS_READ`, default **300**/900s per caller; none of the four writes or rotates | expanding one Grant asks three routes at once. Reset link and config actions are the next sections |
 
 **Not covered:** retired configs (the owner's view leaves them out), and an audit
 row for a read (F-311-r audits actions only). Its consumers are F-311-v (panel)
 and F-311-y (bot).
+
+## An admin resets one user's `/sub` link (built — F-311-n)
+
+`POST …/users/:userId/grants/:grantId/rotate-token`, no body -> `{grantId,
+subscriptionUrl}` — the new link, never a bare key. Same controller, over
+`SubscriptionLinkService.reset` ([contract.gift.md](contract.gift.md) "resetting
+it"), unchanged, asked as the path's user in the reseller's scope.
+
+| Rule | Why |
+|---|---|
+| Door `staffWrite` and the reseller's user (**404** `user_not_found`) before anything rotates; the Grant is the path user's by `rotateToken`'s own check (**404** `grant_not_found`) | a suspended reseller reads the link (above) but destroys none |
+| The owner reset's rules hold as written: host before rotation, one transaction, the old link dead as the new exists; **409** `no_subscription_domain` leaves the old link working; status is not a gate | one reset, two callers |
+| Bucket `RESELLER_USER_CONFIG_ACTION`, not the owner's `GRANT_ROTATE_TOKEN` | the user's own budget is not spent by support |
+
+**Not covered:** a reason and the audit row (F-311-r), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
 
 ## An admin's actions on one user's configs (built — F-311-g)
 

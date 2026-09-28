@@ -82,6 +82,16 @@ export class ResellerUserGrantsService {
   }
 
   /**
+   * An admin resets this user's `/sub` link (F-311-n): the owner's own reset,
+   * asked as the path's user in the reseller's scope — its host, one
+   * transaction, the old link dead as the new one exists. `staffWrite`: a
+   * suspended reseller reads the link but destroys none.
+   */
+  rotateLink(actor: ResellerActor, tenantId: string, userId: string, grantId: string): Promise<string> {
+    return this.run(actor, tenantId, userId, () => this.links.reset(grantId, userId), 'staffWrite');
+  }
+
+  /**
    * An admin's config action on this user's configs (F-311-g): the door is
    * `staffWrite`, so a suspended reseller reads its users' services but
    * changes none. One outcome per config; the fence to this user's configs is

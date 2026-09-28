@@ -133,7 +133,7 @@ export class ResellerUserGrantsController {
     return { grantId, ...(await this.refusing(() => this.service.usage(actorOf(req), tenantId, userId, grantId))) };
   }
 
-  /** Read only: resetting the link is an admin action of its own (F-311-n). */
+  /** Read only: resetting the link is `rotate-token`, below (F-311-n). */
   @Get('grants/:grantId/subscription-link')
   @readLimit
   async subscriptionLink(
@@ -143,6 +143,24 @@ export class ResellerUserGrantsController {
     @Req() req: Request,
   ) {
     const subscriptionUrl = await this.refusing(() => this.service.subscriptionLink(actorOf(req), tenantId, userId, grantId));
+    return { grantId, subscriptionUrl };
+  }
+
+  /**
+   * An admin resets this Grant's `/sub` link (F-311-n): the old one stops at
+   * once and the new one is answered — never a bare key. The config actions'
+   * bucket, not the owner's `GRANT_ROTATE_TOKEN`: that one is the user's own.
+   */
+  @Post('grants/:grantId/rotate-token')
+  @HttpCode(HttpStatus.OK)
+  @actionLimit
+  async rotateToken(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Req() req: Request,
+  ) {
+    const subscriptionUrl = await this.refusing(() => this.service.rotateLink(actorOf(req), tenantId, userId, grantId));
     return { grantId, subscriptionUrl };
   }
 
