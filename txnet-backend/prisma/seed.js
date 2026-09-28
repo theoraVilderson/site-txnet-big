@@ -136,8 +136,8 @@ async function grantGatewayManageToAdmin() {
 
 // ADR-0019: USD is the one base currency, two decimal places, and every money
 // column is in it; IRR is what a rial gateway is paid in and what the FX worker
-// quotes first. EUR and TRY are the currencies F-116-i rates too (ADR-0098
-// part 8), two decimals like every choosable one. Nothing else writes these rows, and the
+// quotes first. The rest are what F-116-i/i2 rate (ADR-0098 part 8), at their
+// ISO 4217 decimals — never above two, the money columns' scale (part 6). Nothing else writes these rows, and the
 // worker deliberately refuses to guess them (currency/open-questions.md), so a
 // fresh install without them fails every rial quote with `RateUnavailable`.
 // `update: {}` on purpose: an operator's later change to a row is theirs.
@@ -146,6 +146,26 @@ const CURRENCIES = [
   { code: 'IRR', name: 'Iranian Rial', symbol: '﷼', decimalPlaces: 0, isBaseCurrency: false },
   { code: 'EUR', name: 'Euro', symbol: '€', decimalPlaces: 2, isBaseCurrency: false },
   { code: 'TRY', name: 'Turkish Lira', symbol: '₺', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'GBP', name: 'British Pound', symbol: '£', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'AED', name: 'UAE Dirham', symbol: 'AED', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'CNY', name: 'Chinese Yuan', symbol: 'CN¥', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'JPY', name: 'Japanese Yen', symbol: '¥', decimalPlaces: 0, isBaseCurrency: false },
+  { code: 'CAD', name: 'Canadian Dollar', symbol: 'CA$', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'AUD', name: 'Australian Dollar', symbol: 'A$', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'CHF', name: 'Swiss Franc', symbol: 'CHF', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'SAR', name: 'Saudi Riyal', symbol: 'SAR', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'QAR', name: 'Qatari Riyal', symbol: 'QAR', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'RUB', name: 'Russian Ruble', symbol: '₽', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'AZN', name: 'Azerbaijani Manat', symbol: '₼', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'KRW', name: 'South Korean Won', symbol: '₩', decimalPlaces: 0, isBaseCurrency: false },
+  { code: 'SEK', name: 'Swedish Krona', symbol: 'SEK', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'NOK', name: 'Norwegian Krone', symbol: 'NOK', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'DKK', name: 'Danish Krone', symbol: 'DKK', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'INR', name: 'Indian Rupee', symbol: '₹', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'MYR', name: 'Malaysian Ringgit', symbol: 'RM', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'THB', name: 'Thai Baht', symbol: '฿', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'HKD', name: 'Hong Kong Dollar', symbol: 'HK$', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'SGD', name: 'Singapore Dollar', symbol: 'S$', decimalPlaces: 2, isBaseCurrency: false },
 ];
 
 async function seedCurrencies() {

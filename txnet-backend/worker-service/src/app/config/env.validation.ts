@@ -389,21 +389,13 @@ export const envSchema = z.object({
    * Iranian market's rial or toman price of a euro is a euro rate only once
    * divided into this tick's accepted USDT/IRT. A code needs a seeded
    * `currency` row (the worker creates none) and a source in this build.
+   *
+   * Unset, every currency in `FX_CURRENCY_DEFAULTS` (23, F-116-i2). Each
+   * foreign code's `FX_SOURCES_<CODE>` and `FX_SANITY_MIN_<CODE>`/`_MAX_<CODE>`
+   * are read straight from the environment — one schema entry per currency
+   * would be 69 lines saying the same thing — and default to that table.
    */
-  FX_CURRENCIES: z.string().min(1).default('IRR,EUR,TRY'),
-  /**
-   * Each foreign currency's sources: its foreign books (reachable only with
-   * international internet) and its Iranian quotes (reachable from inside
-   * Iran). Every default was watched answering on 2026-09-28; the defaults
-   * live in `currency/fx-currencies.ts`, next to the bands.
-   */
-  FX_SOURCES_EUR: optional(z.string()),
-  FX_SOURCES_TRY: optional(z.string()),
-  /** Each foreign currency's hard band, units per USD (defaults in fx-currencies.ts). */
-  FX_SANITY_MIN_EUR: optional(z.string()),
-  FX_SANITY_MAX_EUR: optional(z.string()),
-  FX_SANITY_MIN_TRY: optional(z.string()),
-  FX_SANITY_MAX_TRY: optional(z.string()),
+  FX_CURRENCIES: optional(z.string()),
   /**
    * The per-source deadline, and the catalog's own number (section 6.2 step 1).
    *

@@ -34,6 +34,12 @@ export type FxSourceOutcome = FxSourceRead | FxSourceFailure;
  */
 export const answered = (o: FxSourceOutcome): o is FxSourceRead => o.ok;
 
+/** One URL's answer this tick, shared by every source that reads it (F-116-i2). */
+export type FxFetch = { ok: true; body: unknown } | { ok: false; reason: string };
+export type FxFetches = Map<string, Promise<FxFetch>>;
+
+const downloaded = (f: FxFetch): f is { ok: true; body: unknown } => f.ok;
+
 const TWO = new Prisma.Decimal(2);
 
 /**
@@ -75,16 +81,23 @@ export class FxRatePoller {
    * `rialPerUsdt` is this tick's accepted USDT/IRT rate (F-116-i), which a
    * `rial-per-unit` source is divided into; null when the tick has none, and
    * then such a source is a failure like any other.
+   *
+   * `fetches` is the tick's downloads by URL (F-116-i2): a source that quotes
+   * many currencies — tgju's table, a central bank's reference rates — is
+   * downloaded once per tick and parsed once per currency. The job passes one
+   * map to every `poll` of a run; a caller that passes none still shares
+   * within its own call.
    */
   async poll(
     sources: readonly FxSource[],
     rialPerUsdt: Prisma.Decimal | null = null,
+    fetches: FxFetches = new Map(),
   ): Promise<FxSourceOutcome[]> {
     // `allSettled` over the whole list rather than a loop: this is the
     // concurrency, and `query` already resolves rather than rejects, so the
     // settled wrapper is a belt against a bug in it, not the mechanism.
     const settled = await Promise.allSettled(
-      sources.map((source) => this.query(source, rialPerUsdt)),
+      sources.map((source) => this.query(source, rialPerUsdt, fetches)),
     );
 
     return settled.map((s, i) =>
@@ -102,23 +115,19 @@ export class FxRatePoller {
   private async query(
     source: FxSource,
     rialPerUsdt: Prisma.Decimal | null,
+    fetches: FxFetches,
   ): Promise<FxSourceOutcome> {
     const started = Date.now();
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    try {
-      const response = await fetch(source.url, {
-        signal: controller.signal,
-        headers: { accept: 'application/json' },
-      });
-      if (!response.ok)
-        return this.failed(
-          source,
-          started,
-          `answered ${response.status}`,
-        );
+    let pending = fetches.get(source.url);
+    if (!pending) {
+      pending = this.download(source);
+      fetches.set(source.url, pending);
+    }
+    const got = await pending;
+    if (!downloaded(got)) return this.failed(source, started, got.reason);
 
-      const top = source.parse(await response.json());
+    try {
+      const top = source.parse(got.body);
 
       // A crossed book (bid above ask) is a well-formed answer that cannot be
       // true of one moment: either the two sides were read at different times
@@ -141,14 +150,31 @@ export class FxRatePoller {
         latencyMs: Date.now() - started,
       };
     } catch (error) {
+      return this.failed(source, started, reasonOf(error));
+    }
+  }
+
+  /** One URL, once, with the per-source deadline. Never rejects. */
+  private async download(source: FxSource): Promise<FxFetch> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const response = await fetch(source.url, {
+        signal: controller.signal,
+        headers: { accept: source.format === 'text' ? '*/*' : 'application/json' },
+      });
+      if (!response.ok) return { ok: false, reason: `answered ${response.status}` };
+      const body =
+        source.format === 'text' ? await response.text() : await response.json();
+      return { ok: true, body };
+    } catch (error) {
       const aborted =
         error instanceof Error &&
         (error.name === 'AbortError' || error.name === 'TimeoutError');
-      return this.failed(
-        source,
-        started,
-        aborted ? `no answer within ${this.timeoutMs}ms` : reasonOf(error),
-      );
+      return {
+        ok: false,
+        reason: aborted ? `no answer within ${this.timeoutMs}ms` : reasonOf(error),
+      };
     } finally {
       clearTimeout(timer);
     }

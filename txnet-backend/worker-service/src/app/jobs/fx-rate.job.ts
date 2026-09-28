@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory, Prisma } from '@prisma/client';
 import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { accepted, gateFxDeviation } from '../currency/fx-rate.gate';
-import { answered, FxRatePoller } from '../currency/fx-rate.poller';
+import { answered, FxFetches, FxRatePoller } from '../currency/fx-rate.poller';
 import { reduceFxReads, reduced } from '../currency/fx-rate.reducer';
 import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
 import { FX_DOMESTIC_CODE, fxCurrencies, fxCurrencyConfig } from '../currency/fx-currencies';
@@ -116,13 +116,16 @@ export class FxRateJob implements Job {
   async run(): Promise<JobResult> {
     const codes = fxCurrencies(this.config);
     const runs: FxCurrencyRun[] = [];
+    // One download per URL for the whole run (F-116-i2): tgju's table and the
+    // central banks' serve twenty currencies each, and are fetched once.
+    const fetches: FxFetches = new Map();
 
     // IRR alone and first: its accepted rate is what every `rial-per-unit`
     // source of the other currencies divides into — this tick's, never an
     // older one, and never one the gate refused.
     let rialPerUsdt: Prisma.Decimal | null = null;
     if (codes[0] === FX_DOMESTIC_CODE) {
-      const irr = await this.rate(FX_DOMESTIC_CODE, null);
+      const irr = await this.rate(FX_DOMESTIC_CODE, null, fetches);
       runs.push(irr);
       rialPerUsdt = irr.published;
     }
@@ -131,7 +134,7 @@ export class FxRateJob implements Job {
       ...(await Promise.all(
         codes
           .filter((c) => c !== FX_DOMESTIC_CODE)
-          .map((c) => this.rate(c, rialPerUsdt)),
+          .map((c) => this.rate(c, rialPerUsdt, fetches)),
       )),
     );
 
@@ -160,6 +163,7 @@ export class FxRateJob implements Job {
   private async rate(
     code: string,
     rialPerUsdt: Prisma.Decimal | null,
+    fetches: FxFetches,
   ): Promise<FxCurrencyRun> {
     const failed = (metrics: Record<string, unknown>, reason: string, errors = 1): FxCurrencyRun => {
       this.logger.error(`${code}: ${reason}`);
@@ -173,7 +177,7 @@ export class FxRateJob implements Job {
       return failed({}, reasonOf(err));
     }
 
-    const outcomes = await this.poller.poll(currency.sources, rialPerUsdt);
+    const outcomes = await this.poller.poll(currency.sources, rialPerUsdt, fetches);
     const reads = outcomes.filter(answered);
     const reduction = reduceFxReads(outcomes, {
       minSources: this.config.get<number>('FX_MIN_SOURCES', 2),

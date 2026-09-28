@@ -60,6 +60,8 @@ export interface FxSource {
   readonly currency: string;
   readonly url: string;
   readonly reads: FxReads;
+  /** How the answer is read: JSON (the default) or text (a central bank's XML). */
+  readonly format?: 'json' | 'text';
   /** Throws with a readable reason if the body is not the shape it expects. */
   parse(body: unknown): FxBookTop;
 }
@@ -291,25 +293,143 @@ export const bybitTry: FxSource = {
 // ---------------------------------------------------------------------------
 
 /**
- * tgju's live market table, the free-market rial price of one unit. **A
- * quote, not a book** — one price, so it is both sides — and an unofficial
- * endpoint of a public site, which is why it is one voice in a median and
- * never a currency's only source.
+ * tgju's live market table, the free-market rial price of `units` of the
+ * currency — 100 for the yen, 1 for the rest (checked against the ECB on
+ * 2026-09-28: read per 1, tgju's yen is a hundred times off). **A quote, not
+ * a book** — one price, so it is both sides — and an unofficial endpoint of a
+ * public site, which is why it is one voice in a median and never a
+ * currency's only source. One download a tick serves every currency
+ * (`FxRatePoller`, F-116-i2).
  */
-const tgju = (currency: string, item: string): FxSource => ({
-  key: `tgju-${currency.toLowerCase()}`,
+const tgju = (currency: string, units = 1): FxSource => {
+  const item = `price_${currency.toLowerCase()}`;
+  return {
+    key: `tgju-${currency.toLowerCase()}`,
+    currency,
+    url: 'https://call1.tgju.org/ajax.json',
+    reads: 'rial-per-unit',
+    parse: (body) => {
+      const p = (body as { current?: Record<string, { p?: unknown }> })?.current?.[item]?.p;
+      const q = price(typeof p === 'string' ? p.replace(/,/g, '') : p, `current.${item}.p`).div(units);
+      return { bestBid: q, bestAsk: q };
+    },
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Central banks' daily reference rates (F-116-i2). One XML table each, many
+// currencies, the cross computed inside the bank's own table so it needs no
+// other source. Official and slow — once a working day — so each is one voice
+// in a median, and a table older than `OFFICIAL_MAX_AGE_DAYS` does not vote.
+// Both answered from inside Iran with no proxy on 2026-09-28.
+// ---------------------------------------------------------------------------
+
+/** A weekend plus a holiday; older than this, the bank has stopped publishing. */
+export const OFFICIAL_MAX_AGE_DAYS = 4;
+
+const DAY_MS = 86_400_000;
+
+const notStale = (date: Date, label: string): void => {
+  if (Number.isNaN(date.getTime())) throw new Error(`${label} has no readable date`);
+  if (Date.now() - date.getTime() > OFFICIAL_MAX_AGE_DAYS * DAY_MS)
+    throw new Error(
+      `${label} is dated ${date.toISOString().slice(0, 10)}, older than ${OFFICIAL_MAX_AGE_DAYS} days`,
+    );
+};
+
+const text = (body: unknown): string => {
+  if (typeof body !== 'string') throw new Error('answer is not text');
+  return body;
+};
+
+/** One figure out of the ECB table: units of `code` per one euro. */
+const ecbPerEur = (xml: string, code: string): Prisma.Decimal => {
+  const m = xml.match(new RegExp(`currency='${code}' rate='([^']+)'`));
+  if (!m) throw new Error(`the ECB table has no ${code}`);
+  return price(m[1], `ECB ${code}`);
+};
+
+/**
+ * The European Central Bank's euro reference rates: `X per EUR / USD per
+ * EUR`, and for the euro itself `1 / USD per EUR`.
+ */
+const ecb = (currency: string): FxSource => ({
+  key: `ecb-${currency.toLowerCase()}`,
   currency,
-  url: 'https://call1.tgju.org/ajax.json',
-  reads: 'rial-per-unit',
+  url: 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml',
+  reads: 'per-usdt',
+  format: 'text',
   parse: (body) => {
-    const p = (body as { current?: Record<string, { p?: unknown }> })?.current?.[item]?.p;
-    const q = price(typeof p === 'string' ? p.replace(/,/g, '') : p, `current.${item}.p`);
+    const xml = text(body);
+    notStale(new Date(`${xml.match(/time='([0-9-]+)'/)?.[1]}T00:00:00Z`), 'the ECB table');
+    const usd = ecbPerEur(xml, 'USD');
+    const q = currency === 'EUR' ? new Prisma.Decimal(1).div(usd) : ecbPerEur(xml, currency).div(usd);
     return { bestBid: q, bestAsk: q };
   },
 });
 
-export const tgjuEur = tgju('EUR', 'price_eur');
-export const tgjuTry = tgju('TRY', 'price_try');
+/** One currency out of the TCMB table: the mid of its forex buying and selling, in TRY per one unit. */
+const tcmbTryPer = (xml: string, code: string): Prisma.Decimal => {
+  const block = xml.match(new RegExp(`CurrencyCode="${code}">([\\s\\S]*?)</Currency>`))?.[1];
+  if (!block) throw new Error(`the TCMB table has no ${code}`);
+  const field = (name: string) => block.match(new RegExp(`<${name}>([^<]*)</${name}>`))?.[1];
+  const unit = price(field('Unit'), `TCMB ${code} Unit`);
+  const buy = price(field('ForexBuying'), `TCMB ${code} ForexBuying`);
+  const sell = price(field('ForexSelling'), `TCMB ${code} ForexSelling`);
+  return buy.plus(sell).div(2).div(unit);
+};
+
+/**
+ * The Central Bank of the Republic of Türkiye's daily rates, all in lira:
+ * `TRY per USD / TRY per X`, and for the lira itself `TRY per USD`. Its
+ * `Unit` is read, not assumed — it prices the yen per 100.
+ */
+const tcmb = (currency: string): FxSource => ({
+  key: `tcmb-${currency.toLowerCase()}`,
+  currency,
+  url: 'https://www.tcmb.gov.tr/kurlar/today.xml',
+  reads: 'per-usdt',
+  format: 'text',
+  parse: (body) => {
+    const xml = text(body);
+    const [d, m, y] = (xml.match(/Tarih="([0-9.]+)"/)?.[1] ?? '').split('.');
+    notStale(new Date(`${y}-${m}-${d}T00:00:00Z`), 'the TCMB table');
+    const usd = tcmbTryPer(xml, 'USD');
+    const q = currency === 'TRY' ? usd : usd.div(tcmbTryPer(xml, currency));
+    return { bestBid: q, bestAsk: q };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Foreign books that answer from inside Iran with no proxy (2026-09-28).
+// ---------------------------------------------------------------------------
+
+/** KuCoin USDT-EUR — `{data: {bids, asks}}`. */
+export const kucoinEur: FxSource = {
+  key: 'kucoin-eur',
+  currency: 'EUR',
+  url: 'https://api.kucoin.com/api/v1/market/orderbook/level2_20?symbol=USDT-EUR',
+  reads: 'per-usdt',
+  parse: bookAt((body) => (body as { data?: unknown })?.data),
+};
+
+/** MEXC EUR/USDT — USDT per euro, so it is inverted. */
+export const mexcEur: FxSource = {
+  key: 'mexc-eur',
+  currency: 'EUR',
+  url: 'https://api.mexc.com/api/v3/depth?symbol=EURUSDT&limit=5',
+  reads: 'usdt-per-unit',
+  parse: bookAt(itself),
+};
+
+/** Bybit spot USDT/AED — `{result: {b, a}}`. */
+export const bybitAed: FxSource = {
+  key: 'bybit-aed',
+  currency: 'AED',
+  url: 'https://api.bybit.com/v5/market/orderbook?category=spot&symbol=USDTAED&limit=5',
+  reads: 'per-usdt',
+  parse: bookAt((body) => (body as { result?: unknown })?.result, 'b', 'a'),
+};
 
 /**
  * Abantether's coin list — its euro, bought and sold in **toman**
@@ -344,6 +464,14 @@ export const abantetherEur: FxSource = {
  * Iranian exchanges were put on the US OFAC list in June 2026, and dropping
  * one has to be a config change an operator makes, not a release.
  */
+/** tgju per-unit counts that are not 1. */
+const TGJU_UNITS: Readonly<Record<string, number>> = { JPY: 100 };
+
+/** Which of the many-currency tables quotes which currency (checked 2026-09-28). */
+const TGJU = ['EUR', 'TRY', 'GBP', 'AED', 'CNY', 'JPY', 'CAD', 'AUD', 'CHF', 'SAR', 'QAR', 'RUB', 'AZN', 'KRW', 'SEK', 'NOK', 'DKK', 'INR', 'MYR', 'THB', 'HKD', 'SGD'];
+const ECB = ['EUR', 'TRY', 'GBP', 'CNY', 'JPY', 'CAD', 'AUD', 'CHF', 'KRW', 'SEK', 'NOK', 'DKK', 'INR', 'MYR', 'THB', 'HKD', 'SGD'];
+const TCMB = ['EUR', 'TRY', 'GBP', 'AED', 'CNY', 'JPY', 'CAD', 'AUD', 'CHF', 'SAR', 'QAR', 'RUB', 'AZN', 'KRW', 'SEK', 'NOK', 'DKK'];
+
 export const FX_SOURCES: readonly FxSource[] = [
   nobitex,
   tabdeal,
@@ -353,13 +481,17 @@ export const FX_SOURCES: readonly FxSource[] = [
   krakenEur,
   bitstampEur,
   coinbaseEur,
-  tgjuEur,
+  kucoinEur,
+  mexcEur,
   abantetherEur,
   binanceTry,
   btcturkTry,
   okxTry,
   bybitTry,
-  tgjuTry,
+  bybitAed,
+  ...TGJU.map((c) => tgju(c, TGJU_UNITS[c])),
+  ...ECB.map(ecb),
+  ...TCMB.map(tcmb),
 ];
 
 /**
