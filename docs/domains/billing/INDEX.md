@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 58
+version: 59
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -41,7 +41,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260925001500_a_discount_without_a_code/**
 owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_tenant, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # Billing
@@ -76,9 +76,9 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-28 | contract v59 (F-311-i): `POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/duration` (`{days or endsAt, reason}`) — an admin moves a user's Grant's end, written to `grant_duration_change`; `staffWrite`. Additive. [contract.gift.md](contract.gift.md). Consumers: F-311-w, F-311-y |
 | 2026-09-27 | contract v58 (F-311-h): `POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/freeze` (`{until?}`) and `…/unfreeze` — an admin freezes a user's Grant, kept and its clock stopped; `staffWrite`. Additive. [contract.gift.md](contract.gift.md). Consumers: F-311-w, F-311-y |
 | 2026-09-27 | v57 (F-027-dk): `billing-service` sizes no share and consumes no collection pass — `CeilingAllocatorService`, `HotLoopService`, the hot-loop consumer and the internal `hot-loop/sweep-due` route are deleted; `BlockRequestQueue` unbinds `network.usage.#` from `HOT_LOOP_QUEUE`. `MIN_BLOCK_SECONDS` is in `block-request.ts` |
 | 2026-09-26 | contract v56 (F-311-g): `POST /api/billing/tenants/:tenantId/users/:userId/configs/actions` — an admin's regenerate / disable / enable / retire / move on 1..50 of that user's configs, `staffWrite`, one outcome per id; an admin's regenerate no longer counts against the user's cap. Additive. [contract.gift.md](contract.gift.md). Consumers: F-311-v, F-311-y |
-| 2026-09-26 | contract v54 (F-027-ci): the holder of 409 `panel_already_registered` / `inbound_assigned_elsewhere` / `inbound_has_configs` travels as `facts` ids (`panelId`; `remoteId`, `groupId`, `configs`) — the envelope had dropped the old body fields, so no client ever received them |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

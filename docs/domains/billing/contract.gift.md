@@ -213,6 +213,22 @@ controller, over `freezeGrant` / `unfreezeGrant` (entitlement `contract.md` "Fre
 
 **Not covered:** a reason and the audit row (F-311-r), telling the user (F-311-s).
 
+## An admin changes one of a user's Grants' days (built — F-311-i)
+
+`POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/duration`, body
+`{days | endsAt, reason}` — exactly one of `days` (whole, ±1..3650) or `endsAt`
+(ISO instant with offset); `reason` 1..500 chars -> `{grantId, changeId,
+endsAtBefore, endsAtAfter}`. Same controller, over `changeGrantDuration`
+(entitlement `contract.md` "Days").
+
+| Rule | Why |
+|---|---|
+| Door `staffWrite`, the reseller's user and the path user's Grant — as for a freeze | the same fences |
+| **409** `grant_closed`, `grant_not_active`, `grant_permanent`, `grant_moved`; **400** `duration_end_not_future`, `duration_unchanged` | a closed Grant is renewed, never re-dated |
+| Bucket `RESELLER_USER_CONFIG_ACTION`, shared with the freeze | one admin's writes on a user's service |
+
+**Not covered:** reading the history back (F-311-r), telling the user (F-311-s).
+
 **Not covered:** a panel list for the admin to pick a move's target from (the
 owner's systems page has one; a reseller's admin has none yet), an audit row
 beyond `config_action_log` (F-311-r), telling the user (F-311-s). A move of a

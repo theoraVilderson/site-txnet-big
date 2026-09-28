@@ -8,6 +8,7 @@ import {
   tenantTransaction,
 } from '@txnet-backend/shared-core';
 
+import { changeGrantDuration, DurationChange, DurationMove } from '../../entitlement/duration';
 import { Freeze, freezeGrant, Unfreeze, unfreezeGrant } from '../../entitlement/freeze';
 import { EntitlementRefused, GrantService } from '../../entitlement/grant';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -97,6 +98,20 @@ export class ResellerUserGrantsService {
   /** An admin unfreezes it: the frozen time is added to its end (F-311-h). */
   unfreeze(actor: ResellerActor, tenantId: string, userId: string, grantId: string): Promise<Unfreeze> {
     return this.run(actor, tenantId, userId, () => this.onGrant(userId, grantId, (tx) => unfreezeGrant(tx, grantId, new Date())), 'staffWrite');
+  }
+
+  /**
+   * An admin moves this user's Grant's end by ±N days or to a date (F-311-i),
+   * written down with the admin and the reason: `staffWrite`, as for a freeze.
+   */
+  changeDuration(actor: ResellerActor, tenantId: string, userId: string, grantId: string, change: DurationMove, reason: string): Promise<DurationChange> {
+    return this.run(
+      actor,
+      tenantId,
+      userId,
+      () => this.onGrant(userId, grantId, (tx) => changeGrantDuration(tx, grantId, { at: new Date(), actorUserId: actor.userId, change, reason })),
+      'staffWrite',
+    );
   }
 
   /** `work` on the Grant, in one transaction, only if it is the path's user's. */

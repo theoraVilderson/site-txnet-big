@@ -2,8 +2,8 @@
 id: entitlement
 layer: domain
 status: draft
-version: 11
-updated: 2026-09-27
+version: 12
+updated: 2026-09-28
 ---
 
 # Contract — entitlement
@@ -121,6 +121,16 @@ answer `unfrozen`). Refused: `grant_not_active` (a quota stop stays the top-up's
 `grant_not_frozen`, `freeze_until_not_future`, `grant_moved` (the end moved: retry).
 A top-up or renewal never lifts it (both key on `quota_exhausted`). Its HTTP
 route is billing's `contract.gift.md` (F-311-h).
+
+**Days (F-311-i)** — `changeGrantDuration(tx, id, {at, actorUserId, change, reason})`
+in `entitlement/duration.ts`, proved by `duration.spec.ts`. `change` is `{days}`
+(±N from the end it **has**, not from now) or `{endsAt}`; an `active` or
+`suspended` Grant moves, its reason untouched. Each move writes one
+`grant_duration_change` row (actor, `endsAtBefore`, `endsAtAfter`, reason) —
+duration is `endsAt`, not a quota metric (§4.5). Refused: `grant_closed`
+(expired / exhausted / cancelled: a renewal's, F-311-d), `grant_not_active`
+(pending), `grant_permanent`, `duration_unchanged`, `duration_end_not_future`
+(cutting off is a delete, F-311-m), `grant_moved`. Route: billing `contract.gift.md`.
 
 **Unlimited traffic (F-111-q).** A prepaid variant sold with
 `traffic_bytes.limit = 0` (catalog invariant 10) is issued with

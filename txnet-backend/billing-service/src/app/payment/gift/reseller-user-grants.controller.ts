@@ -24,6 +24,7 @@ import { EntitlementRefused, EntitlementRejection } from '../../entitlement/gran
 import { ConfigActionRefused } from '../../traffic/config-actions';
 import type { AdminConfigCommand } from '../../traffic/user-configs';
 import { AdminConfigActionBody, adminConfigActionSchema } from '../../traffic/user-configs.schema';
+import { GrantDurationBody, grantDurationSchema } from './grant-duration.schema';
 import { GrantFreezeBody, grantFreezeSchema } from './grant-freeze.schema';
 import { GrantListQuery, grantListSchema } from './grant-list.schema';
 import {
@@ -43,12 +44,16 @@ const STATUS: Record<ResellerUserGrantsRejection, 403 | 404 | 409> = {
   user_not_found: 404,
 };
 
-/** A freeze's refusals (F-311-h); any other `EntitlementRefused` is not this surface's and passes through. */
-const FREEZE_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
+/** A freeze's (F-311-h) and a change of days' (F-311-i) refusals; any other `EntitlementRefused` is not this surface's and passes through. */
+const GRANT_ACTION_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
   grant_not_active: 409,
   grant_not_frozen: 409,
   grant_moved: 409,
   freeze_until_not_future: 400,
+  grant_closed: 409,
+  grant_permanent: 409,
+  duration_end_not_future: 400,
+  duration_unchanged: 400,
 };
 
 /** One bucket for all four: expanding one Grant asks three of them at once. */
@@ -175,6 +180,26 @@ export class ResellerUserGrantsController {
   }
 
   /**
+   * An admin changes this Grant's days (F-311-i): `days` (±N from the end it
+   * has) or `endsAt`, and the `reason` its history keeps. A closed Grant is a
+   * renewal's, not a date's.
+   */
+  @Post('grants/:grantId/duration')
+  @HttpCode(HttpStatus.OK)
+  @actionLimit
+  async duration(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Body(new ZodValidationPipe(grantDurationSchema)) body: GrantDurationBody,
+    @Req() req: Request,
+  ) {
+    const change = body.endsAt !== undefined ? { endsAt: new Date(body.endsAt) } : { days: body.days as number };
+    const done = await this.refusing(() => this.service.changeDuration(actorOf(req), tenantId, userId, grantId, change, body.reason));
+    return { grantId, changeId: done.changeId, endsAtBefore: done.endsAtBefore.toISOString(), endsAtAfter: done.endsAtAfter.toISOString() };
+  }
+
+  /**
    * The door's refusals travel as `reason`, as on the other reseller surfaces;
    * a missing Grant is the owner routes' own 404. The link's two 409s
    * (`SubscriptionLinkService`) are already HTTP errors and pass through.
@@ -189,8 +214,8 @@ export class ResellerUserGrantsController {
       if (e instanceof EntitlementRefused) {
         const payload = { reason: e.reason, message: e.message };
         if (e.reason === 'grant_not_found') throw new NotFoundException({ i18nKey: E.grant.notFound, ...payload });
-        if (FREEZE_STATUS[e.reason] === 400) throw new BadRequestException(payload);
-        if (FREEZE_STATUS[e.reason] === 409) throw new ConflictException(payload);
+        if (GRANT_ACTION_STATUS[e.reason] === 400) throw new BadRequestException(payload);
+        if (GRANT_ACTION_STATUS[e.reason] === 409) throw new ConflictException(payload);
         throw e;
       }
       if (!(e instanceof ResellerUserGrantsRefused)) throw e;

@@ -55,7 +55,15 @@ export type EntitlementRejection =
   /** Unfreeze (F-311-h): the Grant is not frozen — never a suspension for quota, which a top-up lifts. */
   | 'grant_not_frozen'
   /** Freeze: an unfreeze time that has already come. */
-  | 'freeze_until_not_future';
+  | 'freeze_until_not_future'
+  /** Days (F-311-i): expired, exhausted or cancelled — only a renewal brings it back (§4.4). */
+  | 'grant_closed'
+  /** Days: a permanent Grant has no end to move. */
+  | 'grant_permanent'
+  /** Days: the new end is now or earlier — cutting a service off is a delete (F-311-m). */
+  | 'duration_end_not_future'
+  /** Days: the new end is the end it has. */
+  | 'duration_unchanged';
 
 export class EntitlementRefused extends Error {
   constructor(
