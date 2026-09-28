@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import type { Mock } from 'vitest';
+import { validateEnv } from '../config/env.validation';
 import { FX_CURRENCY_DEFAULTS, fxCurrencyConfig } from './fx-currencies';
 import { answered, FxRatePoller } from './fx-rate.poller';
 import { FX_SOURCES, fxSourcesFor } from './fx-source';
@@ -155,5 +156,22 @@ describe('FX sources for many currencies (F-116-i2)', () => {
       expect(c.sanityMin.lt(c.sanityMax), code).toBe(true);
     }
     for (const s of FX_SOURCES) expect(codes, s.key).toContain(s.currency);
+  });
+
+  it('carries a per-currency override through env validation, and drops an empty one', () => {
+    const env = validateEnv({
+      DATABASE_APP_URL: 'postgresql://x',
+      RABBITMQ_URL: 'amqp://x',
+      REDIS_URL: 'redis://x',
+      FX_SOURCES_GBP: 'tgju-gbp,ecb-gbp',
+      FX_SANITY_MIN_GBP: '0.5',
+      FX_SOURCES_EUR: '',
+      FX_SOURCES_gbp: 'ignored',
+    } as Record<string, unknown>) as unknown as Record<string, unknown>;
+
+    expect(env.FX_SOURCES_GBP).toBe('tgju-gbp,ecb-gbp');
+    expect(env.FX_SANITY_MIN_GBP).toBe('0.5');
+    expect(env).not.toHaveProperty('FX_SOURCES_EUR');
+    expect(env).not.toHaveProperty('FX_SOURCES_gbp');
   });
 });

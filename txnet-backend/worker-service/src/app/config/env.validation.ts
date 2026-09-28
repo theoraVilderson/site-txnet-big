@@ -392,7 +392,7 @@ export const envSchema = z.object({
    *
    * Unset, every currency in `FX_CURRENCY_DEFAULTS` (23, F-116-i2). Each
    * foreign code's `FX_SOURCES_<CODE>` and `FX_SANITY_MIN_<CODE>`/`_MAX_<CODE>`
-   * are read straight from the environment — one schema entry per currency
+   * are carried by `FX_PER_CURRENCY_KEY` below — one schema entry per currency
    * would be 69 lines saying the same thing — and default to that table.
    */
   FX_CURRENCIES: optional(z.string()),
@@ -465,6 +465,16 @@ export const envSchema = z.object({
 
 export type EnvConfig = z.infer<typeof envSchema>;
 
+/**
+ * A foreign currency's own FX knobs (F-116-i2): `FX_SOURCES_<CODE>`,
+ * `FX_SANITY_MIN_<CODE>`, `FX_SANITY_MAX_<CODE>`. Not one schema entry per
+ * currency — 23 of them, three each — but carried through `validateEnv` by
+ * pattern, because `skipProcessEnv` means `ConfigService` sees only what this
+ * function returns. An empty value is dropped, so the defaults in
+ * `currency/fx-currencies.ts` apply.
+ */
+export const FX_PER_CURRENCY_KEY = /^FX_(SOURCES|SANITY_MIN|SANITY_MAX)_[A-Z]{3}$/;
+
 export function validateEnv(raw: Record<string, unknown>): EnvConfig {
   const parsed = envSchema.safeParse(raw);
   if (!parsed.success) {
@@ -474,7 +484,12 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
     );
     throw new Error('Environment validation failed — see log above');
   }
-  return parsed.data;
+  const perCurrency = Object.fromEntries(
+    Object.entries(raw).filter(
+      ([key, value]) => FX_PER_CURRENCY_KEY.test(key) && typeof value === 'string' && value.trim() !== '',
+    ),
+  );
+  return { ...parsed.data, ...perCurrency };
 }
 
 /**

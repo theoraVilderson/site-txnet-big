@@ -139,7 +139,8 @@ those books. Nothing is routed through a proxy.
 | `FX_SANITY_MIN_<CODE>` / `_MAX_<CODE>` | the same | its band; IRR keeps `FX_SANITY_*_RIAL` |
 
 `FX_MIN_SOURCES` and `FX_MAX_DEVIATION_PERCENT` are shared by every currency.
-The per-code variables are read from the environment, not the env schema. A
+The per-code variables have no schema entry each: `validateEnv` carries every
+`FX_PER_CURRENCY_KEY` match through (the app skips `process.env`), empty ones dropped. A
 currency outside the defaults table is rated once all three of them are set
 and this build has a source for it.
 
