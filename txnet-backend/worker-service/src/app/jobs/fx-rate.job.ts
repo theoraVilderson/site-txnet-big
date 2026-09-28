@@ -6,14 +6,14 @@ import { accepted, gateFxDeviation } from '../currency/fx-rate.gate';
 import { answered, FxRatePoller } from '../currency/fx-rate.poller';
 import { reduceFxReads, reduced } from '../currency/fx-rate.reducer';
 import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
-import { FxSource, fxSourcesByKey } from '../currency/fx-source';
+import { FX_DOMESTIC_CODE, fxCurrencies, fxCurrencyConfig } from '../currency/fx-currencies';
 
 /**
  * F-0603 / F-0604 / F-0605 / F-0606-a — the FX worker, **off the request
  * path** and
  * nowhere near it.
  *
- * Steps 1 to 4 of the catalog's five-step loop: every active source queried
+ * Steps 1 to 4 of the catalog's five-step loop, per currency since F-116-i: every active source queried
  * concurrently with a three-second timeout (F-0603, `FxRatePoller`), then the
  * failures and the values outside the hard band discarded, `minSources`
  * required to remain, and the **median** taken (F-0604, `reduceFxReads`), then
@@ -74,13 +74,33 @@ import { FxSource, fxSourcesByKey } from '../currency/fx-source';
  * A rate refused by F-0605's gate is that same `failed` run, reached by
  * returning rather than throwing so that the numbers survive into the run log —
  * they are what the alert is about. See the comment on that branch.
+ *
+ * **F-116-i: the loop runs once per currency** (ADR-0098 part 8, D-51) —
+ * `FX_CURRENCIES`, each with its own sources, band, median, gate and snapshot
+ * (`fx-currencies.ts`). IRR runs first, alone, because an Iranian market's rial
+ * price of a euro is only a euro rate once divided into **this tick's
+ * accepted** USDT/IRT; the other currencies then run concurrently. Each
+ * currency's shortfall, refusal or error is that currency's: it is recorded
+ * under `metrics.currencies[code]` and the others carry on. So since F-116-i a
+ * shortfall **returns** too, like a refusal, and keeps its numbers; the run is
+ * `failed` only when no currency published (`itemsProcessed: 0`), `partial`
+ * when some did not.
  */
+/** What one currency's loop left in the run log, and whether it published. */
+interface FxCurrencyRun {
+  code: string;
+  metrics: Record<string, unknown>;
+  errors: number;
+  /** The rate the snapshot holds, when this currency published one. */
+  published: Prisma.Decimal | null;
+}
+
 @Injectable()
 export class FxRateJob implements Job {
   readonly key = 'fx_rate_refresh';
   readonly name = 'FX rate refresh';
   readonly description =
-    'Queries every active USDT/IRT order book concurrently with a 3s timeout (F-0603), discards failures and out-of-band values, takes the median of at least minSources (F-0604), refuses a move beyond FX_MAX_DEVIATION_PERCENT since the last accepted rate (F-0605), and writes an append-only snapshot cached under fx:rate:{code} (F-0606-a).';
+    'For every currency in FX_CURRENCIES (IRR first): queries its sources concurrently with a 3s timeout (F-0603), discards failures and out-of-band values, takes the median of at least minSources (F-0604), refuses a move beyond FX_MAX_DEVIATION_PERCENT since that currency\'s last accepted rate (F-0605), and writes an append-only snapshot cached under fx:rate:{code} (F-0606-a, F-116-i).';
   readonly category = BotWorkerCategory.data_aggregation;
   /** Unscheduled, no rate is ever refreshed and every Toman figure goes stale. */
   readonly defaultSchedule: DefaultSchedule = { scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' };
@@ -94,16 +114,78 @@ export class FxRateJob implements Job {
   ) {}
 
   async run(): Promise<JobResult> {
-    const sources = this.active();
-    const outcomes = await this.poller.poll(sources);
+    const codes = fxCurrencies(this.config);
+    const runs: FxCurrencyRun[] = [];
+
+    // IRR alone and first: its accepted rate is what every `rial-per-unit`
+    // source of the other currencies divides into — this tick's, never an
+    // older one, and never one the gate refused.
+    let rialPerUsdt: Prisma.Decimal | null = null;
+    if (codes[0] === FX_DOMESTIC_CODE) {
+      const irr = await this.rate(FX_DOMESTIC_CODE, null);
+      runs.push(irr);
+      rialPerUsdt = irr.published;
+    }
+    // The rest concurrently, so their books are readings of one moment.
+    runs.push(
+      ...(await Promise.all(
+        codes
+          .filter((c) => c !== FX_DOMESTIC_CODE)
+          .map((c) => this.rate(c, rialPerUsdt)),
+      )),
+    );
+
+    const published = runs.filter((r) => r.published).map((r) => r.code);
+    return {
+      // Zero published with errors is `failed`, some is `partial`
+      // (`TickConsumer.statusOf`): a currency without a rate is never quiet.
+      itemsProcessed: published.length,
+      errorsCount: runs.reduce((n, r) => n + r.errors, 0),
+      metrics: {
+        published,
+        // `currency_fx` in postgres-queries.yaml reads `accepted` and
+        // `rejectedDeviationPercent` from each entry, labelled by its code.
+        // Renaming either silently disarms `currency.rules.yml` — see
+        // `docs/operations/observability.md`.
+        currencies: Object.fromEntries(runs.map((r) => [r.code, r.metrics])),
+      },
+    };
+  }
+
+  /**
+   * One currency's loop. Never throws: a config error, a shortfall, a refusal
+   * or a missing `currency` row is this currency's failure, recorded with
+   * whatever numbers it got to, and costs no other currency its rate.
+   */
+  private async rate(
+    code: string,
+    rialPerUsdt: Prisma.Decimal | null,
+  ): Promise<FxCurrencyRun> {
+    const failed = (metrics: Record<string, unknown>, reason: string, errors = 1): FxCurrencyRun => {
+      this.logger.error(`${code}: ${reason}`);
+      return { code, metrics: { ...metrics, failed: reason }, errors, published: null };
+    };
+
+    let currency: ReturnType<typeof fxCurrencyConfig>;
+    try {
+      currency = fxCurrencyConfig(this.config, code);
+    } catch (err) {
+      return failed({}, reasonOf(err));
+    }
+
+    const outcomes = await this.poller.poll(currency.sources, rialPerUsdt);
     const reads = outcomes.filter(answered);
-    const reduction = reduceFxReads(outcomes, this.reduction());
+    const reduction = reduceFxReads(outcomes, {
+      minSources: this.config.get<number>('FX_MIN_SOURCES', 2),
+      sanityMin: currency.sanityMin,
+      sanityMax: currency.sanityMax,
+    });
 
     const metrics = {
-      sources: sources.length,
+      sources: currency.sources.length,
       answered: reads.length,
       used: reduced(reduction) ? reduction.used.length : 0,
-      rialPerUsdt: reduced(reduction) ? reduction.rialPerUsdt.toString() : null,
+      rate: reduced(reduction) ? reduction.rate.toString() : null,
       discarded: Object.fromEntries(
         reduction.discarded.map((d) => [d.source, d.reason]),
       ),
@@ -111,90 +193,90 @@ export class FxRateJob implements Job {
         outcomes.map((o) => [
           o.source,
           answered(o)
-            ? { rialPerUsdt: o.rialPerUsdt.toString(), latencyMs: o.latencyMs }
+            ? { rate: o.rate.toString(), latencyMs: o.latencyMs }
             : { failed: o.reason, latencyMs: o.latencyMs },
         ]),
       ),
     };
 
-    // A poll that cannot produce a rate is a failed run, not a quiet one
+    // A poll that cannot produce a rate is a failure, not a quiet one
     // (automation invariant #3). The reducer's reason names every source and
     // what happened to it, which is the difference between an operator fixing
     // an exchange and an operator reading "too few sources" once a day.
     if (!reduced(reduction))
-      throw new Error(`no FX rate this poll: ${reduction.reason}`);
+      return failed(
+        metrics,
+        `no ${code} rate this poll: ${reduction.reason}`,
+        reduction.discarded.length + 1,
+      );
 
-    // The baseline, read fresh from the shared store every run. Not held in a
-    // field: a field is the per-replica history F-0606-a exists to remove.
-    const gated = gateFxDeviation(
-      reduction.rialPerUsdt,
-      await this.snapshots.lastAccepted(),
-      this.maxDeviationPercent(),
-    );
+    try {
+      // The baseline, read fresh from the shared store every run. Not held in
+      // a field: a field is the per-replica history F-0606-a exists to remove.
+      const gated = gateFxDeviation(
+        reduction.rate,
+        await this.snapshots.lastAccepted(code),
+        this.maxDeviationPercent(),
+      );
 
-    // A rejection is a failed run like a shortfall, but it **returns** rather
-    // than throwing, and that is deliberate. A thrown error reaches
-    // `bot_execution_log` as `{ error: <message> }` and nothing else — the
-    // per-source readings, the median and the size of the move are all lost,
-    // and those three numbers are the entire content of this alert. Returned
-    // with `itemsProcessed: 0` and a non-zero `errorsCount`, `TickConsumer`
-    // records exactly the same `failed` status and keeps the evidence.
-    //
-    // `accepted` and `rejectedDeviationPercent` are the two keys
-    // `currency.rules.yml` reads, and they are why the run log needs the shape
-    // rather than the status: an accepted rate with one dead exchange is
-    // `partial`, not `success`, so a rule that asked the status could not tell
-    // it from a refusal. Renaming either key silently disarms that alert — see
-    // `docs/operations/observability.md`.
-    if (!accepted(gated)) {
-      this.logger.error(`FX rate rejected: ${gated.reason}`);
+      // A rejection keeps its numbers — the per-source readings, the median
+      // and the size of the move are the entire content of the alert. An
+      // accepted rate with one dead exchange is `partial`, so the alert reads
+      // `accepted`, never the run's status.
+      if (!accepted(gated)) {
+        this.logger.error(`${code} FX rate rejected: ${gated.reason}`);
+        return {
+          code,
+          errors: reduction.discarded.length + 1,
+          published: null,
+          metrics: {
+            ...metrics,
+            accepted: false,
+            rejected: gated.reason,
+            rejectedDeviationPercent: gated.deviationPercent.toNumber(),
+            maxDeviationPercent: gated.maxDeviationPercent.toNumber(),
+            previousRate: gated.previous.toString(),
+          },
+        };
+      }
+
+      // Step 4. The snapshot is written before anything claims the rate is
+      // live, and it is what the *next* run's baseline will be read from.
+      const out = await this.snapshots.publish(code, gated.rate);
+
+      this.logger.log(
+        `${code}: ${reduction.used.length}/${currency.sources.length} source(s) used, ` +
+          `median ${reduction.rate.toString()} per USD` +
+          (gated.deviationPercent === null
+            ? ' (cold start — no deviation gate)'
+            : ` (${gated.deviationPercent.toString()}% move)`) +
+          `, snapshot ${out.snapshot.id}: ` +
+          reads.map((o) => `${o.source}=${o.rate.toString()}`).join(' '),
+      );
+
       return {
-        itemsProcessed: 0,
-        errorsCount: reduction.discarded.length + 1,
+        code,
+        // A snapshot that is durable but uncached is a degraded run, not a
+        // healthy one: every reader goes to the table until the next poll
+        // rewrites the key, and nothing else would ever say so.
+        errors: reduction.discarded.length + (out.cached ? 0 : 1),
+        published: new Prisma.Decimal(out.snapshot.rate),
         metrics: {
           ...metrics,
-          accepted: false,
-          rejected: gated.reason,
-          rejectedDeviationPercent: gated.deviationPercent.toNumber(),
-          maxDeviationPercent: gated.maxDeviationPercent.toNumber(),
-          previousRialPerUsdt: gated.previous.toString(),
+          accepted: true,
+          snapshotId: out.snapshot.id,
+          cached: out.cached,
+          deviationPercent:
+            gated.deviationPercent === null
+              ? null
+              : gated.deviationPercent.toNumber(),
+          previousRate:
+            gated.previous === null ? null : gated.previous.toString(),
         },
       };
+    } catch (err) {
+      return failed(metrics, reasonOf(err), reduction.discarded.length + 1);
     }
-
-    // Step 4. The snapshot is written before anything claims the rate is live,
-    // and it is what the *next* run's baseline will be read from.
-    const published = await this.snapshots.publish(gated.rialPerUsdt);
-
-    this.logger.log(
-      `${reduction.used.length}/${sources.length} source(s) used, ` +
-        `median ${reduction.rialPerUsdt.toString()} rial/USDT` +
-        (gated.deviationPercent === null
-          ? ' (cold start — no deviation gate)'
-          : ` (${gated.deviationPercent.toString()}% move)`) +
-        `, snapshot ${published.snapshot.id}: ` +
-        reads.map((o) => `${o.source}=${o.rialPerUsdt.toString()}`).join(' '),
-    );
-
-    return {
-      itemsProcessed: reduction.used.length,
-      // A snapshot that is durable but uncached is a degraded run, not a
-      // healthy one: every reader goes to the table until the next poll
-      // rewrites the key, and nothing else would ever say so.
-      errorsCount: reduction.discarded.length + (published.cached ? 0 : 1),
-      metrics: {
-        ...metrics,
-        accepted: true,
-        snapshotId: published.snapshot.id,
-        cached: published.cached,
-        deviationPercent:
-          gated.deviationPercent === null
-            ? null
-            : gated.deviationPercent.toNumber(),
-        previousRialPerUsdt:
-          gated.previous === null ? null : gated.previous.toString(),
-      },
-    };
   }
 
   /**
@@ -206,41 +288,7 @@ export class FxRateJob implements Job {
       this.config.get<string>('FX_MAX_DEVIATION_PERCENT', '5'),
     );
   }
-
-  /**
-   * Read at run time, not at boot, for the reason `VaultRetentionJob` gives: a
-   * job's own configuration being wrong must cost that job its runs and leave
-   * every other job in this process running.
-   */
-  private active(): FxSource[] {
-    const configured = this.config
-      .get<string>('FX_SOURCES', '')
-      .split(',')
-      .map((k) => k.trim())
-      .filter(Boolean);
-
-    if (configured.length === 0)
-      throw new Error('FX_SOURCES is empty — no source to poll');
-
-    return fxSourcesByKey(configured);
-  }
-
-  /**
-   * The band and the quorum, read at run time for the same reason as the
-   * source list. All three are config because all three are judgements about a
-   * market rather than facts about this code: `open-questions.md` records that
-   * the band's edges are this repo's estimate, chosen wide enough to catch
-   * nonsense and never disagreement.
-   */
-  private reduction() {
-    return {
-      minSources: this.config.get<number>('FX_MIN_SOURCES', 2),
-      sanityMinRial: new Prisma.Decimal(
-        this.config.get<string>('FX_SANITY_MIN_RIAL', '100000'),
-      ),
-      sanityMaxRial: new Prisma.Decimal(
-        this.config.get<string>('FX_SANITY_MAX_RIAL', '10000000'),
-      ),
-    };
-  }
 }
+
+const reasonOf = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);

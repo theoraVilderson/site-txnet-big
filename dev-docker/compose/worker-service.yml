@@ -107,9 +107,15 @@ services:
       # The FX worker's sources and its per-source deadline (F-0603, D-22).
       # A list rather than a constant because three of the four exchanges are
       # on the US OFAC list since June 2026 and dropping one must be config.
-      # The default is the two endpoints D-22 states in full; wallex and bitpin
-      # are implemented but unverified.
-      - FX_SOURCES=${FX_SOURCES:-nobitex,tabdeal}
+      # These are IRR's (F-116-i): the two D-22 endpoints plus wallex, watched
+      # answering 2026-09-28. bitpin's URL answers 404, so it is off.
+      - FX_SOURCES=${FX_SOURCES:-nobitex,tabdeal,wallex}
+      # F-116-i: every currency the loop rates, IRR first. Each foreign one
+      # has its own FX_SOURCES_<CODE> / FX_SANITY_MIN_<CODE> / _MAX_<CODE>;
+      # unset, the defaults in currency/fx-currencies.ts apply.
+      - FX_CURRENCIES=${FX_CURRENCIES:-IRR,EUR,TRY}
+      - FX_SOURCES_EUR=${FX_SOURCES_EUR:-}
+      - FX_SOURCES_TRY=${FX_SOURCES_TRY:-}
       - FX_SOURCE_TIMEOUT_MS=${FX_SOURCE_TIMEOUT_MS:-3000}
       # The quorum and the hard sanity band F-0604 reduces with. Wide on
       # purpose: the band rejects what cannot be a price, the median handles

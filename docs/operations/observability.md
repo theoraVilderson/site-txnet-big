@@ -56,7 +56,9 @@ not (`CurrencyFxRateStale`).
 polled while one exchange was down is `partial` rather than `success`, so the
 status cannot tell a refused rate from a dead source — a critical and a warning.
 `FxRateJob` writes `accepted` and `rejectedDeviationPercent` for these rules to
-read; renaming either key disarms them and breaks nothing visible.
+read — since F-116-i once per currency, under `metricsJson.currencies.<code>`,
+and `currency_fx` turns the code into a `currency` label; renaming either key
+disarms them and breaks nothing visible.
 
 **RabbitMQ is scraped by two jobs, not one.** The `rabbitmq_prometheus` plugin
 is enabled in the `4.2-management-alpine` image already, and it serves two

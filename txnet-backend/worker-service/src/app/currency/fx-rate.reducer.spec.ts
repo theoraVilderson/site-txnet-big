@@ -27,7 +27,7 @@ describe('reduceFxReads', () => {
   const read = (source: string, rial: string): FxSourceOutcome => ({
     source,
     ok: true,
-    rialPerUsdt: D(rial),
+    rate: D(rial),
     latencyMs: 10,
   });
 
@@ -41,8 +41,8 @@ describe('reduceFxReads', () => {
   /** The defaults the job passes, restated so a test reads on its own. */
   const band = {
     minSources: 2,
-    sanityMinRial: D('100000'),
-    sanityMaxRial: D('10000000'),
+    sanityMin: D('100000'),
+    sanityMax: D('10000000'),
   };
 
   it('takes the median of the surviving reads, not the mean', () => {
@@ -59,7 +59,7 @@ describe('reduceFxReads', () => {
 
     expect(result.ok).toBe(true);
     if (!reduced(result)) return;
-    expect(result.rialPerUsdt.toString()).toBe('1102000');
+    expect(result.rate.toString()).toBe('1102000');
     expect(result.used).toEqual(['nobitex', 'tabdeal', 'wallex']);
   });
 
@@ -81,7 +81,7 @@ describe('reduceFxReads', () => {
       { source: 'wallex', reason: 'out of band: 1' },
       { source: 'bitpin', reason: 'out of band: 99000000' },
     ]);
-    expect(result.rialPerUsdt.toString()).toBe('1100000');
+    expect(result.rate.toString()).toBe('1100000');
   });
 
   it('keeps a reading exactly on each edge of the band', () => {
@@ -138,7 +138,7 @@ describe('reduceFxReads', () => {
 
     expect(result.ok).toBe(true);
     if (!reduced(result)) return;
-    expect(result.rialPerUsdt.toString()).toBe('1100000');
+    expect(result.rate.toString()).toBe('1100000');
   });
 
   it('publishes a source-shaped sample of exactly minSources', () => {
@@ -152,6 +152,6 @@ describe('reduceFxReads', () => {
     // The lower middle again, and deliberately so: with two sources there is
     // no majority, so the reducer publishes a quote rather than inventing the
     // midpoint of a disagreement it cannot resolve.
-    expect(result.rialPerUsdt.toString()).toBe('1100000');
+    expect(result.rate.toString()).toBe('1100000');
   });
 });

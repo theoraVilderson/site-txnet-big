@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Prisma, RateSource } from '@prisma/client';
 import { RedisKeys } from '../redis/redis.keys';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,7 +9,7 @@ export interface FxSnapshot {
   /** `currency.CurrencyExchangeRate.id` — the id F-0606-b stamps on a price. */
   snapshotId: string;
   currencyCode: string;
-  /** Rial per one base unit, as a decimal string (C-02 — never a float). */
+  /** Units of the currency per one USD, as a decimal string (C-02 — never a float). */
   rate: string;
   source: RateSource;
   /** When this rate started applying. F-0607-a's ladder is a function of it. */
@@ -31,7 +30,7 @@ export class FxQuoteCurrencyMissing extends Error {
   constructor(readonly code: string) {
     super(
       `no currency row with code "${code}" — the FX snapshot has nothing to ` +
-        `hang on; seed the currency table (FX_QUOTE_CURRENCY_CODE)`,
+        `hang on; seed the currency table (FX_CURRENCIES names it)`,
     );
     this.name = 'FxQuoteCurrencyMissing';
   }
@@ -75,20 +74,17 @@ export class FxQuoteCurrencyMissing extends Error {
  * one shared, durable baseline for every replica, which is what
  * `contract.fx-worker.md` said would happen here.
  */
+/** `currency_exchange_rate.rate` is `DECIMAL(18, 8)`. */
+export const RATE_SCALE = 8;
+
 @Injectable()
 export class FxRateSnapshotStore {
   private readonly logger = new Logger(FxRateSnapshotStore.name);
 
   constructor(
-    private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
   ) {}
-
-  /** The currency the worker quotes in. Config, because D-22's sources are. */
-  private code(): string {
-    return this.config.get<string>('FX_QUOTE_CURRENCY_CODE', 'IRR');
-  }
 
   /**
    * Write the snapshot, then cache it.
@@ -100,8 +96,12 @@ export class FxRateSnapshotStore {
    * is what the job turns into a non-zero `errorsCount`, so the run is visibly
    * degraded rather than quietly so.
    */
-  async publish(rate: Prisma.Decimal): Promise<FxPublished> {
-    const code = this.code();
+  async publish(code: string, median: Prisma.Decimal): Promise<FxPublished> {
+    // Rounded to the column's scale here, once, so the row and the key hold
+    // the same number: an inverted book (1 / 1.13685) has more digits than
+    // `DECIMAL(18,8)` keeps, and a key carrying the unrounded one would be a
+    // rate no snapshot backs.
+    const rate = median.toDecimalPlaces(RATE_SCALE, Prisma.Decimal.ROUND_HALF_UP);
     const currency = await this.prisma.currency.findUnique({
       where: { code },
     });
@@ -158,9 +158,7 @@ export class FxRateSnapshotStore {
    * Null only before the first snapshot ever written, which is the one genuine
    * cold start.
    */
-  async lastAccepted(): Promise<Prisma.Decimal | null> {
-    const code = this.code();
-
+  async lastAccepted(code: string): Promise<Prisma.Decimal | null> {
     try {
       const hit = await this.redis.client.get(RedisKeys.fxRate(code));
       if (hit) return new Prisma.Decimal((JSON.parse(hit) as FxSnapshot).rate);

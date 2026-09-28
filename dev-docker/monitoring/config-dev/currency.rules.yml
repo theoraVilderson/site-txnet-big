@@ -16,6 +16,9 @@
 # a `/metrics` because worker-service serves no requests (ADR-0027) — the same
 # argument, in full, as the outbox gauge.
 #
+# F-116-i: every series carries a `currency` label (IRR, EUR, TRY — one loop
+# per currency, ADR-0098 part 8), so each rule fires per currency and names it.
+#
 # The worker's own schedule is `*/5 * * * *` (a `bot_schedule` row, not a
 # constant), so five minutes is the floor under every `for:` here. A single
 # missed poll is not an incident.
@@ -41,16 +44,18 @@ groups:
           severity: critical
           unit: currency
         annotations:
-          summary: "An FX rate was refused for moving too far"
+          summary: "The {{ $labels.currency }} FX rate was refused for moving too far"
           description: >-
-            {{ $value }} fx_rate_refresh run(s) in the last hour were refused by
-            F-0605's deviation gate; the largest move was
-            {{ with query "currency_fx_max_rejected_deviation_percent_1h" }}{{ . | first | value | printf "%.2f" }}{{ end }}%.
+            {{ $value }} fx_rate_refresh run(s) in the last hour had the
+            {{ $labels.currency }} rate refused by F-0605's deviation gate; the
+            largest move was
+            {{ with query (printf "currency_fx_max_rejected_deviation_percent_1h{currency='%s'}" $labels.currency) }}{{ . | first | value | printf "%.2f" }}{{ end }}%.
             The platform is still quoting the last ACCEPTED rate, so nothing is
             mispriced yet and nothing is fresh either. Read the run's
-            bot_execution_log row: `perSource` says what each exchange answered,
-            and a single source ten times out from the others is a book read in
-            the wrong unit (`FxSource.unit`), not a market move.
+            bot_execution_log row: `currencies.{{ $labels.currency }}.perSource`
+            says what each source answered, and a single source ten times (or
+            one-over) out from the others is a book read the wrong way
+            (`FxSource.reads`), not a market move.
 
       # The gate's own failure mode, and the reason the alert above cannot be
       # the only one. A refusal keeps the old rate live; if refusals keep
@@ -65,13 +70,15 @@ groups:
           severity: critical
           unit: currency
         annotations:
-          summary: "No FX rate has been accepted for half an hour"
+          summary: "No {{ $labels.currency }} FX rate has been accepted for half an hour"
           description: >-
-            The last accepted USD→IRR rate is {{ $value | humanizeDuration }}
-            old and every price quoted since is based on it. Either the gate is
-            refusing every poll (see CurrencyFxRateRejected), fewer than
-            FX_MIN_SOURCES exchanges are answering, or `fx_rate_refresh` has no
-            active bot_schedule. Its last bot_execution_log row says which.
+            The last accepted USD→{{ $labels.currency }} rate is
+            {{ $value | humanizeDuration }} old and every price quoted since is
+            based on it. Either the gate is refusing every poll (see
+            CurrencyFxRateRejected), fewer than FX_MIN_SOURCES sources are
+            answering — for a foreign currency, often its foreign books being
+            unreachable from this node — or `fx_rate_refresh` has no active
+            bot_schedule. Its last bot_execution_log row says which.
 
       # -1 is the exporter's "no accepted rate in the seven-day window", which
       # on a fresh platform means the worker has never successfully run. It is
@@ -88,10 +95,12 @@ groups:
           severity: warning
           unit: currency
         annotations:
-          summary: "The FX worker has never accepted a rate"
+          summary: "The FX worker has never accepted a {{ $labels.currency }} rate"
           description: >-
-            No fx_rate_refresh run has produced an accepted rate in the last
-            seven days. The job registers itself on boot but an admin has to
-            give it a `*/5 * * * *` cron_expression schedule through
-            /api/auth/workers (F-031-b); until then it never ticks. Nothing prices
-            in rial yet (F-0606 is the row that publishes), so this is a warning.
+            No fx_rate_refresh run has produced an accepted
+            {{ $labels.currency }} rate in the last seven days, so no tenant
+            can choose it as an operating currency. For a currency just added
+            to FX_CURRENCIES, read `currencies.{{ $labels.currency }}` in the
+            last run: a shortfall names every source and why it failed. With
+            no run at all, check that `fx_rate_refresh` has an active
+            bot_schedule (/api/auth/workers, F-031-b).

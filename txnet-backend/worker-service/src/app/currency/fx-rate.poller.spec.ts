@@ -43,8 +43,9 @@ describe('FxRatePoller', () => {
     url = `https://${key}.test/orderbook`,
   ): FxSource => ({
     key,
+    currency: 'IRR',
     url,
-    unit,
+    reads: unit === 'toman' ? 'toman-per-usdt' : 'per-usdt',
     parse: (body: unknown) => {
       const b = body as { bid: string; ask: string };
       return { bestBid: D(b.bid), bestAsk: D(b.ask) };
@@ -79,7 +80,7 @@ describe('FxRatePoller', () => {
 
     expect(outcome.ok).toBe(true);
     if (!answered(outcome)) throw new Error('unreachable');
-    expect(outcome.rialPerUsdt.toString()).toBe('1001000');
+    expect(outcome.rate.toString()).toBe('1001000');
   });
 
   it('multiplies a toman source by ten, because the band gate cannot tell a unit error from a crash', async () => {
@@ -90,7 +91,7 @@ describe('FxRatePoller', () => {
     ]);
 
     if (!answered(outcome)) throw new Error('unreachable');
-    expect(outcome.rialPerUsdt.toString()).toBe('1001000');
+    expect(outcome.rate.toString()).toBe('1001000');
   });
 
   it('queries every source at once rather than one after another', async () => {

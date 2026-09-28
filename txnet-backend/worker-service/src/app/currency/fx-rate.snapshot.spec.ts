@@ -1,4 +1,3 @@
-import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { FxRateSnapshotStore, FxQuoteCurrencyMissing } from './fx-rate.snapshot';
 import { PrismaService } from '../prisma/prisma.service';
@@ -32,9 +31,6 @@ describe('FxRateSnapshotStore', () => {
   const CURRENCY = { id: 'currency-irr', code: 'IRR' };
   const SNAPSHOT_ID = 'snap-1';
   const EFFECTIVE_AT = new Date('2026-09-12T10:00:00Z');
-
-  const config = (code = 'IRR') =>
-    ({ get: (_k: string, d: string) => code ?? d }) as unknown as ConfigService;
 
   /**
    * A Prisma double that records every call, so that "nothing else was
@@ -102,9 +98,9 @@ describe('FxRateSnapshotStore', () => {
   it('inserts a snapshot and touches no earlier row', async () => {
     const { prisma, calls, created } = prismaWith(CURRENCY);
     const { redis } = redisWith();
-    const store = new FxRateSnapshotStore(config(), prisma, redis);
+    const store = new FxRateSnapshotStore(prisma, redis);
 
-    const { snapshot, cached } = await store.publish(
+    const { snapshot, cached } = await store.publish('IRR',
       new Prisma.Decimal('1075000'),
     );
 
@@ -127,9 +123,9 @@ describe('FxRateSnapshotStore', () => {
   it('caches the snapshot under fx:rate:{code}, with no expiry', async () => {
     const { prisma } = prismaWith(CURRENCY);
     const { redis, sets } = redisWith();
-    const store = new FxRateSnapshotStore(config(), prisma, redis);
+    const store = new FxRateSnapshotStore(prisma, redis);
 
-    await store.publish(new Prisma.Decimal('1075000'));
+    await store.publish('IRR', new Prisma.Decimal('1075000'));
 
     expect(sets).toHaveLength(1);
     expect(sets[0].key).toBe('fx:rate:IRR');
@@ -165,8 +161,8 @@ describe('FxRateSnapshotStore', () => {
       },
     } as unknown as RedisService;
 
-    const store = new FxRateSnapshotStore(config(), prisma, redis);
-    await store.publish(new Prisma.Decimal('1075000'));
+    const store = new FxRateSnapshotStore(prisma, redis);
+    await store.publish('IRR', new Prisma.Decimal('1075000'));
 
     expect(order).toEqual(['snapshot', 'cache']);
   });
@@ -174,15 +170,29 @@ describe('FxRateSnapshotStore', () => {
   it('refuses to invent the currency row it is quoting against', async () => {
     const { prisma, calls } = prismaWith(null);
     const { redis } = redisWith();
-    const store = new FxRateSnapshotStore(config(), prisma, redis);
+    const store = new FxRateSnapshotStore(prisma, redis);
 
     // Reference data, not this job's to create: a `currency` row carries
     // `isBaseCurrency` and `decimalPlaces`, and a worker guessing at those is
     // how a platform ends up with two base currencies (invariant #1).
-    await expect(store.publish(new Prisma.Decimal('1075000'))).rejects.toThrow(
+    await expect(store.publish('IRR', new Prisma.Decimal('1075000'))).rejects.toThrow(
       FxQuoteCurrencyMissing,
     );
     expect(calls).toEqual(['currency.findUnique']);
+  });
+
+  it('rounds to the column\'s eight places once, so the row and the key hold the same rate (F-116-i)', async () => {
+    const { prisma, created } = prismaWith({ id: 'currency-eur', code: 'EUR' });
+    const { redis, sets } = redisWith();
+    const store = new FxRateSnapshotStore(prisma, redis);
+
+    // 1 / 1.13685, an inverted EUR/USDT book: more digits than DECIMAL(18,8).
+    const { snapshot } = await store.publish('EUR', new Prisma.Decimal(1).div('1.13685'));
+
+    expect((created[0] as { rate: Prisma.Decimal }).rate.toString()).toBe('0.87962352');
+    expect(snapshot.rate).toBe('0.87962352');
+    expect(sets[0].key).toBe('fx:rate:EUR');
+    expect(JSON.parse(sets[0].value).rate).toBe('0.87962352');
   });
 
   it('reads the last accepted rate from the cache', async () => {
@@ -196,9 +206,9 @@ describe('FxRateSnapshotStore', () => {
         effectiveAt: EFFECTIVE_AT.toISOString(),
       }),
     });
-    const store = new FxRateSnapshotStore(config(), prisma, redis);
+    const store = new FxRateSnapshotStore(prisma, redis);
 
-    const last = await store.lastAccepted();
+    const last = await store.lastAccepted('IRR');
 
     expect(last!.toString()).toBe('1075000');
     expect(calls).toEqual([]);
@@ -215,9 +225,9 @@ describe('FxRateSnapshotStore', () => {
       effectiveAt: EFFECTIVE_AT,
     });
     const { redis } = redisWith();
-    const store = new FxRateSnapshotStore(config(), prisma, redis);
+    const store = new FxRateSnapshotStore(prisma, redis);
 
-    const last = await store.lastAccepted();
+    const last = await store.lastAccepted('IRR');
 
     expect(last!.toString()).toBe('1075000');
     expect(calls).toEqual(['currency.findUnique', 'rate.findFirst']);
@@ -226,9 +236,9 @@ describe('FxRateSnapshotStore', () => {
   it('has no baseline before the first snapshot, rather than a zero', async () => {
     const { prisma } = prismaWith(CURRENCY, null);
     const { redis } = redisWith();
-    const store = new FxRateSnapshotStore(config(), prisma, redis);
+    const store = new FxRateSnapshotStore(prisma, redis);
 
-    expect(await store.lastAccepted()).toBeNull();
+    expect(await store.lastAccepted('IRR')).toBeNull();
   });
 
   it('falls back to the table when the cache read itself fails', async () => {
@@ -248,9 +258,9 @@ describe('FxRateSnapshotStore', () => {
         set: vi.fn(async () => 'OK'),
       },
     } as unknown as RedisService;
-    const store = new FxRateSnapshotStore(config(), prisma, redis);
+    const store = new FxRateSnapshotStore(prisma, redis);
 
-    const last = await store.lastAccepted();
+    const last = await store.lastAccepted('IRR');
 
     expect(last!.toString()).toBe('1075000');
     expect(calls).toEqual(['currency.findUnique', 'rate.findFirst']);
@@ -270,9 +280,9 @@ describe('FxRateSnapshotStore', () => {
         }),
       },
     } as unknown as RedisService;
-    const store = new FxRateSnapshotStore(config(), prisma, redis);
+    const store = new FxRateSnapshotStore(prisma, redis);
 
-    const published = await store.publish(new Prisma.Decimal('1075000'));
+    const published = await store.publish('IRR', new Prisma.Decimal('1075000'));
 
     expect(published.snapshot.id).toBe(SNAPSHOT_ID);
     expect(published.cached).toBe(false);

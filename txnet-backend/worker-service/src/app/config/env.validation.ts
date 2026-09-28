@@ -377,14 +377,33 @@ export const envSchema = z.object({
    * whether the business keeps reading a given exchange is not a decision a
    * release should encode. Dropping one is an environment change.
    *
-   * The default is the two endpoints D-22 states in full and that have been
-   * seen to answer. `wallex` and `bitpin` are implemented but off: their URLs
-   * are this repo's guess rather than D-22's, and a source that can only fail
-   * is a permanently red line in the run log. Add them in the change that
-   * confirms them — two is also F-0604's `minSources` default, so the default
-   * here is the minimum that can produce a rate at all.
+   * These are IRR's sources (F-116-i kept the name). `nobitex` and `tabdeal`
+   * are the two endpoints D-22 states in full; `wallex` was watched answering
+   * on 2026-09-28 and joined them, which is what lets the median outvote one
+   * bad book. `bitpin` is implemented but its URL answers 404, so it is off.
    */
-  FX_SOURCES: z.string().min(1).default('nobitex,tabdeal'),
+  FX_SOURCES: z.string().min(1).default('nobitex,tabdeal,wallex'),
+  /**
+   * F-116-i (ADR-0098 part 8, D-51) — which currencies the FX loop rates, each
+   * with its own sources, band, median, gate and snapshot. IRR runs first: an
+   * Iranian market's rial or toman price of a euro is a euro rate only once
+   * divided into this tick's accepted USDT/IRT. A code needs a seeded
+   * `currency` row (the worker creates none) and a source in this build.
+   */
+  FX_CURRENCIES: z.string().min(1).default('IRR,EUR,TRY'),
+  /**
+   * Each foreign currency's sources: its foreign books (reachable only with
+   * international internet) and its Iranian quotes (reachable from inside
+   * Iran). Every default was watched answering on 2026-09-28; the defaults
+   * live in `currency/fx-currencies.ts`, next to the bands.
+   */
+  FX_SOURCES_EUR: optional(z.string()),
+  FX_SOURCES_TRY: optional(z.string()),
+  /** Each foreign currency's hard band, units per USD (defaults in fx-currencies.ts). */
+  FX_SANITY_MIN_EUR: optional(z.string()),
+  FX_SANITY_MAX_EUR: optional(z.string()),
+  FX_SANITY_MIN_TRY: optional(z.string()),
+  FX_SANITY_MAX_TRY: optional(z.string()),
   /**
    * The per-source deadline, and the catalog's own number (section 6.2 step 1).
    *
@@ -447,20 +466,6 @@ export const envSchema = z.object({
    * is the correct amount of noise for a rate moving that fast.
    */
   FX_MAX_DEVIATION_PERCENT: z.string().min(1).default('5'),
-
-  /**
-   * F-0606-a — which `currency.code` the worker's snapshots and its
-   * `fx:rate:{code}` cache entry are written against.
-   *
-   * Config rather than a constant for the same reason `FX_SOURCES` is: the
-   * currency a platform quotes in is a deployment's fact, not this code's. It
-   * names a row that must already exist — the worker will not create one,
-   * because a `currency` row carries `isBaseCurrency` and `decimalPlaces` and a
-   * background job guessing at those is how a platform acquires a second base
-   * currency (currency invariant #1). A code with no row is a failed run that
-   * says so.
-   */
-  FX_QUOTE_CURRENCY_CODE: z.string().min(1).default('IRR'),
 
   /** Optional label in every log line, for a deployment running several. */
   WORKER_NAME: optional(z.string()),

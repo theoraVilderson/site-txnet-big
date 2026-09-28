@@ -7,10 +7,10 @@ export interface FxDiscard {
   reason: string;
 }
 
-/** Enough sources survived; `rialPerUsdt` is the median of `used`. */
+/** Enough sources survived; `rate` is the median of `used`. */
 export interface FxReduced {
   ok: true;
-  rialPerUsdt: Prisma.Decimal;
+  rate: Prisma.Decimal;
   /** The sources whose reading was kept, in poll order. */
   used: string[];
   discarded: FxDiscard[];
@@ -38,9 +38,9 @@ export const reduced = (r: FxReduction): r is FxReduced => r.ok;
 export interface FxReductionOptions {
   /** How many readings must survive before a median means anything. */
   minSources: number;
-  /** The hard band, inclusive on both edges, in rial per USDT. */
-  sanityMinRial: Prisma.Decimal;
-  sanityMaxRial: Prisma.Decimal;
+  /** The hard band, inclusive on both edges, in units of the currency per USD. */
+  sanityMin: Prisma.Decimal;
+  sanityMax: Prisma.Decimal;
 }
 
 /**
@@ -98,8 +98,8 @@ export function reduceFxReads(
       discarded.push({ source: outcome.source, reason: outcome.reason });
       continue;
     }
-    const rate = outcome.rialPerUsdt;
-    if (rate.lt(options.sanityMinRial) || rate.gt(options.sanityMaxRial)) {
+    const rate = outcome.rate;
+    if (rate.lt(options.sanityMin) || rate.gt(options.sanityMax)) {
       discarded.push({
         source: outcome.source,
         reason: `out of band: ${rate.toString()}`,
@@ -122,7 +122,7 @@ export function reduceFxReads(
       discarded,
     };
 
-  return { ok: true, rialPerUsdt: median(kept), used, discarded };
+  return { ok: true, rate: median(kept), used, discarded };
 }
 
 /**

@@ -136,13 +136,16 @@ async function grantGatewayManageToAdmin() {
 
 // ADR-0019: USD is the one base currency, two decimal places, and every money
 // column is in it; IRR is what a rial gateway is paid in and what the FX worker
-// quotes (`FX_QUOTE_CURRENCY_CODE`). Nothing else writes these rows, and the
+// quotes first. EUR and TRY are the currencies F-116-i rates too (ADR-0098
+// part 8), two decimals like every choosable one. Nothing else writes these rows, and the
 // worker deliberately refuses to guess them (currency/open-questions.md), so a
 // fresh install without them fails every rial quote with `RateUnavailable`.
 // `update: {}` on purpose: an operator's later change to a row is theirs.
 const CURRENCIES = [
   { code: 'USD', name: 'US Dollar', symbol: '$', decimalPlaces: 2, isBaseCurrency: true },
   { code: 'IRR', name: 'Iranian Rial', symbol: '﷼', decimalPlaces: 0, isBaseCurrency: false },
+  { code: 'EUR', name: 'Euro', symbol: '€', decimalPlaces: 2, isBaseCurrency: false },
+  { code: 'TRY', name: 'Turkish Lira', symbol: '₺', decimalPlaces: 2, isBaseCurrency: false },
 ];
 
 async function seedCurrencies() {

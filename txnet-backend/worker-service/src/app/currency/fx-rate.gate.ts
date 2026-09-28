@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 /** The rate passed the gate and may be published. */
 export interface FxAccepted {
   ok: true;
-  rialPerUsdt: Prisma.Decimal;
+  rate: Prisma.Decimal;
   /** What it was compared against; null on a cold start. */
   previous: Prisma.Decimal | null;
   /** How far it moved, in percent. Null when there was no baseline. */
@@ -14,7 +14,7 @@ export interface FxAccepted {
 export interface FxRejected {
   ok: false;
   /** The rate that was refused — kept, because the alert is about its size. */
-  rialPerUsdt: Prisma.Decimal;
+  rate: Prisma.Decimal;
   previous: Prisma.Decimal;
   deviationPercent: Prisma.Decimal;
   maxDeviationPercent: Prisma.Decimal;
@@ -76,7 +76,7 @@ export function gateFxDeviation(
   // value and the division has no answer. Nothing should produce one — F-0604's
   // band floor is 100000 — but "should not" is not a reason to throw here.
   if (previous === null || previous.lte(0))
-    return { ok: true, rialPerUsdt: candidate, previous: null, deviationPercent: null };
+    return { ok: true, rate: candidate, previous: null, deviationPercent: null };
 
   const deviationPercent = candidate
     .minus(previous)
@@ -87,15 +87,15 @@ export function gateFxDeviation(
   if (deviationPercent.gt(maxDeviationPercent))
     return {
       ok: false,
-      rialPerUsdt: candidate,
+      rate: candidate,
       previous,
       deviationPercent,
       maxDeviationPercent,
       reason:
-        `median ${candidate.toString()} rial/USDT moved ` +
+        `median ${candidate.toString()} per USD moved ` +
         `${deviationPercent.toString()}% from the last accepted rate ` +
         `${previous.toString()} (max ${maxDeviationPercent.toString()}%)`,
     };
 
-  return { ok: true, rialPerUsdt: candidate, previous, deviationPercent };
+  return { ok: true, rate: candidate, previous, deviationPercent };
 }

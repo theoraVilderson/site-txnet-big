@@ -2,16 +2,19 @@
 id: currency
 layer: domain
 status: active
-version: 4
-updated: 2026-09-13
+version: 5
+updated: 2026-09-28
 ---
 
 # Contract — the FX worker (currency)
 
-Governs the loop that discovers the USD→IRR rate: backlog rows **F-0603**,
+Governs the loop that discovers a USD→code rate: backlog rows **F-0603**,
 **F-0604**, **F-0605**, **F-0606-a** and **F-0606-b** (in `billing`) — all
-built. Read it before changing anything under
-`txnet-backend/worker-service/src/app/currency/`.
+built. Since **F-116-i** the loop runs once per currency; what that adds (the
+sources per currency, how a book becomes a rate, the run log's shape) is
+`contract.fx-currencies.md`. Read both before changing anything under
+`txnet-backend/worker-service/src/app/currency/`. Written below for IRR; each
+rule holds per currency.
 
 ## TL;DR
 
@@ -42,11 +45,11 @@ ladder is the reader's**: this unit publishes the rate it last accepted and when
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| poll the active sources | the source list | one outcome per source — rial rate + latency, or a reason + latency | async, off the request path | **none — it does not throw** |
-| reduce the outcomes (`reduceFxReads`) | the outcomes + `{minSources, sanityMinRial, sanityMaxRial}` | the median rial rate + the sources used + what was discarded and why, **or** a shortfall with the same discard list | sync, pure | **none — a shortfall is a value, not a throw** |
+| poll the active sources | the source list (+ this tick's IRR rate) | one outcome per source — rate per USD + latency, or a reason + latency | async, off the request path | **none — it does not throw** |
+| reduce the outcomes (`reduceFxReads`) | the outcomes + `{minSources, sanityMin, sanityMax}` | the median rate + the sources used + what was discarded and why, **or** a shortfall with the same discard list | sync, pure | **none — a shortfall is a value, not a throw** |
 | gate the move (`gateFxDeviation`) | the median + the last accepted rate (or null) + `maxDeviationPercent` | accepted, with how far it moved, **or** rejected, with the move, the baseline and the band | sync, pure | **none — a refusal is a value, not a throw** |
-| publish / read back the snapshot (`FxRateSnapshotStore`) | the accepted rate / — | the `CurrencyExchangeRate` row (id + `effectiveAt`) and whether the cache write landed / the last accepted rate, or null before the first snapshot | async | a missing `FX_QUOTE_CURRENCY_CODE` currency row throws. A failed cache **write** does not; an unreadable cache **read** falls through to the table |
-| the `fx_rate_refresh` job | a tick | `bot_execution_log` row: per-source readings and latencies, the discard reasons, the median, `accepted` and the deviation | async | `FX_SOURCES` empty/unknown, or fewer than `minSources` readings survived — the run is `failed`. A **refused** rate is also `failed`, but by returning rather than throwing, so the numbers survive |
+| publish / read back the snapshot (`FxRateSnapshotStore`) | a code + the accepted rate / a code | the `CurrencyExchangeRate` row (id + `effectiveAt`), rate rounded to the column's 8 places, and whether the cache write landed / the last accepted rate, or null before the first snapshot | async | a code with no `currency` row throws. A failed cache **write** does not; an unreadable cache **read** falls through to the table |
+| the `fx_rate_refresh` job | a tick | `bot_execution_log` row, per currency: per-source readings and latencies, the discard reasons, the median, `accepted` and the deviation (`contract.fx-currencies.md`) | async | only an empty `FX_CURRENCIES` throws. A shortfall, a refusal or a bad config is that currency's, **returned** so the numbers survive; no currency published is `failed` |
 
 ## The sources (D-22)
 
@@ -55,12 +58,11 @@ inside Iran during a national-internet shutdown. **The mid of best bid and best
 ask**, not a last trade price: on a thin book the last trade is whatever one
 person happened to pay.
 
-Four are implemented (`fx-source.ts`, which is where each one's endpoint and its
-`unit` live). `nobitex` and `tabdeal` are in the `FX_SOURCES` default because
-D-22 states their URLs in full; `wallex` and `bitpin` are this repo's guess at
-theirs and are off until someone has watched them answer.
+IRR's four are in `fx-source.ts` with every other currency's (the list per
+currency: `contract.fx-currencies.md`). `nobitex`, `tabdeal` and `wallex` are
+the `FX_SOURCES` default; `bitpin`'s URL answers 404 and stays off.
 
-`unit` is load-bearing: a toman source read as rial is a tenfold error no
+`reads` is load-bearing: a toman source read as rial is a tenfold error no
 single-source check catches, and F-0605's band would then reject the correct
 rate for ever while reporting only "moved too far". **The list is config, not
 code** (`FX_SOURCES`) — D-22 ends on a compliance question rather than a
@@ -82,13 +84,13 @@ a stale zero. Roughly a factor of ten either side of where this market has been;
 the edges are this repo's estimate, not D-22's (`open-questions.md`).
 
 **It does not catch a tenfold unit error and must not be tightened until it
-does** — `FxSource.unit` prevents it and F-0605's gate notices it. A band tight
+does** — `FxSource.reads` prevents it and F-0605's gate notices it. A band tight
 enough to catch 10x would reject the true rate the first time this market
 moved.
 
 **Fewer than `minSources` is no rate, not a best effort.** One surviving source
 is precisely the broken API this defends against, with nothing left to outvote
-it: the run is `failed`, naming every source and what happened to it, and the
+it: that currency fails, naming every source and what happened to it, and the
 last accepted rate stays live because it is a row and a key rather than the
 outcome of this poll. Two is the catalog's default and the minimum that produces
 a rate at all — outvoting an outlier takes three, so raise it the moment a third
@@ -141,9 +143,7 @@ only guard and that is correct.
 
 ## What F-0606-a publishes
 
-| knob | default | what it is for |
-|---|---|---|
-| `FX_QUOTE_CURRENCY_CODE` | `IRR` | which `currency.code` the snapshots and the cache entry are written against |
+`FX_QUOTE_CURRENCY_CODE` is gone (F-116-i): the code is each loop's own.
 
 **The row is the truth, the key is a cache of it, and the row is written
 first** — the other order would publish, for as long as the write took, a rate
@@ -163,9 +163,8 @@ and the table is what makes the missing expiry safe.
 
 **The worker will not create the `currency` row it quotes against**: that row
 carries `isBaseCurrency` and `decimalPlaces`, and a job guessing at those is how
-a platform acquires a second base currency (invariant #1). A missing code is a
-`failed` run naming it — and **nothing else writes those rows either** (no seed,
-no admin screen: `open-questions.md`).
+a platform acquires a second base currency (invariant #1). A missing code fails
+that currency, naming it; `prisma/seed.js` writes USD, IRR, EUR and TRY.
 
 **A failed cache write is reported, not thrown**; a failed cache *read* falls
 through to the table. By the time the key is written the rate is durable, so

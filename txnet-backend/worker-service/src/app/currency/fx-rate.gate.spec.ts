@@ -37,7 +37,7 @@ describe('gateFxDeviation', () => {
 
     expect(accepted(gated)).toBe(true);
     if (!accepted(gated)) return;
-    expect(gated.rialPerUsdt.toString()).toBe('600000');
+    expect(gated.rate.toString()).toBe('600000');
     expect(gated.deviationPercent).toBeNull();
   });
 
@@ -56,7 +56,7 @@ describe('gateFxDeviation', () => {
     if (accepted(gated)) return;
     expect(gated.deviationPercent.toString()).toBe('10');
     expect(gated.previous.toString()).toBe('600000');
-    expect(gated.rialPerUsdt.toString()).toBe('660000');
+    expect(gated.rate.toString()).toBe('660000');
     expect(gated.reason).toContain('10');
     expect(gated.reason).toContain('5');
   });

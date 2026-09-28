@@ -87,30 +87,48 @@ automation_outbox:
 currency_fx:
   master: true
   cache_seconds: 15
+  # F-116-i: one series per quoted currency (label `currency`). A run keeps
+  # each currency's outcome under `metricsJson.currencies.<code>`; a row from
+  # before F-116-i is IRR's whole. Every active non-base `currency` row gets
+  # a series even with no run at all, so a seeded currency that never got a
+  # rate reads -1, the NeverAccepted case, instead of vanishing.
   query: >-
     SELECT
+      cur.code AS currency,
       COALESCE(
-        EXTRACT(EPOCH FROM (now() - MAX(l."startedAt")
-          FILTER (WHERE l."metricsJson"->>'accepted' = 'true'))),
+        EXTRACT(EPOCH FROM (now() - MAX(r."startedAt")
+          FILTER (WHERE r.m->>'accepted' = 'true'))),
         -1)::float8 AS seconds_since_accepted,
-      COUNT(*) FILTER (
-        WHERE l."metricsJson"->>'accepted' = 'false'
-          AND l."startedAt" > now() - interval '1 hour')::bigint
+      COUNT(r.m) FILTER (
+        WHERE r.m->>'accepted' = 'false'
+          AND r."startedAt" > now() - interval '1 hour')::bigint
         AS rejections_1h,
-      COALESCE(MAX((l."metricsJson"->>'rejectedDeviationPercent')::float8)
-        FILTER (WHERE l."startedAt" > now() - interval '1 hour'), 0)::float8
+      COALESCE(MAX((r.m->>'rejectedDeviationPercent')::float8)
+        FILTER (WHERE r."startedAt" > now() - interval '1 hour'), 0)::float8
         AS max_rejected_deviation_percent_1h
-    FROM automation.bot_execution_log l
-    JOIN automation.bot_worker w ON w.id = l."botWorkerId"
-    WHERE w.key = 'fx_rate_refresh'
-      AND l."startedAt" > now() - interval '7 days'
+    FROM currency.currency cur
+    LEFT JOIN (
+      SELECT l."startedAt", c.key AS code, c.value AS m
+      FROM automation.bot_execution_log l
+      JOIN automation.bot_worker w ON w.id = l."botWorkerId"
+      CROSS JOIN LATERAL jsonb_each(COALESCE(
+        l."metricsJson"->'currencies',
+        jsonb_build_object('IRR', l."metricsJson"))) c
+      WHERE w.key = 'fx_rate_refresh'
+        AND l."startedAt" > now() - interval '7 days'
+    ) r ON r.code = cur.code
+    WHERE cur."isActive" AND NOT cur."isBaseCurrency"
+    GROUP BY cur.code
   metrics:
+    - currency:
+        usage: "LABEL"
+        description: "The quoted currency's code (IRR, EUR, TRY)."
     - seconds_since_accepted:
         usage: "GAUGE"
         description: "Age in seconds of the last FX rate the deviation gate accepted. -1 means no accepted rate in the last seven days — including a platform that has never run the worker."
     - rejections_1h:
         usage: "GAUGE"
-        description: "How many fx_rate_refresh runs in the last hour were refused by F-0605's deviation gate. Any non-zero value is a critical alert."
+        description: "How many fx_rate_refresh runs in the last hour had this currency refused by F-0605's deviation gate. Any non-zero value is a critical alert."
     - max_rejected_deviation_percent_1h:
         usage: "GAUGE"
         description: "The largest move, in percent, that the gate refused in the last hour. Zero when nothing was refused."

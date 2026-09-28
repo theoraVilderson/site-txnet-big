@@ -1,13 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
-import { FxSource } from './fx-source';
+import { FxSource, rateOf } from './fx-source';
 
-/** A source that answered, with the mid of its book normalised to rial. */
+/**
+ * A source that answered, with the mid of its book normalised to units of its
+ * currency per one USD (`rateOf`) — rial for IRR, euro for EUR.
+ */
 export interface FxSourceRead {
   source: string;
   ok: true;
-  rialPerUsdt: Prisma.Decimal;
+  rate: Prisma.Decimal;
   latencyMs: number;
 }
 
@@ -31,7 +34,6 @@ export type FxSourceOutcome = FxSourceRead | FxSourceFailure;
  */
 export const answered = (o: FxSourceOutcome): o is FxSourceRead => o.ok;
 
-const TEN = new Prisma.Decimal(10);
 const TWO = new Prisma.Decimal(2);
 
 /**
@@ -69,12 +71,20 @@ export class FxRatePoller {
     this.timeoutMs = config.get<number>('FX_SOURCE_TIMEOUT_MS', 3_000);
   }
 
-  async poll(sources: readonly FxSource[]): Promise<FxSourceOutcome[]> {
+  /**
+   * `rialPerUsdt` is this tick's accepted USDT/IRT rate (F-116-i), which a
+   * `rial-per-unit` source is divided into; null when the tick has none, and
+   * then such a source is a failure like any other.
+   */
+  async poll(
+    sources: readonly FxSource[],
+    rialPerUsdt: Prisma.Decimal | null = null,
+  ): Promise<FxSourceOutcome[]> {
     // `allSettled` over the whole list rather than a loop: this is the
     // concurrency, and `query` already resolves rather than rejects, so the
     // settled wrapper is a belt against a bug in it, not the mechanism.
     const settled = await Promise.allSettled(
-      sources.map((source) => this.query(source)),
+      sources.map((source) => this.query(source, rialPerUsdt)),
     );
 
     return settled.map((s, i) =>
@@ -89,7 +99,10 @@ export class FxRatePoller {
     );
   }
 
-  private async query(source: FxSource): Promise<FxSourceOutcome> {
+  private async query(
+    source: FxSource,
+    rialPerUsdt: Prisma.Decimal | null,
+  ): Promise<FxSourceOutcome> {
     const started = Date.now();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -119,12 +132,12 @@ export class FxRatePoller {
         );
 
       const mid = top.bestBid.plus(top.bestAsk).div(TWO);
-      const rialPerUsdt = source.unit === 'toman' ? mid.mul(TEN) : mid;
+      const rate = rateOf(source, mid, rialPerUsdt);
 
       return {
         source: source.key,
         ok: true,
-        rialPerUsdt,
+        rate,
         latencyMs: Date.now() - started,
       };
     } catch (error) {
