@@ -47,7 +47,7 @@ type VariantOverrides = {
   visibility?: VariantVisibility;
   isActive?: boolean;
   productActive?: boolean;
-  prices?: Array<{ id: string; amount: Prisma.Decimal; effectiveFrom: Date; isActive: boolean }>;
+  prices?: Array<{ id: string; amount: Prisma.Decimal; currencyCode: string; effectiveFrom: Date; isActive: boolean }>;
   fulfilmentKind?: FulfilmentKind;
   panelGroupId?: string | null;
   quotas?: Record<string, unknown>;
@@ -84,7 +84,7 @@ function variantRow(o: VariantOverrides = {}) {
         { position: 2, category: { key: 'gold', nameKey: 'catalog.category.gold.name', isActive: true, parentId: null } },
       ],
     },
-    prices: o.prices ?? [{ id: PRICE, amount: D('12.50'), effectiveFrom: new Date('2026-01-01T00:00:00Z'), isActive: true }],
+    prices: o.prices ?? [{ id: PRICE, amount: D('12.50'), currencyCode: 'USD', effectiveFrom: new Date('2026-01-01T00:00:00Z'), isActive: true }],
   };
 }
 
@@ -318,7 +318,7 @@ describe('InvoiceService.create', () => {
 
   it('prices a free variant at zero without asking the coupon engine, and rejects every code as nothing to discount', async () => {
     const { service, calls } = buildCreate({
-      variant: variantRow({ prices: [{ id: PRICE, amount: D('0'), effectiveFrom: new Date('2026-01-01T00:00:00Z'), isActive: true }] }),
+      variant: variantRow({ prices: [{ id: PRICE, amount: D('0'), currencyCode: 'USD', effectiveFrom: new Date('2026-01-01T00:00:00Z'), isActive: true }] }),
     });
     const invoice = await asTenant(() => service.create({ userId: USER, variantId: VARIANT, couponCodes: [' spring '] }));
     expect(calls.validated).toEqual([]);
@@ -455,6 +455,7 @@ describe('InvoiceService.forSale — what the shop lists (F-111-e)', () => {
   function buildList(rows: Array<ReturnType<typeof variantRow>>, groups: GroupRow[] = [groupRow()]) {
     const asked: unknown[] = [];
     const tx = {
+      tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
       $executeRaw: async () => 0,
       panelGroup: { findMany: async () => groups },
       productVariant: {

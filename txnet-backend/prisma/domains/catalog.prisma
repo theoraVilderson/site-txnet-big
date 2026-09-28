@@ -199,7 +199,7 @@ model ProductVariant {
   @@schema("catalog")
 }
 
-/// A variant's price in USD (ADR-0019, C-02) from `effectiveFrom` on. History:
+/// A variant's price in its `currencyCode` (ADR-0098, C-02) from `effectiveFrom` on. History:
 /// a change is a new row, and a trigger refuses any update but `isActive` and
 /// any delete (F-0602) — yesterday's invoice is computed at yesterday's price.
 /// The one exception is its variant's own delete, which cascades (F-026-h):
@@ -209,6 +209,10 @@ model Price {
   tenantId         String?  @db.Uuid
   variantId        String   @db.Uuid
   amount           Decimal  @db.Decimal(18, 2)
+  /// The currency `amount` is in (F-116-d, ADR-0098): the tenant's operating
+  /// currency when written — the platform's for a platform row. A reader
+  /// takes only the rows in its tenant's currency; no default (C-02).
+  currencyCode     String
   effectiveFrom    DateTime
   isActive         Boolean  @default(true)
   createdByAdminId String?  @db.Uuid
@@ -224,7 +228,7 @@ model Price {
 }
 
 /// What a `metered` variant charges per 2^30 bytes (ADR-0073, F-027-g), in the
-/// same USD as `Price` but at the precision a rate needs — `(18, 8)`, as
+/// same currency as `Price` but at the precision a rate needs — `(18, 8)`, as
 /// `tenant_usage_meter.unitPrice` and `currency_exchange_rate.rate` already
 /// are. `C-02` governs amounts, and every amount derived from this rate is
 /// rounded to whole cents before the ledger sees it (ADR-0072).
@@ -244,6 +248,8 @@ model MeteredRate {
   /// one nobody can buy, so a rate of zero stalls the user rather than
   /// serving free traffic. Free metered service is a quota with no rate.
   rate             Decimal  @db.Decimal(18, 8)
+  /// The currency `rate` is in, on the same terms as `Price.currencyCode` (F-116-d).
+  currencyCode     String
   effectiveFrom    DateTime
   isActive         Boolean  @default(true)
   createdByAdminId String?  @db.Uuid

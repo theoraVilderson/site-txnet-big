@@ -40,4 +40,4 @@ Refusals: `not_allowed` 403, `reseller_suspended` 403, `reseller_not_found`
 |---|---|
 | panel-web | the two routes, from the settings screen (F-116-h, not built) |
 | billing | `tenant.operatingCurrencyCode` through shared-core `operatingCurrencyOf` / `platformCurrencyOf`, stamped on every new money row (F-116-b, built) |
-| catalog | the same, for `Price` and `MeteredRate` (F-116-d, not built) |
+| catalog | the same, for `Price` and `MeteredRate`; a reader offers only prices in it (F-116-d, built) |

@@ -113,6 +113,7 @@ describe('grantFromVariant', () => {
   const rate = (id: string, r: string, effectiveFrom: string, isActive = true) => ({
     id,
     rate: new Prisma.Decimal(r),
+    currencyCode: 'USD',
     effectiveFrom: at(effectiveFrom),
     isActive,
   });
@@ -125,7 +126,7 @@ describe('grantFromVariant', () => {
   };
 
   it('copies what was sold and ends it durationDays later', () => {
-    expect(grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T10:00:00Z') }, variant)).toEqual({
+    expect(grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T10:00:00Z'), currencyCode: 'USD' }, variant)).toEqual({
       status: GrantStatus.active,
       startsAt: at('2026-09-01T10:00:00Z'),
       endsAt: at('2026-10-01T10:00:00Z'),
@@ -135,13 +136,14 @@ describe('grantFromVariant', () => {
       quotas: variant.quotas,
       featureKeys: ['vpn.access'],
       meteredRate: null,
+      meteredRateCurrencyCode: null,
       purchasedBytes: BigInt(53687091200),
       trafficUnlimited: false,
     });
   });
 
   it('fills a prepaid Grant\'s bag with its traffic quota at issue, and a metered one\'s with nothing (ADR-0072)', () => {
-    const start = { source: GrantSource.purchase, startsAt: at('2026-09-01T00:00:00Z') };
+    const start = { source: GrantSource.purchase, startsAt: at('2026-09-01T00:00:00Z'), currencyCode: 'USD' };
     expect(grantFromVariant(start, variant).purchasedBytes).toBe(BigInt(53687091200));
     expect(grantFromVariant(start, { ...variant, billingMode: VariantBillingMode.metered }).purchasedBytes).toBe(BigInt(0));
     expect(grantFromVariant(start, { ...variant, quotas: {} }).purchasedBytes).toBe(BigInt(0));
@@ -153,13 +155,13 @@ describe('grantFromVariant', () => {
       billingMode: VariantBillingMode.metered,
       meteredRates: [rate('r1', '0.40000000', '2026-01-01T00:00:00Z'), rate('r2', '0.25000000', '2026-10-01T00:00:00Z')],
     };
-    const g = grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T10:00:00Z') }, metered);
+    const g = grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T10:00:00Z'), currencyCode: 'USD' }, metered);
     expect(g.meteredRate?.toString()).toBe('0.4');
   });
 
   it('carries no rate on a prepaid variant, whatever its rate history says', () => {
     const priced = { ...variant, meteredRates: [rate('r1', '0.40000000', '2026-01-01T00:00:00Z')] };
-    expect(grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T10:00:00Z') }, priced).meteredRate).toBeNull();
+    expect(grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T10:00:00Z'), currencyCode: 'USD' }, priced).meteredRate).toBeNull();
   });
 
   it('has no rate for a metered variant whose history starts later', () => {
@@ -168,17 +170,17 @@ describe('grantFromVariant', () => {
       billingMode: VariantBillingMode.metered,
       meteredRates: [rate('r1', '0.40000000', '2026-10-01T00:00:00Z')],
     };
-    expect(grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T10:00:00Z') }, metered).meteredRate).toBeNull();
+    expect(grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T10:00:00Z'), currencyCode: 'USD' }, metered).meteredRate).toBeNull();
   });
 
   it('is permanent with no duration, and pending while a purchase settles', () => {
-    const g = grantFromVariant({ source: GrantSource.purchase, startsAt: at('2026-09-01T00:00:00Z') }, { ...variant, durationDays: null });
+    const g = grantFromVariant({ source: GrantSource.purchase, startsAt: at('2026-09-01T00:00:00Z'), currencyCode: 'USD' }, { ...variant, durationDays: null });
     expect(g.endsAt).toBeNull();
     expect(g.status).toBe(GrantStatus.pending);
   });
 
   it('does not share the variant\'s arrays with the Grant', () => {
-    const g = grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T00:00:00Z') }, variant);
+    const g = grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T00:00:00Z'), currencyCode: 'USD' }, variant);
     g.featureKeys.push('x');
     expect(variant.product.featureKeys).toEqual(['vpn.access']);
   });
@@ -204,13 +206,14 @@ describe('GrantService.issue', () => {
     billingMode: VariantBillingMode.prepaid,
     quotas: {},
     durationDays: 30,
-    meteredRates: [] as Array<{ id: string; rate: Prisma.Decimal; effectiveFrom: Date; isActive: boolean }>,
+    meteredRates: [] as Array<{ id: string; rate: Prisma.Decimal; currencyCode: string; effectiveFrom: Date; isActive: boolean }>,
     product: { isActive: true, featureKeys: ['vpn.access'], categories: [{ position: 0, category: { key: 'vpn', isActive: true, parentId: null } }] },
   });
 
   function fakeTx(variant: ReturnType<typeof variantRow> | null) {
     const grants: Array<Record<string, unknown>> = [];
     const tx = {
+      tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
       productVariant: { findUnique: vi.fn(async () => variant) },
       grant: {
         findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) =>
@@ -279,6 +282,7 @@ describe('GrantService.issue locks the metered rate (F-027-p, ADR-0073)', () => 
     meteredRates: rates.map((r, i) => ({
       id: `r${i + 1}`,
       rate: new Prisma.Decimal(r.rate),
+      currencyCode: 'USD',
       effectiveFrom: at(r.effectiveFrom),
       isActive: true,
     })),
@@ -288,6 +292,7 @@ describe('GrantService.issue locks the metered rate (F-027-p, ADR-0073)', () => 
   function fakeTx(variant: ReturnType<typeof meteredVariant>) {
     const grants: Array<Record<string, unknown>> = [];
     const tx = {
+      tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
       productVariant: { findUnique: vi.fn(async () => variant) },
       grant: {
         findFirst: vi.fn(async () => null),

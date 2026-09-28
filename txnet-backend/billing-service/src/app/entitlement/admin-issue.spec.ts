@@ -65,6 +65,7 @@ const variantRow = (over: VariantOver = {}) => ({
 function fakeTx(variant: ReturnType<typeof variantRow> | null, placeable = 1) {
   const grants: Array<Record<string, unknown>> = [];
   const tx = {
+    tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
     productVariant: { findUnique: vi.fn(async () => variant) },
     panelGroup: {
       findMany: vi.fn(async () => [{ id: GROUP, minHealthyPanels: 1, members: Array.from({ length: placeable }, (_, i) => ({ panelId: `p${i}` })) }]),

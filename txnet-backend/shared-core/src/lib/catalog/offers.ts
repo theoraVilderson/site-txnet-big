@@ -11,10 +11,13 @@ import { inLiveCategoryWhere } from './category-tree';
  * the same thing. `catalog-reads.spec.ts` holds the rules.
  */
 
-export type PriceRow = { id: string; amount: Prisma.Decimal; effectiveFrom: Date; isActive: boolean };
+export type PriceRow = { id: string; amount: Prisma.Decimal; currencyCode: string; effectiveFrom: Date; isActive: boolean };
 
 /** A row of an append-only history: it takes effect at an instant and can be switched off. */
 export type EffectiveRow = { effectiveFrom: Date; isActive: boolean };
+
+/** A money row of a history: an {@link EffectiveRow} that says which currency it is in (F-116-d). */
+export type PricedRow = EffectiveRow & { currencyCode: string };
 
 /**
  * The row in effect at `at`: the newest **active** one whose `effectiveFrom` is
@@ -35,11 +38,26 @@ export function effectiveAt<T extends EffectiveRow>(rows: readonly T[], at: Date
 }
 
 /**
- * The price in effect at `at` (F-0602) — {@link effectiveAt} over a variant's
- * price history, so an invoice is recomputed at the price it was issued at.
+ * The row in effect at `at` among those in `currencyCode` (F-116-d, ADR-0098
+ * part 2). A tenant prices in its operating currency, and the platform's rows
+ * it shares may be in another: such a row is no price for that tenant, never
+ * one converted on the way (user, 2026-09-28). When a tenant changes currency,
+ * F-116-f writes new rows in the new one and the old stop matching.
  */
-export function priceAt<T extends PriceRow>(prices: readonly T[], at: Date): T | null {
-  return effectiveAt(prices, at);
+export function effectiveIn<T extends PricedRow>(rows: readonly T[], at: Date, currencyCode: string): T | null {
+  return effectiveAt(
+    rows.filter((r) => r.currencyCode === currencyCode),
+    at,
+  );
+}
+
+/**
+ * The price in effect at `at` (F-0602), in `currencyCode` — the tenant's
+ * operating currency (F-116-d) — so an invoice is recomputed at the price it
+ * was issued at, in the currency it was issued in.
+ */
+export function priceAt<T extends PriceRow>(prices: readonly T[], at: Date, currencyCode: string): T | null {
+  return effectiveIn(prices, at, currencyCode);
 }
 
 export type OfferFacts = {
@@ -74,22 +92,22 @@ export const listedVariantWhere = {
   product: { isActive: true, ...inLiveCategoryWhere },
 } satisfies Prisma.ProductVariantWhereInput;
 
-/** The price rows {@link priceAt} chooses among at `at`. */
-export const pricesInEffect = (at: Date) =>
-  ({ isActive: true, effectiveFrom: { lte: at } }) satisfies Prisma.PriceWhereInput;
+/** The price rows {@link priceAt} chooses among at `at`, in `currencyCode`. */
+export const pricesInEffect = (at: Date, currencyCode: string) =>
+  ({ isActive: true, effectiveFrom: { lte: at }, currencyCode }) satisfies Prisma.PriceWhereInput;
 
 /** The rows a tenant reads: its own and the platform's (`tenantId IS NULL`). */
 const ownOrPlatform = (tenantId: string) => [{ tenantId }, { tenantId: null }];
 
 /**
  * A variant `listOffers` would return to `tenantId` at `at`: listed, with a
- * price in effect. For a reader on the **cross-tenant pool**, where RLS does
+ * price in effect in `currencyCode`, the tenant's operating currency (F-116-d). For a reader on the **cross-tenant pool**, where RLS does
  * not narrow the rows — this spells out the shared-read rule RLS applies to
  * `listOffers` (`catalog-schema.int.spec.ts`), and nothing else.
  */
-export const offeredToTenant = (tenantId: string, at: Date) =>
+export const offeredToTenant = (tenantId: string, at: Date, currencyCode: string) =>
   ({
     ...listedVariantWhere,
     OR: ownOrPlatform(tenantId),
-    prices: { some: { ...pricesInEffect(at), OR: ownOrPlatform(tenantId) } },
+    prices: { some: { ...pricesInEffect(at, currencyCode), OR: ownOrPlatform(tenantId) } },
   }) satisfies Prisma.ProductVariantWhereInput;

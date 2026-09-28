@@ -17,6 +17,7 @@ import {
   firstLiveCategory,
   productCategoriesInclude,
   productCategoriesLive,
+  operatingCurrencyOf,
 } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -65,22 +66,32 @@ export type CatalogOffer = {
   visibility: VariantVisibility;
   /** The network panel group a `network_access` variant is delivered on (F-027-bk), or `null`. */
   panelGroupId: string | null;
-  price: { id: string; amount: string; effectiveFrom: Date };
+  /** In the tenant's operating currency — a price in any other is no price (F-116-d). */
+  price: { id: string; amount: string; currencyCode: string; effectiveFrom: Date };
 };
 
 type VariantRow = Prisma.ProductVariantGetPayload<{ include: { product: { include: typeof productCategoriesInclude }; prices: true } }>;
 
-/** A variant with its product, its categories (each with its chain up) and the active prices that could be in effect at `at`. */
-const withPrices = (at: Date) =>
+/**
+ * A variant with its product, its categories (each with its chain up) and the
+ * active prices in `currencyCode` that could be in effect at `at`.
+ */
+const withPrices = (at: Date, currencyCode: string) =>
   ({
     product: { include: productCategoriesInclude },
     prices: {
-      where: pricesInEffect(at),
+      where: pricesInEffect(at, currencyCode),
       orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }],
     },
   }) satisfies Prisma.ProductVariantInclude;
 
-function toOffer(v: VariantRow, at: Date, offered: (f: OfferFacts) => boolean): CatalogOffer | null {
+/**
+ * The currency the caller's tenant prices in (F-116-d, ADR-0098 part 2), read
+ * on the caller's `tx` so the offer and the price it carries are one snapshot.
+ */
+const tenantCurrency = (tx: Prisma.TransactionClient) => operatingCurrencyOf(tx, TenantContext.current('catalog offer').id);
+
+function toOffer(v: VariantRow, at: Date, currencyCode: string, offered: (f: OfferFacts) => boolean): CatalogOffer | null {
   const facts = {
     visibility: v.visibility,
     isActive: v.isActive,
@@ -88,8 +99,9 @@ function toOffer(v: VariantRow, at: Date, offered: (f: OfferFacts) => boolean): 
     categoryActive: productCategoriesLive(v.product.categories),
   };
   if (!offered(facts)) return null;
-  // A variant with no price in effect is not for sale — never at zero by default.
-  const price = priceAt(v.prices, at);
+  // A variant with no price in effect is not for sale — never at zero by default,
+  // and never at a price in another currency than the tenant's (F-116-d).
+  const price = priceAt(v.prices, at, currencyCode);
   if (!price) return null;
   return {
     variantId: v.id,
@@ -114,7 +126,7 @@ function toOffer(v: VariantRow, at: Date, offered: (f: OfferFacts) => boolean): 
     qualityTier: v.qualityTier,
     visibility: v.visibility,
     panelGroupId: v.panelGroupId,
-    price: { id: price.id, amount: price.amount.toFixed(2), effectiveFrom: price.effectiveFrom },
+    price: { id: price.id, amount: price.amount.toFixed(2), currencyCode: price.currencyCode, effectiveFrom: price.effectiveFrom },
   };
 }
 
@@ -126,8 +138,9 @@ function toOffer(v: VariantRow, at: Date, offered: (f: OfferFacts) => boolean): 
  * variant is `null`: RLS never returns it.
  */
 export async function sellableOfferById(tx: Prisma.TransactionClient, variantId: string, at: Date): Promise<CatalogOffer | null> {
-  const row = await tx.productVariant.findUnique({ where: { id: variantId }, include: withPrices(at) });
-  return row ? toOffer(row, at, isSellableBySku) : null;
+  const currencyCode = await tenantCurrency(tx);
+  const row = await tx.productVariant.findUnique({ where: { id: variantId }, include: withPrices(at, currencyCode) });
+  return row ? toOffer(row, at, currencyCode, isSellableBySku) : null;
 }
 
 /**
@@ -137,12 +150,13 @@ export async function sellableOfferById(tx: Prisma.TransactionClient, variantId:
  * shop, F-111-e).
  */
 export async function listOffersIn(tx: Prisma.TransactionClient, at: Date): Promise<CatalogOffer[]> {
+  const currencyCode = await tenantCurrency(tx);
   const rows = await tx.productVariant.findMany({
     where: listedVariantWhere,
-    include: withPrices(at),
+    include: withPrices(at, currencyCode),
     orderBy: [{ sku: 'asc' }],
   });
-  return rows.flatMap((v) => toOffer(v, at, isListed) ?? []);
+  return rows.flatMap((v) => toOffer(v, at, currencyCode, isListed) ?? []);
 }
 
 @Injectable()
@@ -158,21 +172,23 @@ export class CatalogReadService {
   offerBySku(sku: string, at: Date = new Date()): Promise<CatalogOffer | null> {
     const tenant = TenantContext.current('catalog offer by sku');
     return tenantTransaction(this.prisma, async (tx) => {
-      const rows = await tx.productVariant.findMany({ where: { sku }, include: withPrices(at) });
+      const currencyCode = await operatingCurrencyOf(tx, tenant.id);
+      const rows = await tx.productVariant.findMany({ where: { sku }, include: withPrices(at, currencyCode) });
       const row = pickBySku(rows, tenant.id);
-      return row ? toOffer(row, at, isSellableBySku) : null;
+      return row ? toOffer(row, at, currencyCode, isSellableBySku) : null;
     });
   }
 
-  /** The price row of a variant in effect at `at` (F-0602), or `null`. */
+  /** The price row of a variant in effect at `at` (F-0602), in the tenant's currency (F-116-d), or `null`. */
   priceAt(variantId: string, at: Date): Promise<PriceRow | null> {
     return tenantTransaction(this.prisma, async (tx) => {
+      const currencyCode = await tenantCurrency(tx);
       const prices = await tx.price.findMany({
-        where: { variantId, ...pricesInEffect(at) },
+        where: { variantId, ...pricesInEffect(at, currencyCode) },
         orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }],
         take: 1,
       });
-      return priceAt(prices, at);
+      return priceAt(prices, at, currencyCode);
     });
   }
 }

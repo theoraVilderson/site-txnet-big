@@ -72,7 +72,7 @@ describe('an unlimited Grant', () => {
     meteredRates: [],
     product: { featureKeys: ['vpn.access'] },
   };
-  const start = { source: GrantSource.purchase, startsAt: new Date('2026-09-26T10:00:00Z') };
+  const start = { source: GrantSource.purchase, startsAt: new Date('2026-09-26T10:00:00Z'), currencyCode: 'USD' };
 
   it('is flagged at issue from a sold 0, with an empty bag, never 0-as-unlimited', () => {
     const g = grantFromVariant(start, variant);

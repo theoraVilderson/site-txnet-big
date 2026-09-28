@@ -67,8 +67,8 @@ async function insertVariant(id: string, tenantId: string | null, productId: str
 
 async function insertPrice(id: string, tenantId: string | null, variantId: string, amount: string) {
   await owner.$executeRawUnsafe(`
-    INSERT INTO catalog.price (id, "tenantId", "variantId", amount, "effectiveFrom")
-    VALUES ('${id}', ${q(tenantId)}, '${variantId}', ${amount}, now())
+    INSERT INTO catalog.price (id, "tenantId", "variantId", amount, "currencyCode", "effectiveFrom")
+    VALUES ('${id}', ${q(tenantId)}, '${variantId}', ${amount}, 'USD', now())
   `);
 }
 

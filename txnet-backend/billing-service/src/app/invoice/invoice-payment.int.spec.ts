@@ -92,7 +92,7 @@ beforeAll(async () => {
       VALUES ('${variant}', NULL, '${PRODUCT}', '${sku}', 'prepaid', 'public', 30)
     `);
     await owner.$executeRawUnsafe(`
-      INSERT INTO catalog.price (id, "variantId", amount, "effectiveFrom") VALUES ('${price}', '${variant}', 12.50, '2026-01-01')
+      INSERT INTO catalog.price (id, "variantId", amount, "currencyCode", "effectiveFrom") VALUES ('${price}', '${variant}', 12.50, 'USD', '2026-01-01')
     `);
   }
   await owner.$executeRawUnsafe(`

@@ -2,7 +2,15 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
 import { ConfigStatus, Grant, GrantSource, GrantStatus, Prisma, QuotaAdjustment, QuotaMetric, VariantBillingMode } from '@prisma/client';
-import { TenantContext, evaluateLineNameTemplate, meteredRatesInEffect, productCategoriesInclude, productCategoriesLive, tenantTransaction } from '@txnet-backend/shared-core';
+import {
+  TenantContext,
+  evaluateLineNameTemplate,
+  meteredRatesInEffect,
+  operatingCurrencyOf,
+  productCategoriesInclude,
+  productCategoriesLive,
+  tenantTransaction,
+} from '@txnet-backend/shared-core';
 
 import { isSellableBySku, meteredRateAt, type MeteredRateRow, type OfferFacts } from '../catalog/catalog-reads';
 import { trafficQuotaOf } from '../catalog/traffic-quota';
@@ -156,9 +164,11 @@ type VariantShape = {
  * downstream ever reads 0 as unlimited — to the lease planner and to exhaustion
  * 0 is empty.
  */
-export function grantFromVariant(input: { source: GrantSource; startsAt: Date }, v: VariantShape) {
+export function grantFromVariant(input: { source: GrantSource; startsAt: Date; currencyCode: string }, v: VariantShape) {
   // A metered Grant's traffic is what its blocks buy, never the variant's.
   const traffic = v.billingMode === VariantBillingMode.prepaid ? trafficQuotaOf(v.quotas) : null;
+  // The rate in the tenant's currency, locked with that currency (F-116-d).
+  const rate = v.billingMode === VariantBillingMode.metered ? meteredRateAt(v.meteredRates, input.startsAt, input.currencyCode) : null;
   return {
     status: input.source === GrantSource.purchase ? GrantStatus.pending : GrantStatus.active,
     startsAt: input.startsAt,
@@ -169,7 +179,8 @@ export function grantFromVariant(input: { source: GrantSource; startsAt: Date },
     billingMode: v.billingMode,
     quotas: structuredClone(v.quotas),
     featureKeys: [...v.product.featureKeys],
-    meteredRate: v.billingMode === VariantBillingMode.metered ? (meteredRateAt(v.meteredRates, input.startsAt)?.rate ?? null) : null,
+    meteredRate: rate?.rate ?? null,
+    meteredRateCurrencyCode: rate?.currencyCode ?? null,
     purchasedBytes: traffic?.kind === 'limited' ? traffic.bytes : BigInt(0),
     trafficUnlimited: traffic?.kind === 'unlimited',
   };
@@ -458,11 +469,12 @@ export class GrantService {
     }
 
     const startsAt = input.startsAt ?? new Date();
+    const currencyCode = await operatingCurrencyOf(tx, tenant.id);
     const variant = await tx.productVariant.findUnique({
       where: { id: input.variantId },
       // The rate history comes back with the variant — one round trip, and the
       // rows are narrowed to those that could be in effect at the sale.
-      include: { product: { include: productCategoriesInclude }, meteredRates: { where: meteredRatesInEffect(startsAt) } },
+      include: { product: { include: productCategoriesInclude }, meteredRates: { where: meteredRatesInEffect(startsAt, currencyCode) } },
     });
     if (!variant) throw new EntitlementRefused('variant_not_found', input.variantId);
     const facts: OfferFacts = {
@@ -474,7 +486,7 @@ export class GrantService {
     if (!assignable(input.source, facts)) throw new EntitlementRefused('variant_not_assignable', input.variantId);
 
     const { token, hash } = newSubscriptionToken();
-    const shape = grantFromVariant({ source: input.source, startsAt }, variant);
+    const shape = grantFromVariant({ source: input.source, startsAt, currencyCode }, variant);
     // A metered variant with no rate in effect is not sold — never at zero by
     // default, exactly as a variant with no price is not for sale (ADR-0073).
     if (variant.billingMode === VariantBillingMode.metered && shape.meteredRate === null) {

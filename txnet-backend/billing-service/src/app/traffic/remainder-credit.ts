@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { GrantStatus, Prisma, VariantBillingMode, WalletReasonType } from '@prisma/client';
-import { tenantTransaction, operatingCurrencyOf } from '@txnet-backend/shared-core';
+import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletCreditService } from '../wallet/wallet-credit.service';
@@ -171,7 +171,7 @@ export class RemainderCreditService {
     const grant = await tx.grant.findUnique({ where: { id: input.grantId } });
     if (!grant) throw new RemainderCreditRefused('grant_not_found', input.grantId);
     if (!IS_CLOSED[grant.status]) throw new RemainderCreditRefused('grant_not_closed', `${input.grantId} is ${grant.status}`);
-    if (grant.billingMode !== VariantBillingMode.metered || grant.meteredRate === null) {
+    if (grant.billingMode !== VariantBillingMode.metered || grant.meteredRate === null || grant.meteredRateCurrencyCode === null) {
       throw new RemainderCreditRefused('grant_not_metered', input.grantId);
     }
 
@@ -186,8 +186,8 @@ export class RemainderCreditService {
     const movement = await this.ledger.credit(tx, {
       userId: grant.userId,
       amount: back.amount,
-      // The Grant's rate has no currency column until F-116-d; it is the tenant's.
-      currencyCode: await operatingCurrencyOf(tx, grant.tenantId),
+      // The rate's own, locked onto the Grant with it at issue (F-116-d).
+      currencyCode: grant.meteredRateCurrencyCode,
       reasonType: WalletReasonType.traffic_refund,
       referenceId: grant.id,
     });

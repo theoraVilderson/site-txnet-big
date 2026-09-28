@@ -105,6 +105,10 @@ model Grant {
   /// `billingMode = metered`. `(18, 8)` because a rate is not an amount: every
   /// amount derived from it is still whole cents before the ledger (C-02).
   meteredRate           Decimal?           @db.Decimal(18, 8)
+  /// The currency `meteredRate` is in, locked with it at issue (F-116-d): a
+  /// block is debited and a remainder credited in it. Set exactly when
+  /// `meteredRate` is (`grant_metered_rate_currency_with_rate`).
+  meteredRateCurrencyCode String?
   /// Sold with `traffic_bytes.limit = 0` (F-111-q): no ceiling, never
   /// exhausted, never buys a block. The catalog is the only place 0 means
   /// unlimited; here the bag stays 0 and this says why. Only on a prepaid

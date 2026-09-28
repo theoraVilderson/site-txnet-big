@@ -67,6 +67,7 @@ type GrantRow = {
   status: GrantStatus;
   billingMode: VariantBillingMode;
   meteredRate: Prisma.Decimal | null;
+  meteredRateCurrencyCode: string | null;
   billedBytes: bigint;
   purchasedBytes: bigint;
   consumedBytes: bigint;
@@ -79,6 +80,7 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
     status: GrantStatus.expired,
     billingMode: VariantBillingMode.metered,
     meteredRate: D('0.40000000'),
+    meteredRateCurrencyCode: 'USD',
     billedBytes: GIB,
     purchasedBytes: GIB,
     consumedBytes: BigInt(0),

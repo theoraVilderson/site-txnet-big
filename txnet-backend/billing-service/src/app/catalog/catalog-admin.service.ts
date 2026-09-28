@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigProtocol, FulfilmentKind, PanelGroupStrategy, Prisma, QualityTier, TenantType, VariantBillingMode, VariantVisibility } from '@prisma/client';
 
-import { CATEGORY_MAX_DEPTH, tenantTransaction } from '@txnet-backend/shared-core';
+import { CATEGORY_MAX_DEPTH, operatingCurrencyOf, platformCurrencyOf, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -176,7 +176,7 @@ export type ListCategoriesFilter = { archived?: boolean };
 export type PublishTextsInput = { lang: string; keys: string[] };
 export type EditTextsInput = { lang: string; texts: Record<string, string> };
 
-export type PriceView = { id: string; variantId: string; amount: string; effectiveFrom: Date; isActive: boolean };
+export type PriceView = { id: string; variantId: string; amount: string; currencyCode: string; effectiveFrom: Date; isActive: boolean };
 export type CategoryView = {
   id: string;
   tenantId: string | null;
@@ -292,10 +292,19 @@ const productView = (r: Row, defaultLang: string, categoryIds: string[]): Produc
   archivedAt: (r['archivedAt'] as Date | null | undefined) ?? null,
 });
 
+/**
+ * The currency a new price is written in (F-116-d, ADR-0098 part 2): its
+ * tenant's operating currency, the platform's for a platform row. An amount is
+ * never converted on the way in — the admin typed it in that currency.
+ */
+const pricingCurrencyOf = (tx: Prisma.TransactionClient, tenantId: string | null) =>
+  tenantId === null ? platformCurrencyOf(tx) : operatingCurrencyOf(tx, tenantId);
+
 const priceView = (r: Row): PriceView => ({
   id: r['id'] as string,
   variantId: r['variantId'] as string,
   amount: new Prisma.Decimal(r['amount'] as Prisma.Decimal.Value).toFixed(2),
+  currencyCode: r['currencyCode'] as string,
   effectiveFrom: r['effectiveFrom'] as Date,
   isActive: r['isActive'] as boolean,
 });
@@ -952,6 +961,7 @@ export class CatalogAdminService {
           tenantId,
           variantId: variant['id'] as string,
           amount: new Prisma.Decimal(input.price),
+          currencyCode: await pricingCurrencyOf(tx, tenantId),
           effectiveFrom,
           createdByAdminId: actor.adminId,
         },
@@ -1001,7 +1011,14 @@ export class CatalogAdminService {
       const variant = await this.managed(tx, 'productVariant', 'variant_not_found', actor, variantId, owner);
       const tenantId = (variant['tenantId'] as string | null) ?? null;
       const row = (await tx.price.create({
-        data: { tenantId, variantId, amount: new Prisma.Decimal(input.amount), effectiveFrom, createdByAdminId: actor.adminId },
+        data: {
+          tenantId,
+          variantId,
+          amount: new Prisma.Decimal(input.amount),
+          currencyCode: await pricingCurrencyOf(tx, tenantId),
+          effectiveFrom,
+          createdByAdminId: actor.adminId,
+        },
       })) as unknown as Row;
       const view = priceView(row);
       await this.audit(tx, actor, tenantId, 'catalog_price_set', 'price', view.id, null, view);

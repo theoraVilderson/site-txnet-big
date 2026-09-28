@@ -33,6 +33,8 @@ const { createLocaleClient } = require('@txnet/locale-client');
 
 const prisma = new PrismaClient();
 
+/** The currency the seeded amounts are written in (F-116-d). */
+const SEED_CURRENCY = 'USD';
 const GIB = 1024 ** 3;
 const traffic = (gib, resetPolicy = 'none') => ({ traffic_bytes: { limit: gib * GIB, resetPolicy } });
 const devices = (n) => ({ concurrent_devices: { limit: n, resetPolicy: 'none' } });
@@ -267,7 +269,9 @@ async function ensureVariant(productId, v, at) {
       tenantId: null,
       productId,
       ...fields,
-      prices: { create: { tenantId: null, amount: price, effectiveFrom: at } },
+      // Every row records its currency (F-116-d, ADR-0098). These amounts are
+      // dollars: on a platform in another currency they are simply not offered.
+      prices: { create: { tenantId: null, amount: price, currencyCode: SEED_CURRENCY, effectiveFrom: at } },
     },
   });
 }

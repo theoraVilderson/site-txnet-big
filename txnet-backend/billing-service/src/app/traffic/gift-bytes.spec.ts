@@ -45,6 +45,7 @@ type Row = {
   billingMode: VariantBillingMode;
   trafficUnlimited: boolean;
   meteredRate: Prisma.Decimal | null;
+  meteredRateCurrencyCode: string | null;
   purchasedBytes: bigint;
   billedBytes: bigint;
   consumedBytes: bigint;
@@ -63,6 +64,7 @@ function build(row: Partial<Row>, balance = D('1.00')) {
     billingMode: VariantBillingMode.metered,
     trafficUnlimited: false,
     meteredRate: D('0.40000000'),
+    meteredRateCurrencyCode: 'USD',
     purchasedBytes: GIB,
     billedBytes: GIB,
     consumedBytes: GIB,

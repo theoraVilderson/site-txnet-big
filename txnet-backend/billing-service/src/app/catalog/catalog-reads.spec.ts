@@ -23,7 +23,7 @@ const d = (v: string) => new Prisma.Decimal(v);
 const at = (iso: string) => new Date(iso);
 
 function price(id: string, amount: string, effectiveFrom: string, isActive = true): PriceRow {
-  return { id, amount: d(amount), effectiveFrom: at(effectiveFrom), isActive };
+  return { id, amount: d(amount), currencyCode: 'USD', effectiveFrom: at(effectiveFrom), isActive };
 }
 
 describe('priceAt', () => {
@@ -34,33 +34,33 @@ describe('priceAt', () => {
   ];
 
   it('answers the row in effect at the instant, not the newest', () => {
-    expect(priceAt(history, at('2026-07-15T12:00:00Z'))?.id).toBe('p2');
-    expect(priceAt(history, at('2026-10-01T00:00:00Z'))?.id).toBe('p3');
+    expect(priceAt(history, at('2026-07-15T12:00:00Z'), 'USD')?.id).toBe('p2');
+    expect(priceAt(history, at('2026-10-01T00:00:00Z'), 'USD')?.id).toBe('p3');
   });
 
   it('takes a row from the very instant it becomes effective', () => {
-    expect(priceAt(history, at('2026-06-01T00:00:00Z'))?.id).toBe('p2');
-    expect(priceAt(history, at('2026-05-31T23:59:59.999Z'))?.id).toBe('p1');
+    expect(priceAt(history, at('2026-06-01T00:00:00Z'), 'USD')?.id).toBe('p2');
+    expect(priceAt(history, at('2026-05-31T23:59:59.999Z'), 'USD')?.id).toBe('p1');
   });
 
   it('never lets a row written later reach back to an earlier instant', () => {
     const later = [...history, price('p4', '1.00', '2026-12-01T00:00:00Z')];
-    expect(priceAt(later, at('2026-07-15T12:00:00Z'))?.id).toBe('p2');
+    expect(priceAt(later, at('2026-07-15T12:00:00Z'), 'USD')?.id).toBe('p2');
   });
 
   it('skips a switched-off row and falls back to the one before it', () => {
     const off = [history[0], price('p2', '6.00', '2026-06-01T00:00:00Z', false), history[2]];
-    expect(priceAt(off, at('2026-07-15T12:00:00Z'))?.id).toBe('p1');
+    expect(priceAt(off, at('2026-07-15T12:00:00Z'), 'USD')?.id).toBe('p1');
   });
 
   it('has no price before the first row, or with none active', () => {
-    expect(priceAt(history, at('2025-12-31T23:59:59Z'))).toBeNull();
-    expect(priceAt([price('p1', '5.00', '2026-01-01T00:00:00Z', false)], at('2026-02-01T00:00:00Z'))).toBeNull();
-    expect(priceAt([], at('2026-02-01T00:00:00Z'))).toBeNull();
+    expect(priceAt(history, at('2025-12-31T23:59:59Z'), 'USD')).toBeNull();
+    expect(priceAt([price('p1', '5.00', '2026-01-01T00:00:00Z', false)], at('2026-02-01T00:00:00Z'), 'USD')).toBeNull();
+    expect(priceAt([], at('2026-02-01T00:00:00Z'), 'USD')).toBeNull();
   });
 
   it('does not depend on the order the rows arrive in', () => {
-    expect(priceAt([...history].reverse(), at('2026-07-15T12:00:00Z'))?.id).toBe('p2');
+    expect(priceAt([...history].reverse(), at('2026-07-15T12:00:00Z'), 'USD')?.id).toBe('p2');
   });
 });
 
@@ -68,19 +68,20 @@ describe('meteredRateAt', () => {
   const rate = (id: string, r: string, effectiveFrom: string, isActive = true): MeteredRateRow => ({
     id,
     rate: d(r),
+    currencyCode: 'USD',
     effectiveFrom: at(effectiveFrom),
     isActive,
   });
   const history = [rate('r1', '0.40000000', '2026-01-01T00:00:00Z'), rate('r2', '0.25000000', '2026-06-01T00:00:00Z')];
 
   it('answers the rate in effect at the instant, by the same rule a price is found', () => {
-    expect(meteredRateAt(history, at('2026-03-01T00:00:00Z'))?.id).toBe('r1');
-    expect(meteredRateAt(history, at('2026-06-01T00:00:00Z'))?.id).toBe('r2');
+    expect(meteredRateAt(history, at('2026-03-01T00:00:00Z'), 'USD')?.id).toBe('r1');
+    expect(meteredRateAt(history, at('2026-06-01T00:00:00Z'), 'USD')?.id).toBe('r2');
   });
 
   it('has no rate before the first row, and skips a switched-off one', () => {
-    expect(meteredRateAt(history, at('2025-12-31T23:59:59Z'))).toBeNull();
-    expect(meteredRateAt([rate('r1', '0.40000000', '2026-01-01T00:00:00Z', false)], at('2026-03-01T00:00:00Z'))).toBeNull();
+    expect(meteredRateAt(history, at('2025-12-31T23:59:59Z'), 'USD')).toBeNull();
+    expect(meteredRateAt([rate('r1', '0.40000000', '2026-01-01T00:00:00Z', false)], at('2026-03-01T00:00:00Z'), 'USD')).toBeNull();
   });
 });
 

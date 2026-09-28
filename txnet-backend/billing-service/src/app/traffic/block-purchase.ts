@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Grant, GrantStatus, Prisma, VariantBillingMode, WalletReasonType } from '@prisma/client';
-import { METERED_RATE_UNIT_BYTES, tenantTransaction, operatingCurrencyOf } from '@txnet-backend/shared-core';
+import { METERED_RATE_UNIT_BYTES, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletLedgerService } from '../wallet/wallet-ledger.service';
@@ -188,7 +188,7 @@ export class BlockPurchaseService {
     const grant = await tx.grant.findUnique({ where: { id: input.grantId } });
     if (!grant) throw new BlockPurchaseRefused('grant_not_found', input.grantId);
     if (grant.status !== GrantStatus.active) throw new BlockPurchaseRefused('grant_not_active', `${input.grantId} is ${grant.status}`);
-    if (grant.billingMode !== VariantBillingMode.metered || grant.meteredRate === null) {
+    if (grant.billingMode !== VariantBillingMode.metered || grant.meteredRate === null || grant.meteredRateCurrencyCode === null) {
       throw new BlockPurchaseRefused('grant_not_metered', input.grantId);
     }
 
@@ -202,8 +202,8 @@ export class BlockPurchaseService {
     const movement = await this.ledger.debit(tx, {
       userId: grant.userId,
       amount: block.amount,
-      // The Grant's rate has no currency column until F-116-d; it is the tenant's.
-      currencyCode: await operatingCurrencyOf(tx, grant.tenantId),
+      // The rate's own, locked onto the Grant with it at issue (F-116-d).
+      currencyCode: grant.meteredRateCurrencyCode,
       reasonType: WalletReasonType.traffic_consumption,
       referenceId: grant.id,
     });

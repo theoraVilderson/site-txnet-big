@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 
-import { effectiveAt } from './offers';
+import { effectiveIn } from './offers';
 
 /**
  * The unit a metered rate is quoted in (ADR-0073, F-027-g).
@@ -19,19 +19,19 @@ import { effectiveAt } from './offers';
 export const METERED_RATE_UNIT_BYTES = 1024 * 1024 * 1024;
 
 /** A row of a variant's rate history, as anything that resolves one reads it. */
-export type MeteredRateRow = { id: string; rate: Prisma.Decimal; effectiveFrom: Date; isActive: boolean };
+export type MeteredRateRow = { id: string; rate: Prisma.Decimal; currencyCode: string; effectiveFrom: Date; isActive: boolean };
 
-/** The rate rows {@link meteredRateAt} chooses among at `at`, asked of the database. */
-export const meteredRatesInEffect = (at: Date) =>
-  ({ isActive: true, effectiveFrom: { lte: at } }) satisfies Prisma.MeteredRateWhereInput;
+/** The rate rows {@link meteredRateAt} chooses among at `at`, in `currencyCode`, asked of the database. */
+export const meteredRatesInEffect = (at: Date, currencyCode: string) =>
+  ({ isActive: true, effectiveFrom: { lte: at }, currencyCode }) satisfies Prisma.MeteredRateWhereInput;
 
 /**
  * The rate in effect at `at` (F-027-p), by the same rule a price is found —
- * the newest active row that had already taken effect. Read **once, at the
- * moment of sale**: `GrantService.issue` locks the answer onto
- * `Grant.meteredRate`, and nothing prices a byte from the catalog afterwards
- * (ADR-0073).
+ * the newest active row in the tenant's currency that had already taken effect
+ * (F-116-d). Read **once, at the moment of sale**: `GrantService.issue` locks
+ * the answer and its currency onto the Grant, and nothing prices a byte from
+ * the catalog afterwards (ADR-0073).
  */
-export function meteredRateAt<T extends MeteredRateRow>(rates: readonly T[], at: Date): T | null {
-  return effectiveAt(rates, at);
+export function meteredRateAt<T extends MeteredRateRow>(rates: readonly T[], at: Date, currencyCode: string): T | null {
+  return effectiveIn(rates, at, currencyCode);
 }

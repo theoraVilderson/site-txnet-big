@@ -117,6 +117,7 @@ describe('TenantOnboardingService', () => {
       tenantGatewayConfig: { findFirst: first(rows.gateway) },
       botIntegration: { findFirst: first(rows.bot) },
       productVariant: { findFirst: first(rows.price) },
+      tenant: { findUnique: vi.fn(async () => ({ operatingCurrencyCode: 'IRR' })) },
     };
     const access = { admit: vi.fn(async () => ({ id: RESELLER, slug: 'r', as: 'owner' as const })) };
     return { service: new TenantOnboardingService(access as never, all as never), all, access };
@@ -173,7 +174,7 @@ describe('TenantOnboardingService', () => {
     };
 
     it('asks the catalog\'s predicate, not a copy of it', async () => {
-      expect(await pricingWhere()).toEqual(offeredToTenant(RESELLER, now));
+      expect(await pricingWhere()).toEqual(offeredToTenant(RESELLER, now, 'IRR'));
     });
 
     it('counts the platform\'s offers the reseller inherits as well as its own', async () => {
@@ -187,8 +188,9 @@ describe('TenantOnboardingService', () => {
       const where = await pricingWhere();
       expect(where).toMatchObject(listedVariantWhere);
       expect(where).toMatchObject({ visibility: 'public', isActive: true, product: { isActive: true, categories: { some: { category: expect.objectContaining({ isActive: true }) } } } });
-      expect(where.prices).toMatchObject({ some: pricesInEffect(now) });
-      expect(pricesInEffect(now)).toEqual({ isActive: true, effectiveFrom: { lte: now } });
+      // Priced in the reseller's own currency (F-116-d): a platform price in another is not something to sell.
+      expect(where.prices).toMatchObject({ some: pricesInEffect(now, 'IRR') });
+      expect(pricesInEffect(now, 'IRR')).toEqual({ isActive: true, effectiveFrom: { lte: now }, currencyCode: 'IRR' });
     });
   });
 });

@@ -63,6 +63,9 @@ accounting truth for the holds queue (ADR-0074), not a write to refuse.
 quotas by `GrantService.issue` — the rate in effect at `startsAt` (F-027-p,
 ADR-0073) — and null unless `billingMode = metered`. Amounts derived
 from it are still whole cents before the ledger (`C-02`).
+`meteredRateCurrencyCode` is the rate's currency, locked with it (F-116-d): a
+block is debited and a remainder credited in it, set exactly when the rate is
+(`grant_metered_rate_currency_with_rate`); rows from before were backfilled `USD`.
 
 ## The purge clock (F-027-f, ADR-0075)
 

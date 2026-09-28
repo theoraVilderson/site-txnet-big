@@ -2,8 +2,8 @@
 id: catalog
 layer: domain
 status: draft
-version: 6
-updated: 2026-09-26
+version: 7
+updated: 2026-09-28
 ---
 
 # Contract — catalog
@@ -15,7 +15,7 @@ another service asks the same question (F-018-ah); management built
 (F-026-d) at `/api/catalog` — `catalog/catalog-admin.*`, proved by
 `catalog-admin.service.spec.ts`; the same management for a **named** reseller
 (F-066-w7) at `/api/catalog/tenants/:tenantId/...` — `catalog/reseller-catalog.*`,
-proved by `reseller-catalog.service.spec.ts`.** Decisions: ADR-0049, ADR-0064, ADR-0073, ADR-0086.
+proved by `reseller-catalog.service.spec.ts`.** Decisions: ADR-0049, ADR-0064, ADR-0073, ADR-0086, ADR-0098.
 
 ## HTTP surface (F-026-d)
 
@@ -43,7 +43,7 @@ cross-tenant pool.
 | `POST /capabilities/:id/remove` | — | `{id, outcome: 'deleted'}` | `capability_in_use` 409 (a product or a Grant holds the key — a platform one counted across tenants), `capability_not_found` |
 | `POST /products/:id/variants`, `PATCH /variants/:id` | `sku`, `billingMode`, `visibility`, `quotas?`, `durationDays?`, `panelGroupId?`, `qualityTier?`, first `price`; patch has no SKU or billing mode | variant with prices | `variant_not_found`, `sku_taken`, `price_in_the_past`, `panel_group_not_found` (a group that is neither the platform's nor the variant's tenant's, F-027-bk), `traffic_quota_required` 400 (F-111-p: a `network_access` + `prepaid` variant with no `quotas.traffic_bytes` — on create, the product's `defaultQuotas` count; on a patch, only one that writes `quotas`). `traffic_bytes.limit: 0` = unlimited; `durationDays: 0` = unlimited, stored `null` |
 | `GET /panel-groups` (F-026-p) | — | `[{id, tenantId, name, strategy, protocols, healthyMembers}]` by name (`protocols`: what its members' inbounds sell — each member's assigned ones, else its panel's pool — sorted, F-114-b, F-027-ch; empty = nothing is placed): the groups a variant may name — the platform's and the caller's own (owner: all, so a variant is offered only the platform's and its own tenant's). `healthyMembers` counts what fulfilment places on now (`placeableMember`: not `drain`, accepted, `healthy`); only `mirror` is fulfilled | — |
-| `POST /variants/:id/prices` | `amount`, `effectiveFrom?` (default now; never in the past) | a **new** price row | `variant_not_found`, `price_in_the_past` 400 |
+| `POST /variants/:id/prices` | `amount`, `effectiveFrom?` (default now; never in the past) | a **new** price row, `currencyCode` its tenant's operating currency (the platform's for a platform variant) — the amount is taken as typed, never converted (F-116-d) | `variant_not_found`, `price_in_the_past` 400 |
 | `POST /prices/:id/deactivate` | — | the price, switched off | `price_not_found` |
 | `GET /translations` | `lang?` | drafts: `{lang, key, draft, published, source: {lang, text}}` — the caller's items' (owner: all) | — |
 | `POST /translations/draft-missing` | — | `{drafted}` | `texts_unavailable` |
@@ -126,10 +126,10 @@ A category or product body carries **text, never a key**; `nameKey` /
 marketing object and says how it is fulfilled (`fulfilmentKind`) and what a
 Grant of it unlocks (`featureKeys`); a **variant** is the SKU that is sold, with
 its quotas, duration and visibility; a **price** is the variant's USD amount
-from `effectiveFrom` on, and a change is a new row. `tenantId IS NULL` is the
+in its `currencyCode` from `effectiveFrom` on, and a change is a new row. `tenantId IS NULL` is the
 platform's row, readable by every tenant. Names are i18n keys (§4.3).
 A **metered** variant also carries a `metered_rate` history (F-027-g, ADR-0073):
-USD per 2^30 bytes at `Decimal(18,8)`, append-only under
+money per 2^30 bytes in its `currencyCode` at `Decimal(18,8)`, append-only under
 `metered_rate_is_history` exactly as a price is, and read **once, at the moment
 of sale** — `GrantService.issue` locks it onto `Grant.meteredRate` (F-027-p), so
 a rate written tomorrow never reprices bytes already sold. The unit is
@@ -138,16 +138,29 @@ strictly positive (`metered_rate_is_positive`, F-027-al): unlike a price, zero
 is not "free" here — no block can be bought at nothing, so the Grant stalls.
 Free metered service is a quota with no rate.
 
+## Currency (F-116-d, ADR-0098 part 2)
+
+`catalog/catalog-reads.ts`, `shared-core/src/lib/catalog/offers.ts`, proved by
+`catalog/price-currency.spec.ts`.
+
+| Rule | Held by |
+|---|---|
+| A `price` and a `metered_rate` row record `currencyCode`: its tenant's operating currency when written, the platform's for a platform row. NOT NULL, no default; rows from before are `USD` | migration `20260928002600`, `pricingCurrencyOf` |
+| **A reader takes only the rows in the reading tenant's operating currency.** A platform row in another currency is no price for that tenant — the variant is not offered, as one with no price is not; never converted (user, 2026-09-28) | `effectiveIn` under `priceAt` / `meteredRateAt`; `pricesInEffect(at, code)` / `meteredRatesInEffect(at, code)` |
+| An offer carries `price.currencyCode`; an invoice copies it | `toOffer`, `InvoiceService.create` |
+| A Grant locks the rate's currency with the rate; a block and a remainder move in it | `grantFromVariant`, entitlement invariant 10 |
+| A currency change writes new rows in the new currency (F-116-f); the old ones stop matching and stay as history | — (F-116-f) |
+
 ## Provides (intended)
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| `listOffers(at?)` — built | tenant (ambient), instant (default now) | every `public` variant under an active product filed in at least one live category (it and every one above it on — `category-tree.ts`, F-026-r), with the price in effect; a variant with no price is not offered | sync | — |
+| `listOffers(at?)` — built | tenant (ambient), instant (default now) | every `public` variant under an active product filed in at least one live category (it and every one above it on — `category-tree.ts`, F-026-r), with the price in effect in the tenant's currency; a variant with no such price is not offered | sync | — |
 | `listOffersIn(tx, at)` — built | the caller's `tenantTransaction`, instant | what `listOffers` answers, read in the caller's transaction; each offer carries `panelGroupId` — billing's shop list narrows it to what can be delivered (F-111-e) | sync | — |
 | `offerBySku(sku, at?)` — built | sku | the offer, `public` or `unlisted`; the caller's own SKU over the platform's | sync | `null`: unknown, `admin_only`, switched off, or no price |
-| `offeredToTenant(tenantId, at)` — built | tenant id, instant | a Prisma `where` for a variant `listOffers` would return to that tenant: `listedVariantWhere`, own or platform row, a price in effect — for a reader on the cross-tenant pool, where RLS does not narrow (F-018-ah) | sync | — |
+| `offeredToTenant(tenantId, at, currencyCode)` — built | tenant id, instant, its operating currency (F-116-d) | a Prisma `where` for a variant `listOffers` would return to that tenant: `listedVariantWhere`, own or platform row, a price in effect — for a reader on the cross-tenant pool, where RLS does not narrow (F-018-ah) | sync | — |
 | `sellableOfferById(tx, variantId, at)` — built | the caller's `tenantTransaction`, variant id, instant | the offer as `offerBySku` would sell it (`public` or `unlisted`, live, priced), read in the caller's transaction — billing's invoice (F-111-a) | sync | `null` |
-| `priceAt(variantId, at)` — built | variantId, instant | the newest active price row with `effectiveFrom <= at` (F-0602) | sync | `null` |
+| `priceAt(variantId, at)` — built | variantId, instant | the newest active price row in the tenant's currency with `effectiveFrom <= at` (F-0602, F-116-d) | sync | `null` |
 | manage category / product / variant, write a new price | admin payload, `catalog.manage` | row (F-026-d) | sync | — |
 
 ## Emits (events)
@@ -181,7 +194,7 @@ None.
 | A price row is never deleted on its own, and only `isActive` changes on it (`price_is_history`); it goes only with its variant's delete (cascade, F-026-h) | trigger `catalog.price_is_history` |
 | A category key, a product key and a SKU are unique inside a tenant, and once among platform rows | partial unique indexes |
 | A coupon scope row names exactly one product or one variant (`coupon_service_scope_names_one`) | CHECK |
-| Money is USD `Decimal(18,2)`, never negative; zero is a free variant | column type + CHECK (ADR-0019, C-02) |
+| Money is `Decimal(18,2)` in the row's `currencyCode` (`^[A-Z]{3}$`), never negative; zero is a free variant | column type + CHECKs (ADR-0098, C-02) |
 | `visibility`: `public` listed; `unlisted` by SKU only; `admin_only` never sold, only assigned (F-506) | F-026-c |
 
 ## Deprecations

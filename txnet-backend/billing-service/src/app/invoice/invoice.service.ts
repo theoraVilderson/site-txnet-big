@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CouponChannel, InvoiceStatus, Prisma, RedemptionStatus } from '@prisma/client';
-import { TenantContext, tenantTransaction, operatingCurrencyOf } from '@txnet-backend/shared-core';
+import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import { CatalogOffer, listOffersIn, sellableOfferById } from '../catalog/catalog-reads';
@@ -155,8 +155,8 @@ export class InvoiceService {
           variantId: offer.variantId,
           priceId: offer.price.id,
           amount,
-          // The tenant's today (F-116-b); the price's own once it carries one (F-116-d).
-          currencyCode: await operatingCurrencyOf(tx, tenant.id),
+          // The price's own (F-116-d): the offer took only a price in the tenant's currency.
+          currencyCode: offer.price.currencyCode,
           discount: ruleDiscount.plus(coupons.totalDiscount),
           total: coupons.payable,
           discountRuleId: rule?.rule.id ?? null,

@@ -1,7 +1,7 @@
 ---
 id: catalog
 layer: domain
-updated: 2026-09-25
+updated: 2026-09-28
 ---
 
 # Data model — catalog
@@ -17,8 +17,8 @@ Source of truth: `txnet-backend/prisma/domains/catalog.prisma` (Postgres schema
 | product_capability | what a product may unlock (F-114-f-a): `key` (immutable, unique among what one tenant sees — trigger `capability_key_free`), `nameKey`/`descriptionKey`, `sourceLang` | `tenantId` nullable, shared-read | deletable only while no product or Grant holds its key |
 | product | marketing object (its categories are `product_category_link`, F-026-q): `key`, `nameKey`/`descriptionKey`, `fulfilmentKind`, `featureKeys[]`, `defaultQuotas`, `archivedAt` | `tenantId` nullable, shared-read | deletable with its variants until one is referenced, then permanent (`isActive`, `archivedAt`) — F-026-h |
 | product_variant | the SKU: `quotas` (JSONB by metric), `durationDays` (null = permanent), `billingMode`, `visibility`, `panelGroupId` (FK `network.panel_group`, a platform group or its own tenant's — F-027-bk), `qualityTier` | `tenantId` = its product's, shared-read | permanent (`isActive`) |
-| price | a variant's USD `amount` from `effectiveFrom`; append-only | `tenantId` = its variant's, shared-read | as long as its variant (FK `ON DELETE CASCADE`) |
-| metered_rate | a variant's USD `rate` per 2^30 bytes from `effectiveFrom`, `Decimal(18,8)`, strictly positive; append-only (F-027-g) | `tenantId` = its variant's, shared-read | permanent |
+| price | a variant's `amount` in its `currencyCode` (F-116-d) from `effectiveFrom`; append-only | `tenantId` = its variant's, shared-read | as long as its variant (FK `ON DELETE CASCADE`) |
+| metered_rate | a variant's `rate` per 2^30 bytes in its `currencyCode` from `effectiveFrom`, `Decimal(18,8)`, strictly positive; append-only (F-027-g) | `tenantId` = its variant's, shared-read | permanent |
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
@@ -38,7 +38,7 @@ once at the moment of sale — never at consumption time (ADR-0073).
 
 ## Migration notes
 
-`20260925001400` added `product_capability` and wrote one row per key in use: a key any platform product carries is the platform's, any other a row of each tenant whose product or Grant holds it; only keys in the `vpn.access` shape. `20260921000700` added `metered_rate` (additive: one table, nothing reads it
+`20260928002600` (F-116-d) added `currencyCode` to `price` and `metered_rate` (backfilled `USD`, then no default) and `entitlement.grant.meteredRateCurrencyCode` (`USD` where a rate is set). `20260925001400` added `product_capability` and wrote one row per key in use: a key any platform product carries is the platform's, any other a row of each tenant whose product or Grant holds it; only keys in the `vpn.access` shape. `20260921000700` added `metered_rate` (additive: one table, nothing reads it
 until F-027-p); `20260922000100` tightened its CHECK from `>= 0` to `> 0`
 (F-027-al) — free metered service is a quota with no rate, not a rate of zero,
 which no block purchaser can buy from. `20260914001500` dropped `service_plan` / `service_plan_promotion` and

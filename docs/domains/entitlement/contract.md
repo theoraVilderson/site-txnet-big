@@ -138,10 +138,12 @@ once `minHealthyPanels` of its configs are confirmed (network
 `contract.groups.md` rule 10, F-027-bl).
 
 A **metered** variant also has its rate copied: the `catalog.metered_rate` row
-in effect at `startsAt` is locked onto `Grant.meteredRate` (F-027-p, ADR-0073),
+in effect at `startsAt`, in the tenant's operating currency, is locked onto
+`Grant.meteredRate` with its currency on `meteredRateCurrencyCode` (F-027-p,
+ADR-0073, F-116-d) — a block is debited in that currency,
 and every block bought against that Grant is priced from the Grant's own
 column — a catalog edit tomorrow never reprices what was sold. A metered
-variant with **no** rate in effect is refused (`metered_rate_missing`), and one
+variant with **no** rate in effect in that currency is refused (`metered_rate_missing`), and one
 whose rate in effect is **zero** with `metered_rate_not_positive` (F-027-al) —
 a block priced at nothing cannot be bought, so such a Grant stalls at its first
 block rather than serving free traffic; the catalog column refuses the same

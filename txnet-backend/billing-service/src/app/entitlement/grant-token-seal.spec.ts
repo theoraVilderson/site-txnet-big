@@ -86,6 +86,7 @@ describe('GrantService keeps the token it answers', () => {
     const stored = (data: Record<string, unknown>) =>
       Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v === Prisma.DbNull ? null : v]));
     const tx = {
+      tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
       productVariant: { findUnique: vi.fn(async () => variant) },
       grant: {
         findFirst: vi.fn(async () => null),
