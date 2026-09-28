@@ -181,6 +181,20 @@ of volume or time used, user 2026-09-28) as `product_refund` — and
 
 **Not covered:** the audit row beyond `grant_deletion` (F-311-r), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
 
+## An admin sets one of a user's Grants' speed (built — F-311-p)
+
+`POST …/users/:userId/grants/:grantId/speed`, body `{mbps, reason}` — `mbps` whole
+Mbit/s both ways (1..100 000) or `null` to lift the cap; `reason` 1..500 chars ->
+`{grantId, rateMbpsBefore, rateMbpsAfter}`. Same controller, over `setGrantSpeed`
+(network [contract.provisioning.md](../network/contract.provisioning.md) "Speed cap").
+
+| Rule | Why |
+|---|---|
+| Door `staffWrite`, the reseller's user and the path user's Grant; bucket `RESELLER_USER_CONFIG_ACTION` — as for traffic | the same fences |
+| **409** `rate_limit_unsupported` with `panels: [{id, name}]` — every panel of a live config must answer `per_client_rate_limit` yes; `no_configs`; `grant_closed`, `grant_not_active` (pending) | a cap is only promised where a panel enforces it; lifting one is never refused |
+
+**Not covered:** the audit row beyond the cap's own `reason` (F-311-r), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
+
 ## An admin issues a user a service by hand (built — F-311-o)
 
 `POST …/users/:userId/grants`, body `{variantId, requestId}` (both uuids;

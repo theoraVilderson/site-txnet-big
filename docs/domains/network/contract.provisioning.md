@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: draft
-version: 15
-updated: 2026-09-26
+version: 16
+updated: 2026-09-28
 ---
 
 # Provisioning — every action is desired state, and one pass carries it
@@ -161,3 +161,21 @@ in the update's `where` — so an action landing mid-pass leaves no row to updat
 The pass runs in each collected panel's turn, started in `cmd` with the loop
 (`contract.collection.md` "Running it", F-027-bt). Every row has a `claimTag` (NOT NULL, F-027-aa), and it goes
 out with every create and update.
+
+## Speed cap (F-311-p)
+
+A Grant's speed cap is `grant_rate_limit` (`data-model.md`), written by billing's
+`setGrantSpeed` (`billing-service/src/app/traffic/grant-speed.ts`) and nothing
+else; no row is no cap. It is keyed by the Grant, so every config the Grant has
+now or is given later carries it.
+
+| Rule | Why |
+|---|---|
+| The pass writes it only to a panel whose capability document answers `per_client_rate_limit` yes (`collect.Panel.RateLimitable`); elsewhere it is recorded and not enforced | a family with no cap refuses the write every pass (`FaultUnsupported`) |
+| On such a panel the client's rate is the Grant's (`rateMbps` × 10⁶ bits/s both ways), or 0 where it has none — a rate nobody set is overwritten like any drift | desired state is ours; "no cap" is a value, not "leave it" |
+| A create and a regenerate's update carry the cap; a client reading another rate gets `SetClientRateLimit` (finding `rate_limited`), `partial` until the read shows it | a new client is never served uncapped for a pass |
+| `setGrantSpeed` refuses a cap, by panel name (`rate_limit_unsupported`), while any live config sits on a panel that does not answer yes; lifting one is never refused | a cap is only promised where it is enforced |
+| A row written, changed or deleted wakes every panel the Grant is on (`network_converge`, F-111-j) | the cap lands in seconds, not on the bulk pass |
+
+**Not covered:** the lease planner's own endgame cap (F-027-dn), which will take
+the lower of the two.

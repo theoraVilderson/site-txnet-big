@@ -192,6 +192,7 @@ model Grant {
   deletion         GrantDeletion?
   configs          Config[]
   leaseClose       LeaseClose?
+  rateLimit        GrantRateLimit?
 
   @@index([tenantId, userId])
   @@index([userId, status])

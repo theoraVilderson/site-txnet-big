@@ -22,6 +22,8 @@ type provRig struct {
 	allocs  *converge.MemoryAllocations
 	conv    *converge.Converger
 	at      time.Time
+	// rateLimitable is the panel's `per_client_rate_limit` answer (F-311-p).
+	rateLimitable bool
 }
 
 func newProvRig(t *testing.T, cfg fake.Config) *provRig {
@@ -49,6 +51,7 @@ func (r *provRig) pass(t *testing.T) converge.ProvisionReport {
 	p := collect.Panel{
 		ID: "panel-1", CounterSemantics: driver.CounterCumulative,
 		Transport: driver.TransportPull, MaxLineRateBps: gigabit, Driver: r.panel,
+		RateLimitable: r.rateLimitable,
 	}
 	report, err := r.conv.Pass(context.Background(), p, collect.Result{ObservedAt: r.at})
 	if err != nil {
@@ -505,5 +508,74 @@ func TestAPushClientsCeilingIsTranslatedByItsBaseline(t *testing.T) {
 	}
 	if got := converge.PanelCeiling(10_000*mb, converge.OffsetBytes(c, p, "c1")); got != 9_000*mb {
 		t.Fatalf("ceiling = %d, want 9000 MB", got)
+	}
+}
+
+// ---- speed cap (F-311-p) ----------------------------------------------------
+
+const twentyMbit = 20_000_000
+
+func TestAGrantsSpeedCapIsWrittenWhereThePanelHoldsOneAndConfirmedByTheRead(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	r.rateLimitable = true
+	r.panel.Given("remote-a")
+	row := wanted("c1")
+	row.RemoteID, row.UUID, row.RateCapBps = "remote-a", "remote-a", twentyMbit
+	r.desired.Put("panel-1", row)
+
+	onlyAction(t, r.pass(t), converge.ActionRateLimited)
+	if client, _ := r.client(t, "remote-a"); client.RateLimitBps != twentyMbit {
+		t.Fatalf("panel rate = %d, want %d", client.RateLimitBps, twentyMbit)
+	}
+	if report := r.pass(t); len(report.Findings) != 0 {
+		t.Fatalf("a cap the panel holds is written again: %+v", report.Findings)
+	}
+	if got := r.row(t, "c1"); got.State != converge.StateComplete {
+		t.Fatalf("state = %s, want complete once the panel reads the cap", got.State)
+	}
+}
+
+func TestALiftedCapIsWrittenAsNoCap(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	r.rateLimitable = true
+	r.panel.Given("remote-a")
+	if err := r.panel.SetClientRateLimit(context.Background(), "remote-a", twentyMbit); err != nil {
+		t.Fatal(err)
+	}
+	row := wanted("c1")
+	row.RemoteID, row.UUID = "remote-a", "remote-a"
+	r.desired.Put("panel-1", row)
+
+	onlyAction(t, r.pass(t), converge.ActionRateLimited)
+	if client, _ := r.client(t, "remote-a"); client.RateLimitBps != 0 {
+		t.Fatalf("panel rate = %d, want 0: no row is no cap", client.RateLimitBps)
+	}
+}
+
+func TestACapIsNeverSentToAPanelThatCannotHoldOne(t *testing.T) {
+	r := newProvRig(t, fake.Config{Unsupported: map[driver.RowKey]bool{driver.RowPerClientRateLimit: true}})
+	r.panel.Given("remote-a")
+	row := wanted("c1")
+	row.RemoteID, row.UUID, row.RateCapBps = "remote-a", "remote-a", twentyMbit
+	r.desired.Put("panel-1", row)
+
+	if report := r.pass(t); len(report.Findings) != 0 {
+		t.Fatalf("findings = %+v, want none: the cap is recorded, not enforced, where the panel has none", report.Findings)
+	}
+	if got := r.row(t, "c1"); got.State != converge.StateComplete {
+		t.Fatalf("state = %s, want complete", got.State)
+	}
+}
+
+func TestANewClientIsCreatedUnderItsGrantsCap(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	r.rateLimitable = true
+	row := wanted("c1")
+	row.RateCapBps = twentyMbit
+	r.desired.Put("panel-1", row)
+
+	onlyAction(t, r.pass(t), converge.ActionCreated)
+	if client, _ := r.client(t, r.row(t, "c1").RemoteID); client.RateLimitBps != twentyMbit {
+		t.Fatalf("created rate = %d, want %d: the cap goes in with the create", client.RateLimitBps, twentyMbit)
 	}
 }

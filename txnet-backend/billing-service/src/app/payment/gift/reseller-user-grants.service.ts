@@ -16,6 +16,7 @@ import { Freeze, freezeGrant, Unfreeze, unfreezeGrant } from '../../entitlement/
 import { EntitlementRefused, GrantService } from '../../entitlement/grant';
 import { adjustGrantTraffic, resetGrantTraffic, TrafficChange, TrafficReset } from '../../entitlement/traffic';
 import { giftGrantBytes } from '../../traffic/gift-bytes';
+import { setGrantSpeed, SpeedChange } from '../../traffic/grant-speed';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GrantUsageService, GrantUsageView } from '../../traffic/grant-usage';
 import { RemainderCreditService } from '../../traffic/remainder-credit';
@@ -169,6 +170,21 @@ export class ResellerUserGrantsService {
       tenantId,
       userId,
       () => this.onGrant(userId, grantId, (tx) => giftGrantBytes(tx, grantId, { at: new Date(), actorUserId: actor.userId, bytes, reason })),
+      'staffWrite',
+    );
+  }
+
+  /**
+   * An admin sets or lifts this user's Grant's speed cap (F-311-p): written to
+   * its panels' clients by the convergence pass, refused by name where a panel
+   * cannot hold one. `staffWrite`, as for a gift.
+   */
+  setSpeed(actor: ResellerActor, tenantId: string, userId: string, grantId: string, mbps: number | null, reason: string): Promise<SpeedChange> {
+    return this.run(
+      actor,
+      tenantId,
+      userId,
+      () => this.onGrant(userId, grantId, (tx) => setGrantSpeed(tx, grantId, { mbps, reason, actorUserId: actor.userId, at: new Date() })),
       'staffWrite',
     );
   }

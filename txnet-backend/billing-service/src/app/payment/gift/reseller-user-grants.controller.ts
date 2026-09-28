@@ -22,6 +22,7 @@ import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { EntitlementRefused, EntitlementRejection } from '../../entitlement/grant';
 import { ConfigActionRefused } from '../../traffic/config-actions';
+import { SpeedCapRefused } from '../../traffic/grant-speed';
 import type { AdminConfigCommand } from '../../traffic/user-configs';
 import { AdminConfigActionBody, adminConfigActionSchema } from '../../traffic/user-configs.schema';
 import { GrantDeleteBody, grantDeleteSchema } from './grant-delete.schema';
@@ -30,6 +31,7 @@ import { GrantFreezeBody, grantFreezeSchema } from './grant-freeze.schema';
 import { GrantIssueBody, grantIssueSchema } from './grant-issue.schema';
 import { GrantListQuery, grantListSchema } from './grant-list.schema';
 import { GrantRenewBody, grantRenewSchema } from './grant-renew.schema';
+import { GrantSpeedBody, grantSpeedSchema } from './grant-speed.schema';
 import {
   bytesOfGb,
   GrantTrafficBody,
@@ -326,6 +328,24 @@ export class ResellerUserGrantsController {
   }
 
   /**
+   * An admin sets this Grant's speed cap (F-311-p): `mbps` both ways, or
+   * `null` to lift it. **409** `rate_limit_unsupported` names the panels that
+   * cannot hold one; `no_configs` is a Grant with nothing placed yet.
+   */
+  @Post('grants/:grantId/speed')
+  @HttpCode(HttpStatus.OK)
+  @actionLimit
+  async setSpeed(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Body(new ZodValidationPipe(grantSpeedSchema)) body: GrantSpeedBody,
+    @Req() req: Request,
+  ) {
+    return this.refusing(() => this.service.setSpeed(actorOf(req), tenantId, userId, grantId, body.mbps, body.reason));
+  }
+
+  /**
    * An admin deletes this Grant (F-311-m): `cancelled`, every config released
    * from its panel now rather than after the purge window, rows kept. `refund`
    * is the admin's answer for the unserved remainder (F-027-r); `refundSkipped`
@@ -403,6 +423,9 @@ export class ResellerUserGrantsController {
     } catch (e) {
       if (e instanceof ConfigActionRefused && e.reason === 'grant_not_found') {
         throw new NotFoundException({ i18nKey: E.grant.notFound, reason: e.reason, message: `${e.name}: ${e.message}` });
+      }
+      if (e instanceof SpeedCapRefused) {
+        throw new ConflictException({ reason: e.reason, panels: e.panels, message: e.message });
       }
       if (e instanceof EntitlementRefused) {
         const payload = { reason: e.reason, message: e.message };

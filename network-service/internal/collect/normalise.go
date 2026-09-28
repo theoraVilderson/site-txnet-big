@@ -79,7 +79,12 @@ type Panel struct {
 	// than fixed in the loop because it is the panel owner's figure, and
 	// `Paced` is what turns it into behaviour (F-027-v, invariant 34).
 	MaxRequestsPerMinute int
-	Driver               driver.Driver
+	// RateLimitable is the panel's `per_client_rate_limit` answer in its
+	// capability document. Only such a panel is sent a speed cap (F-311-p);
+	// elsewhere a cap is recorded and not enforced, never a write the family
+	// refuses every pass.
+	RateLimitable bool
+	Driver        driver.Driver
 	// ReviewState is `panel.reviewState`. Only an accepted panel is read or
 	// converged (F-027-aq): a pending one has not answered the questionnaire
 	// and a refused one failed it, so neither has users to meter.

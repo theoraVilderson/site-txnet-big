@@ -583,6 +583,24 @@ model LeaseClose {
   @@schema("network")
 }
 
+/// An admin's speed cap on a Grant (F-311-p): no row is no cap. Written to
+/// every config's client through `SetClientRateLimit` on a panel that answers
+/// `per_client_rate_limit` yes; recorded and not enforced elsewhere. Keyed by
+/// the Grant, so a config placed later carries it.
+model GrantRateLimit {
+  grantId      String   @id @db.Uuid
+  /// 1..100000 (CHECK `grant_rate_limit_rate_positive`), both directions.
+  rateMbps     Int
+  reason       String
+  setByAdminId String   @db.Uuid
+  setAt        DateTime @default(now())
+
+  grant Grant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@map("grant_rate_limit")
+  @@schema("network")
+}
+
 /// Where a variant's Grants are provisioned (§7.3, F-027-bk). `tenantId` null
 /// is a platform group: it holds platform panels only and serves anyone's
 /// variants. A tenant's group holds its own panels and platform ones, and
