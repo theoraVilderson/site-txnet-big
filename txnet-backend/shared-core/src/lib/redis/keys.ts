@@ -253,10 +253,15 @@ export const UnscopedRedisKeys = {
    * together (F-067-p, ADR-0084 decision 3). A hash keyed by event id, so a
    * redelivered event is counted once; the flush renames it to its batch.
    */
-  noticeBurst: (tenantId: string, userId: string, template: string) => `notice:burst:${tenantId}:${userId}:${template}`,
-  /** The flush id already scheduled for that burst; `SET NX`, so a burst schedules one flush. */
-  noticeBurstScheduled: (tenantId: string, userId: string, template: string) =>
-    `notice:burst-scheduled:${tenantId}:${userId}:${template}`,
+  noticeBurst: (tenantId: string, userId: string, template: string, window?: 'hour') =>
+    `notice:burst${window ? `-${window}` : ''}:${tenantId}:${userId}:${template}`,
+  /**
+   * The flush id already scheduled for that burst; `SET NX`, so a burst schedules one flush.
+   * `hour` is a retention notice that may wait for its siblings (F-601-p): a lane of its own,
+   * so a 10 s notice of the same template is never held an hour with it.
+   */
+  noticeBurstScheduled: (tenantId: string, userId: string, template: string, window?: 'hour') =>
+    `notice:burst-scheduled${window ? `-${window}` : ''}:${tenantId}:${userId}:${template}`,
   /** What one flush took, kept so a redelivered flush tells the same batch and nothing newer. */
   noticeBurstBatch: (flushId: string) => `notice:burst-batch:${flushId}`,
 

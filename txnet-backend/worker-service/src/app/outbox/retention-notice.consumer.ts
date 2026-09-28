@@ -52,6 +52,12 @@ type Told = { notice: string; period: string; template: string; params: Record<s
  * `RetentionHeldNoticeJob` tells. A usage level muted while its carried time
  * level is not tells the time level alone. Cutoff notices are always `now` —
  * the ledger's rule, not this consumer's.
+ *
+ * **Several services, one message** (F-601-p). A `patient` notice — both
+ * rows, when combined — joins the user's hour lane, and the claim is told it
+ * may wait that long, so quiet hours starting inside the hour hold its bot
+ * message; an urgent one keeps the 10 s burst. Either carries its Grant, so a
+ * combined message names the services.
  */
 @Injectable()
 export class RetentionNoticeConsumer implements OnApplicationBootstrap {
@@ -60,6 +66,8 @@ export class RetentionNoticeConsumer implements OnApplicationBootstrap {
   private readonly baseUrl: string;
   private readonly serviceToken: string;
   private readonly timeoutMs: number;
+  /** How long a patient notice may wait for its siblings (F-601-p), told to the claim. */
+  private readonly waitSec: number;
   /** The table told from; a field so a spec can name a type no producer emits yet. */
   notices: Partial<Record<string, RetentionNotice>> = RETENTION_NOTICES;
 
@@ -73,6 +81,7 @@ export class RetentionNoticeConsumer implements OnApplicationBootstrap {
     this.baseUrl = config.get<string>('NOTIFICATION_API_BASE_URL', '').replace(/\/+$/, '');
     this.serviceToken = config.get<string>('SERVICE_AUTH_TOKEN', '');
     this.timeoutMs = config.get<number>('NOTIFICATION_API_TIMEOUT_MS', 60_000);
+    this.waitSec = Math.ceil(config.get<number>('AUTOMATION_RETENTION_WINDOW_MS', 3_600_000) / 1000);
   }
 
   async onApplicationBootstrap() {
@@ -85,22 +94,27 @@ export class RetentionNoticeConsumer implements OnApplicationBootstrap {
     if (!notice) throw new Error(`outbox event ${event.id} is ${event.type}, which has no retention notice`);
     const retention = retentionOf(event, notice, this.notices);
 
-    const first = await this.claim(event, retention, event.type, retention.period);
+    const patient = notice.patient === true;
+    const first = await this.claim(event, retention, event.type, retention.period, patient);
     if (!first.claimed) {
       this.logger.debug(`grant ${retention.grantId} already told ${event.type} this period`);
       return;
     }
     let how: Claim = first;
     let told: Told = { notice: event.type, period: retention.period, template: notice.template, params: retention.params };
+    let waits = patient;
     const ahead = retention.ahead;
     if (ahead) {
-      const second = await this.claim(event, retention, ahead.notice, ahead.period);
+      const aheadPatient = this.notices[ahead.notice]?.patient === true;
+      const second = await this.claim(event, retention, ahead.notice, ahead.period, aheadPatient);
       if (second.claimed && second.deliver !== 'muted') {
         if (first.deliver === 'muted') {
           how = second;
           told = { notice: ahead.notice, period: ahead.period, ...ahead.alone };
+          waits = aheadPatient;
         } else {
           told = { ...told, template: ahead.template, params: { ...retention.params, ...ahead.params } };
+          waits = patient && aheadPatient;
         }
       }
     }
@@ -108,7 +122,7 @@ export class RetentionNoticeConsumer implements OnApplicationBootstrap {
       this.logger.debug(`grant ${retention.grantId}: ${event.type} is muted by its owner`);
       return;
     }
-    const person = { tenantId: retention.tenantId, userId: retention.userId, template: told.template, params: told.params };
+    const person = { tenantId: retention.tenantId, userId: retention.userId, template: told.template, params: told.params, grantId: retention.grantId };
     if (how.deliver === 'held') {
       await this.post(HOLD_PATH, {
         eventId: event.id,
@@ -123,11 +137,12 @@ export class RetentionNoticeConsumer implements OnApplicationBootstrap {
       await this.sender.send({ consumer: CONSUMER, eventId: event.id, person, only: ['inbox'] });
       return;
     }
-    await this.sender.send({ consumer: CONSUMER, eventId: event.id, person });
+    await this.sender.send({ consumer: CONSUMER, eventId: event.id, person, ...(waits ? { window: 'hour' as const } : {}) });
   }
 
-  private async claim(event: OutboxMessage, r: Retention, notice: string, period: string): Promise<Claim> {
-    const body = await this.post(CLAIM_PATH, { eventId: event.id, userId: r.userId, grantId: r.grantId, notice, period });
+  private async claim(event: OutboxMessage, r: Retention, notice: string, period: string, patient: boolean): Promise<Claim> {
+    const claim = { eventId: event.id, userId: r.userId, grantId: r.grantId, notice, period };
+    const body = await this.post(CLAIM_PATH, patient ? { ...claim, waitSec: this.waitSec } : claim);
     const claimed = body?.claimed;
     if (typeof claimed !== 'boolean') throw new Error(`notification answered ${CLAIM_PATH} without 'claimed'`);
     if (!claimed) return { claimed: false };

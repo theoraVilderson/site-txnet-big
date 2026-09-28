@@ -4,9 +4,10 @@ import { retentionKindOf } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { GrantNoticeLevelService } from './grant-notice-level.service';
-import { NotificationPreferencesService, quietUntil } from './notification-preferences.service';
+import { NotificationPreferencesService, quietWithin } from './notification-preferences.service';
 
-export type RetentionClaim = { eventId: string; userId: string; grantId: string; notice: string; period: string };
+/** `waitSec`: the notice may wait that long for the user's other services before it is told (F-601-p). */
+export type RetentionClaim = { eventId: string; userId: string; grantId: string; notice: string; period: string; waitSec?: number };
 
 /**
  * How a claimed notice is told (F-601-m): `now`, on every channel; `held`,
@@ -18,13 +19,17 @@ export type ClaimAnswer = { claimed: false } | { claimed: true; deliver: 'now' |
 
 export type RetentionHold = Omit<RetentionClaim, 'userId'> & { tenantId: string; template: string; params: Record<string, string>; botAt: string };
 
-export type HeldNotice = { id: string; tenantId: string; userId: string; template: string; params: Record<string, string> };
+export type HeldNotice = { id: string; tenantId: string; userId: string; grantId: string; template: string; params: Record<string, string> };
 
 /** How long a take holds its rows: a job that died mid-run gives them back after this. */
 export const HELD_LEASE_SEC = 600;
 
-/** A held bot message is at most a quiet window away; a `botAt` farther out is a caller's bug. */
-const MAX_HOLD_MS = 86_400_000;
+/**
+ * A held bot message is at most a quiet window away — plus the hour a patient
+ * notice may wait before the window opens (F-601-p); a `botAt` farther out is
+ * a caller's bug.
+ */
+const MAX_HOLD_MS = 86_400_000 + 3_600_000;
 
 /**
  * The retention ledger (F-601-a, invariant 14): a retention notice is told
@@ -42,7 +47,8 @@ const MAX_HOLD_MS = 86_400_000;
  * set to `essential` is muted for every kind. A `cutoff` kind is always
  * `now`. A row whose bot message is already held answers `held` again, so a
  * redelivery after the window ended never tells the bot a second time beside
- * the held one.
+ * the held one. A notice that may wait (`waitSec`, F-601-p) is held also
+ * when the window opens before its wait ends.
  *
  * The app pool: the table has no `tenantId` and no RLS, and the caller is a
  * process on the internal seam, never a user.
@@ -70,7 +76,7 @@ export class RetentionLedgerService {
     if (kind === 'cutoff') return { claimed: true, deliver: 'now' };
     const [pref, level] = await Promise.all([this.preferences.stored(input.userId), this.levels.level(input.userId, input.grantId)]);
     if (level === 'essential' || pref?.mutedKinds.includes(kind)) return { claimed: true, deliver: 'muted' };
-    const until = quietUntil(pref, now);
+    const until = quietWithin(pref, now, input.waitSec ?? 0);
     return until ? { claimed: true, deliver: 'held', botAt: until.toISOString() } : { claimed: true, deliver: 'now' };
   }
 
@@ -81,7 +87,7 @@ export class RetentionLedgerService {
    */
   async hold(input: RetentionHold, now = new Date()): Promise<{ held: boolean }> {
     const botAt = new Date(input.botAt);
-    if (!(botAt.getTime() - now.getTime() <= MAX_HOLD_MS)) throw new Error(`a held notice's botAt ${input.botAt} is more than a day away`);
+    if (!(botAt.getTime() - now.getTime() <= MAX_HOLD_MS)) throw new Error(`a held notice's botAt ${input.botAt} is more than a day and an hour away`);
     const key = { grantId: input.grantId, notice: input.notice, period: input.period, eventId: input.eventId };
     const { count } = await this.prisma.retentionNotice.updateMany({
       where: { ...key, botTemplate: null },
@@ -91,7 +97,7 @@ export class RetentionLedgerService {
     return { held: (await this.prisma.retentionNotice.count({ where: { ...key, botTemplate: { not: null } } })) === 1 };
   }
 
-  /** Held bot messages now due, leased to this take for {@link HELD_LEASE_SEC}; oldest first. */
+  /** Held bot messages now due, leased to this take for {@link HELD_LEASE_SEC}; oldest first; each with its Grant, to be named (F-601-p). */
   take(limit: number): Promise<HeldNotice[]> {
     return this.prisma.$queryRaw<HeldNotice[]>(Prisma.sql`
       UPDATE "notification"."retention_notice" AS t
@@ -105,7 +111,7 @@ export class RetentionLedgerService {
         LIMIT ${limit}
         FOR UPDATE SKIP LOCKED
       )
-      RETURNING t."id", t."botTenantId" AS "tenantId", t."userId", t."botTemplate" AS "template", t."botParams" AS "params"`);
+      RETURNING t."id", t."botTenantId" AS "tenantId", t."userId", t."grantId", t."botTemplate" AS "template", t."botParams" AS "params"`);
   }
 
   /** The held messages told: nothing is held on those rows any more. */

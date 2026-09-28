@@ -45,7 +45,7 @@ function build() {
     present: vi.fn(async (keys: string[]) => keys.map(() => false)),
     // F-067-p: the owner's notice joins their burst, told after the window.
     evalScript: vi.fn(async (_script: string, keys: string[], args: unknown[]) => {
-      joined.push({ burst: keys[0]!, params: JSON.parse(String(args[1])) });
+      joined.push({ burst: keys[0]!, params: JSON.parse(String(args[1])).params });
       return 1;
     }),
   };

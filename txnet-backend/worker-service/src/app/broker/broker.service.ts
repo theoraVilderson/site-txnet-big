@@ -14,6 +14,7 @@ import {
   confirmedPublisher,
   NOTICE_BURST_DELAY_ROUTING_KEY,
   NOTICE_BURST_FLUSH_ROUTING_KEY,
+  NOTICE_BURST_HOUR_DELAY_ROUTING_KEY,
   OTP_DELIVERY_ROUTING_PREFIX,
   OutboxEventType,
   outboxRoutingKey,
@@ -115,6 +116,8 @@ export interface NoticeFlush {
   tenantId: string;
   userId: string;
   template: string;
+  /** The hour lane (F-601-p): a non-urgent retention notice's burst; absent is the 10 s one. */
+  window?: 'hour';
 }
 export type NoticeFlushHandler = (flush: NoticeFlush) => Promise<void>;
 
@@ -201,6 +204,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly livePushQueue: string;
   private readonly retentionNoticeQueue: string;
   private readonly noticeDelayQueue: string;
+  private readonly noticeHourDelayQueue: string;
   private readonly noticeFlushQueue: string;
   private readonly outboxPrefetch: number;
   private readonly botUpdatePrefix: string;
@@ -229,6 +233,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     this.livePushQueue = config.getOrThrow<string>('AUTOMATION_LIVE_PUSH_QUEUE');
     this.retentionNoticeQueue = config.getOrThrow<string>('AUTOMATION_RETENTION_NOTICE_QUEUE');
     this.noticeDelayQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_DELAY_QUEUE');
+    this.noticeHourDelayQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_HOUR_DELAY_QUEUE');
     this.noticeFlushQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_FLUSH_QUEUE');
     this.outboxPrefetch = config.getOrThrow<number>('AUTOMATION_OUTBOX_PREFETCH');
     this.botUpdatePrefix = config.getOrThrow<string>('BOT_UPDATE_QUEUE_PREFIX');
@@ -374,6 +379,15 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       },
     });
     await this.channel.bindQueue(this.noticeDelayQueue, this.exchange, NOTICE_BURST_DELAY_ROUTING_KEY);
+    // F-601-p: the hour lane waits in a queue of its own and lands on the same flush key.
+    await this.channel.assertQueue(this.noticeHourDelayQueue, {
+      durable: true,
+      arguments: {
+        'x-dead-letter-exchange': this.exchange,
+        'x-dead-letter-routing-key': NOTICE_BURST_FLUSH_ROUTING_KEY,
+      },
+    });
+    await this.channel.bindQueue(this.noticeHourDelayQueue, this.exchange, NOTICE_BURST_HOUR_DELAY_ROUTING_KEY);
     await this.channel.assertQueue(this.noticeFlushQueue, {
       durable: true,
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
@@ -475,12 +489,14 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   /**
    * Schedule a combined notice's flush `delayMs` from now (F-067-p): the
    * message expires in the delay queue and the broker moves it to the flush
-   * queue. Every flush has the same window, so the queue's head always
-   * expires first and none waits behind a later one.
+   * queue. Every flush of one lane has the same window, and each lane has
+   * its own queue (the hour lane, F-601-p), so a queue's head always expires
+   * first and none waits behind a later one.
    */
   async publishNoticeFlush(flush: NoticeFlush, delayMs: number): Promise<void> {
     if (!this.publish) throw new Error('broker channel is not open');
-    await this.publish(this.exchange, NOTICE_BURST_DELAY_ROUTING_KEY, Buffer.from(JSON.stringify(flush)), {
+    const key = flush.window === 'hour' ? NOTICE_BURST_HOUR_DELAY_ROUTING_KEY : NOTICE_BURST_DELAY_ROUTING_KEY;
+    await this.publish(this.exchange, key, Buffer.from(JSON.stringify(flush)), {
       persistent: true,
       contentType: 'application/json',
       messageId: flush.flushId,

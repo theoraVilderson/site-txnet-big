@@ -37,6 +37,20 @@ export function quietUntil(pref: Pick<StoredPreference, 'quietStart' | 'quietEnd
   return new Date(onTheMinute + wait * 60_000);
 }
 
+/**
+ * `quietUntil` for a notice that may wait up to `waitSec` before it is told
+ * (F-601-p): held also when the window opens inside that wait, until the end
+ * of that window — a notice claimed at 22:30 and told at 23:30 is a night one.
+ */
+export function quietWithin(pref: Pick<StoredPreference, 'quietStart' | 'quietEnd' | 'timezone'> | null, now: Date, waitSec: number): Date | null {
+  const inside = quietUntil(pref, now);
+  if (inside || !pref || pref.quietStart === null || pref.quietEnd === null || pref.quietStart === pref.quietEnd) return inside;
+  const toStart = (pref.quietStart - localMinute(now, pref.timezone) + DAY_MIN) % DAY_MIN;
+  if (toStart * 60 > waitSec) return null;
+  const onTheMinute = now.getTime() - (now.getTime() % 60_000);
+  return quietUntil(pref, new Date(onTheMinute + toStart * 60_000));
+}
+
 function localMinute(now: Date, timezone: string): number {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, hourCycle: 'h23', hour: '2-digit', minute: '2-digit' }).formatToParts(now);
   const part = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);

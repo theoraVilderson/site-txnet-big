@@ -4,6 +4,7 @@ import { IdentityHeaders, RedisTtl, RequestHeaders, UnscopedRedisKeys } from '@t
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { envelopeData } from '../automation/internal-answer';
 import type { BrokerService, NoticeFlush } from '../broker/broker.service';
 import { RealtimePublisher } from '../realtime/realtime.publisher';
 import { RedisService } from '../redis/redis.service';
@@ -19,6 +20,17 @@ export type PersonChannel = (typeof PERSON_CHANNELS)[number];
 
 /** The marker segment of a combined notice's channels; the flush id is the "event" (F-067-p). */
 const BURST_CONSUMER = 'notice-burst';
+
+/** billing's names of one user's Grants, for a combined notice to list (F-601-p). */
+const NAMES_PATH = '/api/internal/billing/entitlement/grants/names';
+
+/**
+ * One service of a combined notice, as auth-service renders it in the user's
+ * language (F-601-p): its catalog name key (the sku when the language has no
+ * text), and the buyer's labels on its live configs. `null`s: a Grant billing
+ * did not name, told as "a service".
+ */
+export type ServiceName = { nameKey: string | null; sku: string | null; labels: string[] };
 
 /**
  * Add one event to its burst and, if the burst had no flush yet, claim it.
@@ -47,7 +59,11 @@ if redis.call('EXISTS', KEYS[3]) == 0 then
 end
 return redis.call('HGETALL', KEYS[3])`;
 
-export type Person = { tenantId: string; userId: string; template: string; params: Record<string, string> };
+/** `grantId`: the service a retention notice is about, so a combined one can name it (F-601-p). */
+export type Person = { tenantId: string; userId: string; template: string; params: Record<string, string>; grantId?: string };
+
+/** One burst entry as stored: its params, and its Grant when it has one. */
+type Entry = { params: Record<string, string>; grantId?: string };
 
 /**
  * One event, told (F-067-o, ADR-0084 decision 2). `consumer` is the notice's
@@ -66,6 +82,12 @@ export type EventNotice = {
   live?: { channel: `user:${string}` | `tenant:${string}`; body: Record<string, unknown> };
   person?: Person;
   only?: readonly PersonChannel[];
+  /**
+   * `hour`: a non-urgent retention notice (F-601-p) — its burst waits
+   * `AUTOMATION_RETENTION_WINDOW_MS` for the same notice of the user's other
+   * services, in a lane of its own. Absent: the 10 s burst.
+   */
+  window?: 'hour';
 };
 
 /**
@@ -84,6 +106,11 @@ export type EventNotice = {
  * burst for that template, and the first event of a burst schedules a flush
  * `AUTOMATION_NOTICE_WINDOW_MS` later through the broker's delay queue. The
  * flush tells the event itself if it was alone, or one summary with `count`.
+ *
+ * **Several services, named** (F-601-p). A retention notice carries its
+ * Grant; a combined flush of them asks billing for the services' names once
+ * and tells them beside `count`. A lookup that fails tells the summary alone:
+ * a notice without its list beats one not told.
  */
 export class EventNoticeSender {
   private readonly logger = new Logger(EventNoticeSender.name);
@@ -91,6 +118,9 @@ export class EventNoticeSender {
   private readonly serviceToken: string;
   private readonly timeoutMs: number;
   private readonly windowMs: number;
+  private readonly hourMs: number;
+  private readonly billingUrl: string;
+  private readonly billingTimeoutMs: number;
 
   constructor(
     private readonly redis: RedisService,
@@ -102,6 +132,9 @@ export class EventNoticeSender {
     this.serviceToken = config.get<string>('SERVICE_AUTH_TOKEN', '');
     this.timeoutMs = config.get<number>('AUTH_API_TIMEOUT_MS', 30_000);
     this.windowMs = config.get<number>('AUTOMATION_NOTICE_WINDOW_MS', 10_000);
+    this.hourMs = config.get<number>('AUTOMATION_RETENTION_WINDOW_MS', 3_600_000);
+    this.billingUrl = config.get<string>('BILLING_API_BASE_URL', '').replace(/\/+$/, '');
+    this.billingTimeoutMs = config.get<number>('BILLING_API_TIMEOUT_MS', 30_000);
   }
 
   async send(notice: EventNotice): Promise<void> {
@@ -112,7 +145,7 @@ export class EventNoticeSender {
       for (const channel of notice.only) await this.once(notice, channel, () => this.tell(channel, person), failures);
     } else if (person) {
       const owed = await this.owedBeforeBursts(notice);
-      if (owed === null) await this.once(notice, 'person', () => this.join(notice.eventId, person), failures);
+      if (owed === null) await this.once(notice, 'person', () => this.join(notice.eventId, person, notice.window), failures);
       for (const channel of owed ?? []) await this.once(notice, channel, () => this.tell(channel, person), failures);
     }
     if (failures.length > 0) throw failures[0];
@@ -140,40 +173,75 @@ export class EventNoticeSender {
    * batch it first took.
    */
   async flush(flush: NoticeFlush): Promise<void> {
-    const { flushId, tenantId, userId, template } = flush;
+    const { flushId, tenantId, userId, template, window } = flush;
     const flat = await this.redis.evalScript<string[]>(
       NOTICE_BURST_TAKE,
       [
-        UnscopedRedisKeys.noticeBurstScheduled(tenantId, userId, template),
-        UnscopedRedisKeys.noticeBurst(tenantId, userId, template),
+        UnscopedRedisKeys.noticeBurstScheduled(tenantId, userId, template, window),
+        UnscopedRedisKeys.noticeBurst(tenantId, userId, template, window),
         UnscopedRedisKeys.noticeBurstBatch(flushId),
       ],
       [RedisTtl.outboxProcessed, flushId],
     );
-    const count = flat.length / 2;
+    const entries = flat.filter((_, i) => i % 2 === 1).map(entryOf);
+    const count = entries.length;
     if (count === 0) return;
-    const person: Person = { tenantId, userId, template, params: count === 1 ? (JSON.parse(flat[1]!) as Record<string, string>) : {} };
+    const person: Person = { tenantId, userId, template, params: count === 1 ? entries[0]!.params : {} };
+    const services = count > 1 ? await this.names(tenantId, userId, entries) : undefined;
     const failures: unknown[] = [];
     const told = { consumer: BURST_CONSUMER, eventId: flushId };
     for (const channel of PERSON_CHANNELS) {
-      await this.once(told, channel, () => this.tell(channel, person, count > 1 ? count : undefined), failures);
+      await this.once(told, channel, () => this.tell(channel, person, count > 1 ? count : undefined, services), failures);
     }
     if (failures.length > 0) throw failures[0];
   }
 
+  /**
+   * Tell several items of one template on one channel as one message
+   * (F-601-p): the bot messages held for one user's quiet hours and due
+   * together. Each item is marked on its own before the tell and given back
+   * if it throws, so a repeat tells only what was not told; one item left is
+   * told as itself.
+   */
+  async sendTogether(
+    consumer: string,
+    channel: PersonChannel,
+    base: Omit<Person, 'params' | 'grantId'>,
+    items: ReadonlyArray<{ eventId: string; params: Record<string, string>; grantId?: string }>,
+  ): Promise<void> {
+    const marked: string[] = [];
+    const owed: typeof items[number][] = [];
+    for (const item of items) {
+      const marker = UnscopedRedisKeys.outboxProcessed(`${consumer}:${channel}`, item.eventId);
+      if (!(await this.redis.setNx(marker, RedisTtl.outboxProcessed))) continue;
+      marked.push(marker);
+      owed.push(item);
+    }
+    if (owed.length === 0) return;
+    try {
+      if (owed.length === 1) await this.tell(channel, { ...base, params: owed[0]!.params });
+      else await this.tell(channel, { ...base, params: {} }, owed.length, await this.names(base.tenantId, base.userId, owed));
+    } catch (err) {
+      for (const marker of marked) await this.redis.del(marker);
+      throw err;
+    }
+  }
+
   /** Add the event to its burst; the call that opens a burst schedules its flush, or gives the claim back. */
-  private async join(eventId: string, person: Person): Promise<void> {
+  private async join(eventId: string, person: Person, window?: 'hour'): Promise<void> {
     const { tenantId, userId, template } = person;
-    const scheduled = UnscopedRedisKeys.noticeBurstScheduled(tenantId, userId, template);
+    const windowMs = window === 'hour' ? this.hourMs : this.windowMs;
+    const scheduled = UnscopedRedisKeys.noticeBurstScheduled(tenantId, userId, template, window);
     const flushId = randomUUID();
+    const entry: Entry = person.grantId ? { params: person.params, grantId: person.grantId } : { params: person.params };
     const claimed = await this.redis.evalScript<number>(
       NOTICE_BURST_ADD,
-      [UnscopedRedisKeys.noticeBurst(tenantId, userId, template), scheduled],
-      [eventId, JSON.stringify(person.params), RedisTtl.outboxProcessed, Math.ceil(this.windowMs / 1000) + RedisTtl.noticeBurstScheduledSlack, flushId],
+      [UnscopedRedisKeys.noticeBurst(tenantId, userId, template, window), scheduled],
+      [eventId, JSON.stringify(entry), RedisTtl.outboxProcessed, Math.ceil(windowMs / 1000) + RedisTtl.noticeBurstScheduledSlack, flushId],
     );
     if (claimed !== 1) return;
     try {
-      await this.broker.publishNoticeFlush({ flushId, tenantId, userId, template }, this.windowMs);
+      await this.broker.publishNoticeFlush({ flushId, tenantId, userId, template, ...(window ? { window } : {}) }, windowMs);
     } catch (err) {
       await this.redis.del(scheduled);
       throw err;
@@ -195,8 +263,44 @@ export class EventNoticeSender {
     }
   }
 
+  /**
+   * The services a combined notice lists, in its order (F-601-p) — only when
+   * every item names its Grant, else `undefined`. Never throws: a lookup that
+   * fails is logged and the summary is told without the list.
+   */
+  private async names(tenantId: string, userId: string, items: ReadonlyArray<{ grantId?: string }>): Promise<ServiceName[] | undefined> {
+    const grantIds = items.map((i) => i.grantId);
+    if (grantIds.some((id) => !id)) return undefined;
+    try {
+      if (!this.billingUrl) throw new Error('BILLING_API_BASE_URL is not set');
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.billingTimeoutMs);
+      try {
+        const response = await fetch(`${this.billingUrl}${NAMES_PATH}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', [RequestHeaders.serviceToken]: this.serviceToken },
+          body: JSON.stringify({ tenantId, userId, grantIds }),
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`billing answered ${response.status} to ${NAMES_PATH}`);
+        const items = envelopeData(await response.json())?.items;
+        if (!Array.isArray(items)) throw new Error(`billing answered ${NAMES_PATH} without its items`);
+        const byId = new Map((items as Array<ServiceName & { grantId: string }>).map((n) => [n.grantId, n]));
+        return grantIds.map((id) => {
+          const n = byId.get(id!);
+          return { nameKey: n?.nameKey ?? null, sku: n?.sku ?? null, labels: n?.labels ?? [] };
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (err) {
+      this.logger.warn(`combined notice for user ${userId} told without its services' names: ${(err as Error).message}`);
+      return undefined;
+    }
+  }
+
   /** Throws on an unset seam or a refusal, so that channel stays owed. */
-  private async tell(channel: PersonChannel, person: Person, count?: number): Promise<void> {
+  private async tell(channel: PersonChannel, person: Person, count?: number, services?: ServiceName[]): Promise<void> {
     if (!this.baseUrl) throw new Error('AUTH_API_BASE_URL is not set');
     if (!this.serviceToken) throw new Error('SERVICE_AUTH_TOKEN is not set');
 
@@ -210,7 +314,7 @@ export class EventNoticeSender {
           [RequestHeaders.serviceToken]: this.serviceToken,
           [IdentityHeaders.tenantId]: person.tenantId,
         },
-        body: JSON.stringify({ userId: person.userId, channel, template: person.template, params: person.params, count }),
+        body: JSON.stringify({ userId: person.userId, channel, template: person.template, params: person.params, count, services }),
         signal: controller.signal,
       });
       if (!response.ok) throw new Error(`auth-api answered ${response.status} to ${NOTIFY_PATH} (${channel})`);
@@ -218,4 +322,15 @@ export class EventNoticeSender {
       clearTimeout(timer);
     }
   }
+}
+
+/**
+ * A stored burst entry. Before F-601-p an entry was its params alone, and a
+ * batch is kept for a redelivered flush (`RedisTtl.outboxProcessed`), so that
+ * shape is still read; no template has a param named `params`.
+ */
+function entryOf(raw: string): Entry {
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  if (parsed['params'] && typeof parsed['params'] === 'object') return parsed as unknown as Entry;
+  return { params: parsed as Record<string, string> };
 }

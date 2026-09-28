@@ -4,8 +4,13 @@ import { OutboxEventType } from '@txnet-backend/shared-core';
  * How one retention event is told: auth-service's template, the payload
  * fields passed to it as params, and `optional` ones passed only when the
  * payload has them (the tenant's support link, which it may not have set).
+ *
+ * `patient` (F-601-p, user 2026-09-28): a non-urgent notice, which waits up to
+ * an hour for the same notice of the user's other services and is told with
+ * them as one message. A row without it is urgent — a new type is never
+ * delayed by omission.
  */
-export type RetentionNotice = { template: string; params: readonly string[]; optional?: readonly string[]; ahead?: AheadNotice };
+export type RetentionNotice = { template: string; params: readonly string[]; optional?: readonly string[]; ahead?: AheadNotice; patient?: true };
 
 /**
  * A second notice the event may carry, told with it as one message (F-601-f):
@@ -37,16 +42,16 @@ const USAGE_WITH_END: AheadNotice = {
  */
 export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>> = {
   // F-601-c: nothing consumed 24 h, then 72 h, after activation — the steps, and the tenant's support.
-  [OutboxEventType.GRANT_NOT_CONNECTED]: { template: 'serviceNotConnected', params: [], optional: ['supportUrl'] },
-  [OutboxEventType.GRANT_STILL_NOT_CONNECTED]: { template: 'serviceStillNotConnected', params: [], optional: ['supportUrl'] },
+  [OutboxEventType.GRANT_NOT_CONNECTED]: { template: 'serviceNotConnected', params: [], optional: ['supportUrl'], patient: true },
+  [OutboxEventType.GRANT_STILL_NOT_CONNECTED]: { template: 'serviceStillNotConnected', params: [], optional: ['supportUrl'], patient: true },
   // F-601-d: a prepaid Grant's period crossed 50 / 80 / 95 % of its bytes — the level and what is left;
   // with a time level due the same day when there is one (F-601-f, F-601-n).
-  [OutboxEventType.GRANT_USAGE_50]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'], ahead: USAGE_WITH_END },
-  [OutboxEventType.GRANT_USAGE_80]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'], ahead: USAGE_WITH_END },
+  [OutboxEventType.GRANT_USAGE_50]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'], ahead: USAGE_WITH_END, patient: true },
+  [OutboxEventType.GRANT_USAGE_80]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'], ahead: USAGE_WITH_END, patient: true },
   [OutboxEventType.GRANT_USAGE_95]: { template: 'serviceUsageThreshold', params: ['percent', 'remaining'], ahead: USAGE_WITH_END },
   // F-601-e: 7 / 3 / 1 day(s) before a Grant's end — the whole days left; the last level reads "within a day".
-  [OutboxEventType.GRANT_ENDS_IN_7D]: { template: 'serviceEndsSoon', params: ['days'] },
-  [OutboxEventType.GRANT_ENDS_IN_3D]: { template: 'serviceEndsSoon', params: ['days'] },
+  [OutboxEventType.GRANT_ENDS_IN_7D]: { template: 'serviceEndsSoon', params: ['days'], patient: true },
+  [OutboxEventType.GRANT_ENDS_IN_3D]: { template: 'serviceEndsSoon', params: ['days'], patient: true },
   [OutboxEventType.GRANT_ENDS_IN_1D]: { template: 'serviceEndsWithinADay', params: [] },
   // F-601-b: the service stopped — time, a prepaid volume, a metered wallet. Cutoff notices: never muted (F-601-m).
   [OutboxEventType.GRANT_ENDED]: { template: 'serviceEnded', params: [] },
@@ -60,9 +65,9 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   // F-601-k: a stopped Grant runs again — told once per stop undone, the link unchanged.
   [OutboxEventType.GRANT_REACTIVATED]: { template: 'serviceReactivated', params: [] },
   // F-601-l: used, then nothing for 7 days — one check-in per idle stretch, and the tenant's support.
-  [OutboxEventType.GRANT_IDLE]: { template: 'serviceIdle', params: [], optional: ['supportUrl'] },
+  [OutboxEventType.GRANT_IDLE]: { template: 'serviceIdle', params: [], optional: ['supportUrl'], patient: true },
   // F-602: at the last 72 h's rate, what is left of the period runs out within 5 days (or a day) — once per usage period.
-  [OutboxEventType.GRANT_RUNS_OUT_SOON]: { template: 'serviceRunsOutSoon', params: ['days', 'remaining'] },
+  [OutboxEventType.GRANT_RUNS_OUT_SOON]: { template: 'serviceRunsOutSoon', params: ['days', 'remaining'], patient: true },
   [OutboxEventType.GRANT_RUNS_OUT_WITHIN_A_DAY]: { template: 'serviceRunsOutWithinADay', params: ['remaining'] },
   // F-311-s: an admin's act on the service, told once per act (period = its audit row); never muted. `reactivated`: the act
   // also brought a stopped service back, said as the message's closing line instead of a second "active again".

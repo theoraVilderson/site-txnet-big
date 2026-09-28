@@ -59,7 +59,7 @@ function build({ marked = false, notifyStatus = 200 }: { marked?: boolean; notif
     present: vi.fn(async (keys: string[]) => keys.map(() => false)),
     // F-067-p: the inbox and bot notice joins its burst; the first one claims the flush.
     evalScript: vi.fn(async (_script: string, keys: string[], args: unknown[]) => {
-      calls.joined.push({ burst: keys[0]!, eventId: args[0], params: JSON.parse(String(args[1])) });
+      calls.joined.push({ burst: keys[0]!, eventId: args[0], params: JSON.parse(String(args[1])).params });
       return 1;
     }),
   };

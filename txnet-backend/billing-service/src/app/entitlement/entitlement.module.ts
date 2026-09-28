@@ -5,6 +5,7 @@ import { TrafficModule } from '../traffic/traffic.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { GrantDeliveryService } from './delivery';
 import { EntitlementInternalController } from './entitlement-internal.controller';
+import { GrantNamesService } from './grant-names';
 import { GrantService } from './grant';
 import { GrantTokenSeal } from './grant-token-seal';
 import { GrantPurgeService } from './purge';
@@ -33,7 +34,7 @@ import { GrantUnfreezeService } from './freeze';
 @Module({
   imports: [TrafficModule, WalletModule],
   controllers: [EntitlementInternalController],
-  providers: [KekService, GrantTokenSeal, GrantService, GrantPurgeService, GrantDeliveryService, GrantUnusedNoticeService, GrantEndNoticeService, GrantPurgeNoticeService, GrantIdleNoticeService, GrantExhaustionForecastService, GrantUnfreezeService],
+  providers: [KekService, GrantTokenSeal, GrantService, GrantPurgeService, GrantDeliveryService, GrantUnusedNoticeService, GrantEndNoticeService, GrantPurgeNoticeService, GrantIdleNoticeService, GrantExhaustionForecastService, GrantUnfreezeService, GrantNamesService],
   exports: [GrantService, GrantPurgeService],
 })
 export class EntitlementModule {}

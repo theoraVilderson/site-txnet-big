@@ -64,8 +64,25 @@ export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 export const NOTIFY_CHANNELS = ['inbox', 'bot'] as const;
 export type NotifyChannel = (typeof NOTIFY_CHANNELS)[number];
 
-/** `count` (F-067-p, ADR-0084 decision 3): the worker combined this many of one template into one notice; the summary text is told, with `{{count}}`. */
-export type NotifyRequest = { userId: string; channel: NotifyChannel; template: NotifyTemplate; params: Record<string, string>; count?: number };
+/**
+ * One service a combined notice names (F-601-p): its catalog name key, read
+ * here in the user's language, the sku when no language has it, and the
+ * buyer's labels on its configs. `null`s: a service billing did not name.
+ */
+export type NotifyService = { nameKey: string | null; sku: string | null; labels: string[] };
+
+/**
+ * `count` (F-067-p, ADR-0084 decision 3): the worker combined this many of one template into one notice; the summary text is told, with `{{count}}`.
+ * `services` (F-601-p): the services that summary is about, listed under it.
+ */
+export type NotifyRequest = {
+  userId: string;
+  channel: NotifyChannel;
+  template: NotifyTemplate;
+  params: Record<string, string>;
+  count?: number;
+  services?: NotifyService[];
+};
 export type NotifyResult = { sent: BotPlatform[] };
 
 type Texts = Partial<Record<string, string>>;
@@ -618,6 +635,18 @@ const TRAILING_LINES: ReadonlyArray<Text & { param: string }> = [
   { param: 'supportUrl', read: (ns) => ns?.retention?.supportLine, fallback: '🛟 Support: {{supportUrl}}' },
 ];
 
+/** A combined notice lists at most this many services; the rest are one "and N more" line. */
+const LISTED_SERVICES = 20;
+
+/** The words of a combined notice's list of services (F-601-p). */
+const SERVICE_LIST = {
+  line: { read: (ns) => ns?.retention?.serviceLine, fallback: '• {{name}}' },
+  labelled: { read: (ns) => ns?.retention?.serviceLineLabelled, fallback: '• {{name}} — {{labels}}' },
+  separator: { read: (ns) => ns?.retention?.serviceLabelsSeparator, fallback: ', ' },
+  unnamed: { read: (ns) => ns?.retention?.serviceUnnamed, fallback: 'A service' },
+  more: { read: (ns) => ns?.retention?.servicesMore, fallback: '…and {{more}} more' },
+} satisfies Record<string, Text>;
+
 function interpolate(template: string, vars: Record<string, string>): string {
   return Object.entries(vars).reduce(
     (acc, [key, value]) => acc.replace(new RegExp(`{{\\s*${key}\\s*}}`, 'g'), value),
@@ -664,7 +693,8 @@ export class UserNotifier {
     const spec = combined ? TEMPLATE_TEXT[request.template].many : TEMPLATE_TEXT[request.template];
     const params = combined ? { ...request.params, count: String(request.count) } : request.params;
     const body = interpolate(spec.read(ns) ?? spec.fallback, params);
-    const text = [body, ...TRAILING_LINES.filter((l) => params[l.param]).map((l) => interpolate(l.read(ns) ?? l.fallback, params))].join('\n\n');
+    const list = combined && request.services?.length ? this.serviceList(request.services, user.languagePreference, ns) : null;
+    const text = [body, ...(list ? [list] : []), ...TRAILING_LINES.filter((l) => params[l.param]).map((l) => interpolate(l.read(ns) ?? l.fallback, params))].join('\n\n');
 
     if (request.channel === 'inbox') {
       // Throws: the row is owed until it lands.
@@ -694,5 +724,27 @@ export class UserNotifier {
     }
     if (sent.length === 0 && lastError) throw lastError;
     return { sent };
+  }
+
+  /**
+   * The services a combined notice is about, one line each (F-601-p): the
+   * catalog name in the user's language, else the platform's default one,
+   * else the sku; then the buyer's labels, which tell identical purchases
+   * apart. Past {@link LISTED_SERVICES}, one "and N more" line.
+   */
+  private serviceList(services: NotifyService[], lang: string, ns: NotificationsNamespace | undefined): string {
+    const say = (t: Text, vars: Record<string, string> = {}) => interpolate(t.read(ns) ?? t.fallback, vars);
+    const catalogName = (key: string | null) => {
+      if (!key?.startsWith('catalog.')) return undefined;
+      const entry = key.slice('catalog.'.length);
+      const text = this.locale.getKey(lang, 'catalog', entry) ?? this.locale.getKey(this.locale.getDefaultLanguage(), 'catalog', entry);
+      return typeof text === 'string' && text !== '' ? text : undefined;
+    };
+    const lines = services.slice(0, LISTED_SERVICES).map((s) => {
+      const name = catalogName(s.nameKey) ?? s.sku ?? say(SERVICE_LIST.unnamed);
+      return s.labels.length > 0 ? say(SERVICE_LIST.labelled, { name, labels: s.labels.join(say(SERVICE_LIST.separator)) }) : say(SERVICE_LIST.line, { name });
+    });
+    if (services.length > LISTED_SERVICES) lines.push(say(SERVICE_LIST.more, { more: String(services.length - LISTED_SERVICES) }));
+    return lines.join('\n');
   }
 }

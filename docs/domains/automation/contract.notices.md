@@ -3,7 +3,7 @@ id: automation
 layer: domain
 status: active
 version: 8
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # Contract — automation: telling a person about an event
@@ -49,9 +49,11 @@ its own re-read (`panel-web/contract.systems.md` rule 2).
 | **A burst is one recipient, one tenant, one template.** `person` is `HSET` into `noticeBurst(tenantId, userId, template)`, field = event id | a redelivered event is counted once; two templates never merge into a sentence neither has |
 | **The first event of a burst schedules its flush.** One script adds the event and `SET NX`es `noticeBurstScheduled(…)` to a new flush id; the call that took it publishes the flush to `AUTOMATION_NOTICE_DELAY_QUEUE` with `expiration` = `AUTOMATION_NOTICE_WINDOW_MS` (10 s) | one flush per burst however many replicas take its events |
 | A flush that could not be published frees the flag and throws; the event's `person` marker is given back | the redelivery schedules it again. The flag's own TTL (window + 60 s) frees a burst whose flush died with its process |
-| **The delay is the broker's**: the delay queue has no consumer and dead-letters onto `notice.burst.flush`, bound by `AUTOMATION_NOTICE_FLUSH_QUEUE`; `NoticeFlushConsumer` tells it | a scheduled flush survives a restart. One window for all, so the queue's head always expires first |
+| **The delay is the broker's**: the delay queue has no consumer and dead-letters onto `notice.burst.flush`, bound by `AUTOMATION_NOTICE_FLUSH_QUEUE`; `NoticeFlushConsumer` tells it | a scheduled flush survives a restart. One window per queue, so a queue's head always expires first |
+| **The hour lane** (F-601-p): an event sent with `window: 'hour'` — a patient retention notice — joins `noticeBurst(…, 'hour')`, and its flush (`window: 'hour'`) waits `AUTOMATION_RETENTION_WINDOW_MS` (1 h) in `AUTOMATION_NOTICE_HOUR_DELAY_QUEUE`, onto the same flush key | the same template's 10 s burst is a different one; a 1 h message in the 10 s queue would hold every flush behind it |
 | **The flush takes the burst once.** One script renames the hash to `noticeBurstBatch(flushId)` (7 days) and clears the flag only if it still holds this flush's id | an event after the take opens the next burst. A redelivered flush re-reads its own batch, never a newer one |
 | One event: the template with its own params. More: the template with `count` and no params — auth-service's `…Many` / `…ManyTitle` text | a summary cannot name twelve panels. `auth-api/contract.md` `/internal/notify/user` |
+| **A burst of services is named** (F-601-p): an entry is stored as `{ params, grantId? }` (the older bare params still read); a combined flush whose every entry has a Grant asks billing's `grants/names` once and sends `services` beside `count`, one per entry. A failed lookup tells without it | "3 of your services end within a week" says which three (notification `contract.retention.md`) |
 | A flush with an empty batch sends nothing | a second flush of an already-taken burst is harmless |
 | **Each outbox queue has its own channel at `AUTOMATION_OUTBOX_PREFETCH` (8)**, like the bot-update queues | `prefetch` is per channel here. On the shared one a burst of one type took the ticks' slots and every other type's |
 

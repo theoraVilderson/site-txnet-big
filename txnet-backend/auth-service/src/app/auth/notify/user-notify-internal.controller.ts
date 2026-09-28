@@ -14,6 +14,19 @@ const notifySchema = z
     params: z.record(z.string().max(200)).default({}),
     // F-067-p: a combined burst of this template; absent for one event.
     count: z.number().int().min(2).max(100_000).optional(),
+    // F-601-p: the services a combined retention notice is about, listed under it.
+    services: z
+      .array(
+        z
+          .object({
+            nameKey: z.string().max(200).nullable(),
+            sku: z.string().max(200).nullable(),
+            labels: z.array(z.string().max(40)).max(50),
+          })
+          .strict(),
+      )
+      .max(500)
+      .optional(),
   })
   .strict();
 

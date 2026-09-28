@@ -16,6 +16,8 @@ export const retentionClaimSchema = z
     grantId: z.string({ message: invalid }).uuid({ message: invalid }),
     notice: z.string({ message: invalid }).regex(/^[a-z0-9_]+(\.[a-z0-9_]+)+$/, { message: invalid }).max(100, { message: invalid }),
     period: z.string({ message: invalid }).min(1, { message: invalid }).max(100, { message: invalid }),
+    // F-601-p: a patient notice may wait this long for the user's other services.
+    waitSec: z.number({ message: invalid }).int({ message: invalid }).min(1, { message: invalid }).max(3600, { message: invalid }).optional(),
   })
   .strict();
 
@@ -25,7 +27,7 @@ export const retentionClaimSchema = z
  * the `botAt` the claim answered.
  */
 export const retentionHoldSchema = retentionClaimSchema
-  .omit({ userId: true })
+  .omit({ userId: true, waitSec: true })
   .extend({
     tenantId: z.string({ message: invalid }).uuid({ message: invalid }),
     template: z.string({ message: invalid }).regex(/^[A-Za-z0-9]+$/, { message: invalid }).max(100, { message: invalid }),

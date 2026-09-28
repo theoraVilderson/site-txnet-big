@@ -651,6 +651,61 @@ describe('UserNotifier', () => {
     }
   });
 
+  describe('a combined notice names its services (F-601-p)', () => {
+    const catalog: Record<string, Record<string, string>> = { fa: { 'product.month.name': 'یک‌ماهه' }, en: { 'product.year.name': 'Yearly' } };
+    const locale = (namespace: unknown) =>
+      ({
+        getNamespace: vi.fn(() => namespace),
+        getKey: vi.fn((lang: string, n: string, key: string) => (n === 'catalog' ? catalog[lang]?.[key] : undefined)),
+        getDefaultLanguage: () => 'en',
+      }) as unknown as LocaleService;
+
+    it('lists each under the summary, in the user’s language, then the default, the sku, or "a service"; labels beside the name', async () => {
+      const client = botClient();
+      const notifier = new UserNotifier(
+        notifierPrisma({ user: { languagePreference: 'fa' }, links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+        registry(client),
+        locale({ retention: { endsSoonMany: '{{count}} ends', serviceLabelsSeparator: '، ' } }),
+      );
+      await inTenant(() =>
+        notifier.notify({
+          userId: 'user-1',
+          channel: 'bot',
+          template: 'serviceEndsSoon',
+          params: {},
+          count: 4,
+          services: [
+            { nameKey: 'catalog.product.month.name', sku: 'M', labels: ['علی', 'لپ‌تاپ'] },
+            { nameKey: 'catalog.product.year.name', sku: 'Y', labels: [] },
+            { nameKey: 'catalog.product.gone.name', sku: 'G1', labels: [] },
+            { nameKey: null, sku: null, labels: [] },
+          ],
+        }),
+      );
+
+      expect(client.sendMessage).toHaveBeenCalledWith('5501', '4 ends\n\n• یک‌ماهه — علی، لپ‌تاپ\n• Yearly\n• G1\n• A service');
+    });
+
+    it('tells one notice as itself, with no list, and past twenty lists "and N more"', async () => {
+      const client = botClient();
+      const notifier = new UserNotifier(
+        notifierPrisma({ links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+        registry(client),
+        locale({ retention: { endsSoon: 'ends in {{days}}', endsSoonMany: '{{count}} end' } }),
+      );
+      const one = { nameKey: null, sku: 'S', labels: [] };
+      await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'serviceEndsSoon', params: { days: '7' }, services: [one] }));
+      await inTenant(() =>
+        notifier.notify({ userId: 'user-1', channel: 'bot', template: 'serviceEndsSoon', params: {}, count: 23, services: Array(23).fill(one) }),
+      );
+
+      expect(client.sendMessage.mock.calls[0][1]).toBe('ends in 7');
+      const lines = String(client.sendMessage.mock.calls[1][1]).split('\n');
+      expect(lines.filter((l) => l === '• S')).toHaveLength(20);
+      expect(lines.at(-1)).toBe('…and 3 more');
+    });
+  });
+
   it('falls back to English text when the namespace has no template', async () => {
     const client = botClient();
     const notifier = new UserNotifier(

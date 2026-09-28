@@ -215,6 +215,12 @@ export const OTP_DELIVERY_ROUTING_KEY = `${OTP_DELIVERY_ROUTING_PREFIX}send`;
  */
 export const NOTICE_BURST_DELAY_ROUTING_KEY = 'notice.burst.delay';
 export const NOTICE_BURST_FLUSH_ROUTING_KEY = 'notice.burst.flush';
+/**
+ * The hour lane's delay (F-601-p): a non-urgent retention notice waits up to an
+ * hour for the same notice of the user's other services. Its own queue, since a
+ * delay queue expires only its head and every message in one must share a window.
+ */
+export const NOTICE_BURST_HOUR_DELAY_ROUTING_KEY = 'notice.burst.delay-hour';
 
 /** A topic binding matching every routing key under `prefix` (which ends in `.`). */
 export const topicBindingAll = (prefix: string): string => `${prefix}#`;

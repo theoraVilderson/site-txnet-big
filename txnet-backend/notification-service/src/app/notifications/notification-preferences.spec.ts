@@ -15,7 +15,7 @@
  */
 import { OutboxEventType } from '@txnet-backend/shared-core';
 
-import { NotificationPreferencesService, quietUntil } from './notification-preferences.service';
+import { NotificationPreferencesService, quietUntil, quietWithin } from './notification-preferences.service';
 import { preferencesSchema } from './notification-preferences.schema';
 import { RetentionLedgerService } from './retention-ledger.service';
 
@@ -50,6 +50,21 @@ describe('quietUntil', () => {
   });
 });
 
+describe('quietWithin — a notice that may wait (F-601-p)', () => {
+  // 22:30 Tehran is 19:00 UTC; the window opens at 23:00, 30 minutes on.
+  const before = new Date('2026-09-27T19:00:00Z');
+
+  it('holds a notice whose wait reaches into the window until the window ends', () => {
+    expect(quietWithin(NIGHT, before, 3600)?.toISOString()).toBe('2026-09-28T04:30:00.000Z');
+  });
+
+  it('is quietUntil with no wait, or a wait that ends before the window opens', () => {
+    expect(quietWithin(NIGHT, before, 0)).toBeNull();
+    expect(quietWithin(NIGHT, before, 1200)).toBeNull();
+    expect(quietWithin(NIGHT, new Date('2026-09-27T22:45:40Z'), 3600)?.toISOString()).toBe('2026-09-28T04:30:00.000Z');
+  });
+});
+
 describe('RetentionLedgerService.claim — how a claimed notice is told', () => {
   const at = new Date('2026-09-27T22:45:40Z'); // 02:15 in Tehran
   const claim = (notice: string) => ({ eventId: EVENT, userId: USER, grantId: GRANT, notice, period: 'p1' });
@@ -80,6 +95,18 @@ describe('RetentionLedgerService.claim — how a claimed notice is told', () => 
       deliver: 'held',
       botAt: '2026-09-28T04:30:00.000Z',
     });
+  });
+
+  it('holds a patient notice whose wait runs into the quiet window (F-601-p)', async () => {
+    const { service } = ledger({ mutedKinds: [], ...NIGHT });
+    const evening = new Date('2026-09-27T19:00:00Z'); // 22:30 in Tehran
+
+    await expect(service.claim({ ...claim(OutboxEventType.GRANT_ENDS_IN_7D), waitSec: 3600 }, evening)).resolves.toEqual({
+      claimed: true,
+      deliver: 'held',
+      botAt: '2026-09-28T04:30:00.000Z',
+    });
+    await expect(service.claim(claim(OutboxEventType.GRANT_ENDS_IN_7D), evening)).resolves.toEqual({ claimed: true, deliver: 'now' });
   });
 
   it('tells a cutoff or purge notice now, whatever is muted and whatever the hour — without reading the preferences', async () => {

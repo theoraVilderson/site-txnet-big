@@ -139,6 +139,8 @@ export const envSchema = z.object({
   AUTOMATION_NOTICE_DELAY_QUEUE: z.string().min(1).default('txnet.automation.notice.delay'),
   /** Where that flush lands once the window has passed; the worker tells the burst from here. */
   AUTOMATION_NOTICE_FLUSH_QUEUE: z.string().min(1).default('txnet.automation.notice.flush'),
+  /** The hour lane's delay queue (F-601-p): its own, since a delay queue must hold one window. */
+  AUTOMATION_NOTICE_HOUR_DELAY_QUEUE: z.string().min(1).default('txnet.automation.notice.delay-hour'),
   /**
    * The bot-update queue set (F-067-b): `<prefix>.0` … `<prefix>.N-1`, each
    * bound to its own `bot.update.<slot>` on the same exchange and
@@ -205,6 +207,12 @@ export const envSchema = z.object({
    * burst's notice arrives up to this late (ADR-0084 consequences).
    */
   AUTOMATION_NOTICE_WINDOW_MS: z.coerce.number().int().positive().default(10_000),
+  /**
+   * How long a non-urgent retention notice waits for the same notice of the
+   * user's other services before they are told as one (F-601-p). Urgent ones
+   * keep `AUTOMATION_NOTICE_WINDOW_MS`.
+   */
+  AUTOMATION_RETENTION_WINDOW_MS: z.coerce.number().int().positive().default(3_600_000),
 
   /**
    * How many unpublished `automation.outbox_event` rows one relay run claims

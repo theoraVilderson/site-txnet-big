@@ -35,6 +35,7 @@ import {
   isActiveAt,
   newSubscriptionToken,
 } from './grant';
+import { grantNamesSchema, GrantNamesService } from './grant-names';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -334,5 +335,52 @@ describe('GrantService.issue locks the metered rate (F-027-p, ADR-0073)', () => 
 
     await expect(issue(tx, at('2026-09-01T10:00:00Z'))).rejects.toMatchObject({ reason: 'metered_rate_not_positive' });
     expect(grants).toHaveLength(0);
+  });
+});
+
+describe('GrantNamesService — the services a combined notice names (F-601-p)', () => {
+  const OTHER = '66666666-6666-4666-8666-666666666666';
+  function build() {
+    const grants = [
+      { id: 'g1', userId: USER, variant: { sku: 'M50', nameKey: null, product: { nameKey: 'catalog.product.month.name' } } },
+      { id: 'g2', userId: USER, variant: null },
+      { id: 'g3', userId: OTHER, variant: { sku: 'X', nameKey: 'catalog.product.x.name', product: { nameKey: 'p' } } },
+    ];
+    const configs = [
+      { grantId: 'g1', userId: USER, userLabel: "Ali's phone" },
+      { grantId: 'g1', userId: USER, userLabel: "Ali's phone" },
+      { grantId: 'g1', userId: USER, userLabel: 'laptop' },
+    ];
+    const tx = {
+      $executeRaw: vi.fn(),
+      grant: {
+        findMany: vi.fn(async ({ where }: { where: { id: { in: string[] }; userId: string } }) =>
+          grants.filter((g) => where.id.in.includes(g.id) && g.userId === where.userId),
+        ),
+      },
+      config: {
+        findMany: vi.fn(async ({ where }: { where: { grantId: { in: string[] }; userId: string } }) =>
+          configs.filter((c) => where.grantId.in.includes(c.grantId) && c.userId === where.userId),
+        ),
+      },
+    };
+    const prisma = { $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) };
+    return { service: new GrantNamesService(prisma as never), tx };
+  }
+
+  it("answers the user's own Grants with the product's name key, the sku and each label once; another user's is left out", async () => {
+    const { service, tx } = build();
+    const items = await service.names({ tenantId: TENANT, userId: USER, grantIds: ['g1', 'g2', 'g3'] });
+
+    expect(items).toEqual([
+      { grantId: 'g1', nameKey: 'catalog.product.month.name', sku: 'M50', labels: ["Ali's phone", 'laptop'] },
+      { grantId: 'g2', nameKey: null, sku: null, labels: [] },
+    ]);
+    expect(tx.$executeRaw).toHaveBeenCalled();
+  });
+
+  it('refuses a body without its tenant, or with no Grant', () => {
+    expect(grantNamesSchema.safeParse({ userId: USER, grantIds: [PAYMENT] }).success).toBe(false);
+    expect(grantNamesSchema.safeParse({ tenantId: TENANT, userId: USER, grantIds: [] }).success).toBe(false);
   });
 });

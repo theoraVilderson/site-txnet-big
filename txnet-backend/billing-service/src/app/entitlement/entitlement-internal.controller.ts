@@ -1,14 +1,16 @@
-import { Controller, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 
 import { DeliverDueResult, DeliveryOutcome, GrantDeliveryService } from './delivery';
 import { EndNoticeResult, GrantEndNoticeService } from './end-notice';
 import { ForecastResult, GrantExhaustionForecastService } from './exhaustion-forecast';
 import { GrantUnfreezeService } from './freeze';
+import { GrantName, GrantNamesBody, grantNamesSchema, GrantNamesService } from './grant-names';
 import { GrantIdleNoticeService, IdleNoticeResult } from './idle-notice';
 import { GrantPurgeService, PurgeResult } from './purge';
 import { GrantPurgeNoticeService } from './purge-notice';
 import { GrantUnusedNoticeService, UnusedNoticeResult } from './unused-notice';
+import { ZodValidationPipe } from '../request/zod-validation.pipe';
 
 /**
  * The seam `worker-service` reaches the purge clock through (F-027-y).
@@ -43,6 +45,7 @@ export class EntitlementInternalController {
     private readonly idle: GrantIdleNoticeService,
     private readonly forecast: GrantExhaustionForecastService,
     private readonly unfreeze: GrantUnfreezeService,
+    private readonly grantNames: GrantNamesService,
   ) {}
 
   /**
@@ -123,6 +126,17 @@ export class EntitlementInternalController {
   @HttpCode(200)
   endDue(): Promise<EndNoticeResult> {
     return this.ends.noticeDue();
+  }
+
+  /**
+   * The names a combined retention notice lists (F-601-p): one user's Grants
+   * of one tenant, by id; an id that is not theirs is left out. `{ items }`
+   * in the usual envelope.
+   */
+  @Post('grants/names')
+  @HttpCode(200)
+  async names(@Body(new ZodValidationPipe(grantNamesSchema)) body: GrantNamesBody): Promise<{ items: GrantName[] }> {
+    return { items: await this.grantNames.names(body) };
   }
 
   /**

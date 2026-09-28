@@ -2,7 +2,7 @@
 id: notification
 layer: domain
 status: active
-version: 9
+version: 10
 keywords: [notification, notice settings, quiet hours, mute notices, essential notices only, notices per service, campaign, delivery, push, sms, email, bulk send, reseller campaign, ارسال انبوه, stop a reseller's campaigns, stop sending campaigns, توقف ارسال کمپین‌های نماینده]
 source:
   - txnet-backend/notification-service/**
@@ -30,10 +30,10 @@ updated: 2026-09-28
 ## Changelog
 | Date | Change |
 |---|---|
-| 2026-09-17 | v4 -> **v5** (**break**): the internal `tenants/:tenantId/stop` route is gone — the platform owner's own `campaigns/tenants/:tenantId/stop` is the only way in (F-018-w, ADR-0058 (5)) |
 | 2026-09-20 | v5 -> **v6** (additive, F-313-d): a reseller-named campaign surface — `tenants/:tenantId/campaigns…`, admitted by `ResellerAccess`, with an audience count so a segment is sized before it is sent ([contract.reseller.md](contract.reseller.md)) |
 | 2026-09-27 | v6 -> **v7** (additive, F-601-a): the retention ledger — `internal/notifications/retention/claim`, each retention notice told once per Grant period through ADR-0084's path ([contract.retention.md](contract.retention.md)) |
 | 2026-09-27 | v7 -> **v8** (additive, F-601-m): a user's notice settings — `GET`/`PUT notifications/preferences` (muted kinds, quiet hours); the claim answers how a notice is told, and `retention/hold`, `held/take`, `held/told` release a bot message after quiet hours ([contract.retention.md](contract.retention.md)) |
 | 2026-09-28 | v8 -> **v9** (additive, F-601-o): a notice level per service — `GET notifications/preferences/grants`, `PUT …/grants/:grantId`; the claim answers `muted` for any kind but `cutoff` on a Grant set to `essential` ([contract.retention.md](contract.retention.md) "One service, essentials only") |
+| 2026-09-28 | v9 -> **v10** (additive, F-601-p): the claim takes `waitSec` (a patient notice's wait; quiet hours starting inside it hold the bot), and `held/take` answers each row's `grantId`, so several services' notices are told as one message naming them ([contract.retention.md](contract.retention.md) "Several services, one message") |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

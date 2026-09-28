@@ -55,7 +55,7 @@ function build({
     del: vi.fn(async () => undefined),
     present: vi.fn(async (keys: string[]) => keys.map(() => false)),
     evalScript: vi.fn(async (_script: string, keys: string[], args: unknown[]) => {
-      calls.joined.push({ burst: keys[0]!, eventId: args[0], params: JSON.parse(String(args[1])) });
+      calls.joined.push({ burst: keys[0]!, eventId: args[0], params: JSON.parse(String(args[1])).params });
       return 1;
     }),
   };
@@ -285,6 +285,46 @@ describe('RetentionNoticeConsumer.handle', () => {
       await consumer.handle(event({ endNotice: END, endPeriod: 'e1', days: '3' }));
 
       expect(calls.joined).toEqual([{ burst: UnscopedRedisKeys.noticeBurst(TENANT, USER, 'testEnd'), eventId: EVENT, params: { days: '3' } }]);
+    });
+
+    it('a patient notice tells the claim it may wait, and joins the hour lane with its Grant (F-601-p)', async () => {
+      const { consumer, calls } = build();
+      consumer.notices = { [TYPE]: { template: 'testThreshold', params: ['level'], patient: true } };
+
+      await consumer.handle(event());
+
+      expect(calls.fetched[0]!.body).toMatchObject({ notice: TYPE, waitSec: 3600 });
+      expect(calls.joined.map((j) => j.burst)).toEqual([UnscopedRedisKeys.noticeBurst(TENANT, USER, 'testThreshold', 'hour')]);
+    });
+
+    it('a patient level carrying an urgent one is told on the 10 s lane: an urgent notice never waits (F-601-p)', async () => {
+      const END = 'entitlement.grant.ends_in_1d';
+      const { consumer, calls } = build();
+      consumer.notices = {
+        [TYPE]: { template: 'testThreshold', params: ['level'], patient: true, ahead: { types: [END], told: () => ({ template: 'testThresholdAndLastDay', params: [] }) } },
+        [END]: { template: 'testLastDay', params: [] },
+      };
+
+      await consumer.handle(event({ endNotice: END, endPeriod: 'e1', days: '1' }));
+
+      expect(calls.fetched.map((f) => 'waitSec' in (f.body as object))).toEqual([true, false]);
+      expect(calls.joined.map((j) => j.burst)).toEqual([UnscopedRedisKeys.noticeBurst(TENANT, USER, 'testThresholdAndLastDay')]);
+    });
+
+    it('only the non-urgent notices are patient (user 2026-09-28)', () => {
+      const patient = Object.entries(RETENTION_NOTICES).filter(([, n]) => n?.patient).map(([type]) => type).sort();
+      expect(patient).toEqual(
+        [
+          'entitlement.grant.ends_in_3d',
+          'entitlement.grant.ends_in_7d',
+          'entitlement.grant.idle',
+          'entitlement.grant.not_connected',
+          'entitlement.grant.runs_out_soon',
+          'entitlement.grant.still_not_connected',
+          'entitlement.grant.usage_50',
+          'entitlement.grant.usage_80',
+        ].sort(),
+      );
     });
 
     it('every notice it tells has a kind the ledger reads its mute by', () => {

@@ -233,6 +233,11 @@
     "adminConfigMoved": "🔀 Support moved one of your service's configs to another server. If you added it to your app by hand, copy it again from My services; a subscription link updates on its own.",
     "adminConfigMovedMany": "🔀 Support moved {{count}} of your configs to other servers. If you added them to your app by hand, copy them again from My services; a subscription link updates on its own.",
     "adminConfigMovedManyTitle": "{{count}} configs moved server",
-    "reactivatedLine": "✅ Your service is active again and reconnects within a few minutes — its link stays the same."
+    "reactivatedLine": "✅ Your service is active again and reconnects within a few minutes — its link stays the same.",
+    "serviceLine": "• {{name}}",
+    "serviceLineLabelled": "• {{name}} — {{labels}}",
+    "serviceLabelsSeparator": ", ",
+    "serviceUnnamed": "A service",
+    "servicesMore": "…and {{more}} more"
   }
 }

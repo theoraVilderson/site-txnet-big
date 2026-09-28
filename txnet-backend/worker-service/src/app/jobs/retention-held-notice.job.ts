@@ -18,7 +18,7 @@ const TAKE_LIMIT = 200;
 /** The held message's own marker segment: the ledger row's id is its "event". */
 const CONSUMER = 'retention-held';
 
-type Held = { id: string; tenantId: string; userId: string; template: string; params: Record<string, string> };
+type Held = { id: string; tenantId: string; userId: string; grantId: string; template: string; params: Record<string, string> };
 
 /**
  * The end of a user's quiet hours (F-601-m, spec 9.4). A retention notice
@@ -28,11 +28,15 @@ type Held = { id: string; tenantId: string; userId: string; template: string; pa
  * **Every five minutes**: a window's end is on the minute, and a message five
  * minutes after it is still morning's first.
  *
+ * **One message per template** (F-601-p): the rows due together for one
+ * user and one template — five services' "ends in 7 days" held overnight —
+ * are told as one, naming the services; a template alone is told as itself.
+ *
  * **Safe to run twice** (ADR-0027): a take leases its rows for ten minutes, so
- * two runs never take one row; each message is marked per row id on the bot
- * channel before it is told (`EventNoticeSender`), so a run that died between
- * the tell and `told` repeats nothing when the lease lapses and the row is
- * taken again.
+ * two runs never take one row; each row is marked per row id on the bot
+ * channel before it is told (`EventNoticeSender.sendTogether`), so a run that
+ * died between the tell and `told` repeats nothing when the lease lapses and
+ * the row is taken again — it is only cleared.
  *
  * **It never succeeds quietly**: an unset seam or a refused take throws. A
  * message whose tell failed is left leased, taken again after the lease, and
@@ -69,20 +73,26 @@ export class RetentionHeldNoticeJob implements Job {
     if (!Array.isArray(items?.items)) throw new Error(`notification answered ${TAKE_PATH} without its items`);
     const held = items.items as Held[];
 
+    const groups = new Map<string, Held[]>();
+    for (const row of held) {
+      const key = `${row.tenantId}:${row.userId}:${row.template}`;
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
     const told: string[] = [];
     let errors = 0;
-    for (const row of held) {
+    for (const rows of groups.values()) {
+      const { tenantId, userId, template } = rows[0]!;
       try {
-        await this.sender.send({
-          consumer: CONSUMER,
-          eventId: row.id,
-          person: { tenantId: row.tenantId, userId: row.userId, template: row.template, params: row.params ?? {} },
-          only: ['bot'],
-        });
-        told.push(row.id);
+        await this.sender.sendTogether(
+          CONSUMER,
+          'bot',
+          { tenantId, userId, template },
+          rows.map((r) => ({ eventId: r.id, params: r.params ?? {}, grantId: r.grantId })),
+        );
+        told.push(...rows.map((r) => r.id));
       } catch (err) {
-        errors++;
-        this.logger.warn(`held retention notice ${row.id} not told: ${(err as Error).message}`);
+        errors += rows.length;
+        this.logger.warn(`held retention notice(s) ${rows.map((r) => r.id).join(', ')} not told: ${(err as Error).message}`);
       }
     }
     if (told.length > 0) {

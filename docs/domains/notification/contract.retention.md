@@ -2,7 +2,7 @@
 id: notification
 layer: domain
 status: active
-version: 9
+version: 10
 updated: 2026-09-28
 ---
 
@@ -23,13 +23,13 @@ one notice path of ADR-0084 — not a second one inside `notification-service`
 | emit | the producing domain (entitlement, billing, network) | an outbox row (ADR-0021) in the transaction that saw the moment |
 | route | `worker-service` `RetentionNoticeConsumer`, queue `AUTOMATION_RETENTION_NOTICE_QUEUE` | bound to every type in `RETENTION_NOTICES` (`outbox/retention-notices.ts`) |
 | once per period, and how | **this unit**: `POST internal/notifications/retention/claim` | the ledger below; asked before anything is told; its answer carries the user's mute and quiet hours (F-601-m) and the Grant's own level (F-601-o) |
-| tell | `EventNoticeSender` -> auth-service `/internal/notify/user` | inbox (a `notification` row through this unit's `create`) and bot, in the user's language — [automation/contract.notices.md](../automation/contract.notices.md) |
+| tell | `EventNoticeSender` -> auth-service `/internal/notify/user` | inbox (a `notification` row through this unit's `create`) and bot, in the user's language — [automation/contract.notices.md](../automation/contract.notices.md); several services' same notice as one message, naming them (F-601-p, below) |
 
 ## The claim
 
 | Operation | Route | Input | Output | Errors |
 |---|---|---|---|---|
-| claim a notice for a period | `POST internal/notifications/retention/claim` (`SERVICE_AUTH_TOKEN`) | `{ eventId, userId, grantId: uuid, notice: <outbox type>, period: 1..100 chars }`, strict | `{ claimed: false }`, or `{ claimed: true, deliver: now \| muted }`, or `{ claimed: true, deliver: held, botAt }` (ISO), 200 — "Mute and quiet hours" below | 400 `validation.failed`; 404 on a wrong token |
+| claim a notice for a period | `POST internal/notifications/retention/claim` (`SERVICE_AUTH_TOKEN`) | `{ eventId, userId, grantId: uuid, notice: <outbox type>, period: 1..100 chars, waitSec?: 1..3600 }`, strict — `waitSec`: F-601-p | `{ claimed: false }`, or `{ claimed: true, deliver: now \| muted }`, or `{ claimed: true, deliver: held, botAt }` (ISO), 200 — "Mute and quiet hours" below | 400 `validation.failed`; 404 on a wrong token |
 
 - One `retention_notice` row per `(grantId, notice, period)`. The first event
   to claim it writes it and is answered `claimed: true`.
@@ -54,7 +54,7 @@ over the same row). The claim reads them, so no producer knows they exist.
 | read my settings | `GET notifications/preferences` (gated) | — | `{ muted: kind[], quietHours: { start, end } \| null, timezone }`; no row reads `{ [], null, 'Asia/Tehran' }` | 401; 429 (inbox read bucket) |
 | replace them | `PUT notifications/preferences` (gated, open while suspended) | the same, strict; `start`/`end` `HH:MM` and different, `timezone` an IANA zone | what was stored | 400 `validation.failed`; 401; 429 (inbox write bucket) |
 | keep a held bot message | `POST internal/notifications/retention/hold` (token) | `{ eventId, grantId, notice, period, tenantId, template, params, botAt }`, strict | `{ held }` | 400; 500 on a `botAt` over a day away |
-| take due held messages | `POST internal/notifications/retention/held/take` (token) | `{ limit: 1..500 }` | `{ items: [{ id, tenantId, userId, template, params }] }`, each leased 10 min | 400 |
+| take due held messages | `POST internal/notifications/retention/held/take` (token) | `{ limit: 1..500 }` | `{ items: [{ id, tenantId, userId, grantId, template, params }] }`, each leased 10 min | 400 |
 | mark them told | `POST internal/notifications/retention/held/told` (token) | `{ ids: uuid[1..500] }` | `{ cleared }` | 400 |
 
 | Rule | Why |
@@ -66,6 +66,7 @@ over the same row). The claim reads them, so no producer knows they exist.
 | The first `hold` for a row stands; a claim by the same event on a row already holding one answers `held` with its `botAt` | a redelivery after the window ends never tells the bot beside the held message |
 | A take leases rows 10 min (`FOR UPDATE SKIP LOCKED`); the worker marks each tell per row id, then `told` clears it | two runs never take one row; a run that died between the tell and `told` repeats nothing |
 | Minutes from the local clock: a DST jump inside the window moves the release by that hour | Asia/Tehran has kept none since 2022 |
+| A claim with `waitSec` is also `held` when the window **opens** inside that wait, until that window's end; `botAt` is then at most a day and an hour away (F-601-p) | a notice claimed at 22:30 and told at 23:30 is a night one |
 
 ## One service, essentials only (F-601-o, user 2026-09-28)
 
@@ -84,6 +85,24 @@ notices** or **essential only**; the bot's side is F-319, over the same rows.
 | Beside the kinds muted on every Grant, never instead: a notice is muted when its kind is, **or** its Grant is essential | one switch per service, one per kind, and neither undoes the other |
 | Keyed `(userId, grantId)` under the gate's `userId`, and read by the claim with the event's `userId`: no ownership read of billing | a Grant id that is not the caller's names a row nothing reads; a Grant that changes hands starts at `all` for its new owner |
 | `all` deletes the row; a muted claim still writes the ledger row | no row is the default; switching back never tells a period already past |
+
+## Several services, one message (F-601-p, user 2026-09-28)
+
+A buyer of five services for friends heard "your service ends in 7 days"
+five times, a minute apart. The same notice for several of one user's
+Grants now reaches them once, naming the services. **The ledger does not
+change**: each Grant's row is claimed on its own (invariant 14); only the
+telling groups, per user and template.
+
+| Rule | Why |
+|---|---|
+| **Patient** notices wait up to an hour (`AUTOMATION_RETENTION_WINDOW_MS`) for the same template of the user's other services: 50 / 80 %, 7 / 3 days, not connected (24 h, 72 h), idle, runs out within 5 days — the rows marked `patient` in worker's `RETENTION_NOTICES` | the hourly sweeps emit one user's services minutes apart; an hour catches a sweep whole |
+| **Every other type is urgent** and keeps the 10 s burst: 95 %, the last day, runs out within a day, wallet low, reactivated, every `cutoff`. A row without `patient` is urgent, so a new type is never delayed by omission. A combined usage + time notice waits only if both are patient | "an urgent notice is never delayed" (F-601-n) |
+| The hour lane is its own burst key (`noticeBurst(…, 'hour')`) and its own delay queue (`AUTOMATION_NOTICE_HOUR_DELAY_QUEUE`) | 50 % and 95 % share `serviceUsageThreshold`; and a delay queue expires only its head, so one queue holds one window |
+| A patient claim sends `waitSec`, so quiet hours starting inside the hour hold its bot message (above); the inbox row of a held notice is still written at once, one per service | the inbox makes no sound |
+| Held bot messages due together are one message per `(user, template)`: `RetentionHeldNoticeJob` groups a take, marks each row on its own and tells the rest as one | five held overnight are one morning message; a repeat after a crash tells nothing twice |
+| A combined message **names** each service: billing's `POST internal/billing/entitlement/grants/names` (entitlement `contract.retention.md`) answers the product's name key, its sku and the buyer's live config labels (F-307-f); auth-service lists them under the summary, "• One month — Ali's phone", in the user's language, 20 at most then "…and N more" | five identical purchases are told apart only by their labels |
+| A names lookup that fails tells the summary without the list | a notice without its list beats one not told |
 
 ## What a producer writes
 
@@ -154,5 +173,7 @@ service the user has. It rides the purchase's own notices (automation
 
 - A mute per channel (bot vs inbox): a kind or a Grant is muted on both.
 - The level of a service bought for someone else set at purchase: it is set afterwards, per service (F-601-o).
+- A name of its own on a service (not on a config line): a combined notice names a service by its product and its configs' labels (F-601-p).
+- One inbox row for several held notices: during quiet hours the inbox gets one row per service; only the bot message is grouped (F-601-p).
 - The bot's own settings screen: F-319, over the same `notification_preference` row.
 - Retention of ledger rows: one per Grant, notice and period, kept.
