@@ -1,7 +1,7 @@
 ---
 id: currency
 layer: domain
-updated: 2026-09-12
+updated: 2026-09-28
 ---
 
 # Open questions — currency
@@ -15,3 +15,4 @@ updated: 2026-09-12
 | 2026-09-12 | The `wallex` and `bitpin` endpoints are this repo's guess; D-22 names the exchanges but only states Nobitex's and Tabdeal's URLs in full | no | ASSUMED(2026-09-12): both are implemented and left out of the `FX_SOURCES` default. A source that can only fail is a permanently red line in the run log. Turn each on in the change that watches it answer | -> the change that verifies them |
 | 2026-09-04 | Rounding rule on display conversion (banker's? floor? per-currency `decimalPlaces`)? | no | ASSUMED(2026-09-04): round half-up to `decimalPlaces` | -> rules.md |
 | 2026-09-12 | **Nothing creates the `currency` rows.** ADR-0019 settles *what* they are (USD base, two decimals; IRR quoted) but no seed or admin screen wrote either | resolved | **Answered 2026-09-13: `prisma/seed.js` upserts USD (base, 2 decimals) and IRR (0 decimals) and schedules `fx_rate_refresh` at `*/5 * * * *`.** The worker still refuses to create a row itself (invariant #1). Found as a rial gateway answering `billing.gatewayUnavailable` (`RateUnavailable`) with its keys set | -> `prisma/seed.js` |
+| 2026-09-28 | **Where do rates for EUR, TRY and other currencies come from?** ADR-0098 lets a tenant choose its operating currency, but the FX worker reads only USDT/IRT order books (D-22) | resolved | **Answered 2026-09-28 (D-51): each currency gets its own sources, Iranian and foreign, in the same median/gate loop, plus a manual rate for the platform and for a tenant** | -> ADR-0098 parts 8–9, F-116-i, F-116-j |

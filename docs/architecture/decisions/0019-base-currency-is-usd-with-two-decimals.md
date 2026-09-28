@@ -1,14 +1,18 @@
 ---
 id: adr-0019
-status: accepted
-updated: 2026-09-09
+status: superseded
+updated: 2026-09-28
 ---
 
 # ADR 0019 — The base currency is USD with two decimal places
 
-- **Status:** accepted
+- **Status:** superseded by [ADR-0098](0098-every-tenant-keeps-its-books-in-its-own-currency.md)
 - **Date:** 2026-09-09
 - **Affects units:** billing, currency, tenant, catalog, engagement, ai
+
+> **Superseded 2026-09-28 by ADR-0098:** each tenant, the platform included,
+> keeps its books in its own operating currency. USD stays the default and the
+> rate pivot.
 
 ## Context
 
