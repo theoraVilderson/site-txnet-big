@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { TenantType } from '@prisma/client';
+import { DiscountRuleKind, DiscountType, FeeType, TenantType } from '@prisma/client';
 import {
   type TenantCapabilityName,
   ResellerAccess,
@@ -28,9 +28,13 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
  *
  * **When.** Until F-116-f converts live money, a change is refused while the
  * tenant has any: a user's ledger row, an invoice, a payment, a price or a
- * metered rate — and for the platform, also any tenant ↔ platform money
- * (a reseller billing ledger row, a package sold to resellers) and the
- * platform-wide prices (`tenantId` null). A reseller's own billing wallet is
+ * metered rate; or while it holds a setting with an amount in it (F-116-a2) —
+ * a gateway's limit, fixed fee, fee floor/ceiling or presets, a live coupon's
+ * amount, cap or purchase bound, a fixed-amount rule, deposit presets — which
+ * would otherwise keep the old currency's numbers under the new one's label.
+ * For the platform, also any tenant ↔ platform money
+ * (a reseller billing ledger row, a package sold to resellers), the
+ * platform-wide prices and coupons (`tenantId` null) and its own gateways. A reseller's own billing wallet is
  * in the platform's currency, so it does not count against the reseller.
  * The check and the write are not one transaction: a first payment landing
  * between them is accepted as F-116-f's to convert.
@@ -62,6 +66,29 @@ export class OperatingCurrencyRefused extends Error {
 
 /** Money columns are `DECIMAL(18,2)` (ADR-0098 part 6). */
 const MAX_DECIMALS = 2;
+
+/** A gateway whose limits, fee or presets name an amount (F-116-a2); a percentage fee alone does not. */
+const GATEWAY_WITH_AMOUNT = {
+  OR: [
+    { minAcceptAmount: { not: null } },
+    { maxAcceptAmount: { not: null } },
+    { feeFloor: { not: null } },
+    { feeCeiling: { not: null } },
+    { depositPresets: { isEmpty: false } },
+    { feeType: FeeType.fixed, feeValue: { not: 0 } },
+  ],
+};
+
+/** A live coupon that names an amount: its value, its cap, or a purchase bound. */
+const COUPON_WITH_AMOUNT = {
+  deletedAt: null,
+  OR: [
+    { discountType: { in: [DiscountType.fixed_amount, DiscountType.wallet_credit] } },
+    { maxDiscountCap: { not: null } },
+    { minPurchaseAmount: { not: null } },
+    { maxPurchaseAmount: { not: null } },
+  ],
+};
 
 type Target = { id: string; platform: boolean; code: string };
 
@@ -124,9 +151,17 @@ export class TenantOperatingCurrencyService {
       this.all.paymentTransaction.findFirst({ where: { tenantId: id }, ...pick }),
       this.all.price.findFirst({ where: own, ...pick }),
       this.all.meteredRate.findFirst({ where: own, ...pick }),
+      this.all.tenantGatewayConfig.findFirst({ where: { tenantId: id, ...GATEWAY_WITH_AMOUNT }, ...pick }),
+      this.all.coupon.findFirst({ where: { AND: [own, COUPON_WITH_AMOUNT] }, ...pick }),
+      this.all.discountRule.findFirst({ where: { tenantId: id, kind: DiscountRuleKind.fixed_amount }, ...pick }),
+      this.all.depositSetting.findFirst({ where: { tenantId: id, presets: { isEmpty: false } }, select: { tenantId: true } }),
     ];
     if (platform) {
-      probes.push(this.all.tenantBillingTransaction.findFirst(pick), this.all.tenantFeaturePackage.findFirst(pick));
+      probes.push(
+        this.all.tenantBillingTransaction.findFirst(pick),
+        this.all.tenantFeaturePackage.findFirst(pick),
+        this.all.paymentGateway.findFirst({ where: GATEWAY_WITH_AMOUNT, ...pick }),
+      );
     }
     return (await Promise.all(probes)).some((row) => row !== null);
   }

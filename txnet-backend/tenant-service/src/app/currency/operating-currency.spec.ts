@@ -14,6 +14,10 @@ import { OperatingCurrencyRefused, TenantOperatingCurrencyService } from './oper
  * - A set is refused while the tenant has money — a ledger row, an invoice, a
  *   payment, a price; for the platform, also any tenant ↔ platform money —
  *   until F-116-f converts it.
+ * - So is a set while it holds a money-bearing setting (F-116-a2): a gateway
+ *   with a limit, a fixed fee, a fee floor/ceiling or presets; a live coupon
+ *   with an amount in it; a fixed-amount rule; deposit presets. A setting
+ *   with no amount in it (a percentage, an empty list) does not count.
  * - A reseller's is reached through `ResellerAccess`; the platform's only by
  *   its own staff holding `tenant.manage`.
  */
@@ -39,7 +43,24 @@ describe('TenantOperatingCurrencyService', () => {
 
   type Money = 'walletTransaction' | 'invoice' | 'paymentTransaction' | 'price' | 'meteredRate' | 'tenantBillingTransaction' | 'tenantFeaturePackage';
 
-  const build = (opts: { status?: string; money?: Money[] } = {}) => {
+  /** The settings whose `findFirst` answers by its `where` (F-116-a2). */
+  type Setting = 'tenantGatewayConfig' | 'paymentGateway' | 'coupon' | 'discountRule' | 'depositSetting';
+  type Row = Record<string, unknown>;
+
+  /** Just enough of Prisma's `where` for the probes: equality, `not`, `in`, `isEmpty`, `OR`, `AND`. */
+  const matches = (row: Row, where: Row): boolean =>
+    Object.entries(where).every(([key, cond]) => {
+      if (key === 'OR') return (cond as Row[]).some((w) => matches(row, w));
+      if (key === 'AND') return (cond as Row[]).every((w) => matches(row, w));
+      const value = row[key] ?? null;
+      if (cond === null || typeof cond !== 'object') return value === cond;
+      const c = cond as { not?: unknown; in?: unknown[]; isEmpty?: boolean };
+      if ('not' in c) return c.not === null ? value !== null : value === null || Number(value) !== Number(c.not);
+      if (c.in) return c.in.includes(value);
+      return (((value as unknown[] | null) ?? []).length === 0) === c.isEmpty;
+    });
+
+  const build = (opts: { status?: string; money?: Money[]; settings?: Partial<Record<Setting, Row[]>> } = {}) => {
     const tenants: Record<string, Record<string, unknown>> = {
       [PLATFORM]: { id: PLATFORM, tenantType: 'platform_owner', slug: 'platform_owner', ownerUserId: STAFF, status: 'active', deletedAt: null, operatingCurrencyCode: 'USD' },
       [RESELLER]: { id: RESELLER, tenantType: 'reseller', slug: 'ali', ownerUserId: OWNER, status: opts.status ?? 'active', graceEndsAt: null, deletedAt: null, operatingCurrencyCode: 'USD' },
@@ -51,6 +72,9 @@ describe('TenantOperatingCurrencyService', () => {
       },
     };
     const probe = (table: Money) => ({ findFirst: vi.fn(async () => (opts.money?.includes(table) ? { id: 'x' } : null)) });
+    const setting = (table: Setting) => ({
+      findFirst: vi.fn(async ({ where }: { where: Row }) => (opts.settings?.[table] ?? []).find((r) => matches(r, where)) ?? null),
+    });
     const all = {
       tenant: {
         findUnique: appPrisma.tenant.findUnique,
@@ -64,6 +88,11 @@ describe('TenantOperatingCurrencyService', () => {
       meteredRate: probe('meteredRate'),
       tenantBillingTransaction: probe('tenantBillingTransaction'),
       tenantFeaturePackage: probe('tenantFeaturePackage'),
+      tenantGatewayConfig: setting('tenantGatewayConfig'),
+      paymentGateway: setting('paymentGateway'),
+      coupon: setting('coupon'),
+      discountRule: setting('discountRule'),
+      depositSetting: setting('depositSetting'),
     };
     const access = new ResellerAccess(appPrisma as never);
     const service = new TenantOperatingCurrencyService(access, all as never);
@@ -126,6 +155,60 @@ describe('TenantOperatingCurrencyService', () => {
   it("counts tenant ↔ platform money against the platform's own currency", async () => {
     for (const table of ['tenantBillingTransaction', 'tenantFeaturePackage'] as Money[]) {
       const { service } = build({ money: [table] });
+      expect(await refusal(service.set(staff, PLATFORM, 'IRR'))).toBe('tenant_has_money');
+    }
+  });
+
+  const gateway = { tenantId: RESELLER, feeType: 'percentage', feeValue: 1.5, depositPresets: [] };
+  const coupon = { tenantId: RESELLER, discountType: 'percentage', deletedAt: null };
+
+  it.each<[string, Setting, Row]>([
+    ['a gateway with a minimum', 'tenantGatewayConfig', { ...gateway, minAcceptAmount: 10 }],
+    ['a gateway with a maximum', 'tenantGatewayConfig', { ...gateway, maxAcceptAmount: 500 }],
+    ['a gateway with a fee floor', 'tenantGatewayConfig', { ...gateway, feeFloor: 1 }],
+    ['a gateway with a fee ceiling', 'tenantGatewayConfig', { ...gateway, feeCeiling: 20 }],
+    ['a gateway with presets', 'tenantGatewayConfig', { ...gateway, depositPresets: [10, 50] }],
+    ['a gateway with a fixed fee', 'tenantGatewayConfig', { ...gateway, feeType: 'fixed', feeValue: 2 }],
+    ['a fixed-amount coupon', 'coupon', { ...coupon, discountType: 'fixed_amount' }],
+    ['a gift code', 'coupon', { ...coupon, discountType: 'wallet_credit' }],
+    ['a percentage coupon with a cap', 'coupon', { ...coupon, maxDiscountCap: 5 }],
+    ['a coupon with a minimum purchase', 'coupon', { ...coupon, minPurchaseAmount: 10 }],
+    ['a coupon with a maximum purchase', 'coupon', { ...coupon, maxPurchaseAmount: 100 }],
+    ['a fixed-amount rule', 'discountRule', { tenantId: RESELLER, kind: 'fixed_amount' }],
+    ['deposit presets', 'depositSetting', { tenantId: RESELLER, presets: [5, 10] }],
+  ])('refuses a set while the reseller holds %s, and says so on read', async (_, table, row) => {
+    const { service, all } = build({ settings: { [table]: [row] } });
+    expect((await service.read(owner, RESELLER)).changeable).toBe(false);
+    expect(await refusal(service.set(owner, RESELLER, 'IRR'))).toBe('tenant_has_money');
+    expect(all.tenant.update).not.toHaveBeenCalled();
+  });
+
+  it('does not count a setting with no amount in it, a deleted coupon, or another tenant\'s or the platform\'s', async () => {
+    const { service } = build({
+      settings: {
+        tenantGatewayConfig: [gateway, { ...gateway, feeType: 'fixed', feeValue: 0 }, { ...gateway, tenantId: OTHER, minAcceptAmount: 1 }],
+        paymentGateway: [{ ...gateway, minAcceptAmount: 1 }],
+        coupon: [
+          coupon,
+          { ...coupon, discountType: 'free_grant' },
+          { ...coupon, discountType: 'fixed_amount', deletedAt: new Date() },
+          { ...coupon, tenantId: OTHER, discountType: 'fixed_amount' },
+          { ...coupon, tenantId: null, discountType: 'fixed_amount' },
+        ],
+        discountRule: [{ tenantId: RESELLER, kind: 'percentage' }],
+        depositSetting: [{ tenantId: RESELLER, presets: [] }],
+      },
+    });
+    expect((await service.set(owner, RESELLER, 'IRR')).code).toBe('IRR');
+  });
+
+  it("counts the platform's own gateways and platform-wide coupons against the platform's currency", async () => {
+    for (const settings of [
+      { paymentGateway: [{ ...gateway, feeCeiling: 3 }] },
+      { coupon: [{ ...coupon, tenantId: null, discountType: 'fixed_amount' }] },
+      { discountRule: [{ tenantId: PLATFORM, kind: 'fixed_amount' }] },
+    ]) {
+      const { service } = build({ settings });
       expect(await refusal(service.set(staff, PLATFORM, 'IRR'))).toBe('tenant_has_money');
     }
   });
