@@ -16,7 +16,7 @@ export interface CurrencyRate {
   snapshotId: string | null;
   effectiveAt: string | null;
   /** Set while a person's pin is what prices this currency (F-0608-a). */
-  pinned: { reason: string; expiresAt: string } | null;
+  pinned: { reason: string; expiresAt: string | null } | null;
 }
 
 /**
@@ -58,7 +58,7 @@ export class CurrencyRatesService {
               snapshotId: snapshot.snapshotId,
               effectiveAt: snapshot.effectiveAt.toISOString(),
               pinned: snapshot.pinned
-                ? { reason: snapshot.pinned.reason, expiresAt: snapshot.pinned.expiresAt.toISOString() }
+                ? { reason: snapshot.pinned.reason, expiresAt: snapshot.pinned.expiresAt?.toISOString() ?? null }
                 : null,
             }
           : { ...base, rate: null, snapshotId: null, effectiveAt: null, pinned: null };

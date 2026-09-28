@@ -23,7 +23,8 @@ export interface CurrencyRate {
   /** Units per one USD, a decimal string (C-02); `null` with no rate. */
   rate: string | null;
   effectiveAt: string | null;
-  pinned: { reason: string; expiresAt: string } | null;
+  /** `expiresAt` null: pinned with no end (F-116-n). */
+  pinned: { reason: string; expiresAt: string | null } | null;
 }
 
 /** A manual rate (`currency/contract.md` "HTTP API", F-0608-a). */
@@ -34,7 +35,8 @@ export interface CurrencyPin {
   reason: string;
   setById: string;
   effectiveAt: string;
-  expiresAt: string;
+  /** `null`: no end, live until a person ends it (F-116-n). */
+  expiresAt: string | null;
   endedAt: string | null;
 }
 
@@ -61,8 +63,8 @@ export interface PinBody {
   code: string;
   rate: string;
   reason: string;
-  /** 1..720. */
-  hours: number;
+  /** 1..720, or `null` for no end (F-116-n). */
+  hours: number | null;
 }
 
 export const currencyApi = {

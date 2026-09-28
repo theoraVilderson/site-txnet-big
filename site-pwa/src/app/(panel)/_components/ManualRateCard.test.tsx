@@ -97,9 +97,24 @@ describe("the manual-rate card", () => {
     fireEvent.click(screen.getByRole("button", { name: /confirm\.yes/ }));
 
     await waitFor(() =>
-      expect(pin).toHaveBeenCalledWith({ code: "IRR", rate: "1200000", reason: "market moved", hours: 24 }),
+      expect(pin).toHaveBeenCalledWith({ code: "IRR", rate: "1200000", reason: "market moved", hours: null }),
     );
     await waitFor(() => expect(pinForm).toHaveBeenCalledTimes(2));
+  });
+
+  it("sends the hours only when no end is unticked (F-116-n: no end is the default)", async () => {
+    render(<ManualRateCard scope="platform" />);
+    await screen.findByRole("button", { name: /manualRate\.useReading/ });
+    expect(screen.getByRole("checkbox", { name: /manualRate\.noEnd/ })).toBeChecked();
+    fireEvent.change(rateBox(), { target: { value: "1200000" } });
+    fireEvent.change(screen.getByRole("textbox", { name: /manualRate\.reason/ }), { target: { value: "market moved" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /manualRate\.noEnd/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: /manualRate\.hours/ }), { target: { value: "48" } });
+
+    fireEvent.click(setRate());
+    fireEvent.click(screen.getByRole("button", { name: /confirm\.yes/ }));
+
+    await waitFor(() => expect(pin).toHaveBeenCalledWith(expect.objectContaining({ hours: 48 })));
   });
 
   it("keeps the button off for a rate that is not a positive decimal", async () => {

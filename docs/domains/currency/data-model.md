@@ -13,8 +13,8 @@ Source of truth: `txnet-backend/prisma/domains/currency.prisma` (Postgres schema
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
 | currency | ISO-4217 or internal code, symbol, decimals, base/selectable flags | no | permanent |
-| currency_exchange_rate | append-only rate (USD -> this currency) with `source`, `effectiveAt`; a `manual_admin` row is a pin and also has `reason`, `expiresAt`, `setByAdminId` (CHECK `currency_exchange_rate_pin_shape`, F-0608-a) and, for a tenant's own pin, `tenantId` (CHECK `currency_exchange_rate_tenant_pin_only`, no FK; F-116-j). **Under RLS since F-116-j**: a row with no tenant is everyone's, a tenant's pin only that tenant's (`tenant_isolation`), `cross_tenant` sees all; unbound (the worker) sees the no-tenant rows only | no | permanent |
-| currency_rate_pin_end | a pin ended before its expiry: `rateId` (unique), `endedById`, `endedAt`; insert-only (services hold `SELECT, INSERT`) | no | permanent |
+| currency_exchange_rate | append-only rate (USD -> this currency) with `source`, `effectiveAt`; a `manual_admin` row is a pin and also has `reason`, `setByAdminId` and an optional `expiresAt` — null is no end (CHECK `currency_exchange_rate_pin_shape`, F-0608-a; loosened F-116-n) and, for a tenant's own pin, `tenantId` (CHECK `currency_exchange_rate_tenant_pin_only`, no FK; F-116-j). **Under RLS since F-116-j**: a row with no tenant is everyone's, a tenant's pin only that tenant's (`tenant_isolation`), `cross_tenant` sees all; unbound (the worker) sees the no-tenant rows only | no | permanent |
+| currency_rate_pin_end | a pin ended before its expiry, or at all for one with none: `rateId` (unique), `endedById`, `endedAt`; insert-only (services hold `SELECT, INSERT`) | no | permanent |
 | user_currency_preference | one active preferred display currency per user | via user | latest wins |
 | currency_policy | admin lock (global or per-user) forcing a display currency | user-scoped rows | until changed |
 

@@ -9,8 +9,8 @@ export const pinSchema = z
     code: z.string().regex(/^[A-Z]{3}$/, invalid),
     rate: z.string().regex(/^\d{1,10}(\.\d{1,18})?$/, invalid),
     reason: z.string().trim().min(3, invalid).max(500, invalid),
-    /** One hour to thirty days: a pin is an emergency measure, not a price list. */
-    hours: z.number().int().min(1, invalid).max(720, invalid),
+    /** One hour to thirty days, or `null`: no end, until a person ends it (F-116-n). */
+    hours: z.number().int().min(1, invalid).max(720, invalid).nullable(),
   })
   .strict();
 

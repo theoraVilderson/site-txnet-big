@@ -40,6 +40,12 @@ for its own books — can pin a fixed rate for the emergency.
    they are exactly the readings the median and the gate did not trust.
 5. **A currency without any rate still cannot be chosen** (F-116-a,
    unchanged).
+6. **A pin may have no end** (amended 2026-09-28, user, F-116-n). A person
+   may fix a rate as their own price, not only for an emergency: `hours: null`
+   pins until someone ends it, and the panel offers that first. The cost is
+   the one accepted above, without a clock: a forgotten pin sells at its rate
+   while the market moves. The picker marks every pinned currency, and one
+   click ends a pin.
 
 ## Consequences
 

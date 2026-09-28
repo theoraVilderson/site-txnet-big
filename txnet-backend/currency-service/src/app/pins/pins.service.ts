@@ -30,8 +30,8 @@ export interface PinInput {
   /** Units of the currency per one USD, as a decimal string (C-02). */
   rate: string;
   reason: string;
-  /** How long the pin applies, from now. */
-  hours: number;
+  /** How long the pin applies, from now; `null` until a person ends it (F-116-n). */
+  hours: number | null;
 }
 
 export interface PinView {
@@ -41,7 +41,8 @@ export interface PinView {
   reason: string;
   setById: string;
   effectiveAt: string;
-  expiresAt: string;
+  /** `null`: no end — live until ended (F-116-n). */
+  expiresAt: string | null;
   endedAt: string | null;
 }
 
@@ -144,7 +145,7 @@ export class CurrencyPinService {
             currencyId: currency.id,
             source: RateSource.manual_admin,
             tenantId,
-            expiresAt: { gt: new Date() },
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
             pinEnd: { is: null },
           },
           orderBy: { effectiveAt: 'desc' },
@@ -201,7 +202,7 @@ export class CurrencyPinService {
     if (!rate.isFinite() || rate.lte(0))
       throw new CurrencyPinRefused('invalid_rate', input.rate);
 
-    const expiresAt = new Date(Date.now() + input.hours * 3_600_000);
+    const expiresAt = input.hours === null ? null : new Date(Date.now() + input.hours * 3_600_000);
     // `tenantTransaction`: the audit row is under RLS, and a bare
     // `$transaction` carries no tenant binding into its statements.
     const row = await tenantTransaction(this.prisma, async (tx) => {
@@ -227,7 +228,7 @@ export class CurrencyPinService {
           newValue: {
             code: input.code,
             rate: rate.toString(),
-            expiresAt: expiresAt.toISOString(),
+            expiresAt: expiresAt?.toISOString() ?? null,
             scope: scope.kind,
           },
           reason: input.reason,
@@ -238,7 +239,7 @@ export class CurrencyPinService {
     });
 
     this.logger.log(
-      `${input.code} pinned at ${rate.toString()} until ${expiresAt.toISOString()} by ${actor.userId}`,
+      `${input.code} pinned at ${rate.toString()} until ${expiresAt?.toISOString() ?? 'ended by hand'} by ${actor.userId}`,
     );
     return toView({
       ...row,
@@ -268,7 +269,7 @@ export class CurrencyPinService {
     ) {
       throw new CurrencyPinRefused('pin_not_found', pinId);
     }
-    if (pin.pinEnd || !pin.expiresAt || pin.expiresAt <= new Date())
+    if (pin.pinEnd || (pin.expiresAt && pin.expiresAt <= new Date()))
       throw new CurrencyPinRefused('pin_over', pinId);
 
     try {
@@ -374,7 +375,7 @@ function toView(row: PinRow): PinView {
     reason: row.reason ?? '',
     setById: row.setByAdminId ?? '',
     effectiveAt: row.effectiveAt.toISOString(),
-    expiresAt: row.expiresAt?.toISOString() ?? '',
+    expiresAt: row.expiresAt?.toISOString() ?? null,
     endedAt: row.pinEnd ? row.pinEnd.endedAt.toISOString() : null,
   };
 }

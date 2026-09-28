@@ -34,7 +34,8 @@ export interface FxRateSnapshot {
   /** F-0607-a's staleness ladder reads this; the reader does not judge it. */
   effectiveAt: Date;
   /** Set when this is a person's pin (F-0608-a, ADR-0101), not a discovered rate. */
-  pinned?: { reason: string; expiresAt: Date };
+  /** `expiresAt` null: a pin with no end, live until a person ends it (F-116-n). */
+  pinned?: { reason: string; expiresAt: Date | null };
 }
 
 /**
@@ -169,15 +170,16 @@ async function fromPin(db: FxRateDb, code: string, log: FxRateLog | undefined, s
         currencyId: currency.id,
         source: RateSource.manual_admin,
         isActive: true,
-        expiresAt: { gt: new Date() },
         pinEnd: { is: null },
+        // Not expired, or no end at all (F-116-n).
+        AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }],
         // A tenant's pin, then the platform's (F-116-j); no tenant, the platform's only.
         ...(scope.tenantId ? { OR: [{ tenantId: scope.tenantId }, { tenantId: null }] } : { tenantId: null }),
       },
       orderBy: [{ tenantId: { sort: 'asc', nulls: 'last' } }, { effectiveAt: 'desc' }],
       select: { id: true, rate: true, effectiveAt: true, reason: true, expiresAt: true },
     }) as { id: string; rate: Prisma.Decimal; effectiveAt: Date; reason: string | null; expiresAt: Date | null } | null;
-    if (!pin || !pin.expiresAt) return null;
+    if (!pin) return null;
     const snap = usable(pin.id, code, pin.rate, pin.effectiveAt);
     return snap ? { ...snap, pinned: { reason: pin.reason ?? '', expiresAt: pin.expiresAt } } : null;
   } catch (err) {

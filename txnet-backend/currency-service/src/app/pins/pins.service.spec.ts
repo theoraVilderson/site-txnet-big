@@ -133,6 +133,15 @@ describe('CurrencyPinService (F-0608-a)', () => {
     expect(view).toMatchObject({ id: 'pin-1', code: 'EUR', rate: '0.95123457', endedAt: null });
   });
 
+  it('pins with no end when hours is null, until a person ends it (F-116-n)', async () => {
+    const { pins, created } = world();
+
+    const view = await pins.pin(actor, { code: 'EUR', rate: '0.95', reason: 'our own price', hours: null });
+
+    expect(created.rate).toEqual([expect.objectContaining({ source: RateSource.manual_admin, expiresAt: null })]);
+    expect(view.expiresAt).toBeNull();
+  });
+
   it('refuses the base currency and an unknown code (a reseller\'s scope is pins.tenant.spec.ts)', async () => {
     const input = { rate: '1', reason: 'x', hours: 1 };
     await expect(world().pins.pin(actor, { ...input, code: 'USD' })).rejects.toMatchObject({ reason: 'base_currency' });

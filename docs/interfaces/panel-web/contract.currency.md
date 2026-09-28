@@ -73,8 +73,10 @@ platform's (invariant 21), so a card there would pin the platform's rate.
    empty. `lastDownload.rate`, when it differs from `lastAccepted`, is a
    button that fills the box; nothing fills it on its own.
 8. **A pin is never one click.** "Set" is enabled for a positive decimal
-   (the route's pattern), a reason of 3+ characters and 1–720 hours, and it
-   opens a confirm naming `1 USD = <rate> <code>` and the hours; the platform's
+   (the route's pattern), a reason of 3+ characters and a duration, and it
+   opens a confirm naming `1 USD = <rate> <code>` and the duration. **No end
+   is the default** (F-116-n, user): a ticked box sends `hours: null`; unticked,
+   1–720 hours. A pin with no end reads "until ended by hand". The platform's
    adds that every reseller without its own pin follows it.
 9. **What is live is the answer's.** After a pin or an end the form is read
    again; the card never patches it from what it sent. A tenant sees the

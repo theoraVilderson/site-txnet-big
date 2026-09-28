@@ -37,10 +37,10 @@ billing-service's and not `billing`'s.
 ## Changelog
 | Date | Change |
 |---|---|
-| 2026-09-28 | `contract.fx-currencies.md` v2 — F-116-i2: **23 currencies** by default; tgju, ECB and TCMB serve many currencies from one download a tick (per-unit counts, stale official tables refused); KuCoin/MEXC for EUR. `FX_SOURCES_EUR`/`_TRY` left the env schema (carried by pattern) |
 | 2026-09-28 | `contract.md` v3 — F-116-k: **`currency-service`**, the unit's HTTP home (ADR-0100); `GET /api/currency/rates` |
 | 2026-09-28 | `contract.md` v4 — F-0608-a: **the platform's manual rate** (ADR-0101): pin / end / form routes; `readFxRate` answers a live pin first and reads discovered rows only from the table; `currency_rate_pin_end`; `fx:reading:{code}` |
 | 2026-09-28 | `contract.md` v5 — F-116-j: **a tenant's own pin**, inside its books only (ADR-0098 part 9): `readFxRate/readFxPair` take `{tenantId}`; no tenant = the boundary, no tenant pin; a tenant pins its operating currency or its gateways' (billing's internal `charge-currencies`) |
 | 2026-09-28 | `contract.md` v6 — F-116-m (additive): **the toman (IRT) is tied to the rial**, `readFxRate` answers IRR / 10 (reader rule 8); pinning IRT is refused `derived_currency`. Row by migration `20260928003700_the_toman_is_tied_to_the_rial` |
+| 2026-09-28 | `contract.md` v7 — F-116-n (additive): **a pin may have no end** (`hours: null`, `expiresAt` null, live until ended; ADR-0101 part 6). CHECK loosened by migration `20260928003800_a_pin_may_have_no_end` |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

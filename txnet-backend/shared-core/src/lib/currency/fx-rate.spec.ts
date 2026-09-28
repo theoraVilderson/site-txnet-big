@@ -116,6 +116,17 @@ describe('readFxRate — one currency, cache first', () => {
     expect(reads.where).toContainEqual(expect.objectContaining({ source: RateSource.external_api }));
   });
 
+  it('answers a pin with no end, and asks the table for one (F-116-n)', async () => {
+    const { db, cache, reads } = stores({
+      pins: { IRR: { ...row('pin-open', '1300000'), reason: 'our price', expiresAt: null as unknown as Date } },
+    });
+
+    const snap = await readFxRate(db, cache, 'IRR');
+
+    expect(snap).toMatchObject({ snapshotId: 'pin-open', pinned: { reason: 'our price', expiresAt: null } });
+    expect(JSON.stringify(reads.where[0])).toContain('"expiresAt":null');
+  });
+
   it('falls through to the live rate, with a warning, when the pin cannot be read', async () => {
     const warn = vi.fn();
     const { db, cache } = stores({ cache: { 'fx:rate:EUR': cached('EUR', '0.87') }, pins: { EUR: 'throw' } });

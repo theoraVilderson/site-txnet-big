@@ -2,7 +2,7 @@
 id: currency
 layer: domain
 status: active
-version: 6
+version: 7
 updated: 2026-09-28
 ---
 
@@ -48,7 +48,7 @@ Rules a caller may rely on:
 5. **Age is not judged here** — F-0607-a reads `effectiveAt`; a rate of any
    age stays usable (ADR-0101).
 6. **A live pin answers first** (F-0608-a, ADR-0101 part 3): a `manual_admin`
-   row not expired and not ended, the newest if several, read from the table on
+   row not expired (or with no end, F-116-n) and not ended, the newest if several, read from the table on
    every call (a Redis flush must not drop a pin). The snapshot then carries
    `pinned: {reason, expiresAt}`; its id is the pin row, so a price records it.
    A failed pin read is a warning and falls through to the discovered rate.
@@ -77,7 +77,7 @@ Behind Traefik and ForwardAuth (`/api/currency/*`), the shared guards (C-11).
 |---|---|---|---|
 | `GET /api/currency/rates` (F-116-k) | any signed-in caller | every active currency: `{code, name, symbol, decimalPlaces, isBase, rate, snapshotId, effectiveAt, pinned}`, `rate` a decimal string per USD from `readFxRate`, `null` when it has none; the base currency `"1"`; `pinned` `{reason, expiresAt}` while a pin prices it | 401 from the gate; 429 (`CURRENCY_READ`, 120/min) |
 | `GET /api/currency/pins/:code` (F-0608-a, F-116-j) | `currency.pin`; the platform or a tenant | the pin form: `{current, platformPin, lastAccepted, lastDownload}` — `current` the caller's own live pin, `platformPin` the platform's beside a tenant's — the live pin, the last discovered rate, the worker's last reading (`fx:reading:{code}`, a suggestion, never a rate) | 403 (incl. `currency_not_yours`); 404 `currency_not_found`; 409 `base_currency` / `derived_currency` |
-| `POST /api/currency/pins` (F-0608-a) | same | `{code, rate, reason, hours 1–720}` → the pin, rate rounded to 8 places; a `manual_admin` row + `admin_audit_log` (`currency_rate_pin`) in one tenant-bound transaction | 400 validation / `invalid_rate`; 403; 404; 409 `base_currency` / `derived_currency` (IRT: pin IRR, rule 8); 429 (`CURRENCY_PIN_WRITE`, 30/15 min) |
+| `POST /api/currency/pins` (F-0608-a) | same | `{code, rate, reason, hours}` — `hours` 1–720, or `null` for **no end** (live until `/end`, F-116-n); `expiresAt` answers `null` then — → the pin, rate rounded to 8 places; a `manual_admin` row + `admin_audit_log` (`currency_rate_pin`) in one tenant-bound transaction | 400 validation / `invalid_rate`; 403; 404; 409 `base_currency` / `derived_currency` (IRT: pin IRR, rule 8); 429 (`CURRENCY_PIN_WRITE`, 30/15 min) |
 | `POST /api/currency/pins/:id/end` (F-0608-a) | same | the pin with `endedAt`; a `currency_rate_pin_end` row + audit (`currency_rate_pin_end`); the pin row is never edited | 404 `pin_not_found`; 409 `pin_over` (ended, expired, or ended concurrently) |
 
 **Access**: `currency.pin` at the door (granted to `Admin`). Inside, the

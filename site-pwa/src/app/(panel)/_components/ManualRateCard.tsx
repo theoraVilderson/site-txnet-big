@@ -32,7 +32,7 @@ const DEFAULT_HOURS = 24;
  *  - **the worker's reading is a suggestion** (D-53): the rate box starts
  *    empty and a reading fills it only when clicked;
  *  - **a pin is never one click**: it is sent after a sentence naming the
- *    rate and how long it holds;
+ *    rate and how long it holds — by default, until someone ends it (F-116-n);
  *  - **what is live is the answer's**: after a pin or an end the form is read
  *    again, never patched from what was sent.
  */
@@ -56,6 +56,8 @@ export function ManualRateCard({ scope }: { scope: "platform" | "reseller" }) {
   });
   const [rate, setRate] = useState("");
   const [reason, setReason] = useState("");
+  /** No end is the default (user, F-116-n): the rate holds until someone ends it. */
+  const [forever, setForever] = useState(true);
   const [hours, setHours] = useState(String(DEFAULT_HOURS));
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -96,8 +98,13 @@ export function ManualRateCard({ scope }: { scope: "platform" | "reseller" }) {
   const form = fresh ? read.form : null;
   const formError = fresh ? read.error : null;
   const hoursN = Number(hours);
-  const valid =
-    RATE.test(rate) && Number(rate) > 0 && reason.trim().length >= 3 && Number.isInteger(hoursN) && hoursN >= 1 && hoursN <= 720;
+  const hoursOk = forever || (Number.isInteger(hoursN) && hoursN >= 1 && hoursN <= 720);
+  const valid = RATE.test(rate) && Number(rate) > 0 && reason.trim().length >= 3 && hoursOk;
+  /** A pin's line: until its end, or "until ended" for one with none. */
+  const pinLine = (p: { rate: string; expiresAt: string | null }) =>
+    p.expiresAt
+      ? t("common", K.pinLine, { code, rate: p.rate, until: formatInstant(p.expiresAt, lang) ?? "" })
+      : t("common", K.pinLineForever, { code, rate: p.rate });
 
   const pick = (next: string) => {
     setCode(next);
@@ -111,7 +118,7 @@ export function ManualRateCard({ scope }: { scope: "platform" | "reseller" }) {
     setBusy(true);
     setFailure(null);
     try {
-      const pin = await currencyApi.pin({ code, rate, reason: reason.trim(), hours: hoursN });
+      const pin = await currencyApi.pin({ code, rate, reason: reason.trim(), hours: forever ? null : hoursN });
       setNotice(t("common", K.pinned, { code: pin.code, rate: pin.rate }));
       setRate("");
       setReason("");
@@ -193,26 +200,14 @@ export function ManualRateCard({ scope }: { scope: "platform" | "reseller" }) {
                 {form.platformPin && (
                   <div>
                     <dt className="inline text-text-secondary">{t("common", K.platformPin)} </dt>
-                    <dd className="inline">
-                      {t("common", K.pinLine, {
-                        code,
-                        rate: form.platformPin.rate,
-                        until: formatInstant(form.platformPin.expiresAt, lang) ?? "",
-                      })}
-                    </dd>
+                    <dd className="inline">{pinLine(form.platformPin)}</dd>
                   </div>
                 )}
               </dl>
 
               {form.current && (
                 <div className="space-y-2 rounded-2xl border border-primary/20 bg-leaf-bg p-4">
-                  <p className="text-sm font-bold text-text-primary">
-                    {t("common", K.pinLine, {
-                      code,
-                      rate: form.current.rate,
-                      until: formatInstant(form.current.expiresAt, lang) ?? "",
-                    })}
-                  </p>
+                  <p className="text-sm font-bold text-text-primary">{pinLine(form.current)}</p>
                   <p className="text-sm text-text-secondary">{form.current.reason}</p>
                   <button type="button" className={quietButton} disabled={busy} onClick={() => end(form.current!.id)}>
                     {t("common", K.end)}
@@ -254,17 +249,30 @@ export function ManualRateCard({ scope }: { scope: "platform" | "reseller" }) {
                     onChange={(e) => setReason(e.target.value)}
                   />
                 </label>
-                <label className="block">
-                  <span className="mb-1 block text-sm text-text-secondary">{t("common", K.hours)}</span>
-                  <input
-                    className={input}
-                    inputMode="numeric"
-                    dir="ltr"
-                    value={hours}
-                    disabled={busy || confirming}
-                    onChange={(e) => setHours(e.target.value.trim())}
-                  />
-                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm text-text-primary">
+                    <input
+                      type="checkbox"
+                      checked={forever}
+                      disabled={busy || confirming}
+                      onChange={(e) => setForever(e.target.checked)}
+                    />
+                    {t("common", K.noEnd)}
+                  </label>
+                  {!forever && (
+                    <label className="block">
+                      <span className="mb-1 block text-sm text-text-secondary">{t("common", K.hours)}</span>
+                      <input
+                        className={input}
+                        inputMode="numeric"
+                        dir="ltr"
+                        value={hours}
+                        disabled={busy || confirming}
+                        onChange={(e) => setHours(e.target.value.trim())}
+                      />
+                    </label>
+                  )}
+                </div>
               </div>
 
               <button
@@ -283,7 +291,9 @@ export function ManualRateCard({ scope }: { scope: "platform" | "reseller" }) {
                 <div className="space-y-3 rounded-2xl border border-gold/20 bg-gold-bg p-4">
                   <h3 className="flex items-center gap-2 text-sm font-bold text-text-primary">
                     <AlertTriangle size={16} className="shrink-0 text-gold" aria-hidden />
-                    {t("common", K.confirm.title, { code, rate, hours: hoursN })}
+                    {forever
+                      ? t("common", K.confirm.titleForever, { code, rate })
+                      : t("common", K.confirm.title, { code, rate, hours: hoursN })}
                   </h3>
                   <p className="text-sm text-text-primary">
                     {t("common", scope === "platform" ? K.confirm.bodyPlatform : K.confirm.body)}
