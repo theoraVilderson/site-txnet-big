@@ -267,6 +267,16 @@ describe('RetentionNoticeConsumer.handle', () => {
       expect(calls.joined).toEqual([]);
     });
 
+    it('a held patient notice joins the inbox-only hour lane instead of telling at once (F-601-q)', async () => {
+      const { consumer, calls } = build({ claims: { [TYPE]: { claimed: true, deliver: 'held', botAt: BOT_AT } } });
+      consumer.notices = { [TYPE]: { template: 'testThreshold', params: ['level'], patient: true } };
+
+      await consumer.handle(event());
+
+      expect(told(calls)).toEqual([]);
+      expect(calls.joined.map((j) => j.burst)).toEqual([UnscopedRedisKeys.noticeBurst(TENANT, USER, 'testThreshold', 'hour', 'inbox')]);
+    });
+
     it('throws on an answer that claims without saying how, before telling anyone', async () => {
       const { consumer, calls } = build({ claims: { [TYPE]: { claimed: true } } });
 

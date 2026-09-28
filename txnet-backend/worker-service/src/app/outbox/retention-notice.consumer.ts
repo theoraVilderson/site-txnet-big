@@ -57,7 +57,8 @@ type Told = { notice: string; period: string; template: string; params: Record<s
  * rows, when combined — joins the user's hour lane, and the claim is told it
  * may wait that long, so quiet hours starting inside the hour hold its bot
  * message; an urgent one keeps the 10 s burst. Either carries its Grant, so a
- * combined message names the services.
+ * combined message names the services. A held patient notice's inbox row
+ * joins an inbox-only hour lane (F-601-q); a held urgent one is told at once.
  */
 @Injectable()
 export class RetentionNoticeConsumer implements OnApplicationBootstrap {
@@ -134,7 +135,7 @@ export class RetentionNoticeConsumer implements OnApplicationBootstrap {
         params: told.params,
         botAt: how.botAt,
       });
-      await this.sender.send({ consumer: CONSUMER, eventId: event.id, person, only: ['inbox'] });
+      await this.sender.send({ consumer: CONSUMER, eventId: event.id, person, only: ['inbox'], ...(waits ? { window: 'hour' as const } : {}) });
       return;
     }
     await this.sender.send({ consumer: CONSUMER, eventId: event.id, person, ...(waits ? { window: 'hour' as const } : {}) });

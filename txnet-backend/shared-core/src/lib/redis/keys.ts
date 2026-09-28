@@ -253,15 +253,16 @@ export const UnscopedRedisKeys = {
    * together (F-067-p, ADR-0084 decision 3). A hash keyed by event id, so a
    * redelivered event is counted once; the flush renames it to its batch.
    */
-  noticeBurst: (tenantId: string, userId: string, template: string, window?: 'hour') =>
-    `notice:burst${window ? `-${window}` : ''}:${tenantId}:${userId}:${template}`,
+  noticeBurst: (tenantId: string, userId: string, template: string, window?: 'hour', only?: 'inbox') =>
+    `notice:burst${noticeLane(window, only)}:${tenantId}:${userId}:${template}`,
   /**
    * The flush id already scheduled for that burst; `SET NX`, so a burst schedules one flush.
    * `hour` is a retention notice that may wait for its siblings (F-601-p): a lane of its own,
-   * so a 10 s notice of the same template is never held an hour with it.
+   * so a 10 s notice of the same template is never held an hour with it. `inbox`: a notice
+   * held for quiet hours, whose flush tells the inbox alone (F-601-q) — a lane of its own too.
    */
-  noticeBurstScheduled: (tenantId: string, userId: string, template: string, window?: 'hour') =>
-    `notice:burst-scheduled${window ? `-${window}` : ''}:${tenantId}:${userId}:${template}`,
+  noticeBurstScheduled: (tenantId: string, userId: string, template: string, window?: 'hour', only?: 'inbox') =>
+    `notice:burst-scheduled${noticeLane(window, only)}:${tenantId}:${userId}:${template}`,
   /** What one flush took, kept so a redelivered flush tells the same batch and nothing newer. */
   noticeBurstBatch: (flushId: string) => `notice:burst-batch:${flushId}`,
 
@@ -292,6 +293,11 @@ export const UnscopedRedisKeys = {
 export interface BotKeyIntegration {
   readonly platform: string;
   readonly id: string;
+}
+
+/** A notice burst's lane segment: none (10 s), `-hour` (F-601-p), `-hour-inbox` (held, F-601-q). */
+function noticeLane(window?: 'hour', only?: 'inbox'): string {
+  return `${window ? `-${window}` : ''}${only ? `-${only}` : ''}`;
 }
 
 const chatScope = (integration: BotKeyIntegration, chatId: string) =>

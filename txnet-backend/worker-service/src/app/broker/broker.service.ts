@@ -118,6 +118,8 @@ export interface NoticeFlush {
   template: string;
   /** The hour lane (F-601-p): a non-urgent retention notice's burst; absent is the 10 s one. */
   window?: 'hour';
+  /** A burst of notices held for quiet hours (F-601-q): the flush tells the inbox alone. */
+  only?: 'inbox';
 }
 export type NoticeFlushHandler = (flush: NoticeFlush) => Promise<void>;
 

@@ -75,7 +75,10 @@ type Entry = { params: Record<string, string>; grantId?: string };
  *
  * `only` names the person's channels to tell, each on its own and never
  * joined to a burst: a retention notice in the user's quiet hours is told to
- * the inbox now and to the bot when they end (F-601-m).
+ * the inbox now and to the bot when they end (F-601-m). With `window: 'hour'`
+ * and `only: ['inbox']` — a non-urgent notice held for quiet hours — the inbox
+ * row joins an hour lane of its own whose flush tells the inbox alone, so the
+ * same notice of several services is one row (F-601-q).
  */
 export type EventNotice = {
   consumer: string;
@@ -142,7 +145,9 @@ export class EventNoticeSender {
     const failures: unknown[] = [];
     const { live, person } = notice;
     if (live) await this.once(notice, 'live', () => this.realtime.publish(live.channel, live.body), failures);
-    if (person && notice.only) {
+    if (person && notice.window && notice.only?.length === 1 && notice.only[0] === 'inbox') {
+      await this.once(notice, 'inbox', () => this.join(notice.eventId, person, notice.window, 'inbox'), failures);
+    } else if (person && notice.only) {
       for (const channel of notice.only) await this.once(notice, channel, () => this.tell(channel, person), failures);
     } else if (person) {
       const owed = await this.owedBeforeBursts(notice);
@@ -174,12 +179,12 @@ export class EventNoticeSender {
    * batch it first took.
    */
   async flush(flush: NoticeFlush): Promise<void> {
-    const { flushId, tenantId, userId, template, window } = flush;
+    const { flushId, tenantId, userId, template, window, only } = flush;
     const flat = await this.redis.evalScript<string[]>(
       NOTICE_BURST_TAKE,
       [
-        UnscopedRedisKeys.noticeBurstScheduled(tenantId, userId, template, window),
-        UnscopedRedisKeys.noticeBurst(tenantId, userId, template, window),
+        UnscopedRedisKeys.noticeBurstScheduled(tenantId, userId, template, window, only),
+        UnscopedRedisKeys.noticeBurst(tenantId, userId, template, window, only),
         UnscopedRedisKeys.noticeBurstBatch(flushId),
       ],
       [RedisTtl.outboxProcessed, flushId],
@@ -191,7 +196,7 @@ export class EventNoticeSender {
     const services = count > 1 ? await this.names(tenantId, userId, entries) : undefined;
     const failures: unknown[] = [];
     const told = { consumer: BURST_CONSUMER, eventId: flushId };
-    for (const channel of PERSON_CHANNELS) {
+    for (const channel of only ? [only] : PERSON_CHANNELS) {
       await this.once(told, channel, () => this.tell(channel, person, count > 1 ? count : undefined, services), failures);
     }
     if (failures.length > 0) throw failures[0];
@@ -229,20 +234,20 @@ export class EventNoticeSender {
   }
 
   /** Add the event to its burst; the call that opens a burst schedules its flush, or gives the claim back. */
-  private async join(eventId: string, person: Person, window?: 'hour'): Promise<void> {
+  private async join(eventId: string, person: Person, window?: 'hour', only?: 'inbox'): Promise<void> {
     const { tenantId, userId, template } = person;
     const windowMs = window === 'hour' ? this.hourMs : this.windowMs;
-    const scheduled = UnscopedRedisKeys.noticeBurstScheduled(tenantId, userId, template, window);
+    const scheduled = UnscopedRedisKeys.noticeBurstScheduled(tenantId, userId, template, window, only);
     const flushId = randomUUID();
     const entry: Entry = person.grantId ? { params: person.params, grantId: person.grantId } : { params: person.params };
     const claimed = await this.redis.evalScript<number>(
       NOTICE_BURST_ADD,
-      [UnscopedRedisKeys.noticeBurst(tenantId, userId, template, window), scheduled],
+      [UnscopedRedisKeys.noticeBurst(tenantId, userId, template, window, only), scheduled],
       [eventId, JSON.stringify(entry), RedisTtl.outboxProcessed, Math.ceil(windowMs / 1000) + RedisTtl.noticeBurstScheduledSlack, flushId],
     );
     if (claimed !== 1) return;
     try {
-      await this.broker.publishNoticeFlush({ flushId, tenantId, userId, template, ...(window ? { window } : {}) }, windowMs);
+      await this.broker.publishNoticeFlush({ flushId, tenantId, userId, template, ...(window ? { window } : {}), ...(only ? { only } : {}) }, windowMs);
     } catch (err) {
       await this.redis.del(scheduled);
       throw err;

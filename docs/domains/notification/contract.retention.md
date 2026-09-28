@@ -99,7 +99,8 @@ telling groups, per user and template.
 | **Patient** notices wait up to an hour (`AUTOMATION_RETENTION_WINDOW_MS`) for the same template of the user's other services: 50 / 80 %, 7 / 3 days, not connected (24 h, 72 h), idle, runs out within 5 days — the rows marked `patient` in worker's `RETENTION_NOTICES` | the hourly sweeps emit one user's services minutes apart; an hour catches a sweep whole |
 | **Every other type is urgent** and keeps the 10 s burst: 95 %, the last day, runs out within a day, wallet low, reactivated, every `cutoff`. A row without `patient` is urgent, so a new type is never delayed by omission. A combined usage + time notice waits only if both are patient | "an urgent notice is never delayed" (F-601-n) |
 | The hour lane is its own burst key (`noticeBurst(…, 'hour')`) and its own delay queue (`AUTOMATION_NOTICE_HOUR_DELAY_QUEUE`) | 50 % and 95 % share `serviceUsageThreshold`; and a delay queue expires only its head, so one queue holds one window |
-| A patient claim sends `waitSec`, so quiet hours starting inside the hour hold its bot message (above); the inbox row of a held notice is still written at once, one per service | the inbox makes no sound |
+| A patient claim sends `waitSec`, so quiet hours starting inside the hour hold its bot message (above) | a notice claimed at 22:30 and told at 23:30 is a night one |
+| **A held patient notice's inbox row joins an hour lane of its own** (`noticeBurst(…, 'hour', 'inbox')`, F-601-q, user 2026-09-28): its flush tells the inbox alone, one row naming the services, as the bot message is; a held urgent notice is still its own inbox row at once | five held at night were five inbox rows beside one morning message; the bot stays the held message's, so the lane never shares a burst with one that tells it |
 | Held bot messages due together are one message per `(user, template)`: `RetentionHeldNoticeJob` groups a take, marks each row on its own and tells the rest as one | five held overnight are one morning message; a repeat after a crash tells nothing twice |
 | A combined message **names** each service: billing's `POST internal/billing/entitlement/grants/names` (entitlement `contract.retention.md`) answers the buyer's name for the service (F-307-x), the product's name key, its sku and the buyer's live config labels (F-307-f); auth-service lists them under the summary, "• Home (One month) — Ali's phone", in the user's language, 20 at most then "…and N more" | five identical purchases are told apart by the names their buyer gave them |
 | A names lookup that fails tells the summary without the list | a notice without its list beats one not told |
@@ -173,6 +174,5 @@ service the user has. It rides the purchase's own notices (automation
 
 - A mute per channel (bot vs inbox): a kind or a Grant is muted on both.
 - The level of a service bought for someone else set at purchase: it is set afterwards, per service (F-601-o).
-- One inbox row for several held notices: during quiet hours the inbox gets one row per service; only the bot message is grouped (F-601-p).
 - The bot's own settings screen: F-319, over the same `notification_preference` row.
 - Retention of ledger rows: one per Grant, notice and period, kept.

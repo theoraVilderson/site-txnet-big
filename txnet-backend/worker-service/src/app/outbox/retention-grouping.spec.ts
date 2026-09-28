@@ -203,3 +203,56 @@ describe('F-601-p — quiet hours release one message per template', () => {
     expect(calls.cleared).toEqual([[row(1), row(2)], [row(1), row(2)]]);
   });
 });
+
+/**
+ * F-601-q (user 2026-09-28): during quiet hours the inbox got one row per
+ * service while the bot message was already one. A held non-urgent notice's
+ * inbox row now joins an hour lane of its own that tells the inbox alone —
+ * the bot is still the held message's; an urgent held one is its own row at once.
+ */
+describe('F-601-q — held notices are one inbox row', () => {
+  const held = (n: number, window?: 'hour'): EventNotice => ({ ...endsSoon(n, window), only: ['inbox'] });
+
+  it('three held patient notices are one inbox row naming them, and no bot message', async () => {
+    const { sender, calls } = build();
+    for (const n of [1, 2, 3]) await sender.send(held(n, 'hour'));
+    expect(calls.told).toEqual([]);
+    expect(calls.flushes).toHaveLength(1);
+    expect(calls.flushes[0]!.delayMs).toBe(3_600_000);
+    expect(calls.flushes[0]!.flush).toMatchObject({ window: 'hour', only: 'inbox' });
+
+    await sender.flush(calls.flushes[0]!.flush);
+    expect(calls.told.map((t) => t.channel)).toEqual(['inbox']);
+    expect(calls.told[0]).toMatchObject({ template: 'serviceEndsSoon', count: 3, params: {} });
+    expect(calls.told[0]!.services).toHaveLength(3);
+  });
+
+  it('a held burst never shares a key with the hour lane that also tells the bot', async () => {
+    const { sender, calls } = build();
+    await sender.send(held(1, 'hour'));
+    await sender.send(endsSoon(2, 'hour'));
+    expect(calls.flushes).toHaveLength(2);
+    expect(calls.flushes[1]!.flush.only).toBeUndefined();
+    expect(UnscopedRedisKeys.noticeBurst(TENANT, USER, 'serviceEndsSoon', 'hour', 'inbox')).not.toBe(
+      UnscopedRedisKeys.noticeBurst(TENANT, USER, 'serviceEndsSoon', 'hour'),
+    );
+  });
+
+  it('an urgent held notice is still its own inbox row, at once', async () => {
+    const { sender, calls } = build();
+    await sender.send(held(1));
+    expect(calls.flushes).toEqual([]);
+    expect(calls.told).toEqual([expect.objectContaining({ channel: 'inbox', params: { days: '7' } })]);
+  });
+
+  it('a redelivered event joins nothing twice, and a redelivered flush tells nothing twice', async () => {
+    const { sender, calls } = build();
+    await sender.send(held(1, 'hour'));
+    await sender.send(held(2, 'hour'));
+    await sender.send(held(1, 'hour'));
+    await sender.flush(calls.flushes[0]!.flush);
+    await sender.flush(calls.flushes[0]!.flush);
+    expect(calls.told).toHaveLength(1);
+    expect(calls.told[0]).toMatchObject({ channel: 'inbox', count: 2 });
+  });
+});
