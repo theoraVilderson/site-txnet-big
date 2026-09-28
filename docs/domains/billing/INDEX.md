@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 72
+version: 73
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -88,8 +88,8 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-28 | contract v73 (**breaking** for revenue readers, F-116-h8, ADR-0098 part 3): the reseller revenue report sums each currency on its own (`byCurrency`) and converts every total into the reseller's currency now (`currencyCode`), `null` when it cannot. Consumer: bot-app (F-116-h9). See [contract.revenue.md](contract.revenue.md) |
 | 2026-09-28 | contract v72 (**breaking** for coupon admins, F-116-h7, ADR-0099): a platform coupon or gift code serves the platform owner's users only — never a reseller's, on any gateway, invoice or the gift box. `coupon_tenant` dropped; `tenantIds` on a coupon or batch is `400`. Consumer: panel `CouponForm`/`GiftCodes`, updated in the same change |
 | 2026-09-28 | contract v71 (additive, F-116-h6, ADR-0098 part 3): a coupon in another currency than the order has its money converted at the live rate (USD pivot), recorded on the redemption (`fxRate`, both snapshots); with no rate it is `currency_unavailable` |
-| 2026-09-28 | contract v70 (**breaking** for usage-report readers, F-116-h5, ADR-0098 part 3): a coupon redemption records `currencyCode`; the usage report totals per currency and converts into the tenant's now, `discountGiven` `null` when it cannot. `reserve_coupon` takes the order's currency. Consumer: panel `CouponUsage` (F-116-h3). See [contract.coupon.md](contract.coupon.md) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

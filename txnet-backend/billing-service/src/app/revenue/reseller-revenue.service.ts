@@ -5,6 +5,8 @@ import {
   ResellerAccessRefused,
   ResellerAccessRejection,
   ResellerActor,
+  convertedByChanges,
+  operatingCurrencyOf,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
 
@@ -25,21 +27,33 @@ export class ResellerRevenueRefused extends Error {
 
 export type RevenuePeriod = { from: Date; to: Date };
 
+/** One currency's figure as written (2 places, the column's), before any conversion. */
+export type CurrencyTotal = { currencyCode: string; total: string; count: number };
+
 export type RevenueTotals = {
   /** The window actually totalled, as the request resolved it. */
   from: string;
   to: string;
   /**
-   * What this reseller **sold** in the window: base-currency decimal strings
-   * (C-02, ADR-0019), with the reasons that make up the total.
+   * The reseller's operating currency now: what every converted `total` is in
+   * (F-116-h8, ADR-0098 part 3).
+   */
+  currencyCode: string;
+  /**
+   * What this reseller **sold** in the window, with the reasons that make up
+   * the total. Each currency is summed on its own (`byCurrency`); a `total` is
+   * those sums converted through the reseller's currency changes into
+   * `currencyCode`, and `null` when no change leads from one of them — never
+   * summed as written.
    */
   sales: {
-    total: string;
+    total: string | null;
     count: number;
-    byReason: { reasonType: WalletReasonType; total: string; count: number }[];
+    byReason: { reasonType: WalletReasonType; total: string | null; count: number }[];
+    byCurrency: CurrencyTotal[];
   };
   /** What its users **paid in** in the window. Money in, not revenue (ADR-0067). */
-  topUps: { total: string; count: number };
+  topUps: { total: string | null; count: number; byCurrency: CurrencyTotal[] };
 };
 
 /**
@@ -125,6 +139,19 @@ export const REFUND_REASONS = (Object.keys(UNDOES) as WalletReasonType[]).filter
 
 const money = (v: Prisma.Decimal | null | undefined) => (v ? v.toFixed(2) : '0.00');
 
+const ZERO = new Prisma.Decimal(0);
+
+/** Amounts per currency, as written: the shape every figure below is summed into. */
+type ByCurrency = Map<string, Prisma.Decimal>;
+
+const add = (into: ByCurrency, code: string, amount: Prisma.Decimal) =>
+  into.set(code, (into.get(code) ?? ZERO).plus(amount));
+
+const listed = (sums: ByCurrency, counts: Map<string, number>): CurrencyTotal[] =>
+  [...new Set([...sums.keys(), ...counts.keys()])]
+    .sort((a, b) => a.localeCompare(b))
+    .map((currencyCode) => ({ currencyCode, total: money(sums.get(currencyCode)), count: counts.get(currencyCode) ?? 0 }));
+
 /**
  * A reseller's own revenue (F-311-b, spec F-311, ADR-0067):
  * `GET /api/billing/tenants/:tenantId/revenue` — totals over a period for the
@@ -172,8 +199,10 @@ export class ResellerRevenueService {
     return this.run(actor, tenantId, async () =>
       tenantTransaction(this.prisma, async (tx) => {
         const [sales, refunds, topUps] = await Promise.all([
+          // Grouped by currency as well (F-116-h8): a sum across currencies is
+          // dollars and rials added as one number, so it is never asked for.
           tx.walletTransaction.groupBy({
-            by: ['reasonType'],
+            by: ['reasonType', 'currencyCode'],
             where: { direction: LedgerDirection.debit, reasonType: { in: SALE_REASONS }, createdAt },
             _sum: { amount: true },
             _count: { _all: true },
@@ -184,11 +213,12 @@ export class ResellerRevenueService {
           // the window, and a reason can come out negative rather than be
           // clamped to something no rows back.
           tx.walletTransaction.groupBy({
-            by: ['reasonType'],
+            by: ['reasonType', 'currencyCode'],
             where: { direction: LedgerDirection.credit, reasonType: { in: REFUND_REASONS }, createdAt },
             _sum: { amount: true },
           }),
-          tx.paymentTransaction.aggregate({
+          tx.paymentTransaction.groupBy({
+            by: ['currencyCode'],
             // Only a settled payment is money: legacy counted `pending` and
             // `failed` attempts and got a balance that drifted for ever
             // (`contract.history.md`). `billingTenantId: null` leaves out the
@@ -200,46 +230,92 @@ export class ResellerRevenueService {
           }),
         ]);
 
-        // What came back, against the sale it came off. `count` is untouched:
-        // the blocks were sold and the rows exist — what changed is how much of
-        // the money the reseller kept.
-        const refunded = new Map<WalletReasonType, Prisma.Decimal>();
+        // What came back, against the sale it came off, in the currency it was
+        // written in. `count` is untouched: the blocks were sold and the rows
+        // exist — what changed is how much of the money the reseller kept.
+        const net = new Map<WalletReasonType, ByCurrency>();
+        const counts = new Map<WalletReasonType, number>();
+        const salesCounts = new Map<string, number>();
+        const salesByCurrency: ByCurrency = new Map();
+        const of = (reason: WalletReasonType) => net.get(reason) ?? net.set(reason, new Map()).get(reason)!;
+        for (const row of sales) {
+          const amount = new Prisma.Decimal(money(row._sum.amount));
+          add(of(row.reasonType), row.currencyCode, amount);
+          add(salesByCurrency, row.currencyCode, amount);
+          counts.set(row.reasonType, (counts.get(row.reasonType) ?? 0) + row._count._all);
+          salesCounts.set(row.currencyCode, (salesCounts.get(row.currencyCode) ?? 0) + row._count._all);
+        }
         for (const row of refunds) {
           const sale = UNDOES[row.reasonType];
           if (!sale) continue;
-          refunded.set(sale, (refunded.get(sale) ?? new Prisma.Decimal(0)).plus(money(row._sum.amount)));
+          const amount = new Prisma.Decimal(money(row._sum.amount)).neg();
+          add(of(sale), row.currencyCode, amount);
+          add(salesByCurrency, row.currencyCode, amount);
         }
+
+        const convert = await this.converter(tx, tenantId);
 
         // Every reason either list names, so a window holding a close and none
         // of the blocks it refunds still reports the money going back out.
-        const sold = new Map(sales.map((row) => [row.reasonType, row]));
-        const reasons = [...new Set([...sold.keys(), ...refunded.keys()])];
-        const byReason = reasons.map((reasonType) => {
-          const row = sold.get(reasonType);
-          const gross = new Prisma.Decimal(money(row?._sum.amount));
-          return {
-            reasonType,
-            total: money(gross.minus(refunded.get(reasonType) ?? 0)),
-            count: row?._count._all ?? 0,
-          };
-        });
+        const byReason: RevenueTotals['sales']['byReason'] = [];
+        let salesTotal: Prisma.Decimal | null = ZERO;
+        for (const [reasonType, sums] of net) {
+          const total = await convert.sum(sums);
+          // Summed from the rows already read rather than asked for again:
+          // a second aggregate is a second chance for the two to disagree.
+          salesTotal = salesTotal && total ? salesTotal.plus(total) : null;
+          byReason.push({ reasonType, total: convert.show(total), count: counts.get(reasonType) ?? 0 });
+        }
+
+        const paidIn: ByCurrency = new Map();
+        const paidInCounts = new Map<string, number>();
+        for (const row of topUps) {
+          add(paidIn, row.currencyCode, new Prisma.Decimal(money(row._sum.amountCredited)));
+          paidInCounts.set(row.currencyCode, row._count._all);
+        }
 
         return {
           from: period.from.toISOString(),
           to: period.to.toISOString(),
+          currencyCode: convert.currencyCode,
           sales: {
-            // Summed from the rows already read rather than asked for again:
-            // a second aggregate is a second chance for the two to disagree.
-            total: byReason
-              .reduce((sum, row) => sum.plus(row.total), new Prisma.Decimal(0))
-              .toFixed(2),
+            total: convert.show(salesTotal),
             count: byReason.reduce((n, row) => n + row.count, 0),
             byReason,
+            byCurrency: listed(salesByCurrency, salesCounts),
           },
-          topUps: { total: money(topUps._sum.amountCredited), count: topUps._count._all },
+          topUps: {
+            total: convert.show(await convert.sum(paidIn)),
+            count: [...paidInCounts.values()].reduce((n, c) => n + c, 0),
+            byCurrency: listed(paidIn, paidInCounts),
+          },
         };
       }),
     );
+  }
+
+  /**
+   * Sums per currency into the reseller's currency now: an earlier one
+   * converted through its `currency_change` rows, as the coupon usage report's
+   * is (F-116-h5) — `null` when no change leads from it. Shown at the target
+   * currency's own places; a figure with no currency to convert is zero.
+   */
+  private async converter(tx: Prisma.TransactionClient, tenantId: string) {
+    const currencyCode = await operatingCurrencyOf(tx, tenantId);
+    const target = await tx.currency.findUnique({ where: { code: currencyCode }, select: { decimalPlaces: true } });
+    const places = target?.decimalPlaces ?? 2;
+    return {
+      currencyCode,
+      show: (v: Prisma.Decimal | null) => (v ? v.toFixed(places) : null),
+      sum: async (sums: ByCurrency): Promise<Prisma.Decimal | null> => {
+        let total: Prisma.Decimal | null = ZERO;
+        for (const [code, amount] of sums) {
+          const converted = code === currencyCode ? amount : await convertedByChanges(tx, tenantId, amount, code, currencyCode);
+          total = converted && total ? total.plus(converted) : null;
+        }
+        return total;
+      },
+    };
   }
 
   /** Admit, run in the reseller's scope, and translate the door's refusal into this surface's one type. */

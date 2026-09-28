@@ -22,9 +22,13 @@
  *  - **money in is not revenue.** The top-up figure is answered beside the sales
  *    one and never folded into it (ADR-0067 decision 1);
  *  - **only a settled payment is money.** A `pending` or `failed` attempt is
- *    not a top-up, which is the arithmetic legacy got wrong (`contract.history.md`).
+ *    not a top-up, which is the arithmetic legacy got wrong (`contract.history.md`);
+ *  - **each currency is totalled on its own** (F-116-h8, ADR-0098 part 3): a
+ *    row written before the reseller changed currency is converted through its
+ *    `currency_change` rows into the currency it keeps now — never added to the
+ *    new one as written, which would report dollars and rials as one number.
  */
-import { LedgerDirection, PaymentStatus, WalletReasonType } from '@prisma/client';
+import { LedgerDirection, PaymentStatus, Prisma, WalletReasonType } from '@prisma/client';
 import { ResellerAccess, TenantContext } from '@txnet-backend/shared-core';
 
 import { ResellerRevenueRefused, ResellerRevenueService } from './reseller-revenue.service';
@@ -41,17 +45,17 @@ const stranger = { userId: STRANGER, tenantId: PLATFORM, permissions: [] as stri
 const FROM = new Date('2026-09-01T00:00:00.000Z');
 const TO = new Date('2026-09-30T00:00:00.000Z');
 
-/** A decimal as Prisma answers one: `toFixed` is all this code asks of it. */
-const dec = (v: string) => ({ toFixed: (n: number) => Number(v).toFixed(n) });
-
 /** What a ledger call saw: its arguments, and the tenant in scope when it ran. */
 type Seen = { what: string; args: any; scope: string | undefined };
 
 function build(
   rows: {
-    sales?: { reasonType: WalletReasonType; sum: string; count: number }[];
-    refunds?: { reasonType: WalletReasonType; sum: string }[];
-    topUps?: { sum: string | null; count: number };
+    sales?: { reasonType: WalletReasonType; sum: string; count: number; currencyCode?: string }[];
+    refunds?: { reasonType: WalletReasonType; sum: string; currencyCode?: string }[];
+    topUps?: { sum: string | null; count: number; currencyCode?: string }[];
+    /** The reseller's operating currency now. */
+    currencyCode?: string;
+    changes?: { fromCode: string; toCode: string; rate: string }[];
   } = {},
 ) {
   const seen: Seen[] = [];
@@ -75,11 +79,21 @@ function build(
 
   const sales = (rows.sales ?? []).map((r) => ({
     reasonType: r.reasonType,
-    _sum: { amount: dec(r.sum) },
+    currencyCode: r.currencyCode ?? 'USD',
+    _sum: { amount: new Prisma.Decimal(r.sum) },
     _count: { _all: r.count },
   }));
-  const refunds = (rows.refunds ?? []).map((r) => ({ reasonType: r.reasonType, _sum: { amount: dec(r.sum) } }));
-  const topUps = rows.topUps ?? { sum: null, count: 0 };
+  const refunds = (rows.refunds ?? []).map((r) => ({
+    reasonType: r.reasonType,
+    currencyCode: r.currencyCode ?? 'USD',
+    _sum: { amount: new Prisma.Decimal(r.sum) },
+  }));
+  const topUps = (rows.topUps ?? []).map((r) => ({
+    currencyCode: r.currencyCode ?? 'USD',
+    _sum: { amountCredited: r.sum === null ? null : new Prisma.Decimal(r.sum) },
+    _count: { _all: r.count },
+  }));
+  const places: Record<string, number> = { USD: 2, IRR: 0, EUR: 2 };
 
   const tx = {
     // `tenantTransaction` binds the scope with this as its first statement.
@@ -92,11 +106,15 @@ function build(
         return record(debit ? 'sales' : 'refunds', debit ? sales : refunds)(args);
       },
     },
-    paymentTransaction: {
-      aggregate: record('topUps', {
-        _sum: { amountCredited: topUps.sum === null ? null : dec(topUps.sum) },
-        _count: { _all: topUps.count },
-      }),
+    paymentTransaction: { groupBy: record('topUps', topUps) },
+    // The reseller's currency now, and the changes that led to it (F-116-f).
+    tenant: { findUnique: async () => ({ operatingCurrencyCode: rows.currencyCode ?? 'USD' }) },
+    currency: {
+      findUnique: async ({ where }: { where: { code: string } }) =>
+        where.code in places ? { decimalPlaces: places[where.code] } : null,
+    },
+    currencyChange: {
+      findMany: async () => (rows.changes ?? []).map((c) => ({ ...c, rate: new Prisma.Decimal(c.rate) })),
     },
   };
   const prisma = { $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx) };
@@ -108,18 +126,19 @@ describe('ResellerRevenueService.totals', () => {
   it('answers the sales total from the sale debits, as a base-currency decimal string', async () => {
     const { service } = build({
       sales: [{ reasonType: WalletReasonType.traffic_consumption, sum: '1250.5', count: 7 }],
-      topUps: { sum: '4000', count: 12 },
+      topUps: [{ sum: '4000', count: 12 }],
     });
 
     const total = await service.totals(owner, RESELLER, { from: FROM, to: TO });
 
+    expect(total.currencyCode).toBe('USD');
     expect(total.sales.total).toBe('1250.50');
     expect(total.sales.count).toBe(7);
     expect(total.sales.byReason).toEqual([
       { reasonType: WalletReasonType.traffic_consumption, total: '1250.50', count: 7 },
     ]);
     // Money in, beside the sales figure and never folded into it.
-    expect(total.topUps).toEqual({ total: '4000.00', count: 12 });
+    expect(total.topUps).toEqual({ total: '4000.00', count: 12, byCurrency: [{ currencyCode: 'USD', total: '4000.00', count: 12 }] });
     expect(total.from).toBe(FROM.toISOString());
     expect(total.to).toBe(TO.toISOString());
   });
@@ -127,8 +146,8 @@ describe('ResellerRevenueService.totals', () => {
   it('answers zero rather than null when the period holds nothing', async () => {
     const { service } = build();
     const total = await service.totals(owner, RESELLER, { from: FROM, to: TO });
-    expect(total.sales).toEqual({ total: '0.00', count: 0, byReason: [] });
-    expect(total.topUps).toEqual({ total: '0.00', count: 0 });
+    expect(total.sales).toEqual({ total: '0.00', count: 0, byReason: [], byCurrency: [] });
+    expect(total.topUps).toEqual({ total: '0.00', count: 0, byCurrency: [] });
   });
 
   it('reads both ledgers inside the reseller"s scope, and names no tenant in either query', async () => {
@@ -220,5 +239,66 @@ describe('ResellerRevenueService.totals', () => {
       ResellerRevenueRefused,
     );
     expect(seen).toEqual([]);
+  });
+
+  it('totals each currency on its own, then converts the old one through the reseller’s change into its currency now (F-116-h8)', async () => {
+    // Sold in dollars until the reseller moved to rials at 1 USD = 600000 IRR.
+    const { seen, service } = build({
+      currencyCode: 'IRR',
+      changes: [{ fromCode: 'USD', toCode: 'IRR', rate: '600000' }],
+      sales: [
+        { reasonType: WalletReasonType.product_purchase, sum: '10.00', count: 2, currencyCode: 'USD' },
+        { reasonType: WalletReasonType.product_purchase, sum: '3000000', count: 1, currencyCode: 'IRR' },
+      ],
+      refunds: [{ reasonType: WalletReasonType.product_refund, sum: '2.50', currencyCode: 'USD' }],
+      topUps: [
+        { sum: '20.00', count: 1, currencyCode: 'USD' },
+        { sum: '6000000', count: 3, currencyCode: 'IRR' },
+      ],
+    });
+
+    const total = await service.totals(owner, RESELLER, { from: FROM, to: TO });
+
+    // Never 3000010 — the two currencies are summed apart, and the dollars converted.
+    expect(total.currencyCode).toBe('IRR');
+    expect(total.sales.total).toBe('7500000');
+    expect(total.sales.count).toBe(3);
+    expect(total.sales.byReason).toEqual([{ reasonType: WalletReasonType.product_purchase, total: '7500000', count: 3 }]);
+    // What was written, per currency, net of what came back in that currency.
+    expect(total.sales.byCurrency).toEqual([
+      { currencyCode: 'IRR', total: '3000000.00', count: 1 },
+      { currencyCode: 'USD', total: '7.50', count: 2 },
+    ]);
+    expect(total.topUps.total).toBe('18000000');
+    expect(total.topUps.count).toBe(4);
+    expect(total.topUps.byCurrency).toEqual([
+      { currencyCode: 'IRR', total: '6000000.00', count: 3 },
+      { currencyCode: 'USD', total: '20.00', count: 1 },
+    ]);
+
+    // Grouped by currency in the query — a sum across currencies is never asked for.
+    for (const call of seen) expect(call.args.by).toContain('currencyCode');
+  });
+
+  it('leaves a converted total empty, never summed as written, when no change of the reseller leads from a currency', async () => {
+    const { service } = build({
+      currencyCode: 'IRR',
+      sales: [
+        { reasonType: WalletReasonType.product_purchase, sum: '10.00', count: 1, currencyCode: 'EUR' },
+        { reasonType: WalletReasonType.product_purchase, sum: '500000', count: 1, currencyCode: 'IRR' },
+      ],
+      topUps: [{ sum: '500000', count: 1, currencyCode: 'IRR' }],
+    });
+
+    const total = await service.totals(owner, RESELLER, { from: FROM, to: TO });
+
+    expect(total.sales.total).toBeNull();
+    expect(total.sales.byReason).toEqual([{ reasonType: WalletReasonType.product_purchase, total: null, count: 2 }]);
+    expect(total.sales.byCurrency).toEqual([
+      { currencyCode: 'EUR', total: '10.00', count: 1 },
+      { currencyCode: 'IRR', total: '500000.00', count: 1 },
+    ]);
+    // A figure whose currencies all convert is still answered.
+    expect(total.topUps.total).toBe('500000');
   });
 });

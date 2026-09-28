@@ -2,8 +2,8 @@
 id: billing
 layer: domain
 status: active
-version: 2
-updated: 2026-09-22
+version: 3
+updated: 2026-09-28
 ---
 
 # Contract — billing / a reseller's own revenue
@@ -35,8 +35,10 @@ page when one is built.
 | **A refund of a sale comes off it**, and `UNDOES` names, exhaustively, which sale each credit undoes. Today `traffic_refund` -> `traffic_consumption` (F-027-r) and `product_refund` -> `product_purchase` (an undelivered purchase, F-111-d). A `currency_change` pair is neither a sale nor a refund (F-116-f). It is subtracted from that reason's total and from `sales.total`; `count` is untouched | the blocks were bought ahead of consumption and the unconsumed ones go back when the Grant closes (ADR-0072 rule 3). A figure that took the debits and ignored the credits would report every reseller more than it kept, by the headroom this platform holds — and grow with the number of Grants that expire, which is all of them. The rows were still sold, so what changed is the money, not the count |
 | A window holding a close whose blocks were bought earlier reports a **negative** reason, and is not clamped to zero | the figure is the movement in the window; a zero would be a number no rows back, and it would hide exactly the period a reseller asks about |
 | `topUps` counts `status: success` and `billingTenantId: null` only | a `pending` or `failed` attempt is not money — the arithmetic legacy got wrong (`contract.history.md`); a row with `billingTenantId` is the reseller paying **the platform** (F-019-b), money out |
-| Amounts are base-currency decimal strings, two places (C-02, ADR-0019). An empty period is `0.00`, never `null` | a report with a hole in it is read as a zero anyway, and a string cannot be rounded in transit |
-| The `sales.total` is summed from the `byReason` rows already read, not asked for a second time | a second aggregate is a second chance for the total and its parts to disagree |
+| Amounts are decimal strings (C-02, ADR-0019). An empty period is zero, never `null` | a report with a hole in it is read as a zero anyway, and a string cannot be rounded in transit |
+| **Each currency is summed on its own** (F-116-h8, ADR-0098 part 3): every query groups by `currencyCode`, and `byCurrency` (on `sales` and `topUps`) answers each as written, two places, a sale net of the refunds in that currency | a reseller that moved USD -> IRR has rows in both; one sum across them is dollars and rials added as one number |
+| Every `total` (`sales`, each `byReason`, `topUps`) is those sums converted into the reseller's currency **now** — the answer's `currencyCode` — through its `currency_change` rows (`convertedByChanges`, as the coupon usage report, F-116-h5), at that currency's places. `null` when no change leads from one of the currencies | a figure converted at no rate the reseller agreed to, or summed as written, is a number no rows back; `byCurrency` still says what was taken |
+| The `sales.total` is summed from the converted `byReason` totals already read, not asked for a second time | a second aggregate is a second chance for the total and its parts to disagree |
 | Nothing is cached or stored | the ledger says what was earned; a remembered total is a second memory (the reasoning of ADR-0041 §5) |
 | The window defaults to 30 days, is capped at 366 by the schema, and the answer echoes the `from`/`to` actually used. Its own rate-limit bucket, `RESELLER_REVENUE_READ` | two aggregates scan the tenant's whole ledgers over the period with no index narrowing them further — the most expensive read on any reseller-named surface |
 | `.strict()` on the query | the path already said whose revenue this is; a second answer is refused rather than ignored |
