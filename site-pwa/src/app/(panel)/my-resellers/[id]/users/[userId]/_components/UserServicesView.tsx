@@ -21,6 +21,7 @@ import { UsageMeter } from "../../../../../services/_components/UsageMeter";
 import { GRANT_TONES, serviceName } from "../../../../../services/_lib/my-services";
 import { USER_KEYS as K } from "../../../../_lib/users";
 import { AdminConfigs } from "./AdminConfigs";
+import { GrantActions, IssueGrant } from "./GrantActions";
 import { useUserMessage } from "./useUserMessage";
 
 const S = K.services;
@@ -38,6 +39,8 @@ const PAGE_SIZE = 20;
  *  - **a sheet is read when it is opened**: expanding one Grant asks three
  *    routes against one bucket (300/900s), so ten closed rows ask nothing;
  *  - **no rename**: the admin surface has no label route, so no pencil;
+ *  - **a Grant's acts sit on its sheet, the issue of a new one on the page**
+ *    (F-311-w, `GrantActions.tsx`); after either the list is read again;
  *  - **a suspended reseller reads and cannot act**: the actions come back
  *    `reseller_suspended`, said as its sentence.
  */
@@ -109,10 +112,13 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
           </h1>
           <p className="mt-1 text-sm text-text-secondary">{t("common", S.subtitle)}</p>
         </div>
-        <button type="button" className={quietButton} onClick={retry}>
-          <RefreshCw size={12} aria-hidden />
-          {t("common", K.refresh)}
-        </button>
+        <div className="flex flex-col items-start gap-2 md:items-end">
+          <button type="button" className={quietButton} onClick={retry}>
+            <RefreshCw size={12} aria-hidden />
+            {t("common", K.refresh)}
+          </button>
+          <IssueGrant api={api} tenantId={id} texts={texts} onIssued={retry} />
+        </div>
       </header>
 
       {loadError !== null ? (
@@ -133,7 +139,7 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
           ) : (
             <ul className="space-y-3">
               {answer.rows.map((row) => (
-                <AdminGrantCard key={row.id} api={api} row={row} texts={texts} />
+                <AdminGrantCard key={row.id} api={api} row={row} texts={texts} onChanged={retry} />
               ))}
             </ul>
           )}
@@ -156,7 +162,7 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
 }
 
 /** One Grant: its name, status and meter; opened, its sheet. */
-function AdminGrantCard({ api, row, texts }: { api: ResellerUserGrantsApi; row: GrantRow; texts: Record<string, string> }) {
+function AdminGrantCard({ api, row, texts, onChanged }: { api: ResellerUserGrantsApi; row: GrantRow; texts: Record<string, string>; onChanged: () => void }) {
   const { t, lang } = useLocale();
   const [open, setOpen] = useState(false);
   const tone = GRANT_TONES[row.status];
@@ -184,13 +190,14 @@ function AdminGrantCard({ api, row, texts }: { api: ResellerUserGrantsApi; row: 
       <div className="mt-3">
         <UsageMeter row={row} live={false} warn={false} />
       </div>
-      {open && <GrantSheet api={api} grantId={row.id} />}
+      {open && <GrantSheet api={api} row={row} onChanged={onChanged} />}
     </li>
   );
 }
 
-/** An opened Grant: the 30 days, the subscription link, the configs and their lines. */
-function GrantSheet({ api, grantId }: { api: ResellerUserGrantsApi; grantId: string }) {
+/** An opened Grant: its acts, the 30 days, the subscription link, the configs and their lines. */
+function GrantSheet({ api, row, onChanged }: { api: ResellerUserGrantsApi; row: GrantRow; onChanged: () => void }) {
+  const grantId = row.id;
   const message = useUserMessage();
   const [rows, setRows] = useState<UserConfigRow[] | null>(null);
   const [readError, setReadError] = useState<unknown>(null);
@@ -212,11 +219,18 @@ function GrantSheet({ api, grantId }: { api: ResellerUserGrantsApi; grantId: str
   }, [api, grantId, asked]);
 
   const reload = () => setAsked((n) => n + 1);
+  // A Grant's act can switch its configs off or on, or release them: both reads.
+  const acted = () => {
+    reload();
+    onChanged();
+  };
 
   return (
     <div className="mt-4 space-y-4 border-t border-card-border pt-4">
+      <GrantActions api={api} row={row} onActed={acted} />
       <UsageBars grantId={grantId} read={api.grantUsage} />
-      <SubscriptionLink api={api} grantId={grantId} />
+      {/* Re-mounted by every read, so a link read before a rotate is not kept. */}
+      <SubscriptionLink key={asked} api={api} grantId={grantId} />
       {readError !== null && <Alert>{message(readError)}</Alert>}
       {rows === null && readError === null && <TableSkeleton rows={2} columns={2} />}
       {rows !== null && (

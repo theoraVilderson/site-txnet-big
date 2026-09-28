@@ -6,7 +6,7 @@ version: 38
 updated: 2026-09-28
 ---
 
-# Contract — panel-web: a reseller's users and one user's services (F-311-v)
+# Contract — panel-web: a reseller's users and one user's services (F-311-v, -w)
 
 A topic file of [contract.md](contract.md) (§10), and a screen pair of the
 reseller workspace described in [contract.resellers.md](contract.resellers.md)
@@ -16,14 +16,15 @@ Reached from the console's "More settings" (`OnboardingConsoleView`).
 | page | route | files |
 |---|---|---|
 | its users | `/my-resellers/[id]/users` (`myResellerUsersPath`) | `my-resellers/[id]/users/_components/ResellerUsersView.tsx` |
-| one user's services | `/my-resellers/[id]/users/[userId]` (`myResellerUserPath`) | `…/users/[userId]/_components/UserServicesView.tsx`, `AdminConfigs.tsx`, `useUserMessage.ts` |
+| one user's services | `/my-resellers/[id]/users/[userId]` (`myResellerUserPath`) | `…/users/[userId]/_components/UserServicesView.tsx`, `AdminConfigs.tsx`, `GrantActions.tsx`, `useUserMessage.ts` |
 
-Rules for both: `my-resellers/_lib/users.ts`. Calls: `resellerUsersApi`
+Rules for both: `my-resellers/_lib/users.ts`; a Grant's acts: `my-resellers/_lib/grant-actions.ts`. Calls: `resellerUsersApi`
 (`lib/auth-api.ts`) over auth's
 [contract.reseller-users.md](../auth-api/contract.reseller-users.md) (F-311-a),
 and `resellerUserGrantsApi(tenantId, userId)` (`lib/billing-api.ts`) over
 billing's [contract.reseller-grants.md](../../domains/billing/contract.reseller-grants.md)
-"One user's services" and "An admin's actions on one user's configs" (F-311-f/g).
+"One user's services", "An admin's actions on one user's configs" (F-311-f/g) and
+its Grant sections (F-311-d, -h..-q).
 
 ## Rules
 
@@ -41,7 +42,12 @@ billing's [contract.reseller-grants.md](../../domains/billing/contract.reseller-
 | 10 | Config actions offered: **regenerate, disable, enable, retire, move**, on one config or the ticked ones (1–50). A disable asks its reason first (1–200, the user reads it); a move its panel from billing's `configs/move-targets` (F-311-v1), read the first time move is pressed (F-311-v2); `adminActionBody` sends no body the schema would refuse; retire confirms | the schema refuses the whole request for a bad body, not one config |
 | 11 | **An outcome per config**: the refused ones are named by the name they had when pressed (`ADMIN_REFUSAL_KEYS` — the owner's, plus a move's `same_panel` / `panel_not_found`), the list is read again; a thrown request is its sentence and touched nothing | billing answers 200 with one outcome per id |
 | 12 | No "n left" gates an admin's regenerate | billing neither checks nor counts it for an admin (network `contract.provisioning.md`) |
+| 13 | **A Grant's acts on its sheet** (F-311-w, `GrantActions`): freeze / unfreeze, days, traffic, reset, gift, speed, devices, new `/sub` link, renew, delete. `grantActionsOf`: every act but the link only on `active` / `suspended`; traffic and reset on a limited prepaid bag, gift on a metered one, days on one with an end. Anything subtler is billing's to refuse | the link is reset in any state; the rest is refused `grant_closed` / `grant_not_renewable` |
+| 14 | **The form is the confirm**: one form open, saying what the act does; its button is off until `grantActionBody` returns the exact body its `.strict()` schema takes — a reason where required (1–500), a whole non-zero ±days, a non-zero GB, an empty speed / devices box lifts the cap. A delete's refund is answered either way first | a refused body is a 400 and nothing is done; the refund is the admin's answer (user, 2026-09-26) |
+| 15 | A renewal and an issue carry one `requestId` per opened form | a double click renews or issues once (billing answers `renewed` / `issued: false`) |
+| 16 | **Issue a new service** on the page (`IssueGrant`): a variant of the reseller's own catalog (`catalogAdminApi(id)`: active products, then each one's active variants), read when the form first opens | billing takes `admin_only` variants too, and refuses what it cannot place (`variant_not_deliverable`) |
+| 17 | A Grant act's refusal is its sentence (`GRANT_REFUSAL_KEYS`), which the spec holds to the controller's `GRANT_ACTION_STATUS` and the speed cap's two; the outcome is billing's answer (new end, bag, refund, the new link); after any act the list and the sheet are read again, the `/sub` box re-mounted | those reasons carry no i18n key; a link read before a rotate is dead |
 
-**Not covered:** the
-Grant actions — freeze, days, traffic, reset, gift, speed, rotate, delete,
-issue (F-311-w); history, search by pasted link, bulk (F-311-x).
+**Not covered:** re-dating to a picked day (billing takes `endsAt`; the sheet
+sends ±days), and the panels a speed cap's refusal names (not flat, so not in
+the envelope's `facts`); history, search by pasted link, bulk (F-311-x).

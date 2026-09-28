@@ -622,6 +622,48 @@ export interface ResellerUserGrantsApi {
   configAction(body: AdminConfigActionBody): Promise<{ action: AdminConfigAction; results: AdminConfigActionOutcome[] }>;
   /** Where a move may send a config (F-311-v1): shared panels and the reseller's own. */
   moveTargets(): Promise<MoveTarget[]>;
+  /**
+   * An admin's act on one Grant (F-311-w): `route` is the action's segment
+   * under `…/grants/:grantId/` and `body` exactly what its schema takes —
+   * both from `my-resellers/_lib/grant-actions.ts`, which the spec holds to
+   * the controller.
+   */
+  grantAction(grantId: string, route: string, body: Record<string, unknown>): Promise<GrantActionResult>;
+  /** An admin issues this user a service by hand (F-311-o). */
+  issue(body: Record<string, unknown>): Promise<GrantIssued>;
+}
+
+/**
+ * The answer of any Grant action (`billing/contract.reseller-grants.md`),
+ * as one shape: each route fills its own fields and the sheet reads only
+ * those. Bytes and money are decimal strings.
+ */
+export interface GrantActionResult {
+  grantId: string;
+  configsDisabled?: number;
+  configsRestored?: number;
+  endsAtAfter?: string | null;
+  purchasedBytesAfter?: string;
+  resetBytes?: string;
+  spent?: boolean;
+  revived?: boolean;
+  rateMbpsAfter?: number | null;
+  limitAfter?: number | null;
+  panelsNotEnforcing?: { id: string; name: string }[];
+  subscriptionUrl?: string;
+  renewed?: boolean;
+  refundedAmount?: string | null;
+  refundSkipped?: string | null;
+}
+
+export interface GrantIssued {
+  grantId: string;
+  variantId: string;
+  status: GrantStatus;
+  startsAt: string;
+  endsAt: string | null;
+  /** `false`: a repeat of the same request, answering its first Grant. */
+  issued: boolean;
 }
 
 /** A panel a config may move to (F-311-v1); `own` is the reseller's dedicated one, else shared. */
@@ -648,6 +690,8 @@ export function resellerUserGrantsApi(tenantId: string, userId: string): Reselle
         method: "POST",
         body: JSON.stringify(body),
       }),
+    grantAction: (grantId, route, body) => call<GrantActionResult>(`${grant(grantId)}/${route}`, { method: "POST", body: JSON.stringify(body) }),
+    issue: (body) => call<GrantIssued>(`${at}/grants`, { method: "POST", body: JSON.stringify(body) }),
   };
 }
 
