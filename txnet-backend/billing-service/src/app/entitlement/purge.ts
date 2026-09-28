@@ -6,7 +6,7 @@ import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 import type { EnvConfig } from '../config/env.validation';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { ADMIN_FROZEN, QUOTA_EXHAUSTED } from './suspension';
+import { ADMIN_FROZEN, PERIOD_ENDED, QUOTA_EXHAUSTED } from './suspension';
 
 /**
  * The second and third stages of ADR-0075 (F-027-y): the clock a suspension
@@ -153,8 +153,20 @@ export type Revival = {
  * answers it. `suspendForExhaustion` is the mirror of this (`suspension.ts`).
  */
 export async function reviveOnTopUp(tx: Prisma.TransactionClient, grantId: string): Promise<Revival> {
+  return revive(tx, grantId, QUOTA_EXHAUSTED);
+}
+
+/**
+ * The same way back for a Grant whose days ran out (F-027-do), guarded on
+ * `period_ended`: only a renewal that gave it a future end calls this.
+ */
+export async function reviveOnRenewal(tx: Prisma.TransactionClient, grantId: string): Promise<Revival> {
+  return revive(tx, grantId, PERIOD_ENDED);
+}
+
+async function revive(tx: Prisma.TransactionClient, grantId: string, statusReason: string): Promise<Revival> {
   const moved = await tx.grant.updateMany({
-    where: { id: grantId, status: GrantStatus.suspended, statusReason: QUOTA_EXHAUSTED },
+    where: { id: grantId, status: GrantStatus.suspended, statusReason },
     data: { status: GrantStatus.active, statusReason: null, suspendedAt: null },
   });
   if (moved.count === 0) return { revived: false, configsRestored: 0 };

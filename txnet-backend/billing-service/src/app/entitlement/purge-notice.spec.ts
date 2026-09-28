@@ -35,6 +35,7 @@ function due(over: Partial<PurgeNoticeDue> = {}): PurgeNoticeDue {
     tenantId: TENANT_A,
     userId: USER,
     billingMode: VariantBillingMode.prepaid,
+    statusReason: null,
     suspendedAt: SUSPENDED,
     purgeNoticeFor: null,
     ...over,
@@ -77,8 +78,8 @@ function build(rows: PurgeNoticeDue[] = [], opts: { raced?: boolean; batchSize?:
 
 describe('purgeNoticeType (F-601-j)', () => {
   it('tells a prepaid Grant to renew and a metered one to top up', () => {
-    expect(purgeNoticeType(VariantBillingMode.prepaid)).toBe(OutboxEventType.GRANT_PURGE_SOON);
-    expect(purgeNoticeType(VariantBillingMode.metered)).toBe(OutboxEventType.GRANT_PURGE_SOON_METERED);
+    expect(purgeNoticeType(VariantBillingMode.prepaid, null)).toBe(OutboxEventType.GRANT_PURGE_SOON);
+    expect(purgeNoticeType(VariantBillingMode.metered, null)).toBe(OutboxEventType.GRANT_PURGE_SOON_METERED);
   });
 });
 

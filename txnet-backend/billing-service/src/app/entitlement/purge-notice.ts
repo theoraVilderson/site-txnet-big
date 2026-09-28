@@ -7,7 +7,7 @@ import type { EnvConfig } from '../config/env.validation';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GRANT_AGGREGATE } from './delivered';
-import { ADMIN_FROZEN } from './suspension';
+import { ADMIN_FROZEN, PERIOD_ENDED } from './suspension';
 
 type PurgeNotice = typeof OutboxEventType.GRANT_PURGE_SOON | typeof OutboxEventType.GRANT_PURGE_SOON_METERED;
 
@@ -17,6 +17,7 @@ export type PurgeNoticeDue = {
   tenantId: string;
   userId: string;
   billingMode: VariantBillingMode;
+  statusReason: string | null;
   suspendedAt: Date;
   purgeNoticeFor: Date | null;
 };
@@ -27,8 +28,12 @@ export type PurgeNoticeResult = { scanned: number; told: number };
  * What keeps the configs: a renewal for a prepaid Grant, a top-up for a
  * metered one — a metered renewal adds days alone and revives nothing
  * (`reviveFundedGrants`), the reason F-601-b's cutoff notices split the same way.
+ * A Grant whose days ran out (`period_ended`, F-027-do) is the exception: only
+ * a renewal brings it back, whatever its billing mode.
  */
-export function purgeNoticeType(billingMode: VariantBillingMode): PurgeNotice {
+export function purgeNoticeType(billingMode: VariantBillingMode, statusReason: string | null): PurgeNotice {
+  // Days that ran out come back by a renewal alone, a metered Grant's too (F-027-do).
+  if (statusReason === PERIOD_ENDED) return OutboxEventType.GRANT_PURGE_SOON;
   return billingMode === VariantBillingMode.metered ? OutboxEventType.GRANT_PURGE_SOON_METERED : OutboxEventType.GRANT_PURGE_SOON;
 }
 
@@ -68,7 +73,7 @@ export class GrantPurgeNoticeService {
     const take = this.config.get('GRANT_PURGE_BATCH_SIZE', { infer: true });
 
     const due = await this.crossTenant.$queryRaw<PurgeNoticeDue[]>`
-      SELECT g."id", g."tenantId", g."userId", g."billingMode", g."suspendedAt", g."purgeNoticeFor"
+      SELECT g."id", g."tenantId", g."userId", g."billingMode", g."statusReason", g."suspendedAt", g."purgeNoticeFor"
         FROM "entitlement"."grant" g
         JOIN "tenant"."tenant" t ON t."id" = g."tenantId"
        WHERE g."status" = ${GrantStatus.suspended}::"entitlement"."GrantStatus"
@@ -101,7 +106,7 @@ export class GrantPurgeNoticeService {
     });
     if (moved.count !== 1) return null;
 
-    const type = purgeNoticeType(grant.billingMode);
+    const type = purgeNoticeType(grant.billingMode, grant.statusReason);
     await tx.outboxEvent.create({
       data: {
         aggregate: GRANT_AGGREGATE,

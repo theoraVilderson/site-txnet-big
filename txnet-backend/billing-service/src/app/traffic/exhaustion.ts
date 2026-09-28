@@ -3,7 +3,7 @@ import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import { emitCutOff } from '../entitlement/cut-off';
-import { suspendForExhaustion } from '../entitlement/suspension';
+import { suspendForExhaustion, suspendForPeriodEnd } from '../entitlement/suspension';
 import { BlockPurchaseRefused, type BlockPurchaseRejection, sizeBlock } from './block-purchase';
 
 /**
@@ -135,10 +135,14 @@ export type Closed = {
  * moves either). A metered Grant is the block path's (`suspendIfExhausted`):
  * its close is a bag, not the end.
  *
+ * **A passed end is `period_ended`, whatever the Grant (F-027-do).** A close
+ * standing on an end that has passed suspends a prepaid, metered or unlimited
+ * Grant alike — with its own reason, so bytes do not revive it and a renewal
+ * of days does — and starts its purge clock. It wins over a Quota that moved:
+ * bytes alone buy no time.
+ *
  * **The user is told (F-601-b).** A suspension emits `volume_spent`, or
- * `ended` when the close was on the Grant's end. An unlimited or metered Grant
- * whose standing close is on a passed end is not suspended — nothing here
- * decides that — but it has stopped, so it is told `ended` all the same.
+ * `ended` when the close was on the Grant's end.
  */
 export async function suspendIfClosed(tx: Prisma.TransactionClient, grantId: string, at: Date = new Date()): Promise<Closed> {
   const verdict = (v: ClosedVerdict, configsDisabled = 0): Closed => ({ grantId, verdict: v, configsDisabled });
@@ -157,17 +161,22 @@ export async function suspendIfClosed(tx: Prisma.TransactionClient, grantId: str
   const ended = endStands && close.expiresAt !== null && close.expiresAt <= at ? close.expiresAt : null;
   const owner = { grantId, tenantId: grant.tenantId, userId: grant.userId };
 
-  const bagless = grant.trafficUnlimited ? 'unlimited' : grant.billingMode !== VariantBillingMode.prepaid ? 'not_prepaid' : null;
-  if (bagless) {
-    if (ended) await emitCutOff(tx, owner, OutboxEventType.GRANT_ENDED, ended);
-    return verdict(bagless);
+  // Days ran out (F-027-do): every kind of Grant is suspended for it, with the
+  // purge clock, so a renewal reaches it in place until the purge.
+  if (ended) {
+    const suspension = await suspendForPeriodEnd(tx, grantId, at);
+    if (!suspension.suspended) return verdict('not_active');
+    await emitCutOff(tx, owner, OutboxEventType.GRANT_ENDED, ended);
+    return verdict('suspended', suspension.configsDisabled);
   }
+
+  const bagless = grant.trafficUnlimited ? 'unlimited' : grant.billingMode !== VariantBillingMode.prepaid ? 'not_prepaid' : null;
+  if (bagless) return verdict(bagless);
   if (!endStands || close.quotaBytes !== grant.purchasedBytes) return verdict('reopened');
 
   const suspension = await suspendForExhaustion(tx, grantId, at);
   if (!suspension.suspended) return verdict('not_active');
-  if (ended) await emitCutOff(tx, owner, OutboxEventType.GRANT_ENDED, ended);
-  else await emitCutOff(tx, owner, OutboxEventType.GRANT_VOLUME_SPENT, at);
+  await emitCutOff(tx, owner, OutboxEventType.GRANT_VOLUME_SPENT, at);
   return verdict('suspended', suspension.configsDisabled);
 }
 

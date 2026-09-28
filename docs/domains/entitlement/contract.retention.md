@@ -137,7 +137,7 @@ proved by `cut-off.spec.ts`. Payload `tenantId, userId, grantId, period`.
 |---|---|
 | `suspendIfClosed` suspending a prepaid Grant: `ended` when the close was on its end, else `volume_spent`; both say "renew" | a renewal moves the end or raises Quota, and revives it |
 | `suspendIfExhausted` suspending a metered Grant: `wallet_spent`, which says "top up" | a top-up revives it (`reviveFundedGrants`); a metered renewal adds days alone and revives nothing |
-| An unlimited or metered Grant whose standing close is on a passed end: `ended`, and nothing written to the Grant | it has stopped though nothing here suspends it — the one way an unlimited Grant stops |
+| An unlimited or metered Grant whose standing close is on a passed end: suspended as `period_ended` (F-027-do) and told `ended` | a renewal of days revives it (`reviveOnRenewal`) — the one way an unlimited Grant stops |
 | A close stands only while its Quota **and** end are the Grant's (`network/contract.lease.md` rule 25); one a renewal moved is `reopened`, untold | a late close never suspends, nor tells, a renewed Grant |
 | `period` = the end for `ended`, the suspension's instant otherwise; nothing is emitted when nothing stopped (a redelivered close finds it `suspended`) | notification's ledger holds each stop once (invariant 14); a renewal or revival opens a new one |
 | Never muted, never held for quiet hours (F-601-m) | a user whose service stopped must hear it |
@@ -155,7 +155,7 @@ purge (`purge-due` answers `told` beside its counts).
 | A frozen Grant (`admin_frozen`, F-311-h) is never scanned | it is never purged, and a renewal would not unfreeze it |
 | Only while a config is still `present` | a Grant the purge got to first is not told "within a day" |
 | The clock is `purgeNoticeFor`, the `suspendedAt` told for; the write is conditional on the value read; `period` = `suspendedAt` | once per suspension; a revival clears `suspendedAt`, so the next one is due again with nothing reset |
-| Prepaid: `entitlement.grant.purge_soon` ("renew"); metered: `.purge_soon_metered` ("top up") | a metered renewal adds days alone and revives nothing (as "Cutoff") |
+| Prepaid, or any Grant suspended as `period_ended`: `entitlement.grant.purge_soon` ("renew"); metered out of money: `.purge_soon_metered` ("top up") | a metered renewal revives only a lapsed Grant (F-027-do); a top-up only one out of money (as "Cutoff") |
 | Never muted, never held for quiet hours (F-601-m) | the last chance to keep a config as it is |
 
 
@@ -167,7 +167,7 @@ userId, grantId, period`; template `serviceReactivated`.
 
 | Rule | Why |
 |---|---|
-| A suspension revived (`reviveOnTopUp`) by a renewal or a wallet top-up: told, `period` = the `suspendedAt` it cleared | once per suspension; the revival's conditional write lets one racing caller through |
+| A suspension revived (`reviveOnTopUp`, or `reviveOnRenewal` for `period_ended`) by a renewal or a wallet top-up: told, `period` = the `suspendedAt` it cleared | once per suspension; the revival's conditional write lets one racing caller through |
 | An active Grant whose close stood as read (`standingClose`: the close's end is the Grant's, and its Quota for a bag; a bagless one's only on a passed end), renewed with room: told, `period` = the close's `closedAt` | an unlimited or metered Grant past its end is stopped though nothing suspends it; the planner reopens it on the moved end (`network/contract.lease.md` rule 25) |
 | Nothing when the Grant still cannot run: its end, after the write, passed; a bag with no room (a carried debt); a metered close on its bag, which a renewal of days leaves closed | "active again" while it is off is the one false notice here |
 | Nothing for a Grant that never stopped: active with no close, or a close on another end | there was no cutoff to answer |

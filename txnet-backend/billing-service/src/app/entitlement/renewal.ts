@@ -1,9 +1,9 @@
 import { GrantSource, GrantStatus, Prisma, QuotaMetric, VariantBillingMode } from '@prisma/client';
 
 import { EntitlementRefused } from './grant';
-import { reviveOnTopUp } from './purge';
+import { reviveOnRenewal, reviveOnTopUp } from './purge';
 import { emitReactivated, runs, standingClose } from './reactivated';
-import { QUOTA_EXHAUSTED } from './suspension';
+import { PERIOD_ENDED, QUOTA_EXHAUSTED } from './suspension';
 
 /**
  * A renewal is `Quota += X` on the same Grant (F-027-dg; SPEC weakness #30).
@@ -22,8 +22,11 @@ import { QUOTA_EXHAUSTED } from './suspension';
  *
  * The planner reopens a closed Grant when its Quota or end moved
  * (`contract.lease.md` rule 25), so this writes nothing on the network side.
- * An `expired` Grant is not renewed here: `grant_status_one_way` makes expiry
- * terminal (F-027-do).
+ * A Grant whose days ran out is `suspended` as `period_ended` (F-027-do), not
+ * `expired` — which `grant_status_one_way` makes terminal — so it is renewed
+ * here in place until the purge: revived once its end is ahead again and, for
+ * a bag, Quota past Used; with days but a spent bag, it waits as
+ * `quota_exhausted`, its purge clock still running, for the bytes that revive it.
  */
 
 const GIB = BigInt(1024 ** 3);
@@ -146,10 +149,14 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
   if (input.bytes > BigInt(0)) await row(input.bytes, input.reason ?? null);
   if (carry.forgivenBytes > BigInt(0)) await row(carry.forgivenBytes, DEBT_FORGIVEN);
 
-  const revived =
-    grant.status === GrantStatus.suspended && grant.statusReason === QUOTA_EXHAUSTED && bagged && purchasedBytes > usedBytes
-      ? (await reviveOnTopUp(tx, grant.id)).revived
-      : false;
+  const room = !bagged || purchasedBytes > usedBytes;
+  let revived = false;
+  if (grant.status === GrantStatus.suspended && grant.statusReason === QUOTA_EXHAUSTED && bagged && room) {
+    revived = (await reviveOnTopUp(tx, grant.id)).revived;
+  } else if (grant.status === GrantStatus.suspended && grant.statusReason === PERIOD_ENDED && runs(endsAt, at)) {
+    if (room) revived = (await reviveOnRenewal(tx, grant.id)).revived;
+    else await lapseToQuota(tx, grant.id);
+  }
 
   // F-601-k: a stop this renewal undid is told, once the Grant can run again.
   // The close is read only for an active Grant — a suspended one is back by
@@ -157,11 +164,23 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
   if (runs(endsAt, at)) {
     const owner = { grantId: grant.id, tenantId: grant.tenantId, userId: grant.userId };
     if (revived && grant.suspendedAt) await emitReactivated(tx, owner, grant.suspendedAt);
-    else if (grant.status === GrantStatus.active && (!bagged || purchasedBytes > usedBytes)) {
+    else if (grant.status === GrantStatus.active && room) {
       const closedAt = await standingClose(tx, grant, bagged, at);
       if (closedAt) await emitReactivated(tx, owner, closedAt);
     }
   }
 
   return { grantId: grant.id, ...carry, purchasedBytes, endsAt, revived };
+}
+
+/**
+ * A Grant whose days ran out, renewed by days onto a spent bag: time is back,
+ * traffic is not. Its reason becomes the one the next bytes revive; the purge
+ * clock keeps running, as the user has had no service since it started.
+ */
+async function lapseToQuota(tx: Prisma.TransactionClient, grantId: string): Promise<void> {
+  await tx.grant.updateMany({
+    where: { id: grantId, status: GrantStatus.suspended, statusReason: PERIOD_ENDED },
+    data: { statusReason: QUOTA_EXHAUSTED },
+  });
 }

@@ -6,9 +6,9 @@
  *  - **a metered user told to renew.** Renewing a metered Grant adds days,
  *    never bytes, so it revives nothing; the wallet top-up does
  *    (`reviveFundedGrants`). The wrong word leaves them cut off, waiting;
- *  - **an unlimited Grant cut off in silence.** Its close on time suspends
- *    nothing (it has no bag), so a notice keyed to the suspension alone would
- *    never tell the one Grant kind that can only end by time;
+ *  - **an unlimited Grant cut off in silence.** It has no bag, so time is the
+ *    only way it ends: its close on a passed end suspends it (F-027-do) and
+ *    tells it;
  *  - **a renewed Grant told it stopped.** A close read after a renewal moved
  *    the end is not a cutoff — and a prepaid one must not be suspended on it
  *    either (`network/contract.lease.md` rule 25: Quota **or** the end);
@@ -92,12 +92,11 @@ describe('cutoff notices on a close (suspendIfClosed)', () => {
     expect(events.map((e) => [e.type, e.payload['period']])).toEqual([[OutboxEventType.GRANT_ENDED, ENDED.toISOString()]]);
   });
 
-  it('an unlimited or a metered Grant closed on its end is told it ended, and nothing is written to it', async () => {
+  it('an unlimited or a metered Grant closed on its end is suspended (F-027-do) and told it ended', async () => {
     for (const grant of [{ trafficUnlimited: true, purchasedBytes: BigInt(0) }, { billingMode: VariantBillingMode.metered }]) {
-      const { tx, events, grantWrites } = closedTx({ ...grant, endsAt: ENDED }, { quotaBytes: BigInt(0), expiresAt: ENDED });
-      await suspendIfClosed(tx, GRANT, AT);
+      const { tx, events } = closedTx({ ...grant, endsAt: ENDED }, { quotaBytes: BigInt(0), expiresAt: ENDED });
+      await expect(suspendIfClosed(tx, GRANT, AT)).resolves.toMatchObject({ verdict: 'suspended' });
       expect(events.map((e) => e.type)).toEqual([OutboxEventType.GRANT_ENDED]);
-      expect(grantWrites).toEqual([]);
     }
   });
 

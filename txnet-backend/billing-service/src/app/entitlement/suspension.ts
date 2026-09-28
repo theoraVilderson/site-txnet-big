@@ -15,6 +15,14 @@ export const QUOTA_EXHAUSTED = 'quota_exhausted';
  */
 export const ADMIN_FROZEN = 'admin_frozen';
 
+/**
+ * `grant.statusReason` for a Grant whose days ran out (F-027-do): the lease
+ * planner's close stood on its passed end. `suspended`, not `expired` — which
+ * `grant_status_one_way` makes terminal — so a renewal of days reaches the same
+ * Grant, link and configs until the purge. Bytes alone never revive it.
+ */
+export const PERIOD_ENDED = 'period_ended';
+
 export type Suspension = {
   /** False where the Grant was no longer `active` when the write reached it. Nothing was written. */
   suspended: boolean;
@@ -41,9 +49,18 @@ export type Suspension = {
  * where it is, and a second call is a no-op.
  */
 export async function suspendForExhaustion(tx: Prisma.TransactionClient, grantId: string, at: Date): Promise<Suspension> {
+  return suspend(tx, grantId, at, QUOTA_EXHAUSTED);
+}
+
+/** The same stop for a Grant whose days ran out (F-027-do): its own reason, so bytes do not revive it. */
+export async function suspendForPeriodEnd(tx: Prisma.TransactionClient, grantId: string, at: Date): Promise<Suspension> {
+  return suspend(tx, grantId, at, PERIOD_ENDED);
+}
+
+async function suspend(tx: Prisma.TransactionClient, grantId: string, at: Date, statusReason: string): Promise<Suspension> {
   const moved = await tx.grant.updateMany({
     where: { id: grantId, status: GrantStatus.active },
-    data: { status: GrantStatus.suspended, statusReason: QUOTA_EXHAUSTED, suspendedAt: at },
+    data: { status: GrantStatus.suspended, statusReason, suspendedAt: at },
   });
   if (moved.count === 0) return { suspended: false, configsDisabled: 0 };
 

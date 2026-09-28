@@ -49,6 +49,15 @@ Each stop is told to the user (F-601-b, `contract.retention.md` "Cutoff"). A ren
 (`renewal.ts`) revives it; a wallet top-up does not. That revival, and a top-up's of a metered Grant, is told (F-601-k, `contract.retention.md` "Active again"). `transition()` cannot do this: it writes no
 `suspendedAt`, which `grant_suspended_has_a_clock` refuses.
 
+**Running out of days suspends too (F-027-do, user 2026-09-27)** — never
+`expired`, which is terminal and would leave a renewal nothing to land on.
+When the planner's close stands on a passed end, `suspendIfClosed` suspends the
+Grant, prepaid, metered or unlimited, with `statusReason = 'period_ended'`
+(`PERIOD_ENDED`, `suspendForPeriodEnd`), purge clock started. Only a renewal
+revives it (`reviveOnRenewal`): its end ahead again and, for a bag, Quota past
+Used; with days but a spent bag it becomes `quota_exhausted`, clock running.
+Bytes alone (a top-up, `settle`) revive nothing: the guard is the reason.
+
 **Purge and restore (F-027-y, ADR-0075)** — `entitlement/purge.ts`. A
 suspension frees nothing: the client still holds a seat and a licence on the
 customer's panel. `GrantPurgeService.purgeDue(now)` is the second stage — for
@@ -103,7 +112,7 @@ doing): Quota rises by it too, as its own `quota_adjustment` row with reason
 row (invariant 3). A Grant suspended for quota is revived (`reviveOnTopUp`)
 when the raise leaves room; the planner reopens a closed one on the moved
 Quota or end (rule 25). Refused: `grant_not_renewable` (not `active` or
-`suspended` — an `expired` Grant is F-027-do), `traffic_not_renewable` (bytes
+`suspended`; a lapsed Grant is `suspended`, F-027-do), `traffic_not_renewable` (bytes
 on a metered or unlimited Grant, which renew by days alone),
 `nothing_to_renew`, `grant_moved` (Quota or end changed since the read: retry,
 so no debt is forgiven twice). Callers arrive with F-305 and F-311-d.
