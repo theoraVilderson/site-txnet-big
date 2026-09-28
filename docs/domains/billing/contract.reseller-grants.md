@@ -241,3 +241,8 @@ the user bought (user, 2026-09-28); with either, that amount, the other 0.
 | A repeat of `requestId` on the same Grant is **200** with the first renewal, `renewed: false` | a double click or a repeated bot callback must not give a second free period |
 
 **Not covered:** charging the user's wallet (F-305 is the user's own renewal), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
+
+## An admin finds a service by a pasted line (built — F-311-t)
+
+`POST /api/billing/tenants/:tenantId/grants/by-lines`, the owner's `by-lines` body and page ([contract.gift.md](contract.gift.md)), each row with its `userId`: support gets a link, not a user. `GrantService.listByLinesInScope` is the owner's matcher (F-307-p, F-307-r), unchanged, fenced by the reseller's `tenantId` written into the query instead of a user.
+Door `ResellerAccess` `read`, refusals as the reads'; no path user — the paste names them. Bucket `GRANTS_BY_LINES` per caller: one paste scans the reseller's live configs. Consumer F-311-x (panel).

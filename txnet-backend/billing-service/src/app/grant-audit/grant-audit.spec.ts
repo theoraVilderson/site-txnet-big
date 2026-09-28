@@ -142,7 +142,7 @@ describe('an admin action on a Grant or config writes a row (F-311-r)', () => {
 
   it('covers every write method of ResellerUserGrantsService', () => {
     const writes = Object.getOwnPropertyNames(ResellerUserGrantsService.prototype).filter(
-      (m) => !['constructor', 'grants', 'configs', 'usage', 'subscriptionLink', 'history', 'run', 'onGrant', 'audited'].includes(m),
+      (m) => !['constructor', 'grants', 'configs', 'usage', 'subscriptionLink', 'history', 'findByLines', 'run', 'admitted', 'onGrant', 'audited'].includes(m),
     );
     expect(writes.sort()).toEqual(EVERY_WRITE.map((c) => c.method).sort());
   });

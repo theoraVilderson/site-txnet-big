@@ -6,6 +6,7 @@ import {
   ForbiddenException,
   Get,
   HttpCode,
+  HttpException,
   HttpStatus,
   Ip,
   NotFoundException,
@@ -490,20 +491,25 @@ export class ResellerUserGrantsController {
         throw e;
       }
       if (!(e instanceof ResellerUserGrantsRefused)) throw e;
-      const payload = { reason: e.reason, message: e.message };
-      switch (STATUS[e.reason]) {
-        case 403:
-          throw new ForbiddenException(payload);
-        case 404:
-          throw new NotFoundException(payload);
-        default:
-          throw new ConflictException(payload);
-      }
+      throw resellerRefusal(e);
     }
   }
 }
 
-const actorOf = (req: Request) => {
+/** A refusal of this surface's door or user fence, as its status (shared with the search, F-311-t). */
+export function resellerRefusal(e: ResellerUserGrantsRefused): HttpException {
+  const payload = { reason: e.reason, message: e.message };
+  switch (STATUS[e.reason]) {
+    case 403:
+      return new ForbiddenException(payload);
+    case 404:
+      return new NotFoundException(payload);
+    default:
+      return new ConflictException(payload);
+  }
+}
+
+export const actorOf = (req: Request) => {
   const { userId, tenantId, permissions } = identityOf(req);
   return { userId, tenantId, permissions };
 };

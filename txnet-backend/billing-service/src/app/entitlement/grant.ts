@@ -245,7 +245,10 @@ export type GrantView = {
 };
 
 /** `hidden`: the user's Grants the scope left out — 0 on `all` (user, 2026-09-26). */
-export type GrantPage = { total: number; page: number; pageSize: number; hidden: number; rows: GrantView[] };
+export type GrantPage<Row = GrantView> = { total: number; page: number; pageSize: number; hidden: number; rows: Row[] };
+
+/** A Grant an admin's paste found among the tenant's users (F-311-t): the owner's view, and whose it is. */
+export type TenantGrantView = GrantView & { userId: string };
 
 /** Which of a user's Grants the list answers: `current` by default, `all` on request. */
 export const GRANT_LIST_SCOPES = ['current', 'all'] as const;
@@ -268,6 +271,7 @@ export const SETTLED_GRANT_STATUSES: readonly GrantStatus[] = [GrantStatus.cance
  */
 const GRANT_VIEW_COLUMNS = {
   id: true,
+  userId: true,
   status: true,
   startsAt: true,
   endsAt: true,
@@ -337,14 +341,21 @@ async function configNamedLike(tx: Prisma.TransactionClient, userId: string, q: 
 }
 
 /**
- * A live config of the user's that any pasted line is (F-307-p,
+ * Whose configs and Grants a paste is matched among: one user's (F-307-p), or
+ * every user of the tenant in scope (F-311-t, an admin's search). The tenant is
+ * written into the query, not left to RLS alone.
+ */
+type Whose = { userId: string } | { tenantId: string };
+
+/**
+ * A live config of `whose` that any pasted line is (F-307-p,
  * `config-identity.ts`): the uuid a line carries matched in the query, case
  * aside; a line with none compared with the configs' current captured lines,
  * `#name` left out of both. A captured line read from another client (a
  * regenerate not yet re-captured) is a dead link and matches nothing, as
  * `/sub` serves nothing from it. An empty result matches no Grant.
  */
-async function configHoldingLines(tx: Prisma.TransactionClient, userId: string, pasted: readonly string[]): Promise<Prisma.ConfigWhereInput> {
+async function configHoldingLines(tx: Prisma.TransactionClient, whose: Whose, pasted: readonly string[]): Promise<Prisma.ConfigWhereInput> {
   const live = { not: ConfigStatus.retired };
   const ids = pasted.map(configIdentityOf).filter((i) => i !== null);
   const uuids = [...new Set(ids.flatMap((i) => ('uuid' in i ? [i.uuid] : [])))];
@@ -353,7 +364,7 @@ async function configHoldingLines(tx: Prisma.TransactionClient, userId: string, 
   if (uuids.length) OR.push({ uuid: { in: uuids, mode: 'insensitive' } });
   if (lines.size || !OR.length) {
     const stored = lines.size
-      ? await tx.config.findMany({ where: { userId, status: live }, select: { id: true, uuid: true, linksUuid: true, linkLines: true } })
+      ? await tx.config.findMany({ where: { ...whose, status: live }, select: { id: true, uuid: true, linksUuid: true, linkLines: true } })
       : [];
     const held = stored.filter((c) => c.linksUuid !== null && c.linksUuid === c.uuid && c.linkLines.some((l) => lines.has(storedLineIdentity(l))));
     OR.push({ id: { in: held.map((c) => c.id) } });
@@ -366,13 +377,13 @@ async function configHoldingLines(tx: Prisma.TransactionClient, userId: string, 
  * token's hash (F-307-r), every other line through `configHoldingLines`. A
  * paste of config lines alone asks only the configs, as before.
  */
-async function grantHoldingLines(tx: Prisma.TransactionClient, userId: string, pasted: readonly string[]): Promise<Prisma.GrantWhereInput> {
+async function grantHoldingLines(tx: Prisma.TransactionClient, whose: Whose, pasted: readonly string[]): Promise<Prisma.GrantWhereInput> {
   const tokens = pasted.map(subscriptionTokenOf).filter((t) => t !== null);
   const lines = pasted.filter((l) => subscriptionTokenOf(l) === null);
-  if (!tokens.length) return { userId, configs: { some: await configHoldingLines(tx, userId, lines) } };
+  if (!tokens.length) return { ...whose, configs: { some: await configHoldingLines(tx, whose, lines) } };
   const OR: Prisma.GrantWhereInput[] = [{ subscriptionTokenHash: { in: [...new Set(tokens.map(hashSubscriptionToken))] } }];
-  if (lines.length) OR.push({ configs: { some: await configHoldingLines(tx, userId, lines) } });
-  return { userId, OR };
+  if (lines.length) OR.push({ configs: { some: await configHoldingLines(tx, whose, lines) } });
+  return { ...whose, OR };
 }
 
 function soldLimitOf(r: GrantViewRow): bigint | null {
@@ -553,16 +564,44 @@ export class GrantService {
     userId: string,
     request: { page?: number; pageSize?: number; scope?: GrantListScope; q?: string; lines?: readonly string[] } = {},
   ): Promise<GrantPage> {
+    const q = request.q?.trim() ?? '';
+    return this.pageOf(
+      request,
+      async (tx) =>
+        request.lines
+          ? grantHoldingLines(tx, { userId }, request.lines)
+          : q === ''
+            ? { userId }
+            : { userId, configs: { some: await configNamedLike(tx, userId, q) } },
+      (_row, view) => view,
+    );
+  }
+
+  /**
+   * The Grants of **every user of the tenant in scope** that any pasted line
+   * finds (F-311-t): `listForUser`'s `lines` matcher and page — the same uuid,
+   * line and `/sub` token rules, `current`/`all` and `hidden` — fenced by the
+   * scope's `tenantId` instead of a user, and each row says whose it is. For
+   * an admin's search: the caller has opened the reseller's scope and checked
+   * the door (`ResellerUserGrantsService.findByLines`).
+   */
+  listByLinesInScope(request: { page?: number; pageSize?: number; scope?: GrantListScope; lines?: readonly string[] }): Promise<GrantPage<TenantGrantView>> {
+    const tenantId = TenantContext.current('grant search').id;
+    // No line matches no Grant — never the tenant's whole list.
+    return this.pageOf(request, (tx) => grantHoldingLines(tx, { tenantId }, request.lines ?? []), (r, view) => ({ ...view, userId: r.userId }));
+  }
+
+  /** One page of the Grants `whose` selects, the settled ones left out unless `all`, newest period first. */
+  private pageOf<Row>(
+    request: { page?: number; pageSize?: number; scope?: GrantListScope },
+    whose: (tx: Prisma.TransactionClient) => Promise<Prisma.GrantWhereInput>,
+    rowOf: (r: GrantViewRow, view: GrantView) => Row,
+  ): Promise<GrantPage<Row>> {
     const page = request.page ?? DEFAULT_PAGE;
     const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
     const all = request.scope === 'all';
-    const q = request.q?.trim() ?? '';
     return tenantTransaction(this.prisma, async (tx) => {
-      const mine: Prisma.GrantWhereInput = request.lines
-        ? await grantHoldingLines(tx, userId, request.lines)
-        : q === ''
-          ? { userId }
-          : { userId, configs: { some: await configNamedLike(tx, userId, q) } };
+      const mine = await whose(tx);
       const where: Prisma.GrantWhereInput = all ? mine : { ...mine, status: { notIn: [...SETTLED_GRANT_STATUSES] } };
       const [rows, total, everything] = await Promise.all([
         tx.grant.findMany({
@@ -595,7 +634,7 @@ export class GrantService {
           })
         : [];
       const adjusted = new Map(sums.map((s) => [s.grantId, s._sum.delta ?? BigInt(0)]));
-      return { total, page, pageSize, hidden, rows: rows.map((r) => grantViewOf(r, tenant?.purgeAfterDays ?? null, adjusted.get(r.id))) };
+      return { total, page, pageSize, hidden, rows: rows.map((r) => rowOf(r, grantViewOf(r, tenant?.purgeAfterDays ?? null, adjusted.get(r.id)))) };
     });
   }
 

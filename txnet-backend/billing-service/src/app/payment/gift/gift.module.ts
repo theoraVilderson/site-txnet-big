@@ -8,6 +8,7 @@ import { GiftController } from './gift.controller';
 import { GrantListController } from './grant-list.controller';
 import { GrantTokenController } from './grant-token.controller';
 import { GiftRedemptionService } from './gift-redemption.service';
+import { ResellerGrantsByLinesController } from './reseller-grants-by-lines.controller';
 import { ResellerUserGrantsController } from './reseller-user-grants.controller';
 import { ResellerUserGrantsService } from './reseller-user-grants.service';
 import { SubscriptionLinkService } from './subscription-link.service';
@@ -24,7 +25,7 @@ import { SubscriptionLinkService } from './subscription-link.service';
  */
 @Module({
   imports: [WalletModule, EntitlementModule, TrafficModule],
-  controllers: [GiftController, GrantTokenController, GrantListController, ResellerUserGrantsController],
+  controllers: [GiftController, GrantTokenController, GrantListController, ResellerUserGrantsController, ResellerGrantsByLinesController],
   providers: [GiftRedemptionService, SubscriptionLinkService, ResellerUserGrantsService, ResellerAccess],
   exports: [GiftRedemptionService],
 })

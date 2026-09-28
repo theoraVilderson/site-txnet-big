@@ -14,7 +14,7 @@ import { deleteGrant, Deletion } from '../../entitlement/delete';
 import { DeviceLimitChange, setGrantDeviceLimit } from '../../entitlement/devices';
 import { changeGrantDuration, DurationChange, DurationMove } from '../../entitlement/duration';
 import { Freeze, freezeGrant, Unfreeze, unfreezeGrant } from '../../entitlement/freeze';
-import { EntitlementRefused, GrantService } from '../../entitlement/grant';
+import { EntitlementRefused, GrantPage, GrantService, TenantGrantView } from '../../entitlement/grant';
 import { adjustGrantTraffic, resetGrantTraffic, TrafficChange, TrafficReset } from '../../entitlement/traffic';
 import { giftGrantBytes } from '../../traffic/gift-bytes';
 import { setGrantSpeed, SpeedChange } from '../../traffic/grant-speed';
@@ -23,7 +23,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { GrantUsageService, GrantUsageView } from '../../traffic/grant-usage';
 import { RemainderCreditService } from '../../traffic/remainder-credit';
 import { AdminConfigCommand, UserConfigOutcome, UserConfigsService, UserConfigView } from '../../traffic/user-configs';
-import { GrantListQuery } from './grant-list.schema';
+import { GrantListQuery, GrantsByLinesBody } from './grant-list.schema';
 import { SubscriptionLinkService } from './subscription-link.service';
 
 /** The door's refusals, and the one this surface adds: the path's user is not the reseller's. */
@@ -87,6 +87,16 @@ export class ResellerUserGrantsService {
 
   subscriptionLink(actor: ResellerActor, tenantId: string, userId: string, grantId: string): Promise<string> {
     return this.run(actor, tenantId, userId, () => this.links.linkFor(grantId, userId));
+  }
+
+  /**
+   * An admin finds a service by a pasted config line or `/sub` link across the
+   * reseller's users (F-311-t): the owner's matcher (F-307-p, F-307-r) over the
+   * reseller's tenant, each row naming its user. `read`, as the user reads:
+   * there is no path user to check — the paste is what names them.
+   */
+  findByLines(actor: ResellerActor, tenantId: string, body: GrantsByLinesBody): Promise<GrantPage<TenantGrantView>> {
+    return this.admitted(actor, tenantId, 'read', () => this.grantService.listByLinesInScope(body));
   }
 
   /**
@@ -287,12 +297,17 @@ export class ResellerUserGrantsService {
     work: () => Promise<T>,
     capability: 'read' | 'staffWrite' = 'read',
   ): Promise<T> {
+    return this.admitted(actor, tenantId, capability, async () => {
+      const user = await tenantTransaction(this.prisma, (tx) => tx.user.findFirst({ where: { id: userId }, select: { id: true } }));
+      if (!user) throw new ResellerUserGrantsRefused('user_not_found', userId);
+      return await work();
+    });
+  }
+
+  /** The door, then `work` in the reseller's scope; the door's refusal becomes this surface's one type. */
+  private async admitted<T>(actor: ResellerActor, tenantId: string, capability: 'read' | 'staffWrite', work: () => Promise<T>): Promise<T> {
     try {
-      return await this.access.run(actor, tenantId, capability, async () => {
-        const user = await tenantTransaction(this.prisma, (tx) => tx.user.findFirst({ where: { id: userId }, select: { id: true } }));
-        if (!user) throw new ResellerUserGrantsRefused('user_not_found', userId);
-        return await work();
-      });
+      return await this.access.run(actor, tenantId, capability, work);
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new ResellerUserGrantsRefused(e.reason, tenantId);
       throw e;
