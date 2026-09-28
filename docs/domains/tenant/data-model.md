@@ -1,7 +1,7 @@
 ---
 id: tenant
 layer: domain
-updated: 2026-09-21
+updated: 2026-09-28
 ---
 
 # Data model — tenant
@@ -21,7 +21,7 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 | tenant_status_history | every status change: `fromStatus`, `toStatus`, `reason`, `actorUserId` (null = the platform); append-only (trigger), FK RESTRICT (F-018-f) | yes | permanent |
 | tenant_feature_entitlement | which feature keys are on for a tenant; `package_included` rows are replaced by a subscription `PUT` or a package `apply`, and added to by a package edit (F-018-e, F-018-o) | yes | until revoked/expired |
 | tenant_staff_member | reseller's internal team — **membership only**: `invitedByUserId`, `invitedAt`, `joinedAt`, `accessExpiresAt`, `revokedAt`, unique `(tenantId, userId)`. What a member may do is their `identity.user.roleId` (F-018-j, [contract.staff.md](contract.staff.md)) | yes | with tenant (cascade); a removed member is `revokedAt`, never deleted |
-| tenant_billing_wallet | a reseller's prepaid balance with the platform (cache, `>= 0`; D-41) | yes | with tenant |
+| tenant_billing_wallet | a reseller's prepaid balance with the platform (cache, `>= 0`; D-41), in `currencyCode` — the platform's; a `tenant_billing_transaction` in another is refused by a trigger (F-116-f) | yes | with tenant |
 | tenant_billing_transaction | append-only ledger of tenant<->platform charges | yes | permanent |
 | tenant_usage_meter | metered usage rollups for pay-as-you-go | yes | permanent |
 | tenant_gateway_config / tenant_sms_config | BYO integration settings; the secrets are vault rows (`tenant_sms_config`: one per tenant, no secret column since F-018-a). `tenant_gateway_config.currencyCode` = what its limits, fees and presets are in, the tenant's operating currency when written (F-116-b, billing `data-model.md` "Currency") | yes | with tenant |
@@ -48,6 +48,15 @@ branding/entitlements through a resolver, never the raw tables.
 `20260917000900_tenant_billing_wallet` (F-019-a) adds what Prisma cannot model:
 non-negative `cachedBalance` / `balanceAfter`, positive `amount`, and a partial
 unique `(reasonType, referenceId)` on `tenant_billing_transaction`.
+
+`20260928002900_a_currency_change_converts_live_money` (F-116-f, ADR-0098 part 4)
+adds `currencyCode` (backfilled with the platform's, then NOT NULL, no default) to
+`tenant_billing_wallet`, `tenant_billing_transaction`, `tenant_feature_package` and
+`tenant_usage_meter`; `sourceAmount` + `sourceCurrencyCode` (both or neither) to
+`tenant_billing_transaction`; the trigger `tenant_billing_transaction_in_wallet_currency`;
+and narrows the `(reasonType, referenceId)` unique to exclude `currency_change`,
+whose closing and opening rows all name the one change. Written by billing's
+`convertOperatingCurrency` (`billing/contract.currency-change.md`).
 
 `20260917001300_tenant_subscription` (F-018-e) adds both subscription tables, strict
 RLS on `tenant_subscription`, the settings row and its CHECKs.

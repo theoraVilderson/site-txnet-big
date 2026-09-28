@@ -245,6 +245,8 @@ describe('WalletHistoryService.ledger', () => {
         WalletReasonType.product_purchase,
         // And its refund when it was never delivered (F-111-d).
         WalletReasonType.product_refund,
+        // A balance restated in a new currency (F-116-f): the user should see why it changed.
+        WalletReasonType.currency_change,
       ],
     });
   });

@@ -4,8 +4,11 @@ import {
   TenantBillingReasonType,
   TenantBillingTransaction,
   TenantLedgerDirection,
+  TenantType,
 } from '@prisma/client';
 import { OutboxEventType } from '../../automation/routing-keys';
+import { convertedByChanges } from '../../billing/currency-change';
+import { platformCurrencyOf } from '../../billing/operating-currency';
 
 /**
  * The one place a reseller's billing balance changes (F-019-a, D-41; tenant
@@ -41,8 +44,17 @@ import { OutboxEventType } from '../../automation/routing-keys';
  */
 export type TenantBillingEntry = {
   tenantId: string;
-  /** Base currency (ADR-0019), strictly positive, at most the column's 2 decimal places. */
+  /** Strictly positive, at most the column's 2 decimal places. */
   amount: Prisma.Decimal;
+  /**
+   * The currency `amount` is in. Omitted = the wallet's, which is always the
+   * platform's (ADR-0098 part 4) — a platform change converts every billing
+   * wallet with it. A credit priced before the platform's
+   * currency changed (a top-up asked in the old one) names it, and is
+   * converted at that change's rate (F-116-f); a debit in another currency
+   * than the wallet's is refused.
+   */
+  currencyCode?: string;
   reasonType: TenantBillingReasonType;
   /** What caused the movement — a payment, a renewal, an admin request. At most one entry per (reasonType, referenceId). */
   referenceId?: string;
@@ -72,6 +84,14 @@ export class TenantBillingInvalidAmount extends Error {
   constructor(amount: Prisma.Decimal) {
     super(`billing amount must be > 0 with at most ${LEDGER_SCALE} decimal places, got ${amount.toString()}`);
     this.name = 'TenantBillingInvalidAmount';
+  }
+}
+
+/** A movement in another currency than the wallet's, and not a credit a recorded change converts (F-116-f). */
+export class TenantBillingCurrencyMismatch extends Error {
+  constructor(readonly tenantId: string, readonly walletCurrency: string, readonly entryCurrency: string) {
+    super(`billing wallet of tenant ${tenantId} is kept in ${walletCurrency}; refused a movement in ${entryCurrency}`);
+    this.name = 'TenantBillingCurrencyMismatch';
   }
 }
 
@@ -111,9 +131,9 @@ export class TenantBillingLedger {
     entry: TenantBillingEntry,
     direction: TenantLedgerDirection,
   ): Promise<TenantBillingTransaction> {
-    const { tenantId, amount, reasonType, referenceId } = entry;
-    if (amount.lte(0) || amount.decimalPlaces() > LEDGER_SCALE) {
-      throw new TenantBillingInvalidAmount(amount);
+    const { tenantId, reasonType, referenceId } = entry;
+    if (entry.amount.lte(0) || entry.amount.decimalPlaces() > LEDGER_SCALE) {
+      throw new TenantBillingInvalidAmount(entry.amount);
     }
 
     if (referenceId !== undefined) {
@@ -129,8 +149,23 @@ export class TenantBillingLedger {
       if (direction === TenantLedgerDirection.debit) throw new TenantBillingInsufficientBalance(tenantId);
       // Opens on the first credit; `skipDuplicates` lets two first credits meet
       // at the version guard below instead of at the unique `tenantId`.
-      await tx.tenantBillingWallet.createMany({ data: [{ tenantId }], skipDuplicates: true });
+      // It opens in the platform's currency, whatever the entry names.
+      await tx.tenantBillingWallet.createMany({ data: [{ tenantId, currencyCode: await platformCurrencyOf(tx) }], skipDuplicates: true });
       wallet = await tx.tenantBillingWallet.findUniqueOrThrow({ where: { tenantId } });
+    }
+
+    const currencyCode = entry.currencyCode ?? wallet.currencyCode;
+    let amount = entry.amount;
+    let source: { sourceAmount: Prisma.Decimal; sourceCurrencyCode: string } | null = null;
+    if (wallet.currencyCode !== currencyCode) {
+      const platform = await tx.tenant.findFirst({ where: { tenantType: TenantType.platform_owner }, select: { id: true } });
+      const converted =
+        direction === TenantLedgerDirection.credit && platform
+          ? await convertedByChanges(tx, platform.id, entry.amount, currencyCode, wallet.currencyCode)
+          : null;
+      if (!converted || converted.lte(0)) throw new TenantBillingCurrencyMismatch(tenantId, wallet.currencyCode, currencyCode);
+      amount = converted;
+      source = { sourceAmount: entry.amount, sourceCurrencyCode: currencyCode };
     }
 
     const balanceAfter =
@@ -148,7 +183,7 @@ export class TenantBillingLedger {
 
     try {
       return await tx.tenantBillingTransaction.create({
-        data: { walletId: wallet.id, amount, direction, reasonType, referenceId, balanceAfter },
+        data: { walletId: wallet.id, amount, direction, reasonType, referenceId, balanceAfter, currencyCode: wallet.currencyCode, ...(source ?? {}) },
       });
     } catch (e) {
       // Two writers of the same reference both passed the check above; the

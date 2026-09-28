@@ -31,6 +31,7 @@ Source of truth: `txnet-backend/prisma/domains/billing.prisma` (Postgres schema
 | grant_bulk_outcome | one Grant's outcome of one bulk admin request (F-311-u1): key `(tenantId, requestId, grantId)`, the body's `fingerprint`, the outcome JSON as answered — a repeat answers it and acts on nothing again. No FK: a `grant_not_found` outcome may name no Grant | `tenantId`, strict RLS | 30 days: with its job (F-311-u3), or by `createdAt` when it has none |
 | grant_bulk_job | a bulk act by filter run by the worker (F-311-u2): `(tenantId, requestId)` unique, `fingerprint`, the actor (`actorUserId`, `actorIp`), `action`, `command` (input + reason), `filter`, `status` `running`/`done`/`cancelled`, `total` and the `ok`/`refused`/`failed` counts, `finishedAt`, `purgedAt` (F-311-u3). [contract.reseller-grants-bulk.md](contract.reseller-grants-bulk.md) "By a filter" | `tenantId`, strict RLS | permanent — its counts outlive its items |
 | grant_bulk_job_item | one Grant of a bulk job, frozen at the confirm (F-311-u2): key `(jobId, grantId)`, `tenantId`, `attempts`, `doneAt` (null = pending), `ok`, `failed` (after 3 attempts); its outcome is `grant_bulk_outcome`'s row under the job's `requestId`. Partial indexes on pending and on done | `tenantId`, strict RLS | 30 days after its job ended (F-311-u3) |
+| currency_change | one change of a tenant's operating currency (F-116-f): `fromCode`/`toCode` (differ, CHECK), `rate` `DECIMAL(30,18)` > 0, the legs' `fromSnapshotId`/`toSnapshotId` (FK `currency_exchange_rate`, RESTRICT), `changedByUserId`, `summary` (counts converted). The ledgers read it to convert a late credit | written on the cross-tenant pool only; the app pool reads its own tenant's and the platform's | permanent (evidence) |
 
 ## Currency (F-116-b, ADR-0098 parts 2–3)
 
@@ -50,6 +51,13 @@ A payment's `exchangeRateSnapshot` is `currencyCode` -> the charge currency
 (`DECIMAL(30,18)`, F-116-e) through the USD pivot; `exchangeRateSnapshotId` is the
 charge currency's leg and `exchangeRateFromSnapshotId` the payment currency's, each
 NULL when that side is USD (`20260928002700_a_payment_records_both_legs_of_its_rate`).
+A credit converted through a `currency_change` (F-116-f) carries what it was before:
+`wallet_transaction.sourceAmount` + `sourceCurrencyCode`, both or neither, the code
+never the row's own (CHECKs in `20260928002900_a_currency_change_converts_live_money`,
+which also added `currencyCode` to the four tenant <-> platform tables — tenant's
+data-model). `currency_change` is the `WalletReasonType` of a change's closing and
+opening rows (`20260928002800`, alone because a new enum value is unusable in the
+transaction that adds it).
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |

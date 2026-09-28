@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 68
+version: 69
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -44,7 +44,9 @@ source:
   - txnet-backend/prisma/domains/migrations/20260928001100_a_bulk_job_is_audited_and_purged/**
   - txnet-backend/prisma/domains/migrations/20260928002500_every_money_row_records_its_currency/**
   - txnet-backend/prisma/domains/migrations/20260928002700_a_payment_records_both_legs_of_its_rate/**
-owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_tenant, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice]
+  - txnet-backend/prisma/domains/migrations/20260928002800_a_currency_change_has_a_reason/**
+  - txnet-backend/prisma/domains/migrations/20260928002900_a_currency_change_converts_live_money/**
+owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_tenant, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
 updated: 2026-09-28
 ---
@@ -59,7 +61,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Files
 | File | Read it when |
 |---|---|
-| [contract.md](contract.md) | using or changing billing from outside |
+| [contract.md](contract.md) | using or changing billing from outside; what a tenant's currency change converts: [contract.currency-change.md](contract.currency-change.md) |
 | [contract.gateways.md](contract.gateways.md) | creating, changing or deleting a payment gateway — a tenant's own, or a named reseller's |
 | [contract.purchase.md](contract.purchase.md) | buying a catalog product: the invoice, its coupons and discounts with no code, its 30-minute clock, and paying it from the wallet |
 | [contract.deposit.md](contract.deposit.md) | one whole top-up: gateway list, quote, start — and the bank's callback that settles it |
@@ -82,8 +84,8 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-28 | contract v69 (additive, F-116-f, ADR-0098 part 5): a currency change converts live money in one transaction (`convertOperatingCurrency`, `billing.currency_change`); a credit priced before it is converted at its rate, recording `sourceAmount`/`sourceCurrencyCode`. See [contract.currency-change.md](contract.currency-change.md) |
 | 2026-09-28 | contract v68 (additive, F-116-e, ADR-0098 part 6): a deposit is priced from the payment's `currencyCode` to the charge currency through the USD pivot; `payment_transaction.exchangeRateFromSnapshotId` records the payment currency's leg, `exchangeRateSnapshot` is `DECIMAL(30,18)`; a gateway in another currency than the payment's is not offered. See [contract.deposit.md](contract.deposit.md) |
 | 2026-09-28 | contract v67 (**breaking** for ledger callers, F-116-b, ADR-0098): every money row records `currencyCode`; `LedgerEntry.currencyCode` is required and a movement in another currency than the wallet's is `LedgerCurrencyMismatch`. Consumers: `tenant-service` reseller purchase (updated), F-116-d/e/f/g. See [data-model.md](data-model.md) "Currency" |
-| 2026-09-28 | contract.gift v12 (additive, F-307-x): `PUT /api/billing/gift/grants/:grantId/label` — a buyer names a service; the list answers `label` and `q` matches it. See [contract.gift.md](contract.gift.md) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

@@ -82,6 +82,8 @@ const IS_SALE: Record<WalletReasonType, boolean> = {
   [WalletReasonType.product_purchase]: true,
   // A credit: an undelivered purchase given back (F-111-d). Subtracted below, like `traffic_refund`.
   [WalletReasonType.product_refund]: false,
+  // F-116-f: a balance restated in a new currency — a closing debit and an opening credit, nothing sold.
+  [WalletReasonType.currency_change]: false,
 };
 
 /** The reasons that count, derived from the table above rather than listed twice. */
@@ -115,6 +117,7 @@ const UNDOES: Record<WalletReasonType, WalletReasonType | null> = {
   [WalletReasonType.admin_manual_adjust]: null,
   [WalletReasonType.reseller_purchase]: null,
   [WalletReasonType.product_purchase]: null,
+  [WalletReasonType.currency_change]: null,
 };
 
 /** The credits that come off a sale, derived from the table above. */

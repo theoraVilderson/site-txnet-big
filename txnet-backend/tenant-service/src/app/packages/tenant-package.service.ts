@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AdminAction, AuditTargetType, Prisma, TenantBillingModel, TenantStatus, TenantType } from '@prisma/client';
+import { platformCurrencyOf } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { addPackageEntitlements, lockPackage, lockSubscribers, replacePackageEntitlements } from './package-entitlements';
@@ -82,6 +83,8 @@ export class TenantPackageService {
             monthlyPrice: input.monthlyPrice ?? null,
             yearlyPrice: input.yearlyPrice ?? null,
             includedFeatureKeys: input.includedFeatureKeys,
+            // Priced in the platform's currency (ADR-0098 part 4); converted with it (F-116-f).
+            currencyCode: await platformCurrencyOf(tx),
           },
           select: PACKAGE_SELECT,
         });

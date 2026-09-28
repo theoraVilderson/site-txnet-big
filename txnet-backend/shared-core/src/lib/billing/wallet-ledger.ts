@@ -7,6 +7,7 @@ import {
 } from '@prisma/client';
 
 import { OutboxEventType } from '../automation/routing-keys';
+import { convertedByChanges } from './currency-change';
 
 /**
  * The one place a wallet balance changes (F-092-b, billing invariants 1-4, C-02).
@@ -47,7 +48,9 @@ export type LedgerEntry = {
   /**
    * The currency `amount` is in (F-116-b), taken from the row that priced it —
    * the payment's, the invoice's, the coupon's. It must be the wallet's; a
-   * wallet with none yet opens in it.
+   * wallet with none yet opens in it. A **credit** priced before the tenant's
+   * currency changed (F-116-f) is converted at that change's rate, and the row
+   * records what it was; a debit in another currency is always refused.
    */
   currencyCode: string;
   reasonType: WalletReasonType;
@@ -62,9 +65,10 @@ export type LedgerEntry = {
 };
 
 /**
- * A movement in another currency than the wallet's (ADR-0098 part 3). Refused
- * before anything is written; `wallet_transaction`'s trigger refuses the same
- * row for a writer that is not this class.
+ * A movement in another currency than the wallet's (ADR-0098 part 3), and not
+ * a credit a recorded currency change converts (F-116-f). Refused before
+ * anything is written; `wallet_transaction`'s trigger refuses the same row for
+ * a writer that is not this class.
  */
 export class LedgerCurrencyMismatch extends Error {
   constructor(readonly userId: string, readonly walletCurrency: string, readonly entryCurrency: string) {
@@ -122,9 +126,9 @@ export class WalletLedgerService {
     entry: LedgerEntry,
     direction: LedgerDirection,
   ): Promise<WalletTransaction> {
-    const { userId, amount } = entry;
-    if (amount.lte(0) || amount.decimalPlaces() > LEDGER_SCALE) {
-      throw new InvalidLedgerAmount(amount);
+    const { userId } = entry;
+    if (entry.amount.lte(0) || entry.amount.decimalPlaces() > LEDGER_SCALE) {
+      throw new InvalidLedgerAmount(entry.amount);
     }
 
     let wallet = await tx.wallet.findUnique({ where: { ownerUserId: userId } });
@@ -138,8 +142,16 @@ export class WalletLedgerService {
       await tx.wallet.createMany({ data: [{ ownerUserId: userId, currencyCode: entry.currencyCode }], skipDuplicates: true });
       wallet = await tx.wallet.findUniqueOrThrow({ where: { ownerUserId: userId } });
     }
+    let amount = entry.amount;
+    let source: { sourceAmount: Prisma.Decimal; sourceCurrencyCode: string } | null = null;
     if (wallet.currencyCode !== entry.currencyCode) {
-      throw new LedgerCurrencyMismatch(userId, wallet.currencyCode, entry.currencyCode);
+      const converted =
+        direction === LedgerDirection.credit
+          ? await convertedByChanges(tx, await tenantOf(tx, entry), entry.amount, entry.currencyCode, wallet.currencyCode)
+          : null;
+      if (!converted || converted.lte(0)) throw new LedgerCurrencyMismatch(userId, wallet.currencyCode, entry.currencyCode);
+      amount = converted;
+      source = { sourceAmount: entry.amount, sourceCurrencyCode: entry.currencyCode };
     }
 
     const balanceAfter =
@@ -165,7 +177,8 @@ export class WalletLedgerService {
         direction,
         reasonType: entry.reasonType,
         referenceId: entry.referenceId,
-        currencyCode: entry.currencyCode,
+        currencyCode: wallet.currencyCode,
+        ...(source ?? {}),
         ...(entry.tenantId ? { tenantId: entry.tenantId } : {}),
         balanceAfter,
       },
@@ -183,4 +196,11 @@ export class WalletLedgerService {
     });
     return movement;
   }
+}
+
+/** The wallet owner's tenant: the one named, or the user's own row. */
+async function tenantOf(tx: Prisma.TransactionClient, entry: LedgerEntry): Promise<string> {
+  if (entry.tenantId) return entry.tenantId;
+  const user = await tx.user.findUniqueOrThrow({ where: { id: entry.userId }, select: { tenantId: true } });
+  return user.tenantId;
 }

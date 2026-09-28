@@ -11,6 +11,7 @@
     "reseller_purchase": "Reseller package purchase",
     "traffic_refund": "Unused traffic returned",
     "product_purchase": "Product purchase",
-    "product_refund": "Product refund — not delivered"
+    "product_refund": "Product refund — not delivered",
+    "currency_change": "Currency change"
   }
 }

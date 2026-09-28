@@ -56,6 +56,8 @@ const LABEL_KEYS: Record<WalletReasonType, string> = {
   // A product bought from the wallet (F-111-b): on the default page, like every debit but traffic.
   [WalletReasonType.product_purchase]: REASON_LABEL_KEY.product_purchase,
   [WalletReasonType.product_refund]: REASON_LABEL_KEY.product_refund,
+  // F-116-f: a wallet closed in the old currency and opened in the new — both rows, on the default page.
+  [WalletReasonType.currency_change]: REASON_LABEL_KEY.currency_change,
 };
 
 /** The declaration order, which is the order a filter is answered in. */

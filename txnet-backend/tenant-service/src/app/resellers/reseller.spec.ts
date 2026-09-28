@@ -34,6 +34,8 @@ describe('ResellerService', () => {
     const tx = {
       tenant: {
         create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('tenant'), { id: 'new-tenant', ...data, createdAt: new Date() })),
+        // The platform's currency, which a billing wallet opens in (F-116-f).
+        findFirst: vi.fn(async () => ({ operatingCurrencyCode: 'USD' })),
       },
       tenantBillingWallet: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('wallet'), data)) },
       tenantDomain: {
@@ -89,7 +91,7 @@ describe('ResellerService', () => {
       billingModel: 'subscription_monthly',
     });
     // An empty wallet: no balance is written (tenant invariant 3).
-    expect(tx.tenantBillingWallet.create.mock.calls[0][0].data).toEqual({ tenantId: 'new-tenant' });
+    expect(tx.tenantBillingWallet.create.mock.calls[0][0].data).toEqual({ tenantId: 'new-tenant', currencyCode: 'USD' });
     expect(view.owner).toEqual({ id: USER, fullName: 'Reseller Owner', username: 'owner', phoneNumber: '+989123456789' });
   });
 

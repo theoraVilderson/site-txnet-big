@@ -54,6 +54,9 @@ function fakeStore() {
         return data;
       },
     },
+    // No currency change recorded, so no credit converts (F-116-f's case is currency-change.int.spec.ts).
+    user: { findUniqueOrThrow: async () => ({ tenantId: 't1' }) },
+    currencyChange: { findMany: async () => [] },
   };
   return { tx: tx as unknown as Prisma.TransactionClient, wallets, ledger, outbox };
 }

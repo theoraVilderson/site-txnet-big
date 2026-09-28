@@ -94,6 +94,8 @@ enum TenantBillingReasonType {
   admin_manual_adjust
   /// F-019-h: the buyer's payment for the first period lands here before it is charged; `referenceId` = the tenant id.
   reseller_purchase
+  /// F-116-f: the platform's currency changed; a closing and an opening row, `referenceId` = the `billing.currency_change`.
+  currency_change
 
   @@schema("tenant")
 }
@@ -247,11 +249,13 @@ model TenantDomain {
 model TenantFeaturePackage {
   id                  String   @id @default(uuid()) @db.Uuid
   name                String   @unique // «Starter»، «Growth»، «Enterprise»
-  // F-018-d: base currency (C-02). Either may be null — a package sold for one
+  // F-018-d: in `currencyCode` (C-02). Either may be null — a package sold for one
   // period only — but not both, and neither is zero (CHECKs in migration
   // 20260917001200_tenant_feature_package).
   monthlyPrice        Decimal? @db.Decimal(18, 2)
   yearlyPrice         Decimal? @db.Decimal(18, 2)
+  /// The platform's currency (ADR-0098 part 4); converted with it (F-116-f).
+  currencyCode        String
   includedFeatureKeys Json // Array of TENANT_FEATURE_KEYS (shared-core)
   // D-41: no metering, so the two below stay `{}` and unused.
   usageIncludedJson   Json     @default("{}")
@@ -382,6 +386,8 @@ model TenantBillingWallet {
   id            String  @id @default(uuid()) @db.Uuid
   tenantId      String  @unique @db.Uuid
   cachedBalance Decimal @default(0) @db.Decimal(18, 2) // فقط Cache؛ منبع حقیقت TenantBillingTransaction است
+  /// The platform's currency (ADR-0098 part 4), converted with it (F-116-f).
+  currencyCode  String
   version       Int     @default(0) // Optimistic Locking
 
   tenant       Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -403,6 +409,11 @@ model TenantBillingTransaction {
   reasonType   TenantBillingReasonType
   referenceId  String?                 @db.Uuid
   balanceAfter Decimal                 @db.Decimal(18, 2)
+  /// Always its wallet's (F-116-f); a trigger refuses another.
+  currencyCode String
+  /// A credit priced before a platform currency change and landing after it: what it was before conversion. Both or neither.
+  sourceAmount       Decimal?          @db.Decimal(18, 2)
+  sourceCurrencyCode String?
   createdAt    DateTime                @default(now())
 
   wallet      TenantBillingWallet @relation(fields: [walletId], references: [id])
@@ -423,6 +434,8 @@ model TenantUsageMeter {
   periodEnd           DateTime
   quantity            Decimal        @db.Decimal(18, 4)
   unitPrice           Decimal        @db.Decimal(18, 8) // از TenantFeaturePackage.overageRuleJson
+  /// The platform's currency when written (F-116-f); an unbilled row is converted with it.
+  currencyCode        String
   isBilled            Boolean        @default(false)
   billedTransactionId String?        @db.Uuid
 

@@ -1,10 +1,11 @@
-import { Body, Controller, ForbiddenException, Get, HttpException, HttpStatus, NotFoundException, Param, ParseUUIDPipe, Put, Req } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, HttpException, HttpStatus, Ip, NotFoundException, Param, ParseUUIDPipe, Put, Req } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { SetOperatingCurrencyInput, setOperatingCurrencySchema } from './operating-currency.schema';
 import {
+  OperatingCurrencyChange,
   OperatingCurrencyRefused,
   OperatingCurrencyRejection,
   OperatingCurrencyView,
@@ -12,13 +13,14 @@ import {
 } from './operating-currency.service';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
-const STATUS: Record<OperatingCurrencyRejection, 403 | 404 | 409> = {
+const STATUS: Record<OperatingCurrencyRejection, 403 | 404 | 409 | 503> = {
   not_allowed: 403,
   reseller_suspended: 403,
   reseller_not_found: 404,
   reseller_terminated: 409,
   currency_unavailable: 409,
-  tenant_has_money: 409,
+  currency_changed: 409,
+  rate_unavailable: 503,
 };
 
 /**
@@ -43,8 +45,9 @@ export class TenantOperatingCurrencyController {
     @Req() req: Request,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(setOperatingCurrencySchema)) body: SetOperatingCurrencyInput,
-  ): Promise<OperatingCurrencyView> {
-    return refusing(() => this.currency.set(actorOf(req), id, body.code));
+    @Ip() ip: string,
+  ): Promise<OperatingCurrencyChange> {
+    return refusing(() => this.currency.set(actorOf(req), id, body.code, ip));
   }
 }
 
@@ -59,6 +62,8 @@ async function refusing<T>(work: () => Promise<T>): Promise<T> {
         throw new ForbiddenException(payload);
       case 404:
         throw new NotFoundException(payload);
+      case 503:
+        throw new HttpException(payload, HttpStatus.SERVICE_UNAVAILABLE);
       default:
         throw new HttpException(payload, HttpStatus.CONFLICT);
     }

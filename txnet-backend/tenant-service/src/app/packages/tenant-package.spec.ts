@@ -34,6 +34,8 @@ describe('TenantPackageService', () => {
     const writes: string[] = [];
     const tx = {
       $queryRaw: vi.fn(async () => []),
+      // A package is priced in the platform's currency (F-116-f).
+      tenant: { findFirst: vi.fn(async () => ({ operatingCurrencyCode: 'USD' })) },
       tenantFeaturePackage: {
         findUnique: vi.fn(async () => opts.existing ?? null),
         create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('create'), stored({ ...data, id: PKG }))),

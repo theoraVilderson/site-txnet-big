@@ -2,8 +2,8 @@
 id: billing
 layer: domain
 status: active
-version: 8
-updated: 2026-09-26
+version: 69
+updated: 2026-09-28
 ---
 
 # Contract — billing
@@ -154,7 +154,7 @@ numbers are `gateway-pricing.golden.json` (F-0611).
 | Takes the caller's `tx`, which must come from `tenantTransaction(prisma, fn)`; `walletTransaction` is a registered model, so any other transaction is refused — except a cross-tenant pool's, whose caller names `entry.tenantId` | the balance and the reason it moved commit together (`tenant-context` rule 5) |
 | `entry.userId` must come from a tenant-scoped source — `X-User-Id`, or a row read under the scope | `wallet` has no `tenantId`; the ledger row is stamped with the tenant in scope |
 | `amount` is in `entry.currencyCode`, `> 0`, at most 2 decimal places; anything else is `InvalidLedgerAmount`, never rounded | invariant 2; `Decimal(18, 2)` would round the amount but not `balanceAfter` |
-| **`entry.currencyCode` must be the wallet's** (v67, F-116-b): anything else is `LedgerCurrencyMismatch`, before anything is written; the row records it. The caller takes it from the row that priced the amount — the payment, the invoice, the coupon — and metered traffic from the tenant (`operatingCurrencyOf`) until F-116-d gives a rate one. A trigger on `wallet_transaction` refuses the same row from any other writer | invariant 10; ADR-0098 part 3 — a 10 EUR credit must never land in a USD wallet as 10 USD |
+| **`entry.currencyCode` must be the wallet's** (v67, F-116-b): anything else is `LedgerCurrencyMismatch`, before anything is written — except a **credit** priced before the tenant's currency changed, converted at that change's rate with `sourceAmount`/`sourceCurrencyCode` recorded (v69, F-116-f, [contract.currency-change.md](contract.currency-change.md)); the row records the wallet's. The caller takes it from the row that priced the amount — the payment, the invoice, the coupon — and metered traffic from the tenant (`operatingCurrencyOf`) until F-116-d gives a rate one. A trigger on `wallet_transaction` refuses the same row from any other writer | invariant 10; ADR-0098 part 3 — a 10 EUR credit must never land in a USD wallet as 10 USD |
 | `cachedBalance` is updated with `where { id, version }` **before** the row is appended; `count = 0` is `WalletVersionConflict` | invariants 1, 4 — a loser appends nothing |
 | A lost race is thrown, not retried; the caller restarts its whole transaction | a retry inside the same transaction cannot read the row fresh |
 | A debit below zero, or from a user with no wallet, is `InsufficientFunds` | a missing wallet is a zero balance |

@@ -81,6 +81,8 @@ enum AdminAction {
   campaign_stop
   // F-019-a (D-41) — the platform owner credits or debits a reseller's billing wallet by hand.
   tenant_billing_adjust
+  // F-116-f (ADR-0098 part 5). A tenant's operating currency changed and its live money was converted.
+  tenant_currency_change
   // F-018-c. The platform owner creates a reseller.
   tenant_create
   // F-018-d. A package the platform sells resellers. Never deleted; deactivation is an update.

@@ -8,7 +8,7 @@ import {
   TenantStatus,
   TenantType,
 } from '@prisma/client';
-import { cnameTargetHost, invalidateTenantOwner } from '@txnet-backend/shared-core';
+import { cnameTargetHost, invalidateTenantOwner, platformCurrencyOf } from '@txnet-backend/shared-core';
 
 import type { RedisService } from '../redis/redis.service';
 
@@ -78,7 +78,7 @@ export async function writeReseller(tx: Prisma.TransactionClient, redis: RedisSe
     },
   });
   // Empty: no balance is written here (tenant invariant 3).
-  await tx.tenantBillingWallet.create({ data: { tenantId: tenant.id } });
+  await tx.tenantBillingWallet.create({ data: { tenantId: tenant.id, currencyCode: await platformCurrencyOf(tx) } });
   // A subdomain routes as it stands — the platform issued it (tenant invariant 5 is for custom domains).
   const domains = [];
   for (const host of input.hosts) {

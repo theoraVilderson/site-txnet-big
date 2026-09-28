@@ -49,6 +49,8 @@ function store() {
   const tenant = {
     findUnique: async ({ where }: { where: { id: string } }) =>
       tenants.has(where.id) ? { id: where.id, tenantType: tenants.get(where.id) } : null,
+    // The platform, whose currency a billing wallet opens in (F-116-f).
+    findFirst: async () => ({ id: 'platform', operatingCurrencyCode: 'USD' }),
   };
 
   const tx = {

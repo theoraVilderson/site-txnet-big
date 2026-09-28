@@ -254,6 +254,8 @@ export class DepositSettlementService {
         await this.tenantLedger.credit(tx, {
           tenantId: billingTenantId,
           amount: credited,
+          // Asked in the platform's currency at intent; converted if it has changed since (F-116-f).
+          currencyCode: payment.currencyCode,
           reasonType: TenantBillingReasonType.topup_payment,
           referenceId: payment.id,
         });

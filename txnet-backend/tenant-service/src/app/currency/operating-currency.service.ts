@@ -1,15 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { DiscountRuleKind, DiscountType, FeeType, TenantType } from '@prisma/client';
+import { TenantType } from '@prisma/client';
 import {
+  type CurrencyChangeSummary,
   type TenantCapabilityName,
+  CurrencyChangeConflict,
   ResellerAccess,
   ResellerAccessRefused,
   ResellerAccessRejection,
   ResellerActor,
+  convertOperatingCurrency,
   holdsPermission,
+  readFxPair,
 } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
+import { RedisService } from '../redis/redis.service';
 
 /**
  * A tenant's operating currency (F-116-a, ADR-0098 part 1): the currency it
@@ -26,18 +31,13 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
  * holding an active rate row. The staleness ladder (F-0607-a) is not built;
  * when it is, "has a rate" is its answer.
  *
- * **When.** Until F-116-f converts live money, a change is refused while the
- * tenant has any: a user's ledger row, an invoice, a payment, a price or a
- * metered rate; or while it holds a setting with an amount in it (F-116-a2) —
- * a gateway's limit, fixed fee, fee floor/ceiling or presets, a live coupon's
- * amount, cap or purchase bound, a fixed-amount rule, deposit presets — which
- * would otherwise keep the old currency's numbers under the new one's label.
- * For the platform, also any tenant ↔ platform money
- * (a reseller billing ledger row, a package sold to resellers), the
- * platform-wide prices and coupons (`tenantId` null) and its own gateways. A reseller's own billing wallet is
- * in the platform's currency, so it does not count against the reseller.
- * The check and the write are not one transaction: a first payment landing
- * between them is accepted as F-116-f's to convert.
+ * **What a change does** (F-116-f, part 5): the pair old -> new is read once,
+ * and `convertOperatingCurrency` converts every live amount at it in one
+ * transaction on the cross-tenant pool — the change spans every user of the
+ * tenant and, for the platform, every reseller. History is left as written.
+ * No rate for the pair refuses the change (`rate_unavailable`); a change that
+ * lost a race to another is refused (`currency_changed`) rather than
+ * converted at a rate read for the other's starting currency.
  */
 
 export type OperatingCurrencyActor = ResellerActor;
@@ -46,13 +46,16 @@ export type CurrencyChoice = { code: string; name: string; symbol: string; decim
 
 export type OperatingCurrencyView = {
   code: string;
-  /** `false` while the tenant has money (until F-116-f). */
-  changeable: boolean;
   /** The currencies a set would accept, by code. */
   choices: CurrencyChoice[];
 };
 
-export type OperatingCurrencyRejection = ResellerAccessRejection | 'currency_unavailable' | 'tenant_has_money';
+/** A set that changed the currency: what was converted, and at what rate (F-116-f). */
+export type OperatingCurrencyChange = OperatingCurrencyView & {
+  conversion: { changeId: string; fromCode: string; rate: string; summary: CurrencyChangeSummary } | null;
+};
+
+export type OperatingCurrencyRejection = ResellerAccessRejection | 'currency_unavailable' | 'rate_unavailable' | 'currency_changed';
 
 export class OperatingCurrencyRefused extends Error {
   constructor(
@@ -67,30 +70,14 @@ export class OperatingCurrencyRefused extends Error {
 /** Money columns are `DECIMAL(18,2)` (ADR-0098 part 6). */
 const MAX_DECIMALS = 2;
 
-/** A gateway whose limits, fee or presets name an amount (F-116-a2); a percentage fee alone does not. */
-const GATEWAY_WITH_AMOUNT = {
-  OR: [
-    { minAcceptAmount: { not: null } },
-    { maxAcceptAmount: { not: null } },
-    { feeFloor: { not: null } },
-    { feeCeiling: { not: null } },
-    { depositPresets: { isEmpty: false } },
-    { feeType: FeeType.fixed, feeValue: { not: 0 } },
-  ],
-};
+/**
+ * The whole change runs in one transaction (user, 2026-09-28): set-based, so
+ * seconds for a tenant with 100k wallets. The interactive default of 5s is
+ * for a request, not for this.
+ */
+const CHANGE_TIMEOUT_MS = 120_000;
 
-/** A live coupon that names an amount: its value, its cap, or a purchase bound. */
-const COUPON_WITH_AMOUNT = {
-  deletedAt: null,
-  OR: [
-    { discountType: { in: [DiscountType.fixed_amount, DiscountType.wallet_credit] } },
-    { maxDiscountCap: { not: null } },
-    { minPurchaseAmount: { not: null } },
-    { maxPurchaseAmount: { not: null } },
-  ],
-};
-
-type Target = { id: string; platform: boolean; code: string };
+type Target = { id: string; code: string };
 
 @Injectable()
 export class TenantOperatingCurrencyService {
@@ -99,26 +86,40 @@ export class TenantOperatingCurrencyService {
   constructor(
     private readonly resellerAccess: ResellerAccess,
     private readonly all: CrossTenantPrismaService,
+    private readonly redis: RedisService,
   ) {}
 
   async read(actor: OperatingCurrencyActor, tenantId: string): Promise<OperatingCurrencyView> {
-    return this.view(await this.admit(actor, tenantId, 'read'));
+    return this.view(await this.admit(actor, tenantId, 'read'), await this.choices());
   }
 
-  async set(actor: OperatingCurrencyActor, tenantId: string, code: string): Promise<OperatingCurrencyView> {
+  async set(actor: OperatingCurrencyActor, tenantId: string, code: string, ip: string): Promise<OperatingCurrencyChange> {
     const target = await this.admit(actor, tenantId, 'staffWrite');
     const choices = await this.choices();
     if (!choices.some((c) => c.code === code)) throw new OperatingCurrencyRefused('currency_unavailable', code);
-    if (code === target.code) return this.view(target, choices);
-    if (await this.hasMoney(target)) throw new OperatingCurrencyRefused('tenant_has_money', target.id);
-    await this.all.tenant.update({ where: { id: target.id }, data: { operatingCurrencyCode: code } });
-    this.logger.log(`operating currency of ${target.id} set ${target.code} -> ${code} by ${actor.userId}`);
-    return this.view({ ...target, code }, choices);
+    if (code === target.code) return { code, choices, conversion: null };
+
+    const pair = await readFxPair(this.all, this.redis, target.code, code, this.logger);
+    if (!pair) throw new OperatingCurrencyRefused('rate_unavailable', `${target.code} -> ${code}`);
+    let outcome;
+    try {
+      outcome = await this.all.$transaction(
+        (tx) => convertOperatingCurrency(tx, { tenantId: target.id, toCode: code, pair, actorUserId: actor.userId, actorIp: ip }),
+        { timeout: CHANGE_TIMEOUT_MS },
+      );
+    } catch (e) {
+      if (e instanceof CurrencyChangeConflict) throw new OperatingCurrencyRefused('currency_changed', target.id);
+      throw e;
+    }
+    const { changeId, fromCode, rate, summary } = outcome;
+    // A retry that found the change already made converted nothing.
+    const conversion = changeId && summary ? { changeId, fromCode, rate, summary } : null;
+    this.logger.log(`operating currency of ${target.id} set ${target.code} -> ${code} at ${rate} by ${actor.userId}: ${JSON.stringify(summary)}`);
+    return { code, choices, conversion };
   }
 
-  private async view(target: Target, choices?: CurrencyChoice[]): Promise<OperatingCurrencyView> {
-    const [list, money] = await Promise.all([choices ?? this.choices(), this.hasMoney(target)]);
-    return { code: target.code, changeable: !money, choices: list };
+  private view(target: Target, choices: CurrencyChoice[]): OperatingCurrencyView {
+    return { code: target.code, choices };
   }
 
   private async choices(): Promise<CurrencyChoice[]> {
@@ -141,31 +142,6 @@ export class TenantOperatingCurrencyService {
       .sort((a, b) => a.code.localeCompare(b.code));
   }
 
-  /** Any money the change would reinterpret — see the class comment for the list. */
-  private async hasMoney({ id, platform }: Target): Promise<boolean> {
-    const own = platform ? { OR: [{ tenantId: id }, { tenantId: null }] } : { tenantId: id };
-    const pick = { select: { id: true } } as const;
-    const probes: Promise<unknown>[] = [
-      this.all.walletTransaction.findFirst({ where: { wallet: { owner: { tenantId: id } } }, ...pick }),
-      this.all.invoice.findFirst({ where: { tenantId: id }, ...pick }),
-      this.all.paymentTransaction.findFirst({ where: { tenantId: id }, ...pick }),
-      this.all.price.findFirst({ where: own, ...pick }),
-      this.all.meteredRate.findFirst({ where: own, ...pick }),
-      this.all.tenantGatewayConfig.findFirst({ where: { tenantId: id, ...GATEWAY_WITH_AMOUNT }, ...pick }),
-      this.all.coupon.findFirst({ where: { AND: [own, COUPON_WITH_AMOUNT] }, ...pick }),
-      this.all.discountRule.findFirst({ where: { tenantId: id, kind: DiscountRuleKind.fixed_amount }, ...pick }),
-      this.all.depositSetting.findFirst({ where: { tenantId: id, presets: { isEmpty: false } }, select: { tenantId: true } }),
-    ];
-    if (platform) {
-      probes.push(
-        this.all.tenantBillingTransaction.findFirst(pick),
-        this.all.tenantFeaturePackage.findFirst(pick),
-        this.all.paymentGateway.findFirst({ where: GATEWAY_WITH_AMOUNT, ...pick }),
-      );
-    }
-    return (await Promise.all(probes)).some((row) => row !== null);
-  }
-
   private async admit(actor: OperatingCurrencyActor, tenantId: string, capability: TenantCapabilityName): Promise<Target> {
     const tenant = await this.all.tenant.findUnique({
       where: { id: tenantId },
@@ -175,11 +151,11 @@ export class TenantOperatingCurrencyService {
       if (actor.tenantId !== tenantId || !holdsPermission(actor.permissions, 'tenant.manage')) {
         throw new OperatingCurrencyRefused('not_allowed', tenantId);
       }
-      return { id: tenantId, platform: true, code: tenant.operatingCurrencyCode };
+      return { id: tenantId, code: tenant.operatingCurrencyCode };
     }
     try {
       const reseller = await this.resellerAccess.admit(actor, tenantId, capability);
-      return { id: reseller.id, platform: false, code: tenant?.operatingCurrencyCode ?? 'USD' };
+      return { id: reseller.id, code: tenant?.operatingCurrencyCode ?? 'USD' };
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new OperatingCurrencyRefused(e.reason, tenantId);
       throw e;

@@ -32,6 +32,10 @@ enum WalletReasonType {
   /// `referenceId` = the invoice. Always a credit — it undoes (part of) a
   /// `product_purchase` (`UNDOES`).
   product_refund
+  /// F-116-f: a tenant's operating currency changed (ADR-0098 part 5). Each
+  /// wallet with a balance gets a closing debit in the old currency and an
+  /// opening credit in the new one; `referenceId` = the `currency_change`.
+  currency_change
 
   @@schema("billing")
 }
@@ -201,6 +205,11 @@ model WalletTransaction {
   balanceAfter Decimal           @db.Decimal(18, 2)
   /// Always its wallet's at the moment it was written (F-116-b).
   currencyCode String
+  /// A credit priced before a currency change and landing after it (F-116-f):
+  /// what it was, and in what, before `amount` converted it at the change's
+  /// rate. Both or neither, CHECK in the migration.
+  sourceAmount       Decimal?    @db.Decimal(18, 2)
+  sourceCurrencyCode String?
   createdAt    DateTime          @default(now())
 
   wallet                Wallet                 @relation(fields: [walletId], references: [id])
@@ -974,5 +983,28 @@ model GrantBulkJobItem {
 
   @@id([jobId, grantId])
   @@map("grant_bulk_job_item")
+  @@schema("billing")
+}
+
+/// F-116-f (ADR-0098 part 5): one change of a tenant's operating currency, and
+/// the rate everything live was converted at — `rate` units of `toCode` per
+/// one `fromCode`, the pair's readings in `fromSnapshotId` / `toSnapshotId`
+/// (a leg on the USD pivot has none). A ledger reads these to credit money
+/// priced before the change in the wallet's currency after it. Written only on
+/// the cross-tenant pool; `summary` counts what was converted.
+model CurrencyChange {
+  id              String   @id @db.Uuid
+  tenantId        String   @db.Uuid
+  fromCode        String
+  toCode          String
+  rate            Decimal  @db.Decimal(30, 18)
+  fromSnapshotId  String?  @db.Uuid
+  toSnapshotId    String?  @db.Uuid
+  changedByUserId String   @db.Uuid
+  summary         Json     @default("{}")
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@map("currency_change")
   @@schema("billing")
 }

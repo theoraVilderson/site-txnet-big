@@ -63,7 +63,10 @@ describe('ResellerPurchaseService', () => {
       $queryRaw: vi.fn(async () => (writes.push('lock package'), [])),
       tenantFeaturePackage: { findUnique: vi.fn(async () => (opts.package === null ? null : { ...pkg, ...opts.package })) },
       tenant: {
-        findFirst: vi.fn(async () => (opts.owns ? { id: 'old' } : null)),
+        // "Does the buyer own a reseller already?" — and, with a tenantType, the platform (F-116-f).
+        findFirst: vi.fn(async ({ where }: { where: { tenantType?: string } }) =>
+          where.tenantType === 'platform_owner' ? { id: 'platform', operatingCurrencyCode: 'USD' } : opts.owns ? { id: 'old' } : null,
+        ),
         // The buyer's tenant, the platform, keeps its books in USD (F-116-b).
         findUnique: vi.fn(async () => ({ operatingCurrencyCode: 'USD' })),
         create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('tenant'), { id: NEW_TENANT, ...data, createdAt: NOW })),
