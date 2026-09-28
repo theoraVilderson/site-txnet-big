@@ -3495,5 +3495,48 @@
         "job_not_found": "This job is not one of yours."
       }
     }
+  },
+  "operatingCurrency": {
+    "title": "Operating currency",
+    "hint": "The currency prices, wallets, coupons and invoices are kept in. Customers pay in it and see it.",
+    "hintPlatform": "The platform's own currency. Resellers' billing wallets and the packages they buy are kept in it.",
+    "label": "Currency",
+    "choice": "{{name}} ({{code}})",
+    "change": "Change currency",
+    "reload": "Try again",
+    "confirm": {
+      "title": "Change {{from}} to {{to}}?",
+      "body": "Every wallet balance, active price, coupon, discount rule, deposit setting and gateway limit in {{from}} is converted to {{to}} at today's rate. Past transactions and invoices stay in {{from}}. Unpaid invoices are cancelled.",
+      "platform": "This is the platform's currency: every reseller's billing wallet and the packages they buy are converted too.",
+      "yes": "Convert and change",
+      "no": "Cancel"
+    },
+    "done": {
+      "title": "Now in {{to}}. Converted at 1 {{from}} = {{rate}} {{to}}.",
+      "nothing": "There was no money to convert."
+    },
+    "summary": {
+      "wallets": "Wallets: {{count}}",
+      "prices": "Prices: {{count}}",
+      "meteredRates": "Traffic rates: {{count}}",
+      "grants": "Active services: {{count}}",
+      "coupons": "Coupons: {{count}}",
+      "rules": "Discount rules: {{count}}",
+      "depositSettings": "Deposit settings: {{count}}",
+      "gateways": "Gateways: {{count}}",
+      "invoicesCancelled": "Unpaid invoices cancelled: {{count}}",
+      "billingWallets": "Reseller billing wallets: {{count}}",
+      "packages": "Reseller packages: {{count}}",
+      "usageMeters": "Usage meters: {{count}}"
+    },
+    "refusals": {
+      "not_allowed": "You cannot manage this currency.",
+      "reseller_not_found": "This reseller does not exist.",
+      "reseller_suspended": "This reseller is suspended, so its currency cannot be changed.",
+      "reseller_terminated": "This reseller has been closed.",
+      "currency_unavailable": "That currency cannot be chosen right now.",
+      "rate_unavailable": "There is no exchange rate for this change right now, so nothing was converted. Try again later.",
+      "currency_changed": "Someone else changed the currency a moment ago. The current one is shown again; check it before trying."
+    }
   }
 }

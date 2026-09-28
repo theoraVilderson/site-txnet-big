@@ -10,6 +10,7 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { myResellerBrandingPath, myResellerUsersPath } from "@/lib/routes";
 import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-api";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
+import { OperatingCurrencyCard } from "../../../_components/OperatingCurrencyCard";
 import { Badge } from "../../../financial/_components/Badge";
 import { Alert, primaryButton, quietButton } from "../../../catalog/_components/catalog-ui";
 import {
@@ -189,6 +190,8 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
             <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
           </Link>
         </section>
+        {/* F-116-h. By the path's reseller, like every card here (invariant 21). */}
+        <OperatingCurrencyCard tenantId={id} scope="reseller" />
       </div>
     </>
   );

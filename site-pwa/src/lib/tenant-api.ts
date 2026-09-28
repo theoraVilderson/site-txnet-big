@@ -198,6 +198,59 @@ export const resellerOnboardingApi = {
   },
 };
 
+/** A currency a tenant may keep its books in (`tenant/contract.currency.md` rule 2). */
+export interface CurrencyChoice {
+  code: string;
+  name: string;
+  symbol: string;
+  decimalPlaces: number;
+}
+
+export interface OperatingCurrency {
+  code: string;
+  choices: CurrencyChoice[];
+}
+
+/** shared-core's `CurrencyChangeSummary`: how many live rows of each kind a change converted. */
+export type CurrencyChangeSummary = Record<
+  | "wallets"
+  | "prices"
+  | "meteredRates"
+  | "grants"
+  | "coupons"
+  | "rules"
+  | "depositSettings"
+  | "gateways"
+  | "invoicesCancelled"
+  | "billingWallets"
+  | "packages"
+  | "usageMeters",
+  number
+>;
+
+/** A set's answer: `conversion` is `null` when the code was already the tenant's (rule 4). */
+export interface OperatingCurrencyChange extends OperatingCurrency {
+  conversion: { changeId: string; fromCode: string; rate: string; summary: CurrencyChangeSummary } | null;
+}
+
+/**
+ * A tenant's operating currency (F-116-a/f, ADR-0098). The same two routes
+ * serve a reseller — admitted by the path's reseller (invariant 21) — and the
+ * platform's own tenant, which only its staff with `tenant.manage` may read.
+ */
+export const operatingCurrencyApi = {
+  async get(tenantId: string): Promise<OperatingCurrency> {
+    return call<OperatingCurrency>(`/tenants/${encodeURIComponent(tenantId)}/operating-currency`, { method: "GET" });
+  },
+  /** Converts the tenant's live money at one rate snapshot (F-116-f); history keeps its currency. */
+  async set(tenantId: string, code: string): Promise<OperatingCurrencyChange> {
+    return call<OperatingCurrencyChange>(`/tenants/${encodeURIComponent(tenantId)}/operating-currency`, {
+      method: "PUT",
+      body: JSON.stringify({ code }),
+    });
+  },
+};
+
 /** shared-core's `LineNameTemplateProblem`: why a line-name template would be refused. */
 export type LineNameTemplateProblem = "too_long" | "unknown_placeholder" | "control_character";
 

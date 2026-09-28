@@ -41,6 +41,6 @@ Refusals: `not_allowed` 403, `reseller_suspended` 403, `reseller_not_found`
 
 | unit | uses |
 |---|---|
-| panel-web | the two routes, from the settings screen (F-116-h, not built) |
+| panel-web | the two routes: a reseller's on its workspace `/my-resellers/:id`, the platform's on `/settings` (F-116-h, built; `panel-web/contract.currency.md`) |
 | billing | `tenant.operatingCurrencyCode` through shared-core `operatingCurrencyOf` / `platformCurrencyOf`, stamped on every new money row (F-116-b, built); a change runs billing's `convertOperatingCurrency` (F-116-f, built) |
 | catalog | the same, for `Price` and `MeteredRate`; a reader offers only prices in it (F-116-d, built) |
