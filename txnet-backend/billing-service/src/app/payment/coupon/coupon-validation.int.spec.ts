@@ -104,8 +104,8 @@ beforeAll(async () => {
   ]) {
     n += 1;
     await owner.$executeRawUnsafe(`
-      INSERT INTO billing.coupon_redemption (id, "couponId", "userId", status, "discountAppliedAmount", "orderReferenceId")
-      VALUES (gen_random_uuid(), '${couponId('a4')}', '${userId}', '${status}', 1.00, '${couponId(String(n).padStart(2, '0'))}')
+      INSERT INTO billing.coupon_redemption (id, "couponId", "userId", status, "discountAppliedAmount", "currencyCode", "orderReferenceId")
+      VALUES (gen_random_uuid(), '${couponId('a4')}', '${userId}', '${status}', 1.00, 'USD', '${couponId(String(n).padStart(2, '0'))}')
     `);
   }
 

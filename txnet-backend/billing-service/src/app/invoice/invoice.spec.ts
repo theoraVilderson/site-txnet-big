@@ -231,7 +231,7 @@ describe('InvoiceService.create', () => {
     });
     expect((calls.validated[0]['amount'] as Prisma.Decimal).toFixed(2)).toBe('12.50');
     expect(calls.reserved).toEqual([
-      { userId: USER, orderReferenceId: invoice.id, applied: [{ couponId: COUPON, code: 'SPRING', discount: D('2.50') }] },
+      { userId: USER, orderReferenceId: invoice.id, currencyCode: 'USD', applied: [{ couponId: COUPON, code: 'SPRING', discount: D('2.50') }] },
     ]);
     expect(invoice).toMatchObject({ discount: '2.50', total: '10.00', rejected: [{ code: 'OLD', reason: 'expired' }] });
     expect((calls.created[0]['total'] as Prisma.Decimal).toFixed(2)).toBe('10.00');

@@ -195,8 +195,8 @@ describe('coupon limits: the gates a database answers (F-502-k)', () => {
 
   const redeemedAgo = (couponId: string, userId: string, days: number) =>
     owner.$executeRawUnsafe(`
-      INSERT INTO billing.coupon_redemption (id, "couponId", "userId", status, "discountAppliedAmount", "orderReferenceId", "redeemedAt")
-      VALUES (gen_random_uuid(), '${couponId}', '${userId}', 'confirmed', 1.00, gen_random_uuid(), now() - interval '${days} days')
+      INSERT INTO billing.coupon_redemption (id, "couponId", "userId", status, "discountAppliedAmount", "currencyCode", "orderReferenceId", "redeemedAt")
+      VALUES (gen_random_uuid(), '${couponId}', '${userId}', 'confirmed', 1.00, 'USD', gen_random_uuid(), now() - interval '${days} days')
     `);
 
   const reserve = async (id: string, userId: string) => {
@@ -205,6 +205,7 @@ describe('coupon limits: the gates a database answers (F-502-k)', () => {
       reservations.reserve(tx, {
         userId,
         orderReferenceId: crypto.randomUUID(),
+        currencyCode: 'USD',
         applied: [{ couponId: id, code, discount: new Prisma.Decimal('2.00') }],
       }),
     );

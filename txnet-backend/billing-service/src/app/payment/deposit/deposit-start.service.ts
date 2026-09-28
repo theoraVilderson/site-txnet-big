@@ -281,6 +281,7 @@ export class DepositStartService {
         userId,
         orderReferenceId: paymentId,
         paymentTransactionId: paymentId,
+        currencyCode,
         applied: coupons.applied,
       });
       if (!price.free) return null;

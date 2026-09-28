@@ -25,6 +25,8 @@ export type CouponReservation = {
   /** The order the holds belong to; `confirm` and `release` name it. For a top-up, the payment's id. */
   orderReferenceId: string;
   paymentTransactionId?: string | null;
+  /** The order's currency, which every held discount is in; each redemption records it (F-116-h5). */
+  currencyCode: string;
   /** `CouponValidation.applied`, as validated in this same transaction. */
   applied: readonly AppliedCoupon[];
 };
@@ -60,7 +62,7 @@ export class CouponReservationService {
    */
   async reserve(tx: Prisma.TransactionClient, reservation: CouponReservation): Promise<void> {
     assertTenantTransaction('coupon reservation');
-    const { userId, orderReferenceId } = reservation;
+    const { userId, orderReferenceId, currencyCode } = reservation;
     const paymentTransactionId = reservation.paymentTransactionId ?? null;
 
     // Coupon id order, so two orders stacking the same codes lock them alike and never deadlock.
@@ -72,7 +74,7 @@ export class CouponReservationService {
       const [{ outcome }] = await tx.$queryRaw<Array<{ outcome: string }>>`
         SELECT billing.reserve_coupon(
           ${couponId}::uuid, ${userId}::uuid, ${orderReferenceId}::uuid,
-          ${paymentTransactionId}::uuid, ${discount.toFixed(2)}::numeric
+          ${paymentTransactionId}::uuid, ${discount.toFixed(2)}::numeric, ${currencyCode}::text
         ) AS outcome`;
       if (outcome === 'reserved') continue;
       if (!REFUSALS.includes(outcome as CouponRejection)) {

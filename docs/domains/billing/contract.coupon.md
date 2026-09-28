@@ -144,8 +144,10 @@ Migration `20260915000100_coupon_free_grant`; `coupon-admin.service.ts`,
 
 | Rule | Why |
 |---|---|
-| Per coupon or per batch: each redemption with code, user id, full name and username, payment id and status, discount (2 places), status, time; newest first, paginated (≤ 100), filtered by status and an inclusive `redeemedAt` range | D-33 |
-| Totals over the date range, ignoring status filter and page: `redemptions`, `used` (confirmed), `reserved` (pending), `released` (expired + cancelled), `discountGiven` (confirmed only) | a hold gave nothing yet; a released one never will |
+| Per coupon or per batch: each redemption with code, user id, full name and username, payment id and status, discount (2 places) and its `currencyCode`, status, time; newest first, paginated (≤ 100), filtered by status and an inclusive `redeemedAt` range | D-33 |
+| Totals over the date range, ignoring status filter and page: `redemptions`, `used` (confirmed), `reserved` (pending), `released` (expired + cancelled), and what confirmed ones gave | a hold gave nothing yet; a released one never will |
+| What was given is summed **per currency** (`discountGivenByCurrency`, as written), then totalled in the owner tenant's currency now (`currencyCode`; the platform's for a platform coupon): a sum in an earlier one is converted through the tenant's `currency_change` rows (`convertedByChanges`), as settlement's owed is. No chain from a currency: `discountGiven: null`, never summed as written (F-116-h5) | a tenant that moved USD -> IRR reported 5.50 dollars and 1,500,000 rials as 1,500,005.50 |
+| A redemption records `currencyCode`: the order's (invoice or top-up) for a held discount — `reserve_coupon` takes it from the caller, which priced the order — and the coupon's own for a gift code (F-116-h5) | the discount is part of the order's amount |
 | A soft-deleted coupon still reports; another tenant's coupon or batch is `coupon_not_found` / `batch_not_found` | ADR-0048 decision 6; reach as F-502-c |
 
 ## HTTP surface (built — F-502-f)

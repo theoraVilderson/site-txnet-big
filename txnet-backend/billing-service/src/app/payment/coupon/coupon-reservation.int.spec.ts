@@ -109,6 +109,7 @@ function reservationOf(suffix: string, userId: string, orderReferenceId = nextOr
   return {
     userId,
     orderReferenceId,
+    currencyCode: 'USD',
     applied: [{ couponId: couponId(suffix), code, discount: new Prisma.Decimal('2.00') }],
   };
 }

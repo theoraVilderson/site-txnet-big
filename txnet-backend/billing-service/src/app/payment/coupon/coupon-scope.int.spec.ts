@@ -186,7 +186,7 @@ describe('a free_grant coupon', () => {
     const rows = await runWithTenant({ id: RESELLER_A }, () =>
       tenantTransaction(app, (tx: Prisma.TransactionClient) =>
         tx.$queryRawUnsafe<{ outcome: string }[]>(
-          `SELECT billing.reserve_coupon('${FREE}'::uuid, '${ADMIN}'::uuid, gen_random_uuid(), NULL, 1.00) AS outcome`,
+          `SELECT billing.reserve_coupon('${FREE}'::uuid, '${ADMIN}'::uuid, gen_random_uuid(), NULL, 1.00, 'USD') AS outcome`,
         ),
       ),
     );

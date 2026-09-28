@@ -178,6 +178,7 @@ describe('paying an invoice from the wallet (F-111-b)', () => {
         reservations.reserve(tx, {
           userId: USER,
           orderReferenceId: id,
+          currencyCode: 'USD',
           applied: [{ couponId: COUPON, code: 'SPRING', discount: new Prisma.Decimal('2.50') }],
         }),
       ),

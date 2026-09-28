@@ -10,9 +10,13 @@
  *  - **a deleted coupon still reports.** Soft delete exists so its receipts stay
  *    explicable (ADR-0048 decision 6);
  *  - **reach** is coupon management's: another tenant's coupon or batch is not
- *    found.
+ *    found;
+ *  - **each currency is totalled on its own** (F-116-h5, ADR-0098 part 3): a
+ *    redemption records the currency it was taken in, and one from before a
+ *    currency change is converted through the tenant's `currency_change` rows
+ *    into the currency it keeps now — never added to the new one as written.
  */
-import { TenantType } from '@prisma/client';
+import { Prisma, TenantType } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { CouponAdminRefused, CouponAdminService } from './coupon-admin.service';
@@ -78,11 +82,14 @@ function table(rows: Row[]) {
     findMany: async ({ where }: { where?: Row } = {}) => rows.filter((r) => matches(r, where)),
     findUnique: async ({ where }: { where: Row }) => rows.find((r) => matches(r, where)) ?? null,
     count: async ({ where }: { where?: Row } = {}) => rows.filter((r) => matches(r, where)).length,
-    groupBy: async ({ where }: { where: Row }) => {
-      const by = new Map<unknown, Row[]>();
-      for (const r of rows.filter((x) => matches(x, where))) by.set(r['status'], [...(by.get(r['status']) ?? []), r]);
-      return [...by.entries()].map(([status, list]) => ({
-        status,
+    groupBy: async ({ by, where }: { by: string[]; where: Row }) => {
+      const groups = new Map<string, Row[]>();
+      for (const r of rows.filter((x) => matches(x, where))) {
+        const key = JSON.stringify(by.map((k) => r[k]));
+        groups.set(key, [...(groups.get(key) ?? []), r]);
+      }
+      return [...groups.entries()].map(([key, list]) => ({
+        ...Object.fromEntries(by.map((k, i) => [k, (JSON.parse(key) as unknown[])[i]])),
         _count: { _all: list.length },
         _sum: { discountAppliedAmount: list.reduce((a, r) => a + Number(r['discountAppliedAmount']), 0).toFixed(2) },
       }));
@@ -90,8 +97,9 @@ function table(rows: Row[]) {
   };
 }
 
-const redemption = (id: string, couponId: string, userId: string, status: string, amount: string, pay: string | null = null): Row => ({
+const redemption = (id: string, couponId: string, userId: string, status: string, amount: string, pay: string | null = null, currencyCode = 'USD'): Row => ({
   id,
+  currencyCode,
   couponId,
   userId,
   status,
@@ -101,15 +109,28 @@ const redemption = (id: string, couponId: string, userId: string, status: string
   redeemedAt: new Date('2026-09-10T10:00:00Z'),
 });
 
-function build() {
+/**
+ * `switched`: the reseller moved USD -> IRR at 1,000,000 (F-116-f) after its
+ * first redemptions, and one IRR use followed. `changes: false` drops the
+ * change row, as for a currency the tenant never left.
+ */
+function build(opts: { switched?: boolean; changes?: boolean } = {}) {
   const types: Record<string, TenantType> = { [OWNER]: TenantType.platform_owner, [RESELLER]: TenantType.reseller, [OTHER]: TenantType.reseller };
+  const now = (id: string) => (opts.switched && id === RESELLER ? 'IRR' : 'USD');
   const db = {
-    tenant: table(Object.entries(types).map(([id, tenantType]) => ({ id, tenantType }))),
+    tenant: table(Object.entries(types).map(([id, tenantType]) => ({ id, tenantType, operatingCurrencyCode: now(id) }))),
+    currency: table([
+      { code: 'USD', decimalPlaces: 2 },
+      { code: 'IRR', decimalPlaces: 0 },
+    ]),
+    currencyChange: table(
+      opts.switched && opts.changes !== false ? [{ tenantId: RESELLER, fromCode: 'USD', toCode: 'IRR', rate: new Prisma.Decimal(1_000_000) }] : [],
+    ),
     coupon: table([
-      { id: 'c-plain', tenantId: RESELLER, code: 'NOWRUZ', batchId: null, deletedAt: new Date(), usedCount: 2, reservedCount: 1 },
-      { id: 'c-b1', tenantId: RESELLER, code: 'GIFT-AAAA', batchId: BATCH, deletedAt: null, usedCount: 1, reservedCount: 0 },
-      { id: 'c-b2', tenantId: RESELLER, code: 'GIFT-BBBB', batchId: BATCH, deletedAt: null, usedCount: 0, reservedCount: 0 },
-      { id: 'c-other', tenantId: OTHER, code: 'THEIRS', batchId: OTHER_BATCH, deletedAt: null, usedCount: 1, reservedCount: 0 },
+      { id: 'c-plain', tenantId: RESELLER, code: 'NOWRUZ', batchId: null, deletedAt: new Date(), usedCount: 2, reservedCount: 1, currencyCode: now(RESELLER) },
+      { id: 'c-b1', tenantId: RESELLER, code: 'GIFT-AAAA', batchId: BATCH, deletedAt: null, usedCount: 1, reservedCount: 0, currencyCode: now(RESELLER) },
+      { id: 'c-b2', tenantId: RESELLER, code: 'GIFT-BBBB', batchId: BATCH, deletedAt: null, usedCount: 0, reservedCount: 0, currencyCode: now(RESELLER) },
+      { id: 'c-other', tenantId: OTHER, code: 'THEIRS', batchId: OTHER_BATCH, deletedAt: null, usedCount: 1, reservedCount: 0, currencyCode: 'USD' },
     ]),
     couponBatch: table([
       { id: BATCH, tenantId: RESELLER, label: 'mine' },
@@ -122,6 +143,7 @@ function build() {
       redemption('r4', 'c-plain', USER_B, 'expired', '9.00'),
       redemption('r5', 'c-b1', USER_A, 'confirmed', '5.00'),
       redemption('r6', 'c-other', USER_B, 'confirmed', '7.00'),
+      ...(opts.switched ? [redemption('r7', 'c-plain', USER_A, 'confirmed', '1500000.00', null, 'IRR')] : []),
     ]),
     user: table([
       { id: USER_A, fullName: 'Sara K', username: 'sara' },
@@ -158,10 +180,41 @@ describe('CouponUsageService', () => {
       paymentTransactionId: PAY_1,
       paymentStatus: 'success',
       discountAmount: '3.00',
+      currencyCode: 'USD',
       status: 'confirmed',
       redeemedAt: new Date('2026-09-10T10:00:00Z'),
     });
-    expect(report.totals).toEqual({ redemptions: 4, used: 2, reserved: 1, released: 1, discountGiven: '5.50' });
+    expect(report.totals).toEqual({
+      redemptions: 4,
+      used: 2,
+      reserved: 1,
+      released: 1,
+      discountGiven: '5.50',
+      currencyCode: 'USD',
+      discountGivenByCurrency: [{ currencyCode: 'USD', amount: '5.50' }],
+    });
+  });
+
+  it('totals each currency on its own, then converts the old one through the tenant’s change into its currency now', async () => {
+    const report = await build({ switched: true }).forCoupon(actor(RESELLER), 'c-plain', {});
+    expect(report.items.find((i) => i.id === 'r7')).toMatchObject({ discountAmount: '1500000.00', currencyCode: 'IRR' });
+    expect(report.items.find((i) => i.id === 'r1')).toMatchObject({ discountAmount: '3.00', currencyCode: 'USD' });
+    // 5.50 USD at 1,000,000 plus 1,500,000 IRR — not 1,500,005.50 of anything.
+    expect(report.totals).toMatchObject({
+      used: 3,
+      discountGiven: '7000000',
+      currencyCode: 'IRR',
+      discountGivenByCurrency: [
+        { currencyCode: 'IRR', amount: '1500000.00' },
+        { currencyCode: 'USD', amount: '5.50' },
+      ],
+    });
+  });
+
+  it('leaves the converted total empty, never summed as written, when no change of the tenant leads from a currency', async () => {
+    const report = await build({ switched: true, changes: false }).forCoupon(actor(RESELLER), 'c-plain', {});
+    expect(report.totals.discountGiven).toBeNull();
+    expect(report.totals.discountGivenByCurrency).toHaveLength(2);
   });
 
   it('keeps a deleted coupon reportable, since its receipts must stay explicable', async () => {

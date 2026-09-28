@@ -164,8 +164,8 @@ async function seed() {
     await sql(`INSERT INTO billing.invoice (id, "tenantId", "userId", "variantId", "priceId", amount, discount, total, "currencyCode", status, "expiresAt")
       VALUES ('${id}', '${TENANT}', '${RICH}', '${VARIANT}', '${PRICE_NOW}', 12.50, 0, 12.50, 'USD', '${status}', now() + interval '30 minutes')`);
   }
-  await sql(`INSERT INTO billing.coupon_redemption (id, "couponId", "userId", "discountAppliedAmount", status, "orderReferenceId")
-    VALUES (gen_random_uuid(), '${FIXED_COUPON}', '${RICH}', 5.00, 'pending', '${PENDING_INVOICE}')`);
+  await sql(`INSERT INTO billing.coupon_redemption (id, "couponId", "userId", "discountAppliedAmount", "currencyCode", status, "orderReferenceId")
+    VALUES (gen_random_uuid(), '${FIXED_COUPON}', '${RICH}', 5.00, 'USD', 'pending', '${PENDING_INVOICE}')`);
 
   await sql(`INSERT INTO entitlement."grant" (id, "tenantId", "userId", "variantId", source, status, "startsAt", "billingMode", "subscriptionTokenHash", "meteredRate", "meteredRateCurrencyCode")
     VALUES ('${GRANT}', '${TENANT}', '${RICH}', '${VARIANT}', 'purchase', 'active', now(), 'metered', repeat('a', 64), 0.50000000, 'USD')`);

@@ -209,8 +209,8 @@ describe('D-21: coupons', () => {
   it('lets one user hold two redemptions of one coupon', async () => {
     const redeem = (id: string) =>
       owner.$executeRawUnsafe(`
-        INSERT INTO billing.coupon_redemption (id, "couponId", "userId", "discountAppliedAmount", "orderReferenceId")
-        VALUES ('${id}', '${COUPON}', '${USER}', 10.00, '${id}')
+        INSERT INTO billing.coupon_redemption (id, "couponId", "userId", "discountAppliedAmount", "currencyCode", "orderReferenceId")
+        VALUES ('${id}', '${COUPON}', '${USER}', 10.00, 'USD', '${id}')
       `);
 
     expect(await sqlstate(redeem('bbbbbbbb-0000-4000-8000-000000000001'))).toBeNull();

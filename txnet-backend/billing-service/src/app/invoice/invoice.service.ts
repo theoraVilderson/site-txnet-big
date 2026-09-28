@@ -168,7 +168,7 @@ export class InvoiceService {
         },
       });
       if (coupons.applied.length > 0) {
-        await this.reservations.reserve(tx, { userId, orderReferenceId: id, applied: coupons.applied });
+        await this.reservations.reserve(tx, { userId, orderReferenceId: id, currencyCode: invoice.currencyCode, applied: coupons.applied });
       }
 
       return {

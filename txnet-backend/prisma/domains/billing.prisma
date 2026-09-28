@@ -420,6 +420,8 @@ model CouponRedemption {
   status                   RedemptionStatus @default(pending)
   paymentTransactionId     String?          @db.Uuid
   discountAppliedAmount    Decimal          @db.Decimal(18, 2)
+  /// What `discountAppliedAmount` is in: the order's currency, a gift code's own (F-116-h5).
+  currencyCode             String
   orderReferenceId         String           @db.Uuid
   redeemedAt               DateTime         @default(now())
 
