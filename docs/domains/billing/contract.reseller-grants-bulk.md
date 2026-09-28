@@ -32,7 +32,8 @@ body `grant-bulk.schema.ts`.
 | `speed` | `mbps` 1..100 000 or `null` | `{rateMbpsBefore, rateMbpsAfter}` |
 | `devices` | `limit` 1..1000 or `null` | `{adjustmentId, limitBefore, limitAfter, panelsNotEnforcing}` |
 
-Every body is `{action, grantIds[1..50], reason, …}`; `reason` (1..500) is
+Every body is `{requestId, action, grantIds[1..50], reason, …}`; `requestId` (a
+uuid the consumer mints once per confirm) and `reason` (1..500) are
 **required** for every action, freeze and unfreeze included. Bytes are decimal
 strings, dates ISO. Answers **200** `{action, results[{grantId, userId, ok: true,
 result} | {grantId, ok: false, reason, panels?}]}`.
@@ -43,11 +44,14 @@ result} | {grantId, ok: false, reason, panels?}]}`.
 | **A Grant must be the reseller's** (C-15): read by id *and* the path's `tenantId` in the act's own transaction; another tenant's Grant, or none, is `grant_not_found` and is not acted on | no path user to check; `grant` is RLS-strict but not in `TENANT_SCOPED_MODELS`, so the query says it |
 | One transaction per Grant, ids deduplicated, in the order named; a refusal is that Grant's `reason` — the single route's (`grant_not_active`, `grant_closed`, `traffic_not_adjustable`, …; `rate_limit_unsupported` with `panels`) — and any other throw is `failed`, logged; the rest still run | one frozen or closed Grant must not stop 49 others; a Grant named twice gets +3 days once |
 | Each Grant is one `admin_audit_log` row (the single route's `action`) and one notice to its user, in its transaction | the Grant's history and the user's message read the same as for one Grant |
+| **One `requestId`, one act per Grant** (F-311-u1): each Grant's outcome is kept in `billing.grant_bulk_outcome` under `(tenantId, requestId, grantId)` — an `ok` one in the act's transaction, a refusal after it. A repeat answers the stored outcomes, **200**, identical, and acts on none of those Grants again; a concurrent repeat collides on the key and its act rolls back | a double click or a bot callback delivered twice must not turn +3 days into +6 |
+| `failed` is **not** kept: a repeat tries that Grant again, and only it | nothing was done to it; a transient throw must not lock the request's retry |
+| The same `requestId` with another body (action, input, reason, or selection — duplicates and all counted once) is **409** `request_reused`, before any Grant is read | an id reused by mistake must neither act nor answer another request's outcomes |
 | Bucket `RESELLER_USER_CONFIG_ACTION`, per request — as the config actions spend it for 1..50 configs | one bulk is one admin decision |
 
 **Not in bulk:** delete (a refund answer per Grant), renew and issue (a
 `requestId` per Grant), rotate-token (every user's app would lose its link at
-once). **Not covered:** a repeated request is not deduplicated — a second click
-adds the days again; the confirm is the consumer's (F-311-x panel, F-311-y bot).
+once). **Not covered:** a stored outcome is kept with no expiry (≤ 50 small rows
+a request); the confirm itself is the consumer's (F-311-x panel, F-311-y bot).
 Choosing Grants by a filter (a panel, a plan, "every active Grant") rather than
 by id is not built.

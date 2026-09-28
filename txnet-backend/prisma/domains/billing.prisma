@@ -847,3 +847,28 @@ model GatewaySettlementPayout {
   @@map("gateway_settlement_payout")
   @@schema("billing")
 }
+
+/// F-311-u1: one Grant's outcome of one bulk request (F-311-u) — a repeated
+/// `requestId` (a double click, a bot callback delivered twice) answers these
+/// rows and acts on no Grant again. An `ok` row is written in the act's own
+/// transaction, so a concurrent repeat's insert collides and its act rolls
+/// back; a refusal is written after it. A `failed` throw is never stored: that
+/// Grant was not touched and a repeat tries it again. `fingerprint` is the
+/// body's hash — the same id with another body is `request_reused`. No foreign
+/// key on `grantId`: a `grant_not_found` outcome names a Grant that is not the
+/// reseller's, or none; none on the actor (may be the platform's staff).
+model GrantBulkOutcome {
+  tenantId    String   @db.Uuid
+  requestId   String   @db.Uuid
+  grantId     String   @db.Uuid
+  fingerprint String
+  actorUserId String   @db.Uuid
+  ok          Boolean
+  /// The outcome exactly as the route answered it: `{grantId, userId, ok, result}` or `{grantId, ok, reason, panels?}`.
+  outcome     Json
+  createdAt   DateTime @default(now())
+
+  @@id([tenantId, requestId, grantId])
+  @@map("grant_bulk_outcome")
+  @@schema("billing")
+}

@@ -1,7 +1,8 @@
-import { Body, Controller, HttpCode, HttpStatus, Ip, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { Body, ConflictException, Controller, HttpCode, HttpStatus, Ip, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
 import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
+import { EntitlementRefused } from '../../entitlement/grant';
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
@@ -14,7 +15,9 @@ import { ResellerUserGrantsRefused, ResellerUserGrantsService } from './reseller
  * `POST /api/billing/tenants/:tenantId/grants/bulk` — freeze, unfreeze, days,
  * traffic, reset, gift, speed, devices over 1..50 Grants, one outcome per
  * Grant, always **200** once the door lets it in; the refusals of the door are
- * the other reseller routes' (`resellerRefusal`).
+ * the other reseller routes' (`resellerRefusal`). A repeated `requestId`
+ * answers the first call's outcomes; the same id with another body is **409**
+ * `request_reused` (F-311-u1).
  *
  * No user in the path: the Grants may be many users', and each is fenced by
  * the reseller's tenant. The single-Grant writes' bucket,
@@ -42,6 +45,7 @@ export class ResellerGrantsBulkController {
       return { action: body.action, results: await this.service.bulk({ ...actorOf(req), ip }, tenantId, body) };
     } catch (e) {
       if (e instanceof ResellerUserGrantsRefused) throw resellerRefusal(e);
+      if (e instanceof EntitlementRefused && e.reason === 'request_reused') throw new ConflictException({ reason: e.reason, message: e.message });
       throw e;
     }
   }

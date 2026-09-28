@@ -49,6 +49,24 @@ vi.mock('../entitlement/admin-renewal', () => ({
   renewGrantByAdmin: vi.fn(async () => (log.push('act'), { renewalId: 'r1', grantId: GRANT, plan: true, bytes: BigInt(0), days: 30, forgivenBytes: BigInt(0), purchasedBytesBefore: BigInt(0), purchasedBytesAfter: BigInt(0), endsAtBefore: null, endsAtAfter: null, revived: false, renewed: !repeat })),
 }));
 
+/**
+ * Without per-file isolation (`test:affected`, VITEST_ISOLATE=0) these mocks
+ * would stay in the worker's registry and reach the next file — the bulk
+ * spec's own mocks of the same acts among them: give it real modules.
+ */
+afterAll(() => {
+  vi.doUnmock('../entitlement/freeze');
+  vi.doUnmock('../entitlement/duration');
+  vi.doUnmock('../entitlement/traffic');
+  vi.doUnmock('../traffic/gift-bytes');
+  vi.doUnmock('../traffic/grant-speed');
+  vi.doUnmock('../entitlement/devices');
+  vi.doUnmock('../entitlement/delete');
+  vi.doUnmock('../entitlement/admin-issue');
+  vi.doUnmock('../entitlement/admin-renewal');
+  vi.resetModules();
+});
+
 const PLATFORM = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';
 const OWNER_USER = '44444444-4444-4444-8444-444444444444';
@@ -86,6 +104,8 @@ function build() {
   const tx = {
     $executeRaw: async () => 1,
     user: { findFirst: async ({ where }: { where: { id: string } }) => (where.id === CUSTOMER && scope() === RESELLER ? { id: CUSTOMER } : null) },
+    // A bulk request's kept outcomes (F-311-u1): none yet, so the act runs.
+    grantBulkOutcome: { findFirst: async () => null, findUnique: async () => null, create: async () => ({}) },
     grant: {
       // By its user (one Grant's routes) or by the reseller's tenant (bulk, F-311-u).
       findFirst: async ({ where }: { where: { id: string; userId?: string; tenantId?: string } }) =>
@@ -134,7 +154,7 @@ const EVERY_WRITE: Case[] = [
   { method: 'issue', action: 'grant_issue', reason: 'trial', target: NEW_GRANT, call: (s) => s.issue(admin, RESELLER, CUSTOMER, 'v1', 'req-1', 'trial') },
   { method: 'renew', action: 'grant_renew', reason: 'paid cash', call: (s) => s.renew(admin, RESELLER, CUSTOMER, GRANT, { requestId: 'req-2', reason: 'paid cash' }) },
   { method: 'rotateLink', action: 'grant_link_rotate', reason: 'leaked', call: (s) => s.rotateLink(admin, RESELLER, CUSTOMER, GRANT, 'leaked') },
-  { method: 'bulk', action: 'grant_duration_change', reason: 'outage', call: (s) => s.bulk(admin, RESELLER, { action: 'days', grantIds: [GRANT], days: 3, reason: 'outage' }) },
+  { method: 'bulk', action: 'grant_duration_change', reason: 'outage', call: (s) => s.bulk(admin, RESELLER, { requestId: 'b0b0b0b0-b0b0-4b0b-8b0b-b0b0b0b0b0b0', action: 'days', grantIds: [GRANT], days: 3, reason: 'outage' }) },
   { method: 'act', action: 'config_disable', reason: 'abuse', target: CFG_A, call: (s) => s.act(admin, RESELLER, CUSTOMER, { action: 'disable', configIds: [CFG_A], reason: 'abuse' }) },
 ];
 

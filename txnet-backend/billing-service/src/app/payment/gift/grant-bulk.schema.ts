@@ -14,11 +14,14 @@ const grantIds = z.array(z.string({ message: E.configActionInvalid }).uuid({ mes
 /** Always asked: an act on many users' services is explained once, on every Grant's audit row. */
 const reason = z.string({ message: E.configActionInvalid }).trim().min(1, { message: E.configActionInvalid }).max(500, { message: E.configActionInvalid });
 
+/** The caller's own id for this one bulk act, minted once per confirm: a repeat answers the first call (F-311-u1). */
+const requestId = z.string({ message: E.configActionInvalid }).uuid({ message: E.configActionInvalid });
+
 const days = z.number({ message: E.configActionInvalid }).int({ message: E.configActionInvalid }).min(-3650, { message: E.configActionInvalid }).max(3650, { message: E.configActionInvalid }).refine((d) => d !== 0, { message: E.configActionInvalid });
 
 /**
  * The body of `POST /api/billing/tenants/:tenantId/grants/bulk` (F-311-u):
- * one `action`, 1..50 `grantIds` of the reseller's users, the `reason`, and
+ * the `requestId`, one `action`, 1..50 `grantIds` of the reseller's users, the `reason`, and
  * the action's own input — the single-Grant route's, with the same bounds.
  * `days` is relative only: a bulk move is "+3 days to everyone", never one
  * fixed date for Grants that end on different days.
@@ -29,14 +32,14 @@ const days = z.number({ message: E.configActionInvalid }).int({ message: E.confi
 export const grantBulkSchema = z.discriminatedUnion(
   'action',
   [
-    z.object({ action: z.literal('freeze'), grantIds, until: grantFreezeSchema.shape.until, reason }).strict(),
-    z.object({ action: z.literal('unfreeze'), grantIds, reason }).strict(),
-    z.object({ action: z.literal('days'), grantIds, days, reason }).strict(),
-    z.object({ action: z.literal('traffic'), grantIds, gb: grantTrafficSchema.shape.gb, reason }).strict(),
-    z.object({ action: z.literal('traffic_reset'), grantIds, reason }).strict(),
-    z.object({ action: z.literal('traffic_gift'), grantIds, gb: grantTrafficGiftSchema.shape.gb, reason }).strict(),
-    z.object({ action: z.literal('speed'), grantIds, mbps: grantSpeedSchema.shape.mbps, reason }).strict(),
-    z.object({ action: z.literal('devices'), grantIds, limit: grantDevicesSchema.shape.limit, reason }).strict(),
+    z.object({ requestId, action: z.literal('freeze'), grantIds, until: grantFreezeSchema.shape.until, reason }).strict(),
+    z.object({ requestId, action: z.literal('unfreeze'), grantIds, reason }).strict(),
+    z.object({ requestId, action: z.literal('days'), grantIds, days, reason }).strict(),
+    z.object({ requestId, action: z.literal('traffic'), grantIds, gb: grantTrafficSchema.shape.gb, reason }).strict(),
+    z.object({ requestId, action: z.literal('traffic_reset'), grantIds, reason }).strict(),
+    z.object({ requestId, action: z.literal('traffic_gift'), grantIds, gb: grantTrafficGiftSchema.shape.gb, reason }).strict(),
+    z.object({ requestId, action: z.literal('speed'), grantIds, mbps: grantSpeedSchema.shape.mbps, reason }).strict(),
+    z.object({ requestId, action: z.literal('devices'), grantIds, limit: grantDevicesSchema.shape.limit, reason }).strict(),
   ],
   { message: E.configActionInvalid },
 );
