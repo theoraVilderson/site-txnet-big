@@ -62,7 +62,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 | [contract.history.md](contract.history.md) | the panel's financial page: the wallet ledger and the top-up attempts |
 | [contract.verify.md](contract.verify.md) | a payment the gateway met with silence: the retry clock, the flag, manual confirmation |
 | [contract.gift.md](contract.gift.md) | the panel's gift-code box, and a user's own Grants, configs, usage and `/sub` link |
-| [contract.reseller-grants.md](contract.reseller-grants.md) | a reseller's admin on one of its users' services: reads, config actions, freeze, days, traffic, reset, gift (F-311) |
+| [contract.reseller-grants.md](contract.reseller-grants.md) | a reseller's admin on one of its users' services: reads, config actions, freeze, days, traffic, reset, gift, delete, issue (F-311) |
 | [contract.coupon.md](contract.coupon.md) | whose a coupon is, whose users it serves, managing coupons and gift codes |
 | [contract.revenue.md](contract.revenue.md) | what one reseller sold and what its users paid in, over a period |
 | [contract.metering.md](contract.metering.md) | a collection pass becoming usage: what `metering-service` writes, and what it refuses to |

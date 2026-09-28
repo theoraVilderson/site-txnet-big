@@ -27,6 +27,7 @@ import { AdminConfigActionBody, adminConfigActionSchema } from '../../traffic/us
 import { GrantDeleteBody, grantDeleteSchema } from './grant-delete.schema';
 import { GrantDurationBody, grantDurationSchema } from './grant-duration.schema';
 import { GrantFreezeBody, grantFreezeSchema } from './grant-freeze.schema';
+import { GrantIssueBody, grantIssueSchema } from './grant-issue.schema';
 import { GrantListQuery, grantListSchema } from './grant-list.schema';
 import {
   bytesOfGb,
@@ -54,7 +55,7 @@ const STATUS: Record<ResellerUserGrantsRejection, 403 | 404 | 409> = {
   user_not_found: 404,
 };
 
-/** A freeze's (F-311-h), a change of days' (F-311-i), of traffic's (F-311-j, F-311-k, F-311-l) and a delete's (F-311-m) refusals; any other `EntitlementRefused` is not this surface's and passes through. */
+/** A freeze's (F-311-h), a change of days' (F-311-i), of traffic's (F-311-j, F-311-k, F-311-l), a delete's (F-311-m) and an issue's (F-311-o) refusals; any other `EntitlementRefused` is not this surface's and passes through. */
 const GRANT_ACTION_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
   grant_not_active: 409,
   grant_not_frozen: 409,
@@ -68,6 +69,12 @@ const GRANT_ACTION_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
   quota_below_zero: 400,
   nothing_to_reset: 409,
   grant_not_metered: 409,
+  variant_not_assignable: 409,
+  variant_not_deliverable: 409,
+  metered_rate_missing: 409,
+  metered_rate_not_positive: 409,
+  request_reused: 409,
+  already_issued: 409,
 };
 
 /** One bucket for all four: expanding one Grant asks three of them at once. */
@@ -333,6 +340,24 @@ export class ResellerUserGrantsController {
   }
 
   /**
+   * An admin issues this user a service by hand (F-311-o): an `admin_grant`
+   * Grant of `variantId`, active at once and placed like a purchase, no
+   * invoice. `requestId` makes a repeat answer the first Grant (`issued: false`).
+   */
+  @Post('grants')
+  @HttpCode(HttpStatus.OK)
+  @actionLimit
+  async issue(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Body(new ZodValidationPipe(grantIssueSchema)) body: GrantIssueBody,
+    @Req() req: Request,
+  ) {
+    const done = await this.refusing(() => this.service.issue(actorOf(req), tenantId, userId, body.variantId, body.requestId));
+    return { ...done, startsAt: done.startsAt.toISOString(), endsAt: done.endsAt?.toISOString() ?? null };
+  }
+
+  /**
    * The door's refusals travel as `reason`, as on the other reseller surfaces;
    * a missing Grant is the owner routes' own 404. The link's two 409s
    * (`SubscriptionLinkService`) are already HTTP errors and pass through.
@@ -347,6 +372,7 @@ export class ResellerUserGrantsController {
       if (e instanceof EntitlementRefused) {
         const payload = { reason: e.reason, message: e.message };
         if (e.reason === 'grant_not_found') throw new NotFoundException({ i18nKey: E.grant.notFound, ...payload });
+        if (e.reason === 'variant_not_found') throw new NotFoundException({ i18nKey: E.invoice.variantNotFound, ...payload });
         if (GRANT_ACTION_STATUS[e.reason] === 400) throw new BadRequestException(payload);
         if (GRANT_ACTION_STATUS[e.reason] === 409) throw new ConflictException(payload);
         throw e;

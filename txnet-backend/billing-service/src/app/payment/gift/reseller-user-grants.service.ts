@@ -8,6 +8,7 @@ import {
   tenantTransaction,
 } from '@txnet-backend/shared-core';
 
+import { AdminIssued, issueGrantByAdmin } from '../../entitlement/admin-issue';
 import { deleteGrant, Deletion } from '../../entitlement/delete';
 import { changeGrantDuration, DurationChange, DurationMove } from '../../entitlement/duration';
 import { Freeze, freezeGrant, Unfreeze, unfreezeGrant } from '../../entitlement/freeze';
@@ -184,6 +185,24 @@ export class ResellerUserGrantsService {
       () =>
         this.onGrant(userId, grantId, (tx) =>
           deleteGrant(tx, grantId, { at: new Date(), actorUserId: actor.userId, reason, refund }, (t, id, clock) => this.remainders.settle(t, { grantId: id, ...clock })),
+        ),
+      'staffWrite',
+    );
+  }
+
+  /**
+   * An admin issues this user a service by hand (F-311-o): an `admin_grant`
+   * Grant of the variant, active at once and placed like a purchase, no
+   * invoice. `staffWrite`, as for a freeze; the user is the reseller's (`run`).
+   */
+  issue(actor: ResellerActor, tenantId: string, userId: string, variantId: string, requestId: string): Promise<AdminIssued> {
+    return this.run(
+      actor,
+      tenantId,
+      userId,
+      () =>
+        tenantTransaction(this.prisma, (tx) =>
+          issueGrantByAdmin(tx, this.grantService, { userId, variantId, requestId, actorUserId: actor.userId, at: new Date() }),
         ),
       'staffWrite',
     );

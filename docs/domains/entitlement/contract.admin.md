@@ -88,3 +88,16 @@ One `grant_deletion` row keeps the choice, reason, status before and what was
 credited (invariant 25). Refused: `grant_closed`, `grant_not_active` (pending:
 the delivery's, invariant 14), `grant_moved` (the status moved, or a block was
 bought before the credit — all rolled back). Route: billing `contract.reseller-grants.md`.
+
+**Issue (F-311-o)** — `issueGrantByAdmin(tx, grants, {userId, variantId, requestId, actorUserId, at})`
+in `entitlement/admin-issue.ts`, proved by `admin-issue.spec.ts`. `GrantService.issue`
+with `source = admin_grant`, `sourceReferenceId = requestId`, `issuedByAdminId` the
+admin: no invoice, `active` at once, `admin_only` variants included (F-506). **Placed
+like a purchase** — group fulfilment's sweep writes its configs, so what invoice
+create refuses to sell is refused before a Grant exists: `variant_not_deliverable`
+(no handler for the kind, no placeable group, a prepaid network variant stating no
+traffic). **One request, one Grant**: a repeat of `requestId` answers that Grant
+(`issued: false`); the same id for another user or variant is `request_reused`.
+Also refused: `variant_not_found`, `variant_not_assignable` (switched off),
+`metered_rate_missing` / `metered_rate_not_positive`, `already_issued` (a concurrent
+repeat: retry). Route: billing `contract.reseller-grants.md`.

@@ -71,7 +71,11 @@ export type EntitlementRejection =
   /** Days: the new end is now or earlier — cutting a service off is a delete (F-311-m). */
   | 'duration_end_not_future'
   /** Days: the new end is the end it has. */
-  | 'duration_unchanged';
+  | 'duration_unchanged'
+  /** Admin issue (F-311-o): nothing could deliver it — no handler, no placeable group, no stated traffic. */
+  | 'variant_not_deliverable'
+  /** Admin issue: this request id already issued a Grant to another user or of another variant. */
+  | 'request_reused';
 
 export class EntitlementRefused extends Error {
   constructor(
