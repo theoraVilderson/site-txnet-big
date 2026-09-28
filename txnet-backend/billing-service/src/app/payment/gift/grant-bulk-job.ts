@@ -4,6 +4,7 @@ import { GrantBulkJob, GrantBulkJobStatus, Prisma } from '@prisma/client';
 import { ResellerAccess, ResellerAccessRefused, ResellerActor, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../../config/env.validation';
+import { auditBulkJob } from '../../grant-audit/grant-audit';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GrantBulkCommand } from './grant-bulk.schema';
@@ -44,6 +45,8 @@ export type GrantBulkJobView = {
   failed: number;
   createdAt: string;
   finishedAt: string | null;
+  /** When its per-Grant outcomes were purged (F-311-u3); the counts above stay. */
+  purgedAt: string | null;
 };
 
 const view = (j: GrantBulkJob): GrantBulkJobView => ({
@@ -60,7 +63,11 @@ const view = (j: GrantBulkJob): GrantBulkJobView => ({
   failed: j.failedCount,
   createdAt: j.createdAt.toISOString(),
   finishedAt: j.finishedAt?.toISOString() ?? null,
+  purgedAt: j.purgedAt?.toISOString() ?? null,
 });
+
+/** What a job's audit rows say it was and where it stood: never its Grants, which have rows of their own. */
+const auditState = (j: GrantBulkJob) => ({ action: j.action, command: j.command, filter: j.filter, status: j.status, total: j.total, ok: j.okCount, refused: j.refusedCount, failed: j.failedCount });
 
 const isDuplicate = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
 
@@ -117,7 +124,8 @@ export class ResellerGrantBulkJobService {
   /**
    * The Grants a job has reached, in the order it reached them, each as a bulk
    * by id answers it; `problems` keeps the refused and failed ones only — "who
-   * did not get the +3 days". The job's counts are the totals.
+   * did not get the +3 days". The job's counts are the totals. Once purged
+   * (F-311-u3) there are no rows, and `purgedAt` says why.
    */
   outcomes(actor: ResellerActor, tenantId: string, jobId: string, page: GrantBulkPage) {
     const { page: p = 1, pageSize = 20, problems } = page;
@@ -133,18 +141,24 @@ export class ResellerGrantBulkJobService {
         const kept = await tx.grantBulkOutcome.findMany({ where: { tenantId, requestId: job.requestId, grantId: { in: items.map((i) => i.grantId) } } });
         const byGrant = new Map(kept.map((o) => [o.grantId, o.outcome as GrantBulkOutcome]));
         const rows = items.map((i): GrantBulkOutcome => (i.failed ? { grantId: i.grantId, ok: false, reason: GRANT_BULK_FAILED } : (byGrant.get(i.grantId) ?? { grantId: i.grantId, ok: false, reason: GRANT_BULK_FAILED })));
-        return { rows, page: p, pageSize };
+        return { rows, page: p, pageSize, purgedAt: job.purgedAt?.toISOString() ?? null };
       }),
     );
   }
 
-  /** Stops a running job: the Grants it reached stand, the rest are never acted on. A finished or cancelled job is answered as it is. */
+  /**
+   * Stops a running job: the Grants it reached stand, the rest are never acted
+   * on — written down as `grant_bulk_cancel` (F-311-u3). A finished or
+   * cancelled job is answered as it is, and writes nothing.
+   */
   cancel(actor: AdminActor, tenantId: string, jobId: string): Promise<GrantBulkJobView> {
     return this.admitted(actor, tenantId, 'staffWrite', () =>
       tenantTransaction(this.prisma, async (tx) => {
-        await this.find(tx, tenantId, jobId);
-        await tx.grantBulkJob.updateMany({ where: { id: jobId, status: GrantBulkJobStatus.running }, data: { status: GrantBulkJobStatus.cancelled, finishedAt: new Date() } });
-        return view(await this.find(tx, tenantId, jobId));
+        const before = await this.find(tx, tenantId, jobId);
+        const { count } = await tx.grantBulkJob.updateMany({ where: { id: jobId, status: GrantBulkJobStatus.running }, data: { status: GrantBulkJobStatus.cancelled, finishedAt: new Date() } });
+        const after = await this.find(tx, tenantId, jobId);
+        if (count > 0) await auditBulkJob(tx, actor, tenantId, 'grant_bulk_cancel', jobId, auditState(before), auditState(after), null);
+        return view(after);
       }),
     );
   }
@@ -166,7 +180,10 @@ export class ResellerGrantBulkJobService {
         const total = await insertSelection(tx, job.id, tenantId, filter, GRANT_BULK_JOB_MAX_GRANTS + 1);
         if (total === 0) throw new GrantBulkJobRefused('selection_empty');
         if (total > GRANT_BULK_JOB_MAX_GRANTS) throw new GrantBulkJobRefused('selection_too_large', String(GRANT_BULK_JOB_MAX_GRANTS));
-        return view(await tx.grantBulkJob.update({ where: { id: job.id }, data: { total } }));
+        const started = await tx.grantBulkJob.update({ where: { id: job.id }, data: { total } });
+        // The admin's one decision, written once (F-311-u3); a repeat returned above and writes none.
+        await auditBulkJob(tx, actor, tenantId, 'grant_bulk_start', job.id, null, auditState(started), command.reason);
+        return view(started);
       });
     } catch (e) {
       // A concurrent confirm with this id created the job first; its answer is this one's.
@@ -200,6 +217,13 @@ function sameOrReused(prior: GrantBulkJob, fingerprint: string): GrantBulkJobVie
 }
 
 export type GrantBulkDrainResult = { jobs: number; acted: number; finished: number };
+export type GrantBulkPurgeResult = { jobs: number; outcomes: number };
+
+/** Ended jobs purged per call: each is two deletes of up to 100 000 rows, so a backlog drains over ticks. */
+const PURGE_JOBS_PER_CALL = 5;
+/** A bulk by id's outcome rows deleted per call, by age. */
+const PURGE_OUTCOMES_PER_CALL = 5_000;
+const DAY_MS = 86_400_000;
 
 /**
  * One batch of every running bulk job (F-311-u2), asked by `worker-service`'s
@@ -251,6 +275,49 @@ export class GrantBulkJobDrainService {
     }
     if (acted > 0) this.logger.log(`acted on ${acted} Grant(s) over ${jobs.length} bulk job(s), ${finished} finished`);
     return { jobs: jobs.length, acted, finished };
+  }
+
+  /**
+   * The retention clock (F-311-u3, user 2026-09-28): `GRANT_BULK_RETENTION_DAYS`
+   * (30) after a job ended — done or cancelled, never running — its items and
+   * its `grant_bulk_outcome` rows are deleted and `purgedAt` set. **The job row
+   * stays**, counts and all: the list still shows it, the audit rows still name
+   * it, and a repeat of its `requestId` still answers it and acts on nothing.
+   *
+   * A bulk by id's outcomes have no job: they go by their own age, and only
+   * those whose `requestId` names no job, so a long job's early outcomes are
+   * never taken before the job is. A repeat of such a request after 30 days
+   * acts again — nobody retries a click a month later.
+   *
+   * Bounded per call and safe to run twice: a purged job is not due again, and
+   * a deleted row is not found again.
+   */
+  async purge(now: Date = new Date()): Promise<GrantBulkPurgeResult> {
+    const cutoff = new Date(now.getTime() - this.config.get('GRANT_BULK_RETENTION_DAYS', { infer: true }) * DAY_MS);
+    const due = await this.crossTenant.grantBulkJob.findMany({
+      where: { purgedAt: null, finishedAt: { lt: cutoff } },
+      orderBy: { finishedAt: 'asc' },
+      take: PURGE_JOBS_PER_CALL,
+      select: { id: true, tenantId: true, requestId: true },
+    });
+    for (const job of due) {
+      await runWithTenant({ id: job.tenantId }, () =>
+        tenantTransaction(this.prisma, async (tx) => {
+          await tx.grantBulkJobItem.deleteMany({ where: { jobId: job.id } });
+          await tx.grantBulkOutcome.deleteMany({ where: { tenantId: job.tenantId, requestId: job.requestId } });
+          await tx.grantBulkJob.updateMany({ where: { id: job.id, purgedAt: null }, data: { purgedAt: now } });
+        }),
+      );
+    }
+    const outcomes = await this.crossTenant.$executeRaw`
+      DELETE FROM "billing"."grant_bulk_outcome"
+       WHERE ctid IN (
+         SELECT o.ctid FROM "billing"."grant_bulk_outcome" o
+          WHERE o."createdAt" < ${cutoff}
+            AND NOT EXISTS (SELECT 1 FROM "billing"."grant_bulk_job" j WHERE j."tenantId" = o."tenantId" AND j."requestId" = o."requestId")
+          LIMIT ${PURGE_OUTCOMES_PER_CALL})`;
+    if (due.length + outcomes > 0) this.logger.log(`purged ${due.length} ended bulk job(s) and ${outcomes} bulk-by-id outcome(s)`);
+    return { jobs: due.length, outcomes };
   }
 
   /** One job's share of the batch, in its tenant. */

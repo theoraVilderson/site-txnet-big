@@ -51,8 +51,9 @@ result} | {grantId, ok: false, reason, panels?}]}`.
 
 **Not in bulk:** delete (a refund answer per Grant), renew and issue (a
 `requestId` per Grant), rotate-token (every user's app would lose its link at
-once). **Not covered:** a stored outcome is kept with no expiry (≤ 50 small rows
-a request); the confirm itself is the consumer's (F-311-x panel, F-311-y bot).
+once). A stored outcome is purged 30 days after it was written (F-311-u3,
+below), so a repeat that late acts again. **Not covered:** the confirm itself is
+the consumer's (F-311-x panel, F-311-y bot).
 
 ## By a filter, as a job (built — F-311-u2)
 
@@ -67,8 +68,8 @@ request. `payment/gift/reseller-grants-bulk-job.controller.ts` over
 | `POST …/count` `{filter}` | `read` | `{count}` — what the confirm shows |
 | `POST …` a bulk body with `filter` in place of `grantIds` | `staffWrite` | **202** the job; the same `requestId` again answers it |
 | `GET …?page&pageSize` | `read` | `{rows[job], page, pageSize, total}`, newest first |
-| `GET …/:jobId` | `read` | the job: `{id, requestId, action, command, filter, status, total, processed, ok, refused, failed, createdAt, finishedAt}` |
-| `GET …/:jobId/outcomes?page&pageSize&problems` | `read` | `{rows, page, pageSize}` — each reached Grant as a bulk by id answers it, in the order reached; `problems=true` keeps refused and failed |
+| `GET …/:jobId` | `read` | the job: `{id, requestId, action, command, filter, status, total, processed, ok, refused, failed, createdAt, finishedAt, purgedAt}` |
+| `GET …/:jobId/outcomes?page&pageSize&problems` | `read` | `{rows, page, pageSize, purgedAt}` — each reached Grant as a bulk by id answers it, in the order reached; `problems=true` keeps refused and failed |
 | `POST …/:jobId/cancel` | `staffWrite` | the job, `cancelled`; a finished one as it is |
 
 `filter` is `{panelId?, productId?, variantId?, statuses?}`, every condition
@@ -86,6 +87,8 @@ variant is what the Grant was issued from.
 | A throw nobody named is tried on 3 drains, then that Grant is `failed`; a refusal is kept at once. The job's counts move per item marked done, and the job is `done` when none is left | a transient error retries; a broken Grant does not stall 8 000 others |
 | A cancel stops the Grants not yet reached, within one batch; those reached stand | the admin who chose the wrong panel can stop it, not undo it |
 | A started job finishes whatever its tenant's status, as a started campaign (F-018-p); starting and cancelling are the `staffWrite` | a suspension mid-job must not leave half a panel with +3 days and nobody able to see why |
+| **The job is audited as one admin act** (F-311-u3): `grant_bulk_start` in the start's transaction (after: action, command, filter, total; reason: the body's) and `grant_bulk_cancel` in a cancel that stopped it (before and after: status and counts), target `grant_bulk_job`. A repeated start and a cancel of an ended job write none; nobody is told | "who gave 8 000 users +3 days, and who stopped it" is one row, beside the 8 000 Grant rows that say what each got |
+| **Retention** (F-311-u3, user 2026-09-28): `GRANT_BULK_RETENTION_DAYS` (30) after a job ended, the drain call also deletes its items and its `grant_bulk_outcome` rows and sets `purgedAt` — 5 jobs a call; **the job row and its counts stay**. Its outcomes page then answers no rows and `purgedAt`. A running job is never purged | the per-Grant rows are the bulk of the data; the summary is what an admin asks for later, and it keeps a repeated `requestId` answered |
+| A bulk by id's outcomes, which have no job, go 30 days after they were written, 5 000 a call — only those whose `requestId` names no job | a long job's early outcomes are never taken before the job is |
 
-**Not covered:** jobs and items are kept with no expiry. The job has no audit
-row of its own — each Grant's act has one.
+The drain route answers `{jobs, acted, finished, purged, outcomesPurged}`.

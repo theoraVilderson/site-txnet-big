@@ -113,6 +113,9 @@ enum AdminAction {
   grant_traffic_gift
   grant_speed_set
   grant_devices_set
+  // F-311-u3. An admin's bulk job by filter: its start and its cancel.
+  grant_bulk_start
+  grant_bulk_cancel
   grant_delete
   grant_issue
   grant_renew
@@ -152,6 +155,8 @@ enum AuditTargetType {
   product_variant
   price
   notification_campaign
+  // F-311-u3. A bulk job by filter, not any one Grant it acted on.
+  grant_bulk_job
   // F-019-a. A reseller's billing wallet with the platform, not a user's `wallet`.
   tenant_billing_wallet
   // F-018-c. A tenant itself.

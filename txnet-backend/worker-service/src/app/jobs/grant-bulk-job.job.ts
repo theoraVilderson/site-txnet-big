@@ -22,6 +22,9 @@ const DRAIN_PATH = '/api/internal/billing/grant-bulk-jobs/drain';
  * where the next tick starts, and a Grant already acted on under the job's
  * `requestId` is answered, not acted on again (F-311-u1).
  *
+ * The same call runs the retention purge (F-311-u3): 30 days after a job
+ * ended its per-Grant rows go, its summary stays.
+ *
  * **It never succeeds quietly**, for the reason `vault-retention.job.ts` gives.
  */
 @Injectable()
@@ -65,13 +68,13 @@ export class GrantBulkJobDrainJob implements Job {
       if (!response.ok) throw new Error(`billing answered ${response.status} to ${DRAIN_PATH}`);
 
       const body = envelopeData(await response.json());
-      const keys = ['jobs', 'acted', 'finished'] as const;
+      const keys = ['jobs', 'acted', 'finished', 'purged', 'outcomesPurged'] as const;
       if (!keys.every((k) => typeof body?.[k] === 'number')) {
-        throw new Error(`billing answered ${DRAIN_PATH} without its three counts`);
+        throw new Error(`billing answered ${DRAIN_PATH} without its five counts`);
       }
-      const [jobs, acted, finished] = keys.map((k) => body![k] as number);
+      const [jobs, acted, finished, purged, outcomesPurged] = keys.map((k) => body![k] as number);
       if (acted > 0) this.logger.log(`acted on ${acted} Grant(s) over ${jobs} bulk job(s), ${finished} finished`);
-      return { itemsProcessed: acted, errorsCount: 0, metrics: { jobs, acted, finished } };
+      return { itemsProcessed: acted, errorsCount: 0, metrics: { jobs, acted, finished, purged, outcomesPurged } };
     } finally {
       clearTimeout(timer);
     }

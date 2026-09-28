@@ -133,7 +133,8 @@ export class ResellerGrantsBulkJobController {
  * The seam `worker-service`'s `grant_bulk_job_drain` tick reaches the drain
  * through (F-311-u2) — outside the gate and the tenant, service callers only,
  * as `EntitlementInternalController` explains. Answers the raw counts: the
- * only caller records them in `bot_execution_log`.
+ * only caller records them in `bot_execution_log`. After the batch, the
+ * retention purge (F-311-u3): `purged` ended jobs, `outcomesPurged` by-id rows.
  */
 @TenantCapability('system')
 @Controller('internal/billing/grant-bulk-jobs')
@@ -143,7 +144,9 @@ export class GrantBulkJobInternalController {
 
   @Post('drain')
   @HttpCode(200)
-  drain(): Promise<GrantBulkDrainResult> {
-    return this.drainer.drain();
+  async drain(): Promise<GrantBulkDrainResult & { purged: number; outcomesPurged: number }> {
+    const drained = await this.drainer.drain();
+    const { jobs: purged, outcomes: outcomesPurged } = await this.drainer.purge();
+    return { ...drained, purged, outcomesPurged };
   }
 }

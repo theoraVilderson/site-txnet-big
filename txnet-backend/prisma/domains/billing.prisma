@@ -910,6 +910,10 @@ model GrantBulkJob {
   createdAt    DateTime           @default(now())
   /// When the last item got its outcome, or the admin cancelled.
   finishedAt   DateTime?
+  /// When its items and per-Grant outcomes were purged, `GRANT_BULK_RETENTION_DAYS`
+  /// after `finishedAt` (F-311-u3). The row and its counts stay: the list, a
+  /// repeated `requestId`, and the audit rows still read it.
+  purgedAt     DateTime?
 
   items GrantBulkJobItem[]
 

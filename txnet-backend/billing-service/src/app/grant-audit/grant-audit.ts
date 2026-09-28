@@ -93,6 +93,26 @@ export async function auditedConfigAct<T extends string | void>(
   return movedTo;
 }
 
+export type BulkJobAuditAction = Extract<AdminAction, 'grant_bulk_start' | 'grant_bulk_cancel'>;
+
+/**
+ * A bulk job by filter, written down as one admin act (F-311-u3): its start
+ * and its cancel, against the job, in that act's own transaction. Nobody is
+ * told — each Grant it reaches is told by its own act's row (F-311-s).
+ */
+export async function auditBulkJob(
+  tx: Prisma.TransactionClient,
+  actor: AuditActor,
+  tenantId: string,
+  action: BulkJobAuditAction,
+  jobId: string,
+  before: unknown,
+  after: unknown,
+  reason: string | null,
+): Promise<void> {
+  await write(tx, actor, tenantId, action, AuditTargetType.grant_bulk_job, jobId, before, after, reason);
+}
+
 export type GrantHistoryRow = {
   id: string;
   action: AdminAction;

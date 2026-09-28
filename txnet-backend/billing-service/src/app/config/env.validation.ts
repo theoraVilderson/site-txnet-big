@@ -235,6 +235,16 @@ export const envSchema = z.object({
   ),
 
   /**
+   * Days after a bulk job ends before its per-Grant items and outcomes are
+   * purged, the job's own row and counts kept (F-311-u3, the user's 30 on
+   * 2026-09-28). Also the age at which a bulk by id's outcomes go.
+   */
+  GRANT_BULK_RETENTION_DAYS: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(30),
+  ),
+
+  /**
    * Delivery of a paid Grant (F-111-d, spec §5.8 step 3): it is checked once at
    * the first tick after payment, then retried this many times, the first retry
    * `GRANT_DELIVERY_FIRST_RETRY_MS` later and each one after at twice the last

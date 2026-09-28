@@ -15,7 +15,11 @@
  *    tick resumes where it stopped;
  *  - a throw nobody named is tried again, then `failed` — never retried for
  *    ever, never a whole job lost; a cancel stops the Grants not yet reached;
- *  - the door is `staffWrite` to start or cancel, `read` to watch.
+ *  - the door is `staffWrite` to start or cancel, `read` to watch;
+ *  - **the job itself is audited** (F-311-u3): its start and its cancel are
+ *    one admin row each, a repeat or a no-op cancel none;
+ *  - **30 days after it ends its per-Grant rows go** (F-311-u3), and the
+ *    job's summary stays — a repeat of its `requestId` still acts on nothing.
  */
 import { Prisma } from '@prisma/client';
 import { ResellerAccess, TenantContext } from '@txnet-backend/shared-core';
@@ -45,7 +49,11 @@ vi.mock('../../entitlement/duration', () => ({
   },
 }));
 const audits: { grantId: string | null; actor: string; tenantId: string }[] = [];
+const jobAudits: { action: string; jobId: string; actor: string; tenantId: string; reason: string | null; after: unknown }[] = [];
 vi.mock('../../grant-audit/grant-audit', () => ({
+  auditBulkJob: async (_tx: unknown, actor: { userId: string }, tenantId: string, action: string, jobId: string, _before: unknown, after: unknown, reason: string | null) => {
+    jobAudits.push({ action, jobId, actor: actor.userId, tenantId, reason, after });
+  },
   auditedGrantAct: async (_tx: unknown, actor: { userId: string }, tenantId: string, grantId: string | null, _spec: unknown, act: () => Promise<unknown>) => {
     const r = await act();
     audits.push({ grantId, actor: actor.userId, tenantId });
@@ -94,6 +102,7 @@ function build(batch = 200) {
   GRANTS.clear();
   calls.length = 0;
   audits.length = 0;
+  jobAudits.length = 0;
   throwing.clear();
   for (const n of [1, 2, 3]) GRANTS.set(g(n), { id: g(n), tenantId: RESELLER, userId: `u${n}`, status: 'active', panels: [PANEL] });
   GRANTS.set(g(4), { id: g(4), tenantId: RESELLER, userId: 'u4', status: 'active', panels: [] });
@@ -132,7 +141,7 @@ function build(batch = 200) {
       count: async () => inScope(jobs).length,
       create: async ({ data }: { data: Row }) => {
         if (jobs.some((j) => j.tenantId === data.tenantId && j.requestId === data.requestId)) throw duplicate();
-        const row = { id: randomUUID(), status: 'running', okCount: 0, refusedCount: 0, failedCount: 0, createdAt: new Date(Date.now() + jobs.length), finishedAt: null, ...data };
+        const row = { id: randomUUID(), status: 'running', okCount: 0, refusedCount: 0, failedCount: 0, createdAt: new Date(Date.now() + jobs.length), finishedAt: null, purgedAt: null, ...data };
         jobs.push(row);
         return row;
       },
@@ -153,6 +162,12 @@ function build(batch = 200) {
           .sort((a, b) => ((a.doneAt as Date)?.getTime() ?? 0) - ((b.doneAt as Date)?.getTime() ?? 0) || String(a.grantId).localeCompare(String(b.grantId)))
           .slice(skip, skip + take),
       count: async ({ where }: { where: Row }) => pick(inScope(items), where).length,
+      deleteMany: async ({ where }: { where: Row }) => {
+        const hit = new Set(pick(inScope(items), where));
+        const kept = items.filter((r) => !hit.has(r));
+        items.splice(0, items.length, ...kept);
+        return { count: hit.size };
+      },
       updateMany: async ({ where, data }: { where: Row; data: Row }) => {
         const hit = pick(inScope(items), where);
         hit.forEach((r) => apply(r, data));
@@ -163,6 +178,12 @@ function build(batch = 200) {
       findUnique: async ({ where }: { where: { tenantId_requestId_grantId: Row } }) => pick(outcomes, where.tenantId_requestId_grantId)[0] ?? null,
       findFirst: async ({ where }: { where: Row }) => pick(outcomes, where)[0] ?? null,
       findMany: async ({ where }: { where: Row }) => pick(outcomes, where),
+      deleteMany: async ({ where }: { where: Row }) => {
+        const hit = new Set(pick(outcomes, where));
+        const kept = outcomes.filter((r) => !hit.has(r));
+        outcomes.splice(0, outcomes.length, ...kept);
+        return { count: hit.size };
+      },
       create: async ({ data }: { data: Row }) => {
         if (pick(outcomes, { tenantId: data.tenantId, requestId: data.requestId, grantId: data.grantId }).length) throw duplicate();
         outcomes.push(data);
@@ -198,9 +219,17 @@ function build(batch = 200) {
           .slice(0, take)
           .map((i) => ({ jobId: i.jobId, tenantId: i.tenantId, grantId: i.grantId, attempts: i.attempts })),
     },
-    grantBulkJob: { findMany: async ({ where }: { where: { id: { in: string[] } } }) => jobs.filter((j) => where.id.in.includes(j.id as string)) },
+    grantBulkJob: {
+      /** By id for the drain; ended before a cutoff and not yet purged for the purge. */
+      findMany: async ({ where }: { where: { id?: { in: string[] }; finishedAt?: { lt: Date } } }) =>
+        where.id
+          ? jobs.filter((j) => where.id!.in.includes(j.id as string))
+          : jobs.filter((j) => j.purgedAt == null && j.finishedAt != null && (j.finishedAt as Date) < where.finishedAt!.lt),
+    },
+    /** The bulk-by-id outcomes' purge: counted, its SQL is checked against Postgres. */
+    $executeRaw: async () => 0,
   };
-  const config = { get: (k: string) => (k === 'GRANT_BULK_JOB_BATCH_SIZE' ? batch : undefined) };
+  const config = { get: (k: string) => ({ GRANT_BULK_JOB_BATCH_SIZE: batch, GRANT_BULK_RETENTION_DAYS: 30 })[k] };
   const service = new ResellerGrantBulkJobService(prisma as never, access);
   const drain = new GrantBulkJobDrainService(prisma as never, crossTenant as never, config as never);
   return { service, drain, jobs, items, outcomes };
@@ -304,5 +333,56 @@ describe('bulk act by filter, as a job (F-311-u2)', () => {
     await expect(service.start(owner, SUSPENDED, days())).rejects.toMatchObject({ reason: 'reseller_suspended' });
     const job = await service.start(owner, RESELLER, days({ panelId: PANEL }));
     await expect(service.job(owner, SUSPENDED, job.id)).rejects.toMatchObject({ reason: 'job_not_found' });
+  });
+
+  it('audits the start and the cancel as one admin row each — a repeat and a no-op cancel write none', async () => {
+    const { service, drain } = build();
+    const req = randomUUID();
+    const job = await service.start(owner, RESELLER, days({ panelId: PANEL }, req));
+    await service.start(owner, RESELLER, days({ panelId: PANEL }, req));
+    expect(jobAudits).toEqual([
+      { action: 'grant_bulk_start', jobId: job.id, actor: OWNER, tenantId: RESELLER, reason: 'panel de-2 down 2026-09-27', after: expect.objectContaining({ action: 'days', total: 3, filter: { panelId: PANEL, statuses: ['active'] } }) },
+    ]);
+
+    await service.cancel(owner, RESELLER, job.id);
+    await service.cancel(owner, RESELLER, job.id);
+    expect(jobAudits.map((a) => a.action)).toEqual(['grant_bulk_start', 'grant_bulk_cancel']);
+
+    const other = await service.start(owner, RESELLER, days({ panelId: PANEL }));
+    await drain.drain();
+    await service.cancel(owner, RESELLER, other.id);
+    expect(jobAudits.filter((a) => a.jobId === other.id).map((a) => a.action)).toEqual(['grant_bulk_start']);
+  });
+
+  it("purges an ended job's items and outcomes after 30 days and keeps its summary; a repeat still acts on nothing", async () => {
+    const { service, drain, items, outcomes } = build();
+    const req = randomUUID();
+    const old = await service.start(owner, RESELLER, days({ panelId: PANEL }, req));
+    await drain.drain(new Date('2026-08-01T00:00:00Z'));
+    const recent = await service.start(owner, RESELLER, days({ statuses: ['active'] }));
+    await drain.drain(new Date('2026-09-10T00:00:00Z'));
+
+    expect(await drain.purge(new Date('2026-09-28T00:00:00Z'))).toMatchObject({ jobs: 1 });
+
+    expect(items.filter((i) => i.jobId === old.id)).toEqual([]);
+    expect(outcomes.filter((o) => o.requestId === old.requestId)).toEqual([]);
+    expect(items.filter((i) => i.jobId === recent.id)).toHaveLength(4);
+    expect(await service.job(owner, RESELLER, old.id)).toMatchObject({ status: 'done', total: 3, ok: 3, purgedAt: '2026-09-28T00:00:00.000Z' });
+    expect(await service.outcomes(owner, RESELLER, old.id, { problems: false })).toMatchObject({ rows: [], purgedAt: '2026-09-28T00:00:00.000Z' });
+
+    calls.length = 0;
+    expect((await service.start(owner, RESELLER, days({ panelId: PANEL }, req))).id).toBe(old.id);
+    await drain.drain();
+    expect(calls).toEqual([]);
+    expect(await drain.purge(new Date('2026-09-28T00:00:00Z'))).toMatchObject({ jobs: 0 });
+  });
+
+  it('never purges a running job, however old', async () => {
+    const { service, drain, items } = build(1);
+    const job = await service.start(owner, RESELLER, days({ panelId: PANEL }));
+    await drain.drain(new Date('2026-01-01T00:00:00Z'));
+
+    expect(await drain.purge(new Date('2026-09-28T00:00:00Z'))).toMatchObject({ jobs: 0 });
+    expect(items.filter((i) => i.jobId === job.id)).toHaveLength(3);
   });
 });
