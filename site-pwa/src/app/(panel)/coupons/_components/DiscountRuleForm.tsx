@@ -9,7 +9,6 @@ import { billingApi, type DiscountRule } from "@/lib/billing-api";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Alert, Field, Sheet, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { Toggle } from "../../gateways/_components/gateway-fields";
-import { BASE_CURRENCY } from "../../_lib/money";
 import { UserSearch } from "../../user-groups/_components/UserSearch";
 import { memberSearchOf } from "../../user-groups/_lib/user-groups";
 import {
@@ -142,7 +141,14 @@ export function DiscountRuleForm({ me, rule, choices, onClose, onSaved }: { me: 
         <Field
           label={t("common", F.value)}
           error={errors.value}
-          hint={form.kind === "percentage" ? t("common", F.valueHintPercent) : t("common", F.valueHintAmount, { currency: BASE_CURRENCY })}
+          hint={
+            form.kind === "percentage"
+              ? t("common", F.valueHintPercent)
+              : // An edit is in the rule's own currency; a new rule takes the tenant's, which this form is not told (F-116-h3).
+                rule
+                ? t("common", F.valueHintAmount, { currency: rule.currencyCode })
+                : t("common", F.valueHintAmountUnknown)
+          }
         >
           <input className={input} dir="ltr" inputMode="decimal" value={form.value} onChange={(e) => set("value", e.target.value)} />
         </Field>

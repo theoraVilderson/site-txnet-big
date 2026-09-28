@@ -55,6 +55,7 @@ const t = (_ns: string, key: string, vars?: Record<string, string | number>) =>
 const INVOICE_ID = "88888888-8888-4888-8888-888888888881";
 
 const OFFER: ShopOffer = {
+  currencyCode: "USD",
   variantId: "v-30",
   sku: "VPN-30",
   nameKey: "catalog.product.vpn.name",
@@ -84,6 +85,7 @@ const MAIL: ShopOffer = {
 };
 
 const INVOICE: ShopInvoice = {
+  currencyCode: "USD",
   id: INVOICE_ID,
   variantId: "v-30",
   sku: "VPN-30",
@@ -257,6 +259,7 @@ describe("one page: pick, codes, pay", () => {
 
   it("shows no key or link — it sends the user to My services, where the link is", async () => {
     payInvoice.mockResolvedValue({
+      currencyCode: "USD",
       id: INVOICE_ID,
       status: "paid",
       total: "12.50",

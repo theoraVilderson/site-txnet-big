@@ -7,7 +7,7 @@ import type { GrantActionResult, GrantRow, ResellerUserGrantsApi } from "@/lib/b
 import { catalogAdminApi } from "@/lib/catalog-api";
 import { DatePicker } from "../../../../../_components/kit/DatePicker";
 import { formatInstant } from "../../../../../_lib/datetime";
-import { BASE_CURRENCY, formatMoney } from "../../../../../_lib/money";
+import { formatMoney } from "../../../../../_lib/money";
 import { Alert, input, primaryButton, quietButton } from "../../../../../catalog/_components/catalog-ui";
 import { formatBytes } from "../../../../../services/_lib/service-configs";
 import {
@@ -215,7 +215,7 @@ function Outcome({ action, result }: { action: GrantAction; result: GrantActionR
       break;
     case "delete":
       lines.push(t("common", G.done.delete));
-      if (result.refundedAmount) lines.push(t("common", G.done.refunded, { amount: formatMoney(result.refundedAmount, BASE_CURRENCY, { lang, t }) }));
+      if (result.refundedAmount && result.currencyCode) lines.push(t("common", G.done.refunded, { amount: formatMoney(result.refundedAmount, result.currencyCode, { lang, t }) }));
       else if (result.refundSkipped) lines.push(t("common", G.done.refundSkipped));
       break;
   }

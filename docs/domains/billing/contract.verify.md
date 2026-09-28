@@ -55,7 +55,7 @@ SuperAdmin through `*`, ADR-0043). The permission is not the boundary.
 
 | Route | Body | Answers `data` |
 |---|---|---|
-| `GET /api/billing/payments/manual` | — | `[{id, status, tenantId, userId, source, gatewayId, gatewayName, providerName, amountRequested, amountCredited, chargedAmountMinor, authority, createdAt, verifyAttempts, nextVerifyAt, flaggedAt}]` — since F-092-af every `pending` or `expired` payment made inside `RECONCILIATION_LOOKBACK_SEC`, verifying or not, `authority` null or not; oldest first, at most 200 |
+| `GET /api/billing/payments/manual` | — | `[{id, status, tenantId, userId, source, gatewayId, gatewayName, providerName, amountRequested, amountCredited, currencyCode, chargedAmountMinor, authority, createdAt, verifyAttempts, nextVerifyAt, flaggedAt}]` — `currencyCode` the payment's own (F-116-h3) — since F-092-af every `pending` or `expired` payment made inside `RECONCILIATION_LOOKBACK_SEC`, verifying or not, `authority` null or not; oldest first, at most 200 |
 | `POST /api/billing/payments/manual/:id/inquire` | — | `{paymentId, outcome, gatewayStatus, referenceId}` |
 | `POST /api/billing/payments/manual/:id/confirm` | `{referenceId ≤64, reason 5..500}`, strict | the same shape |
 | `POST /api/billing/payments/manual/:id/authority` (F-092-af) | `{authority 1..64}`, strict | the same shape — the answer of the ask that follows the attach |
@@ -143,7 +143,7 @@ ADR-0046 decisions 5, 6. `DepositSettlementService.closeReversed`,
 |---|---|
 | An inquiry answering `reversed` — in a run, `verifyDue`, or a person's inquire — writes its log row **and**, in the same transaction, closes the payment: `pending` then `expired` guarded, `failed` / `failureCode: reversed`, `expiresAt` and `nextVerifyAt` null | the gateway is returning the payer's money; left open, the row held coupon slots and read "verifying" for a week |
 | The holds still kept — a pending row's, or an expired row's inside `COUPON_HOLD_AFTER_EXPIRY_SEC` (F-092-ah) — are released `cancelled` | nothing timed out — the payment was refused after the fact |
-| The same transaction writes `billing.payment` / `billing.payment.reversed`, payload `{tenantId, userId, paymentId, chargedAmountMinor, amountCredited, gateway}` | the payer's notice (F-067-m), and the money never moves without its event (ADR-0021) |
+| The same transaction writes `billing.payment` / `billing.payment.reversed`, payload `{tenantId, userId, paymentId, chargedAmountMinor, amountCredited, currencyCode, gateway}` — `currencyCode` the payment's (F-116-h3) | the payer's notice (F-067-m), and the money never moves without its event (ADR-0021) |
 | An inquiry answering `failed` about the row's **own** authority closes it in the log row's transaction (`closeFailed`, F-092-aj, ADR-0047 decision 4): `pending` then `expired` guarded, `failed` / `failureCode: payment_failed`, `expiresAt` and `nextVerifyAt` null, holds released `cancelled`, **no event**. About an offered authority it only withdraws that candidate | Zarinpal's `failed` is final (the user checked): left open, the row held a coupon slot and was asked about for a week. Nothing was paid, so there is nothing to tell the payer |
 | Every driver declares `verifyWindowSec` — `null` for Zarinpal, whose paid payments are not returned unverified. On a windowed gateway a verifying payment is flagged at `min(VERIFY_FLAG_AFTER_SEC, window / 2)` after it was made | a flag after a day is useless for a gateway that returns the money in 20 minutes; half the window leaves a person time to act |
 

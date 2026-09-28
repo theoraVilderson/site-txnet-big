@@ -22,6 +22,7 @@ const t = (_ns: string, key: string, params?: Record<string, unknown>) =>
   params ? `${key}${JSON.stringify(params)}` : key;
 
 const QUOTE: DepositQuote = {
+  currencyCode: "USD",
   gatewayId: "11111111-1111-4111-8111-111111111111",
   source: "tenant",
   amount: "100.00",
@@ -55,6 +56,7 @@ describe("the bill's tax line", () => {
 });
 
 const ROW: WalletPaymentRow = {
+  currencyCode: "USD",
   id: "77777777-7777-4777-8777-777777777777",
   status: "success",
   amountRequested: "100.00",

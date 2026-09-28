@@ -19,7 +19,7 @@ import { Select } from "../../../_components/kit/Select";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatInstant } from "../../../_lib/datetime";
-import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
+import { formatMoney } from "../../../_lib/money";
 import { Alert, Field, StatusBadge, input, primaryButton } from "../../_components/resellers-ui";
 import { BILLING_MODELS, RESELLER_KEYS } from "../../_lib/resellers";
 import {
@@ -72,7 +72,7 @@ export function BuyResellerView() {
   /** `undefined` until asked; `null` for a buyer who holds none. */
   const [held, setHeld] = useState<OwnedReseller | null | undefined>(undefined);
   const [offers, setOffers] = useState<PackageOffer[] | null>(null);
-  const [balance, setBalance] = useState<string | null>(null);
+  const [balance, setBalance] = useState<{ amount: string; currency: string } | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [asked, setAsked] = useState(0);
 
@@ -102,7 +102,7 @@ export function BuyResellerView() {
         const [onSale, wallet] = await Promise.all([resellerPurchaseApi.packages(), billingApi.walletBalance()]);
         if (!alive) return;
         setOffers(onSale);
-        setBalance(wallet.balance);
+        setBalance({ amount: wallet.balance, currency: wallet.currencyCode });
         setLoadError(null);
       } catch (e) {
         if (!alive) return;
@@ -137,7 +137,7 @@ export function BuyResellerView() {
   const choices = offerChoices(offers ?? [], form.billingModel);
   const picked = choices.find((o) => o.id === form.packageId) ?? null;
   const price = picked ? offerPrice(picked, form.billingModel) : null;
-  const money = (amount: string) => formatMoney(amount, BASE_CURRENCY, { lang, t });
+  const money = (amount: string, currency: string) => formatMoney(amount, currency, { lang, t });
 
   // A period the picked package is not sold for drops the pick, rather than
   // sending one the service would refuse `package_not_sold_for_period`.
@@ -155,7 +155,7 @@ export function BuyResellerView() {
     try {
       const answer = await resellerPurchaseApi.purchase(purchaseBody(form));
       setBought(answer);
-      setBalance(answer.walletBalance);
+      setBalance({ amount: answer.walletBalance, currency: answer.currencyCode });
     } catch (e) {
       setFailure(e);
     } finally {
@@ -192,12 +192,12 @@ export function BuyResellerView() {
           <p className="mt-2 text-sm text-text-secondary">
             {t("common", K.done.body, {
               slug: bought.slug,
-              charged: money(bought.charged),
+              charged: money(bought.charged, bought.currencyCode),
               date: formatInstant(bought.currentPeriodEnd, lang, { withTime: false }) ?? bought.currentPeriodEnd,
             })}
           </p>
           <p className="mt-1 text-sm text-text-secondary">
-            {t("common", K.done.balance, { balance: money(bought.walletBalance) })}
+            {t("common", K.done.balance, { balance: money(bought.walletBalance, bought.currencyCode) })}
           </p>
           {target && (
             <p className="mt-4 text-sm text-text-primary">
@@ -221,7 +221,7 @@ export function BuyResellerView() {
           <div className="rounded-2xl border border-card-border bg-card-bg px-5 py-3">
             <p className="text-[11px] text-text-secondary">{t("common", K.balance)}</p>
             <p dir="ltr" className="text-lg font-bold text-gold">
-              {money(balance)}
+              {money(balance.amount, balance.currency)}
             </p>
           </div>
         )
@@ -255,7 +255,7 @@ export function BuyResellerView() {
               <Select
                 value={form.packageId}
                 onChange={(v) => set({ packageId: v })}
-                options={choices.map((o) => ({ value: o.id, label: `${o.name} — ${money(offerPrice(o, form.billingModel) as string)}` }))}
+                options={choices.map((o) => ({ value: o.id, label: `${o.name} — ${money(offerPrice(o, form.billingModel) as string, o.currencyCode)}` }))}
                 invalid={!!errors.packageId}
               />
             )}
@@ -300,7 +300,7 @@ export function BuyResellerView() {
 
           <button type="button" className={primaryButton} disabled={busy || !picked} onClick={submit}>
             {busy && <Loader2 size={14} className="animate-spin" aria-hidden />}
-            {t("common", K.submit, { price: price ? money(price) : "—" })}
+            {t("common", K.submit, { price: price && picked ? money(price, picked.currencyCode) : "—" })}
           </button>
         </div>
       )}

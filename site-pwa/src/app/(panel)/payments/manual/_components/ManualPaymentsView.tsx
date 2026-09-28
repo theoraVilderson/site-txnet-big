@@ -5,7 +5,7 @@ import { Ban, KeyRound, Loader2, RotateCw, SearchCheck, ShieldCheck, TriangleAle
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi, type ManualAnswer, type VerifyingPayment } from "@/lib/billing-api";
-import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
+import { formatMoney } from "../../../_lib/money";
 import { formatInstant } from "../../../_lib/datetime";
 import {
   MANUAL_KEYS as K,
@@ -191,7 +191,7 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
     void run(() => billingApi.manualReject(row.id, checked.reason));
   };
 
-  const money = formatMoney(row.amountCredited, BASE_CURRENCY, { lang, t });
+  const money = formatMoney(row.amountCredited, row.currencyCode, { lang, t });
   const settledOutcome = answer && answer.outcome !== "unsettled";
 
   return (

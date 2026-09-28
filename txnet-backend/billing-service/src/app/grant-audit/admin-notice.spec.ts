@@ -86,7 +86,7 @@ const TOLD: { name: string; action: GrantAuditAction; result: unknown; type: str
   {
     name: 'a delete',
     action: 'grant_delete',
-    result: { deletionId: 'd1', statusBefore: 'active', configsReleased: 2, refund: false, refundedAmount: null, walletTransactionId: null, refundSkipped: null },
+    result: { deletionId: 'd1', statusBefore: 'active', configsReleased: 2, refund: false, refundedAmount: null, currencyCode: null, walletTransactionId: null, refundSkipped: null },
     type: OutboxEventType.GRANT_ADMIN_DELETED,
     params: {},
   },

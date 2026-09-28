@@ -16,6 +16,8 @@ type PaymentConfirmed = {
   userId: string;
   paymentId: string;
   amountCredited: string;
+  /** What `amountCredited` is in (F-116-h3); `null` on an event written before it. */
+  currencyCode: string | null;
   gatewayReferenceId: string | null;
   confirmationSource: string;
   /** Where the top-up was started (F-306-a); absent on an event written before it = the panel. */
@@ -70,7 +72,12 @@ export class PaymentConfirmedConsumer implements OnApplicationBootstrap {
       eventId: event.id,
       live: {
         channel: `user:${payment.userId}`,
-        body: { type: OutboxEventType.PAYMENT_CONFIRMED, paymentId: payment.paymentId, amountCredited: payment.amountCredited },
+        body: {
+          type: OutboxEventType.PAYMENT_CONFIRMED,
+          paymentId: payment.paymentId,
+          amountCredited: payment.amountCredited,
+          ...(payment.currencyCode ? { currencyCode: payment.currencyCode } : {}),
+        },
       },
       person: {
         tenantId: payment.tenantId,
@@ -99,6 +106,7 @@ function paymentOf(event: OutboxMessage): PaymentConfirmed {
     userId,
     paymentId,
     amountCredited,
+    currencyCode: str('currencyCode'),
     gatewayReferenceId: str('gatewayReferenceId'),
     confirmationSource,
     channel: str('channel') ?? 'panel',

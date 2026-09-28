@@ -32,6 +32,8 @@ export interface Reseller {
   domains: { domainValue: string; domainType: string; purpose: string; verificationStatus: string }[];
   /** The billing wallet's `cachedBalance`, a decimal string (C-02). */
   billingBalance: string;
+  /** What `billingBalance` is in: the wallet's; the platform's with none yet (F-116-h2). */
+  billingCurrencyCode: string;
 }
 
 export interface CreateResellerBody {
@@ -46,6 +48,8 @@ export interface TenantPackage {
   name: string;
   monthlyPrice: string | null;
   yearlyPrice: string | null;
+  /** What both prices are in: the package's own, the platform's (F-116-h3). */
+  currencyCode: string;
   includedFeatureKeys: string[];
   isActive: boolean;
 }
@@ -71,6 +75,8 @@ export interface PackageOffer {
   name: string;
   monthlyPrice: string | null;
   yearlyPrice: string | null;
+  /** What both prices are in (F-116-h3). */
+  currencyCode: string;
   includedFeatureKeys: string[];
 }
 
@@ -90,6 +96,8 @@ export type Purchased = Reseller & {
   charged: string;
   /** The buyer's wallet balance after the charge. */
   walletBalance: string;
+  /** What `charged` and `walletBalance` are in: the buyer's wallet's (F-116-h2). */
+  currencyCode: string;
 };
 
 /**

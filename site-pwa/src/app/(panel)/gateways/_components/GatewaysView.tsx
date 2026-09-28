@@ -239,7 +239,7 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
 
           {presets && (
             <motion.div {...reveal(1)}>
-              <DepositPresetsCard surface={surface} initial={presets} />
+              <DepositPresetsCard surface={surface} initial={presets.presets} currency={presets.currencyCode} />
             </motion.div>
           )}
 
@@ -261,6 +261,7 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
         <GatewayWizard
           surface={surface}
           me={actor}
+          currency={presets?.currencyCode ?? null}
           onClose={() => setEditing(null)}
           onCreated={async () => {
             setNotice(null);

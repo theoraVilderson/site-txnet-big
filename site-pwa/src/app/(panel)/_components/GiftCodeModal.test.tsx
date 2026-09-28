@@ -88,7 +88,7 @@ function fillCode(value: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(useLocale).mockReturnValue({ lang: "en", t } as ReturnType<typeof useLocale>);
-  redeemGift.mockResolvedValue({ code: "GIFT10", credited: "10.00", balance: "22.34" });
+  redeemGift.mockResolvedValue({ code: "GIFT10", credited: "10.00", balance: "22.34", currencyCode: "USD" });
 });
 
 describe("a refused code", () => {

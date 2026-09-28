@@ -3,7 +3,7 @@
 import { ArrowDown, Wallet } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
+import { formatMoney } from "../../../_lib/money";
 
 const D = FrontendI18nKeys.common.deposit.wallet;
 
@@ -12,6 +12,13 @@ interface WalletPreviewProps {
   balance: string | null;
   /** The quote's `credited` — what will land in the wallet — or `null` with no quote. */
   credited: string | null;
+  /**
+   * What each figure is in (F-116-h3): the wallet's, and the quote's — the
+   * same one today, since a gateway in another currency is never offered, but
+   * each figure names its own rather than assume it.
+   */
+  balanceCurrency: string | null;
+  creditedCurrency: string | null;
 }
 
 /**
@@ -29,9 +36,9 @@ interface WalletPreviewProps {
  * figures side by side say everything the projection did and neither is a
  * guess.
  */
-export function WalletPreview({ balance, credited }: WalletPreviewProps) {
+export function WalletPreview({ balance, credited, balanceCurrency, creditedCurrency }: WalletPreviewProps) {
   const { lang, t } = useLocale();
-  const money = (value: string) => formatMoney(value, BASE_CURRENCY, { lang, t });
+  const money = (value: string, currency: string) => formatMoney(value, currency, { lang, t });
 
   return (
     <div
@@ -50,7 +57,7 @@ export function WalletPreview({ balance, credited }: WalletPreviewProps) {
             {t("common", D.current)}
           </p>
           <p dir="ltr" className="mt-1 truncate text-2xl font-bold">
-            {balance === null ? "—" : money(balance)}
+            {balance === null || balanceCurrency === null ? "—" : money(balance, balanceCurrency)}
           </p>
         </div>
         <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10">
@@ -63,11 +70,11 @@ export function WalletPreview({ balance, credited }: WalletPreviewProps) {
           <ArrowDown size={12} aria-hidden />
           {t("common", D.incoming)}
         </p>
-        {credited === null ? (
+        {credited === null || creditedCurrency === null ? (
           <p className="mt-1 text-sm font-bold text-white/60">{t("common", D.pending)}</p>
         ) : (
           <p dir="ltr" className="mt-1 truncate text-3xl font-bold">
-            +{money(credited)}
+            +{money(credited, creditedCurrency)}
           </p>
         )}
       </div>

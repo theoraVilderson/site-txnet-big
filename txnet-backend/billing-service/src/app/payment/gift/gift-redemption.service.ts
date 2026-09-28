@@ -54,6 +54,8 @@ export type GiftRedemption =
       credited: Prisma.Decimal;
       /** The wallet's balance after this credit, from the ledger row itself. */
       balanceAfter: Prisma.Decimal;
+      /** What `credited` and `balanceAfter` are in: the coupon's, which the wallet's must match (F-116-h3). */
+      currencyCode: string;
     }
   | {
       /** A free-service code (F-502-l-b, D-35): a Grant instead of money. */
@@ -161,6 +163,7 @@ export class GiftRedemptionService {
         code,
         credited,
         balanceAfter: entry.balanceAfter,
+        currencyCode: coupon.currencyCode,
       };
     });
   }

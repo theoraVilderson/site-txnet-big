@@ -70,6 +70,7 @@ export class GiftController {
         code: result.code,
         credited: result.credited.toFixed(2),
         balance: result.balanceAfter.toFixed(2),
+        currencyCode: result.currencyCode,
       };
     } catch (e) {
       if (e instanceof GiftCodeRefused) {

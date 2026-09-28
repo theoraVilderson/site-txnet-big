@@ -32,6 +32,7 @@ vi.mock("@/lib/billing-api", () => ({
 const depositQuote = vi.mocked(billingApi.depositQuote);
 
 const GATEWAY: DepositGateway = {
+  currencyCode: "USD",
   id: "11111111-1111-4111-8111-111111111111",
   source: "tenant",
   displayName: "Zarinpal",
@@ -46,6 +47,7 @@ const GATEWAY: DepositGateway = {
 /** A quote whose numbers are deliberately not derivable from each other. */
 function quoteFor(amount: string): DepositQuote {
   return {
+    currencyCode: "USD",
     gatewayId: GATEWAY.id,
     source: "tenant",
     amount,

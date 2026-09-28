@@ -161,7 +161,7 @@ every other stays so.
 |---|---|
 | A `webhook_auto` credit is acked and nothing is sent — **unless the payload's `channel` is `bot`** (F-306-a; absent = `panel`) | a panel payer is on the success page; the notice is for a **late** credit. A bot payer started in a chat and waits there |
 | A payload with `shownInChat: true` is acked and nothing is sent, whatever its channel (F-104-m) | billing sets it only on the credit the bot's `paid` relay made, and the bot has already said it in that chat |
-| Consumer `payment-credited-notify`: live `{type:'billing.payment.confirmed', paymentId, amountCredited}` on `user:<userId>`, then template `paymentCredited` to the payer's inbox and bot, `X-Tenant-Id` = the payload's tenant | the one notice path; markers `RedisTtl.outboxProcessed` (7 days) |
+| Consumer `payment-credited-notify`: live `{type:'billing.payment.confirmed', paymentId, amountCredited, currencyCode}` on `user:<userId>` (`currencyCode` passed on when the payload has it — F-116-h3), then template `paymentCredited` to the payer's inbox and bot, `X-Tenant-Id` = the payload's tenant | the one notice path; markers `RedisTtl.outboxProcessed` (7 days) |
 | A payload missing its tenant, user, payment, amount or source throws | whose payment it is is never guessed |
 | **The relay schedules itself**: `outbox_relay` declares `defaultSchedule` `always_on`, written on boot while it has none (F-114-a, `contract.worker.md`); unscheduled, the event is never published and nobody is told | ADR-0045 consequences — decided once, in the code, rather than per deployment |
 
@@ -174,7 +174,7 @@ bound to exactly `outbox.billing.payment.reversed`.
 |---|---|
 | Every reversal is told — there is no source to skip | nobody watches a reversal happen; a payer who paid and got nothing must hear why |
 | Consumer `payment-reversed-notify`, never the credited notice's | one payment can carry both events in its life; neither may swallow the other |
-| `{type:'billing.payment.reversed', paymentId, amountCredited}` on `user:<userId>`, then template `paymentReversed` with `{amount}` to inbox and bot | the panel toast, the inbox row and the bot message; the words are auth-service's, in the user's language |
+| `{type:'billing.payment.reversed', paymentId, amountCredited, currencyCode}` on `user:<userId>` (as above), then template `paymentReversed` with `{amount}` to inbox and bot | the panel toast, the inbox row and the bot message; the words are auth-service's, in the user's language |
 | A payload without tenant, user, payment or amount throws | ADR-0045 |
 
 ## The third consumer: a new inbox row (F-035-b)

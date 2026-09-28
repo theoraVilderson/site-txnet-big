@@ -1,14 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { billingApi, type AdminGateway, type GatewayAdminApi, type GatewayGrant } from "@/lib/billing-api";
+import { billingApi, type AdminGateway, type DepositPresets, type GatewayAdminApi, type GatewayGrant } from "@/lib/billing-api";
 
 export interface GatewaysState {
   gateways: AdminGateway[];
   /** `null` when the caller may not see links — loaded only for the platform owner. */
   grants: GatewayGrant[] | null;
-  /** The caller tenant's default quick amounts (F-092-v); `null` until read or when it could not be. */
-  presets: string[] | null;
+  /**
+   * The caller tenant's default quick amounts (F-092-v) and their currency —
+   * the tenant's now, since a currency change converts them (F-116-f) — so
+   * also what a new gateway's amounts are in; `null` until read or when it could not be.
+   */
+  presets: DepositPresets | null;
   /** The caller tenant's default top-up tax (F-104-ag), `{rate}` so "no tax" (`null`) differs from "not read" (`null` itself). */
   tax: { rate: string | null } | null;
   /** Only until the first answer. A later reload keeps the lists on screen and sets `isRefreshing`. */
@@ -32,7 +36,7 @@ export interface GatewaysState {
 export function useGateways(api: GatewayAdminApi, withLinks: boolean, enabled = true): GatewaysState {
   const [gateways, setGateways] = useState<AdminGateway[]>([]);
   const [grants, setGrants] = useState<GatewayGrant[] | null>(null);
-  const [presets, setPresets] = useState<string[] | null>(null);
+  const [presets, setPresets] = useState<DepositPresets | null>(null);
   const [tax, setTax] = useState<{ rate: string | null } | null>(null);
   const [isLoading, setLoading] = useState(true);
   const [isRefreshing, setRefreshing] = useState(false);
@@ -47,7 +51,7 @@ export function useGateways(api: GatewayAdminApi, withLinks: boolean, enabled = 
         // Read with the lists so the card appears with them; a failure here
         // hides the card rather than failing the page.
         api.presets().then(
-          (r) => r.presets,
+          (r) => r,
           () => null,
         ),
         // The same for the default tax card.

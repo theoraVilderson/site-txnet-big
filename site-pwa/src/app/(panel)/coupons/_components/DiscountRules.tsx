@@ -7,7 +7,7 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import { userGroupsApi, type Me } from "@/lib/auth-api";
 import { billingApi, type DiscountRule } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
-import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
+import { formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
 import { COUPON_KEYS } from "../_lib/coupon-form";
 import { RULE_KEYS as K, RULE_STATUS_TONES, ruleRefusalKey } from "../_lib/discount-rules";
@@ -90,10 +90,10 @@ export function DiscountRules({ me }: { me: Me | null }) {
   };
 
   const labelOf = (list: Choices, id: string) => (Array.isArray(list) ? list.find((c) => c.value === id)?.label : undefined) ?? id.slice(0, 8);
-  const money = (amount: string) => formatMoney(amount, BASE_CURRENCY, { lang, t });
+  const money = (amount: string, currency: string) => formatMoney(amount, currency, { lang, t });
   const day = (instant: string) => formatInstant(instant, lang) ?? "";
 
-  const what = (r: DiscountRule) => (r.kind === "percentage" ? t("common", L.percentOff, { value: Number(r.value).toString() }) : t("common", L.amountOff, { amount: money(r.value) }));
+  const what = (r: DiscountRule) => (r.kind === "percentage" ? t("common", L.percentOff, { value: Number(r.value).toString() }) : t("common", L.amountOff, { amount: money(r.value, r.currencyCode) }));
   const where = (r: DiscountRule) =>
     r.productId ? t("common", L.product, { label: labelOf(choices.products, r.productId) }) : r.categoryId ? t("common", L.category, { label: labelOf(choices.categories, r.categoryId) }) : t("common", L.everything);
   const who = (r: DiscountRule) =>

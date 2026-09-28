@@ -7,7 +7,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { WalletPaymentRow } from "@/lib/billing-api";
 import { PANEL_FINANCIAL } from "@/lib/routes";
-import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
+import { formatMoney } from "../../../_lib/money";
 
 const V = FrontendI18nKeys.common.deposit.verifying;
 
@@ -17,7 +17,7 @@ const V = FrontendI18nKeys.common.deposit.verifying;
  */
 export function VerifyingBanner({ payment }: { payment: WalletPaymentRow }) {
   const { lang, t } = useLocale();
-  const amount = formatMoney(payment.amountCredited, BASE_CURRENCY, { lang, t });
+  const amount = formatMoney(payment.amountCredited, payment.currencyCode, { lang, t });
   return (
     <div role="status" className="mb-6 flex items-start gap-3 rounded-2xl border border-primary/20 bg-leaf-bg p-4 text-sm">
       <ShieldCheck size={20} aria-hidden className="mt-0.5 shrink-0 text-primary" />
@@ -47,7 +47,7 @@ export function VerifyingConfirm({
   onCancel: () => void;
 }) {
   const { lang, t } = useLocale();
-  const amount = formatMoney(payment.amountCredited, BASE_CURRENCY, { lang, t });
+  const amount = formatMoney(payment.amountCredited, payment.currencyCode, { lang, t });
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => e.key === "Escape" && onCancel();

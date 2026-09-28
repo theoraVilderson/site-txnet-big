@@ -50,6 +50,7 @@ vi.mock("../../_hooks/useWalletBalance", () => ({
 const t = (_ns: string, key: string) => key;
 
 const ZARINPAL: DepositGateway = {
+  currencyCode: "USD",
   id: "11111111-1111-4111-8111-111111111111",
   source: "tenant",
   displayName: "Zarinpal",
@@ -70,6 +71,7 @@ const NEXTPAY: DepositGateway = {
 };
 
 const BASE: DepositQuote = {
+  currencyCode: "USD",
   gatewayId: ZARINPAL.id,
   source: "tenant",
   amount: "10.00",

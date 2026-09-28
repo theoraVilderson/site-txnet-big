@@ -27,7 +27,7 @@ import type { Me } from "@/lib/auth-api";
 import type { GatewaySecretName } from "@/lib/billing-api";
 import { Select } from "../../_components/kit/Select";
 import { PresetsEditor } from "./PresetsEditor";
-import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
+import { formatMoney } from "../../_lib/money";
 import {
   CATEGORIES,
   PROVIDERS,
@@ -68,6 +68,12 @@ const invalidInput = "border-error focus:border-error";
 interface GatewayWizardProps {
   surface: GatewaySurface;
   me: Me | null;
+  /**
+   * What a new gateway's amounts will be in: the surface tenant's currency now
+   * (F-116-h3), as the presets answer names it; `null` when that was not read —
+   * then amounts are shown bare rather than in a currency guessed.
+   */
+  currency: string | null;
   onClose: () => void;
   /** A gateway was created. The page re-reads its list; the wizard stays open on its done screen. */
   onCreated: () => void | Promise<void>;
@@ -83,7 +89,7 @@ interface GatewayWizardProps {
  * side on `lg`. Secrets are write-only exactly as in the editor: the review step
  * says whether one was entered, never what it is.
  */
-export function GatewayWizard({ surface, me, onClose, onCreated }: GatewayWizardProps) {
+export function GatewayWizard({ surface, me, currency, onClose, onCreated }: GatewayWizardProps) {
   const { t, lang, isRtl } = useLocale();
   const errorMessage = useGatewayMessage(surface);
   const reduceMotion = useReducedMotion();
@@ -103,7 +109,8 @@ export function GatewayWizard({ surface, me, onClose, onCreated }: GatewayWizard
 
   const step = WIZARD_STEPS[stepIndex];
   const total = WIZARD_STEPS.length;
-  const money = (amount: string) => formatMoney(amount, BASE_CURRENCY, { lang, t });
+  const code = currency ?? "";
+  const money = (amount: string) => (code ? formatMoney(amount, code, { lang, t }) : amount);
 
   const set = <K extends keyof GatewayForm>(k: K, v: GatewayForm[K]) => {
     setTouched(true);
@@ -315,8 +322,8 @@ export function GatewayWizard({ surface, me, onClose, onCreated }: GatewayWizard
             />,
           )}
         </div>
-        {labeled("minAcceptAmount", t("common", F.minAmount), textInput("minAcceptAmount", { ltr: true, decimal: true, suffix: BASE_CURRENCY, placeholder: t("common", G.range.noLimit) }), undefined, true)}
-        {labeled("maxAcceptAmount", t("common", F.maxAmount), textInput("maxAcceptAmount", { ltr: true, decimal: true, suffix: BASE_CURRENCY, placeholder: t("common", G.range.noLimit) }), undefined, true)}
+        {labeled("minAcceptAmount", t("common", F.minAmount), textInput("minAcceptAmount", { ltr: true, decimal: true, suffix: code, placeholder: t("common", G.range.noLimit) }), undefined, true)}
+        {labeled("maxAcceptAmount", t("common", F.maxAmount), textInput("maxAcceptAmount", { ltr: true, decimal: true, suffix: code, placeholder: t("common", G.range.noLimit) }), undefined, true)}
         <p className="-mt-2 text-[11px] text-text-secondary sm:col-span-2">{t("common", W.hints.amounts)}</p>
         <div className="sm:col-span-2">
           <Toggle
@@ -334,6 +341,7 @@ export function GatewayWizard({ surface, me, onClose, onCreated }: GatewayWizard
           <p className="text-[11px] leading-5 text-text-secondary">{t("common", FrontendI18nKeys.common.gateways.presets.gatewayHint)}</p>
           <PresetsEditor
             id="gw-depositPresets"
+            currency={code}
             value={form.depositPresets}
             onChange={(next) => set("depositPresets", next)}
             emptyText={t("common", FrontendI18nKeys.common.gateways.presets.inherit)}
@@ -342,7 +350,7 @@ export function GatewayWizard({ surface, me, onClose, onCreated }: GatewayWizard
       </div>
     ),
 
-    fee: <FeeFields form={form} set={set} errors={errors} money={money} />,
+    fee: <FeeFields form={form} set={set} errors={errors} money={money} currency={code} />,
 
     secrets: (
       <div className="flex flex-col gap-4">

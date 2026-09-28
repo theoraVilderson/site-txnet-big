@@ -27,7 +27,7 @@ import { useGatewayMessage, type GatewaySurface } from "../_lib/surface";
 import type { Me } from "@/lib/auth-api";
 import type { AdminGateway, GatewaySecretState } from "@/lib/billing-api";
 import { Select } from "../../_components/kit/Select";
-import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
+import { formatMoney } from "../../_lib/money";
 import { PresetsEditor } from "./PresetsEditor";
 import { secretFields, takesStaticRate } from "../_lib/provider-fields";
 import { FeeFields, Field, PROVIDER_ICONS, SecretInput, TextInput, Toggle, fieldErrorText, useRangeText, type SetField } from "./gateway-fields";
@@ -120,7 +120,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: Gatewa
   const [active, setActive] = useState<EditorSectionId>("general");
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  const money = (amount: string) => formatMoney(amount, BASE_CURRENCY, { lang, t });
+  const money = (amount: string) => formatMoney(amount, gateway.currencyCode, { lang, t });
   const rangeText = useRangeText(money);
 
   const changed = changedFields(gateway, form, me);
@@ -323,7 +323,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: Gatewa
                 invalid={Boolean(errors[k])}
                 ltr
                 decimal
-                suffix={BASE_CURRENCY}
+                suffix={gateway.currencyCode}
                 placeholder={t("common", G.range.noLimit)}
               />
             </Field>
@@ -343,6 +343,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: Gatewa
           <p className="text-[11px] leading-5 text-text-secondary">{t("common", G.presets.gatewayHint)}</p>
           <PresetsEditor
             id="gw-editor-presets"
+            currency={gateway.currencyCode}
             value={form.depositPresets}
             onChange={(next) => set("depositPresets", next)}
             emptyText={t("common", G.presets.inherit)}
@@ -351,7 +352,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: Gatewa
       </div>
     ),
 
-    fee: <FeeFields form={form} set={set} errors={errors} money={money} />,
+    fee: <FeeFields form={form} set={set} errors={errors} money={money} currency={gateway.currencyCode} />,
 
     connection: (
       <div className="flex flex-col gap-4">

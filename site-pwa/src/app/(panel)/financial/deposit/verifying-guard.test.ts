@@ -19,6 +19,7 @@ vi.mock("@/lib/billing-api", () => ({ billingApi: { walletPayments: vi.fn() } })
 const walletPayments = vi.mocked(billingApi.walletPayments);
 
 const row = (overrides: Partial<WalletPaymentRow> = {}): WalletPaymentRow => ({
+  currencyCode: "USD",
   id: "77777777-7777-4777-8777-777777777777",
   status: "pending",
   amountRequested: "10.00",

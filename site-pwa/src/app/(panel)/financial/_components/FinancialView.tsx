@@ -4,7 +4,7 @@ import { useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
+import { formatMoney } from "../../_lib/money";
 import { Pagination } from "../../_components/kit/Pagination";
 import { useFinancialPage } from "../_hooks/useFinancialPage";
 import {
@@ -82,7 +82,7 @@ export function FinancialView() {
           <div className="rounded-2xl border border-card-border bg-card-bg px-5 py-3">
             <p className="text-[11px] text-text-secondary">{t("common", F.balance)}</p>
             <p dir="ltr" className="text-lg font-bold text-gold">
-              {formatMoney(page.balance, BASE_CURRENCY, { lang, t })}
+              {formatMoney(page.balance.balance, page.balance.currencyCode, { lang, t })}
             </p>
           </div>
         )}

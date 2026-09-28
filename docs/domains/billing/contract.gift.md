@@ -22,7 +22,7 @@ user and the tenant come from its headers, never from the body.
 
 | Route | Body | Answers `data` |
 |---|---|---|
-| `POST /api/billing/gift/redeem` | `{code}` — 1..64 chars, trimmed | `{code, credited, balance}` — `code` as stored, `credited` and `balance` base-currency decimal strings |
+| `POST /api/billing/gift/redeem` | `{code}` — 1..64 chars, trimmed | `{kind, code, credited, balance, currencyCode}` — `code` as stored, `credited` and `balance` decimal strings in `currencyCode`, the code's own, which the wallet's must match (F-116-h3) |
 
 ## Rules
 

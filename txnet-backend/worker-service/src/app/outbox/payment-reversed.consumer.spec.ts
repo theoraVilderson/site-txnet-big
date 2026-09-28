@@ -35,6 +35,7 @@ function event(payload: Record<string, unknown> = {}): OutboxMessage {
       paymentId: PAYMENT,
       chargedAmountMinor: '19800000',
       amountCredited: '19.80',
+      currencyCode: 'IRR',
       ...payload,
     },
   };
@@ -103,7 +104,7 @@ describe('PaymentReversedConsumer.handle', () => {
     expect(calls.published).toEqual([
       {
         channel: `user:${USER}`,
-        payload: { type: 'billing.payment.reversed', paymentId: PAYMENT, amountCredited: '19.80' },
+        payload: { type: 'billing.payment.reversed', paymentId: PAYMENT, amountCredited: '19.80', currencyCode: 'IRR' },
       },
     ]);
     expect(calls.joined).toEqual([

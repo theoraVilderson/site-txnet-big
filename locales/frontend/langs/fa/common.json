@@ -1165,6 +1165,7 @@
         "value": "مقدار",
         "valueHintPercent": "بین ۰ تا ۱۰۰.",
         "valueHintAmount": "به {{currency}}؛ هیچ‌وقت بیشتر از قیمت کم نمی‌شود.",
+        "valueHintAmountUnknown": "به ارز اصلی شما؛ هیچ‌وقت بیشتر از قیمت کم نمی‌شود.",
         "target": "برای کدام محصول",
         "targetAll": "همه‌ی محصولات",
         "targetProduct": "یک محصول",

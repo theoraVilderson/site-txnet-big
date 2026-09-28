@@ -36,6 +36,8 @@ export type PackageView = {
   name: string;
   monthlyPrice: string | null;
   yearlyPrice: string | null;
+  /** What both prices are in: the package's own, the platform's (ADR-0098 part 4, F-116-h3). */
+  currencyCode: string;
   includedFeatureKeys: string[];
   isActive: boolean;
 };
@@ -57,6 +59,7 @@ const PACKAGE_SELECT = {
   name: true,
   monthlyPrice: true,
   yearlyPrice: true,
+  currencyCode: true,
   includedFeatureKeys: true,
   isActive: true,
 } satisfies Prisma.TenantFeaturePackageSelect;
@@ -240,6 +243,7 @@ function toView(row: PackageRow): PackageView {
     name: row.name,
     monthlyPrice: row.monthlyPrice?.toString() ?? null,
     yearlyPrice: row.yearlyPrice?.toString() ?? null,
+    currencyCode: row.currencyCode,
     includedFeatureKeys: row.includedFeatureKeys as string[],
     isActive: row.isActive,
   };

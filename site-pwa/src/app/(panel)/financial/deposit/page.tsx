@@ -9,7 +9,7 @@ import { DepositView } from "./_components/DepositView";
  * `/financial/deposit` — the top-up page (F-093-e).
  *
  * A shell around one client view. The only thing on it that is addressable is
- * the shop's hand-off (F-111-e): `?invoice=&missing=` pre-fills the shortfall
+ * the shop's hand-off (F-111-e): `?invoice=&missing=&currency=` pre-fills the shortfall
  * and links back to that invoice. An amount the user types, and every coupon
  * code, stay out of the URL — a code in it would sit in the browser history.
  * `useSearchParams` needs the `Suspense` boundary for Next to prerender it.
@@ -26,7 +26,8 @@ function DepositFromQuery() {
   const params = useSearchParams();
   const invoice = params.get("invoice");
   const missing = params.get("missing");
+  const currency = params.get("currency");
   // One object per hand-off, so the view's effects run when it changes and not on every render.
-  const forInvoice = useMemo(() => forInvoiceOf(invoice, missing), [invoice, missing]);
+  const forInvoice = useMemo(() => forInvoiceOf(invoice, missing, currency), [invoice, missing, currency]);
   return <DepositView forInvoice={forInvoice} />;
 }

@@ -9,7 +9,7 @@ import { billingApi, type CouponUsageReport, type UsageQuery } from "@/lib/billi
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Pagination } from "../../_components/kit/Pagination";
 import { Select } from "../../_components/kit/Select";
-import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
+import { formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
 import {
   COUPON_KEYS as K,
@@ -88,7 +88,7 @@ export function CouponUsage({
   }, [onClose]);
 
   if (typeof document === "undefined") return null;
-  const money = (amount: string) => formatMoney(amount, BASE_CURRENCY, { lang, t });
+  const money = (amount: string, currency: string) => formatMoney(amount, currency, { lang, t });
   const totals = report?.totals;
   const tiles: Array<[string, string]> = totals
     ? [
@@ -96,7 +96,14 @@ export function CouponUsage({
         [t("common", U.totals.used), String(totals.used)],
         [t("common", U.totals.reserved), String(totals.reserved)],
         [t("common", U.totals.released), String(totals.released)],
-        [t("common", U.totals.discountGiven), money(totals.discountGiven)],
+        [
+          t("common", U.totals.discountGiven),
+          // One total in the owner's currency now; with no conversion from an
+          // earlier one, each currency's sum as written — never added together (F-116-h5).
+          totals.discountGiven !== null
+            ? money(totals.discountGiven, totals.currencyCode)
+            : totals.discountGivenByCurrency.map((g) => money(g.amount, g.currencyCode)).join(" · "),
+        ],
       ]
     : [];
 
@@ -189,7 +196,7 @@ export function CouponUsage({
                           <td className="px-2 py-2 font-mono text-[10px]" dir="ltr">
                             {r.paymentTransactionId ? `${r.paymentTransactionId.slice(0, 8)} · ${r.paymentStatus ?? ""}` : "—"}
                           </td>
-                          <td className="px-2 py-2">{money(r.discountAmount)}</td>
+                          <td className="px-2 py-2">{money(r.discountAmount, r.currencyCode)}</td>
                           <td className="px-2 py-2">{t("common", U.status[r.status])}</td>
                           <td className="px-2 py-2">{formatInstant(r.redeemedAt, lang) ?? ""}</td>
                         </tr>

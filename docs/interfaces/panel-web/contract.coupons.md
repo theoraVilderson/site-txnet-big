@@ -59,7 +59,10 @@ The routes, the scope and every rule are
    (`23:59:59.999+03:30`), since billing reads `to` as `lte`. A new filter goes
    back to page 1; a range ending before it starts is said, not sent. Billing's
    totals follow the range and ignore the status, and the view says nothing
-   more about them than billing does.
+   more about them than billing does. Each redemption's discount is in its own
+   `currencyCode`; "discount given" is `discountGiven` in `totals.currencyCode`,
+   or, when billing answers `null`, each `discountGivenByCurrency` sum in its
+   own currency, side by side and never added (F-116-h5, F-116-h3).
 
 10. **Gift codes (tab 2, F-502-h) are never on screen.** Generating answers
     the batch (label, counts), not its codes; "Download CSV" fetches

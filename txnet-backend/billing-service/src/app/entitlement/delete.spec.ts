@@ -52,6 +52,9 @@ function build(row: Partial<Row> | null, opts: { moved?: boolean } = {}) {
         return { count: 3 };
       },
     },
+    walletTransaction: {
+      findUniqueOrThrow: async ({ where }: { where: { id: string } }) => ({ id: where.id, currencyCode: 'IRR' }),
+    },
     grantDeletion: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         deletions.push(data);
@@ -131,7 +134,7 @@ describe('deleteGrant', () => {
 
     const result = await deleteGrant(tx, GRANT, input(true), settler('credited').settle);
 
-    expect(result).toMatchObject({ refund: true, refundedAmount: '1.25', walletTransactionId: WALLET_ROW, refundSkipped: null });
+    expect(result).toMatchObject({ refund: true, refundedAmount: '1.25', currencyCode: 'IRR', walletTransactionId: WALLET_ROW, refundSkipped: null });
     expect(deletions[0]).toMatchObject({ refundRemainder: true, refundedAmount: new Prisma.Decimal('1.25'), walletTransactionId: WALLET_ROW, refundSkipped: null });
   });
 
@@ -140,7 +143,7 @@ describe('deleteGrant', () => {
       const { tx, grant, deletions } = build({});
       const result = await deleteGrant(tx, GRANT, input(true), settler(why).settle);
       expect(grant?.status).toBe(GrantStatus.cancelled);
-      expect(result).toMatchObject({ refund: true, refundedAmount: null, refundSkipped: why });
+      expect(result).toMatchObject({ refund: true, refundedAmount: null, currencyCode: null, refundSkipped: why });
       expect(deletions[0]).toMatchObject({ refundRemainder: true, refundedAmount: null, walletTransactionId: null, refundSkipped: why });
     }
   });

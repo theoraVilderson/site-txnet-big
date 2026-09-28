@@ -73,7 +73,7 @@ beforeEach(() => {
   client = fakeClient();
   signedInAs("u-1");
   realtime.mockReturnValue(client as never);
-  walletBalance.mockResolvedValue({ balance: "12.34" });
+  walletBalance.mockResolvedValue({ balance: "12.34", currencyCode: "USD" });
 });
 
 describe("useWalletBalance", () => {
@@ -98,7 +98,7 @@ describe("useWalletBalance", () => {
     // The event legacy would have done arithmetic with. `amount` is here on
     // purpose: a hook that reads it passes this assertion only by accident, and
     // a hook that reads a *missing* one produces `NaN` — the shipped bug.
-    walletBalance.mockResolvedValue({ balance: "62.34" });
+    walletBalance.mockResolvedValue({ balance: "62.34", currencyCode: "USD" });
     await act(async () => {
       for (const onMessage of client.listeners) {
         onMessage({ type: "payment.succeeded", amount: 50 });
@@ -113,7 +113,7 @@ describe("useWalletBalance", () => {
     const { result } = renderHook(() => useWalletBalance());
     await waitFor(() => expect(result.current.balance).toBe("12.34"));
 
-    walletBalance.mockResolvedValue({ balance: "62.34" });
+    walletBalance.mockResolvedValue({ balance: "62.34", currencyCode: "USD" });
     await act(async () => client.missed.forEach((onMissed) => onMissed()));
 
     await waitFor(() => expect(result.current.balance).toBe("62.34"));

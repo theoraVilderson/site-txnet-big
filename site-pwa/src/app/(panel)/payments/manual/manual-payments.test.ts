@@ -78,6 +78,7 @@ describe("canConfirmByHand", () => {
 // F-093-o (ADR-0046 decision 7): every open payment is listed, so the badges
 // are what tells a person which one needs them.
 const payment = (overrides: Partial<VerifyingPayment>): VerifyingPayment => ({
+  currencyCode: "USD",
   id: "77777777-7777-4777-8777-777777777777",
   status: "pending",
   tenantId: null,

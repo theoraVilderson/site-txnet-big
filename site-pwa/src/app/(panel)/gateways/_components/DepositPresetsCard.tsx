@@ -15,7 +15,7 @@ const P = FrontendI18nKeys.common.gateways.presets;
  * gateways they apply to — the one place a manager already is when deciding
  * how people pay. A gateway's own list, set in its form, overrides this one.
  */
-export function DepositPresetsCard({ surface, initial }: { surface: GatewaySurface; initial: string[] }) {
+export function DepositPresetsCard({ surface, initial, currency }: { surface: GatewaySurface; initial: string[]; currency: string }) {
   const { t } = useLocale();
   const errorMessage = useGatewayMessage(surface);
   const [list, setList] = useState(initial);
@@ -56,6 +56,7 @@ export function DepositPresetsCard({ surface, initial }: { surface: GatewaySurfa
       <p className="mb-3 text-[11px] leading-5 text-text-secondary">{t("common", P.defaultHint)}</p>
       <PresetsEditor
         id="default-presets"
+        currency={currency}
         value={list}
         onChange={(next) => {
           setList(next);

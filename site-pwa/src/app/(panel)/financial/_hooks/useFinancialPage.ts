@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   billingApi,
+  type WalletBalance,
   type WalletLedgerRow,
   type WalletPaymentRow,
 } from "@/lib/billing-api";
@@ -21,9 +22,10 @@ export interface FinancialPageState {
   /**
    * The wallet's balance as `billing` last answered it. Only the ledger route
    * carries it, so it survives a trip to the payments tab rather than blanking
-   * — it is the same figure, not a stale guess at it.
+   * — it is the same figure, not a stale guess at it. With the wallet's
+   * currency (F-116-h3).
    */
-  balance: string | null;
+  balance: WalletBalance | null;
   total: number;
   pageSize: number;
   /** True while a read for the current filters is in flight — the table shows its skeleton. */
@@ -54,7 +56,7 @@ export interface FinancialPageState {
 export function useFinancialPage(filters: FinancialFilters): FinancialPageState {
   const [ledger, setLedger] = useState<WalletLedgerRow[] | null>(null);
   const [payments, setPayments] = useState<WalletPaymentRow[] | null>(null);
-  const [balance, setBalance] = useState<string | null>(null);
+  const [balance, setBalance] = useState<WalletBalance | null>(null);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<unknown>(null);
 
@@ -83,7 +85,7 @@ export function useFinancialPage(filters: FinancialFilters): FinancialPageState 
           if (!alive) return;
           setLedger(page.rows);
           setPayments(null);
-          setBalance(page.balance);
+          setBalance({ balance: page.balance, currencyCode: page.currencyCode });
           setTotal(page.total);
         } else {
           const page = await billingApi.walletPayments(query);

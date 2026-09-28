@@ -57,6 +57,7 @@ const RESELLER: Me = { ...OWNER, role: { id: "r2", name: "Admin" }, permissions:
 const UUID = "22222222-2222-4222-8222-222222222222";
 
 const COUPON: AdminCoupon = {
+  currencyCode: "USD",
   id: "c1",
   tenantId: "t-res",
   code: "NOWRUZ",

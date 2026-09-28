@@ -52,8 +52,8 @@ export const PANEL_DEPOSIT = "/financial/deposit";
  * pre-filled (raised to the gateway's minimum there) and the page links back to
  * the invoice. No coupon code ever rides in it.
  */
-export const panelDepositForInvoicePath = (invoiceId: string, missing: string) =>
-  `${PANEL_DEPOSIT}?${new URLSearchParams({ invoice: invoiceId, missing })}`;
+export const panelDepositForInvoicePath = (invoiceId: string, missing: string, currency: string) =>
+  `${PANEL_DEPOSIT}?${new URLSearchParams({ invoice: invoiceId, missing, currency })}`;
 /** A reseller's billing wallet with the platform (F-019-d). */
 export const PANEL_TENANT_BILLING = "/financial/billing";
 /**

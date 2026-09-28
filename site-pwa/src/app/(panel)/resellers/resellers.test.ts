@@ -124,6 +124,7 @@ describe("creating a reseller", () => {
 
 describe("package and period", () => {
   const pkg = (id: string, over: Partial<TenantPackage> = {}): TenantPackage => ({
+    currencyCode: "USD",
     id,
     name: id,
     monthlyPrice: "10",

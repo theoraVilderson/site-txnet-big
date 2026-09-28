@@ -8,7 +8,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { billingApi, type TenantWalletPage } from "@/lib/billing-api";
 import { PANEL_TENANT_BILLING_TOPUP } from "@/lib/routes";
-import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
+import { formatMoney } from "../../../_lib/money";
 import { Pagination } from "../../../_components/kit/Pagination";
 import { FinancialTable } from "../../_components/FinancialTable";
 import { TenantBillingRow } from "./TenantBillingRow";
@@ -87,7 +87,7 @@ export function TenantBillingView() {
             <div className="rounded-2xl border border-card-border bg-card-bg px-5 py-3">
               <p className="text-[11px] text-text-secondary">{t("common", B.balance)}</p>
               <p dir="ltr" className="text-lg font-bold text-gold">
-                {formatMoney(data.balance, BASE_CURRENCY, { lang, t })}
+                {formatMoney(data.balance, data.currencyCode, { lang, t })}
               </p>
             </div>
             {/* Only once the wallet read succeeded: a refused reader would be refused there too (F-019-e). */}

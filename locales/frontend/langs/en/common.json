@@ -1165,6 +1165,7 @@
         "value": "Amount",
         "valueHintPercent": "Between 0 and 100.",
         "valueHintAmount": "In {{currency}}; never more than the price.",
+        "valueHintAmountUnknown": "In your operating currency; never more than the price.",
         "target": "Applies to",
         "targetAll": "Every product",
         "targetProduct": "One product",

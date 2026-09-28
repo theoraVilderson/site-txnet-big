@@ -5,7 +5,7 @@ import { Sparkles, Ticket, Trash2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { DepositQuote } from "@/lib/billing-api";
-import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
+import { formatMoney } from "../../../_lib/money";
 
 const D = FrontendI18nKeys.common.deposit.coupon;
 
@@ -145,7 +145,7 @@ export function CouponInput({ codes, onAdd, onRemove, quote, disabled }: CouponI
                 </div>
                 {discount !== undefined && (
                   <span dir="ltr" className="mt-1 text-sm font-bold text-primary">
-                    -{formatMoney(discount, BASE_CURRENCY, { lang, t })}
+                    -{formatMoney(discount, quote?.currencyCode ?? "", { lang, t })}
                   </span>
                 )}
                 <button

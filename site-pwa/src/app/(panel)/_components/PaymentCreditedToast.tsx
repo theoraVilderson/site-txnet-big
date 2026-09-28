@@ -7,7 +7,7 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { userChannel } from "@/lib/realtime";
 import { usePanelRealtime } from "../_context/PanelRealtimeContext";
 import { usePanelSession } from "../_context/PanelSessionContext";
-import { BASE_CURRENCY, formatMoney } from "../_lib/money";
+import { formatMoney } from "../_lib/money";
 import { readPaymentCredited, readPaymentReversed } from "../payment/_lib/pending-payment";
 
 const KEYS = {
@@ -34,16 +34,16 @@ export function PaymentCreditedToast() {
   const { group } = usePanelSession();
   const userId = group?.current.userId ?? null;
   const client = usePanelRealtime();
-  const [notice, setNotice] = useState<{ kind: keyof typeof KEYS; amount: string } | null>(null);
+  const [notice, setNotice] = useState<{ kind: keyof typeof KEYS; amount: string; currency: string } | null>(null);
 
   useEffect(() => {
     if (!client || !userId) return;
     return client.subscribe(userChannel(userId), {
       onMessage: (payload) => {
         const credited = readPaymentCredited(payload);
-        if (credited) return setNotice({ kind: "credited", amount: credited.amountCredited });
+        if (credited) return setNotice({ kind: "credited", amount: credited.amountCredited, currency: credited.currencyCode });
         const reversed = readPaymentReversed(payload);
-        if (reversed) setNotice({ kind: "reversed", amount: reversed.amountCredited });
+        if (reversed) setNotice({ kind: "reversed", amount: reversed.amountCredited, currency: reversed.currencyCode });
       },
     });
   }, [client, userId]);
@@ -67,7 +67,7 @@ export function PaymentCreditedToast() {
       <div className="min-w-0 flex-1 text-sm">
         <p className="font-bold text-text-primary">{t("common", S.title)}</p>
         <p className="mt-0.5 text-text-secondary">
-          {t("common", S.body, { amount: formatMoney(notice.amount, BASE_CURRENCY, { lang, t }) })}
+          {t("common", S.body, { amount: formatMoney(notice.amount, notice.currency, { lang, t }) })}
         </p>
       </div>
       <button

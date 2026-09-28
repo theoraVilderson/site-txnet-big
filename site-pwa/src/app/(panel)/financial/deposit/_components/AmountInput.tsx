@@ -6,7 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { DepositGateway } from "@/lib/billing-api";
 import { toEnglishDigits } from "@/util/helper";
-import { BASE_CURRENCY, amountInWords, formatMoney } from "../../../_lib/money";
+import { amountInWords, formatMoney } from "../../../_lib/money";
 import { fromCents, offeredPresets, toCents } from "../_lib/deposit-amount";
 
 const D = FrontendI18nKeys.common.deposit.amount;
@@ -17,6 +17,8 @@ interface AmountInputProps {
   onAmountChange: (amount: string) => void;
   /** Its `minAmount` / `maxAmount` are the bounds, the presets and the slider's range. */
   gateway: DepositGateway | null;
+  /** What the amount is in: the gateway's, else the wallet's; `null` until either is known (F-116-h3). */
+  currency: string | null;
   disabled?: boolean;
 }
 
@@ -42,13 +44,13 @@ const TYPING = /^\d{0,16}(\.\d{0,2})?$/;
  * `GET /deposit/gateways`, so they move when the tenant moves them
  * (`deposit-amount.ts`).
  */
-export function AmountInput({ amount, onAmountChange, gateway, disabled }: AmountInputProps) {
+export function AmountInput({ amount, onAmountChange, gateway, currency, disabled }: AmountInputProps) {
   const { lang, t } = useLocale();
   const [focused, setFocused] = useState(false);
   const inputId = useId();
 
-  const money = (value: string) => formatMoney(value, BASE_CURRENCY, { lang, t });
-  const words = amountInWords(amount, BASE_CURRENCY, { lang, t });
+  const money = (value: string) => formatMoney(value, currency ?? "", { lang, t });
+  const words = currency ? amountInWords(amount, currency, { lang, t }) : null;
 
   const cents = toCents(amount);
   // A bound the gateway left open is `null`: no check on that side, and no slider without both.
@@ -81,7 +83,7 @@ export function AmountInput({ amount, onAmountChange, gateway, disabled }: Amoun
         }`}
       >
         <span className="me-3 shrink-0 text-sm font-bold text-text-secondary opacity-50">
-          {BASE_CURRENCY}
+          {currency}
         </span>
         <input
           id={inputId}

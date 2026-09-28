@@ -4,7 +4,6 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Bitcoin, Check, ChevronDown, CircleCheckBig, CreditCard, Eye, EyeOff, Globe, Landmark, MessageCircle, Percent, Star, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { BASE_CURRENCY } from "../../_lib/money";
 import type { FormError, FormErrors, GatewayForm } from "../_lib/gateway-form";
 import { feePreview, type Provider } from "../_lib/gateway-wizard";
 
@@ -243,7 +242,8 @@ export function useRangeText(money: (amount: string) => string) {
 }
 
 /** Fee mode, value, floor and ceiling, with the exact preview `feePreview` computes. */
-export function FeeFields({ form, set, errors, money }: { form: GatewayForm; set: SetField; errors: FormErrors; money: (amount: string) => string }) {
+/** `currency` is what the fixed fee, floor and ceiling are in: the gateway's own, or the tenant's for a new one (F-116-h3). */
+export function FeeFields({ form, set, errors, money, currency }: { form: GatewayForm; set: SetField; errors: FormErrors; money: (amount: string) => string; currency: string }) {
   const { t } = useLocale();
   const [sample, setSample] = useState("100");
   const [advanced, setAdvanced] = useState(Boolean(form.feeFloor || form.feeCeiling));
@@ -289,7 +289,7 @@ export function FeeFields({ form, set, errors, money }: { form: GatewayForm; set
               ))}
             </div>
           </div>
-          {decimal("feeValue", t("common", F.feeValue), form.feeType === "percentage" ? "%" : BASE_CURRENCY)}
+          {decimal("feeValue", t("common", F.feeValue), form.feeType === "percentage" ? "%" : currency)}
         </div>
       ) : (
         <p className="rounded-xl bg-[var(--leaf-bg)] p-3 text-xs leading-6 text-text-primary">{t("common", W.hints.automaticNote)}</p>
@@ -309,8 +309,8 @@ export function FeeFields({ form, set, errors, money }: { form: GatewayForm; set
         </button>
         {open && (
           <div className="grid gap-4 border-t border-card-border p-3 sm:grid-cols-2">
-            {decimal("feeFloor", t("common", F.feeFloor), BASE_CURRENCY)}
-            {decimal("feeCeiling", t("common", F.feeCeiling), BASE_CURRENCY)}
+            {decimal("feeFloor", t("common", F.feeFloor), currency)}
+            {decimal("feeCeiling", t("common", F.feeCeiling), currency)}
           </div>
         )}
       </div>
@@ -342,7 +342,7 @@ export function FeeFields({ form, set, errors, money }: { form: GatewayForm; set
                   onChange={(e) => setSample(e.target.value)}
                   className="w-32 rounded-lg border border-white/30 bg-white/15 px-2 py-1.5 pe-10 text-sm font-bold text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-white/40"
                 />
-                <span className="pointer-events-none absolute inset-y-0 end-2 flex items-center text-[10px] font-bold opacity-80">{BASE_CURRENCY}</span>
+                <span className="pointer-events-none absolute inset-y-0 end-2 flex items-center text-[10px] font-bold opacity-80">{currency}</span>
               </span>
             </label>
             <div className="text-end">

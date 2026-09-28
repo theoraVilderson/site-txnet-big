@@ -3,7 +3,7 @@
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { TenantWalletRow } from "@/lib/billing-api";
-import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
+import { formatMoney } from "../../../_lib/money";
 import { formatInstant } from "../../../_lib/datetime";
 import { DIRECTION_TONES } from "../../_lib/tones";
 import { Badge } from "../../_components/Badge";
@@ -35,7 +35,7 @@ export function TenantBillingRow({
   const Icon = tone.icon;
   const credit = row.direction === "credit";
   const reasonKey = reasonLabelKey(row.reasonType);
-  const money = (amount: string) => formatMoney(amount, BASE_CURRENCY, { lang, t });
+  const money = (amount: string) => formatMoney(amount, row.currencyCode, { lang, t });
   const when = formatInstant(row.createdAt, lang);
 
   return (

@@ -114,6 +114,7 @@ describe("who may buy", () => {
 
 describe("the packages on sale", () => {
   const offer = (id: string, over: Partial<PackageOffer> = {}): PackageOffer => ({
+    currencyCode: "USD",
     id,
     name: id,
     monthlyPrice: "10",

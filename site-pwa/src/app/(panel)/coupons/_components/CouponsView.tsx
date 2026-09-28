@@ -8,7 +8,7 @@ import { billingApi, type AdminCoupon, type CouponListQuery, type CouponPage } f
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Pagination } from "../../_components/kit/Pagination";
 import { Select } from "../../_components/kit/Select";
-import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
+import { formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
 import { COUPON_KEYS as K, STATUS_TONES, isPlatformOwner, refusalKey } from "../_lib/coupon-form";
 import { CouponForm } from "./CouponForm";
@@ -133,13 +133,13 @@ function DiscountCoupons({ owner }: { owner: boolean }) {
     }
   };
 
-  const money = (amount: string) => formatMoney(amount, BASE_CURRENCY, { lang, t });
+  const money = (amount: string, currency: string) => formatMoney(amount, currency, { lang, t });
   const discountText = (c: AdminCoupon) =>
     c.discountType === "free_grant"
       ? t("common", K.form.freeService)
       : c.discountType === "percentage"
-      ? `${t("common", K.list.percentOff, { value: Number(c.discountValue).toString() })}${c.maxDiscountCap ? ` · ${t("common", K.list.cap, { amount: money(c.maxDiscountCap) })}` : ""}`
-      : t("common", K.list.amountOff, { amount: money(c.discountValue) });
+      ? `${t("common", K.list.percentOff, { value: Number(c.discountValue).toString() })}${c.maxDiscountCap ? ` · ${t("common", K.list.cap, { amount: money(c.maxDiscountCap, c.currencyCode) })}` : ""}`
+      : t("common", K.list.amountOff, { amount: money(c.discountValue, c.currencyCode) });
   const hasLimits = (c: AdminCoupon) =>
     Boolean(c.minPurchaseAmount || c.maxPurchaseAmount || c.validFrom || c.activeWeekdays.length || c.activeHourFrom !== null || c.firstPurchaseOnly || c.newUserWithinDays || c.periodDays || c.allowedChannels.length || c.gateways.length || c.serviceScopes.length);
 

@@ -67,7 +67,7 @@ read on the app pool before the cross-tenant pool is touched.
 | Route | Body / query | Answer |
 |---|---|---|
 | `GET /api/tenants/purchase/mine` | — | `{reseller}`: the caller's live reseller (`id, slug, status, billingModel, package {id, name}, currentPeriodEnd, domains`), `null` when none — a 200 either way (F-019-l) |
-| `GET /api/tenants/purchase/packages` | — | active packages by name: `id, name, monthlyPrice, yearlyPrice, includedFeatureKeys` |
+| `GET /api/tenants/purchase/packages` | — | active packages by name: `id, name, monthlyPrice, yearlyPrice, currencyCode, includedFeatureKeys` — `currencyCode` the package's (F-116-h3) |
 | `GET /api/tenants/purchase/slug` | `name` 1..100, `.strict()` | `{slug}` — a suggestion, checked again by the purchase |
 | `POST /api/tenants/purchase` | `{packageId, billingModel, name, slug?}`, `.strict()` | `201` a reseller view + `packageId, currentPeriodEnd, charged, walletBalance, currencyCode` (the buyer's wallet's) |
 
@@ -101,7 +101,7 @@ it; the audit row carries the platform owner's tenant.
 | `POST /api/tenant-packages/:id/apply` | — | `200 {packageId, includedFeatureKeys, subscribers}` |
 
 A package view: `id, name, monthlyPrice, yearlyPrice` (decimal strings or
-`null`, C-02), `includedFeatureKeys, isActive`. Refusals: `not_platform_owner`
+`null`, C-02), `currencyCode` (the package's, the platform's — F-116-h3), `includedFeatureKeys, isActive`. Refusals: `not_platform_owner`
 403, `package_not_found` 404, `package_name_taken` 409, `package_price_in_use` 409, `package_unpriced` 422.
 
 | Rule | Why |

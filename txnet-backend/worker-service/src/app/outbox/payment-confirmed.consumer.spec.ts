@@ -33,6 +33,7 @@ function event(payload: Record<string, unknown> = {}): OutboxMessage {
       userId: USER,
       paymentId: PAYMENT,
       amountCredited: '19.80',
+      currencyCode: 'IRR',
       gatewayReferenceId: '900900900',
       confirmationSource: 'reconciliation_auto',
       ...payload,
@@ -103,7 +104,7 @@ describe('PaymentConfirmedConsumer.handle', () => {
     expect(calls.published).toEqual([
       {
         channel: `user:${USER}`,
-        payload: { type: 'billing.payment.confirmed', paymentId: PAYMENT, amountCredited: '19.80' },
+        payload: { type: 'billing.payment.confirmed', paymentId: PAYMENT, amountCredited: '19.80', currencyCode: 'IRR' },
       },
     ]);
     expect(calls.joined).toEqual([

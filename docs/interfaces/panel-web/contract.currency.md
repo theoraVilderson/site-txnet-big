@@ -12,7 +12,8 @@ A topic file of [contract.resellers.md](contract.resellers.md). One card,
 `(panel)/_components/OperatingCurrencyCard.tsx`, over tenant's two routes
 ([tenant/contract.currency.md](../../domains/tenant/contract.currency.md)),
 through `operatingCurrencyApi` in `src/lib/tenant-api.ts`. It picks the
-currency; showing money in a row's own currency is F-116-h3 (ADR-0098).
+currency; every other screen shows money in the currency its answer names
+([contract.kit.md](contract.kit.md) rule 1a, F-116-h3, ADR-0098).
 
 ## Where it is
 

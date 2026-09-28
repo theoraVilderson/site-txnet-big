@@ -32,6 +32,13 @@ page still owns on top of them.
 1. **An amount arrives already in the currency it names.** The kit never
    converts: base -> display is the `currency` unit's job (ADR-0019). Legacy's
    `toToman` (÷10) has no counterpart here, on purpose.
+1a. **The code is the answer's, never a default (F-116-h3, ADR-0098 part 3).**
+   `money.ts` has no `BASE_CURRENCY`. A screen passes the `currencyCode` its
+   route answered beside the amount — a list row its **own**, so a USD row
+   written before a switch to IRR still reads as dollars; a balance its
+   wallet's. With no code there is no figure in a currency: a live event
+   without one is not shown, a new rule's or gateway's form names the tenant's
+   (the presets answer's) or none. Spec: `financial/_components/LedgerRow.test.tsx`.
 2. **An amount stays a decimal string.** Pass the API's `Decimal` string as is.
    Rounding is half away from zero to the currency's decimals, done on the
    string; `Intl.NumberFormat` receives the exact string, never a float.

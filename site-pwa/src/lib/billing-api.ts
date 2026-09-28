@@ -34,12 +34,14 @@ const call = createApiClient({
  */
 export interface WalletBalance {
   /**
-   * `wallet.cachedBalance` as a decimal string, in the **base** currency
-   * (ADR-0019: USD, two places). Written only inside the transaction that
+   * `wallet.cachedBalance` as a decimal string, in `currencyCode` (two
+   * places). Written only inside the transaction that
    * appends the proving ledger row, so it is a balance and not a running total —
    * nothing on this side adds to it or recomputes it.
    */
   balance: string;
+  /** The wallet's currency; a user with no wallet yet, the one their first credit will take (F-116-h2). */
+  currencyCode: string;
 }
 
 /** One page of either list. The two lists differ only in their row. */
@@ -60,7 +62,7 @@ export interface Paged<Row> {
  */
 export interface WalletLedgerRow {
   id: string;
-  /** Base currency, a decimal string. Unsigned — `direction` carries the sign. */
+  /** In `currencyCode`, a decimal string. Unsigned — `direction` carries the sign. */
   amount: string;
   direction: "credit" | "debit";
   /** `WalletReasonType`: what caused the movement. There is no free-text title. */
@@ -69,6 +71,8 @@ export interface WalletLedgerRow {
   referenceId: string | null;
   /** The balance the ledger wrote after this row. Never recomputed here or there. */
   balanceAfter: string;
+  /** The row's own currency — a USD row written before a switch to IRR stays dollars (F-116-h3). */
+  currencyCode: string;
   createdAt: string;
 }
 
@@ -85,6 +89,8 @@ export interface WalletPaymentRow {
   taxRatePercent: string | null;
   discount: string;
   amountCredited: string;
+  /** The payment's own currency: what every amount above is in (F-116-h3). */
+  currencyCode: string;
   /** What the gateway was asked for, and the rate that produced it — frozen at intent (ADR-0019). */
   charge: { amountMinor: string; rate: string | null };
   trackingCode: string | null;
@@ -120,10 +126,12 @@ export interface GiftCredit {
   kind?: "wallet_credit";
   /** The code as stored, which is the trimmed, upper-cased form of what was typed. */
   code: string;
-  /** Base currency, a decimal string. Always `> 0` — a zero-value coupon raises server-side. */
+  /** In `currencyCode`, a decimal string. Always `> 0` — a zero-value coupon raises server-side. */
   credited: string;
-  /** The balance after the credit. Base currency, a decimal string. */
+  /** The balance after the credit. In `currencyCode`, a decimal string. */
   balance: string;
+  /** What `credited` and `balance` are in: the code's own, which the wallet's matches (F-116-h3). */
+  currencyCode: string;
 }
 
 /**
@@ -201,8 +209,8 @@ export type GrantsPage = Paged<GrantRow> & { hidden: number };
 /**
  * One variant the shop sells, as `GET /offers` answers it (F-111-e,
  * `billing/contract.purchase.md`): listed, priced now, and deliverable — billing
- * leaves out what an invoice would refuse. `price` is the catalog's, in base
- * currency; it is shown, never sent back. Names are keys, resolved through the
+ * leaves out what an invoice would refuse. `price` is the catalog's, in
+ * `currencyCode`; it is shown, never sent back. Names are keys, resolved through the
  * published `catalog` namespace as My services does.
  */
 export interface ShopOffer {
@@ -223,6 +231,8 @@ export interface ShopOffer {
   billingMode: "prepaid" | "metered";
   quotas: unknown;
   price: string;
+  /** What `price` is in: the price row's own (F-116-h3). */
+  currencyCode: string;
 }
 
 /** The statuses an invoice can be in, as `billing.prisma` declares `InvoiceStatus` (C-09). */
@@ -231,7 +241,7 @@ export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
 /**
  * An invoice, as `POST /invoices` makes it and `GET /invoices/:id` reads it back
- * (F-111-a, F-111-e). Money is a decimal string in base currency (C-02).
+ * (F-111-a, F-111-e). Money is a decimal string in `currencyCode` (C-02).
  * `rejected` is only in the creation's answer: the codes that took nothing, with
  * billing's sentence.
  */
@@ -244,6 +254,8 @@ export interface ShopInvoice {
   amount: string;
   discount: string;
   total: string;
+  /** What every amount here is in (F-116-h3, ADR-0098): the answer's own, never assumed. */
+  currencyCode: string;
   applied: Array<{ code: string; discount: string }>;
   rejected?: Array<{ code: string; reason: string; message: string }>;
   expiresAt: string;
@@ -255,6 +267,8 @@ export interface InvoicePaid {
   status: "paid";
   total: string;
   balanceAfter: string;
+  /** What every amount here is in (F-116-h3, ADR-0098): the answer's own, never assumed. */
+  currencyCode: string;
   walletTransactionId: string | null;
   grants: Array<{ id: string; status: string }>;
 }
@@ -375,7 +389,7 @@ export interface DepositGateway {
   /** The driver behind it (`zarinpal`, …). Shown as the logo, never branched on. */
   providerName: string;
   category: string;
-  /** Base currency, decimal strings. The gateway's own range — the amount box's bounds; `null` is no limit on that side. */
+  /** In `currencyCode`, decimal strings. The gateway's own range — the amount box's bounds; `null` is no limit on that side. */
   minAmount: string | null;
   maxAmount: string | null;
   /** Off or not yet verified: shown only to someone who may manage gateways, so they can test it. */
@@ -385,6 +399,8 @@ export interface DepositGateway {
    * already inside the range. Empty means none was configured.
    */
   presets: string[];
+  /** The gateway's own currency: what its range and presets are in (F-116-h2). */
+  currencyCode: string;
 }
 
 /** A coupon that priced into the quote. `discount` is what this code took, after the ones before it. */
@@ -418,6 +434,8 @@ export interface DepositQuote {
   source: "platform" | "tenant";
   /** What the user asked to top up with, echoed back. */
   amount: string;
+  /** The payment's currency: what every amount here but `charge` is in (F-116-h2). */
+  currencyCode: string;
   coupons: QuotedCoupon[];
   rejected: RejectedCoupon[];
   discount: string;
@@ -434,7 +452,7 @@ export interface DepositQuote {
    */
   tax: string;
   taxRatePercent: string | null;
-  /** What the card is charged, in base currency. `0.00` on the free path. */
+  /** What the card is charged, in `currencyCode`. `0.00` on the free path. */
   payable: string;
   /** What lands in the wallet — the amount plus the adjustment gap. */
   credited: string;
@@ -481,6 +499,8 @@ export interface DepositStarted {
   credited: string;
   /** The wallet balance after a free top-up credited it; `null` when nothing was credited. */
   balance: string | null;
+  /** What every amount here is in (F-116-h3, ADR-0098): the answer's own, never assumed. */
+  currencyCode: string;
 }
 
 /**
@@ -494,6 +514,8 @@ export interface TenantWalletRow {
   reasonType: string;
   amount: string;
   balanceAfter: string;
+  /** The row's own currency, never the reseller's now (F-116-h3). */
+  currencyCode: string;
   createdAt: string;
 }
 
@@ -504,7 +526,7 @@ export interface TenantTopupBody {
 }
 
 /** `GET /tenant-wallet`: one page, and the wallet's own balance — never a sum of the page. */
-export type TenantWalletPage = Paged<TenantWalletRow> & { balance: string };
+export type TenantWalletPage = Paged<TenantWalletRow> & { balance: string; currencyCode: string };
 
 /** Prisma's `TenantLedgerDirection`. */
 export type TenantLedgerDirection = "credit" | "debit";
@@ -528,7 +550,7 @@ export interface TenantWalletAdminRow extends TenantWalletRow {
 }
 
 /** `GET /tenant-wallets/:tenantId/transactions`: one page, and the wallet's own balance. */
-export type TenantWalletAdminPage = Paged<TenantWalletAdminRow> & { tenantId: string; balance: string };
+export type TenantWalletAdminPage = Paged<TenantWalletAdminRow> & { tenantId: string; balance: string; currencyCode: string };
 
 export interface TenantWalletAdjusted {
   transactionId: string;
@@ -536,6 +558,7 @@ export interface TenantWalletAdjusted {
   direction: TenantLedgerDirection;
   amount: string;
   balanceAfter: string;
+  currencyCode: string;
   createdAt: string;
 }
 
@@ -553,13 +576,19 @@ export const gatewayApiPrefix = (tenantId: string | null) =>
   tenantId === null ? "/gateways" : `/tenants/${encodeURIComponent(tenantId)}/gateways`;
 
 /** The eight calls both gateway surfaces answer. `GatewaysView` takes one of these, not `billingApi`. */
+/** The tenant's default quick amounts, and the currency they are in (F-116-h2). */
+export interface DepositPresets {
+  presets: string[];
+  currencyCode: string;
+}
+
 export interface GatewayAdminApi {
   list(): Promise<AdminGateway[]>;
   create(body: CreateGatewayBody): Promise<AdminGateway>;
   update(source: GatewaySource, id: string, body: UpdateGatewayBody): Promise<AdminGateway>;
   remove(source: GatewaySource, id: string): Promise<GatewayRemoved>;
-  presets(): Promise<{ presets: string[] }>;
-  setPresets(presets: string[]): Promise<{ presets: string[] }>;
+  presets(): Promise<DepositPresets>;
+  setPresets(presets: string[]): Promise<DepositPresets>;
   /** The tenant's default tax on a top-up (F-104-ag); `null` is no tax. */
   tax(): Promise<{ taxRatePercent: string | null }>;
   setTax(taxRatePercent: string | null): Promise<{ taxRatePercent: string | null }>;
@@ -579,8 +608,8 @@ export function gatewayAdminApi(tenantId: string | null): GatewayAdminApi {
     create: (body) => call<AdminGateway>(at, { method: "POST", body: JSON.stringify(body) }),
     update: (source, id, body) => call<AdminGateway>(row(source, id), { method: "PATCH", body: JSON.stringify(body) }),
     remove: (source, id) => call<GatewayRemoved>(row(source, id), { method: "DELETE" }),
-    presets: () => call<{ presets: string[] }>(`${at}/presets`, { method: "GET" }),
-    setPresets: (presets) => call<{ presets: string[] }>(`${at}/presets`, { method: "PUT", body: JSON.stringify({ presets }) }),
+    presets: () => call<DepositPresets>(`${at}/presets`, { method: "GET" }),
+    setPresets: (presets) => call<DepositPresets>(`${at}/presets`, { method: "PUT", body: JSON.stringify({ presets }) }),
     tax: () => call<{ taxRatePercent: string | null }>(`${at}/tax`, { method: "GET" }),
     setTax: (taxRatePercent) =>
       call<{ taxRatePercent: string | null }>(`${at}/tax`, { method: "PUT", body: JSON.stringify({ taxRatePercent }) }),
@@ -676,6 +705,8 @@ export interface GrantActionResult {
   subscriptionUrl?: string;
   renewed?: boolean;
   refundedAmount?: string | null;
+  /** What `refundedAmount` is in (F-116-h3); `null` with it. */
+  currencyCode?: string | null;
   refundSkipped?: string | null;
 }
 
@@ -1444,6 +1475,8 @@ export interface DiscountRule {
   name: string;
   kind: "percentage" | "fixed_amount";
   value: string;
+  /** The rule's own currency: what a `fixed_amount` value is in (F-116-h2). */
+  currencyCode: string;
   /** At most one of these two; neither = everything. A category covers every category under it. */
   productId: string | null;
   categoryId: string | null;
@@ -1509,6 +1542,8 @@ export interface AdminCoupon {
   maxDiscountCap: string | null;
   minPurchaseAmount: string | null;
   maxPurchaseAmount: string | null;
+  /** The coupon's own currency: what a fixed value, the cap and the purchase bounds are in (F-116-h2). */
+  currencyCode: string;
   totalUsageLimit: number | null;
   perUserUsageLimit: number;
   usedCount: number;
@@ -1624,7 +1659,7 @@ export interface GenerateGiftBatchBody {
   label: string;
   note?: string | null;
   count: number;
-  /** Base currency, a decimal string. */
+  /** In the coupon owner's currency, a decimal string. */
   value: string;
   /** Set: every code gives a Grant of this variant, and `value` is "0" (F-502-l-a). */
   grantVariantId?: string | null;
@@ -1660,6 +1695,8 @@ export interface CouponUsageItem {
   paymentTransactionId: string | null;
   paymentStatus: string | null;
   discountAmount: string;
+  /** What `discountAmount` is in: the order's when it was taken (F-116-h5). */
+  currencyCode: string;
   status: RedemptionStatus;
   redeemedAt: string;
 }
@@ -1669,7 +1706,23 @@ export interface CouponUsageReport {
   total: number;
   page: number;
   pageSize: number;
-  totals: { redemptions: number; used: number; reserved: number; released: number; discountGiven: string };
+  totals: CouponUsageTotals;
+}
+
+/**
+ * The report's totals over its range (F-116-h5). What confirmed uses gave is
+ * summed per currency as written, then totalled in the owner's currency now;
+ * `discountGiven` is `null` when an earlier currency has no conversion to it —
+ * then only the per-currency sums say what was given.
+ */
+export interface CouponUsageTotals {
+  redemptions: number;
+  used: number;
+  reserved: number;
+  released: number;
+  discountGiven: string | null;
+  currencyCode: string;
+  discountGivenByCurrency: Array<{ currencyCode: string; amount: string }>;
 }
 
 /** Which table a gateway row is in — the pair `source` + `id` names a row (D-25). */
@@ -1687,6 +1740,8 @@ export interface VerifyingPayment {
   providerName: string | null;
   amountRequested: string;
   amountCredited: string;
+  /** The payment's own currency (F-116-h3). */
+  currencyCode: string;
   chargedAmountMinor: string;
   authority: string | null;
   createdAt: string;
@@ -2056,6 +2111,8 @@ export interface AdminGateway {
   callbackUrl: string | null;
   /** Tax on a top-up through this gateway, a percentage; `null` inherits the tenant's default (ADR-0076). */
   taxRatePercent: string | null;
+  /** The gateway's own currency: what its limits, fixed fee, fixed modifier and presets are in (F-116-h2). */
+  currencyCode: string;
   /** `null` when billing could not ask the vault; the row is still manageable. */
   credentials: Record<GatewaySecretName, GatewaySecretState> | null;
   /** The secrets its provider needs that are not stored: saved, maybe active, and cannot take a payment yet (F-104-e). `null` with `credentials`. */

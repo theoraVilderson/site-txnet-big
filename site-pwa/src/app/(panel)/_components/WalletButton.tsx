@@ -15,7 +15,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { PANEL_DEPOSIT, PANEL_FINANCIAL } from "@/lib/routes";
 import { useWalletBalance } from "../_hooks/useWalletBalance";
-import { BASE_CURRENCY, formatMoney } from "../_lib/money";
+import { formatMoney } from "../_lib/money";
 import { GiftCodeModal } from "./GiftCodeModal";
 
 /** The control's strings as generated constants (C-06). */
@@ -80,7 +80,7 @@ const QUICK_ACTIONS: readonly QuickAction[] = [
  */
 export function WalletButton() {
   const { t, lang } = useLocale();
-  const { balance, isLoading, failed, refresh } = useWalletBalance();
+  const { balance, currencyCode, isLoading, failed, refresh } = useWalletBalance();
   const [open, setOpen] = useState(false);
   const [giftOpen, setGiftOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -122,13 +122,13 @@ export function WalletButton() {
         className="inline-block h-4 w-20 animate-pulse rounded-md bg-bg-inner align-middle"
         aria-hidden
       />
-    ) : balance === null ? (
+    ) : balance === null || currencyCode === null ? (
       <span className={open ? "text-white/80" : "text-text-secondary"}>
         {t("common", W.unavailable)}
       </span>
     ) : (
       <span className={open ? "text-white" : "text-gold"}>
-        {formatMoney(balance, BASE_CURRENCY, { lang, t })}
+        {formatMoney(balance, currencyCode, { lang, t })}
       </span>
     );
 

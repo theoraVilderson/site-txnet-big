@@ -18,7 +18,7 @@ import { PANEL_RESELLERS } from "@/lib/routes";
 import { Select } from "../../../_components/kit/Select";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatInstant } from "../../../_lib/datetime";
-import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
+import { formatMoney } from "../../../_lib/money";
 import {
   BILLING_MODELS,
   RESELLER_KEYS as K,
@@ -167,7 +167,7 @@ export function ResellerDetailView({ id }: { id: string }) {
                   )}
                 </Fact>
                 <Fact label={t("common", K.columns.balance)}>
-                  <span dir="ltr">{formatMoney(r.billingBalance, BASE_CURRENCY, { lang, t })}</span>
+                  <span dir="ltr">{formatMoney(r.billingBalance, r.billingCurrencyCode, { lang, t })}</span>
                 </Fact>
                 <Fact label={t("common", K.columns.created)}>{formatInstant(r.createdAt, lang)}</Fact>
                 <Fact label={t("common", K.detail.domains)}>
@@ -318,7 +318,7 @@ function SubscriptionSection({ loaded, onSaved }: { loaded: Loaded; onSaved: () 
                   placeholder={t("common", K.subscription.package)}
                   options={choices.map((p) => ({
                     value: p.id,
-                    label: `${p.name} — ${formatMoney(priceFor(p, period) ?? "0", BASE_CURRENCY, { lang, t })}`,
+                    label: `${p.name} — ${formatMoney(priceFor(p, period) ?? "0", p.currencyCode, { lang, t })}`,
                   }))}
                 />
               )}
@@ -424,7 +424,7 @@ function AdjustSection({ reseller, onSaved }: { reseller: Reseller; onSaved: () 
       setForm(emptyAdjustForm());
       setRequestId(crypto.randomUUID());
       onSaved();
-      return t("common", K.adjust.done, { balance: formatMoney(done.balanceAfter, BASE_CURRENCY, { lang, t }) });
+      return t("common", K.adjust.done, { balance: formatMoney(done.balanceAfter, done.currencyCode, { lang, t }) });
     });
   };
 
@@ -441,7 +441,7 @@ function AdjustSection({ reseller, onSaved }: { reseller: Reseller; onSaved: () 
             ]}
           />
         </Field>
-        <Field label={`${t("common", K.adjust.amount)} (${BASE_CURRENCY})`} error={errors.amount}>
+        <Field label={`${t("common", K.adjust.amount)} (${reseller.billingCurrencyCode})`} error={errors.amount}>
           <input className={input} dir="ltr" inputMode="decimal" value={form.amount} onChange={(e) => set({ amount: e.target.value })} />
         </Field>
         <Field label={t("common", K.adjust.note)} error={errors.note}>

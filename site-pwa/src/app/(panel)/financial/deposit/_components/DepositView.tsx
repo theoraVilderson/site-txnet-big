@@ -13,7 +13,7 @@ import { panelShopInvoicePath } from "@/lib/routes";
 import { prefillAmount, rememberReturnInvoice, type ForInvoice } from "../../../shop/_lib/shop";
 import { useWalletBalance } from "../../../_hooks/useWalletBalance";
 import { PaymentPendingView } from "../../../payment/_components/PaymentPendingView";
-import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
+import { formatMoney } from "../../../_lib/money";
 import { useDepositQuote } from "../_hooks/useDepositQuote";
 import { useStartOnce } from "../_hooks/useStartOnce";
 import { useVerifyingGuard } from "../_hooks/useVerifyingGuard";
@@ -58,7 +58,7 @@ const D = FrontendI18nKeys.common.deposit;
 export function DepositView({ forInvoice = null }: { forInvoice?: ForInvoice | null } = {}) {
   const { lang, t } = useLocale();
   const messageFor = useApiErrorMessage();
-  const { balance, refresh } = useWalletBalance();
+  const { balance, currencyCode: walletCurrency, refresh } = useWalletBalance();
 
   const [gateways, setGateways] = useState<DepositGateway[]>([]);
   const [gateway, setGateway] = useState<DepositGateway | null>(null);
@@ -228,7 +228,7 @@ export function DepositView({ forInvoice = null }: { forInvoice?: ForInvoice | n
   if (awaiting) return <PaymentPendingView paymentId={awaiting} />;
 
   if (credited) {
-    const money = (value: string) => formatMoney(value, BASE_CURRENCY, { lang, t });
+    const money = (value: string) => formatMoney(value, credited.currencyCode, { lang, t });
     return (
       <div className="mx-auto w-full max-w-2xl p-4 md:p-8">
         <div className="rounded-3xl border border-card-border bg-card-bg p-8 text-center shadow-lg">
@@ -293,7 +293,7 @@ export function DepositView({ forInvoice = null }: { forInvoice?: ForInvoice | n
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-card-border bg-leaf-bg px-4 py-3 text-sm">
           <span className="flex items-center gap-2 text-text-primary">
             <ShoppingCart size={18} className="text-primary" aria-hidden />
-            {t("common", D.forInvoice.notice, { amount: formatMoney(forInvoice.missing, BASE_CURRENCY, { lang, t }) })}
+            {t("common", D.forInvoice.notice, { amount: formatMoney(forInvoice.missing, forInvoice.currency, { lang, t }) })}
           </span>
           <Link href={panelShopInvoicePath(forInvoice.invoiceId)} className="font-bold text-primary underline">
             {t("common", D.forInvoice.back)}
@@ -313,13 +313,19 @@ export function DepositView({ forInvoice = null }: { forInvoice?: ForInvoice | n
       <div className="flex flex-col gap-8 md:flex-row md:items-start">
         <div className="w-full space-y-6 md:w-7/12">
           <div className="md:hidden">
-            <WalletPreview balance={balance} credited={quote.quote?.credited ?? null} />
+            <WalletPreview
+              balance={balance}
+              balanceCurrency={walletCurrency}
+              credited={quote.quote?.credited ?? null}
+              creditedCurrency={quote.quote?.currencyCode ?? null}
+            />
           </div>
 
           <AmountInput
             amount={amount}
             onAmountChange={onAmountChange}
             gateway={gateway}
+            currency={gateway?.currencyCode ?? walletCurrency}
             disabled={noGateway}
           />
 
@@ -344,7 +350,12 @@ export function DepositView({ forInvoice = null }: { forInvoice?: ForInvoice | n
         {/* Sticky beside the form: the bill stays in view while the amount and
             the codes above it change. `top-24` clears the shell's top bar. */}
         <div className="hidden w-full space-y-6 md:sticky md:top-24 md:block md:w-5/12">
-          <WalletPreview balance={balance} credited={quote.quote?.credited ?? null} />
+          <WalletPreview
+              balance={balance}
+              balanceCurrency={walletCurrency}
+              credited={quote.quote?.credited ?? null}
+              creditedCurrency={quote.quote?.currencyCode ?? null}
+            />
           {summary}
         </div>
       </div>

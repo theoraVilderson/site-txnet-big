@@ -5,7 +5,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { DepositGateway } from "@/lib/billing-api";
 import { Skeleton } from "../../../_components/kit/Skeleton";
-import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
+import { formatMoney } from "../../../_lib/money";
 
 const D = FrontendI18nKeys.common.deposit.gateway;
 
@@ -47,7 +47,7 @@ export function GatewaySelector({
   onRetry,
 }: GatewaySelectorProps) {
   const { lang, t } = useLocale();
-  const money = (value: string) => formatMoney(value, BASE_CURRENCY, { lang, t });
+  const money = (value: string, currency: string) => formatMoney(value, currency, { lang, t });
 
   return (
     <section className="rounded-3xl border border-card-border bg-card-bg p-5 shadow-sm sm:p-6">
@@ -109,11 +109,11 @@ export function GatewaySelector({
                   </span>
                   <span dir="ltr" className="block truncate text-[11px] text-text-secondary">
                     {gateway.minAmount && gateway.maxAmount
-                      ? t("common", D.range, { min: money(gateway.minAmount), max: money(gateway.maxAmount) })
+                      ? t("common", D.range, { min: money(gateway.minAmount, gateway.currencyCode), max: money(gateway.maxAmount, gateway.currencyCode) })
                       : gateway.minAmount
-                        ? t("common", D.rangeFrom, { min: money(gateway.minAmount) })
+                        ? t("common", D.rangeFrom, { min: money(gateway.minAmount, gateway.currencyCode) })
                         : gateway.maxAmount
-                          ? t("common", D.rangeUpTo, { max: money(gateway.maxAmount) })
+                          ? t("common", D.rangeUpTo, { max: money(gateway.maxAmount, gateway.currencyCode) })
                           : t("common", D.rangeAny)}
                   </span>
                 </span>

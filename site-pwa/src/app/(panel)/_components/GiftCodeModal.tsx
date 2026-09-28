@@ -18,7 +18,7 @@ import { ApiError } from "@/lib/api-error";
 import { billingApi, type GiftGrant, type GiftRedemption } from "@/lib/billing-api";
 import { PANEL_MY_SERVICES } from "@/lib/routes";
 import { formatInstant } from "../_lib/datetime";
-import { BASE_CURRENCY, formatMoney } from "../_lib/money";
+import { formatMoney } from "../_lib/money";
 
 /** The modal's strings as generated constants (C-06). */
 const G = FrontendI18nKeys.common.wallet.gift;
@@ -178,7 +178,7 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
     }
   }
 
-  const money = (amount: string) => formatMoney(amount, BASE_CURRENCY, { lang, t });
+  const money = (amount: string, currency: string) => formatMoney(amount, currency, { lang, t });
 
   /** Under reduced motion every entrance below becomes this and nothing more. */
   const fade: Variants = {
@@ -276,8 +276,8 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
             ) : redeemed ? (
               <Success
                 reduce={!!reduce}
-                credited={money(redeemed.credited)}
-                balance={money(redeemed.balance)}
+                credited={money(redeemed.credited, redeemed.currencyCode)}
+                balance={money(redeemed.balance, redeemed.currencyCode)}
                 onClose={onClose}
                 t={t}
               />

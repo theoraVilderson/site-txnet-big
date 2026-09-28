@@ -14,7 +14,7 @@ import { flattenTexts } from "../../catalog/_lib/catalog-form";
 import { formatBytes } from "../../services/_lib/service-configs";
 import { useWalletBalance } from "../../_hooks/useWalletBalance";
 import { formatInstant } from "../../_lib/datetime";
-import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
+import { formatMoney } from "../../_lib/money";
 import { categoriesOf, forgetReturnInvoice, groupOffers, hasOwnName, quotaLimit, shortfallOf, type OfferGroup } from "../_lib/shop";
 
 const S = FrontendI18nKeys.common.shop;
@@ -55,7 +55,7 @@ type Names = { of: (key: string | null, fallback: string) => string };
 export function ShopView({ invoiceId }: { invoiceId: string | null }) {
   const { lang, t } = useLocale();
   const messageFor = useApiErrorMessage();
-  const money = (value: string) => formatMoney(value, BASE_CURRENCY, { lang, t });
+  const money = (value: string, currency: string) => formatMoney(value, currency, { lang, t });
 
   const [phase, setPhase] = useState<Phase>({ kind: "list" });
   const [offers, setOffers] = useState<ShopOffer[] | null>(null);
@@ -199,7 +199,7 @@ function OfferList({
 }: {
   offers: ShopOffer[] | null;
   names: Names;
-  money: (v: string) => string;
+  money: (v: string, currency: string) => string;
   onBuy: (o: ShopOffer) => void;
 }) {
   const { t } = useLocale();
@@ -269,7 +269,7 @@ function ProductCard({
 }: {
   group: OfferGroup;
   names: Names;
-  money: (v: string) => string;
+  money: (v: string, currency: string) => string;
   onBuy: (o: ShopOffer) => void;
 }) {
   const { t } = useLocale();
@@ -316,7 +316,7 @@ function ProductCard({
             <p className="truncate text-xs font-bold text-text-secondary">{names.of(offer.nameKey, offer.sku)}</p>
           )}
           <p dir="ltr" className="text-2xl font-black text-text-primary">
-            {money(offer.price)}
+            {money(offer.price, offer.currencyCode)}
           </p>
         </div>
         <button
@@ -375,13 +375,13 @@ function Checkout({
   buying: Buying;
   initial: ShopInvoice | null;
   names: Names;
-  money: (v: string) => string;
+  money: (v: string, currency: string) => string;
   onBack: () => void;
   onPaid: (p: InvoicePaid) => void;
 }) {
   const { t, lang } = useLocale();
   const messageFor = useApiErrorMessage();
-  const { balance } = useWalletBalance();
+  const { balance, currencyCode: walletCurrency } = useWalletBalance();
   const busy = useRef(false);
   const [isBusy, setIsBusy] = useState(false);
   const [invoice, setInvoice] = useState<ShopInvoice | null>(initial);
@@ -395,6 +395,8 @@ function Checkout({
   const name = names.of(buying.nameKey, buying.sku);
   // The price before any code: the list's, or on a return the invoice's own.
   const listed = buying.offer?.price ?? initial?.amount ?? null;
+  // Each figure in the currency its answer names (F-116-h3): the invoice's once there is one, the list's before.
+  const currency = invoice?.currencyCode ?? buying.offer?.currencyCode ?? initial?.currencyCode ?? "";
   const open = invoice === null || invoice.status === "pending";
 
   /** Runs one step under the claim: a second press, or a code typed mid-pay, is ignored. */
@@ -564,15 +566,15 @@ function Checkout({
         )}
 
         <dl className="space-y-2 text-sm">
-          <Line label={t("common", S.invoice.amount)} value={money(invoice?.amount ?? listed ?? "")} />
-          {invoice?.applied.map((a) => <Line key={a.code} label={a.code} value={`− ${money(a.discount)}`} />)}
-          <Line label={t("common", S.invoice.total)} value={money(invoice?.total ?? listed ?? "")} strong />
+          <Line label={t("common", S.invoice.amount)} value={money(invoice?.amount ?? listed ?? "", currency)} />
+          {invoice?.applied.map((a) => <Line key={a.code} label={a.code} value={`− ${money(a.discount, currency)}`} />)}
+          <Line label={t("common", S.invoice.total)} value={money(invoice?.total ?? listed ?? "", currency)} strong />
         </dl>
 
-        {balance !== null && open && (
+        {balance !== null && walletCurrency !== null && open && (
           <p className="flex items-center gap-2 text-xs text-text-secondary">
             <Wallet size={14} aria-hidden />
-            <span dir="auto">{t("common", S.checkout.balance, { balance: money(balance) })}</span>
+            <span dir="auto">{t("common", S.checkout.balance, { balance: money(balance, walletCurrency) })}</span>
           </p>
         )}
 
@@ -589,13 +591,13 @@ function Checkout({
 
         {missing && invoice && (
           <div className="rounded-2xl border border-error-border bg-error-bg p-4 text-sm">
-            <p className="font-bold text-error">{t("common", S.shortfall.title, { missing: money(missing) })}</p>
+            <p className="font-bold text-error">{t("common", S.shortfall.title, { missing: money(missing, invoice.currencyCode) })}</p>
             <p className="mt-1 text-text-secondary">{t("common", S.shortfall.hint, { time: until })}</p>
             <Link
-              href={panelDepositForInvoicePath(invoice.id, missing)}
+              href={panelDepositForInvoicePath(invoice.id, missing, invoice.currencyCode)}
               className="mt-3 inline-block rounded-2xl bg-primary px-4 py-2 font-bold text-white hover:brightness-110"
             >
-              {t("common", S.shortfall.topUp, { amount: money(missing) })}
+              {t("common", S.shortfall.topUp, { amount: money(missing, invoice.currencyCode) })}
             </Link>
           </div>
         )}
@@ -629,7 +631,7 @@ function Checkout({
  * subscription link and My services shows it as often as asked, so this says
  * where it is and goes there.
  */
-function Paid({ paid, name, money }: { paid: InvoicePaid; name: string; money: (v: string) => string }) {
+function Paid({ paid, name, money }: { paid: InvoicePaid; name: string; money: (v: string, currency: string) => string }) {
   const { t } = useLocale();
 
   return (
@@ -641,7 +643,7 @@ function Paid({ paid, name, money }: { paid: InvoicePaid; name: string; money: (
         <h2 className="text-xl font-bold text-text-primary">{t("common", S.paid.title)}</h2>
         <p className="mt-1 text-sm text-text-secondary">{name}</p>
         <p dir="ltr" className="mt-1 text-sm font-bold text-primary">
-          {t("common", S.paid.balance, { balance: money(paid.balanceAfter) })}
+          {t("common", S.paid.balance, { balance: money(paid.balanceAfter, paid.currencyCode) })}
         </p>
       </div>
 

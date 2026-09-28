@@ -58,7 +58,8 @@ carry one piece of the return (rules 7 and 8).
    carries `missing` in the envelope's `error.facts` (`ApiError.facts`,
    [contract.errors.md](contract.errors.md)); `shortfallOf` reads it and never
    recomputes it from a balance, so the round-up-to-the-cent rule (F-111-c)
-   lives only in billing. The link is `panelDepositForInvoicePath(id, missing)`.
+   lives only in billing. The link is `panelDepositForInvoicePath(id, missing, currency)`,
+   `currency` the invoice's own, as every figure on the page is in its answer's (F-116-h3).
    The top-up page ([contract.deposit.md](contract.deposit.md) rule 18)
    pre-fills `missing` raised to the chosen gateway's `minAmount`
    (`prefillAmount`, exact decimal compare, C-02) and links back.

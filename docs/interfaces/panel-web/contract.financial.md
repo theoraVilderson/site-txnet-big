@@ -140,9 +140,9 @@ half of `POST /api/billing/tenant-wallet/topup` and its `/gateways` list
   listed them; `GET /wallet/payments` answers the `discount` amount and no
   codes (`contract.history.md`'s column list), so the page shows the amount.
   Adding them is a `billing` change first, and a row of its own.
-- **A display currency.** Every amount is formatted in the base currency
-  (ADR-0019). F-025 is the row that brings the conversion, and it changes the
-  arguments to `formatMoney`, not this page's data path.
+- **A display currency.** Every amount is formatted in its own row's
+  `currencyCode` (F-116-h3), the balance in the wallet's; nothing converts
+  between them. F-025 is the row that brings a display conversion.
 - **Live updates.** The lists are read when the filters change and on retry. An
   event on `user:<userId>` re-reads the top bar's balance (F-093-c) but not
   these tables; a payment landing while the page is open is one refresh away.

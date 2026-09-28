@@ -5,7 +5,7 @@ import { AlertCircle, ChevronDown, Loader2, Receipt, ShieldCheck, Sparkles } fro
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { DepositQuote } from "@/lib/billing-api";
-import { BASE_CURRENCY, amountInWords, formatMoney } from "../../../_lib/money";
+import { amountInWords, formatMoney } from "../../../_lib/money";
 import { numberLocale } from "../../../_lib/digits";
 import { fromMinor, tomanFromRial } from "../_lib/deposit-amount";
 
@@ -50,7 +50,8 @@ export function PaymentSummary({
 }: PaymentSummaryProps) {
   const { lang, t } = useLocale();
   const [open, setOpen] = useState(false);
-  const money = (value: string) => formatMoney(value, BASE_CURRENCY, { lang, t });
+  // Every figure but `charge` is in the quote's own currency (F-116-h3); only read with a quote.
+  const money = (value: string) => formatMoney(value, quote?.currencyCode ?? "", { lang, t });
 
   const free = quote?.free ?? false;
   const canPay = quote !== null && !isQuoting && !isStarting;

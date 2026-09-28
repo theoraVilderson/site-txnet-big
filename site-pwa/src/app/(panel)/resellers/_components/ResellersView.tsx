@@ -9,7 +9,7 @@ import { tenantApi, type Reseller } from "@/lib/tenant-api";
 import { panelResellerPath } from "@/lib/routes";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { formatInstant } from "../../_lib/datetime";
-import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
+import { formatMoney } from "../../_lib/money";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { Alert, StatusBadge, primaryButton, quietButton, useMessage } from "./resellers-ui";
 import { RESELLER_KEYS as K, canAdministerResellers } from "../_lib/resellers";
@@ -145,7 +145,7 @@ export function ResellersView() {
                   </td>
                   <td className={`${cell} text-text-secondary`}>{t("common", K.period[r.billingModel])}</td>
                   <td className={cell} dir="ltr">
-                    {formatMoney(r.billingBalance, BASE_CURRENCY, { lang, t })}
+                    {formatMoney(r.billingBalance, r.billingCurrencyCode, { lang, t })}
                   </td>
                   <td className={`${cell} text-text-secondary`}>{formatInstant(r.createdAt, lang, { withTime: false })}</td>
                 </tr>

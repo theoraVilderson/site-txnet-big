@@ -94,6 +94,8 @@ export type VerifyingPaymentView = {
   providerName: string | null;
   amountRequested: string;
   amountCredited: string;
+  /** What `amountRequested` and `amountCredited` are in: the payment's own (F-116-h3). */
+  currencyCode: string;
   chargedAmountMinor: string;
   authority: string | null;
   createdAt: Date;
@@ -124,6 +126,7 @@ const VIEW_SELECT = {
   tenantGatewayConfigId: true,
   amountRequested: true,
   amountCredited: true,
+  currencyCode: true,
   chargedAmountMinor: true,
   gatewayTrackingCode: true,
   createdAt: true,
@@ -185,6 +188,7 @@ export class ManualConfirmService {
         providerName: gw?.providerName ?? null,
         amountRequested: r.amountRequested.toFixed(2),
         amountCredited: r.amountCredited.toFixed(2),
+        currencyCode: r.currencyCode,
         chargedAmountMinor: r.chargedAmountMinor.toString(),
         authority: r.gatewayTrackingCode,
         createdAt: r.createdAt,

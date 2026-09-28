@@ -8,11 +8,13 @@ import { usePanelSession } from "../_context/PanelSessionContext";
 
 export interface WalletBalanceState {
   /**
-   * The balance as billing answered it — a decimal string in the base currency
-   * (ADR-0019), or `null` while there is none to show. `null` is not zero:
+   * The balance as billing answered it — a decimal string in `currencyCode`,
+   * or `null` while there is none to show. `null` is not zero:
    * `"0.00"` is a real balance a user with no wallet yet has.
    */
   balance: string | null;
+  /** The wallet's currency, as the same answer named it (F-116-h3); `null` with `balance`. */
+  currencyCode: string | null;
   isLoading: boolean;
   /** The read did not land. There is no server text for it — the caller shows its own line. */
   failed: boolean;
@@ -45,6 +47,7 @@ export function useWalletBalance(): WalletBalanceState {
   const client = usePanelRealtime();
 
   const [balance, setBalance] = useState<string | null>(null);
+  const [currencyCode, setCurrencyCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
@@ -66,9 +69,10 @@ export function useWalletBalance(): WalletBalanceState {
     setIsLoading(true);
     (async () => {
       try {
-        const { balance: next } = await billingApi.walletBalance();
+        const next = await billingApi.walletBalance();
         if (!alive) return;
-        setBalance(next);
+        setBalance(next.balance);
+        setCurrencyCode(next.currencyCode);
         setFailed(false);
       } catch {
         // Nothing translated comes back for a balance — the route raises no
@@ -98,5 +102,5 @@ export function useWalletBalance(): WalletBalanceState {
     });
   }, [client, userId]);
 
-  return { balance, isLoading, failed, refresh };
+  return { balance, currencyCode, isLoading, failed, refresh };
 }

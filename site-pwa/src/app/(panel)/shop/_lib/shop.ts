@@ -86,13 +86,16 @@ export interface ForInvoice {
   invoiceId: string;
   /** Billing's shortfall, at most two places — what a deposit amount takes. */
   missing: string;
+  /** What `missing` is in: the invoice's (F-116-h3). */
+  currency: string;
 }
 
 /** The hand-off read off the top-up page's query, or `null` when it is not a well-formed one. */
-export function forInvoiceOf(invoiceId: string | null, missing: string | null): ForInvoice | null {
+export function forInvoiceOf(invoiceId: string | null, missing: string | null, currency: string | null): ForInvoice | null {
   if (!invoiceId || !/^[0-9a-f-]{36}$/i.test(invoiceId)) return null;
   if (!missing || !/^\d{1,12}(\.\d{1,2})?$/.test(missing)) return null;
-  return { invoiceId, missing };
+  if (!currency || !/^[A-Z]{3}$/.test(currency)) return null;
+  return { invoiceId, missing, currency };
 }
 
 /**

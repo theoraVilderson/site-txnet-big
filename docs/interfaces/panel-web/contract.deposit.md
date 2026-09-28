@@ -159,7 +159,8 @@ route returns the whole breakdown instead of the pieces of one.
     rate shows no row, so an untaxed bill is exactly as before. Proof:
     `deposit/tax-line.test.tsx`.
 18. **Opened for an invoice's shortfall (F-111-e), it pre-fills and links back.**
-    `?invoice=&missing=` (`panelDepositForInvoicePath`, well-formed or ignored)
+    `?invoice=&missing=&currency=` (`panelDepositForInvoicePath`, well-formed or ignored;
+    `currency` the invoice's, what the notice prints `missing` in — F-116-h3)
     makes the amount `missing` raised to the chosen gateway's `minAmount` —
     derived, so it follows the picker — until the user types their own. A
     banner and the free path's result link back to `/shop?invoice=`; the id is
@@ -168,9 +169,10 @@ route returns the whole breakdown instead of the pieces of one.
 
 ## What this page does not do
 
-No display
-currency: amounts are base currency until F-025, and `charge` is shown as the
-gateway's own figure beside the payable rather than converted here. No live
+No conversion:
+each figure is in the currency its answer names (F-116-h3) — the quote's, a
+gateway's range in the gateway's, the balance in the wallet's — and `charge` is
+shown as the gateway's own figure beside the payable rather than converted here. No live
 staleness on the rate — that ladder is F-0607-a's.
 
 ## Proof

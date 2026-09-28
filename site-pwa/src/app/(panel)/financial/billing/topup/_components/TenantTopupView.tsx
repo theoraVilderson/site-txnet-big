@@ -110,7 +110,7 @@ export function TenantTopupView() {
         </div>
       </header>
 
-      <AmountInput amount={amount} onAmountChange={setAmount} gateway={gateway} disabled={noGateway} />
+      <AmountInput amount={amount} onAmountChange={setAmount} gateway={gateway} currency={gateway?.currencyCode ?? null} disabled={noGateway} />
 
       <GatewaySelector
         gateways={gateways}

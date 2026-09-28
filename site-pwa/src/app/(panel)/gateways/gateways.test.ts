@@ -46,6 +46,7 @@ const OWNER_ME: Me = {
 const RESELLER_ME: Me = { ...OWNER_ME, role: { id: "r2", name: "Admin" }, permissions: ["gateway.manage", "settlement.manage"], tenant: { id: "t-res", type: "reseller", isOwner: false } };
 
 const GATEWAY: AdminGateway = {
+  currencyCode: "USD",
   source: "tenant",
   id: "g1",
   tenantId: "t-res",

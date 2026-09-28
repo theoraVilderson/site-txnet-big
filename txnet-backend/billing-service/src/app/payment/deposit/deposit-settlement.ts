@@ -391,6 +391,8 @@ export class DepositSettlementService {
           // currency's minor unit — a string, as every amount on the wire.
           chargedAmountMinor: payment.chargedAmountMinor.toString(),
           amountCredited: payment.amountCredited.toFixed(2),
+          // What `amountCredited` is in: the payment's own (F-116-h3).
+          currencyCode: payment.currencyCode,
           gateway: { source: ref.source, id: ref.gatewayId },
         },
       },
@@ -516,6 +518,8 @@ export class DepositSettlementService {
           userId: payment.userId,
           paymentId: payment.id,
           amountCredited: payment.amountCredited.toFixed(2),
+          // What `amountCredited` and `amountAsked` are in: the payment's own (F-116-h3).
+          currencyCode: payment.currencyCode,
           // Both figures (F-104-d): what was asked, and what the gateway says
           // arrived — in the gateway currency's minor unit, as strings.
           amountAsked: amountAsked.toFixed(2),

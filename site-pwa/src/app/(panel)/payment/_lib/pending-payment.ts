@@ -35,12 +35,19 @@ export function pendingStateOf(row: WalletPaymentRow | null): PendingState {
   return { kind: "closed" };
 }
 
+/** A payment event on the user's channel: which payment, what it credited, and in what. */
+export interface PaymentEvent {
+  paymentId: string;
+  amountCredited: string;
+  currencyCode: string;
+}
+
 /**
  * A late credit announced on the payer's own `user:` channel (F-067-l,
  * ADR-0045), or `null` for anything else on it. The amount must look like
  * billing's decimal string — it is printed.
  */
-export function readPaymentCredited(payload: unknown): { paymentId: string; amountCredited: string } | null {
+export function readPaymentCredited(payload: unknown): PaymentEvent | null {
   return readPaymentEvent(payload, RealtimeEvents.paymentConfirmed);
 }
 
@@ -48,15 +55,21 @@ export function readPaymentCredited(payload: unknown): { paymentId: string; amou
  * A payment the gateway reversed, announced on the same channel (F-067-m,
  * ADR-0046 decision 5) — the bank is returning the money — or `null`.
  */
-export function readPaymentReversed(payload: unknown): { paymentId: string; amountCredited: string } | null {
+export function readPaymentReversed(payload: unknown): PaymentEvent | null {
   return readPaymentEvent(payload, RealtimeEvents.paymentReversed);
 }
 
-function readPaymentEvent(payload: unknown, type: string): { paymentId: string; amountCredited: string } | null {
+/**
+ * `currencyCode` is what `amountCredited` is in (F-116-h3). An event without
+ * one — written before the payload carried it — is not read: a figure with no
+ * currency is not shown as if it had one.
+ */
+function readPaymentEvent(payload: unknown, type: string): PaymentEvent | null {
   if (!payload || typeof payload !== "object") return null;
   const p = payload as Record<string, unknown>;
   if (p.type !== type) return null;
   if (typeof p.paymentId !== "string" || !p.paymentId) return null;
   if (typeof p.amountCredited !== "string" || !/^\d{1,16}(\.\d{1,2})?$/.test(p.amountCredited)) return null;
-  return { paymentId: p.paymentId, amountCredited: p.amountCredited };
+  if (typeof p.currencyCode !== "string" || !/^[A-Z]{3}$/.test(p.currencyCode)) return null;
+  return { paymentId: p.paymentId, amountCredited: p.amountCredited, currencyCode: p.currencyCode };
 }

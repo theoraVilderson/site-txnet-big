@@ -163,11 +163,13 @@ export interface CategoryRemoval {
   products?: { deleted: number; archived: number; unlinked: number };
 }
 
-/** Base currency, a decimal string (C-02). A row is history: never edited, only switched off. */
+/** A decimal string in `currencyCode` (C-02). A row is history: never edited, only switched off. */
 export interface CatalogPrice {
   id: string;
   variantId: string;
   amount: string;
+  /** The price row's own currency — an old row keeps the one it was set in (F-116-h3). */
+  currencyCode: string;
   effectiveFrom: string;
   isActive: boolean;
 }

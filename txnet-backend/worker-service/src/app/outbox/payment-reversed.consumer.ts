@@ -11,7 +11,8 @@ import { EventNoticeSender } from './event-notice';
 const CONSUMER = 'payment-reversed-notify';
 
 /** The part of billing's `billing.payment.reversed` payload this reads (`DepositSettlementService.closeReversed`). */
-type PaymentReversed = { tenantId: string; userId: string; paymentId: string; amountCredited: string };
+/** `currencyCode` is what `amountCredited` is in (F-116-h3); `null` on an event written before it. */
+type PaymentReversed = { tenantId: string; userId: string; paymentId: string; amountCredited: string; currencyCode: string | null };
 
 /**
  * Tell the payer the bank is returning a payment the gateway reversed
@@ -48,7 +49,12 @@ export class PaymentReversedConsumer implements OnApplicationBootstrap {
       eventId: event.id,
       live: {
         channel: `user:${payment.userId}`,
-        body: { type: OutboxEventType.PAYMENT_REVERSED, paymentId: payment.paymentId, amountCredited: payment.amountCredited },
+        body: {
+          type: OutboxEventType.PAYMENT_REVERSED,
+          paymentId: payment.paymentId,
+          amountCredited: payment.amountCredited,
+          ...(payment.currencyCode ? { currencyCode: payment.currencyCode } : {}),
+        },
       },
       person: { tenantId: payment.tenantId, userId: payment.userId, template: 'paymentReversed', params: { amount: payment.amountCredited } },
     });
@@ -66,5 +72,5 @@ function paymentOf(event: OutboxMessage): PaymentReversed {
   if (!tenantId || !userId || !paymentId || !amountCredited) {
     throw new Error(`outbox event ${event.id} has a payload without its tenant, user, payment or amount`);
   }
-  return { tenantId, userId, paymentId, amountCredited };
+  return { tenantId, userId, paymentId, amountCredited, currencyCode: str('currencyCode') };
 }

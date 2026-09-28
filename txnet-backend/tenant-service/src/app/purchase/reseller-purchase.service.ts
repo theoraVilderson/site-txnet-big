@@ -65,6 +65,8 @@ export type PackageOffer = {
   name: string;
   monthlyPrice: string | null;
   yearlyPrice: string | null;
+  /** What both prices are in: the package's own (F-116-h3). */
+  currencyCode: string;
   includedFeatureKeys: string[];
 };
 
@@ -95,6 +97,7 @@ const PACKAGE_SELECT = {
   isActive: true,
   monthlyPrice: true,
   yearlyPrice: true,
+  currencyCode: true,
   includedFeatureKeys: true,
 } satisfies Prisma.TenantFeaturePackageSelect;
 
@@ -124,6 +127,7 @@ export class ResellerPurchaseService {
       name: p.name,
       monthlyPrice: p.monthlyPrice?.toFixed(2) ?? null,
       yearlyPrice: p.yearlyPrice?.toFixed(2) ?? null,
+      currencyCode: p.currencyCode,
       includedFeatureKeys: p.includedFeatureKeys as string[],
     }));
   }

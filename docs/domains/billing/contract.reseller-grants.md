@@ -166,7 +166,7 @@ gifted byte back as money.
 `POST …/users/:userId/grants/:grantId/delete`, body `{refund, reason}` — `refund`
 boolean, always asked (the admin's answer, user 2026-09-26); `reason` 1..500 chars
 -> `{grantId, deletionId, statusBefore, configsReleased, refund, refundedAmount,
-walletTransactionId, refundSkipped}` (`refundedAmount` a decimal string or null).
+currencyCode, walletTransactionId, refundSkipped}` (`refundedAmount` decimal or null, in `currencyCode`, its wallet row's — F-116-h3).
 Same controller, over `deleteGrant` (entitlement `contract.admin.md` "Delete") with
 `RemainderCreditService.settle` ([contract.traffic-block.md](contract.traffic-block.md)
 "The remainder") as its settler: `cancelled`, every config released from its panel

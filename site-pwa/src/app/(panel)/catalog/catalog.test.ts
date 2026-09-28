@@ -541,7 +541,7 @@ describe("a new price", () => {
 });
 
 describe("currentPrice", () => {
-  const price = (id: string, effectiveFrom: string, isActive = true): CatalogPrice => ({ id, variantId: "v1", amount: "1.00", effectiveFrom, isActive });
+  const price = (id: string, effectiveFrom: string, isActive = true): CatalogPrice => ({ id, variantId: "v1", amount: "1.00", currencyCode: "USD", effectiveFrom, isActive });
   const NOW = new Date("2026-09-14T12:00:00Z");
 
   it("is the newest active price already in effect — not a future one, not a switched-off one", () => {

@@ -5,7 +5,7 @@ import { Hash, Wallet } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { WalletLedgerRow } from "@/lib/billing-api";
-import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
+import { formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
 import { DIRECTION_TONES, reasonLabelKey } from "../_lib/tones";
 import { Badge } from "./Badge";
@@ -35,7 +35,7 @@ export function LedgerRow({ row }: { row: WalletLedgerRow }) {
   const Icon = tone.icon;
   const reasonKey = reasonLabelKey(row.reasonType);
   const title = reasonKey ? t("common", reasonKey) : row.reasonType;
-  const money = (amount: string) => formatMoney(amount, BASE_CURRENCY, { lang, t });
+  const money = (amount: string) => formatMoney(amount, row.currencyCode, { lang, t });
   const when = formatInstant(row.createdAt, lang);
 
   return (

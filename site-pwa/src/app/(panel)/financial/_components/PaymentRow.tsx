@@ -15,7 +15,7 @@ import {
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { WalletPaymentRow } from "@/lib/billing-api";
-import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
+import { formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
 import { GATEWAY_TONES, paymentTone } from "../_lib/tones";
 import { Badge } from "./Badge";
@@ -46,7 +46,7 @@ export function PaymentRow({ row }: { row: WalletPaymentRow }) {
   const status = paymentTone(row);
   const gateway = GATEWAY_TONES[row.gateway?.source ?? "none"];
   const StatusIcon = status.icon;
-  const money = (amount: string) => formatMoney(amount, BASE_CURRENCY, { lang, t });
+  const money = (amount: string) => formatMoney(amount, row.currencyCode, { lang, t });
   const when = formatInstant(row.createdAt, lang);
   const expiresAt = formatInstant(row.expiresAt, lang);
   const adjusted = row.amountRequested !== row.amountCredited;

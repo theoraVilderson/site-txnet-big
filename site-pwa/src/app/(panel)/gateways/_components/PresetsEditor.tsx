@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
+import { formatMoney } from "../../_lib/money";
 import { MAX_PRESETS, addPreset, type PresetError } from "../_lib/presets";
 
 const P = FrontendI18nKeys.common.gateways.presets;
@@ -14,6 +14,8 @@ interface PresetsEditorProps {
   onChange: (next: string[]) => void;
   /** Shown when the list is empty — what the top-up page will offer instead. */
   emptyText: string;
+  /** What the amounts are in: the gateway's own, or the tenant's for its default list (F-116-h3). */
+  currency: string;
   id?: string;
 }
 
@@ -22,7 +24,7 @@ interface PresetsEditorProps {
  * goes through `addPreset`, so the list on screen is already the one billing
  * will store — sorted, two decimals, no repeats, at most {@link MAX_PRESETS}.
  */
-export function PresetsEditor({ value, onChange, emptyText, id }: PresetsEditorProps) {
+export function PresetsEditor({ value, onChange, emptyText, currency, id }: PresetsEditorProps) {
   const { lang, t } = useLocale();
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<PresetError | null>(null);
@@ -50,7 +52,7 @@ export function PresetsEditor({ value, onChange, emptyText, id }: PresetsEditorP
               dir="ltr"
               className="inline-flex items-center gap-1 rounded-full border border-[var(--accent-primary)]/40 bg-card-bg py-1 pe-1 ps-3 text-xs font-bold text-text-primary shadow-sm"
             >
-              {formatMoney(amount, BASE_CURRENCY, { lang, t })}
+              {formatMoney(amount, currency, { lang, t })}
               <button
                 type="button"
                 onClick={() => onChange(value.filter((v) => v !== amount))}
@@ -87,7 +89,7 @@ export function PresetsEditor({ value, onChange, emptyText, id }: PresetsEditorP
               error ? "border-error" : "border-card-border"
             }`}
           />
-          <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-xs font-bold text-text-secondary">{BASE_CURRENCY}</span>
+          <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-xs font-bold text-text-secondary">{currency}</span>
         </div>
         <button
           type="button"

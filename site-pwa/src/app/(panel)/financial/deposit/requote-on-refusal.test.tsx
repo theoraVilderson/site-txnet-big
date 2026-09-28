@@ -53,6 +53,7 @@ vi.mock("../../_hooks/useWalletBalance", () => ({
 const t = (_ns: string, key: string) => key;
 
 const GATEWAY: DepositGateway = {
+  currencyCode: "USD",
   id: "11111111-1111-4111-8111-111111111111",
   source: "tenant",
   displayName: "Zarinpal",
@@ -65,6 +66,7 @@ const GATEWAY: DepositGateway = {
 };
 
 const BASE: DepositQuote = {
+  currencyCode: "USD",
   gatewayId: GATEWAY.id,
   source: "tenant",
   amount: "10.00",

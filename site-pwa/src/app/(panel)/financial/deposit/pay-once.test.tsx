@@ -42,6 +42,7 @@ vi.mock("./_hooks/useDepositQuote", () => ({ useDepositQuote: () => ({ quote, is
 const t = (_ns: string, key: string) => key;
 
 const GATEWAY: DepositGateway = {
+  currencyCode: "USD",
   id: "11111111-1111-4111-8111-111111111111",
   source: "tenant",
   displayName: "Zarinpal",
@@ -56,6 +57,7 @@ const GATEWAY: DepositGateway = {
 /** A bill for the inputs on screen — `charge: null`, so no rial block is drawn. */
 let quote: DepositQuote | null = null;
 const QUOTE: DepositQuote = {
+  currencyCode: "USD",
   gatewayId: GATEWAY.id,
   source: "tenant",
   amount: "10.00",
@@ -73,6 +75,7 @@ const QUOTE: DepositQuote = {
 };
 
 const verifyingRow: WalletPaymentRow = {
+  currencyCode: "USD",
   id: "77777777-7777-4777-8777-777777777777",
   status: "pending",
   amountRequested: "10.00",

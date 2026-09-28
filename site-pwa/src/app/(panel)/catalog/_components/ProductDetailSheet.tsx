@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, Loader2, Plus, Power, Sparkles } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { type CatalogCapability, type CatalogCategory, type CatalogProduct, type CatalogProductDetail, type CatalogVariant, type FulfilmentKind, type PanelGroupOption, type Quotas } from "@/lib/catalog-api";
+import { type CatalogCapability, type CatalogCategory, type CatalogPrice, type CatalogProduct, type CatalogProductDetail, type CatalogVariant, type FulfilmentKind, type PanelGroupOption, type Quotas } from "@/lib/catalog-api";
 import { useCatalogSurface } from "../_lib/surface";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Select } from "../../_components/kit/Select";
-import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
+import { formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
 import {
   BILLING_MODES,
@@ -96,7 +96,7 @@ export function ProductDetailSheet({
     void load();
   }, [load]);
 
-  const money = (amount: string) => formatMoney(amount, BASE_CURRENCY, { lang, t });
+  const money = (price: CatalogPrice) => formatMoney(price.amount, price.currencyCode, { lang, t });
 
   return (
     <Sheet
@@ -263,7 +263,7 @@ function VariantCard({
   variant: CatalogVariant;
   kind: FulfilmentKind;
   groups: PanelGroups;
-  money: (a: string) => string;
+  money: (price: CatalogPrice) => string;
   onChanged: () => Promise<void>;
 }) {
   const { t, lang } = useLocale();
@@ -312,7 +312,7 @@ function VariantCard({
         </div>
         <div className="flex flex-wrap items-center gap-1">
           <span className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-xs font-bold text-primary">
-            {current ? money(current.amount) : t("common", K.price.noPrice)}
+            {current ? money(current) : t("common", K.price.noPrice)}
           </span>
           <CopyId id={v.id} />
           <button type="button" className={quietButton} onClick={() => void act(() => api.updateVariant(v.id, { isActive: !v.isActive }))}>
@@ -348,7 +348,7 @@ function VariantCard({
             <tbody className="divide-y divide-card-border text-text-primary">
               {v.prices.map((p) => (
                 <tr key={p.id}>
-                  <td className="px-2 py-1.5">{money(p.amount)}</td>
+                  <td className="px-2 py-1.5">{money(p)}</td>
                   <td className="px-2 py-1.5">{t("common", K.price.effectiveFrom, { time: formatInstant(p.effectiveFrom, lang) ?? "" })}</td>
                   <td className="px-2 py-1.5">
                     {p.id === current?.id

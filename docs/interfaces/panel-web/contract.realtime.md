@@ -197,13 +197,14 @@ choice, and this keying is what makes it a rule of the socket instead.
 
 **The first producer on a signed-in channel is a late credit (F-067-l,
 ADR-0045).** `worker-service` publishes `{type:'billing.payment.confirmed',
-paymentId, amountCredited}` on `user:<userId>`. Two listeners share the
+paymentId, amountCredited, currencyCode}` on `user:<userId>`. Two listeners share the
 channel: `useWalletBalance` re-reads on any event, and
 `_components/PaymentCreditedToast.tsx` (at the layout) shows "payment
 confirmed" for 8 s for this one shape only — `readPaymentCredited` ignores the
-rest and refuses an amount that is not a decimal string. Since F-067-m the same
+rest and refuses an amount that is not a decimal string, or one with no
+`currencyCode` (an event written before F-116-h3). Since F-067-m the same
 toast also shows "payment reversed" for `{type:'billing.payment.reversed',
-paymentId, amountCredited}` (`readPaymentReversed`), the last event heard.
+paymentId, amountCredited, currencyCode}` (`readPaymentReversed`), the last event heard.
 
 ## Identity does not change on a live socket
 

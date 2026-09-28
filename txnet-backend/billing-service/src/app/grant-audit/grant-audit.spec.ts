@@ -40,7 +40,7 @@ vi.mock('../entitlement/devices', () => ({
   setGrantDeviceLimit: vi.fn(async () => (log.push('act'), { grantId: GRANT, adjustmentId: 'a4', limitBefore: null, limitAfter: 2, panelsNotEnforcing: [] })),
 }));
 vi.mock('../entitlement/delete', () => ({
-  deleteGrant: vi.fn(async () => (log.push('act'), { deletionId: 'd1', statusBefore: 'active', configsReleased: 2, refund: false, refundedAmount: null, walletTransactionId: null, refundSkipped: null })),
+  deleteGrant: vi.fn(async () => (log.push('act'), { deletionId: 'd1', statusBefore: 'active', configsReleased: 2, refund: false, refundedAmount: null, currencyCode: null, walletTransactionId: null, refundSkipped: null })),
 }));
 vi.mock('../entitlement/admin-issue', () => ({
   issueGrantByAdmin: vi.fn(async () => (log.push('act'), { grantId: NEW_GRANT, variantId: 'v1', status: 'active', startsAt: new Date(), endsAt: null, issued: repeat ? false : true })),

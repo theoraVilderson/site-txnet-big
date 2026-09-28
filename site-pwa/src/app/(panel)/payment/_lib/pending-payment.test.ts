@@ -8,6 +8,7 @@ import { PENDING_POLL_MS, pendingStateOf, readPaymentCredited, readPaymentRevers
  *  - a poll so fast it spends the route's budget (300 per 15 min) in one visit.
  */
 const row = (overrides: Partial<WalletPaymentRow>): WalletPaymentRow => ({
+  currencyCode: "USD",
   id: "77777777-7777-4777-8777-777777777777",
   status: "pending",
   amountRequested: "10.00",
@@ -81,8 +82,8 @@ describe("the poll", () => {
 describe("readPaymentCredited", () => {
   it("reads the event worker-service publishes", () => {
     expect(
-      readPaymentCredited({ type: "billing.payment.confirmed", paymentId: "p-1", amountCredited: "19.80" }),
-    ).toEqual({ paymentId: "p-1", amountCredited: "19.80" });
+      readPaymentCredited({ type: "billing.payment.confirmed", paymentId: "p-1", amountCredited: "19.80", currencyCode: "IRR" }),
+    ).toEqual({ paymentId: "p-1", amountCredited: "19.80", currencyCode: "IRR" });
   });
 
   it.each([
@@ -91,6 +92,8 @@ describe("readPaymentCredited", () => {
     { type: "wallet.changed", paymentId: "p-1", amountCredited: "19.80" },
     { type: "billing.payment.confirmed", paymentId: "p-1", amountCredited: "<b>9</b>" },
     { type: "billing.payment.confirmed", amountCredited: "19.80" },
+    // Written before the event named its currency (F-116-h3): a figure with no currency is not shown.
+    { type: "billing.payment.confirmed", paymentId: "p-1", amountCredited: "19.80" },
   ])("ignores %j", (payload) => {
     expect(readPaymentCredited(payload)).toBeNull();
   });
@@ -99,8 +102,8 @@ describe("readPaymentCredited", () => {
 describe("readPaymentReversed (F-067-m)", () => {
   it("reads the event worker-service publishes when the gateway reversed a payment", () => {
     expect(
-      readPaymentReversed({ type: "billing.payment.reversed", paymentId: "p-1", amountCredited: "19.80" }),
-    ).toEqual({ paymentId: "p-1", amountCredited: "19.80" });
+      readPaymentReversed({ type: "billing.payment.reversed", paymentId: "p-1", amountCredited: "19.80", currencyCode: "IRR" }),
+    ).toEqual({ paymentId: "p-1", amountCredited: "19.80", currencyCode: "IRR" });
   });
 
   it.each([

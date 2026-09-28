@@ -34,6 +34,8 @@ export type Deletion = {
   refund: boolean;
   /** Whole cents credited back (a string, as money leaves this service), or null. */
   refundedAmount: string | null;
+  /** What `refundedAmount` is in: the wallet row's own (F-116-h3); null with it. */
+  currencyCode: string | null;
   walletTransactionId: string | null;
   refundSkipped: RefundSkipped | null;
 };
@@ -101,6 +103,11 @@ export async function deleteGrant(
     }
   }
 
+  // The credit's own currency, read off the row it wrote: the settler answers an amount, not a wallet.
+  const currencyCode = credited
+    ? (await tx.walletTransaction.findUniqueOrThrow({ where: { id: credited.walletTransactionId }, select: { currencyCode: true } })).currencyCode
+    : null;
+
   const row = await tx.grantDeletion.create({
     data: {
       tenantId: grant.tenantId,
@@ -122,6 +129,7 @@ export async function deleteGrant(
     configsReleased: released.count,
     refund: input.refund,
     refundedAmount: credited ? credited.amount.toFixed(2) : null,
+    currencyCode,
     walletTransactionId: credited?.walletTransactionId ?? null,
     refundSkipped,
   };

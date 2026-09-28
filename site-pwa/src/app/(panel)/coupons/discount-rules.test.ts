@@ -46,6 +46,7 @@ const B = "22222222-2222-4222-8222-222222222222";
 const G = "33333333-3333-4333-8333-333333333333";
 
 const RULE: DiscountRule = {
+  currencyCode: "USD",
   id: "r1",
   name: "Nowruz",
   kind: "percentage",
