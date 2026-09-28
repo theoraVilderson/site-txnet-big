@@ -46,6 +46,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260928002700_a_payment_records_both_legs_of_its_rate/**
   - txnet-backend/prisma/domains/migrations/20260928002800_a_currency_change_has_a_reason/**
   - txnet-backend/prisma/domains/migrations/20260928002900_a_currency_change_converts_live_money/**
+  - txnet-backend/prisma/domains/migrations/20260928003000_a_gateway_rate_keeps_an_inverse_pair/**
 owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_tenant, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
 updated: 2026-09-28

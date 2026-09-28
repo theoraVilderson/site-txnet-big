@@ -51,9 +51,16 @@ type Seed = {
   tenants?: Record<string, TenantType>;
   /** Live + withdrawn grants the fake store already holds. */
   grants?: Array<Record<string, unknown>>;
-  /** Per-tenant accrual and payout sums, as the two ledgers would answer them. */
-  accrued?: Record<string, string>;
-  paidOut?: Record<string, string>;
+  /**
+   * Per-tenant accrual and payout sums, as the two ledgers would answer them:
+   * a string is in USD, an object is per currency code.
+   */
+  accrued?: Record<string, Sums>;
+  paidOut?: Record<string, Sums>;
+  /** Tenant id -> its operating currency now. Absent = `USD`. */
+  currencies?: Record<string, string>;
+  /** `currency_change` rows, newest first, as `convertedByChanges` reads them. */
+  changes?: Array<{ tenantId: string; fromCode: string; toCode: string; rate: string }>;
   /** `tenant_gateway_config` rows, by id -> owning tenant. */
   configs?: Record<string, string>;
   /** `payment_gateway` rows that exist. */
@@ -74,6 +81,8 @@ type Seed = {
    */
   paidOutBehindTheLock?: string;
 };
+
+type Sums = string | Record<string, string>;
 
 type Calls = {
   /** Everything written, in order, so "inside the transaction" is checkable. */
@@ -104,17 +113,33 @@ function build(seed: Seed = {}) {
     committed: false,
   };
 
-  const sums = (of: Record<string, string>) =>
-    Object.entries(of).map(([tenantId, amount]) => ({ tenantId, _sum: { amount: d(amount) } }));
+  const currencyOf = (tenantId: string) => seed.currencies?.[tenantId] ?? 'USD';
 
-  /** Read at call time, not at build time: a rival payout may have landed. */
-  const sumOf = (of: Record<string, string>) => async ({ where }: { where: { tenantId: string } }) => ({
-    _sum: { amount: of[where.tenantId] ? d(of[where.tenantId]) : null },
-  });
+  /** Grouped by tenant and currency. Read at call time, not at build time: a rival payout may have landed. */
+  const groupsOf = (of: Record<string, Sums>) => async ({ where }: { where: { tenantId?: string } }) =>
+    Object.entries(of)
+      .filter(([tenantId]) => !where.tenantId || tenantId === where.tenantId)
+      .flatMap(([tenantId, sums]) =>
+        Object.entries(typeof sums === 'string' ? { USD: sums } : sums).map(([currencyCode, amount]) => ({
+          tenantId,
+          currencyCode,
+          _sum: { amount: d(amount) },
+        })),
+      );
 
   const tx = {
-    // Every tenant here keeps its books in USD (F-116-b).
-    tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
+    // A tenant keeps its books in its operating currency (F-116-b); `USD` unless seeded.
+    tenant: {
+      findUnique: async ({ where }: { where: { id: string } }) => ({ operatingCurrencyCode: currencyOf(where.id) }),
+      findFirst: async () => ({ operatingCurrencyCode: 'USD' }),
+      findMany: async ({ where }: { where: { id: { in: string[] } } }) =>
+        where.id.in.map((id) => ({ id, operatingCurrencyCode: currencyOf(id) })),
+    },
+    currencyChange: {
+      findMany: async ({ where }: { where: { tenantId: string } }) =>
+        (seed.changes ?? []).filter((c) => c.tenantId === where.tenantId).map((c) => ({ ...c, rate: d(c.rate) })),
+    },
+    currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
     paymentGatewayGrant: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         calls.writes.push('grant');
@@ -141,7 +166,7 @@ function build(seed: Seed = {}) {
         calls.payouts.push(data);
         return { ...data, id: 'payout-1', paidAt: new Date('2026-09-12T00:00:00Z') };
       },
-      aggregate: sumOf(paidOut),
+      groupBy: groupsOf(paidOut),
     },
     adminAuditLog: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -150,7 +175,7 @@ function build(seed: Seed = {}) {
         return { id: 'audit-1' };
       },
     },
-    gatewaySettlementEntry: { aggregate: sumOf(accrued) },
+    gatewaySettlementEntry: { groupBy: groupsOf(accrued) },
     $executeRaw: async (_sql: TemplateStringsArray, ...values: unknown[]) => {
       calls.writes.push('lock');
       calls.locks.push(values);
@@ -171,6 +196,7 @@ function build(seed: Seed = {}) {
     tenant: {
       findUnique: async ({ where }: { where: { id: string } }) =>
         tenants[where.id] ? { id: where.id, tenantType: tenants[where.id] } : null,
+      findMany: tx.tenant.findMany,
       findFirst: async () => {
         const owner = Object.entries(tenants).find(([, t]) => t === TenantType.platform_owner);
         return owner ? { id: owner[0] } : null;
@@ -207,14 +233,6 @@ function build(seed: Seed = {}) {
       },
       findMany: async ({ where }: { where: Record<string, unknown> }) =>
         grants.filter((g) => !where['tenantId'] || g['tenantId'] === where['tenantId']),
-    },
-    gatewaySettlementEntry: {
-      ...tx.gatewaySettlementEntry,
-      groupBy: async () => sums(accrued),
-    },
-    gatewaySettlementPayout: {
-      ...tx.gatewaySettlementPayout,
-      groupBy: async () => sums(paidOut),
     },
     $transaction: async (fn: (t: typeof tx) => Promise<unknown>) => {
       if (seed.paidOutBehindTheLock !== undefined) {
@@ -487,6 +505,40 @@ describe('the settlement operator surface', () => {
       expect(rows).toHaveLength(1);
       expect(rows[0].accrued.toFixed(2)).toBe('0.00');
       expect(rows[0].outstanding.toFixed(2)).toBe('-10.00');
+    });
+
+    // The borrower moved USD -> EUR at 0.92 after 100.00 USD accrued and 40.00 USD
+    // was paid out; 20.00 EUR accrued since (F-116-f). Summed as written, that is
+    // 120 - 40 of two currencies; it is 55.20 + 20.00 - 36.80 EUR.
+    const changedCurrency = {
+      accrued: { [BORROWER]: { USD: '100.00', EUR: '20.00' } },
+      paidOut: { [BORROWER]: { USD: '40.00' } },
+      currencies: { [BORROWER]: 'EUR' },
+      changes: [{ tenantId: BORROWER, fromCode: 'USD', toCode: 'EUR', rate: '0.92' }],
+    };
+
+    it('is in the tenant\'s currency now: rows written before a currency change convert at its rate', async () => {
+      const { service } = build(changedCurrency);
+
+      const [row] = await service.owed(operator());
+
+      expect([row.currencyCode, row.accrued.toFixed(2), row.paidOut.toFixed(2), row.outstanding.toFixed(2)])
+        .toEqual(['EUR', '112.00', '36.80', '75.20']);
+    });
+
+    it('holds a payout to that same converted balance', async () => {
+      const { service, calls } = build(changedCurrency);
+
+      await expect(service.recordPayout({ tenantId: BORROWER, amount: d('75.21') }, operator()))
+        .rejects.toMatchObject({ reason: 'exceeds_outstanding' });
+      await service.recordPayout({ tenantId: BORROWER, amount: d('75.20') }, operator());
+      expect(calls.payouts[0]).toMatchObject({ currencyCode: 'EUR' });
+    });
+
+    it('refuses to sum a row in a currency the tenant never left, rather than add two currencies', async () => {
+      const { service } = build({ ...changedCurrency, changes: [] });
+
+      await expect(service.owed(operator())).rejects.toThrow(/USD/);
     });
   });
 

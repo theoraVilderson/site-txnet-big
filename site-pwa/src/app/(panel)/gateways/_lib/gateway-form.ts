@@ -53,6 +53,8 @@ export type FormError = "required" | "decimal" | "range" | "percent" | "merchant
 export type FormErrors = Partial<Record<keyof GatewayForm, FormError>>;
 
 const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,8})?$/;
+/** A rate's shape: `numeric(30, 18)` has 12 whole digits; its places are `PLACES`' to judge. */
+const RATE = /^(0|[1-9]\d{0,11})(\.\d+)?$/;
 /**
  * The scale of the column each decimal lands in (`billing.payment_gateway`,
  * and the identical columns on `tenant.tenant_gateway_config`).
@@ -69,7 +71,8 @@ const PLACES: Partial<Record<keyof GatewayForm, number>> = {
   feeCeiling: 2,
   feeValue: 4,
   taxRatePercent: 4,
-  staticRate: 8,
+  // `numeric(30, 18)`: a currency change divides a rate (F-116-f), and the editor saves back what it read.
+  staticRate: 18,
 };
 
 /** The places after the point in a value `DECIMAL` already accepted. */
@@ -229,8 +232,8 @@ export function validateForm(form: GatewayForm): FormErrors {
   if (form.providerName === "zarinpal" && merchantId && !UUID.test(merchantId)) errors.merchantId = "merchantFormat";
   if (takesStaticRate(form.providerName)) {
     const rate = form.staticRate.trim();
-    if (rate === "" || (DECIMAL.test(rate) && Number(rate) <= 0)) errors.staticRate = "required";
-    else if (!DECIMAL.test(rate)) errors.staticRate = "decimal";
+    if (rate === "" || (RATE.test(rate) && Number(rate) <= 0)) errors.staticRate = "required";
+    else if (!RATE.test(rate)) errors.staticRate = "decimal";
     else {
       const fine = tooFine("staticRate", rate);
       if (fine) errors.staticRate = fine;

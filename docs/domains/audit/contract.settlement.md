@@ -3,7 +3,7 @@ id: audit
 layer: domain
 status: active
 version: 1
-updated: 2026-09-13
+updated: 2026-09-28
 ---
 
 # Contract — the settlement operator surface
@@ -34,7 +34,7 @@ whose contract states it. The cost is the one exception below.
 | list grants | `?tenantId` (optional) | up to 200 grants, newest first, live and withdrawn | — |
 | create a grant | borrowing `tenantId` + **exactly one** of `gatewayId` / `tenantGatewayConfigId`, `note?` | the grant | `gateway_not_found`, `tenant_not_found`, `gateway_not_grantable`, `grant_to_owner`, `already_granted` |
 | withdraw a grant | grant id | the grant, inactive, with `withdrawnAt` | `grant_not_found`, `already_withdrawn` |
-| what is owed | — | per tenant: `accrued`, `paidOut`, `outstanding` — decimal **strings** (C-02), most owed first | — |
+| what is owed | — | per tenant: `currencyCode`, `accrued`, `paidOut`, `outstanding` — decimal **strings** (C-02) in that currency, most owed first | — |
 | record a payout | `tenantId`, `amount`, `method?`, `reference?`, `proofAttachmentKey?`, `notes?` | the payout | `amount_not_positive`, `exceeds_outstanding` |
 
 A refusal names its `reason` in the body. That is deliberate and does **not**
@@ -121,6 +121,13 @@ decision of its own and has not been taken.
   the tenant. A running balance is a second source of truth for money, and the
   first time it disagreed with the rows there would be no way to say which was
   right.
+- **It is in the tenant's operating currency now** (F-116-f). Each row keeps
+  the currency it was written in, so a tenant that changed currency has rows
+  in two: each currency is summed apart, and an earlier one is converted
+  through the tenant's `billing.currency_change` rows (`convertedByChanges`,
+  `billing/contract.currency-change.md` rule 9). A payout is checked against,
+  and recorded in, that same currency. A sum in a currency no change leads from
+  is refused, never added as written.
 
 ## The proof attachment (F-033)
 

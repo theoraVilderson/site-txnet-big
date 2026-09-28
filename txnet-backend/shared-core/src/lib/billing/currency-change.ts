@@ -94,8 +94,13 @@ export class CurrencyChangeConflict extends Error {
 
 /** `rate` is stored as `DECIMAL(30,18)` — the same scale as a payment's (F-116-e). */
 const RATE_SCALE = 18;
-/** A metered rate and a gateway's rate columns are `DECIMAL(18,8)`. */
+/** A metered rate is `DECIMAL(18,8)`. */
 const RATE_COLUMN_SCALE = 8;
+/**
+ * A gateway's rate columns are `DECIMAL(30,18)`: divided by the rate, an
+ * inverse pair (USD -> IRR) lands near 1e-6 and needs the places.
+ */
+const GATEWAY_RATE_SCALE = 18;
 
 export async function convertOperatingCurrency(
   tx: Prisma.TransactionClient,
@@ -177,7 +182,10 @@ export async function convertOperatingCurrency(
  * currency the money is in now back to the one it was priced in, so money
  * priced before a change and landing after it (an in-flight payment, a refund
  * of an older invoice) is converted at the rate(s) the wallet itself was.
- * Rounded once, to `toCode`'s decimals.
+ * Rounded once, to `toCode`'s decimals — and a positive amount never to
+ * nothing: one that converts to less than a minor unit (1,000 IRR into a USD
+ * wallet) is one minor unit. Rounded to zero, the ledger refused it and the
+ * payment's settlement retried it forever; the unit is at most a cent more.
  */
 export async function convertedByChanges(
   tx: Prisma.TransactionClient,
@@ -200,7 +208,8 @@ export async function convertedByChanges(
     if (code === fromCode) {
       const target = await tx.currency.findUnique({ where: { code: toCode }, select: { decimalPlaces: true } });
       if (!target) return null;
-      return amount.mul(factor).toDecimalPlaces(target.decimalPlaces, Prisma.Decimal.ROUND_HALF_UP);
+      const converted = amount.mul(factor).toDecimalPlaces(target.decimalPlaces, Prisma.Decimal.ROUND_HALF_UP);
+      return converted.isZero() && amount.gt(0) ? new Prisma.Decimal(10).pow(-target.decimalPlaces) : converted;
     }
   }
   return null;
@@ -320,10 +329,10 @@ const gatewaySet = (c: Conversion) => Prisma.sql`
   "feeFloor" = ${money(c, Prisma.sql`"feeFloor"`)},
   "feeCeiling" = ${money(c, Prisma.sql`"feeCeiling"`)},
   "depositPresets" = ${moneyList(c, Prisma.sql`"depositPresets"`)},
-  "staticRate" = round("staticRate" / ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int),
-  "fixedAmountModifier" = round("fixedAmountModifier" / ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int),
-  "minRate" = round("minRate" / ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int),
-  "maxRate" = round("maxRate" / ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int),
+  "staticRate" = round("staticRate" / ${c.rate}::numeric, ${GATEWAY_RATE_SCALE}::int),
+  "fixedAmountModifier" = round("fixedAmountModifier" / ${c.rate}::numeric, ${GATEWAY_RATE_SCALE}::int),
+  "minRate" = round("minRate" / ${c.rate}::numeric, ${GATEWAY_RATE_SCALE}::int),
+  "maxRate" = round("maxRate" / ${c.rate}::numeric, ${GATEWAY_RATE_SCALE}::int),
   "currencyCode" = ${c.to}, "updatedAt" = now()`;
 
 async function convertGateways(c: Conversion): Promise<number> {

@@ -37,6 +37,16 @@ const decimal = (what: string, places: number) => {
   const message = `${what} must be a decimal string with at most ${places} places`;
   return z.string({ message }).regex(decimalAt(places), { message });
 };
+/**
+ * A gateway rate, `numeric(30, 18)`: 12 whole digits, 18 places. A currency
+ * change divides these (F-116-f), so an inverse pair lands near 1e-6 and the
+ * editor must be able to save back what it read.
+ */
+const rateAt = (signed: boolean) => new RegExp(`^${signed ? '-?' : ''}(0|[1-9]\\d{0,11})(\\.\\d{1,18})?$`);
+const rate = (what: string, signed = false) => {
+  const message = `${what} must be a decimal string with at most 18 places`;
+  return z.string({ message }).regex(rateAt(signed), { message });
+};
 const uuid = (what: string) => z.string({ message: `${what} must be a uuid` }).uuid({ message: `${what} must be a uuid` });
 const secret = (what: string) => z.string({ message: `${what} must be a string` }).min(1, { message: `${what} must not be empty` }).max(512);
 
@@ -54,12 +64,12 @@ const fields = {
   feeFloor: decimal('feeFloor', 2).nullable(),
   feeCeiling: decimal('feeCeiling', 2).nullable(),
   useLiveRate: z.boolean(),
-  staticRate: decimal('staticRate', 8).nullable(),
+  staticRate: rate('staticRate').nullable(),
   // A modifier may be a markdown, so it takes a sign.
   percentageModifier: z.string().regex(/^-?(0|[1-9]\d{0,4})(\.\d{1,4})?$/, { message: 'percentageModifier must be a decimal string' }),
-  fixedAmountModifier: z.string().regex(/^-?(0|[1-9]\d{0,9})(\.\d{1,8})?$/, { message: 'fixedAmountModifier must be a decimal string' }),
-  minRate: decimal('minRate', 8).nullable(),
-  maxRate: decimal('maxRate', 8).nullable(),
+  fixedAmountModifier: rate('fixedAmountModifier', true),
+  minRate: rate('minRate').nullable(),
+  maxRate: rate('maxRate').nullable(),
   roundingStep: decimal('roundingStep', 8).nullable(),
   roundingMode: z.nativeEnum(RateRoundingMode),
   description: z.string().trim().max(500).nullable(),

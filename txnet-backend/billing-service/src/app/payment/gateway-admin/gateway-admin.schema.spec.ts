@@ -33,11 +33,21 @@ describe('gateway admin schema decimals', () => {
     expect(errorOf({ feeValue: '2.34567' })).toBe('feeValue must be a decimal string with at most 4 places');
   });
 
-  it('keeps eight places on a rate, where the column has them', () => {
-    for (const k of ['staticRate', 'minRate', 'maxRate', 'roundingStep']) {
-      expect(at({ [k]: '0.00012345' }).success).toBe(true);
-      expect(errorOf({ [k]: '0.000123456' })).toBe(`${k} must be a decimal string with at most 8 places`);
+  it('keeps eight places on a rounding step, where the column has them', () => {
+    expect(at({ roundingStep: '0.00012345' }).success).toBe(true);
+    expect(errorOf({ roundingStep: '0.000123456' })).toBe('roundingStep must be a decimal string with at most 8 places');
+  });
+
+  it('keeps eighteen places on a rate: a currency change divides it that fine, and the editor saves it back (F-116-f)', () => {
+    for (const k of ['staticRate', 'minRate', 'maxRate', 'fixedAmountModifier']) {
+      expect(at({ [k]: '0.000001666666666667' }).success).toBe(true);
+      expect(errorOf({ [k]: '0.0000016666666666667' })).toBe(`${k} must be a decimal string with at most 18 places`);
+      // 12 whole digits, the column's; a 13th would overflow it.
+      expect(at({ [k]: '999999999999' }).success).toBe(true);
+      expect(errorOf({ [k]: '1000000000000' })).toBe(`${k} must be a decimal string with at most 18 places`);
     }
+    expect(at({ fixedAmountModifier: '-0.5' }).success).toBe(true);
+    expect(errorOf({ staticRate: '-0.5' })).toBe('staticRate must be a decimal string with at most 18 places');
   });
 
   it('takes four places on a tax rate, at both levels, and null inherits (F-104-ag)', () => {

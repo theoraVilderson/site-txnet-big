@@ -61,6 +61,9 @@ const EUR_RATE = '10000000-0000-4000-8000-000000000010';
 const PLATFORM_PRODUCT = '10000000-0000-4000-8000-000000000011';
 const PLATFORM_VARIANT = '10000000-0000-4000-8000-000000000012';
 const PLATFORM_PRICE = '10000000-0000-4000-8000-000000000013';
+const ROUND_TRIP = '10000000-0000-4000-8000-000000000014';
+const ROUND_TRIP_USER = '10000000-0000-4000-8000-000000000015';
+const IRR_RATE = '10000000-0000-4000-8000-000000000016';
 
 /** One USD is 0.92 EUR: the pair the change crosses at. */
 const usdToEur = (): FxPair => ({
@@ -69,6 +72,23 @@ const usdToEur = (): FxPair => ({
   rate: new Prisma.Decimal('0.92'),
   from: null,
   to: { snapshotId: EUR_RATE, currencyCode: 'EUR', rate: new Prisma.Decimal('0.92'), effectiveAt: new Date() },
+});
+
+/** One USD is 1,050,000 IRR, and back: an inverse pair six orders of magnitude apart. */
+const IRR_PER_USD = new Prisma.Decimal('1050000');
+const usdToIrr = (): FxPair => ({
+  fromCode: 'USD',
+  toCode: 'IRR',
+  rate: IRR_PER_USD,
+  from: null,
+  to: { snapshotId: IRR_RATE, currencyCode: 'IRR', rate: IRR_PER_USD, effectiveAt: new Date() },
+});
+const irrToUsd = (): FxPair => ({
+  fromCode: 'IRR',
+  toCode: 'USD',
+  rate: new Prisma.Decimal(1).div(IRR_PER_USD),
+  from: { snapshotId: IRR_RATE, currencyCode: 'IRR', rate: IRR_PER_USD, effectiveAt: new Date() },
+  to: null,
 });
 
 let pg: PostgresFixture;
@@ -95,15 +115,18 @@ afterAll(async () => {
 async function seed() {
   await sql(`INSERT INTO currency.currency (id, code, name, symbol, "decimalPlaces", "isBaseCurrency") VALUES
     (gen_random_uuid(), 'USD', 'US Dollar', '$', 2, true),
-    ('${EUR_RATE}', 'EUR', 'Euro', '€', 2, false)`);
-  await sql(`INSERT INTO currency.currency_exchange_rate (id, "currencyId", rate, source) VALUES ('${EUR_RATE}', '${EUR_RATE}', 0.92, 'external_api')`);
+    ('${EUR_RATE}', 'EUR', 'Euro', '€', 2, false),
+    ('${IRR_RATE}', 'IRR', 'Iranian Rial', '﷼', 0, false)`);
+  await sql(`INSERT INTO currency.currency_exchange_rate (id, "currencyId", rate, source) VALUES
+    ('${EUR_RATE}', '${EUR_RATE}', 0.92, 'external_api'), ('${IRR_RATE}', '${IRR_RATE}', 1050000, 'external_api')`);
   await sql(`INSERT INTO identity.role (id, name, "isSystemRole") VALUES ('${ROLE}', 'User', true)`);
   await sql(`INSERT INTO tenant.tenant (id, "tenantType", "ownerUserId", slug, status, "billingModel", "updatedAt") VALUES
     ('${PLATFORM}', 'platform_owner', '${ADMIN}', 'platform', 'active', 'pay_as_you_go_metered', now()),
-    ('${TENANT}', 'reseller', '${ADMIN}', 'alpha', 'active', 'pay_as_you_go_metered', now())`);
-  for (const id of [RICH, EMPTY]) {
+    ('${TENANT}', 'reseller', '${ADMIN}', 'alpha', 'active', 'pay_as_you_go_metered', now()),
+    ('${ROUND_TRIP}', 'reseller', '${ADMIN}', 'beta', 'active', 'pay_as_you_go_metered', now())`);
+  for (const [id, tenantId] of [[RICH, TENANT], [EMPTY, TENANT], [ROUND_TRIP_USER, ROUND_TRIP]]) {
     await sql(`INSERT INTO identity."user" (id, "tenantId", "fullName", "passwordHash", "roleId", "updatedAt")
-      VALUES ('${id}', '${TENANT}', 'Someone', 'x', '${ROLE}', now())`);
+      VALUES ('${id}', '${tenantId}', 'Someone', 'x', '${ROLE}', now())`);
   }
   // A wallet with a history row, and one that is empty.
   await sql(`INSERT INTO billing.wallet (id, "ownerUserId", "cachedBalance", version, "currencyCode") VALUES
@@ -129,6 +152,12 @@ async function seed() {
   await sql(`INSERT INTO tenant.tenant_gateway_config (id, "tenantId", "displayName", "providerName", "gatewayCategory", "minAcceptAmount", "maxAcceptAmount",
       "currencyCode", "feeCalculationMode", "feeType", "feeValue", "useLiveRate", "staticRate", "roundingStep", "depositPresets", "updatedAt")
     VALUES (gen_random_uuid(), '${TENANT}', 'Zarinpal', 'zarinpal', 'domestic_rial', 5.00, 500.00, 'USD', 'manual', 'fixed', 1.0000, false, 600000, 1000, '{10.00}', now())`);
+
+  // A USD gateway charging USD at a static 1 per unit, and an empty wallet.
+  await sql(`INSERT INTO tenant.tenant_gateway_config (id, "tenantId", "displayName", "providerName", "gatewayCategory",
+      "currencyCode", "feeCalculationMode", "feeType", "feeValue", "useLiveRate", "staticRate", "minRate", "updatedAt")
+    VALUES (gen_random_uuid(), '${ROUND_TRIP}', 'Stripe', 'stripe', 'international_card', 'USD', 'manual', 'percentage', 0, false, 1, 0.9, now())`);
+  await sql(`INSERT INTO billing.wallet (id, "ownerUserId", "cachedBalance", version, "currencyCode") VALUES (gen_random_uuid(), '${ROUND_TRIP_USER}', 0, 0, 'USD')`);
 
   // An invoice still on its clock holding a coupon, and one already paid.
   for (const [id, status] of [[PENDING_INVOICE, 'pending'], [PAID_INVOICE, 'paid']]) {
@@ -204,7 +233,7 @@ describe('a reseller changes its operating currency USD -> EUR', () => {
     expect(await one(`SELECT "minAcceptAmount"::text AS min, "maxAcceptAmount"::text AS max, "feeValue"::text AS fee, "depositPresets"::text AS p,
         "staticRate"::text AS rate, "roundingStep"::text AS step, "currencyCode" AS c FROM tenant.tenant_gateway_config WHERE "tenantId" = '${TENANT}'`))
       // A static rate is charge units per unit of the tenant's currency, so it divides; its rounding step is in charge units and stays.
-      .toEqual({ min: '4.60', max: '460.00', fee: '0.9200', p: '{9.20}', rate: '652173.91304348', step: '1000.00000000', c: 'EUR' });
+      .toEqual({ min: '4.60', max: '460.00', fee: '0.9200', p: '{9.20}', rate: '652173.913043478260869565', step: '1000.00000000', c: 'EUR' });
     expect(await one(`SELECT "meteredRate"::text AS r, "meteredRateCurrencyCode" AS c FROM entitlement."grant" WHERE id = '${GRANT}'`)).toEqual({ r: '0.46000000', c: 'EUR' });
   });
 
@@ -260,5 +289,27 @@ describe('the platform changes its currency USD -> EUR', () => {
       new TenantBillingLedger().credit(tx, { tenantId: TENANT, amount: new Prisma.Decimal('10.00'), currencyCode: 'USD', reasonType: 'topup_payment' }),
     );
     expect([moved.amount.toFixed(2), moved.currencyCode, moved.sourceAmount?.toFixed(2), moved.balanceAfter.toFixed(2)]).toEqual(['9.20', 'EUR', '10.00', '55.20']);
+  });
+});
+
+describe('a reseller goes USD -> IRR and back: currencies six orders of magnitude apart', () => {
+  const gateway = () => one<{ rate: string; min: string; c: string }>(
+    `SELECT "staticRate"::text AS rate, "minRate"::text AS min, "currencyCode" AS c FROM tenant.tenant_gateway_config WHERE "tenantId" = '${ROUND_TRIP}'`);
+
+  it('keeps a static rate divided into one near 1e-6, and brings it back whole', async () => {
+    await change(ROUND_TRIP, usdToIrr());
+    // 1 / 1,050,000: DECIMAL(18,8) kept 0.00000095, two significant digits (F-116-f).
+    expect(await gateway()).toEqual({ rate: '0.000000952380952381', min: '0.000000857142857143', c: 'IRR' });
+    await change(ROUND_TRIP, irrToUsd());
+    expect(await gateway()).toEqual({ rate: '1.000000000000000000', min: '0.900000000000105000', c: 'USD' });
+  });
+
+  it('credits a late refund too small for the new currency one minor unit, never nothing', async () => {
+    // 1,000 IRR is 0.00095 USD: rounded, nothing — refused, and its settlement retried forever.
+    const moved = await cross.$transaction((tx) => new WalletLedgerService().credit(tx, {
+      userId: ROUND_TRIP_USER, amount: new Prisma.Decimal('1000'), currencyCode: 'IRR', reasonType: 'product_refund', tenantId: ROUND_TRIP,
+    }));
+    expect([moved.amount.toFixed(2), moved.currencyCode, moved.sourceAmount?.toFixed(0), moved.sourceCurrencyCode, moved.balanceAfter.toFixed(2)])
+      .toEqual(['0.01', 'USD', '1000', 'IRR', '0.01']);
   });
 });

@@ -167,6 +167,8 @@ export class SettlementController {
     // service answers (C-02): a JSON number would round the ledger.
     return rows.map((r) => ({
       tenantId: r.tenantId,
+      // The tenant's currency now: rows written before a change are converted into it (F-116-f).
+      currencyCode: r.currencyCode,
       accrued: r.accrued.toFixed(2),
       paidOut: r.paidOut.toFixed(2),
       outstanding: r.outstanding.toFixed(2),

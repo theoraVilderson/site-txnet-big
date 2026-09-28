@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PaymentProviderName, Prisma, TenantType } from '@prisma/client';
-import { operatingCurrencyOf } from '@txnet-backend/shared-core';
+import { convertedByChanges, operatingCurrencyOf } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -107,6 +107,8 @@ export type RecordPayoutInput = {
 
 export type OwedRow = {
   tenantId: string;
+  /** The tenant's operating currency now: every amount below is in it. */
+  currencyCode: string;
   accrued: Prisma.Decimal;
   paidOut: Prisma.Decimal;
   outstanding: Prisma.Decimal;
@@ -124,10 +126,7 @@ const ZERO = new Prisma.Decimal(0);
 const PAYOUT_LOCK = 96_07;
 
 /** Whichever client the two settlement ledgers are being summed on. */
-type LedgerReader = Pick<
-  CrossTenantPrismaService,
-  'gatewaySettlementEntry' | 'gatewaySettlementPayout'
->;
+type LedgerReader = Prisma.TransactionClient;
 
 /**
  * Which providers a grant may lend (D-32, F-104-p). An in-chat payment is made
@@ -373,35 +372,8 @@ export class SettlementService {
    */
   async owed(operator: Operator): Promise<OwedRow[]> {
     await this.assertOperator(operator);
-
-    const [accruals, payouts] = await Promise.all([
-      this.all.gatewaySettlementEntry.groupBy({
-        by: ['tenantId'],
-        _sum: { amount: true },
-      }),
-      this.all.gatewaySettlementPayout.groupBy({
-        by: ['tenantId'],
-        _sum: { amount: true },
-      }),
-    ]);
-
-    const rows = new Map<string, OwedRow>();
-    const row = (tenantId: string) => {
-      const found = rows.get(tenantId) ?? {
-        tenantId,
-        accrued: ZERO,
-        paidOut: ZERO,
-        outstanding: ZERO,
-      };
-      rows.set(tenantId, found);
-      return found;
-    };
-
-    for (const a of accruals) row(a.tenantId).accrued = a._sum.amount ?? ZERO;
-    for (const p of payouts) row(p.tenantId).paidOut = p._sum.amount ?? ZERO;
-    for (const r of rows.values()) r.outstanding = r.accrued.minus(r.paidOut);
-
-    return [...rows.values()].sort((a, b) => b.outstanding.comparedTo(a.outstanding));
+    const rows = await this.sumLedgers(this.all);
+    return rows.sort((a, b) => b.outstanding.comparedTo(a.outstanding));
   }
 
   /**
@@ -414,17 +386,56 @@ export class SettlementService {
     tenantId: string,
     on: LedgerReader = this.all,
   ): Promise<Prisma.Decimal> {
-    const [accrued, paidOut] = await Promise.all([
-      on.gatewaySettlementEntry.aggregate({
-        where: { tenantId },
-        _sum: { amount: true },
-      }),
-      on.gatewaySettlementPayout.aggregate({
-        where: { tenantId },
-        _sum: { amount: true },
-      }),
+    const [row] = await this.sumLedgers(on, tenantId);
+    return row?.outstanding ?? ZERO;
+  }
+
+  /**
+   * Accruals and payouts per tenant, in the tenant's operating currency now.
+   *
+   * Each row keeps the currency it was written in (F-116-b), so a tenant that
+   * changed currency has rows in two. They are summed per currency, and a sum
+   * in an earlier one is converted through the tenant's `currency_change` rows
+   * (`convertedByChanges`) — the rate its wallet crossed at, the same way a
+   * late credit is (F-116-f). Adding them as written would add two currencies.
+   * A sum no chain of changes leads from is a row in a currency the tenant
+   * never left: a bug, and refused rather than summed.
+   */
+  private async sumLedgers(on: LedgerReader, tenantId?: string): Promise<OwedRow[]> {
+    const where = tenantId ? { tenantId } : {};
+    const [accruals, payouts] = await Promise.all([
+      on.gatewaySettlementEntry.groupBy({ by: ['tenantId', 'currencyCode'], where, _sum: { amount: true } }),
+      on.gatewaySettlementPayout.groupBy({ by: ['tenantId', 'currencyCode'], where, _sum: { amount: true } }),
     ]);
-    return (accrued._sum.amount ?? ZERO).minus(paidOut._sum.amount ?? ZERO);
+
+    const ids = [...new Set([...accruals, ...payouts].map((r) => r.tenantId))];
+    const tenants = await on.tenant.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, operatingCurrencyCode: true },
+    });
+    const currencies = new Map(tenants.map((t) => [t.id, t.operatingCurrencyCode]));
+
+    const rows = new Map<string, OwedRow>();
+    const row = (id: string) => {
+      const currencyCode = currencies.get(id);
+      if (!currencyCode) throw new Error(`tenant ${id} not found summing what it is owed`);
+      const found = rows.get(id) ?? { tenantId: id, currencyCode, accrued: ZERO, paidOut: ZERO, outstanding: ZERO };
+      rows.set(id, found);
+      return found;
+    };
+    const inCurrencyNow = async (id: string, code: string, sum: Prisma.Decimal | null) => {
+      const amount = sum ?? ZERO;
+      const now = row(id).currencyCode;
+      if (code === now) return amount;
+      const converted = await convertedByChanges(on, id, amount, code, now);
+      if (!converted) throw new Error(`tenant ${id} is owed in ${code}, which no currency change of its leads from to ${now}`);
+      return converted;
+    };
+
+    for (const a of accruals) row(a.tenantId).accrued = row(a.tenantId).accrued.plus(await inCurrencyNow(a.tenantId, a.currencyCode, a._sum.amount));
+    for (const p of payouts) row(p.tenantId).paidOut = row(p.tenantId).paidOut.plus(await inCurrencyNow(p.tenantId, p.currencyCode, p._sum.amount));
+    for (const r of rows.values()) r.outstanding = r.accrued.minus(r.paidOut);
+    return [...rows.values()];
   }
 
   /**

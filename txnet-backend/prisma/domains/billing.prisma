@@ -457,11 +457,11 @@ model PaymentGateway {
   // Rate from base currency to what the gateway charges in (F-0609). The same
   // columns sit on tenant.TenantGatewayConfig; one calculator reads both.
   useLiveRate         Boolean          @default(true)
-  staticRate          Decimal?         @db.Decimal(18, 8)
+  staticRate          Decimal?         @db.Decimal(30, 18)
   percentageModifier  Decimal          @default(0) @db.Decimal(9, 4) // + = markup
-  fixedAmountModifier Decimal          @default(0) @db.Decimal(18, 8)
-  minRate             Decimal?         @db.Decimal(18, 8)
-  maxRate             Decimal?         @db.Decimal(18, 8)
+  fixedAmountModifier Decimal          @default(0) @db.Decimal(30, 18)
+  minRate             Decimal?         @db.Decimal(30, 18)
+  maxRate             Decimal?         @db.Decimal(30, 18)
   roundingStep        Decimal?         @db.Decimal(18, 8)
   roundingMode        RateRoundingMode @default(up)
   confirmationMode    ConfirmationMode @default(automatic)

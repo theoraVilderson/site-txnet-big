@@ -146,8 +146,11 @@ describe("gateway form — validation", () => {
     }
     expect(validateForm({ ...base, feeValue: "2.34567" }).feeValue).toEqual({ kind: "precision", places: 4 });
     expect(validateForm({ ...base, feeValue: "2.3456" }).feeValue).toBeUndefined();
-    // A rate keeps its eight places: `staticRate` is numeric(18, 8).
-    expect(validateForm({ ...base, providerName: "telegram_stars", staticRate: "0.00012345" }).staticRate).toBeUndefined();
+    // A rate keeps eighteen places: `staticRate` is numeric(30, 18), and a currency
+    // change divides it into one this fine (F-116-f), which must save back.
+    const stars = { ...base, providerName: "telegram_stars" };
+    expect(validateForm({ ...stars, staticRate: "0.000001666666666667" }).staticRate).toBeUndefined();
+    expect(validateForm({ ...stars, staticRate: "0.0000016666666666667" }).staticRate).toEqual({ kind: "precision", places: 18 });
     // Still a shape error, not a precision one, when it is not a number at all.
     expect(validateForm({ ...base, feeFloor: "1,5" }).feeFloor).toBe("decimal");
   });

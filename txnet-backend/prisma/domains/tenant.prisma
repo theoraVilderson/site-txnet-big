@@ -476,11 +476,11 @@ model TenantGatewayConfig {
   feeFloor            Decimal?                        @db.Decimal(18, 2)
   feeCeiling          Decimal?                        @db.Decimal(18, 2)
   useLiveRate         Boolean                         @default(true)
-  staticRate          Decimal?                        @db.Decimal(18, 8)
+  staticRate          Decimal?                        @db.Decimal(30, 18)
   percentageModifier  Decimal                         @default(0) @db.Decimal(9, 4) // + = markup
-  fixedAmountModifier Decimal                         @default(0) @db.Decimal(18, 8)
-  minRate             Decimal?                        @db.Decimal(18, 8)
-  maxRate             Decimal?                        @db.Decimal(18, 8)
+  fixedAmountModifier Decimal                         @default(0) @db.Decimal(30, 18)
+  minRate             Decimal?                        @db.Decimal(30, 18)
+  maxRate             Decimal?                        @db.Decimal(30, 18)
   roundingStep        Decimal?                        @db.Decimal(18, 8)
   roundingMode        RateRoundingMode                @default(up)
   // Quick amounts on the top-up page (F-092-v). Empty = the tenant's default.

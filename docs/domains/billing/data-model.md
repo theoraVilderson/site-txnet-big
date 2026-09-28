@@ -51,6 +51,9 @@ A payment's `exchangeRateSnapshot` is `currencyCode` -> the charge currency
 (`DECIMAL(30,18)`, F-116-e) through the USD pivot; `exchangeRateSnapshotId` is the
 charge currency's leg and `exchangeRateFromSnapshotId` the payment currency's, each
 NULL when that side is USD (`20260928002700_a_payment_records_both_legs_of_its_rate`).
+A gateway's `staticRate`, `fixedAmountModifier`, `minRate`, `maxRate` (`payment_gateway`
+and `tenant.tenant_gateway_config`) are `DECIMAL(30,18)` too: a currency change divides
+them (`20260928003000_a_gateway_rate_keeps_an_inverse_pair`); `roundingStep` stays `(18,8)`.
 A credit converted through a `currency_change` (F-116-f) carries what it was before:
 `wallet_transaction.sourceAmount` + `sourceCurrencyCode`, both or neither, the code
 never the row's own (CHECKs in `20260928002900_a_currency_change_converts_live_money`,
