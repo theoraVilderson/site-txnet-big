@@ -52,7 +52,10 @@ function reader(options: {
       findUnique: async () => options.currency ?? { id: CURRENCY_ID },
     },
     currencyExchangeRate: {
-      findFirst: async () => {
+      // The discovered rate's table read is what these count. The live-pin
+      // lookup (F-0608-a) runs first on every read and finds none here.
+      findFirst: async ({ where }: { where: { source?: string } }) => {
+        if (where.source === 'manual_admin') return null;
         calls.findFirst += 1;
         return options.row ?? null;
       },

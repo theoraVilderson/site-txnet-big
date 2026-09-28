@@ -148,6 +148,8 @@ export class InvoiceService {
             target: { kind: 'purchase', productId: offer.productId, variantId: offer.variantId },
             channel: request.channel ?? CouponChannel.panel,
             userId,
+            // A purchase is inside this tenant's books: its own pin converts (F-116-j).
+            ratesTenantId: tenant.id,
           });
 
       const id = randomUUID();

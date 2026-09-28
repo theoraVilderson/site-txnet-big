@@ -51,6 +51,11 @@ model CurrencyExchangeRate {
   /// it); a discovered rate has neither.
   reason         String?
   expiresAt      DateTime?
+  /// F-116-j (ADR-0098 part 9): the tenant whose books a pin prices; null for
+  /// the platform's pin and for every discovered rate (a CHECK holds it). No
+  /// FK: `tenant` rows are never deleted, and a relation would reach across
+  /// into the tenant schema for a column only readers filter on.
+  tenantId       String?    @db.Uuid
   /// Set when the pin was ended before `expiresAt` — its own row, so the
   /// rate itself is never edited (invariant #3).
   pinEnd         CurrencyRatePinEnd?
@@ -65,6 +70,7 @@ model CurrencyExchangeRate {
   couponRedemptionsFrom CouponRedemption[] @relation("CouponRedemptionRateFromLeg")
 
   @@index([currencyId, effectiveAt(sort: Desc)])
+  @@index([currencyId, tenantId, effectiveAt(sort: Desc)])
   @@map("currency_exchange_rate")
   @@schema("currency")
 }

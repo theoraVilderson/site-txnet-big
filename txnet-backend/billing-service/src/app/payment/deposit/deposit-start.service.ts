@@ -190,6 +190,8 @@ export class DepositStartService {
         // `bot` when the bot's top-up called (F-306-a, `DepositController.channelOf`).
         channel: request.channel ?? CouponChannel.panel,
         userId,
+        // A billing top-up is money with the platform: no tenant's pin (F-116-j).
+        ratesTenantId: request.billingTenantId ? null : tenant.id,
       });
       return {
         gateway,
@@ -212,7 +214,17 @@ export class DepositStartService {
     };
     const { provider, price } = await priceDeposit(
       { providers: this.providers, merchant: this.merchant, fx: this.fx },
-      { gateway, ref, amount, currencyCode, discount: coupons.totalDiscount, actorId: userId, defaultTaxRatePercent },
+      {
+        gateway,
+        ref,
+        amount,
+        currencyCode,
+        discount: coupons.totalDiscount,
+        actorId: userId,
+        defaultTaxRatePercent,
+        // A billing top-up is money with the platform: no tenant's pin prices it (F-116-j, ADR-0098 part 9).
+        ratesTenantId: request.billingTenantId ? null : tenant.id,
+      },
     );
 
     // A gateway that will be paid needs somewhere to answer; a free top-up does

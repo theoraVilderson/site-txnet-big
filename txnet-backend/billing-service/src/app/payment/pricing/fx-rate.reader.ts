@@ -57,9 +57,13 @@ export class FxRateReader {
    * `from` -> `to` as the platform last accepted it, and both legs' snapshots,
    * or `null` when either leg has no rate. `to` is the gateway's charge
    * currency, whose leg `exchangeRateSnapshotId` records; `from` is the payer's.
+   *
+   * `ratesTenantId` is the tenant whose books this prices (F-116-j): its own
+   * pin answers first. Null at the tenant <-> platform boundary — a billing
+   * top-up — where no tenant's pin may price (ADR-0098 part 9).
    */
-  async pair(from: string, to: string): Promise<FxRateSnapshot | null> {
-    const pair = await readFxPair(this.prisma, this.redis, from, to, this.logger);
+  async pair(from: string, to: string, ratesTenantId: string | null = null): Promise<FxRateSnapshot | null> {
+    const pair = await readFxPair(this.prisma, this.redis, from, to, this.logger, { tenantId: ratesTenantId });
     return pair ? { snapshotId: pair.to?.snapshotId ?? null, fromSnapshotId: pair.from?.snapshotId ?? null, rate: pair.rate } : null;
   }
 }

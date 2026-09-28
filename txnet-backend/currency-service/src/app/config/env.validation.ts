@@ -41,6 +41,15 @@ export const envSchema = z.object({
   CURRENCY_PIN_WRITE_RATE_LIMIT: rateLimit(30),
 
   TRUST_PROXY: z.string().default(''),
+
+  /**
+   * billing-service's internal base (F-116-j): which currencies a tenant's
+   * gateways charge in. Unset, a tenant pins only its operating currency.
+   */
+  BILLING_API_BASE_URL: z.string().default(''),
+  BILLING_API_TIMEOUT_MS: z.coerce.number().int().positive().default(3_000),
+  /** The service token billing's `internal/*` requires. */
+  SERVICE_AUTH_TOKEN: z.string().default(''),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

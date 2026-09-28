@@ -60,7 +60,7 @@ const APP = join(__dirname, '..');
  * `GrantBulkJobInternalController` is the bulk jobs' drain (F-311-u2), a
  * minute tick: throttling it would leave a started +3 days half applied.
  */
-const EXEMPT = new Set(['HealthController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController']);
+const EXEMPT = new Set(['HealthController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'ChargeCurrenciesController']);
 
 /**
  * Controllers with no identity to bucket on, and what they count instead.

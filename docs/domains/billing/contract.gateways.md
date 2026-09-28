@@ -2,8 +2,8 @@
 id: billing
 layer: domain
 status: active
-version: 3
-updated: 2026-09-24
+version: 4
+updated: 2026-09-28
 ---
 
 # Contract — billing / gateway management
@@ -63,3 +63,14 @@ uses. Shaped identically, `:source/:id` included, so one client serves both.
 Refusals add `ResellerAccess`'s four to the list above: 403 `not_allowed`,
 `reseller_suspended`; 404 `reseller_not_found` (platform staff only); 409
 `reseller_terminated`. Proof: `reseller-gateway.service.spec.ts`.
+
+## Which rate a gateway price reads, and whose (F-116-j)
+
+| Rule | Why |
+|---|---|
+| **A price inside a tenant's books reads that tenant's pins first**: `FxRateReader.pair(from, to, ratesTenantId)`, given by the caller — a user's top-up quote and start, a purchase's coupon conversion (`CouponRequest.ratesTenantId`) pass the payer's tenant | ADR-0098 part 9, ADR-0101: a reseller in an outage pins the rate its own users pay at |
+| **A billing top-up passes none** (`request.billingTenantId` set): money with the platform never reads a tenant's pin. A caller that says nothing gets the platform's rates only | a tenant cannot choose the rate it pays the platform at |
+| `GET /api/internal/billing/tenants/:tenantId/charge-currencies`, `ServiceOnlyGuard` (404 without the token): `{currencies}`, the sorted, distinct charge currencies of the tenant's `selectableGateways`, read as that tenant (`chargeCurrenciesOf`) | currency-service's answer to which currencies a tenant may pin besides its operating one (user, 2026-09-28); billing owns gateways and each provider's `chargeCurrency`, so the answer is computed here, never copied |
+
+Proof: `gateway-currency.spec.ts` (a reseller's pin vs a billing top-up;
+`chargeCurrenciesOf`), `coupon-currency.spec.ts`.

@@ -18,7 +18,7 @@
  */
 import { Prisma } from '@prisma/client';
 
-import { offeredInCurrency, priceDeposit, type SelectedGateway } from '../deposit/deposit-pricing';
+import { chargeCurrenciesOf, offeredInCurrency, priceDeposit, type SelectedGateway } from '../deposit/deposit-pricing';
 import { FxRateReader } from './fx-rate.reader';
 import { InvalidPricingInput } from './gateway-pricing';
 
@@ -33,6 +33,9 @@ const RATES: Record<string, { snapshotId: string; rate: string }> = {
   EUR: { snapshotId: EUR_ROW, rate: '0.92000000' },
 };
 
+/** A reseller's own live IRR pin (F-116-j): only a read naming `t-1` may see it. */
+const TENANT_PIN = { id: 'pin-t1', rate: d('1200000'), effectiveAt: new Date('2026-09-28T09:00:00Z'), reason: 'r', expiresAt: new Date('2099-01-01T00:00:00Z') };
+
 function fxReader() {
   const redis = {
     get: async (key: string) => {
@@ -42,8 +45,13 @@ function fxReader() {
     },
   };
   const prisma = {
-    currency: { findUnique: async () => null },
-    currencyExchangeRate: { findFirst: async () => null },
+    currency: { findUnique: async ({ where }: { where: { code: string } }) => ({ id: where.code }) },
+    currencyExchangeRate: {
+      findFirst: async ({ where }: { where: { currencyId: string; source?: string; OR?: { tenantId: string | null }[] } }) =>
+        where.source === 'manual_admin' && where.currencyId === 'IRR' && where.OR?.some((o) => o.tenantId === 't-1')
+          ? TENANT_PIN
+          : null,
+    },
   };
   return new FxRateReader(prisma as never, redis as never);
 }
@@ -96,6 +104,7 @@ const input = (g: SelectedGateway, currencyCode: string, amount = '100.00') => (
   defaultTaxRatePercent: null,
   actorId: 'u',
   currencyCode,
+  ratesTenantId: null as string | null,
 });
 
 describe('F-116-e — a deposit is priced from the payer currency to the charge currency', () => {
@@ -107,6 +116,16 @@ describe('F-116-e — a deposit is priced from the payer currency to the charge 
     expect(price.chargedAmountMinor).toBe(BigInt(114130435));
     expect(price.rateSnapshotId).toBe(IRR_ROW);
     expect(price.rateFromSnapshotId).toBe(EUR_ROW);
+  });
+
+  it('prices a reseller\'s user at its own IRR pin, and a billing top-up (no tenant) never (F-116-j)', async () => {
+    const own = await priceDeposit(deps('IRR', 0), { ...input(gateway({ currencyCode: 'USD' }), 'USD'), ratesTenantId: 't-1' });
+    const boundary = await priceDeposit(deps('IRR', 0), input(gateway({ currencyCode: 'USD' }), 'USD'));
+
+    expect(own.price.rate?.toFixed()).toBe('1200000');
+    expect(own.price.rateSnapshotId).toBe('pin-t1');
+    expect(boundary.price.rate?.toFixed()).toBe('1050000');
+    expect(boundary.price.rateSnapshotId).toBe(IRR_ROW);
   });
 
   it('a USD payer records the IRR leg only — USD is the pivot, no row backs it', async () => {
@@ -153,5 +172,18 @@ describe('F-116-e — a deposit is priced from the payer currency to the charge 
     expect(offeredInCurrency(lent, 'EUR')).toBe(false);
     expect(offeredInCurrency(lent, 'TRY')).toBe(true);
     await expect(priceDeposit(deps('IRR', 0), input(lent, 'EUR'))).rejects.toThrow(InvalidPricingInput);
+  });
+});
+
+describe('F-116-j — the currencies a tenant\'s gateways charge in', () => {
+  it('names each known provider\'s charge currency once, sorted, and skips an unknown provider', () => {
+    const charge: Record<string, string> = { zarinpal: 'IRR', stripe: 'USD', bale: 'IRR' };
+    const providers = {
+      has: (name: string) => name in charge,
+      get: (name: string) => ({ chargeCurrency: charge[name] }),
+    };
+    const gateways = ['zarinpal', 'stripe', 'bale', 'gone'].map((providerName) => ({ providerName }));
+
+    expect(chargeCurrenciesOf(gateways as never, providers as never)).toEqual(['IRR', 'USD']);
   });
 });

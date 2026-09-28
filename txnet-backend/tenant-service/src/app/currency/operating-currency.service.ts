@@ -99,7 +99,8 @@ export class TenantOperatingCurrencyService {
     if (!choices.some((c) => c.code === code)) throw new OperatingCurrencyRefused('currency_unavailable', code);
     if (code === target.code) return { code, choices, conversion: null };
 
-    const pair = await readFxPair(this.all, this.redis, target.code, code, this.logger);
+    // Its own change is inside its own books: its own pin converts (F-116-j, ADR-0098 part 9).
+    const pair = await readFxPair(this.all, this.redis, target.code, code, this.logger, { tenantId: target.id });
     if (!pair) throw new OperatingCurrencyRefused('rate_unavailable', `${target.code} -> ${code}`);
     let outcome;
     try {

@@ -51,7 +51,7 @@ describe('CurrencyRatesService (F-116-k)', () => {
       { IRR: { id: 's-irr', rate: '2438995' } },
     );
 
-    const list = await rates.list();
+    const list = await rates.list('t-1');
 
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true } }));
     expect(list.map((r) => r.code)).toEqual(['EUR', 'GBP', 'IRR', 'USD']);

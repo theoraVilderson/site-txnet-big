@@ -322,6 +322,21 @@ export async function selectableGateways(
 }
 
 /**
+ * The currencies a tenant's selectable gateways charge in (F-116-j): what its
+ * own manual rate may be pinned for, beside its operating currency. A provider
+ * this build does not know is left out, as the list and the quote leave it out.
+ */
+export function chargeCurrenciesOf(
+  gateways: readonly Pick<GatewayOffer, 'providerName'>[],
+  providers: Pick<PaymentProviderRegistry, 'has' | 'get'>,
+): string[] {
+  const codes = gateways
+    .filter((g) => providers.has(g.providerName))
+    .map((g) => providers.get(g.providerName).chargeCurrency);
+  return [...new Set(codes)].sort();
+}
+
+/**
  * A gateway prices a payment only in the currency it is configured in
  * (F-116-e). Its limits, fee floor and ceiling, presets and `staticRate` are
  * amounts in its `currencyCode`, and the payment is in the payer tenant's
@@ -350,6 +365,12 @@ export type DepositPricingInput = {
   defaultTaxRatePercent: Prisma.Decimal | null;
   /** The user the vault access is attributed to. */
   actorId: string;
+  /**
+   * Whose books the rate prices (F-116-j): the payer's tenant, so its own pin
+   * answers first; null for a billing top-up, money with the platform, where
+   * no tenant's pin may price (ADR-0098 part 9).
+   */
+  ratesTenantId: string | null;
 };
 
 export type DepositPricing = { provider: PaymentProvider; price: GatewayPrice };
@@ -398,7 +419,7 @@ export async function priceDeposit(
     discount,
     defaultTaxRatePercent,
     // Payer currency -> charge currency, through the USD pivot (ADR-0098 part 6).
-    liveRate: pricing.useLiveRate && !chargesInPaymentCurrency ? await deps.fx.pair(currencyCode, provider.chargeCurrency) : null,
+    liveRate: pricing.useLiveRate && !chargesInPaymentCurrency ? await deps.fx.pair(currencyCode, provider.chargeCurrency, input.ratesTenantId) : null,
     chargeDecimals: provider.chargeDecimals,
     chargesInPaymentCurrency,
   };

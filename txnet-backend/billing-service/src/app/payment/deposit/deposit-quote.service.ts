@@ -214,6 +214,8 @@ export class DepositQuoteService {
         // `bot` when the bot's top-up called (F-306-a, `DepositController.channelOf`).
         channel: request.channel ?? CouponChannel.panel,
         userId,
+        // A user's top-up is inside this tenant's books: its own pin prices it (F-116-j).
+        ratesTenantId: tenant.id,
       });
       return { gateway, coupons, defaultTaxRatePercent: await defaultTaxRate(tx, tenant.id), currencyCode };
     });
@@ -238,6 +240,8 @@ export class DepositQuoteService {
         discount: coupons.totalDiscount,
         actorId: userId,
         defaultTaxRatePercent,
+        // A quote is a user's top-up, inside this tenant's books (F-116-j).
+        ratesTenantId: tenant.id,
       },
     );
 

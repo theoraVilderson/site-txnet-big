@@ -33,8 +33,15 @@ export interface FxPair {
   to: FxRateSnapshot | null;
 }
 
-/** The two tables the table fallback reads. A transaction client or a service fits. */
-export type FxRateDb = Pick<Prisma.TransactionClient, 'currency' | 'currencyExchangeRate'>;
+/**
+ * The two tables the reads use. A transaction client or a service fits; a
+ * service also brings `$transaction`, which a tenant's pin needs (below).
+ */
+export type FxRateDb = Pick<Prisma.TransactionClient, 'currency' | 'currencyExchangeRate'> & {
+  $transaction?: unknown;
+};
+
+type PinQuery = Parameters<Prisma.TransactionClient['currencyExchangeRate']['findFirst']>[0];
 
 /** `fx:rate:{code}` is read with a plain GET. */
 export interface FxRateCache {
@@ -43,6 +50,16 @@ export interface FxRateCache {
 
 export interface FxRateLog {
   warn(message: string): void;
+}
+
+/**
+ * Whose books a read prices (F-116-j, ADR-0098 part 9). With a `tenantId`,
+ * that tenant's own live pin answers before the platform's. Without one — the
+ * tenant <-> platform boundary, a billing top-up, anything the platform
+ * charges a tenant — no tenant's pin is ever read.
+ */
+export interface FxRateScope {
+  tenantId?: string | null;
 }
 
 /**
@@ -62,9 +79,10 @@ export async function readFxRate(
   cache: FxRateCache,
   code: string,
   log?: FxRateLog,
+  scope: FxRateScope = {},
 ): Promise<FxRateSnapshot | null> {
   return (
-    (await fromPin(db, code, log)) ??
+    (await fromPin(db, code, log, scope)) ??
     (await fromCache(cache, code, log)) ??
     (await fromTable(db, code, log))
   );
@@ -85,11 +103,12 @@ export async function readFxPair(
   fromCode: string,
   toCode: string,
   log?: FxRateLog,
+  scope: FxRateScope = {},
 ): Promise<FxPair | null> {
   if (fromCode === toCode) return { fromCode, toCode, rate: new Prisma.Decimal(1), from: null, to: null };
 
   const leg = (code: string) =>
-    code === FX_PIVOT_CURRENCY ? Promise.resolve(null) : readFxRate(db, cache, code, log);
+    code === FX_PIVOT_CURRENCY ? Promise.resolve(null) : readFxRate(db, cache, code, log, scope);
   const [from, to] = await Promise.all([leg(fromCode), leg(toCode)]);
 
   if ((fromCode !== FX_PIVOT_CURRENCY && !from) || (toCode !== FX_PIVOT_CURRENCY && !to)) return null;
@@ -101,27 +120,30 @@ export async function readFxPair(
 
 /**
  * F-0608-a (ADR-0101 part 3) — a live pin wins over every discovered rate: a
- * `manual_admin` row not yet expired and not ended, the newest if several.
+ * `manual_admin` row not yet expired and not ended, the newest if several; a
+ * tenant's own before the platform's when the read names that tenant (F-116-j).
  * Read from the table on every call, not a cache: a pin that a Redis flush
  * lost would sell at the rate the admin pinned against, silently. A failed
  * read is a warning and falls through to the discovered rate — the reader
  * never throws.
  */
-async function fromPin(db: FxRateDb, code: string, log?: FxRateLog): Promise<FxRateSnapshot | null> {
+async function fromPin(db: FxRateDb, code: string, log: FxRateLog | undefined, scope: FxRateScope): Promise<FxRateSnapshot | null> {
   try {
     const currency = await db.currency.findUnique({ where: { code }, select: { id: true } });
     if (!currency) return null;
-    const pin = await db.currencyExchangeRate.findFirst({
+    const pin = await pinRow(db, scope, {
       where: {
         currencyId: currency.id,
         source: RateSource.manual_admin,
         isActive: true,
         expiresAt: { gt: new Date() },
         pinEnd: { is: null },
+        // A tenant's pin, then the platform's (F-116-j); no tenant, the platform's only.
+        ...(scope.tenantId ? { OR: [{ tenantId: scope.tenantId }, { tenantId: null }] } : { tenantId: null }),
       },
-      orderBy: { effectiveAt: 'desc' },
+      orderBy: [{ tenantId: { sort: 'asc', nulls: 'last' } }, { effectiveAt: 'desc' }],
       select: { id: true, rate: true, effectiveAt: true, reason: true, expiresAt: true },
-    });
+    }) as { id: string; rate: Prisma.Decimal; effectiveAt: Date; reason: string | null; expiresAt: Date | null } | null;
     if (!pin || !pin.expiresAt) return null;
     const snap = usable(pin.id, code, pin.rate, pin.effectiveAt);
     return snap ? { ...snap, pinned: { reason: pin.reason ?? '', expiresAt: pin.expiresAt } } : null;
@@ -129,6 +151,24 @@ async function fromPin(db: FxRateDb, code: string, log?: FxRateLog): Promise<FxR
     log?.warn(`fx pin for ${code} unreadable, using the discovered rate: ${(err as Error).message}`);
     return null;
   }
+}
+
+/**
+ * The pin lookup, bound to the tenant it names (F-116-j). `currency_exchange_rate`
+ * is under RLS: a tenant's pin is visible only where `app.tenant_id` is that
+ * tenant. Given a service (it has `$transaction`), the reader opens a
+ * transaction and binds exactly `scope.tenantId` for this one query; given a
+ * transaction client, the caller's binding stands. No tenant: no binding, and
+ * RLS itself shows only the platform's pins.
+ */
+async function pinRow(db: FxRateDb, scope: FxRateScope, query: PinQuery): Promise<unknown> {
+  const tenantId = scope.tenantId;
+  if (!tenantId || typeof db.$transaction !== 'function') return db.currencyExchangeRate.findFirst(query);
+  const begin = db.$transaction as (fn: (tx: Prisma.TransactionClient) => Promise<unknown>) => Promise<unknown>;
+  return begin.call(db, async (tx: Prisma.TransactionClient) => {
+    await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+    return tx.currencyExchangeRate.findFirst(query);
+  });
 }
 
 async function fromCache(cache: FxRateCache, code: string, log?: FxRateLog): Promise<FxRateSnapshot | null> {

@@ -35,7 +35,11 @@ export class CurrencyRatesService {
     private readonly redis: RedisService,
   ) {}
 
-  async list(): Promise<CurrencyRate[]> {
+  /**
+   * `tenantId` is the caller's (F-116-j): a tenant sees the rate its own books
+   * price at — its own pin first — which is what its gateways charge.
+   */
+  async list(tenantId: string | null = null): Promise<CurrencyRate[]> {
     const currencies = await this.prisma.currency.findMany({
       where: { isActive: true },
       select: { code: true, name: true, symbol: true, decimalPlaces: true, isBaseCurrency: true },
@@ -46,7 +50,7 @@ export class CurrencyRatesService {
       currencies.map(async (c): Promise<CurrencyRate> => {
         const base = { code: c.code, name: c.name, symbol: c.symbol, decimalPlaces: c.decimalPlaces, isBase: c.isBaseCurrency };
         if (c.isBaseCurrency) return { ...base, rate: '1', snapshotId: null, effectiveAt: null, pinned: null };
-        const snapshot = await readFxRate(this.prisma as unknown as FxRateDb, this.redis, c.code, this.logger);
+        const snapshot = await readFxRate(this.prisma as unknown as FxRateDb, this.redis, c.code, this.logger, { tenantId });
         return snapshot
           ? {
               ...base,

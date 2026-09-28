@@ -18,6 +18,7 @@ updated: 2026-09-28
 | 5 | `currency_policy` is unique per `(scope, userId)`; `scope = global` has `userId = NULL` (needs partial unique index) | schema `@@unique` + planned partial index | conflicting locks |
 | 6 | A pin is a person's decision, never the market: a live pin prices first, an expired or ended one prices nothing, and none is ever the FX worker's deviation baseline | `readFxRate` `fromPin` / `fromTable` (`source` filters); `FxRateSnapshotStore.lastAccepted` reads `external_api` only; CHECK `currency_exchange_rate_pin_shape` | a stale pin prices sales; the gate refuses the real market as a jump |
 | 7 | A rate of any age stays usable; age is shown, not enforced (ADR-0101) | `readFxRate` has no age cut-off | a currency stops selling during an outage |
+| 8 | A tenant's pin prices only a read that names that tenant; a read without a tenant — the tenant ↔ platform boundary — never sees one (ADR-0098 part 9) | RLS `tenant_isolation` on `currency_exchange_rate` (migration `20260928003600`); `readFxRate` binds exactly the named tenant for its pin lookup (`pinRow`), `tenantId: null` without a scope; billing passes `ratesTenantId: null` for a billing top-up; CHECK `currency_exchange_rate_tenant_pin_only` | a tenant picks the rate it pays the platform at |
 
 ## How to test
 

@@ -74,8 +74,13 @@ describe('CurrencyPinService (F-0608-a)', () => {
       },
       $transaction: vi.fn(async (work: (t: typeof tx) => unknown) => work(tx)),
     };
+    // Reads of rate rows run in `tenantTransaction` (RLS): the transaction client reads what the service would.
+    Object.assign(tx.currencyExchangeRate, {
+      findFirst: prisma.currencyExchangeRate.findFirst,
+      findUnique: prisma.currencyExchangeRate.findUnique,
+    });
     const redis = { get: vi.fn(async () => options.reading ?? null) };
-    const service = new CurrencyPinService(prisma as never, redis as never);
+    const service = new CurrencyPinService(prisma as never, redis as never, { chargeCurrencies: async () => [] } as never);
     // Every call inside the request's tenant scope, as IdentityMiddleware opens it:
     // `tenantTransaction` binds that tenant into the transaction for the audit row's RLS.
     const scoped = <A extends unknown[], R>(fn: (...a: A) => Promise<R>) =>
@@ -128,10 +133,8 @@ describe('CurrencyPinService (F-0608-a)', () => {
     expect(view).toMatchObject({ id: 'pin-1', code: 'EUR', rate: '0.95123457', endedAt: null });
   });
 
-  it('refuses a reseller, the base currency and an unknown code', async () => {
+  it('refuses the base currency and an unknown code (a reseller\'s scope is pins.tenant.spec.ts)', async () => {
     const input = { rate: '1', reason: 'x', hours: 1 };
-    await expect(world({ tenantType: TenantType.reseller }).pins.pin(actor, { ...input, code: 'EUR' }))
-      .rejects.toMatchObject({ reason: 'not_platform_owner' });
     await expect(world().pins.pin(actor, { ...input, code: 'USD' })).rejects.toMatchObject({ reason: 'base_currency' });
     await expect(world().pins.pin(actor, { ...input, code: 'XXX' })).rejects.toMatchObject({ reason: 'currency_not_found' });
     await expect(world().pins.pin(actor, { ...input, code: 'EUR', rate: '0.000000001' }))

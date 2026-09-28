@@ -36,6 +36,7 @@ Refusals: `not_allowed` 403, `reseller_suspended` 403, `reseller_not_found`
 | 4. A set to the code it already has is not a change: 200, `conversion: null`, nothing read or written | a retried request is harmless |
 | 5. **No rate, no change** (`rate_unavailable`): nothing is converted at a guessed rate. A change that finds the tenant no longer in the currency its rate was read from is refused (`currency_changed`), not converted | part 5: one snapshot, and the right one |
 | 6. The platform's own tenant is not a reseller, so `ResellerAccess` does not admit it: the caller must be signed in to it and hold `tenant.manage`. A reseller's `tenant.manage` is its own tenant's, never the platform's | the platform's currency prices every reseller's billing (part 4) |
+| 7. **The pair is read in the tenant's own books** (F-116-j): `readFxPair(…, { tenantId: target.id })`, so its own live pin converts before the platform's | ADR-0098 part 9: a tenant's rate prices its own currency change, and only that tenant's |
 
 ## Consumers
 

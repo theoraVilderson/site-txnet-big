@@ -144,7 +144,7 @@ describe('the loader reads a rate only for a coupon that needs one', () => {
     const v = await inTenantTransaction(() => service.validate(tx, { ...irrOrder('100000000', ['A', 'B', 'PCT', 'OWN']), userId: USER }));
 
     expect(fx.pair).toHaveBeenCalledTimes(1);
-    expect(fx.pair).toHaveBeenCalledWith('USD', 'IRR');
+    expect(fx.pair).toHaveBeenCalledWith('USD', 'IRR', null); // no `ratesTenantId`: the platform's rates only (F-116-j)
     expect(v.applied.map((a) => [a.code, a.discount.toFixed(2), a.fx])).toEqual([
       ['A', '2000000.00', USD_IRR],
       ['B', '3000000.00', USD_IRR],

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Coupon, CouponChannel, CouponVisibility, DiscountType, PaymentStatus, Prisma, RedemptionStatus } from '@prisma/client';
 import { TenantContext, TenantScopeConflict } from '@txnet-backend/shared-core';
 
@@ -56,6 +56,12 @@ export type CouponRequest = {
   gatewayId?: string;
   /** Where the code was typed; a coupon limited to channels needs it. */
   channel?: CouponChannel;
+  /**
+   * Whose books a coupon's money is converted in (F-116-j): the order's tenant,
+   * whose own pin answers first. Absent = the platform's rates only — the safe
+   * reading for a caller that did not say.
+   */
+  ratesTenantId?: string | null;
 };
 
 /** A coupon row, plus what the loader counted for this user. */
@@ -368,7 +374,10 @@ export function applyCoupons(
 
 @Injectable()
 export class CouponValidationService {
-  constructor(private readonly fx: Pick<FxRateReader, 'pair'>) {}
+  // `@Inject` because the parameter's type is a `Pick`, which erases to
+  // `Object` in the emitted metadata: without it Nest cannot resolve the
+  // reader and billing-service does not boot (since F-116-h6).
+  constructor(@Inject(FxRateReader) private readonly fx: Pick<FxRateReader, 'pair'>) {}
 
   /**
    * `tx` must come from `tenantTransaction(prisma, fn)`. `coupon` is not a
@@ -418,7 +427,7 @@ export class CouponValidationService {
     );
     const rates = new Map<string, CouponFx | null>();
     for (const code of foreign) {
-      const pair = await this.fx.pair(code, request.currencyCode);
+      const pair = await this.fx.pair(code, request.currencyCode, request.ratesTenantId ?? null);
       rates.set(code, pair && { rate: pair.rate, snapshotId: pair.snapshotId, fromSnapshotId: pair.fromSnapshotId ?? null });
     }
 

@@ -59,6 +59,7 @@ const WRITE = {
 
 const STATUS: Record<CurrencyPinRejection, 400 | 403 | 404 | 409> = {
   not_platform_owner: 403,
+  currency_not_yours: 403,
   currency_not_found: 404,
   pin_not_found: 404,
   base_currency: 409,
@@ -67,8 +68,9 @@ const STATUS: Record<CurrencyPinRejection, 400 | 403 | 404 | 409> = {
 };
 
 /**
- * The platform's manual rate (F-0608-a, ADR-0101): the form's data, a pin,
- * and an early end. `currency.pin` at the door, the platform owner inside.
+ * A manual rate (F-0608-a, F-116-j, ADR-0101): the form's data, a pin, and an
+ * early end. `currency.pin` at the door; inside, the platform owner pins for
+ * everyone and any other tenant for its own books only.
  */
 @Controller('currency/pins')
 @UseGuards(CurrencyPinGuard)

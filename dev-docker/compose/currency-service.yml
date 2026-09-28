@@ -43,6 +43,10 @@ services:
       - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-}
       - CURRENCY_READ_RATE_LIMIT=${CURRENCY_READ_RATE_LIMIT:-}
       - TRUST_PROXY=${TRUST_PROXY}
+      # Which currencies a tenant's gateways charge in (F-116-j): billing's
+      # internal route, behind the service token.
+      - BILLING_API_BASE_URL=http://billing-service:3000
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
     networks:
       - private_backend_network
     labels:

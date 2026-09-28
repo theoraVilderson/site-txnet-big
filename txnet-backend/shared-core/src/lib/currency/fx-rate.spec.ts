@@ -19,8 +19,10 @@ const AT = new Date('2026-09-28T09:00:00.000Z');
 function stores(options: {
   cache?: Record<string, string>;
   table?: Record<string, Row | null>;
-  /** A live pin per code (F-0608-a); `'throw'` makes the pin query fail. */
+  /** A live platform pin per code (F-0608-a); `'throw'` makes the pin query fail. */
   pins?: Record<string, Row | 'throw'>;
+  /** A live pin per `tenantId:code` (F-116-j). */
+  tenantPins?: Record<string, Row>;
   redisDown?: boolean;
 }) {
   const reads = { get: [] as string[], table: [] as string[], pins: [] as string[], where: [] as unknown[] };
@@ -34,7 +36,9 @@ function stores(options: {
   const db = {
     currency: {
       findUnique: async ({ where }: { where: { code: string } }) =>
-        (options.table && where.code in options.table) || (options.pins && where.code in options.pins)
+        (options.table && where.code in options.table) ||
+        (options.pins && where.code in options.pins) ||
+        Object.keys(options.tenantPins ?? {}).some((k) => k.endsWith(`:${where.code}`))
           ? { id: `cur-${where.code}` }
           : null,
     },
@@ -43,8 +47,15 @@ function stores(options: {
         const code = where.currencyId.replace(/^cur-/, '');
         if (where.source === RateSource.manual_admin) {
           reads.pins.push(code);
+          reads.where.push(where);
           const pin = options.pins?.[code];
           if (pin === 'throw') throw new Error('db down');
+          // The reader asks `tenantId: X OR null`, tenant first; this double
+          // answers the same order.
+          const tenants = ((where as { OR?: { tenantId: string | null }[] }).OR ?? [{ tenantId: (where as { tenantId?: null }).tenantId ?? null }])
+            .map((o) => o.tenantId)
+            .filter((t): t is string => !!t);
+          for (const t of tenants) if (options.tenantPins?.[`${t}:${code}`]) return options.tenantPins[`${t}:${code}`];
           return pin ?? null;
         }
         reads.table.push(code);
@@ -102,7 +113,7 @@ describe('readFxRate — one currency, cache first', () => {
 
     await readFxRate(db, cache, 'EUR');
 
-    expect(reads.where).toEqual([expect.objectContaining({ source: RateSource.external_api })]);
+    expect(reads.where).toContainEqual(expect.objectContaining({ source: RateSource.external_api }));
   });
 
   it('falls through to the live rate, with a warning, when the pin cannot be read', async () => {
@@ -111,6 +122,59 @@ describe('readFxRate — one currency, cache first', () => {
 
     expect((await readFxRate(db, cache, 'EUR', { warn }))?.snapshotId).toBe('snap-EUR');
     expect(warn).toHaveBeenCalledWith(expect.stringMatching(/pin/));
+  });
+
+  it('answers a tenant its own pin first, then the platform pin (F-116-j)', async () => {
+    const until = new Date('2026-09-30T09:00:00.000Z');
+    const { db, cache } = stores({
+      cache: { 'fx:rate:IRR': cached('IRR', '2440000') },
+      pins: { IRR: { ...row('pin-platform', '2500000'), reason: 'platform', expiresAt: until } },
+      tenantPins: { 't-1:IRR': { ...row('pin-t1', '2600000'), reason: 'reseller', expiresAt: until } },
+    });
+
+    expect((await readFxRate(db, cache, 'IRR', undefined, { tenantId: 't-1' }))?.snapshotId).toBe('pin-t1');
+    expect((await readFxRate(db, cache, 'IRR', undefined, { tenantId: 't-2' }))?.snapshotId).toBe('pin-platform');
+  });
+
+  it('never answers a tenant pin to a read with no tenant — the tenant <-> platform boundary', async () => {
+    const until = new Date('2026-09-30T09:00:00.000Z');
+    const { db, cache, reads } = stores({
+      cache: { 'fx:rate:IRR': cached('IRR', '2440000') },
+      table: { IRR: row('r-irr', '2440000') },
+      tenantPins: { 't-1:IRR': { ...row('pin-t1', '2600000'), reason: 'reseller', expiresAt: until } },
+    });
+
+    expect((await readFxRate(db, cache, 'IRR'))?.snapshotId).toBe('snap-IRR');
+    expect(reads.where).toContainEqual(expect.objectContaining({ source: RateSource.manual_admin, tenantId: null }));
+  });
+
+  it('binds exactly the named tenant for its pin, in a transaction, when given a service', async () => {
+    const until = new Date('2026-09-30T09:00:00.000Z');
+    const { db, cache } = stores({
+      cache: { 'fx:rate:IRR': cached('IRR', '2440000') },
+      tenantPins: { 't-1:IRR': { ...row('pin-t1', '2600000'), reason: 'reseller', expiresAt: until } },
+    });
+    const bound: unknown[] = [];
+    const service = Object.assign(Object.create(null), db as object, {
+      $transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ ...(db as object), $executeRaw: async (_s: TemplateStringsArray, ...v: unknown[]) => bound.push(...v) }),
+    });
+
+    expect((await readFxRate(service, cache, 'IRR', undefined, { tenantId: 't-1' }))?.snapshotId).toBe('pin-t1');
+    expect(bound).toEqual(['t-1']);
+  });
+
+  it('carries the tenant to both legs of a pair', async () => {
+    const until = new Date('2026-09-30T09:00:00.000Z');
+    const { db, cache } = stores({
+      cache: { 'fx:rate:IRR': cached('IRR', '2440000'), 'fx:rate:EUR': cached('EUR', '0.88') },
+      tenantPins: { 't-1:IRR': { ...row('pin-t1', '2600000'), reason: 'reseller', expiresAt: until } },
+    });
+
+    const pair = await readFxPair(db, cache, 'EUR', 'IRR', undefined, { tenantId: 't-1' });
+
+    expect(pair?.to?.snapshotId).toBe('pin-t1');
+    expect(pair?.from?.snapshotId).toBe('snap-EUR');
   });
 
   it('answers null for a currency with no row and none published', async () => {

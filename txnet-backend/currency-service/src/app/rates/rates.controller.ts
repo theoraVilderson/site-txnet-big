@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Req } from '@nestjs/common';
 import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
@@ -22,7 +22,7 @@ export class CurrencyRatesController {
 
   @Get()
   @RateLimit(READ)
-  list(): Promise<CurrencyRate[]> {
-    return this.rates.list();
+  list(@Req() req: Request): Promise<CurrencyRate[]> {
+    return this.rates.list(identityOf(req).tenantId);
   }
 }

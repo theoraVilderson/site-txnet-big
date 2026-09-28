@@ -2,7 +2,7 @@
 id: currency
 layer: domain
 status: active
-version: 4
+version: 5
 updated: 2026-09-28
 ---
 
@@ -53,6 +53,14 @@ Rules a caller may rely on:
    `pinned: {reason, expiresAt}`; its id is the pin row, so a price records it.
    A failed pin read is a warning and falls through to the discovered rate.
    The table fallback reads discovered (`external_api`) rows only.
+7. **Whose pin** (F-116-j, ADR-0098 part 9): `readFxRate(…, { tenantId })` /
+   `readFxPair(…, { tenantId })` read that tenant's own live pin, then the
+   platform's. The table is under RLS, so given a service the reader binds
+   exactly that tenant in a transaction for the pin lookup (`pinRow`); given a
+   transaction client, the caller's binding stands. **Without a tenant no tenant's pin is ever read** — that is the
+   tenant ↔ platform boundary (a billing top-up, anything the platform charges
+   a tenant). Callers say whose books they price (billing
+   `contract.gateways.md`, tenant `contract.currency.md` rule 7).
 
 ## HTTP API (`currency-service`, ADR-0100)
 
@@ -61,12 +69,18 @@ Behind Traefik and ForwardAuth (`/api/currency/*`), the shared guards (C-11).
 | Route | Who | Answer | Errors |
 |---|---|---|---|
 | `GET /api/currency/rates` (F-116-k) | any signed-in caller | every active currency: `{code, name, symbol, decimalPlaces, isBase, rate, snapshotId, effectiveAt, pinned}`, `rate` a decimal string per USD from `readFxRate`, `null` when it has none; the base currency `"1"`; `pinned` `{reason, expiresAt}` while a pin prices it | 401 from the gate; 429 (`CURRENCY_READ`, 120/min) |
-| `GET /api/currency/pins/:code` (F-0608-a) | `currency.pin`, platform owner | the pin form: `{current, lastAccepted, lastDownload}` — the live pin, the last discovered rate, the worker's last reading (`fx:reading:{code}`, a suggestion, never a rate) | 403; 404 `currency_not_found`; 409 `base_currency` |
+| `GET /api/currency/pins/:code` (F-0608-a, F-116-j) | `currency.pin`; the platform or a tenant | the pin form: `{current, platformPin, lastAccepted, lastDownload}` — `current` the caller's own live pin, `platformPin` the platform's beside a tenant's — the live pin, the last discovered rate, the worker's last reading (`fx:reading:{code}`, a suggestion, never a rate) | 403 (incl. `currency_not_yours`); 404 `currency_not_found`; 409 `base_currency` |
 | `POST /api/currency/pins` (F-0608-a) | same | `{code, rate, reason, hours 1–720}` → the pin, rate rounded to 8 places; a `manual_admin` row + `admin_audit_log` (`currency_rate_pin`) in one tenant-bound transaction | 400 validation / `invalid_rate`; 403; 404; 409 `base_currency`; 429 (`CURRENCY_PIN_WRITE`, 30/15 min) |
 | `POST /api/currency/pins/:id/end` (F-0608-a) | same | the pin with `endedAt`; a `currency_rate_pin_end` row + audit (`currency_rate_pin_end`); the pin row is never edited | 404 `pin_not_found`; 409 `pin_over` (ended, expired, or ended concurrently) |
 
-**Access**: `currency.pin` at the door (granted to `Admin`), the platform-owner
-tenant inside; a tenant's own pin is F-116-j. A newer pin supersedes an older
+**Access**: `currency.pin` at the door (granted to `Admin`). Inside, the
+platform owner pins for everyone (`tenantId` null); **any other tenant pins
+for its own books only** (F-116-j): its operating currency, or a currency its
+own selectable gateways charge in — billing's internal
+`charge-currencies` answer (`BillingClient`; unreachable = operating currency
+only). Otherwise 403 `currency_not_yours`. A tenant ends only its own pin and
+the platform only its own (else 404 `pin_not_found`). `GET /rates` answers
+each caller the rate its own books price at. A newer pin supersedes an older
 live one; nothing merges them.
 
 Age is not judged here (F-0607-a, ADR-0101). The service fetches no rate.

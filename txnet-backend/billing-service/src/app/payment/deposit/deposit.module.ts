@@ -16,6 +16,7 @@ import { DepositInChatController } from './deposit-in-chat.controller';
 import { DepositInChatService } from './deposit-in-chat.service';
 import { DepositReconciliationService } from './deposit-reconciliation.service';
 import { DepositSettlementService } from './deposit-settlement';
+import { ChargeCurrenciesController } from './charge-currencies.controller';
 import { DepositInternalController } from './deposit-internal.controller';
 import { DepositQuoteService } from './deposit-quote.service';
 import { DepositStartService } from './deposit-start.service';
@@ -51,7 +52,7 @@ import { ManualConfirmService } from './manual-confirm.service';
  */
 @Module({
   imports: [LocaleModule, CouponModule, GatewayModule, WalletModule],
-  controllers: [DepositController, DepositInChatController, DepositCallbackController, DepositWebhookController, DepositInternalController, ManualConfirmController],
+  controllers: [DepositController, DepositInChatController, DepositCallbackController, DepositWebhookController, DepositInternalController, ManualConfirmController, ChargeCurrenciesController],
   providers: [DepositQuoteService, DepositStartService, DepositAbandonService, DepositCallbackService, DepositSettlementService, DepositFollowOnService, DepositExpiryService, DepositReconciliationService, ManualConfirmService, DepositWebhookService, DepositInChatService, FxRateReader, InvoiceLinkClient, TenantBillingLedger],
   exports: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositExpiryService, DepositReconciliationService],
 })
