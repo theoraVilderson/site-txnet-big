@@ -31,6 +31,7 @@ function coupon(code: string, over: Partial<CouponFacts> = {}): CouponFacts {
     id: `coupon-${seq}`,
     tenantId: TENANT,
     code,
+    currencyCode: 'USD',
     discountType: DiscountType.percentage,
     discountValue: D(10),
     maxDiscountCap: null,
@@ -67,6 +68,7 @@ function coupon(code: string, over: Partial<CouponFacts> = {}): CouponFacts {
 const topUp = (amount: string, codes: string[]): CouponRequest => ({
   codes,
   amount: D(amount),
+  currencyCode: 'USD',
   target: { kind: 'wallet_top_up' },
 });
 
@@ -198,7 +200,7 @@ describe('each gate refuses with its own reason', () => {
 
   it.each(cases)('%s', (_name, over, reason, target = { kind: 'wallet_top_up' }) => {
     const known = _name === 'unknown code' ? [] : [coupon('CODE', over)];
-    const r = applyCoupons({ codes: ['CODE'], amount: D('20.00'), target }, known, NOW);
+    const r = applyCoupons({ codes: ['CODE'], amount: D('20.00'), currencyCode: 'USD', target }, known, NOW);
 
     if (reason === null) {
       expect(r.rejected).toEqual([]);
@@ -238,7 +240,7 @@ describe('ownership (F-502-b, ADR-0048)', () => {
     const platform = coupon('CODE', { tenantId: null, discountValue: D(10) });
     for (const rows of [[platform, own], [own, platform]]) {
       const r = applyCoupons(onGateway('tenant'), rows, NOW);
-      expect(r.applied).toEqual([{ couponId: own.id, code: 'CODE', discount: D('10.00') }]);
+      expect(r.applied).toEqual([{ couponId: own.id, code: 'CODE', discount: D('10.00'), fx: null }]);
     }
   });
 

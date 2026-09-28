@@ -138,7 +138,7 @@ beforeAll(async () => {
   service = new DepositQuoteService(
     app,
     crossTenant,
-    new CouponValidationService(),
+    new CouponValidationService(fx),
     registry as never,
     merchant as never,
     fx as never,

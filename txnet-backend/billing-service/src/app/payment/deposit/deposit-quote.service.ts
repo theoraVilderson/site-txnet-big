@@ -207,6 +207,7 @@ export class DepositQuoteService {
       const coupons = await this.coupons.validate(tx, {
         codes: request.couponCodes,
         amount,
+        currencyCode,
         target: { kind: 'wallet_top_up' },
         gatewaySource: request.source,
         gatewayId,

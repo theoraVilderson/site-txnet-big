@@ -53,6 +53,8 @@ model CurrencyExchangeRate {
   // behind it cannot be deleted.
   payments     PaymentTransaction[] @relation("PaymentRateToLeg")
   paymentsFrom PaymentTransaction[] @relation("PaymentRateFromLeg")
+  couponRedemptions     CouponRedemption[] @relation("CouponRedemptionRateToLeg")
+  couponRedemptionsFrom CouponRedemption[] @relation("CouponRedemptionRateFromLeg")
 
   @@index([currencyId, effectiveAt(sort: Desc)])
   @@map("currency_exchange_rate")

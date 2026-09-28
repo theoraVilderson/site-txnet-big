@@ -143,6 +143,8 @@ export class InvoiceService {
         : await this.coupons.validate(tx, {
             codes: request.couponCodes,
             amount: couponBase,
+            // The price's own, which the invoice records (F-116-d, F-116-h6).
+            currencyCode: offer.price.currencyCode,
             target: { kind: 'purchase', productId: offer.productId, variantId: offer.variantId },
             channel: request.channel ?? CouponChannel.panel,
             userId,

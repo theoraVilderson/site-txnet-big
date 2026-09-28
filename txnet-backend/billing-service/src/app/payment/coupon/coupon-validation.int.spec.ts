@@ -47,7 +47,8 @@ const OTHER_VARIANT = '88888888-8888-4888-8888-888888888888';
 let pg: PostgresFixture;
 let owner: PrismaClient;
 let app: PrismaService;
-const validator = new CouponValidationService();
+// Every coupon here is in the order's currency: no rate is ever asked (F-116-h6).
+const validator = new CouponValidationService({ pair: async () => null });
 
 beforeAll(async () => {
   pg = await startPostgresFixture();
@@ -125,6 +126,7 @@ function couponId(suffix: string) {
 const topUp = (codes: string[]): CouponRequest => ({
   codes,
   amount: new Prisma.Decimal('20.00'),
+  currencyCode: 'USD',
   target: { kind: 'wallet_top_up' },
 });
 

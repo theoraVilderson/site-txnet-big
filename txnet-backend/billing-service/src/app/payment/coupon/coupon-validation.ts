@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { Coupon, CouponChannel, CouponVisibility, DiscountType, PaymentStatus, Prisma, RedemptionStatus } from '@prisma/client';
 import { TenantContext, TenantScopeConflict } from '@txnet-backend/shared-core';
 
+import { FxRateReader } from '../pricing/fx-rate.reader';
+
 /**
  * Which of the codes a user typed discount this purchase, and by how much
  * (F-092-g; D-21, D-23).
@@ -23,6 +25,13 @@ import { TenantContext, TenantScopeConflict } from '@txnet-backend/shared-core';
  * the amount rather than the running payable. Not kept: Persian messages (a
  * `reason` the route maps to an i18n key, C-01), float rial arithmetic, and a
  * capacity check that ignored the user's own hold.
+ *
+ * A coupon's money — a fixed value, a percentage's cap, the purchase bounds —
+ * is in its own `currencyCode` (F-116-h6, ADR-0098 part 3). On an order in
+ * another currency each is converted at the live rate through the USD pivot
+ * before any gate or discount reads it, and the rate travels with the applied
+ * coupon to its redemption. With no rate such a coupon is `currency_unavailable`;
+ * it is never read as if it were in the order's currency.
  */
 export type CouponTarget =
   | { kind: 'wallet_top_up' }
@@ -32,8 +41,10 @@ export type CouponTarget =
 export type CouponRequest = {
   /** As typed. Blank entries are dropped, the rest trimmed, upper-cased and de-duplicated. */
   codes: readonly string[];
-  /** Base currency (ADR-0019), > 0, at most 2 decimal places. */
+  /** > 0, at most 2 decimal places, in `currencyCode`. */
   amount: Prisma.Decimal;
+  /** The order's currency: the one its caller priced it in (F-116-h6). */
+  currencyCode: string;
   target: CouponTarget;
   /**
    * Whose gateway takes the payment. A platform coupon (`tenantId` null) is the
@@ -53,6 +64,7 @@ export type CouponFacts = Pick<
   | 'id'
   | 'tenantId'
   | 'code'
+  | 'currencyCode'
   | 'discountType'
   | 'discountValue'
   | 'maxDiscountCap'
@@ -90,7 +102,15 @@ export type CouponFacts = Pick<
   userCreatedAt: Date | null;
   /** The user has a `success` payment (F-502-k: a top-up is a purchase until orders exist). */
   userHasPurchased: boolean;
+  /**
+   * The coupon's currency -> the order's, read only when they differ and the
+   * coupon carries money (F-116-h6): `null` = no rate, absent = none asked.
+   */
+  fx?: CouponFx | null;
 };
+
+/** The live rate a coupon's money crossed at, and the snapshot of each leg (null for USD, the pivot). */
+export type CouponFx = { rate: Prisma.Decimal; snapshotId: string | null; fromSnapshotId: string | null };
 
 export type CouponRejection =
   /** Unknown, inactive, soft-deleted, another tenant's, or targeted at someone else — never told apart. */
@@ -106,6 +126,8 @@ export type CouponRejection =
   | 'wrong_channel'
   | 'wrong_gateway'
   | 'out_of_scope'
+  /** Its money is in another currency than the order's, and there is no rate between them (F-116-h6). */
+  | 'currency_unavailable'
   | 'below_min_purchase'
   | 'above_max_purchase'
   | 'first_purchase_only'
@@ -118,7 +140,14 @@ export type CouponRejection =
   /** The codes before it already took the payable to zero, or its discount rounds to nothing. */
   | 'nothing_to_discount';
 
-export type AppliedCoupon = { couponId: string; code: string; discount: Prisma.Decimal };
+export type AppliedCoupon = {
+  couponId: string;
+  code: string;
+  /** In the order's currency. */
+  discount: Prisma.Decimal;
+  /** The rate the coupon's money was converted at; `null` when nothing was converted. */
+  fx: CouponFx | null;
+};
 export type RejectedCoupon = { code: string; reason: CouponRejection };
 
 export type CouponValidation = {
@@ -148,7 +177,42 @@ export function normalizeCouponCodes(codes: readonly string[]): string[] {
   return [...new Set(normalized)];
 }
 
-function gate(c: CouponFacts, request: CouponRequest, now: Date): CouponRejection | null {
+/** A coupon's money in the order's currency (F-116-h6). */
+type CouponMoney = Pick<CouponFacts, 'discountValue' | 'maxDiscountCap' | 'minPurchaseAmount' | 'maxPurchaseAmount'> & {
+  fx: CouponFx | null;
+};
+
+/** Whether `c` carries any amount that is in its own currency. A plain percentage carries none. */
+export function carriesMoney(c: Pick<CouponFacts, 'discountType' | 'maxDiscountCap' | 'minPurchaseAmount' | 'maxPurchaseAmount'>): boolean {
+  return c.discountType === DiscountType.fixed_amount || c.maxDiscountCap != null || c.minPurchaseAmount != null || c.maxPurchaseAmount != null;
+}
+
+/**
+ * `c`'s money in `currencyCode`, or `null` when it needs a rate and has none.
+ * What a discount gives is rounded down and a minimum purchase up, so a
+ * conversion never grants more than the coupon's own terms (C-02: Decimal).
+ */
+function moneyIn(c: CouponFacts, currencyCode: string): CouponMoney | null {
+  const own = { discountValue: c.discountValue, maxDiscountCap: c.maxDiscountCap, minPurchaseAmount: c.minPurchaseAmount, maxPurchaseAmount: c.maxPurchaseAmount };
+  if (c.currencyCode === currencyCode || !carriesMoney(c)) return { ...own, fx: null };
+  if (!c.fx) return null;
+  const { rate } = c.fx;
+  const at = (v: Prisma.Decimal | null, rounding: Prisma.Decimal.Rounding) =>
+    v == null ? null : v.mul(rate).toDecimalPlaces(MONEY_SCALE, rounding);
+  return {
+    // A percentage is a ratio, never converted.
+    discountValue:
+      c.discountType === DiscountType.fixed_amount
+        ? c.discountValue.mul(rate).toDecimalPlaces(MONEY_SCALE, Prisma.Decimal.ROUND_DOWN)
+        : c.discountValue,
+    maxDiscountCap: at(c.maxDiscountCap, Prisma.Decimal.ROUND_DOWN),
+    minPurchaseAmount: at(c.minPurchaseAmount, Prisma.Decimal.ROUND_UP),
+    maxPurchaseAmount: at(c.maxPurchaseAmount, Prisma.Decimal.ROUND_DOWN),
+    fx: c.fx,
+  };
+}
+
+function gate(c: CouponFacts, money: CouponMoney | null, request: CouponRequest, now: Date): CouponRejection | null {
   if (!c.isActive || c.deletedAt) return 'not_found';
   if (c.visibility === CouponVisibility.targeted && !c.allowsUser) return 'not_found';
   // A gift code and a free-service code are redeemed in the gift box, not priced here (F-502-l-a).
@@ -162,8 +226,9 @@ function gate(c: CouponFacts, request: CouponRequest, now: Date): CouponRejectio
   }
   if (!onGateway(c, request)) return 'wrong_gateway';
   if (!inScope(c, request.target)) return 'out_of_scope';
-  if (c.minPurchaseAmount && request.amount.lt(c.minPurchaseAmount)) return 'below_min_purchase';
-  if (c.maxPurchaseAmount && request.amount.gt(c.maxPurchaseAmount)) return 'above_max_purchase';
+  if (!money) return 'currency_unavailable';
+  if (money.minPurchaseAmount && request.amount.lt(money.minPurchaseAmount)) return 'below_min_purchase';
+  if (money.maxPurchaseAmount && request.amount.gt(money.maxPurchaseAmount)) return 'above_max_purchase';
   if (c.firstPurchaseOnly && c.userHasPurchased) return 'first_purchase_only';
   if (c.newUserWithinDays != null && !isNewUser(c.userCreatedAt, c.newUserWithinDays, now)) return 'not_a_new_user';
   // 0 is unlimited — the user's answer 2026-09-11, as in legacy.
@@ -231,8 +296,12 @@ function rank(c: CouponFacts): number {
   return (c.deletedAt ? 2 : 0) + (c.tenantId === null ? 1 : 0);
 }
 
-/** The discount `c` takes from `running`, before the cap at `running`. */
-function discountOf(c: CouponFacts, running: Prisma.Decimal): Prisma.Decimal {
+/**
+ * The discount `c` takes from `running`, before the cap at `running`. The
+ * coupon's own terms are checked; `money` is what it gives in the order's
+ * currency, where a fixed value may round to nothing.
+ */
+function discountOf(c: CouponFacts, money: CouponMoney, running: Prisma.Decimal): Prisma.Decimal {
   const value = c.discountValue;
   if (c.discountType === DiscountType.percentage) {
     if (value.lte(0) || value.gt(100)) {
@@ -240,14 +309,14 @@ function discountOf(c: CouponFacts, running: Prisma.Decimal): Prisma.Decimal {
     }
     // Down to the cent: a discount rounded up would give away money no rule granted.
     let d = running.mul(value).div(100).toDecimalPlaces(MONEY_SCALE, Prisma.Decimal.ROUND_DOWN);
-    if (c.maxDiscountCap && d.gt(c.maxDiscountCap)) d = c.maxDiscountCap;
+    if (money.maxDiscountCap && d.gt(money.maxDiscountCap)) d = money.maxDiscountCap;
     return d;
   }
   if (c.discountType === DiscountType.fixed_amount) {
     if (value.lte(0) || value.decimalPlaces() > MONEY_SCALE) {
       throw new InvalidCouponInput(`coupon ${c.code}: a fixed discount must be > 0 in cents`);
     }
-    return value;
+    return money.discountValue;
   }
   throw new InvalidCouponInput(`coupon ${c.code}: unknown discountType ${String(c.discountType)}`);
 }
@@ -273,19 +342,20 @@ export function applyCoupons(
 
   for (const code of normalizeCouponCodes(request.codes)) {
     const c = byCode.get(code);
-    const reason = c ? gate(c, request, now) : 'not_found';
-    if (!c || reason) {
+    const money = c ? moneyIn(c, request.currencyCode) : null;
+    const reason = c ? gate(c, money, request, now) : 'not_found';
+    if (!c || !money || reason) {
       rejected.push({ code, reason: reason ?? 'not_found' });
       continue;
     }
 
-    const discount = Prisma.Decimal.min(discountOf(c, running), running);
+    const discount = Prisma.Decimal.min(discountOf(c, money, running), running);
     if (discount.lte(0)) {
       rejected.push({ code, reason: 'nothing_to_discount' });
       continue;
     }
     running = running.minus(discount);
-    applied.push({ couponId: c.id, code, discount });
+    applied.push({ couponId: c.id, code, discount, fx: money.fx });
   }
 
   return {
@@ -298,6 +368,8 @@ export function applyCoupons(
 
 @Injectable()
 export class CouponValidationService {
+  constructor(private readonly fx: Pick<FxRateReader, 'pair'>) {}
+
   /**
    * `tx` must come from `tenantTransaction(prisma, fn)`. `coupon` is not a
    * registered model — the extension would filter out the platform's rows —
@@ -340,6 +412,16 @@ export class CouponValidationService {
       rows.some((c) => c.firstPurchaseOnly) &&
       (await tx.paymentTransaction.count({ where: { userId, status: PaymentStatus.success }, take: 1 })) > 0;
 
+    // One live rate per coupon currency whose money this order needs converted (F-116-h6).
+    const foreign = new Set(
+      rows.filter((c) => c.currencyCode !== request.currencyCode && carriesMoney(c)).map((c) => c.currencyCode),
+    );
+    const rates = new Map<string, CouponFx | null>();
+    for (const code of foreign) {
+      const pair = await this.fx.pair(code, request.currencyCode);
+      rates.set(code, pair && { rate: pair.rate, snapshotId: pair.snapshotId, fromSnapshotId: pair.fromSnapshotId ?? null });
+    }
+
     const facts: CouponFacts[] = [];
     for (const { serviceScopes, allowedUsers, gateways, _count, ...coupon } of rows) {
       const liveRedemptionsInPeriod =
@@ -362,6 +444,7 @@ export class CouponValidationService {
         liveRedemptionsInPeriod,
         userCreatedAt: user?.createdAt ?? null,
         userHasPurchased,
+        fx: rates.get(coupon.currencyCode),
       });
     }
     return applyCoupons(request, facts, now);

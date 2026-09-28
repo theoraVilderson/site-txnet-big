@@ -63,6 +63,7 @@ export const COUPON_REJECTION_KEY: Record<CouponRejection, string> = {
   wrong_channel: E.coupon.wrongChannel,
   wrong_gateway: E.coupon.wrongGateway,
   out_of_scope: E.coupon.outOfScope,
+  currency_unavailable: E.coupon.currencyUnavailable,
   below_min_purchase: E.coupon.belowMinPurchase,
   above_max_purchase: E.coupon.aboveMaxPurchase,
   first_purchase_only: E.coupon.firstPurchaseOnly,

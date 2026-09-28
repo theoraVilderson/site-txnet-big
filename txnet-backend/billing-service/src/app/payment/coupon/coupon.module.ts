@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { CouponReservationService } from './coupon-reservation';
 import { CouponValidationService } from './coupon-validation';
+import { FxRateReader } from '../pricing/fx-rate.reader';
 
 /**
  * The coupon engine: validation (F-092-g) and reservation (F-092-h). F-092-o
@@ -9,7 +10,8 @@ import { CouponValidationService } from './coupon-validation';
  * those holds.
  */
 @Module({
-  providers: [CouponValidationService, CouponReservationService],
+  // FxRateReader: a coupon in another currency than the order is converted at the live rate (F-116-h6).
+  providers: [CouponValidationService, CouponReservationService, FxRateReader],
   exports: [CouponValidationService, CouponReservationService],
 })
 export class CouponModule {}

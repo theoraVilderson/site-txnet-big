@@ -424,9 +424,18 @@ model CouponRedemption {
   currencyCode             String
   orderReferenceId         String           @db.Uuid
   redeemedAt               DateTime         @default(now())
+  /// A coupon in another currency than the order (F-116-h6): its currency, the
+  /// live rate its money was converted at into `currencyCode`, and each leg's
+  /// snapshot (NULL for USD, the pivot). All NULL when nothing was converted.
+  fxFromCode               String?
+  fxRate                   Decimal?         @db.Decimal(30, 18)
+  fxSnapshotId             String?          @db.Uuid
+  fxFromSnapshotId         String?          @db.Uuid
 
-  coupon             Coupon              @relation(fields: [couponId], references: [id])
-  paymentTransaction PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id])
+  coupon             Coupon                @relation(fields: [couponId], references: [id])
+  paymentTransaction PaymentTransaction?   @relation(fields: [paymentTransactionId], references: [id])
+  fxSnapshotRow      CurrencyExchangeRate? @relation("CouponRedemptionRateToLeg", fields: [fxSnapshotId], references: [id], onDelete: Restrict)
+  fxFromSnapshotRow  CurrencyExchangeRate? @relation("CouponRedemptionRateFromLeg", fields: [fxFromSnapshotId], references: [id], onDelete: Restrict)
 
   // No unique (couponId, userId): perUserUsageLimit may exceed 1 (D-21), so
   // the limit is counted in the redemption transaction, not by an index.

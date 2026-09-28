@@ -147,7 +147,7 @@ describe('DepositQuoteService.quote', () => {
   it('breaks a manual-fee deposit down the way the gateway will charge it', async () => {
     const service = build({
       coupons: {
-        applied: [{ couponId: 'c1', code: 'SAVE5', discount: d('5.00') }],
+        applied: [{ couponId: 'c1', code: 'SAVE5', discount: d('5.00'), fx: null }],
         rejected: [{ code: 'OLD', reason: 'expired' }],
         totalDiscount: d('5.00'),
         payable: d('15.00'),
@@ -231,7 +231,7 @@ describe('DepositQuoteService.quote', () => {
     const service = build({
       rows: [gatewayRow({ feeCalculationMode: 'automatic' })],
       coupons: {
-        applied: [{ couponId: 'c1', code: 'ALL', discount: d('10.00') }],
+        applied: [{ couponId: 'c1', code: 'ALL', discount: d('10.00'), fx: null }],
         rejected: [],
         totalDiscount: d('10.00'),
         payable: d('0'),
@@ -341,7 +341,7 @@ describe('a gateway with no merchant id (F-092-u)', () => {
     const service = build({
       configured: [],
       coupons: {
-        applied: [{ couponId: 'c1', code: 'ALL', discount: d('20.00') }],
+        applied: [{ couponId: 'c1', code: 'ALL', discount: d('20.00'), fx: null }],
         rejected: [],
         totalDiscount: d('20.00'),
         payable: d('0'),

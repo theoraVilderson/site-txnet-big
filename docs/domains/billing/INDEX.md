@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 70
+version: 71
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -48,6 +48,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260928002900_a_currency_change_converts_live_money/**
   - txnet-backend/prisma/domains/migrations/20260928003000_a_gateway_rate_keeps_an_inverse_pair/**
   - txnet-backend/prisma/domains/migrations/20260928003100_a_coupon_redemption_records_its_currency/**
+  - txnet-backend/prisma/domains/migrations/20260928003200_a_coupon_applies_only_in_its_own_currency/**
 owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_tenant, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
 updated: 2026-09-28
@@ -86,8 +87,8 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-28 | contract v71 (additive, F-116-h6, ADR-0098 part 3): a coupon in another currency than the order has its money converted at the live rate (USD pivot), recorded on the redemption (`fxRate`, both snapshots); with no rate it is `currency_unavailable` |
 | 2026-09-28 | contract v70 (**breaking** for usage-report readers, F-116-h5, ADR-0098 part 3): a coupon redemption records `currencyCode`; the usage report totals per currency and converts into the tenant's now, `discountGiven` `null` when it cannot. `reserve_coupon` takes the order's currency. Consumer: panel `CouponUsage` (F-116-h3). See [contract.coupon.md](contract.coupon.md) |
 | 2026-09-28 | contract v69 (additive, F-116-f, ADR-0098 part 5): a currency change converts live money in one transaction (`convertOperatingCurrency`, `billing.currency_change`); a credit priced before it is converted at its rate, recording `sourceAmount`/`sourceCurrencyCode`. See [contract.currency-change.md](contract.currency-change.md) |
-| 2026-09-28 | contract v68 (additive, F-116-e, ADR-0098 part 6): a deposit is priced from the payment's `currencyCode` to the charge currency through the USD pivot; `payment_transaction.exchangeRateFromSnapshotId` records the payment currency's leg, `exchangeRateSnapshot` is `DECIMAL(30,18)`; a gateway in another currency than the payment's is not offered. See [contract.deposit.md](contract.deposit.md) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

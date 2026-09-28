@@ -25,7 +25,11 @@ export type CouponReservation = {
   /** The order the holds belong to; `confirm` and `release` name it. For a top-up, the payment's id. */
   orderReferenceId: string;
   paymentTransactionId?: string | null;
-  /** The order's currency, which every held discount is in; each redemption records it (F-116-h5). */
+  /**
+   * The order's currency, which every held discount is in; each redemption
+   * records it (F-116-h5), and the rate a coupon in another currency was
+   * converted at (`AppliedCoupon.fx`, F-116-h6).
+   */
   currencyCode: string;
   /** `CouponValidation.applied`, as validated in this same transaction. */
   applied: readonly AppliedCoupon[];
@@ -47,6 +51,7 @@ const REFUSALS: readonly CouponRejection[] = [
   'not_a_discount',
   'not_started',
   'expired',
+  'currency_unavailable',
   'first_purchase_only',
   'per_user_limit_reached',
   'period_limit_reached',
@@ -67,14 +72,15 @@ export class CouponReservationService {
 
     // Coupon id order, so two orders stacking the same codes lock them alike and never deadlock.
     const byLockOrder = [...reservation.applied].sort((a, b) => a.couponId.localeCompare(b.couponId));
-    for (const { couponId, code, discount } of byLockOrder) {
+    for (const { couponId, code, discount, fx } of byLockOrder) {
       if (discount.lte(0) || discount.decimalPlaces() > 2) {
         throw new InvalidCouponInput(`coupon ${code}: a held discount must be > 0 in cents`);
       }
       const [{ outcome }] = await tx.$queryRaw<Array<{ outcome: string }>>`
         SELECT billing.reserve_coupon(
           ${couponId}::uuid, ${userId}::uuid, ${orderReferenceId}::uuid,
-          ${paymentTransactionId}::uuid, ${discount.toFixed(2)}::numeric, ${currencyCode}::text
+          ${paymentTransactionId}::uuid, ${discount.toFixed(2)}::numeric, ${currencyCode}::text,
+          ${fx ? fx.rate.toFixed() : null}::numeric, ${fx?.snapshotId ?? null}::uuid, ${fx?.fromSnapshotId ?? null}::uuid
         ) AS outcome`;
       if (outcome === 'reserved') continue;
       if (!REFUSALS.includes(outcome as CouponRejection)) {

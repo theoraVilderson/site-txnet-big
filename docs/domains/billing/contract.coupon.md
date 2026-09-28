@@ -66,7 +66,7 @@ facts); `reserve_coupon` in `20260914001200_coupon_limit_gates`. Proved by
 
 | Rule | Why |
 |---|---|
-| Full gate order: `not_found`, `not_a_discount`, `platform_coupon_needs_platform_gateway`, `not_started`, `expired`, `outside_window`, `wrong_channel`, `wrong_gateway`, `out_of_scope`, `below_min_purchase`, `above_max_purchase`, `first_purchase_only`, `not_a_new_user`, `per_user_limit_reached`, `period_limit_reached`, `capacity_reached` | each refusal its own i18n key under `billing.coupon.*` (C-07) |
+| Full gate order: `not_found`, `not_a_discount`, `platform_coupon_needs_platform_gateway`, `not_started`, `expired`, `outside_window`, `wrong_channel`, `wrong_gateway`, `out_of_scope`, `currency_unavailable` (F-116-h6), `below_min_purchase`, `above_max_purchase`, `first_purchase_only`, `not_a_new_user`, `per_user_limit_reached`, `period_limit_reached`, `capacity_reached` | each refusal its own i18n key under `billing.coupon.*` (C-07) |
 | Weekday and hour are read in Asia/Tehran from the server's instant; a window past midnight keeps the weekday it is now | the tenant market's clock; the client's is never asked |
 | A channel or gateway limit with no channel / gateway named is refused | a limit is never passed by omission |
 | Quote and start pass `gatewaySource`, `gatewayId` and `channel`. `channel` is `bot` only when the request carries a valid `X-Service-Token` (`presentsServiceToken`), never from the body; otherwise `panel` (F-306-a) | a body field would let any panel user spend a bot-only coupon. The bot calls through the gate like the panel, so the token is the one thing that tells them apart |
@@ -75,6 +75,20 @@ facts); `reserve_coupon` in `20260914001200_coupon_limit_gates`. Proved by
 | ASSUMED(2026-09-14): a purchase is a `success` payment until orders exist (F-501) | the only purchase built |
 | `reserve_coupon` re-checks `not_started`, `period_limit_reached` and `first_purchase_only` under the coupon's row lock; first purchase also refuses a live hold of another first-purchase coupon on a different order | counts another buyer can move; cross-coupon it is best-effort |
 | `redeem_gift_coupon` does not apply these limits; F-502-c refuses them on a `wallet_credit` coupon as `limits_not_for_gift_codes` | the gift box has no amount, gateway or purchase |
+
+## A coupon in another currency than the order (built — F-116-h6)
+
+`coupon-validation.ts` (`moneyIn`, the loader's rates); `reserve_coupon` in
+`20260928003200_a_coupon_applies_only_in_its_own_currency`. Proved by
+`coupon-currency.spec.ts`. ADR-0098 part 3; the rate is the user's call (2026-09-28).
+
+| Rule | Why |
+|---|---|
+| A coupon's money — a fixed value, a percentage's cap, `minPurchaseAmount`, `maxPurchaseAmount` — is in its own `currencyCode`. The caller names the order's (`CouponRequest.currencyCode`: the operating currency on a top-up, the platform's on a billing top-up, the price's on an invoice) | a platform USD coupon on a reseller's IRR order took 2 rials off, not 2 dollars |
+| When they differ, each is converted at the live rate, coupon -> order through the USD pivot (`FxRateReader.pair`, one read per coupon currency) before any gate or discount reads it; a percentage itself is a ratio and is not | the same number the deposit is priced with (F-116-e) |
+| What a coupon gives (value, cap) and `maxPurchaseAmount` are rounded down to the cent, `minPurchaseAmount` up | a conversion never grants more than the coupon's own terms; a value under a cent is `nothing_to_discount` |
+| A coupon that carries money and has no rate is `currency_unavailable` and takes nothing; a plain percentage with no bounds needs no rate | refused, never used as if in the order's currency |
+| The redemption records `fxFromCode`, `fxRate` and each leg's snapshot (`fxSnapshotId` the order currency's, `fxFromSnapshotId` the coupon's, NULL for USD); all NULL when nothing was converted. `reserve_coupon` raises on a coupon carrying money in another currency with no rate | a receipt says what a dollar coupon was worth in rials that day |
 
 ## Management (built — F-502-c)
 

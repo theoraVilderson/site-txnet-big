@@ -179,7 +179,7 @@ describe('paying an invoice from the wallet (F-111-b)', () => {
           userId: USER,
           orderReferenceId: id,
           currencyCode: 'USD',
-          applied: [{ couponId: COUPON, code: 'SPRING', discount: new Prisma.Decimal('2.50') }],
+          applied: [{ couponId: COUPON, code: 'SPRING', discount: new Prisma.Decimal('2.50'), fx: null }],
         }),
       ),
     );

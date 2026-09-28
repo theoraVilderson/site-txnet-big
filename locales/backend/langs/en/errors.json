@@ -195,6 +195,7 @@
       "periodLimitReached": "You have used this discount code as many times as it allows for now. Try again later.",
       "expired": "This discount code has expired.",
       "outOfScope": "This discount code cannot be used for a wallet top-up.",
+      "currencyUnavailable": "This discount code cannot be used in your currency right now.",
       "belowMinPurchase": "The amount is below this discount code's minimum.",
       "perUserLimitReached": "You have already used this discount code as many times as it allows.",
       "capacityReached": "This discount code has been used up.",

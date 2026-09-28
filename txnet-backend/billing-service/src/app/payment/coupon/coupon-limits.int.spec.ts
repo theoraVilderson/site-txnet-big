@@ -170,7 +170,8 @@ describe('coupon limits: storage (F-502-j)', () => {
 });
 
 describe('coupon limits: the gates a database answers (F-502-k)', () => {
-  const validator = new CouponValidationService();
+  // Every coupon here is in the order's currency: no rate is ever asked (F-116-h6).
+  const validator = new CouponValidationService({ pair: async () => null });
   const reservations = new CouponReservationService();
 
   const inTenant = <T>(fn: (tx: Prisma.TransactionClient) => Promise<T>) =>
@@ -182,6 +183,7 @@ describe('coupon limits: the gates a database answers (F-502-k)', () => {
       validator.validate(tx, {
         codes: [code],
         amount: new Prisma.Decimal('20.00'),
+        currencyCode: 'USD',
         target: { kind: 'wallet_top_up' },
         gatewaySource: 'platform',
         gatewayId: GATEWAY,
@@ -206,7 +208,7 @@ describe('coupon limits: the gates a database answers (F-502-k)', () => {
         userId,
         orderReferenceId: crypto.randomUUID(),
         currencyCode: 'USD',
-        applied: [{ couponId: id, code, discount: new Prisma.Decimal('2.00') }],
+        applied: [{ couponId: id, code, discount: new Prisma.Decimal('2.00'), fx: null }],
       }),
     );
   };

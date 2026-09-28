@@ -317,7 +317,7 @@ describe('DepositStartService.start', () => {
   it('holds the coupons and persists the payment before the gateway is asked to mint', async () => {
     const { service, calls } = build({
       coupons: {
-        applied: [{ couponId: 'c1', code: 'SAVE5', discount: d('5.00') }],
+        applied: [{ couponId: 'c1', code: 'SAVE5', discount: d('5.00'), fx: null }],
         rejected: [],
         totalDiscount: d('5.00'),
         payable: d('15.00'),
@@ -436,7 +436,7 @@ describe('DepositStartService.start', () => {
   it('credits a fully discounted top-up at once, and reaches no gateway at all', async () => {
     const { service, calls } = build({
       coupons: {
-        applied: [{ couponId: 'c1', code: 'ALLFREE', discount: d('20.00') }],
+        applied: [{ couponId: 'c1', code: 'ALLFREE', discount: d('20.00'), fx: null }],
         rejected: [],
         totalDiscount: d('20.00'),
         payable: d('0.00'),
@@ -458,7 +458,7 @@ describe('DepositStartService.start', () => {
   it('writes nothing when a hold can no longer be taken', async () => {
     const { service, calls } = build({
       coupons: {
-        applied: [{ couponId: 'c1', code: 'LAST', discount: d('5.00') }],
+        applied: [{ couponId: 'c1', code: 'LAST', discount: d('5.00'), fx: null }],
         rejected: [],
         totalDiscount: d('5.00'),
         payable: d('15.00'),
@@ -475,7 +475,7 @@ describe('DepositStartService.start', () => {
   it('fails the payment and gives the holds back when the gateway will not mint', async () => {
     const { service, calls } = build({
       coupons: {
-        applied: [{ couponId: 'c1', code: 'SAVE5', discount: d('5.00') }],
+        applied: [{ couponId: 'c1', code: 'SAVE5', discount: d('5.00'), fx: null }],
         rejected: [],
         totalDiscount: d('5.00'),
         payable: d('15.00'),
@@ -493,7 +493,7 @@ describe('DepositStartService.start', () => {
   it('fails the payment and gives the holds back when the vault will not answer before minting', async () => {
     const { service, calls } = build({
       coupons: {
-        applied: [{ couponId: 'c1', code: 'SAVE5', discount: d('5.00') }],
+        applied: [{ couponId: 'c1', code: 'SAVE5', discount: d('5.00'), fx: null }],
         rejected: [],
         totalDiscount: d('5.00'),
         payable: d('15.00'),

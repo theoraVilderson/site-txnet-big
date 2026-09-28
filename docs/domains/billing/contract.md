@@ -187,7 +187,7 @@ reserve/confirm state machine (built, F-092-h).
 | confirm payment | gateway webhook / reconciliation / admin | wallet credit + `payment_transaction.status = success` | async | duplicate, mismatch (flagged) |
 | initiate wallet transfer | senderId, receiverId, amount | `wallet_transfer_request` (`pending_otp`) | sync | — |
 | confirm wallet transfer | transferId, OTP | atomic debit+credit, `confirmed` | sync tx | bad/expired OTP (5 tries -> cancelled) |
-| validate coupons — **built**, see above | tx, codes[], amount, target, userId | applied (couponId, code, discount), rejected (code, reason), totalDiscount, payable | sync, read | invalid input, scope conflict |
+| validate coupons — **built**, see above | tx, codes[], amount, currencyCode (the order's), target, userId | applied (couponId, code, discount, fx — [contract.coupon.md](contract.coupon.md), F-116-h6), rejected (code, reason), totalDiscount, payable | sync, read | invalid input, scope conflict |
 | reserve coupons — **built**, see above | tx, userId, orderReferenceId, paymentTransactionId?, applied[] | `coupon_redemption` rows (`pending`) | sync tx | refused (reason), invalid input, scope conflict |
 | confirm / release coupons — **built**, see above | tx, orderReferenceId, outcome | count moved to `confirmed` / `cancelled` / `expired` | sync tx | scope conflict |
 | create an invoice — **built**, [contract.purchase.md](contract.purchase.md) | userId (header), variantId, couponCodes[] | invoice priced from the catalog, the best discount rule with no code taken (F-114-h), coupons held, 30-min expiry | sync | variant not for sale, coupon hold refused |
