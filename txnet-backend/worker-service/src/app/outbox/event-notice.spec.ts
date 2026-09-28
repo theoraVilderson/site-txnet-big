@@ -21,9 +21,13 @@ const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
 const OTHER_USER = '55555555-5555-4555-8555-555555555555';
 
-type Fetched = { headers: Record<string, string>; body: { channel: string; template: string; params: Record<string, string>; count?: number } };
+type Fetched = {
+  headers: Record<string, string>;
+  body: { channel: string; template: string; params: Record<string, string>; count?: number; every?: boolean };
+};
 
-function build({ failChannel = null as null | 'inbox' | 'bot' } = {}) {
+/** `sent`: what auth-api answers per channel (F-601-t); a channel absent answers `{}`, as before it said who was reached. */
+function build({ failChannel = null as null | 'inbox' | 'bot' | 'sms', sent = {} as Record<string, string[]> } = {}) {
   const strings = new Map<string, string>();
   const hashes = new Map<string, Map<string, string>>();
   const calls = { published: [] as string[], flushes: [] as Array<{ flush: NoticeFlush; delayMs: number }>, fetched: [] as Fetched[] };
@@ -74,7 +78,8 @@ function build({ failChannel = null as null | 'inbox' | 'bot' } = {}) {
       const body = JSON.parse(init.body);
       calls.fetched.push({ headers: init.headers, body });
       const ok = body.channel !== failing.channel;
-      return { ok, status: ok ? 200 : 502, json: async () => ({}) };
+      const data = sent[body.channel] ? { ok: true, data: { sent: sent[body.channel] } } : {};
+      return { ok, status: ok ? 200 : 502, json: async () => data };
     }),
   );
   const sender = new EventNoticeSender(redis as never, realtime as never, config as never, broker as never);
@@ -239,5 +244,84 @@ describe('EventNoticeSender — a notice’s class decides its channels (F-601-s
       ['panelRefused', 'inbox'],
       ['panelAccepted', undefined],
     ]);
+  });
+});
+
+describe('EventNoticeSender — SMS for a critical or security notice (F-601-t, ADR-0097)', () => {
+  const critical = (n: number) => notice(n, { template: 'paymentReversed', params: { amount: '10' } });
+  const channels = (calls: { fetched: Fetched[] }) => calls.fetched.map((f) => f.body.channel);
+
+  it('a critical notice no bot reached is told by SMS, after the bot', async () => {
+    const { sender, calls } = build({ sent: { bot: [], sms: ['sms'] } });
+    await sender.send(critical(1));
+    await sender.flush(calls.flushes[0]!.flush);
+
+    expect(channels(calls)).toEqual(['inbox', 'bot', 'sms']);
+    expect(calls.fetched[2]!.body).toMatchObject({ template: 'paymentReversed', params: { amount: '10' } });
+  });
+
+  it('a critical notice a bot reached is not told by SMS', async () => {
+    const { sender, calls } = build({ sent: { bot: ['telegram'] } });
+    await sender.send(critical(1));
+    await sender.flush(calls.flushes[0]!.flush);
+
+    expect(channels(calls)).toEqual(['inbox', 'bot']);
+  });
+
+  it('an important notice no bot reached is never told by SMS', async () => {
+    const { sender, calls } = build({ sent: { bot: [] } });
+    await sender.send(notice(1));
+    await sender.flush(calls.flushes[0]!.flush);
+
+    expect(channels(calls)).toEqual(['inbox', 'bot']);
+  });
+
+  it('a bot that failed is no bot reached: the SMS that lands settles the notice', async () => {
+    const { sender, calls } = build({ failChannel: 'bot', sent: { sms: ['sms'] } });
+    await sender.send(critical(1));
+    await expect(sender.flush(calls.flushes[0]!.flush)).resolves.toBeUndefined();
+
+    expect(channels(calls)).toEqual(['inbox', 'bot', 'sms']);
+  });
+
+  it('a failed bot with no SMS to fall to stays owed, and a redelivery asks the bot again', async () => {
+    const { sender, calls, failing } = build({ failChannel: 'bot', sent: { sms: [] } });
+    await sender.send(critical(1));
+    const flush = calls.flushes[0]!.flush;
+    await expect(sender.flush(flush)).rejects.toThrow(/502/);
+
+    failing.channel = null;
+    await sender.flush(flush);
+    expect(channels(calls)).toEqual(['inbox', 'bot', 'sms', 'bot']);
+  });
+
+  it('an SMS that failed after a bot reached no one is owed, and the redelivery repeats nothing that landed', async () => {
+    const { sender, calls, failing } = build({ failChannel: 'sms', sent: { bot: [] } });
+    await sender.send(critical(1));
+    const flush = calls.flushes[0]!.flush;
+    await expect(sender.flush(flush)).rejects.toThrow(/502/);
+
+    failing.channel = null;
+    await sender.flush(flush);
+    expect(channels(calls)).toEqual(['inbox', 'bot', 'sms', 'bot', 'sms']);
+  });
+
+  it('a security notice goes to every linked chat and by SMS, each owed on its own', async () => {
+    const { sender, calls } = build({ sent: { bot: ['telegram', 'bale'], sms: ['sms'] } });
+    await sender.send({ ...notice(1), class: 'security' });
+    await sender.flush(calls.flushes[0]!.flush);
+
+    expect(channels(calls)).toEqual(['inbox', 'bot', 'sms']);
+    expect(calls.fetched[1]!.body.every).toBe(true);
+    expect(calls.fetched[0]!.body.every).toBeUndefined();
+  });
+
+  it('a burst takes its strongest notice’s class', async () => {
+    const { sender, calls } = build({ sent: { bot: [], sms: ['sms'] } });
+    await sender.send({ ...notice(1), class: 'important' });
+    await sender.send({ ...notice(2), class: 'critical' });
+    await sender.flush(calls.flushes[0]!.flush);
+
+    expect(channels(calls)).toEqual(['inbox', 'bot', 'sms']);
   });
 });

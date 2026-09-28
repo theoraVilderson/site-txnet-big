@@ -60,8 +60,11 @@ export const NOTIFY_TEMPLATES = [
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
-/** One call is one channel (F-067-o, ADR-0084 decision 2): the worker marks each on its own, so a redelivery repeats only the one that failed. */
-export const NOTIFY_CHANNELS = ['inbox', 'bot'] as const;
+/**
+ * One call is one channel (F-067-o, ADR-0084 decision 2): the worker marks each on its own, so a redelivery repeats only the one that failed.
+ * `sms` (F-601-t, ADR-0097): a security notice, and a critical one no bot reached, on the tenant's line.
+ */
+export const NOTIFY_CHANNELS = ['inbox', 'bot', 'sms'] as const;
 export type NotifyChannel = (typeof NOTIFY_CHANNELS)[number];
 
 /**
@@ -75,16 +78,19 @@ export type NotifyService = { label?: string | null; nameKey: string | null; sku
 /**
  * `count` (F-067-p, ADR-0084 decision 3): the worker combined this many of one template into one notice; the summary text is told, with `{{count}}`.
  * `services` (F-601-p): the services that summary is about, listed under it.
+ * `every` (F-601-t): a security notice's `bot` — every verified linked chat, not the one messenger.
  */
 export type NotifyRequest = {
   userId: string;
   channel: NotifyChannel;
+  every?: boolean;
   template: NotifyTemplate;
   params: Record<string, string>;
   count?: number;
   services?: NotifyService[];
 };
-export type NotifyResult = { sent: BotPlatform[] };
+/** Who was reached: the platforms messaged, or `sms`. Empty: no one, and not an error. */
+export type NotifyResult = { sent: Array<BotPlatform | 'sms'> };
 
 type Texts = Partial<Record<string, string>>;
 type NotificationsNamespace = { payment?: Texts; subscription?: Texts; panel?: Texts; purchase?: Texts; retention?: Texts };
@@ -664,7 +670,11 @@ function interpolate(template: string, vars: Record<string, string>): string {
  * **One messenger, never both** (F-601-s, ADR-0097): the chat linked last
  * is told; only when that send fails (a blocked bot) is the other tried. A
  * tenant with no bot on the first platform goes to the next. The user's own
- * choice of messenger is F-601-u.
+ * choice of messenger is F-601-u. A security notice asks for `every` chat.
+ *
+ * **SMS** (F-601-t): the rendered text, without a combined notice's list, to
+ * the phone the user verified, on the line notification-service picks for the
+ * tenant. No verified phone, or no line, is `{sent: []}`.
  *
  * The OTP senders' neighbour and deliberately built from the same parts: the
  * tenant's primary bot per platform (`BotClientRegistry`), and only links whose
@@ -691,7 +701,7 @@ export class UserNotifier {
     const tenantId = TenantContext.current('user notification').id;
     const user = await this.prisma.user.findFirst({
       where: { id: request.userId },
-      select: { languagePreference: true },
+      select: { languagePreference: true, phoneNumber: true, phoneVerifiedAt: true },
     });
     if (!user) return { sent: [] };
 
@@ -701,7 +711,16 @@ export class UserNotifier {
     const params = combined ? { ...request.params, count: String(request.count) } : request.params;
     const body = interpolate(spec.read(ns) ?? spec.fallback, params);
     const list = combined && request.services?.length ? this.serviceList(request.services, user.languagePreference, ns) : null;
-    const text = [body, ...(list ? [list] : []), ...TRAILING_LINES.filter((l) => params[l.param]).map((l) => interpolate(l.read(ns) ?? l.fallback, params))].join('\n\n');
+    const trailing = TRAILING_LINES.filter((l) => params[l.param]).map((l) => interpolate(l.read(ns) ?? l.fallback, params));
+    const text = [body, ...(list ? [list] : []), ...trailing].join('\n\n');
+
+    if (request.channel === 'sms') {
+      if (!user.phoneVerifiedAt || !user.phoneNumber) return { sent: [] };
+      if (!this.inbox) throw new Error(`${request.template} by SMS needs notification-service, which is not wired`);
+      // A combined notice's list of services stays off an SMS: it is the panel's to show.
+      const { sent } = await this.inbox.sms({ tenantId, userId: request.userId, to: user.phoneNumber, text: [body, ...trailing].join('\n\n') });
+      return { sent: sent ? ['sms'] : [] };
+    }
 
     if (request.channel === 'inbox') {
       // Throws: the row is owed until it lands.
@@ -717,20 +736,22 @@ export class UserNotifier {
     });
 
     let lastError: unknown = null;
+    const sent: BotPlatform[] = [];
     for (const link of links) {
       const platform: BotPlatform = link.platform;
       const client = await this.bots.primaryClient(tenantId, platform, 'identity:UserNotifier');
       if (!client) continue;
       try {
         await client.sendMessage(link.platformUserId, text);
-        return { sent: [platform] };
+        sent.push(platform);
+        if (!request.every) break;
       } catch (err) {
         lastError = err;
         this.logger.warn(`${request.template} to user ${request.userId} on ${platform} failed: ${(err as Error).message}`);
       }
     }
-    if (lastError) throw lastError;
-    return { sent: [] };
+    if (sent.length === 0 && lastError) throw lastError;
+    return { sent };
   }
 
   /**

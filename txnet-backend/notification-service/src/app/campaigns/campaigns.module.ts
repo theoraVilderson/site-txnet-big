@@ -19,6 +19,8 @@ import { CampaignFanOutService } from './campaign-fan-out.service';
 import { CampaignInternalController } from './campaign-internal.controller';
 import { CampaignTextService } from './campaign-texts';
 import { MailLineResolver } from './mail-line';
+import { NoticeSmsController } from './notice-sms.controller';
+import { NoticeSmsService } from './notice-sms';
 import { ResellerCampaignController } from './reseller-campaign.controller';
 import { ResellerCampaignService } from './reseller-campaign.service';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -44,11 +46,12 @@ class BotDirectoryModule {}
  * Campaign drafts (F-035-c), sending them (F-035-d) and delivering to Telegram
  * and Bale (F-035-e), by SMS (F-035-f) and by email in each recipient's language
  * (F-035-h); the ticks that drive the last two are `worker-service`'s. A
- * reseller reaches the same rules for itself through F-313-d's own door.
+ * reseller reaches the same rules for itself through F-313-d's own door. A
+ * notice's SMS (F-601-t) takes the same line through `NoticeSmsService`.
  */
 @Module({
   imports: [MessengerModule.forRoot({ imports: [BotDirectoryModule] }), LocaleModule],
-  controllers: [CampaignAdminController, ResellerCampaignController, CampaignInternalController],
+  controllers: [CampaignAdminController, ResellerCampaignController, CampaignInternalController, NoticeSmsController],
   providers: [
     CampaignAdminService,
     // A reseller acting for itself (F-313-d): admitted by the door, then served
@@ -69,6 +72,12 @@ class BotDirectoryModule {}
       provide: SmsLineSource,
       useFactory: (config: ConfigService, vault: CredentialVaultService, db: CrossTenantPrismaService) => new SmsLineSource(config, vault, db),
       inject: [ConfigService, CredentialVaultService, CrossTenantPrismaService],
+    },
+    // A notice's SMS (F-601-t) goes out on the same line a campaign's would, chosen by the same resolver.
+    {
+      provide: NoticeSmsService,
+      useFactory: (lines: SmsLineSource, db: CrossTenantPrismaService) => new NoticeSmsService(lines, db),
+      inject: [SmsLineSource, CrossTenantPrismaService],
     },
     { provide: MailLineResolver, useFactory: MailLineResolver.fromConfig, inject: [ConfigService] },
     // Drafts campaign texts (F-035-h), as billing's catalog does (ADR-0050).

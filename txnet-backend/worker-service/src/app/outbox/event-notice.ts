@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { IdentityHeaders, NoticeClass, noticeClassOf, RedisTtl, RequestHeaders, UnscopedRedisKeys } from '@txnet-backend/shared-core';
+import { IdentityHeaders, NOTICE_CLASSES, NoticeClass, noticeClassOf, RedisTtl, RequestHeaders, UnscopedRedisKeys } from '@txnet-backend/shared-core';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -17,6 +17,8 @@ const NOTIFY_PATH = '/api/internal/notify/user';
 /** The seam's channels, in the order they are tried after the live push. */
 const PERSON_CHANNELS = ['inbox', 'bot'] as const;
 export type PersonChannel = (typeof PERSON_CHANNELS)[number];
+/** `sms` (F-601-t) is never a burst's own channel: a flush asks for it by the notice's class. */
+type TellChannel = PersonChannel | 'sms';
 
 /** The marker segment of a combined notice's channels; the flush id is the "event" (F-067-p). */
 const BURST_CONSUMER = 'notice-burst';
@@ -63,8 +65,8 @@ return redis.call('HGETALL', KEYS[3])`;
 /** `grantId`: the service a retention notice is about, so a combined one can name it (F-601-p). */
 export type Person = { tenantId: string; userId: string; template: string; params: Record<string, string>; grantId?: string };
 
-/** One burst entry as stored: its params, and its Grant when it has one. */
-type Entry = { params: Record<string, string>; grantId?: string };
+/** One burst entry as stored: its params, its Grant when it has one, and the class its consumer stated (F-601-t). */
+type Entry = { params: Record<string, string>; grantId?: string; class?: NoticeClass };
 
 /**
  * One event, told (F-067-o, ADR-0084 decision 2). `consumer` is the notice's
@@ -117,6 +119,13 @@ export type EventNotice = {
  * `AUTOMATION_NOTICE_WINDOW_MS` later through the broker's delay queue. The
  * flush tells the event itself if it was alone, or one summary with `count`.
  *
+ * **SMS by class** (F-601-t, ADR-0097 part 2). A flush takes its burst's
+ * strongest class. `critical`: the bot, and when it reached no one — no
+ * verified chat, no bot, or every send failed — SMS, as one channel's effect,
+ * so a redelivery asks the bot again before any SMS. `security`: the bot on
+ * every linked chat, and SMS, each owed on its own. Any other class never
+ * sends SMS. An answer that does not say who was reached counts as reached.
+ *
  * **Several services, named** (F-601-p). A retention notice carries its
  * Grant; a combined flush of them asks billing for the services' names once
  * and tells them beside `count`. A lookup that fails tells the summary alone:
@@ -158,7 +167,7 @@ export class EventNoticeSender {
       for (const channel of notice.only) await this.once(notice, channel, () => this.tell(channel, person), failures);
     } else if (person) {
       const owed = await this.owedBeforeBursts(notice);
-      if (owed === null) await this.once(notice, 'person', () => this.join(notice.eventId, person, notice.window), failures);
+      if (owed === null) await this.once(notice, 'person', () => this.join(notice.eventId, person, notice.window, undefined, notice.class), failures);
       for (const channel of owed ?? []) await this.once(notice, channel, () => this.tell(channel, person), failures);
     }
     if (failures.length > 0) throw failures[0];
@@ -201,12 +210,37 @@ export class EventNoticeSender {
     if (count === 0) return;
     const person: Person = { tenantId, userId, template, params: count === 1 ? entries[0]!.params : {} };
     const services = count > 1 ? await this.names(tenantId, userId, entries) : undefined;
+    const many = count > 1 ? count : undefined;
+    const cls = NOTICE_CLASSES[Math.min(...entries.map((e) => NOTICE_CLASSES.indexOf(e.class ?? noticeClassOf(template))))]!;
     const failures: unknown[] = [];
     const told = { consumer: BURST_CONSUMER, eventId: flushId };
     for (const channel of only ? [only] : PERSON_CHANNELS) {
-      await this.once(told, channel, () => this.tell(channel, person, count > 1 ? count : undefined, services), failures);
+      const effect =
+        channel === 'bot' && cls === 'critical'
+          ? () => this.botElseSms(person, many, services)
+          : () => this.tell(channel, person, many, services, channel === 'bot' && cls === 'security');
+      await this.once(told, channel, effect, failures);
     }
+    if (!only && cls === 'security') await this.once(told, 'sms', () => this.tell('sms', person, many, services), failures);
     if (failures.length > 0) throw failures[0];
+  }
+
+  /**
+   * A critical notice's bot, else its SMS (F-601-t): SMS only when no bot
+   * reached the user. A bot that failed and an SMS that reached no one
+   * either (no phone, no line) rethrows the bot's failure, so it stays owed.
+   */
+  private async botElseSms(person: Person, count?: number, services?: ServiceName[]): Promise<void> {
+    let botFailure: unknown = null;
+    try {
+      const sent = await this.tell('bot', person, count, services);
+      if (sent === undefined || sent.length > 0) return;
+    } catch (err) {
+      botFailure = err;
+      this.logger.warn(`critical ${person.template} for user ${person.userId} reached no bot, trying SMS: ${(err as Error).message}`);
+    }
+    const sms = await this.tell('sms', person, count, services);
+    if (botFailure && !sms?.length) throw botFailure;
   }
 
   /**
@@ -241,12 +275,12 @@ export class EventNoticeSender {
   }
 
   /** Add the event to its burst; the call that opens a burst schedules its flush, or gives the claim back. */
-  private async join(eventId: string, person: Person, window?: 'hour', only?: 'inbox'): Promise<void> {
+  private async join(eventId: string, person: Person, window?: 'hour', only?: 'inbox', cls?: NoticeClass): Promise<void> {
     const { tenantId, userId, template } = person;
     const windowMs = window === 'hour' ? this.hourMs : this.windowMs;
     const scheduled = UnscopedRedisKeys.noticeBurstScheduled(tenantId, userId, template, window, only);
     const flushId = randomUUID();
-    const entry: Entry = person.grantId ? { params: person.params, grantId: person.grantId } : { params: person.params };
+    const entry: Entry = { params: person.params, ...(person.grantId ? { grantId: person.grantId } : {}), ...(cls ? { class: cls } : {}) };
     const claimed = await this.redis.evalScript<number>(
       NOTICE_BURST_ADD,
       [UnscopedRedisKeys.noticeBurst(tenantId, userId, template, window, only), scheduled],
@@ -261,7 +295,7 @@ export class EventNoticeSender {
     }
   }
 
-  private async once(notice: Pick<EventNotice, 'consumer' | 'eventId'>, channel: string, effect: () => Promise<void>, failures: unknown[]): Promise<void> {
+  private async once(notice: Pick<EventNotice, 'consumer' | 'eventId'>, channel: string, effect: () => Promise<unknown>, failures: unknown[]): Promise<void> {
     const marker = UnscopedRedisKeys.outboxProcessed(`${notice.consumer}:${channel}`, notice.eventId);
     if (!(await this.redis.setNx(marker, RedisTtl.outboxProcessed))) {
       this.logger.debug(`outbox event ${notice.eventId} already told on ${channel}`);
@@ -312,8 +346,11 @@ export class EventNoticeSender {
     }
   }
 
-  /** Throws on an unset seam or a refusal, so that channel stays owed. */
-  private async tell(channel: PersonChannel, person: Person, count?: number, services?: ServiceName[]): Promise<void> {
+  /**
+   * Throws on an unset seam or a refusal, so that channel stays owed. Answers
+   * who was reached (auth-api's `sent`), or `undefined` when the answer does not say.
+   */
+  private async tell(channel: TellChannel, person: Person, count?: number, services?: ServiceName[], every?: boolean): Promise<string[] | undefined> {
     if (!this.baseUrl) throw new Error('AUTH_API_BASE_URL is not set');
     if (!this.serviceToken) throw new Error('SERVICE_AUTH_TOKEN is not set');
 
@@ -327,10 +364,12 @@ export class EventNoticeSender {
           [RequestHeaders.serviceToken]: this.serviceToken,
           [IdentityHeaders.tenantId]: person.tenantId,
         },
-        body: JSON.stringify({ userId: person.userId, channel, template: person.template, params: person.params, count, services }),
+        body: JSON.stringify({ userId: person.userId, channel, ...(every ? { every } : {}), template: person.template, params: person.params, count, services }),
         signal: controller.signal,
       });
       if (!response.ok) throw new Error(`auth-api answered ${response.status} to ${NOTIFY_PATH} (${channel})`);
+      const sent = envelopeData(await response.json().catch((): null => null))?.['sent'];
+      return Array.isArray(sent) ? sent.map(String) : undefined;
     } finally {
       clearTimeout(timer);
     }

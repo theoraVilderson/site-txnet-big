@@ -10,12 +10,13 @@ import { RETENTION_KIND_OF, type RetentionKind } from './retention-kinds';
  *
  * | class | channels | mute | quiet hours |
  * |---|---|---|---|
- * | critical | inbox + one messenger | never | ignored |
+ * | security | inbox + every linked chat + SMS | never | ignored |
+ * | critical | inbox + one messenger; SMS when no bot reached (F-601-t) | never | ignored |
  * | important | inbox + one messenger | by kind (F-601-m) | bot held |
  * | info | inbox only | by kind | — |
  *
  * `response` and `security` have no notice yet: a response is the page's own
- * answer, and a security notice's every-chat + SMS delivery is F-601-t's.
+ * answer; a security notice's delivery is built (F-601-t) and waits for one.
  */
 export const NOTICE_CLASSES = ['response', 'security', 'critical', 'important', 'info'] as const;
 export type NoticeClass = (typeof NOTICE_CLASSES)[number];

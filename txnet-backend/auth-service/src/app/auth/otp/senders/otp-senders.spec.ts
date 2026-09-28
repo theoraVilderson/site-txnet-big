@@ -492,7 +492,7 @@ describe('SMS OTP sender', () => {
  */
 describe('UserNotifier', () => {
   function notifierPrisma({
-    user = { languagePreference: 'en' } as { languagePreference: string } | null,
+    user = { languagePreference: 'en' } as { languagePreference: string; phoneNumber?: string | null; phoneVerifiedAt?: Date | null } | null,
     links: linked = [] as Array<{ platform: string; platformUserId: string }>,
   } = {}) {
     return {
@@ -749,6 +749,58 @@ describe('UserNotifier', () => {
       const lines = String(client.sendMessage.mock.calls[1][1]).split('\n');
       expect(lines.filter((l) => l === '• S')).toHaveLength(20);
       expect(lines.at(-1)).toBe('…and 3 more');
+    });
+  });
+
+  // F-601-t, ADR-0097: a security notice goes to every linked chat, and a critical or security one by SMS.
+  describe('every chat, and SMS (F-601-t)', () => {
+    const phoned = { languagePreference: 'en', phoneNumber: '09120000000', phoneVerifiedAt: new Date() };
+    const smsClient = (answer: { sent: boolean }) =>
+      ({ put: vi.fn(), sms: vi.fn(async () => answer) }) as unknown as NotificationInboxClient & { sms: Mock };
+
+    it('`every` messages each verified linked chat, not the first alone', async () => {
+      const client = botClient();
+      const links = [
+        { platform: 'bale', platformUserId: '7' },
+        { platform: 'telegram', platformUserId: '5501' },
+      ];
+      const notifier = new UserNotifier(notifierPrisma({ links }) as unknown as PrismaService, registry(client), localeService(ns));
+      const out = await inTenant(() =>
+        notifier.notify({ userId: 'user-1', channel: 'bot', every: true, template: 'paymentCredited', params: { amount: '1', reference: '2' } }),
+      );
+
+      expect(out).toEqual({ sent: ['bale', 'telegram'] });
+      expect(client.sendMessage).toHaveBeenCalledTimes(2);
+    });
+
+    it('`sms` sends the rendered text to the verified phone on the tenant’s line', async () => {
+      const inbox = smsClient({ sent: true });
+      const notifier = new UserNotifier(notifierPrisma({ user: phoned }) as unknown as PrismaService, registry(botClient()), localeService(ns), inbox);
+      const out = await inTenant(() =>
+        notifier.notify({ userId: 'user-1', channel: 'sms', template: 'paymentCredited', params: { amount: '19.80', reference: '900' } }),
+      );
+
+      expect(out).toEqual({ sent: ['sms'] });
+      expect(inbox.sms).toHaveBeenCalledWith({ tenantId: 'tenant-1', userId: 'user-1', to: '09120000000', text: 'Credited 19.80 (ref 900)' });
+    });
+
+    it('`sms` with no verified phone, or no line, reaches no one and is not an error', async () => {
+      const inbox = smsClient({ sent: true });
+      const unverified = new UserNotifier(
+        notifierPrisma({ user: { ...phoned, phoneVerifiedAt: null } as never }) as unknown as PrismaService,
+        registry(botClient()),
+        localeService(ns),
+        inbox,
+      );
+      await expect(
+        inTenant(() => unverified.notify({ userId: 'user-1', channel: 'sms', template: 'paymentCredited', params: { amount: '1', reference: '2' } })),
+      ).resolves.toEqual({ sent: [] });
+      expect(inbox.sms).not.toHaveBeenCalled();
+
+      const noLine = new UserNotifier(notifierPrisma({ user: phoned }) as unknown as PrismaService, registry(botClient()), localeService(ns), smsClient({ sent: false }));
+      await expect(
+        inTenant(() => noLine.notify({ userId: 'user-1', channel: 'sms', template: 'paymentCredited', params: { amount: '1', reference: '2' } })),
+      ).resolves.toEqual({ sent: [] });
     });
   });
 

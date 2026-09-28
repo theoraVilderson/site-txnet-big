@@ -10,6 +10,8 @@ const notifySchema = z
   .object({
     userId: z.string().uuid(),
     channel: z.enum(NOTIFY_CHANNELS),
+    // F-601-t: a security notice's bot message goes to every linked chat.
+    every: z.boolean().optional(),
     template: z.enum(NOTIFY_TEMPLATES),
     params: z.record(z.string().max(200)).default({}),
     // F-067-p: a combined burst of this template; absent for one event.
@@ -34,8 +36,8 @@ const notifySchema = z
 
 /**
  * `POST /api/internal/notify/user` (F-067-l, ADR-0045 decision 2) — a service
- * asks for a named message to reach a user through one channel, `inbox` or
- * `bot` (F-067-o). Service callers
+ * asks for a named message to reach a user through one channel, `inbox`,
+ * `bot` (F-067-o) or `sms` (F-601-t). Service callers
  * only (a neutral 404 otherwise); the tenant is `X-Tenant-Id`, bound like the
  * OTP delivery seam's (F-067-a).
  */

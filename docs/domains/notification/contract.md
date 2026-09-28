@@ -48,6 +48,7 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | fan out | `POST internal/notifications/campaigns/fan-out` (`SERVICE_AUTH_TOKEN`) | — | `{ campaigns, recipients, finished, unreadable }` | 404 on a wrong token |
 | deliver | `POST internal/notifications/campaigns/deliver` (token) | — | `{ claimed, sent, failed, deferred, stalled }` | 404 on a wrong token |
 | record an outcome | `POST internal/notifications/campaigns/recipients/:id/outcome` (token) | `{ outcome: sent\|failed }` | `{ changed }` | 400; 404 `recipient_not_found` |
+| a notice's SMS | `POST internal/notifications/sms` (token) | `{ tenantId, userId, to, text ≤2000 }` | `{ sent: true }` or `{ sent: false, reason: no_line\|refused }` — on the line `SmsLineResolver` picks with the recipient's tenant as the campaign's; a reseller with no own line sends none (F-601-t, D-41) | 400; 404 on a wrong token; 503 a line not opened or answering for its account |
 | claim a retention notice | `POST internal/notifications/retention/claim` (token) | `{ eventId, userId, grantId, notice, period, waitSec? }` | `{ claimed, deliver?, botAt? }` — once per Grant period, and how (mute, quiet hours, a wait of F-601-p); `hold`, `held/take`, `held/told` beside it ([contract.retention.md](contract.retention.md), F-601-a, F-601-m) | 400; 404 on a wrong token |
 
 - `unreadCount` is over the whole inbox, whatever the page or filter.
