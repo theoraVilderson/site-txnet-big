@@ -84,7 +84,9 @@ both figures rather than summing them: a zero labelled "revenue" reads as a
 broken report, "service sales" beside "customer top-ups" reads as what it is.
 
 Money is billing's decimal strings, rendered as they arrived — the bot does no
-arithmetic on any of it (C-02). Dates are cut to their day part; that is
+arithmetic on any of it (C-02). Each figure names the answer's `currencyCode`
+through `locale/money.ts` (F-116-h9, ADR-0098 part 3); a `total` billing could
+not convert (`null`) lists its `byCurrency` sums instead, never added. Dates are cut to their day part; that is
 spelling, not formatting, and `i18n` still owns the calendar and the numerals.
 
 ## The bulk message (F-313-b)

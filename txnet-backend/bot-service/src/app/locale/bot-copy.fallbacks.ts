@@ -160,6 +160,7 @@ export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   // An amount and the currency it is in (F-116-h4): billing names the code, the
   // chat says its name. A code with no name here prints as the code (`money.ts`).
   [BotKeys.money.amount]: '{{amount}} {{currency}}',
+  [BotKeys.money.list]: '{{first}}, {{rest}}',
   [BotKeys.money.currency.IRT]: 'Toman',
   [BotKeys.money.currency.IRR]: 'rials',
   [BotKeys.money.currency.USD]: 'USD',

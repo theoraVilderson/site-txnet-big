@@ -201,6 +201,7 @@
   },
   "money": {
     "amount": "{{amount}} {{currency}}",
+    "list": "{{first}}, {{rest}}",
     "currency": {
       "IRT": "Toman",
       "IRR": "rials",

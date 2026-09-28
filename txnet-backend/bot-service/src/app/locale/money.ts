@@ -30,3 +30,26 @@ export function money(amount: string, currencyCode: string | null | undefined): 
   if (!currencyCode) return { raw: amount };
   return { key: BotKeys.money.amount, values: { amount, currency: currencyName(currencyCode) } };
 }
+
+/** One currency's figure, as billing answers it beside a converted total. */
+export interface CurrencyAmount {
+  currencyCode: string;
+  total: string;
+}
+
+/**
+ * A total billing converted into one currency, or — when it could not
+ * (`total: null`, no `currency_change` leads there) — each currency as it was
+ * taken, listed and never added (F-116-h9, ADR-0098 part 3). Adding them is
+ * dollars and rials summed as one number; the bot converts nothing itself.
+ */
+export function moneyTotal(
+  total: string | null,
+  currencyCode: string | null | undefined,
+  byCurrency: CurrencyAmount[] = [],
+): BotText {
+  if (total !== null) return money(total, currencyCode);
+  const parts = byCurrency.map((c) => money(c.total, c.currencyCode));
+  if (parts.length === 0) return money('0.00', currencyCode);
+  return parts.reduceRight((rest, first) => ({ key: BotKeys.money.list, values: { first, rest } }));
+}

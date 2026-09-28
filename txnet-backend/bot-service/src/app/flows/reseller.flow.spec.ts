@@ -39,8 +39,9 @@ function harness(over: { verdict?: unknown; users?: unknown; revenue?: unknown; 
         ok({
           from: '2026-08-21T00:00:00.000Z',
           to: '2026-09-20T00:00:00.000Z',
-          sales: { total: '0.00', count: 0, byReason: [] },
-          topUps: { total: '1250.00', count: 7 },
+          currencyCode: 'IRT',
+          sales: { total: '0.00', count: 0, byReason: [], byCurrency: [] },
+          topUps: { total: '1250.00', count: 7, byCurrency: [{ currencyCode: 'IRT', total: '1250.00', count: 7 }] },
         }),
     ),
   } as unknown as Mocked<BillingApiClient>;
@@ -278,7 +279,47 @@ describe('ResellerFlow', () => {
         botTenantId: TENANT,
       });
       expect(result.view.body).toMatchObject({
-        values: { from: '2026-08-21', to: '2026-09-20', sales: '0.00', salesCount: '0', topUps: '1250.00', topUpsCount: '7' },
+        values: { from: '2026-08-21', to: '2026-09-20', salesCount: '0', topUpsCount: '7' },
+      });
+    });
+
+    it('names the currency the answer names beside each total (F-116-h9)', async () => {
+      const { flow } = harness();
+
+      const result = await flow.handle(ctx, { flow: 'reseller', step: 'reseller.home', data: {} }, 'reseller:revenue');
+
+      expect(result.view.body.values).toMatchObject({
+        sales: { key: BotKeys.money.amount, values: { amount: '0.00', currency: { key: BotKeys.money.currency.IRT } } },
+        topUps: { key: BotKeys.money.amount, values: { amount: '1250.00', currency: { key: BotKeys.money.currency.IRT } } },
+      });
+    });
+
+    it('lists each currency as taken when billing could not convert them, and adds none of them', async () => {
+      const { flow } = harness({
+        revenue: ok({
+          from: '2026-08-21T00:00:00.000Z',
+          to: '2026-09-20T00:00:00.000Z',
+          currencyCode: 'IRT',
+          sales: { total: '0.00', count: 0, byReason: [], byCurrency: [] },
+          topUps: {
+            total: null,
+            count: 3,
+            byCurrency: [
+              { currencyCode: 'USD', total: '12.50', count: 1 },
+              { currencyCode: 'IRT', total: '900000.00', count: 2 },
+            ],
+          },
+        }),
+      });
+
+      const result = await flow.handle(ctx, { flow: 'reseller', step: 'reseller.home', data: {} }, 'reseller:revenue');
+
+      expect(result.view.body.values?.topUps).toEqual({
+        key: BotKeys.money.list,
+        values: {
+          first: { key: BotKeys.money.amount, values: { amount: '12.50', currency: { key: BotKeys.money.currency.USD } } },
+          rest: { key: BotKeys.money.amount, values: { amount: '900000.00', currency: { key: BotKeys.money.currency.IRT } } },
+        },
       });
     });
   });

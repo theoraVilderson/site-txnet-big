@@ -1,5 +1,6 @@
 import { BotAction, BotText, BotView } from '@txnet-backend/messenger';
 import { BotKeys } from '../locale/bot-keys';
+import { type CurrencyAmount, moneyTotal } from '../locale/money';
 
 /**
  * The screens shared by every flow. They are `BotView`s — keys and choices,
@@ -647,12 +648,15 @@ export function resellerBlockConfirmView(user: { id: string; fullName: string })
  * its services and `topUps` what they paid in, and ADR-0067 decision 1 is that
  * neither is the other. Both are billing's strings, rendered as they arrived —
  * the bot does no arithmetic on money (C-02) and none on the dates either.
+ * Each names the currency the answer names; a total billing could not convert
+ * lists its currencies instead (F-116-h9, `moneyTotal`).
  */
 export function resellerRevenueView(totals: {
   from: string;
   to: string;
-  sales: { total: string; count: number };
-  topUps: { total: string; count: number };
+  currencyCode?: string | null;
+  sales: { total: string | null; count: number; byCurrency?: CurrencyAmount[] };
+  topUps: { total: string | null; count: number; byCurrency?: CurrencyAmount[] };
 }): BotView {
   return view(
     'reseller.revenue',
@@ -661,9 +665,9 @@ export function resellerRevenueView(totals: {
       values: {
         from: totals.from,
         to: totals.to,
-        sales: totals.sales.total,
+        sales: moneyTotal(totals.sales.total, totals.currencyCode, totals.sales.byCurrency),
         salesCount: String(totals.sales.count),
-        topUps: totals.topUps.total,
+        topUps: moneyTotal(totals.topUps.total, totals.currencyCode, totals.topUps.byCurrency),
         topUpsCount: String(totals.topUps.count),
       },
     },

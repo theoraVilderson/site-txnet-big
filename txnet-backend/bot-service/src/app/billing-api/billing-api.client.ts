@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { ApiResult } from '../auth-api/auth-api.types';
 import { BotCopy } from '../locale/bot-copy';
 import { BotKeys } from '../locale/bot-keys';
+import type { CurrencyAmount } from '../locale/money';
 
 /** One gateway as `GET /api/billing/deposit/gateways` lists it (`billing/contract.deposit.md`). */
 export interface DepositGateway {
@@ -94,7 +95,12 @@ export interface InChatPaid {
  * users spent on its services, `topUps` what they paid into their wallets. The
  * window echoed back is the one billing actually used, so the bot renders the
  * dates it was given rather than restating the ones it sent. Every amount is a
- * base-currency decimal string — the bot does no arithmetic on any of them.
+ * decimal string — the bot does no arithmetic on any of them.
+ *
+ * Each currency is summed on its own (`byCurrency`); a `total` is those sums
+ * converted into `currencyCode`, the reseller's currency now, and `null` when
+ * billing found no change leading there (F-116-h8). `currencyCode` and
+ * `byCurrency` are optional for a rolling deploy against an older billing.
  *
  * `sales.total` is `0.00` until `entitlement` is built and something writes a
  * `traffic_consumption` row. That is why this screen labels both figures
@@ -104,8 +110,14 @@ export interface InChatPaid {
 export interface ResellerRevenue {
   from: string;
   to: string;
-  sales: { total: string; count: number; byReason: { reasonType: string; total: string; count: number }[] };
-  topUps: { total: string; count: number };
+  currencyCode?: string | null;
+  sales: {
+    total: string | null;
+    count: number;
+    byReason: { reasonType: string; total: string | null; count: number }[];
+    byCurrency?: CurrencyAmount[];
+  };
+  topUps: { total: string | null; count: number; byCurrency?: CurrencyAmount[] };
 }
 
 /** Whose call this is: the chat's access token, in the chat's language. */
