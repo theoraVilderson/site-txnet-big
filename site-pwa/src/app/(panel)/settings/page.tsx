@@ -2,10 +2,11 @@
 
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { ManualRateCard } from "../_components/ManualRateCard";
 import { OperatingCurrencyCard } from "../_components/OperatingCurrencyCard";
 import { usePanelSession } from "../_context/PanelSessionContext";
 import { EmailSection } from "./_components/EmailSection";
-import { canSetPlatformCurrency } from "./_lib/settings";
+import { canPinRates, canSetPlatformCurrency } from "./_lib/settings";
 import { MessengerSection } from "./_components/MessengerSection";
 import { NotificationsSection } from "./_components/NotificationsSection";
 
@@ -19,6 +20,11 @@ import { NotificationsSection } from "./_components/NotificationsSection";
  * with `tenant.manage` (or `*`) only: a reseller can grant itself that key, so the
  * tenant type gates it as well. A reseller's currency is in its workspace,
  * because its owner's session carries the platform tenant (invariant 21).
+ *
+ * The manual-rate card (F-116-l) is here for anyone holding `currency.pin`,
+ * on either kind of tenant: the pin routes scope to the session's own books,
+ * so on a reseller's domain its staff pin for that reseller only. For the
+ * same invariant-21 reason it is not in a reseller's workspace.
  */
 export default function SettingsPage() {
   const { t } = useLocale();
@@ -32,6 +38,9 @@ export default function SettingsPage() {
       <NotificationsSection />
       <MessengerSection />
       {me && canSetPlatformCurrency(me) && <OperatingCurrencyCard tenantId={me.tenant.id} scope="platform" />}
+      {me && canPinRates(me) && (
+        <ManualRateCard scope={me.tenant.type === "platform_owner" ? "platform" : "reseller"} />
+      )}
     </div>
   );
 }

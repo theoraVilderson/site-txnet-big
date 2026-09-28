@@ -3534,5 +3534,44 @@
       "rate_unavailable": "There is no exchange rate for this change right now, so nothing was converted. Try again later.",
       "currency_changed": "Someone else changed the currency a moment ago. The current one is shown again; check it before trying."
     }
+  },
+  "manualRate": {
+    "title": "Manual exchange rate",
+    "hint": "Set a rate yourself for a currency your prices or gateways use. It prices only your own books and ends on its own.",
+    "hintPlatform": "Set a rate yourself for any currency. It prices every reseller that has no rate of its own, and ends on its own.",
+    "currency": "Currency",
+    "choice": "{{name}} ({{code}})",
+    "choicePinned": "{{name}} ({{code}}) — set by hand",
+    "none": "There is no currency to set a rate for.",
+    "reload": "Try again",
+    "lastAccepted": "Last automatic rate:",
+    "noRate": "none yet",
+    "platformPin": "Platform's manual rate:",
+    "rateLine": "1 USD = {{rate}} {{code}}",
+    "pinLine": "1 USD = {{rate}} {{code}}, until {{until}}",
+    "end": "End this rate now",
+    "rate": "{{code}} per 1 USD",
+    "useReading": "Use the latest reading: {{rate}}",
+    "reason": "Reason",
+    "hours": "For how many hours (1–720)",
+    "pin": "Set this rate",
+    "pinned": "Set: 1 USD = {{rate}} {{code}}.",
+    "ended": "The manual {{code}} rate has ended; the automatic rate prices again.",
+    "confirm": {
+      "title": "Price at 1 USD = {{rate}} {{code}} for {{hours}} hours?",
+      "body": "Every price, top-up and conversion in your books uses this rate until it ends. Money already paid is not changed.",
+      "bodyPlatform": "Every price, top-up and conversion on the platform — and every reseller without its own rate — uses this rate until it ends. Money already paid is not changed.",
+      "yes": "Set the rate",
+      "no": "Cancel"
+    },
+    "refusals": {
+      "not_platform_owner": "You cannot set exchange rates.",
+      "currency_not_yours": "Your prices and gateways do not use this currency, so you cannot set its rate.",
+      "currency_not_found": "This currency is not active.",
+      "base_currency": "The base currency's rate is always 1.",
+      "invalid_rate": "That rate is not a positive number.",
+      "pin_not_found": "This manual rate no longer exists.",
+      "pin_over": "This manual rate has already ended."
+    }
   }
 }

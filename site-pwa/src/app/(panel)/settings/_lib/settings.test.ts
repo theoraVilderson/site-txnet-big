@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Me } from "@/lib/auth-api";
-import { canSetPlatformCurrency } from "./settings";
+import { canPinRates, canSetPlatformCurrency } from "./settings";
 
 const me = (type: string, permissions: string[]) => ({ tenant: { type }, permissions }) as unknown as Me;
 
@@ -21,5 +21,18 @@ describe("canSetPlatformCurrency", () => {
   it("refuses platform staff without the key, and no session", () => {
     expect(canSetPlatformCurrency(me("platform_owner", ["coupon.manage"]))).toBe(false);
     expect(canSetPlatformCurrency(null)).toBe(false);
+  });
+});
+
+describe("canPinRates", () => {
+  it("admits currency.pin or * on either tenant type — the service scopes the pin", () => {
+    expect(canPinRates(me("platform_owner", ["currency.pin"]))).toBe(true);
+    expect(canPinRates(me("reseller", ["currency.pin"]))).toBe(true);
+    expect(canPinRates(me("platform_owner", ["*"]))).toBe(true);
+  });
+
+  it("refuses without the key, and no session", () => {
+    expect(canPinRates(me("platform_owner", ["tenant.manage"]))).toBe(false);
+    expect(canPinRates(null)).toBe(false);
   });
 });
