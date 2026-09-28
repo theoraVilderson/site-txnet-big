@@ -12,7 +12,7 @@ import { AuditActor, auditedGrantAct, GrantAuditAction } from '../../grant-audit
 import { PrismaService } from '../../prisma/prisma.service';
 import { giftGrantBytes } from '../../traffic/gift-bytes';
 import { setGrantSpeed, SpeedCapRefused } from '../../traffic/grant-speed';
-import { GrantBulkAction, GrantBulkBody } from './grant-bulk.schema';
+import { GrantBulkAction, GrantBulkBody, GrantBulkCommand } from './grant-bulk.schema';
 import { bytesOfGb } from './grant-traffic.schema';
 
 /** A throw nobody named: that Grant rolled back, the others stand. */
@@ -78,15 +78,16 @@ export async function actOnEach(
   return outcomes;
 }
 
-type OutcomeRow = { tenantId: string; requestId: string; grantId: string; fingerprint: string; actorUserId: string };
+export type OutcomeRow = { tenantId: string; requestId: string; grantId: string; fingerprint: string; actorUserId: string };
 
 /**
  * One Grant of the request, at most once. Its stored outcome if a call with
  * this id already reached it; else the act, and its `ok` row in the same
  * transaction — a concurrent repeat collides on the key (P2002), its own act
- * rolls back, and the outcome the other call committed is the answer.
+ * rolls back, and the outcome the other call committed is the answer. Also
+ * a filter job's act on one of its frozen Grants (F-311-u2).
  */
-async function actOnce(prisma: PrismaService, actor: AuditActor, command: GrantBulkBody, row: OutcomeRow): Promise<GrantBulkOutcome> {
+export async function actOnce(prisma: PrismaService, actor: AuditActor, command: GrantBulkCommand, row: OutcomeRow): Promise<GrantBulkOutcome> {
   const { tenantId, requestId, grantId } = row;
   const key = { tenantId_requestId_grantId: { tenantId, requestId, grantId } };
   try {
@@ -123,12 +124,17 @@ function refusalOf(grantId: string, e: unknown): GrantBulkOutcome | null {
 
 const isDuplicate = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
 
-/** The body without its id, the Grants deduplicated in order, keys sorted: the same confirm sent twice hashes the same. */
+/** The body without its id, the Grants deduplicated in order: the same confirm sent twice hashes the same. */
 function fingerprintOf(command: GrantBulkBody, grantIds: string[]): string {
   const { requestId: _requestId, ...body } = { ...command, grantIds };
+  return bulkFingerprint(body);
+}
+
+/** A bulk body's hash, keys sorted — by id (above) or by filter (F-311-u2), always without its `requestId`. */
+export function bulkFingerprint(body: Record<string, unknown>): string {
   const sorted = Object.keys(body)
     .sort()
-    .map((k) => [k, body[k as keyof typeof body] ?? null]);
+    .map((k) => [k, body[k] ?? null]);
   return createHash('sha256').update(JSON.stringify(sorted)).digest('hex');
 }
 
@@ -136,7 +142,7 @@ function fingerprintOf(command: GrantBulkBody, grantIds: string[]): string {
 type Audited = <T>(step: () => Promise<T>) => Promise<T>;
 
 /** The single-Grant act, audited, and its result as the single route answers it (dates ISO, bytes as strings). */
-async function act(tx: Prisma.TransactionClient, audited: Audited, actorUserId: string, grantId: string, command: GrantBulkBody): Promise<Record<string, unknown>> {
+async function act(tx: Prisma.TransactionClient, audited: Audited, actorUserId: string, grantId: string, command: GrantBulkCommand): Promise<Record<string, unknown>> {
   const at = new Date();
   const { reason } = command;
   switch (command.action) {

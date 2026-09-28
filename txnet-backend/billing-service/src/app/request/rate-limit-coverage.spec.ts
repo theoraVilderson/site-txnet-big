@@ -57,8 +57,10 @@ const APP = join(__dirname, '..');
  * would leave paid Grants `pending` on panels that are ready.
  * `InvoiceInternalController` is the invoice clock's seam (F-111-a), the same
  * tick and argument as `DepositInternalController`.
+ * `GrantBulkJobInternalController` is the bulk jobs' drain (F-311-u2), a
+ * minute tick: throttling it would leave a started +3 days half applied.
  */
-const EXEMPT = new Set(['HealthController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController']);
+const EXEMPT = new Set(['HealthController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController']);
 
 /**
  * Controllers with no identity to bucket on, and what they count instead.

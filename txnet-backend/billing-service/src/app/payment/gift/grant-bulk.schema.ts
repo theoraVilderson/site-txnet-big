@@ -46,3 +46,5 @@ export const grantBulkSchema = z.discriminatedUnion(
 
 export type GrantBulkBody = z.infer<typeof grantBulkSchema>;
 export type GrantBulkAction = GrantBulkBody['action'];
+/** One action with its input and reason, whatever chose the Grants — ids here, a filter in a job (F-311-u2). */
+export type GrantBulkCommand = GrantBulkBody extends infer B ? (B extends GrantBulkBody ? Omit<B, 'grantIds' | 'requestId'> : never) : never;

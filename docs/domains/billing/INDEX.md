@@ -40,6 +40,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260925000600_product_refund/**
   - txnet-backend/prisma/domains/migrations/20260925001500_a_discount_without_a_code/**
   - txnet-backend/prisma/domains/migrations/20260928000900_a_bulk_request_is_applied_once/**
+  - txnet-backend/prisma/domains/migrations/20260928001000_a_bulk_job_by_filter/**
 owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_tenant, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
 updated: 2026-09-28
@@ -63,7 +64,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 | [contract.history.md](contract.history.md) | the panel's financial page: the wallet ledger and the top-up attempts |
 | [contract.verify.md](contract.verify.md) | a payment the gateway met with silence: the retry clock, the flag, manual confirmation |
 | [contract.gift.md](contract.gift.md) | the panel's gift-code box, and a user's own Grants, configs, usage and `/sub` link |
-| [contract.reseller-grants.md](contract.reseller-grants.md) | a reseller's admin on one of its users' services: reads, config actions, freeze, days, traffic, reset, gift, delete, issue, search by pasted line (F-311); many users' Grants at once: [contract.reseller-grants-bulk.md](contract.reseller-grants-bulk.md) (F-311-u) |
+| [contract.reseller-grants.md](contract.reseller-grants.md) | a reseller's admin on one of its users' services: reads, config actions, freeze, days, traffic, reset, gift, delete, issue, search by pasted line (F-311); many users' Grants at once, by id or by a filter as a job: [contract.reseller-grants-bulk.md](contract.reseller-grants-bulk.md) (F-311-u, F-311-u2) |
 | [contract.coupon.md](contract.coupon.md) | whose a coupon is, whose users it serves, managing coupons and gift codes |
 | [contract.revenue.md](contract.revenue.md) | what one reseller sold and what its users paid in, over a period |
 | [contract.metering.md](contract.metering.md) | a collection pass becoming usage: what `metering-service` writes, and what it refuses to |

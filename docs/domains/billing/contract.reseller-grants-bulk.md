@@ -53,5 +53,39 @@ result} | {grantId, ok: false, reason, panels?}]}`.
 `requestId` per Grant), rotate-token (every user's app would lose its link at
 once). **Not covered:** a stored outcome is kept with no expiry (≤ 50 small rows
 a request); the confirm itself is the consumer's (F-311-x panel, F-311-y bot).
-Choosing Grants by a filter (a panel, a plan, "every active Grant") rather than
-by id is not built.
+
+## By a filter, as a job (built — F-311-u2)
+
+An outage is per panel, and a panel can hold thousands of Grants: the same
+acts, chosen by a filter and run by the worker in batches rather than in the
+request. `payment/gift/reseller-grants-bulk-job.controller.ts` over
+`grant-bulk-job.ts`; the filter's SQL is `grant-bulk-selection.ts`, body
+`grant-bulk-job.schema.ts`. All under `POST|GET /api/billing/tenants/:tenantId/grants/bulk-jobs`:
+
+| Route | Door | Answers |
+|---|---|---|
+| `POST …/count` `{filter}` | `read` | `{count}` — what the confirm shows |
+| `POST …` a bulk body with `filter` in place of `grantIds` | `staffWrite` | **202** the job; the same `requestId` again answers it |
+| `GET …?page&pageSize` | `read` | `{rows[job], page, pageSize, total}`, newest first |
+| `GET …/:jobId` | `read` | the job: `{id, requestId, action, command, filter, status, total, processed, ok, refused, failed, createdAt, finishedAt}` |
+| `GET …/:jobId/outcomes?page&pageSize&problems` | `read` | `{rows, page, pageSize}` — each reached Grant as a bulk by id answers it, in the order reached; `problems=true` keeps refused and failed |
+| `POST …/:jobId/cancel` | `staffWrite` | the job, `cancelled`; a finished one as it is |
+
+`filter` is `{panelId?, productId?, variantId?, statuses?}`, every condition
+given holding; `statuses` defaults to `[active]`, so "every active Grant" is
+`{}`. A panel is a config on it with `desiredRemote = present`; a product or
+variant is what the Grant was issued from.
+
+| Rule | Why |
+|---|---|
+| **The selection is frozen at the confirm** (user, 2026-09-28): the Grants the filter matches are written as the job's items (`grant_bulk_job_item`) in the start's own transaction, one `INSERT … SELECT` — the count's `WHERE`, the reseller's `tenantId` in it (C-15) | the number confirmed is what is acted on, progress has a fixed denominator, and a Grant bought on that panel a minute later does not get the +3 days |
+| **One `requestId`, one job**: a repeat with the same body answers that job and selects nothing again; another body, or an id a bulk by id already used, is **409** `request_reused`; a concurrent repeat collides on `(tenantId, requestId)` | a double click must not start two jobs, i.e. +6 days |
+| Nothing matched is **422** `selection_empty`; over 100 000 Grants is **422** `selection_too_large`, and no job is kept | an empty job is a mistake; a larger one is split by panel or product |
+| **The clock is `worker-service`'s, the work is here** (user, 2026-09-28; ADR-0027): the `grant_bulk_job_drain` tick, `always_on`, asks `POST /api/internal/billing/grant-bulk-jobs/drain` (`ServiceOnlyGuard`), which acts on at most `GRANT_BULK_JOB_BATCH_SIZE` (200) pending items across running jobs, oldest job first | as the purge and the campaigns: one scheduler, bounded ticks, resumable |
+| Each Grant is acted on by the bulk by id's own `actOnce`, **in the job's tenant, as the job's admin** (`actorUserId`, `actorIp` kept on the job): its audit row, its notice, its outcome in `grant_bulk_outcome` under the job's `requestId` | a Grant's history and the user's message read the same whichever way the Grants were chosen, and once per Grant holds across both |
+| A throw nobody named is tried on 3 drains, then that Grant is `failed`; a refusal is kept at once. The job's counts move per item marked done, and the job is `done` when none is left | a transient error retries; a broken Grant does not stall 8 000 others |
+| A cancel stops the Grants not yet reached, within one batch; those reached stand | the admin who chose the wrong panel can stop it, not undo it |
+| A started job finishes whatever its tenant's status, as a started campaign (F-018-p); starting and cancelling are the `staffWrite` | a suspension mid-job must not leave half a panel with +3 days and nobody able to see why |
+
+**Not covered:** jobs and items are kept with no expiry. The job has no audit
+row of its own — each Grant's act has one.

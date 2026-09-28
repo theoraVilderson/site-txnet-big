@@ -224,6 +224,17 @@ export const envSchema = z.object({
   ),
 
   /**
+   * How many Grants one drain of the bulk jobs acts on (F-311-u2), across every
+   * running job, oldest first. Each is a transaction with its audit row and
+   * notice, so 200 keeps a tick well inside the worker's timeout; a job of
+   * 8 000 Grants finishes in 40 ticks and resumes where each stopped.
+   */
+  GRANT_BULK_JOB_BATCH_SIZE: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(200),
+  ),
+
+  /**
    * Delivery of a paid Grant (F-111-d, spec §5.8 step 3): it is checked once at
    * the first tick after payment, then retried this many times, the first retry
    * `GRANT_DELIVERY_FIRST_RETRY_MS` later and each one after at twice the last

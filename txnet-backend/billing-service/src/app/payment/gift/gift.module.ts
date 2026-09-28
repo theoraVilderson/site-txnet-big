@@ -8,7 +8,9 @@ import { GiftController } from './gift.controller';
 import { GrantListController } from './grant-list.controller';
 import { GrantTokenController } from './grant-token.controller';
 import { GiftRedemptionService } from './gift-redemption.service';
+import { GrantBulkJobDrainService, ResellerGrantBulkJobService } from './grant-bulk-job';
 import { ResellerGrantsBulkController } from './reseller-grants-bulk.controller';
+import { GrantBulkJobInternalController, ResellerGrantsBulkJobController } from './reseller-grants-bulk-job.controller';
 import { ResellerGrantsByLinesController } from './reseller-grants-by-lines.controller';
 import { ResellerUserGrantsController } from './reseller-user-grants.controller';
 import { ResellerUserGrantsService } from './reseller-user-grants.service';
@@ -23,12 +25,13 @@ import { SubscriptionLinkService } from './subscription-link.service';
  * `SubscriptionLinkService`, answers and resets their `/sub` links (F-114-e-b).
  * The same reads, with a Grant's configs and usage from `TrafficModule`, are
  * answered to a reseller's admin for one of its users (F-311-f), and its
- * writes over many users' Grants at once (F-311-u).
+ * writes over many users' Grants at once (F-311-u) — by id in the request,
+ * or by a filter as a job the worker drains (F-311-u2).
  */
 @Module({
   imports: [WalletModule, EntitlementModule, TrafficModule],
-  controllers: [GiftController, GrantTokenController, GrantListController, ResellerUserGrantsController, ResellerGrantsByLinesController, ResellerGrantsBulkController],
-  providers: [GiftRedemptionService, SubscriptionLinkService, ResellerUserGrantsService, ResellerAccess],
+  controllers: [GiftController, GrantTokenController, GrantListController, ResellerUserGrantsController, ResellerGrantsByLinesController, ResellerGrantsBulkController, ResellerGrantsBulkJobController, GrantBulkJobInternalController],
+  providers: [GiftRedemptionService, SubscriptionLinkService, ResellerUserGrantsService, ResellerGrantBulkJobService, GrantBulkJobDrainService, ResellerAccess],
   exports: [GiftRedemptionService],
 })
 export class GiftModule {}

@@ -872,3 +872,69 @@ model GrantBulkOutcome {
   @@map("grant_bulk_outcome")
   @@schema("billing")
 }
+
+enum GrantBulkJobStatus {
+  running
+  done
+  cancelled
+
+  @@schema("billing")
+}
+
+/// F-311-u2: a bulk act (F-311-u) whose Grants were chosen by a filter — a
+/// panel, a product or variant, statuses — rather than by id, run by the
+/// worker in batches. The selection is **frozen at the confirm**: the Grants
+/// that matched then are this job's items, so the count the admin saw is what
+/// is acted on and a Grant bought a minute later is not. `requestId` is the
+/// caller's, as for a bulk by id: a repeat answers this job, another body with
+/// it is `request_reused`, and each Grant's outcome is `grant_bulk_outcome`'s
+/// row under it — the same once-per-Grant key. `command` is the action's own
+/// input and the reason; the actor is kept because each act is audited as theirs.
+model GrantBulkJob {
+  id           String             @id @default(uuid()) @db.Uuid
+  tenantId     String             @db.Uuid
+  requestId    String             @db.Uuid
+  fingerprint  String
+  actorUserId  String             @db.Uuid
+  actorIp      String
+  action       String
+  /// The bulk body without `requestId` and `filter`: `{action, reason, …the action's input}`.
+  command      Json
+  filter       Json
+  status       GrantBulkJobStatus @default(running)
+  /// The Grants frozen at the confirm; never changes after.
+  total        Int
+  okCount      Int                @default(0)
+  refusedCount Int                @default(0)
+  failedCount  Int                @default(0)
+  createdAt    DateTime           @default(now())
+  /// When the last item got its outcome, or the admin cancelled.
+  finishedAt   DateTime?
+
+  items GrantBulkJobItem[]
+
+  @@unique([tenantId, requestId])
+  @@index([tenantId, createdAt])
+  @@map("grant_bulk_job")
+  @@schema("billing")
+}
+
+/// One Grant of a `GrantBulkJob`, frozen at the confirm. `doneAt` is set once
+/// it has its outcome — kept in `grant_bulk_outcome`, or `failed` after the
+/// last attempt (a throw nobody named is tried again on the next batches).
+/// `ok` is that outcome's, copied so the outcomes page filters without a join.
+model GrantBulkJobItem {
+  jobId    String    @db.Uuid
+  tenantId String    @db.Uuid
+  grantId  String    @db.Uuid
+  attempts Int       @default(0)
+  doneAt   DateTime?
+  ok       Boolean?
+  failed   Boolean   @default(false)
+
+  job GrantBulkJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, grantId])
+  @@map("grant_bulk_job_item")
+  @@schema("billing")
+}
