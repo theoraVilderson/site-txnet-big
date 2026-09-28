@@ -24,7 +24,7 @@ import { GatewayCredentials, GatewayFailure } from '../gateway/payment-provider'
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
 import { Chat } from './chat-platform';
-import { defaultTaxRate, offeredInThisChat, priceDeposit, selectGateway } from './deposit-pricing';
+import { defaultTaxRate, offeredInCurrency, offeredInThisChat, priceDeposit, selectGateway } from './deposit-pricing';
 import { DepositGatewayNotFound, money } from './deposit-quote.service';
 import { InvoiceLinkClient } from './invoice-link.client';
 import { webhookUrlFor, withPaymentId } from './payment-callback-url';
@@ -168,9 +168,13 @@ export class DepositStartService {
 
     // 1. Read: the gateway, the coupons as they stand, and where the bank will
     //    send the user back to. Nothing is held after this closes.
-    const { gateway, coupons, callbackUrl, returnOrigin, defaultTaxRatePercent } = await tenantTransaction(this.prisma, async (tx) => {
+    const { gateway, coupons, callbackUrl, returnOrigin, defaultTaxRatePercent, currencyCode } = await tenantTransaction(this.prisma, async (tx) => {
+      // The payer's tenant's currency; a billing top-up is money with the
+      // platform, so it is in the platform's (ADR-0098 part 4, F-116-b). Read
+      // before pricing: the price is computed in it (F-116-e).
+      const currencyCode = request.billingTenantId ? await platformCurrencyOf(tx) : await operatingCurrencyOf(tx, tenant.id);
       const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, source, { canTest: request.canTest });
-      if (!gateway) throw new DepositGatewayNotFound(gatewayId, source);
+      if (!gateway || !offeredInCurrency(gateway, currencyCode)) throw new DepositGatewayNotFound(gatewayId, source);
       if (this.providers.has(gateway.providerName) && !offeredInThisChat(this.providers.get(gateway.providerName), gateway, request.chat?.platform ?? null)) {
         throw new DepositGatewayNotFound(gatewayId, source);
       }
@@ -190,6 +194,7 @@ export class DepositStartService {
         callbackUrl: gateway.callbackUrl ?? (await this.callbackUrl(tx, tenant.id)),
         returnOrigin: await this.returnOrigin(tx, tenant.id, request.origin),
         defaultTaxRatePercent: await defaultTaxRate(tx, tenant.id),
+        currencyCode,
       };
     });
 
@@ -204,7 +209,7 @@ export class DepositStartService {
     };
     const { provider, price } = await priceDeposit(
       { providers: this.providers, merchant: this.merchant, fx: this.fx },
-      { gateway, ref, amount, discount: coupons.totalDiscount, actorId: userId, defaultTaxRatePercent },
+      { gateway, ref, amount, currencyCode, discount: coupons.totalDiscount, actorId: userId, defaultTaxRatePercent },
     );
 
     // A gateway that will be paid needs somewhere to answer; a free top-up does
@@ -227,9 +232,6 @@ export class DepositStartService {
     // 2. Write: the payment and its holds, together or not at all. A refused
     //    hold aborts this whole transaction, and the panel re-quotes.
     const balance = await tenantTransaction(this.prisma, async (tx) => {
-      // The payer's tenant's currency; a billing top-up is money with the
-      // platform, so it is in the platform's (ADR-0098 part 4, F-116-b).
-      const currencyCode = request.billingTenantId ? await platformCurrencyOf(tx) : await operatingCurrencyOf(tx, tenant.id);
       await tx.paymentTransaction.create({
         data: {
           id: paymentId,
@@ -253,10 +255,12 @@ export class DepositStartService {
           currencyCode,
           // Non-null on the column, and the free path charges nobody anything.
           chargedAmountMinor: price.chargedAmountMinor ?? BigInt(0),
-          // The pair, or neither: a rate with no snapshot is the state ADR-0019
-          // says a rial invoice must never be in (invariant 12).
+          // The rate with its snapshots, or neither: a rate with no snapshot is
+          // the state ADR-0019 says an invoice must never be in (invariant 12).
+          // A pair has a leg per side, USD's being none (F-116-e).
           exchangeRateSnapshot: price.rate,
           exchangeRateSnapshotId: price.rateSnapshotId,
+          exchangeRateFromSnapshotId: price.rateFromSnapshotId,
           status: price.free ? PaymentStatus.success : PaymentStatus.pending,
           // A hold has no clock of its own: it lives as long as its payment,
           // and a payment that has already landed never expires.

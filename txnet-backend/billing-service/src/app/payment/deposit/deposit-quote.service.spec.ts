@@ -55,6 +55,7 @@ function gatewayRow(overrides: Record<string, unknown> = {}) {
     maxRate: null,
     roundingStep: null,
     roundingMode: 'up',
+    currencyCode: 'USD',
     createdAt: new Date('2026-09-01T00:00:00Z'),
     updatedAt: new Date('2026-09-01T00:00:00Z'),
     ...overrides,
@@ -83,7 +84,7 @@ type Setup = {
 function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, configured, liveRate, tenantPresets }: Setup = {}) {
   const tx = {
     $executeRaw: async () => 0,
-    tenant: { findUnique: async () => ({ tenantType: 'reseller' }) },
+    tenant: { findUnique: async () => ({ tenantType: 'reseller', operatingCurrencyCode: 'USD' }) },
     // No grant: `selectGateway` looks for one only after the tenant's own row
     // misses, and `selectableGateways` always asks (F-096-b).
     paymentGatewayGrant: { findMany: async () => [] },
@@ -126,7 +127,7 @@ function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, 
   const couponService = { validate: async () => coupons };
   // No live rate published, which is what these cases were written against:
   // the gateway prices from its `staticRate` (F-092-c).
-  const fx = { current: async () => liveRate ?? null };
+  const fx = { pair: async () => liveRate ?? null };
   return new DepositQuoteService(
     prisma as never,
     // No grant in this fixture: `tenantGatewayConfig.findMany` on the

@@ -54,6 +54,7 @@ function gatewayRow(overrides: Record<string, unknown> = {}) {
     maxRate: null,
     roundingStep: null,
     roundingMode: 'up',
+    currencyCode: 'USD',
     createdAt: new Date('2026-09-01T00:00:00Z'),
     ...overrides,
   };
@@ -119,7 +120,7 @@ function build(setup: Setup = {}) {
 
   const tx = {
     $executeRaw: async () => 0,
-    tenant: { findUnique: async () => ({ tenantType }) },
+    tenant: { findUnique: async () => ({ tenantType, operatingCurrencyCode: 'USD' }) },
     // No grant: `selectGateway` looks for one only after the tenant's own row
     // misses, and `selectableGateways` always asks (F-096-b).
     paymentGatewayGrant: { findMany: async () => [] },
@@ -216,7 +217,7 @@ function build(setup: Setup = {}) {
     reservations as never,
     registry as never,
     merchant as never,
-    { current: async () => null } as never,
+    { pair: async () => null } as never,
     ledger as never,
     config as never,
     {

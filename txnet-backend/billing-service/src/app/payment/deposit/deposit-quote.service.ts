@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CouponChannel, Prisma } from '@prisma/client';
-import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { operatingCurrencyOf, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -8,7 +8,7 @@ import { CouponValidationService, RejectedCoupon } from '../coupon/coupon-valida
 import { GatewayMerchant, GatewaySource, hasEverySecret } from '../gateway/gateway-merchant';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
-import { defaultTaxRate, type GatewayOffer, offeredInThisChat, priceDeposit, selectableGateways, selectGateway, type SelectOptions } from './deposit-pricing';
+import { defaultTaxRate, type GatewayOffer, offeredInCurrency, offeredInThisChat, priceDeposit, selectableGateways, selectGateway, type SelectOptions } from './deposit-pricing';
 import { resolvePresets } from './deposit-presets';
 
 /**
@@ -131,9 +131,10 @@ export class DepositQuoteService {
     const tenant = TenantContext.current('deposit gateways');
     // The caller's default list, not a lender's: the amounts follow what this
     // tenant sells, whoever's gateway takes the payment.
-    const { rows, tenantPresets } = await tenantTransaction(this.prisma, async (tx) => ({
+    const { rows, tenantPresets, currencyCode } = await tenantTransaction(this.prisma, async (tx) => ({
       rows: await selectableGateways(tx, this.crossTenant, tenant.id, options),
       tenantPresets: (await tx.depositSetting.findUnique({ where: { tenantId: tenant.id } }))?.presets ?? [],
+      currencyCode: await operatingCurrencyOf(tx, tenant.id),
     }));
     // Outside the transaction: the vault queries on its own bound connection.
     //
@@ -161,6 +162,8 @@ export class DepositQuoteService {
       ),
     );
     return rows
+      // A gateway lent from a tenant in another currency cannot price this one's payment (F-116-e).
+      .filter((g) => offeredInCurrency(g, currencyCode))
       .filter((g) => this.providers.has(g.providerName))
       .filter((g) => offeredInThisChat(this.providers.get(g.providerName), g, options.chatPlatform))
       .filter((g) => hasEverySecret(configured.get(g.ownerTenantId), { source: g.source, gatewayId: g.id, providerName: g.providerName }))
@@ -186,9 +189,12 @@ export class DepositQuoteService {
     const tenant = TenantContext.current('deposit quote');
     const { userId, gatewayId, amount } = request;
 
-    const { gateway, coupons, defaultTaxRatePercent } = await tenantTransaction(this.prisma, async (tx) => {
+    const { gateway, coupons, defaultTaxRatePercent, currencyCode } = await tenantTransaction(this.prisma, async (tx) => {
+      const currencyCode = await operatingCurrencyOf(tx, tenant.id);
       const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, request.source, { canTest: request.canTest });
-      if (!gateway || !this.offeredHere(gateway, request.chatPlatform)) throw new DepositGatewayNotFound(gatewayId, request.source);
+      if (!gateway || !this.offeredHere(gateway, request.chatPlatform) || !offeredInCurrency(gateway, currencyCode)) {
+        throw new DepositGatewayNotFound(gatewayId, request.source);
+      }
       const coupons = await this.coupons.validate(tx, {
         codes: request.couponCodes,
         amount,
@@ -199,7 +205,7 @@ export class DepositQuoteService {
         channel: request.channel ?? CouponChannel.panel,
         userId,
       });
-      return { gateway, coupons, defaultTaxRatePercent: await defaultTaxRate(tx, tenant.id) };
+      return { gateway, coupons, defaultTaxRatePercent: await defaultTaxRate(tx, tenant.id), currencyCode };
     });
 
     const { provider, price } = await priceDeposit(
@@ -218,6 +224,7 @@ export class DepositQuoteService {
           grantId: gateway.grantId,
         },
         amount,
+        currencyCode,
         discount: coupons.totalDiscount,
         actorId: userId,
         defaultTaxRatePercent,

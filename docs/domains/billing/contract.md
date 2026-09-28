@@ -122,10 +122,10 @@ numbers are `gateway-pricing.golden.json` (F-0611).
 | `gatewayTrackingCode` is unique per gateway column; for Zarinpal it holds `authority`, not `ref_id` (`gatewayReferenceId`) | ADR-0028 — `authority` is what a duplicate callback shares |
 | A payment's coupons are its `coupon_redemption` rows; there is no `couponId` column | codes stack, applied in order, each on what the previous left (D-21) |
 | `perUserUsageLimit` may exceed 1 and is **not** enforced by an index — the redemption transaction counts it | D-21; F-092-h |
-| Amounts are base currency; `chargedAmountMinor` + `exchangeRateSnapshot` are what the gateway was asked for, frozen at intent | ADR-0019 |
+| Amounts are in the row's `currencyCode`; `chargedAmountMinor` + `exchangeRateSnapshot` (`currencyCode` -> the charge currency, `DECIMAL(30,18)`, the rate charged at exactly) are what the gateway was asked for, frozen at intent | ADR-0019, ADR-0098 (F-116-e) |
 | `amountReceivedMinor` + `receivedCurrency` are what the gateway reports **arrived** — a receipt, never money of record: both or neither (CHECK), amount `>= 0`, code `^[A-Z0-9]{2,20}$`, in that currency's minor unit. Migration `20260916000200_payment_d32_providers_and_receipt` also adds D-32's providers and `GatewayCategory.in_chat` | D-32; C-02's one exception (F-104-a) |
 | `taxApplied` (`>= 0`, default 0) + `taxRatePercent` (0..100, null = no tax) are what a top-up was taxed and at which rate, frozen at intent so a later rate change cannot re-explain the receipt. No rate means `taxApplied = 0` (CHECK); rows before F-104-ae read 0 and null. Migration `20260924001300_tax_on_top_up_returns` | ADR-0076 (F-104-ae) |
-| `exchangeRateSnapshotId` says **which** reading that rate was — a FK to `currency.currency_exchange_rate`, `RESTRICT`, null on a `staticRate` gateway. The FX worker appends a row per accepted poll, so the number alone identifies nothing | F-0606-b |
+| `exchangeRateSnapshotId` (the charge currency's leg) and `exchangeRateFromSnapshotId` (the payment currency's, F-116-e) say **which** readings that rate was — FKs to `currency.currency_exchange_rate`, `RESTRICT`; a leg on the USD pivot is null, both are null on a `staticRate` or same-currency price. The FX worker appends a row per accepted poll, so the number alone identifies nothing | F-0606-b, F-116-e |
 | `displayName` and gateway pricing (fee / min / max, and F-0609's rate columns, and `taxRatePercent` — null = the tenant's default, ADR-0076) have the same columns on `payment_gateway` and `tenant.tenant_gateway_config` | one calculator reads both (F-092-e) |
 
 ## Request edge (built — F-092-a)
@@ -225,9 +225,9 @@ Its delivery's `entitlement.grant.delivered` / `.refunded` are entitlement's (F-
   capped every coupon at one use per user (D-21).
 - `exchangeRateSnapshot` is frozen at intent time, never recomputed — on crypto
   and on the rial/card path (ADR-0019) — and since F-0606-b it is frozen
-  together with `exchangeRateSnapshotId`. `priceAtGateway` returns the pair:
-  the rate it charged at, and the `currency_exchange_rate` row that rate was
-  derived from, or neither when the gateway priced from its own `staticRate`.
+  together with its legs' ids. `priceAtGateway` returns them together: the
+  rate it charged at, and the `currency_exchange_rate` rows it was derived
+  from (F-116-e), or none when the gateway priced from its own `staticRate`.
   A live rate handed to it without a snapshot id is a caller bug, not a quiet
   fall back — the state ADR-0019 says the rial path must never be in.
 

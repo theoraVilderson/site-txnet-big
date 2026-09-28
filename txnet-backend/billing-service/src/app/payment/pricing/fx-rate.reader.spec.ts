@@ -58,14 +58,11 @@ function reader(options: {
       },
     },
   };
-  const config = { get: (_k: string, fallback: string) => options.code ?? fallback };
   return {
     calls,
-    fx: new FxRateReader(
-      config as never,
-      prisma as never,
-      redis as never,
-    ),
+    // The pricer asks for USD -> the charge currency; USD is the pivot, so the
+    // one leg read is the charge currency's (F-116-e).
+    fx: { current: () => new FxRateReader(prisma as never, redis as never).pair('USD', options.code ?? 'IRR') },
   };
 }
 
@@ -82,7 +79,7 @@ describe('FxRateReader — the cache', () => {
     expect(calls.findFirst).toBe(0);
   });
 
-  it('reads the key the worker writes, under the configured currency code', async () => {
+  it('reads the key the worker writes, under the charge currency code', async () => {
     const { fx, calls } = reader({ hit: cached({ currencyCode: 'TRY' }), code: 'TRY' });
 
     await fx.current();
@@ -97,7 +94,7 @@ describe('FxRateReader — falling through to the table', () => {
 
     const snapshot = await fx.current();
 
-    expect(snapshot).toEqual({ snapshotId: ROW_ID, rate: new Prisma.Decimal('1041000') });
+    expect(snapshot).toEqual({ snapshotId: ROW_ID, fromSnapshotId: null, rate: new Prisma.Decimal('1041000') });
   });
 
   it('falls through when Redis is down rather than reporting no rate', async () => {

@@ -263,7 +263,7 @@ describe('offeredInThisChat', () => {
 describe('a Telegram Stars price', () => {
   it('charges whole Stars, rounded up, at the gateway’s USD value per Star', async () => {
     const stars = new TelegramStarsProvider();
-    const fx = { current: vi.fn() };
+    const fx = { pair: vi.fn() };
     const { provider, price } = await priceDeposit(
       { providers: { get: () => stars } as never, merchant: { requireConfigured: async () => undefined } as never, fx: fx as never },
       {
@@ -283,9 +283,11 @@ describe('a Telegram Stars price', () => {
           roundingMode: 'nearest',
           minAcceptAmount: null,
           maxAcceptAmount: null,
+          currencyCode: 'USD',
         } as never,
         ref: {} as never,
         amount: d('10.00'),
+        currencyCode: 'USD',
         discount: d('0'),
         actorId: USER,
         defaultTaxRatePercent: null,
@@ -295,6 +297,6 @@ describe('a Telegram Stars price', () => {
     // 10 USD / 0.013 USD per Star = 769.23… Stars.
     expect(price.chargedAmountMinor).toBe(BigInt(770));
     // A Star has no live rate, whatever the row says.
-    expect(fx.current).not.toHaveBeenCalled();
+    expect(fx.pair).not.toHaveBeenCalled();
   });
 });

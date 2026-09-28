@@ -160,6 +160,7 @@ export class DepositFollowOnService {
             // the base currency, so the pair is 1 and nothing is stale.
             exchangeRateSnapshot: original.exchangeRateSnapshot,
             exchangeRateSnapshotId: original.exchangeRateSnapshotId ?? null,
+            exchangeRateFromSnapshotId: original.exchangeRateFromSnapshotId ?? null,
             status: PaymentStatus.pending,
             // Already due: the credit follows immediately, and a row stranded
             // by a crash between the two is closed by the expiry sweep instead

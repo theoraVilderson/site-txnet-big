@@ -134,7 +134,7 @@ beforeAll(async () => {
   };
   // No FX rate published in this fixture: these cases are about which gateway
   // is selectable, and a `staticRate` prices them (F-092-c).
-  const fx = { current: async () => null };
+  const fx = { pair: async () => null };
   service = new DepositQuoteService(
     app,
     crossTenant,

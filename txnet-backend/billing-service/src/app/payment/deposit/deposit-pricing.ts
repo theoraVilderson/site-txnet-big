@@ -6,10 +6,10 @@ import type { PaymentProvider } from '../gateway/payment-provider';
 import type { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import type { FxRateReader } from '../pricing/fx-rate.reader';
 import {
-  BASE_CURRENCY_CODE,
   feeBasis,
   feeQuoteAmountMinor,
   GatewayPrice,
+  InvalidPricingInput,
   PriceRequest,
   priceAtGateway,
   quotedFeeFromMinor,
@@ -98,6 +98,8 @@ export const GATEWAY_COLUMNS = {
   taxRatePercent: true,
   depositPresets: true,
   callbackUrl: true,
+  // What its limits, fees and `staticRate` are in (F-116-b); see `offeredInCurrency`.
+  currencyCode: true,
 } satisfies Prisma.TenantGatewayConfigSelect & Prisma.PaymentGatewaySelect;
 
 export type SelectedGateway = Prisma.TenantGatewayConfigGetPayload<{ select: typeof GATEWAY_COLUMNS }>;
@@ -319,11 +321,25 @@ export async function selectableGateways(
   ];
 }
 
+/**
+ * A gateway prices a payment only in the currency it is configured in
+ * (F-116-e). Its limits, fee floor and ceiling, presets and `staticRate` are
+ * amounts in its `currencyCode`, and the payment is in the payer tenant's
+ * operating currency (ADR-0098 part 2). They differ only for a gateway lent by
+ * a tenant in another currency; converting its settings on the fly is not
+ * built, so it is not offered — never priced with EUR limits read as TRY.
+ */
+export function offeredInCurrency(gateway: Pick<SelectedGateway, 'currencyCode'>, currencyCode: string): boolean {
+  return gateway.currencyCode === currencyCode;
+}
+
 export type DepositPricingInput = {
   gateway: SelectedGateway;
   ref: MerchantGatewayRef;
-  /** Base currency (ADR-0019). */
+  /** In `currencyCode`. */
   amount: Prisma.Decimal;
+  /** The payment's currency — the payer tenant's operating currency, read by the caller (ADR-0098 part 2). */
+  currencyCode: string;
   /** Every applied coupon together, as validation answered it. */
   discount: Prisma.Decimal;
   /**
@@ -357,12 +373,17 @@ export async function priceDeposit(
   },
   input: DepositPricingInput,
 ): Promise<DepositPricing> {
-  const { gateway, ref, amount, discount, actorId, defaultTaxRatePercent } = input;
+  const { gateway, ref, amount, discount, actorId, defaultTaxRatePercent, currencyCode } = input;
+  // A caller bug, not a user's: the list and the selection already drop it.
+  if (!offeredInCurrency(gateway, currencyCode)) {
+    throw new InvalidPricingInput(`gateway is configured in ${gateway.currencyCode}, the payment is in ${currencyCode}`);
+  }
   const provider = deps.providers.get(gateway.providerName);
-  // A gateway charging the base currency prices at 1: the live rate is rial per dollar (F-104-g).
-  const chargesInBaseCurrency = provider.chargeCurrency === BASE_CURRENCY_CODE;
-  // A Star's `staticRate` is its USD value; the calculator wants Stars per USD,
-  // and a Star has no live rate (F-104-e, F-104-k). Not positive stays unusable.
+  // A gateway charging the payer's own currency prices at 1 (F-104-g, F-116-e).
+  const chargesInPaymentCurrency = provider.chargeCurrency === currencyCode;
+  // A Star's `staticRate` is its value in the gateway's currency; the calculator
+  // wants Stars per unit, and a Star has no live rate (F-104-e, F-104-k). Not
+  // positive stays unusable.
   const perUnit = provider.staticRateIsChargeUnitValue;
   const pricing: SelectedGateway = perUnit
     ? {
@@ -376,9 +397,10 @@ export async function priceDeposit(
     amount,
     discount,
     defaultTaxRatePercent,
-    liveRate: pricing.useLiveRate && !chargesInBaseCurrency ? await deps.fx.current() : null,
+    // Payer currency -> charge currency, through the USD pivot (ADR-0098 part 6).
+    liveRate: pricing.useLiveRate && !chargesInPaymentCurrency ? await deps.fx.pair(currencyCode, provider.chargeCurrency) : null,
     chargeDecimals: provider.chargeDecimals,
-    chargesInBaseCurrency,
+    chargesInPaymentCurrency,
   };
 
   if (gateway.feeCalculationMode === FeeCalcMode.automatic) {

@@ -42,7 +42,8 @@ come from its headers, never from the body.
 | A fully discounted top-up is quoted whatever the vault holds | nothing reaches the gateway on the free path |
 | Coupons are validated in the same transaction as a wallet top-up. A rejected code is not an error: the quote goes on without it and `rejected[].message` is translated, one i18n key per `reason` | codes stack; a typo must not hide the rest of the breakdown |
 | An automatic fee: the provider is asked for `feeQuoteAmountMinor`, its answer converted by `quotedFeeFromMinor` (rounded **up** to the cent). The vault and the provider are called after the transaction closes; the free path calls neither | no connection is held across a call to a bank |
-| A `useLiveRate` gateway is priced at the rate the FX worker last published (`FxRateReader`, F-092-c); one that does not ask for a live rate is never read for, and prices from its `staticRate` | a quote is not the place to spend a Redis round trip proving a column's value |
+| A `useLiveRate` gateway is priced from the payment's currency (the payer tenant's operating currency; the platform's on a billing top-up) to its `chargeCurrency`, at the pair the FX worker last published (`FxRateReader.pair`, F-092-c, F-116-e); one charging the payment's own currency prices at exactly 1 and reads nothing; one that does not ask for a live rate is never read for, and prices from its `staticRate` (charge units per unit of its `currencyCode`) | a quote is not the place to spend a Redis round trip proving a column's value |
+| A gateway whose `currencyCode` is not the payment's is **not listed**, and is **404** on a quote or a start (`offeredInCurrency`, F-116-e) — only a gateway lent by a tenant in another currency | its limits, fees, presets and `staticRate` are amounts in its own currency; converting them on the fly is not built |
 | No readable rate is `liveRate: null` — the gateway's `staticRate`, or a refusal — and never an error of its own: Redis down, a value that no longer parses, no `currency` row and no snapshot ever written are all the same answer | a 500 on a quote where the user's move is the same as a 503's: another gateway |
 | Out of the gateway's range is **400** `billing.amountOutOfRange`; no usable rate, rate out of range, a provider failure, no merchant id, no driver are all **503** `billing.gatewayUnavailable` — the cause goes to the log only | the user's move is the same: another gateway |
 | A quote reserves and writes nothing | `start` reserves, on the request that pays |
@@ -58,14 +59,14 @@ them was nobody reading the key.
 
 | Rule | Why |
 |---|---|
-| Cache first, table second, and both: `fx:rate:{FX_QUOTE_CURRENCY_CODE}` (`UnscopedRedisKeys.fxRate`, C-03), then the newest `effectiveAt` for that code | the key is a cache of a `currency_exchange_rate` row, so a miss is a question for the table and never an answer (`currency/contract.fx-worker.md`) |
+| A pair is shared-core's `readFxPair` (`currency/contract.md`): `rate(to) / rate(from)`, a leg per snapshot, USD's leg none. Per leg, cache first, table second, and both: `fx:rate:{code}` (`UnscopedRedisKeys.fxRate`, C-03), then the newest `effectiveAt` for that code; a missing leg is no rate | the key is a cache of a `currency_exchange_rate` row, so a miss is a question for the table and never an answer (`currency/contract.fx-worker.md`) |
 | An unreadable or unparseable cache value is a **miss**, logged, not an answer | otherwise a Redis outage silently drops every live-rate gateway to its `staticRate`, at whatever price that column happens to name |
 | A rate with no snapshot id, or one that is not positive, is refused from either store — both halves or neither | ADR-0019's forbidden state, and `priceAtGateway` treats a snapshotless rate as a caller bug (`InvalidPricingInput`), which is a 500 |
 | No tenant is bound for the table read, and none is needed | `currency_exchange_rate` has no `tenantId` and so no RLS policy: the rate is the platform's, and every tenant prices from the same one |
 | It does not judge the rate's **age** | the staleness ladder is F-0607-a's, and reads the `effectiveAt` this leaves on the snapshot |
 
-**Not covered:** `amount` is base currency; the display-currency step the
-F-092-i row names arrives with F-025. The rate's age is unjudged until
+**Not covered:** `amount` is in the payment's currency; the display-currency
+step the F-092-i row names arrives with F-025. The rate's age is unjudged until
 F-0607-a, so a rate the ladder would call *degraded* is quoted as a normal one.
 
 ## Starting the payment (built — F-092-i)
@@ -82,7 +83,7 @@ shown.
 | Three transactions, none open across a call to a bank: the reads (gateway, coupons, callback host); the `payment_transaction` + its holds, together or not at all; the authority, once there is one | the same rule the quote follows for the vault and the fee quote |
 | The holds name the **payment**: `orderReferenceId` = `paymentTransactionId` = the row's id, minted before the row is written | F-092-j confirms and F-092-k expires by that id |
 | A hold that can no longer be taken aborts the whole transaction and is **409**, one i18n key per `reason` — the same keys a rejected code gets on a quote. Nothing was written | `CouponReservationRefused`; the panel re-quotes and shows the breakdown without it |
-| The row carries the quote's own numbers — `amountRequested` / `discountApplied` / `feeApplied` / `amountCredited` / `chargedAmountMinor` — and the rate **with** its snapshot id, or neither | invariant 12, ADR-0019 |
+| The row carries the quote's own numbers — `amountRequested` / `discountApplied` / `feeApplied` / `amountCredited` / `chargedAmountMinor` — and the rate **with** its legs' snapshot ids (`exchangeRateSnapshotId` the charge currency's, `exchangeRateFromSnapshotId` the payment's; USD's is none), or none of them | invariant 12, ADR-0019, F-116-e |
 | `expiresAt` is `now + PAYMENT_PENDING_TTL_SEC` (default 900) on a pending payment and `null` on one that already landed. The holds have no clock of their own | legacy gave the row and its coupon locks two TTLs, so a lock could outlive its payment |
 | `gatewayTrackingCode` is the `authority`, written after the gateway answers. A `request` that succeeded and whose authority was not stored leaves a `pending` row with no code — found late by F-092-l / F-092-k, rather than not at all | ADR-0028 |
 | A gateway that will not mint: the row is `failed` with the `GatewayFailure.reason` as `failureCode`, and the holds are **released** `cancelled` — nothing timed out. Everything between the write and the mint closes it the same way, whatever threw: the vault read for the merchant id or the provider token, the callback URL the payment is named in, and bot-service's invoice link (`unavailable`) | a live hold behind a payment that never existed is spent capacity, and a payment no bank has heard of is not worth a TTL (F-104-w) |

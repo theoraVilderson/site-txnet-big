@@ -48,9 +48,11 @@ model CurrencyExchangeRate {
   isActive       Boolean    @default(true)
 
   currency Currency @relation(fields: [currencyId], references: [id])
-  // The payments priced at this reading (F-0606-b). Append-only: a row with
-  // payments behind it cannot be deleted.
-  payments PaymentTransaction[]
+  // The payments priced at this reading (F-0606-b), as the charge currency's
+  // leg or the payment currency's (F-116-e). Append-only: a row with payments
+  // behind it cannot be deleted.
+  payments     PaymentTransaction[] @relation("PaymentRateToLeg")
+  paymentsFrom PaymentTransaction[] @relation("PaymentRateFromLeg")
 
   @@index([currencyId, effectiveAt(sort: Desc)])
   @@map("currency_exchange_rate")

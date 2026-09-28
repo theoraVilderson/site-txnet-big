@@ -159,16 +159,16 @@ describe('the rate snapshot (F-0606-b)', () => {
   });
 });
 
-describe('a gateway charging in the base currency (F-104-g)', () => {
-  // Stripe charges USD, which is the base currency (ADR-0019). The live rate is
-  // rial per dollar, so applying it — the default for every gateway — would
+describe('a gateway charging in the payer currency (F-104-g, F-116-e)', () => {
+  // A USD tenant's Stripe charges USD, the payment's own currency. The live rate
+  // is rial per dollar, so applying it — the default for every gateway — would
   // charge a 10 USD top-up as roughly 600,000 USD. The user's call, 2026-09-16:
   // such a gateway prices at exactly 1, whatever its rate columns say.
   const liveCase = golden.cases.find((c) => c.expect?.rateSnapshotId != null)!;
 
   it('charges at rate 1, ignoring the live rate, the static rate, modifiers, bounds and rounding', () => {
     const request = requestOf(liveCase);
-    const usd: PriceRequest = { ...request, chargeDecimals: 2, chargesInBaseCurrency: true };
+    const usd: PriceRequest = { ...request, chargeDecimals: 2, chargesInPaymentCurrency: true };
     usd.pricing = { ...usd.pricing, staticRate: new Prisma.Decimal('58000'), percentageModifier: new Prisma.Decimal('3'), minRate: new Prisma.Decimal('50000') };
 
     const price = priceAtGateway(usd);

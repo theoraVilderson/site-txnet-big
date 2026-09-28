@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { readFxRate } from '@txnet-backend/shared-core';
+import { readFxPair } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
@@ -16,8 +15,10 @@ import { FxRateSnapshot } from './gateway-pricing';
  * `DepositQuoteService` passed `liveRate: null` and every `useLiveRate` gateway
  * either fell back to its own `staticRate` or refused the quote.
  *
- * The read itself is shared-core's `readFxRate` since F-116-c; the rules
- * below are that function's, kept here because this is where they were argued.
+ * The read itself is shared-core's `readFxPair` since F-116-c/F-116-e: the
+ * payer's currency to the gateway's charge currency through the USD pivot, a
+ * leg per snapshot. The rules below are shared-core's, kept here because this
+ * is where they were argued.
  *
  * **Cache first, table second, and it must be both** (`contract.fx-worker.md`).
  * `fx:rate:{code}` is a cache of a `currency.currency_exchange_rate` row, not a
@@ -48,21 +49,17 @@ export class FxRateReader {
   private readonly logger = new Logger(FxRateReader.name);
 
   constructor(
-    private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
   ) {}
 
-  /** The currency the worker quotes in — the same config key it publishes under. */
-  private code(): string {
-    return this.config.get<string>('FX_QUOTE_CURRENCY_CODE', 'IRR');
-  }
-
-  /** The rate the platform last accepted, or `null` when there is none to have. */
-  async current(): Promise<FxRateSnapshot | null> {
-    // One reader for every service (F-116-c): the cache/table rules below live
-    // in shared-core's `readFxRate` now; this keeps the pricer's `{snapshotId, rate}`.
-    const snapshot = await readFxRate(this.prisma, this.redis, this.code(), this.logger);
-    return snapshot ? { snapshotId: snapshot.snapshotId, rate: snapshot.rate } : null;
+  /**
+   * `from` -> `to` as the platform last accepted it, and both legs' snapshots,
+   * or `null` when either leg has no rate. `to` is the gateway's charge
+   * currency, whose leg `exchangeRateSnapshotId` records; `from` is the payer's.
+   */
+  async pair(from: string, to: string): Promise<FxRateSnapshot | null> {
+    const pair = await readFxPair(this.prisma, this.redis, from, to, this.logger);
+    return pair ? { snapshotId: pair.to?.snapshotId ?? null, fromSnapshotId: pair.from?.snapshotId ?? null, rate: pair.rate } : null;
   }
 }

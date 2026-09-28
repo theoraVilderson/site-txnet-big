@@ -46,6 +46,10 @@ settlement entry and its wallet credit take the payment's; a wallet takes its fi
 credit's. Never re-derived from the tenant afterwards: its currency may change
 (F-116-f). A `wallet_transaction` in another currency than its wallet's is refused
 by the trigger `wallet_transaction_in_wallet_currency`.
+A payment's `exchangeRateSnapshot` is `currencyCode` -> the charge currency
+(`DECIMAL(30,18)`, F-116-e) through the USD pivot; `exchangeRateSnapshotId` is the
+charge currency's leg and `exchangeRateFromSnapshotId` the payment currency's, each
+NULL when that side is USD (`20260928002700_a_payment_records_both_legs_of_its_rate`).
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |

@@ -37,7 +37,7 @@ const topUp = (missing: Prisma.Decimal) =>
     amount: Prisma.Decimal.max(missing, pricing.minAcceptAmount ?? missing),
     discount: d('0'),
     chargeDecimals: 2,
-    chargesInBaseCurrency: true,
+    chargesInPaymentCurrency: true,
   });
 
 describe('invoiceShortfall (F-111-c, spec §5.9)', () => {

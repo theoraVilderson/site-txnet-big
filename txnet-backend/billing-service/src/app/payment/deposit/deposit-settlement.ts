@@ -59,10 +59,11 @@ export const PAYMENT_SELECT = {
   feeApplied: true,
   chargedAmountMinor: true,
   // The frozen rate a receipt for another amount is valued at (F-104-d), and
-  // which reading it was: a follow-on payment is written at the same pair, and
+  // which reading it was: a follow-on payment is written at the same rate and legs, and
   // a rate without its snapshot is the state invariant 12 forbids (F-104-s).
   exchangeRateSnapshot: true,
   exchangeRateSnapshotId: true,
+  exchangeRateFromSnapshotId: true,
   // The authority. The callback arrives holding one; reconciliation has to read
   // it off the row, because nothing brought it (F-092-l).
   gatewayTrackingCode: true,
