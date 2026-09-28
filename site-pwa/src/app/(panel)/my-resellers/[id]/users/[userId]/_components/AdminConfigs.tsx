@@ -1,18 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Ban, KeyRound, Loader2, Play, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Ban, KeyRound, Loader2, Play, Trash2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import type { AdminConfigActionOutcome, ResellerUserGrantsApi, UserConfigRow } from "@/lib/billing-api";
+import type { AdminConfigActionOutcome, MoveTarget, ResellerUserGrantsApi, UserConfigRow } from "@/lib/billing-api";
 import { Alert, input, primaryButton, quietButton } from "../../../../../catalog/_components/catalog-ui";
 import {
   CONFIG_STATUS_KEYS,
   DRIFT_VERDICTS,
-  REFUSAL_KEYS,
   configName,
   formatBytes,
 } from "../../../../../services/_lib/service-configs";
-import { USER_KEYS as K, adminActionBody, type OfferedAction } from "../../../../_lib/users";
+import { ADMIN_REFUSAL_KEYS, USER_KEYS as K, adminActionBody, type OfferedAction } from "../../../../_lib/users";
 import { useUserMessage } from "./useUserMessage";
 
 const A = K.actions;
@@ -29,7 +28,9 @@ type Refused = Extract<AdminConfigActionOutcome, { ok: false }>;
  * **An admin's new link is outside the user's allowance**, so no "n left"
  * gates the button — billing does not check it for an admin. A disable asks
  * for its reason first: it is the config's `disabledReason`, the sentence the
- * user reads, and billing refuses a disable without one.
+ * user reads, and billing refuses a disable without one. A move asks for its
+ * panel from F-311-v1's list, read the first time a move is pressed; the moved
+ * config comes back as a new one when the list is read again.
  */
 export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsApi; rows: UserConfigRow[]; onActed: () => void }) {
   const { t, lang } = useLocale();
@@ -39,6 +40,9 @@ export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsAp
   const [busy, setBusy] = useState(false);
   const [disabling, setDisabling] = useState<string[] | null>(null);
   const [reason, setReason] = useState("");
+  const [moving, setMoving] = useState<string[] | null>(null);
+  const [targets, setTargets] = useState<MoveTarget[] | null>(null);
+  const [toPanelId, setToPanelId] = useState("");
   const [done, setDone] = useState<number | null>(null);
   const [refused, setRefused] = useState<{ outcome: Refused; label: string }[]>([]);
   const [actError, setActError] = useState<unknown>(null);
@@ -46,8 +50,29 @@ export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsAp
   const selected = rows.filter((r) => picked.has(r.id)).map((r) => r.id);
   const allSelected = rows.length > 0 && selected.length === rows.length;
 
-  async function act(action: OfferedAction, ids: string[], why?: string) {
-    const body = adminActionBody(action, ids, why);
+  function startMove(ids: string[]) {
+    setDisabling(null);
+    setMoving(ids);
+    if (targets !== null) return;
+    api
+      .moveTargets()
+      .then(setTargets)
+      .catch((e) => {
+        setMoving(null);
+        setActError(e);
+      });
+  }
+
+  function start(action: OfferedAction, ids: string[]) {
+    if (action === "disable") {
+      setMoving(null);
+      setDisabling(ids);
+    } else if (action === "move") startMove(ids);
+    else void act(action, ids);
+  }
+
+  async function act(action: OfferedAction, ids: string[], why?: string, panelId?: string) {
+    const body = adminActionBody(action, ids, why, panelId);
     if (busy || !body) return;
     if (action === "retire" && !window.confirm(t("common", A.retireConfirm, { count: ids.length }))) return;
     const labels = new Map(rows.map((r) => [r.id, configName(r)]));
@@ -65,6 +90,8 @@ export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsAp
       );
       setDisabling(null);
       setReason("");
+      setMoving(null);
+      setToPanelId("");
       setPicked(new Set());
       onActed();
     } catch (e) {
@@ -101,7 +128,7 @@ export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsAp
 
       {selected.length > 0 && (
         <div className={`${bar} rounded-2xl bg-leaf-bg px-3 py-2`}>
-          <ActionButtons busy={busy} onAct={(action) => (action === "disable" ? setDisabling(selected) : void act(action, selected))} />
+          <ActionButtons busy={busy} onAct={(action) => start(action, selected)} />
         </div>
       )}
 
@@ -129,6 +156,45 @@ export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsAp
               {t("common", A.confirmDisable)}
             </button>
             <button type="button" className={quietButton} onClick={() => setDisabling(null)}>
+              {t("common", A.cancel)}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {moving && (
+        <form
+          className="space-y-2 rounded-2xl border border-card-border bg-bg-inner p-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act("move", moving, undefined, toPanelId);
+          }}
+        >
+          {targets === null ? (
+            <p className="flex items-center gap-2 text-xs text-text-secondary">
+              <Loader2 size={12} className="animate-spin" aria-hidden />
+              {t("common", A.moveLoading)}
+            </p>
+          ) : targets.length === 0 ? (
+            <p className="text-xs text-text-secondary">{t("common", A.moveNone)}</p>
+          ) : (
+            <label className="block text-xs font-bold text-text-secondary">
+              {t("common", A.moveTo)}
+              <select className={`${input} mt-1`} value={toPanelId} onChange={(e) => setToPanelId(e.target.value)}>
+                <option value="">{t("common", A.movePick)}</option>
+                {targets.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} · {p.region} · {t("common", p.own ? A.moveOwn : A.moveShared)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <div className="flex gap-2">
+            <button type="submit" className={primaryButton} disabled={busy || adminActionBody("move", moving, undefined, toPanelId) === null}>
+              {t("common", A.confirmMove)}
+            </button>
+            <button type="button" className={quietButton} onClick={() => setMoving(null)}>
               {t("common", A.cancel)}
             </button>
           </div>
@@ -170,7 +236,7 @@ export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsAp
                 <ActionButtons
                   busy={busy}
                   status={row.status}
-                  onAct={(action) => (action === "disable" ? setDisabling([row.id]) : void act(action, [row.id]))}
+                  onAct={(action) => start(action, [row.id])}
                 />
               </div>
             </li>
@@ -195,7 +261,7 @@ export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsAp
             <li key={outcome.configId}>
               <span dir="ltr">{label}</span>
               {": "}
-              {t("common", REFUSAL_KEYS[outcome.reason] ?? REFUSAL_KEYS.failed)}
+              {t("common", ADMIN_REFUSAL_KEYS[outcome.reason] ?? ADMIN_REFUSAL_KEYS.failed)}
             </li>
           ))}
         </ul>
@@ -206,7 +272,7 @@ export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsAp
 }
 
 /**
- * The four buttons. On one config, enable shows only on a disabled one and
+ * The five buttons. On one config, enable shows only on a disabled one and
  * disable only on one that is not; on the ticked ones both show, and billing
  * answers each config for itself.
  */
@@ -232,6 +298,10 @@ function ActionButtons({ busy, status, onAct }: { busy: boolean; status?: UserCo
           {t("common", A.enable)}
         </button>
       )}
+      <button type="button" className={button} disabled={busy} onClick={() => onAct("move")}>
+        <ArrowLeftRight size={12} aria-hidden />
+        {t("common", A.move)}
+      </button>
       <button
         type="button"
         className="ms-auto inline-flex items-center gap-1 rounded-xl border border-error-border px-2.5 py-1.5 text-xs font-bold text-error hover:bg-error-bg disabled:opacity-50"

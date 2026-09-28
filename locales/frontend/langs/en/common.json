@@ -3210,7 +3210,19 @@
       "confirmDisable": "disable it",
       "cancel": "cancel",
       "selected": "{{count}} selected",
-      "done": "done for {{count}} config(s)."
+      "done": "done for {{count}} config(s).",
+      "move": "move",
+      "moveTo": "move to panel",
+      "movePick": "pick a panel",
+      "moveLoading": "loading panels…",
+      "moveNone": "there is no other panel to move to.",
+      "moveShared": "shared",
+      "moveOwn": "yours",
+      "confirmMove": "move it",
+      "refusal": {
+        "same_panel": "it is already on that panel.",
+        "panel_not_found": "that panel cannot take it any more."
+      }
     },
     "refusals": {
       "not_allowed": "you cannot manage this reseller's users.",

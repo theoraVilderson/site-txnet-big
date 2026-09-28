@@ -7,6 +7,8 @@ import { resellerUsersApiPath } from "@/lib/auth-api";
 import { resellerUserGrantsPath } from "@/lib/billing-api";
 import {
   ADMIN_ACTIONS,
+  ADMIN_REFUSAL_KEYS,
+  MOVE_REFUSALS,
   USERS_QUERY_MIN,
   USER_REFUSAL_KEYS,
   adminActionBody,
@@ -76,6 +78,20 @@ describe("an admin's config action", () => {
     expect(adminActionBody("disable", ["c1"], "  leaked  ")).toEqual({ action: "disable", configIds: ["c1"], reason: "leaked" });
     expect(adminActionBody("enable", ["c1"], "leaked")).toEqual({ action: "enable", configIds: ["c1"] });
     expect(adminActionBody("regenerate", ["c1", "c2"])).toEqual({ action: "regenerate", configIds: ["c1", "c2"] });
+  });
+
+  it("carries a target panel with a move, and only with a move", () => {
+    expect(adminActionBody("move", ["c1"], undefined, "p-1")).toEqual({ action: "move", configIds: ["c1"], toPanelId: "p-1" });
+    expect(adminActionBody("move", ["c1"])).toBeNull();
+    expect(adminActionBody("retire", ["c1"], undefined, "p-1")).toEqual({ action: "retire", configIds: ["c1"] });
+  });
+
+  it("asks billing's own route for the panels a move may name", () => {
+    expect(source(GRANTS_CONTROLLER)).toContain("@Get('configs/move-targets')");
+  });
+
+  it("has a sentence of its own for a move's two refusals", () => {
+    for (const reason of MOVE_REFUSALS) expect(ADMIN_REFUSAL_KEYS[reason]).not.toBe(ADMIN_REFUSAL_KEYS.failed);
   });
 
   it("sends no disable the schema would refuse", () => {

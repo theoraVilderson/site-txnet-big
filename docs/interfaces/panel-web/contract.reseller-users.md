@@ -38,11 +38,10 @@ billing's [contract.reseller-grants.md](../../domains/billing/contract.reseller-
 | 7 | The list is billing's `current` scope, "show ended" (`hidden`) switches to `all` — billing filters, never the page | as `/services` (contract.my-services.md) |
 | 8 | A Grant's sheet is read **only when opened**: configs, 30-day usage and the `/sub` link — the link on copy / QR only | the three share one bucket, 300/900s per caller |
 | 9 | A service is named as on `/services`: its catalog text (`catalogApi.texts`, read once per page), the SKU when there is none (F-311-v3) | a reseller's items are named in the same published `catalog` namespace |
-| 10 | Config actions offered: **regenerate, disable, enable, retire**, on one config or the ticked ones (1–50). A disable asks its reason first (1–200, the user reads it); `adminActionBody` sends no body the schema would refuse; retire confirms | the schema refuses the whole request for a bad body, not one config |
-| 11 | **An outcome per config**: the refused ones are named by the name they had when pressed (`REFUSAL_KEYS`), the list is read again; a thrown request is its sentence and touched nothing | billing answers 200 with one outcome per id |
+| 10 | Config actions offered: **regenerate, disable, enable, retire, move**, on one config or the ticked ones (1–50). A disable asks its reason first (1–200, the user reads it); a move its panel from billing's `configs/move-targets` (F-311-v1), read the first time move is pressed (F-311-v2); `adminActionBody` sends no body the schema would refuse; retire confirms | the schema refuses the whole request for a bad body, not one config |
+| 11 | **An outcome per config**: the refused ones are named by the name they had when pressed (`ADMIN_REFUSAL_KEYS` — the owner's, plus a move's `same_panel` / `panel_not_found`), the list is read again; a thrown request is its sentence and touched nothing | billing answers 200 with one outcome per id |
 | 12 | No "n left" gates an admin's regenerate | billing neither checks nor counts it for an admin (network `contract.provisioning.md`) |
 
-**Not covered:** `move` (billing takes it, but a reseller has no read of the
-panels it may move to, so the screen would ask for a typed panel id); the
+**Not covered:** the
 Grant actions — freeze, days, traffic, reset, gift, speed, rotate, delete,
 issue (F-311-w); history, search by pasted link, bulk (F-311-x).

@@ -1,5 +1,6 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import type { AdminConfigAction, AdminConfigActionBody } from "@/lib/billing-api";
+import type { AdminConfigAction, AdminConfigActionBody, ConfigActionRefusal } from "@/lib/billing-api";
+import { REFUSAL_KEYS } from "../../services/_lib/service-configs";
 
 /** The screens' strings as generated constants (C-06). */
 export const USER_KEYS = FrontendI18nKeys.common.resellerUsers;
@@ -44,11 +45,10 @@ export function usersQuery(raw: string, page: number): { q?: string; page: numbe
 }
 
 /**
- * The config actions the sheet offers (F-311-g). `move` is billing's too, but
- * it names a target panel and a reseller has no read of the panels it may
- * move to — offering it would mean typing a panel id.
+ * The config actions the sheet offers (F-311-g): billing's
+ * `ADMIN_CONFIG_ACTIONS`, `move` among them — its targets are F-311-v1's read.
  */
-export const ADMIN_ACTIONS = ["regenerate", "disable", "enable", "retire"] as const satisfies readonly AdminConfigAction[];
+export const ADMIN_ACTIONS = ["regenerate", "disable", "enable", "retire", "move"] as const satisfies readonly AdminConfigAction[];
 export type OfferedAction = (typeof ADMIN_ACTIONS)[number];
 
 /** `adminConfigActionSchema`'s bounds: 1..50 ids, a disable's reason 1..200 after a trim. */
@@ -57,14 +57,25 @@ const MAX_REASON = 200;
 
 /**
  * The body, exactly, or `null` where the schema would refuse it: a `reason`
- * with a disable and with nothing else, 1..50 ids. The schema refuses the
- * whole request — every config — for a body it cannot read, so the sheet
- * never sends one.
+ * with a disable and a `toPanelId` with a move, each with nothing else, 1..50
+ * ids. The schema refuses the whole request — every config — for a body it
+ * cannot read, so the sheet never sends one.
  */
-export function adminActionBody(action: OfferedAction, configIds: string[], reason?: string): AdminConfigActionBody | null {
+export function adminActionBody(action: OfferedAction, configIds: string[], reason?: string, toPanelId?: string): AdminConfigActionBody | null {
   if (configIds.length === 0 || configIds.length > MAX_CONFIGS) return null;
+  if (action === "move") return toPanelId ? { action, configIds, toPanelId } : null;
   if (action !== "disable") return { action, configIds };
   const why = (reason ?? "").trim();
   if (why.length === 0 || why.length > MAX_REASON) return null;
   return { action, configIds, reason: why };
 }
+
+/** The two refusals only a move meets; the owner's list says "failed" for both, since a user never moves. */
+export const MOVE_REFUSALS = ["same_panel", "panel_not_found"] as const satisfies readonly ConfigActionRefusal[];
+
+/** One config's refusal on the admin sheet: the owner's sentences, with a move's own two. */
+export const ADMIN_REFUSAL_KEYS: Record<ConfigActionRefusal, string> = {
+  ...REFUSAL_KEYS,
+  same_panel: K.actions.refusal.same_panel,
+  panel_not_found: K.actions.refusal.panel_not_found,
+};

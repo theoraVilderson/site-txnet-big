@@ -620,6 +620,16 @@ export interface ResellerUserGrantsApi {
   grantUsage(grantId: string): Promise<GrantUsage>;
   subscriptionLink(grantId: string): Promise<{ grantId: string; subscriptionUrl: string }>;
   configAction(body: AdminConfigActionBody): Promise<{ action: AdminConfigAction; results: AdminConfigActionOutcome[] }>;
+  /** Where a move may send a config (F-311-v1): shared panels and the reseller's own. */
+  moveTargets(): Promise<MoveTarget[]>;
+}
+
+/** A panel a config may move to (F-311-v1); `own` is the reseller's dedicated one, else shared. */
+export interface MoveTarget {
+  id: string;
+  name: string;
+  region: string;
+  own: boolean;
 }
 
 export function resellerUserGrantsApi(tenantId: string, userId: string): ResellerUserGrantsApi {
@@ -632,6 +642,7 @@ export function resellerUserGrantsApi(tenantId: string, userId: string): Reselle
     grantUsage: (grantId) => call<GrantUsage>(`${grant(grantId)}/usage`, { method: "GET" }),
     subscriptionLink: (grantId) =>
       call<{ grantId: string; subscriptionUrl: string }>(`${grant(grantId)}/subscription-link`, { method: "GET" }),
+    moveTargets: async () => (await call<{ panels: MoveTarget[] }>(`${at}/configs/move-targets`, { method: "GET" })).panels,
     configAction: (body) =>
       call<{ action: AdminConfigAction; results: AdminConfigActionOutcome[] }>(`${at}/configs/actions`, {
         method: "POST",
