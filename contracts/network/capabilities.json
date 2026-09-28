@@ -1,7 +1,7 @@
 {
   "$comment": [
     "The acceptance questionnaire (ADR-0074, F-027-i) — the declared home of the",
-    "16 row keys, their scope and what an unmet answer costs.",
+    "17 row keys, their scope and what an unmet answer costs.",
     "",
     "These strings cross a process boundary: network-service writes them into",
     "network.panel.capabilities as JSONB, and the panel's systems page reads them",
@@ -80,6 +80,13 @@
       "severity": "degrades",
       "question": "Can a bandwidth rate be written for one client?",
       "unmet": "A custom rate rule is recorded and not enforced at the far end; layer-1 limiting stays ours."
+    },
+    {
+      "key": "per_client_ip_limit",
+      "scope": "any",
+      "severity": "degrades",
+      "question": "Can a limit on the distinct addresses one client connects from at once be written for that client?",
+      "unmet": "A Grant's device limit is recorded and not enforced on this panel; the admin is told which panels ignore it (F-311-q)."
     },
     {
       "key": "enable_disable_client",

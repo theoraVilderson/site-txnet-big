@@ -340,6 +340,7 @@ func (d *Driver) Capabilities(ctx context.Context) (driver.Capabilities, error) 
 			driver.RowPerClientDataLimit:      yes("data_limit, enforced by Marzban itself; zero is written as one byte, since 0 is unlimited there"),
 			driver.RowDataLimitCountsSameByte: yes("data_limit is checked against used_traffic, the figure we read"),
 			driver.RowPerClientRateLimit:      no("Marzban has no per-user bandwidth cap"),
+			driver.RowPerClientIPLimit:        no("Marzban has no per-user address limit"),
 			driver.RowEnableDisableClient:     yes("status active / disabled"),
 			driver.RowClientLifecycle:         yes("POST, PUT and DELETE /api/user"),
 			driver.RowStableRemoteID:          yes("the username, which Marzban cannot rename"),
@@ -483,6 +484,15 @@ func (d *Driver) SetClientDataLimit(ctx context.Context, remoteID string, ceilin
 	_, err := d.modify(ctx, "SetClientDataLimit", remoteID,
 		userBody{DataLimit: ceiling(ceilingBytes), DataLimitResetStrategy: noReset})
 	return err
+}
+
+// SetClientIPLimit: Marzban has no per-user address limit it lets us write.
+// "No limit" is already true, and anything else is refused rather than believed.
+func (d *Driver) SetClientIPLimit(_ context.Context, _ string, limit int) error {
+	if limit <= 0 {
+		return nil
+	}
+	return driver.NewFault(driver.FaultUnsupported, "SetClientIPLimit", 0, errors.New("Marzban has no per-user address limit"))
 }
 
 // SetClientRateLimit: Marzban has no per-user bandwidth cap. "No cap" is

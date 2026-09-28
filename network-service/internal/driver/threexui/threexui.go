@@ -186,6 +186,7 @@ func (r record) remote() driver.RemoteClient {
 		UUID:           r.UUID,
 		Enabled:        r.Enable,
 		DataLimitBytes: r.TotalGB,
+		IPLimit:        r.LimitIP,
 	}
 	if c.UUID == "" {
 		c.UUID = r.Password
@@ -481,6 +482,7 @@ func (d *Driver) Capabilities(ctx context.Context) (driver.Capabilities, error) 
 			driver.RowPerClientDataLimit:      yes("totalGB, enforced by 3x-ui's depletion job; zero is written as one byte, since 0 is unlimited there"),
 			driver.RowDataLimitCountsSameByte: yes("the total is checked against up plus down, the figures we read"),
 			driver.RowPerClientRateLimit:      no("3x-ui has no per-client bandwidth cap; limitIp counts addresses"),
+			driver.RowPerClientIPLimit:        yes("limitIp, the distinct addresses 3x-ui lets one client use at once; enforced by its IP-limit job, which needs the Xray access log and fail2ban on the server"),
 			driver.RowEnableDisableClient:     yes("the client's enable flag"),
 			driver.RowClientLifecycle:         yes("clients/add, clients/update/{email}, clients/del/{email}"),
 			driver.RowStableRemoteID:          yes("the email, which we never change"),
@@ -568,6 +570,7 @@ func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientReques
 		ExpiryTime: expiry(req.ExpiresAt),
 		Comment:    req.ClaimTag,
 		SubID:      subID,
+		LimitIP:    req.IPLimit,
 		InboundIds: []int{inboundID},
 	}
 	if req.Protocol == "trojan" {
@@ -606,6 +609,7 @@ func (d *Driver) UpdateClient(ctx context.Context, req driver.UpdateClientReques
 	next.TotalGB = limit(req.NoDataLimit, req.DataLimitBytes)
 	next.ExpiryTime = expiry(req.ExpiresAt)
 	next.Comment = req.ClaimTag
+	next.LimitIP = req.IPLimit
 	return d.call(ctx, op, http.MethodPost, []string{"panel", "api", "clients", "update", r.Email},
 		updateBody{wireClient: next, LimitHwid: r.LimitHwid}, nil)
 }
@@ -647,6 +651,11 @@ func (d *Driver) SetClientRateLimit(_ context.Context, _ string, rateBps int64) 
 		return nil
 	}
 	return driver.NewFault(driver.FaultUnsupported, "SetClientRateLimit", 0, errors.New("3x-ui has no per-client rate limit"))
+}
+
+// SetClientIPLimit writes limitIp, the Grant's device limit (F-311-q).
+func (d *Driver) SetClientIPLimit(ctx context.Context, remoteID string, limit int) error {
+	return d.update(ctx, "SetClientIPLimit", remoteID, func(c *wireClient) { c.LimitIP = limit })
 }
 
 func (d *Driver) GetUsage(ctx context.Context) ([]driver.ClientUsage, error) {

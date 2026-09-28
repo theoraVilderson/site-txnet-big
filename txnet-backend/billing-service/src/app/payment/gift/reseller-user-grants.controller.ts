@@ -26,6 +26,7 @@ import { SpeedCapRefused } from '../../traffic/grant-speed';
 import type { AdminConfigCommand } from '../../traffic/user-configs';
 import { AdminConfigActionBody, adminConfigActionSchema } from '../../traffic/user-configs.schema';
 import { GrantDeleteBody, grantDeleteSchema } from './grant-delete.schema';
+import { GrantDevicesBody, grantDevicesSchema } from './grant-devices.schema';
 import { GrantDurationBody, grantDurationSchema } from './grant-duration.schema';
 import { GrantFreezeBody, grantFreezeSchema } from './grant-freeze.schema';
 import { GrantIssueBody, grantIssueSchema } from './grant-issue.schema';
@@ -83,6 +84,7 @@ const GRANT_ACTION_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
   nothing_to_renew: 400,
   plan_period_unknown: 409,
   already_renewed: 409,
+  devices_unchanged: 400,
 };
 
 /** One bucket for all four: expanding one Grant asks three of them at once. */
@@ -343,6 +345,24 @@ export class ResellerUserGrantsController {
     @Req() req: Request,
   ) {
     return this.refusing(() => this.service.setSpeed(actorOf(req), tenantId, userId, grantId, body.mbps, body.reason));
+  }
+
+  /**
+   * An admin sets this Grant's device limit (F-311-q), or lifts it with
+   * `null`. Never refused by a panel: `panelsNotEnforcing` names the ones that
+   * cannot hold it.
+   */
+  @Post('grants/:grantId/devices')
+  @HttpCode(HttpStatus.OK)
+  @actionLimit
+  async setDevices(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Body(new ZodValidationPipe(grantDevicesSchema)) body: GrantDevicesBody,
+    @Req() req: Request,
+  ) {
+    return this.refusing(() => this.service.setDevices(actorOf(req), tenantId, userId, grantId, body.limit, body.reason));
   }
 
   /**

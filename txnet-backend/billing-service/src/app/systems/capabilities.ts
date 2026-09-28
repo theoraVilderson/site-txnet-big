@@ -22,6 +22,7 @@ export const CAPABILITY_ROWS = [
   { key: 'per_client_data_limit', scope: 'any', severity: 'metered' },
   { key: 'data_limit_counts_the_same_bytes_as_usage', scope: 'any', severity: 'metered' },
   { key: 'per_client_rate_limit', scope: 'any', severity: 'degrades' },
+  { key: 'per_client_ip_limit', scope: 'any', severity: 'degrades' },
   { key: 'enable_disable_client', scope: 'any', severity: 'required' },
   { key: 'client_lifecycle', scope: 'any', severity: 'required' },
   { key: 'stable_remote_id', scope: 'any', severity: 'degrades' },

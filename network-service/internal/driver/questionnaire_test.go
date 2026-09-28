@@ -43,8 +43,8 @@ func TestQuestionnaireMatchesTheDeclaredFixture(t *testing.T) {
 		t.Errorf("fixture version = %d, want %d", fixture.Version, CapabilitiesVersion)
 	}
 	rows := Questionnaire()
-	if len(rows) != 16 {
-		t.Fatalf("questionnaire has %d rows, want the fixed 16", len(rows))
+	if len(rows) != 17 {
+		t.Fatalf("questionnaire has %d rows, want the fixed 17", len(rows))
 	}
 	if len(fixture.Rows) != len(rows) {
 		t.Fatalf("fixture has %d rows, questionnaire has %d", len(fixture.Rows), len(rows))

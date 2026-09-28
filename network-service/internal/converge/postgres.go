@@ -69,9 +69,12 @@ SELECT c.id::text, coalesce(c."remoteId", ''), c."claimTag", c.uuid, c.protocol:
        c."linkLines", coalesce(c."linksRemoteId", ''), coalesce(c."linksUuid", ''), c."linksCapturedAt",
        c."trafficUnlimited", c."inboundRemoteId" IS NULL, coalesce(c."credentialGroupId"::text, ''),
        coalesce(c."observedRateBps", 0)::bigint,
-       coalesce(rl."rateMbps"::bigint * 1000000, 0)
+       coalesce(rl."rateMbps"::bigint * 1000000, 0),
+       CASE WHEN jsonb_typeof(g.quotas #> '{concurrent_devices,limit}') = 'number'
+            THEN greatest((g.quotas #>> '{concurrent_devices,limit}')::numeric, 0)::int ELSE 0 END
   FROM network.config c
   LEFT JOIN network.grant_rate_limit rl ON rl."grantId" = c."grantId"
+  LEFT JOIN entitlement."grant" g ON g.id = c."grantId"
   LEFT JOIN network.config_counter_state s ON s."configId" = c.id
   LEFT JOIN LATERAL (SELECT sum(r."highWaterInBytes" + r."highWaterOutBytes") AS bytes
                        FROM network.radius_session r WHERE r."configId" = c.id) rs ON true
@@ -93,7 +96,7 @@ func (s PostgresDesired) For(ctx context.Context, panelID string) ([]DesiredConf
 		if err := rows.Scan(&d.ConfigID, &d.RemoteID, &d.ClaimTag, &d.UUID, &d.Protocol, &d.InboundRemoteID,
 			&d.Enabled, &d.Present, &d.AllocatedBytes, &d.ServedBytes, &d.SessionBytes, &d.SessionBaselineBytes,
 			&state, &drift, &d.RepairCount, &repairedAt,
-			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt, &d.Unlimited, &d.InboundResolved, &d.CredentialGroupID, &d.RateBps, &d.RateCapBps); err != nil {
+			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt, &d.Unlimited, &d.InboundResolved, &d.CredentialGroupID, &d.RateBps, &d.RateCapBps, &d.IPLimit); err != nil {
 			return nil, fmt.Errorf("reading panel %s desired state: %w", panelID, err)
 		}
 		d.State, d.Drift = EnforcementState(state), DriftState(drift)

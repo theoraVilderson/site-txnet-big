@@ -2598,6 +2598,10 @@
           "question": "Can a bandwidth rate be written for one client?",
           "unmet": "A custom rate is recorded but not enforced on the panel; our own limiting stays."
         },
+        "per_client_ip_limit": {
+          "question": "Can a limit on the addresses one client connects from at once be written for that client?",
+          "unmet": "A device limit is recorded but not enforced on this panel; the admin is told which panels ignore it."
+        },
         "enable_disable_client": {
           "question": "Can one client be disabled and re-enabled without deleting it?",
           "unmet": "Refused: suspending would have to delete the client, and a top-up could not restore it."

@@ -119,7 +119,8 @@ type envelope struct {
 }
 
 // client is one element of an inbound's settings.clients. Fields this driver
-// does not own (limitIp, tgId, flow) are carried through a write unchanged.
+// does not own (tgId, flow) are carried through a write unchanged; limitIp is
+// the Grant's device limit (F-311-q).
 // Comment is not x-ui's: it is kept because the map is stored as sent.
 type client struct {
 	ID         string `json:"id,omitempty"`
@@ -185,6 +186,7 @@ func (f found) remote() driver.RemoteClient {
 		InboundRemoteID: strconv.Itoa(f.inbound.ID),
 		Enabled:         f.client.Enable,
 		DataLimitBytes:  f.client.TotalGB,
+		IPLimit:         f.client.LimitIP,
 	}
 	// The counters' row is what x-ui's depletion job checks, so its total is
 	// the ceiling actually enforced; the settings copy is only its source.
@@ -483,6 +485,7 @@ func (d *Driver) Capabilities(ctx context.Context) (driver.Capabilities, error) 
 			driver.RowPerClientDataLimit:      yes("totalGB, enforced by x-ui's depletion job; zero is written as one byte, since 0 is unlimited there"),
 			driver.RowDataLimitCountsSameByte: yes("the total is checked against up plus down, the figures we read"),
 			driver.RowPerClientRateLimit:      no("x-ui has no per-client bandwidth cap; limitIp counts addresses"),
+			driver.RowPerClientIPLimit:        yes("limitIp, the distinct addresses x-ui lets one client use at once; enforced by its IP-limit job, which needs the Xray access log and fail2ban on the server"),
 			driver.RowEnableDisableClient:     yes("the client's enable flag"),
 			driver.RowClientLifecycle:         yes("addClient, updateClient, delClient; an inbound's last client cannot be deleted and is disabled instead"),
 			driver.RowStableRemoteID:          yes("the email, which we never change"),
@@ -569,6 +572,7 @@ func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientReques
 		ExpiryTime: expiry(req.ExpiresAt),
 		Comment:    req.ClaimTag,
 		SubID:      subID,
+		LimitIP:    req.IPLimit,
 	}
 	credential(&c, req.Protocol, req.UUID)
 	if err := d.write(ctx, op, []string{"xui", "API", "inbounds", "addClient"}, inboundID, c); err != nil {
@@ -596,6 +600,7 @@ func (d *Driver) UpdateClient(ctx context.Context, req driver.UpdateClientReques
 	next.TotalGB = limit(req.NoDataLimit, req.DataLimitBytes)
 	next.ExpiryTime = expiry(req.ExpiresAt)
 	next.Comment = req.ClaimTag
+	next.LimitIP = req.IPLimit
 	return d.write(ctx, op, []string{"xui", "API", "inbounds", "updateClient", key}, f.inbound.ID, next)
 }
 
@@ -646,6 +651,11 @@ func (d *Driver) SetClientRateLimit(_ context.Context, _ string, rateBps int64) 
 		return nil
 	}
 	return driver.NewFault(driver.FaultUnsupported, "SetClientRateLimit", 0, errors.New("x-ui has no per-client rate limit"))
+}
+
+// SetClientIPLimit writes limitIp, the Grant's device limit (F-311-q).
+func (d *Driver) SetClientIPLimit(ctx context.Context, remoteID string, limit int) error {
+	return d.update(ctx, "SetClientIPLimit", remoteID, func(c *client) { c.LimitIP = limit })
 }
 
 func (d *Driver) GetUsage(ctx context.Context) ([]driver.ClientUsage, error) {

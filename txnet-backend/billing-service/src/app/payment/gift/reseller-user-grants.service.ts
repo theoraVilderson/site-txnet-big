@@ -11,6 +11,7 @@ import {
 import { AdminIssued, issueGrantByAdmin } from '../../entitlement/admin-issue';
 import { AdminRenew, AdminRenewed, renewGrantByAdmin } from '../../entitlement/admin-renewal';
 import { deleteGrant, Deletion } from '../../entitlement/delete';
+import { DeviceLimitChange, setGrantDeviceLimit } from '../../entitlement/devices';
 import { changeGrantDuration, DurationChange, DurationMove } from '../../entitlement/duration';
 import { Freeze, freezeGrant, Unfreeze, unfreezeGrant } from '../../entitlement/freeze';
 import { EntitlementRefused, GrantService } from '../../entitlement/grant';
@@ -185,6 +186,21 @@ export class ResellerUserGrantsService {
       tenantId,
       userId,
       () => this.onGrant(userId, grantId, (tx) => setGrantSpeed(tx, grantId, { mbps, reason, actorUserId: actor.userId, at: new Date() })),
+      'staffWrite',
+    );
+  }
+
+  /**
+   * An admin sets or lifts this user's Grant's device limit (F-311-q): the
+   * Grant's `concurrent_devices` quota, written to its panels' clients by the
+   * convergence pass where they hold one. `staffWrite`, as for a speed cap.
+   */
+  setDevices(actor: ResellerActor, tenantId: string, userId: string, grantId: string, limit: number | null, reason: string): Promise<DeviceLimitChange> {
+    return this.run(
+      actor,
+      tenantId,
+      userId,
+      () => this.onGrant(userId, grantId, (tx) => setGrantDeviceLimit(tx, grantId, { limit, reason, actorUserId: actor.userId, at: new Date() })),
       'staffWrite',
     );
   }

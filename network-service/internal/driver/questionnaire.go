@@ -43,6 +43,7 @@ const (
 	RowPerClientDataLimit      RowKey = "per_client_data_limit"
 	RowDataLimitCountsSameByte RowKey = "data_limit_counts_the_same_bytes_as_usage"
 	RowPerClientRateLimit      RowKey = "per_client_rate_limit"
+	RowPerClientIPLimit        RowKey = "per_client_ip_limit"
 	RowEnableDisableClient     RowKey = "enable_disable_client"
 	RowClientLifecycle         RowKey = "client_lifecycle"
 	RowStableRemoteID          RowKey = "stable_remote_id"
@@ -145,6 +146,11 @@ var questionnaire = []Row{
 		Unmet:    "A custom rate rule is recorded and not enforced at the far end; layer-1 limiting stays ours.",
 	},
 	{
+		Key: RowPerClientIPLimit, Scope: ScopeAny, Severity: SeverityDegrades,
+		Question: "Can a limit on the distinct addresses one client connects from at once be written for that client?",
+		Unmet:    "A Grant's device limit is recorded and not enforced on this panel; the admin is told which panels ignore it (F-311-q).",
+	},
+	{
 		Key: RowEnableDisableClient, Scope: ScopeAny, Severity: SeverityRequired,
 		Question: "Can one client be disabled and re-enabled without deleting it?",
 		Unmet:    "Refused: suspension would have to delete the client, and a top-up could then not restore it (ADR-0075, F-027-x).",
@@ -181,7 +187,7 @@ var questionnaire = []Row{
 	},
 }
 
-// Questionnaire is the fixed 16 rows, in their declared order. The order is
+// Questionnaire is the fixed 17 rows, in their declared order. The order is
 // part of the contract: the fixture and the panel's capability matrix read it.
 func Questionnaire() []Row {
 	rows := make([]Row, len(questionnaire))

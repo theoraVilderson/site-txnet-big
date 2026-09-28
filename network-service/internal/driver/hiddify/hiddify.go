@@ -416,6 +416,7 @@ func (d *Driver) Capabilities(ctx context.Context) (driver.Capabilities, error) 
 			driver.RowPerClientDataLimit:      yes("usage_limit_GB, enforced by Hiddify itself; 0 is a real zero there"),
 			driver.RowDataLimitCountsSameByte: yes("the limit is checked against the same byte column the usage figure reports; both cross as GB = 1024³ bytes in a float64, exact below 2^53 bytes"),
 			driver.RowPerClientRateLimit:      no("Hiddify has no per-user bandwidth cap"),
+			driver.RowPerClientIPLimit:        no("Hiddify has no per-user address limit"),
 			driver.RowEnableDisableClient:     yes("enable true / false"),
 			driver.RowClientLifecycle:         yes("POST, PATCH and DELETE /api/v2/admin/user/"),
 			driver.RowStableRemoteID:          no("the only id the API addresses is the uuid, which a regenerate changes; the name we key on can be renamed by hand"),
@@ -513,6 +514,15 @@ func (d *Driver) DeleteClient(ctx context.Context, remoteID string) error {
 func (d *Driver) SetClientDataLimit(ctx context.Context, remoteID string, ceilingBytes int64) error {
 	_, err := d.patch(ctx, "SetClientDataLimit", remoteID, body{UsageLimitGB: gb(ceilingBytes), Mode: noReset})
 	return err
+}
+
+// SetClientIPLimit: Hiddify has no per-user address limit it lets us write.
+// "No limit" is already true, and anything else is refused rather than believed.
+func (d *Driver) SetClientIPLimit(_ context.Context, _ string, limit int) error {
+	if limit <= 0 {
+		return nil
+	}
+	return driver.NewFault(driver.FaultUnsupported, "SetClientIPLimit", 0, errors.New("Hiddify has no per-user address limit"))
 }
 
 // SetClientRateLimit: Hiddify has no per-user bandwidth cap.

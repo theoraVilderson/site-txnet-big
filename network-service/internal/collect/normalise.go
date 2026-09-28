@@ -84,7 +84,10 @@ type Panel struct {
 	// elsewhere a cap is recorded and not enforced, never a write the family
 	// refuses every pass.
 	RateLimitable bool
-	Driver        driver.Driver
+	// IPLimitable is its `per_client_ip_limit` answer: only such a panel is
+	// sent a Grant's device limit (F-311-q), as RateLimitable is for a cap.
+	IPLimitable bool
+	Driver      driver.Driver
 	// ReviewState is `panel.reviewState`. Only an accepted panel is read or
 	// converged (F-027-aq): a pending one has not answered the questionnaire
 	// and a refused one failed it, so neither has users to meter.

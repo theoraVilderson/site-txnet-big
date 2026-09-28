@@ -327,6 +327,7 @@ func (d *Driver) Capabilities(ctx context.Context) (driver.Capabilities, error) 
 			driver.RowPerClientDataLimit:      yes("transfer-limit on the user's own limitation, enforced by User Manager; zero is written as one byte, since 0 is no limit there"),
 			driver.RowDataLimitCountsSameByte: yes("transfer-limit is checked against upload plus download, the octets the NAS reports to us"),
 			driver.RowPerClientRateLimit:      yes("rate-limit-rx and rate-limit-tx on the user's own limitation"),
+			driver.RowPerClientIPLimit:        no("shared-users on the user would hold it; this driver does not write it yet"),
 			driver.RowEnableDisableClient:     yes("disabled=yes refuses the next login; an open session is not cut"),
 			driver.RowClientLifecycle:         yes("PUT, PATCH and DELETE on /user-manager/user and its chain"),
 			driver.RowStableRemoteID:          no("the remote id is the user's name, the User-Name accounting carries; a name edited on the router reads as missing until the claim tag matches"),
@@ -531,6 +532,15 @@ func (d *Driver) SetClientDataLimit(ctx context.Context, remoteID string, ceilin
 	delete(body, "rate-limit-rx")
 	delete(body, "rate-limit-tx")
 	return d.patch(ctx, "SetClientDataLimit", "limitation", chainName(remoteID), body)
+}
+
+// SetClientIPLimit: User Manager has no per-user address limit it lets us write.
+// "No limit" is already true, and anything else is refused rather than believed.
+func (d *Driver) SetClientIPLimit(_ context.Context, _ string, limit int) error {
+	if limit <= 0 {
+		return nil
+	}
+	return driver.NewFault(driver.FaultUnsupported, "SetClientIPLimit", 0, errors.New("User Manager has no per-user address limit"))
 }
 
 func (d *Driver) SetClientRateLimit(ctx context.Context, remoteID string, rateBps int64) error {

@@ -102,7 +102,8 @@ SELECT id::text, "driverType"::text, "counterSemantics"::text,
        "panelState"::text, "blockedSince",
        coalesce("lagMeanSec", 0), coalesce("lagVarianceSec2", 0), "lagSamples",
        transport::text,
-       coalesce(capabilities #>> '{answers,per_client_rate_limit,supported}' = 'true', false)
+       coalesce(capabilities #>> '{answers,per_client_rate_limit,supported}' = 'true', false),
+       coalesce(capabilities #>> '{answers,per_client_ip_limit,supported}' = 'true', false)
   FROM network.panel
  WHERE "reviewState" IN ('accepted', 'accepted_low_trust')
    AND (transport = 'push' OR "counterSemantics" <> 'session')
@@ -125,7 +126,7 @@ func (s *PostgresSource) Panels(ctx context.Context) ([]Panel, error) {
 			&row.APIBaseURL, &row.ClientBaseURL, &row.Credentials,
 			&review, &p.OwnershipType, &p.TenantID,
 			&p.MaxLineRateBps, &p.MaxRequestsPerMinute, &state, &blockedSince,
-			&p.LagMeanSec, &p.LagVarianceSec2, &p.LagSamples, &transport, &p.RateLimitable); err != nil {
+			&p.LagMeanSec, &p.LagVarianceSec2, &p.LagSamples, &transport, &p.RateLimitable, &p.IPLimitable); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("reading panels: %w", err)
 		}

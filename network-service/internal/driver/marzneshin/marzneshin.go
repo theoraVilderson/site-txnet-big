@@ -495,6 +495,7 @@ func (d *Driver) Capabilities(ctx context.Context) (driver.Capabilities, error) 
 			driver.RowPerClientDataLimit:      yes("data_limit, enforced by Marzneshin itself; zero is written as one byte, since 0 is no limit there"),
 			driver.RowDataLimitCountsSameByte: yes("data_limit is checked against used_traffic, the figure we read"),
 			driver.RowPerClientRateLimit:      no("Marzneshin has no per-user bandwidth cap"),
+			driver.RowPerClientIPLimit:        no("Marzneshin has no per-user address limit"),
 			driver.RowEnableDisableClient:     yes("POST /api/users/{username}/enable and /disable"),
 			driver.RowClientLifecycle:         yes("POST, PUT and DELETE /api/users"),
 			driver.RowStableRemoteID:          yes("the username, which no Marzneshin route renames"),
@@ -658,6 +659,15 @@ func (d *Driver) DeleteClient(ctx context.Context, remoteID string) error {
 func (d *Driver) SetClientDataLimit(ctx context.Context, remoteID string, ceilingBytes int64) error {
 	return d.modify(ctx, "SetClientDataLimit",
 		userBody{Username: remoteID, DataLimit: ceiling(ceilingBytes), DataLimitResetStrategy: noReset})
+}
+
+// SetClientIPLimit: Marzneshin has no per-user address limit it lets us write.
+// "No limit" is already true, and anything else is refused rather than believed.
+func (d *Driver) SetClientIPLimit(_ context.Context, _ string, limit int) error {
+	if limit <= 0 {
+		return nil
+	}
+	return driver.NewFault(driver.FaultUnsupported, "SetClientIPLimit", 0, errors.New("Marzneshin has no per-user address limit"))
 }
 
 // SetClientRateLimit: Marzneshin has no per-user bandwidth cap. "No cap" is

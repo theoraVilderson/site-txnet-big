@@ -57,6 +57,9 @@ type Driver interface {
 	SetClientDataLimit(ctx context.Context, remoteID string, ceilingBytes int64) error
 	// SetClientRateLimit writes a per-client bandwidth cap. Zero means no cap.
 	SetClientRateLimit(ctx context.Context, remoteID string, rateBps int64) error
+	// SetClientIPLimit writes how many distinct addresses one client may
+	// connect from at once: a Grant's device limit (F-311-q). Zero means none.
+	SetClientIPLimit(ctx context.Context, remoteID string, limit int) error
 
 	// GetUsage returns every client on the panel in one call. It is the bulk
 	// pass, and one call is the contract: catalog 8.4 forbids per-client reads
@@ -150,6 +153,9 @@ type RemoteClient struct {
 	DataLimitBytes int64
 	// RateLimitBps is the per-client bandwidth cap the panel is enforcing.
 	RateLimitBps int64
+	// IPLimit is how many distinct addresses the panel lets the client use at
+	// once (RowPerClientIPLimit). Zero means none.
+	IPLimit int
 	// ExpiresAt is the panel's own expiry, where it enforces one
 	// (RowServerSideExpiry). Zero means none.
 	ExpiresAt time.Time
@@ -185,8 +191,10 @@ type CreateClientRequest struct {
 	// family calls no limit, or its stand-in figure where it has none.
 	NoDataLimit  bool
 	RateLimitBps int64
-	ExpiresAt    time.Time
-	Enabled      bool
+	// IPLimit is RemoteClient's, written only where the family has one.
+	IPLimit   int
+	ExpiresAt time.Time
+	Enabled   bool
 }
 
 // UpdateClientRequest changes a client that already exists. Every field is
@@ -202,8 +210,10 @@ type UpdateClientRequest struct {
 	// NoDataLimit is CreateClientRequest's: no limit, DataLimitBytes ignored.
 	NoDataLimit  bool
 	RateLimitBps int64
-	ExpiresAt    time.Time
-	Enabled      bool
+	// IPLimit is RemoteClient's, written only where the family has one.
+	IPLimit   int
+	ExpiresAt time.Time
+	Enabled   bool
 }
 
 // ClientUsage is one reading of one client's counter, as the panel reports it

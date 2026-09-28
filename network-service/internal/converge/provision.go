@@ -104,6 +104,10 @@ type DesiredConfig struct {
 	// `grant_rate_limit` row (F-311-p); zero is no row, and no cap. Written
 	// only to a panel that is RateLimitable.
 	RateCapBps int64
+	// IPLimit is the Grant's device limit, `quotas.concurrent_devices.limit`
+	// (F-311-q): how many distinct addresses the client may use at once, zero
+	// for none. Written only to a panel that is IPLimitable.
+	IPLimit int
 	// Unlimited is `trafficUnlimited`, copied from its Grant (F-111-r): the
 	// client carries no limit, so there is no allocation to wait for, and
 	// AllocatedBytes is nil by construction (CHECK
@@ -180,6 +184,9 @@ const (
 	// ActionRateLimited: the client's speed cap was written to the Grant's,
 	// or lifted where the Grant has none (F-311-p).
 	ActionRateLimited Action = "rate_limited"
+	// ActionIPLimited: the client's address limit was written to its Grant's
+	// device limit, or lifted where the Grant has none (F-311-q).
+	ActionIPLimited Action = "ip_limited"
 	// ActionRekeyed: a renamed or rebuilt client already holds the desired
 	// state; only the row's `remoteId` moved to it.
 	ActionRekeyed Action = "rekeyed"
@@ -462,7 +469,7 @@ func (v *Provisioning) one(
 		err := p.Driver.UpdateClient(ctx, driver.UpdateClientRequest{
 			RemoteID: client.RemoteID, ClaimTag: row.ClaimTag, UUID: row.UUID,
 			InboundRemoteID: client.InboundRemoteID, DataLimitBytes: limit, NoDataLimit: none,
-			RateLimitBps: rateFor(p, row, client), ExpiresAt: client.ExpiresAt, Enabled: row.Enabled,
+			RateLimitBps: rateFor(p, row, client), IPLimit: ipLimitFor(p, row, client), ExpiresAt: client.ExpiresAt, Enabled: row.Enabled,
 		})
 		if err != nil {
 			return refused(client.RemoteID, err)
@@ -489,6 +496,12 @@ func (v *Provisioning) one(
 		}
 		report.Written++
 		return outcome(client.RemoteID, StatePartial), found(ActionRateLimited, client.RemoteID, nil)
+	case p.IPLimitable && client.IPLimit != row.IPLimit:
+		if err := p.Driver.SetClientIPLimit(ctx, client.RemoteID, row.IPLimit); err != nil {
+			return refused(client.RemoteID, err)
+		}
+		report.Written++
+		return outcome(client.RemoteID, StatePartial), found(ActionIPLimited, client.RemoteID, nil)
 	case client.RemoteID != row.RemoteID:
 		report.Synced++
 		return outcome(client.RemoteID, StateComplete), found(ActionRekeyed, client.RemoteID, nil)
@@ -535,7 +548,7 @@ func (v *Provisioning) create(
 	created, err := p.Driver.CreateClient(ctx, driver.CreateClientRequest{
 		ClaimTag: row.ClaimTag, UUID: row.UUID, InboundRemoteID: inbound.RemoteID,
 		SubscriptionKey: key, Name: name, Protocol: row.Protocol, DataLimitBytes: ceiling, NoDataLimit: row.Unlimited, Enabled: row.Enabled,
-		RateLimitBps: rateFor(p, row, driver.RemoteClient{}),
+		RateLimitBps: rateFor(p, row, driver.RemoteClient{}), IPLimit: ipLimitFor(p, row, driver.RemoteClient{}),
 	})
 	if err != nil {
 		return refused("", err)
@@ -563,6 +576,15 @@ func rateFor(p collect.Panel, row DesiredConfig, client driver.RemoteClient) int
 		return row.RateCapBps
 	}
 	return client.RateLimitBps
+}
+
+// ipLimitFor is rateFor for the device limit (F-311-q): the Grant's on a panel
+// that holds one, and whatever the client already has on one that does not.
+func ipLimitFor(p collect.Panel, row DesiredConfig, client driver.RemoteClient) int {
+	if p.IPLimitable {
+		return row.IPLimit
+	}
+	return client.IPLimit
 }
 
 // inboundCache reads the panel's inbounds at most once a pass, and only when

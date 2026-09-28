@@ -434,6 +434,12 @@ func (p *paced) SetClientRateLimit(ctx context.Context, remoteID string, rateBps
 	})
 }
 
+func (p *paced) SetClientIPLimit(ctx context.Context, remoteID string, limit int) error {
+	return p.spend(ctx, "SetClientIPLimit", func(ctx context.Context) error {
+		return p.Driver.SetClientIPLimit(ctx, remoteID, limit)
+	})
+}
+
 func (p *paced) ResetUsage(ctx context.Context, remoteID string) error {
 	return p.spend(ctx, "ResetUsage", func(ctx context.Context) error { return p.Driver.ResetUsage(ctx, remoteID) })
 }

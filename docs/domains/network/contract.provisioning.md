@@ -179,3 +179,22 @@ now or is given later carries it.
 
 **Not covered:** the lease planner's own endgame cap (F-027-dn), which will take
 the lower of the two.
+
+## Device limit (F-311-q)
+
+A Grant's device limit is its own `quotas.concurrent_devices.limit` (entitlement
+`contract.admin.md` "Devices"): what a variant sold, copied at issue, or what an
+admin set. The pass reads it from `entitlement.grant` beside the config
+(`DesiredConfig.IPLimit`); absent, not a positive number, or 0 is no limit.
+
+| Rule | Why |
+|---|---|
+| Written only to a panel whose capability document answers `per_client_ip_limit` yes (`collect.Panel.IPLimitable`): the x-ui families' `limitIp`, the distinct addresses at once. Marzban, Marzneshin, Hiddify and User Manager answer no | an address limit is the one the far end holds; elsewhere it is recorded and not enforced |
+| On such a panel the client's limit is the Grant's, or 0 where it has none — a `limitIp` nobody set here is overwritten like any drift | desired state is ours, as for the speed cap |
+| A create and a regenerate's update carry it; a client reading another limit gets `SetClientIPLimit` (finding `ip_limited`), `partial` until the read shows it | a new client is never served unlimited for a pass |
+| A change to the entry wakes every panel the Grant is on (trigger `converge_grant_devices_changed`, F-111-j's channel) | it lands in seconds |
+
+`limitIp` is enforced by the panel's own IP-limit job, which needs the Xray
+access log and fail2ban on that server; the capability answer says so, and a
+panel set up without them holds nothing. **Not covered:** our own count of
+distinct addresses and its graduated response (F-1101, F-1102).

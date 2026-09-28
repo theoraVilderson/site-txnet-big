@@ -166,6 +166,7 @@ export const CAPABILITY_KEYS = {
   per_client_data_limit: K.matrix.row.per_client_data_limit,
   data_limit_counts_the_same_bytes_as_usage: K.matrix.row.data_limit_counts_the_same_bytes_as_usage,
   per_client_rate_limit: K.matrix.row.per_client_rate_limit,
+  per_client_ip_limit: K.matrix.row.per_client_ip_limit,
   enable_disable_client: K.matrix.row.enable_disable_client,
   client_lifecycle: K.matrix.row.client_lifecycle,
   stable_remote_id: K.matrix.row.stable_remote_id,

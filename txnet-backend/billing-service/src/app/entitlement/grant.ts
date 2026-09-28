@@ -79,7 +79,9 @@ export type EntitlementRejection =
   /** Admin renewal (F-311-d): a dated Grant with no copied plan period — the admin types the amount. */
   | 'plan_period_unknown'
   /** Admin renewal: a concurrent repeat of the same request won; retry to read its renewal. */
-  | 'already_renewed';
+  | 'already_renewed'
+  /** Device limit (F-311-q): the limit the Grant already has, or a lift of none. */
+  | 'devices_unchanged';
 
 export class EntitlementRefused extends Error {
   constructor(

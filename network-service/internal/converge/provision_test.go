@@ -24,6 +24,8 @@ type provRig struct {
 	at      time.Time
 	// rateLimitable is the panel's `per_client_rate_limit` answer (F-311-p).
 	rateLimitable bool
+	// ipLimitable is its `per_client_ip_limit` answer (F-311-q).
+	ipLimitable bool
 }
 
 func newProvRig(t *testing.T, cfg fake.Config) *provRig {
@@ -51,7 +53,7 @@ func (r *provRig) pass(t *testing.T) converge.ProvisionReport {
 	p := collect.Panel{
 		ID: "panel-1", CounterSemantics: driver.CounterCumulative,
 		Transport: driver.TransportPull, MaxLineRateBps: gigabit, Driver: r.panel,
-		RateLimitable: r.rateLimitable,
+		RateLimitable: r.rateLimitable, IPLimitable: r.ipLimitable,
 	}
 	report, err := r.conv.Pass(context.Background(), p, collect.Result{ObservedAt: r.at})
 	if err != nil {
@@ -577,5 +579,59 @@ func TestANewClientIsCreatedUnderItsGrantsCap(t *testing.T) {
 	onlyAction(t, r.pass(t), converge.ActionCreated)
 	if client, _ := r.client(t, r.row(t, "c1").RemoteID); client.RateLimitBps != twentyMbit {
 		t.Fatalf("created rate = %d, want %d: the cap goes in with the create", client.RateLimitBps, twentyMbit)
+	}
+}
+
+// ---- device limit (F-311-q) -------------------------------------------------
+
+func TestAGrantsDeviceLimitIsWrittenWhereThePanelHoldsOneAndLiftedAsNone(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	r.ipLimitable = true
+	r.panel.Given("remote-a")
+	row := wanted("c1")
+	row.RemoteID, row.UUID, row.IPLimit = "remote-a", "remote-a", 2
+	r.desired.Put("panel-1", row)
+
+	onlyAction(t, r.pass(t), converge.ActionIPLimited)
+	if client, _ := r.client(t, "remote-a"); client.IPLimit != 2 {
+		t.Fatalf("panel limit = %d, want 2", client.IPLimit)
+	}
+	if report := r.pass(t); len(report.Findings) != 0 {
+		t.Fatalf("a limit the panel holds is written again: %+v", report.Findings)
+	}
+
+	row.IPLimit = 0
+	r.desired.Put("panel-1", row)
+	onlyAction(t, r.pass(t), converge.ActionIPLimited)
+	if client, _ := r.client(t, "remote-a"); client.IPLimit != 0 {
+		t.Fatalf("panel limit = %d, want 0: a Grant with none lifts it", client.IPLimit)
+	}
+}
+
+func TestADeviceLimitIsNeverSentToAPanelThatCannotHoldOne(t *testing.T) {
+	r := newProvRig(t, fake.Config{Unsupported: map[driver.RowKey]bool{driver.RowPerClientIPLimit: true}})
+	r.panel.Given("remote-a")
+	row := wanted("c1")
+	row.RemoteID, row.UUID, row.IPLimit = "remote-a", "remote-a", 2
+	r.desired.Put("panel-1", row)
+
+	if report := r.pass(t); len(report.Findings) != 0 {
+		t.Fatalf("findings = %+v, want none: the limit is recorded, not enforced, where the panel has none", report.Findings)
+	}
+	if got := r.row(t, "c1"); got.State != converge.StateComplete {
+		t.Fatalf("state = %s, want complete", got.State)
+	}
+}
+
+func TestANewClientIsCreatedUnderItsGrantsDeviceLimit(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	r.ipLimitable = true
+	row := wanted("c1")
+	row.IPLimit = 3
+	r.desired.Put("panel-1", row)
+
+	onlyAction(t, r.pass(t), converge.ActionCreated)
+	if client, _ := r.client(t, r.row(t, "c1").RemoteID); client.IPLimit != 3 {
+		t.Fatalf("created limit = %d, want 3: the limit goes in with the create", client.IPLimit)
 	}
 }

@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-version: 19
+version: 20
 updated: 2026-09-28
 ---
 
@@ -104,6 +104,17 @@ traffic). **One request, one Grant**: a repeat of `requestId` answers that Grant
 Also refused: `variant_not_found`, `variant_not_assignable` (switched off),
 `metered_rate_missing` / `metered_rate_not_positive`, `already_issued` (a concurrent
 repeat: retry). Route: billing `contract.reseller-grants.md`.
+
+**Devices (F-311-q)** — `setGrantDeviceLimit(tx, id, {limit, reason, actorUserId, at})`
+in `entitlement/devices.ts`, proved by `devices.spec.ts`. The limit is the Grant's own
+`quotas.concurrent_devices.limit` — the entry a variant's sold limit is copied into, the
+entry's other fields and the other metrics left as they were; `null` removes the entry.
+One `quota_adjustment` row (`concurrent_devices`, delta after − before with none as 0,
+`admin_grant`, the admin, the reason — invariant 3), conditional on the quotas read. An
+`active` or `suspended` Grant, frozen included. **Never refused by a panel** (user,
+2026-09-28): the answer's `panelsNotEnforcing` names each live config's panel that does
+not answer `per_client_ip_limit` yes; network writes it where one does (`contract.provisioning.md`
+"Device limit"). Refused: `grant_closed`, `grant_not_active`, `devices_unchanged`, `grant_moved`.
 
 **Renew (F-311-d)** — `renewGrantByAdmin(tx, {grantId, requestId, actorUserId, at, reason, amount?})`
 in `entitlement/admin-renewal.ts`, proved by `admin-renewal.spec.ts`. `renewGrant`

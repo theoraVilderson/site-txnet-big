@@ -82,8 +82,8 @@ The rules:
    because one assembled here would disagree with the one Marzban serves.
    `ClientLinks` is the whole `links` list (`contract.links.md`).
 
-Its questionnaire answers: every row yes except `per_client_rate_limit`.
-Verdict `accepted`, metered sale allowed.
+Its questionnaire answers: every row yes except `per_client_rate_limit` and
+`per_client_ip_limit`. Verdict `accepted`, metered sale allowed.
 
 Conformance: the eleven pull scenarios pass. The four push scenarios and
 `ceiling_refused` are skipped by name (no sessions, and the ceiling always

@@ -87,7 +87,7 @@ The key must be the owner's: `GET user/` lists only the users of the key's
 admin and its sub-admins, so another admin's users would never be seen.
 
 Its questionnaire answers: every row yes except `usage_for_named_subset`,
-`per_client_rate_limit` and `stable_remote_id`; `native_subscription_link`
+`per_client_rate_limit`, `per_client_ip_limit` and `stable_remote_id`; `native_subscription_link`
 is yes exactly when `clientBaseUrl` is set.
 Verdict `accepted`, metered sale allowed.
 

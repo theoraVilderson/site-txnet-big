@@ -69,8 +69,8 @@ The rules:
    admin token: the subscription is public and may be on another domain.
    `ClientLinks` is the whole of `<subscription>/links` (`contract.links.md`).
 
-Its questionnaire answers: every row yes except `per_client_rate_limit`.
-Verdict `accepted`, metered sale allowed.
+Its questionnaire answers: every row yes except `per_client_rate_limit` and
+`per_client_ip_limit`. Verdict `accepted`, metered sale allowed.
 
 Conformance: the eleven pull scenarios pass, `bulk_pass_is_bounded` in fifty
 pages of a hundred. The four push scenarios and `ceiling_refused` are skipped

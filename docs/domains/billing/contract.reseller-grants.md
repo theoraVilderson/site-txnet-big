@@ -195,6 +195,15 @@ Mbit/s both ways (1..100 000) or `null` to lift the cap; `reason` 1..500 chars -
 
 **Not covered:** the audit row beyond the cap's own `reason` (F-311-r), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
 
+## An admin sets one of a user's Grants' device limit (built — F-311-q)
+
+`POST …/users/:userId/grants/:grantId/devices`, body `{limit, reason}` — `limit`
+1..1000 devices or `null` to lift it -> `{grantId, adjustmentId, limitBefore,
+limitAfter, panelsNotEnforcing: [{id, name}]}`. Over entitlement's `setGrantDeviceLimit`
+([contract.admin.md](../entitlement/contract.admin.md) "Devices"). Door, bucket and
+refusal statuses as the speed cap's; `devices_unchanged` is 400. Unlike the speed cap
+it is never refused by a panel: the ones that cannot hold it are named.
+
 ## An admin issues a user a service by hand (built — F-311-o)
 
 `POST …/users/:userId/grants`, body `{variantId, requestId}` (both uuids;

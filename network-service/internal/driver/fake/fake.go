@@ -54,6 +54,7 @@ type client struct {
 	inbound         string
 	enabled         bool
 	rateLimit       int64
+	ipLimit         int
 	expiresAt       time.Time
 
 	// up and down are the far end's own counters, in full precision. What a
@@ -446,7 +447,7 @@ func (p *Panel) ListClients(ctx context.Context) ([]driver.RemoteClient, error) 
 		out = append(out, driver.RemoteClient{
 			RemoteID: c.remoteID, Label: c.label, UUID: c.uuid,
 			InboundRemoteID: c.inbound, Enabled: c.enabled,
-			DataLimitBytes: enforcing, RateLimitBps: c.rateLimit, ExpiresAt: c.expiresAt,
+			DataLimitBytes: enforcing, RateLimitBps: c.rateLimit, IPLimit: c.ipLimit, ExpiresAt: c.expiresAt,
 		})
 	}
 	return out, nil
@@ -475,7 +476,7 @@ func (p *Panel) CreateClient(ctx context.Context, req driver.CreateClientRequest
 	c := &client{
 		remoteID: remoteID, uuid: req.UUID, subscriptionKey: req.SubscriptionKey,
 		inbound: req.InboundRemoteID, enabled: req.Enabled,
-		dataLimit: req.DataLimitBytes, rateLimit: req.RateLimitBps, expiresAt: req.ExpiresAt,
+		dataLimit: req.DataLimitBytes, rateLimit: req.RateLimitBps, ipLimit: req.IPLimit, expiresAt: req.ExpiresAt,
 	}
 	// The claim tag is the second matching key, and only where the family has
 	// a field we own to put it in (F-027-aa).
@@ -489,7 +490,7 @@ func (p *Panel) CreateClient(ctx context.Context, req driver.CreateClientRequest
 	p.order = append(p.order, c.remoteID)
 	return driver.RemoteClient{
 		RemoteID: c.remoteID, Label: c.label, UUID: c.uuid, InboundRemoteID: c.inbound,
-		Enabled: c.enabled, DataLimitBytes: c.dataLimit, RateLimitBps: c.rateLimit, ExpiresAt: c.expiresAt,
+		Enabled: c.enabled, DataLimitBytes: c.dataLimit, RateLimitBps: c.rateLimit, IPLimit: c.ipLimit, ExpiresAt: c.expiresAt,
 	}, nil
 }
 
@@ -507,7 +508,7 @@ func (p *Panel) UpdateClient(ctx context.Context, req driver.UpdateClientRequest
 		return p.notFound("UpdateClient", req.RemoteID)
 	}
 	c.uuid, c.inbound, c.enabled = req.UUID, req.InboundRemoteID, req.Enabled
-	c.dataLimit, c.rateLimit, c.expiresAt = req.DataLimitBytes, req.RateLimitBps, req.ExpiresAt
+	c.dataLimit, c.rateLimit, c.ipLimit, c.expiresAt = req.DataLimitBytes, req.RateLimitBps, req.IPLimit, req.ExpiresAt
 	if p.supports(driver.RowClientLabelStorable) {
 		c.label = req.ClaimTag
 	}
@@ -595,6 +596,24 @@ func (p *Panel) SetClientRateLimit(ctx context.Context, remoteID string, rateBps
 		return p.notFound("SetClientRateLimit", remoteID)
 	}
 	c.rateLimit = rateBps
+	p.afterWriteLocked(c)
+	return nil
+}
+
+func (p *Panel) SetClientIPLimit(ctx context.Context, remoteID string, limit int) error {
+	if err := p.gate(ctx, "SetClientIPLimit"); err != nil {
+		return err
+	}
+	if !p.supports(driver.RowPerClientIPLimit) {
+		return p.unsupported("SetClientIPLimit")
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	c := p.clients[remoteID]
+	if c == nil {
+		return p.notFound("SetClientIPLimit", remoteID)
+	}
+	c.ipLimit = limit
 	p.afterWriteLocked(c)
 	return nil
 }
