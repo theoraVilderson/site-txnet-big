@@ -348,7 +348,7 @@ export class ResellerUserGrantsService {
   /** The door, then `work` in the reseller's scope; the door's refusal becomes this surface's one type. */
   private async admitted<T>(actor: ResellerActor, tenantId: string, capability: 'read' | 'staffWrite', work: () => Promise<T>): Promise<T> {
     try {
-      return await this.access.run(actor, tenantId, capability, work);
+      return await this.access.runIncludingPlatform(actor, tenantId, capability, work);
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new ResellerUserGrantsRefused(e.reason, tenantId);
       throw e;

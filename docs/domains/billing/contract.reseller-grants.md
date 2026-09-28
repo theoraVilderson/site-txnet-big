@@ -34,7 +34,7 @@ which asks the four owner reads of [contract.gift.md](contract.gift.md) — `Gra
 | Rule | Why |
 |---|---|
 | `ResellerAccess` (F-066-w1) is the door, capability `read`, no permission guard; refusals travel as `reason` — `not_allowed` / `reseller_suspended` **403**, `reseller_not_found` **404**, `reseller_terminated` **409** | every reseller-named surface (`contract.revenue.md`); a suspended reseller still sees its users' services |
-| **The reseller is the path's**, and every read runs in its scope | the owner's session carries the platform's `X-Tenant-Id` (ADR-0059) |
+| **The reseller is the path's**, and every read runs in its scope — or the platform's own tenant, for platform staff only (F-311-aa, ADR-0102) | the owner's session carries the platform's `X-Tenant-Id` (ADR-0059) |
 | **Only that reseller's users** (C-15): the user is read first, in the reseller's scope (`user` is RLS-strict and in `TENANT_SCOPED_MODELS`); another tenant's user or none is **404** `user_not_found`, and no Grant is read for them | the Grant reads fence only by `userId`, and `traffic_daily_aggregate` has no tenant at all |
 | The owner reads are asked **as the path's user**, so a Grant of another user of the same reseller is their own **404** `grant_not_found` | their ownership check is the only one that knows a Grant's user |
 | One bucket for every read here, `RESELLER_USER_GRANTS_READ`, default **300**/900s per caller; none of them writes or rotates | expanding one Grant asks three routes at once. Reset link and config actions are the next sections |

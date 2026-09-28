@@ -68,15 +68,44 @@ export class ResellerAccessRefused extends Error {
 export class ResellerAccess {
   constructor(@Inject(RESELLER_ACCESS_READER) private readonly prisma: ResellerAccessReader) {}
 
-  async admit(actor: ResellerActor, tenantId: string, capability: TenantCapabilityName, now = new Date()): Promise<AdmittedReseller> {
+  admit(actor: ResellerActor, tenantId: string, capability: TenantCapabilityName, now = new Date()): Promise<AdmittedReseller> {
+    return this.admitTarget(actor, tenantId, capability, now, false);
+  }
+
+  /**
+   * {@link admit}, on a route that may also name the platform's own tenant
+   * (F-311-aa, D-55): the users-admin routes, one page for every tenant's
+   * users, the platform's direct users included. The platform's tenant is
+   * admitted to **its staff only** (`tenant.manage` or `*`) and to nobody
+   * else, who learns nothing — its `ownerUserId` and a seat on it are no door.
+   * A reseller is answered exactly as {@link admit} answers it. Every other
+   * route keeps {@link admit}: configuring the platform (its domains, its
+   * brand) is not a reseller route's job.
+   */
+  admitIncludingPlatform(actor: ResellerActor, tenantId: string, capability: TenantCapabilityName, now = new Date()): Promise<AdmittedReseller> {
+    return this.admitTarget(actor, tenantId, capability, now, true);
+  }
+
+  private async admitTarget(
+    actor: ResellerActor,
+    tenantId: string,
+    capability: TenantCapabilityName,
+    now: Date,
+    platform: boolean,
+  ): Promise<AdmittedReseller> {
+    const tenantType = platform ? { in: [TenantType.reseller, TenantType.platform_owner] } : TenantType.reseller;
     const [caller, tenant] = await Promise.all([
       this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } }),
       this.prisma.tenant.findFirst({
-        where: { id: tenantId, tenantType: TenantType.reseller, deletedAt: null },
+        where: { id: tenantId, tenantType, deletedAt: null },
         select: { id: true, slug: true, tenantType: true, ownerUserId: true, status: true, graceEndsAt: true },
       }),
     ]);
     const staff = caller?.tenantType === TenantType.platform_owner && holdsPermission(actor.permissions, 'tenant.manage');
+    if (platform && tenant?.tenantType === TenantType.platform_owner) {
+      if (!staff) throw new ResellerAccessRefused('not_allowed', tenantId);
+      return { id: tenant.id, slug: tenant.slug, as: 'staff' };
+    }
     const reseller = tenant?.tenantType === TenantType.reseller ? tenant : null;
     // Only staff learns whether a reseller exists.
     if (!reseller) throw new ResellerAccessRefused(staff ? 'reseller_not_found' : 'not_allowed', tenantId);
@@ -107,6 +136,18 @@ export class ResellerAccess {
   ): Promise<T> {
     const reseller = await this.admit(actor, tenantId, capability, now);
     return runWithTenant({ id: reseller.id }, () => work(reseller));
+  }
+
+  /** {@link admitIncludingPlatform}, then `work` in the admitted tenant's scope — {@link run}'s rule, the platform's tenant included. */
+  async runIncludingPlatform<T>(
+    actor: ResellerActor,
+    tenantId: string,
+    capability: TenantCapabilityName,
+    work: (reseller: AdmittedReseller) => Promise<T>,
+    now = new Date(),
+  ): Promise<T> {
+    const admitted = await this.admitIncludingPlatform(actor, tenantId, capability, now);
+    return runWithTenant({ id: admitted.id }, () => work(admitted));
   }
 
   /**

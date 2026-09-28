@@ -2,8 +2,8 @@
 id: tenant
 layer: domain
 status: active
-version: 2
-updated: 2026-09-20
+version: 3
+updated: 2026-09-28
 ---
 
 # Contract — tenant / feature entitlements
@@ -75,6 +75,18 @@ the host; the ambient routes stay for a tenant configuring itself.
 - `work` awaits its own queries — `runWithTenant`'s rule; a Prisma promise
   returned unawaited runs after the scope has closed.
 - Tests: `shared-core/src/lib/tenant/reseller-access.spec.ts`.
+
+### The platform's own tenant, on the users-admin routes only (F-311-aa, ADR-0102)
+
+| call | answer |
+|---|---|
+| `admitIncludingPlatform(actor, tenantId, capability)` | `admit`, except the `platform_owner` tenant is also found: platform staff (`tenant.manage` or `*`) get `{id, slug, as: 'staff'}`; everyone else `not_allowed`, its `ownerUserId` and a seat on it included |
+| `runIncludingPlatform(actor, tenantId, capability, work)` | the same, then `work` in that tenant's scope — `run`'s rule |
+
+Called by the users-admin services only: `reseller-users.service.ts` (auth),
+`reseller-user-grants.service.ts` and `grant-bulk-job.ts` (billing) — one page
+for every tenant's users (D-55). Every other route keeps `admit`/`run`, where
+the platform's id stays `reseller_not_found` to staff.
 
 ### Asking the door instead of guessing: `GET /api/tenants/:id/access` (F-311-e)
 

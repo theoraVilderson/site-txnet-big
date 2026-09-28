@@ -129,6 +129,40 @@ describe('ResellerAccess', () => {
     await expect(access.admit(staff, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'reseller_terminated' });
   });
 
+  it("admits the platform's own tenant only where the route opts in, and only to its staff (F-311-aa, D-55)", async () => {
+    const access = build();
+    // The users-admin routes: one page for every tenant, the platform one more of them.
+    await expect(access.admitIncludingPlatform(staff, PLATFORM, 'staffWrite', T0)).resolves.toEqual({
+      id: PLATFORM,
+      slug: 'platform_owner',
+      as: 'staff',
+    });
+    await expect(access.admitIncludingPlatform({ ...staff, permissions: ['*'] }, PLATFORM, 'read', T0)).resolves.toMatchObject({ as: 'staff' });
+
+    // Anyone else learns nothing: the platform's `ownerUserId` without the
+    // permission, a reseller's owner, a user of the platform holding another
+    // permission, and a reseller's member whose seat names another tenant.
+    for (const caller of [
+      { userId: STAFF, tenantId: PLATFORM, permissions: [] as string[] },
+      owner,
+      { userId: CUSTOMER, tenantId: PLATFORM, permissions: ['user.read'] },
+      { userId: CUSTOMER, tenantId: RESELLER, permissions: ['tenant.manage'] },
+    ]) {
+      await expect(build('active', [seat()]).admitIncludingPlatform(caller, PLATFORM, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    }
+
+    // Every other route still names resellers only, for staff too.
+    await expect(access.admit(staff, PLATFORM, 'read', T0)).rejects.toMatchObject({ reason: 'reseller_not_found' });
+
+    // A reseller is answered exactly as `admit` answers it.
+    await expect(access.admitIncludingPlatform(owner, RESELLER, 'staffWrite', T0)).resolves.toEqual({ id: RESELLER, slug: 'ali', as: 'owner' });
+    await expect(build('suspended').admitIncludingPlatform(owner, RESELLER, 'staffWrite', T0)).rejects.toMatchObject({ reason: 'reseller_suspended' });
+
+    // And the work runs in the platform's scope.
+    const seen = await access.runIncludingPlatform(staff, PLATFORM, 'read', async () => TenantContext.current().id, T0);
+    expect(seen).toBe(PLATFORM);
+  });
+
   it("runs admitted work in the reseller's scope, and refused work not at all (ADR-0064 (3))", async () => {
     const access = build('suspended');
     const seen = await access.run(owner, RESELLER, 'read', async (reseller) => ({ reseller, scope: TenantContext.current().id }), T0);

@@ -34,6 +34,10 @@ Code: `txnet-backend/auth-service/src/app/auth/users/reseller-users.service.ts`.
   customers is the failure this row exists to prevent. A user id from another
   tenant is therefore `user_not_found`, the same answer an id that never
   existed gets.
+- **The platform's own users are one more tenant here** (F-311-aa, ADR-0102).
+  The path may name the platform's tenant; only platform staff are admitted
+  to it (`runIncludingPlatform`), and it is scoped, audited and blocked exactly
+  as a reseller's users are. Platform staff are in that list themselves.
 - **`read` to list, `staffWrite` to block.** So a suspended reseller still sees
   its customers and changes nothing about them (`tenant/rules.md`).
 - **`banned` outranks a block.** A reseller moves a user between `active` and

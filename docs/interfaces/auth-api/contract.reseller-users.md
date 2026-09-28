@@ -24,7 +24,9 @@ Field schemas live in code:
 Every route needs a **Bearer** token and **no permission**: the door is
 `ResellerAccess` (tenant invariant 21) — the reseller's owner, one of its staff
 seats holding `tenant.manage`, or the platform owner's staff — judged against
-the **reseller the path names**, never the session's tenant. A `user` object is
+the **reseller the path names**, never the session's tenant. The path may
+also name the **platform's own tenant**, admitted to platform staff only
+(F-311-aa, ADR-0102); anyone else asking for it gets `not_allowed`. A `user` object is
 `{id, fullName, username, phoneMasked, status, createdAt}` and carries no phone
 number and no email.
 

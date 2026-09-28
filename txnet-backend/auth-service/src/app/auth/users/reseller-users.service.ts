@@ -187,7 +187,7 @@ export class ResellerUsersService {
     work: (reseller: { id: string }) => Promise<T>,
   ): Promise<T> {
     try {
-      return await this.access.run(actor, tenantId, capability, (reseller) => work(reseller));
+      return await this.access.runIncludingPlatform(actor, tenantId, capability, (reseller) => work(reseller));
     } catch (err) {
       if (err instanceof ResellerAccessRefused) {
         throw new ResellerUsersRefused(err.reason, tenantId);
