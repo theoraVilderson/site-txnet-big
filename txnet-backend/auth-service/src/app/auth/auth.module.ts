@@ -52,6 +52,7 @@ import { ResellerUsersService } from './users/reseller-users.service';
 import { UserSearchService } from './users/user-search.service';
 import { MeService } from './me/me.service';
 import { MeEmailService } from './me/me-email.service';
+import { MeMessengerService } from './me/me-messenger.service';
 import { PermissionStateStore } from './permissions/permission-state.store';
 import {
   PERMISSIONS_LISTEN_CLIENT,
@@ -107,6 +108,7 @@ import { ConfigService } from '@nestjs/config';
     // binds `RESELLER_ACCESS_READER` to this service's app pool.
     ResellerAccess,
     MeEmailService,
+    MeMessengerService,
     AuthService,
     SurfaceOwnerService,
     AuthGuard,

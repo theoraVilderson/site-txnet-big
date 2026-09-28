@@ -6,17 +6,20 @@ import {
   HttpStatus,
   Ip,
   Post,
+  Put,
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { NoticeMessenger } from '@prisma/client';
 import { RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 import { AuthGuard } from '../auth.guard';
 import { RateLimit } from '../decorators/rate-limit.decorator';
 import { MeService } from './me.service';
 import { MeEmailService } from './me-email.service';
+import { MeMessengerService } from './me-messenger.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { meEmailRequestSchema, meEmailVerifySchema } from '../auth.schema';
+import { meEmailRequestSchema, meEmailVerifySchema, meMessengerSchema } from '../auth.schema';
 import type { AuthClaims } from '../token.service';
 
 /**
@@ -36,6 +39,7 @@ export class MeController {
   constructor(
     private readonly me: MeService,
     private readonly email: MeEmailService,
+    private readonly messenger: MeMessengerService,
   ) {}
 
   @Get('me')
@@ -88,6 +92,33 @@ export class MeController {
     @Req() req: Request,
   ) {
     return this.email.confirm(claimsOf(req), body.email, body.otpCode);
+  }
+
+  /** Which messenger the caller's notices take (F-601-u): Telegram, Bale or both; unchosen reads as both. */
+  @TenantCapability('account')
+  @Get('me/messenger')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.ME_MESSENGER, req?.user?.sub ?? req?.ip),
+    configKey: 'ME_MESSENGER_RATE_LIMIT',
+    windowSec: 900,
+  })
+  readMessenger(@Req() req: Request) {
+    return this.messenger.read(claimsOf(req));
+  }
+
+  @TenantCapability('account')
+  @Put('me/messenger')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.ME_MESSENGER, req?.user?.sub ?? req?.ip),
+    configKey: 'ME_MESSENGER_RATE_LIMIT',
+    windowSec: 900,
+  })
+  saveMessenger(@Body(new ZodValidationPipe(meMessengerSchema)) body: { messenger: NoticeMessenger }, @Req() req: Request) {
+    return this.messenger.save(claimsOf(req), body.messenger);
   }
 }
 

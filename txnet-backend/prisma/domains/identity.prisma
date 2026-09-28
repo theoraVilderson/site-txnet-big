@@ -60,6 +60,16 @@ enum OtpPurpose {
   @@schema("identity")
 }
 
+/// Which messenger a user's notices take (F-601-u, ADR-0097 part 2).
+/// `User.noticeMessenger` null — the user has not chosen — reads as `both`.
+enum NoticeMessenger {
+  telegram
+  bale
+  both
+
+  @@schema("identity")
+}
+
 enum OtpChannel {
   sms
   bale     // از طریق ربات بله، نیازمند LinkedBotAccount از پیش تایید‌شده
@@ -99,6 +109,9 @@ model User {
   // و اگر bale/telegram انتخاب شود باید LinkedBotAccount متناظر از قبل موجود باشد
   // (این اعتبارسنجی در سطح سرویس انجام می‌شود، نه در schema).
   preferredOtpChannel    OtpChannel? 
+  /// The messenger this user's notices take (F-601-u). Null until they
+  /// choose, and read as `both`; a chosen one not linked falls back to the other.
+  noticeMessenger        NoticeMessenger?
   referredByUserId       String?    @db.Uuid
 
   createdAt DateTime  @default(now())

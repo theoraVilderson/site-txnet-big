@@ -71,6 +71,8 @@
     "emailAlreadyVerified": "That address is already on your account",
     "emailTaken": "That address belongs to another account",
     "emailVerified": "Your email address is confirmed",
+    "messenger": "Your messenger for notices",
+    "messengerSaved": "Your messenger for notices is saved",
     "handoffResellers": "Your resellers",
     "handoffIssued": "Opening your reseller panel",
     "handoffRefused": "This reseller panel cannot be opened from your account",

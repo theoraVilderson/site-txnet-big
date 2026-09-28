@@ -268,6 +268,12 @@ export type BotLinkStatus = {
   failureKey?: string;
 };
 
+/** The messengers a user may take notices on (F-601-u); `both` is also what an unchosen one reads as. */
+export const NOTICE_MESSENGERS = ["both", "telegram", "bale"] as const;
+export type NoticeMessenger = (typeof NOTICE_MESSENGERS)[number];
+/** `linked`: the platforms with a verified chat, so the panel can say which one is not linked yet. */
+export type MeMessenger = { messenger: NoticeMessenger; chosen: boolean; linked: Array<"telegram" | "bale"> };
+
 export const authApi = {
   async loginPassword(identifier: string, password: string, captchaToken: string) {
     const result = await request<AuthResult | ({ requiresOtp: true; otpToken: string } & OtpDeliveryHandles)>("/auth/login/password", { method: "POST", body: JSON.stringify({ identifier, password }) }, captchaToken);
@@ -380,6 +386,9 @@ export const authApi = {
   /** Mails a code to `email` (F-035-g); nothing is written until `confirmEmail`. */
   async requestEmailCode(email: string) { return request<OtpQueued>("/auth/me/email", { method: "POST", body: JSON.stringify({ email }) }); },
   async confirmEmail(email: string, otpCode: string) { return request<{ email: string; emailVerifiedAt: string }>("/auth/me/email/verify", { method: "POST", body: JSON.stringify({ email, otpCode }) }); },
+  /** Which messenger the caller's notices take (F-601-u); unchosen reads as `both`, with `chosen: false`. */
+  async messenger() { return request<MeMessenger>("/auth/me/messenger", { method: "GET" }); },
+  async saveMessenger(messenger: NoticeMessenger) { return request<MeMessenger>("/auth/me/messenger", { method: "PUT", body: JSON.stringify({ messenger }) }); },
   /** The one refresh every client and the socket run (see `credentialRefresh`). */
   refreshCredential,
   /** Hold every tokenless call until `releaseSessionHold` — the panel's page load (see `sessionHold`). */

@@ -3,7 +3,7 @@ id: auth-api
 layer: interface
 status: active
 version: 16
-keywords: [auth api, user groups endpoint, roles endpoint, role management endpoint, user search endpoint, handoff endpoint, reseller panel handoff, login endpoint, register endpoint, auth-service, captcha, bot check, human verification, otp channels endpoint, bot webhook, telegram webhook, bale webhook, forgot password endpoint, mini app session, webapp session, initdata]
+keywords: [auth api, messenger endpoint, notice messenger endpoint, user groups endpoint, roles endpoint, role management endpoint, user search endpoint, handoff endpoint, reseller panel handoff, login endpoint, register endpoint, auth-service, captcha, bot check, human verification, otp channels endpoint, bot webhook, telegram webhook, bale webhook, forgot password endpoint, mini app session, webapp session, initdata]
 source:
   - txnet-backend/auth-service/src/main.ts
   - txnet-backend/auth-service/src/app/auth/auth.controller.ts
@@ -17,6 +17,7 @@ source:
   - txnet-backend/auth-service/src/app/auth/auth.guard.ts
   - txnet-backend/auth-service/src/app/auth/auth.module.ts
   - txnet-backend/auth-service/src/app/auth/auth.schema.ts
+  - txnet-backend/auth-service/src/app/auth/me/me.controller.ts
   - txnet-backend/auth-service/src/app/auth/handoff/handoff.controller.ts
   - txnet-backend/auth-service/src/app/auth/bot-link/bot-link.controller.ts
   - txnet-backend/auth-service/src/app/automation/bot-integration.controller.ts
@@ -47,13 +48,13 @@ updated: 2026-09-28
 ---
 # auth-api
 **Responsibility:** NestJS `auth-service` HTTP surface (`/api/auth/*`, impersonation and worker administration included), translating HTTP <-> `identity`. **Not:** identity rules (`identity`), other services' edge check (`forward-auth`).
-See [contract.md](contract.md) (HTTP API), [contract.roles.md](contract.roles.md) (a tenant's own roles), [contract.reseller-bots.md](contract.reseller-bots.md) (connecting a named reseller's bot), [contract.reseller-users.md](contract.reseller-users.md) (a named reseller's own users), [contract.user-groups.md](contract.user-groups.md) (user groups), [contract.switch-scope.md](contract.switch-scope.md) (which account group a call acts on), [contract.cookies.md](contract.cookies.md) (the refresh cookie), [contract.rate-limits.md](contract.rate-limits.md) (how every limit in that table is counted), [contract.versions.md](contract.versions.md) (when a shape changed and who it broke) and [open-questions.md](open-questions.md) (undecided items).
+See [contract.md](contract.md) (HTTP API), [contract.roles.md](contract.roles.md) (a tenant's own roles), [contract.reseller-bots.md](contract.reseller-bots.md) (connecting a named reseller's bot), [contract.reseller-users.md](contract.reseller-users.md) (a named reseller's own users), [contract.user-groups.md](contract.user-groups.md) (user groups), [contract.switch-scope.md](contract.switch-scope.md) (which account group a call acts on), [contract.cookies.md](contract.cookies.md) (the refresh cookie), [contract.messenger.md](contract.messenger.md) (the caller's notice messenger), [contract.rate-limits.md](contract.rate-limits.md) (how every limit in that table is counted), [contract.versions.md](contract.versions.md) (when a shape changed and who it broke) and [open-questions.md](open-questions.md) (undecided items).
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-28 | Contract v35 -> **v36** (additive, F-601-u): `GET`/`PUT /auth/me/messenger` — Telegram, Bale or both; and `POST /internal/notify/user`'s `bot` follows it, unchosen telling every verified chat once. [contract.messenger.md](contract.messenger.md). Consumers: panel-web (same change), worker-service (none needed) |
 | 2026-09-28 | Contract v34 -> **v35** (additive, F-307-x): an entry of `services` on `POST /internal/notify/user` takes an optional `label` — the buyer's name for the service, told before the catalog name (`retention.serviceNamed`, fa + en). Sender `worker-service` in the same item |
 | 2026-09-28 | Contract v33 -> **v34** (additive, F-601-p): `POST /internal/notify/user` takes an optional `services` beside `count` — the services a combined retention notice is about, listed under its summary in the user's language (`retention.serviceLine…`, fa + en). Consumer `worker-service` in the same item |
 | 2026-09-25 | Contract v32 -> **v33** (additive, F-114-j): `/auth/user-groups` — a tenant's user groups and their members, `user_group.manage`; only the platform owner's may hold resellers or another tenant's users. [contract.user-groups.md](contract.user-groups.md). No consumer on the wire yet |
 | 2026-09-25 | Contract v31 -> **v32** (additive, F-067-p, ADR-0084 decision 3): `POST /internal/notify/user` takes an optional `count` (≥2) and tells the template's summary text; every template has one, fa + en. Consumer `worker-service` in the same item |
-| 2026-09-25 | Contract v30 -> **v31** (**break**, F-067-o, ADR-0084): `POST /internal/notify/user` requires `channel` (`inbox` \| `bot`), one per call, and every template has an inbox title; `panelAccepted`, `panelRefused` added. Its one consumer, `worker-service`, moved in the same item. [contract.versions.md](contract.versions.md) |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

@@ -492,7 +492,12 @@ describe('SMS OTP sender', () => {
  */
 describe('UserNotifier', () => {
   function notifierPrisma({
-    user = { languagePreference: 'en' } as { languagePreference: string; phoneNumber?: string | null; phoneVerifiedAt?: Date | null } | null,
+    user = { languagePreference: 'en' } as {
+      languagePreference: string;
+      phoneNumber?: string | null;
+      phoneVerifiedAt?: Date | null;
+      noticeMessenger?: string | null;
+    } | null,
     links: linked = [] as Array<{ platform: string; platformUserId: string }>,
   } = {}) {
     return {
@@ -520,25 +525,47 @@ describe('UserNotifier', () => {
     );
   });
 
-  // F-601-s, ADR-0097: one messenger — the one linked last — and the other only when that send fails; never both.
-  it('messages the chat linked last alone, and the other only when that send fails', async () => {
+  // F-601-u, ADR-0097: the user picks Telegram, Bale or both; unchosen is both.
+  describe('the chosen messenger (F-601-u)', () => {
     const links = [
       { platform: 'bale', platformUserId: '7' },
       { platform: 'telegram', platformUserId: '5501' },
     ];
-    const client = botClient();
-    const db = notifierPrisma({ links });
-    const notifier = new UserNotifier(db as unknown as PrismaService, registry(client), localeService(ns));
-    const tell = () => inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'paymentCredited', params: { amount: '1', reference: '2' } }));
+    const tellAs = (noticeMessenger: string | null) => {
+      const client = botClient();
+      const db = notifierPrisma({ user: { languagePreference: 'en', noticeMessenger }, links });
+      const notifier = new UserNotifier(db as unknown as PrismaService, registry(client), localeService(ns));
+      const tell = () => inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'paymentCredited', params: { amount: '1', reference: '2' } }));
+      return { client, db, tell };
+    };
 
-    expect(await tell()).toEqual({ sent: ['bale'] });
-    expect(client.sendMessage.mock.calls.map((c) => c[0])).toEqual(['7']);
-    expect(db.linkedBotAccount.findMany).toHaveBeenCalledWith(expect.objectContaining({ orderBy: { linkedAt: 'desc' } }));
+    it('unchosen, and `both`, tell every verified linked chat once', async () => {
+      for (const choice of [null, 'both']) {
+        const { client, db, tell } = tellAs(choice);
+        expect(await tell()).toEqual({ sent: ['bale', 'telegram'] });
+        expect(client.sendMessage.mock.calls.map((c) => c[0])).toEqual(['7', '5501']);
+        expect(db.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({ select: expect.objectContaining({ noticeMessenger: true }) }));
+      }
+    });
 
-    client.sendMessage.mockClear();
-    client.sendMessage.mockRejectedValueOnce(new Error('bot was blocked by the user'));
-    expect(await tell()).toEqual({ sent: ['telegram'] });
-    expect(client.sendMessage.mock.calls.map((c) => c[0])).toEqual(['7', '5501']);
+    it('`both` with one send failing reaches the other and does not retry through it', async () => {
+      const { client, tell } = tellAs(null);
+      client.sendMessage.mockRejectedValueOnce(new Error('bot was blocked by the user'));
+      expect(await tell()).toEqual({ sent: ['telegram'] });
+      expect(client.sendMessage).toHaveBeenCalledTimes(2);
+    });
+
+    it('a chosen messenger is told alone, even when linked first, and the other only when that send fails', async () => {
+      const { client, db, tell } = tellAs('telegram');
+      expect(await tell()).toEqual({ sent: ['telegram'] });
+      expect(client.sendMessage.mock.calls.map((c) => c[0])).toEqual(['5501']);
+      expect(db.linkedBotAccount.findMany).toHaveBeenCalledWith(expect.objectContaining({ orderBy: { linkedAt: 'desc' } }));
+
+      client.sendMessage.mockClear();
+      client.sendMessage.mockRejectedValueOnce(new Error('bot was blocked by the user'));
+      expect(await tell()).toEqual({ sent: ['bale'] });
+      expect(client.sendMessage.mock.calls.map((c) => c[0])).toEqual(['5501', '7']);
+    });
   });
 
   it('sends nothing, and is not an error, for a user with no linked chat or no bot', async () => {

@@ -133,6 +133,20 @@ never sends one.
    failed load shows one line and no form: an empty form saved would reset
    everything the user set.
 
+## Which messenger tells them, on `/settings` (F-601-u)
+
+`settings/_components/MessengerSection.tsx`, below the notice settings, over
+`authApi.messenger` / `saveMessenger`
+([identity/contract.messenger.md](../../domains/identity/contract.messenger.md)).
+
+1. **Three options — both, Telegram, Bale — words from an exhaustive
+   `Record<NoticeMessenger, …>`.** Unchosen reads as both, the server's
+   default, so the form opens on it; `chosen` is not shown.
+2. **A platform with no verified chat can be picked, and says so**: until it
+   is linked, the notifier tells the other. Stated here, enforced there.
+3. **Saved with one button; the answer is what is shown after.** A failed
+   load shows one line and no form, as the notice settings do.
+
 ## A service's notice level on `/services` (F-601-o)
 
 `services/_components/NoticeLevel.tsx`, under each row's "manage", over
@@ -156,5 +170,6 @@ never sends one.
 |---|---|---|
 | notification | `GET /api/notifications`, `POST /api/notifications/read` | the last good page stays with an error line and a retry; the bell still opens |
 | notification | `GET` / `PUT /api/notifications/preferences` | the settings section shows one error line and no form; the rest of `/settings` works |
+| identity (auth-api) | `GET` / `PUT /api/auth/me/messenger` | the messenger section shows one error line and no form; the rest of `/settings` works |
 | notification | `GET /api/notifications/preferences/grants`, `PUT …/grants/:grantId` | "manage" shows one line and no choice; the rest of `/services` works |
 | realtime | `notification.created` on `user:<userId>` | no live badge; the count is right again on the next page load, because the row is durable and the push only spares a reload (D-15) |

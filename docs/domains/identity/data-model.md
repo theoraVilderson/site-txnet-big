@@ -133,6 +133,10 @@ hash are cached in Redis only (`register:pending:<phone>`, 600s TTL, see
 
 ## Migration notes
 
+- 2026-09-28, F-601-u (`20260928002300_a_user_chooses_their_notice_messenger`):
+  `user.noticeMessenger` (`NoticeMessenger`: telegram, bale, both), nullable
+  and never backfilled — null is "not chosen" and reads as both. Rollback drops
+  the column and the type.
 - 2026-09-19, F-018-n (`20260919000200_identity_role_tenant`): `role.tenantId`
   added nullable and never backfilled; `role_name_key` replaced by
   `(tenantId, name)` plus the partial index above, and the table policied

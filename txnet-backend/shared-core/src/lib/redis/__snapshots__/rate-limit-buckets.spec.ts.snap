@@ -28,6 +28,7 @@ exports[`RateLimitBucket > records the whole rate-limited surface in one place 1
   "ME = me",
   "ME_EMAIL_REQUEST = me:email:req",
   "ME_EMAIL_VERIFY = me:email:verify",
+  "ME_MESSENGER = me:messenger",
   "HANDOFF_LIST = handoff:list",
   "HANDOFF_ISSUE = handoff:issue",
   "HANDOFF_REDEEM = handoff:redeem",

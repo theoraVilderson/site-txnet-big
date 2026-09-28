@@ -23,7 +23,7 @@ one notice path of ADR-0084 — not a second one inside `notification-service`
 | emit | the producing domain (entitlement, billing, network) | an outbox row (ADR-0021) in the transaction that saw the moment |
 | route | `worker-service` `RetentionNoticeConsumer`, queue `AUTOMATION_RETENTION_NOTICE_QUEUE` | bound to every type in `RETENTION_NOTICES` (`outbox/retention-notices.ts`) |
 | once per period, and how | **this unit**: `POST internal/notifications/retention/claim` | the ledger below; asked before anything is told; its answer carries the user's mute and quiet hours (F-601-m) and the Grant's own level (F-601-o) |
-| tell | `EventNoticeSender` -> auth-service `/internal/notify/user` | inbox (a `notification` row through this unit's `create`) and one bot, as the notice's class says (F-601-s, below), in the user's language — [automation/contract.notices.md](../automation/contract.notices.md); several services' same notice as one message, naming them (F-601-p, below) |
+| tell | `EventNoticeSender` -> auth-service `/internal/notify/user` | inbox (a `notification` row through this unit's `create`) and the user's messenger, as the notice's class says (F-601-s, below), in the user's language — [automation/contract.notices.md](../automation/contract.notices.md); several services' same notice as one message, naming them (F-601-p, below) |
 
 ## The claim
 
@@ -75,15 +75,15 @@ shared-core `NOTICE_CLASS_OF` (`notice-classes.ts`, beside `RETENTION_KIND_OF`) 
 | Class | Retention types | Channels | Mute | Quiet hours |
 |---|---|---|---|---|
 | security | none yet (sign-in, password, phone or email change) | inbox + every linked chat + SMS | never | ignored |
-| critical | every `cutoff`, and `reactivated` (an all-clear follows its alarm) | inbox + one bot; SMS when no bot reached them (F-601-t) | `cutoff` never; `reactivated` by its kind | ignored: the claim answers `now` |
-| important | `ending`, `connect`, `usage` but 50 % | inbox + one bot | by kind | the bot held (above) |
+| critical | every `cutoff`, and `reactivated` (an all-clear follows its alarm) | inbox + the user's messenger; SMS when no bot reached them (F-601-t) | `cutoff` never; `reactivated` by its kind | ignored: the claim answers `now` |
+| important | `ending`, `connect`, `usage` but 50 % | inbox + the user's messenger | by kind | the bot held (above) |
 | info | 50 % | inbox only | by kind | none: `now`, as there is no bot to hold |
 
 | Rule | Why |
 |---|---|
 | The claim holds only an `important` notice; `critical` and `info` answer `now` (or `muted`) | a service back on is news at night; 50 % has no bot message to keep |
 | A type is classed, not a template; a type missing from the table is `critical` | 50 % and 80 % share a template; a new notice never silently loses the bot |
-| One bot: the chat linked last, the other only when that send fails; never both (auth-api `/internal/notify/user`) | two messengers told the same thing twice |
+| The user's messenger (F-601-u): both unless they chose one; a chosen one alone, the other only when that send fails (auth-api `/internal/notify/user`, [identity/contract.messenger.md](../identity/contract.messenger.md)) | the user decides whether two bots tell them; unchosen, a blocked bot loses nothing |
 | SMS (F-601-t): the recipient's tenant's line through `SmsLineResolver` (notification `POST internal/notifications/sms`), to the verified phone; a reseller with no own line sends none (D-41); "no bot reached" is no verified chat, no bot, or every send failed; a notice of no known class never goes by SMS | SMS costs money: only security events and critical notices that reached no bot |
 | Payment, purchase and panel notices are classed by template (user 2026-09-28): money or a service lost `critical`, something to do or received `important`, `panelAccepted` `info` | one table for every notice |
 
@@ -193,7 +193,6 @@ service the user has. It rides the purchase's own notices (automation
 
 - A mute per channel (bot vs inbox): a kind or a Grant is muted on both.
 - A `security` notice: the delivery is built (F-601-t), no notice is `security` yet.
-- The user's own choice of messenger (Telegram or Bale): F-601-u; until then, the one linked last.
 - Quiet hours for the payment, purchase and panel notices: they are not claimed, so nothing holds them.
 - The level of a service bought for someone else set at purchase: it is set afterwards, per service (F-601-o).
 - The bot's own settings screen: F-319, over the same `notification_preference` row.

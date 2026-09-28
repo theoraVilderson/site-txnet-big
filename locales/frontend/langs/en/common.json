@@ -1602,6 +1602,19 @@
       "save": "Save",
       "saved": "Your notice settings are saved.",
       "loadFailed": "We could not load your notice settings."
+    },
+    "messenger": {
+      "title": "Where notices reach you",
+      "subtitle": "Service notices go to your inbox and to your messenger. Choose which one; with both, each bot tells you once.",
+      "options": {
+        "both": "Telegram and Bale",
+        "telegram": "Telegram",
+        "bale": "Bale"
+      },
+      "notLinked": "Not linked yet — until you link it, notices go to your other messenger.",
+      "save": "Save",
+      "saved": "Your messenger is saved.",
+      "loadFailed": "We could not load your messenger setting."
     }
   },
   "tenantBilling": {

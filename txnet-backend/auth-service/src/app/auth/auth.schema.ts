@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { phoneSchema } from '../common/validation/phone.schema';
 import { strongPasswordSchema } from '../common/validation/strong-password.schema';
+import { NoticeMessenger } from '@prisma/client';
 import { OtpChannel } from './otp/otp.interface';
 
 export const passwordLoginSchema = z.object({
@@ -41,6 +42,11 @@ const emailAddressSchema = z.string().trim().max(254).email();
 
 export const meEmailRequestSchema = z.object({
   email: emailAddressSchema,
+});
+
+// F-601-u: from the Prisma enum (C-09), so a value added there is accepted here.
+export const meMessengerSchema = z.object({
+  messenger: z.nativeEnum(NoticeMessenger),
 });
 
 export const meEmailVerifySchema = z.object({

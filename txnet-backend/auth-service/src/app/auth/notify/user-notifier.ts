@@ -667,10 +667,11 @@ function interpolate(template: string, vars: Record<string, string>): string {
  * F-067-o, ADR-0084 decision 2): `inbox` puts the rendered row in their panel
  * inbox, `bot` messages one of their linked chats. The worker asks once per channel.
  *
- * **One messenger, never both** (F-601-s, ADR-0097): the chat linked last
- * is told; only when that send fails (a blocked bot) is the other tried. A
- * tenant with no bot on the first platform goes to the next. The user's own
- * choice of messenger is F-601-u. A security notice asks for `every` chat.
+ * **The user's messenger** (F-601-u, ADR-0097 part 2): Telegram, Bale or
+ * both, and unchosen is both — each verified chat once, a failed one not
+ * retried through the other. A chosen one is told alone, the other only when
+ * that send fails (a blocked bot, or not linked); a tenant with no bot on the
+ * first platform goes to the next. A security notice asks for `every` chat.
  *
  * **SMS** (F-601-t): the rendered text, without a combined notice's list, to
  * the phone the user verified, on the line notification-service picks for the
@@ -701,7 +702,7 @@ export class UserNotifier {
     const tenantId = TenantContext.current('user notification').id;
     const user = await this.prisma.user.findFirst({
       where: { id: request.userId },
-      select: { languagePreference: true, phoneNumber: true, phoneVerifiedAt: true },
+      select: { languagePreference: true, phoneNumber: true, phoneVerifiedAt: true, noticeMessenger: true },
     });
     if (!user) return { sent: [] };
 
@@ -735,16 +736,21 @@ export class UserNotifier {
       orderBy: { linkedAt: 'desc' },
     });
 
+    const choice = user.noticeMessenger ?? 'both';
+    const every = request.every || choice === 'both';
+    // The chosen platform first; the rest keep linked-last order for the fallback.
+    const ordered = every ? links : [...links.filter((l) => l.platform === choice), ...links.filter((l) => l.platform !== choice)];
+
     let lastError: unknown = null;
     const sent: BotPlatform[] = [];
-    for (const link of links) {
+    for (const link of ordered) {
       const platform: BotPlatform = link.platform;
       const client = await this.bots.primaryClient(tenantId, platform, 'identity:UserNotifier');
       if (!client) continue;
       try {
         await client.sendMessage(link.platformUserId, text);
         sent.push(platform);
-        if (!request.every) break;
+        if (!every) break;
       } catch (err) {
         lastError = err;
         this.logger.warn(`${request.template} to user ${request.userId} on ${platform} failed: ${(err as Error).message}`);
