@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, TenantType, UserStatus } from '@prisma/client';
+import { platformCurrencyOf } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -59,7 +60,7 @@ const RESELLER_SELECT = {
   createdAt: true,
   ownerUserId: true,
   domains: { select: { domainValue: true, domainType: true, purpose: true, verificationStatus: true } },
-  billingWallet: { select: { cachedBalance: true } },
+  billingWallet: { select: { cachedBalance: true, currencyCode: true } },
 } satisfies Prisma.TenantSelect;
 
 type ResellerRow = Prisma.TenantGetPayload<{ select: typeof RESELLER_SELECT }>;
@@ -143,6 +144,8 @@ export class ResellerService {
       select: OWNER_SELECT,
     });
     const byId = new Map(owners.map((o) => [o.id, o]));
+    // A reseller with no billing wallet yet reads zero in the platform's currency — the one its wallet will be made in.
+    const platformCurrency = rows.some((r) => !r.billingWallet) ? await platformCurrencyOf(this.all) : null;
     return rows.map((r) => ({
       id: r.id,
       slug: r.slug,
@@ -152,6 +155,7 @@ export class ResellerService {
       owner: byId.get(r.ownerUserId) ?? null,
       domains: r.domains,
       billingBalance: r.billingWallet?.cachedBalance.toString() ?? '0',
+      billingCurrencyCode: r.billingWallet?.currencyCode ?? (platformCurrency as string),
     }));
   }
 }

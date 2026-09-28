@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { LedgerDirection, PaymentStatus, Prisma, WalletReasonType } from '@prisma/client';
-import { BackendI18nKeys, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, TenantContext, operatingCurrencyOf, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { LocaleService } from '../locale/locale.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -107,12 +107,22 @@ export type LedgerRow = {
   referenceId: string | null;
   /** The balance after this row, as the ledger wrote it. Never recomputed. */
   balanceAfter: string;
+  /**
+   * What `amount` and `balanceAfter` are in: the row's own (ADR-0098 part 3).
+   * A row written before a currency change keeps the old one (F-116-h2).
+   */
+  currencyCode: string;
   createdAt: string;
 };
 
 export type LedgerPage = {
-  /** Base currency (ADR-0019), a decimal string — the wallet's balance now. */
+  /** A decimal string — the wallet's balance now, in `currencyCode`. */
   balance: string;
+  /**
+   * The wallet's currency, or the tenant's operating one for a user with no
+   * wallet yet — the currency its first credit will be in (F-116-h2).
+   */
+  currencyCode: string;
   total: number;
   page: number;
   pageSize: number;
@@ -138,6 +148,8 @@ export type PaymentRow = {
   taxRatePercent: string | null;
   discount: string;
   amountCredited: string;
+  /** What every amount above is in: the payment's own (ADR-0098 part 3, F-116-h2). `charge` is in the gateway's minor unit. */
+  currencyCode: string;
   /** What the gateway was asked for, and the rate that produced it — frozen at intent (ADR-0019). */
   charge: { amountMinor: string; rate: string | null };
   /** Zarinpal's `authority`; the id a duplicate callback shares (ADR-0028). */
@@ -186,6 +198,7 @@ const PAYMENT_COLUMNS = {
   taxRatePercent: true,
   discountApplied: true,
   amountCredited: true,
+  currencyCode: true,
   chargedAmountMinor: true,
   exchangeRateSnapshot: true,
   gatewayTrackingCode: true,
@@ -226,6 +239,7 @@ function paymentRowOf(r: PaymentColumns): PaymentRow {
     taxRatePercent: r.taxRatePercent?.toFixed() ?? null,
     discount: money(r.discountApplied),
     amountCredited: money(r.amountCredited),
+    currencyCode: r.currencyCode,
     charge: {
       amountMinor: r.chargedAmountMinor.toString(),
       rate: r.exchangeRateSnapshot === null ? null : r.exchangeRateSnapshot.toString(),
@@ -256,28 +270,28 @@ export class WalletHistoryService {
   ) {}
 
   async ledger(request: LedgerPageRequest): Promise<LedgerPage> {
-    TenantContext.current('wallet history');
+    const tenant = TenantContext.current('wallet history');
     const { userId } = request;
     const { page, pageSize } = paged(request);
 
     const reasonType = this.reasonFilter(request);
-    const empty = (balance: string): LedgerPage => ({ balance, total: 0, page, pageSize, rows: [] });
+    const empty = (balance: string, currencyCode: string): LedgerPage => ({ balance, currencyCode, total: 0, page, pageSize, rows: [] });
 
     return tenantTransaction(this.prisma, async (tx) => {
       // `wallet` carries no `tenantId` and is reached through its owner, so the
       // scope is the gate's `X-User-Id` (ledger rule 2 in `contract.md`).
       const wallet = await tx.wallet.findUnique({
         where: { ownerUserId: userId },
-        select: { id: true, cachedBalance: true },
+        select: { id: true, cachedBalance: true, currencyCode: true },
       });
       // No wallet is a zero balance, as it is for a debit — not a 404. The page
       // exists before the first top-up does.
-      if (!wallet) return empty('0.00');
+      if (!wallet) return empty('0.00', await operatingCurrencyOf(tx, tenant.id));
       const balance = money(wallet.cachedBalance);
       // A search that matched no label. Answered here rather than as
       // `reasonType: { in: [] }`, so the filter cannot be dropped on the way to
       // the query and answer the whole ledger instead of none of it.
-      if (reasonType.in.length === 0) return empty(balance);
+      if (reasonType.in.length === 0) return empty(balance, wallet.currencyCode);
 
       const where: Prisma.WalletTransactionWhereInput = {
         walletId: wallet.id,
@@ -301,6 +315,7 @@ export class WalletHistoryService {
             reasonType: true,
             referenceId: true,
             balanceAfter: true,
+            currencyCode: true,
             createdAt: true,
           },
         }),
@@ -309,6 +324,7 @@ export class WalletHistoryService {
 
       return {
         balance,
+        currencyCode: wallet.currencyCode,
         total,
         page,
         pageSize,
@@ -319,6 +335,7 @@ export class WalletHistoryService {
           reasonType: r.reasonType,
           referenceId: r.referenceId,
           balanceAfter: money(r.balanceAfter),
+          currencyCode: r.currencyCode,
           createdAt: r.createdAt.toISOString(),
         })),
       };

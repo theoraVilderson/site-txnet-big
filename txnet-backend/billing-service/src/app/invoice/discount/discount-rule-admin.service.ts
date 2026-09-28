@@ -70,6 +70,8 @@ export type DiscountRuleView = {
   name: string;
   kind: DiscountRuleKind;
   value: string;
+  /** What a `fixed` rule's `value` is in: the rule's own (ADR-0098 part 3, F-116-h2). */
+  currencyCode: string;
   productId: string | null;
   categoryId: string | null;
   forNamedUsers: boolean;
@@ -99,7 +101,7 @@ type Merged = {
   isActive: boolean;
 };
 
-type RuleRow = Omit<Merged, 'userIds'> & { id: string; createdAt: Date; updatedAt: Date };
+type RuleRow = Omit<Merged, 'userIds'> & { id: string; currencyCode: string; createdAt: Date; updatedAt: Date };
 
 export function statusOfRule(r: { isActive: boolean; startsAt: Date; endsAt: Date | null }, now: number): DiscountRuleStatus {
   if (!r.isActive) return 'off';
@@ -114,6 +116,7 @@ function viewOf(row: RuleRow, userIds: string[], now = Date.now()): DiscountRule
     name: row.name,
     kind: row.kind,
     value: row.value.toFixed(2),
+    currencyCode: row.currencyCode,
     productId: row.productId,
     categoryId: row.categoryId,
     forNamedUsers: row.forNamedUsers,

@@ -17,7 +17,7 @@ lending one to another tenant is `domains/audit/contract.settlement.md`.
 `/api/billing/coupons` (`payment/coupon-admin/`): coupons, gift-code batches, usage — `contract.coupon.md`.
 `/api/billing/gateways` (`payment/gateway-admin/`): `GET` list, `POST` create,
 `PATCH` / `DELETE :source/:id`, `GET` / `PUT presets` — the caller's own
-default quick amounts (F-092-v) — and `GET` / `PUT tax` — its default tax on a
+default quick amounts (F-092-v), `{presets, currencyCode}` — and `GET` / `PUT tax` — its default tax on a
 top-up, `{taxRatePercent}` (F-104-ag). Behind `gateway.manage`; the permission is not
 the boundary. Linking a gateway to another tenant is the settlement grant
 (`domains/audit/contract.settlement.md`), not this surface.
@@ -35,6 +35,7 @@ the boundary. Linking a gateway to another tenant is the settlement grant
 | Quick amounts (F-092-v): a gateway's `depositPresets` overrides the tenant's `presets` (`billing.deposit_setting`); both written through `deposit-presets.ts` — positive, 2 decimals, unique, ascending, at most 8; empty inherits. A default-list write is audited `deposit_presets_update` | one rule for both lists; the top-up page never judges a list |
 | Tax on a top-up (F-104-ag, ADR-0076): a gateway's `taxRatePercent` overrides the tenant's default on `billing.deposit_setting` (`PUT tax`, required key, `null` = no tax); a gateway's `null` inherits. Both 0..100, else `invalid_range` naming `taxRatePercent`, before anything is written. The default is audited `deposit_tax_update` in the same transaction, and writes the rate alone — the quick amounts on the same row are untouched; a gateway's rate lands in its `gateway_update` row | the same two levels as quick amounts; the migration's CHECK stands behind it, but a CHECK answers a typo with a 500 |
 | Every decimal is refused finer than the column that stores it (F-104-ad): 2 places for `minAcceptAmount`, `maxAcceptAmount`, `feeFloor`, `feeCeiling`, 4 for `feeValue` and `taxRatePercent`, 8 for `roundingStep`, 18 for `staticRate` / `minRate` / `maxRate` / `fixedAmountModifier` (`DECIMAL(30,18)`, 12 whole digits: a currency change divides them, F-116-f, and the editor must save back what it read). The message names the field and its places; the panel's form refuses the same values before the request — `taxRatePercent` too, on a gateway and on the default (F-104-aj, `taxRateError`) | `numeric(18, 2)` rounds a third place away instead of refusing it, so a `feeCeiling` of `0.125` was stored as `0.13` and the operator was told nothing — money nobody asked for is not ours to round (the user's call, 2026-09-20) |
+| A gateway view carries `currencyCode`, the gateway's own: what its limits, fixed fee, fixed modifier and presets are in; the presets answer names the default list's, the tenant's now when none is saved yet (F-116-h2) | ADR-0098 part 3: a currency change converts these, and the panel cannot tell 5 USD from 5 IRR without it |
 | Every write lands with its `admin_audit_log` row (`gateway_create` / `_update` / `_delete`) in one transaction | who changed a gateway is the question after money went somewhere unexpected |
 
 Refusals name their `reason`: 403 `not_platform_owner`, `verification_is_platform_owners`;

@@ -29,6 +29,8 @@ export type ResellerView = {
   owner: OwnerView | null;
   domains: { domainValue: string; domainType: TenantDomainType; purpose: TenantDomainPurpose; verificationStatus: string }[];
   billingBalance: string;
+  /** What `billingBalance` is in: the billing wallet's, the platform's (ADR-0098 parts 3–4, F-116-h2). */
+  billingCurrencyCode: string;
 };
 
 /**
@@ -78,7 +80,8 @@ export async function writeReseller(tx: Prisma.TransactionClient, redis: RedisSe
     },
   });
   // Empty: no balance is written here (tenant invariant 3).
-  await tx.tenantBillingWallet.create({ data: { tenantId: tenant.id, currencyCode: await platformCurrencyOf(tx) } });
+  const billingCurrencyCode = await platformCurrencyOf(tx);
+  await tx.tenantBillingWallet.create({ data: { tenantId: tenant.id, currencyCode: billingCurrencyCode } });
   // A subdomain routes as it stands — the platform issued it (tenant invariant 5 is for custom domains).
   const domains = [];
   for (const host of input.hosts) {
@@ -107,6 +110,7 @@ export async function writeReseller(tx: Prisma.TransactionClient, redis: RedisSe
       verificationStatus: domain.verificationStatus,
     })),
     billingBalance: '0',
+    billingCurrencyCode,
   };
   await tx.adminAuditLog.create({
     data: {

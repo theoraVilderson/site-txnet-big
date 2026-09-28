@@ -34,8 +34,9 @@ administration of other tenants is the platform owner's alone.
 
 A reseller view: `id, slug, status, billingModel, createdAt`, `owner`
 (`id, fullName, username, phoneNumber`, never a hash), `domains`
-(`domainValue, domainType, purpose, verificationStatus`) and `billingBalance`
-(the wallet's `cachedBalance` as a decimal string, C-02; `"0"` with no wallet).
+(`domainValue, domainType, purpose, verificationStatus`), `billingBalance`
+(the wallet's `cachedBalance` as a decimal string, C-02; `"0"` with no wallet)
+and `billingCurrencyCode` (the wallet's; the platform's with none — F-116-h2).
 
 Refusals, each with one status: `not_platform_owner` 403, `reseller_not_found`
 and `owner_not_found` 404, `slug_taken` and `owner_inactive` 409. A body that
@@ -68,7 +69,7 @@ read on the app pool before the cross-tenant pool is touched.
 | `GET /api/tenants/purchase/mine` | — | `{reseller}`: the caller's live reseller (`id, slug, status, billingModel, package {id, name}, currentPeriodEnd, domains`), `null` when none — a 200 either way (F-019-l) |
 | `GET /api/tenants/purchase/packages` | — | active packages by name: `id, name, monthlyPrice, yearlyPrice, includedFeatureKeys` |
 | `GET /api/tenants/purchase/slug` | `name` 1..100, `.strict()` | `{slug}` — a suggestion, checked again by the purchase |
-| `POST /api/tenants/purchase` | `{packageId, billingModel, name, slug?}`, `.strict()` | `201` a reseller view + `packageId, currentPeriodEnd, charged, walletBalance` |
+| `POST /api/tenants/purchase` | `{packageId, billingModel, name, slug?}`, `.strict()` | `201` a reseller view + `packageId, currentPeriodEnd, charged, walletBalance, currencyCode` (the buyer's wallet's) |
 
 Refusals: `not_platform_user` 403; `package_not_found` 404; `buyer_inactive`,
 `already_reseller`, `slug_taken`, `insufficient_balance`, `wallet_changed` 409;

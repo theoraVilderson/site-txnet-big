@@ -553,10 +553,10 @@ describe('GatewayAdminService — quick amounts (F-092-v)', () => {
   it("reads and writes the caller's own default list, audited, and no other tenant's", async () => {
     const { service, audit } = build();
 
-    expect(await service.presets(actor(RESELLER))).toEqual([]);
-    expect(await service.setPresets(actor(RESELLER), ['2.5', '2'])).toEqual(['2.00', '2.50']);
-    expect(await service.presets(actor(RESELLER))).toEqual(['2.00', '2.50']);
-    expect(await service.presets(actor(OTHER))).toEqual([]);
+    expect((await service.presets(actor(RESELLER))).presets).toEqual([]);
+    expect((await service.setPresets(actor(RESELLER), ['2.5', '2'])).presets).toEqual(['2.00', '2.50']);
+    expect((await service.presets(actor(RESELLER))).presets).toEqual(['2.00', '2.50']);
+    expect((await service.presets(actor(OTHER))).presets).toEqual([]);
     expect(audit.at(-1)).toMatchObject({ tenantId: RESELLER, action: 'deposit_presets_update', targetEntityType: 'config', targetEntityId: RESELLER });
   });
 });
@@ -624,7 +624,7 @@ describe('GatewayAdminService — tax on a top-up (F-104-ag)', () => {
     await service.setTax(actor(RESELLER), '9');
     await service.setPresets(actor(RESELLER), ['10']);
 
-    expect(await service.presets(actor(RESELLER))).toEqual(['10.00']);
+    expect((await service.presets(actor(RESELLER))).presets).toEqual(['10.00']);
     expect(await service.tax(actor(RESELLER))).toBe('9');
   });
 

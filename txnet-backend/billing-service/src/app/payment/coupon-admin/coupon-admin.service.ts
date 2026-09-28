@@ -64,6 +64,8 @@ export type CouponView = {
   maxDiscountCap: string | null;
   minPurchaseAmount: string | null;
   maxPurchaseAmount: string | null;
+  /** What `discountValue` (when fixed), the cap and the purchase bounds are in: the coupon's own (ADR-0098 part 3, F-116-h2). */
+  currencyCode: string;
   totalUsageLimit: number | null;
   perUserUsageLimit: number;
   usedCount: number;
@@ -426,6 +428,7 @@ export class CouponAdminService {
         maxDiscountCap: str(row['maxDiscountCap']),
         minPurchaseAmount: str(row['minPurchaseAmount']),
         maxPurchaseAmount: str(row['maxPurchaseAmount']),
+        currencyCode: row['currencyCode'] as string,
         totalUsageLimit: (row['totalUsageLimit'] as number | null) ?? null,
         perUserUsageLimit: Number(row['perUserUsageLimit'] ?? 1),
         usedCount: Number(row['usedCount'] ?? 0),

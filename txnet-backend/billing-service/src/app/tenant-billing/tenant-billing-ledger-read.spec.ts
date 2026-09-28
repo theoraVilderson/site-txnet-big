@@ -40,6 +40,7 @@ function store({ hasWallet = true } = {}) {
       reasonType: TenantBillingReasonType.subscription_charge,
       referenceId: 'ref-b',
       balanceAfter: d('60'),
+      currencyCode: 'USD',
       createdAt: new Date('2026-09-18T10:00:00Z'),
     },
     {
@@ -49,6 +50,8 @@ function store({ hasWallet = true } = {}) {
       reasonType: TenantBillingReasonType.admin_manual_adjust,
       referenceId: 'ref-a',
       balanceAfter: d('100'),
+      // Written before the platform switched from EUR: it keeps its own (F-116-h2).
+      currencyCode: 'EUR',
       createdAt: new Date('2026-09-17T10:00:00Z'),
     },
   ];
@@ -57,6 +60,8 @@ function store({ hasWallet = true } = {}) {
   const tenant = {
     findUnique: async ({ where }: { where: { id: string } }) =>
       tenants.has(where.id) ? { id: where.id, tenantType: tenants.get(where.id) } : null,
+    // `platformCurrencyOf`: the currency a reseller with no wallet yet reads zero in.
+    findFirst: async () => ({ operatingCurrencyCode: 'EUR' }),
   };
 
   const all = {
@@ -65,7 +70,7 @@ function store({ hasWallet = true } = {}) {
       findUnique: async ({ where }: { where: { tenantId: string } }) => {
         queries.push({ what: 'wallet', where });
         // Deliberately not the last row's balanceAfter: the header is the wallet's.
-        return hasWallet ? { id: WALLET, cachedBalance: d('75.5') } : null;
+        return hasWallet ? { id: WALLET, cachedBalance: d('75.5'), currencyCode: 'USD' } : null;
       },
     },
     tenantBillingTransaction: {
@@ -124,6 +129,7 @@ describe('TenantBillingAdminService.history', () => {
     expect(page).toEqual({
       tenantId: RESELLER,
       balance: '75.50',
+      currencyCode: 'USD',
       total: 2,
       page: 1,
       pageSize: 20,
@@ -135,6 +141,7 @@ describe('TenantBillingAdminService.history', () => {
           referenceId: 'ref-b',
           amount: '40.00',
           balanceAfter: '60.00',
+          currencyCode: 'USD',
           createdAt: new Date('2026-09-18T10:00:00Z'),
         },
         {
@@ -144,6 +151,7 @@ describe('TenantBillingAdminService.history', () => {
           referenceId: 'ref-a',
           amount: '100.00',
           balanceAfter: '100.00',
+          currencyCode: 'EUR',
           createdAt: new Date('2026-09-17T10:00:00Z'),
         },
       ],
@@ -171,6 +179,7 @@ describe('TenantBillingAdminService.history', () => {
     expect(await service(s).history(owner, RESELLER, {})).toEqual({
       tenantId: RESELLER,
       balance: '0.00',
+      currencyCode: 'EUR',
       total: 0,
       page: 1,
       pageSize: 20,

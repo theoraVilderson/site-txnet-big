@@ -162,6 +162,7 @@ describe('DepositQuoteService.quote', () => {
       gatewayId: GATEWAY,
       source: 'tenant',
       amount: '20.00',
+      currencyCode: 'USD',
       coupons: [{ code: 'SAVE5', discount: '5.00' }],
       rejected: [{ code: 'OLD', reason: 'expired' }],
       discount: '5.00',
@@ -271,6 +272,7 @@ describe('DepositQuoteService.listGateways', () => {
         minAmount: '1.00',
         maxAmount: '1000.00',
         presets: [],
+        currencyCode: 'USD',
         testing: false,
       },
     ]);

@@ -106,13 +106,13 @@ export class GatewayAdminController {
   @Get('presets')
   @RateLimit(READ)
   async presets(@Req() req: Request, @Ip() ip: string) {
-    return this.refusing(async () => ({ presets: await this.gateways.presets(this.actor(req, ip)) }));
+    return this.refusing(() => this.gateways.presets(this.actor(req, ip)));
   }
 
   @Put('presets')
   @RateLimit(WRITE)
   async setPresets(@Body(new ZodValidationPipe(depositPresetsSchema)) body: DepositPresetsBody, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(async () => ({ presets: await this.gateways.setPresets(this.actor(req, ip), body.presets ?? []) }));
+    return this.refusing(() => this.gateways.setPresets(this.actor(req, ip), body.presets ?? []));
   }
 
   /** The caller's default tax on a top-up (ADR-0076, F-104-ag); a gateway's own rate overrides it, `null` is none. */

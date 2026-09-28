@@ -101,7 +101,7 @@ export class ResellerGatewayController {
   @Get('presets')
   @RateLimit(READ)
   async presets(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(async () => ({ presets: await this.gateways.presets(this.actor(req, ip), tenantId) }));
+    return this.refusing(() => this.gateways.presets(this.actor(req, ip), tenantId));
   }
 
   @Put('presets')
@@ -112,7 +112,7 @@ export class ResellerGatewayController {
     @Req() req: Request,
     @Ip() ip: string,
   ) {
-    return this.refusing(async () => ({ presets: await this.gateways.setPresets(this.actor(req, ip), tenantId, body.presets ?? []) }));
+    return this.refusing(() => this.gateways.setPresets(this.actor(req, ip), tenantId, body.presets ?? []));
   }
 
   /** The reseller's own default tax on a top-up (ADR-0076, F-104-ag). */

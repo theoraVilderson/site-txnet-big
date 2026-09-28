@@ -63,7 +63,7 @@ row; its row adds the columns with the writer. **Proof:**
 | Idempotency | `requestId` is the entry's `referenceId`; the same request again is `409 duplicate_request` |
 | Audit | one `admin_audit_log` row, `tenant_billing_adjust` / `tenant_billing_wallet`, in the same transaction; `note` lives only there |
 | Rate limit | `TENANT_BILLING_ADMIN_WRITE`, 30 per 15 min per user |
-| `201` | `{transactionId, tenantId, direction, amount, balanceAfter, createdAt}` — decimals as strings |
+| `201` | `{transactionId, tenantId, direction, amount, balanceAfter, currencyCode, createdAt}` — decimals as strings |
 
 | `reason` | status |
 |---|---|
@@ -117,8 +117,9 @@ billing's deposit start and settlement (`billing/contract.deposit.md`).
 | `page` / `pageSize` optional (1 / 20), `pageSize ≤ 100`, `.strict()`; a bad one is 400 `billing.pageInvalid` | the wallet history's paging |
 | Rate limit: `WALLET_HISTORY`, per user | the same act: reading a money list |
 
-`200`: `{balance, total, page, pageSize, rows: [{id, direction, reasonType,
-amount, balanceAfter, createdAt}]}` — decimals as strings. No `referenceId`:
+`200`: `{balance, currencyCode, total, page, pageSize, rows: [{id, direction, reasonType,
+amount, balanceAfter, currencyCode, createdAt}]}` — decimals as strings; each row
+its own currency, a wallet-less reseller the platform's now (F-116-h2). No `referenceId`:
 an adjustment's is the platform owner's request id.
 
 **Proof:** `tenant-billing/tenant-wallet.spec.ts`.
@@ -138,8 +139,8 @@ controller, so one reseller's wallet has one door.
 | Paging | the reseller read's rules (`tenantWalletSchema`): `page` / `pageSize` (1 / 20), `pageSize ≤ 100`, `.strict()`, a bad one 400 `billing.pageInvalid` |
 | Rate limit | `WALLET_HISTORY`, per user — the same act as the reseller's own read |
 
-`200`: `{tenantId, balance, total, page, pageSize, rows: [{id, direction,
-reasonType, referenceId, amount, balanceAfter, createdAt}]}` — decimals as
+`200`: `{tenantId, balance, currencyCode, total, page, pageSize, rows: [{id, direction,
+reasonType, referenceId, amount, balanceAfter, currencyCode, createdAt}]}` — decimals as
 strings, rows newest first with `id` breaking a tie. `balance` is
 `cachedBalance` (invariant 3); a reseller never credited has no wallet and
 answers `"0.00"` with no rows. Unlike the reseller's own read this **does**

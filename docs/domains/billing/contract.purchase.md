@@ -25,7 +25,7 @@ the gate like every billing route ("Request edge" in `contract.md`).
 
 | Body | Answer (201) |
 |---|---|
-| `variantId` (uuid), `couponCodes?` (≤ 10, ≤ 64 chars each) | `{id, variantId, sku, nameKey, status: "pending", amount, discount, total, automaticDiscount: {ruleId, name, discount} \| null, applied: [{code, discount}], rejected: [{code, reason, message}], expiresAt}` — money as decimal strings, base currency (C-02) |
+| `variantId` (uuid), `couponCodes?` (≤ 10, ≤ 64 chars each) | `{id, variantId, sku, nameKey, status: "pending", amount, discount, total, currencyCode, automaticDiscount: {ruleId, name, discount} \| null, applied: [{code, discount}], rejected: [{code, reason, message}], expiresAt}` — money as decimal strings, base currency (C-02) |
 
 | Rule | Held by |
 |---|---|
@@ -64,10 +64,10 @@ otherwise) → `InvoiceExpiryService.expirePending()` → `{scanned, expired, ho
 
 | Answer | When |
 |---|---|
-| `200 {id, status: "paid", total, balanceAfter, walletTransactionId, grants: [{id, status: "pending"}]}` | paid. No token: the link is `GET /api/billing/gift/grants/:id/subscription-link`'s (`contract.gift.md`, F-114-e-c) |
+| `200 {id, status: "paid", total, currencyCode, balanceAfter, walletTransactionId, grants: [{id, status: "pending"}]}` | paid. No token: the link is `GET /api/billing/gift/grants/:id/subscription-link`'s (`contract.gift.md`, F-114-e-c) |
 | `404 errors.billing.invoice.notFound` | unknown, another tenant's (RLS) or another user's — never told apart |
 | `409` `reason`: `already_paid` / `expired` / `cancelled` | its i18n key beside it. Past `expiresAt` is `expired` even before the sweep flips it. A `refunded` invoice (F-111-d) is `already_paid`: it was, and its clock may still run |
-| `409 insufficient_balance` + `error.facts: {total, balance, missing}` | the wallet holds less than `total`; nothing is written. `missing` is the top-up to offer — "The shortfall" below. In `facts` because the shared envelope drops any other field (F-111-e: until then the figure never reached a client) |
+| `409 insufficient_balance` + `error.facts: {total, balance, missing, currencyCode}` (the invoice's, F-116-h2) | the wallet holds less than `total`; nothing is written. `missing` is the top-up to offer — "The shortfall" below. In `facts` because the shared envelope drops any other field (F-111-e: until then the figure never reached a client) |
 | `404 errors.billing.invoice.variantNotFound` | the variant was switched off since the invoice: the Grant cannot be issued and the whole payment rolls back |
 
 **One transaction, in this order** (spec §5.8 step 2):
@@ -93,7 +93,7 @@ Both on `InvoiceService`, proved by `invoice/invoice.spec.ts`.
 
 | Route | Answer | Rule |
 |---|---|---|
-| `GET /api/billing/offers` (`OffersController`) | `[{variantId, sku, nameKey, productId, productNameKey, descriptionKey, categoryKey, categories: [{key, nameKey}], fulfilmentKind, durationDays, billingMode, quotas, price}]`, by SKU. `nameKey` is the variant's own, else its product's; `productNameKey` always the product's; `categories` every **live** category the product is filed in, by its own order (F-114-d) | `forSale`: catalog's `listOffersIn` (listed, live, priced), **less what `deliveryRouteOf` cannot deliver** — the rule `create` refuses with, so the list never offers a buy that answers `variantNotFound`. `@TenantCapability('sell')`; `SHOP_OFFERS` bucket, `SHOP_OFFERS_RATE_LIMIT` (120) per 15 min |
+| `GET /api/billing/offers` (`OffersController`) | `[{variantId, sku, nameKey, productId, productNameKey, descriptionKey, categoryKey, categories: [{key, nameKey}], fulfilmentKind, durationDays, billingMode, quotas, price, currencyCode}]`, by SKU. `nameKey` is the variant's own, else its product's; `productNameKey` always the product's; `categories` every **live** category the product is filed in, by its own order (F-114-d) | `forSale`: catalog's `listOffersIn` (listed, live, priced), **less what `deliveryRouteOf` cannot deliver** — the rule `create` refuses with, so the list never offers a buy that answers `variantNotFound`. `@TenantCapability('sell')`; `SHOP_OFFERS` bucket, `SHOP_OFFERS_RATE_LIMIT` (120) per 15 min |
 | `GET /api/billing/invoices/:id` | the create answer without `rejected`; `applied` = the holds under the invoice's id, `pending` or `confirmed` | `get`: scoped to the caller's user (+ RLS) — unknown, another tenant's and another user's are one `404 notFound`. A `pending` one past `expiresAt` reads `expired`, as the pay refuses it. No capability (it sells nothing); `INVOICE_READ` bucket, `INVOICE_READ_RATE_LIMIT` (120) per 15 min |
 
 ## Giving an invoice up (built — F-114-d)
@@ -159,7 +159,7 @@ budgets. Bodies are `.strict()`; money is a decimal string (C-02).
 
 | Route | Answer | Refusals (`{reason, message}`) |
 |---|---|---|
-| `GET /` | every rule of the caller's tenant, newest first: `{id, name, kind, value, productId, categoryId, forNamedUsers, userIds, groupId, startsAt, endsAt, isActive, status, createdAt, updatedAt}`; `status` is `off` / `ended` / `scheduled` / `running` | — |
+| `GET /` | every rule of the caller's tenant, newest first: `{id, name, kind, value, currencyCode, productId, categoryId, forNamedUsers, userIds, groupId, startsAt, endsAt, isActive, status, createdAt, updatedAt}`; `status` is `off` / `ended` / `scheduled` / `running` | — |
 | `POST /` | `201` the rule. Body: `name` (≤ 80), `kind` (`percentage` / `fixed_amount`), `value`, `startsAt`; optional `productId`, `categoryId`, `forNamedUsers`, `userIds` (≤ 1000), `groupId`, `endsAt`, `isActive` | `400` `invalid_value`, `invalid_window`, `one_target`, `named_needs_users`, `one_audience` (named users and a group), `user_out_of_scope` (a user not of this tenant); `404 target_not_found` (a product or category this tenant cannot see, or archived), `404 group_not_found` (not this tenant's group) |
 | `PATCH /:id` | the rule, any field of the body above; `userIds` replaces the list | the same, and `404 rule_not_found` |
 

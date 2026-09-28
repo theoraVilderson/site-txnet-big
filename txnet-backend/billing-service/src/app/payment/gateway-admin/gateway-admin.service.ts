@@ -81,6 +81,9 @@ export type GatewayFields = {
 export type CreateGatewayInput = GatewayFields & GatewaySecretValues & { source: GatewaySource; tenantId?: string };
 export type UpdateGatewayInput = GatewayFields & GatewaySecretValues;
 
+/** A tenant's default quick amounts (F-092-v), and what they are in (ADR-0098 part 3, F-116-h2). */
+export type DepositPresetList = { presets: string[]; currencyCode: string };
+
 export type GatewayView = {
   source: GatewaySource;
   id: string;
@@ -94,6 +97,11 @@ export type GatewayView = {
   description: string | null;
   supportedCurrencies: unknown;
   confirmationMode: string | null;
+  /**
+   * What its limits, fixed fee, fixed modifier and presets are in: the
+   * gateway's own, its owner's at the time (ADR-0098 part 3, F-116-h2).
+   */
+  currencyCode: string;
   minAcceptAmount: string | null;
   maxAcceptAmount: string | null;
   feeCalculationMode: string;
@@ -273,16 +281,19 @@ export class GatewayAdminService {
    * its own overrides them. Always the caller's tenant: a tenant's price list
    * is its own business, the platform owner's included.
    */
-  async presets(actor: GatewayActor): Promise<string[]> {
-    const row = await tenantTransaction(this.prisma, (db) => db.depositSetting.findUnique({ where: { tenantId: actor.tenantId } }));
-    return presetStrings(row?.presets);
+  async presets(actor: GatewayActor): Promise<DepositPresetList> {
+    return tenantTransaction(this.prisma, async (db) => {
+      const row = await db.depositSetting.findUnique({ where: { tenantId: actor.tenantId } });
+      // No row yet: the list is empty, and a first save writes it in the tenant's currency.
+      return { presets: presetStrings(row?.presets), currencyCode: row?.currencyCode ?? (await operatingCurrencyOf(db, actor.tenantId)) };
+    });
   }
 
-  async setPresets(actor: GatewayActor, values: string[]): Promise<string[]> {
+  async setPresets(actor: GatewayActor, values: string[]): Promise<DepositPresetList> {
     const presets = this.presetDecimals(values);
-    await tenantTransaction(this.prisma, async (tx) => {
+    const saved = await tenantTransaction(this.prisma, async (tx) => {
       const before = presetStrings((await tx.depositSetting.findUnique({ where: { tenantId: actor.tenantId } }))?.presets);
-      await tx.depositSetting.upsert({
+      const row = await tx.depositSetting.upsert({
         where: { tenantId: actor.tenantId },
         create: { tenantId: actor.tenantId, currencyCode: await operatingCurrencyOf(tx, actor.tenantId), presets, updatedByUserId: actor.adminId },
         update: { presets, updatedByUserId: actor.adminId },
@@ -299,8 +310,9 @@ export class GatewayAdminService {
           adminIpAddress: actor.ip,
         },
       });
+      return row;
     });
-    return presetStrings(presets);
+    return { presets: presetStrings(presets), currencyCode: saved.currencyCode };
   }
 
   /**
@@ -743,6 +755,7 @@ export class GatewayAdminService {
       description: source === 'platform' ? str(row['description']) : null,
       supportedCurrencies: source === 'platform' ? (row['supportedCurrencies'] ?? []) : null,
       confirmationMode: source === 'platform' ? str(row['confirmationMode']) : null,
+      currencyCode: row['currencyCode'] as string,
       minAcceptAmount: str(row['minAcceptAmount']),
       maxAcceptAmount: str(row['maxAcceptAmount']),
       feeCalculationMode: row['feeCalculationMode'] as string,

@@ -46,7 +46,8 @@ import { slugCandidates, slugFromName } from './slug-suggestion';
 
 export type PurchaseBuyer = { userId: string; tenantId: string; ip: string };
 
-export type PurchaseView = ResellerView & { packageId: string; currentPeriodEnd: Date; charged: string; walletBalance: string };
+/** `charged` and `walletBalance` are the buyer's wallet's, in `currencyCode` — the platform's (ADR-0098 part 4, F-116-h2). */
+export type PurchaseView = ResellerView & { packageId: string; currentPeriodEnd: Date; charged: string; walletBalance: string; currencyCode: string };
 
 /**
  * The reseller a buyer already holds (F-019-l): what `/resellers/buy` shows in
@@ -181,11 +182,12 @@ export class ResellerPurchaseService {
         if (await this.ownsReseller(tx, buyer.userId)) throw new ResellerPurchaseRefused('already_reseller', buyer.userId);
 
         const reseller = await writeReseller(tx, this.redis, { slug, hosts, billingModel: input.billingModel, owner, actorId: buyer.userId, ip: buyer.ip });
+        // The buyer is the platform's user, so this is the platform's currency (ADR-0098 part 4).
+        const currencyCode = await operatingCurrencyOf(tx, buyer.tenantId);
         const paid = await this.wallets.debit(tx, {
           userId: buyer.userId,
           amount: price,
-          // The buyer is the platform's user, so this is the platform's currency (ADR-0098 part 4).
-          currencyCode: await operatingCurrencyOf(tx, buyer.tenantId),
+          currencyCode,
           reasonType: WalletReasonType.reseller_purchase,
           referenceId: reseller.id,
           tenantId: buyer.tenantId,
@@ -216,6 +218,7 @@ export class ResellerPurchaseService {
           currentPeriodEnd,
           charged: price.toFixed(2),
           walletBalance: paid.balanceAfter.toFixed(2),
+          currencyCode,
         };
       });
       this.logger.log(`reseller ${view.id} (${slug}) bought by ${buyer.userId}: package ${input.packageId}, ${input.billingModel}`);

@@ -231,7 +231,10 @@ describe('paying an invoice from the wallet (F-111-b)', () => {
     const e = await refusal(pay(id, POOR_USER));
 
     expect(e.reason).toBe('insufficient_balance');
-    expect(e.shortfall && Object.values(e.shortfall).map((d) => d.toFixed(2))).toEqual(['12.50', '5.00', '7.50']);
+    const s = e.shortfall;
+    expect(s && [s.total, s.balance, s.missing].map((d) => d.toFixed(2))).toEqual(['12.50', '5.00', '7.50']);
+    // In the invoice's currency, which the panel names beside the figure (F-116-h2).
+    expect(s?.currencyCode).toBe('USD');
     expect(await writtenFor(id)).toEqual({ invoice: InvoiceStatus.pending, debits: [], grants: [], events: [] });
     expect(await balanceOf(POOR_USER)).toBe('5.00');
   });

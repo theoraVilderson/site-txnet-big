@@ -59,6 +59,8 @@ export type InvoiceCreated = {
   amount: string;
   discount: string;
   total: string;
+  /** What every amount here is in: the invoice's own, its price's (ADR-0098 part 3, F-116-h2). */
+  currencyCode: string;
   /** The rule with no code taken before the coupons (F-114-h), or null. `discount` includes it. */
   automaticDiscount: AutomaticDiscount | null;
   /** The codes applied, in the order typed, with what each took. */
@@ -178,6 +180,7 @@ export class InvoiceService {
         amount: amount.toFixed(2),
         discount: ruleDiscount.plus(coupons.totalDiscount).toFixed(2),
         total: coupons.payable.toFixed(2),
+        currencyCode: invoice.currencyCode,
         automaticDiscount: rule ? { ruleId: rule.rule.id, name: rule.rule.name, discount: rule.discount.toFixed(2) } : null,
         applied: coupons.applied.map((a) => ({ code: a.code, discount: a.discount.toFixed(2) })),
         rejected: coupons.rejected,
@@ -239,6 +242,7 @@ export class InvoiceService {
         amount: row.amount.toFixed(2),
         discount: row.discount.toFixed(2),
         total: row.total.toFixed(2),
+        currencyCode: row.currencyCode,
         automaticDiscount:
           row.discountRuleId && row.discountRule
             ? { ruleId: row.discountRuleId, name: row.discountRule.name, discount: row.ruleDiscount.toFixed(2) }

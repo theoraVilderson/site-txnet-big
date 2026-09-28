@@ -22,8 +22,8 @@ query, so neither route has an id to authorise.
 
 | Route | Query | Answers `data` |
 |---|---|---|
-| `GET /api/billing/wallet/history` | `page`, `pageSize` (≤ 100), `types[]`, `direction`, `from`, `to`, `search` | `{balance, total, page, pageSize, rows[{id, amount, direction, reasonType, referenceId, balanceAfter, createdAt}]}` |
-| `GET /api/billing/wallet/payments` | `page`, `pageSize` (≤ 100), `statuses[]`, `from`, `to` | `{total, page, pageSize, rows[{id, status, amountRequested, fee, tax, taxRatePercent, discount, amountCredited, charge{amountMinor, rate}, trackingCode, referenceId, cardPanMasked, failureCode, gateway{source, id, displayName}, createdAt, expiresAt}]}` |
+| `GET /api/billing/wallet/history` | `page`, `pageSize` (≤ 100), `types[]`, `direction`, `from`, `to`, `search` | `{balance, currencyCode, total, page, pageSize, rows[{id, amount, direction, reasonType, referenceId, balanceAfter, currencyCode, createdAt}]}` — each row's own currency, the page's the wallet's (F-116-h2) |
+| `GET /api/billing/wallet/payments` | `page`, `pageSize` (≤ 100), `statuses[]`, `from`, `to` | `{total, page, pageSize, rows[{id, status, amountRequested, fee, tax, taxRatePercent, discount, amountCredited, currencyCode, charge{amountMinor, rate}, trackingCode, referenceId, cardPanMasked, failureCode, gateway{source, id, displayName}, createdAt, expiresAt}]}` |
 
 ## Rules
 

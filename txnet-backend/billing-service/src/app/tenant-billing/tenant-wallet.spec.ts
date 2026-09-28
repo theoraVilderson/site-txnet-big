@@ -41,6 +41,7 @@ function build({ hasWallet = true } = {}) {
       direction: TenantLedgerDirection.debit,
       reasonType: TenantBillingReasonType.admin_manual_adjust,
       balanceAfter: d('60'),
+      currencyCode: 'USD',
       createdAt: new Date('2026-09-17T10:00:00Z'),
     },
     {
@@ -49,17 +50,21 @@ function build({ hasWallet = true } = {}) {
       direction: TenantLedgerDirection.credit,
       reasonType: TenantBillingReasonType.topup_payment,
       balanceAfter: d('100'),
+      // Written before the platform switched from EUR: it keeps its own (F-116-h2).
+      currencyCode: 'EUR',
       createdAt: new Date('2026-09-16T10:00:00Z'),
     },
   ];
   const tx = {
     $executeRaw: async () => 0,
+    // `platformCurrencyOf`: the currency a reseller with no wallet yet reads zero in.
+    tenant: { findFirst: async () => ({ operatingCurrencyCode: 'EUR' }) },
     tenantBillingWallet: {
       findUnique: async (args: { where: unknown }) => {
         reads.push({ scope: TenantContext.current().id, what: 'wallet', where: args.where });
         // A deliberately different figure from the rows' last balanceAfter: the
         // header is the wallet's, not the page's.
-        return hasWallet ? { id: WALLET, cachedBalance: d('75.5') } : null;
+        return hasWallet ? { id: WALLET, cachedBalance: d('75.5'), currencyCode: 'USD' } : null;
       },
     },
     tenantBillingTransaction: {
@@ -87,6 +92,7 @@ describe("a reseller's billing wallet, read", () => {
 
     expect(page).toEqual({
       balance: '75.50',
+      currencyCode: 'USD',
       total: 2,
       page: 1,
       pageSize: 20,
@@ -97,6 +103,7 @@ describe("a reseller's billing wallet, read", () => {
           direction: 'debit',
           reasonType: 'admin_manual_adjust',
           balanceAfter: '60.00',
+          currencyCode: 'USD',
           createdAt: new Date('2026-09-17T10:00:00Z'),
         },
         {
@@ -105,6 +112,7 @@ describe("a reseller's billing wallet, read", () => {
           direction: 'credit',
           reasonType: 'topup_payment',
           balanceAfter: '100.00',
+          currencyCode: 'EUR',
           createdAt: new Date('2026-09-16T10:00:00Z'),
         },
       ],
@@ -123,7 +131,7 @@ describe("a reseller's billing wallet, read", () => {
 
     const { service, reads } = build({ hasWallet: false });
     const empty = await asReseller(() => service.history(owner, {}));
-    expect(empty).toEqual({ balance: '0.00', total: 0, page: 1, pageSize: 20, rows: [] });
+    expect(empty).toEqual({ balance: '0.00', currencyCode: 'EUR', total: 0, page: 1, pageSize: 20, rows: [] });
     expect(reads.map((r) => r.what)).toEqual(['wallet']);
   });
 

@@ -13,6 +13,7 @@ import {
   TenantBillingInvalidAmount,
   TenantBillingLedger,
   TenantBillingVersionConflict,
+  platformCurrencyOf,
 } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -66,6 +67,8 @@ export type AdjustmentView = {
   direction: TenantLedgerDirection;
   amount: string;
   balanceAfter: string;
+  /** The wallet's, which the ledger wrote the row in (F-116-h2). */
+  currencyCode: string;
   createdAt: Date;
 };
 
@@ -80,12 +83,16 @@ export type TenantLedgerRow = {
   /** The platform's currency (C-02, ADR-0098 part 4), two decimals, as a string. */
   amount: string;
   balanceAfter: string;
+  /** What `amount` and `balanceAfter` are in: the row's own, the platform's when it was written (F-116-h2). */
+  currencyCode: string;
   createdAt: Date;
 };
 
 export type TenantLedgerPage = {
   tenantId: string;
   balance: string;
+  /** The wallet's currency — the platform's — or the platform's now for a reseller with no wallet yet (F-116-h2). */
+  currencyCode: string;
   total: number;
   page: number;
   pageSize: number;
@@ -169,14 +176,12 @@ export class TenantBillingAdminService {
 
     const page = query.page ?? DEFAULT_PAGE;
     const pageSize = query.pageSize ?? DEFAULT_PAGE_SIZE;
-    const empty = { tenantId, balance: '0.00', total: 0, page, pageSize, rows: [] };
-
     const wallet = await this.all.tenantBillingWallet.findUnique({
       where: { tenantId },
-      select: { id: true, cachedBalance: true },
+      select: { id: true, cachedBalance: true, currencyCode: true },
     });
     // A reseller that has never been credited has no wallet yet: a zero balance, as the ledger reads it.
-    if (!wallet) return empty;
+    if (!wallet) return { tenantId, balance: '0.00', currencyCode: await platformCurrencyOf(this.all), total: 0, page, pageSize, rows: [] };
 
     const where = { walletId: wallet.id };
     const [rows, total] = await Promise.all([
@@ -193,6 +198,7 @@ export class TenantBillingAdminService {
           reasonType: true,
           referenceId: true,
           balanceAfter: true,
+          currencyCode: true,
           createdAt: true,
         },
       }),
@@ -203,6 +209,7 @@ export class TenantBillingAdminService {
       tenantId,
       // The wallet's own figure (invariant 3), never a sum of the rows on the page.
       balance: money(wallet.cachedBalance),
+      currencyCode: wallet.currencyCode,
       total,
       page,
       pageSize,
@@ -213,6 +220,7 @@ export class TenantBillingAdminService {
         referenceId: r.referenceId,
         amount: money(r.amount),
         balanceAfter: money(r.balanceAfter),
+        currencyCode: r.currencyCode,
         createdAt: r.createdAt,
       })),
     };
@@ -244,7 +252,7 @@ function parseAmount(raw: string): Prisma.Decimal {
 
 function toView(
   tenantId: string,
-  row: { id: string; direction: TenantLedgerDirection; amount: Prisma.Decimal; balanceAfter: Prisma.Decimal; createdAt: Date },
+  row: { id: string; direction: TenantLedgerDirection; amount: Prisma.Decimal; balanceAfter: Prisma.Decimal; currencyCode: string; createdAt: Date },
 ): AdjustmentView {
   return {
     transactionId: row.id,
@@ -252,6 +260,7 @@ function toView(
     direction: row.direction,
     amount: row.amount.toString(),
     balanceAfter: row.balanceAfter.toString(),
+    currencyCode: row.currencyCode,
     createdAt: row.createdAt,
   };
 }

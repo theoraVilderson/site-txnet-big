@@ -68,6 +68,7 @@ function toHttp(e: unknown): unknown {
       total: e.shortfall.total.toFixed(2),
       balance: e.shortfall.balance.toFixed(2),
       missing: e.shortfall.missing.toFixed(2),
+      currencyCode: e.shortfall.currencyCode,
     };
     return new ConflictException(facts ? { ...body, facts } : body);
   }
@@ -227,6 +228,7 @@ export class OffersController {
       billingMode: o.billingMode,
       quotas: o.quotas,
       price: o.price.amount,
+      currencyCode: o.price.currencyCode,
     }));
   }
 }

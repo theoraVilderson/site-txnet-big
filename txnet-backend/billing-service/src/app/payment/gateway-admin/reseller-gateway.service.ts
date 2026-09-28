@@ -10,6 +10,7 @@ import {
 import type { GatewaySource } from '../gateway/gateway-merchant';
 import {
   CreateGatewayInput,
+  DepositPresetList,
   GatewayActor,
   GatewayAdminRefused,
   GatewayAdminRejection,
@@ -85,11 +86,11 @@ export class ResellerGatewayService {
     return this.run(actor, tenantId, 'read', (as) => this.gateways.list(as));
   }
 
-  presets(actor: ResellerGatewayActor, tenantId: string): Promise<string[]> {
+  presets(actor: ResellerGatewayActor, tenantId: string): Promise<DepositPresetList> {
     return this.run(actor, tenantId, 'read', (as) => this.gateways.presets(as));
   }
 
-  setPresets(actor: ResellerGatewayActor, tenantId: string, values: string[]): Promise<string[]> {
+  setPresets(actor: ResellerGatewayActor, tenantId: string, values: string[]): Promise<DepositPresetList> {
     return this.run(actor, tenantId, 'staffWrite', (as) => this.gateways.setPresets(as, values));
   }
 

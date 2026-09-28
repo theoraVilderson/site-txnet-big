@@ -53,7 +53,7 @@ export type DepositGateway = {
   displayName: string;
   providerName: string;
   category: string;
-  /** Base currency, the gateway's accepted range for `amount`; `null` is no limit on that side. */
+  /** The gateway's accepted range for `amount`, in `currencyCode`; `null` is no limit on that side. */
   minAmount: string | null;
   maxAmount: string | null;
   /**
@@ -62,6 +62,12 @@ export type DepositGateway = {
    * means the panel draws its automatic ladder.
    */
   presets: string[];
+  /**
+   * What `minAmount`, `maxAmount` and `presets` are in — and what a top-up
+   * through it is asked in: the gateway's own, which is only ever offered to a
+   * tenant in the same one (F-116-e, F-116-h2).
+   */
+  currencyCode: string;
   /** Off or not yet verified — offered only to a caller who may manage gateways, to test it. */
   testing: boolean;
 };
@@ -81,11 +87,13 @@ export type DepositQuoteRequest = {
   chatPlatform?: string | null;
 };
 
-/** Money as decimal strings in base currency; `amountMinor` as a string, since JSON has no bigint. */
+/** Money as decimal strings in `currencyCode`; `amountMinor` as a string, since JSON has no bigint. */
 export type DepositQuote = {
   gatewayId: string;
   source: GatewaySource;
   amount: string;
+  /** What every amount but `charge` is in: the tenant's operating currency, the payment's to be (F-116-h2). */
+  currencyCode: string;
   /** The codes that discounted, in the order typed, each with what it took. */
   coupons: Array<{ code: string; discount: string }>;
   rejected: RejectedCoupon[];
@@ -176,6 +184,7 @@ export class DepositQuoteService {
         minAmount: g.minAcceptAmount == null ? null : money(g.minAcceptAmount),
         maxAmount: g.maxAcceptAmount == null ? null : money(g.maxAcceptAmount),
         presets: resolvePresets(g.depositPresets, tenantPresets, { min: g.minAcceptAmount, max: g.maxAcceptAmount }),
+        currencyCode: g.currencyCode,
         testing: g.testing,
       }));
   }
@@ -235,6 +244,7 @@ export class DepositQuoteService {
       gatewayId: gateway.id,
       source: request.source,
       amount: money(price.amount),
+      currencyCode,
       coupons: coupons.applied.map((c) => ({ code: c.code, discount: money(c.discount) })),
       rejected: coupons.rejected,
       discount: money(price.discount),

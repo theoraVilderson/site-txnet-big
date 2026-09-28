@@ -125,6 +125,8 @@ export type DepositStarted = {
   credited: string;
   /** The wallet balance a free top-up left behind; `null` when a gateway still has to be paid. */
   balance: string | null;
+  /** What every amount but `invoice` is in: the payment's own (ADR-0098 part 3, F-116-h2). */
+  currencyCode: string;
 };
 
 /**
@@ -309,6 +311,7 @@ export class DepositStartService {
       payable: money(price.payable),
       credited: money(price.credited),
       balance: balance ? money(balance) : null,
+      currencyCode,
     };
     if (price.free) return answer;
 

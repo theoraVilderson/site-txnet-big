@@ -51,6 +51,7 @@ function ledgerRow(overrides: Record<string, unknown> = {}) {
     reasonType: WalletReasonType.payment_gateway,
     referenceId: null,
     balanceAfter: d('30.00'),
+    currencyCode: 'USD',
     createdAt: new Date('2026-09-10T10:00:00Z'),
     ...overrides,
   };
@@ -66,6 +67,7 @@ function paymentRow(overrides: Record<string, unknown> = {}) {
     taxRatePercent: null,
     discountApplied: d('0'),
     amountCredited: d('10.00'),
+    currencyCode: 'USD',
     chargedAmountMinor: BigInt(1000000),
     exchangeRateSnapshot: d('1000000'),
     gatewayTrackingCode: 'A0000000000000000000000000000001',
@@ -82,7 +84,9 @@ function paymentRow(overrides: Record<string, unknown> = {}) {
 }
 
 type Setup = {
-  wallet?: { id: string; cachedBalance: Prisma.Decimal } | null;
+  wallet?: { id: string; cachedBalance: Prisma.Decimal; currencyCode: string } | null;
+  /** The tenant's operating currency now (ADR-0098 part 1). */
+  operating?: string;
   rows?: ReturnType<typeof ledgerRow>[];
   payments?: ReturnType<typeof paymentRow>[];
 };
@@ -95,7 +99,12 @@ type Slice = { skip: number; take: number };
  * answer is not enough on its own: it can be right while the query read the
  * wrong slice.
  */
-function build({ wallet = { id: WALLET, cachedBalance: d('30.00') }, rows = [ledgerRow()], payments = [paymentRow()] }: Setup = {}) {
+function build({
+  wallet = { id: WALLET, cachedBalance: d('30.00'), currencyCode: 'USD' },
+  operating = 'USD',
+  rows = [ledgerRow()],
+  payments = [paymentRow()],
+}: Setup = {}) {
   const asked: {
     ledger?: Prisma.WalletTransactionWhereInput;
     payments?: Prisma.PaymentTransactionWhereInput;
@@ -104,6 +113,7 @@ function build({ wallet = { id: WALLET, cachedBalance: d('30.00') }, rows = [led
   } = {};
   const tx = {
     $executeRaw: async () => 0,
+    tenant: { findUnique: async () => ({ operatingCurrencyCode: operating }) },
     wallet: { findUnique: async () => wallet },
     walletTransaction: {
       findMany: async (args: { where: Prisma.WalletTransactionWhereInput } & Slice) => {
@@ -179,7 +189,7 @@ describe('WalletHistoryService.ledger', () => {
     const { service } = build({ wallet: null });
     const result = await runWithTenant({ id: TENANT }, () => service.ledger({ userId: USER, lang: 'fa', ...page }));
 
-    expect(result).toEqual({ balance: '0.00', total: 0, page: 1, pageSize: 10, rows: [] });
+    expect(result).toEqual({ balance: '0.00', currencyCode: 'USD', total: 0, page: 1, pageSize: 10, rows: [] });
   });
 
   it('turns a search term into the reason types whose label matches it', async () => {
@@ -382,5 +392,59 @@ describe('WalletHistoryService.payment', () => {
   it('answers null for a payment that is not the caller’s', async () => {
     const { service } = build({ payments: [] });
     expect(await runWithTenant({ id: TENANT }, () => service.payment(USER, '77777777-7777-4777-8777-777777777777'))).toBeNull();
+  });
+});
+
+/**
+ * F-116-h2 (ADR-0098 part 3): every amount names the currency it is in, and
+ * that is the row's own — never the tenant's now. A tenant that switched from
+ * USD to IRR still has USD rows in its ledger; read with the tenant's
+ * currency, a $10 top-up would show as 10 rials.
+ */
+describe('WalletHistoryService — each amount names its own currency', () => {
+  it("labels each ledger row with its own currency, and the balance with the wallet's", async () => {
+    const { service } = build({
+      wallet: { id: WALLET, cachedBalance: d('600000.00'), currencyCode: 'IRR' },
+      operating: 'IRR',
+      rows: [
+        ledgerRow({ id: 'opening', reasonType: WalletReasonType.currency_change, amount: d('600000.00'), balanceAfter: d('600000.00'), currencyCode: 'IRR' }),
+        ledgerRow({ id: 'closing', reasonType: WalletReasonType.currency_change, direction: 'debit', amount: d('10.00'), balanceAfter: d('0.00'), currencyCode: 'USD' }),
+      ],
+    });
+
+    const result = await runWithTenant({ id: TENANT }, () => service.ledger({ userId: USER, lang: 'fa', ...page }));
+
+    expect(result.balance).toBe('600000.00');
+    expect(result.currencyCode).toBe('IRR');
+    expect(result.rows.map((r) => [r.id, r.amount, r.currencyCode])).toEqual([
+      ['opening', '600000.00', 'IRR'],
+      ['closing', '10.00', 'USD'],
+    ]);
+  });
+
+  it("names the tenant's operating currency for a user with no wallet yet — the one its first credit will be in", async () => {
+    const { service } = build({ wallet: null, operating: 'IRR' });
+
+    const result = await runWithTenant({ id: TENANT }, () => service.ledger({ userId: USER, lang: 'fa', ...page }));
+
+    expect(result).toMatchObject({ balance: '0.00', currencyCode: 'IRR', rows: [] });
+  });
+
+  it("names the wallet's currency when a search matches no label, as for a full page", async () => {
+    const { service } = build({ wallet: { id: WALLET, cachedBalance: d('5.00'), currencyCode: 'EUR' }, operating: 'IRR' });
+
+    const result = await runWithTenant({ id: TENANT }, () => service.ledger({ userId: USER, lang: 'fa', search: 'no-such-label', ...page }));
+
+    expect(result).toMatchObject({ balance: '5.00', currencyCode: 'EUR', rows: [] });
+  });
+
+  it("labels a payment with the currency it was asked in, not the tenant's now", async () => {
+    const { service } = build({ operating: 'IRR', payments: [paymentRow({ currencyCode: 'USD' })] });
+
+    const list = await runWithTenant({ id: TENANT }, () => service.payments({ userId: USER, ...page }));
+    const one = await runWithTenant({ id: TENANT }, () => service.payment(USER, '77777777-7777-4777-8777-777777777777'));
+
+    expect(list.rows[0]).toMatchObject({ amountRequested: '10.00', currencyCode: 'USD' });
+    expect(one).toMatchObject({ currencyCode: 'USD' });
   });
 });
