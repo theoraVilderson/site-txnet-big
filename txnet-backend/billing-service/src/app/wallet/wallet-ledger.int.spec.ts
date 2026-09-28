@@ -79,8 +79,8 @@ async function seed() {
     VALUES ('${USER_A}', '${TENANT_A}', 'alpha person', 'x', '${ROLE_ID}', now())
   `);
   await owner.$executeRawUnsafe(`
-    INSERT INTO billing.wallet (id, "ownerUserId", "cachedBalance", version)
-    VALUES ('${WALLET_A}', '${USER_A}', 100.00, 0)
+    INSERT INTO billing.wallet (id, "ownerUserId", "currencyCode", "cachedBalance", version)
+    VALUES ('${WALLET_A}', '${USER_A}', 'USD', 100.00, 0)
   `);
 }
 
@@ -136,6 +136,7 @@ describe('two debits on one wallet, both reading version 0', () => {
           ledger.debit(heldAfterWalletRead(tx, barrier), {
             userId: USER_A,
             amount: new Prisma.Decimal('70.00'),
+            currencyCode: 'USD',
             reasonType: 'traffic_consumption',
             referenceId,
           }),

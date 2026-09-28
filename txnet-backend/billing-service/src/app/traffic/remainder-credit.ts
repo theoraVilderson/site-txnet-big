@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { GrantStatus, Prisma, VariantBillingMode, WalletReasonType } from '@prisma/client';
-import { tenantTransaction } from '@txnet-backend/shared-core';
+import { tenantTransaction, operatingCurrencyOf } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletCreditService } from '../wallet/wallet-credit.service';
@@ -186,6 +186,8 @@ export class RemainderCreditService {
     const movement = await this.ledger.credit(tx, {
       userId: grant.userId,
       amount: back.amount,
+      // The Grant's rate has no currency column until F-116-d; it is the tenant's.
+      currencyCode: await operatingCurrencyOf(tx, grant.tenantId),
       reasonType: WalletReasonType.traffic_refund,
       referenceId: grant.id,
     });

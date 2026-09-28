@@ -75,15 +75,15 @@ async function seed() {
     await owner.$executeRawUnsafe(`
       INSERT INTO billing.payment_gateway
         (id, "displayName", "providerName", "gatewayCategory", "supportedCurrencies", "merchantId",
-         "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt")
+         "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt", "currencyCode")
       VALUES ('${id}', 'platform', '${provider}', 'domestic_rial', '["IRR"]', 'm',
-              1.00, 500.00, 'manual', 'percentage', 1.0000, now())
+              1.00, 500.00, 'manual', 'percentage', 1.0000, now(), 'USD')
     `);
   }
   await insertResellerGateway(RESELLER_GATEWAY, 'zarinpal');
   await owner.$executeRawUnsafe(`
-    INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "perUserUsageLimit", "createdByAdminId")
-    VALUES ('${COUPON}', '${TENANT}', 'GIFT10', 'wallet_credit', 10.00, 3, '${USER}')
+    INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "perUserUsageLimit", "createdByAdminId", "currencyCode")
+    VALUES ('${COUPON}', '${TENANT}', 'GIFT10', 'wallet_credit', 10.00, 3, '${USER}', 'USD')
   `);
 }
 
@@ -91,9 +91,9 @@ function insertResellerGateway(id: string, provider: string) {
   return owner.$executeRawUnsafe(`
     INSERT INTO tenant.tenant_gateway_config
       (id, "tenantId", "displayName", "providerName", "gatewayCategory",
-       "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt")
+       "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt", "currencyCode")
     VALUES ('${id}', '${TENANT}', 'reseller', '${provider}', 'domestic_rial',
-            1.00, 500.00, 'manual', 'fixed', 0.5000, now())
+            1.00, 500.00, 'manual', 'fixed', 0.5000, now(), 'USD')
   `);
 }
 
@@ -114,12 +114,12 @@ function insertPayment(gateway: {
       (id, "tenantId", "userId", "gatewayId", "tenantGatewayConfigId", "gatewayTrackingCode",
        "amountRequested", "feeApplied", "discountApplied", "amountCredited",
        "chargedAmountMinor", "exchangeRateSnapshot", "exchangeRateSnapshotId",
-       "amountReceivedMinor", "receivedCurrency")
+       "amountReceivedMinor", "receivedCurrency", "currencyCode")
     VALUES ('${id}', '${TENANT}', '${USER}', ${uuidOrNull(gateway.gatewayId)},
             ${uuidOrNull(gateway.tenantGatewayConfigId)}, ${gateway.authority ? `'${gateway.authority}'` : 'NULL'},
             10.00, 0.20, 0.00, 10.00, 10404000, 1020000.00000000,
             ${uuidOrNull(gateway.rateSnapshotId)},
-            ${gateway.received?.minor ?? 'NULL'}, ${gateway.received?.currency ? `'${gateway.received.currency}'` : 'NULL'})
+            ${gateway.received?.minor ?? 'NULL'}, ${gateway.received?.currency ? `'${gateway.received.currency}'` : 'NULL'}, 'USD')
   `);
 }
 
@@ -267,9 +267,9 @@ describe('D-32: what actually arrived, beside what was asked (F-104-a)', () => {
           owner.$executeRawUnsafe(`
             INSERT INTO tenant.tenant_gateway_config
               (id, "tenantId", "displayName", "providerName", "gatewayCategory",
-               "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt")
+               "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt", "currencyCode")
             VALUES ('${id}', '${TENANT}', '${provider}', '${provider}', '${category}',
-                    1.00, 500.00, 'manual', 'fixed', 0.5000, now())
+                    1.00, 500.00, 'manual', 'fixed', 0.5000, now(), 'USD')
           `),
         ),
       ).toBeNull();

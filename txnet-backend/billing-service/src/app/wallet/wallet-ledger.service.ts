@@ -7,6 +7,7 @@ export type { LedgerEntry } from '@txnet-backend/shared-core';
 export {
   InsufficientFunds,
   InvalidLedgerAmount,
+  LedgerCurrencyMismatch,
   WalletLedgerService,
   WalletVersionConflict,
 } from '@txnet-backend/shared-core';

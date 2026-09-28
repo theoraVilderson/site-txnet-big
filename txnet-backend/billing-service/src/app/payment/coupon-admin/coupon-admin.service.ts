@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CouponChannel, CouponVisibility, DiscountType, Prisma, TenantType } from '@prisma/client';
 
-import { productCategoriesInclude, productCategoriesLive, tenantTransaction, type TenantTransactionOptions } from '@txnet-backend/shared-core';
+import { productCategoriesInclude, productCategoriesLive, tenantTransaction, type TenantTransactionOptions, operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -282,7 +282,13 @@ export class CouponAdminService {
       const relations = await this.checkRelations(tx, actor, tenantId, next, input, { tenantIds: [], allowedUserIds: [], gateways: [], serviceScopes: [] });
       await this.assertCodeFree(tx, tenantId, next['code'] as string, null);
       const row = (await tx.coupon.create({
-        data: { ...this.columns(next), tenantId, createdByAdminId: actor.adminId } as Prisma.CouponUncheckedCreateInput,
+        data: {
+          ...this.columns(next),
+          tenantId,
+          // A platform coupon is in the platform's currency, a tenant's in its own (F-116-b).
+          currencyCode: tenantId ? await operatingCurrencyOf(tx, tenantId) : await platformCurrencyOf(tx),
+          createdByAdminId: actor.adminId,
+        } as Prisma.CouponUncheckedCreateInput,
       })) as unknown as Row;
       await this.writeRelations(tx, row['id'] as string, relations, input);
       const [view] = await this.views(tx, [row]);

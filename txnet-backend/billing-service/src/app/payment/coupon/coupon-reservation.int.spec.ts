@@ -73,8 +73,8 @@ beforeAll(async () => {
   }
   for (const [suffix, tenantId, code, total, perUser] of COUPONS) {
     await owner.$executeRawUnsafe(`
-      INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "totalUsageLimit", "perUserUsageLimit", "createdByAdminId")
-      VALUES ('${couponId(suffix)}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${code}', 'percentage', 10.00, ${total ?? 'NULL'}, ${perUser}, '${ADMIN}')
+      INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "totalUsageLimit", "perUserUsageLimit", "createdByAdminId", "currencyCode")
+      VALUES ('${couponId(suffix)}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${code}', 'percentage', 10.00, ${total ?? 'NULL'}, ${perUser}, '${ADMIN}', 'USD')
     `);
   }
   // PLATFORM serves tenant A by name; B is not named (ADR-0048). DELETED is soft-deleted.

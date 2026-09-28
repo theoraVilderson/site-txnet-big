@@ -1,7 +1,7 @@
 ---
 id: adr-0002
 status: accepted
-updated: 2026-09-04
+updated: 2026-09-28
 ---
 
 # ADR 0002 — Money is base-currency Decimal, balances are ledger-derived
@@ -9,6 +9,7 @@ updated: 2026-09-04
 - **Status:** accepted
 - **Date:** 2026-09-04 (documented; predates this doc)
 - **Affects units:** billing, currency, tenant, engagement, ai
+- **Amended by:** [ADR-0098](0098-every-tenant-keeps-its-books-in-its-own-currency.md) — every money row records its currency; there is no single base currency (built in F-116-b)
 
 ## Context
 

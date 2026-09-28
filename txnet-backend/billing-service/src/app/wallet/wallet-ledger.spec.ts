@@ -25,6 +25,7 @@ const D = (v: string | number) => new Prisma.Decimal(v);
 type WalletRow = {
   id: string;
   ownerUserId: string;
+  currencyCode: string;
   cachedBalance: Prisma.Decimal;
   version: number;
 };
@@ -53,12 +54,13 @@ function fakeStore() {
         if (!row) throw new Error('no wallet');
         return row;
       },
-      createMany: async ({ data }: { data: Array<{ ownerUserId: string }> }) => {
+      createMany: async ({ data }: { data: Array<{ ownerUserId: string; currencyCode: string }> }) => {
         let count = 0;
-        for (const { ownerUserId } of data) {
+        for (const { ownerUserId, currencyCode } of data) {
           if (wallets.has(ownerUserId)) continue;
           wallets.set(ownerUserId, {
             id: `wallet-${ownerUserId}`,
+            currencyCode,
             ownerUserId,
             cachedBalance: D(0),
             version: 0,
@@ -107,6 +109,7 @@ function fakeStore() {
       wallets.set(ownerUserId, {
         id: `wallet-${ownerUserId}`,
         ownerUserId,
+        currencyCode: 'USD',
         cachedBalance: D(balance),
         version: 0,
       });
@@ -132,6 +135,7 @@ describe('WalletLedgerService', () => {
       ledgerService.debit(store.tx, {
         userId: 'user-1',
         amount: D('70.00'),
+        currencyCode: 'USD',
         reasonType: 'traffic_consumption',
         referenceId,
       });
@@ -161,6 +165,7 @@ describe('WalletLedgerService', () => {
       ledgerService.debit(store.tx, {
         userId: 'user-1',
         amount: D('10.01'),
+        currencyCode: 'USD',
         reasonType: 'traffic_consumption',
       }),
     ).rejects.toBeInstanceOf(InsufficientFunds);
@@ -175,6 +180,7 @@ describe('WalletLedgerService', () => {
       ledgerService.debit(store.tx, {
         userId: 'user-1',
         amount: D('1.00'),
+        currencyCode: 'USD',
         reasonType: 'traffic_consumption',
       }),
     ).rejects.toBeInstanceOf(InsufficientFunds);
@@ -187,6 +193,7 @@ describe('WalletLedgerService', () => {
     const row = await ledgerService.credit(store.tx, {
       userId: 'user-1',
       amount: D('25.50'),
+      currencyCode: 'USD',
       reasonType: 'payment_gateway',
       referenceId: 'payment-1',
     });
@@ -214,6 +221,7 @@ describe('WalletLedgerService', () => {
       ledgerService.credit(store.tx, {
         userId: 'user-1',
         amount: D(amount),
+        currencyCode: 'USD',
         reasonType: 'admin_manual_adjust',
       }),
     ).rejects.toBeInstanceOf(InvalidLedgerAmount);
@@ -228,8 +236,8 @@ describe('WalletLedgerService', () => {
     const store = fakeStore();
     store.seed('user-1', '100.00');
 
-    await ledgerService.debit(store.tx, { userId: 'user-1', amount: D('30.00'), reasonType: 'traffic_consumption', tenantId: 't-1' });
-    await ledgerService.credit(store.tx, { userId: 'user-1', amount: D('5.00'), reasonType: 'payment_gateway', tenantId: 't-1' });
+    await ledgerService.debit(store.tx, { userId: 'user-1', amount: D('30.00'), currencyCode: 'USD', reasonType: 'traffic_consumption', tenantId: 't-1' });
+    await ledgerService.credit(store.tx, { userId: 'user-1', amount: D('5.00'), currencyCode: 'USD', reasonType: 'payment_gateway', tenantId: 't-1' });
 
     expect(store.outbox).toEqual([
       expect.objectContaining({ aggregate: 'billing.wallet', aggregateId: 'wallet-user-1', type: 'billing.wallet.changed', payload: { tenantId: 't-1', userId: 'user-1', walletTransactionId: 'ledger-1' } }),
@@ -242,7 +250,7 @@ describe('WalletLedgerService', () => {
     store.seed('user-1', '10.00');
 
     await expect(
-      ledgerService.debit(store.tx, { userId: 'user-1', amount: D('30.00'), reasonType: 'traffic_consumption' }),
+      ledgerService.debit(store.tx, { userId: 'user-1', amount: D('30.00'), currencyCode: 'USD', reasonType: 'traffic_consumption' }),
     ).rejects.toBeInstanceOf(InsufficientFunds);
     expect(store.outbox).toEqual([]);
   });

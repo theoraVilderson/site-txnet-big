@@ -90,9 +90,9 @@ beforeAll(async () => {
   await owner.$executeRawUnsafe(`
     INSERT INTO tenant.tenant_gateway_config
       (id, "tenantId", "displayName", "providerName", "gatewayCategory", "verificationStatus", "isActive",
-       "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt")
+       "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt", "currencyCode")
     VALUES ('${B_OWN}', '${TENANT_B}', 'beta zarinpal', 'zarinpal', 'domestic_rial', 'verified', true,
-       1.00, 1000.00, 'manual', 'percentage', 1.0000, now())
+       1.00, 1000.00, 'manual', 'percentage', 1.0000, now(), 'USD')
   `);
   await owner.$executeRawUnsafe(`
     INSERT INTO billing.payment_gateway_grant (id, "tenantId", "tenantGatewayConfigId", "grantedByAdminId")

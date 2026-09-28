@@ -99,8 +99,8 @@ beforeAll(async () => {
   await insertPrice(PLATFORM_PRICE, null, PLATFORM_VARIANT, '5.00');
   await insertPrice('44444444-4444-4444-8444-4444444444d2', RESELLER_A, A_VARIANT, '6.00');
   await owner.$executeRawUnsafe(`
-    INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "createdByAdminId")
-    VALUES ('${COUPON}', NULL, 'SCOPED', 'percentage', 10.00, '${ADMIN}')
+    INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "createdByAdminId", "currencyCode")
+    VALUES ('${COUPON}', NULL, 'SCOPED', 'percentage', 10.00, '${ADMIN}', 'USD')
   `);
 
   const base = new PrismaService(pg.appUrl);

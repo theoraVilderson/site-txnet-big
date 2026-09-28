@@ -153,6 +153,7 @@ export class DepositFollowOnService {
             amountRequested: value.credited,
             feeApplied: value.fee,
             amountCredited: value.credited,
+            currencyCode: original.currencyCode,
             chargedAmountMinor: arrivedMinor,
             // The invoice's own rate: the arrival is money for the price that
             // invoice quoted, and every driver that settles by webhook charges

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DiscountRuleKind, Prisma } from '@prisma/client';
-import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { TenantContext, tenantTransaction, operatingCurrencyOf } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -187,7 +187,7 @@ export class DiscountRuleAdminService {
       await this.checkRelations(tx, tenant.id, m, { target: true, users: true, group: true });
 
       const { userIds, ...columns } = m;
-      const row = await tx.discountRule.create({ data: { ...columns, tenantId: tenant.id, createdByAdminId: actor.adminId } });
+      const row = await tx.discountRule.create({ data: { ...columns, tenantId: tenant.id, currencyCode: await operatingCurrencyOf(tx, tenant.id), createdByAdminId: actor.adminId } });
       if (m.forNamedUsers) {
         await tx.discountRuleUser.createMany({ data: userIds.map((userId) => ({ ruleId: row.id, userId, tenantId: tenant.id })) });
       }

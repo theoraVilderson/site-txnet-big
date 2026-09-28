@@ -42,8 +42,14 @@ import { OutboxEventType } from '../automation/routing-keys';
 export type LedgerEntry = {
   /** The wallet owner. Must come from a tenant-scoped source — the gate's `X-User-Id`, or a scoped row. */
   userId: string;
-  /** Base currency (ADR-0019), strictly positive, at most the column's 2 decimal places. */
+  /** Strictly positive, at most the column's 2 decimal places. */
   amount: Prisma.Decimal;
+  /**
+   * The currency `amount` is in (F-116-b), taken from the row that priced it —
+   * the payment's, the invoice's, the coupon's. It must be the wallet's; a
+   * wallet with none yet opens in it.
+   */
+  currencyCode: string;
   reasonType: WalletReasonType;
   /** The row that caused this movement — a payment, a redemption, a transfer. */
   referenceId?: string;
@@ -54,6 +60,18 @@ export type LedgerEntry = {
    */
   tenantId?: string;
 };
+
+/**
+ * A movement in another currency than the wallet's (ADR-0098 part 3). Refused
+ * before anything is written; `wallet_transaction`'s trigger refuses the same
+ * row for a writer that is not this class.
+ */
+export class LedgerCurrencyMismatch extends Error {
+  constructor(readonly userId: string, readonly walletCurrency: string, readonly entryCurrency: string) {
+    super(`wallet of user ${userId} is kept in ${walletCurrency}; refused a movement in ${entryCurrency}`);
+    this.name = 'LedgerCurrencyMismatch';
+  }
+}
 
 /** `wallet_transaction.amount` / `balanceAfter` are `Decimal(18, 2)`. */
 const LEDGER_SCALE = 2;
@@ -116,8 +134,12 @@ export class WalletLedgerService {
       // NOTHING`, so two first credits racing both proceed to the read below
       // and meet again at the version guard, instead of one failing on the
       // unique `ownerUserId`.
-      await tx.wallet.createMany({ data: [{ ownerUserId: userId }], skipDuplicates: true });
+      // It opens in the currency of that credit (F-116-b).
+      await tx.wallet.createMany({ data: [{ ownerUserId: userId, currencyCode: entry.currencyCode }], skipDuplicates: true });
       wallet = await tx.wallet.findUniqueOrThrow({ where: { ownerUserId: userId } });
+    }
+    if (wallet.currencyCode !== entry.currencyCode) {
+      throw new LedgerCurrencyMismatch(userId, wallet.currencyCode, entry.currencyCode);
     }
 
     const balanceAfter =
@@ -143,6 +165,7 @@ export class WalletLedgerService {
         direction,
         reasonType: entry.reasonType,
         referenceId: entry.referenceId,
+        currencyCode: entry.currencyCode,
         ...(entry.tenantId ? { tenantId: entry.tenantId } : {}),
         balanceAfter,
       },

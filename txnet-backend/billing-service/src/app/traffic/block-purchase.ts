@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Grant, GrantStatus, Prisma, VariantBillingMode, WalletReasonType } from '@prisma/client';
-import { METERED_RATE_UNIT_BYTES, tenantTransaction } from '@txnet-backend/shared-core';
+import { METERED_RATE_UNIT_BYTES, tenantTransaction, operatingCurrencyOf } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletLedgerService } from '../wallet/wallet-ledger.service';
@@ -202,6 +202,8 @@ export class BlockPurchaseService {
     const movement = await this.ledger.debit(tx, {
       userId: grant.userId,
       amount: block.amount,
+      // The Grant's rate has no currency column until F-116-d; it is the tenant's.
+      currencyCode: await operatingCurrencyOf(tx, grant.tenantId),
       reasonType: WalletReasonType.traffic_consumption,
       referenceId: grant.id,
     });

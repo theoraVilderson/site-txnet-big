@@ -24,7 +24,7 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 | tenant_billing_wallet | a reseller's prepaid balance with the platform (cache, `>= 0`; D-41) | yes | with tenant |
 | tenant_billing_transaction | append-only ledger of tenant<->platform charges | yes | permanent |
 | tenant_usage_meter | metered usage rollups for pay-as-you-go | yes | permanent |
-| tenant_gateway_config / tenant_sms_config | BYO integration settings; the secrets are vault rows (`tenant_sms_config`: one per tenant, no secret column since F-018-a) | yes | with tenant |
+| tenant_gateway_config / tenant_sms_config | BYO integration settings; the secrets are vault rows (`tenant_sms_config`: one per tenant, no secret column since F-018-a). `tenant_gateway_config.currencyCode` = what its limits, fees and presets are in, the tenant's operating currency when written (F-116-b, billing `data-model.md` "Currency") | yes | with tenant |
 | tenant_restriction | brand-level usage caps | yes | until inactive |
 
 ## Relationships crossing unit boundaries

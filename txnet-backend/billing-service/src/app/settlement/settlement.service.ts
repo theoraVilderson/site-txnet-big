@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PaymentProviderName, Prisma, TenantType } from '@prisma/client';
+import { operatingCurrencyOf } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -472,6 +473,7 @@ export class SettlementService {
         data: {
           tenantId: input.tenantId,
           amount: input.amount,
+          currencyCode: await operatingCurrencyOf(tx, input.tenantId),
           recordedByAdminId: operator.adminId,
           method: input.method ?? null,
           reference: input.reference ?? null,

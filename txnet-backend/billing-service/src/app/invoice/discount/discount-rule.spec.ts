@@ -132,6 +132,8 @@ describe('DiscountRuleAdminService', () => {
     const audits: Array<Record<string, unknown>> = [];
     const created: Array<Record<string, unknown>> = [];
     const tx = {
+      // Every tenant here keeps its books in USD (F-116-b).
+      tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
       $executeRaw: async () => 0,
       product: { findFirst: async ({ where }: { where: { id: string } }) => ((o.products ?? [PRODUCT]).includes(where.id) ? { id: where.id } : null) },
       productCategory: {

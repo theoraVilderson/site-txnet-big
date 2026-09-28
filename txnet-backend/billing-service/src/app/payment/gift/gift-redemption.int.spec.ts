@@ -89,8 +89,8 @@ beforeAll(async () => {
   }
   for (const [suffix, tenantId, code, type, value, total, perUser] of COUPONS) {
     await owner.$executeRawUnsafe(`
-      INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "totalUsageLimit", "perUserUsageLimit", "createdByAdminId")
-      VALUES ('${couponId(suffix)}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${code}', '${type}', ${value}, ${total ?? 'NULL'}, ${perUser}, '${ADMIN}')
+      INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "totalUsageLimit", "perUserUsageLimit", "createdByAdminId", "currencyCode")
+      VALUES ('${couponId(suffix)}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${code}', '${type}', ${value}, ${total ?? 'NULL'}, ${perUser}, '${ADMIN}', 'USD')
     `);
   }
   for (const suffix of ['e4', 'e7']) {
@@ -114,8 +114,8 @@ beforeAll(async () => {
     VALUES ('${VARIANT}', '${PRODUCT}', 'VPN-30', 'prepaid', 'public', 30, '{"traffic_bytes": {"limit": 53687091200, "resetPolicy": "none"}}')
   `);
   await owner.$executeRawUnsafe(`
-    INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "perUserUsageLimit", "createdByAdminId", "grantVariantId")
-    VALUES ('${couponId('e9')}', '${TENANT_A}', 'FREEVPN', 'free_grant', 0, 1, '${ADMIN}', '${VARIANT}')
+    INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "perUserUsageLimit", "createdByAdminId", "grantVariantId", "currencyCode")
+    VALUES ('${couponId('e9')}', '${TENANT_A}', 'FREEVPN', 'free_grant', 0, 1, '${ADMIN}', '${VARIANT}', 'USD')
   `);
 
   const base = new PrismaService(pg.appUrl);

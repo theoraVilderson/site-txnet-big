@@ -32,6 +32,21 @@ Source of truth: `txnet-backend/prisma/domains/billing.prisma` (Postgres schema
 | grant_bulk_job | a bulk act by filter run by the worker (F-311-u2): `(tenantId, requestId)` unique, `fingerprint`, the actor (`actorUserId`, `actorIp`), `action`, `command` (input + reason), `filter`, `status` `running`/`done`/`cancelled`, `total` and the `ok`/`refused`/`failed` counts, `finishedAt`, `purgedAt` (F-311-u3). [contract.reseller-grants-bulk.md](contract.reseller-grants-bulk.md) "By a filter" | `tenantId`, strict RLS | permanent — its counts outlive its items |
 | grant_bulk_job_item | one Grant of a bulk job, frozen at the confirm (F-311-u2): key `(jobId, grantId)`, `tenantId`, `attempts`, `doneAt` (null = pending), `ok`, `failed` (after 3 attempts); its outcome is `grant_bulk_outcome`'s row under the job's `requestId`. Partial indexes on pending and on done | `tenantId`, strict RLS | 30 days after its job ended (F-311-u3) |
 
+## Currency (F-116-b, ADR-0098 parts 2–3)
+
+`wallet`, `wallet_transaction`, `invoice`, `payment_transaction`, `coupon`,
+`discount_rule`, `deposit_setting`, `gateway_settlement_entry`,
+`gateway_settlement_payout`, `payment_gateway` and `tenant.tenant_gateway_config`
+each carry `currencyCode` (`^[A-Z]{3}$` CHECK, NOT NULL, **no default**): what that
+row's amounts are in. Backfilled `USD` by `20260928002500_every_money_row_records_its_currency`.
+A new row takes the owner tenant's `operatingCurrencyCode` at the moment it is
+written (`operatingCurrencyOf`); a platform gateway, a platform coupon and a billing
+top-up take the platform's (`platformCurrencyOf`). A payment's follow-on, its
+settlement entry and its wallet credit take the payment's; a wallet takes its first
+credit's. Never re-derived from the tenant afterwards: its currency may change
+(F-116-f). A `wallet_transaction` in another currency than its wallet's is refused
+by the trigger `wallet_transaction_in_wallet_currency`.
+
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
 |---|---|---|---|

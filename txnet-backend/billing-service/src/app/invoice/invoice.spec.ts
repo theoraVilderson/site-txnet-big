@@ -108,6 +108,8 @@ function buildCreate(setup: CreateSetup = {}) {
     groupQueries: [] as unknown[],
   };
   const tx = {
+    // Every tenant here keeps its books in USD (F-116-b).
+    tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
     $executeRaw: async () => 0,
     productVariant: { findUnique: async () => variant },
     panelGroup: {

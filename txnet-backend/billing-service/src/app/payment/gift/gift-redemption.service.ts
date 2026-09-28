@@ -139,9 +139,15 @@ export class GiftRedemptionService {
       }
 
       const credited = row.credited as Prisma.Decimal;
+      // The coupon's currency (F-116-b); a wallet kept in another refuses it.
+      const { coupon } = await tx.couponRedemption.findUniqueOrThrow({
+        where: { id: row.redemption_id as string },
+        select: { coupon: { select: { currencyCode: true } } },
+      });
       const entry = await this.ledger.credit(tx, {
         userId,
         amount: credited,
+        currencyCode: coupon.currencyCode,
         reasonType: WalletReasonType.coupon_redemption,
         // The redemption row, not the coupon: a coupon may be redeemed again,
         // a redemption never is, so this is what makes the credit traceable to

@@ -33,7 +33,7 @@ needs to move up that table.
 | id | rule | enforced by |
 |---|---|---|
 | C-01 | Technical docs, code, commit messages and logs are in English. Existing Persian inline comments may stay; do not add new ones. | review |
-| C-02 | Money is base-currency `Decimal` only — never a second currency column, never written as a float. One exception: a payment's gateway receipt, `amountReceivedMinor` + `receivedCurrency` (D-32). Balances are ledger-derived; never write a balance field directly outside a ledger-append transaction. See ADR-0002. | review |
+| C-02 | Money is `Decimal`, never a float, and every money row records its `currencyCode` (ADR-0098) — one currency per row, never a second amount column in another. A payment's gateway receipt, `amountReceivedMinor` + `receivedCurrency` (D-32), is evidence, not money of record. Balances are ledger-derived; never write a balance field directly outside a ledger-append transaction. See ADR-0002. | review |
 | C-12 | A Nest route or middleware path names its wildcard: `'{*path}'`, `'internal/*path'`, `@Get('*key')`. A bare `*` — `forRoutes('*')`, `'internal/*'` — is a violation. | check |
 | C-11 | A backend app that opens a tenant scope (`runWithTenant(...)`) registers `TenantStatusGuard` as an `APP_GUARD`, so every route it serves obeys `TenantStatusPolicy`. See `docs/domains/tenant/rules.md`. | check |
 | C-10 | A panel route is a constant in `site-pwa/src/lib/routes.ts`. A path literal in `href=`, `redirect(` or `router.push/replace(` is a violation. | check |
@@ -94,10 +94,13 @@ message: build the key through cache.SessionKey (internal/cache/keys.go) — nev
 
 ---
 
-## C-02 — money is base-currency `Decimal`, balances are ledger-derived
+## C-02 — money is `Decimal` in its row's currency, balances are ledger-derived
 
-**Rule.** A monetary value is stored once, as `Decimal`, in the system's single
-base currency. No monetary table gets its own currency column. The one exception is `payment_transaction`'s gateway receipt (`amountReceivedMinor` + `receivedCurrency`, D-32): evidence of what arrived, never credited as is — `amountCredited` stays base. A wallet-style
+**Rule.** A monetary value is stored once, as `Decimal`, and its row records the
+currency it is in: `currencyCode`, NOT NULL with no default, so a writer names it
+(ADR-0098 part 3, amending ADR-0002's single base currency). A row's currency is
+never derived from its tenant, whose currency may change. A ledger row is in its
+wallet's currency. `payment_transaction`'s gateway receipt (`amountReceivedMinor` + `receivedCurrency`, D-32) is evidence of what arrived, never credited as is — `amountCredited` is in the row's `currencyCode`. A wallet-style
 `cachedBalance` is never written outside the same transaction that appends the
 proving ledger row.
 

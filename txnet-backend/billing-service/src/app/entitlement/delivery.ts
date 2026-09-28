@@ -229,8 +229,8 @@ export class GrantDeliveryService {
     const configs = await tx.config.findMany({ where: { grantId, status: { not: ConfigStatus.retired } }, select: { id: true } });
     for (const { id } of configs) await this.actions.retire(tx, { configId: id, actor: GRANT_DELIVERY_ACTOR });
 
-    const [invoice] = await tx.$queryRaw<Array<{ id: string; userId: string; total: Prisma.Decimal; status: InvoiceStatus }>>`
-      SELECT id, "userId", total, status FROM billing.invoice WHERE id = ${grant.sourceReferenceId}::uuid FOR UPDATE`;
+    const [invoice] = await tx.$queryRaw<Array<{ id: string; userId: string; total: Prisma.Decimal; currencyCode: string; status: InvoiceStatus }>>`
+      SELECT id, "userId", total, "currencyCode", status FROM billing.invoice WHERE id = ${grant.sourceReferenceId}::uuid FOR UPDATE`;
     if (!invoice) throw new Error(`invoice ${grant.sourceReferenceId} of grant ${grantId} not found`);
     const flipped = await tx.invoice.updateMany({ where: { id: invoice.id, status: InvoiceStatus.paid }, data: { status: InvoiceStatus.refunded } });
     // Anything but `paid` here is a second refund of one invoice: roll the cancel back with it.
@@ -239,7 +239,7 @@ export class GrantDeliveryService {
     const total = new Prisma.Decimal(invoice.total);
     // A free invoice moved no money and writes no row (billing invariant 2).
     if (total.gt(0)) {
-      await this.credits.credit(tx, { userId: invoice.userId, amount: total, reasonType: WalletReasonType.product_refund, referenceId: invoice.id });
+      await this.credits.credit(tx, { userId: invoice.userId, amount: total, currencyCode: invoice.currencyCode, reasonType: WalletReasonType.product_refund, referenceId: invoice.id });
     }
 
     await tx.outboxEvent.create({

@@ -84,16 +84,16 @@ async function seed() {
   await owner.$executeRawUnsafe(`
     INSERT INTO billing.payment_gateway
       (id, "displayName", "providerName", "gatewayCategory", "supportedCurrencies", "merchantId",
-       "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt")
+       "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt", "currencyCode")
     VALUES ('${PLATFORM_GATEWAY}', 'platform', 'zarinpal', 'domestic_rial', '["IRR"]', 'm',
-            1.00, 500.00, 'manual', 'percentage', 1.0000, now())
+            1.00, 500.00, 'manual', 'percentage', 1.0000, now(), 'USD')
   `);
   await owner.$executeRawUnsafe(`
     INSERT INTO tenant.tenant_gateway_config
       (id, "tenantId", "displayName", "providerName", "gatewayCategory",
-       "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt")
+       "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt", "currencyCode")
     VALUES ('${RESELLER_GATEWAY}', '${OWNER_TENANT}', 'owner gateway', 'zarinpal', 'domestic_rial',
-            1.00, 500.00, 'manual', 'percentage', 1.0000, now())
+            1.00, 500.00, 'manual', 'percentage', 1.0000, now(), 'USD')
   `);
 }
 
@@ -120,9 +120,9 @@ function insertPayment(id: string, tenantId: string, grantId: string | null) {
   return owner.$executeRawUnsafe(`
     INSERT INTO billing.payment_transaction
       (id, "tenantId", "userId", "gatewayId", "amountRequested", "feeApplied",
-       "amountCredited", "chargedAmountMinor", status, "grantId")
+       "amountCredited", "chargedAmountMinor", status, "grantId", "currencyCode")
     VALUES ('${id}', '${tenantId}', '${USER}', '${PLATFORM_GATEWAY}', 10.00, 0.00,
-            10.00, 100000, 'success', ${grantId ? `'${grantId}'` : 'NULL'})
+            10.00, 100000, 'success', ${grantId ? `'${grantId}'` : 'NULL'}, 'USD')
   `);
 }
 
@@ -188,8 +188,8 @@ describe('ADR-0041 §4: one accrual per payment', () => {
 
     await expect(
       owner.$executeRawUnsafe(`
-        INSERT INTO billing.gateway_settlement_entry (id, "grantId", "tenantId", "paymentTransactionId", amount)
-        VALUES ('${uuid(101)}', '${uuid(6)}', '${BORROWER}', '${PAYMENT}', 9.80)
+        INSERT INTO billing.gateway_settlement_entry (id, "grantId", "tenantId", "paymentTransactionId", amount, "currencyCode")
+        VALUES ('${uuid(101)}', '${uuid(6)}', '${BORROWER}', '${PAYMENT}', 9.80, 'USD')
       `),
     ).resolves.toBe(1);
   });
@@ -197,8 +197,8 @@ describe('ADR-0041 §4: one accrual per payment', () => {
   it('refuses a second accrual for the same payment', async () => {
     await expect(
       owner.$executeRawUnsafe(`
-        INSERT INTO billing.gateway_settlement_entry (id, "grantId", "tenantId", "paymentTransactionId", amount)
-        VALUES ('${uuid(102)}', '${uuid(6)}', '${BORROWER}', '${PAYMENT}', 9.80)
+        INSERT INTO billing.gateway_settlement_entry (id, "grantId", "tenantId", "paymentTransactionId", amount, "currencyCode")
+        VALUES ('${uuid(102)}', '${uuid(6)}', '${BORROWER}', '${PAYMENT}', 9.80, 'USD')
       `),
     ).rejects.toThrow(/Key \("paymentTransactionId"\).*already exists/);
   });
@@ -206,15 +206,15 @@ describe('ADR-0041 §4: one accrual per payment', () => {
   it('refuses a negative accrual and a payout of nothing', async () => {
     await expect(
       owner.$executeRawUnsafe(`
-        INSERT INTO billing.gateway_settlement_entry (id, "grantId", "tenantId", "paymentTransactionId", amount)
-        VALUES ('${uuid(103)}', '${uuid(6)}', '${BORROWER}', '${uuid(104)}', -1.00)
+        INSERT INTO billing.gateway_settlement_entry (id, "grantId", "tenantId", "paymentTransactionId", amount, "currencyCode")
+        VALUES ('${uuid(103)}', '${uuid(6)}', '${BORROWER}', '${uuid(104)}', -1.00, 'USD')
       `),
     ).rejects.toThrow();
 
     await expect(
       owner.$executeRawUnsafe(`
-        INSERT INTO billing.gateway_settlement_payout (id, "tenantId", amount, "recordedByAdminId")
-        VALUES ('${uuid(105)}', '${BORROWER}', 0.00, '${ADMIN}')
+        INSERT INTO billing.gateway_settlement_payout (id, "tenantId", amount, "recordedByAdminId", "currencyCode")
+        VALUES ('${uuid(105)}', '${BORROWER}', 0.00, '${ADMIN}', 'USD')
       `),
     ).rejects.toThrow(/gateway_settlement_payout_amount_positive/);
   });
@@ -223,8 +223,8 @@ describe('ADR-0041 §4: one accrual per payment', () => {
     await expect(
       owner.$executeRawUnsafe(`
         INSERT INTO billing.gateway_settlement_payout
-          (id, "tenantId", amount, "recordedByAdminId", method, reference, "proofAttachmentKey")
-        VALUES ('${uuid(106)}', '${BORROWER}', 9.80, '${ADMIN}', 'sheba', 'TRX-1', 'settlement/2026-09/borrower.pdf')
+          (id, "tenantId", amount, "recordedByAdminId", method, reference, "proofAttachmentKey", "currencyCode")
+        VALUES ('${uuid(106)}', '${BORROWER}', 9.80, '${ADMIN}', 'sheba', 'TRX-1', 'settlement/2026-09/borrower.pdf', 'USD')
       `),
     ).resolves.toBe(1);
   });
@@ -273,8 +273,8 @@ describe('the three tables are isolated on the borrowing tenant', () => {
     await expect(
       asTenant(
         OTHER_TENANT,
-        `INSERT INTO billing.gateway_settlement_payout (id, "tenantId", amount, "recordedByAdminId")
-         VALUES ('${uuid(107)}', '${BORROWER}', 5.00, '${ADMIN}')`,
+        `INSERT INTO billing.gateway_settlement_payout (id, "tenantId", amount, "recordedByAdminId", "currencyCode")
+         VALUES ('${uuid(107)}', '${BORROWER}', 5.00, '${ADMIN}', 'USD')`,
       ),
     ).rejects.toThrow();
   });
@@ -294,9 +294,9 @@ describe("releasing a lent gateway: the lender's functions, and nobody else's", 
     await owner.$executeRawUnsafe(`
       INSERT INTO billing.payment_transaction
         (id, "tenantId", "userId", "tenantGatewayConfigId", "amountRequested", "feeApplied",
-         "amountCredited", "chargedAmountMinor", status, "grantId")
+         "amountCredited", "chargedAmountMinor", status, "grantId", "currencyCode")
       VALUES ('${OPEN}', '${BORROWER}', '${USER}', '${RESELLER_GATEWAY}', 10.00, 0.00,
-              10.00, 100000, 'pending', '${uuid(4)}')
+              10.00, 100000, 'pending', '${uuid(4)}', 'USD')
     `);
   });
   afterAll(async () => crossTenant?.$disconnect());

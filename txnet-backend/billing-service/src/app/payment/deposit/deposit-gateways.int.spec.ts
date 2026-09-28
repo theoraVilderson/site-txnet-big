@@ -78,9 +78,9 @@ beforeAll(async () => {
     await owner.$executeRawUnsafe(`
       INSERT INTO tenant.tenant_gateway_config
         (id, "tenantId", "displayName", "providerName", "gatewayCategory", "verificationStatus", "isActive",
-         "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "staticRate", "updatedAt")
+         "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "staticRate", "updatedAt", "currencyCode")
       VALUES ('${id}', '${tenantId}', '${provider}', '${provider}', 'domestic_rial', '${status}', ${active},
-         1.00, 1000.00, 'manual', 'percentage', 1.0000, 1000000, now())
+         1.00, 1000.00, 'manual', 'percentage', 1.0000, 1000000, now(), 'USD')
     `);
   }
 
@@ -92,9 +92,9 @@ beforeAll(async () => {
     await owner.$executeRawUnsafe(`
       INSERT INTO billing.payment_gateway
         (id, "displayName", "providerName", "gatewayCategory", "supportedCurrencies", "isActive", "merchantId",
-         "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "staticRate", "updatedAt")
+         "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "staticRate", "updatedAt", "currencyCode")
       VALUES ('${id}', 'platform ${provider}', '${provider}', 'domestic_rial', '["IRR"]', ${active}, 'PLAINTEXT-NEVER-READ',
-         1.00, 1000.00, 'manual', 'percentage', 2.0000, 1000000, now())
+         1.00, 1000.00, 'manual', 'percentage', 2.0000, 1000000, now(), 'USD')
     `);
   }
 

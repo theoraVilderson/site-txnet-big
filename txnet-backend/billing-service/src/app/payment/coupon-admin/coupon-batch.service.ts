@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 
 import { Injectable, Logger } from '@nestjs/common';
 import { CouponVisibility, DiscountType, Prisma } from '@prisma/client';
+import { operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
 
 import { CouponActor, CouponAdminRefused, CouponAdminService, statusOf } from './coupon-admin.service';
 
@@ -101,6 +102,8 @@ export class CouponBatchService {
           if (missing) throw new CouponAdminRefused('tenant_not_found', missing);
         }
         const codes = await this.draw(tx, tenantId, prefix, count);
+        // A platform batch is in the platform's currency, a tenant's in its own (F-116-b).
+        const currencyCode = tenantId ? await operatingCurrencyOf(tx, tenantId) : await platformCurrencyOf(tx);
         const row = await tx.couponBatch.create({ data: { tenantId, label, note: input.note?.trim() || null, createdByAdminId: actor.adminId } });
         for (let i = 0; i < codes.length; i += CHUNK) {
           await tx.coupon.createMany({
@@ -109,6 +112,7 @@ export class CouponBatchService {
               code,
               discountType: grantVariantId ? DiscountType.free_grant : DiscountType.wallet_credit,
               discountValue: value,
+              currencyCode,
               grantVariantId,
               totalUsageLimit: 1,
               perUserUsageLimit: 1,

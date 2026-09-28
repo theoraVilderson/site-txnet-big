@@ -74,9 +74,9 @@ beforeAll(async () => {
     `);
   }
   await owner.$executeRawUnsafe(`
-    INSERT INTO billing.wallet (id, "ownerUserId", "cachedBalance", version) VALUES
-      (gen_random_uuid(), '${USER}', 100.00, 0),
-      (gen_random_uuid(), '${POOR_USER}', 5.00, 0)
+    INSERT INTO billing.wallet (id, "ownerUserId", "cachedBalance", version, "currencyCode") VALUES
+      (gen_random_uuid(), '${USER}', 100.00, 0, 'USD'),
+      (gen_random_uuid(), '${POOR_USER}', 5.00, 0, 'USD')
   `);
   await owner.$executeRawUnsafe(`
     INSERT INTO catalog.product_category (id, key, "nameKey") VALUES ('${CATEGORY}', 'vpn', 'catalog.category.vpn.name')
@@ -96,8 +96,8 @@ beforeAll(async () => {
     `);
   }
   await owner.$executeRawUnsafe(`
-    INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "totalUsageLimit", "perUserUsageLimit", "createdByAdminId")
-    VALUES ('${COUPON}', '${TENANT}', 'SPRING', 'percentage', 20.00, 10, 0, '${ADMIN}')
+    INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "totalUsageLimit", "perUserUsageLimit", "createdByAdminId", "currencyCode")
+    VALUES ('${COUPON}', '${TENANT}', 'SPRING', 'percentage', 20.00, 10, 0, '${ADMIN}', 'USD')
   `);
 
   const base = new PrismaService(pg.appUrl);
@@ -142,6 +142,7 @@ async function invoice(o: {
       amount,
       discount,
       total: amount.minus(discount),
+      currencyCode: 'USD',
       expiresAt: o.expiresAt ?? new Date(Date.now() + 30 * 60 * 1000),
     },
   });

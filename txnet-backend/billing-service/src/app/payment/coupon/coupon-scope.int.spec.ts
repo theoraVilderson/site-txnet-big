@@ -66,9 +66,9 @@ afterAll(async () => {
 
 async function insertCoupon(id: string, tenantId: string | null, code: string, deleted = false) {
   await owner.$executeRawUnsafe(`
-    INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "createdByAdminId", "deletedAt", "deletedByAdminId")
+    INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "createdByAdminId", "deletedAt", "deletedByAdminId", "currencyCode")
     VALUES ('${id}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${code}', 'percentage', 10.00, '${ADMIN}',
-            ${deleted ? 'now()' : 'NULL'}, ${deleted ? `'${ADMIN}'` : 'NULL'})
+            ${deleted ? 'now()' : 'NULL'}, ${deleted ? `'${ADMIN}'` : 'NULL'}, 'USD')
   `);
 }
 
@@ -171,8 +171,8 @@ describe('a free_grant coupon', () => {
 
   const insert = (id: string, code: string, type: string, value: string, variant: string | null) =>
     owner.$executeRawUnsafe(`
-      INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "createdByAdminId", "grantVariantId")
-      VALUES ('${id}', '${RESELLER_A}', '${code}', '${type}', ${value}, '${ADMIN}', ${variant ? `'${variant}'` : 'NULL'})
+      INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "createdByAdminId", "grantVariantId", "currencyCode")
+      VALUES ('${id}', '${RESELLER_A}', '${code}', '${type}', ${value}, '${ADMIN}', ${variant ? `'${variant}'` : 'NULL'}, 'USD')
     `);
 
   it('names exactly one variant, only for that type, and carries no value', async () => {

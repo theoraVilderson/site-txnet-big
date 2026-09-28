@@ -113,6 +113,8 @@ function build(seed: Seed = {}) {
   });
 
   const tx = {
+    // Every tenant here keeps its books in USD (F-116-b).
+    tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
     paymentGatewayGrant: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         calls.writes.push('grant');

@@ -176,6 +176,9 @@ model Wallet {
   id            String  @id @default(uuid()) @db.Uuid
   ownerUserId   String  @unique @db.Uuid
   cachedBalance Decimal @default(0) @db.Decimal(18, 2)
+  /// The currency it opened in, from its first credit (F-116-b). Every ledger
+  /// row is in it: the ledger refuses another, and so does a trigger.
+  currencyCode  String
   version       Int     @default(0) // Optimistic Locking
 
   owner        User               @relation(fields: [ownerUserId], references: [id])
@@ -196,6 +199,8 @@ model WalletTransaction {
   reasonType   WalletReasonType
   referenceId  String?           @db.Uuid
   balanceAfter Decimal           @db.Decimal(18, 2)
+  /// Always its wallet's at the moment it was written (F-116-b).
+  currencyCode String
   createdAt    DateTime          @default(now())
 
   wallet                Wallet                 @relation(fields: [walletId], references: [id])
@@ -258,6 +263,9 @@ model Coupon {
   discountValue       Decimal           @db.Decimal(18, 2)
   maxDiscountCap      Decimal?          @db.Decimal(18, 2) // فقط برای درصدی
   minPurchaseAmount   Decimal?          @db.Decimal(18, 2)
+  /// The currency its amounts are in (F-116-b, ADR-0098 part 3): never implied
+  /// by the tenant, whose currency may change. `^[A-Z]{3}$`, CHECK in the migration.
+  currencyCode        String
   totalUsageLimit     Int? // null = نامحدود
   perUserUsageLimit   Int               @default(1) // 0 = unlimited
   usedCount           Int               @default(0)
@@ -429,6 +437,9 @@ model PaymentGateway {
   merchantId          String // DEPRECATED (D-25): never read — a platform gateway's merchant id is the platform_owner tenant's vault entry
   minAcceptAmount     Decimal?         @db.Decimal(18, 2) // null = no minimum
   maxAcceptAmount     Decimal?         @db.Decimal(18, 2) // null = no maximum
+  /// The platform's currency its limits, fees and presets are in (F-116-b) —
+  /// not what it charges in, which is `supportedCurrencies`.
+  currencyCode        String
   feeCalculationMode  FeeCalcMode
   feeType             FeeType
   feeValue            Decimal          @db.Decimal(18, 4)
@@ -465,13 +476,16 @@ model PaymentGateway {
 }
 
 /// A tenant's default quick amounts on the top-up page (F-092-v); a gateway's
-/// own `depositPresets` override them. Base currency (ADR-0019). One row per
+/// own `depositPresets` override them. In `currencyCode`. One row per
 /// tenant, written through `deposit-presets.ts`.
 /// `taxRatePercent` is the tenant's default tax on a top-up (ADR-0076), which a
 /// gateway's own rate overrides; null = no tax. 0..100, CHECK in the migration.
 model DepositSetting {
   tenantId        String    @id @db.Uuid
   presets         Decimal[] @default([]) @db.Decimal(18, 2)
+  /// The currency its amounts are in (F-116-b, ADR-0098 part 3): never implied
+  /// by the tenant, whose currency may change. `^[A-Z]{3}$`, CHECK in the migration.
+  currencyCode    String
   taxRatePercent  Decimal?  @db.Decimal(9, 4)
   updatedByUserId String?   @db.Uuid
   updatedAt       DateTime  @updatedAt
@@ -503,7 +517,7 @@ model Invoice {
   userId    String        @db.Uuid
   variantId String        @db.Uuid
   priceId   String        @db.Uuid
-  /// The catalog price, base currency.
+  /// The catalog price, in `currencyCode`.
   amount    Decimal       @db.Decimal(18, 2)
   /// Everything taken off `amount`: the automatic rule's part, then the
   /// coupons', stacked on what the rule left (F-092-g, F-114-h).
@@ -513,6 +527,9 @@ model Invoice {
   ruleDiscount   Decimal  @default(0) @db.Decimal(18, 2)
   /// `amount - discount`, a CHECK; what the wallet pays.
   total     Decimal       @db.Decimal(18, 2)
+  /// The currency its amounts are in (F-116-b, ADR-0098 part 3): never implied
+  /// by the tenant, whose currency may change. `^[A-Z]{3}$`, CHECK in the migration.
+  currencyCode String
   status    InvoiceStatus @default(pending)
   expiresAt DateTime
   createdAt DateTime      @default(now())
@@ -547,8 +564,11 @@ model DiscountRule {
   /// The admin's label, shown to the buyer beside what it took.
   name             String           @db.VarChar(80)
   kind             DiscountRuleKind
-  /// A percentage in (0, 100], or a fixed amount in base currency (C-02).
+  /// A percentage in (0, 100], or a fixed amount in `currencyCode` (C-02).
   value            Decimal          @db.Decimal(18, 2)
+  /// The currency its amounts are in (F-116-b, ADR-0098 part 3): never implied
+  /// by the tenant, whose currency may change. `^[A-Z]{3}$`, CHECK in the migration.
+  currencyCode     String
   /// At most one of the two; neither = every product.
   productId        String?          @db.Uuid
   categoryId       String?          @db.Uuid
@@ -600,10 +620,13 @@ model PaymentTransaction {
   // enforces it; Prisma cannot express it.
   gatewayId             String?             @db.Uuid
   tenantGatewayConfigId String?             @db.Uuid
-  amountRequested       Decimal             @db.Decimal(18, 2) // base, before coupons
+  amountRequested       Decimal             @db.Decimal(18, 2) // before coupons, in `currencyCode`
   feeApplied            Decimal             @db.Decimal(18, 2)
   discountApplied       Decimal             @default(0) @db.Decimal(18, 2) // every coupon together
   amountCredited        Decimal             @db.Decimal(18, 2) // base + adjustment gap
+  /// The currency every amount above is in — the payer's tenant's, or the
+  /// platform's for a billing top-up (F-116-b). Not the charge currency.
+  currencyCode          String
   // The tax charged on top (ADR-0076) and the rate it was charged at, frozen
   // at intent so a later rate change cannot re-explain the receipt. No rate =
   // no tax: a row from before F-104-ae reads 0 and NULL. CHECKs in the migration.
@@ -812,8 +835,10 @@ model GatewaySettlementEntry {
   tenantId             String   @db.Uuid
   /// One accrual per payment, so a retried callback cannot accrue twice.
   paymentTransactionId String   @unique @db.Uuid
-  /// Base currency (ADR-0019, C-02). `amountCredited` net of the gateway fee.
+  /// In `currencyCode` (C-02). `amountCredited` net of the gateway fee.
   amount               Decimal  @db.Decimal(18, 2)
+  /// Its payment's (F-116-b).
+  currencyCode         String
   accruedAt            DateTime @default(now())
 
   grant              PaymentGatewayGrant @relation(fields: [grantId], references: [id])
@@ -830,8 +855,10 @@ model GatewaySettlementPayout {
   id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   /// The tenant that was paid.
   tenantId          String   @db.Uuid
-  /// Base currency (ADR-0019, C-02). What is still owed is the accruals minus these.
+  /// In `currencyCode` (C-02). What is still owed is the accruals minus these.
   amount            Decimal  @db.Decimal(18, 2)
+  /// The paid tenant's operating currency when it was recorded (F-116-b).
+  currencyCode      String
   paidAt            DateTime @default(now())
   /// Never null in practice: a payout is a person's act and is attributed (ADR-0041 §5).
   recordedByAdminId String   @db.Uuid

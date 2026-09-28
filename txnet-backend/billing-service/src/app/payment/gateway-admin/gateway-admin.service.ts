@@ -11,7 +11,7 @@ import {
   TenantGatewayVerificationStatus,
   TenantType,
 } from '@prisma/client';
-import { tenantTransaction } from '@txnet-backend/shared-core';
+import { tenantTransaction, operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../../config/env.validation';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
@@ -284,7 +284,7 @@ export class GatewayAdminService {
       const before = presetStrings((await tx.depositSetting.findUnique({ where: { tenantId: actor.tenantId } }))?.presets);
       await tx.depositSetting.upsert({
         where: { tenantId: actor.tenantId },
-        create: { tenantId: actor.tenantId, presets, updatedByUserId: actor.adminId },
+        create: { tenantId: actor.tenantId, currencyCode: await operatingCurrencyOf(tx, actor.tenantId), presets, updatedByUserId: actor.adminId },
         update: { presets, updatedByUserId: actor.adminId },
       });
       await tx.adminAuditLog.create({
@@ -320,7 +320,7 @@ export class GatewayAdminService {
       // `update` names the rate alone: the quick amounts on the same row are not this write's.
       await tx.depositSetting.upsert({
         where: { tenantId: actor.tenantId },
-        create: { tenantId: actor.tenantId, taxRatePercent, updatedByUserId: actor.adminId },
+        create: { tenantId: actor.tenantId, currencyCode: await operatingCurrencyOf(tx, actor.tenantId), taxRatePercent, updatedByUserId: actor.adminId },
         update: { taxRatePercent, updatedByUserId: actor.adminId },
       });
       await tx.adminAuditLog.create({
@@ -403,6 +403,10 @@ export class GatewayAdminService {
         });
         if (duplicate) throw new GatewayAdminRefused('provider_already_configured', input.providerName);
       }
+      // Its limits, fees and presets are in its owner's currency (F-116-b): the
+      // platform's for a platform gateway, the tenant's for its own. Set here,
+      // under the cast, because `data` is assembled untyped.
+      data['currencyCode'] = tenantId ? await operatingCurrencyOf(tx, tenantId) : await platformCurrencyOf(tx);
       const row = (input.source === 'platform'
         ? await tx.paymentGateway.create({ data: data as Prisma.PaymentGatewayUncheckedCreateInput })
         : await tx.tenantGatewayConfig.create({ data: data as Prisma.TenantGatewayConfigUncheckedCreateInput })) as unknown as Row;

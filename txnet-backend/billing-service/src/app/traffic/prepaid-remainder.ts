@@ -75,7 +75,7 @@ export async function creditPrepaidRemainder(
 
   const invoice = await tx.invoice.findFirst({
     where: { id: grant.sourceReferenceId, status: InvoiceStatus.paid },
-    select: { id: true, userId: true, total: true },
+    select: { id: true, userId: true, total: true, currencyCode: true },
   });
   if (!invoice || !new Prisma.Decimal(invoice.total).gt(0)) throw new RemainderCreditRefused('nothing_paid', grant.sourceReferenceId);
 
@@ -91,6 +91,6 @@ export async function creditPrepaidRemainder(
   });
 
   const amount = new Prisma.Decimal(cents.toString()).div(CENTS.toString());
-  const movement = await ledger.credit(tx, { userId: invoice.userId, amount, reasonType: WalletReasonType.product_refund, referenceId: invoice.id });
+  const movement = await ledger.credit(tx, { userId: invoice.userId, amount, currencyCode: invoice.currencyCode, reasonType: WalletReasonType.product_refund, referenceId: invoice.id });
   return { amount, walletTransactionId: movement.id };
 }

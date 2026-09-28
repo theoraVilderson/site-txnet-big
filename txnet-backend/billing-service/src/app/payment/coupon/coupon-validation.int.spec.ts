@@ -78,8 +78,8 @@ beforeAll(async () => {
   ];
   for (const [suffix, tenantId, code, perUser] of coupons) {
     await owner.$executeRawUnsafe(`
-      INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "perUserUsageLimit", "createdByAdminId")
-      VALUES ('${couponId(suffix)}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${code}', 'percentage', 10.00, ${perUser}, '${ADMIN}')
+      INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "perUserUsageLimit", "createdByAdminId", "currencyCode")
+      VALUES ('${couponId(suffix)}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${code}', 'percentage', 10.00, ${perUser}, '${ADMIN}', 'USD')
     `);
   }
   // PLATFORM10 serves tenant A's users by name (ADR-0048); B is not named.
@@ -201,15 +201,15 @@ describe('a coupon on a lent gateway', () => {
     await owner.$executeRawUnsafe(`
       INSERT INTO billing.payment_gateway
         (id, "displayName", "providerName", "gatewayCategory", "supportedCurrencies", "merchantId",
-         "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt")
-      VALUES ('${PLATFORM_GATEWAY}', 'platform', 'zarinpal', 'domestic_rial', '["IRR"]', 'm', 1.00, 500.00, 'manual', 'percentage', 1.0000, now())
+         "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt", "currencyCode")
+      VALUES ('${PLATFORM_GATEWAY}', 'platform', 'zarinpal', 'domestic_rial', '["IRR"]', 'm', 1.00, 500.00, 'manual', 'percentage', 1.0000, now(), 'USD')
     `);
     await owner.$executeRawUnsafe(`
       INSERT INTO tenant.tenant_gateway_config
         (id, "tenantId", "displayName", "providerName", "gatewayCategory",
-         "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt")
+         "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt", "currencyCode")
       VALUES ('${TENANT_GATEWAY}', '${TENANT_A}', 'alpha gateway', 'zarinpal', 'domestic_rial',
-              1.00, 500.00, 'manual', 'percentage', 1.0000, now())
+              1.00, 500.00, 'manual', 'percentage', 1.0000, now(), 'USD')
     `);
     // Both gateways are lent to B, actively.
     for (const [gatewayId, configId] of [[PLATFORM_GATEWAY, null], [null, TENANT_GATEWAY]]) {
@@ -228,8 +228,8 @@ describe('a coupon on a lent gateway', () => {
     ];
     for (const [suffix, tenantId, code, column, gateway, names] of coupons) {
       await owner.$executeRawUnsafe(`
-        INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "perUserUsageLimit", "createdByAdminId")
-        VALUES ('${couponId(suffix)}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${code}', 'percentage', 10.00, 1, '${ADMIN}')
+        INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "perUserUsageLimit", "createdByAdminId", "currencyCode")
+        VALUES ('${couponId(suffix)}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${code}', 'percentage', 10.00, 1, '${ADMIN}', 'USD')
       `);
       await owner.$executeRawUnsafe(`
         INSERT INTO billing.coupon_gateway (id, "couponId", ${column}) VALUES (gen_random_uuid(), '${couponId(suffix)}', '${gateway}')

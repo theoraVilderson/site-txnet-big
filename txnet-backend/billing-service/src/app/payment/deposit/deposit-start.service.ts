@@ -9,7 +9,7 @@ import {
   TenantDomainType,
   WalletReasonType,
 } from '@prisma/client';
-import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { TenantContext, tenantTransaction, operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import type { EnvConfig } from '../../config/env.validation';
@@ -227,6 +227,9 @@ export class DepositStartService {
     // 2. Write: the payment and its holds, together or not at all. A refused
     //    hold aborts this whole transaction, and the panel re-quotes.
     const balance = await tenantTransaction(this.prisma, async (tx) => {
+      // The payer's tenant's currency; a billing top-up is money with the
+      // platform, so it is in the platform's (ADR-0098 part 4, F-116-b).
+      const currencyCode = request.billingTenantId ? await platformCurrencyOf(tx) : await operatingCurrencyOf(tx, tenant.id);
       await tx.paymentTransaction.create({
         data: {
           id: paymentId,
@@ -247,6 +250,7 @@ export class DepositStartService {
           taxRatePercent: price.taxRatePercent,
           discountApplied: price.discount,
           amountCredited: price.credited,
+          currencyCode,
           // Non-null on the column, and the free path charges nobody anything.
           chargedAmountMinor: price.chargedAmountMinor ?? BigInt(0),
           // The pair, or neither: a rate with no snapshot is the state ADR-0019
@@ -279,6 +283,7 @@ export class DepositStartService {
       const entry = await this.ledger.credit(tx, {
         userId,
         amount: price.credited,
+        currencyCode,
         reasonType: WalletReasonType.payment_gateway,
         referenceId: paymentId,
       });

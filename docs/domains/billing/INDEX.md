@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 66
+version: 67
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -42,6 +42,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260928000900_a_bulk_request_is_applied_once/**
   - txnet-backend/prisma/domains/migrations/20260928001000_a_bulk_job_by_filter/**
   - txnet-backend/prisma/domains/migrations/20260928001100_a_bulk_job_is_audited_and_purged/**
+  - txnet-backend/prisma/domains/migrations/20260928002500_every_money_row_records_its_currency/**
 owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_tenant, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
 updated: 2026-09-28
@@ -80,8 +81,8 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-28 | contract v67 (**breaking** for ledger callers, F-116-b, ADR-0098): every money row records `currencyCode`; `LedgerEntry.currencyCode` is required and a movement in another currency than the wallet's is `LedgerCurrencyMismatch`. Consumers: `tenant-service` reseller purchase (updated), F-116-d/e/f/g. See [data-model.md](data-model.md) "Currency" |
 | 2026-09-28 | contract.gift v12 (additive, F-307-x): `PUT /api/billing/gift/grants/:grantId/label` — a buyer names a service; the list answers `label` and `q` matches it. See [contract.gift.md](contract.gift.md) |
 | 2026-09-28 | contract v66 (F-311-r): `GET …/users/:userId/grants/:grantId/history` — the Grant's audited admin acts, its configs' included; an optional `reason` on freeze, unfreeze, rotate-token and issue. Every write on this surface writes one `admin_audit_log` row (audit invariant #12). Additive. Consumers: F-311-x, F-311-y |
-| 2026-09-28 | contract v65 (F-311-n): `POST …/users/:userId/grants/:grantId/rotate-token` — an admin resets a user's `/sub` link over the owner's `SubscriptionLinkService.reset`; door `staffWrite`. Additive. Consumers: F-311-w, F-311-y |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

@@ -454,6 +454,9 @@ model TenantGatewayConfig {
   isActive            Boolean                         @default(false)
   minAcceptAmount     Decimal?                        @db.Decimal(18, 2) // null = no minimum
   maxAcceptAmount     Decimal?                        @db.Decimal(18, 2) // null = no maximum
+  /// The tenant's currency its limits, fees and presets are in (F-116-b) —
+  /// not what it charges in.
+  currencyCode        String
   feeCalculationMode  FeeCalcMode
   feeType             FeeType
   feeValue            Decimal                         @db.Decimal(18, 4)

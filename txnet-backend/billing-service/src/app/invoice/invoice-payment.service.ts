@@ -74,6 +74,7 @@ type LockedInvoice = {
   userId: string;
   variantId: string;
   total: Prisma.Decimal;
+  currencyCode: string;
   status: InvoiceStatus;
   expiresAt: Date;
 };
@@ -97,7 +98,7 @@ export class InvoicePaymentService {
       // RLS scopes the row to this tenant; the `userId` makes another user's
       // invoice as absent as another tenant's.
       const [invoice] = await tx.$queryRaw<LockedInvoice[]>`
-        SELECT id, "userId", "variantId", total, status, "expiresAt"
+        SELECT id, "userId", "variantId", total, "currencyCode", status, "expiresAt"
           FROM billing.invoice
          WHERE id = ${invoiceId}::uuid AND "userId" = ${userId}::uuid
          FOR UPDATE`;
@@ -129,6 +130,7 @@ export class InvoicePaymentService {
           const movement = await this.ledger.debit(tx, {
             userId,
             amount: total,
+            currencyCode: invoice.currencyCode,
             reasonType: WalletReasonType.product_purchase,
             referenceId: invoice.id,
           });

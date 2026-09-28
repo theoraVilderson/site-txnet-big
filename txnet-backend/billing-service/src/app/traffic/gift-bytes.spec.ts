@@ -69,13 +69,15 @@ function build(row: Partial<Row>, balance = D('1.00')) {
     endsAt: new Date(AT.getTime() + 10 * DAY),
     ...row,
   };
-  const wallet = { id: 'wallet-1', ownerUserId: USER, cachedBalance: balance, version: 0 };
+  const wallet = { id: 'wallet-1', ownerUserId: USER, currencyCode: 'USD', cachedBalance: balance, version: 0 };
   const ledger: Array<Record<string, unknown>> = [];
   const adjustments: Array<Record<string, unknown>> = [];
   const writes: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }> = [];
   const matches = (where: Record<string, unknown>) => Object.entries(where).every(([k, v]) => (grant as Record<string, unknown>)[k] === v);
 
   const tx = {
+    // Every tenant here keeps its books in USD (F-116-b).
+    tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
     grant: {
       findUnique: async ({ where }: { where: { id: string } }) => (where.id === grant.id ? { ...grant } : null),
       findMany: async () => [],

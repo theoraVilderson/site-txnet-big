@@ -7,6 +7,7 @@ import {
   TenantBillingVersionConflict,
   WalletLedgerService,
   WalletVersionConflict,
+  operatingCurrencyOf,
 } from '@txnet-backend/shared-core';
 import { randomBytes } from 'node:crypto';
 
@@ -183,6 +184,8 @@ export class ResellerPurchaseService {
         const paid = await this.wallets.debit(tx, {
           userId: buyer.userId,
           amount: price,
+          // The buyer is the platform's user, so this is the platform's currency (ADR-0098 part 4).
+          currencyCode: await operatingCurrencyOf(tx, buyer.tenantId),
           reasonType: WalletReasonType.reseller_purchase,
           referenceId: reseller.id,
           tenantId: buyer.tenantId,

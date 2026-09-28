@@ -52,6 +52,8 @@ export const PAYMENT_SELECT = {
   gatewayId: true,
   tenantGatewayConfigId: true,
   amountCredited: true,
+  // What every amount on it is in (F-116-b): the wallet credit and the accrual are too.
+  currencyCode: true,
   // The gateway's own cut, which the payer covered. A granted gateway's
   // accrual is net of it (ADR-0041 §4, F-096-d).
   feeApplied: true,
@@ -265,6 +267,7 @@ export class DepositSettlementService {
         // computed (`amountRequested` is what the user typed) — or
         // what a receipt for another amount made of it (F-104-d).
         amount: credited,
+        currencyCode: payment.currencyCode,
         reasonType: WalletReasonType.payment_gateway,
         referenceId: payment.id,
       });
@@ -468,6 +471,7 @@ export class DepositSettlementService {
         tenantId: tenant.id,
         paymentTransactionId: payment.id,
         amount,
+        currencyCode: payment.currencyCode,
       },
       select: { id: true },
     });

@@ -59,15 +59,15 @@ beforeAll(async () => {
   await owner.$executeRawUnsafe(`
     INSERT INTO billing.payment_gateway
       (id, "displayName", "providerName", "gatewayCategory", "supportedCurrencies", "merchantId",
-       "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt")
-    VALUES ('${GATEWAY}', 'platform', 'zarinpal', 'domestic_rial', '["IRR"]', 'm', 1.00, 500.00, 'manual', 'percentage', 1.0000, now())
+       "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt", "currencyCode")
+    VALUES ('${GATEWAY}', 'platform', 'zarinpal', 'domestic_rial', '["IRR"]', 'm', 1.00, 500.00, 'manual', 'percentage', 1.0000, now(), 'USD')
   `);
   // OLD_USER has paid once before; NEW_USER never has.
   await owner.$executeRawUnsafe(`
     INSERT INTO billing.payment_transaction
       (id, "tenantId", "userId", "gatewayId", status, "amountRequested", "feeApplied", "discountApplied", "amountCredited",
-       "chargedAmountMinor", "exchangeRateSnapshot")
-    VALUES (gen_random_uuid(), '${TENANT}', '${OLD_USER}', '${GATEWAY}', 'success', 10.00, 0.00, 0.00, 10.00, 10000000, 1000000.00000000)
+       "chargedAmountMinor", "exchangeRateSnapshot", "currencyCode")
+    VALUES (gen_random_uuid(), '${TENANT}', '${OLD_USER}', '${GATEWAY}', 'success', 10.00, 0.00, 0.00, 10.00, 10000000, 1000000.00000000, 'USD')
   `);
 
   const base = new PrismaService(pg.appUrl);
@@ -84,8 +84,8 @@ afterAll(async () => {
 async function couponWith(columns: Record<string, string> = {}): Promise<string> {
   seq += 1;
   const id = `77777777-7777-4777-8777-7777777777${String(seq).padStart(2, '0')}`;
-  const names = ['id', '"tenantId"', 'code', '"discountType"', '"discountValue"', '"createdByAdminId"', ...Object.keys(columns)];
-  const values = [`'${id}'`, `'${TENANT}'`, `'LIMIT${seq}'`, `'percentage'`, '10.00', `'${ADMIN}'`, ...Object.values(columns)];
+  const names = ['id', '"tenantId"', 'code', '"discountType"', '"discountValue"', '"createdByAdminId"', '"currencyCode"', ...Object.keys(columns)];
+  const values = [`'${id}'`, `'${TENANT}'`, `'LIMIT${seq}'`, `'percentage'`, '10.00', `'${ADMIN}'`, `'USD'`, ...Object.values(columns)];
   await owner.$executeRawUnsafe(`INSERT INTO billing.coupon (${names.join(', ')}) VALUES (${values.join(', ')})`);
   return id;
 }

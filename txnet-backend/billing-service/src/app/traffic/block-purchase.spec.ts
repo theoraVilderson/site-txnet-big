@@ -106,10 +106,12 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
     purchasedBytes: BigInt(0),
     ...grant,
   };
-  const wallet = { id: 'wallet-1', ownerUserId: USER, cachedBalance: balance, version: 0 };
+  const wallet = { id: 'wallet-1', ownerUserId: USER, currencyCode: 'USD', cachedBalance: balance, version: 0 };
   const ledger: Array<Record<string, unknown>> = [];
 
   const tx = {
+    // Every tenant here keeps its books in USD (F-116-b).
+    tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
     grant: {
       findUnique: async ({ where }: { where: { id: string } }) => (where.id === row.id ? { ...row } : null),
       update: async ({ where, data }: { where: { id: string }; data: Record<string, { increment: bigint }> }) => {
