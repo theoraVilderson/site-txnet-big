@@ -82,7 +82,7 @@ function build() {
     tenantStaffMember: { findFirst: async () => null },
   } as never);
 
-  const grantState = () => ({ status: log.includes('act') ? 'suspended' : 'active', statusReason: null, endsAt: null, purchasedBytes: BigInt(10), quotas: {}, tokenRotatedAt: new Date('2026-09-01T00:00:00Z') });
+  const grantState = () => ({ userId: CUSTOMER, status: log.includes('act') ? 'suspended' : 'active', statusReason: null, endsAt: null, purchasedBytes: BigInt(10), quotas: {}, tokenRotatedAt: new Date('2026-09-01T00:00:00Z') });
   const tx = {
     $executeRaw: async () => 1,
     user: { findFirst: async ({ where }: { where: { id: string } }) => (where.id === CUSTOMER && scope() === RESELLER ? { id: CUSTOMER } : null) },
@@ -100,7 +100,9 @@ function build() {
       findMany: async (args: Row) => ((history.findMany = args), []),
       count: async () => 0,
     },
+    outboxEvent: { create: async ({ data }: { data: Row }) => (notices.push({ ...data, scope: scope() }), data) },
   };
+  const notices: Row[] = [];
   const history: Row = {};
   const prisma = { $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx) };
 
@@ -109,7 +111,7 @@ function build() {
   const links = { reset: async (_g: string, _u: string, around: (t: unknown, run: () => Promise<string>) => Promise<string>) => prisma.$transaction((t) => around(t, async () => (log.push('act'), 'https://sub.acme.test/sub/SECRET'))) };
   const remainders = { settle: async () => null };
   const service = new ResellerUserGrantsService(prisma as never, access, {} as never, configs, {} as never, links as never, remainders as never);
-  return { service, rows, history };
+  return { service, rows, history, notices };
 }
 
 type Case = { method: string; action: AdminAction; reason: string | null; call: (s: ResellerUserGrantsService) => Promise<unknown>; target?: string };
@@ -160,6 +162,12 @@ describe('an admin action on a Grant or config writes a row (F-311-r)', () => {
       tenantId: RESELLER,
       scope: RESELLER,
     });
+  });
+
+  it("tells the Grant's owner of a told act, in the reseller's transaction (F-311-s)", async () => {
+    const { service, notices } = build();
+    await service.freeze(admin, RESELLER, CUSTOMER, GRANT, null, 'chargeback');
+    expect(notices).toEqual([expect.objectContaining({ type: 'entitlement.grant.admin_frozen', payload: expect.objectContaining({ userId: CUSTOMER, grantId: GRANT }), scope: RESELLER })]);
   });
 
   it('writes the state on either side of the act, bytes as text', async () => {

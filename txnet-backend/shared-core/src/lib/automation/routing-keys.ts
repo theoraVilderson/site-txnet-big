@@ -90,6 +90,24 @@ export const OutboxEventType = {
   GRANT_LOW_BALANCE: 'entitlement.grant.low_balance',
   /** F-601-i: a paid Grant still `pending` 5 minutes on — the buyer is told it is being prepared, the tenant's owner why; once per Grant. */
   GRANT_DELIVERY_DELAYED: 'entitlement.grant.delivery_delayed',
+  /** F-311-s: an admin froze the user's Grant — one per act, its audit row's id the period (`grant-audit/admin-notice.ts`). Never muted. */
+  GRANT_ADMIN_FROZEN: 'entitlement.grant.admin_frozen',
+  /** F-311-s: an admin unfroze it; the frozen time was added to its end. */
+  GRANT_ADMIN_UNFROZEN: 'entitlement.grant.admin_unfrozen',
+  /** F-311-s: an admin moved its end later — `days`, whole and never zero. */
+  GRANT_ADMIN_DAYS_ADDED: 'entitlement.grant.admin_days_added',
+  /** F-311-s: an admin moved its end earlier — `days`. */
+  GRANT_ADMIN_DAYS_REMOVED: 'entitlement.grant.admin_days_removed',
+  /** F-311-s: an admin raised its traffic, or gifted bytes — `amount` ("5.0 GB"). */
+  GRANT_ADMIN_TRAFFIC_ADDED: 'entitlement.grant.admin_traffic_added',
+  /** F-311-s: an admin lowered its traffic — `amount`. */
+  GRANT_ADMIN_TRAFFIC_REMOVED: 'entitlement.grant.admin_traffic_removed',
+  /** F-311-s: an admin reset its traffic; the full volume is left again. */
+  GRANT_ADMIN_TRAFFIC_RESET: 'entitlement.grant.admin_traffic_reset',
+  /** F-311-s: an admin deleted it. Never muted. */
+  GRANT_ADMIN_DELETED: 'entitlement.grant.admin_deleted',
+  /** F-311-s: an admin rotated its `/sub` link; the old one no longer answers. Never muted. */
+  GRANT_ADMIN_LINK_ROTATED: 'entitlement.grant.admin_link_rotated',
 } as const;
 export type OutboxEventType = (typeof OutboxEventType)[keyof typeof OutboxEventType];
 
@@ -136,6 +154,15 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.GRANT_RUNS_OUT_WITHIN_A_DAY]: 'worker-service',
   [OutboxEventType.GRANT_LOW_BALANCE]: 'worker-service',
   [OutboxEventType.GRANT_DELIVERY_DELAYED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_FROZEN]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_UNFROZEN]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_DAYS_ADDED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_DAYS_REMOVED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_TRAFFIC_ADDED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_TRAFFIC_REMOVED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_TRAFFIC_RESET]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_DELETED]: 'worker-service',
+  [OutboxEventType.GRANT_ADMIN_LINK_ROTATED]: 'worker-service',
 };
 
 /** Every tick routing key starts with this. The suffix is the worker key. */

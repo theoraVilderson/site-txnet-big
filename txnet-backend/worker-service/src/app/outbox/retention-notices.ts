@@ -64,4 +64,14 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   // F-602: at the last 72 h's rate, what is left of the period runs out within 5 days (or a day) — once per usage period.
   [OutboxEventType.GRANT_RUNS_OUT_SOON]: { template: 'serviceRunsOutSoon', params: ['days', 'remaining'] },
   [OutboxEventType.GRANT_RUNS_OUT_WITHIN_A_DAY]: { template: 'serviceRunsOutWithinADay', params: ['remaining'] },
+  // F-311-s: an admin's act on the service, told once per act (period = its audit row). Frozen, deleted and a dead link are never muted.
+  [OutboxEventType.GRANT_ADMIN_FROZEN]: { template: 'serviceFrozenByAdmin', params: [] },
+  [OutboxEventType.GRANT_ADMIN_UNFROZEN]: { template: 'serviceUnfrozenByAdmin', params: [] },
+  [OutboxEventType.GRANT_ADMIN_DAYS_ADDED]: { template: 'serviceDaysAddedByAdmin', params: ['days'] },
+  [OutboxEventType.GRANT_ADMIN_DAYS_REMOVED]: { template: 'serviceDaysRemovedByAdmin', params: ['days'] },
+  [OutboxEventType.GRANT_ADMIN_TRAFFIC_ADDED]: { template: 'serviceTrafficAddedByAdmin', params: ['amount'] },
+  [OutboxEventType.GRANT_ADMIN_TRAFFIC_REMOVED]: { template: 'serviceTrafficRemovedByAdmin', params: ['amount'] },
+  [OutboxEventType.GRANT_ADMIN_TRAFFIC_RESET]: { template: 'serviceTrafficResetByAdmin', params: [] },
+  [OutboxEventType.GRANT_ADMIN_DELETED]: { template: 'serviceDeletedByAdmin', params: [] },
+  [OutboxEventType.GRANT_ADMIN_LINK_ROTATED]: { template: 'serviceLinkRotatedByAdmin', params: [] },
 };

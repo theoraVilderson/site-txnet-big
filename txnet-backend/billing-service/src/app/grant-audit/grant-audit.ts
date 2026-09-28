@@ -1,5 +1,7 @@
 import { AdminAction, AuditTargetType, Prisma } from '@prisma/client';
 
+import { adminNoticeOf, emitAdminNotice } from './admin-notice';
+
 /**
  * An admin's act on a user's Grant or config, written down (F-311-r, audit
  * unit): one `admin_audit_log` row — actor, target, before, after, reason —
@@ -11,6 +13,9 @@ import { AdminAction, AuditTargetType, Prisma } from '@prisma/client';
  * act, so a row never claims a state the act did not leave; `outcome` adds
  * what lives off the row (a quota's bytes, a speed cap, a refund). Neither
  * ever carries a token or a link: a rotation's outcome is the time, not the URL.
+ *
+ * The acts the user is told of (F-311-s) write their notice beside the row, in
+ * the same transaction, the row's id its period (`admin-notice.ts`).
  */
 export type AuditActor = { userId: string; ip: string };
 
@@ -62,7 +67,9 @@ export async function auditedGrantAct<T>(
   if (spec.changed && !spec.changed(result)) return result;
   const target = spec.targetOf ? spec.targetOf(result) : (grantId as string);
   const after = await tx.grant.findUnique({ where: { id: target }, select: GRANT_STATE });
-  await write(tx, actor, tenantId, spec.action, AuditTargetType.grant, target, before, { ...after, outcome: spec.outcome?.(result) }, spec.reason);
+  const auditId = await write(tx, actor, tenantId, spec.action, AuditTargetType.grant, target, before, { ...after, outcome: spec.outcome?.(result) }, spec.reason);
+  const notice = adminNoticeOf(spec.action, result);
+  if (notice) await emitAdminNotice(tx, tenantId, target, auditId, notice);
   return result;
 }
 
@@ -149,8 +156,8 @@ async function write(
   before: unknown,
   after: unknown,
   reason: string | null,
-): Promise<void> {
-  await tx.adminAuditLog.create({
+): Promise<string> {
+  const row = await tx.adminAuditLog.create({
     data: {
       tenantId,
       adminId: actor.userId,
@@ -162,7 +169,9 @@ async function write(
       adminIpAddress: actor.ip,
       reason,
     },
+    select: { id: true },
   });
+  return row.id;
 }
 
 /** Bytes as strings and instants as ISO text, so a row reads back as it was written. */

@@ -58,11 +58,26 @@ every write; the route is `GET …/users/:userId/grants/:grantId/history`.
 | The read: the Grant's rows **and every config it ever held** (a retired or moved one included), newest first, paged (≤100, default 20), each `{id, action, targetType, targetId, actorUserId, before, after, reason, at}`; door `read`, the path user's Grant (**404** otherwise); the admin's IP is not answered | the reader is the reseller; a suspended one still sees who did what |
 
 Not recorded: the system's own acts (the unfreeze sweep, a quota stop) — they
-are not an admin's. Telling the user is F-311-s.
+are not an admin's. Telling the user is the next section's.
 
 ## Emits (events)
 
-None planned yet — no message bus is wired up.
+**An admin's act, told to the Grant's owner (F-311-s, built).** `auditedGrantAct`
+writes, beside the row and in the same transaction, one retention outbox row
+(`grant-audit/admin-notice.ts`, proved by `admin-notice.spec.ts`):
+
+| Act | Type `entitlement.grant.…` | Params |
+|---|---|---|
+| freeze / unfreeze | `admin_frozen` / `admin_unfrozen` | — |
+| days | `admin_days_added` / `admin_days_removed` | `days`: whole, at least 1 |
+| traffic change, gift | `admin_traffic_added` / `admin_traffic_removed` | `amount` ("5.0 GB") |
+| reset / delete / link rotate | `admin_traffic_reset` / `admin_deleted` / `admin_link_rotated` | — |
+
+`period` is the audit row's id, so the ledger tells each act once. Never in
+the payload: the admin's `reason` (staff's words) or a link. Not told here: a
+speed cap, a device limit, an issue or a renewal (told by their own notices),
+a config act. How it is told: notification
+[contract.retention.md](../notification/contract.retention.md).
 
 ## Consumes
 

@@ -36,6 +36,16 @@ export const RETENTION_KIND_OF: Readonly<Partial<Record<OutboxEventType, Retenti
   [OutboxEventType.GRANT_WALLET_SPENT]: 'cutoff',
   [OutboxEventType.GRANT_PURGE_SOON]: 'cutoff',
   [OutboxEventType.GRANT_PURGE_SOON_METERED]: 'cutoff',
+  // F-311-s: an admin's act — the service stopped, gone or its link dead is `cutoff`; the rest file under the kind they change.
+  [OutboxEventType.GRANT_ADMIN_FROZEN]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_DELETED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_LINK_ROTATED]: 'cutoff',
+  [OutboxEventType.GRANT_ADMIN_UNFROZEN]: 'reactivated',
+  [OutboxEventType.GRANT_ADMIN_DAYS_ADDED]: 'ending',
+  [OutboxEventType.GRANT_ADMIN_DAYS_REMOVED]: 'ending',
+  [OutboxEventType.GRANT_ADMIN_TRAFFIC_ADDED]: 'usage',
+  [OutboxEventType.GRANT_ADMIN_TRAFFIC_REMOVED]: 'usage',
+  [OutboxEventType.GRANT_ADMIN_TRAFFIC_RESET]: 'usage',
 };
 
 export function retentionKindOf(notice: string): RetentionKind {

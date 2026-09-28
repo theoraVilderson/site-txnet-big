@@ -37,6 +37,15 @@ export const NOTIFY_TEMPLATES = [
   'serviceIdle',
   'serviceRunsOutSoon',
   'serviceRunsOutWithinADay',
+  'serviceFrozenByAdmin',
+  'serviceUnfrozenByAdmin',
+  'serviceDaysAddedByAdmin',
+  'serviceDaysRemovedByAdmin',
+  'serviceTrafficAddedByAdmin',
+  'serviceTrafficRemovedByAdmin',
+  'serviceTrafficResetByAdmin',
+  'serviceDeletedByAdmin',
+  'serviceLinkRotatedByAdmin',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -380,6 +389,97 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.retention?.runsOutWithinADayMany,
       fallback: '📉 At your recent rate, {{count}} of your services run out of volume within a day. Renew them now from My services so they do not stop.',
       inbox: { read: (ns) => ns?.retention?.runsOutWithinADayManyTitle, fallback: '{{count}} services run out of volume within a day' },
+    },
+  },
+  // F-311-s: an admin's act on the service, told once per act; never the admin's reason.
+  serviceFrozenByAdmin: {
+    read: (ns) => ns?.retention?.adminFrozen,
+    fallback: '⏸️ Your service was paused by support. Its remaining time is kept: the days it stays paused are added back when it resumes.',
+    inbox: { read: (ns) => ns?.retention?.adminFrozenTitle, fallback: 'Your service was paused' },
+    many: {
+      read: (ns) => ns?.retention?.adminFrozenMany,
+      fallback: '⏸️ {{count}} of your services were paused by support. Their remaining time is kept and added back when they resume.',
+      inbox: { read: (ns) => ns?.retention?.adminFrozenManyTitle, fallback: '{{count}} services paused' },
+    },
+  },
+  serviceUnfrozenByAdmin: {
+    read: (ns) => ns?.retention?.adminUnfrozen,
+    fallback: '▶️ Your service was resumed by support and reconnects within a few minutes. The days it was paused were added to its end, and its link stays the same.',
+    inbox: { read: (ns) => ns?.retention?.adminUnfrozenTitle, fallback: 'Your service was resumed' },
+    many: {
+      read: (ns) => ns?.retention?.adminUnfrozenMany,
+      fallback: '▶️ {{count}} of your services were resumed by support. The days they were paused were added to their ends, and their links stay the same.',
+      inbox: { read: (ns) => ns?.retention?.adminUnfrozenManyTitle, fallback: '{{count}} services resumed' },
+    },
+  },
+  serviceDaysAddedByAdmin: {
+    read: (ns) => ns?.retention?.adminDaysAdded,
+    fallback: '📅 Support added {{days}} day(s) to your service. My services shows its new end date.',
+    inbox: { read: (ns) => ns?.retention?.adminDaysAddedTitle, fallback: '{{days}} day(s) added to your service' },
+    many: {
+      read: (ns) => ns?.retention?.adminDaysAddedMany,
+      fallback: '📅 Support changed the time of {{count}} of your services. My services shows their new end dates.',
+      inbox: { read: (ns) => ns?.retention?.adminDaysAddedManyTitle, fallback: 'The time of {{count}} services changed' },
+    },
+  },
+  serviceDaysRemovedByAdmin: {
+    read: (ns) => ns?.retention?.adminDaysRemoved,
+    fallback: '📅 Support took {{days}} day(s) off your service. My services shows its new end date.',
+    inbox: { read: (ns) => ns?.retention?.adminDaysRemovedTitle, fallback: '{{days}} day(s) taken off your service' },
+    many: {
+      read: (ns) => ns?.retention?.adminDaysRemovedMany,
+      fallback: '📅 Support changed the time of {{count}} of your services. My services shows their new end dates.',
+      inbox: { read: (ns) => ns?.retention?.adminDaysRemovedManyTitle, fallback: 'The time of {{count}} services changed' },
+    },
+  },
+  serviceTrafficAddedByAdmin: {
+    read: (ns) => ns?.retention?.adminTrafficAdded,
+    fallback: '📶 Support added {{amount}} to your service\'s volume.',
+    inbox: { read: (ns) => ns?.retention?.adminTrafficAddedTitle, fallback: '{{amount}} added to your service' },
+    many: {
+      read: (ns) => ns?.retention?.adminTrafficAddedMany,
+      fallback: '📶 Support changed the volume of {{count}} of your services. My services shows what each has left.',
+      inbox: { read: (ns) => ns?.retention?.adminTrafficAddedManyTitle, fallback: 'The volume of {{count}} services changed' },
+    },
+  },
+  serviceTrafficRemovedByAdmin: {
+    read: (ns) => ns?.retention?.adminTrafficRemoved,
+    fallback: '📶 Support took {{amount}} off your service\'s volume. My services shows what is left.',
+    inbox: { read: (ns) => ns?.retention?.adminTrafficRemovedTitle, fallback: '{{amount}} taken off your service' },
+    many: {
+      read: (ns) => ns?.retention?.adminTrafficRemovedMany,
+      fallback: '📶 Support changed the volume of {{count}} of your services. My services shows what each has left.',
+      inbox: { read: (ns) => ns?.retention?.adminTrafficRemovedManyTitle, fallback: 'The volume of {{count}} services changed' },
+    },
+  },
+  serviceTrafficResetByAdmin: {
+    read: (ns) => ns?.retention?.adminTrafficReset,
+    fallback: '🔄 Support reset your service\'s usage — its full volume is yours again.',
+    inbox: { read: (ns) => ns?.retention?.adminTrafficResetTitle, fallback: 'Your service\'s usage was reset' },
+    many: {
+      read: (ns) => ns?.retention?.adminTrafficResetMany,
+      fallback: '🔄 Support reset the usage of {{count}} of your services — their full volume is yours again.',
+      inbox: { read: (ns) => ns?.retention?.adminTrafficResetManyTitle, fallback: 'Usage of {{count}} services reset' },
+    },
+  },
+  serviceDeletedByAdmin: {
+    read: (ns) => ns?.retention?.adminDeleted,
+    fallback: '🗑️ Your service was deleted by support and no longer connects. If you think this is a mistake, contact support.',
+    inbox: { read: (ns) => ns?.retention?.adminDeletedTitle, fallback: 'Your service was deleted' },
+    many: {
+      read: (ns) => ns?.retention?.adminDeletedMany,
+      fallback: '🗑️ {{count}} of your services were deleted by support and no longer connect. If you think this is a mistake, contact support.',
+      inbox: { read: (ns) => ns?.retention?.adminDeletedManyTitle, fallback: '{{count}} services deleted' },
+    },
+  },
+  serviceLinkRotatedByAdmin: {
+    read: (ns) => ns?.retention?.adminLinkRotated,
+    fallback: '🔗 Support changed your service\'s subscription link. The old link no longer works: copy the new one from My services and update it in your VPN app.',
+    inbox: { read: (ns) => ns?.retention?.adminLinkRotatedTitle, fallback: 'Your service\'s link changed' },
+    many: {
+      read: (ns) => ns?.retention?.adminLinkRotatedMany,
+      fallback: '🔗 Support changed the subscription links of {{count}} of your services. The old links no longer work: copy the new ones from My services and update them in your VPN app.',
+      inbox: { read: (ns) => ns?.retention?.adminLinkRotatedManyTitle, fallback: 'Links of {{count}} services changed' },
     },
   },
 };

@@ -12,6 +12,9 @@ A §10 split of [contract.md](contract.md), which is at its ceiling. What a
 reseller's admin does to one of its users' Grants by hand (F-311), renewal included. Each runs in
 the caller's transaction; the HTTP routes, their door and status codes are
 billing's [contract.reseller-grants.md](../billing/contract.reseller-grants.md).
+Freeze, unfreeze, days, traffic (a gift too), reset, delete and a rotated link
+are told to the user once each, beside their audit row (F-311-s,
+notification [contract.retention.md](../notification/contract.retention.md)).
 
 **Freeze (F-311-h)** — `freezeGrant(tx, id, {at, until?})` and
 `unfreezeGrant(tx, id, at)` in `entitlement/freeze.ts`, proved by `freeze.spec.ts`.
