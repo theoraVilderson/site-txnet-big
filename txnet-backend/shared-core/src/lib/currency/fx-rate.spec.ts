@@ -1,6 +1,6 @@
 import { Prisma, RateSource } from '@prisma/client';
 
-import { FX_PIVOT_CURRENCY, readFxPair, readFxRate } from './fx-rate';
+import { DERIVED_CURRENCIES, FX_PIVOT_CURRENCY, readFxPair, readFxRate } from './fx-rate';
 
 /**
  * F-116-c — any currency to any other through the USD pivot (ADR-0098 part 6).
@@ -227,5 +227,69 @@ describe('readFxPair — through the USD pivot', () => {
     const { db, cache } = stores({ cache: { 'fx:rate:IRR': cached('IRR', '1042500') }, table: { TRY: null } });
 
     expect(await readFxPair(db, cache, 'TRY', 'IRR')).toBeNull();
+  });
+});
+
+/**
+ * F-116-m — the toman is the rial divided by ten, and never a rate of its own
+ * (user, 2026-09-28). IRT reads IRR's snapshot and divides; a rial pin moves
+ * it, and a pair between the two is the exact ratio, never two reads that a
+ * worker tick could land between.
+ */
+describe('a currency tied to another (IRT = IRR / 10)', () => {
+  it('is declared once, against the rial', () => {
+    expect(DERIVED_CURRENCIES['IRT']).toEqual({ of: 'IRR', divisor: 10 });
+  });
+
+  it("reads the rial's snapshot, divided, and records the rial's row", async () => {
+    const { db, cache, reads } = stores({ cache: { 'fx:rate:IRR': cached('IRR', '1042500') } });
+
+    const snap = await readFxRate(db, cache, 'IRT');
+
+    expect(snap).toMatchObject({ snapshotId: 'snap-IRR', currencyCode: 'IRT' });
+    expect(snap!.rate.toString()).toBe('104250');
+    expect(reads.get).toEqual(['fx:rate:IRR']);
+  });
+
+  it('follows a rial pin, marked as pinned', async () => {
+    const { db, cache } = stores({ pins: { IRR: { ...row('pin-1', '1200000'), reason: 'market', expiresAt: new Date(Date.now() + 3600e3) } } });
+
+    const snap = await readFxRate(db, cache, 'IRT');
+
+    expect(snap!.rate.toString()).toBe('120000');
+    expect(snap!.pinned?.reason).toBe('market');
+  });
+
+  it('never reads a pin or a row of its own', async () => {
+    const { db, cache, reads } = stores({ table: { IRR: row('r-1', '1000000'), IRT: row('r-own', '1') } });
+
+    const snap = await readFxRate(db, cache, 'IRT');
+
+    expect(snap!.rate.toString()).toBe('100000');
+    expect([...reads.pins, ...reads.table]).not.toContain('IRT');
+  });
+
+  it('is null when the rial has no rate', async () => {
+    const { db, cache } = stores({});
+    expect(await readFxRate(db, cache, 'IRT')).toBeNull();
+  });
+
+  it('prices a rial <-> toman pair at exactly the ratio, from one rial read', async () => {
+    const { db, cache, reads } = stores({ cache: { 'fx:rate:IRR': cached('IRR', '1042500') } });
+
+    const pair = await readFxPair(db, cache, 'IRR', 'IRT');
+
+    expect(pair!.rate.toString()).toBe('0.1');
+    expect(pair!.from!.snapshotId).toBe(pair!.to!.snapshotId);
+    expect(reads.get).toEqual(['fx:rate:IRR']);
+    expect((await readFxPair(db, cache, 'IRT', 'IRR'))!.rate.toString()).toBe('10');
+  });
+
+  it('crosses to any other currency through the pivot as the rial does', async () => {
+    const { db, cache } = stores({ cache: { 'fx:rate:IRR': cached('IRR', '1000000'), 'fx:rate:EUR': cached('EUR', '0.9') } });
+
+    const pair = await readFxPair(db, cache, 'EUR', 'IRT');
+
+    expect(pair!.rate.toString()).toBe('111111.11111111111111');
   });
 });

@@ -80,6 +80,7 @@ platform's (invariant 21), so a card there would pin the platform's rate.
    again; the card never patches it from what it sent. A tenant sees the
    platform's live pin beside its own (`platformPin`), and ends only its own.
 10. **Every refusal has its own sentence** (`common.manualRate.refusals.*`),
-    the routes' seven; anything else is `useApiErrorMessage`'s.
+    the routes' eight — `derived_currency` says the toman follows the rial
+    (F-116-m); anything else is `useApiErrorMessage`'s.
 
 Spec: `ManualRateCard.test.tsx`, `settings/_lib/settings.test.ts`.

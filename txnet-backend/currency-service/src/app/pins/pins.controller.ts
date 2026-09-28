@@ -63,6 +63,7 @@ const STATUS: Record<CurrencyPinRejection, 400 | 403 | 404 | 409> = {
   currency_not_found: 404,
   pin_not_found: 404,
   base_currency: 409,
+  derived_currency: 409,
   pin_over: 409,
   invalid_rate: 400,
 };

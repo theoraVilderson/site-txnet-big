@@ -40,6 +40,8 @@ describe('TenantOperatingCurrencyService', () => {
     { code: 'USD', name: 'US Dollar', symbol: '$', decimalPlaces: 2, isActive: true, isBaseCurrency: true, exchangeRates: [] },
     { code: 'IRR', name: 'Iranian Rial', symbol: '﷼', decimalPlaces: 0, isActive: true, isBaseCurrency: false, exchangeRates: [{ id: 'r1' }] },
     { code: 'EUR', name: 'Euro', symbol: '€', decimalPlaces: 2, isActive: true, isBaseCurrency: false, exchangeRates: [] },
+    // Tied to the rial (F-116-m): no row of its own, a rate while IRR has one.
+    { code: 'IRT', name: 'Iranian Toman', symbol: 'تومان', decimalPlaces: 0, isActive: true, isBaseCurrency: false, exchangeRates: [] },
     { code: 'TRY', name: 'Lira', symbol: '₺', decimalPlaces: 2, isActive: false, isBaseCurrency: false, exchangeRates: [{ id: 'r2' }] },
     { code: 'KWD', name: 'Dinar', symbol: 'KD', decimalPlaces: 3, isActive: true, isBaseCurrency: false, exchangeRates: [{ id: 'r3' }] },
   ];
@@ -85,7 +87,7 @@ describe('TenantOperatingCurrencyService', () => {
     const view = await build().service.read(owner, RESELLER);
     expect(view.code).toBe('USD');
     // EUR has no rate, TRY is inactive, KWD has three decimals.
-    expect(view.choices.map((c) => c.code)).toEqual(['IRR', 'USD']);
+    expect(view.choices.map((c) => c.code)).toEqual(['IRR', 'IRT', 'USD']);
   });
 
   it("lets the reseller's owner and the platform's staff change it, converting at the rate from the old currency to the new", async () => {

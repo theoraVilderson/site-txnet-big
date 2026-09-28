@@ -34,3 +34,7 @@ Migration `20260928003400_a_platform_admin_pins_a_rate` (F-0608-a) added the
 pin columns, the CHECK, `currency_rate_pin_end` and the `currency.pin`
 permission. Base-currency uniqueness and the `currency_policy` partial unique index are
 "section 99" manual SQL — not applied. Redis cache key `fx:rate:{code}`.
+
+Migration `20260928003700_the_toman_is_tied_to_the_rial` (F-116-m) added the
+`IRT` currency row (also in `seed.js`). It never has a `currency_exchange_rate`
+row: its rate is IRR's / 10 (`contract.md` reader rule 8).

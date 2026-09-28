@@ -3569,6 +3569,7 @@
       "currency_not_yours": "Your prices and gateways do not use this currency, so you cannot set its rate.",
       "currency_not_found": "This currency is not active.",
       "base_currency": "The base currency's rate is always 1.",
+      "derived_currency": "The toman is always the rial ÷ 10. Set the rial's rate and the toman follows it.",
       "invalid_rate": "That rate is not a positive number.",
       "pin_not_found": "This manual rate no longer exists.",
       "pin_over": "This manual rate has already ended."

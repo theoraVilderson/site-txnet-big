@@ -8,6 +8,23 @@ import { UnscopedRedisKeys } from '../redis/keys';
  */
 export const FX_PIVOT_CURRENCY = 'USD';
 
+/**
+ * F-116-m — a currency that is another divided by a fixed number, never a
+ * rate of its own (user, 2026-09-28): the toman is ten rials. Its rate is
+ * `rate(of) / divisor`, read through the same pin, cache and table as `of`,
+ * so a rial pin moves the toman and the two can never disagree. Nothing
+ * fetches, stores or pins a rate for a key of this map.
+ */
+export const DERIVED_CURRENCIES: Readonly<Record<string, { of: string; divisor: number }>> = {
+  IRT: { of: 'IRR', divisor: 10 },
+};
+
+/** `code`'s root currency and how many root units one of `code` is — `code`, 1 for any other. */
+function rootOf(code: string): { root: string; units: number } {
+  const derived = DERIVED_CURRENCIES[code];
+  return derived ? { root: derived.of, units: derived.divisor } : { root: code, units: 1 };
+}
+
 /** One accepted USD -> `currencyCode` rate, and the row that backs it. */
 export interface FxRateSnapshot {
   /** `currency.CurrencyExchangeRate.id` — what a price records it crossed at. */
@@ -81,6 +98,12 @@ export async function readFxRate(
   log?: FxRateLog,
   scope: FxRateScope = {},
 ): Promise<FxRateSnapshot | null> {
+  const { root, units } = rootOf(code);
+  if (root !== code) {
+    // The root's snapshot, its id and pin kept: a price records the rial row it crossed at.
+    const snap = await readFxRate(db, cache, root, log, scope);
+    return snap ? { ...snap, currencyCode: code, rate: snap.rate.div(units) } : null;
+  }
   return (
     (await fromPin(db, code, log, scope)) ??
     (await fromCache(cache, code, log)) ??
@@ -106,6 +129,16 @@ export async function readFxPair(
   scope: FxRateScope = {},
 ): Promise<FxPair | null> {
   if (fromCode === toCode) return { fromCode, toCode, rate: new Prisma.Decimal(1), from: null, to: null };
+
+  // One root (IRR <-> IRT, F-116-m): the exact ratio, both legs from one read,
+  // so a worker tick can never land between them.
+  const [f, t] = [rootOf(fromCode), rootOf(toCode)];
+  if (f.root === t.root && f.root !== FX_PIVOT_CURRENCY) {
+    const snap = await readFxRate(db, cache, f.root, log, scope);
+    if (!snap) return null;
+    const leg = (code: string, units: number): FxRateSnapshot => ({ ...snap, currencyCode: code, rate: snap.rate.div(units) });
+    return { fromCode, toCode, rate: new Prisma.Decimal(f.units).div(t.units), from: leg(fromCode, f.units), to: leg(toCode, t.units) };
+  }
 
   const leg = (code: string) =>
     code === FX_PIVOT_CURRENCY ? Promise.resolve(null) : readFxRate(db, cache, code, log, scope);

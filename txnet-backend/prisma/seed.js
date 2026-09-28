@@ -144,6 +144,8 @@ async function grantGatewayManageToAdmin() {
 const CURRENCIES = [
   { code: 'USD', name: 'US Dollar', symbol: '$', decimalPlaces: 2, isBaseCurrency: true },
   { code: 'IRR', name: 'Iranian Rial', symbol: '﷼', decimalPlaces: 0, isBaseCurrency: false },
+  // Ten rials, never a rate of its own: readFxRate answers IRR / 10 (F-116-m).
+  { code: 'IRT', name: 'Iranian Toman', symbol: 'تومان', decimalPlaces: 0, isBaseCurrency: false },
   { code: 'EUR', name: 'Euro', symbol: '€', decimalPlaces: 2, isBaseCurrency: false },
   { code: 'TRY', name: 'Turkish Lira', symbol: '₺', decimalPlaces: 2, isBaseCurrency: false },
   { code: 'GBP', name: 'British Pound', symbol: '£', decimalPlaces: 2, isBaseCurrency: false },

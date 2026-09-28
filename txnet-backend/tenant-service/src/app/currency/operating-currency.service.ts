@@ -8,6 +8,7 @@ import {
   ResellerAccessRefused,
   ResellerAccessRejection,
   ResellerActor,
+  DERIVED_CURRENCIES,
   convertOperatingCurrency,
   holdsPermission,
   readFxPair,
@@ -137,8 +138,10 @@ export class TenantOperatingCurrencyService {
       },
       orderBy: { code: 'asc' },
     });
+    // A tied currency (the toman, F-116-m) has no row of its own: it has a rate while its root does.
+    const rated = new Set(rows.filter((c) => c.isBaseCurrency || c.exchangeRates.length > 0).map((c) => c.code));
     return rows
-      .filter((c) => c.isActive && c.decimalPlaces <= MAX_DECIMALS && (c.isBaseCurrency || c.exchangeRates.length > 0))
+      .filter((c) => c.isActive && c.decimalPlaces <= MAX_DECIMALS && rated.has(DERIVED_CURRENCIES[c.code]?.of ?? c.code))
       .map(({ code, name, symbol, decimalPlaces }) => ({ code, name, symbol, decimalPlaces }))
       .sort((a, b) => a.code.localeCompare(b.code));
   }

@@ -137,6 +137,9 @@ describe('CurrencyPinService (F-0608-a)', () => {
     const input = { rate: '1', reason: 'x', hours: 1 };
     await expect(world().pins.pin(actor, { ...input, code: 'USD' })).rejects.toMatchObject({ reason: 'base_currency' });
     await expect(world().pins.pin(actor, { ...input, code: 'XXX' })).rejects.toMatchObject({ reason: 'currency_not_found' });
+    // The toman is the rial / 10 (F-116-m): it moves with a rial pin and has none of its own.
+    await expect(world().pins.pin(actor, { ...input, code: 'IRT' })).rejects.toMatchObject({ reason: 'derived_currency' });
+    await expect(world().pins.view(actor, 'IRT')).rejects.toMatchObject({ reason: 'derived_currency' });
     await expect(world().pins.pin(actor, { ...input, code: 'EUR', rate: '0.000000001' }))
       .rejects.toBeInstanceOf(CurrencyPinRefused);
   });

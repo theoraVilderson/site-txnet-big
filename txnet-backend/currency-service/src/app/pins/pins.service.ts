@@ -7,6 +7,7 @@ import {
   TenantType,
 } from '@prisma/client';
 import {
+  DERIVED_CURRENCIES,
   UnscopedRedisKeys,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
@@ -73,6 +74,7 @@ export type CurrencyPinRejection =
   | 'currency_not_yours'
   | 'currency_not_found'
   | 'base_currency'
+  | 'derived_currency'
   | 'invalid_rate'
   | 'pin_not_found'
   | 'pin_over';
@@ -331,6 +333,9 @@ export class CurrencyPinService {
    * gateways charge in (billing's answer; user, 2026-09-28).
    */
   private async pinnable(code: string, scope: Scope): Promise<{ id: string }> {
+    // A tied currency (the toman, F-116-m) is its root's rate divided; pin the root.
+    if (DERIVED_CURRENCIES[code])
+      throw new CurrencyPinRefused('derived_currency', code);
     const currency = await this.prisma.currency.findUnique({
       where: { code },
       select: { id: true, isActive: true, isBaseCurrency: true },
