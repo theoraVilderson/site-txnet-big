@@ -74,10 +74,11 @@ A notice's class is found by asking these questions in order. The first
 | important | inbox + primary messenger | by kind (F-601-m) | bot held to the window's end |
 | info | inbox only, live on every open panel | by kind | — |
 
-- **Primary messenger.** This is the one the user chose, Telegram or Bale.
-  If they have not chosen, it is the bot they linked last. When a send fails
-  (for example, the bot is blocked), the notice goes to the other bot.
-  A notice is never sent to both.
+- **Primary messenger.** The user chooses Telegram, Bale or both (F-601-u).
+  If they have not chosen, it is both: every linked bot is told (user
+  2026-09-28, amending "never both" of the same day). With one choice, a
+  failed send (for example, the bot is blocked) goes to the other bot; with
+  both, each bot is sent once and neither retries through the other.
 - **An all-clear follows its alarm.** A notice that ends a critical state
   ("active again") takes that state's channels. Its mute switch stays as
   F-601-m made it.
