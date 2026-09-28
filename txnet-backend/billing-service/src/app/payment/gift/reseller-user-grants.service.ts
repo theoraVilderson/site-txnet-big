@@ -63,6 +63,14 @@ export class ResellerUserGrantsRefused extends Error {
  * `user_not_found`, and no Grant is read for them. A Grant of another user of
  * the same reseller is then the owner read's own 404, as it is for the owner.
  */
+/** A panel a config may move to (F-311-v1); `own` is the reseller's dedicated one, else shared. */
+export interface MoveTarget {
+  id: string;
+  name: string;
+  region: string;
+  own: boolean;
+}
+
 @Injectable()
 export class ResellerUserGrantsService {
   constructor(
@@ -89,6 +97,27 @@ export class ResellerUserGrantsService {
 
   subscriptionLink(actor: ResellerActor, tenantId: string, userId: string, grantId: string): Promise<string> {
     return this.run(actor, tenantId, userId, () => this.links.linkFor(grantId, userId));
+  }
+
+  /**
+   * The panels an admin may move one of this user's configs to (F-311-v1):
+   * shared (`tenantId` null) or this reseller's own, not retired — the rule
+   * `ConfigActionsService.move` holds — and accepted by review, since a move
+   * to a panel nothing provisions strands the config. **`network.panel` has no
+   * RLS**, so the path's tenant is written into the filter; the reseller's
+   * scope would hide nothing. No address and no credential is selected.
+   */
+  moveTargets(actor: ResellerActor, tenantId: string, userId: string): Promise<MoveTarget[]> {
+    return this.run(actor, tenantId, userId, async () => {
+      const panels = await tenantTransaction(this.prisma, (tx) =>
+        tx.panel.findMany({
+          where: { retiredAt: null, reviewState: { in: ['accepted', 'accepted_low_trust'] }, OR: [{ tenantId: null }, { tenantId }] },
+          select: { id: true, name: true, region: true, tenantId: true },
+          orderBy: [{ region: 'asc' }, { name: 'asc' }],
+        }),
+      );
+      return panels.map((p) => ({ id: p.id, name: p.name, region: p.region, own: p.tenantId !== null }));
+    });
   }
 
   /**

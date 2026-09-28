@@ -131,6 +131,17 @@ export class ResellerUserGrantsController {
     return this.refusing(() => this.service.grants(actorOf(req), tenantId, userId, query));
   }
 
+  /** F-311-v1: where "move" may send one of this user's configs. */
+  @Get('configs/move-targets')
+  @readLimit
+  async moveTargets(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Req() req: Request,
+  ) {
+    return { panels: await this.refusing(() => this.service.moveTargets(actorOf(req), tenantId, userId)) };
+  }
+
   @Get('grants/:grantId/configs')
   @readLimit
   async configs(

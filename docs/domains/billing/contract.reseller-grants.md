@@ -28,6 +28,7 @@ which asks the four owner reads of [contract.gift.md](contract.gift.md) — `Gra
 | `GET …/grants/:grantId/configs` | — | `{grantId, rows[]}`, the owner's config view, `lines` and `login` included |
 | `GET …/grants/:grantId/usage` | — | `{grantId, from, to, days[]}`, as there |
 | `GET …/grants/:grantId/subscription-link` | — | `{grantId, subscriptionUrl}`; its two 409s as there |
+| `GET …/configs/move-targets` (F-311-v1) | — | `{panels[{id, name, region, own}]}`: shared or this reseller's own, accepted by review, not retired — a subset of what a move accepts. `network.panel` has no RLS, so the path's tenant is in the filter; no address or credential |
 | `GET …/grants/:grantId/history` (F-311-r) | `page`, `pageSize` (≤100, default 20) | `{grantId, rows[], page, pageSize, total}` — audit `contract.md` "a Grant's history" |
 
 | Rule | Why |
@@ -36,11 +37,10 @@ which asks the four owner reads of [contract.gift.md](contract.gift.md) — `Gra
 | **The reseller is the path's**, and every read runs in its scope | the owner's session carries the platform's `X-Tenant-Id` (ADR-0059) |
 | **Only that reseller's users** (C-15): the user is read first, in the reseller's scope (`user` is RLS-strict and in `TENANT_SCOPED_MODELS`); another tenant's user or none is **404** `user_not_found`, and no Grant is read for them | the Grant reads fence only by `userId`, and `traffic_daily_aggregate` has no tenant at all |
 | The owner reads are asked **as the path's user**, so a Grant of another user of the same reseller is their own **404** `grant_not_found` | their ownership check is the only one that knows a Grant's user |
-| One bucket for all four, `RESELLER_USER_GRANTS_READ`, default **300**/900s per caller; none of the four writes or rotates | expanding one Grant asks three routes at once. Reset link and config actions are the next sections |
+| One bucket for every read here, `RESELLER_USER_GRANTS_READ`, default **300**/900s per caller; none of them writes or rotates | expanding one Grant asks three routes at once. Reset link and config actions are the next sections |
 
 **Not covered:** retired configs (the owner's view leaves them out), and an audit
-row for a read (only acts are audited). Its consumers are F-311-v (panel)
-and F-311-y (bot).
+row for a read (only acts are audited). Its consumers are F-311-v (panel) and F-311-y (bot).
 
 ## An admin resets one user's `/sub` link (built — F-311-n)
 
