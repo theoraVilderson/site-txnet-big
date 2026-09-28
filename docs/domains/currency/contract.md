@@ -2,14 +2,16 @@
 id: currency
 layer: domain
 status: active
-version: 2
+version: 3
 updated: 2026-09-28
 ---
 
 # Contract — currency
 
-**Mostly draft.** The rate reader below is built (F-116-c); the display-currency
-operations under "Provides (intended)" are still schema only.
+**Mostly draft.** The rate reader (F-116-c) and `currency-service`'s rate read
+(F-116-k) are built; the display-currency operations under "Provides
+(intended)" are still schema only. Every one of them is `currency-service`'s
+when built (ADR-0100).
 
 ## TL;DR
 
@@ -44,6 +46,16 @@ Rules a caller may rely on:
    to the target currency's `decimalPlaces`, and records both legs'
    `snapshotId`s (F-116-e, F-116-g).
 5. **Age is not judged here** — F-0607-a's ladder reads `effectiveAt`.
+
+## HTTP API (`currency-service`, ADR-0100)
+
+Behind Traefik and ForwardAuth (`/api/currency/*`), the shared guards (C-11).
+
+| Route | Who | Answer | Errors |
+|---|---|---|---|
+| `GET /api/currency/rates` (F-116-k) | any signed-in caller | every active currency: `{code, name, symbol, decimalPlaces, isBase, rate, snapshotId, effectiveAt}`, `rate` a decimal string per USD from `readFxRate`, `null` when it has none; the base currency `"1"` | 401 from the gate; 429 (`CURRENCY_READ`, 120/min) |
+
+Age is not judged here (F-0607-a, ADR-0101). The service fetches no rate.
 
 ## Provides (intended)
 

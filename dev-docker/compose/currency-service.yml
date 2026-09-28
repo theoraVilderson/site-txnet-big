@@ -1,0 +1,84 @@
+# NestJS currency-service.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # ===========================================================================
+  # NestJS Currency Service (Nx Monorepo) — the currency unit's HTTP home
+  # ---------------------------------------------------------------------------
+  # ADR-0100, F-116-k. Serves `/api/currency/*` behind ForwardAuth: the
+  # current rates now, the manual rate next (F-0608-a, F-116-j). It fetches no
+  # rate — discovery is worker-service's FX loop — and reads them through
+  # shared-core `readFxRate`, the one reader.
+  # ===========================================================================
+  currency-service:
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - APP_NAME=currency-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-currency-service
+    restart: unless-stopped
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+    environment:
+      - PORT=3000
+      - NODE_ENV=${NODE_ENV:-development}
+      - GLOBAL_PREFIX=${CURRENCY_GLOBAL_PREFIX:-api}
+      - PUBLIC_HOST=currency-service
+      - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
+      # The app role, NOBYPASSRLS; the `currency` schema has no row policy.
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
+      # `fx:rate:{code}`, the rate limiter and the tenant status key.
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-}
+      - CURRENCY_READ_RATE_LIMIT=${CURRENCY_READ_RATE_LIMIT:-}
+      - TRUST_PROXY=${TRUST_PROXY}
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.currency-service.loadbalancer.server.port=3000"
+
+      # Every /api/currency route is behind the gate (`my-auth`).
+      - "traefik.http.routers.currency-service-http.rule=PathPrefix(`/api/currency`)"
+      - "traefik.http.routers.currency-service-http.priority=120"
+      - "traefik.http.routers.currency-service-http.entrypoints=web"
+      - "traefik.http.routers.currency-service-http.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.currency-service-http.service=currency-service"
+
+      - "traefik.http.routers.currency-service.rule=PathPrefix(`/api/currency`)"
+      - "traefik.http.routers.currency-service.priority=120"
+      - "traefik.http.routers.currency-service.entrypoints=websecure"
+      - "traefik.http.routers.currency-service.tls.certresolver=myresolver"
+      - "traefik.http.routers.currency-service.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.currency-service.service=currency-service"
+
+      # A CORS preflight carries no credentials; the gate would refuse it.
+      - "traefik.http.routers.currency-preflight-http.rule=PathPrefix(`/api/currency`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.currency-preflight-http.entrypoints=web"
+      - "traefik.http.routers.currency-preflight-http.priority=150"
+      - "traefik.http.routers.currency-preflight-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.currency-preflight-http.service=currency-service"
+
+      - "traefik.http.routers.currency-preflight.rule=PathPrefix(`/api/currency`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.currency-preflight.entrypoints=websecure"
+      - "traefik.http.routers.currency-preflight.priority=150"
+      - "traefik.http.routers.currency-preflight.tls.certresolver=myresolver"
+      - "traefik.http.routers.currency-preflight.middlewares=strip-fake-headers"
+      - "traefik.http.routers.currency-preflight.service=currency-service"
+      - "txnet.logging=true"
+    depends_on:
+      main-db:
+        condition: service_healthy
+      locale-service:
+        condition: service_healthy

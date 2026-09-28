@@ -8,6 +8,7 @@ code_roots:
   - txnet-backend/auth-service/src
   - txnet-backend/bot-service/src
   - txnet-backend/worker-service/src
+  - txnet-backend/currency-service/src
   - txnet-backend/gateway-service/src
   - txnet-backend/messenger/src
   - txnet-backend/shared-core/src

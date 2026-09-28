@@ -99,6 +99,14 @@ services:
       # And the vault KEK, for the vault's internal seams (F-018-ab).
       - ./secrets/vault-kek:/run/secrets/vault-kek:ro
 
+  currency-service:
+    <<: *host-node
+    build: !reset null
+    environment:
+      - APP_NAME=currency-service
+    volumes: !override
+      - ../txnet-backend:/app:delegated
+
   billing-service:
     <<: *host-node
     build: !reset null

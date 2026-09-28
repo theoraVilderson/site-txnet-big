@@ -404,6 +404,12 @@ export const RateLimitBucket = {
   RESELLER_PURCHASE_WRITE: 'reseller-purchase:write',
 
   /**
+   * Reading the current rates in `currency-service` (F-116-k), per user. The
+   * settings screen and the manual-rate form read them on every visit.
+   */
+  CURRENCY_READ: 'currency:read',
+
+  /**
    * One of the caller's own payments (F-093-l), per user. Its own bucket, not
    * `WALLET_PAYMENTS`: the pending page polls it, and a payer watching a
    * verifying payment must not use up the financial page's list budget.
