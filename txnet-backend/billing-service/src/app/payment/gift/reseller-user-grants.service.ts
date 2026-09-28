@@ -11,6 +11,7 @@ import {
 import { changeGrantDuration, DurationChange, DurationMove } from '../../entitlement/duration';
 import { Freeze, freezeGrant, Unfreeze, unfreezeGrant } from '../../entitlement/freeze';
 import { EntitlementRefused, GrantService } from '../../entitlement/grant';
+import { adjustGrantTraffic, TrafficChange } from '../../entitlement/traffic';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GrantUsageService, GrantUsageView } from '../../traffic/grant-usage';
 import { AdminConfigCommand, UserConfigOutcome, UserConfigsService, UserConfigView } from '../../traffic/user-configs';
@@ -110,6 +111,20 @@ export class ResellerUserGrantsService {
       tenantId,
       userId,
       () => this.onGrant(userId, grantId, (tx) => changeGrantDuration(tx, grantId, { at: new Date(), actorUserId: actor.userId, change, reason })),
+      'staffWrite',
+    );
+  }
+
+  /**
+   * An admin moves this user's prepaid Grant's traffic by ±bytes (F-311-j),
+   * written down with the admin and the reason: `staffWrite`, as for a freeze.
+   */
+  changeTraffic(actor: ResellerActor, tenantId: string, userId: string, grantId: string, deltaBytes: bigint, reason: string): Promise<TrafficChange> {
+    return this.run(
+      actor,
+      tenantId,
+      userId,
+      () => this.onGrant(userId, grantId, (tx) => adjustGrantTraffic(tx, grantId, { at: new Date(), actorUserId: actor.userId, deltaBytes, reason })),
       'staffWrite',
     );
   }

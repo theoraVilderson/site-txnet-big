@@ -108,29 +108,8 @@ on a metered or unlimited Grant, which renew by days alone),
 `nothing_to_renew`, `grant_moved` (Quota or end changed since the read: retry,
 so no debt is forgiven twice). Callers arrive with F-305 and F-311-d.
 
-**Freeze (F-311-h)** — `freezeGrant(tx, id, {at, until?})` and
-`unfreezeGrant(tx, id, at)` in `entitlement/freeze.ts`, proved by `freeze.spec.ts`.
-A freeze moves an `active` Grant to `suspended`, `statusReason = admin_frozen`
-(`ADMIN_FROZEN`), `suspendedAt = at`, every config `desiredEnabled = false`.
-**Kept** (user, 2026-09-27): the purge and its day-ahead notice skip it, so an
-unfreeze turns on the lines the user already holds. **The clock stops**: unfreeze
-moves `endsAt` by `at - suspendedAt` (permanent stays permanent) and restores
-configs as `reviveOnTopUp` does. `until` (`frozenUntil`) ends it by itself: the
-hourly `purge-due` tick unfreezes each due one first (`GrantUnfreezeService`,
-answer `unfrozen`). Refused: `grant_not_active` (a quota stop stays the top-up's),
-`grant_not_frozen`, `freeze_until_not_future`, `grant_moved` (the end moved: retry).
-A top-up or renewal never lifts it (both key on `quota_exhausted`). Its HTTP
-route is billing's `contract.gift.md` (F-311-h).
-
-**Days (F-311-i)** — `changeGrantDuration(tx, id, {at, actorUserId, change, reason})`
-in `entitlement/duration.ts`, proved by `duration.spec.ts`. `change` is `{days}`
-(±N from the end it **has**, not from now) or `{endsAt}`; an `active` or
-`suspended` Grant moves, its reason untouched. Each move writes one
-`grant_duration_change` row (actor, `endsAtBefore`, `endsAtAfter`, reason) —
-duration is `endsAt`, not a quota metric (§4.5). Refused: `grant_closed`
-(expired / exhausted / cancelled: a renewal's, F-311-d), `grant_not_active`
-(pending), `grant_permanent`, `duration_unchanged`, `duration_end_not_future`
-(cutting off is a delete, F-311-m), `grant_moved`. Route: billing `contract.gift.md`.
+**An admin's actions on a Grant (F-311-h, -i, -j)** — freeze, days, traffic:
+[contract.admin.md](contract.admin.md). Their routes are billing's `contract.gift.md`.
 
 **Unlimited traffic (F-111-q).** A prepaid variant sold with
 `traffic_bytes.limit = 0` (catalog invariant 10) is issued with

@@ -58,6 +58,10 @@ export type EntitlementRejection =
   | 'freeze_until_not_future'
   /** Days (F-311-i): expired, exhausted or cancelled — only a renewal brings it back (§4.4). */
   | 'grant_closed'
+  /** Traffic (F-311-j): a metered Grant (its blocks buy its bytes) or an unlimited one has no bag an admin moves. */
+  | 'traffic_not_adjustable'
+  /** Traffic: a cut past zero — a Quota is never negative. */
+  | 'quota_below_zero'
   /** Days: a permanent Grant has no end to move. */
   | 'grant_permanent'
   /** Days: the new end is now or earlier — cutting a service off is a delete (F-311-m). */

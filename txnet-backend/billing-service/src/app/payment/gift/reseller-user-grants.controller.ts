@@ -27,6 +27,7 @@ import { AdminConfigActionBody, adminConfigActionSchema } from '../../traffic/us
 import { GrantDurationBody, grantDurationSchema } from './grant-duration.schema';
 import { GrantFreezeBody, grantFreezeSchema } from './grant-freeze.schema';
 import { GrantListQuery, grantListSchema } from './grant-list.schema';
+import { bytesOfGb, GrantTrafficBody, grantTrafficSchema } from './grant-traffic.schema';
 import {
   ResellerUserGrantsRefused,
   ResellerUserGrantsRejection,
@@ -44,7 +45,7 @@ const STATUS: Record<ResellerUserGrantsRejection, 403 | 404 | 409> = {
   user_not_found: 404,
 };
 
-/** A freeze's (F-311-h) and a change of days' (F-311-i) refusals; any other `EntitlementRefused` is not this surface's and passes through. */
+/** A freeze's (F-311-h), a change of days' (F-311-i) and of traffic's (F-311-j) refusals; any other `EntitlementRefused` is not this surface's and passes through. */
 const GRANT_ACTION_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
   grant_not_active: 409,
   grant_not_frozen: 409,
@@ -54,6 +55,8 @@ const GRANT_ACTION_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
   grant_permanent: 409,
   duration_end_not_future: 400,
   duration_unchanged: 400,
+  traffic_not_adjustable: 409,
+  quota_below_zero: 400,
 };
 
 /** One bucket for all four: expanding one Grant asks three of them at once. */
@@ -197,6 +200,33 @@ export class ResellerUserGrantsController {
     const change = body.endsAt !== undefined ? { endsAt: new Date(body.endsAt) } : { days: body.days as number };
     const done = await this.refusing(() => this.service.changeDuration(actorOf(req), tenantId, userId, grantId, change, body.reason));
     return { grantId, changeId: done.changeId, endsAtBefore: done.endsAtBefore.toISOString(), endsAtAfter: done.endsAtAfter.toISOString() };
+  }
+
+  /**
+   * An admin changes this Grant's traffic (F-311-j): `gb` (± GiB) and the
+   * `reason` its adjustment row keeps. `spent` says the new Quota is at or
+   * below what was used: the planner closes it and it is suspended from there.
+   */
+  @Post('grants/:grantId/traffic')
+  @HttpCode(HttpStatus.OK)
+  @actionLimit
+  async traffic(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Body(new ZodValidationPipe(grantTrafficSchema)) body: GrantTrafficBody,
+    @Req() req: Request,
+  ) {
+    const done = await this.refusing(() => this.service.changeTraffic(actorOf(req), tenantId, userId, grantId, bytesOfGb(body.gb), body.reason));
+    return {
+      grantId,
+      adjustmentId: done.adjustmentId,
+      purchasedBytesBefore: done.purchasedBytesBefore.toString(),
+      purchasedBytesAfter: done.purchasedBytesAfter.toString(),
+      usedBytes: done.usedBytes.toString(),
+      spent: done.spent,
+      revived: done.revived,
+    };
   }
 
   /**

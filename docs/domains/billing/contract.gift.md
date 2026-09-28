@@ -229,6 +229,20 @@ endsAtBefore, endsAtAfter}`. Same controller, over `changeGrantDuration`
 
 **Not covered:** reading the history back (F-311-r), telling the user (F-311-s).
 
+## An admin changes one of a user's Grants' traffic (built — F-311-j)
+
+`POST …/users/:userId/grants/:grantId/traffic`, body `{gb, reason}` — `gb` ±GiB
+(fractions allowed, never 0, |gb| ≤ 100 000); `reason` 1..500 chars -> `{grantId,
+adjustmentId, purchasedBytesBefore, purchasedBytesAfter, usedBytes, spent, revived}`
+(bytes as strings). Same controller, over `adjustGrantTraffic` (entitlement
+`contract.admin.md` "Traffic"). `spent`: the new Quota is at or below Used — the
+planner closes it and it is suspended from that close (ADR-0096).
+
+| Rule | Why |
+|---|---|
+| Door `staffWrite`, the reseller's user and the path user's Grant — as for days; bucket `RESELLER_USER_CONFIG_ACTION` | the same fences |
+| **409** `grant_closed`, `grant_not_active`, `traffic_not_adjustable`, `grant_moved`; **400** `quota_below_zero` | only a prepaid, limited bag moves |
+
 **Not covered:** a panel list for the admin to pick a move's target from (the
 owner's systems page has one; a reseller's admin has none yet), an audit row
 beyond `config_action_log` (F-311-r), telling the user (F-311-s). A move of a

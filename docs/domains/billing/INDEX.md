@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 59
+version: 60
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -76,9 +76,9 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-28 | contract v60 (F-311-j): `POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/traffic` (`{gb, reason}`) — an admin moves a user's prepaid Grant's Quota by ±GiB, an `admin_grant` `quota_adjustment`; `staffWrite`. Additive. [contract.gift.md](contract.gift.md). Consumers: F-311-w, F-311-y |
 | 2026-09-28 | contract v59 (F-311-i): `POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/duration` (`{days or endsAt, reason}`) — an admin moves a user's Grant's end, written to `grant_duration_change`; `staffWrite`. Additive. [contract.gift.md](contract.gift.md). Consumers: F-311-w, F-311-y |
 | 2026-09-27 | contract v58 (F-311-h): `POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/freeze` (`{until?}`) and `…/unfreeze` — an admin freezes a user's Grant, kept and its clock stopped; `staffWrite`. Additive. [contract.gift.md](contract.gift.md). Consumers: F-311-w, F-311-y |
 | 2026-09-27 | v57 (F-027-dk): `billing-service` sizes no share and consumes no collection pass — `CeilingAllocatorService`, `HotLoopService`, the hot-loop consumer and the internal `hot-loop/sweep-due` route are deleted; `BlockRequestQueue` unbinds `network.usage.#` from `HOT_LOOP_QUEUE`. `MIN_BLOCK_SECONDS` is in `block-request.ts` |
-| 2026-09-26 | contract v56 (F-311-g): `POST /api/billing/tenants/:tenantId/users/:userId/configs/actions` — an admin's regenerate / disable / enable / retire / move on 1..50 of that user's configs, `staffWrite`, one outcome per id; an admin's regenerate no longer counts against the user's cap. Additive. [contract.gift.md](contract.gift.md). Consumers: F-311-v, F-311-y |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

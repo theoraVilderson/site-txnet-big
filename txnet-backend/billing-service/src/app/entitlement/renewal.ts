@@ -72,6 +72,18 @@ export type Renewal = CarryOver & {
   revived: boolean;
 };
 
+/** Used: Σ lifetime counters over every config of the Grant, retired ones included — the planner's sum. */
+export async function usedBytesOf(tx: Prisma.TransactionClient, grantId: string): Promise<bigint> {
+  const configs = await tx.config.findMany({
+    where: { grantId },
+    select: { counterState: { select: { lifetimeUpBytes: true, lifetimeDownBytes: true } } },
+  });
+  return configs.reduce(
+    (sum, c) => sum + (c.counterState ? c.counterState.lifetimeUpBytes + c.counterState.lifetimeDownBytes : BigInt(0)),
+    BigInt(0),
+  );
+}
+
 const RENEWABLE: ReadonlySet<GrantStatus> = new Set([GrantStatus.active, GrantStatus.suspended]);
 
 /** Renews a Grant in place, inside the caller's transaction. */
@@ -94,14 +106,7 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
   const bagged = grant.billingMode === VariantBillingMode.prepaid && !grant.trafficUnlimited;
   if (!bagged && input.bytes > BigInt(0)) throw new EntitlementRefused('traffic_not_renewable', grant.id);
 
-  const configs = await tx.config.findMany({
-    where: { grantId: grant.id },
-    select: { counterState: { select: { lifetimeUpBytes: true, lifetimeDownBytes: true } } },
-  });
-  const usedBytes = configs.reduce(
-    (sum, c) => sum + (c.counterState ? c.counterState.lifetimeUpBytes + c.counterState.lifetimeDownBytes : BigInt(0)),
-    BigInt(0),
-  );
+  const usedBytes = await usedBytesOf(tx, grant.id);
   const carry = bagged
     ? carryOver({ purchasedBytes: grant.purchasedBytes, usedBytes, bytes: input.bytes })
     : { debtBytes: BigInt(0), forgivenBytes: BigInt(0), raiseBytes: BigInt(0) };
