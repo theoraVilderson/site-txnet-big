@@ -309,7 +309,6 @@ export function CouponForm({
                 />,
               )}
               {form.visibility === "targeted" && field("allowedUserIds", t("common", F.userIds), text("allowedUserIds", { ltr: true, area: true }), t("common", F.userIdsHint))}
-              {platformCoupon && field("tenantIds", t("common", F.tenantIds), text("tenantIds", { ltr: true, area: true }), t("common", F.tenantIdsHint))}
               <Toggle checked={form.firstPurchaseOnly} onChange={(v) => set("firstPurchaseOnly", v)} label={t("common", F.firstPurchaseOnly)} />
               {field("newUserWithinDays", t("common", F.newUserWithinDays), text("newUserWithinDays", { ltr: true }))}
             </>,

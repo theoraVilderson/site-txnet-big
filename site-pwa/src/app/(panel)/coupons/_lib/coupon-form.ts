@@ -34,7 +34,6 @@ export const REFUSAL_KEYS: Record<CouponRejection, string> = {
   invalid_value: COUPON_KEYS.refusals.invalid_value,
   invalid_limit: COUPON_KEYS.refusals.invalid_limit,
   limits_not_for_gift_codes: COUPON_KEYS.refusals.limits_not_for_gift_codes,
-  tenants_are_platform_coupons: COUPON_KEYS.refusals.tenants_are_platform_coupons,
   targeted_needs_users: COUPON_KEYS.refusals.targeted_needs_users,
   user_out_of_scope: COUPON_KEYS.refusals.user_out_of_scope,
   platform_coupon_needs_platform_gateway: COUPON_KEYS.refusals.platform_coupon_needs_platform_gateway,
@@ -99,8 +98,6 @@ export interface CouponForm {
   visibility: "public" | "targeted";
   /** One uuid per line or comma. */
   allowedUserIds: string;
-  /** Platform coupons: the tenants whose users it serves. One uuid per line or comma. */
-  tenantIds: string;
   activeWeekdays: number[];
   activeHourFrom: string;
   activeHourTo: string;
@@ -137,7 +134,6 @@ export function emptyCouponForm(): CouponForm {
     isActive: true,
     visibility: "public",
     allowedUserIds: "",
-    tenantIds: "",
     activeWeekdays: [],
     activeHourFrom: "",
     activeHourTo: "",
@@ -238,7 +234,6 @@ export function formFromCoupon(c: AdminCoupon): CouponForm {
     isActive: c.isActive,
     visibility: c.visibility === "targeted" ? "targeted" : "public",
     allowedUserIds: c.allowedUserIds.join("\n"),
-    tenantIds: c.tenantIds.join("\n"),
     activeWeekdays: [...c.activeWeekdays].sort(),
     activeHourFrom: s(c.activeHourFrom),
     activeHourTo: s(c.activeHourTo),
@@ -333,7 +328,7 @@ export function validateCouponForm(f: CouponForm, me: Me | null, original: Admin
   const users = ids(f.allowedUserIds);
   if (users.some((u) => !UUID.test(u))) put("allowedUserIds", E.uuid);
   else if (f.visibility === "targeted" && users.length === 0) put("allowedUserIds", E.targetedNeedsUsers);
-  for (const k of ["tenantIds", "productIds", "variantIds"] as const) {
+  for (const k of ["productIds", "variantIds"] as const) {
     if (ids(f[k]).some((u) => !UUID.test(u))) put(k, E.uuid);
   }
   return errors;
@@ -359,7 +354,6 @@ function wire(f: CouponForm): Required<UpdateCouponBody> {
     isActive: f.isActive,
     visibility: f.visibility,
     allowedUserIds: ids(f.allowedUserIds),
-    tenantIds: ids(f.tenantIds),
     activeWeekdays: [...f.activeWeekdays].sort((a, b) => a - b),
     activeHourFrom: intOrNull(f.activeHourFrom),
     activeHourTo: intOrNull(f.activeHourTo),
@@ -392,7 +386,6 @@ export function createBody(f: CouponForm, me: Me | null): CreateCouponBody {
     if (JSON.stringify(v) !== JSON.stringify(EMPTY_WIRE[k as keyof typeof EMPTY_WIRE])) body[k] = v;
   }
   if (isPlatformOwner(me) && f.owner !== "own") body.tenantId = f.owner === "platform" ? null : f.tenantId.trim();
-  if (f.owner !== "platform" || !isPlatformOwner(me)) delete body.tenantIds;
   return body as unknown as CreateCouponBody;
 }
 

@@ -65,10 +65,11 @@ beforeAll(async () => {
   pg = await startPostgresFixture();
   owner = prismaAt(pg.ownerUrl);
 
-  for (const [id, slug] of [[TENANT_A, 'alpha'], [TENANT_B, 'beta']]) {
+  // A is the platform owner, B a reseller: PLATFORM serves A's users only (ADR-0099).
+  for (const [id, type, slug] of [[TENANT_A, 'platform_owner', 'alpha'], [TENANT_B, 'reseller', 'beta']]) {
     await owner.$executeRawUnsafe(`
       INSERT INTO tenant.tenant (id, "tenantType", "ownerUserId", slug, status, "billingModel", "updatedAt")
-      VALUES ('${id}', 'reseller', '${id}', '${slug}', 'active', 'pay_as_you_go_metered', now())
+      VALUES ('${id}', '${type}', '${id}', '${slug}', 'active', 'pay_as_you_go_metered', now())
     `);
   }
   for (const [suffix, tenantId, code, total, perUser] of COUPONS) {
@@ -77,10 +78,7 @@ beforeAll(async () => {
       VALUES ('${couponId(suffix)}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${code}', 'percentage', 10.00, ${total ?? 'NULL'}, ${perUser}, '${ADMIN}', 'USD')
     `);
   }
-  // PLATFORM serves tenant A by name; B is not named (ADR-0048). DELETED is soft-deleted.
-  await owner.$executeRawUnsafe(`
-    INSERT INTO billing.coupon_tenant (id, "couponId", "tenantId") VALUES (gen_random_uuid(), '${couponId('b3')}', '${TENANT_A}')
-  `);
+  // DELETED is soft-deleted.
   await owner.$executeRawUnsafe(`
     UPDATE billing.coupon SET "deletedAt" = now(), "deletedByAdminId" = '${ADMIN}' WHERE id = '${couponId('b7')}'
   `);
@@ -200,7 +198,7 @@ it("reserves a platform coupon from a tenant's connection, and never another ten
   await expect(redemptions('b4')).resolves.toEqual([]);
 });
 
-it('refuses a platform coupon that does not serve the tenant, and a soft-deleted coupon (F-502-b)', async () => {
+it("refuses a platform coupon to a reseller's user (F-116-h7), and a soft-deleted coupon (F-502-b)", async () => {
   await expect(
     asTenant(TENANT_B, (tx) => reservations.reserve(tx, reservationOf('b3', USER))),
   ).rejects.toMatchObject({ code: 'PLATFORM', reason: 'not_found' });

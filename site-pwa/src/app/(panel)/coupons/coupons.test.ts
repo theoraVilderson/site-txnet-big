@@ -86,7 +86,6 @@ const COUPON: AdminCoupon = {
   note: null,
   batchId: null,
   allowedUserIds: [],
-  tenantIds: [],
   gateways: [],
   serviceScopes: [],
   grantVariantId: null,
@@ -155,7 +154,10 @@ describe("createBody", () => {
 
   it("names the owner's choice: platform is null, another tenant its id", () => {
     const base = { ...emptyCouponForm(), code: "WELCOME", discountValue: "5" };
-    expect(createBody({ ...base, owner: "platform", tenantIds: UUID }, OWNER)).toMatchObject({ tenantId: null, tenantIds: [UUID] });
+    // A platform coupon names no tenants: it serves the platform owner's users only (ADR-0099).
+    const platform = createBody({ ...base, owner: "platform" }, OWNER);
+    expect(platform).toMatchObject({ tenantId: null });
+    expect(platform).not.toHaveProperty("tenantIds");
     expect(createBody({ ...base, owner: "tenant", tenantId: UUID }, OWNER)).toMatchObject({ tenantId: UUID });
     expect(createBody({ ...base, owner: "tenant", tenantId: UUID }, RESELLER)).not.toHaveProperty("tenantId");
   });

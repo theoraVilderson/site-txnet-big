@@ -60,7 +60,6 @@ export const COUPON_REFUSAL_STATUS: Record<CouponAdminRejection, 400 | 403 | 404
   invalid_limit: 400,
   invalid_batch: 400,
   limits_not_for_gift_codes: 400,
-  tenants_are_platform_coupons: 400,
   targeted_needs_users: 400,
   user_out_of_scope: 400,
   platform_coupon_needs_platform_gateway: 400,

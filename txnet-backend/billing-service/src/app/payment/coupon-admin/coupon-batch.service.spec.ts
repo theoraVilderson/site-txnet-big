@@ -116,7 +116,6 @@ function build() {
     tenant: table(Object.entries(types).map(([id, tenantType]) => ({ id, tenantType })), 'tenant', writes),
     coupon: table([{ id: 'live', tenantId: RESELLER, code: 'TAKEN-AAAAAAAAAA', deletedAt: null, usedCount: 0, reservedCount: 0, isActive: true }], 'coupon', writes),
     couponBatch: table([{ id: OTHER_BATCH, tenantId: OTHER, label: 'theirs', createdAt: new Date(), deactivatedAt: null }], 'couponBatch', writes),
-    couponTenant: table([], 'couponTenant', writes),
     productVariant: table([{ id: VARIANT, tenantId: null, isActive: true, product: { isActive: true, categories: [{ position: 0, category: { key: 'vpn', isActive: true, parentId: null } }] } }], 'productVariant', writes),
     adminAuditLog: {
       create: async ({ data }: { data: Row }) => {

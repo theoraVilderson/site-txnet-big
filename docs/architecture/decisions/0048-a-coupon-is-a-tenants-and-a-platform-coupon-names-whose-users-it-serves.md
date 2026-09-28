@@ -1,7 +1,7 @@
 ---
 id: adr-0048
 status: accepted
-updated: 2026-09-14
+updated: 2026-09-28
 ---
 
 # ADR 0048 — A coupon is a tenant's, and a platform coupon names whose users it serves
@@ -9,6 +9,7 @@ updated: 2026-09-14
 - **Status:** accepted 2026-09-14 (rows F-502-a, F-502-b)
 - **Date:** 2026-09-14
 - **Affects units:** billing
+- **Decision 2 superseded** 2026-09-28 by [ADR-0099](0099-a-platform-coupon-serves-no-resellers-users.md): a platform coupon serves no reseller's users, and `coupon_tenant` is gone
 
 ## Context
 

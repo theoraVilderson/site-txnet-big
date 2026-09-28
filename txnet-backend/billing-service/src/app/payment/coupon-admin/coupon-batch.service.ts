@@ -27,8 +27,6 @@ export type GenerateBatchInput = {
   /** Upper-cased and joined with a dash: `YLD-7KQ2M9XHRT`. */
   prefix?: string | null;
   expiresAt?: string | Date | null;
-  /** Platform batches only: the tenants whose users may redeem (ADR-0048 decision 2). */
-  tenantIds?: string[];
 };
 
 export type BatchView = {
@@ -88,19 +86,11 @@ export class CouponBatchService {
     }
     const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
     if (expiresAt && Number.isNaN(expiresAt.getTime())) throw new CouponAdminRefused('invalid_limit', 'expiresAt');
-    const tenantIds = [...new Set(input.tenantIds ?? [])];
-    if (tenantId !== null && tenantIds.length > 0) throw new CouponAdminRefused('tenants_are_platform_coupons');
 
     const batch = await this.coupons.within(
       owner,
       async (tx) => {
         if (grantVariantId) await this.coupons.assertGrantVariant(tx, tenantId, grantVariantId);
-        if (tenantIds.length > 0) {
-          // Reached by the platform owner alone: a tenant batch names no tenants.
-          const found = await tx.tenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true } });
-          const missing = tenantIds.find((t) => !found.some((f) => f.id === t));
-          if (missing) throw new CouponAdminRefused('tenant_not_found', missing);
-        }
         const codes = await this.draw(tx, tenantId, prefix, count);
         // A platform batch is in the platform's currency, a tenant's in its own (F-116-b).
         const currencyCode = tenantId ? await operatingCurrencyOf(tx, tenantId) : await platformCurrencyOf(tx);
@@ -124,12 +114,6 @@ export class CouponBatchService {
             })),
           });
         }
-        if (tenantIds.length > 0) {
-          const created = await tx.coupon.findMany({ where: { batchId: row.id }, select: { id: true } });
-          for (let i = 0; i < created.length; i += CHUNK) {
-            await tx.couponTenant.createMany({ data: created.slice(i, i + CHUNK).flatMap((c) => tenantIds.map((t) => ({ couponId: c.id, tenantId: t }))) });
-          }
-        }
         await tx.adminAuditLog.create({
           data: {
             tenantId: tenantId ?? actor.tenantId,
@@ -139,7 +123,7 @@ export class CouponBatchService {
             targetEntityId: row.id,
             oldValue: Prisma.DbNull,
             // The count and the terms — never a code.
-            newValue: { label, count, value: value.toFixed(2), grantVariantId, prefix, expiresAt: expiresAt?.toISOString() ?? null, tenantIds },
+            newValue: { label, count, value: value.toFixed(2), grantVariantId, prefix, expiresAt: expiresAt?.toISOString() ?? null },
             adminIpAddress: actor.ip,
           },
         });

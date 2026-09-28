@@ -39,8 +39,6 @@ export type CouponFields = {
   note?: string | null;
   /** `coupon_allowed_user`; matters when `visibility` is `targeted`. Given = the whole set. */
   allowedUserIds?: string[];
-  /** `coupon_tenant`, platform coupons only (ADR-0048 decision 2). Given = the whole set. */
-  tenantIds?: string[];
   /** `coupon_gateway`; none = any gateway. Given = the whole set. */
   gateways?: CouponGatewayRef[];
   /** `coupon_service_scope`; none = open scope. Given = the whole set. */
@@ -88,7 +86,6 @@ export type CouponView = {
   note: string | null;
   batchId: string | null;
   allowedUserIds: string[];
-  tenantIds: string[];
   gateways: CouponGatewayRef[];
   serviceScopes: Array<{ productId: string | null; variantId: string | null }>;
   grantVariantId: string | null;
@@ -127,7 +124,6 @@ export type CouponAdminRejection =
   | 'invalid_value'
   | 'invalid_limit'
   | 'limits_not_for_gift_codes'
-  | 'tenants_are_platform_coupons'
   | 'targeted_needs_users'
   | 'user_out_of_scope'
   | 'platform_coupon_needs_platform_gateway'
@@ -177,7 +173,7 @@ const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInt
 
 /**
  * Managing coupons (F-502-c, D-33, ADR-0048): create, change, switch on and off
- * and delete `billing.coupon` rows with their allowed users, served tenants,
+ * and delete `billing.coupon` rows with their allowed users,
  * gateways and service scopes. Gift-code batches are `CouponBatchService`'s
  * (F-502-d) and the usage report `CouponUsageService`'s (F-502-e); both enter
  * through {@link access} and {@link loadManaged}.
@@ -188,8 +184,7 @@ const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInt
  *
  * **The pool follows the caller (ADR-0053, D-37).** `coupon`'s `WITH CHECK` is
  * strict, so even the platform owner's connection cannot write a platform
- * coupon, and `coupon_tenant` is written on the cross-tenant pool by design
- * (ADR-0048 decision 3). So:
+ * coupon (ADR-0048 decision 3). So:
  * - the **platform owner** is served on {@link CrossTenantPrismaService};
  * - **any other tenant** in a {@link tenantTransaction} on the app pool, where
  *   RLS stands behind the ownership checks below.
@@ -281,7 +276,7 @@ export class CouponAdminService {
     next['tenantId'] = tenantId;
 
     const created = await this.within(owner, async (tx) => {
-      const relations = await this.checkRelations(tx, actor, tenantId, next, input, { tenantIds: [], allowedUserIds: [], gateways: [], serviceScopes: [] });
+      const relations = await this.checkRelations(tx, actor, tenantId, next, input, { allowedUserIds: [], gateways: [], serviceScopes: [] });
       await this.assertCodeFree(tx, tenantId, next['code'] as string, null);
       const row = (await tx.coupon.create({
         data: {
@@ -378,7 +373,6 @@ export class CouponAdminService {
       if (soft) {
         await tx.coupon.update({ where: { id }, data: { isActive: false, deletedAt: new Date(), deletedByAdminId: actor.adminId } });
       } else {
-        await tx.couponTenant.deleteMany({ where: { couponId: id } });
         await tx.couponAllowedUser.deleteMany({ where: { couponId: id } });
         await tx.couponGateway.deleteMany({ where: { couponId: id } });
         await tx.couponServiceScope.deleteMany({ where: { couponId: id } });
@@ -407,9 +401,8 @@ export class CouponAdminService {
     if (rows.length === 0) return [];
     const ids = rows.map((r) => r['id'] as string);
     const where = { couponId: { in: ids } };
-    const [users, tenants, gateways, scopes, redemptions] = await Promise.all([
+    const [users, gateways, scopes, redemptions] = await Promise.all([
       db.couponAllowedUser.findMany({ where }),
-      db.couponTenant.findMany({ where }),
       db.couponGateway.findMany({ where }),
       db.couponServiceScope.findMany({ where }),
       db.couponRedemption.findMany({ where, select: { couponId: true } }),
@@ -450,7 +443,6 @@ export class CouponAdminService {
         note: str(row['note']),
         batchId: str(row['batchId']),
         allowedUserIds: of(users, id).map((u) => u.userId),
-        tenantIds: of(tenants, id).map((t) => t.tenantId),
         gateways: of(gateways, id).map((g) => (g.gatewayId ? { source: 'platform' as const, id: g.gatewayId } : { source: 'tenant' as const, id: g.tenantGatewayConfigId as string })),
         serviceScopes: of(scopes, id).map((s) => ({ productId: s.productId ?? null, variantId: s.variantId ?? null })),
         grantVariantId: str(row['grantVariantId']),
@@ -581,9 +573,8 @@ export class CouponAdminService {
     tenantId: string | null,
     next: Row,
     patch: CouponFields,
-    current: Pick<CouponView, 'tenantIds' | 'allowedUserIds' | 'gateways' | 'serviceScopes'>,
-  ): Promise<Pick<CouponView, 'tenantIds' | 'allowedUserIds' | 'gateways'> & { serviceScopes: CouponScopeRef[] }> {
-    const tenantIds = [...new Set(patch.tenantIds ?? current.tenantIds)];
+    current: Pick<CouponView, 'allowedUserIds' | 'gateways' | 'serviceScopes'>,
+  ): Promise<Pick<CouponView, 'allowedUserIds' | 'gateways'> & { serviceScopes: CouponScopeRef[] }> {
     const allowedUserIds = [...new Set(patch.allowedUserIds ?? current.allowedUserIds)];
     const gateways = patch.gateways ?? current.gateways;
     const serviceScopes = patch.serviceScopes ?? current.serviceScopes;
@@ -597,19 +588,11 @@ export class CouponAdminService {
       if (serviceScopes.length > 0) throw new CouponAdminRefused('limits_not_for_gift_codes', 'serviceScopes');
     }
 
-    if (tenantId !== null && tenantIds.length > 0) throw new CouponAdminRefused('tenants_are_platform_coupons');
-    if (patch.tenantIds !== undefined && tenantIds.length > 0) {
-      // Reached by the platform owner alone: a tenant coupon names no tenants.
-      const found = await db.tenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true } });
-      const missing = tenantIds.find((t) => !found.some((f) => f.id === t));
-      if (missing) throw new CouponAdminRefused('tenant_not_found', missing);
-    }
-
     if (next['visibility'] === CouponVisibility.targeted && allowedUserIds.length === 0) throw new CouponAdminRefused('targeted_needs_users');
-    if (allowedUserIds.length > 0 && (patch.allowedUserIds !== undefined || patch.tenantIds !== undefined)) {
-      // ADR-0048: a platform coupon naming no tenant serves the platform owner's
-      // users — the caller, since only the platform owner writes one.
-      const served = tenantId !== null ? [tenantId] : tenantIds.length > 0 ? tenantIds : [actor.tenantId];
+    if (allowedUserIds.length > 0 && patch.allowedUserIds !== undefined) {
+      // ADR-0099: a platform coupon serves the platform owner's users — the
+      // caller, since only the platform owner writes one.
+      const served = tenantId !== null ? [tenantId] : [actor.tenantId];
       const users = await db.user.findMany({ where: { id: { in: allowedUserIds } }, select: { id: true, tenantId: true } });
       for (const id of allowedUserIds) {
         const u = users.find((x) => x.id === id);
@@ -643,7 +626,7 @@ export class CouponAdminService {
     if (grantVariantId && (patch.grantVariantId !== undefined || patch.discountType !== undefined)) {
       await this.assertGrantVariant(db, tenantId, grantVariantId);
     }
-    return { tenantIds, allowedUserIds, gateways, serviceScopes };
+    return { allowedUserIds, gateways, serviceScopes };
   }
 
   /**
@@ -700,14 +683,10 @@ export class CouponAdminService {
   private async writeRelations(
     tx: Tx,
     couponId: string,
-    rel: Pick<CouponView, 'tenantIds' | 'allowedUserIds' | 'gateways'> & { serviceScopes: CouponScopeRef[] },
+    rel: Pick<CouponView, 'allowedUserIds' | 'gateways'> & { serviceScopes: CouponScopeRef[] },
     patch: CouponFields,
     replace = false,
   ): Promise<void> {
-    if (patch.tenantIds !== undefined) {
-      if (replace) await tx.couponTenant.deleteMany({ where: { couponId } });
-      if (rel.tenantIds.length) await tx.couponTenant.createMany({ data: rel.tenantIds.map((tenantId) => ({ couponId, tenantId })) });
-    }
     if (patch.allowedUserIds !== undefined) {
       if (replace) await tx.couponAllowedUser.deleteMany({ where: { couponId } });
       if (rel.allowedUserIds.length) await tx.couponAllowedUser.createMany({ data: rel.allowedUserIds.map((userId) => ({ couponId, userId })) });

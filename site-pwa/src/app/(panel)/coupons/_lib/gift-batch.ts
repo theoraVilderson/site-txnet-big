@@ -22,18 +22,16 @@ export interface GiftBatchForm {
   prefix: string;
   /** `YYYY-MM-DD`, Tehran's day; the code works through it. */
   expiresAt: string;
-  tenantIds: string;
 }
 
 export type GiftBatchErrors = Partial<Record<keyof GiftBatchForm, string>>;
 
 export function emptyGiftBatchForm(): GiftBatchForm {
-  return { owner: "own", tenantId: "", label: "", note: "", count: "10", kind: "credit", value: "", grantVariantId: "", prefix: "", expiresAt: "", tenantIds: "" };
+  return { owner: "own", tenantId: "", label: "", note: "", count: "10", kind: "credit", value: "", grantVariantId: "", prefix: "", expiresAt: "" };
 }
 
 const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ids = (text: string) => [...new Set(text.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean))];
 
 /** `CouponBatchService.generate`'s rules, mirrored. */
 export function validateGiftBatch(f: GiftBatchForm, me: Me | null): GiftBatchErrors {
@@ -48,7 +46,6 @@ export function validateGiftBatch(f: GiftBatchForm, me: Me | null): GiftBatchErr
   }
   if (f.prefix.trim() && !/^[A-Za-z0-9]{1,8}$/.test(f.prefix.trim())) errors.prefix = GIFT_KEYS.errors.prefix;
   if (isPlatformOwner(me) && f.owner === "tenant" && !UUID.test(f.tenantId.trim())) errors.tenantId = COUPON_KEYS.errors.uuid;
-  if (ids(f.tenantIds).some((t) => !UUID.test(t))) errors.tenantIds = COUPON_KEYS.errors.uuid;
   return errors;
 }
 
@@ -59,10 +56,7 @@ export function giftBatchBody(f: GiftBatchForm, me: Me | null): GenerateGiftBatc
   if (f.note.trim()) body.note = f.note.trim();
   if (f.prefix.trim()) body.prefix = f.prefix.trim().toUpperCase();
   if (f.expiresAt) body.expiresAt = dayToInstant(f.expiresAt, "end");
-  if (isPlatformOwner(me) && f.owner !== "own") {
-    body.tenantId = f.owner === "platform" ? null : f.tenantId.trim();
-    if (f.owner === "platform" && ids(f.tenantIds).length > 0) body.tenantIds = ids(f.tenantIds);
-  }
+  if (isPlatformOwner(me) && f.owner !== "own") body.tenantId = f.owner === "platform" ? null : f.tenantId.trim();
   return body;
 }
 

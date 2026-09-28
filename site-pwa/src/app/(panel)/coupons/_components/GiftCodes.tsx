@@ -331,7 +331,6 @@ function GiftBatchSheet({ me, onClose, onCreated }: { me: Me | null; onClose: ()
             {field("prefix", t("common", F.prefix), text("prefix", { ltr: true }), t("common", F.prefixHint))}
             {field("expiresAt", t("common", F.expiresAt), <DatePicker value={form.expiresAt} onChange={(v) => set("expiresAt", v ?? "")} />)}
           </div>
-          {owner && form.owner === "platform" && field("tenantIds", t("common", F.tenantIds), text("tenantIds", { ltr: true, area: true }), t("common", F.tenantIdsHint))}
           {field("note", t("common", F.note), text("note", { area: true }))}
         </div>
         <footer className="flex flex-wrap items-center justify-end gap-3 border-t border-card-border p-4">

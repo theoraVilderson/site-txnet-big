@@ -22,6 +22,7 @@
 import { DiscountType, TenantType } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 
+import { createCouponSchema, generateBatchSchema, updateCouponSchema } from './coupon-admin.schema';
 import { CouponAdminRefused, CouponAdminService } from './coupon-admin.service';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
@@ -183,7 +184,6 @@ function build(seed: { redemptions?: Row[]; coupons?: Row[]; grants?: Row[] } = 
       'coupon',
       writes,
     ),
-    couponTenant: table([], 'couponTenant', writes),
     couponAllowedUser: table([], 'couponAllowedUser', writes),
     couponGateway: table([], 'couponGateway', writes),
     couponServiceScope: table([], 'couponServiceScope', writes),
@@ -259,21 +259,22 @@ describe('CouponAdminService — codes, users, gateways', () => {
     await expect(service.create(actor(OWNER), { ...DISCOUNT, code: 'NOWRUZ', tenantId: null })).resolves.toMatchObject({ code: 'NOWRUZ', tenantId: null });
   });
 
-  it('names served tenants on a platform coupon only', async () => {
-    const { service } = build();
-    expect((await refusal(() => service.create(actor(OWNER), { ...DISCOUNT, tenantId: RESELLER, tenantIds: [OTHER] }))).reason).toBe('tenants_are_platform_coupons');
-    const view = await service.create(actor(OWNER), { ...DISCOUNT, tenantId: null, tenantIds: [RESELLER] });
-    expect(view.tenantIds).toEqual([RESELLER]);
+  it("takes no list of served tenants: a platform coupon is never a reseller's (F-116-h7, ADR-0099)", async () => {
+    // Refused on the wire, not dropped — an admin who sent it must not think it applied.
+    const body = { code: 'HOME10', discountType: 'percentage', discountValue: '10', tenantIds: [RESELLER] };
+    expect(createCouponSchema.safeParse(body).success).toBe(false);
+    expect(updateCouponSchema.safeParse({ tenantIds: [RESELLER] }).success).toBe(false);
+    expect(generateBatchSchema.safeParse({ count: 1, value: '5', tenantIds: [RESELLER] }).success).toBe(false);
+    const view = await build().service.create(actor(OWNER), { ...DISCOUNT, tenantId: null });
+    expect(view).not.toHaveProperty('tenantIds');
   });
 
   it('refuses a targeted user who lives outside the tenants the coupon serves', async () => {
     const { service } = build();
     // A reseller's coupon, and a user of the platform owner.
     expect((await refusal(() => service.create(actor(RESELLER), { ...DISCOUNT, visibility: 'targeted', allowedUserIds: [OWNER_USER] }))).reason).toBe('user_out_of_scope');
-    // A platform coupon naming no tenant serves the platform owner's users only — a reseller's account is not one.
+    // A platform coupon serves the platform owner's users only — a reseller's account is not one.
     expect((await refusal(() => service.create(actor(OWNER), { ...DISCOUNT, tenantId: null, visibility: 'targeted', allowedUserIds: [RESELLER_USER] }))).reason).toBe('user_out_of_scope');
-    // Named, it is.
-    await expect(service.create(actor(OWNER), { ...DISCOUNT, tenantId: null, tenantIds: [RESELLER], visibility: 'targeted', allowedUserIds: [RESELLER_USER] })).resolves.toMatchObject({ allowedUserIds: [RESELLER_USER] });
     // And targeted with nobody named would serve nobody.
     expect((await refusal(() => service.create(actor(RESELLER), { ...DISCOUNT, visibility: 'targeted' }))).reason).toBe('targeted_needs_users');
   });

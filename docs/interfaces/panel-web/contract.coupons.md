@@ -45,8 +45,8 @@ The routes, the scope and every rule are
    set, as billing reads it.
 6. **Owner-only fields.** The owner picks whose coupon on create (`own`,
    `platform` = `tenantId: null`, another tenant's id); a platform coupon shows
-   the served-tenants box and only platform gateways. Nothing owner-only is
-   sent for a reseller.
+   only platform gateways, and no served-tenants box — it serves the platform
+   owner's users alone (ADR-0099). Nothing owner-only is sent for a reseller.
 7. **Nothing is patched from an answer.** Save, toggle and delete re-read the
    list; a delete says whether the coupon is gone or hidden because used.
 8. **Status tones are theme tokens, never gold** (`STATUS_TONES`, one per

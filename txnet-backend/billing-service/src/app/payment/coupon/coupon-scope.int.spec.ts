@@ -1,12 +1,11 @@
 /**
- * Whose a coupon is, and whose users it serves (F-502-a, D-33, ADR-0048),
- * against a real Postgres built from the committed migration history.
+ * Whose a coupon is, and whose users it serves (F-502-a, D-33, ADR-0048,
+ * ADR-0099), against a real Postgres built from the committed migration history.
  *
  * Only a database can say either: a code is unique inside a tenant through two
  * partial unique indexes, and a platform coupon (`tenantId` NULL) is visible on
  * a tenant's connection only when `billing.platform_coupon_serves` says it
- * serves that tenant — its `coupon_tenant` rows, or with none the platform
- * owner alone.
+ * serves that tenant — the platform owner, and no reseller ever (F-116-h7).
  *
  *   npm run test:int
  */
@@ -29,7 +28,6 @@ const RESELLER_B = '22222222-2222-4222-8222-222222222222';
 const ADMIN = '33333333-3333-4333-8333-333333333333';
 
 const OWN_ONLY = '77777777-7777-4777-8777-7777777777b1';
-const FOR_A = '77777777-7777-4777-8777-7777777777b2';
 
 let pg: PostgresFixture;
 let owner: PrismaClient;
@@ -50,10 +48,6 @@ beforeAll(async () => {
     `);
   }
   await insertCoupon(OWN_ONLY, null, 'HOME10');
-  await insertCoupon(FOR_A, null, 'ALPHAGIFT');
-  await owner.$executeRawUnsafe(`
-    INSERT INTO billing.coupon_tenant (id, "couponId", "tenantId") VALUES (gen_random_uuid(), '${FOR_A}', '${RESELLER_A}')
-  `);
 
   const base = new PrismaService(pg.appUrl);
   app = base.$extends(withTenant(base)) as unknown as PrismaService;
@@ -111,32 +105,23 @@ describe('a code is unique inside a tenant', () => {
 });
 
 describe('whose users a platform coupon serves', () => {
-  it('with no tenant rows, only the platform owner sees it', async () => {
+  it("serves the platform owner's users and no reseller's (F-116-h7)", async () => {
     await expect(visibleCodes(PLATFORM)).resolves.toContain('HOME10');
     await expect(visibleCodes(RESELLER_A)).resolves.not.toContain('HOME10');
     await expect(visibleCodes(RESELLER_B)).resolves.not.toContain('HOME10');
   });
 
-  it('with tenant rows, only the tenants named see it — not the platform owner', async () => {
-    await expect(visibleCodes(RESELLER_A)).resolves.toContain('ALPHAGIFT');
-    await expect(visibleCodes(RESELLER_B)).resolves.not.toContain('ALPHAGIFT');
-    await expect(visibleCodes(PLATFORM)).resolves.not.toContain('ALPHAGIFT');
-  });
-
-  it('a tenant reads only the coupon_tenant rows naming it', async () => {
-    const rows = (tenantId: string) =>
-      runWithTenant({ id: tenantId }, () =>
-        tenantTransaction(app, (tx: Prisma.TransactionClient) => tx.couponTenant.count()),
-      );
-    await expect(rows(RESELLER_A)).resolves.toBe(1);
-    await expect(rows(RESELLER_B)).resolves.toBe(0);
+  it('keeps no list of served tenants: coupon_tenant is gone (ADR-0099)', async () => {
+    await expect(
+      owner.$queryRawUnsafe(`SELECT to_regclass('billing.coupon_tenant')::text AS t`),
+    ).resolves.toEqual([{ t: null }]);
   });
 
   it('never lets a tenant write a platform coupon', async () => {
     await expect(
       runWithTenant({ id: RESELLER_A }, () =>
         tenantTransaction(app, (tx: Prisma.TransactionClient) =>
-          tx.coupon.update({ where: { id: FOR_A }, data: { label: 'mine now' } }),
+          tx.coupon.update({ where: { id: OWN_ONLY }, data: { label: 'mine now' } }),
         ),
       ),
     ).rejects.toThrow();
@@ -186,7 +171,7 @@ describe('a free_grant coupon', () => {
     const rows = await runWithTenant({ id: RESELLER_A }, () =>
       tenantTransaction(app, (tx: Prisma.TransactionClient) =>
         tx.$queryRawUnsafe<{ outcome: string }[]>(
-          `SELECT billing.reserve_coupon('${FREE}'::uuid, '${ADMIN}'::uuid, gen_random_uuid(), NULL, 1.00, 'USD') AS outcome`,
+          `SELECT billing.reserve_coupon('${FREE}'::uuid, '${ADMIN}'::uuid, gen_random_uuid(), NULL, 1.00, 'USD', NULL, NULL, NULL) AS outcome`,
         ),
       ),
     );

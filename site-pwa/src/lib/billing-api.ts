@@ -1487,7 +1487,6 @@ export type CouponRejection =
   | "invalid_value"
   | "invalid_limit"
   | "limits_not_for_gift_codes"
-  | "tenants_are_platform_coupons"
   | "targeted_needs_users"
   | "user_out_of_scope"
   | "platform_coupon_needs_platform_gateway"
@@ -1532,7 +1531,6 @@ export interface AdminCoupon {
   note: string | null;
   batchId: string | null;
   allowedUserIds: string[];
-  tenantIds: string[];
   gateways: CouponGatewayRef[];
   serviceScopes: Array<{ productId: string | null; variantId: string | null }>;
   /** A free-service coupon's catalog variant (F-502-l-a); null for every other type. */
@@ -1586,7 +1584,6 @@ export interface UpdateCouponBody {
   label?: string | null;
   note?: string | null;
   allowedUserIds?: string[];
-  tenantIds?: string[];
   gateways?: CouponGatewayRef[];
   serviceScopes?: Array<{ productId?: string | null; variantId?: string | null }>;
   grantVariantId?: string | null;
@@ -1633,7 +1630,6 @@ export interface GenerateGiftBatchBody {
   grantVariantId?: string | null;
   prefix?: string | null;
   expiresAt?: string | null;
-  tenantIds?: string[];
 }
 
 export interface CouponRemoved {

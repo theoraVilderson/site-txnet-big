@@ -260,9 +260,8 @@ model WalletTransferRequest {
 /// موتور کوپن — Coupon
 model Coupon {
   id                  String            @id @default(uuid()) @db.Uuid
-  // null = a platform coupon. It serves the users of the tenants its
-  // `coupon_tenant` rows name, and with none the platform owner's own users
-  // (ADR-0048) — no longer every tenant's.
+  // null = a platform coupon. It serves the platform owner's own users and no
+  // reseller's (ADR-0099, which withdrew ADR-0048's `coupon_tenant`).
   tenantId            String?           @db.Uuid
   // Unique inside a tenant (and once among platform coupons) while not deleted:
   // two partial unique indexes Prisma cannot express, in
@@ -316,7 +315,6 @@ model Coupon {
   serviceScopes CouponServiceScope[]
   allowedUsers  CouponAllowedUser[]
   redemptions   CouponRedemption[]
-  tenants       CouponTenant[]
   gateways      CouponGateway[]
   batch         CouponBatch?      @relation(fields: [batchId], references: [id])
   grantVariant  ProductVariant?   @relation(fields: [grantVariantId], references: [id], onDelete: Restrict)
@@ -324,22 +322,6 @@ model Coupon {
   @@index([tenantId, code])
   @@index([batchId])
   @@map("coupon")
-  @@schema("billing")
-}
-
-/// A tenant whose users a platform coupon (`tenantId` null) serves (ADR-0048).
-/// No row = the platform owner's own users only. Written by the platform owner
-/// on the cross-tenant pool; a tenant's connection reads the rows naming it.
-model CouponTenant {
-  id       String @id @default(uuid()) @db.Uuid
-  couponId String @db.Uuid
-  tenantId String @db.Uuid
-
-  coupon Coupon @relation(fields: [couponId], references: [id])
-
-  @@unique([couponId, tenantId])
-  @@index([tenantId])
-  @@map("coupon_tenant")
   @@schema("billing")
 }
 

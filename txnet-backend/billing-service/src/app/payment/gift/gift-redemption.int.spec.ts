@@ -54,7 +54,7 @@ const COUPONS: Array<[string, string | null, string, string, string, number | nu
   ['e4', null, 'GIFTGLOBAL', 'wallet_credit', '7.50', 5, 0],
   ['e5', TENANT_B, 'GIFTBETA', 'wallet_credit', '3.00', null, 0],
   ['e6', TENANT_A, 'DISCOUNT10', 'percentage', '10.00', null, 0],
-  // A platform twin of GIFTPLAIN serving tenant A, and a soft-deleted gift.
+  // A platform twin of GIFTPLAIN, and a soft-deleted gift.
   ['e7', null, 'GIFTPLAIN', 'wallet_credit', '99.00', null, 0],
   ['e8', TENANT_A, 'GIFTGONE', 'wallet_credit', '4.00', null, 0],
 ];
@@ -68,10 +68,11 @@ beforeAll(async () => {
   pg = await startPostgresFixture();
   owner = prismaAt(pg.ownerUrl);
 
-  for (const [id, slug] of [[TENANT_A, 'alpha'], [TENANT_B, 'beta']]) {
+  // A is the platform owner, B a reseller: a platform code serves A's users only (ADR-0099).
+  for (const [id, type, slug] of [[TENANT_A, 'platform_owner', 'alpha'], [TENANT_B, 'reseller', 'beta']]) {
     await owner.$executeRawUnsafe(`
       INSERT INTO tenant.tenant (id, "tenantType", "ownerUserId", slug, status, "billingModel", "updatedAt")
-      VALUES ('${id}', 'reseller', '${id}', '${slug}', 'active', 'pay_as_you_go_metered', now())
+      VALUES ('${id}', '${type}', '${id}', '${slug}', 'active', 'pay_as_you_go_metered', now())
     `);
   }
   // `wallet.ownerUserId` is a foreign key: a credit opens a wallet, and a
@@ -91,11 +92,6 @@ beforeAll(async () => {
     await owner.$executeRawUnsafe(`
       INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "totalUsageLimit", "perUserUsageLimit", "createdByAdminId", "currencyCode")
       VALUES ('${couponId(suffix)}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${code}', '${type}', ${value}, ${total ?? 'NULL'}, ${perUser}, '${ADMIN}', 'USD')
-    `);
-  }
-  for (const suffix of ['e4', 'e7']) {
-    await owner.$executeRawUnsafe(`
-      INSERT INTO billing.coupon_tenant (id, "couponId", "tenantId") VALUES (gen_random_uuid(), '${couponId(suffix)}', '${TENANT_A}')
     `);
   }
   await owner.$executeRawUnsafe(`
@@ -270,7 +266,7 @@ it("redeems a platform code from a tenant's connection, and never another tenant
   await expect(balanceOf(u)).resolves.toBe('7.50');
   await expect(counters('e5')).resolves.toEqual({ usedCount: 0, reservedCount: 0 });
 
-  // Not named by the coupon's tenant rows: unknown to tenant B (ADR-0048).
+  // A reseller's user never redeems a platform code (F-116-h7, ADR-0099).
   await expect(redeem(TENANT_B, 'e4', user(9))).rejects.toMatchObject({ reason: 'not_found' });
 });
 

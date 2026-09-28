@@ -48,7 +48,6 @@ const fields = {
   label: z.string().trim().max(100).nullable(),
   note: z.string().trim().max(1000).nullable(),
   allowedUserIds: z.array(uuid('allowedUserIds')).max(1000),
-  tenantIds: z.array(uuid('tenantIds')).max(1000),
   gateways: z.array(z.object({ source: z.enum(GATEWAY_CREDENTIAL_SOURCES), id: uuid('gateway id') }).strict()).max(50),
   serviceScopes: z
     .array(z.object({ productId: uuid('productId').nullable().optional(), variantId: uuid('variantId').nullable().optional() }).strict())
@@ -99,7 +98,6 @@ export const generateBatchSchema = z
     grantVariantId: uuid('grantVariantId').nullable().optional(),
     prefix: z.string().trim().max(8).nullable().optional(),
     expiresAt: instant('expiresAt').nullable().optional(),
-    tenantIds: z.array(uuid('tenantIds')).max(1000).optional(),
   })
   .strict();
 

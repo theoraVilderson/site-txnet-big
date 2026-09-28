@@ -48,7 +48,6 @@ describe("validateGiftBatch", () => {
     [{ count: "2.5" }, "count", GIFT_KEYS.errors.count],
     [{ value: "0" }, "value", COUPON_KEYS.errors.decimal],
     [{ prefix: "TOO-LONG-1" }, "prefix", GIFT_KEYS.errors.prefix],
-    [{ tenantIds: "nope" }, "tenantIds", COUPON_KEYS.errors.uuid],
   ])("refuses %o on %s", (patch, field, key) => {
     expect(validateGiftBatch({ ...valid(), ...patch }, RESELLER)).toMatchObject({ [field]: key });
   });
@@ -60,14 +59,14 @@ describe("validateGiftBatch", () => {
 
 describe("giftBatchBody", () => {
   it("sends a reseller's batch with no owner fields, the prefix upper-cased and the day included", () => {
-    const body = giftBatchBody({ ...emptyGiftBatchForm(), label: " Yalda ", count: "50", value: "5", prefix: "yld", expiresAt: "2026-12-21", owner: "platform", tenantIds: UUID }, RESELLER);
+    const body = giftBatchBody({ ...emptyGiftBatchForm(), label: " Yalda ", count: "50", value: "5", prefix: "yld", expiresAt: "2026-12-21", owner: "platform" }, RESELLER);
     expect(body).toEqual({ label: "Yalda", count: 50, value: "5", prefix: "YLD", expiresAt: "2026-12-22T00:00:00+03:30" });
   });
 
-  it("names the owner's choice, and served tenants only on a platform batch", () => {
+  it("names the owner's choice, and never a list of served tenants (ADR-0099)", () => {
     const base = { ...emptyGiftBatchForm(), label: "x", count: "1", value: "1" };
-    expect(giftBatchBody({ ...base, owner: "platform", tenantIds: UUID }, OWNER)).toMatchObject({ tenantId: null, tenantIds: [UUID] });
-    expect(giftBatchBody({ ...base, owner: "tenant", tenantId: UUID, tenantIds: UUID }, OWNER)).toEqual({ label: "x", count: 1, value: "1", tenantId: UUID });
+    expect(giftBatchBody({ ...base, owner: "platform" }, OWNER)).toEqual({ label: "x", count: 1, value: "1", tenantId: null });
+    expect(giftBatchBody({ ...base, owner: "tenant", tenantId: UUID }, OWNER)).toEqual({ label: "x", count: 1, value: "1", tenantId: UUID });
   });
 });
 

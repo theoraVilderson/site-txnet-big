@@ -20,9 +20,8 @@ Migration `20260914000900_coupon_management_schema`, proved by
 | Rule | Why |
 |---|---|
 | A code is unique inside its tenant, and once among platform coupons, while `deletedAt` is null — two partial unique indexes | D-33: two resellers may both sell `NOWRUZ`; a deleted coupon frees its code |
-| `tenantId` null is a platform coupon. It serves the tenants its `coupon_tenant` rows name; with none, the platform owner's own users only | ADR-0048 decision 2 — no longer every tenant's |
+| `tenantId` null is a platform coupon. It serves the platform owner's own users and no reseller's — at a gateway, on a wallet-paid invoice, in the gift box: `platform_coupon_serves` is `true` for the `platform_owner` tenant alone, so a reseller's user gets `not_found` (F-116-h7) | ADR-0099 (supersedes ADR-0048 decision 2): a reseller's users see its brand, and a platform discount on its sale would be the reseller's money |
 | `coupon` RLS read side: `mine OR (NULL AND billing.platform_coupon_serves(id, me))`; `WITH CHECK` stays `mine` | ADR-0048 decision 3; ADR-0040 |
-| `coupon_tenant` is strict RLS: a tenant reads the rows naming it; the platform owner writes them on the cross-tenant pool | a reseller never learns whom else a coupon serves |
 | `deletedAt` and `deletedByAdminId` are set together (CHECK); a soft-deleted coupon stays readable for receipts | ADR-0048 decision 6 |
 | `label` and `note` are the admin's; never shown to a user | D-33 |
 | `coupon_batch` groups gift codes generated together; `tenantId` null is the platform owner's, reached on the cross-tenant pool | ADR-0048 decision 7; F-502-d |
@@ -39,7 +38,7 @@ Proved by `coupon-validation.spec.ts` and the reservation, gift and scope int sp
 | `settle_coupon_redemptions` / `claim_expired_coupon_redemptions` keep the old scope | a hold already taken must still give its slot back |
 | Two live coupons sharing a code: the tenant's own wins (validation's `rank`; the gift function's `ORDER BY`) | ADR-0048 decision 5 |
 | A platform coupon on a `tenant` gateway is `platform_coupon_needs_platform_gateway`; a granted platform gateway is `platform`. Quote and start pass `gatewaySource` | ADR-0048 decision 4 |
-| A coupon never follows a lent gateway: the borrower's payer is validated in the borrower's tenant, so the lender's coupon is `not_found` there, and a platform coupon on a lent platform gateway serves the borrower only if it names it. Validation reads no grant. Proved by `coupon-validation.int.spec.ts` (F-102-f-e) | lending moves a gateway, not the lender's discounts; ADR-0041, ADR-0048 decision 2 |
+| A coupon never follows a lent gateway: the borrower's payer is validated in the borrower's tenant, so the lender's coupon is `not_found` there, and a platform coupon on a lent platform gateway is `not_found` to a reseller borrower. Validation reads no grant. Proved by `coupon-validation.int.spec.ts` (F-102-f-e) | lending moves a gateway, not the lender's discounts; ADR-0041, ADR-0099 |
 | A coupon for a reseller's own account is a `targeted` coupon of whichever tenant that account lives in — F-502-c refuses any other as `user_out_of_scope` | ADR-0048 consequences |
 
 ## Limits storage (built — F-502-j)
@@ -106,8 +105,8 @@ config's owner (`gatewayConfigOwner`, read only).
 | The platform owner manages platform coupons and every tenant's; any other tenant its own. Out of reach or soft-deleted = `coupon_not_found`; a reseller's list filter by tenant is ignored | ADR-0048 decision 8, as gateways (D-31) |
 | Create: `tenantId` absent = the caller's tenant, `null` = platform, another id = the platform owner only (`not_platform_owner`, `tenant_not_found`) | the body never widens the caller's reach |
 | A code is stored trimmed and upper-cased, `[A-Z0-9][A-Z0-9_-]{2,39}` (`invalid_code`); a live duplicate in the same scope is `code_taken` — the partial index still decides a race | validation upper-cases what a user types |
-| `tenantIds` (`coupon_tenant`) only on a platform coupon (`tenants_are_platform_coupons`) | ADR-0048 decision 2 |
-| `targeted` needs at least one user (`targeted_needs_users`); every user lives in a tenant the coupon serves — its own, the named ones, or the platform owner's when none (`user_out_of_scope`) | a targeted coupon nobody can use is a mistake, not a setting |
+| No list of served tenants: `tenantIds` on a coupon or a batch is `400`, refused by the strict body schema, never dropped (F-116-h7) | ADR-0099 — an admin who sent it must not think it applied |
+| `targeted` needs at least one user (`targeted_needs_users`); every user lives in the tenant the coupon serves — its own, or the platform owner's for a platform coupon (`user_out_of_scope`) | a targeted coupon nobody can use is a mistake, not a setting |
 | Gateways: a platform coupon names platform gateways only (`platform_coupon_needs_platform_gateway`); a tenant coupon its own `tenant` gateways or ones actively granted to it (`gateway_not_found`) | ADR-0048 decision 4, ADR-0041 |
 | A service scope names one product or one variant, the platform's or the coupon's tenant's (`scope_not_found`) | the scope table's shape (F-026-a) |
 | Values: a percentage in (0, 100], a cap on a percentage only, a positive value (`invalid_value`); the limit CHECKs answered first as `invalid_limit` | a reason, not a database error |
@@ -127,7 +126,7 @@ config's owner (`gatewayConfigOwner`, read only).
 
 | Rule | Why |
 |---|---|
-| A batch is 1..5000 `wallet_credit` codes, each `totalUsageLimit=1`, `perUserUsageLimit=1`, public, one value (> 0, 2 places) and one expiry; ownership as a coupon's (`ownerOfNew`), `tenantIds` on a platform batch only | ADR-0048 decision 7 |
+| A batch is 1..5000 `wallet_credit` codes, each `totalUsageLimit=1`, `perUserUsageLimit=1`, public, one value (> 0, 2 places) and one expiry; ownership as a coupon's (`ownerOfNew`) | ADR-0048 decision 7 |
 | A code is `[PREFIX-]` + 10 characters from `crypto.randomInt` over `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no 0/O/1/I/L) | a person types it off a card |
 | A candidate live in the same scope or already drawn is drawn again, up to 8 rounds; the partial unique index decides a race and the whole batch rolls back | N asked is N made |
 | No code is ever written to an audit row or a log; `coupon_batch_create` records count, value, prefix, expiry, tenants | a code is a bearer credit |
@@ -178,7 +177,7 @@ Migration `20260915000100_coupon_free_grant`; `coupon-admin.service.ts`,
 | `GET\|PATCH\|DELETE /coupons/:id` | patch `.strict()`, no `tenantId` | `CouponView`; delete `{id, mode}` |
 | — | a `CouponView` carries `currencyCode`, the coupon's own: what a fixed `discountValue`, `maxDiscountCap` and the purchase bounds are in (F-116-h2) | — |
 | `GET /coupons/:id/usage`, `GET /coupons/batches/:id/usage` | `status`, `from`, `to`, `page`, `pageSize` | `UsageReport` |
-| `GET\|POST /coupons/batches` | list: `tenantId`, page; generate: `label`, `count` 1..5000, `value`, `prefix`, `expiresAt`, `note`, `tenantId`, `tenantIds` | page of `BatchView`; 201 `BatchView` |
+| `GET\|POST /coupons/batches` | list: `tenantId`, page; generate: `label`, `count` 1..5000, `value`, `prefix`, `expiresAt`, `note`, `tenantId` | page of `BatchView`; 201 `BatchView` |
 | `GET /coupons/batches/:id` | — | `BatchView` |
 | `GET /coupons/batches/:id/export` | — | `{filename, csv}` in the JSON envelope (the panel builds the file); spends the **write** budget |
 | `POST /coupons/batches/:id/deactivate` | — | `{id, deactivated}` |
