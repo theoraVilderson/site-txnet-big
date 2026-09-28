@@ -32,7 +32,7 @@ export type TopupActor = { userId: string; tenantId: string; permissions: readon
 
 export type TopupInput = {
   gatewayId: string;
-  /** Base currency (C-02), a decimal string > 0 with at most 2 places — the schema's. */
+  /** The platform's currency (C-02, ADR-0098 part 4), a decimal string > 0 with at most 2 places — the schema's. */
   amount: string;
 };
 

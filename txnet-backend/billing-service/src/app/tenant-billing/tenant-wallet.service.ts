@@ -30,7 +30,7 @@ export type TenantWalletRow = {
   id: string;
   direction: TenantLedgerDirection;
   reasonType: TenantBillingReasonType;
-  /** Base currency (C-02), two decimals, as a string. */
+  /** The platform's currency (C-02, ADR-0098 part 4), two decimals, as a string. */
   amount: string;
   balanceAfter: string;
   createdAt: Date;

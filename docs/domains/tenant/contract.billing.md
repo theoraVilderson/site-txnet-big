@@ -3,7 +3,7 @@ id: tenant
 layer: domain
 status: active
 version: 13
-updated: 2026-09-19
+updated: 2026-09-28
 ---
 
 # Contract — tenant / the billing wallet
@@ -25,7 +25,8 @@ of `tenant_billing_wallet.cachedBalance` (invariant 3). The same shape as
 |---|---|
 | Takes the caller's `tx` and opens none | the caller's own row — a payment's status, an audit row — commits with the movement |
 | `entry.tenantId` is required; the tables are not in `TENANT_SCOPED_MODELS` | the writer may be the platform owner acting on another tenant (below); strict RLS on `tenant_billing_wallet` stands behind it on the app pool |
-| `amount` is base currency (C-02), `> 0`, at most 2 decimal places; anything else is `TenantBillingInvalidAmount`, never rounded | invariant 14; the column would round the amount but not `balanceAfter` |
+| `amount` is in the **platform's** currency (C-02, ADR-0098 part 4), `> 0`, at most 2 decimal places; anything else is `TenantBillingInvalidAmount`, never rounded | invariant 14; the column would round the amount but not `balanceAfter` |
+| The wallet is in the platform's currency — opened in it, whatever a first entry names — and so is every row; the reseller's own operating currency is never read. An entry naming another currency is `TenantBillingCurrencyMismatch`, before anything is written, **except** a credit priced before the platform's own change, converted through it (`convertedByChanges`) and recorded as `sourceAmount` / `sourceCurrencyCode` | ADR-0098 part 4: what a reseller owes the platform is not re-priced by the reseller's choice of currency; a top-up in flight across the platform's change still lands (F-116-f) |
 | A `referenceId` already used with the same `reasonType` is `TenantBillingDuplicateEntry`, checked before any write; a race past the check meets the unique index and gets the same error | invariant 15: a payment, a renewal or an admin request moves the balance once |
 | A debit below zero, or from a tenant with no wallet, is `TenantBillingInsufficientBalance` | prepaid only (D-01); a missing wallet is a zero balance |
 | `cachedBalance` is written with `where { id, version }` **before** the row is appended; `count = 0` is `TenantBillingVersionConflict` — thrown, not retried | a loser appends nothing; only restarting the caller's transaction reads the row fresh |
@@ -38,6 +39,15 @@ of `tenant_billing_wallet.cachedBalance` (invariant 3). The same shape as
 payment for the first period, credited and charged in the purchase's
 transaction, `contract.admin.md`). `metered_usage_charge` and
 `sms_usage_charge` stay in the enum unused (D-41: no metering).
+
+**The rate at the boundary (F-116-g, ADR-0098 part 4).** Every writer above
+charges an amount already in the platform's currency — a package price, a
+platform-gateway payment, an admin amount — so none crosses a rate. The first
+writer that charges an amount computed from a reseller's own rows (metered
+usage, a share of its sales) converts it at the **platform's** rate
+(`readFxPair`, never a tenant pin — part 9) and records that snapshot on the
+row; its row adds the columns with the writer. **Proof:**
+`shared-core/…/tenant/billing/tenant-billing-currency.spec.ts`.
 
 ## Manual adjustment — the HTTP surface
 

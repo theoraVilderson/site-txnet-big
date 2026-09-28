@@ -42,7 +42,7 @@ import { PrismaService } from '../prisma/prisma.service';
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 20;
 
-/** Base currency as the wire carries it: two decimals, as a string (C-02). */
+/** The platform's currency as the wire carries it: two decimals, as a string (C-02). */
 const money = (v: Prisma.Decimal) => v.toFixed(2);
 
 export type TenantBillingActor = { adminId: string; tenantId: string; ip: string };
@@ -52,7 +52,7 @@ export type TenantBillingReader = Omit<TenantBillingActor, 'ip'>;
 
 export type AdjustInput = {
   direction: 'credit' | 'debit';
-  /** Base currency (C-02), a decimal string. */
+  /** The platform's currency (C-02, ADR-0098 part 4), a decimal string. */
   amount: string;
   /** The client's id for this act; the ledger entry's `referenceId`. */
   requestId: string;
@@ -77,7 +77,7 @@ export type TenantLedgerRow = {
   reasonType: TenantBillingReasonType;
   /** The mover's own id for the entry — a request id, a payment, a charged period. */
   referenceId: string | null;
-  /** Base currency (C-02), two decimals, as a string. */
+  /** The platform's currency (C-02, ADR-0098 part 4), two decimals, as a string. */
   amount: string;
   balanceAfter: string;
   createdAt: Date;
