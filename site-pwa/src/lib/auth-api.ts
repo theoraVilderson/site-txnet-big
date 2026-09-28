@@ -498,14 +498,22 @@ export const resellerUsersApiPath = (tenantId: string) => `/auth/tenants/${encod
  * `GET /api/auth/tenants/:tenantId/users` (F-311-a,
  * [auth-api/contract.reseller-users.md](../../../docs/interfaces/auth-api/contract.reseller-users.md)):
  * newest first, `q` 3-64 characters or none. Admitted under `read`, so a
- * suspended reseller still lists its customers. Block is not called here.
+ * suspended reseller still lists its customers. Block and unblock are
+ * `staffWrite`: a suspended reseller is refused them.
  */
+/** One user's block (F-311-a): `POST` blocks, `DELETE` lifts it — unblock is the deletion of the block. */
+export const resellerUserBlockPath = (tenantId: string, userId: string) => `${resellerUsersApiPath(tenantId)}/${encodeURIComponent(userId)}/block`;
+
 export const resellerUsersApi = {
   async list(tenantId: string, query: { q?: string; page: number; pageSize: number }) {
     const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) });
     if (query.q) params.set("q", query.q);
     return request<{ items: ResellerUser[]; total: number; page: number; pageSize: number }>(`${resellerUsersApiPath(tenantId)}?${params}`, { method: "GET" });
   },
+  /** Answers the user at `suspended`, every session revoked; already blocked is the same 200. `staffWrite`. */
+  async block(tenantId: string, userId: string) { return request<ResellerUser>(resellerUserBlockPath(tenantId, userId), { method: "POST" }); },
+  /** Answers the user at `active`. */
+  async unblock(tenantId: string, userId: string) { return request<ResellerUser>(resellerUserBlockPath(tenantId, userId), { method: "DELETE" }); },
 };
 
 const userGroupPath = (id: string) => `/auth/user-groups/${encodeURIComponent(id)}`;

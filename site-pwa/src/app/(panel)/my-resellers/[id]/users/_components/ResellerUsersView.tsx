@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, Ban, RefreshCw, Search, Undo2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { authApi, resellerUsersApi, type ResellerUser } from "@/lib/auth-api";
 import { myResellerConsolePath, myResellerUserPath } from "@/lib/routes";
@@ -10,7 +10,7 @@ import { Pagination } from "../../../../_components/kit/Pagination";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { formatInstant } from "../../../../_lib/datetime";
 import { Alert, input, primaryButton, quietButton } from "../../../../catalog/_components/catalog-ui";
-import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, usersQuery } from "../../../_lib/users";
+import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, blockActionOf, usersQuery } from "../../../_lib/users";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
 
 /** How long typing rests before the list is asked again. */
@@ -32,8 +32,10 @@ const STATUS_TONE: Record<ResellerUser["status"], string> = {
  *    sentence;
  *  - **a search is 3 characters or none** (`usersQuery`) — fewer keep the
  *    unfiltered list, never a 400;
- *  - **no phone number is on the wire**, only `phoneMasked`; block is not
- *    offered here.
+ *  - **no phone number is on the wire**, only `phoneMasked`;
+ *  - **block and unblock are asked first** (F-311-v4): a block signs the user
+ *    out everywhere. The row takes the user auth answers; a platform ban gets
+ *    no button, since a reseller neither deepens nor lifts it.
  */
 export function ResellerUsersView({ id }: { id: string }) {
   const { t, lang } = useLocale();
@@ -45,6 +47,25 @@ export function ResellerUsersView({ id }: { id: string }) {
   const [loadError, setLoadError] = useState<unknown>(null);
   const [asked, setAsked] = useState(0);
   const [slug, setSlug] = useState<string | null>(null);
+  const [blocking, setBlocking] = useState<string | null>(null);
+  const [blockError, setBlockError] = useState<unknown>(null);
+
+  async function toggleBlock(user: ResellerUser) {
+    const action = blockActionOf(user.status);
+    if (!action || blocking) return;
+    const name = user.fullName || user.username || t("common", K.unnamed);
+    if (!window.confirm(t("common", action === "block" ? K.blockConfirm : K.unblockConfirm, { name }))) return;
+    setBlocking(user.id);
+    setBlockError(null);
+    try {
+      const after = await (action === "block" ? resellerUsersApi.block(id, user.id) : resellerUsersApi.unblock(id, user.id));
+      setAnswer((before) => before && { ...before, items: before.items.map((u) => (u.id === after.id ? { ...u, ...after } : u)) });
+    } catch (e) {
+      setBlockError(e);
+    } finally {
+      setBlocking(null);
+    }
+  }
 
   // Typing rests, then the list is asked from page 1.
   useEffect(() => {
@@ -128,6 +149,8 @@ export function ResellerUsersView({ id }: { id: string }) {
         {short && <p className="mt-1 text-xs text-text-secondary">{t("common", K.searchHint)}</p>}
       </div>
 
+      {blockError !== null && <Alert>{message(blockError)}</Alert>}
+
       {loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
           <Alert>{message(loadError)}</Alert>
@@ -159,6 +182,12 @@ export function ResellerUsersView({ id }: { id: string }) {
                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_TONE[user.status]}`}>
                   {t("common", K.userStatus[user.status])}
                 </span>
+                {blockActionOf(user.status) !== null && (
+                  <button type="button" className={quietButton} disabled={blocking !== null} onClick={() => void toggleBlock(user)}>
+                    {user.status === "active" ? <Ban size={12} aria-hidden /> : <Undo2 size={12} aria-hidden />}
+                    {t("common", user.status === "active" ? K.block : K.unblock)}
+                  </button>
+                )}
                 <Link
                   href={`${myResellerUserPath(id, user.id)}?${new URLSearchParams({ name: user.fullName })}`}
                   className={quietButton}

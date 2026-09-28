@@ -3232,6 +3232,10 @@
       "user_not_found": "this user is not one of this reseller's users.",
       "user_banned": "the platform has banned this account.",
       "cannot_block_self": "you cannot block yourself."
-    }
+    },
+    "block": "block",
+    "unblock": "unblock",
+    "blockConfirm": "Block {{name}}? They are signed out everywhere and cannot sign in until you unblock them.",
+    "unblockConfirm": "Unblock {{name}}? They can sign in again."
   }
 }

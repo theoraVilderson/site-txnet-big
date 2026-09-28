@@ -1,4 +1,5 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import type { ResellerUser } from "@/lib/auth-api";
 import type { AdminConfigAction, AdminConfigActionBody, ConfigActionRefusal } from "@/lib/billing-api";
 import { REFUSAL_KEYS } from "../../services/_lib/service-configs";
 
@@ -42,6 +43,17 @@ export const USERS_PAGE_SIZE = 20;
 export function usersQuery(raw: string, page: number): { q?: string; page: number } {
   const q = raw.trim().slice(0, USERS_QUERY_MAX);
   return q.length >= USERS_QUERY_MIN ? { q, page } : { page };
+}
+
+/**
+ * What the list offers a user of this status (F-311-v4): block an active
+ * one, unblock a blocked one, and nothing for a platform ban — a reseller
+ * neither deepens nor lifts it (`user_banned`).
+ */
+export function blockActionOf(status: ResellerUser["status"]): "block" | "unblock" | null {
+  if (status === "active") return "block";
+  if (status === "suspended") return "unblock";
+  return null;
 }
 
 /**

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { myResellerUserPath, myResellerUsersPath } from "@/lib/routes";
-import { resellerUsersApiPath } from "@/lib/auth-api";
+import { resellerUserBlockPath, resellerUsersApiPath } from "@/lib/auth-api";
 import { resellerUserGrantsPath } from "@/lib/billing-api";
 import {
   ADMIN_ACTIONS,
@@ -12,6 +12,7 @@ import {
   USERS_QUERY_MIN,
   USER_REFUSAL_KEYS,
   adminActionBody,
+  blockActionOf,
   userRefusalKey,
   usersQuery,
 } from "./_lib/users";
@@ -125,5 +126,20 @@ describe("a refusal", () => {
     expect(userRefusalKey({ reason: "user_not_found" })).toBe(USER_REFUSAL_KEYS.user_not_found);
     expect(userRefusalKey({ reason: "something_else" })).toBeNull();
     expect(userRefusalKey(new Error("x"))).toBeNull();
+  });
+});
+
+describe("blocking a user from the list (F-311-v4)", () => {
+  it("names the reseller and the user in the path the controller serves", () => {
+    expect(resellerUserBlockPath("t-1", "u/1")).toBe("/auth/tenants/t-1/users/u%2F1/block");
+    expect(source(USERS_CONTROLLER)).toContain("@Post(':userId/block')");
+    expect(source(USERS_CONTROLLER)).toContain("@Delete(':userId/block')");
+  });
+
+  it("offers block to an active user, unblock to a blocked one, and nothing to a platform ban", () => {
+    expect(blockActionOf("active")).toBe("block");
+    expect(blockActionOf("suspended")).toBe("unblock");
+    // A reseller neither deepens nor lifts the platform's ban (`user_banned`).
+    expect(blockActionOf("banned")).toBeNull();
   });
 });
