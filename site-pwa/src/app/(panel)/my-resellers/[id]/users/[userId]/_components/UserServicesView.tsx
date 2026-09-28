@@ -6,12 +6,14 @@ import { useSearchParams } from "next/navigation";
 import { ArrowRight, Check, ChevronDown, Copy, Loader2, QrCode, RefreshCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { resellerUserGrantsApi, type GrantRow, type GrantScope, type ResellerUserGrantsApi, type UserConfigRow } from "@/lib/billing-api";
+import { catalogApi } from "@/lib/catalog-api";
 import { myResellerUsersPath } from "@/lib/routes";
 import { Pagination } from "../../../../../_components/kit/Pagination";
 import { TableSkeleton } from "../../../../../_components/kit/TableSkeleton";
 import { copyText } from "../../../../../_lib/clipboard";
 import { formatInstant } from "../../../../../_lib/datetime";
 import { Alert, primaryButton, quietButton } from "../../../../../catalog/_components/catalog-ui";
+import { flattenTexts } from "../../../../../catalog/_lib/catalog-form";
 import { ConfigLines } from "../../../../../services/_components/ConfigLines";
 import { QrDialog } from "../../../../../services/_components/QrDialog";
 import { UsageBars } from "../../../../../services/_components/UsageBars";
@@ -23,7 +25,6 @@ import { useUserMessage } from "./useUserMessage";
 
 const S = K.services;
 const PAGE_SIZE = 20;
-const NO_TEXTS: Record<string, string> = {};
 
 /**
  * One user's services, as the admin of the reseller the **path** names reads
@@ -41,9 +42,10 @@ const NO_TEXTS: Record<string, string> = {};
  *    `reseller_suspended`, said as its sentence.
  */
 export function UserServicesView({ id, userId }: { id: string; userId: string }) {
-  const { t } = useLocale();
+  const { t, lang } = useLocale();
   const message = useUserMessage();
   const name = useSearchParams().get("name");
+  const [texts, setTexts] = useState<Record<string, string>>({});
   const api = useMemo(() => resellerUserGrantsApi(id, userId), [id, userId]);
 
   const [page, setPage] = useState(1);
@@ -70,6 +72,20 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
       alive = false;
     };
   }, [api, page, scope, asked]);
+
+  // A reseller's items are named in the same published `catalog` namespace
+  // as the platform's; a failed read leaves the SKU, as on `/services`.
+  useEffect(() => {
+    let alive = true;
+    catalogApi
+      .texts(lang)
+      .then(flattenTexts)
+      .catch(() => ({}))
+      .then((flat) => alive && setTexts(flat));
+    return () => {
+      alive = false;
+    };
+  }, [lang]);
 
   const retry = () => {
     setLoadError(null);
@@ -117,7 +133,7 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
           ) : (
             <ul className="space-y-3">
               {answer.rows.map((row) => (
-                <AdminGrantCard key={row.id} api={api} row={row} />
+                <AdminGrantCard key={row.id} api={api} row={row} texts={texts} />
               ))}
             </ul>
           )}
@@ -140,13 +156,12 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
 }
 
 /** One Grant: its name, status and meter; opened, its sheet. */
-function AdminGrantCard({ api, row }: { api: ResellerUserGrantsApi; row: GrantRow }) {
+function AdminGrantCard({ api, row, texts }: { api: ResellerUserGrantsApi; row: GrantRow; texts: Record<string, string> }) {
   const { t, lang } = useLocale();
   const [open, setOpen] = useState(false);
   const tone = GRANT_TONES[row.status];
   const Icon = tone.icon;
-  // The catalog's names are the platform's namespace, not this reseller's; the SKU is what support quotes.
-  const name = serviceName(NO_TEXTS, row) ?? t("common", S.noPlan);
+  const name = serviceName(texts, row) ?? t("common", S.noPlan);
 
   return (
     <li className="rounded-2xl border border-card-border bg-card-bg p-4">

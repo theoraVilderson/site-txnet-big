@@ -37,7 +37,7 @@ billing's [contract.reseller-grants.md](../../domains/billing/contract.reseller-
 | 6 | The services page is `/services`' own pieces — `UsageMeter`, `UsageBars` (`read` = the admin's usage route), `ConfigLines` without `onRenamed` (no pencil), `QrDialog`, `GRANT_TONES` — over this user's routes | the admin sees what the user sees; there is no admin label route |
 | 7 | The list is billing's `current` scope, "show ended" (`hidden`) switches to `all` — billing filters, never the page | as `/services` (contract.my-services.md) |
 | 8 | A Grant's sheet is read **only when opened**: configs, 30-day usage and the `/sub` link — the link on copy / QR only | the three share one bucket, 300/900s per caller |
-| 9 | A service is named by its variant's **SKU** | the catalog text namespace the panel reads is the session tenant's, not this reseller's |
+| 9 | A service is named as on `/services`: its catalog text (`catalogApi.texts`, read once per page), the SKU when there is none (F-311-v3) | a reseller's items are named in the same published `catalog` namespace |
 | 10 | Config actions offered: **regenerate, disable, enable, retire**, on one config or the ticked ones (1–50). A disable asks its reason first (1–200, the user reads it); `adminActionBody` sends no body the schema would refuse; retire confirms | the schema refuses the whole request for a bad body, not one config |
 | 11 | **An outcome per config**: the refused ones are named by the name they had when pressed (`REFUSAL_KEYS`), the list is read again; a thrown request is its sentence and touched nothing | billing answers 200 with one outcome per id |
 | 12 | No "n left" gates an admin's regenerate | billing neither checks nor counts it for an admin (network `contract.provisioning.md`) |
