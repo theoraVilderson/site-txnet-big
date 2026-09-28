@@ -87,7 +87,9 @@ function build() {
     $executeRaw: async () => 1,
     user: { findFirst: async ({ where }: { where: { id: string } }) => (where.id === CUSTOMER && scope() === RESELLER ? { id: CUSTOMER } : null) },
     grant: {
-      findFirst: async ({ where }: { where: { id: string; userId: string } }) => (where.id === GRANT && where.userId === CUSTOMER ? { id: GRANT } : null),
+      // By its user (one Grant's routes) or by the reseller's tenant (bulk, F-311-u).
+      findFirst: async ({ where }: { where: { id: string; userId?: string; tenantId?: string } }) =>
+        where.id === GRANT && (where.userId === CUSTOMER || where.tenantId === RESELLER) ? { id: GRANT, userId: CUSTOMER } : null,
       findUnique: async () => grantState(),
     },
     config: {
@@ -132,6 +134,7 @@ const EVERY_WRITE: Case[] = [
   { method: 'issue', action: 'grant_issue', reason: 'trial', target: NEW_GRANT, call: (s) => s.issue(admin, RESELLER, CUSTOMER, 'v1', 'req-1', 'trial') },
   { method: 'renew', action: 'grant_renew', reason: 'paid cash', call: (s) => s.renew(admin, RESELLER, CUSTOMER, GRANT, { requestId: 'req-2', reason: 'paid cash' }) },
   { method: 'rotateLink', action: 'grant_link_rotate', reason: 'leaked', call: (s) => s.rotateLink(admin, RESELLER, CUSTOMER, GRANT, 'leaked') },
+  { method: 'bulk', action: 'grant_duration_change', reason: 'outage', call: (s) => s.bulk(admin, RESELLER, { action: 'days', grantIds: [GRANT], days: 3, reason: 'outage' }) },
   { method: 'act', action: 'config_disable', reason: 'abuse', target: CFG_A, call: (s) => s.act(admin, RESELLER, CUSTOMER, { action: 'disable', configIds: [CFG_A], reason: 'abuse' }) },
 ];
 

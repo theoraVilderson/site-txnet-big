@@ -246,3 +246,5 @@ the user bought (user, 2026-09-28); with either, that amount, the other 0.
 
 `POST /api/billing/tenants/:tenantId/grants/by-lines`, the owner's `by-lines` body and page ([contract.gift.md](contract.gift.md)), each row with its `userId`: support gets a link, not a user. `GrantService.listByLinesInScope` is the owner's matcher (F-307-p, F-307-r), unchanged, fenced by the reseller's `tenantId` written into the query instead of a user.
 Door `ResellerAccess` `read`, refusals as the reads'; no path user — the paste names them. Bucket `GRANTS_BY_LINES` per caller: one paste scans the reseller's live configs. Consumer F-311-x (panel).
+
+The freeze, days, traffic, reset, gift, speed and devices acts over 1..50 Grants of many users at once: [contract.reseller-grants-bulk.md](contract.reseller-grants-bulk.md) (F-311-u).

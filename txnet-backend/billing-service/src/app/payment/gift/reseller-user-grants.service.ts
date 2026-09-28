@@ -23,7 +23,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { GrantUsageService, GrantUsageView } from '../../traffic/grant-usage';
 import { RemainderCreditService } from '../../traffic/remainder-credit';
 import { AdminConfigCommand, UserConfigOutcome, UserConfigsService, UserConfigView } from '../../traffic/user-configs';
+import { GrantBulkBody } from './grant-bulk.schema';
 import { GrantListQuery, GrantsByLinesBody } from './grant-list.schema';
+import { actOnEach, GrantBulkOutcome } from './reseller-grants-bulk';
 import { SubscriptionLinkService } from './subscription-link.service';
 
 /** The door's refusals, and the one this surface adds: the path's user is not the reseller's. */
@@ -257,6 +259,16 @@ export class ResellerUserGrantsService {
     return this.audited(actor, tenantId, userId, grantId, { action: 'grant_renew', reason: input.reason, changed: (r) => r.renewed, outcome: (r) => r }, (tx) =>
       renewGrantByAdmin(tx, { ...input, grantId, actorUserId: actor.userId, at: new Date() }),
     );
+  }
+
+  /**
+   * An admin acts on many of the reseller's Grants at once (F-311-u), across
+   * users — e.g. +3 days to everyone after an outage: `staffWrite`, admitted
+   * once; each Grant fenced by the reseller's tenant, acted on and audited in
+   * its own transaction, one outcome each (`reseller-grants-bulk.ts`).
+   */
+  bulk(actor: AdminActor, tenantId: string, command: GrantBulkBody): Promise<GrantBulkOutcome[]> {
+    return this.admitted(actor, tenantId, 'staffWrite', () => actOnEach(this.prisma, actor, tenantId, command));
   }
 
   /**

@@ -8,6 +8,7 @@ import { GiftController } from './gift.controller';
 import { GrantListController } from './grant-list.controller';
 import { GrantTokenController } from './grant-token.controller';
 import { GiftRedemptionService } from './gift-redemption.service';
+import { ResellerGrantsBulkController } from './reseller-grants-bulk.controller';
 import { ResellerGrantsByLinesController } from './reseller-grants-by-lines.controller';
 import { ResellerUserGrantsController } from './reseller-user-grants.controller';
 import { ResellerUserGrantsService } from './reseller-user-grants.service';
@@ -21,11 +22,12 @@ import { SubscriptionLinkService } from './subscription-link.service';
  * also what lists the Grants a user has (F-502-r) and, through
  * `SubscriptionLinkService`, answers and resets their `/sub` links (F-114-e-b).
  * The same reads, with a Grant's configs and usage from `TrafficModule`, are
- * answered to a reseller's admin for one of its users (F-311-f).
+ * answered to a reseller's admin for one of its users (F-311-f), and its
+ * writes over many users' Grants at once (F-311-u).
  */
 @Module({
   imports: [WalletModule, EntitlementModule, TrafficModule],
-  controllers: [GiftController, GrantTokenController, GrantListController, ResellerUserGrantsController, ResellerGrantsByLinesController],
+  controllers: [GiftController, GrantTokenController, GrantListController, ResellerUserGrantsController, ResellerGrantsByLinesController, ResellerGrantsBulkController],
   providers: [GiftRedemptionService, SubscriptionLinkService, ResellerUserGrantsService, ResellerAccess],
   exports: [GiftRedemptionService],
 })
