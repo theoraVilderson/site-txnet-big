@@ -28,7 +28,8 @@ enum WalletReasonType {
   /// invoice. Always a debit — a sale (`IS_SALE` in `reseller-revenue.service.ts`).
   product_purchase
   /// F-111-d: a paid invoice whose Grant could not be delivered, given back in
-  /// full; `referenceId` = the invoice. Always a credit — it undoes a
+  /// full; or F-311-m: the unused share of a deleted prepaid Grant's invoice.
+  /// `referenceId` = the invoice. Always a credit — it undoes (part of) a
   /// `product_purchase` (`UNDOES`).
   product_refund
 

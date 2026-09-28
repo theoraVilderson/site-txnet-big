@@ -2,6 +2,7 @@ import { DesiredRemote, EnforcementState, GrantStatus, Prisma } from '@prisma/cl
 
 import { RemainderCreditRefused } from '../traffic/remainder-credit';
 import { EntitlementRefused } from './grant';
+import { ADMIN_FROZEN } from './suspension';
 
 /**
  * `grant.statusReason` for a Grant an admin deleted (F-311-m). `cancelled` is
@@ -11,14 +12,20 @@ import { EntitlementRefused } from './grant';
 export const ADMIN_DELETED = 'admin_deleted';
 
 /**
- * F-027-r's remainder credit, handed in by the caller: `RemainderCreditService.credit`
+ * The remainder credit, handed in by the caller: `RemainderCreditService.settle`
  * lives in the traffic module, and this stays a function over the caller's
  * transaction like every other admin action (`freeze.ts`, `duration.ts`).
+ * `stoppedAt` is when a frozen Grant's clock stopped — the cancel has already
+ * overwritten the reason that says so by the time the credit reads the Grant.
  */
-export type RemainderSettler = (tx: Prisma.TransactionClient, grantId: string) => Promise<{ amount: Prisma.Decimal; walletTransactionId: string }>;
+export type RemainderSettler = (
+  tx: Prisma.TransactionClient,
+  grantId: string,
+  clock: { at: Date; stoppedAt: Date | null },
+) => Promise<{ amount: Prisma.Decimal; walletTransactionId: string }>;
 
-/** Why a refund that was asked for credited nothing — F-027-r's refusals that leave nothing to give back. */
-export type RefundSkipped = Exclude<RemainderCreditRefused['reason'], 'cursor_moved' | 'grant_not_found' | 'grant_not_closed'>;
+/** Why a refund that was asked for credited nothing: the settler's refusals that leave nothing to give back. */
+export type RefundSkipped = Exclude<RemainderCreditRefused['reason'], 'cursor_moved' | 'grant_not_found' | 'grant_not_closed' | 'grant_not_prepaid'>;
 
 export type Deletion = {
   deletionId: string;
@@ -45,11 +52,12 @@ const CLOSED: readonly GrantStatus[] = [GrantStatus.expired, GrantStatus.exhaust
  * configs and its usage stay as the history of what the user held.
  *
  * **The remainder is the admin's call** (user, 2026-09-26): `refund` gives the
- * unserved metered remainder back through F-027-r, after the cancel so the
- * Grant reads closed, in this transaction; without it (fraud) nothing moves.
- * A refund F-027-r finds nothing for — a prepaid Grant, all of it served — still
- * deletes, and says why. The choice, the reason and what was credited are one
- * `grant_deletion` row. A block bought between the read and the credit
+ * remainder back, after the cancel so the Grant reads closed, in this
+ * transaction — a metered bag's unserved bytes (F-027-r), a prepaid Grant's
+ * unused share of its price by the larger of volume or time used (user,
+ * 2026-09-28); without it (fraud) nothing moves. A refund that finds nothing —
+ * all of it used, a Grant nobody paid for — still deletes, and says why.
+ * The choice, the reason and what was credited are one `grant_deletion` row. A block bought between the read and the credit
  * (`cursor_moved`) is `grant_moved`: the whole delete rolls back, retry.
  *
  * An `active` or `suspended` Grant — frozen or out of quota alike; a timed
@@ -62,7 +70,7 @@ export async function deleteGrant(
   input: { at: Date; actorUserId: string; reason: string; refund: boolean },
   settle: RemainderSettler,
 ): Promise<Deletion> {
-  const grant = await tx.grant.findFirst({ where: { id: grantId }, select: { id: true, tenantId: true, status: true, statusReason: true } });
+  const grant = await tx.grant.findFirst({ where: { id: grantId }, select: { id: true, tenantId: true, status: true, statusReason: true, suspendedAt: true } });
   if (!grant) throw new EntitlementRefused('grant_not_found');
   if (CLOSED.includes(grant.status)) throw new EntitlementRefused('grant_closed', grant.status);
   if (grant.status !== GrantStatus.active && grant.status !== GrantStatus.suspended) throw new EntitlementRefused('grant_not_active', grant.status);
@@ -83,11 +91,12 @@ export async function deleteGrant(
   let refundSkipped: RefundSkipped | null = null;
   if (input.refund) {
     try {
-      credited = await settle(tx, grantId);
+      const stoppedAt = grant.statusReason === ADMIN_FROZEN ? grant.suspendedAt : null;
+      credited = await settle(tx, grantId, { at: input.at, stoppedAt });
     } catch (e) {
       if (!(e instanceof RemainderCreditRefused)) throw e;
       if (e.reason === 'cursor_moved') throw new EntitlementRefused('grant_moved', 'a block was bought meanwhile');
-      if (e.reason === 'grant_not_found' || e.reason === 'grant_not_closed') throw e;
+      if (e.reason === 'grant_not_found' || e.reason === 'grant_not_closed' || e.reason === 'grant_not_prepaid') throw e;
       refundSkipped = e.reason;
     }
   }

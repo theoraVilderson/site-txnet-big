@@ -5,6 +5,7 @@ import { tenantTransaction } from '@txnet-backend/shared-core';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletCreditService } from '../wallet/wallet-credit.service';
 import { GIB, rateUnitsOf } from './block-purchase';
+import { creditPrepaidRemainder } from './prepaid-remainder';
 
 /**
  * The remainder credit (F-027-r; ADR-0072 rule 3).
@@ -40,7 +41,13 @@ export type RemainderCreditRejection =
   /** Everything bought was served, or what is left is worth under a cent. Already settled. */
   | 'nothing_to_credit'
   /** The money cursor moved between the read and the write; the refund was not taken twice. */
-  | 'cursor_moved';
+  | 'cursor_moved'
+  /** Prepaid (F-311-m): the metered path's opposite — a metered Grant settles by its money cursor. */
+  | 'grant_not_prepaid'
+  /** Prepaid: not bought with money — an admin's, a trial's, a coupon's Grant, or a free invoice. */
+  | 'nothing_paid'
+  /** Prepaid: unlimited **and** permanent — neither volume nor time says how much is left. */
+  | 'not_measurable';
 
 export class RemainderCreditRefused extends Error {
   constructor(
@@ -122,6 +129,20 @@ export class RemainderCreditService {
   /** One credit in a transaction of its own, for a caller with no other work to commit with it. */
   creditForGrant(input: CreditRemainder): Promise<CreditedRemainder> {
     return tenantTransaction(this.prisma, (tx) => this.credit(tx, input));
+  }
+
+  /**
+   * Either Grant's remainder, for a close that does not know its billing mode
+   * (F-311-m, an admin's delete): a metered bag by its money cursor, below; a
+   * prepaid one by the larger share of volume or time used (`prepaid-remainder.ts`).
+   * `stoppedAt` is when a frozen Grant's clock stopped, null otherwise.
+   */
+  async settle(tx: Prisma.TransactionClient, input: { grantId: string; at: Date; stoppedAt: Date | null }): Promise<{ amount: Prisma.Decimal; walletTransactionId: string }> {
+    const grant = await tx.grant.findUnique({ where: { id: input.grantId }, select: { billingMode: true } });
+    if (!grant) throw new RemainderCreditRefused('grant_not_found', input.grantId);
+    if (grant.billingMode === VariantBillingMode.prepaid) return creditPrepaidRemainder(tx, this.ledger, input);
+    const back = await this.credit(tx, { grantId: input.grantId });
+    return { amount: back.amount, walletTransactionId: back.walletTransactionId };
   }
 
   /**

@@ -143,6 +143,19 @@ Refusals, each writing nothing: `grant_not_found`, `grant_not_closed`,
 when the admin answers `refund` — its `cursor_moved` rolls the delete back. The
 expiry sweeper's close is not built; a Grant expired today keeps its remainder.
 
+**A prepaid Grant's remainder (F-311-m, user 2026-09-28).** `settle(tx, {grantId,
+at, stoppedAt})` sends a prepaid Grant to `creditPrepaidRemainder`
+(`traffic/prepaid-remainder.ts`, `prepaid-remainder.spec.ts`): both volume and
+time were sold, so back comes `total × (1 − max(volume used, time gone))`,
+rounded **down** to a cent — 30 days / 50 GiB for $10, deleted on day 12 with
+10 GiB used, is $6.00. Volume used is Used / Quota; time gone runs from
+`startsAt` to the delete, or to `stoppedAt` for a frozen Grant. Unlimited: time
+alone; permanent: volume alone; both: `not_measurable`. Only what was paid: the
+purchase invoice's `total` while `paid` — any other source or a free invoice is
+`nothing_paid`. One `product_refund` credit against the invoice, which stays
+`paid`; revenue nets it off the sale (`UNDOES`). Renewals record no price yet:
+the one that does adds what it paid to this sum.
+
 ## An admin's gift — bytes nobody bought (F-311-l)
 
 `giftGrantBytes(tx, grantId, {at, actorUserId, bytes, reason})`

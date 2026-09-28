@@ -173,7 +173,7 @@ export class ResellerUserGrantsService {
       userId,
       () =>
         this.onGrant(userId, grantId, (tx) =>
-          deleteGrant(tx, grantId, { at: new Date(), actorUserId: actor.userId, reason, refund }, (t, id) => this.remainders.credit(t, { grantId: id })),
+          deleteGrant(tx, grantId, { at: new Date(), actorUserId: actor.userId, reason, refund }, (t, id, clock) => this.remainders.settle(t, { grantId: id, ...clock })),
         ),
       'staffWrite',
     );

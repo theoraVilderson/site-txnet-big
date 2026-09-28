@@ -28,11 +28,11 @@ const GRANT = '99999999-9999-4999-8999-999999999991';
 const ADMIN = '77777777-7777-4777-8777-777777777777';
 const WALLET_ROW = '55555555-5555-4555-8555-555555555555';
 
-type Row = { id: string; tenantId: string; status: GrantStatus; statusReason: string | null; frozenUntil: Date | null };
+type Row = { id: string; tenantId: string; status: GrantStatus; statusReason: string | null; suspendedAt: Date | null; frozenUntil: Date | null };
 type Write = { where: Record<string, unknown>; data: Record<string, unknown> };
 
 function build(row: Partial<Row> | null, opts: { moved?: boolean } = {}) {
-  const grant: Row | null = row ? { id: GRANT, tenantId: TENANT, status: GrantStatus.active, statusReason: null, frozenUntil: null, ...row } : null;
+  const grant: Row | null = row ? { id: GRANT, tenantId: TENANT, status: GrantStatus.active, statusReason: null, suspendedAt: null, frozenUntil: null, ...row } : null;
   const grants: Write[] = [];
   const configs: Write[] = [];
   const deletions: Record<string, unknown>[] = [];
@@ -62,11 +62,11 @@ function build(row: Partial<Row> | null, opts: { moved?: boolean } = {}) {
   return { tx: tx as never, grant, grants, configs, deletions };
 }
 
-/** F-027-r's credit, as the caller hands it in: sees the Grant already cancelled. */
+/** The remainder credit, as the caller hands it in: sees the Grant already cancelled. */
 function settler(outcome: 'credited' | RemainderCreditRefused['reason']) {
-  const calls: string[] = [];
-  const settle: RemainderSettler = async (_tx, grantId) => {
-    calls.push(grantId);
+  const calls: { grantId: string; stoppedAt: Date | null }[] = [];
+  const settle: RemainderSettler = async (_tx, grantId, clock) => {
+    calls.push({ grantId, stoppedAt: clock.stoppedAt });
     if (outcome !== 'credited') throw new RemainderCreditRefused(outcome);
     return { amount: new Prisma.Decimal('1.25'), walletTransactionId: WALLET_ROW };
   };
@@ -135,8 +135,8 @@ describe('deleteGrant', () => {
     expect(deletions[0]).toMatchObject({ refundRemainder: true, refundedAmount: new Prisma.Decimal('1.25'), walletTransactionId: WALLET_ROW, refundSkipped: null });
   });
 
-  it('a refund with nothing to give back (prepaid, or all served) still deletes, and says why nothing was credited', async () => {
-    for (const why of ['grant_not_metered', 'nothing_to_credit', 'rate_not_priceable'] as const) {
+  it('a refund with nothing to give back (nobody paid, all of it used) still deletes, and says why nothing was credited', async () => {
+    for (const why of ['nothing_paid', 'nothing_to_credit', 'rate_not_priceable', 'grant_not_metered'] as const) {
       const { tx, grant, deletions } = build({});
       const result = await deleteGrant(tx, GRANT, input(true), settler(why).settle);
       expect(grant?.status).toBe(GrantStatus.cancelled);
@@ -152,13 +152,19 @@ describe('deleteGrant', () => {
   });
 
   it('deletes a suspended Grant — frozen or out of quota — and clears a timed freeze', async () => {
-    const frozen = build({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, frozenUntil: new Date(at.getTime() + 86_400_000) });
-    await deleteGrant(frozen.tx, GRANT, input(false), settler('credited').settle);
+    const frozenAt = new Date(at.getTime() - 5 * 86_400_000);
+    const frozen = build({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: frozenAt, frozenUntil: new Date(at.getTime() + 86_400_000) });
+    const { settle, calls } = settler('credited');
+    await deleteGrant(frozen.tx, GRANT, input(true), settle);
+    // Its clock stopped when it froze: the prepaid remainder is measured to then, not to the delete.
+    expect(calls).toEqual([{ grantId: GRANT, stoppedAt: frozenAt }]);
     expect(frozen.grant).toMatchObject({ status: GrantStatus.cancelled, statusReason: ADMIN_DELETED, frozenUntil: null });
     expect(frozen.deletions[0]).toMatchObject({ statusBefore: GrantStatus.suspended });
 
-    const spent = build({ status: GrantStatus.suspended, statusReason: QUOTA_EXHAUSTED });
-    await deleteGrant(spent.tx, GRANT, input(false), settler('credited').settle);
+    const spent = build({ status: GrantStatus.suspended, statusReason: QUOTA_EXHAUSTED, suspendedAt: frozenAt });
+    const second = settler('credited');
+    await deleteGrant(spent.tx, GRANT, input(true), second.settle);
+    expect(second.calls).toEqual([{ grantId: GRANT, stoppedAt: null }]);
     expect(spent.grants[0].where).toEqual({ id: GRANT, status: GrantStatus.suspended, statusReason: QUOTA_EXHAUSTED });
     expect(spent.grant?.status).toBe(GrantStatus.cancelled);
   });

@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 63
+version: 64
 updated: 2026-09-28
 ---
 
@@ -151,15 +151,17 @@ boolean, always asked (the admin's answer, user 2026-09-26); `reason` 1..500 cha
 -> `{grantId, deletionId, statusBefore, configsReleased, refund, refundedAmount,
 walletTransactionId, refundSkipped}` (`refundedAmount` a decimal string or null).
 Same controller, over `deleteGrant` (entitlement `contract.admin.md` "Delete") with
-`RemainderCreditService.credit` ([contract.traffic-block.md](contract.traffic-block.md)
+`RemainderCreditService.settle` ([contract.traffic-block.md](contract.traffic-block.md)
 "The remainder") as its settler: `cancelled`, every config released from its panel
-now, rows kept; `refund` credits a metered Grant's unserved remainder as
-`traffic_refund`, and `refundSkipped` says why one asked for credited nothing.
+now, rows kept; `refund` credits the remainder — a metered bag's unserved bytes
+as `traffic_refund`, a prepaid Grant's unused share of its invoice (the larger
+of volume or time used, user 2026-09-28) as `product_refund` — and
+`refundSkipped` says why one asked for credited nothing.
 
 | Rule | Why |
 |---|---|
 | Door `staffWrite`, the reseller's user and the path user's Grant; bucket `RESELLER_USER_CONFIG_ACTION` — as for traffic | the same fences |
 | **409** `grant_closed`, `grant_not_active` (pending), `grant_moved` | a closed Grant is already off; a pending one is the delivery's |
-| A prepaid Grant's refund credits nothing (`grant_not_metered`): F-027-r prices only a metered bag | no pro-rata price for a prepaid bag exists yet |
+| A Grant nobody paid for (admin, trial, coupon, free invoice) credits nothing (`nothing_paid`) | only money paid comes back |
 
 **Not covered:** the audit row beyond `grant_deletion` (F-311-r), telling the user (F-311-s). Consumers F-311-w (panel), F-311-y (bot).
