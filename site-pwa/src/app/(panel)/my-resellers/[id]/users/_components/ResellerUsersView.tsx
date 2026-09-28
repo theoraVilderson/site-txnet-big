@@ -12,6 +12,7 @@ import { formatInstant } from "../../../../_lib/datetime";
 import { Alert, input, primaryButton, quietButton } from "../../../../catalog/_components/catalog-ui";
 import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, blockActionOf, usersQuery } from "../../../_lib/users";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
+import { FindByLink } from "./FindByLink";
 
 /** How long typing rests before the list is asked again. */
 const TYPING_MS = 350;
@@ -35,7 +36,9 @@ const STATUS_TONE: Record<ResellerUser["status"], string> = {
  *  - **no phone number is on the wire**, only `phoneMasked`;
  *  - **block and unblock are asked first** (F-311-v4): a block signs the user
  *    out everywhere. The row takes the user auth answers; a platform ban gets
- *    no button, since a reseller neither deepens nor lifts it.
+ *    no button, since a reseller neither deepens nor lifts it;
+ *  - **a service is found by a pasted link, and the ticked ones acted on at
+ *    once** (F-311-x, `FindByLink`), across every user of the reseller.
  */
 export function ResellerUsersView({ id }: { id: string }) {
   const { t, lang } = useLocale();
@@ -148,6 +151,8 @@ export function ResellerUsersView({ id }: { id: string }) {
         </label>
         {short && <p className="mt-1 text-xs text-text-secondary">{t("common", K.searchHint)}</p>}
       </div>
+
+      <FindByLink id={id} />
 
       {blockError !== null && <Alert>{message(blockError)}</Alert>}
 

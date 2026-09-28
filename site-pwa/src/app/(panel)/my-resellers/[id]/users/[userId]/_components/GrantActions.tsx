@@ -130,8 +130,8 @@ export function GrantActions({ api, row, onActed }: { api: ResellerUserGrantsApi
   );
 }
 
-/** The action's own fields, above the reason every form has. */
-function ActionFields({ action, draft, set }: { action: GrantAction; draft: GrantActionDraft; set: (p: Partial<GrantActionDraft>) => void }) {
+/** The action's own fields, above the reason every form has — a bulk act's too. */
+export function ActionFields({ action, draft, set }: { action: GrantAction; draft: GrantActionDraft; set: (p: Partial<GrantActionDraft>) => void }) {
   const { t } = useLocale();
   const number = (labelKey: string, value: string, patch: (v: string) => Partial<GrantActionDraft>) => (
     <label className="block text-xs font-bold text-text-secondary">

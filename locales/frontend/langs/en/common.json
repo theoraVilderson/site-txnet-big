@@ -3353,6 +3353,61 @@
         "rate_limit_unsupported": "A panel of this service cannot cap speed. Move its configs to another panel first.",
         "no_configs": "This service has no configs yet."
       }
+    },
+    "find": {
+      "title": "Find a service by its link",
+      "subtitle": "Paste a config link or a subscription link a user sent you — up to 20 at once. Only your own users' services are found.",
+      "placeholder": "vless://… or https://…/sub/…",
+      "submit": "Find",
+      "noLinks": "No link found in what you pasted.",
+      "capped": "Only the first {{count}} links were searched.",
+      "empty": "No service of your users holds these links.",
+      "clear": "Clear",
+      "openUser": "the user's services",
+      "tick": "Select this service"
+    },
+    "bulk": {
+      "title": "Act on the selected services",
+      "ticked": "{{count}} selected",
+      "max": "At most {{count}} services at once.",
+      "untick": "Clear selection",
+      "confirm": "This applies to all {{count}} selected services, each on its own: one may be refused while the others are done. Each user is told, and the reason is logged on each service.",
+      "submit": "Apply to {{count}} services",
+      "done": "{{ok}} done, {{refused}} refused.",
+      "refusalLine": "{{name}}: {{reason}}",
+      "refusal": {
+        "grant_not_found": "This service is not one of your users'.",
+        "failed": "This one failed; sending the same form again retries only it."
+      }
+    },
+    "history": {
+      "title": "History",
+      "open": "Show history",
+      "close": "Hide history",
+      "empty": "No admin has acted on this service yet.",
+      "onConfig": "on a config",
+      "by": "by {{actor}}",
+      "reason": "Reason: {{reason}}",
+      "other": "Another admin action",
+      "action": {
+        "grant_freeze": "Frozen",
+        "grant_unfreeze": "Unfrozen",
+        "grant_duration_change": "Days changed",
+        "grant_traffic_change": "Traffic changed",
+        "grant_traffic_reset": "Traffic reset",
+        "grant_traffic_gift": "Traffic gifted",
+        "grant_speed_set": "Speed limit set",
+        "grant_devices_set": "Device limit set",
+        "grant_delete": "Deleted",
+        "grant_issue": "Given by hand",
+        "grant_renew": "Renewed for free",
+        "grant_link_rotate": "New subscription link",
+        "config_regenerate": "Config rebuilt",
+        "config_disable": "Config disabled",
+        "config_enable": "Config enabled",
+        "config_retire": "Config retired",
+        "config_move": "Config moved to another panel"
+      }
     }
   }
 }

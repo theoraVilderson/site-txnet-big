@@ -6,7 +6,7 @@ version: 38
 updated: 2026-09-28
 ---
 
-# Contract — panel-web: a reseller's users and one user's services (F-311-v, -w)
+# Contract — panel-web: a reseller's users and one user's services (F-311-v, -w, -x)
 
 A topic file of [contract.md](contract.md) (§10), and a screen pair of the
 reseller workspace described in [contract.resellers.md](contract.resellers.md)
@@ -15,16 +15,17 @@ Reached from the console's "More settings" (`OnboardingConsoleView`).
 
 | page | route | files |
 |---|---|---|
-| its users | `/my-resellers/[id]/users` (`myResellerUsersPath`) | `my-resellers/[id]/users/_components/ResellerUsersView.tsx` |
-| one user's services | `/my-resellers/[id]/users/[userId]` (`myResellerUserPath`) | `…/users/[userId]/_components/UserServicesView.tsx`, `AdminConfigs.tsx`, `GrantActions.tsx`, `useUserMessage.ts` |
+| its users | `/my-resellers/[id]/users` (`myResellerUsersPath`) | `my-resellers/[id]/users/_components/ResellerUsersView.tsx`, `FindByLink.tsx` |
+| one user's services | `/my-resellers/[id]/users/[userId]` (`myResellerUserPath`) | `…/users/[userId]/_components/UserServicesView.tsx`, `AdminConfigs.tsx`, `GrantActions.tsx`, `GrantHistory.tsx`, `useUserMessage.ts` |
 
-Rules for both: `my-resellers/_lib/users.ts`; a Grant's acts: `my-resellers/_lib/grant-actions.ts`. Calls: `resellerUsersApi`
+Rules for both: `my-resellers/_lib/users.ts`; a Grant's acts: `my-resellers/_lib/grant-actions.ts`; search, bulk and history: `my-resellers/_lib/grant-bulk.ts`. Calls: `resellerUsersApi`
 (`lib/auth-api.ts`) over auth's
 [contract.reseller-users.md](../auth-api/contract.reseller-users.md) (F-311-a),
 and `resellerUserGrantsApi(tenantId, userId)` (`lib/billing-api.ts`) over
 billing's [contract.reseller-grants.md](../../domains/billing/contract.reseller-grants.md)
 "One user's services", "An admin's actions on one user's configs" (F-311-f/g) and
-its Grant sections (F-311-d, -h..-q).
+its Grant sections (F-311-d, -h..-q); across users, `resellerGrantsApi(tenantId)`
+over its "by a pasted line" (F-311-t) and [contract.reseller-grants-bulk.md](../../domains/billing/contract.reseller-grants-bulk.md) (F-311-u, -u1).
 
 ## Rules
 
@@ -47,7 +48,11 @@ its Grant sections (F-311-d, -h..-q).
 | 15 | A renewal and an issue carry one `requestId` per opened form | a double click renews or issues once (billing answers `renewed` / `issued: false`) |
 | 16 | **Issue a new service** on the page (`IssueGrant`): a variant of the reseller's own catalog (`catalogAdminApi(id)`: active products, then each one's active variants), read when the form first opens | billing takes `admin_only` variants too, and refuses what it cannot place (`variant_not_deliverable`) |
 | 17 | A Grant act's refusal is its sentence (`GRANT_REFUSAL_KEYS`), which the spec holds to the controller's `GRANT_ACTION_STATUS` and the speed cap's two; the outcome is billing's answer (new end, bag, refund, the new link); after any act the list and the sheet are read again, the `/sub` box re-mounted | those reasons carry no i18n key; a link read before a rotate is dead |
+| 18 | **Find by a pasted link** (F-311-x, `FindByLink` on the users page): the paste split as `/services` splits it (`pastedLines`, ≤20, a POST body), billing's `current` scope; each found service names its user's sheet | support is handed a link, not a phone; a line is a credential, never in a URL |
+| 19 | **Bulk over the ticked found services** (≤50, `toggleTicked`): the Grant forms' own fields, a reason **always** (`bulkBody`, `grantBulkSchema`), no delete / renew / issue / link; one `requestId` per opened form; an outcome per Grant, a refusal named with its sentence (`bulkRefusalKey`, `grant_not_found` and `failed` the bulk's own); the ticks stay, the search is read again | a bad body refuses every Grant; a repeat answers the first call's outcomes (F-311-u1), so +3 days clicked twice is +3 |
+| 20 | **A Grant's history on its sheet** (`GrantHistory`): read when opened and after an act, newest first, 20 a page — the act (`historyActionKey`, a later one a plain label), whether on a config, when, a short actor id, the reason. No IP | billing answers none (audit `contract.md`); the spec holds the labels to `grant-audit.ts`'s two unions |
 
 **Not covered:** re-dating to a picked day (billing takes `endsAt`; the sheet
-sends ±days), and the panels a speed cap's refusal names (not flat, so not in
-the envelope's `facts`); history, search by pasted link, bulk (F-311-x).
+sends ±days), the panels a speed cap's refusal names (not flat, so not in
+the envelope's `facts`), an actor's name in the history (no read of an admin
+by id; a short id is shown), and bulk by a filter (F-311-u2's jobs — no screen yet).

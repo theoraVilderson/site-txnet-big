@@ -22,6 +22,7 @@ import { GRANT_TONES, serviceName } from "../../../../../services/_lib/my-servic
 import { USER_KEYS as K } from "../../../../_lib/users";
 import { AdminConfigs } from "./AdminConfigs";
 import { GrantActions, IssueGrant } from "./GrantActions";
+import { GrantHistory } from "./GrantHistory";
 import { useUserMessage } from "./useUserMessage";
 
 const S = K.services;
@@ -195,7 +196,7 @@ function AdminGrantCard({ api, row, texts, onChanged }: { api: ResellerUserGrant
   );
 }
 
-/** An opened Grant: its acts, the 30 days, the subscription link, the configs and their lines. */
+/** An opened Grant: its acts and their history, the 30 days, the subscription link, the configs and their lines. */
 function GrantSheet({ api, row, onChanged }: { api: ResellerUserGrantsApi; row: GrantRow; onChanged: () => void }) {
   const grantId = row.id;
   const message = useUserMessage();
@@ -228,6 +229,7 @@ function GrantSheet({ api, row, onChanged }: { api: ResellerUserGrantsApi; row: 
   return (
     <div className="mt-4 space-y-4 border-t border-card-border pt-4">
       <GrantActions api={api} row={row} onActed={acted} />
+      <GrantHistory api={api} grantId={grantId} refresh={asked} />
       <UsageBars grantId={grantId} read={api.grantUsage} />
       {/* Re-mounted by every read, so a link read before a rotate is not kept. */}
       <SubscriptionLink key={asked} api={api} grantId={grantId} />

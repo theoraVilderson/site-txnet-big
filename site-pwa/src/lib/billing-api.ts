@@ -631,7 +631,28 @@ export interface ResellerUserGrantsApi {
   grantAction(grantId: string, route: string, body: Record<string, unknown>): Promise<GrantActionResult>;
   /** An admin issues this user a service by hand (F-311-o). */
   issue(body: Record<string, unknown>): Promise<GrantIssued>;
+  /** Every audited admin act on this Grant and its configs, newest first (F-311-r). */
+  history(grantId: string, page: number, pageSize: number): Promise<GrantHistoryPage>;
 }
+
+/**
+ * One audited admin act (F-311-r, audit `contract.md` "a Grant's history"):
+ * `action` is audit's `AdminAction`, `targetType` `grant` or `config`,
+ * `before` / `after` the target's columns as billing wrote them. The admin's
+ * IP is never answered.
+ */
+export interface GrantHistoryRow {
+  id: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  actorUserId: string;
+  before: unknown;
+  after: unknown;
+  reason: string | null;
+  at: string;
+}
+export type GrantHistoryPage = Paged<GrantHistoryRow> & { grantId: string };
 
 /**
  * The answer of any Grant action (`billing/contract.reseller-grants.md`),
@@ -692,8 +713,40 @@ export function resellerUserGrantsApi(tenantId: string, userId: string): Reselle
       }),
     grantAction: (grantId, route, body) => call<GrantActionResult>(`${grant(grantId)}/${route}`, { method: "POST", body: JSON.stringify(body) }),
     issue: (body) => call<GrantIssued>(`${at}/grants`, { method: "POST", body: JSON.stringify(body) }),
+    history: (grantId, page, pageSize) =>
+      call<GrantHistoryPage>(`${grant(grantId)}/history?${new URLSearchParams({ page: String(page), pageSize: String(pageSize) })}`, { method: "GET" }),
   };
 }
+
+/**
+ * A reseller's services across all its users (F-311-t, -u): `/tenants/:tenantId/grants`,
+ * no user in the path — the paste or the ticked ids name them, each fenced by
+ * the reseller's tenant (C-15).
+ */
+export const resellerGrantsPath = (tenantId: string) => `/tenants/${encodeURIComponent(tenantId)}/grants`;
+
+/** A found service: the owner's row with the user it belongs to. */
+export type ResellerGrantRow = GrantRow & { userId: string };
+
+export function resellerGrantsApi(tenantId: string) {
+  const at = resellerGrantsPath(tenantId);
+  return {
+    /**
+     * The reseller's Grants holding a pasted config line or `/sub` link
+     * (F-311-t). **A body, never a query string** — a line is a credential.
+     */
+    byLines: (lines: string[], page: number, pageSize: number, scope: GrantScope) =>
+      call<Paged<ResellerGrantRow> & { hidden: number }>(`${at}/by-lines`, { method: "POST", body: JSON.stringify({ lines, page, pageSize, scope }) }),
+    /** One act on 1..50 Grants (F-311-u); a repeated `requestId` answers the first call (F-311-u1). */
+    bulk: (body: Record<string, unknown>) =>
+      call<{ action: string; results: BulkOutcomeRow[] }>(`${at}/bulk`, { method: "POST", body: JSON.stringify(body) }),
+  };
+}
+
+/** One Grant's outcome of a bulk request; `result` is the single act's answer. */
+export type BulkOutcomeRow =
+  | { grantId: string; userId: string; ok: true; result: GrantActionResult }
+  | { grantId: string; ok: false; reason: string; panels?: { id: string; name: string }[] };
 
 export const billingApi = {
   /**
