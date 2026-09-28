@@ -2,17 +2,16 @@
 id: tenant
 layer: domain
 status: active
-version: 22
-updated: 2026-09-20
+version: 23
+updated: 2026-09-28
 ---
 
 # Contract — tenant
 
-**Resolution, the vault, the billing wallet and reseller creation are implemented; the rest are intended.** *Resolve tenant by
-claim* is real code (`app/tenant/`, F-061-a, F-066-c, F-066-d). Every other row in *Provides* is
-still a shape derived from `txnet-backend/prisma/domains/tenant.prisma`, with no
-service behind it — the `(intended)` marker on that table is what tells them
-apart, and it is the thing to check before calling one.
+**Resolution, the vault, the billing wallet and reseller creation are implemented; the rest are intended.** *Resolve tenant
+by claim* is real code (`app/tenant/`, F-061-a, F-066-c, F-066-d). Every other row in *Provides* is still a shape derived
+from `txnet-backend/prisma/domains/tenant.prisma`, with no service behind it — the `(intended)` marker on that table is
+what tells them apart, and it is the thing to check before calling one.
 
 ## TL;DR
 
@@ -34,6 +33,7 @@ the rest are `reseller`. The platform bills tenants from a prepaid wallet
 | **check entitlement; gate a route on a feature; admit a caller to a route naming a reseller (invariant 21), or answer them whether it would (`GET /api/tenants/:id/access`, F-311-e)** — implemented, [contract.entitlements.md](contract.entitlements.md) | tenantId, featureKey | allowed (+ source, expiry) / denied; `@RequiresFeature(key)`; `{canRead, canWrite, reason}` | sync | `403 tenant.featureNotEntitled`; the access read refuses nobody |
 | **add and prove a custom domain** — implemented, [contract.domains.md](contract.domains.md) | tenantId, domainValue, purpose | domain view with TXT record, CNAME target, last check | sync add; async check (worker sweep) | `not_allowed` / `domain_taken` / `domain_reserved` |
 | **edit a reseller's branding; read it by Host** — implemented, [contract.branding.md](contract.branding.md) | tenantId, text, one image per slot | branding view with image URLs on the tenant's own door | sync | `not_allowed` / `reseller_suspended` / `too_large` / `type_not_allowed` |
+| **read / set a tenant's operating currency** (F-116-a, ADR-0098) — implemented, [contract.currency.md](contract.currency.md) | tenantId, code | `{code, changeable, choices}` | sync | `not_allowed` / `reseller_suspended` / `currency_unavailable` / `tenant_has_money` |
 | **credit / debit the billing wallet** — implemented, [contract.billing.md](contract.billing.md) | tenantId, reason, amount, reference | `tenant_billing_transaction` (append-only); a credit also writes `tenant.billing.credited` | sync tx | insufficient / duplicate / version conflict |
 | **renew a reseller's subscription** — implemented, [contract.billing.md](contract.billing.md), [rules.md](rules.md) #10-#13 | tenantId, or every due one | charged + period moved on, or warned, or suspended as `non_payment`; outbox notices | async (worker sweep + `tenant.billing.credited`) | a failing tenant is `failed` in the sweep |
 | meter usage | tenantId, meterKey, quantity, period | `tenant_usage_meter` row | async (worker) | — |

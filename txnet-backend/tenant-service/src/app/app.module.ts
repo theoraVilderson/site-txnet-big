@@ -5,6 +5,7 @@ import { PUBLIC_PREFIX, PublicRouteGuard, RateLimitGuard, TenantStatusGuard } fr
 
 import { AccessModule } from './access/access.module';
 import { BrandingModule } from './branding/branding.module';
+import { OperatingCurrencyModule } from './currency/operating-currency.module';
 import { LEGACY_BRANDING_PATH } from './branding/tenant-branding.controller';
 import { envConfigOptions } from './config/env.validation';
 import { DomainsModule } from './domains/domains.module';
@@ -68,6 +69,7 @@ const LEGACY_PUBLIC_ROUTES = [`${LEGACY_FILES_PATH}/*path`, LEGACY_BRANDING_PATH
     AccessModule,
     FilesModule,
     BrandingModule,
+    OperatingCurrencyModule,
     VaultModule,
   ],
   controllers: [HealthController],
