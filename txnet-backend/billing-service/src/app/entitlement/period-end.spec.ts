@@ -50,6 +50,8 @@ describe('a close on a passed end suspends as period_ended (suspendIfClosed)', (
       $queryRaw: async (sql: TemplateStringsArray) =>
         sql.join('?').includes('entitlement"."grant"') ? [row] : [{ quotaBytes: closeQuota, expiresAt: ENDED }],
       grant: {
+        // The reserve release (F-118-b) reads the Grant; vpn-reserve.spec.ts holds it.
+        findUnique: async () => null,
         updateMany: async (args: Write) => {
           writes.push(args);
           return { count: 1 };
@@ -117,6 +119,8 @@ describe('renewGrant on a Grant whose period ended', () => {
         findMany: async () => [{ counterState: { lifetimeUpBytes: BigInt(0), lifetimeDownBytes: usedBytes } }],
         updateMany: async () => ({ count: 1 }),
       },
+      // No wallet row: the reserve release (F-118-b) holds nothing here; vpn-reserve.spec.ts holds it.
+      wallet: { findUnique: async () => null },
       leaseClose: { findUnique: async () => null },
       outboxEvent: {
         create: async (args: { data: { type: string } }) => {

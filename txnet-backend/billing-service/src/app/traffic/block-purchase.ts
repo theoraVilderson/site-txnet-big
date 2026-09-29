@@ -4,6 +4,7 @@ import { METERED_RATE_UNIT_BYTES, tenantTransaction } from '@txnet-backend/share
 
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletLedgerService } from '../wallet/wallet-ledger.service';
+import { NO_VPN_RESERVE, VpnReserve } from './vpn-reserve';
 
 /**
  * The block purchaser (F-027-q; ADR-0072, ADR-0073).
@@ -163,6 +164,8 @@ export class BlockPurchaseService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: WalletLedgerService,
+    // Defaulted so a spec that builds the purchaser by hand holds no reserve.
+    private readonly reserve: VpnReserve = NO_VPN_RESERVE,
   ) {}
 
   /** One purchase in a transaction of its own, for a caller with no other work to commit with it. */
@@ -193,13 +196,17 @@ export class BlockPurchaseService {
     }
 
     const wallet = await tx.wallet.findUnique({ where: { ownerUserId: grant.userId } });
+    // The Grant's own reserve (F-118-b) is its money: the bytes it backed are
+    // what this block pays for. Another hold is not (F-118-a).
+    const reserved = await this.reserve.heldFor(tx, grant);
     const block = sizeBlock({
       rate: grant.meteredRate,
       targetBytes: input.targetBytes,
-      // What is not held (F-118-a): the ledger refuses the rest anyway.
-      maxSpend: wallet ? wallet.cachedBalance.minus(wallet.heldAmount) : new Prisma.Decimal(0),
+      maxSpend: wallet ? wallet.cachedBalance.minus(wallet.heldAmount).plus(reserved) : new Prisma.Decimal(0),
     });
 
+    // Sized before anything is written, so a refusal leaves the transaction clean.
+    if (reserved.gt(0)) await this.reserve.release(tx, grant);
     const movement = await this.ledger.debit(tx, {
       userId: grant.userId,
       amount: block.amount,
@@ -216,6 +223,8 @@ export class BlockPurchaseService {
       where: { id: grant.id },
       data: { purchasedBytes: { increment: block.bytes }, billedBytes: { increment: block.bytes } },
     });
+    // The reserve back to its target from what the block left.
+    await this.reserve.top(tx, grant.id);
 
     return {
       ...block,

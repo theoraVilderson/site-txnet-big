@@ -99,6 +99,12 @@ Two things in the current design stop that:
    (`contract.reserve.md` rule 5) is money held for the owner's metered
    Grants, so nothing else can spend it and what a config serves up to its
    ceiling is captured. The shutdown figure (ADR-0078) is held money too.
+   *Amended 2026-09-29 (user, F-118-b):* the hold is a **fixed size per
+   Grant**, `VPN_RESERVE_BYTES` (default 1 GiB) at its rate, clamped to the
+   free balance — not the whole balance, which would refuse every purchase
+   while a metered Grant runs. One hold per Grant replaces the even split of
+   the balance; its own next block spends it. Cost: less headroom for a Grant
+   with many inbounds, tuned by the setting.
 9. **The sub-account is a spending cap on one product** (user, 2026-09-29).
    The owner sets it on a Grant for someone — family, a friend, a colleague —
    with a label, a cap in the wallet's currency and `period none | monthly`.

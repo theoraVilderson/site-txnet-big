@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, WalletTransaction } from '@prisma/client';
 
 import { reviveFundedGrants } from '../entitlement/revival';
+import { NO_VPN_RESERVE, VpnReserve } from '../traffic/vpn-reserve';
 import { LedgerEntry, WalletLedgerService } from './wallet-ledger.service';
 
 /**
@@ -35,7 +36,11 @@ import { LedgerEntry, WalletLedgerService } from './wallet-ledger.service';
 export class WalletCreditService {
   private readonly logger = new Logger(WalletCreditService.name);
 
-  constructor(private readonly ledger: WalletLedgerService) {}
+  constructor(
+    private readonly ledger: WalletLedgerService,
+    // Defaulted so a spec that builds the service by hand holds no reserve.
+    private readonly reserve: VpnReserve = NO_VPN_RESERVE,
+  ) {}
 
   /**
    * Credit the user's wallet and revive what the new balance funds.
@@ -48,7 +53,7 @@ export class WalletCreditService {
   async credit(tx: Prisma.TransactionClient, entry: LedgerEntry): Promise<WalletTransaction> {
     const movement = await this.ledger.credit(tx, entry);
 
-    const revivals = await reviveFundedGrants(tx, entry.userId, movement.balanceAfter);
+    const revivals = await reviveFundedGrants(tx, entry.userId, movement.balanceAfter, new Date(), this.reserve);
     if (revivals.revived > 0) {
       this.logger.log(
         `credit ${movement.id} (${entry.reasonType}) revived ${revivals.revived} of ${revivals.scanned} suspended Grant(s) of user ${entry.userId}`,

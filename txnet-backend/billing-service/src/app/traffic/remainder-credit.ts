@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WalletCreditService } from '../wallet/wallet-credit.service';
 import { GIB, rateUnitsOf } from './block-purchase';
 import { creditPrepaidRemainder } from './prepaid-remainder';
+import { releaseVpnReserve } from './vpn-reserve';
 
 /**
  * The remainder credit (F-027-r; ADR-0072 rule 3).
@@ -175,6 +176,8 @@ export class RemainderCreditService {
       throw new RemainderCreditRefused('grant_not_metered', input.grantId);
     }
 
+    // A closed Grant is not planned: its reserve is free again, whatever the remainder (F-118-b).
+    await releaseVpnReserve(tx, grant);
     const back = sizeRemainder({ rate: grant.meteredRate, remainderBytes: grant.billedBytes - grant.consumedBytes });
 
     const claimed = await tx.grant.updateMany({

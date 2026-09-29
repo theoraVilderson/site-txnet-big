@@ -104,6 +104,8 @@ function fakeTx(row: GrantRow | null) {
         return { count: 1 };
       },
     },
+    // No wallet row: the reserve release (F-118-b) holds nothing here; vpn-reserve.spec.ts holds it.
+    wallet: { findUnique: async () => null },
     $queryRaw: async () => [{ cachedBalance: new Prisma.Decimal('0.00') }],
     config: { updateMany: async () => ({ count: 1 }) },
     outboxEvent: {

@@ -113,6 +113,15 @@ export const envSchema = z.object({
    * it, so an unset value refuses only the gateway management writes, at call
    * time, rather than the whole service.
    */
+  /**
+   * The VPN reserve, in bytes (F-118-b, ADR-0105 (8)): what each metered
+   * Grant holds past its bag, at its own rate, so its configs keep headroom
+   * the wallet has locked. A setting, not a constant (user, 2026-09-29): a
+   * larger one gives many inbounds more room and locks more of the wallet.
+   * 0 leases no reserve at all.
+   */
+  VPN_RESERVE_BYTES: z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(2 ** 30), // one GiB
+
   TENANT_API_BASE_URL: z.string().default(''),
   TENANT_API_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 

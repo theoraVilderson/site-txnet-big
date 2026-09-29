@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 76
+version: 77
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -92,8 +92,8 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-29 | contract v77 (additive, F-118-b, ADR-0105 (8)): the VPN reserve is held money — one hold per metered Grant (`VPN_RESERVE_BYTES`, default 1 GiB, at its rate), topped at issue/block/revive and by `POST internal/billing/traffic/reserve-due` (`vpn_reserve`, every minute), released when the Grant stops being planned; its own block spends it. `traffic/vpn-reserve.ts`, contract.holds.md, contract.traffic-block.md |
 | 2026-09-29 | contract v76 (additive, F-118-g, ADR-0105 (5)(6)(11)): rating and settlement — prepaid blocks, postpaid holds captured hourly, before a re-top and at close; reasons `usage_charge` (a sale) and `usage_refund`. No caller sells a non-VPN meter yet. See [contract.usage-rating.md](contract.usage-rating.md) |
 | 2026-09-29 | contract v75 (additive, F-118-f, ADR-0105 (5)): usage intake — `usage_event` advances `grant_meter.consumed` once per `(source, idempotencyKey)`, through `recordUsage` in-process or the outbox type `billing.usage.event`. No reporter exists yet; VPN keeps its delta path. See [contract.metering.md](contract.metering.md) |
-| 2026-09-29 | contract v74 (additive, F-118-a, ADR-0105 (6)): wallet holds — `hold`/`capture`/`release`, `wallet.heldAmount`; every debit is bounded by the free balance (`cachedBalance - heldAmount`). No hold exists until F-118-b, so no caller's answer changes. See [contract.holds.md](contract.holds.md) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

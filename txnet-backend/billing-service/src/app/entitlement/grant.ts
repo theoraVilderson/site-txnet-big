@@ -21,6 +21,7 @@ import { ADMIN_FROZEN } from './suspension';
 import { unusedClockOf } from './unused-clock';
 import { configIdentityOf, storedLineIdentity } from '../traffic/config-identity';
 import { foldConfigText } from '../traffic/config-text';
+import { NO_VPN_RESERVE, VpnReserve } from '../traffic/vpn-reserve';
 
 /**
  * Grant core (F-026-e; D-34, ADR-0049; spec: `tools/spec.py --section 4.4`).
@@ -456,6 +457,8 @@ export class GrantService {
     private readonly prisma: PrismaService,
     // Defaulted so a spec or script that builds the service by hand needs no KEK.
     private readonly tokens: GrantTokenSeal = NO_TOKEN_SEAL,
+    // Defaulted likewise: a service built by hand holds no reserve.
+    private readonly reserve: VpnReserve = NO_VPN_RESERVE,
   ) {}
 
   /**
@@ -530,6 +533,9 @@ export class GrantService {
       if (meters.length > 0) {
         await tx.grantMeter.createMany({ data: meters.map((m) => ({ ...m, tenantId: tenant.id, grantId: grant.id })) });
       }
+      // A metered Grant starts with an empty bag: its first connect is served
+      // from the reserve, so the reserve is held with the sale (F-118-b).
+      if (grant.billingMode === VariantBillingMode.metered) await this.reserve.top(tx, grant.id);
       return { grant, token };
     } catch (e) {
       // Postgres aborts the transaction on a unique violation, so the winner

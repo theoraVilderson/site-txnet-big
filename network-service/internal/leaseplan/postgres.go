@@ -33,13 +33,12 @@ var _ Store = PostgresStore{}
 // `active`, or `pending` — a group's Grant activates on what its panels
 // confirm, so its configs need a ceiling first — and only if it sold a limit.
 //
-// Quota is `purchasedBytes`, read; on a metered Grant with a locked rate the
-// wallet's reserve is added to it (F-027-dc): what the owner's balance still
-// buys at that rate, computed from the columns' decimal text. One wallet is
-// one reserve (F-027-dt): its cents are split evenly over every metered Grant
-// of the owner the planner plans, touched or not, so two Grants cannot lease
-// past the balance (ReserveShare). A user with no wallet row has a reserve of
-// nothing. Used is summed in Go from each config's
+// Quota is `purchasedBytes`, read; on a metered Grant with a locked rate its
+// reserve is added to it (F-027-dc): what the Grant's own open hold on the
+// owner's wallet buys at that rate (F-118-b, ADR-0105 (8)), computed from the
+// columns' decimal text. Billing holds it (`ownerRef` = the Grant) and nothing
+// else can spend it, so two Grants or a purchase cannot lease the same money.
+// A Grant with no open reserve hold has a reserve of nothing. Used is summed in Go from each config's
 // lifetime counter (`contract.lease.md`), which the pass that called us has
 // already moved, plus, on a push panel, its sessions' high-water marks in
 // `radius_session` (F-027-du). A config is a replica while it can carry
@@ -57,10 +56,7 @@ WITH touched AS (
           AND c.status = 'active' AND c."desiredEnabled" AND c."desiredRemote" = 'present'))
 SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresAt", lc."grantId" IS NOT NULL,
        g."billingMode" = 'metered' AND g."meteredRate" IS NOT NULL,
-       coalesce(g."meteredRate"::text, ''), coalesce(w."cachedBalance"::text, ''),
-       (SELECT count(*) FROM entitlement."grant" o
-         WHERE o."userId" = g."userId" AND o."billingMode" = 'metered' AND o."meteredRate" IS NOT NULL
-           AND o.status IN ('active', 'pending') AND NOT o."trafficUnlimited"),
+       coalesce(g."meteredRate"::text, ''), coalesce(h.amount::text, ''),
        c.id::text, c."panelId"::text,
        c.status = 'active' AND c."desiredEnabled" AND c."desiredRemote" = 'present',
        c."remoteId" IS NOT NULL,
@@ -81,6 +77,7 @@ SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresA
   FROM touched t
   JOIN entitlement."grant" g ON g.id = t."grantId"
   LEFT JOIN billing.wallet w ON w."ownerUserId" = g."userId"
+  LEFT JOIN billing.wallet_hold h ON h."walletId" = w.id AND h."ownerRef" = g.id AND h.status = 'open'
   LEFT JOIN network.lease_close lc ON lc."grantId" = g.id
   JOIN network.config c ON c."grantId" = g.id
   JOIN network.panel p ON p.id = c."panelId"
@@ -101,8 +98,7 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 		var (
 			grantID, driverType string
 			metered             bool
-			rate, balance       string
-			sharers             int64
+			rate, reserve       string
 			quota, lifetime     int64
 			applied             int64
 			endsAt              *time.Time
@@ -116,7 +112,7 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 			tickMask            *int64
 			outageAt            *time.Time
 		)
-		if err := rows.Scan(&grantID, &quota, &endsAt, &closedQuota, &closedEnd, &closed, &metered, &rate, &balance, &sharers, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
+		if err := rows.Scan(&grantID, &quota, &endsAt, &closedQuota, &closedEnd, &closed, &metered, &rate, &reserve, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
 			&applied, &c.Enabled, &c.Allocated, &c.Peak, &c.Pending, &driverType, &pn.CanSetLimit, &pn.Healthy,
 			&tickMs, &tickMask, &pn.Learned.LagMeanSec, &pn.Learned.LagVarianceSec2, &pn.Learned.LagSamples,
 			&pn.Learned.OutageWeight, &outageAt); err != nil {
@@ -125,7 +121,7 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 		if n := len(snap.Grants); n == 0 || snap.Grants[n-1].ID != grantID {
 			g := Grant{ID: grantID, Quota: quota, Purchased: quota, Metered: metered}
 			if metered {
-				g.Quota += ReserveShare(rate, balance, sharers)
+				g.Quota += BytesAffordable(rate, reserve)
 			}
 			if endsAt != nil {
 				g.ExpiresAt = *endsAt

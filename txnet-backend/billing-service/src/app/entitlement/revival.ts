@@ -1,6 +1,7 @@
 import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 
 import { walletCanBuy } from '../traffic/exhaustion';
+import { NO_VPN_RESERVE, type VpnReserve } from '../traffic/vpn-reserve';
 import { reviveOnTopUp } from './purge';
 import { emitReactivated, runs } from './reactivated';
 import { QUOTA_EXHAUSTED } from './suspension';
@@ -62,6 +63,8 @@ export async function reviveFundedGrants(
   userId: string,
   balance: Prisma.Decimal,
   at: Date = new Date(),
+  // A revived Grant is served from its reserve before its next block (F-118-b).
+  reserve: VpnReserve = NO_VPN_RESERVE,
 ): Promise<Revivals> {
   if (balance.lte(0)) return { scanned: 0, revived: 0 };
 
@@ -86,6 +89,7 @@ export async function reviveFundedGrants(
     const revival = await reviveOnTopUp(tx, grant.id);
     if (!revival.revived) continue;
     revived++;
+    await reserve.top(tx, grant.id);
     // F-601-k: told once per suspension undone, unless its end has passed —
     // the planner keeps that one closed, and "active again" would be false.
     if (grant.suspendedAt && runs(grant.endsAt, at)) {

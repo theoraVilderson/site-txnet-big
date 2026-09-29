@@ -77,11 +77,15 @@ export async function suspendIfExhausted(tx: Prisma.TransactionClient, grantId: 
   const owner = await tx.grant.findUnique({ where: { id: grantId }, select: { tenantId: true, userId: true } });
   if (!owner) return verdict('grant_not_found');
 
-  // The free balance: held money cannot buy a block (F-118-a).
+  // The free balance: held money cannot buy a block (F-118-a) — except this
+  // Grant's own reserve, which its block spends first (F-118-b).
   const [wallet] = await tx.$queryRaw<{ free: Prisma.Decimal }[]>`
-    SELECT "cachedBalance" - "heldAmount" AS free FROM "billing"."wallet"
-     WHERE "ownerUserId" = ${owner.userId}::uuid
-       FOR UPDATE`;
+    SELECT w."cachedBalance" - w."heldAmount" + coalesce(
+             (SELECT h.amount FROM "billing"."wallet_hold" h
+               WHERE h."walletId" = w.id AND h."ownerRef" = ${grantId}::uuid AND h.status = 'open'), 0) AS free
+      FROM "billing"."wallet" w
+     WHERE w."ownerUserId" = ${owner.userId}::uuid
+       FOR UPDATE OF w`;
 
   // Read again, after the lock: a block bought meanwhile moved these.
   const grant = await tx.grant.findUnique({

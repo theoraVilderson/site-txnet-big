@@ -61,8 +61,10 @@ const APP = join(__dirname, '..');
  * minute tick: throttling it would leave a started +3 days half applied.
  * `UsageInternalController` is the postpaid capture (F-118-g), an hourly tick:
  * throttling it would leave measured usage held and uncharged.
+ * `VpnReserveController` is the reserve sweep (F-118-b), a minute tick:
+ * throttling it would leave a revived Grant with no headroom past its bag.
  */
-const EXEMPT = new Set(['HealthController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'UsageInternalController', 'ChargeCurrenciesController']);
+const EXEMPT = new Set(['HealthController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'UsageInternalController', 'VpnReserveController', 'ChargeCurrenciesController']);
 
 /**
  * Controllers with no identity to bucket on, and what they count instead.

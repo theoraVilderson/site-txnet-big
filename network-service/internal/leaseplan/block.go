@@ -80,35 +80,26 @@ func blockDue(g Grant, rateNow, rateDemand float64, horizon time.Duration, at ti
 // gib is the byte count one unit of `grant.meteredRate` prices (ADR-0073).
 var gib = big.NewRat(1<<30, 1)
 
-// BytesAffordable is what a wallet balance still buys at a metered rate:
-// whole cents of the balance, floored, over the rate per 2^30 bytes, floored
-// — billing's `bytesAffordable`, held to the same figures by
-// `contracts/network/block-request.json`. Both are the columns' decimal
-// text (`grant.meteredRate` Decimal(18,8), `wallet.cachedBalance`
-// Decimal(18,2)), never a float (C-02). No rate, no balance, a rate of zero
-// or a balance under a cent buys nothing; a figure past int64 is capped.
-func BytesAffordable(rate, balance string) int64 {
-	return ReserveShare(rate, balance, 1)
-}
-
-// ReserveShare is one metered Grant's part of its owner's wallet when
-// `grants` metered Grants draw on it (F-027-dt): the balance's whole cents
-// split evenly, floored, then bought at this Grant's own rate — so the shares
-// together never buy past the balance, whatever their rates. A count under
-// one is the Grant alone.
-func ReserveShare(rate, balance string, grants int64) int64 {
+// BytesAffordable is what an amount of money buys at a metered rate: whole
+// cents of it, floored, over the rate per 2^30 bytes, floored — billing's
+// `bytesAffordable`, held to the same figures by
+// `contracts/network/block-request.json`. The planner reads a Grant's
+// reserve through it: the amount is its open reserve hold (F-118-b), so what
+// it leases past the bag is money no other debit can spend. Both are the
+// columns' decimal text (`grant.meteredRate` Decimal(18,8),
+// `wallet_hold.amount` Decimal(18,2)), never a float (C-02). No rate, no
+// amount, a rate of zero or an amount under a cent buys nothing; a figure
+// past int64 is capped.
+func BytesAffordable(rate, amount string) int64 {
 	r, ok := new(big.Rat).SetString(rate)
 	if !ok || r.Sign() <= 0 {
 		return 0
 	}
-	b, ok := new(big.Rat).SetString(balance)
+	b, ok := new(big.Rat).SetString(amount)
 	if !ok || b.Sign() <= 0 {
 		return 0
 	}
 	cents := floor(new(big.Rat).Mul(b, big.NewRat(100, 1)))
-	if grants > 1 {
-		cents.Quo(cents, big.NewInt(grants))
-	}
 	if cents.Sign() <= 0 {
 		return 0
 	}

@@ -56,6 +56,8 @@ function closedTx(grant: Partial<Row>, close: { quotaBytes: bigint; expiresAt: D
   const tx = {
     $queryRaw: async (sql: TemplateStringsArray) => (sql.join('?').includes('entitlement"."grant"') ? [row] : close ? [close] : []),
     grant: {
+      // The reserve release (F-118-b) reads the Grant; vpn-reserve.spec.ts holds it.
+      findUnique: async () => null,
       updateMany: async (args: { where: { status?: GrantStatus } }) => {
         grantWrites.push(args);
         return { count: row.status === args.where.status ? 1 : 0 };
@@ -140,6 +142,8 @@ describe('cutoff notices on a metered exhaustion (suspendIfExhausted)', () => {
         findUnique: async () => grant,
         updateMany: async (args: { where: { status?: GrantStatus } }) => ({ count: grant.status === args.where.status ? 1 : 0 }),
       },
+      // No wallet row: the reserve release (F-118-b) holds nothing here; vpn-reserve.spec.ts holds it.
+      wallet: { findUnique: async () => null },
       config: { updateMany: async () => ({ count: 1 }) },
       $queryRaw: async () => [{ cachedBalance: new Prisma.Decimal('0.00') }],
       outboxEvent: {

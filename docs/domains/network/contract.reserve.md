@@ -2,14 +2,14 @@
 id: network
 layer: domain
 status: draft
-version: 3
-updated: 2026-09-27
+version: 4
+updated: 2026-09-29
 ---
 
 # The reserve — a metered Grant's configs keep headroom the wallet backs
 
-What governs the wallet's part of a metered Grant's Quota (F-027-cs, F-027-dc, F-027-dt,
-ADR-0091 amendment 2026-09-27, ADR-0094 amendment). Read it before changing
+What governs the wallet's part of a metered Grant's Quota (F-027-cs, F-027-dc, F-118-b,
+ADR-0091 amendment 2026-09-27, ADR-0094 amendment, ADR-0105 (8)). Read it before changing
 how a metered Grant's headroom past its bag is sized, or before giving the
 reserve to a prepaid one.
 
@@ -21,11 +21,14 @@ hurts most.
 
 ## The rule
 
-1. **Metered only.** The reserve is what the wallet would still buy
-   (`bytesAffordable(meteredRate, balance)`, the shutdown extension's figure),
-   shared between the owner's metered Grants (rule 5).
-   A prepaid Grant has none: its bag is all there is, and `Σ ceilings ≤
-   purchasedBytes` holds for it unchanged (user, 2026-09-27).
+1. **Metered only, and held money** (F-118-b, ADR-0105 (8)). The reserve is
+   what the Grant's own open hold on the owner's wallet buys at its locked
+   rate (`BytesAffordable(meteredRate, wallet_hold.amount)`, `ownerRef` = the
+   Grant). Billing holds `VPN_RESERVE_BYTES` (default 1 GiB) at that rate,
+   rounded up to a cent, clamped to the free balance — a fixed size so the
+   rest of the wallet stays spendable (user, 2026-09-29). No hold is a reserve
+   of nothing. A prepaid Grant has none: its bag is all there is, and `Σ
+   ceilings ≤ purchasedBytes` holds for it unchanged (user, 2026-09-27).
 2. **It is a term of Quota, not a step per config.** The lease planner reads
    `purchasedBytes` plus its share of the reserve itself
    ([contract.lease.md](contract.lease.md) rule 20) and splits it like the bag,
@@ -37,17 +40,16 @@ hurts most.
 4. **The shutdown figure is the share** (`walletBackedCeilingBytes`, the
    planner's since F-027-db), so it already holds the reserve
    ([contract.resilience.md](contract.resilience.md)).
-5. **One wallet, one reserve** (F-027-dt, user 2026-09-27). The balance's
-   whole cents are split evenly, floored, over every metered Grant of the
-   owner the planner plans (`active`/`pending`, a locked rate, not unlimited),
-   counted in the planner's load whether or not the turn touched it; each
-   Grant buys its share at its own rate (`leaseplan.ReserveShare`). So the
-   shares never buy past the balance, whatever the rates. A closed Grant still
-   counts: the split never leans on another Grant's state, and a close is
-   a spent Grant that a top-up may reopen (contract.lease.md rule 25). An even
-   split, not one by demand: a busy Grant's share runs out first, its block
-   request buys its bag back (rule 3), and the next turn reads the smaller
-   balance — demand needs every Grant's rates in one turn, which no load has.
+5. **One Grant, one hold** (F-118-b; replaces F-027-dt's even split of the
+   balance). Each reserve is money no other debit can spend — a purchase,
+   another meter, another Grant's block (billing `contract.holds.md`) — so
+   two Grants cannot lease the same money, whatever their rates. Billing
+   (`traffic/vpn-reserve.ts`) tops it at issue, after every block and in the
+   minute's sweep (`vpn_reserve`: a revive, an unfreeze, a renewal, a
+   deposit), and releases it when the Grant stops being planned (a
+   suspension, a freeze, a cancel, a close; the sweep catches a missed one).
+   The Grant's own block spends it first (billing `contract.traffic-block.md`),
+   so bytes served from it are paid by the next block.
 
 Billing's per-config step (`allocateCeilings`, `ceiling ≥ served + min(reserve,
 lineFloor)` on every config) ran until F-027-db and was deleted in F-027-dk;
@@ -56,9 +58,9 @@ with it too: see `open-questions.md` (F-608).
 
 ## What it costs
 
-Configs drawing at once on a nearly empty wallet can serve more than the
-wallet buys, inside one reaction window. That gap is an overrun, and overrun is
-not charged (`billing/contract.traffic-block.md`). It is bounded by the whole
-wallet once, not N times — once per owner, not once per metered Grant, since
-F-027-dt (before it, each Grant leased the whole wallet). A prepaid reserve was rejected for exactly that
-reason: there, nothing would ever pay it back.
+A config can serve past its bag only as far as its Grant's hold buys, and
+that money is locked, so the overrun `contract.traffic-block.md` once left
+uncharged is paid by the block that follows. A smaller reserve than the old
+whole-balance lease means thinner headroom for a Grant with many inbounds:
+`VPN_RESERVE_BYTES` is the knob. A revived or unfrozen Grant waits up to a
+minute (the sweep) for its reserve.

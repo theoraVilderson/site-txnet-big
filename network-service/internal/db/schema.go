@@ -139,9 +139,10 @@ var RequiredColumns = map[string][]string{
 // (ADR-0093 rule 4).
 var ForeignColumns = map[string][]string{
 	"entitlement.grant": {"id", "status", "purchasedBytes", "endsAt", "trafficUnlimited", "userId", "billingMode", "meteredRate", "quotas"},
-	// The metered reserve (F-027-dc, ADR-0094 amendment): what the owner's
-	// balance still buys is part of the planner's Quota.
-	"billing.wallet": {"ownerUserId", "cachedBalance"},
+	// The metered reserve (F-027-dc, ADR-0094 amendment): what the Grant's own
+	// reserve hold buys is part of the planner's Quota (F-118-b).
+	"billing.wallet":      {"id", "ownerUserId"},
+	"billing.wallet_hold": {"walletId", "ownerRef", "amount", "status"},
 }
 
 // MissingColumns reports every required column the database does not have,

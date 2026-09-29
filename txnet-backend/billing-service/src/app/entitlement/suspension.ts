@@ -1,5 +1,7 @@
 import { GrantStatus, Prisma } from '@prisma/client';
 
+import { releaseVpnReserveOf } from '../traffic/vpn-reserve';
+
 /**
  * `grant.statusReason` for a Grant suspended because its bag is spent and its
  * wallet cannot buy the next block (F-027-x, ADR-0075). `suspended` has two
@@ -63,6 +65,8 @@ async function suspend(tx: Prisma.TransactionClient, grantId: string, at: Date, 
     data: { status: GrantStatus.suspended, statusReason, suspendedAt: at },
   });
   if (moved.count === 0) return { suspended: false, configsDisabled: 0 };
+  // Not planned while suspended: what its reserve held is free again (F-118-b).
+  await releaseVpnReserveOf(tx, grantId);
 
   const disabled = await tx.config.updateMany({
     where: { grantId, desiredEnabled: true },

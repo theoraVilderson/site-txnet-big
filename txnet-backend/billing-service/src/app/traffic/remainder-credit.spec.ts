@@ -104,6 +104,8 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
         return { count: 1 };
       },
     },
+    // No reserve held: the release (F-118-b) writes nothing; vpn-reserve.spec.ts holds it.
+    walletHold: { findFirst: async () => null },
     wallet: {
       findUnique: async () => ({ ...wallet }),
       findUniqueOrThrow: async () => ({ ...wallet }),

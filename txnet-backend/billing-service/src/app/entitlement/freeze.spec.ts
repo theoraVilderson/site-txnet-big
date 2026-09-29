@@ -59,6 +59,8 @@ function build(row: Partial<Row> | null) {
     $executeRaw: async () => 0,
     grant: {
       findFirst: async ({ where }: { where: { id: string } }) => (grant && where.id === grant.id ? { ...grant } : null),
+      // The reserve release (F-118-b) reads the Grant; vpn-reserve.spec.ts holds it.
+      findUnique: async () => null,
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         grants.push({ where, data, tenant: tenant() });
         if (!matches(where)) return { count: 0 };

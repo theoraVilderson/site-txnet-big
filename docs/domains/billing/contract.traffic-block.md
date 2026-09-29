@@ -64,7 +64,11 @@ belongs on the path that moves money, and here it would fail the shutdown figure
 
 A balance that cannot fund the target buys the largest whole-cent block it can.
 The balance is the free one, `cachedBalance - heldAmount` (F-118-a,
-[contract.holds.md](contract.holds.md)); so is the exhaustion verdict's.
+[contract.holds.md](contract.holds.md)), **plus the Grant's own VPN reserve
+hold** (F-118-b, network `contract.reserve.md`): sized first, then the reserve
+released, the block debited (one row) and the reserve topped back from what is
+left, in the same transaction. Another Grant's reserve is never spent. The
+exhaustion verdict reads the same figure, and a suspension releases the reserve.
 Only a balance under one cent is refused (`insufficient_funds`), and then the
 ceiling stays where it is and the panel cuts the user off by itself — ADR-0072's
 worst acceptable failure. Stalling with 99c unspent is that failure arriving
@@ -203,7 +207,8 @@ before it is deleted (F-027-dk).
    `WalletVersionConflict` is `raced`, and acked: the planner asks again.
 4. **The planner's target includes any overrun.** It is a horizon of the rate
    less `purchasedBytes − Used`, so bytes served from the reserve past the bag
-   are bought with the next block rather than left uncharged.
+   are bought with the next block — from that reserve's held money if the free
+   balance is short (F-118-b) — rather than left uncharged.
 5. **The balance a block leaves is read for the wallet-low notice** (F-601-g).
    `noticeLowBalance` (`traffic/low-balance.ts`) takes the debit's
    `balanceAfter` in the same transaction: under 1 GB at the Grant's rate it

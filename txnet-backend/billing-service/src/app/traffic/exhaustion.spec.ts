@@ -66,6 +66,8 @@ function fakeTx(input: { grant: Partial<GrantRow> | null; balance: string | null
         return { count: 3 };
       },
     },
+    // No wallet row: the reserve release (F-118-b) holds nothing here; vpn-reserve.spec.ts holds it.
+    wallet: { findUnique: async () => null },
     // The cutoff notice (F-601-b) — cut-off.spec.ts holds what it says.
     outboxEvent: { create: async () => ({ id: 'e1' }) },
     $queryRaw: async () => {
@@ -118,9 +120,11 @@ describe('suspendIfExhausted', () => {
 
     await suspendIfExhausted(tx, GRANT, AT);
 
+    // The cursors' read is the first after the lock; the reserve release reads again after the write.
+    const read = calls.indexOf('grant.read', calls.indexOf('wallet.lock'));
     expect(calls.indexOf('wallet.lock')).toBeGreaterThan(-1);
-    expect(calls.lastIndexOf('grant.read')).toBeGreaterThan(calls.indexOf('wallet.lock'));
-    expect(calls.indexOf('grant.write')).toBeGreaterThan(calls.lastIndexOf('grant.read'));
+    expect(read).toBeGreaterThan(calls.indexOf('wallet.lock'));
+    expect(calls.indexOf('grant.write')).toBeGreaterThan(read);
   });
 
   it.each([
@@ -208,6 +212,8 @@ describe('suspendIfClosed', () => {
         return input.closedAt === null ? [] : [{ quotaBytes: input.closedAt }];
       },
       grant: {
+        // The reserve release (F-118-b) reads the Grant; vpn-reserve.spec.ts holds it.
+        findUnique: async () => null,
         updateMany: async (args: { where: { status?: GrantStatus }; data: Record<string, unknown> }) => {
           calls.push('grant.write');
           grantWrites.push(args);

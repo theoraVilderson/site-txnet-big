@@ -15,6 +15,8 @@ import { RemainderCreditService } from './remainder-credit';
 import { UserConfigsController } from './user-configs.controller';
 import { UserConfigsService } from './user-configs';
 import { GrantUsageService } from './grant-usage';
+import { VpnReserveController } from './vpn-reserve.controller';
+import { VpnReserveSweep } from './vpn-reserve';
 
 /**
  * Metered traffic's money side (F-027-q, ADR-0072). In-process only: the block
@@ -27,6 +29,8 @@ import { GrantUsageService } from './grant-usage';
  * planner asks for it (F-027-dc) — the only path that buys one — and
  * `BlockRequestQueue` carries the request to it. Sizing a config's share is
  * the planner's alone (F-027-db); nothing here splits a bag (F-027-dk).
+ * The headroom past the bag is each Grant's reserve, held money (F-118-b):
+ * `VpnReserveSweep` keeps it at its target over `reserve-due`.
  *
  * `ConfigActionsService` is every action on a config as a desired-state write
  * (F-027-z); `network-service` carries it to the panel, nothing here does.
@@ -37,8 +41,8 @@ import { GrantUsageService } from './grant-usage';
  */
 @Module({
   imports: [WalletModule],
-  controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController],
-  providers: [BlockPurchaseService, BlockRequestService, RemainderCreditService, BlockRequestQueue, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GroupFulfilmentService, GroupDrainService, GrantCloseService],
+  controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController, VpnReserveController],
+  providers: [BlockPurchaseService, BlockRequestService, RemainderCreditService, BlockRequestQueue, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GroupFulfilmentService, GroupDrainService, GrantCloseService, VpnReserveSweep],
   exports: [BlockPurchaseService, RemainderCreditService, ConfigActionsService, GroupFulfilmentService, UserConfigsService, GrantUsageService],
 })
 export class TrafficModule {}

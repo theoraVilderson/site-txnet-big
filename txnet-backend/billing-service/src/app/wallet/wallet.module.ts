@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 import { LocaleModule } from '../locale/locale.module';
+import { VpnReserve } from '../traffic/vpn-reserve';
 import { WalletCreditService } from './wallet-credit.service';
 import { WalletHistoryController } from './wallet-history.controller';
 import { WalletHistoryService } from './wallet-history.service';
@@ -17,11 +19,23 @@ import { WalletHoldService, WalletLedgerService } from './wallet-ledger.service'
  *
  * `WalletHoldService` locks money a wallet has promised (F-118-a, ADR-0105
  * (6)); the reserve (F-118-b) and postpaid settlement (F-118-g) call it.
+ * `VpnReserve` is built here, sized by `VPN_RESERVE_BYTES`, because a credit
+ * that revives a Grant tops its reserve back in the same transaction.
  */
 @Module({
   imports: [LocaleModule],
   controllers: [WalletHistoryController],
-  providers: [WalletLedgerService, WalletHoldService, WalletCreditService, WalletHistoryService],
-  exports: [WalletLedgerService, WalletHoldService, WalletCreditService, WalletHistoryService],
+  providers: [
+    WalletLedgerService,
+    WalletHoldService,
+    {
+      provide: VpnReserve,
+      inject: [WalletHoldService, ConfigService],
+      useFactory: (holds: WalletHoldService, config: ConfigService) => new VpnReserve(holds, BigInt(config.getOrThrow<number>('VPN_RESERVE_BYTES'))),
+    },
+    WalletCreditService,
+    WalletHistoryService,
+  ],
+  exports: [WalletLedgerService, WalletHoldService, VpnReserve, WalletCreditService, WalletHistoryService],
 })
 export class WalletModule {}

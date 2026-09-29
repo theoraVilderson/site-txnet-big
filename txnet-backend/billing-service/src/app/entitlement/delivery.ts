@@ -8,6 +8,7 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionsService, ConfigActor } from '../traffic/config-actions';
 import { GroupFulfilmentRefused, GroupFulfilmentService } from '../traffic/group-fulfilment';
+import { releaseVpnReserveOf } from '../traffic/vpn-reserve';
 import { WalletCreditService } from '../wallet/wallet-credit.service';
 import { errorLine } from '../log-line';
 import { GRANT_AGGREGATE, markDelivered } from './delivered';
@@ -226,6 +227,8 @@ export class GrantDeliveryService {
       throw new Error(`grant ${grantId} is pending with no invoice to refund`);
     }
 
+    // Held at issue for a metered Grant; a cancel gives it back before the refund (F-118-b).
+    await releaseVpnReserveOf(tx, grantId);
     const configs = await tx.config.findMany({ where: { grantId, status: { not: ConfigStatus.retired } }, select: { id: true } });
     for (const { id } of configs) await this.actions.retire(tx, { configId: id, actor: GRANT_DELIVERY_ACTOR });
 

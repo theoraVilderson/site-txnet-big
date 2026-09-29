@@ -46,10 +46,11 @@ Each takes the caller's `tx`, as the ledger does.
 | A capture changes the balance and the hold by the same amount, so the free balance does not move | captured money was never spendable |
 | A capture is guarded on the hold's `amount` it read; of two racing captures the second is `WalletVersionConflict` | the same held money cannot be captured twice |
 | A hold is in the wallet's currency and never converted on the way in. A tenant's currency change converts open holds with the wallet, each **rounded down**, and `heldAmount` to their sum ([contract.currency-change.md](contract.currency-change.md)) | rounded down, the parts never exceed the rounded balance, and rounding only frees money |
+| The VPN reserve (F-118-b) is one hold per metered Grant, `ownerRef` = the Grant id, sized by `VPN_RESERVE_BYTES` (`traffic/vpn-reserve.ts`): topped at issue, after a block, by a revive and by the `reserve-due` sweep; released by a suspension, a freeze, a cancel, a close, and by the sweep for a Grant no longer planned. Only its own Grant's block spends it (release, then debit) | the planner leases what it buys (network `contract.reserve.md`), so it must be money nothing else can spend |
 | Holding, capturing and releasing write no outbox event yet: the panel shows the balance, which a hold does not move. F-118-j shows held money apart and adds it | — |
 
 `wallet_hold` has no `tenantId` and is reached through the wallet's owner, like
 `wallet`: `userId` must come from a tenant-scoped source, as for the ledger.
 
-Tests: `wallet/wallet-hold.spec.ts` (the service), `wallet/wallet-ledger.int.spec.ts`
+Tests: `wallet/wallet-hold.spec.ts` (the service), `traffic/vpn-reserve.spec.ts` (the reserve), `wallet/wallet-ledger.int.spec.ts`
 "held money" (the CHECK, the trigger and a capture on Postgres).
