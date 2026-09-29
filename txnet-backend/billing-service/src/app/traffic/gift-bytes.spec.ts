@@ -71,7 +71,7 @@ function build(row: Partial<Row>, balance = D('1.00')) {
     endsAt: new Date(AT.getTime() + 10 * DAY),
     ...row,
   };
-  const wallet = { id: 'wallet-1', ownerUserId: USER, currencyCode: 'USD', cachedBalance: balance, version: 0 };
+  const wallet = { id: 'wallet-1', ownerUserId: USER, currencyCode: 'USD', cachedBalance: balance, heldAmount: new Prisma.Decimal(0), version: 0 };
   const ledger: Array<Record<string, unknown>> = [];
   const adjustments: Array<Record<string, unknown>> = [];
   const writes: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }> = [];

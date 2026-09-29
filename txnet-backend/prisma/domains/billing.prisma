@@ -183,13 +183,53 @@ model Wallet {
   /// The currency it opened in, from its first credit (F-116-b). Every ledger
   /// row is in it: the ledger refuses another, and so does a trigger.
   currencyCode  String
+  /// Money locked for what the wallet has promised (F-118-a, ADR-0105 (6)):
+  /// the sum of its open `wallet_hold` rows, written only with them (a
+  /// deferred trigger checks it at commit). `CHECK (cachedBalance -
+  /// heldAmount >= 0)`, so no debit can spend it.
+  heldAmount    Decimal @default(0) @db.Decimal(18, 2)
   version       Int     @default(0) // Optimistic Locking
 
   owner        User               @relation(fields: [ownerUserId], references: [id])
   transactions WalletTransaction[]
+  holds        WalletHold[]
   subAccounts  SubAccount[]
 
   @@map("wallet")
+  @@schema("billing")
+}
+
+enum WalletHoldStatus {
+  open
+  closed
+
+  @@schema("billing")
+}
+
+/// F-118-a (ADR-0105 (6)): money locked on a wallet for one owner — a Grant's
+/// postpaid usage, a per-use token. Not a ledger row: a capture debits the
+/// ledger and takes the same amount off `amount`; a release takes it off with
+/// no money moving. One open hold per `(walletId, ownerRef)` (partial unique
+/// index in the migration). Written only by `WalletHoldService`.
+model WalletHold {
+  id           String           @id @default(uuid()) @db.Uuid
+  walletId     String           @db.Uuid
+  /// What the money is held for — a Grant, a per-use token.
+  ownerRef     String           @db.Uuid
+  /// Held now. 0 once closed (CHECK).
+  amount       Decimal          @db.Decimal(18, 2)
+  /// Taken from it by captures so far.
+  captured     Decimal          @default(0) @db.Decimal(18, 2)
+  status       WalletHoldStatus @default(open)
+  /// Always its wallet's while open (the deferred trigger).
+  currencyCode String
+  createdAt    DateTime         @default(now())
+  closedAt     DateTime?
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+
+  @@index([walletId, status])
+  @@map("wallet_hold")
   @@schema("billing")
 }
 

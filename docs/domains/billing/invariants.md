@@ -2,12 +2,12 @@
 id: billing
 layer: domain
 status: active
-updated: 2026-09-28
+updated: 2026-09-29
 ---
 
 # Invariants — billing
 
-From schema comments, plus 11 from the gift path (F-092-m). 1-4 are enforced by `WalletLedgerService` (F-092-b), 15 by the block purchaser (F-027-q), 16 by the remainder credit (F-027-r), 17 by the invoice (F-111-a), 18 by its payment (F-111-b), 20 by its discount rule (F-114-h), 6 by coupon reservation (F-092-h) and gift redemption (F-092-m), 8 in part by the gateway port (F-092-f), 11 by `billing.redeem_gift_coupon`; the rest are not enforced in code yet.
+From schema comments, plus 11 from the gift path (F-092-m). 1-4 are enforced by `WalletLedgerService` (F-092-b), 15 by the block purchaser (F-027-q), 16 by the remainder credit (F-027-r), 17 by the invoice (F-111-a), 18 by its payment (F-111-b), 20 by its discount rule (F-114-h), 21 by `WalletHoldService` and the ledger (F-118-a), 6 by coupon reservation (F-092-h) and gift redemption (F-092-m), 8 in part by the gateway port (F-092-f), 11 by `billing.redeem_gift_coupon`; the rest are not enforced in code yet.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -32,6 +32,7 @@ From schema comments, plus 11 from the gift path (F-092-m). 1-4 are enforced by 
 | 19 | An invoice is refunded at most once, whole, and only when its Grant was never delivered; a refunded invoice is never paid again | `GrantDeliveryService.refund` flips the Grant `pending -> cancelled` and the invoice `paid -> refunded` under its row lock, or rolls back; `pay` answers `already_paid` to `refunded` (F-111-d, `invoice-payment.int.spec.ts`) | money back and service kept, or a second charge inside the invoice's 30 minutes |
 | 20 | A purchase takes at most one discount rule, the matching one that takes the most, and never more than the price; coupons see only what it left | `bestDiscountRule` / `ruleDiscountOf` (F-114-h, `invoice/discount/discount-rule.spec.ts`); `invoice_rule_discount_within_discount` and `invoice_discount_within_amount` CHECKs | two campaigns stacking into a price no one set, or a discount below zero |
 | 19 | A tenant's currency change converts every live amount at one stored rate in one transaction, and no history row (F-116-f, ADR-0098 part 5) | `convertOperatingCurrency` — set-based SQL after a lock on the tenant row; prices get new rows (the price trigger refuses an update); the rate is on `currency_change` (`wallet/currency-change.int.spec.ts`, [contract.currency-change.md](contract.currency-change.md)) | a wallet in one currency and its prices in another; a paid invoice rewritten |
+| 21 | Held money is not spendable: every debit is bounded by `cachedBalance - heldAmount`, `heldAmount` is the sum of the wallet's open `wallet_hold` rows, and a capture lowers the balance and the hold by the same amount in one transaction (ADR-0105 (6)) | `WalletLedgerService` refuses as `InsufficientFunds`; `CHECK wallet_held_within_balance`; a deferred trigger ties `heldAmount` to the open holds and their currency (F-118-a, `wallet/wallet-hold.spec.ts`, `wallet/wallet-ledger.int.spec.ts`, [contract.holds.md](contract.holds.md)) | one balance promised twice — a postpaid meter or the VPN reserve served unfunded |
 
 ## How to test
 
@@ -45,5 +46,5 @@ the per-user limit under a race, and the credit that commits with the use:
 one-accrual-per-payment key (ADR-0041): `payment/gateway-grant-schema.int.spec.ts`. Block
 sizing and the one transaction that debits and advances both cursors:
 `traffic/block-purchase.spec.ts`. The remainder priced down, paid once, and
-refused on a cursor that moved: `traffic/remainder-credit.spec.ts`. Concurrent pays of one invoice, and the payment rolled back whole: `invoice/invoice-payment.int.spec.ts`. Still to write: transfer atomicity,
+refused on a cursor that moved: `traffic/remainder-credit.spec.ts`. Held money refused to a debit and to a raw writer, and a `heldAmount` with no hold refused at commit: `wallet/wallet-ledger.int.spec.ts`. Concurrent pays of one invoice, and the payment rolled back whole: `invoice/invoice-payment.int.spec.ts`. Still to write: transfer atomicity,
 the status-guarded credit on a duplicate webhook.

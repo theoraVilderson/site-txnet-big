@@ -15,7 +15,7 @@ import { WalletLedgerService } from './wallet-ledger.service';
 const D = (v: string | number) => new Prisma.Decimal(v);
 
 function fakeStore() {
-  const wallets = new Map<string, { id: string; ownerUserId: string; currencyCode: string; cachedBalance: Prisma.Decimal; version: number }>();
+  const wallets = new Map<string, { id: string; ownerUserId: string; currencyCode: string; cachedBalance: Prisma.Decimal; heldAmount: Prisma.Decimal; version: number }>();
   const ledger: Array<Record<string, unknown>> = [];
   const outbox: Array<Record<string, unknown>> = [];
   const tx = {
@@ -28,7 +28,7 @@ function fakeStore() {
       createMany: async ({ data }: { data: Array<{ ownerUserId: string; currencyCode: string }> }) => {
         for (const { ownerUserId, currencyCode } of data) {
           if (!wallets.has(ownerUserId)) {
-            wallets.set(ownerUserId, { id: `wallet-${ownerUserId}`, ownerUserId, currencyCode, cachedBalance: D(0), version: 0 });
+            wallets.set(ownerUserId, { id: `wallet-${ownerUserId}`, ownerUserId, currencyCode, cachedBalance: D(0), heldAmount: D(0), version: 0 });
           }
         }
         return { count: data.length };

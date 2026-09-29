@@ -21,6 +21,11 @@
  * policy rather than about the extension, and the owner's count is the
  * negative control — a probe that sees nothing anywhere proves nothing.
  *
+ * The third is held money (F-118-a, billing invariant 21): what the fake in
+ * `wallet-hold.spec.ts` cannot prove is Postgres's side — that a writer which
+ * never heard of holds is refused by `wallet_held_within_balance`, and that a
+ * `heldAmount` with no hold behind it does not survive its commit.
+ *
  *   npm run test:int
  */
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -33,7 +38,12 @@ import {
   startPostgresFixture,
 } from '../../../../test-support/postgres-fixture';
 import { PrismaService } from '../prisma/prisma.service';
-import { WalletLedgerService, WalletVersionConflict } from './wallet-ledger.service';
+import {
+  InsufficientFunds,
+  WalletHoldService,
+  WalletLedgerService,
+  WalletVersionConflict,
+} from './wallet-ledger.service';
 
 vi.setConfig({ testTimeout: HARNESS_TIMEOUT_MS, hookTimeout: HARNESS_TIMEOUT_MS });
 
@@ -50,6 +60,7 @@ let app: PrismaService;
 let owner: PrismaClient;
 
 const ledger = new WalletLedgerService();
+const holds = new WalletHoldService(ledger);
 
 beforeAll(async () => {
   pg = await startPostgresFixture();
@@ -182,5 +193,56 @@ describe('two debits on one wallet, both reading version 0', () => {
     expect(await rawCount(TENANT_B)).toBe(0);
     // The negative control: the same table, through the role RLS does not bind.
     expect(await owner.walletTransaction.count()).toBe(1);
+  });
+});
+
+describe('held money (F-118-a), on the wallet the race left at 30.00', () => {
+  const GRANT = 'bbbbbbbb-0000-4000-8000-000000000001';
+  const inTenant = <T>(fn: (tx: Prisma.TransactionClient) => Promise<T>) =>
+    runWithTenant({ id: TENANT_A }, () => tenantTransaction(app, fn));
+
+  beforeAll(async () => {
+    await inTenant((tx) =>
+      holds.hold(tx, { userId: USER_A, ownerRef: GRANT, amount: new Prisma.Decimal('20.00'), currencyCode: 'USD' }),
+    );
+  });
+
+  it('refuses a ledger debit of held money, and a raw write that ignores the hold', async () => {
+    await expect(
+      inTenant((tx) =>
+        ledger.debit(tx, { userId: USER_A, amount: new Prisma.Decimal('10.01'), currencyCode: 'USD', reasonType: 'product_purchase' }),
+      ),
+    ).rejects.toBeInstanceOf(InsufficientFunds);
+    // The app role, bypassing the service: the CHECK is what stops it.
+    await expect(
+      inTenant((tx) => tx.$executeRaw`UPDATE billing.wallet SET "cachedBalance" = 19.99 WHERE id = ${WALLET_A}::uuid`),
+    ).rejects.toThrow(/wallet_held_within_balance/);
+  });
+
+  it('refuses at commit a heldAmount no open hold accounts for', async () => {
+    await expect(
+      inTenant((tx) => tx.$executeRaw`UPDATE billing.wallet SET "heldAmount" = 25 WHERE id = ${WALLET_A}::uuid`),
+    ).rejects.toThrow(/open holds sum to/);
+  });
+
+  it('captures as one ledger debit and the hold reduced, leaving the free balance as it was', async () => {
+    await inTenant((tx) =>
+      holds.capture(tx, {
+        userId: USER_A,
+        ownerRef: GRANT,
+        amount: new Prisma.Decimal('5.00'),
+        currencyCode: 'USD',
+        reasonType: 'traffic_consumption',
+        referenceId: GRANT,
+      }),
+    );
+    const wallet = await owner.wallet.findUniqueOrThrow({ where: { id: WALLET_A } });
+    const hold = await owner.walletHold.findFirstOrThrow({ where: { walletId: WALLET_A, ownerRef: GRANT } });
+
+    expect(wallet.cachedBalance.toFixed(2)).toBe('25.00');
+    expect(wallet.heldAmount.toFixed(2)).toBe('15.00');
+    expect(hold.amount.toFixed(2)).toBe('15.00');
+    expect(hold.captured.toFixed(2)).toBe('5.00');
+    expect(await owner.walletTransaction.count({ where: { walletId: WALLET_A } })).toBe(2);
   });
 });

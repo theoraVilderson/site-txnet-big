@@ -20,7 +20,7 @@ import { InvoiceShortfall, invoiceShortfall } from './invoice-shortfall';
  *     first, the other re-reads `status` and finds it no longer `pending`;
  *  2. the user's wallet row, `FOR UPDATE`, so the ledger's version guard below
  *     never loses to a writer that read the balance before this one;
- *  3. sufficiency — `total <= cachedBalance`, or {@link InvoiceUnpayable}
+ *  3. sufficiency — `total <= cachedBalance - heldAmount` (F-118-a), or {@link InvoiceUnpayable}
  *     `insufficient_balance` carrying the shortfall, rounded up to the cent
  *     so a top-up of exactly `missing` covers it (F-111-c, `invoice-shortfall.ts`);
  *  4. one `product_purchase` debit of `total`, `referenceId` = the invoice.
@@ -118,11 +118,13 @@ export class InvoicePaymentService {
       }
 
       const total = new Prisma.Decimal(invoice.total);
-      const [wallet] = await tx.$queryRaw<Array<{ cachedBalance: Prisma.Decimal }>>`
-        SELECT "cachedBalance" FROM billing.wallet WHERE "ownerUserId" = ${userId}::uuid FOR UPDATE`;
+      const [wallet] = await tx.$queryRaw<Array<{ cachedBalance: Prisma.Decimal; heldAmount: Prisma.Decimal }>>`
+        SELECT "cachedBalance", "heldAmount" FROM billing.wallet WHERE "ownerUserId" = ${userId}::uuid FOR UPDATE`;
       const balance = wallet ? new Prisma.Decimal(wallet.cachedBalance) : ZERO;
-      if (balance.lt(total)) {
-        throw new InvoiceUnpayable('insufficient_balance', invoiceId, { ...invoiceShortfall(total, balance), currencyCode: invoice.currencyCode });
+      // Held money is not spendable (F-118-a): the shortfall is against what is free.
+      const free = wallet ? balance.minus(new Prisma.Decimal(wallet.heldAmount)) : ZERO;
+      if (free.lt(total)) {
+        throw new InvoiceUnpayable('insufficient_balance', invoiceId, { ...invoiceShortfall(total, free), currencyCode: invoice.currencyCode });
       }
 
       let walletTransactionId: string | null = null;
@@ -141,7 +143,7 @@ export class InvoicePaymentService {
         } catch (e) {
           // Unreachable under the wallet lock; kept so a change to the lock fails as a refusal, not a 500.
           if (e instanceof InsufficientFunds) {
-            throw new InvoiceUnpayable('insufficient_balance', invoiceId, { ...invoiceShortfall(total, balance), currencyCode: invoice.currencyCode });
+            throw new InvoiceUnpayable('insufficient_balance', invoiceId, { ...invoiceShortfall(total, free), currencyCode: invoice.currencyCode });
           }
           throw e;
         }

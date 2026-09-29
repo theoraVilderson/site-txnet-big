@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 69
-updated: 2026-09-28
+updated: 2026-09-29
 ---
 
 # Contract — billing
@@ -158,7 +158,7 @@ numbers are `gateway-pricing.golden.json` (F-0611).
 | **`entry.currencyCode` must be the wallet's** (v67, F-116-b): anything else is `LedgerCurrencyMismatch`, before anything is written — except a **credit** priced before the tenant's currency changed, converted at that change's rate with `sourceAmount`/`sourceCurrencyCode` recorded (v69, F-116-f, [contract.currency-change.md](contract.currency-change.md)); the row records the wallet's. The caller takes it from the row that priced the amount — the payment, the invoice, the coupon — and metered traffic from the tenant (`operatingCurrencyOf`) until F-116-d gives a rate one. A trigger on `wallet_transaction` refuses the same row from any other writer | invariant 10; ADR-0098 part 3 — a 10 EUR credit must never land in a USD wallet as 10 USD |
 | `cachedBalance` is updated with `where { id, version }` **before** the row is appended; `count = 0` is `WalletVersionConflict` | invariants 1, 4 — a loser appends nothing |
 | A lost race is thrown, not retried; the caller restarts its whole transaction | a retry inside the same transaction cannot read the row fresh |
-| A debit below zero, or from a user with no wallet, is `InsufficientFunds` | a missing wallet is a zero balance |
+| A debit past the **free balance** (`cachedBalance - heldAmount`, F-118-a), or from a user with no wallet, is `InsufficientFunds`; a CHECK holds the same line. Holds, captures and releases: [contract.holds.md](contract.holds.md) | a missing wallet is a zero balance; held money is promised elsewhere (ADR-0105 (6)) |
 | A first credit opens the wallet (`createMany … skipDuplicates`), in that credit's currency | two first credits meet at the version guard, not at the unique `ownerUserId` |
 | Returns the appended `wallet_transaction`, whose `balanceAfter` is the new balance | — |
 | **Every movement writes `billing.wallet.changed`** to the outbox in the same `tx` — `{tenantId, userId, walletTransactionId}`, no amount — pushed live-only to `user:<userId>` (F-111-m, `automation/contract.notices.md`) | the top bar re-reads at once whichever writer moved it, and a new writer cannot forget to say so |

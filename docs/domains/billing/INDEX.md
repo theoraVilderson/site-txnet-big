@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 73
+version: 74
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -50,9 +50,10 @@ source:
   - txnet-backend/prisma/domains/migrations/20260928003100_a_coupon_redemption_records_its_currency/**
   - txnet-backend/prisma/domains/migrations/20260928003200_a_coupon_applies_only_in_its_own_currency/**
   - txnet-backend/prisma/domains/migrations/20260928003300_a_platform_coupon_serves_no_reseller/**
-owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change]
+  - txnet-backend/prisma/domains/migrations/20260929000100_held_money_is_not_spendable/**
+owns_tables: [wallet, wallet_hold, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
-updated: 2026-09-28
+updated: 2026-09-29
 ---
 
 # Billing
@@ -65,7 +66,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Files
 | File | Read it when |
 |---|---|
-| [contract.md](contract.md) | using or changing billing from outside; what a tenant's currency change converts: [contract.currency-change.md](contract.currency-change.md) |
+| [contract.md](contract.md) | using or changing billing from outside; what a tenant's currency change converts: [contract.currency-change.md](contract.currency-change.md); money held for a promise: [contract.holds.md](contract.holds.md) |
 | [contract.gateways.md](contract.gateways.md) | creating, changing or deleting a payment gateway — a tenant's own, or a named reseller's |
 | [contract.purchase.md](contract.purchase.md) | buying a catalog product: the invoice, its coupons and discounts with no code, its 30-minute clock, and paying it from the wallet |
 | [contract.deposit.md](contract.deposit.md) | one whole top-up: gateway list, quote, start — and the bank's callback that settles it |
@@ -88,8 +89,8 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-29 | contract v74 (additive, F-118-a, ADR-0105 (6)): wallet holds — `hold`/`capture`/`release`, `wallet.heldAmount`; every debit is bounded by the free balance (`cachedBalance - heldAmount`). No hold exists until F-118-b, so no caller's answer changes. See [contract.holds.md](contract.holds.md) |
 | 2026-09-28 | contract v73 (**breaking** for revenue readers, F-116-h8, ADR-0098 part 3): the reseller revenue report sums each currency on its own (`byCurrency`) and converts every total into the reseller's currency now (`currencyCode`), `null` when it cannot. Consumer: bot-app (F-116-h9). See [contract.revenue.md](contract.revenue.md) |
 | 2026-09-28 | contract v72 (**breaking** for coupon admins, F-116-h7, ADR-0099): a platform coupon or gift code serves the platform owner's users only — never a reseller's, on any gateway, invoice or the gift box. `coupon_tenant` dropped; `tenantIds` on a coupon or batch is `400`. Consumer: panel `CouponForm`/`GiftCodes`, updated in the same change |
-| 2026-09-28 | contract v71 (additive, F-116-h6, ADR-0098 part 3): a coupon in another currency than the order has its money converted at the live rate (USD pivot), recorded on the redemption (`fxRate`, both snapshots); with no rate it is `currency_unavailable` |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

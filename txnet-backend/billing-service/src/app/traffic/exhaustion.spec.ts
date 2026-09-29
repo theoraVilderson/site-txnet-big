@@ -70,7 +70,7 @@ function fakeTx(input: { grant: Partial<GrantRow> | null; balance: string | null
     outboxEvent: { create: async () => ({ id: 'e1' }) },
     $queryRaw: async () => {
       calls.push('wallet.lock');
-      return input.balance === null ? [] : [{ cachedBalance: new Prisma.Decimal(input.balance) }];
+      return input.balance === null ? [] : [{ free: new Prisma.Decimal(input.balance) }];
     },
   };
   return { tx: tx as unknown as Prisma.TransactionClient, calls, grantWrites, configWrites };

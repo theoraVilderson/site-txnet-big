@@ -19,7 +19,8 @@ import type { FxPair } from '../currency/fx-rate';
  * - every wallet of the tenant's users in the old currency: a `currency_change`
  *   debit of its balance (old currency, to zero), the wallet relabelled and
  *   its balance converted, a `currency_change` credit of the new balance. An
- *   empty wallet only changes its label;
+ *   empty wallet only changes its label. Its open holds and `heldAmount`
+ *   convert with it, rounded down (F-118-a) — no ledger row: a hold is not one;
  * - the price and metered rate in effect for each variant, and every one
  *   scheduled after it: a **new** row in the new currency (a price is never
  *   updated, F-0602) from now, or from its own scheduled date;
@@ -254,9 +255,23 @@ async function convertWallets(c: Conversion): Promise<number> {
     SELECT gen_random_uuid(), w.id, u."tenantId", w."cachedBalance", 'debit'::billing."LedgerDirection", 'currency_change'::billing."WalletReasonType", ${c.changeId}::uuid, 0, w."currencyCode", clock_timestamp()
       FROM billing.wallet w JOIN identity."user" u ON u.id = w."ownerUserId"
      WHERE ${scope} AND w."cachedBalance" > 0`;
+  // Open holds (F-118-a) convert with their wallet, each rounded **down**: the
+  // sum of the parts then never exceeds the rounded balance, so
+  // `cachedBalance - heldAmount >= 0` survives the change, and what rounding
+  // takes is locked money handed back to the free balance, never taken from it.
+  // A closed hold is history (invariant 19) and keeps its currency.
+  await c.tx.$executeRaw`
+    UPDATE billing.wallet_hold h
+       SET amount = trunc(h.amount * ${c.rate}::numeric, ${c.dp}::int),
+           captured = trunc(h.captured * ${c.rate}::numeric, ${c.dp}::int),
+           "currencyCode" = ${c.to}
+      FROM billing.wallet w JOIN identity."user" u ON u.id = w."ownerUserId"
+     WHERE h."walletId" = w.id AND h.status = 'open' AND ${scope}`;
   const wallets = await c.tx.$executeRaw`
     UPDATE billing.wallet w
-       SET "currencyCode" = ${c.to}, "cachedBalance" = ${money(c, Prisma.sql`w."cachedBalance"`)}, version = w.version + 1
+       SET "currencyCode" = ${c.to}, "cachedBalance" = ${money(c, Prisma.sql`w."cachedBalance"`)},
+           "heldAmount" = (SELECT coalesce(sum(h.amount), 0) FROM billing.wallet_hold h WHERE h."walletId" = w.id AND h.status = 'open'),
+           version = w.version + 1
       FROM identity."user" u
      WHERE u.id = w."ownerUserId" AND ${scope}`;
   // Every opened wallet is announced, as the ledger announces any movement (F-111-m).

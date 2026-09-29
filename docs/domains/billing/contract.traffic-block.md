@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 4
-updated: 2026-09-28
+updated: 2026-09-29
 ---
 
 # The traffic block — bytes bought before they are served
@@ -63,6 +63,8 @@ belongs on the path that moves money, and here it would fail the shutdown figure
 ## Short balance buys a smaller block, not nothing
 
 A balance that cannot fund the target buys the largest whole-cent block it can.
+The balance is the free one, `cachedBalance - heldAmount` (F-118-a,
+[contract.holds.md](contract.holds.md)); so is the exhaustion verdict's.
 Only a balance under one cent is refused (`insufficient_funds`), and then the
 ceiling stays where it is and the panel cuts the user off by itself — ADR-0072's
 worst acceptable failure. Stalling with 99c unspent is that failure arriving

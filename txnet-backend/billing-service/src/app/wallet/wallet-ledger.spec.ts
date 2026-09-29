@@ -27,6 +27,7 @@ type WalletRow = {
   ownerUserId: string;
   currencyCode: string;
   cachedBalance: Prisma.Decimal;
+  heldAmount: Prisma.Decimal;
   version: number;
 };
 
@@ -63,6 +64,7 @@ function fakeStore() {
             currencyCode,
             ownerUserId,
             cachedBalance: D(0),
+            heldAmount: D(0),
             version: 0,
           });
           count += 1;
@@ -111,6 +113,7 @@ function fakeStore() {
         ownerUserId,
         currencyCode: 'USD',
         cachedBalance: D(balance),
+        heldAmount: D(0),
         version: 0,
       });
     },

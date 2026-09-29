@@ -196,7 +196,8 @@ export class BlockPurchaseService {
     const block = sizeBlock({
       rate: grant.meteredRate,
       targetBytes: input.targetBytes,
-      maxSpend: wallet?.cachedBalance ?? new Prisma.Decimal(0),
+      // What is not held (F-118-a): the ledger refuses the rest anyway.
+      maxSpend: wallet ? wallet.cachedBalance.minus(wallet.heldAmount) : new Prisma.Decimal(0),
     });
 
     const movement = await this.ledger.debit(tx, {

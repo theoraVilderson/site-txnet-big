@@ -36,6 +36,12 @@ import { convertedByChanges } from './currency-change';
  * balance the moment it commits, and a rolled-back movement announces nothing
  * (ADR-0021). Here and not at each caller, so a new writer cannot forget it.
  *
+ * **Held money is not spendable** (F-118-a, ADR-0105 (6)): a debit is bounded
+ * by `cachedBalance - heldAmount`, not the balance, so every existing debit
+ * refuses what a hold locked without knowing holds exist. Postgres holds the
+ * same line as a CHECK. Holds themselves are `WalletHoldService`'s
+ * (`wallet-hold.ts`); a capture is the one debit that also lowers `heldAmount`.
+ *
  * A lost version race is refused, not retried. The caller owns the transaction,
  * and a retry inside it would re-read a row this transaction has already seen
  * change — only restarting the whole transaction reads it fresh.
@@ -88,7 +94,10 @@ export class WalletVersionConflict extends Error {
   }
 }
 
-/** A debit larger than the balance. A user with no wallet has a balance of zero. */
+/**
+ * A debit larger than the balance not already held, or a hold larger than what
+ * is left to hold. A user with no wallet has a balance of zero.
+ */
 export class InsufficientFunds extends Error {
   constructor(readonly userId: string) {
     super(`wallet of user ${userId} cannot cover the debit`);
@@ -111,6 +120,11 @@ export class InvalidLedgerAmount extends Error {
   }
 }
 
+/** Throws {@link InvalidLedgerAmount} unless `amount` fits the ledger's column. */
+export function assertLedgerAmount(amount: Prisma.Decimal): void {
+  if (amount.lte(0) || amount.decimalPlaces() > LEDGER_SCALE) throw new InvalidLedgerAmount(amount);
+}
+
 @Injectable()
 export class WalletLedgerService {
   credit(tx: Prisma.TransactionClient, entry: LedgerEntry): Promise<WalletTransaction> {
@@ -121,15 +135,24 @@ export class WalletLedgerService {
     return this.move(tx, entry, LedgerDirection.debit);
   }
 
+  /**
+   * A capture's debit (F-118-a): the ledger row, and the same amount off
+   * `heldAmount`, under one `version`. Only `WalletHoldService.capture` calls
+   * it, after taking the amount off its hold row in the same `tx` — the
+   * deferred trigger refuses the commit if the two disagree.
+   */
+  debitHeld(tx: Prisma.TransactionClient, entry: LedgerEntry): Promise<WalletTransaction> {
+    return this.move(tx, entry, LedgerDirection.debit, entry.amount);
+  }
+
   private async move(
     tx: Prisma.TransactionClient,
     entry: LedgerEntry,
     direction: LedgerDirection,
+    releasing: Prisma.Decimal = new Prisma.Decimal(0),
   ): Promise<WalletTransaction> {
     const { userId } = entry;
-    if (entry.amount.lte(0) || entry.amount.decimalPlaces() > LEDGER_SCALE) {
-      throw new InvalidLedgerAmount(entry.amount);
-    }
+    assertLedgerAmount(entry.amount);
 
     let wallet = await tx.wallet.findUnique({ where: { ownerUserId: userId } });
     if (!wallet) {
@@ -158,7 +181,9 @@ export class WalletLedgerService {
       direction === LedgerDirection.credit
         ? wallet.cachedBalance.plus(amount)
         : wallet.cachedBalance.minus(amount);
-    if (balanceAfter.isNegative()) throw new InsufficientFunds(userId);
+    // What is held stays held: the free balance, not the balance, bounds a debit.
+    const heldAfter = wallet.heldAmount.minus(releasing);
+    if (balanceAfter.lt(heldAfter)) throw new InsufficientFunds(userId);
 
     // The cache first, under the version it was read at: a writer that lost the
     // race appends nothing even if its caller swallows the error. Postgres
@@ -166,7 +191,11 @@ export class WalletLedgerService {
     // READ COMMITTED the loser sees `count: 0`, never a stale match.
     const { count } = await tx.wallet.updateMany({
       where: { id: wallet.id, version: wallet.version },
-      data: { cachedBalance: balanceAfter, version: { increment: 1 } },
+      data: {
+        cachedBalance: balanceAfter,
+        ...(releasing.isZero() ? {} : { heldAmount: heldAfter }),
+        version: { increment: 1 },
+      },
     });
     if (count !== 1) throw new WalletVersionConflict(userId);
 

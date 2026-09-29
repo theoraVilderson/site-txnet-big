@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 5
-updated: 2026-09-26
+updated: 2026-09-29
 ---
 
 # Contract — billing / purchase
@@ -76,7 +76,7 @@ otherwise) → `InvoiceExpiryService.expirePending()` → `{scanned, expired, ho
 |---|---|---|
 | 1 | the invoice row `SELECT … FOR UPDATE`, scoped to the caller's user | the spec's "advisory lock on the invoice", as a row lock so the expiry sweep's guarded flip waits on the same lock. Concurrent pays queue here and every one after the first reads `paid`: **exactly once** |
 | 2 | the wallet row `FOR UPDATE` | the ledger's version guard then cannot lose to a writer that read the balance first |
-| 3 | `total <= cachedBalance`, else `insufficient_balance` | a user with no wallet has a balance of zero |
+| 3 | `total <= cachedBalance - heldAmount` (the free balance, F-118-a), else `insufficient_balance` with the shortfall against it | a user with no wallet has a balance of zero; held money is promised elsewhere ([contract.holds.md](contract.holds.md)) |
 | 4 | one debit of `total`, `reasonType: product_purchase`, `referenceId` = the invoice — skipped when `total` is `0` | invariant 2: a ledger amount is > 0, so a free invoice writes no row |
 | 5 | invoice → `paid` | — |
 | 6 | `GrantService.issue`, `source: purchase`, `sourceReferenceId` = the invoice, `startsAt` = now | a purchase starts `pending` (entitlement contract); delivery (below) activates it. The `(source, sourceReferenceId)` unique index is the second line against a double issue |

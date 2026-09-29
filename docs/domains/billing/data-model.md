@@ -1,7 +1,7 @@
 ---
 id: billing
 layer: domain
-updated: 2026-09-28
+updated: 2026-09-29
 ---
 
 # Data model — billing
@@ -12,7 +12,8 @@ Source of truth: `txnet-backend/prisma/domains/billing.prisma` (Postgres schema
 ## Tables owned
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
-| wallet | user balance cache + optimistic version | via owner user | permanent |
+| wallet | user balance cache + optimistic version; `heldAmount` = its open holds' sum, `CHECK (cachedBalance - heldAmount >= 0)` (F-118-a) | via owner user | permanent |
+| wallet_hold | money locked for one `ownerRef` (a Grant, a per-use token): `amount` held now, `captured` so far, `status` `open`/`closed` (closed = `amount` 0 + `closedAt`, CHECK), `currencyCode` = its wallet's while open; one open per `(walletId, ownerRef)` (partial unique index); a deferred trigger ties it to `wallet.heldAmount` — [contract.holds.md](contract.holds.md) | via its wallet | permanent |
 | wallet_transaction | append-only money ledger (`balanceAfter` per row) | denormalized `tenantId` | permanent |
 | sub_account | Config-scoped shared spending pocket (byte cap) | via parent wallet | with config |
 | wallet_transfer_request | OTP-confirmed user->user transfer state machine | — | permanent (audit) |

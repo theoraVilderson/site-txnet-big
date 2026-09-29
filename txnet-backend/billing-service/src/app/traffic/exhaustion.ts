@@ -77,8 +77,9 @@ export async function suspendIfExhausted(tx: Prisma.TransactionClient, grantId: 
   const owner = await tx.grant.findUnique({ where: { id: grantId }, select: { tenantId: true, userId: true } });
   if (!owner) return verdict('grant_not_found');
 
-  const [wallet] = await tx.$queryRaw<{ cachedBalance: Prisma.Decimal }[]>`
-    SELECT "cachedBalance" FROM "billing"."wallet"
+  // The free balance: held money cannot buy a block (F-118-a).
+  const [wallet] = await tx.$queryRaw<{ free: Prisma.Decimal }[]>`
+    SELECT "cachedBalance" - "heldAmount" AS free FROM "billing"."wallet"
      WHERE "ownerUserId" = ${owner.userId}::uuid
        FOR UPDATE`;
 
@@ -95,7 +96,7 @@ export async function suspendIfExhausted(tx: Prisma.TransactionClient, grantId: 
   // Past the bag counts as spent: an overrun is a debt for the holds queue (ADR-0074), never credit.
   if (grant.consumedBytes < grant.purchasedBytes) return verdict('bag_not_empty');
   // No wallet row is a balance of zero — the same answer as an empty one.
-  if (walletCanBuy(grant.meteredRate, wallet?.cachedBalance ?? new Prisma.Decimal(0))) return verdict('wallet_can_buy');
+  if (walletCanBuy(grant.meteredRate, wallet?.free ?? new Prisma.Decimal(0))) return verdict('wallet_can_buy');
 
   const suspension = await suspendForExhaustion(tx, grantId, at);
   if (!suspension.suspended) return verdict('not_active');
