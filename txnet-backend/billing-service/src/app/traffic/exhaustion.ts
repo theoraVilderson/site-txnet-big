@@ -4,6 +4,7 @@ import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import { emitCutOff } from '../entitlement/cut-off';
 import { suspendForExhaustion, suspendForPeriodEnd } from '../entitlement/suspension';
+import { withinCap } from '../usage/spending-cap';
 import { BlockPurchaseRefused, type BlockPurchaseRejection, sizeBlock } from './block-purchase';
 
 /**
@@ -21,7 +22,7 @@ import { BlockPurchaseRefused, type BlockPurchaseRejection, sizeBlock } from './
  */
 
 /** What `purchase()` refuses when the money is the problem. Anything else is not a short wallet. */
-const SHORT_OF_FUNDS: ReadonlySet<BlockPurchaseRejection> = new Set<BlockPurchaseRejection>(['insufficient_funds', 'block_below_one_byte']);
+const SHORT_OF_FUNDS: ReadonlySet<BlockPurchaseRejection> = new Set<BlockPurchaseRejection>(['insufficient_funds', 'block_below_one_byte', 'cap_reached']);
 
 /** Whether a purchase refusal was the wallet being short, as opposed to the Grant or the rate. */
 export const isShortOfFunds = (error: unknown): boolean => error instanceof BlockPurchaseRefused && SHORT_OF_FUNDS.has(error.reason);
@@ -79,11 +80,12 @@ export async function suspendIfExhausted(tx: Prisma.TransactionClient, grantId: 
 
   // The free balance: held money cannot buy a block (F-118-a) — except this
   // Grant's own reserve, which its block spends first (F-118-b).
-  const [wallet] = await tx.$queryRaw<{ free: Prisma.Decimal }[]>`
-    SELECT w."cachedBalance" - w."heldAmount" + coalesce(
-             (SELECT h.amount FROM "billing"."wallet_hold" h
-               WHERE h."walletId" = w.id AND h."ownerRef" = ${grantId}::uuid AND h.status = 'open'), 0) AS free
+  const [wallet] = await tx.$queryRaw<{ free: Prisma.Decimal; own?: Prisma.Decimal }[]>`
+    SELECT w."cachedBalance" - w."heldAmount" + o.own AS free, o.own
       FROM "billing"."wallet" w
+     CROSS JOIN LATERAL (SELECT coalesce(
+             (SELECT h.amount FROM "billing"."wallet_hold" h
+               WHERE h."walletId" = w.id AND h."ownerRef" = ${grantId}::uuid AND h.status = 'open'), 0) AS own) o
      WHERE w."ownerUserId" = ${owner.userId}::uuid
        FOR UPDATE OF w`;
 
@@ -99,8 +101,11 @@ export async function suspendIfExhausted(tx: Prisma.TransactionClient, grantId: 
   if (grant.billingMode !== VariantBillingMode.metered || grant.meteredRate === null) return verdict('not_metered');
   // Past the bag counts as spent: an overrun is a debt for the holds queue (ADR-0074), never credit.
   if (grant.consumedBytes < grant.purchasedBytes) return verdict('bag_not_empty');
+  // Its spending cap bounds what the wallet may buy for it (F-118-i).
   // No wallet row is a balance of zero — the same answer as an empty one.
-  if (walletCanBuy(grant.meteredRate, wallet?.free ?? new Prisma.Decimal(0))) return verdict('wallet_can_buy');
+  const free = new Prisma.Decimal(wallet?.free ?? 0);
+  const spendable = await withinCap(tx, { id: grantId, userId: owner.userId }, free, new Prisma.Decimal(wallet?.own ?? 0));
+  if (walletCanBuy(grant.meteredRate, spendable)) return verdict('wallet_can_buy');
 
   const suspension = await suspendForExhaustion(tx, grantId, at);
   if (!suspension.suspended) return verdict('not_active');

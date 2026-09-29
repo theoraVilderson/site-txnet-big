@@ -52,6 +52,9 @@ the block purchaser's; a zero price or one finer than `Decimal(18, 8)` is
 | a capture | `consumed − billed` priced **down** to a cent, never more than the hold | `billed` advances only by the units those cents cover; the rest is carried to the next capture, not charged and not lost |
 | a prepaid remainder | `billed − consumed` priced **down** to a cent | `billed` down to `consumed`; sub-cent dust stays taken |
 
+"The free balance" is bounded by the Grant's spending cap, if it has one, and
+each block and capture is counted on it (F-118-i,
+[contract.spending-cap.md](contract.spending-cap.md)).
 A short balance buys a smaller block or holds less, not nothing; only under
 one cent is `insufficient_funds` (a top-up that still has a hold is not
 refused). At close, what is left under a cent of a postpaid meter is never

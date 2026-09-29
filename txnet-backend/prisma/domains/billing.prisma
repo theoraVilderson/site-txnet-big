@@ -200,7 +200,6 @@ model Wallet {
   owner        User               @relation(fields: [ownerUserId], references: [id])
   transactions WalletTransaction[]
   holds        WalletHold[]
-  subAccounts  SubAccount[]
 
   @@map("wallet")
   @@schema("billing")
@@ -269,20 +268,44 @@ model WalletTransaction {
   @@schema("billing")
 }
 
-/// 6.3 — کیف پول اشتراکی (Sub-account) روی یک Config مشخص.
-model SubAccount {
-  id              String  @id @default(uuid()) @db.Uuid
-  parentWalletId  String  @db.Uuid
-  configId        String  @unique @db.Uuid
-  label           String
-  dataCapBytes    BigInt
-  consumedBytes   BigInt  @default(0)
-  isActive        Boolean @default(true)
+/// A spending cap on one product (F-118-i, ADR-0105 (9)): the owner labels
+/// who a Grant is for and bounds what its usage may cost. The Grant is funded
+/// to `min(free balance, amount − spent − held for it)` and cut at either; the
+/// plan's own price is paid at purchase and is not counted. One per Grant.
+/// Replaces `sub_account`, a byte pocket on one config that nothing wrote.
+model SpendingCap {
+  id             String            @id @default(uuid()) @db.Uuid
+  /// Its Grant's tenant (`entitlement.same_tenant()`), bound by RLS.
+  tenantId       String            @db.Uuid
+  grantId        String            @unique @db.Uuid
+  /// Who it is for: "Sara", "Office". 1..40 characters (CHECK).
+  label          String
+  /// Whole minor units, > 0 (CHECK). The wallet's currency; converted with it (F-116-f).
+  amount         Decimal           @db.Decimal(18, 2)
+  currencyCode   String
+  period         SpendingCapPeriod @default(none)
+  /// The cap's own start: a `monthly` period restarts on its day of the month.
+  startsAt       DateTime          @default(now())
+  /// Where the period `spent` counts from began.
+  periodStartsAt DateTime          @default(now())
+  /// Usage charged to the Grant this period (blocks, captures). >= 0 (CHECK).
+  spent          Decimal           @default(0) @db.Decimal(18, 2)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
-  parentWallet Wallet @relation(fields: [parentWalletId], references: [id])
-  config       Config @relation(fields: [configId], references: [id])
+  grant Grant @relation(fields: [grantId], references: [id], onDelete: Cascade)
 
-  @@map("sub_account")
+  @@index([tenantId])
+  @@map("spending_cap")
+  @@schema("billing")
+}
+
+enum SpendingCapPeriod {
+  /// One budget for the life of the Grant.
+  none
+  /// Restarts every month on the cap's own start date.
+  monthly
+
   @@schema("billing")
 }
 

@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 77
+version: 78
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -53,15 +53,16 @@ source:
   - txnet-backend/prisma/domains/migrations/20260929000100_held_money_is_not_spendable/**
   - txnet-backend/prisma/domains/migrations/20260929000500_usage_arrives_as_idempotent_events/**
   - txnet-backend/prisma/domains/migrations/20260929000600_usage_is_rated_and_settled/**
+  - txnet-backend/prisma/domains/migrations/20260929000700_a_spending_cap_bounds_one_product/**
   - txnet-backend/billing-service/src/app/usage/**
-owns_tables: [wallet, wallet_hold, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change]
+owns_tables: [wallet, wallet_hold, wallet_transaction, spending_cap, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
 updated: 2026-09-29
 ---
 
 # Billing
 
-**Responsibility (one sentence):** end-user money — the wallet ledger, sub-accounts,
+**Responsibility (one sentence):** end-user money — the wallet ledger, spending caps on one product,
 OTP-confirmed transfers, the coupon engine, invoices for catalog purchases, platform-brand
 gateways + transactions (card / rial / crypto), and the affiliate commission ledger. **Not:**
 tenant<->platform billing (`tenant`), display-currency conversion (`currency`), plan prices (`catalog`).
@@ -69,7 +70,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Files
 | File | Read it when |
 |---|---|
-| [contract.md](contract.md) | using or changing billing from outside; what a tenant's currency change converts: [contract.currency-change.md](contract.currency-change.md); money held for a promise: [contract.holds.md](contract.holds.md) |
+| [contract.md](contract.md) | using or changing billing from outside; what a tenant's currency change converts: [contract.currency-change.md](contract.currency-change.md); money held for a promise: [contract.holds.md](contract.holds.md); a spending cap on one Grant: [contract.spending-cap.md](contract.spending-cap.md) |
 | [contract.gateways.md](contract.gateways.md) | creating, changing or deleting a payment gateway — a tenant's own, or a named reseller's |
 | [contract.purchase.md](contract.purchase.md) | buying a catalog product: the invoice, its coupons and discounts with no code, its 30-minute clock, and paying it from the wallet |
 | [contract.deposit.md](contract.deposit.md) | one whole top-up: gateway list, quote, start — and the bank's callback that settles it |
@@ -92,8 +93,8 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-29 | contract v78 (additive, F-118-i, ADR-0105 (9)): a spending cap on one Grant — `GET/PUT/DELETE /api/billing/traffic/grants/:grantId/cap`; every usage path funds a capped Grant to `min(free, cap − spent − held)`; `sub_account` dropped. [contract.spending-cap.md](contract.spending-cap.md) |
 | 2026-09-29 | contract v77 (additive, F-118-b, ADR-0105 (8)): the VPN reserve is held money — one hold per metered Grant (`VPN_RESERVE_BYTES`, default 1 GiB, at its rate), topped at issue/block/revive and by `POST internal/billing/traffic/reserve-due` (`vpn_reserve`, every minute), released when the Grant stops being planned; its own block spends it. `traffic/vpn-reserve.ts`, contract.holds.md, contract.traffic-block.md |
 | 2026-09-29 | contract v76 (additive, F-118-g, ADR-0105 (5)(6)(11)): rating and settlement — prepaid blocks, postpaid holds captured hourly, before a re-top and at close; reasons `usage_charge` (a sale) and `usage_refund`. No caller sells a non-VPN meter yet. See [contract.usage-rating.md](contract.usage-rating.md) |
-| 2026-09-29 | contract v75 (additive, F-118-f, ADR-0105 (5)): usage intake — `usage_event` advances `grant_meter.consumed` once per `(source, idempotencyKey)`, through `recordUsage` in-process or the outbox type `billing.usage.event`. No reporter exists yet; VPN keeps its delta path. See [contract.metering.md](contract.metering.md) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

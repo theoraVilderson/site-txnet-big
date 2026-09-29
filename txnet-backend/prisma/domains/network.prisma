@@ -546,7 +546,6 @@ model Config {
   actionLogs       ConfigActionLog[]
   trafficRawLogs   TrafficRawLog[]
   trafficDailyAggs TrafficDailyAggregate[]
-  subAccount       SubAccount?
 
   counterState      ConfigCounterState?
   usageHolds        UsageHold[]

@@ -4,6 +4,7 @@ import { METERED_RATE_UNIT_BYTES, WalletVersionConflict, runWithTenant, tenantTr
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { withinCap } from '../usage/spending-cap';
 import { WalletHoldService, WalletLedgerService } from '../wallet/wallet-ledger.service';
 
 /**
@@ -151,7 +152,8 @@ export class VpnReserve {
     const target = sizeReserve({
       rate: grant.meteredRate as Prisma.Decimal,
       reserveBytes: this.bytes,
-      available: wallet.cachedBalance.minus(wallet.heldAmount).plus(held),
+      // Inside the Grant's spending cap, if it has one (F-118-i).
+      available: await withinCap(tx, grant, wallet.cachedBalance.minus(wallet.heldAmount).plus(held), held),
     });
     const entry = { userId: grant.userId, ownerRef: grant.id };
     if (target.gt(held)) await this.holds.hold(tx, { ...entry, amount: target.minus(held), currencyCode: wallet.currencyCode });

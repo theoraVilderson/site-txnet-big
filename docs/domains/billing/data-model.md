@@ -16,7 +16,7 @@ Source of truth: `txnet-backend/prisma/domains/billing.prisma` (Postgres schema
 | wallet_hold | money locked for one `ownerRef` (a Grant, a per-use token): `amount` held now, `captured` so far, `status` `open`/`closed` (closed = `amount` 0 + `closedAt`, CHECK), `currencyCode` = its wallet's while open; one open per `(walletId, ownerRef)` (partial unique index); a deferred trigger ties it to `wallet.heldAmount` — [contract.holds.md](contract.holds.md) | via its wallet | permanent |
 | usage_event | one reported use of a Grant's meter (F-118-f): `(grantId, meterKey)` -> `grant_meter`, `quantity` > 0, `occurredAt`, `(source, idempotencyKey)` unique = the dedup; append-only; advances `grant_meter.consumed` | `tenantId` (its meter's), strict RLS | permanent |
 | wallet_transaction | append-only money ledger (`balanceAfter` per row) | denormalized `tenantId` | permanent |
-| sub_account | Config-scoped shared spending pocket (byte cap) | via parent wallet | with config |
+| spending_cap | the owner's cap on one Grant's usage (F-118-i): `label`, `amount` > 0 in the wallet's `currencyCode`, `period` `none`/`monthly` from `startsAt`, `spent` this period since `periodStartsAt`; one per Grant; replaces `sub_account` (dropped) — [contract.spending-cap.md](contract.spending-cap.md) | `tenantId` (its Grant's, `same_tenant()`), strict RLS | with its Grant |
 | wallet_transfer_request | OTP-confirmed user->user transfer state machine | — | permanent (audit) |
 | coupon + coupon_service_scope + coupon_allowed_user + coupon_redemption + coupon_batch + coupon_gateway | coupon engine (reserve/confirm), management | `coupon.tenantId` nullable (null = platform coupon, serving the platform owner's users only — ADR-0099); soft delete; `coupon_redemption.currencyCode` = what its discount is in (F-116-h5); `fxFromCode`/`fxRate`/`fxSnapshotId`/`fxFromSnapshotId` = the rate a coupon in another currency was converted at, else NULL (F-116-h6) | permanent |
 | payment_gateway | platform-brand gateway config (card/rial/crypto); `taxRatePercent` null = the tenant's `deposit_setting` default (ADR-0076) | platform-owner only | permanent |
@@ -68,7 +68,7 @@ transaction that adds it).
 | This table | -> | Other unit's table | Why it is allowed |
 |---|---|---|---|
 | wallet.ownerUserId | -> | identity.user.id | one wallet per user |
-| sub_account.configId | -> | network.config.id | a sub-account funds one VPN config |
+| spending_cap.grantId | -> | entitlement.grant.id | a cap bounds one Grant; `Cascade` |
 | coupon_service_scope.productId / variantId (exactly one) | -> | catalog.product / product_variant | coupon targeting (F-026-a) |
 | coupon.grantVariantId | -> | catalog.product_variant | what a `free_grant` coupon gives (D-35); `Restrict`, a variant is never deleted |
 | affiliate_commission.payoutWalletTransactionId | -> | billing.wallet_transaction | payout is itself a ledger entry |

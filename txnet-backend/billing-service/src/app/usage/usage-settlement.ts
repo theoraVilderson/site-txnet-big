@@ -21,6 +21,7 @@ import {
   ZERO,
 } from './usage-price';
 import { UsageRefundService } from './usage-refund';
+import { spendOnCap, withinCap } from './spending-cap';
 
 export { blockFor, capturable, UsageSettlementRefused } from './usage-price';
 export type { UsageSettlementRefusal } from './usage-price';
@@ -84,7 +85,7 @@ export class UsageSettlementService {
     const { grant, meter } = await this.load(tx, input, RateCardMode.prepaid);
     if (grant.status !== GrantStatus.active) throw new UsageSettlementRefused('grant_not_active', grant.status);
 
-    const block = blockFor(meter, input.targetUnits, await this.freeBalance(tx, grant.userId));
+    const block = blockFor(meter, input.targetUnits, await withinCap(tx, grant, await this.freeBalance(tx, grant.userId)));
     const funded = max(meter.funded, meter.includedQuantity) + block.units;
     await moveCursors(tx, meter, { funded, billed: max(meter.billed, meter.includedQuantity) + block.units });
     const amount = toAmount(block.cents);
@@ -95,6 +96,7 @@ export class UsageSettlementService {
       reasonType: WalletReasonType.usage_charge,
       referenceId: grant.id,
     });
+    await spendOnCap(tx, grant.id, amount);
     return { amount, units: block.units, funded, walletTransactionId: row.id };
   }
 
@@ -178,7 +180,8 @@ export class UsageSettlementService {
   private async topUpTo(tx: Prisma.TransactionClient, ctx: Ctx, targetCents: bigint): Promise<ToppedUp> {
     const captured = await this.captureIn(tx, ctx);
     const heldBefore = await this.heldCents(tx, ctx);
-    const add = min(targetCents - heldBefore, toCents(await this.freeBalance(tx, ctx.grant.userId)));
+    // Inside the Grant's spending cap, if it has one (F-118-i): this hold is already counted in it.
+    const add = min(targetCents - heldBefore, toCents(await withinCap(tx, ctx.grant, await this.freeBalance(tx, ctx.grant.userId))));
     if (add >= BigInt(1)) {
       await this.holds.hold(tx, { userId: ctx.grant.userId, ownerRef: ctx.meter.id, amount: toAmount(add), currencyCode: ctx.meter.currencyCode });
     } else if (heldBefore < BigInt(1) && targetCents > ZERO) {
@@ -207,6 +210,7 @@ export class UsageSettlementService {
       reasonType: WalletReasonType.usage_charge,
       referenceId: grant.id,
     });
+    await spendOnCap(tx, grant.id, amount);
     return { amount, billed: billedTo, walletTransactionId: row.id };
   }
 

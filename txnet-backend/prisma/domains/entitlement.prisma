@@ -204,6 +204,7 @@ model Grant {
   durationChanges  GrantDurationChange[]
   renewals         GrantRenewal[]
   meters           GrantMeter[]
+  spendingCap      SpendingCap?
   deletion         GrantDeletion?
   configs          Config[]
   leaseClose       LeaseClose?

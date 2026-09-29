@@ -66,6 +66,8 @@ export type CurrencyChangeSummary = {
   /** Rate cards repriced (F-118-d). The key predates them; the panel reads it. */
   meteredRates: number;
   grants: number;
+  /** Spending caps (F-118-i): the cap and what it has counted, with their wallet. */
+  spendingCaps: number;
   coupons: number;
   rules: number;
   depositSettings: number;
@@ -151,6 +153,7 @@ export async function convertOperatingCurrency(
     prices: await repricePrices(c),
     meteredRates: await repriceRateCards(c),
     grants: await convertGrants(c),
+    spendingCaps: await convertSpendingCaps(c),
     coupons: await convertCoupons(c),
     rules: await convertRules(c),
     depositSettings: await convertDepositSettings(c),
@@ -331,6 +334,18 @@ const convertGrants = (c: Conversion) => c.tx.$executeRaw`
      SET "meteredRate" = round("meteredRate" * ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int), "meteredRateCurrencyCode" = ${c.to}
    WHERE "tenantId" = ${c.tenantId}::uuid AND "meteredRateCurrencyCode" = ${c.from}
      AND status IN ('pending', 'active', 'suspended', 'exhausted')`;
+
+/**
+ * A spending cap is in its wallet's currency (F-118-i), so it converts with
+ * it: the cap rounded to the new decimals, what it counted rounded **down** —
+ * the owner's room never shrinks by the rounding.
+ */
+const convertSpendingCaps = (c: Conversion) => c.tx.$executeRaw`
+  UPDATE billing.spending_cap
+     SET amount = greatest(${money(c, Prisma.sql`amount`)}, power(10::numeric, -${c.dp}::int)),
+         spent = trunc(spent * ${c.rate}::numeric, ${c.dp}::int),
+         "currencyCode" = ${c.to}, "updatedAt" = now()
+   WHERE "tenantId" = ${c.tenantId}::uuid AND "currencyCode" = ${c.from}`;
 
 const convertCoupons = (c: Conversion) => c.tx.$executeRaw`
   UPDATE billing.coupon

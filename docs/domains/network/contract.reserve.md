@@ -27,7 +27,9 @@ hurts most.
    Grant). Billing holds `VPN_RESERVE_BYTES` (default 1 GiB) at that rate,
    rounded up to a cent, clamped to the free balance — a fixed size so the
    rest of the wallet stays spendable (user, 2026-09-29). No hold is a reserve
-   of nothing. A prepaid Grant has none: its bag is all there is, and `Σ
+   of nothing. A Grant with a spending cap (F-118-i, billing
+   `contract.spending-cap.md`) holds no more than its cap leaves, so the cap
+   reaches Quota here. A prepaid Grant has none: its bag is all there is, and `Σ
    ceilings ≤ purchasedBytes` holds for it unchanged (user, 2026-09-27).
 2. **It is a term of Quota, not a step per config.** The lease planner reads
    `purchasedBytes` plus its share of the reserve itself

@@ -400,6 +400,8 @@ export const envSchema = z.object({
   CONFIG_ACTION_RATE_LIMIT: rateLimit(30),
   /** The 30-day usage chart, opened with a Grant's configs (`traffic/user-configs.controller.ts`, F-307-b). */
   GRANT_USAGE_RATE_LIMIT: rateLimit(180),
+  /** A Grant's spending cap, read and set from the service page (`usage/spending-cap.controller.ts`, F-118-i). */
+  SPENDING_CAP_RATE_LIMIT: rateLimit(60),
   /**
    * The operator settlement surface (`settlement/settlement.controller.ts`,
    * F-096-e), per operator. The read budget is the admin UI's refresh rate

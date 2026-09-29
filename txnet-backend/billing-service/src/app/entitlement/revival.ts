@@ -1,6 +1,7 @@
 import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 
 import { walletCanBuy } from '../traffic/exhaustion';
+import { withinCap } from '../usage/spending-cap';
 import { reviveOnTopUp } from './purge';
 import { emitReactivated, runs } from './reactivated';
 import { QUOTA_EXHAUSTED } from './suspension';
@@ -82,7 +83,8 @@ export async function reviveFundedGrants(
 
   let revived = 0;
   for (const grant of suspended) {
-    if (!walletCanBuy(grant.meteredRate as Prisma.Decimal, balance)) continue;
+    // A Grant its spending cap cut stays cut until the cap is raised (F-118-i).
+    if (!walletCanBuy(grant.meteredRate as Prisma.Decimal, await withinCap(tx, { id: grant.id, userId }, balance))) continue;
     const revival = await reviveOnTopUp(tx, grant.id);
     if (!revival.revived) continue;
     revived++;

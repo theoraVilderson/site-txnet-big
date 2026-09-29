@@ -224,7 +224,6 @@ pass are in [contract.collection.md](contract.collection.md). No config action i
 | identity | `userId` owner of a config | provisioning blocked |
 | entitlement | the `grant` a config is provisioned for — its status, quotas and `panelGroupId` via its variant (ADR-0049; F-027) | provisioning blocked |
 | tenant | `tenantId` denormalized onto panel/config; dedicated Panel pools; a panel's login via the vault's `use` route (F-027-aw) | shared pool still usable; a pending panel stays `pending`, `unopenable` |
-| billing | `sub_account` draws down `config` byte caps | metering stops |
 
 ## Guarantees (intended)
 

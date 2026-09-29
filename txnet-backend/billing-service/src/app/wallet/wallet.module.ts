@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { LocaleModule } from '../locale/locale.module';
 import { VpnReserve, installVpnReserve } from '../traffic/vpn-reserve';
+import { SpendingCaps, installSpendingCaps } from '../usage/spending-cap';
 import { WalletCreditService } from './wallet-credit.service';
 import { WalletHistoryController } from './wallet-history.controller';
 import { WalletHistoryService } from './wallet-history.service';
@@ -21,7 +22,8 @@ import { WalletHoldService, WalletLedgerService } from './wallet-ledger.service'
  * (6)); the reserve (F-118-b) and postpaid settlement (F-118-g) call it.
  * `VpnReserve` is built here, sized by `VPN_RESERVE_BYTES`, and installed for
  * the revive paths, which top a Grant's reserve in the transaction that
- * brings it back (F-118-b).
+ * brings it back (F-118-b). `SpendingCaps` is installed beside it: every
+ * funding path bounds a capped Grant by its cap (F-118-i).
  */
 @Module({
   imports: [LocaleModule],
@@ -36,9 +38,10 @@ import { WalletHoldService, WalletLedgerService } from './wallet-ledger.service'
       useFactory: (holds: WalletHoldService, config: ConfigService) =>
         installVpnReserve(new VpnReserve(holds, BigInt(config.getOrThrow<number>('VPN_RESERVE_BYTES')))),
     },
+    { provide: SpendingCaps, useFactory: () => installSpendingCaps(new SpendingCaps()) },
     WalletCreditService,
     WalletHistoryService,
   ],
-  exports: [WalletLedgerService, WalletHoldService, VpnReserve, WalletCreditService, WalletHistoryService],
+  exports: [WalletLedgerService, WalletHoldService, VpnReserve, SpendingCaps, WalletCreditService, WalletHistoryService],
 })
 export class WalletModule {}

@@ -329,6 +329,13 @@ export const RateLimitBucket = {
   GRANT_USAGE: 'grant:usage',
 
   /**
+   * A Grant's spending cap (F-118-i), per user: read with the service page,
+   * set, raised and removed from it. One bucket — a cap is set a handful of
+   * times, and its read is one per page open.
+   */
+  SPENDING_CAP: 'grant:cap',
+
+  /**
    * The platform owner's settlement surface in `billing-service` (F-096-e),
    * per operator. Two buckets rather than one because the surface is read far
    * more often than it is written — an operator refreshes what is owed while

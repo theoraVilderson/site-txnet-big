@@ -204,7 +204,6 @@ rows individually correct, which is what made it invisible.
 | config.grantId | -> | entitlement.grant.id | the Grant it was provisioned for (F-026-b; was `servicePlanId`) |
 | lease_close.grantId, grant_rate_limit.grantId | -> | entitlement.grant.id | the planner's close of that Grant (F-027-dd; `desiredEnabled` stays billing's), an admin's speed cap on it (F-311-p) |
 | config.tenantId, panel.tenantId | -> | tenant.tenant.id | dedicated pools / per-tenant scoping |
-| config (referenced) | <- | billing.sub_account.configId | sub-account funds a config |
 
 ## Access rules
 

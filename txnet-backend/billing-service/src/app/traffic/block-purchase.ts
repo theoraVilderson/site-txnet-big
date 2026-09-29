@@ -3,6 +3,7 @@ import { Grant, GrantStatus, Prisma, VariantBillingMode, WalletReasonType } from
 import { METERED_RATE_UNIT_BYTES, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { spendOnCap, withinCap } from '../usage/spending-cap';
 import { WalletLedgerService } from '../wallet/wallet-ledger.service';
 import { NO_VPN_RESERVE, VpnReserve } from './vpn-reserve';
 
@@ -46,6 +47,8 @@ export type BlockPurchaseRejection =
   | 'rate_not_priceable'
   /** The balance cannot fund a single cent. The ceiling stays where it is and the panel cuts the user off (ADR-0072). */
   | 'insufficient_funds'
+  /** The wallet could fund it, the Grant's spending cap cannot (F-118-i). Cut as an empty wallet cuts it. */
+  | 'cap_reached'
   /** A rate so high that a whole cent buys less than one byte. Never a zero-byte block. */
   | 'block_below_one_byte'
   | 'target_not_positive';
@@ -199,11 +202,11 @@ export class BlockPurchaseService {
     // The Grant's own reserve (F-118-b) is its money: the bytes it backed are
     // what this block pays for. Another hold is not (F-118-a).
     const reserved = await this.reserve.heldFor(tx, grant);
-    const block = sizeBlock({
-      rate: grant.meteredRate,
-      targetBytes: input.targetBytes,
-      maxSpend: wallet ? wallet.cachedBalance.minus(wallet.heldAmount).plus(reserved) : new Prisma.Decimal(0),
-    });
+    const free = wallet ? wallet.cachedBalance.minus(wallet.heldAmount).plus(reserved) : new Prisma.Decimal(0);
+    // Its spending cap, if the owner set one (F-118-i): the reserve is inside it.
+    const maxSpend = await withinCap(tx, grant, free, reserved);
+    if (maxSpend.lt(free) && maxSpend.lt('0.01')) throw new BlockPurchaseRefused('cap_reached', grant.id);
+    const block = sizeBlock({ rate: grant.meteredRate, targetBytes: input.targetBytes, maxSpend });
 
     // Sized before anything is written, so a refusal leaves the transaction clean.
     if (reserved.gt(0)) await this.reserve.release(tx, grant);
@@ -215,6 +218,7 @@ export class BlockPurchaseService {
       reasonType: WalletReasonType.traffic_consumption,
       referenceId: grant.id,
     });
+    await spendOnCap(tx, grant.id, block.amount);
 
     // `increment`, not a computed value: the cursors are advanced by the
     // database from whatever they hold, so nothing here can write back a

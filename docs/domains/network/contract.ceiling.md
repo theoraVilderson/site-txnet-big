@@ -68,10 +68,11 @@ ceiling. Its configs keep `allocatedCeilingBytes = null` (CHECK
 limit is never taken for `no_limit_on_panel`: provisioning creates it that way
 (F-111-r).
 
-**A sub-account cap is not held today.** Billing's split cut a config carrying
-an active `billing.SubAccount` to its `dataCapBytes` (F-608); the planner reads
-no such cap. Nothing writes `sub_account` yet, so no config carries one —
-`open-questions.md` has the row for when F-608 is built.
+**No config carries a cap of its own.** A sub-account (F-608) is a spending
+cap on one Grant, kept by billing (F-118-i, ADR-0105 (9), billing
+`contract.spending-cap.md`): it bounds the bag billing sells and the reserve it
+holds, so the planner sees it through Quota and reads nothing per config.
+`billing.sub_account` and its `dataCapBytes` are dropped.
 
 ## The convergence loop — carrying the number to the panel (F-027-t)
 

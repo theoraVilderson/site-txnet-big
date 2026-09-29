@@ -69,6 +69,9 @@ hold** (F-118-b, network `contract.reserve.md`): sized first, then the reserve
 released, the block debited (one row) and the reserve topped back from what is
 left, in the same transaction. Another Grant's reserve is never spent. The
 exhaustion verdict reads the same figure, and a suspension releases the reserve.
+A Grant with a spending cap is clamped to what the cap leaves too (F-118-i,
+[contract.spending-cap.md](contract.spending-cap.md)), and each block is counted
+on it in the same transaction.
 Only a balance under one cent is refused (`insufficient_funds`), and then the
 ceiling stays where it is and the panel cuts the user off by itself — ADR-0072's
 worst acceptable failure. Stalling with 99c unspent is that failure arriving
@@ -183,7 +186,9 @@ write is `grant_moved`. Route: [contract.reseller-grants.md](contract.reseller-g
 Each throws `BlockPurchaseRefused` and writes nothing: `grant_not_found`,
 `grant_not_active` (a suspended Grant is revived by F-027-x/y first),
 `grant_not_metered`, `target_not_positive`, `insufficient_funds`,
-`block_below_one_byte` (a clamped block that buys no whole byte), and
+`block_below_one_byte` (a clamped block that buys no whole byte), `cap_reached`
+(the wallet could fund it, the Grant's spending cap cannot — short of funds, as
+the other two are), and
 `rate_not_priceable` — a zero rate, or one finer than `Decimal(18, 8)`. A free
 byte is a catalog decision, not an arithmetic one, so a zero rate is refused
 here rather than read as free traffic.

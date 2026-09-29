@@ -59,6 +59,7 @@ exports[`RateLimitBucket > records the whole rate-limited surface in one place 1
   "CONFIG_LIST = config:list",
   "CONFIG_ACTION = config:action",
   "GRANT_USAGE = grant:usage",
+  "SPENDING_CAP = grant:cap",
   "SETTLEMENT_ADMIN_READ = settlement:admin:read",
   "SETTLEMENT_ADMIN_WRITE = settlement:admin:write",
   "GATEWAY_ADMIN_READ = gateway:admin:read",
