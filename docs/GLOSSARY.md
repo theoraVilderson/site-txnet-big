@@ -19,7 +19,10 @@ introduce a synonym, record why.
 | Wallet | A user's balance record. `cachedBalance` is a cache; `WalletTransaction` (append-only) is the truth. | billing | TenantBillingWallet, Sub-account |
 | TenantBillingWallet | What a Tenant owes the platform. Separate ledger from user Wallet. | tenant | Wallet |
 | Ledger | The append-only `*Transaction` table pattern. Balance is derived, never `UPDATE`d. | billing | cachedBalance |
-| Sub-account | A shared spending pocket scoped to one Config, drawn from a parent Wallet. | billing | Wallet, Linked account group |
+| Sub-account | A spending cap on one product (a Grant), set by its owner for someone else — family, a friend, a colleague — and drawn from the owner's one Wallet; the product is cut at the cap or at the wallet, whichever comes first (ADR-0105). | billing | Wallet, Linked account group |
+| Wallet hold | Money locked on a Wallet for a postpaid or reserved service: not a ledger row, and never spendable while it stands (`cachedBalance − heldAmount >= 0`); captured into a debit or released (ADR-0105). | billing | Coupon hold (a reserved redemption), Block (bytes already debited) |
+| Meter | What a metered service counts — a catalog row with a key and a unit (`vpn.traffic` in bytes), reported by one service (ADR-0105). | catalog | Capability (what a Grant unlocks), Quota |
+| Rate card | A meter's price on a variant: unit size, unit price, prepaid or postpaid, what the plan includes; locked on the Grant at issue as `grant_meter` (ADR-0105). | catalog | Price (a variant's one-off price) |
 | Base currency | The one `Currency.isBaseCurrency = true`. All money is stored in it. | currency | Display currency, USD |
 | Display currency | A per-user/-admin presentation choice applied only at render time. | currency | Base currency |
 | Config | A user's VPN/proxy credential on a Panel (Xray uuid + protocol). | network | App configuration, `.env`, RemoteClient (driver-internal name for the same thing) |
