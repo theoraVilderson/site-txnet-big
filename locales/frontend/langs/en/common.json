@@ -1558,7 +1558,7 @@
       "archivedHint": "These products were sold, so they are not deleted: they are not on sale and not in the list, but their buyers keep their service. Restore brings one back to the list, switched off."
     },
     "rateCard": {
-      "title": "Rate per GB of traffic",
+      "title": "{{meter}} — rate per GB",
       "mode": "How it is paid",
       "modes": {
         "prepaid": "Prepaid — bought from the wallet before use",
@@ -1826,7 +1826,7 @@
         "yearly": "Yearly price ({{currency}})",
         "priceHint": "Leave empty when the package is not sold for this period. At least one of the two is required.",
         "features": "Included features",
-        "rate": "Wholesale price per GiB of VPN traffic ({{currency}})",
+        "rate": "Wholesale price per GiB of {{meter}} ({{currency}})",
         "rateHint": "What a reseller on this package pays the platform for each GiB its users use on the platform's panels. A change applies to services sold from now on. Empty: resellers on this package cannot sell pay-as-you-go VPN on the platform's panels.",
         "otherRates": "Other rates in force — set through the API; this form leaves them as they are",
         "submit": "Create package",

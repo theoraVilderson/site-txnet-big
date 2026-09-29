@@ -135,7 +135,10 @@ platform-only `meter` row, written by a migration because a meter exists only
 where code reports it — seeded `vpn.traffic` (bytes, network-service) and
 `vpn.config.regenerate` (count, billing-service: one config regenerated,
 F-118-q; sold behind the per-use door, F-118-h). Code names it through
-`METER_KEYS` (`shared-core/src/lib/catalog/meter.ts`).
+`METER_KEYS` (`shared-core/src/lib/catalog/meter.ts`). Its name ships with that
+code (F-118-s, D-59 (a)): `meterNameKey` = `catalog.meter.<key>.name`, its text
+committed in `locales/shareds/<lang>/catalog.json` in the commit that adds it;
+no screen writes one (`meter-names.spec.ts`).
 A **rate card** (F-118-d, ADR-0105 decision 3) prices one meter on one variant:
 `unitPrice` per `unitSize` of the meter's unit, `Decimal(18,8)`, in its
 `currencyCode`; `mode` `prepaid | postpaid`, picked by the seller per meter;

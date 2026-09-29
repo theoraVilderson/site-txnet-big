@@ -28,6 +28,7 @@ import {
   emptyCategoryForm,
   emptyProductForm,
   flattenTexts,
+  meterName,
   editId,
   namesBody,
   removalReport,
@@ -811,5 +812,22 @@ describe("a metered variant's rate per GB (F-118-m, ADR-0105 decision 10)", () =
     expect(rateDecimals("0.00045", 2)).toBe(5);
     expect(rateDecimals("0.5", 2)).toBe(2);
     expect(rateDecimals("1500", 0)).toBe(0);
+  });
+});
+
+describe("a meter is shown by its name, never its key (F-118-s, D-59 (a))", () => {
+  const shipped = (lang: string) =>
+    flattenTexts(JSON.parse(readFileSync(join(__dirname, "../../../../../locales/shareds", lang, "catalog.json"), "utf8")));
+
+  it.each(["fa", "en"])("names both meters from the %s text committed in locales/", (lang) => {
+    for (const key of ["vpn.traffic", "vpn.config.regenerate"]) {
+      const name = meterName(shipped(lang), key);
+      expect(name).not.toBe(key);
+      expect(name.trim()).not.toBe("");
+    }
+  });
+
+  it("falls back to the key only when the texts did not load", () => {
+    expect(meterName({}, "vpn.traffic")).toBe("vpn.traffic");
   });
 });

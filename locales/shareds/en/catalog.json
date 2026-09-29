@@ -1,0 +1,14 @@
+{
+  "meter": {
+    "vpn": {
+      "traffic": {
+        "name": "VPN traffic"
+      },
+      "config": {
+        "regenerate": {
+          "name": "VPN config regeneration"
+        }
+      }
+    }
+  }
+}

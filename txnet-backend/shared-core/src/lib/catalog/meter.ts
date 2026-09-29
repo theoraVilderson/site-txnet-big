@@ -18,6 +18,13 @@ export const METER_KEYS = {
 export type MeterKey = (typeof METER_KEYS)[keyof typeof METER_KEYS];
 
 /**
+ * A meter's name key (F-118-s, D-59 (a)) — the seeded `catalog.meter.nameKey`.
+ * Its text is committed in `locales/shareds/<lang>/catalog.json` with the code
+ * that adds the meter, since no screen writes a meter's name.
+ */
+export const meterNameKey = (key: string): string => `catalog.meter.${key}.name`;
+
+/**
  * Meters served through the per-use door (F-118-h, ADR-0105 decision 7):
  * each use is authorized before the work — refused when unfunded — and
  * committed after it (`billing-service` `usage/usage-door.ts`). A card on one

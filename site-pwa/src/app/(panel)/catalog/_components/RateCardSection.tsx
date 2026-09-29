@@ -5,6 +5,7 @@ import { ChevronDown } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import type { CatalogRateCard, CatalogVariant } from "@/lib/catalog-api";
 import { useCatalogSurface } from "../_lib/surface";
+import { useMeterNames } from "../_lib/meter-names";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Select } from "../../_components/kit/Select";
 import { currencyDecimals, formatMoney } from "../../_lib/money";
@@ -33,6 +34,7 @@ import { Field, input, primaryButton, quietButton } from "./catalog-ui";
 export function RateCardSection({ variant: v, act }: { variant: CatalogVariant; act: (run: () => Promise<unknown>) => Promise<void> }) {
   const { t, lang } = useLocale();
   const { api } = useCatalogSurface();
+  const meterName = useMeterNames();
   const [form, setForm] = useState<RateCardForm>({ mode: "prepaid", unitPrice: "", day: "" });
   const [errors, setErrors] = useState<Errors<RateCardForm>>({});
   const [history, setHistory] = useState(false);
@@ -57,7 +59,7 @@ export function RateCardSection({ variant: v, act }: { variant: CatalogVariant; 
   return (
     <div className="flex flex-col gap-2 rounded-xl bg-[var(--leaf-bg)] p-2">
       <p className="text-xs font-bold text-text-primary">
-        {t("common", K.rateCard.title)}:{" "}
+        {t("common", K.rateCard.title, { meter: meterName(VPN_TRAFFIC) })}:{" "}
         {current ? (
           <span dir="auto">
             {rate(current)} · {t("common", K.rateCard.modes[current.mode])}

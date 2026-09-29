@@ -18,6 +18,7 @@ import {
   validatePackage,
   type PackageForm,
 } from "../../_lib/packages";
+import { useMeterNames } from "../../../catalog/_lib/meter-names";
 
 /**
  * Creating or editing one package (F-018-d, F-118-n5): name, the two prices,
@@ -38,6 +39,7 @@ export function PackageSheet({
   onSaved: (p: TenantPackage, created: boolean) => void;
 }) {
   const { t } = useLocale();
+  const meterName = useMeterNames();
   const message = useMessage();
   const [form, setForm] = useState<PackageForm>(() => (pkg ? packageFormOf(pkg) : emptyPackageForm()));
   const [errors, setErrors] = useState<Errors<PackageForm>>({});
@@ -118,7 +120,7 @@ export function PackageSheet({
       </Field>
 
       {WHOLESALE_METERS.map((m) => (
-        <Field key={m.meterKey} label={t("common", K.form.rate, { currency: code })} hint={t("common", K.form.rateHint)} error={errors.rates}>
+        <Field key={m.meterKey} label={t("common", K.form.rate, { meter: meterName(m.meterKey), currency: code })} hint={t("common", K.form.rateHint)} error={errors.rates}>
           <input
             className={input}
             dir="ltr"
@@ -133,8 +135,8 @@ export function PackageSheet({
         <div className="space-y-1 rounded-xl border border-card-border p-3 text-xs text-text-secondary">
           <p className="font-bold">{t("common", K.form.otherRates)}</p>
           {others.map((r) => (
-            <p key={`${r.meterKey}|${r.unitSize}`} dir="ltr">
-              {t("common", K.otherRate, { meter: r.meterKey, price: r.unitPrice, currency: r.currencyCode, size: r.unitSize })}
+            <p key={`${r.meterKey}|${r.unitSize}`} dir="auto">
+              {t("common", K.otherRate, { meter: meterName(r.meterKey), price: r.unitPrice, currency: r.currencyCode, size: r.unitSize })}
             </p>
           ))}
         </div>

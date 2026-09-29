@@ -1,0 +1,14 @@
+{
+  "meter": {
+    "vpn": {
+      "traffic": {
+        "name": "ترافیک VPN"
+      },
+      "config": {
+        "regenerate": {
+          "name": "ساختن دوباره‌ی کانفیگ VPN"
+        }
+      }
+    }
+  }
+}

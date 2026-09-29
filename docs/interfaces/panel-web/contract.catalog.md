@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 25
-updated: 2026-09-25
+updated: 2026-09-29
 ---
 
 # Contract — panel-web: catalog (F-026-f)
@@ -130,7 +130,8 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    the rate in effect (`currentRateCard`, billing's `rateCardAt`) with every
    place it was written in (`rateDecimals`), a new rate by price's rule 5
    (`validateRateCardForm` / `rateCardBody`), and the history, switchable off
-   (`_components/RateCardSection.tsx`). None in effect reads "not for sale"
+   (`_components/RateCardSection.tsx`), titled by the meter's name, never its
+   key (`useMeterNames`, F-118-s). None in effect reads "not for sale"
    (`noRate`). The platform's cards are the platform owner's: billing answers
    a reseller's screen only its own variants.
 10d. **A created product lands on the list, not in its sheet** (F-114-g,

@@ -179,6 +179,15 @@ export function catalogText(texts: CatalogTexts, lang: string, key: string | nul
   return null;
 }
 
+/**
+ * A meter's name (F-118-s, D-59 (a)): billing's `meterNameKey`, its text
+ * committed in `locales/shareds/<lang>/catalog.json` with the code that adds
+ * the meter, so every language the panel has carries it. The key only when
+ * the texts did not load.
+ */
+export const meterNameKey = (key: string) => `catalog.meter.${key}.name`;
+export const meterName = (texts: Record<string, string>, key: string): string => texts[meterNameKey(key)] || key;
+
 /** A rename as an admin types it: one name (and a product's description) in the source language picked. */
 export interface NamesForm {
   sourceLang: string;
