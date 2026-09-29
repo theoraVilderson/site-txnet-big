@@ -36,6 +36,36 @@ ALIASES = {"spec_ref": "spec", "specref": "spec", "depends": "depends_on",
 NOTE_CAP = 240
 # The empty cell as this table writes it.
 EMPTY = "—"
+# An umbrella row carries no work of its own: its note opens "Umbrella." or
+# "Split <date> into …" and the work is its children — rows under its id
+# (F-601-a..m) and rows its note names (F-028 -> F-027-e/n/o). Offered as
+# eligible, it sent every `/next` to F-027 while its children were open
+# (2026-09-29). "Split off"/"Split from" marks a child, not an umbrella.
+UMBRELLA = re.compile(r"^\**\s*(?:umbrella\b|split\s+(?:\d{4}-\d{2}-\d{2}\s+)?into\b)", re.I)
+ID_RE = r"[A-Z]+-\d+(?:-[a-z0-9]+)*"
+
+
+def umbrella_children(r, items):
+    """None for an ordinary row; for an umbrella, its child rows."""
+    if not UMBRELLA.match(r["note"].strip()):
+        return None
+    named = set(re.findall(rf"\b{ID_RE}\b", r["note"]))
+    return [c for c in items if c["id"] != r["id"]
+            and (c["id"].startswith(r["id"] + "-") or c["id"] in named)]
+
+
+def open_children(r, items):
+    """An umbrella's children still to build; [] for an ordinary row."""
+    return [c for c in umbrella_children(r, items) or []
+            if c["status"] not in ("done", "dropped")]
+
+
+def is_eligible(r, by_id, items):
+    """§6b.2's rule, plus: an umbrella is never the next thing to build."""
+    return (r["status"] == "todo"
+            and all(by_id.get(d, {}).get("status") == "done" for d in r["deps"])
+            and "needs-decision" not in r["note"]
+            and umbrella_children(r, items) is None)
 
 
 def split_cells(line):
@@ -261,12 +291,10 @@ def main():
     done = counts["done"]
     pct = (100 * done // len(live)) if live else 0
 
-    eligible = [
-        r for r in items
-        if r["status"] == "todo"
-        and all(by_id.get(d, {}).get("status") == "done" for d in r["deps"])
-        and "needs-decision" not in r["note"]
-    ]
+    eligible = [r for r in items if is_eligible(r, by_id, items)]
+    closable = [r for r in items if r["status"] == "todo"
+                and umbrella_children(r, items) is not None
+                and not open_children(r, items)]
 
     if "--next" in sys.argv:
         print(eligible[0]["id"] if eligible else "")
@@ -323,6 +351,15 @@ def main():
             print(f"  none — {len(decision)} row(s) flagged needs-decision. Ask the user")
         else:
             print("  none — todo rows exist but none qualified. Check their depends_on ids")
+
+    if closable:
+        # Nothing flips an umbrella by itself: its `done` needs a proof, and
+        # that is the children's, cited by a person who checked them.
+        print("\nUMBRELLAS READY TO CLOSE (every child done or dropped):")
+        for r in closable:
+            kids = umbrella_children(r, items)
+            print(f"  {r['id']}  {len(kids)} child row(s) — "
+                  f"--set {r['id']} status=done proof='<the children's proof>'")
 
     blocked = [r for r in items if r["status"] == "blocked"
                or (r["status"] == "todo" and "needs-decision" in r["note"])]

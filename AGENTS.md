@@ -121,6 +121,11 @@ unit's code, split by whether anything actually fails on a violation; the test
 budget and the narrowed commands for the right stack; and §6b itself — 25 lines
 of a 687-line fixed file, instead of all of it.
 
+An **umbrella** row — its note opens `Umbrella.` or `Split <date> into …` — is
+never offered: its work is its children (rows under its id, and ids its note
+names). `backlog.py` lists one whose children are all done under "UMBRELLAS
+READY TO CLOSE"; closing it is yours, with the children's proof.
+
 It reads no source and decides nothing. Every path it names is still read by
 you; what it removes is the hunting, and the re-reading of three cross-cutting
 files whose relevant slice for one row is a few dozen lines out of 1275. Use

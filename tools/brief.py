@@ -68,6 +68,13 @@ def eligibility(row, by_id):
     if "needs-decision" in (row.get("note") or ""):
         ok = False
         lines.append("    BLOCKS  flagged needs-decision — ask the user first (§9)")
+    items = list(by_id.values())
+    if backlog.umbrella_children(row, items) is not None:
+        ok = False
+        still = backlog.open_children(row, items)
+        lines.append(f"    BLOCKS  an umbrella — no work of its own; {len(still)} child row(s) open"
+                     + (f": {', '.join(c['id'] for c in still[:6])}" if still else
+                        " — close it with the children's proof"))
     return ok, lines
 
 
@@ -219,9 +226,7 @@ def main():
     by_id = {r["id"]: r for r in rows}
 
     if "--next" in flags:
-        eligible = [r for r in rows if r["status"] == "todo"
-                    and all(by_id.get(d, {}).get("status") == "done" for d in r["deps"])
-                    and "needs-decision" not in (r.get("note") or "")]
+        eligible = [r for r in rows if backlog.is_eligible(r, by_id, rows)]
         if not eligible:
             print("no eligible row — run tools/backlog.py to see why", file=sys.stderr)
             return 1
