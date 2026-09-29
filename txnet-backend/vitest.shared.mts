@@ -39,6 +39,10 @@ export function backendVitestConfig(root: string, name: string, test: TestOption
       // leftovers still fails there. The resets below, and `vitest.setup.mts`
       // (a module cache dropped after each file), keep shared workers clean.
       isolate: process.env.VITEST_ISOLATE !== '0',
+      // `npm run test:affected` caps workers per project (VITEST_MAX_WORKERS=2,
+      // Nx --parallel=2): projects run side by side and this server also
+      // serves a live site and bot. Figures in docs/CODE-LAYOUT.md.
+      ...(process.env.VITEST_MAX_WORKERS ? { maxWorkers: Number(process.env.VITEST_MAX_WORKERS) } : {}),
       setupFiles: [`${import.meta.dirname}/vitest.setup.mts`],
       restoreMocks: true,
       unstubEnvs: true,

@@ -42,9 +42,15 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 shopt -s nullglob
 
-# Projects at once. Each runs ~2 tsc processes (up to 1.2GB each), so half the
-# cores keeps the machine at one tsc per core instead of two.
-JOBS="${TYPECHECK_JOBS:-$(( $(nproc 2>/dev/null || echo 4) / 2 ))}"
+# Projects at once. Each runs ~2 tsc processes (up to 1.2GB each). This
+# server also serves a live site and a Telegram bot (user, 2026-09-29), so two
+# cores stay free, and `test:affected` running beside this takes four (2
+# projects x 2 workers): what is left, at ~2 tsc a project, never under one.
+# 8 cores -> 1 job. Measured 2026-09-29 on a .prisma change (all projects,
+# both commands together): 268s at the old nproc/2 with default vitest workers
+# (a 19ms spec timed out at 5s), 183s capped. `docs/CODE-LAYOUT.md`.
+cores=$(nproc 2>/dev/null || echo 4)
+JOBS="${TYPECHECK_JOBS:-$(( (cores - 2 - 4) / 2 > 1 ? (cores - 2 - 4) / 2 : 1 ))}"
 NX=node_modules/.bin/nx
 
 case "${1:-}" in

@@ -154,6 +154,17 @@ it stops working: ~130 files then fail that pass on their own, which is this
 section's own contention warning arriving as something that looks like a
 regression. One suite at a time per runner.
 
+**The pair is capped to leave two cores free** (user, 2026-09-29: this server
+also serves a live site and a Telegram bot). `test:affected` runs 2 projects
+at once, 2 vitest workers each (`TEST_JOBS`, `VITEST_MAX_WORKERS`);
+`typecheck.sh` gets what is left, 1 project on 8 cores (`TYPECHECK_JOBS`).
+Uncapped it was 3 projects x ~7 workers plus 4 typecheck projects x ~2 `tsc`
+on 8 cores, and a 19 ms spec timed out at 5 s (`otp-senders.spec.ts`). Measured
+on a `.prisma` change (all projects, both together): **268s uncapped, 183s
+capped**, median load 7; one service 25s -> 26s. A spec that times out only
+in this pair, and passes alone, is contention: re-check the caps before
+raising its timeout.
+
 **`npm test` is `nx run-many -t test`** — all **eleven** unit projects
 (auth-service, billing-service, bot-service, currency-service, gateway-service,
 messenger, metering-service, notification-service, shared-core, tenant-service,
