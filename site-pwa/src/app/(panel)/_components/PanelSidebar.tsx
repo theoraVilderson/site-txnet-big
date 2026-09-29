@@ -12,13 +12,15 @@ import { LogoutButton } from "./LogoutButton";
 import { ResellerPanelButton, useOwnedResellers } from "./ResellerPanelButton";
 import { ThemeDropdown } from "@auth/auth/_components/ThemeDropdown";
 import { useLocale } from "@/context/LocaleContext";
-import { resellerPurchaseApi } from "@/lib/tenant-api";
+import { resellerPurchaseApi, tenantAccessApi } from "@/lib/tenant-api";
+import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import {
   PANEL_MENU,
   activeHref,
   isMenuGroup,
   menuHrefs,
+  ownTenantOf,
   visibleMenu,
   type VisibleMenuGroup,
   type VisibleMenuLink,
@@ -37,16 +39,13 @@ export const PANEL_SIDEBAR_ID = "panel-sidebar";
  * that list keeps a terminated reseller, whose owner may buy again. Asked only
  * of a caller the entry could be shown to (`canAsk`); `null` while `me` is
  * unknown or the answer is pending, which hides the entry. A failed read is
- * `false`: the page answers a holder itself (F-019-l).
+ * `false`: the page answers a holder itself (F-019-l). A caller not asked is
+ * `false` without a state write, derived at render.
  */
 function useHoldsLiveReseller(canAsk: boolean | null): boolean | null {
   const [holds, setHolds] = useState<boolean | null>(null);
   useEffect(() => {
-    if (canAsk === null) return;
-    if (!canAsk) {
-      setHolds(false);
-      return;
-    }
+    if (!canAsk) return;
     let live = true;
     resellerPurchaseApi
       .mine()
@@ -56,7 +55,30 @@ function useHoldsLiveReseller(canAsk: boolean | null): boolean | null {
       live = false;
     };
   }, [canAsk]);
-  return holds;
+  if (canAsk === null) return null;
+  return canAsk ? holds : false;
+}
+
+/**
+ * The door's `canRead` for the caller's own reseller tenant (F-311-ab,
+ * `ownTenantOf`), asked only of `tenantId` when given; `null` until it answers
+ * for that id. A failed read is `false`: the entry is a shortcut, and hiding it
+ * never breaks the sidebar.
+ */
+function useCanAdminister(tenantId: string | null): boolean | null {
+  const [answer, setAnswer] = useState<{ id: string; canRead: boolean } | null>(null);
+  useEffect(() => {
+    if (tenantId === null) return;
+    let live = true;
+    tenantAccessApi
+      .get(tenantId)
+      .then((r) => live && setAnswer({ id: tenantId, canRead: r.canRead }))
+      .catch(() => live && setAnswer({ id: tenantId, canRead: false }));
+    return () => {
+      live = false;
+    };
+  }, [tenantId]);
+  return answer !== null && answer.id === tenantId ? answer.canRead : null;
 }
 
 /**
@@ -94,7 +116,11 @@ export function PanelSidebar() {
   const isOwner = me?.tenant.isOwner ?? false;
   const resellers = useOwnedResellers();
   const ownsReseller = useHoldsLiveReseller(me ? tenantType === "platform_owner" && !isOwner : null);
-  const tenantId = me?.tenant.id ?? null;
+  // Asked only where it can change the answer: a reseller's user holding the key.
+  const canAdminister = useCanAdminister(
+    me && tenantType === "reseller" && holdsPermission(held, "tenant.manage") ? me.tenant.id : null,
+  );
+  const tenantId = ownTenantOf(me?.tenant ?? null, canAdminister);
   const menu = useMemo(
     () => visibleMenu(PANEL_MENU, held ?? [], tenantType, isOwner, ownsReseller, tenantId),
     [held, tenantType, isOwner, ownsReseller, tenantId],

@@ -257,6 +257,23 @@ export function visibleMenu(
   return out;
 }
 
+/**
+ * The tenant id `visibleMenu` builds the caller's own pages on (F-311-ab), or
+ * `null` to hide them. On the platform, `tenant.manage` (or `*`) is the whole of
+ * the users-admin door's rule for its staff, and `requires` already holds it. On
+ * a reseller it is not: the door also needs a live seat (invariant 21), which a
+ * role outlives — so `canRead` is the door's own verdict (`GET /tenants/:id/access`),
+ * and until it answers the pages stay hidden.
+ */
+export function ownTenantOf(
+  tenant: { id: string; type: TenantType } | null,
+  canRead: boolean | null,
+): string | null {
+  if (!tenant) return null;
+  if (tenant.type === "platform_owner") return tenant.id;
+  return canRead === true ? tenant.id : null;
+}
+
 /** Every href a visible menu links to, groups flattened. */
 export function menuHrefs(entries: readonly VisibleMenuEntry[]): string[] {
   return entries.flatMap((e) =>

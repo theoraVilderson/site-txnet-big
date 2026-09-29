@@ -206,6 +206,24 @@ export const resellerOnboardingApi = {
   },
 };
 
+/**
+ * The door's verdict on the caller for one tenant (F-311-e): never refuses, a
+ * refused caller gets `canRead: false`. Uncached — a seat revoked a second ago
+ * must stop administering.
+ */
+export interface TenantAccess {
+  tenantId: string;
+  canRead: boolean;
+  canWrite: boolean;
+  reason?: string;
+}
+
+export const tenantAccessApi = {
+  async get(tenantId: string): Promise<TenantAccess> {
+    return call<TenantAccess>(`/tenants/${encodeURIComponent(tenantId)}/access`, { method: "GET" });
+  },
+};
+
 /** A currency a tenant may keep its books in (`tenant/contract.currency.md` rule 2). */
 export interface CurrencyChoice {
   code: string;

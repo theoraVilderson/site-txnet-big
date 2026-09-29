@@ -32,7 +32,9 @@ under `(panel)` renders in: `_components/PanelShell.tsx` = `PanelSidebar` +
    `requires`, never for `tenantTypes` (F-019-f: `tenant-billing`). Never a role word in a route (D-28, F-098).
    A page inside the caller's own tenant has an `href` that is a function of
    `me.tenant.id` (F-311-ab: `users` -> `myResellerUsersPath`), hidden while
-   that id is unknown; the route-tree test resolves it as `[id]`.
+   that id is unknown; the route-tree test resolves it as `[id]`. On a
+   reseller the id is given only once `GET /tenants/:id/access` answers
+   `canRead` (`ownTenantOf`): a revoked seat keeps its role's key.
 3. **One entry is highlighted:** the longest href that is the path or a
    whole-segment prefix of it (`activeHref`). A detail page under
    `/financial/…` lights its parent without a second rule.

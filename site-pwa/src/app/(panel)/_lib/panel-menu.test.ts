@@ -5,6 +5,7 @@ import { Home, Wallet } from "lucide-react";
 import {
   PANEL_MENU,
   activeHref,
+  ownTenantOf,
   visibleMenu,
   type PanelMenuEntry,
 } from "./panel-menu";
@@ -257,6 +258,17 @@ describe("visibleMenu, the caller's own tenant (F-311-ab)", () => {
     expect(users("platform_owner", [])).toEqual([]);
     expect(users("reseller", ["user_group.manage"])).toEqual([]);
     expect(users("platform_owner", ["*"], null)).toEqual([]);
+  });
+
+  // A reseller's staff hold `tenant.manage` in a role, but the seat is the other
+  // half of the door (invariant 21): a revoked or expired one keeps the role.
+  // So on a reseller the door is asked; the platform's rule is the permission.
+  it("opens a reseller's own pages only once the door admits the caller", () => {
+    expect(ownTenantOf({ id: "R", type: "reseller" }, true)).toBe("R");
+    expect(ownTenantOf({ id: "R", type: "reseller" }, false)).toBeNull();
+    expect(ownTenantOf({ id: "R", type: "reseller" }, null)).toBeNull();
+    expect(ownTenantOf({ id: "P", type: "platform_owner" }, null)).toBe("P");
+    expect(ownTenantOf(null, true)).toBeNull();
   });
 
   it("lights up on one user's page under it", () => {
