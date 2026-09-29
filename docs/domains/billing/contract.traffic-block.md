@@ -83,7 +83,7 @@ early, so it is not a refusal.
 ## The reseller's side — a wholesale leg (F-118-n3)
 
 On a meter with a wholesale leg (F-118-n2) the block is what **both** wallets
-fund, the reseller prepaid whatever the user's mode (ADR-0105 (10), §14.5).
+fund, the reseller prepaid whatever the user's mode (ADR-0105 (10), §14.5; a postpaid hold's growth too, F-118-n4, [contract.usage-rating.md](contract.usage-rating.md) rule 6).
 `VpnWholesale` (`traffic/vpn-wholesale.ts`) raises `wholesaleBilled` to
 `wholesaleConsumed` + the block's headroom, that only while the group holds a
 platform panel (user, 2026-09-29); never down — a byte an own panel served funds the next.

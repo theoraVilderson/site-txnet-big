@@ -29,6 +29,8 @@ export type UsageSettlementRefusal =
   | 'rate_not_priceable'
   /** The free balance cannot fund one cent. The enforcer serves nothing more. */
   | 'insufficient_funds'
+  /** The user could fund it, the reseller's billing wallet cannot buy its wholesale side (F-118-n4). Short of funds too. */
+  | 'wholesale_unfunded'
   /** A price so high that a whole cent buys less than one unit. */
   | 'block_below_one_unit'
   /** A settlement raced this one; nothing was written. */

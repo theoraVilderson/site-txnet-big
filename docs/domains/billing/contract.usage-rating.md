@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 1
+version: 2
 updated: 2026-09-29
 ---
 
@@ -134,8 +134,19 @@ picks the mode on the variant form from F-118-m (user, 2026-09-29).
    gifted bytes (F-311-l) are served first and never charged.
 5. **At close nothing is refunded**: `billed ≤ consumed`, so the remainder
    credit refuses `nothing_to_credit` after its release has captured.
+6. **A reseller's Grant buys its hold's growth wholesale first** (F-118-n4,
+   ADR-0105 (10), §14.5 — the reseller's leg is prepaid whatever the user's
+   mode). `PostpaidHolds.topUpTo` takes a `FundingLeg`: `VpnWholesale`'s room
+   ([contract.traffic-block.md](contract.traffic-block.md) "The reseller's
+   side") bounds how far `funded` may rise, the hold is priced **down** to
+   fit it, and the rise is one `metered_usage_charge` (its own `referenceId`;
+   the guarded `wholesaleBilled` is the guard) **before** `funded` moves. No
+   room and no hold open is `wholesale_unfunded` — short, as
+   `insufficient_funds` is, in the block request and swallowed by a top; a
+   hold still open is not refused, it only stops growing. At close the unused
+   wholesale comes back as a prepaid Grant's does.
 
-Tests: `traffic/vpn-postpaid.spec.ts`.
+Tests: `traffic/vpn-postpaid.spec.ts`, `traffic/vpn-postpaid-wholesale.spec.ts`.
 
 ## The per-use door (F-118-h, ADR-0105 (7))
 

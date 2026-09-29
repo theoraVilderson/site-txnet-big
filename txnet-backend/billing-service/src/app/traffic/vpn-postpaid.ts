@@ -1,10 +1,13 @@
-import { GrantStatus, Prisma, RateCardMode } from '@prisma/client';
-import { METER_KEYS } from '@txnet-backend/shared-core';
+import { randomUUID } from 'node:crypto';
 
-import { PostpaidHolds, type Ctx } from '../usage/postpaid-hold';
+import { GrantStatus, Prisma, RateCardMode } from '@prisma/client';
+import { METER_KEYS, TenantBillingLedger } from '@txnet-backend/shared-core';
+
+import { PostpaidHolds, type Ctx, type FundingLeg } from '../usage/postpaid-hold';
 import { ceilDiv, CENT, max, priceUnits, UsageSettlementRefused } from '../usage/usage-price';
 import type { WalletHoldService } from '../wallet/wallet-ledger.service';
 import { vpnMeterOf } from './vpn-meter';
+import { VpnWholesale, type WholesaleRoom } from './vpn-wholesale';
 
 /**
  * VPN postpaid (F-118-k, ADR-0105 (6)(7)(12)): a metered Grant whose
@@ -27,6 +30,13 @@ import { vpnMeterOf } from './vpn-meter';
  *   no capture a minute; the hourly settlement sweep captures.
  * - **A release** (suspension, freeze, cancel, close) captures what was
  *   served, gives the rest back, and brings the bag down to what was billed.
+ *
+ * On a reseller's Grant (F-118-n4, ADR-0105 (10)) the hold's growth is bought
+ * wholesale first — the reseller's leg is prepaid whatever the user's mode —
+ * so the bag grows only as far as its billing wallet reaches, by
+ * `VpnWholesale`'s room, and each growth is one `metered_usage_charge` before
+ * `funded` moves. A reseller at zero grows nothing; a hold still open is not
+ * refused. Its own reference per growth: the guarded cursor is the guard.
  */
 
 type Ref = { id: string; userId: string };
@@ -42,6 +52,8 @@ export type ServedPostpaid = { captured: Prisma.Decimal; held: Prisma.Decimal; f
 
 export class VpnPostpaid {
   private readonly postpaid: PostpaidHolds | null;
+  /** The reseller's side of a growth (F-118-n4). Its ledger holds no state, so it needs no injection. */
+  private readonly wholesale = new VpnWholesale(new TenantBillingLedger());
 
   constructor(
     holds: WalletHoldService | null,
@@ -64,7 +76,7 @@ export class VpnPostpaid {
     await holds.capture(tx, ctx);
     const held = await holds.heldCents(tx, ctx);
     const target = max(held + this.cents(ctx, extraBytes), this.cents(ctx, this.reserveBytes));
-    return holds.topUpTo(tx, ctx, target);
+    return holds.topUpTo(tx, ctx, target, this.legOf(ctx));
   }
 
   /** Holds the floor when the hold is under it; answers what is held. Only a Grant the planner leases to (active, pending) holds more. */
@@ -76,10 +88,10 @@ export class VpnPostpaid {
     const leased = ctx.grant.status === GrantStatus.active || ctx.grant.status === GrantStatus.pending;
     if (!leased || held >= floor) return new Prisma.Decimal(held.toString()).div(100);
     try {
-      return (await this.postpaid.topUpTo(tx, ctx, floor)).held;
+      return (await this.postpaid.topUpTo(tx, ctx, floor, this.legOf(ctx))).held;
     } catch (e) {
-      // An empty wallet holds nothing: the planner's bag stays where it is and the block request reports it.
-      if (e instanceof UsageSettlementRefused && e.reason === 'insufficient_funds') return new Prisma.Decimal(0);
+      // An empty wallet — the user's or the reseller's — holds nothing: the planner's bag stays where it is and the block request reports it.
+      if (e instanceof UsageSettlementRefused && (e.reason === 'insufficient_funds' || e.reason === 'wholesale_unfunded')) return new Prisma.Decimal(0);
       throw e;
     }
   }
@@ -95,6 +107,17 @@ export class VpnPostpaid {
   async close(tx: Prisma.TransactionClient, grant: Ref): Promise<Prisma.Decimal> {
     if (!this.postpaid) return new Prisma.Decimal(0);
     return this.postpaid.close(tx, await this.load(tx, grant.id));
+  }
+
+  /** The reseller's leg of a growth, when the meter has one. `room` is read once and bounds the `buy` it precedes. */
+  private legOf(ctx: Ctx): FundingLeg | undefined {
+    if (!ctx.meter.wholesalePayerTenantId) return undefined;
+    const bag = () => ctx.grant as { variantId: string; purchasedBytes: bigint; consumedBytes: bigint };
+    let room: WholesaleRoom | null = null;
+    return {
+      room: async (tx, c) => (room = await this.wholesale.room(tx, bag(), c.meter))?.room ?? null,
+      buy: (tx, c, grow) => this.wholesale.buy(tx, bag(), c.meter, room as WholesaleRoom, grow, randomUUID()),
+    };
   }
 
   private load(tx: Prisma.TransactionClient, grantId: string): Promise<Ctx> {

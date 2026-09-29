@@ -175,10 +175,12 @@ export class BlockRequestService {
       const free = wallet ? wallet.cachedBalance.minus(wallet.heldAmount) : new Prisma.Decimal(0);
       return { ...none, served, skipped: null, lowBalance: await noticeLowBalance(tx, grant, free) };
     } catch (error) {
-      if (!(error instanceof UsageSettlementRefused && error.reason === 'insufficient_funds')) throw error;
+      // Either wallet short (the reseller's wholesale side too, F-118-n4).
+      const short = error instanceof UsageSettlementRefused && (error.reason === 'insufficient_funds' || error.reason === 'wholesale_unfunded');
+      if (!short) throw error;
       // Refused before any write: a hold of nothing captures nothing, so the transaction is clean.
       const spent = grant.purchasedBytes - grant.consumedBytes <= BigInt(0);
-      return { ...none, skipped: null, refused: 'insufficient_funds', exhausted: spent ? await suspendIfExhausted(tx, grant.id) : null };
+      return { ...none, skipped: null, refused: error.reason as 'insufficient_funds' | 'wholesale_unfunded', exhausted: spent ? await suspendIfExhausted(tx, grant.id) : null };
     }
   }
 }

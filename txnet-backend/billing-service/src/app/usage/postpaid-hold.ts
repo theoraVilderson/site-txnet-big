@@ -3,7 +3,7 @@ import { METER_KEYS } from '@txnet-backend/shared-core';
 
 import type { WalletHoldService } from '../wallet/wallet-ledger.service';
 import { spendOnCap, withinCap } from './cap-funding';
-import { capturable, max, min, moveCursors, toAmount, toCents, unitsCovered, UsageSettlementRefused, ZERO } from './usage-price';
+import { capturable, CENT, max, min, moveCursors, priceUnits, toAmount, toCents, unitsCovered, UsageSettlementRefused, ZERO } from './usage-price';
 
 /**
  * A postpaid meter's hold (F-118-g, ADR-0105 (6)): captured, topped, released.
@@ -26,8 +26,19 @@ export type MeterRef = { grantId: string; meterKey: string };
 export type Captured = { amount: Prisma.Decimal; billed: bigint; walletTransactionId: string | null };
 export type ToppedUp = { captured: Prisma.Decimal; held: Prisma.Decimal; funded: bigint };
 
-type HeldGrant = { id: string; userId: string; status: GrantStatus; consumedBytes?: bigint; purchasedBytes?: bigint };
+type HeldGrant = { id: string; userId: string; status: GrantStatus; variantId?: string; consumedBytes?: bigint; purchasedBytes?: bigint };
 export type Ctx = { grant: HeldGrant; meter: GrantMeter };
+
+/**
+ * A second payer the bag's growth is bought on first (F-118-n4): the
+ * reseller's wholesale leg of a postpaid VPN Grant, prepaid whatever the
+ * user's mode (§14.5). `room` is how far `funded` may rise — null is no bound —
+ * and `buy` pays for a rise of `grow` before `funded` moves.
+ */
+export type FundingLeg = {
+  room(tx: Prisma.TransactionClient, ctx: Ctx): Promise<bigint | null>;
+  buy(tx: Prisma.TransactionClient, ctx: Ctx, grow: bigint): Promise<void>;
+};
 
 const isVpn = (meter: Pick<GrantMeter, 'meterKey'>) => meter.meterKey === METER_KEYS.vpnTraffic;
 
@@ -43,7 +54,7 @@ export class PostpaidHolds {
   async load(tx: Prisma.TransactionClient, ref: MeterRef, mode?: RateCardMode): Promise<Ctx> {
     const grant = await tx.grant.findUnique({
       where: { id: ref.grantId },
-      select: { id: true, userId: true, status: true, consumedBytes: true, purchasedBytes: true },
+      select: { id: true, userId: true, status: true, variantId: true, consumedBytes: true, purchasedBytes: true },
     });
     if (!grant) throw new UsageSettlementRefused('grant_not_found', ref.grantId);
     const meter = await tx.grantMeter.findUnique({ where: { grantId_meterKey: { grantId: ref.grantId, meterKey: ref.meterKey } } });
@@ -75,19 +86,31 @@ export class PostpaidHolds {
     return { amount, billed: billedTo, walletTransactionId: row.id };
   }
 
-  /** Captures, then holds up to `targetCents` from the free balance; a short one holds less, none at all is refused. */
-  async topUpTo(tx: Prisma.TransactionClient, ctx: Ctx, targetCents: bigint): Promise<ToppedUp> {
+  /**
+   * Captures, then holds up to `targetCents` from the free balance; a short one holds less, none at all is refused.
+   * A `leg` bounds how far `funded` may rise and is paid for the rise before `funded` moves (F-118-n4).
+   */
+  async topUpTo(tx: Prisma.TransactionClient, ctx: Ctx, targetCents: bigint, leg?: FundingLeg): Promise<ToppedUp> {
     const captured = await this.capture(tx, ctx);
     const heldBefore = await this.heldCents(tx, ctx);
+    const base = max(captured.billed, ctx.meter.includedQuantity);
     // Inside the Grant's spending cap, if it has one (F-118-i): this hold is already counted in it.
-    const add = min(targetCents - heldBefore, toCents(await withinCap(tx, ctx.grant, await this.freeBalance(tx, ctx.grant.userId))));
+    let add = min(targetCents - heldBefore, toCents(await withinCap(tx, ctx.grant, await this.freeBalance(tx, ctx.grant.userId))));
+    let short: 'insufficient_funds' | 'wholesale_unfunded' = 'insufficient_funds';
+    const room = leg ? await leg.room(tx, ctx) : null;
+    if (room !== null) {
+      // The most the hold may reach so `funded` rises by `room` at most: those bytes priced **down**.
+      const most = max(ctx.meter.funded + room - base, ZERO) * priceUnits(ctx.meter) / (ctx.meter.unitSize * CENT) - heldBefore;
+      if (most < add) [add, short] = [most, 'wholesale_unfunded'];
+    }
     if (add >= BigInt(1)) {
       await this.holds.hold(tx, { userId: ctx.grant.userId, ownerRef: ctx.meter.id, amount: toAmount(add), currencyCode: ctx.meter.currencyCode });
     } else if (heldBefore < BigInt(1) && targetCents > ZERO) {
-      throw new UsageSettlementRefused('insufficient_funds');
+      throw new UsageSettlementRefused(short);
     }
     const held = heldBefore + max(add, ZERO);
-    const funded = max(captured.billed, ctx.meter.includedQuantity) + unitsCovered(ctx.meter, held);
+    const funded = base + unitsCovered(ctx.meter, held);
+    if (leg && funded > ctx.meter.funded) await leg.buy(tx, ctx, funded - ctx.meter.funded);
     await this.move(tx, ctx, { funded });
     return { captured: captured.amount, held: toAmount(held), funded };
   }
