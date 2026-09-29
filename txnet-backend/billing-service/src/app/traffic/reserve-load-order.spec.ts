@@ -17,5 +17,6 @@ describe('the VPN reserve loads before anything that injects it', () => {
     const { BlockPurchaseService } = await import('./block-purchase');
     const params = Reflect.getMetadata('design:paramtypes', BlockPurchaseService) as unknown[];
     expect(params[2]).toBe(VpnReserve);
-  });
+    // A cold import of the whole billing graph: well past vitest's 5s default under the affected run's load.
+  }, 60_000);
 });
