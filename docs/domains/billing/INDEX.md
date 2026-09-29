@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 79
+version: 80
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -54,6 +54,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260929000500_usage_arrives_as_idempotent_events/**
   - txnet-backend/prisma/domains/migrations/20260929000600_usage_is_rated_and_settled/**
   - txnet-backend/prisma/domains/migrations/20260929000700_a_spending_cap_bounds_one_product/**
+  - txnet-backend/prisma/domains/migrations/20260929000800_held_money_is_announced/**
   - txnet-backend/billing-service/src/app/usage/**
 owns_tables: [wallet, wallet_hold, wallet_transaction, spending_cap, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
@@ -93,8 +94,8 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-29 | contract v80 (additive, F-118-o): a hold or a release writes `billing.wallet.changed` `{tenantId, userId}` — no `walletTransactionId` — at most once per 30 s per wallet (`wallet.heldPushedAt`), so the panel's `held` follows. [contract.holds.md](contract.holds.md) |
 | 2026-09-29 | contract v79 (additive, F-118-j): `GET /api/billing/wallet/history` answers `held` (`heldAmount`) and `available` (`balance − held`) beside `balance`, for the panel to show held money apart. [contract.history.md](contract.history.md) |
 | 2026-09-29 | contract v78 (additive, F-118-i, ADR-0105 (9)): a spending cap on one Grant — `GET/PUT/DELETE /api/billing/traffic/grants/:grantId/cap`; every usage path funds a capped Grant to `min(free, cap − spent − held)`; `sub_account` dropped. [contract.spending-cap.md](contract.spending-cap.md) |
-| 2026-09-29 | contract v77 (additive, F-118-b, ADR-0105 (8)): the VPN reserve is held money — one hold per metered Grant (`VPN_RESERVE_BYTES`, default 1 GiB, at its rate), topped at issue/block/revive and by `POST internal/billing/traffic/reserve-due` (`vpn_reserve`, every minute), released when the Grant stops being planned; its own block spends it. `traffic/vpn-reserve.ts`, contract.holds.md, contract.traffic-block.md |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

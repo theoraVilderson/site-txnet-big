@@ -12,7 +12,7 @@ Source of truth: `txnet-backend/prisma/domains/billing.prisma` (Postgres schema
 ## Tables owned
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
-| wallet | user balance cache + optimistic version; `heldAmount` = its open holds' sum, `CHECK (cachedBalance - heldAmount >= 0)` (F-118-a) | via owner user | permanent |
+| wallet | user balance cache + optimistic version; `heldAmount` = its open holds' sum, `CHECK (cachedBalance - heldAmount >= 0)` (F-118-a); `heldPushedAt` = when a hold last announced itself (F-118-o) | via owner user | permanent |
 | wallet_hold | money locked for one `ownerRef` (a Grant, a per-use token): `amount` held now, `captured` so far, `status` `open`/`closed` (closed = `amount` 0 + `closedAt`, CHECK), `currencyCode` = its wallet's while open; one open per `(walletId, ownerRef)` (partial unique index); a deferred trigger ties it to `wallet.heldAmount` — [contract.holds.md](contract.holds.md) | via its wallet | permanent |
 | usage_event | one reported use of a Grant's meter (F-118-f): `(grantId, meterKey)` -> `grant_meter`, `quantity` > 0, `occurredAt`, `(source, idempotencyKey)` unique = the dedup; append-only; advances `grant_meter.consumed` | `tenantId` (its meter's), strict RLS | permanent |
 | wallet_transaction | append-only money ledger (`balanceAfter` per row) | denormalized `tenantId` | permanent |

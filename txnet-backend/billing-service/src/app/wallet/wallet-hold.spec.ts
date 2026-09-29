@@ -1,3 +1,4 @@
+import { HELD_PUSH_EVERY_MS } from '@txnet-backend/shared-core';
 import { Prisma } from '@prisma/client';
 
 import {
@@ -31,6 +32,7 @@ type WalletRow = {
   cachedBalance: Prisma.Decimal;
   heldAmount: Prisma.Decimal;
   version: number;
+  heldPushedAt: Date | null;
 };
 
 type HoldRow = {
@@ -52,6 +54,7 @@ function fakeStore() {
   const wallets = new Map<string, WalletRow>();
   const holds: HoldRow[] = [];
   const ledger: Array<Record<string, unknown>> = [];
+  const outbox: Array<Record<string, unknown>> = [];
 
   const tx = {
     wallet: {
@@ -63,17 +66,25 @@ function fakeStore() {
         where,
         data,
       }: {
-        where: { id: string; version: number };
-        data: { cachedBalance?: Prisma.Decimal; heldAmount?: Prisma.Decimal; version: { increment: number } };
+        where: { id: string; version?: number; OR?: Array<{ heldPushedAt: null | { lt: Date } }> };
+        data: { cachedBalance?: Prisma.Decimal; heldAmount?: Prisma.Decimal; version?: { increment: number }; heldPushedAt?: Date };
       }) => {
-        const row = [...wallets.values()].find((w) => w.id === where.id && w.version === where.version);
+        const row = [...wallets.values()].find(
+          (w) =>
+            w.id === where.id &&
+            (where.version === undefined || w.version === where.version) &&
+            (!where.OR ||
+              where.OR.some((c) => (c.heldPushedAt === null ? w.heldPushedAt === null : !!w.heldPushedAt && w.heldPushedAt < c.heldPushedAt.lt))),
+        );
         if (!row) return { count: 0 };
         if (data.cachedBalance) row.cachedBalance = data.cachedBalance;
         if (data.heldAmount) row.heldAmount = data.heldAmount;
-        row.version += data.version.increment;
+        if (data.heldPushedAt) row.heldPushedAt = data.heldPushedAt;
+        if (data.version) row.version += data.version.increment;
         return { count: 1 };
       },
     },
+    user: { findUniqueOrThrow: async () => ({ tenantId: 't-1' }) },
     walletHold: {
       findFirst: async ({ where }: { where: { walletId: string; ownerRef: string; status: 'open' } }) => {
         const row = holds.find(
@@ -112,7 +123,12 @@ function fakeStore() {
         return row;
       },
     },
-    outboxEvent: { create: async ({ data }: { data: Record<string, unknown> }) => data },
+    outboxEvent: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        outbox.push(data);
+        return data;
+      },
+    },
   };
 
   return {
@@ -120,6 +136,7 @@ function fakeStore() {
     wallets,
     holds,
     ledger,
+    outbox,
     seed(ownerUserId: string, balance: string) {
       wallets.set(ownerUserId, {
         id: `wallet-${ownerUserId}`,
@@ -128,6 +145,7 @@ function fakeStore() {
         cachedBalance: D(balance),
         heldAmount: D(0),
         version: 0,
+        heldPushedAt: null,
       });
     },
   };
@@ -246,5 +264,56 @@ describe('WalletHoldService', () => {
     // A closed hold is history: the next one for the same owner is a new row.
     await hold(store, '5.00');
     expect(store.holds).toHaveLength(2);
+  });
+
+  /**
+   * F-118-o: a hold or a release moves `available`, so the owner's open panel
+   * is told — but the VPN reserve is re-topped every minute, so a wallet is
+   * announced at most once per {@link HELD_PUSH_EVERY_MS}. The payload names
+   * the wallet and no figure: the panel re-reads, so a skipped one loses nothing
+   * the next read does not bring.
+   */
+  describe('telling the panel held money moved', () => {
+    const t0 = new Date('2026-09-29T12:00:00Z');
+    beforeEach(() => vi.useFakeTimers({ now: t0 }));
+    afterEach(() => vi.useRealTimers());
+    const held = (store: ReturnType<typeof fakeStore>) => store.outbox.filter((e) => e['type'] === 'billing.wallet.changed');
+
+    it('announces a hold, then no second one inside the window, then the next after it', async () => {
+      const store = fakeStore();
+      store.seed('user-1', '100.00');
+
+      await hold(store, '10.00');
+      expect(held(store)).toEqual([
+        { aggregate: 'billing.wallet', aggregateId: 'wallet-user-1', type: 'billing.wallet.changed', payload: { tenantId: 't-1', userId: 'user-1' } },
+      ]);
+
+      vi.setSystemTime(t0.getTime() + HELD_PUSH_EVERY_MS - 1);
+      await hold(store, '5.00');
+      await holds.release(store.tx, { userId: 'user-1', ownerRef: GRANT, amount: D('1.00') });
+      expect(held(store)).toHaveLength(1);
+
+      vi.setSystemTime(t0.getTime() + HELD_PUSH_EVERY_MS + 1);
+      await holds.release(store.tx, { userId: 'user-1', ownerRef: GRANT });
+      expect(held(store)).toHaveLength(2);
+    });
+
+    it('coalesces per wallet, not per platform', async () => {
+      const store = fakeStore();
+      store.seed('user-1', '100.00');
+      store.seed('user-2', '100.00');
+      await hold(store, '10.00');
+      await holds.hold(store.tx, { userId: 'user-2', ownerRef: 'grant-2', amount: D('10.00'), currencyCode: 'USD' });
+
+      expect(held(store).map((e) => e['aggregateId'])).toEqual(['wallet-user-1', 'wallet-user-2']);
+    });
+
+    it('announces nothing for a refused hold', async () => {
+      const store = fakeStore();
+      store.seed('user-1', '10.00');
+      await expect(hold(store, '10.01')).rejects.toBeInstanceOf(InsufficientFunds);
+      expect(store.outbox).toHaveLength(0);
+      expect(store.wallets.get('user-1')!.heldPushedAt).toBeNull();
+    });
   });
 });

@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, Wallet, WalletHold, WalletHoldStatus, WalletTransaction } from '@prisma/client';
 
+import { OutboxEventType } from '../automation/routing-keys';
+
 import {
   assertLedgerAmount,
   InsufficientFunds,
@@ -33,6 +35,12 @@ import {
  * One open hold per `(wallet, ownerRef)`: a second hold for the same owner tops
  * the first up. A closed hold is history.
  *
+ * **A hold or a release is announced, coalesced** (F-118-o): it moves what the
+ * wallet can spend, so it writes `billing.wallet.changed` as a ledger movement
+ * does — but at most once per {@link HELD_PUSH_EVERY_MS} per wallet, since the
+ * VPN reserve is re-topped every minute. A capture needs nothing here: its
+ * ledger debit announces itself.
+ *
  * `tx` is the caller's, as for the ledger; `wallet_hold` carries no `tenantId`
  * and is reached through the wallet's owner, like `wallet` itself.
  */
@@ -57,6 +65,9 @@ export type ReleaseEntry = {
   amount?: Prisma.Decimal;
 };
 
+/** The shortest gap between two hold announcements on one wallet (F-118-o). */
+export const HELD_PUSH_EVERY_MS = 30_000;
+
 /** No open hold for this owner, or one smaller than the amount asked of it. */
 export class HoldExceeded extends Error {
   constructor(readonly userId: string, readonly ownerRef: string, readonly amount: Prisma.Decimal | null) {
@@ -80,6 +91,7 @@ export class WalletHoldService {
     const heldAfter = wallet.heldAmount.plus(entry.amount);
     if (wallet.cachedBalance.lt(heldAfter)) throw new InsufficientFunds(entry.userId);
     await writeHeld(tx, wallet, heldAfter, entry.userId);
+    await announceHeld(tx, wallet, entry.userId);
 
     const open = await openHold(tx, wallet.id, entry.ownerRef);
     if (!open) {
@@ -125,7 +137,10 @@ export class WalletHoldService {
       throw new HoldExceeded(entry.userId, entry.ownerRef, entry.amount ?? null);
     }
 
-    if (amount.gt(0)) await writeHeld(tx, wallet, wallet.heldAmount.minus(amount), entry.userId);
+    if (amount.gt(0)) {
+      await writeHeld(tx, wallet, wallet.heldAmount.minus(amount), entry.userId);
+      await announceHeld(tx, wallet, entry.userId);
+    }
     const closing = entry.amount === undefined;
     const { count } = await tx.walletHold.updateMany({
       where: { id: open.id, status: WalletHoldStatus.open, amount: { gte: amount } },
@@ -155,4 +170,30 @@ async function writeHeld(
     data: { heldAmount, version: { increment: 1 } },
   });
   if (count !== 1) throw new WalletVersionConflict(userId);
+}
+
+/**
+ * Tell the owner's open panel that held money moved (F-118-o), at most once per
+ * {@link HELD_PUSH_EVERY_MS} per wallet. The slot is claimed on the wallet row
+ * `writeHeld` has just locked, without touching `version`, so two replicas
+ * holding on one wallet announce once and the event commits or rolls back with
+ * the hold (ADR-0021). The payload names whose wallet and no figure: the panel
+ * re-reads, so a move skipped inside the window is shown by the next read.
+ */
+async function announceHeld(tx: Prisma.TransactionClient, wallet: Wallet, userId: string): Promise<void> {
+  const now = new Date();
+  const slot = await tx.wallet.updateMany({
+    where: { id: wallet.id, OR: [{ heldPushedAt: null }, { heldPushedAt: { lt: new Date(now.getTime() - HELD_PUSH_EVERY_MS) } }] },
+    data: { heldPushedAt: now },
+  });
+  if (slot.count !== 1) return;
+  const { tenantId } = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { tenantId: true } });
+  await tx.outboxEvent.create({
+    data: {
+      aggregate: 'billing.wallet',
+      aggregateId: wallet.id,
+      type: OutboxEventType.WALLET_CHANGED,
+      payload: { tenantId, userId },
+    },
+  });
 }

@@ -196,6 +196,9 @@ model Wallet {
   /// heldAmount >= 0)`, so no debit can spend it.
   heldAmount    Decimal @default(0) @db.Decimal(18, 2)
   version       Int     @default(0) // Optimistic Locking
+  /// When a hold or release last announced `billing.wallet.changed` (F-118-o):
+  /// at most one per `HELD_PUSH_EVERY_MS` per wallet. Never written under `version`.
+  heldPushedAt  DateTime?
 
   owner        User               @relation(fields: [ownerUserId], references: [id])
   transactions WalletTransaction[]
