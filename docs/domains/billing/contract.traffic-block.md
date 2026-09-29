@@ -90,7 +90,7 @@ platform panel (user, 2026-09-29); never down — a byte an own panel served fun
 
 1. **Bounded first.** The reseller's balance caps how far the bag may grow; a
    block rounding past it is re-sized a cent down. No room is
-   `wholesale_unfunded`, short of funds (block request rule 3).
+   `wholesale_unfunded`, short of funds (block request rule 3). The planner's reserve, and so the shutdown ceiling, holds the same `room` (`leaseplan.WholesaleRoom`, F-118-v).
 2. **In the block's transaction**: one `metered_usage_charge`, `referenceId` the
    block's wallet row, the cursor guarded (`WholesaleCursorMoved` is `raced`).
 3. **Back at close**: `wholesaleBilled − wholesaleConsumed`, priced down, as

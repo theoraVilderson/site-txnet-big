@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: draft
-version: 11
-updated: 2026-09-23
+version: 12
+updated: 2026-09-29
 ---
 
 # Resilience — nobody is cut off because the collector is not running
@@ -30,6 +30,17 @@ beside `allocatedCeilingBytes`, **equal to it**: since F-027-dc the reserve
 is part of the planner's Quota, so a metered config's share already holds
 what the wallet backs, as of the last plan. Why a column and not a call is
 ADR-0078.
+
+**Both wallets back it (F-118-v).** On a Grant whose `vpn.traffic` meter
+has a wholesale leg (F-118-n2) and a live config on a `platform` panel, the
+reserve in that Quota is the lesser of what the user's reserve hold buys and
+`leaseplan.WholesaleRoom` — what the reseller's `tenant_billing_wallet`
+buys at the wholesale rate past `wholesaleBilled`, less the bag's unserved
+part the cursor already owes for; billing's `VpnWholesale.room`, the bound a
+block is sized under. A reseller at zero leaves the ceiling at the bag, so no
+byte is served past what both sides paid. A Grant on its reseller's own
+panels only is bounded by the user's wallet alone, as billing prepays nothing
+wholesale there. ADR-0094's 2026-09-29 amendment lists the columns.
 
 | rule | why it is a refusal and not a preference |
 |---|---|

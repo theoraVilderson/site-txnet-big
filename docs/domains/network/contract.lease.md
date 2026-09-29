@@ -184,7 +184,7 @@ the money, so it decides whether one is bought (`billing/contract.traffic-block.
     `billing.wallet.cachedBalance` still buys, split evenly over the owner's
     `n` metered Grants (`leaseplan.ReserveShare`, F-027-dt, whole cents over
     the rate per 2^30 — never a float, C-02). No wallet row is a reserve of 0.
-    `Purchased` keeps the bag alone. ADR-0094's amendment lists the columns. The figures are held to
+    `Purchased` keeps the bag alone; a wholesale leg with a live platform config caps the reserve at `WholesaleRoom` (F-118-v). ADR-0094's amendments list the columns. The figures are held to
     billing's by `contracts/network/block-request.json`.
 21. **A block is due when the bag runs out inside the horizon**:
     `(Purchased − Used) / ΣRate.Now < Params.Horizon`, a spent bag at any

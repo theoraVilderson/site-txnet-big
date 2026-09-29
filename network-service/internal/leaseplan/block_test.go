@@ -181,3 +181,41 @@ func TestTheReserveIsWhatTheWalletBuys(t *testing.T) {
 		}
 	}
 }
+
+// A reseller's metered Grant on a platform panel (F-118-v, ADR-0094 amendment
+// 2026-09-29): the reserve is leased only as far as the reseller's billing
+// wallet also funds it — billing's `VpnWholesale.room`, the same figure a
+// block is bounded by. Its cursor already covers the bag; what the balance
+// buys at the wholesale rate is the rest.
+func TestTheResellerWalletBoundsTheReserve(t *testing.T) {
+	gb := int64(quota.GB)
+	cases := []struct {
+		name                string
+		w                   leaseplan.Wholesale
+		purchased, consumed int64
+		want                int64
+	}{
+		// $1 at $1 per GiB buys one GiB past a cursor that covers the bag exactly.
+		{"a dollar buys a gigabyte", leaseplan.Wholesale{UnitSize: 1 << 30, UnitPrice: "1.00000000", Balance: "1.00", Billed: 3 << 30, Consumed: 1 << 30}, 3 << 30, 1 << 30, 1 << 30},
+		// Bytes an own panel served funded nothing wholesale: the cursor is ahead by them.
+		{"an own panel's bytes fund the next", leaseplan.Wholesale{UnitSize: 1 << 30, UnitPrice: "1.00000000", Balance: "0.00", Billed: 3 << 30, Consumed: 1 << 30}, 3 << 30, 2 << 30, 1 << 30},
+		{"a reseller at zero adds nothing", leaseplan.Wholesale{UnitSize: 1 << 30, UnitPrice: "1.00000000", Balance: "0.00", Billed: 3 << 30, Consumed: 1 << 30}, 3 << 30, 1 << 30, 0},
+		{"a reseller behind its cursor adds nothing", leaseplan.Wholesale{UnitSize: 1 << 30, UnitPrice: "1.00000000", Balance: "0.50", Billed: 1 << 30, Consumed: 3 << 30}, 3 << 30, 1 << 30, 0},
+		{"a unit priced per MiB", leaseplan.Wholesale{UnitSize: 1 << 20, UnitPrice: "0.00100000", Balance: "0.01", Billed: 0, Consumed: 0}, 0, 0, 10 << 20},
+		{"an unpriceable rate adds nothing", leaseplan.Wholesale{UnitSize: 1 << 30, UnitPrice: "0", Balance: "9.00", Billed: 0, Consumed: 0}, 0, 0, 0},
+	}
+	for _, c := range cases {
+		if got := leaseplan.WholesaleRoom(c.w, c.purchased, c.consumed); got != c.want {
+			t.Errorf("%s: WholesaleRoom = %d, want %d (%.2f GB)", c.name, got, c.want, float64(c.want)/float64(gb))
+		}
+	}
+	// The lesser of the two wallets: $5 of the user's, $1 of the reseller's.
+	if got := leaseplan.ReserveBytes(5*gb, ptr(1*gb)); got != 1*gb {
+		t.Errorf("ReserveBytes(5 GB, 1 GB) = %d, want 1 GB", got)
+	}
+	if got := leaseplan.ReserveBytes(5*gb, nil); got != 5*gb {
+		t.Errorf("ReserveBytes(5 GB, no leg) = %d, want 5 GB", got)
+	}
+}
+
+func ptr(v int64) *int64 { return &v }

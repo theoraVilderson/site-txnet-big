@@ -138,9 +138,15 @@ var RequiredColumns = map[string][]string{
 // a copy of it is a second figure that disagrees in a bag's last minute
 // (ADR-0093 rule 4).
 var ForeignColumns = map[string][]string{
-	"entitlement.grant": {"id", "status", "purchasedBytes", "endsAt", "trafficUnlimited", "userId", "billingMode", "quotas"},
-	// A metered Grant's locked rate is its `vpn.traffic` meter's (F-118-l).
-	"entitlement.grant_meter": {"grantId", "meterKey", "unitPrice"},
+	"entitlement.grant": {"id", "status", "purchasedBytes", "endsAt", "trafficUnlimited", "userId", "billingMode", "quotas",
+		// The bag's served part, beside the wholesale cursor it moves with (F-118-v).
+		"consumedBytes"},
+	// A metered Grant's locked rate is its `vpn.traffic` meter's (F-118-l),
+	// and its wholesale leg bounds the reserve on a platform panel (F-118-v).
+	"entitlement.grant_meter": {"grantId", "meterKey", "unitPrice",
+		"wholesalePayerTenantId", "wholesaleUnitSize", "wholesaleUnitPrice", "wholesaleBilled", "wholesaleConsumed"},
+	// What the reseller's billing wallet funds (F-118-v, ADR-0094 amendment 2026-09-29).
+	"tenant.tenant_billing_wallet": {"tenantId", "cachedBalance"},
 	// The metered reserve (F-027-dc, ADR-0094 amendment): what the Grant's own
 	// reserve hold buys is part of the planner's Quota (F-118-b).
 	"billing.wallet":      {"id", "ownerUserId"},

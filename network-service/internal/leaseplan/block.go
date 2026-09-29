@@ -91,7 +91,13 @@ var gib = big.NewRat(1<<30, 1)
 // amount, a rate of zero or an amount under a cent buys nothing; a figure
 // past int64 is capped.
 func BytesAffordable(rate, amount string) int64 {
-	r, ok := new(big.Rat).SetString(rate)
+	return unitsAffordable(rate, amount, gib)
+}
+
+// unitsAffordable is whole cents of amount, floored, over price per unit
+// units, floored — billing's `unitsCovered(rate, toCents(amount))`.
+func unitsAffordable(price, amount string, unit *big.Rat) int64 {
+	r, ok := new(big.Rat).SetString(price)
 	if !ok || r.Sign() <= 0 {
 		return 0
 	}
@@ -103,14 +109,50 @@ func BytesAffordable(rate, amount string) int64 {
 	if cents.Sign() <= 0 {
 		return 0
 	}
-	// cents × 2^30 / (100 × rate)
-	q := new(big.Rat).Mul(new(big.Rat).SetInt(cents), gib)
+	// cents × unit / (100 × price)
+	q := new(big.Rat).Mul(new(big.Rat).SetInt(cents), unit)
 	q.Quo(q, new(big.Rat).Mul(r, big.NewRat(100, 1)))
 	n := floor(q)
 	if !n.IsInt64() {
 		return math.MaxInt64
 	}
 	return n.Int64()
+}
+
+// Wholesale is a reseller's side of a metered Grant (F-118-n3): its
+// `vpn.traffic` meter's locked wholesale rate and cursors, and the payer's
+// `tenant_billing_wallet.cachedBalance` — decimal text, never a float (C-02).
+type Wholesale struct {
+	UnitSize  int64
+	UnitPrice string
+	Balance   string
+	Billed    int64 // `wholesaleBilled`
+	Consumed  int64 // `wholesaleConsumed`, bytes served on platform panels
+}
+
+// WholesaleRoom is how far past the bag the reseller's billing wallet funds a
+// Grant (F-118-v): every byte the balance buys past its cursor, less what the
+// cursor already owes for the bag's unserved part — billing's
+// `VpnWholesale.room`, the bound a block is sized under. purchased and
+// consumed are the Grant's own columns, so the lag they share with
+// `wholesaleConsumed` cancels. Never negative: a reseller behind its cursor
+// funds nothing more, and the bag it already bought stands.
+func WholesaleRoom(w Wholesale, purchased, consumed int64) int64 {
+	reach := w.Billed + unitsAffordable(w.UnitPrice, w.Balance, big.NewRat(w.UnitSize, 1))
+	if reach < w.Billed { // capped at MaxInt64 above
+		return math.MaxInt64
+	}
+	return max(reach-w.Consumed-(purchased-consumed), 0)
+}
+
+// ReserveBytes is what the planner leases past the bag (F-027-dc): what the
+// user's reserve buys, bounded on a platform panel by what the reseller's
+// wallet funds (F-118-v) — the lesser of the two. nil is no wholesale bound.
+func ReserveBytes(user int64, wholesale *int64) int64 {
+	if wholesale == nil {
+		return user
+	}
+	return min(user, *wholesale)
 }
 
 func floor(r *big.Rat) *big.Int {

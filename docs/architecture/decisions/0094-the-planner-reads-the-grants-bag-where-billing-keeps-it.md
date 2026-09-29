@@ -1,7 +1,7 @@
 ---
 id: adr-0094
 status: active
-updated: 2026-09-27
+updated: 2026-09-29
 ---
 
 # ADR 0094 — the planner reads a Grant's bag where billing keeps it
@@ -55,3 +55,19 @@ Asked while building F-027-dc; the user answered "read it directly".
   copies of the formula to the same figures.
 - A copy kept by billing was refused for rule 3's reason: every wallet writer
   would have to refresh it, and it would trail in the endgame.
+
+## Amendment 2026-09-29 — the reseller's wallet (F-118-v)
+Asked while building F-118-v; the user answered "read it directly".
+- `db.ForeignColumns` adds `entitlement.grant`: `consumedBytes`;
+  `entitlement.grant_meter`: `wholesalePayerTenantId`, `wholesaleUnitSize`,
+  `wholesaleUnitPrice`, `wholesaleBilled`, `wholesaleConsumed`; and
+  `tenant.tenant_billing_wallet`: `tenantId`, `cachedBalance`. Read only,
+  asserted at boot like the rest.
+- On a meter with a wholesale leg and a live config on a `platform` panel, the
+  reserve added to Quota is the lesser of the user's and `WholesaleRoom`
+  (network `contract.resilience.md`) — billing's `VpnWholesale.room`, so the
+  shutdown ceiling never passes what the reseller can pay.
+- `consumedBytes` is read for that bound alone, beside `wholesaleConsumed`,
+  which it moves with; rule 2 still holds for Used.
+- A copy kept by billing was refused for the reason the first amendment gives.
+

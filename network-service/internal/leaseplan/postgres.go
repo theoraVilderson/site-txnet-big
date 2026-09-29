@@ -39,7 +39,10 @@ var _ Store = PostgresStore{}
 // buys at that rate (F-118-b, ADR-0105 (8)), computed from the columns'
 // decimal text. Billing holds it (`ownerRef` = the Grant) and nothing
 // else can spend it, so two Grants or a purchase cannot lease the same money.
-// A Grant with no open reserve hold has a reserve of nothing. Used is summed in Go from each config's
+// A Grant with no open reserve hold has a reserve of nothing. On a meter with
+// a wholesale leg (F-118-n2) and a live config on a platform panel, the
+// reserve is also bounded by what the reseller's `tenant_billing_wallet`
+// funds (F-118-v, `WholesaleRoom`): the lesser of the two wallets. Used is summed in Go from each config's
 // lifetime counter (`contract.lease.md`), which the pass that called us has
 // already moved, plus, on a push panel, its sessions' high-water marks in
 // `radius_session` (F-027-du). A config is a replica while it can carry
@@ -58,6 +61,9 @@ WITH touched AS (
 SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresAt", lc."grantId" IS NOT NULL,
        g."billingMode" = 'metered' AND m."unitPrice" IS NOT NULL,
        coalesce(m."unitPrice"::text, ''), coalesce(h.amount::text, ''),
+       m."wholesalePayerTenantId" IS NOT NULL, coalesce(m."wholesaleUnitSize", 0), coalesce(m."wholesaleUnitPrice"::text, ''),
+       coalesce(m."wholesaleBilled", 0), coalesce(m."wholesaleConsumed", 0), coalesce(tw."cachedBalance"::text, ''),
+       g."consumedBytes", p."ownershipType" = 'platform',
        c.id::text, c."panelId"::text,
        c.status = 'active' AND c."desiredEnabled" AND c."desiredRemote" = 'present',
        c."remoteId" IS NOT NULL,
@@ -80,6 +86,7 @@ SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresA
   LEFT JOIN entitlement.grant_meter m ON m."grantId" = g.id AND m."meterKey" = 'vpn.traffic'
   LEFT JOIN billing.wallet w ON w."ownerUserId" = g."userId"
   LEFT JOIN billing.wallet_hold h ON h."walletId" = w.id AND h."ownerRef" = g.id AND h.status = 'open'
+  LEFT JOIN tenant.tenant_billing_wallet tw ON tw."tenantId" = m."wholesalePayerTenantId"
   LEFT JOIN network.lease_close lc ON lc."grantId" = g.id
   JOIN network.config c ON c."grantId" = g.id
   JOIN network.panel p ON p.id = c."panelId"
@@ -96,11 +103,21 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 	}
 	defer rows.Close()
 	snap := Snapshot{Panels: map[string]Panel{}}
+	// What each Grant's reserve adds, settled once its configs are read: the
+	// wholesale bound applies only if one of them is live on a platform panel.
+	type owed struct {
+		user, room    int64
+		leg, platform bool
+	}
+	var reserves []owed
 	for rows.Next() {
 		var (
 			grantID, driverType string
 			metered             bool
 			rate, reserve       string
+			leg, platform       bool
+			ws                  Wholesale
+			consumed            int64
 			quota, lifetime     int64
 			applied             int64
 			endsAt              *time.Time
@@ -114,7 +131,8 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 			tickMask            *int64
 			outageAt            *time.Time
 		)
-		if err := rows.Scan(&grantID, &quota, &endsAt, &closedQuota, &closedEnd, &closed, &metered, &rate, &reserve, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
+		if err := rows.Scan(&grantID, &quota, &endsAt, &closedQuota, &closedEnd, &closed, &metered, &rate, &reserve,
+			&leg, &ws.UnitSize, &ws.UnitPrice, &ws.Billed, &ws.Consumed, &ws.Balance, &consumed, &platform, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
 			&applied, &c.Enabled, &c.Allocated, &c.Peak, &c.Pending, &driverType, &pn.CanSetLimit, &pn.Healthy,
 			&tickMs, &tickMask, &pn.Learned.LagMeanSec, &pn.Learned.LagVarianceSec2, &pn.Learned.LagSamples,
 			&pn.Learned.OutageWeight, &outageAt); err != nil {
@@ -122,9 +140,14 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 		}
 		if n := len(snap.Grants); n == 0 || snap.Grants[n-1].ID != grantID {
 			g := Grant{ID: grantID, Quota: quota, Purchased: quota, Metered: metered}
+			r := owed{leg: leg}
 			if metered {
-				g.Quota += BytesAffordable(rate, reserve)
+				r.user = BytesAffordable(rate, reserve)
+				if leg {
+					r.room = WholesaleRoom(ws, quota, consumed)
+				}
 			}
+			reserves = append(reserves, r)
 			if endsAt != nil {
 				g.ExpiresAt = *endsAt
 			}
@@ -141,6 +164,7 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 		if !live {
 			continue
 		}
+		reserves[len(reserves)-1].platform = reserves[len(reserves)-1].platform || platform
 		c.Offset = max(lifetime-c.Counter, 0)
 		if applied > 0 {
 			c.LimitSeen = max(applied-c.Offset, 0)
@@ -158,6 +182,13 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 			pn.Learned.OutageAt = *outageAt
 		}
 		snap.Panels[pn.ID] = pn
+	}
+	for i, r := range reserves {
+		var bound *int64
+		if r.leg && r.platform {
+			bound = &r.room
+		}
+		snap.Grants[i].Quota += ReserveBytes(r.user, bound)
 	}
 	return snap, rows.Err()
 }
