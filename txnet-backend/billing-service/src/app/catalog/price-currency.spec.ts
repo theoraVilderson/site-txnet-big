@@ -20,10 +20,10 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { FulfilmentKind, GrantSource, Prisma, VariantBillingMode, VariantVisibility } from '@prisma/client';
-import { meteredRatesInEffect, offeredToTenant, pricesInEffect, runWithTenant } from '@txnet-backend/shared-core';
+import { METER_KEYS, offeredToTenant, pricesInEffect, rateCardsInEffect, runWithTenant } from '@txnet-backend/shared-core';
 
 import { grantFromVariant } from '../entitlement/grant';
-import { meteredRateAt, priceAt, sellableOfferById } from './catalog-reads';
+import { priceAt, rateCardAt, sellableOfferById } from './catalog-reads';
 
 const D = (v: string) => new Prisma.Decimal(v);
 const at = (iso: string) => new Date(iso);
@@ -33,7 +33,13 @@ const NOW = at('2026-09-28T12:00:00Z');
 const row = (id: string, currencyCode: string, effectiveFrom: string) => ({
   id,
   amount: D('5.00'),
-  rate: D('0.50000000'),
+  // A `vpn.traffic` prepaid card per GiB, as a `metered_rate` row became (F-118-d).
+  meterKey: METER_KEYS.vpnTraffic,
+  unitSize: BigInt(1073741824),
+  unitPrice: D('0.50000000'),
+  mode: 'prepaid' as const,
+  includedQuantity: BigInt(0),
+  afterIncluded: 'metered' as const,
   currencyCode,
   effectiveFrom: at(effectiveFrom),
   isActive: true,
@@ -45,17 +51,17 @@ describe('a price or a rate counts only in the currency asked for', () => {
   it('skips a newer row in another currency and answers the one in the currency asked', () => {
     expect(priceAt(history, NOW, 'IRR')?.id).toBe('irr-old');
     expect(priceAt(history, NOW, 'USD')?.id).toBe('usd-new');
-    expect(meteredRateAt(history, NOW, 'IRR')?.id).toBe('irr-old');
+    expect(rateCardAt(history, NOW, 'IRR', METER_KEYS.vpnTraffic)?.id).toBe('irr-old');
   });
 
   it('has no price at all when no row is in that currency', () => {
     expect(priceAt(history, NOW, 'EUR')).toBeNull();
-    expect(meteredRateAt(history, NOW, 'EUR')).toBeNull();
+    expect(rateCardAt(history, NOW, 'EUR', METER_KEYS.vpnTraffic)).toBeNull();
   });
 
   it('asks the database the same question', () => {
     expect(pricesInEffect(NOW, 'IRR')).toEqual({ isActive: true, effectiveFrom: { lte: NOW }, currencyCode: 'IRR' });
-    expect(meteredRatesInEffect(NOW, 'IRR')).toEqual({ isActive: true, effectiveFrom: { lte: NOW }, currencyCode: 'IRR' });
+    expect(rateCardsInEffect(NOW, 'IRR', METER_KEYS.vpnTraffic)).toEqual({ isActive: true, effectiveFrom: { lte: NOW }, currencyCode: 'IRR', meterKey: 'vpn.traffic' });
     expect(offeredToTenant(TENANT, NOW, 'IRR').prices).toEqual({
       some: { isActive: true, effectiveFrom: { lte: NOW }, currencyCode: 'IRR', OR: [{ tenantId: TENANT }, { tenantId: null }] },
     });
@@ -125,7 +131,7 @@ describe('a metered Grant locks its rate’s currency with the rate', () => {
     billingMode: VariantBillingMode.metered,
     quotas: {},
     durationDays: 30,
-    meteredRates: [row('usd', 'USD', '2026-09-01T00:00:00Z'), row('irr', 'IRR', '2026-08-01T00:00:00Z')],
+    rateCards: [row('usd', 'USD', '2026-09-01T00:00:00Z'), row('irr', 'IRR', '2026-08-01T00:00:00Z')],
     product: { featureKeys: [] },
   };
 

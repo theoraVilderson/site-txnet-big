@@ -315,3 +315,65 @@ describe('meters are platform catalog rows (F-118-c, ADR-0105 decision 2)', () =
     await expect(owner.$executeRawUnsafe(`UPDATE catalog.meter SET "descriptionKey" = 'catalog.meter.vpn.traffic.description' WHERE key = 'vpn.traffic'`)).resolves.toBe(1);
   });
 });
+
+describe('a rate card prices a meter on a variant (F-118-d, ADR-0105 decision 3)', () => {
+  const card = (tenantId: string | null, variantId: string, over: Record<string, string> = {}) => {
+    const c = { meterKey: `'vpn.traffic'`, unitPrice: '0.40000000', includedQuantity: '0', afterIncluded: `'metered'`, ...over };
+    return (tenantId === null ? cross : owner).$executeRawUnsafe(`
+      INSERT INTO catalog.rate_card (id, "tenantId", "variantId", "meterKey", "unitSize", "unitPrice", "currencyCode", mode, "includedQuantity", "afterIncluded", "effectiveFrom")
+      VALUES (gen_random_uuid(), ${q(tenantId)}, '${variantId}', ${c.meterKey}, 1073741824, ${c.unitPrice}, 'USD', 'prepaid', ${c.includedQuantity}, ${c.afterIncluded}, now())
+    `);
+  };
+  const tenantCard = (tenantId: string, variantId: string) =>
+    asTenant(tenantId, (tx) =>
+      tx.rateCard.create({
+        data: {
+          tenantId,
+          variantId,
+          meterKey: METER_KEYS.vpnTraffic,
+          unitSize: BigInt(1073741824),
+          unitPrice: new Prisma.Decimal('0.35'),
+          currencyCode: 'USD',
+          mode: 'postpaid',
+          afterIncluded: 'metered',
+          effectiveFrom: new Date(),
+        },
+      }),
+    );
+
+  beforeAll(async () => {
+    await card(null, PLATFORM_VARIANT);
+  });
+
+  it("is written by a tenant on its own variant only — never the platform's or another tenant's", async () => {
+    await expect(tenantCard(RESELLER_A, A_VARIANT)).resolves.toMatchObject({ mode: 'postpaid', tenantId: RESELLER_A });
+    await expect(tenantCard(RESELLER_A, PLATFORM_VARIANT)).rejects.toThrow(/catalog_tenant_mismatch/);
+    await expect(tenantCard(RESELLER_A, B_VARIANT)).rejects.toThrow(/catalog_tenant_mismatch/);
+    const seen = await asTenant(RESELLER_B, (tx) => tx.rateCard.findMany({ select: { variantId: true } }));
+    expect(seen.map((c) => c.variantId)).toEqual([PLATFORM_VARIANT]);
+  });
+
+  it('is history: only isActive changes, and it goes only with its variant', async () => {
+    await expect(cross.$executeRawUnsafe(`UPDATE catalog.rate_card SET "unitPrice" = 0.1 WHERE "variantId" = '${PLATFORM_VARIANT}'`)).rejects.toThrow(/rate_card_is_history/);
+    await expect(cross.$executeRawUnsafe(`UPDATE catalog.rate_card SET mode = 'postpaid' WHERE "variantId" = '${PLATFORM_VARIANT}'`)).rejects.toThrow(/rate_card_is_history/);
+    await expect(cross.$executeRawUnsafe(`DELETE FROM catalog.rate_card WHERE "variantId" = '${PLATFORM_VARIANT}'`)).rejects.toThrow(/rate_card_is_history/);
+    await expect(cross.$executeRawUnsafe(`UPDATE catalog.rate_card SET "isActive" = false WHERE "variantId" = '${PLATFORM_VARIANT}'`)).resolves.toBe(1);
+  });
+
+  it('refuses a meter nobody reports, a metered unit at zero, and a stop with nothing included', async () => {
+    await expect(card(null, PLATFORM_VARIANT, { meterKey: `'sms.sent'` })).rejects.toThrow(/rate_card_meterKey_fkey|23503|Foreign key/);
+    await expect(card(null, PLATFORM_VARIANT, { unitPrice: '0' })).rejects.toThrow(/rate_card_metered_price_positive/);
+    await expect(card(null, PLATFORM_VARIANT, { afterIncluded: `'stop'` })).rejects.toThrow(/rate_card_stop_includes_some/);
+    // 50 GiB with the plan, then nothing more: free past nothing, so a zero price is fine.
+    await expect(card(null, PLATFORM_VARIANT, { afterIncluded: `'stop'`, includedQuantity: '53687091200', unitPrice: '0' })).resolves.toBe(1);
+  });
+
+  it('retires metered_rate: no service role writes one any more', async () => {
+    await expect(
+      cross.$executeRawUnsafe(`
+        INSERT INTO catalog.metered_rate (id, "tenantId", "variantId", rate, "currencyCode", "effectiveFrom")
+        VALUES (gen_random_uuid(), NULL, '${PLATFORM_VARIANT}', 0.4, 'USD', now())
+      `),
+    ).rejects.toThrow(/permission denied/);
+  });
+});

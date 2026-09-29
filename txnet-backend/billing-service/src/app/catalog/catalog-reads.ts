@@ -5,13 +5,14 @@ import {
   isListed,
   isSellableBySku,
   listedVariantWhere,
-  meteredRateAt,
   pickBySku,
   priceAt,
   pricesInEffect,
   tenantTransaction,
-  type MeteredRateRow,
+  rateCardAt,
+  vpnTrafficRateAt,
   type OfferFacts,
+  type RateCardRow,
   type PriceRow,
   categoryLive,
   firstLiveCategory,
@@ -38,7 +39,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 // The rules moved to shared-core (F-018-ah) so every service asks the same
 // question; re-exported so this unit's callers keep their import.
-export { isListed, isSellableBySku, meteredRateAt, pickBySku, priceAt, type MeteredRateRow, type OfferFacts, type PriceRow };
+export { isListed, isSellableBySku, pickBySku, priceAt, rateCardAt, vpnTrafficRateAt, type OfferFacts, type PriceRow, type RateCardRow };
 
 /** One sellable variant with its price, as a caller reads it. Money is a decimal string (C-02). */
 export type CatalogOffer = {

@@ -141,6 +141,10 @@ async function seed() {
   await sql(`INSERT INTO catalog.price (id, "tenantId", "variantId", amount, "currencyCode", "effectiveFrom") VALUES
     ('${PRICE_NOW}', '${TENANT}', '${VARIANT}', 12.50, 'USD', '2026-01-01'),
     ('${PRICE_LATER}', '${TENANT}', '${VARIANT}', 20.00, 'USD', '2099-01-01')`);
+  // Its postpaid card on the VPN meter, in effect, and a superseded one (F-118-d).
+  await sql(`INSERT INTO catalog.rate_card (id, "tenantId", "variantId", "meterKey", "unitSize", "unitPrice", "currencyCode", mode, "includedQuantity", "afterIncluded", "effectiveFrom") VALUES
+    (gen_random_uuid(), '${TENANT}', '${VARIANT}', 'vpn.traffic', 1073741824, 0.30000000, 'USD', 'postpaid', 0, 'metered', '2025-01-01'),
+    (gen_random_uuid(), '${TENANT}', '${VARIANT}', 'vpn.traffic', 1073741824, 0.50000000, 'USD', 'postpaid', 5368709120, 'metered', '2026-01-01')`);
 
   await sql(`INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "minPurchaseAmount", "totalUsageLimit", "perUserUsageLimit", "createdByAdminId", "currencyCode", "reservedCount") VALUES
     ('${FIXED_COUPON}', '${TENANT}', 'FIVE', 'fixed_amount', 5.00, 10.00, 10, 0, '${ADMIN}', 'USD', 1),
@@ -220,6 +224,17 @@ describe('a reseller changes its operating currency USD -> EUR', () => {
       { amount: '18.40', currencyCode: 'EUR', later: true },
       { amount: '12.50', currencyCode: 'USD', later: false },
       { amount: '20.00', currencyCode: 'USD', later: true },
+    ]);
+  });
+
+  it('reprices the rate card in effect as a new card, everything but its price and currency kept', async () => {
+    const cards = await owner.$queryRawUnsafe<Array<{ unitPrice: string; currencyCode: string; mode: string; included: string }>>(`
+      SELECT "unitPrice"::text, "currencyCode", mode::text, "includedQuantity"::text AS included FROM catalog.rate_card
+       WHERE "variantId" = '${VARIANT}' ORDER BY "currencyCode", "effectiveFrom"`);
+    expect(cards).toEqual([
+      { unitPrice: '0.46000000', currencyCode: 'EUR', mode: 'postpaid', included: '5368709120' },
+      { unitPrice: '0.30000000', currencyCode: 'USD', mode: 'postpaid', included: '0' },
+      { unitPrice: '0.50000000', currencyCode: 'USD', mode: 'postpaid', included: '5368709120' },
     ]);
   });
 

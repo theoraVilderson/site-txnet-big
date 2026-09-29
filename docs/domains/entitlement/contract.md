@@ -137,17 +137,18 @@ Grant of a variant with a panel group is moved to `active` by group fulfilment
 once `minHealthyPanels` of its configs are confirmed (network
 `contract.groups.md` rule 10, F-027-bl).
 
-A **metered** variant also has its rate copied: the `catalog.metered_rate` row
-in effect at `startsAt`, in the tenant's operating currency, is locked onto
+A **metered** variant also has its rate copied: the `vpn.traffic` rate card
+(`catalog.rate_card`, F-118-d; `metered_rate` before it) in effect at `startsAt`, in the tenant's operating currency, is locked onto
 `Grant.meteredRate` with its currency on `meteredRateCurrencyCode` (F-027-p,
 ADR-0073, F-116-d) — a block is debited in that currency,
 and every block bought against that Grant is priced from the Grant's own
 column — a catalog edit tomorrow never reprices what was sold. A metered
-variant with **no** rate in effect in that currency is refused (`metered_rate_missing`), and one
+variant with **no** rate in effect in that currency — or whose newest card the byte engine
+cannot serve yet (postpaid, included, not per 2^30 bytes; `vpnTrafficRateAt`) — is refused (`metered_rate_missing`), and one
 whose rate in effect is **zero** with `metered_rate_not_positive` (F-027-al) —
 a block priced at nothing cannot be bought, so such a Grant stalls at its first
 block rather than serving free traffic; the catalog column refuses the same
-value (`metered_rate_is_positive`). Nothing is
+value (`rate_card_metered_price_positive`). Nothing is
 copied for any other billing mode: `grant_metered_rate_is_metered` refuses a
 rate on a prepaid Grant.
 
@@ -209,7 +210,7 @@ Through the outbox (ADR-0021); the first two also live on the buyer's `user:` ch
 
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
-| catalog | a variant's quotas, `durationDays`, `billingMode`, its product's feature keys, and — when metered — its `metered_rate` in effect at the sale (F-027-p) | cannot issue |
+| catalog | a variant's quotas, `durationDays`, `billingMode`, its product's feature keys, and — when metered — its `vpn.traffic` rate card in effect at the sale (F-027-p, F-118-d) | cannot issue |
 | identity | the user a Grant is issued to | cannot issue |
 | tenant | the ambient tenant (ADR-0024) | refuses |
 

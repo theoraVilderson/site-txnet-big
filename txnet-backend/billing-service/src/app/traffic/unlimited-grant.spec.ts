@@ -69,7 +69,7 @@ describe('an unlimited Grant', () => {
     billingMode: VariantBillingMode.prepaid,
     quotas: { traffic_bytes: { limit: 0, resetPolicy: 'none' } },
     durationDays: 30,
-    meteredRates: [],
+    rateCards: [],
     product: { featureKeys: ['vpn.access'] },
   };
   const start = { source: GrantSource.purchase, startsAt: new Date('2026-09-26T10:00:00Z'), currencyCode: 'USD' };

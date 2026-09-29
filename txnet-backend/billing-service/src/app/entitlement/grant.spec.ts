@@ -23,7 +23,7 @@
 import { createHash } from 'node:crypto';
 
 import { GrantSource, GrantStatus, Prisma, VariantBillingMode, VariantVisibility } from '@prisma/client';
-import { runWithTenant } from '@txnet-backend/shared-core';
+import { runWithTenant, type RateCardRow } from '@txnet-backend/shared-core';
 
 import {
   assignable,
@@ -110,9 +110,11 @@ describe('assignable', () => {
 });
 
 describe('grantFromVariant', () => {
+  // A `vpn.traffic` prepaid card per GiB — what a `metered_rate` row became (F-118-d).
   const rate = (id: string, r: string, effectiveFrom: string, isActive = true) => ({
     id,
-    rate: new Prisma.Decimal(r),
+    meterKey: 'vpn.traffic', unitSize: BigInt(1073741824), mode: 'prepaid' as const, includedQuantity: BigInt(0), afterIncluded: 'metered' as const,
+    unitPrice: new Prisma.Decimal(r),
     currencyCode: 'USD',
     effectiveFrom: at(effectiveFrom),
     isActive,
@@ -121,7 +123,7 @@ describe('grantFromVariant', () => {
     billingMode: VariantBillingMode.prepaid,
     quotas: { traffic_bytes: { limit: 53687091200, resetPolicy: 'none' } },
     durationDays: 30,
-    meteredRates: [],
+    rateCards: [],
     product: { featureKeys: ['vpn.access'] },
   };
 
@@ -153,14 +155,14 @@ describe('grantFromVariant', () => {
     const metered = {
       ...variant,
       billingMode: VariantBillingMode.metered,
-      meteredRates: [rate('r1', '0.40000000', '2026-01-01T00:00:00Z'), rate('r2', '0.25000000', '2026-10-01T00:00:00Z')],
+      rateCards: [rate('r1', '0.40000000', '2026-01-01T00:00:00Z'), rate('r2', '0.25000000', '2026-10-01T00:00:00Z')],
     };
     const g = grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T10:00:00Z'), currencyCode: 'USD' }, metered);
     expect(g.meteredRate?.toString()).toBe('0.4');
   });
 
   it('carries no rate on a prepaid variant, whatever its rate history says', () => {
-    const priced = { ...variant, meteredRates: [rate('r1', '0.40000000', '2026-01-01T00:00:00Z')] };
+    const priced = { ...variant, rateCards: [rate('r1', '0.40000000', '2026-01-01T00:00:00Z')] };
     expect(grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T10:00:00Z'), currencyCode: 'USD' }, priced).meteredRate).toBeNull();
   });
 
@@ -168,7 +170,7 @@ describe('grantFromVariant', () => {
     const metered = {
       ...variant,
       billingMode: VariantBillingMode.metered,
-      meteredRates: [rate('r1', '0.40000000', '2026-10-01T00:00:00Z')],
+      rateCards: [rate('r1', '0.40000000', '2026-10-01T00:00:00Z')],
     };
     expect(grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T10:00:00Z'), currencyCode: 'USD' }, metered).meteredRate).toBeNull();
   });
@@ -206,7 +208,7 @@ describe('GrantService.issue', () => {
     billingMode: VariantBillingMode.prepaid,
     quotas: {},
     durationDays: 30,
-    meteredRates: [] as Array<{ id: string; rate: Prisma.Decimal; currencyCode: string; effectiveFrom: Date; isActive: boolean }>,
+    rateCards: [] as RateCardRow[],
     product: { isActive: true, featureKeys: ['vpn.access'], categories: [{ position: 0, category: { key: 'vpn', isActive: true, parentId: null } }] },
   });
 
@@ -279,9 +281,10 @@ describe('GrantService.issue locks the metered rate (F-027-p, ADR-0073)', () => 
     billingMode: VariantBillingMode.metered,
     quotas: {},
     durationDays: 30,
-    meteredRates: rates.map((r, i) => ({
+    rateCards: rates.map((r, i) => ({
       id: `r${i + 1}`,
-      rate: new Prisma.Decimal(r.rate),
+      meterKey: 'vpn.traffic', unitSize: BigInt(1073741824), mode: 'prepaid' as const, includedQuantity: BigInt(0), afterIncluded: 'metered' as const,
+      unitPrice: new Prisma.Decimal(r.rate),
       currencyCode: 'USD',
       effectiveFrom: at(r.effectiveFrom),
       isActive: true,

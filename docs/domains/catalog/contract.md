@@ -128,19 +128,26 @@ Grant of it unlocks (`featureKeys`); a **variant** is the SKU that is sold, with
 its quotas, duration and visibility; a **price** is the variant's USD amount
 in its `currencyCode` from `effectiveFrom` on, and a change is a new row. `tenantId IS NULL` is the
 platform's row, readable by every tenant. Names are i18n keys (§4.3).
-A **metered** variant also carries a `metered_rate` history (F-027-g, ADR-0073):
-money per 2^30 bytes in its `currencyCode` at `Decimal(18,8)`, append-only under
-`metered_rate_is_history` exactly as a price is, and read **once, at the moment
-of sale** — `GrantService.issue` locks it onto `Grant.meteredRate` (F-027-p), so
-a rate written tomorrow never reprices bytes already sold. The unit is
-`METERED_RATE_UNIT_BYTES` (shared-core), spelled nowhere else. A rate is
-strictly positive (`metered_rate_is_positive`, F-027-al): unlike a price, zero
-is not "free" here — no block can be bought at nothing, so the Grant stalls.
-Free metered service is a quota with no rate.
 A **meter** (F-118-c, ADR-0105) is what is counted and billed on use: a
 platform-only `meter` row, written by a migration because a meter exists only
 where code reports it — seeded `vpn.traffic` (bytes). Code names it through
-`METER_KEYS` (`shared-core/src/lib/catalog/meter.ts`); a rate card prices it (F-118-d).
+`METER_KEYS` (`shared-core/src/lib/catalog/meter.ts`).
+A **rate card** (F-118-d, ADR-0105 decision 3) prices one meter on one variant:
+`unitPrice` per `unitSize` of the meter's unit, `Decimal(18,8)`, in its
+`currencyCode`; `mode` `prepaid | postpaid`, picked by the seller per meter;
+`includedQuantity` paid with the plan, then `afterIncluded` `stop | metered`.
+Append-only under `rate_card_is_history` exactly as a price is; a tenant writes
+cards on its own variants only. A metered unit costs more than zero
+(`rate_card_metered_price_positive`, F-027-al: no block is bought at nothing);
+free usage is an included quantity that stops. Read **once, at the moment of
+sale** (`rateCardAt`): a card written tomorrow never reprices what was sold.
+Every `metered_rate` row became a `vpn.traffic` prepaid card per 2^30 bytes
+(`METERED_RATE_UNIT_BYTES`); `metered_rate` is read by nothing and written by
+no service role until F-118-l drops it. No route writes a card yet (F-118-m, F-118-k).
+Until `grant_meter` (F-118-e), a VPN Grant locks only a card the byte engine
+serves — prepaid, per 2^30 bytes, nothing included, then metered
+(`vpnTrafficRateAt`); a newer card of any other shape is no rate, so the sale
+is refused (`metered_rate_missing`), never made at the older card.
 
 ## Currency (F-116-d, ADR-0098 part 2)
 
@@ -149,11 +156,11 @@ where code reports it — seeded `vpn.traffic` (bytes). Code names it through
 
 | Rule | Held by |
 |---|---|
-| A `price` and a `metered_rate` row record `currencyCode`: its tenant's operating currency when written, the platform's for a platform row. NOT NULL, no default; rows from before are `USD` | migration `20260928002600`, `pricingCurrencyOf` |
-| **A reader takes only the rows in the reading tenant's operating currency.** A platform row in another currency is no price for that tenant — the variant is not offered, as one with no price is not; never converted (user, 2026-09-28) | `effectiveIn` under `priceAt` / `meteredRateAt`; `pricesInEffect(at, code)` / `meteredRatesInEffect(at, code)` |
+| A `price` and a `rate_card` row record `currencyCode`: its tenant's operating currency when written, the platform's for a platform row. NOT NULL, no default; rows from before are `USD` | migration `20260928002600`, `pricingCurrencyOf` |
+| **A reader takes only the rows in the reading tenant's operating currency.** A platform row in another currency is no price for that tenant — the variant is not offered, as one with no price is not; never converted (user, 2026-09-28) | `effectiveIn` under `priceAt` / `rateCardAt`; `pricesInEffect(at, code)` / `rateCardsInEffect(at, code, meterKey)` |
 | An offer carries `price.currencyCode`; an invoice copies it | `toOffer`, `InvoiceService.create` |
 | A Grant locks the rate's currency with the rate; a block and a remainder move in it | `grantFromVariant`, entitlement invariant 10 |
-| A currency change writes new rows in the new currency (F-116-f); the old ones stop matching and stay as history | — (F-116-f) |
+| A currency change writes new rows in the new currency (F-116-f) — a rate card per meter, every column but price and currency kept; the old ones stop matching and stay as history | `repriceRateCards` (F-118-d) |
 
 ## Provides (intended)
 
@@ -184,7 +191,7 @@ None.
 | Unit | What it reads |
 |---|---|
 | billing | `coupon_service_scope.productId` / `variantId`: a purchase matches a row naming its variant or its product; `sellableOfferById` + `invoice.variantId` / `priceId` (`Restrict`): what an invoice was priced at (F-111-a) |
-| entitlement | a variant's quotas, duration, billing mode and its product's feature keys, copied into a Grant (F-026-b, F-026-e); the metered rate in effect, locked onto `Grant.meteredRate` at issue (F-027-p, ADR-0073) |
+| entitlement | a variant's quotas, duration, billing mode and its product's feature keys, copied into a Grant (F-026-b, F-026-e); the `vpn.traffic` rate card in effect, locked onto `Grant.meteredRate` at issue (F-027-p, ADR-0073; `vpnTrafficRateAt`, F-118-d) |
 | network | a variant's `panelGroupId` (FK to `network.panel_group`, F-027-bk) and `qualityTier` (F-027) |
 | tenant | `offeredToTenant`: the onboarding checklist's `pricing` step (F-018-ah) |
 
@@ -200,6 +207,7 @@ None.
 | A coupon scope row names exactly one product or one variant (`coupon_service_scope_names_one`) | CHECK |
 | Money is `Decimal(18,2)` in the row's `currencyCode` (`^[A-Z]{3}$`), never negative; zero is a free variant | column type + CHECKs (ADR-0098, C-02) |
 | A meter is a platform row every tenant reads and no service role writes; its `key` and `unit` never change, even for the owner (`meter_is_immutable`) — F-118-c | grants (SELECT only), trigger `catalog.meter_is_immutable` |
+| A rate card is history (`rate_card_is_history`), carries its variant's tenant, names a meter that exists (FK on `meter.key`); a metered unit is priced above zero and a `stop` card includes some (`rate_card_stop_includes_some`) — F-118-d | triggers, FKs, CHECKs |
 | `visibility`: `public` listed; `unlisted` by SKU only; `admin_only` never sold, only assigned (F-506) | F-026-c |
 
 ## Deprecations

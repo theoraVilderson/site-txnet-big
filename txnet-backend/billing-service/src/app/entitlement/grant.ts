@@ -4,15 +4,16 @@ import { Injectable } from '@nestjs/common';
 import { ConfigStatus, Grant, GrantSource, GrantStatus, Prisma, QuotaAdjustment, QuotaMetric, VariantBillingMode } from '@prisma/client';
 import {
   TenantContext,
+  METER_KEYS,
   evaluateLineNameTemplate,
-  meteredRatesInEffect,
   operatingCurrencyOf,
   productCategoriesInclude,
   productCategoriesLive,
+  rateCardsInEffect,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
 
-import { isSellableBySku, meteredRateAt, type MeteredRateRow, type OfferFacts } from '../catalog/catalog-reads';
+import { isSellableBySku, vpnTrafficRateAt, type OfferFacts, type RateCardRow } from '../catalog/catalog-reads';
 import { trafficQuotaOf } from '../catalog/traffic-quota';
 import { PrismaService } from '../prisma/prisma.service';
 import { GrantTokenSeal, NO_TOKEN_SEAL, type SealedToken } from './grant-token-seal';
@@ -48,7 +49,7 @@ export type EntitlementRejection =
   | 'grant_not_found'
   | 'illegal_transition'
   | 'grant_not_active'
-  /** A `metered` variant with no rate in effect at the sale: nothing would price its bytes (F-027-p). */
+  /** A `metered` variant with no rate in effect at the sale — or a `vpn.traffic` card the byte engine cannot serve yet (F-118-d): nothing would price its bytes (F-027-p). */
   | 'metered_rate_missing'
   /** The rate in effect is zero: a block priced at nothing cannot be bought, so the Grant would stall (F-027-al). */
   | 'metered_rate_not_positive'
@@ -137,8 +138,8 @@ type VariantShape = {
   billingMode: VariantBillingMode;
   quotas: Prisma.JsonValue;
   durationDays: number | null;
-  /** The variant's rate history — only the rows that could be in effect need be here. */
-  meteredRates: readonly MeteredRateRow[];
+  /** The variant's rate cards (F-118-d) — only the rows that could be in effect need be here. */
+  rateCards: readonly RateCardRow[];
   product: { featureKeys: string[] };
 };
 
@@ -147,8 +148,8 @@ type VariantShape = {
  * never changes what was sold. A purchase is `pending` until it settles; any
  * other source is `active` at once.
  *
- * `meteredRate` joins the quotas here (ADR-0073): the rate in effect at
- * `startsAt`, and `null` for anything not `metered` — `grant_metered_rate_is_metered`
+ * `meteredRate` joins the quotas here (ADR-0073): the `vpn.traffic` rate card
+ * in effect at `startsAt` (`vpnTrafficRateAt`), and `null` for anything not `metered` — `grant_metered_rate_is_metered`
  * refuses a rate on a prepaid Grant, and a rate nobody reads is a second answer
  * to what the user owes. A metered variant with no rate at all resolves to
  * `null` too; `issue` is what refuses that, with the variant in the message.
@@ -168,7 +169,7 @@ export function grantFromVariant(input: { source: GrantSource; startsAt: Date; c
   // A metered Grant's traffic is what its blocks buy, never the variant's.
   const traffic = v.billingMode === VariantBillingMode.prepaid ? trafficQuotaOf(v.quotas) : null;
   // The rate in the tenant's currency, locked with that currency (F-116-d).
-  const rate = v.billingMode === VariantBillingMode.metered ? meteredRateAt(v.meteredRates, input.startsAt, input.currencyCode) : null;
+  const rate = v.billingMode === VariantBillingMode.metered ? vpnTrafficRateAt(v.rateCards, input.startsAt, input.currencyCode) : null;
   return {
     status: input.source === GrantSource.purchase ? GrantStatus.pending : GrantStatus.active,
     startsAt: input.startsAt,
@@ -472,9 +473,12 @@ export class GrantService {
     const currencyCode = await operatingCurrencyOf(tx, tenant.id);
     const variant = await tx.productVariant.findUnique({
       where: { id: input.variantId },
-      // The rate history comes back with the variant — one round trip, and the
-      // rows are narrowed to those that could be in effect at the sale.
-      include: { product: { include: productCategoriesInclude }, meteredRates: { where: meteredRatesInEffect(startsAt, currencyCode) } },
+      // The rate cards come back with the variant — one round trip, and the
+      // rows are narrowed to the VPN meter's that could be in effect at the sale.
+      include: {
+        product: { include: productCategoriesInclude },
+        rateCards: { where: rateCardsInEffect(startsAt, currencyCode, METER_KEYS.vpnTraffic) },
+      },
     });
     if (!variant) throw new EntitlementRefused('variant_not_found', input.variantId);
     const facts: OfferFacts = {
@@ -495,7 +499,7 @@ export class GrantService {
     // Nor at a rate of zero. `sizeBlock` refuses one too (`rate_not_priceable`,
     // F-027-q), but there it is a user stalled mid-session far from whoever
     // priced the variant; the sale is the last point the two are one act
-    // (F-027-al). `metered_rate_is_positive` holds the same line in the column.
+    // (F-027-al). `rate_card_metered_price_positive` holds the same line in the column.
     if (shape.meteredRate !== null && shape.meteredRate.lte(0)) {
       throw new EntitlementRefused('metered_rate_not_positive', input.variantId);
     }

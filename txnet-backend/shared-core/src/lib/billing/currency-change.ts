@@ -63,6 +63,7 @@ export type CurrencyChangeInput = {
 export type CurrencyChangeSummary = {
   wallets: number;
   prices: number;
+  /** Rate cards repriced (F-118-d). The key predates them; the panel reads it. */
   meteredRates: number;
   grants: number;
   coupons: number;
@@ -148,7 +149,7 @@ export async function convertOperatingCurrency(
   const summary: CurrencyChangeSummary = {
     wallets: await convertWallets(c),
     prices: await repricePrices(c),
-    meteredRates: await repriceMeteredRates(c),
+    meteredRates: await repriceRateCards(c),
     grants: await convertGrants(c),
     coupons: await convertCoupons(c),
     rules: await convertRules(c),
@@ -306,8 +307,23 @@ function repriceRows(c: Conversion, table: Prisma.Sql, value: Prisma.Sql, conver
 const repricePrices = (c: Conversion) =>
   repriceRows(c, Prisma.sql`catalog.price`, Prisma.sql`amount`, money(c, Prisma.sql`p.amount`));
 
-const repriceMeteredRates = (c: Conversion) =>
-  repriceRows(c, Prisma.sql`catalog.metered_rate`, Prisma.sql`rate`, Prisma.sql`round(p.rate * ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int)`);
+/**
+ * A rate card is repriced as a price is, per meter: the card in effect now and
+ * every one scheduled after it, as new cards — everything but the price and its
+ * currency copied (F-118-d). `metered_rate` is read by nothing since then.
+ */
+const repriceRateCards = (c: Conversion) => c.tx.$executeRaw`
+  INSERT INTO catalog.rate_card (id, "tenantId", "variantId", "meterKey", "unitSize", "unitPrice", "currencyCode", mode,
+                                 "includedQuantity", "afterIncluded", "effectiveFrom", "isActive", "createdByAdminId", "createdAt")
+  SELECT gen_random_uuid(), p."tenantId", p."variantId", p."meterKey", p."unitSize",
+         round(p."unitPrice" * ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int), ${c.to}, p.mode,
+         p."includedQuantity", p."afterIncluded", greatest(p."effectiveFrom", now()), true, ${c.actor}::uuid, now()
+    FROM catalog.rate_card p
+   WHERE ${owned(c, Prisma.sql`p."tenantId"`)} AND p."currencyCode" = ${c.from} AND p."isActive"
+     AND (p."effectiveFrom" > now() OR p."effectiveFrom" = (
+           SELECT max(q."effectiveFrom") FROM catalog.rate_card q
+            WHERE q."variantId" = p."variantId" AND q."meterKey" = p."meterKey" AND q."currencyCode" = ${c.from}
+              AND q."isActive" AND q."effectiveFrom" <= now()))`;
 
 /** A Grant not yet closed keeps debiting bytes at its locked rate, so the rate follows its wallet. */
 const convertGrants = (c: Conversion) => c.tx.$executeRaw`

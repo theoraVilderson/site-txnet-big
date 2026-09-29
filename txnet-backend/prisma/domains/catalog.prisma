@@ -134,6 +134,8 @@ model Meter {
   descriptionKey String?
   createdAt      DateTime  @default(now())
 
+  rateCards RateCard[]
+
   @@map("meter")
   @@schema("catalog")
 }
@@ -222,6 +224,7 @@ model ProductVariant {
   panelGroup          PanelGroup?          @relation(fields: [panelGroupId], references: [id], onDelete: Restrict)
   prices              Price[]
   meteredRates        MeteredRate[]
+  rateCards           RateCard[]
   couponServiceScopes CouponServiceScope[]
   grants              Grant[]
   grantingCoupons     Coupon[]
@@ -261,6 +264,71 @@ model Price {
   @@schema("catalog")
 }
 
+/// Whether a rate card's usage is paid before it is served or held and
+/// captured as it is (F-118-d, ADR-0105 decisions 1 and 6). The seller picks it
+/// per meter.
+enum RateCardMode {
+  prepaid
+  postpaid
+
+  @@schema("catalog")
+}
+
+/// What happens past a card's `includedQuantity`: `stop` serves no more,
+/// `metered` charges each further unit at `unitPrice` (ADR-0105 decision 3).
+enum RateCardAfterIncluded {
+  stop
+  metered
+
+  @@schema("catalog")
+}
+
+/// What a variant charges for one meter (F-118-d, ADR-0105 decision 3):
+/// `unitPrice` per `unitSize` of the meter's unit, in `currencyCode` — the
+/// tenant's operating currency when written (ADR-0098) — at the precision a
+/// rate needs, `(18, 8)`. Every amount derived from it is rounded to whole
+/// minor units before the ledger sees it (C-02).
+///
+/// `includedQuantity` comes with the plan's price; past it, `afterIncluded`
+/// says whether the meter stops or charges. So one row sells per-GB VPN
+/// (0 included, then metered) and a hybrid (50 GB with the plan, then per GB).
+///
+/// History, exactly as `Price` is: a change is a new row, and a trigger refuses
+/// any update but `isActive` and any delete but its variant's. A tenant writes
+/// cards on its own variants only (RLS, `same_tenant_as_parent`). Replaces
+/// `MeteredRate`: its rows became `vpn.traffic` prepaid cards.
+model RateCard {
+  id               String                @id @default(uuid()) @db.Uuid
+  tenantId         String?               @db.Uuid
+  variantId        String                @db.Uuid
+  /// A `Meter.key` (`METER_KEYS`).
+  meterKey         String
+  /// How many of the meter's unit one `unitPrice` buys — 2^30 for a GiB of bytes.
+  unitSize         BigInt
+  unitPrice        Decimal               @db.Decimal(18, 8)
+  /// On the same terms as `Price.currencyCode` (F-116-d).
+  currencyCode     String
+  mode             RateCardMode
+  /// In the meter's unit, paid with the plan. 0 = nothing included.
+  includedQuantity BigInt                @default(0)
+  afterIncluded    RateCardAfterIncluded
+  effectiveFrom    DateTime
+  isActive         Boolean               @default(true)
+  createdByAdminId String?               @db.Uuid
+  createdAt        DateTime              @default(now())
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  meter   Meter          @relation(fields: [meterKey], references: [key], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([variantId, meterKey, effectiveFrom(sort: Desc)])
+  @@index([tenantId])
+  @@map("rate_card")
+  @@schema("catalog")
+}
+
+/// Retired by F-118-d: its rows are `vpn.traffic` cards in `RateCard`, nothing
+/// reads it, and no service role may write it. Dropped with F-118-l.
+///
 /// What a `metered` variant charges per 2^30 bytes (ADR-0073, F-027-g), in the
 /// same currency as `Price` but at the precision a rate needs — `(18, 8)`, as
 /// `tenant_usage_meter.unitPrice` and `currency_exchange_rate.rate` already

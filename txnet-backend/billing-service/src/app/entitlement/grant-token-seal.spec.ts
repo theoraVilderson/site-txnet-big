@@ -75,7 +75,7 @@ describe('GrantService keeps the token it answers', () => {
     billingMode: VariantBillingMode.prepaid,
     quotas: {},
     durationDays: 30,
-    meteredRates: [],
+    rateCards: [],
     product: { isActive: true, featureKeys: ['vpn.access'], categories: [{ position: 0, category: { key: 'vpn', isActive: true, parentId: null } }] },
   };
 

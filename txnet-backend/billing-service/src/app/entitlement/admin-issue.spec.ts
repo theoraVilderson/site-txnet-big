@@ -52,7 +52,7 @@ const variantRow = (over: VariantOver = {}) => ({
   billingMode: over.billingMode ?? VariantBillingMode.prepaid,
   quotas: over.quotas ?? { traffic_bytes: { limit: 50 * GIB, resetPolicy: 'none' } },
   durationDays: 30,
-  meteredRates: [],
+  rateCards: [],
   product: {
     isActive: true,
     fulfilmentKind: over.kind ?? FulfilmentKind.network_access,

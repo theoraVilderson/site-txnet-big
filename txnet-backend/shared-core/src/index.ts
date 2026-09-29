@@ -43,6 +43,7 @@ export * from './lib/currency/fx-rate';
 export * from './lib/catalog/offers';
 export * from './lib/catalog/category-tree';
 export * from './lib/catalog/metered-rate';
+export * from './lib/catalog/rate-card';
 export * from './lib/catalog/meter';
 export * from './lib/tenant/billing/tenant-billing-ledger';
 export * from './lib/tenant/feature-keys';
