@@ -80,7 +80,7 @@ the host; the ambient routes stay for a tenant configuring itself.
 
 | call | answer |
 |---|---|
-| `admitIncludingPlatform(actor, tenantId, capability)` | `admit`, except the `platform_owner` tenant is also found: platform staff (`tenant.manage` or `*`) get `{id, slug, as: 'staff'}`; everyone else `not_allowed`, its `ownerUserId` and a seat on it included |
+| `admitIncludingPlatform(actor, tenantId, capability)` | `admit`, except the `platform_owner` tenant is also found: platform staff (`tenant.manage` or `*`) get `{id, slug, as: 'staff', platform: true}` — `platform` only here, for a read whose rows name the platform as `tenantId` null (F-311-ab1); everyone else `not_allowed`, its `ownerUserId` and a seat on it included |
 | `runIncludingPlatform(actor, tenantId, capability, work)` | the same, then `work` in that tenant's scope — `run`'s rule |
 
 Called by the users-admin services only: `reseller-users.service.ts` (auth),

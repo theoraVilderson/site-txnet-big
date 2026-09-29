@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  AdmittedReseller,
   ResellerAccess,
   ResellerAccessRefused,
   ResellerAccessRejection,
@@ -27,6 +28,7 @@ import { GrantBulkBody } from './grant-bulk.schema';
 import { GrantListQuery, GrantsByLinesBody } from './grant-list.schema';
 import { actOnEach, GrantBulkOutcome } from './reseller-grants-bulk';
 import { SubscriptionLinkService } from './subscription-link.service';
+import { UsersCatalogProduct, usersCatalogOf } from './reseller-users-catalog';
 
 /** The door's refusals, and the one this surface adds: the path's user is not the reseller's. */
 export type ResellerUserGrantsRejection = ResellerAccessRejection | 'user_not_found';
@@ -118,6 +120,17 @@ export class ResellerUserGrantsService {
       );
       return panels.map((p) => ({ id: p.id, name: p.name, region: p.region, own: p.tenantId !== null }));
     });
+  }
+
+  /**
+   * The products and plans the users pages name — issue, bulk by product
+   * (F-311-ab1, D-57): `read` on this door, so managing users never needs
+   * `catalog.manage`. The platform's own are `tenantId` null (`platform`).
+   */
+  catalog(actor: ResellerActor, tenantId: string): Promise<UsersCatalogProduct[]> {
+    return this.admitted(actor, tenantId, 'read', (admitted) =>
+      tenantTransaction(this.prisma, (tx) => usersCatalogOf(tx, admitted.platform ? null : tenantId)),
+    );
   }
 
   /**
@@ -346,7 +359,7 @@ export class ResellerUserGrantsService {
   }
 
   /** The door, then `work` in the reseller's scope; the door's refusal becomes this surface's one type. */
-  private async admitted<T>(actor: ResellerActor, tenantId: string, capability: 'read' | 'staffWrite', work: () => Promise<T>): Promise<T> {
+  private async admitted<T>(actor: ResellerActor, tenantId: string, capability: 'read' | 'staffWrite', work: (admitted: AdmittedReseller) => Promise<T>): Promise<T> {
     try {
       return await this.access.runIncludingPlatform(actor, tenantId, capability, work);
     } catch (e) {

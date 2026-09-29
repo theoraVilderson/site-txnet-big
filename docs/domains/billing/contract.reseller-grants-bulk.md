@@ -93,3 +93,21 @@ variant is what the Grant was issued from.
 | A bulk by id's outcomes, which have no job, go 30 days after they were written, 5 000 a call — only those whose `requestId` names no job | a long job's early outcomes are never taken before the job is |
 
 The drain route answers `{jobs, acted, finished, purged, outcomesPurged}`.
+
+## The catalog the users pages name (built — F-311-ab1, D-57)
+
+`GET /api/billing/tenants/:tenantId/users-catalog` -> `{products[{id, nameKey,
+isActive, variants[{id, sku, nameKey, isActive}]}]}`:
+`payment/gift/reseller-users-catalog.controller.ts`, query
+`reseller-users-catalog.ts`, `ResellerUserGrantsService.catalog`; spec
+`reseller-users-catalog.spec.ts`. What a bulk filter picks by product and what
+an admin issues.
+
+| Rule | Why |
+|---|---|
+| **The users-admin door, `read`** (`runIncludingPlatform`), no `catalog.manage` | managing users is not editing prices (D-57); a support admin must issue without that right |
+| **The tenant is in the query** (C-15): the path's id, or `tenantId` null when the door answers `platform: true` (tenant [contract.entitlements.md](../tenant/contract.entitlements.md)) | catalog RLS is shared-read, so the scope alone adds the platform's products to a reseller's list; the platform's own rows are null, not its id |
+| Archived products left out; switched-off products and variants kept, with `isActive` — the issue form offers active ones only, the filter all | a service sold before a switch-off is still filtered by |
+| No price, no fulfilment detail | the forms name a plan; billing refuses what it cannot place (`variant_not_deliverable`) |
+| The users reads' bucket (`RESELLER_USER_GRANTS_READ`) | one read per opened form, as the page's other reads |
+

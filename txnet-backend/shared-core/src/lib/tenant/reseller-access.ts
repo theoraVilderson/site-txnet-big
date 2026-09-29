@@ -15,7 +15,12 @@ export const RESELLER_ACCESS_READER = Symbol('RESELLER_ACCESS_READER');
 export type ResellerActor = { userId: string; tenantId: string; permissions: string[] };
 
 /** How the caller got in: the reseller's `ownerUserId`, one of its staff, or the platform owner's staff. */
-export type AdmittedReseller = { id: string; slug: string; as: 'owner' | 'member' | 'staff' };
+/**
+ * `platform` is present only when `…IncludingPlatform` admitted the platform's own
+ * tenant (F-311-ab1): a read by tenant then names that tenant's catalog rows as
+ * `tenantId` null, not by this id.
+ */
+export type AdmittedReseller = { id: string; slug: string; as: 'owner' | 'member' | 'staff'; platform?: true };
 
 export type ResellerAccessRejection = 'not_allowed' | 'reseller_not_found' | 'reseller_suspended' | 'reseller_terminated';
 
@@ -104,7 +109,7 @@ export class ResellerAccess {
     const staff = caller?.tenantType === TenantType.platform_owner && holdsPermission(actor.permissions, 'tenant.manage');
     if (platform && tenant?.tenantType === TenantType.platform_owner) {
       if (!staff) throw new ResellerAccessRefused('not_allowed', tenantId);
-      return { id: tenant.id, slug: tenant.slug, as: 'staff' };
+      return { id: tenant.id, slug: tenant.slug, as: 'staff', platform: true };
     }
     const reseller = tenant?.tenantType === TenantType.reseller ? tenant : null;
     // Only staff learns whether a reseller exists.

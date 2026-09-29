@@ -136,7 +136,11 @@ describe('ResellerAccess', () => {
       id: PLATFORM,
       slug: 'platform_owner',
       as: 'staff',
+      // A route that reads by tenant needs to know it is the platform's (F-311-ab1):
+      // its catalog rows are `tenantId` null, not this id.
+      platform: true,
     });
+    await expect(access.admitIncludingPlatform(staff, RESELLER, 'read', T0)).resolves.not.toHaveProperty('platform');
     await expect(access.admitIncludingPlatform({ ...staff, permissions: ['*'] }, PLATFORM, 'read', T0)).resolves.toMatchObject({ as: 'staff' });
 
     // Anyone else learns nothing: the platform's `ownerUserId` without the
