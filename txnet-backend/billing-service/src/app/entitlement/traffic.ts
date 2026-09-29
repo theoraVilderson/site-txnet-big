@@ -1,6 +1,7 @@
 import { GrantSource, GrantStatus, Prisma, QuotaMetric, VariantBillingMode } from '@prisma/client';
 
 import { EntitlementRefused } from './grant';
+import { PackageWholesale } from './package-wholesale';
 import { reviveOnTopUp } from './purge';
 import { runs, standingClose } from './reactivated';
 import { usedBytesOf } from './renewal';
@@ -19,6 +20,15 @@ export type TrafficChange = {
   /** A stop the user was told of is undone and the Grant runs: the admin's notice says so, in the same message (F-311-s). */
   reactivated: boolean;
 };
+
+/** Its ledger holds no state. */
+const PACKAGE_WHOLESALE = new PackageWholesale();
+
+/** A raise of a reseller's plan buys what it added, wholesale, naming its adjustment row (F-118-p). */
+async function buyWholesale(tx: Prisma.TransactionClient, grantId: string, adjustmentId: string): Promise<void> {
+  const refused = await PACKAGE_WHOLESALE.settle(tx, grantId, adjustmentId);
+  if (refused) throw new EntitlementRefused(refused, grantId);
+}
 
 /** A Grant whose traffic only a renewal brings back (§4.4 one way, F-311-d). */
 const CLOSED: readonly GrantStatus[] = [GrantStatus.expired, GrantStatus.exhausted, GrantStatus.cancelled];
@@ -134,6 +144,7 @@ export async function adjustGrantTraffic(
   if (moved.count === 0) throw new EntitlementRefused('grant_moved', grantId);
 
   const adjustmentId = await adjustmentRow(tx, grant, input.deltaBytes, input);
+  if (input.deltaBytes > BigInt(0)) await buyWholesale(tx, grantId, adjustmentId);
   const usedBytes = await usedBytesOf(tx, grantId);
   const settled = await settle(tx, grant, input.at, before, after, usedBytes);
   return { adjustmentId, purchasedBytesBefore: before, purchasedBytesAfter: after, usedBytes, ...settled };
@@ -177,6 +188,7 @@ export async function resetGrantTraffic(
   if (moved.count === 0) throw new EntitlementRefused('grant_moved', grantId);
 
   const adjustmentId = await adjustmentRow(tx, grant, resetBytes, input);
+  await buyWholesale(tx, grantId, adjustmentId);
   const settled = await settle(tx, grant, input.at, before, after, usedBytes);
   return { adjustmentId, purchasedBytesBefore: before, purchasedBytesAfter: after, usedBytes, resetBytes, ...settled };
 }

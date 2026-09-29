@@ -87,6 +87,7 @@ function build(
   };
 
   const tx = {
+    grantWholesale: { findUnique: async () => null },
     grant: {
       findUnique: async () => ({
         id: GRANT,

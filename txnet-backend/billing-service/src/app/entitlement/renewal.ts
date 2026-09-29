@@ -1,6 +1,7 @@
 import { GrantSource, GrantStatus, Prisma, QuotaMetric, VariantBillingMode } from '@prisma/client';
 
 import { EntitlementRefused } from './grant';
+import { PackageWholesale } from './package-wholesale';
 import { reviveOnRenewal, reviveOnTopUp } from './purge';
 import { emitReactivated, runs, standingClose } from './reactivated';
 import { PERIOD_ENDED, QUOTA_EXHAUSTED } from './suspension';
@@ -28,6 +29,9 @@ import { PERIOD_ENDED, QUOTA_EXHAUSTED } from './suspension';
  * a bag, Quota past Used; with days but a spent bag, it waits as
  * `quota_exhausted`, its purge clock still running, for the bytes that revive it.
  */
+
+/** Its ledger holds no state. */
+const PACKAGE_WHOLESALE = new PackageWholesale();
 
 const GIB = BigInt(1024 ** 3);
 const DAY_MS = 86_400_000;
@@ -152,8 +156,14 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
         createdByAdminId: input.createdByAdminId ?? null,
       },
     });
-  if (input.bytes > BigInt(0)) await row(input.bytes, input.reason ?? null);
-  if (carry.forgivenBytes > BigInt(0)) await row(carry.forgivenBytes, DEBT_FORGIVEN);
+  const added = input.bytes > BigInt(0) ? await row(input.bytes, input.reason ?? null) : null;
+  const forgiven = carry.forgivenBytes > BigInt(0) ? await row(carry.forgivenBytes, DEBT_FORGIVEN) : null;
+  // A reseller's plan buys what the raise added, wholesale (F-118-p); the charge names the raise.
+  const raise = added ?? forgiven;
+  if (raise) {
+    const refused = await PACKAGE_WHOLESALE.settle(tx, grant.id, raise.id);
+    if (refused) throw new EntitlementRefused(refused, grant.id);
+  }
 
   const room = !bagged || purchasedBytes > usedBytes;
   let revived = false;

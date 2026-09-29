@@ -96,6 +96,7 @@ function build(row: Partial<Row> | null, used = BigInt(3) * GIB) {
         return { count: 2 };
       },
     },
+    grantWholesale: { findUnique: async () => null },
     quotaAdjustment: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         adjustments.push(data);

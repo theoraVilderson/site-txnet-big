@@ -86,7 +86,7 @@ class HoldAlreadyResolved extends Error {}
  *
  * | what arrived | where it lands |
  * |---|---|
- * | a delta whose config claims that remote client | `traffic_raw_log` + `grant.consumedBytes` (+ `grant_meter.wholesaleConsumed` on a platform panel) |
+ * | a delta whose config claims that remote client | `traffic_raw_log` + `grant.consumedBytes` (+ `grant_meter.wholesaleConsumed` or `grant_wholesale.consumed` on a platform panel) |
  * | a delta whose config claims a *different* remote client | `usage_hold`, `attribution_ambiguous` |
  * | a delta naming a config this platform does not have | `unattributed_usage`, against the panel's own identifier |
  * | the pass's `quarantines` | `usage_delta_quarantine`, as the collector judged them |
@@ -299,8 +299,9 @@ export class MeteringService {
    * Returns the Grant's `consumedBytes` as this transaction left it.
    *
    * Bytes that crossed a platform-owned panel also advance the `vpn.traffic`
-   * meter's `wholesaleConsumed` when it has a wholesale leg (F-118-n6): what a
-   * reseller owes the platform for. Its own panels' bytes cost it nothing.
+   * meter's `wholesaleConsumed` when it has a wholesale leg (F-118-n6), or a
+   * package plan's `grant_wholesale.consumed` (F-118-p): what a reseller owes
+   * the platform for. Its own panels' bytes cost it nothing.
    */
   private async charge(
     tx: Prisma.TransactionClient,
@@ -350,6 +351,8 @@ export class MeteringService {
         where: { grantId: c.config.grantId, meterKey: METER_KEYS.vpnTraffic, wholesalePayerTenantId: { not: null } },
         data: { wholesaleConsumed: { increment: charged } },
       });
+      // A reseller's package plan has no meter; its leg counts the same bytes (F-118-p).
+      await tx.grantWholesale.updateMany({ where: { grantId: c.config.grantId }, data: { consumed: { increment: charged } } });
     }
     await this.announceUsage(tx, c.config, grant.userId, grant.consumedBytes);
     await this.announceThreshold(tx, c.config, grant, charged);

@@ -12,6 +12,7 @@ import { releaseVpnReserveOf } from '../traffic/vpn-reserve';
 import { WalletCreditService } from '../wallet/wallet-credit.service';
 import { errorLine } from '../log-line';
 import { GRANT_AGGREGATE, markDelivered } from './delivered';
+import { PackageWholesale } from './package-wholesale';
 
 /**
  * Delivery of a paid Grant — spec §5.8 step 3 (F-111-d).
@@ -125,6 +126,9 @@ export class GrantDeliveryService {
     private readonly config: ConfigService<EnvConfig, true>,
   ) {}
 
+  /** Its ledger holds no state, so it needs no injection. */
+  private readonly wholesale = new PackageWholesale();
+
   private get policy(): DeliveryPolicy {
     return {
       retries: this.config.get('GRANT_DELIVERY_RETRIES', { infer: true }),
@@ -229,6 +233,8 @@ export class GrantDeliveryService {
 
     // Held at issue for a metered Grant; a cancel gives it back before the refund (F-118-b).
     await releaseVpnReserveOf(tx, grantId);
+    // A reseller's plan bought wholesale at the sale; never served, it all comes back (F-118-p).
+    await this.wholesale.giveBack(tx, grantId);
     const configs = await tx.config.findMany({ where: { grantId, status: { not: ConfigStatus.retired } }, select: { id: true } });
     for (const { id } of configs) await this.actions.retire(tx, { configId: id, actor: GRANT_DELIVERY_ACTOR });
 

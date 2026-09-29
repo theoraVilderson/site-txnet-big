@@ -16,6 +16,7 @@ import { isSellableBySku, vpnTrafficRateAt, type OfferFacts, type RateCardRow } 
 import { trafficQuotaOf } from '../catalog/traffic-quota';
 import { PrismaService } from '../prisma/prisma.service';
 import { grantMetersFromVariant, lockWholesale } from './grant-meter';
+import { PackageWholesale } from './package-wholesale';
 import { GrantTokenSeal, NO_TOKEN_SEAL, type SealedToken } from './grant-token-seal';
 import { ADMIN_FROZEN } from './suspension';
 import { unusedClockOf } from './unused-clock';
@@ -58,6 +59,8 @@ export type EntitlementRejection =
   | 'meter_not_served'
   /** A reseller's package prices none of the Grant's platform meters (F-118-n2, ADR-0105 decision 10): the platform could not bill its usage, so it is not sold. */
   | 'wholesale_rate_missing'
+  /** The reseller's billing wallet cannot buy the plan's bag wholesale (F-118-p): nothing is sold, nothing written. */
+  | 'wholesale_unfunded'
   /** Renewal (F-027-dg): only an `active` Grant, or one `suspended`, is renewed in place. */
   | 'grant_not_renewable'
   /** Renewal: bytes on a metered Grant (its blocks buy them) or an unlimited one. */
@@ -458,6 +461,9 @@ export class GrantService {
     private readonly reserve: VpnReserve = NO_VPN_RESERVE,
   ) {}
 
+  /** Its ledger holds no state, so it needs no injection. */
+  private readonly wholesale = new PackageWholesale();
+
   /**
    * Issues a Grant of a variant to a user of the caller's tenant, or answers the
    * one already issued for the same `(source, sourceReferenceId)` with no token.
@@ -535,6 +541,9 @@ export class GrantService {
       if (meters.length > 0) {
         await tx.grantMeter.createMany({ data: meters.map((m) => ({ ...m, tenantId: tenant.id, grantId: grant.id })) });
       }
+      // A reseller's package plan is bought wholesale with the sale (F-118-p, ADR-0105 (0)).
+      const refused = await this.wholesale.open(tx, grant, startsAt);
+      if (refused) throw new EntitlementRefused(refused, `${input.variantId} ${grant.id}`);
       // A metered Grant starts with an empty bag: its first connect is served
       // from the reserve, so the reserve is held with the sale (F-118-b).
       if (grant.billingMode === VariantBillingMode.metered) await this.reserve.top(tx, grant.id);

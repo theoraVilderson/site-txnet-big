@@ -64,6 +64,7 @@ function build(row: Partial<Row>, opts: { usedBytes?: bigint; close?: Close | nu
       updateMany: async () => ({ count: 1 }),
     },
     leaseClose: { findUnique: async () => opts.close ?? null },
+    grantWholesale: { findUnique: async () => null },
     quotaAdjustment: { create: async ({ data }: { data: unknown }) => data },
     outboxEvent: {
       create: async ({ data }: { data: { type: string; payload: Record<string, unknown> } }) => {

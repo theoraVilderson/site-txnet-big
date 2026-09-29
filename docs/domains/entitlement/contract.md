@@ -154,7 +154,7 @@ value (`rate_card_metered_price_positive`). A prepaid Grant gets no
 `grant_meter` row per card in effect (terms, `rateCardId`, counters at 0). A metered VPN
 Grant's `vpn.traffic` row is its rate and money cursor (F-118-l, billing `contract.traffic-block.md`); a package plan has none (decision 0); a `DOOR_METERS` card
 (`vpn.config.regenerate`) is locked on any variant, its door the enforcer (F-118-h); a card on a meter nothing serves refuses the sale (`meter_not_served`, decision 7). `usage_event` advances `consumed` (billing `contract.metering.md`, F-118-f).
-**A reseller's meter also locks its wholesale leg (F-118-n2, decision 10)** — `lockWholesale`: the payer (the Grant's tenant) and its package's `tenant_package_meter_rate` in force at `startsAt` (tenant `contract.admin.md`), in the platform's currency, `wholesaleBilled` at 0 — for **every** meter a reseller sells, whatever its panel group holds (user, 2026-09-29: members change after the sale; whether a unit is charged is its panel's owner's question, F-118-n3). A meter the package does not price, or no package, refuses the sale (`wholesale_rate_missing`, 409 on the admin route). The platform's own sales and package plans read no package.
+**A reseller's meter also locks its wholesale leg (F-118-n2, decision 10)** — `lockWholesale`: the payer (the Grant's tenant) and its package's `tenant_package_meter_rate` in force at `startsAt` (tenant `contract.admin.md`), in the platform's currency, `wholesaleBilled` at 0 — for **every** meter a reseller sells, whatever its panel group holds (user, 2026-09-29: members change after the sale; whether a unit is charged is its panel's owner's question, F-118-n3). A meter the package does not price, or no package, refuses the sale (`wholesale_rate_missing`, 409 on the admin route). The platform's own sales read no package; a reseller's **package plan** buys its bag wholesale instead ([contract.package-wholesale.md](contract.package-wholesale.md), F-118-p).
 
 **Delivery of a paid Grant (F-111-d, spec §5.8 step 3)** —
 `entitlement/delivery.ts`, proved by `delivery.spec.ts` and, against Postgres,
@@ -216,7 +216,7 @@ Through the outbox (ADR-0021); the first two also live on the buyer's `user:` ch
 |---|---|---|
 | catalog | a variant's quotas, `durationDays`, `billingMode`, its product's feature keys, and — when metered — its `vpn.traffic` rate card in effect at the sale (F-027-p, F-118-d) | cannot issue |
 | identity | the user a Grant is issued to | cannot issue |
-| tenant | the ambient tenant (ADR-0024); for a reseller's meter, its package's wholesale rate in force (F-118-n2) | refuses; `wholesale_rate_missing` |
+| tenant | the ambient tenant (ADR-0024); for a reseller's meter or package plan, its package's wholesale rate in force (F-118-n2, F-118-p) and billing wallet | refuses; `wholesale_rate_missing`, `wholesale_unfunded` |
 
 ## Consumers
 

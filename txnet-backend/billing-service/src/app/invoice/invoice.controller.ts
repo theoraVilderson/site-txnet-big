@@ -76,6 +76,12 @@ function toHttp(e: unknown): unknown {
   if (e instanceof EntitlementRefused && (e.reason === 'variant_not_found' || e.reason === 'variant_not_assignable')) {
     return new NotFoundException({ i18nKey: E.invoice.variantNotFound, message });
   }
+  // The seller cannot sell it on the platform's panels now — its package prices
+  // no traffic there, or it cannot pay the wholesale (F-118-p). Nothing was
+  // written; the buyer is told only that it is not for sale.
+  if (e instanceof EntitlementRefused && (e.reason === 'wholesale_rate_missing' || e.reason === 'wholesale_unfunded')) {
+    return new ConflictException({ i18nKey: E.invoice.variantNotFound, reason: e.reason, message });
+  }
   // A code that validated a moment ago and can no longer be held: nothing was
   // written, and the panel asks again without it — as on a top-up (F-092-h).
   if (e instanceof CouponReservationRefused) {

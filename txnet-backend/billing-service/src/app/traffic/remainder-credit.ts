@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { GrantMeter, GrantStatus, Prisma, VariantBillingMode, WalletReasonType } from '@prisma/client';
 import { TenantBillingLedger, tenantTransaction } from '@txnet-backend/shared-core';
 
+import { PackageWholesale } from '../entitlement/package-wholesale';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletCreditService } from '../wallet/wallet-credit.service';
 import { GIB, rateUnitsOf } from './block-purchase';
@@ -131,6 +132,7 @@ export class RemainderCreditService {
 
   /** Its ledger holds no state, so it needs no injection. */
   private readonly wholesale = new VpnWholesale(new TenantBillingLedger());
+  private readonly packageWholesale = new PackageWholesale();
 
   /** One credit in a transaction of its own, for a caller with no other work to commit with it. */
   creditForGrant(input: CreditRemainder): Promise<CreditedRemainder> {
@@ -152,12 +154,15 @@ export class RemainderCreditService {
   }
 
   /**
-   * The reseller's side of a close (F-118-n3): wholesale bytes bought and never
-   * served on a platform panel, back on its billing wallet. Owed to the
-   * reseller whatever the admin answered about the user's own remainder.
+   * The reseller's side of a close (F-118-n3, F-118-p): wholesale bytes bought
+   * and never served on a platform panel — a metered Grant's blocks, or a
+   * package plan's bag — back on its billing wallet. Owed to the reseller
+   * whatever the admin answered about the user's own remainder. A Grant has
+   * at most one of the two legs; the other gives nothing.
    */
-  wholesaleBack(tx: Prisma.TransactionClient, grantId: string): Promise<void> {
-    return this.wholesale.giveBack(tx, grantId);
+  async wholesaleBack(tx: Prisma.TransactionClient, grantId: string): Promise<void> {
+    await this.wholesale.giveBack(tx, grantId);
+    await this.packageWholesale.giveBack(tx, grantId);
   }
 
   /**

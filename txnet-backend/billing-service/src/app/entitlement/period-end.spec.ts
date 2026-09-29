@@ -128,6 +128,7 @@ describe('renewGrant on a Grant whose period ended', () => {
           return { id: 'e' };
         },
       },
+      grantWholesale: { findUnique: async () => null },
       quotaAdjustment: { create: async ({ data }: { data: unknown }) => data },
     };
     return { tx: tx as unknown as Prisma.TransactionClient, writes, events };

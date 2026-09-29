@@ -34,6 +34,17 @@ const CLOSED: ReadonlySet<GrantStatus> = new Set([GrantStatus.expired, GrantStat
 
 const max = (a: bigint, b: bigint) => (a > b ? a : b);
 
+/** Whether a variant's group holds a platform-owned panel now — members change after the sale. Also a package plan's question (F-118-p). */
+export async function onPlatformPanel(tx: Prisma.TransactionClient, variantId: string): Promise<boolean> {
+  const variant = await tx.productVariant.findUnique({ where: { id: variantId }, select: { panelGroupId: true } });
+  if (!variant?.panelGroupId) return false;
+  const member = await tx.panelGroupMember.findFirst({
+    where: { groupId: variant.panelGroupId, panel: { ownershipType: PanelOwnershipType.platform } },
+    select: { panelId: true },
+  });
+  return member !== null;
+}
+
 export class VpnWholesale {
   private readonly leg: WholesaleLeg;
 
@@ -42,14 +53,8 @@ export class VpnWholesale {
   }
 
   /** Whether the Grant's group holds a platform-owned panel now — members change after the sale. */
-  async onPlatformPanel(tx: Prisma.TransactionClient, variantId: string): Promise<boolean> {
-    const variant = await tx.productVariant.findUnique({ where: { id: variantId }, select: { panelGroupId: true } });
-    if (!variant?.panelGroupId) return false;
-    const member = await tx.panelGroupMember.findFirst({
-      where: { groupId: variant.panelGroupId, panel: { ownershipType: PanelOwnershipType.platform } },
-      select: { panelId: true },
-    });
-    return member !== null;
+  onPlatformPanel(tx: Prisma.TransactionClient, variantId: string): Promise<boolean> {
+    return onPlatformPanel(tx, variantId);
   }
 
   /** What the reseller's balance allows the next block; null when the meter has no wholesale leg. Reads only. */

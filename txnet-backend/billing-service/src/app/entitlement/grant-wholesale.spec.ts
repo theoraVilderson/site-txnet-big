@@ -185,13 +185,12 @@ describe('GrantService.issue locks the wholesale rate on a reseller\'s metered G
     expect(tx.tenantSubscription.findUnique).not.toHaveBeenCalled();
   });
 
-  it('leaves a reseller\'s package plan off both legs: no meter, no package read (decision 0)', async () => {
+  it('leaves a reseller\'s package plan off the metered leg: no meter (decision 0); its bag is bought by F-118-p', async () => {
     const { tx, grants, meters } = fakeTx({ tenantType: TenantType.reseller, billingMode: VariantBillingMode.prepaid });
 
     await issue(tx);
 
     expect(grants).toHaveLength(1);
     expect(meters).toHaveLength(0);
-    expect(tx.tenantSubscription.findUnique).not.toHaveBeenCalled();
   });
 });

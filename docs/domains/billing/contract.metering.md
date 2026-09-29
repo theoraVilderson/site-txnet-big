@@ -109,6 +109,10 @@ nothing, and one Grant's group may mix both.
    down to it at close (F-118-n3, `contract.traffic-block.md`).
    `metering.service.spec.ts` "wholesale bytes" pins the 7 GB own + 3 GB
    platform = 3 GB case, the redelivery, and the no-leg Grant.
+4. **A package plan counts the same bytes on its own leg** (F-118-p): the same
+   charge advances `grant_wholesale.consumed` (entitlement
+   `contract.package-wholesale.md`); a Grant has that row or a metered leg,
+   never both.
 
 ## Usage events — every meter but VPN (F-118-f)
 

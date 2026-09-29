@@ -194,6 +194,7 @@ model Grant {
   durationChanges  GrantDurationChange[]
   renewals         GrantRenewal[]
   meters           GrantMeter[]
+  wholesale        GrantWholesale?
   spendingCap      SpendingCap?
   deletion         GrantDeletion?
   configs          Config[]
@@ -386,5 +387,34 @@ model GrantMeter {
   @@unique([grantId, meterKey])
   @@index([tenantId])
   @@map("grant_meter")
+  @@schema("entitlement")
+}
+
+/// A reseller's package plan, bought wholesale (F-118-p, ADR-0105 decision 0
+/// amended 2026-09-29): a plan paid in full has no meter, so the platform's
+/// charge for its bytes lives here — one row per such Grant, written at issue.
+/// The package's `vpn.traffic` rate in force at the sale is locked (recorded,
+/// not keyed), in the platform's currency; only the two cursors move.
+/// `billed` is the bytes the reseller paid for; `consumed` the bytes of the
+/// Grant served on platform-owned panels, advanced by `metering-service`.
+/// The platform's own Grants, unlimited plans and metered Grants carry none.
+model GrantWholesale {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @db.Uuid
+  grantId       String   @unique @db.Uuid
+  payerTenantId String   @db.Uuid
+  rateId        String   @db.Uuid
+  unitSize      BigInt
+  unitPrice     Decimal  @db.Decimal(18, 8)
+  currencyCode  String
+  billed        BigInt   @default(0)
+  consumed      BigInt   @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  grant Grant @relation(fields: [grantId], references: [id])
+
+  @@index([tenantId])
+  @@map("grant_wholesale")
   @@schema("entitlement")
 }

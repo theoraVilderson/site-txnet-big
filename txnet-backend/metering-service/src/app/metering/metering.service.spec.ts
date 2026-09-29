@@ -86,6 +86,8 @@ function grantRow(over: Record<string, unknown> = {}) {
  */
 interface MeterSetup {
   wholesaleLeg?: boolean;
+  /** A reseller's package plan: a `grant_wholesale` row, no meter (F-118-p). */
+  packageLeg?: boolean;
   panelOwnership?: PanelOwnershipType;
 }
 
@@ -110,7 +112,7 @@ function fakeStore(
   /** What `SET LOCAL app.tenant_id` bound, per transaction — the RLS scope. */
   const bound: Array<string | null> = [];
   /** `grant_meter.wholesaleConsumed` on the Grant's `vpn.traffic` meter (F-118-n6). */
-  const wholesale = { consumed: 0n };
+  const wholesale = { consumed: 0n, packageConsumed: 0n };
 
   const uniqueViolation = () =>
     new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
@@ -122,6 +124,13 @@ function fakeStore(
     panel: {
       findUnique: async ({ where }: { where: { id: string } }) =>
         where.id === PANEL ? { ownershipType: meter.panelOwnership ?? PanelOwnershipType.tenant } : null,
+    },
+    grantWholesale: {
+      updateMany: async ({ where, data }: { where: { grantId: string }; data: { consumed: { increment: bigint } } }) => {
+        if (where.grantId !== GRANT || !meter.packageLeg) return { count: 0 };
+        wholesale.packageConsumed += data.consumed.increment;
+        return { count: 1 };
+      },
     },
     grantMeter: {
       updateMany: async ({ where, data }: {
@@ -666,6 +675,17 @@ describe('MeteringService', () => {
 
       expect(store.consumed.get(GRANT)).toBe(10n * GB);
       expect(store.wholesale.consumed).toBe(3n * GB);
+    });
+
+    it("counts a reseller's package plan's platform bytes on its wholesale leg, and not its own panels' (F-118-p)", async () => {
+      const store = fakeStore(config, [], {}, { packageLeg: true });
+      const metering = service(store);
+
+      await metering.apply(pass({ deltas: [delta({ upBytes: '0', downBytes: '7000' })] }));
+      await metering.apply(onPlatform({ deltas: [delta({ deltaId: '66666666-6666-4666-8666-666666666667' })] }));
+
+      expect(store.wholesale.packageConsumed).toBe(3000n);
+      expect(store.wholesale.consumed).toBe(0n);
     });
 
     it('counts a redelivered platform delta once', async () => {

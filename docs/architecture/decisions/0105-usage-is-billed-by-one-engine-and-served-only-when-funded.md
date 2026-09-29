@@ -55,6 +55,15 @@ Two things in the current design stop that:
    metered`. A user with no metered service has `heldAmount = 0`, so every
    debit behaves exactly as before. Every F-118 row proves this with the
    package plan's existing suites (issue, purchase, close, renewal) green.
+   *Amended 2026-09-29 (user, F-118-p):* the **user's** path stays exactly
+   this; the **reseller's** is added. A plan a reseller sells on a group
+   holding a platform panel buys its bag at the package's `vpn.traffic` rate
+   on the reseller's billing wallet — at the sale and at every raise
+   (renewal, an admin's raise or reset) — or is refused
+   (`wholesale_unfunded`, `wholesale_rate_missing`); what no platform panel
+   served comes back at close. Its own row, `grant_wholesale`, not a
+   `grant_meter`: a plan still has no meter. Leaving those bytes free was
+   rejected: the platform served them at its cost.
 1. **One rule for every meter** (ADR-0072, generalised): no unit is served
    unless its money is already **debited** (prepaid) or **held** (postpaid).
    The wallet never goes negative, and that is a database constraint (§5.4).

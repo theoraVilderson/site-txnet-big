@@ -81,6 +81,7 @@ const GRANT_ACTION_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
   metered_rate_missing: 409,
   metered_rate_not_positive: 409,
   wholesale_rate_missing: 409,
+  wholesale_unfunded: 409,
   request_reused: 409,
   already_issued: 409,
   grant_not_renewable: 409,

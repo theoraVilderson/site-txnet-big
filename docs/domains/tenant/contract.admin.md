@@ -3,7 +3,7 @@ id: tenant
 layer: domain
 status: active
 version: 20
-updated: 2026-09-18
+updated: 2026-09-29
 ---
 
 # Contract — tenant / reseller administration
@@ -117,7 +117,7 @@ A package view: `id, name, monthlyPrice, yearlyPrice` (decimal strings or
 | Each write and its audit row (`tenant_package_create` / `tenant_package_update`, target `tenant_feature_package`) are one transaction; an update audits only the fields it changed, before and after | the trail says who re-priced or withdrew a package |
 | **A key added to `includedFeatureKeys` reaches every current subscriber in the edit's transaction** (a `package_included` entitlement, unless held); **a removed key stays until the subscriber's renewal** (F-019-c re-copies the package) | a subscriber gets a new feature at once and never loses one mid-period it paid for (user, 2026-09-17, F-018-o) |
 | **`apply` forces the list now:** every subscriber's `package_included` entitlements are replaced by the package's, removals included; one audit row `tenant_package_apply` with the keys and the tenant ids. An inactive package may be applied | sometimes a removal must be immediate (user, 2026-09-17) |
-| **`meterRates` is the wholesale price list** (F-118-n1, ADR-0105 (10)): per platform meter, what the platform charges a reseller on this package for `unitSize` of it (2^30 = a GiB of `vpn.traffic`), strings as a rate card takes them — a whole `unitSize` ≥ 1, a positive `unitPrice` to 8 places — each meter once. Written to `tenant_package_meter_rate` in the edit's transaction, in the package's currency | the price lives on the package, so a tier or a negotiated deal (a package of its own) prices every reseller on it (user, 2026-09-29) |
+| **`meterRates` is the wholesale price list** (F-118-n1, ADR-0105 (10)): per platform meter, what the platform charges a reseller on this package for `unitSize` of it (2^30 = a GiB of `vpn.traffic` — on its metered Grants and, from F-118-p, the bags of its package plans), strings as a rate card takes them — a whole `unitSize` ≥ 1, a positive `unitPrice` to 8 places — each meter once. Written to `tenant_package_meter_rate` in the edit's transaction, in the package's currency | the price lives on the package, so a tier or a negotiated deal (a package of its own) prices every reseller on it (user, 2026-09-29) |
 | A rate is history: a new price is a new row from now, the old one kept; the same price again writes nothing; `null` switches every active row of that meter off; a meter left out is left alone. A meter not in `catalog.meter` is `meter_not_found` before anything is written. `meterRates` is audited before and after when it changed | a Grant that locked a price (F-118-n2) is traced to the row it came from; the trigger `package_meter_rate_is_history` lets only `isActive` change |
 | Lock order everywhere (edit, `apply`, subscription `PUT`): the package row, then subscription / tenant rows (`package-entitlements.ts`) | an edit and a subscription change on one package serialise, never deadlock, and a tenant that just left a package is not granted its keys |
 

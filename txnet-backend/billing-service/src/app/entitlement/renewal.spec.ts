@@ -67,6 +67,7 @@ function build(row: Partial<Row> | null, usedPerConfig: bigint[], opts: { moved?
     },
     leaseClose: { findUnique: async () => null },
     outboxEvent: { create: async () => ({ id: 'e' }) },
+    grantWholesale: { findUnique: async () => null },
     quotaAdjustment: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         adjustments.push(data);
