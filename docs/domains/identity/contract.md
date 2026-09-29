@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-version: 24
+version: 25
 updated: 2026-09-28
 ---
 

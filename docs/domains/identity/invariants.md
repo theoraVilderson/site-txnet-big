@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-updated: 2026-09-19
+updated: 2026-09-29
 ---
 
 # Invariants — identity
@@ -71,3 +71,4 @@ Nullable is a real value, not a gap: an impersonation session belongs to no
 switch group and must match no scope, so `F-0208`'s scoped revoke never touches
 one.
 | 17 | A handoff code (F-061-f) is minted only for a reseller whose `ownerUserId` is the caller, never from an impersonated session; it is spent at most once, only on that reseller's `panel` domain, and only while the account is still its owner and active — a code shown on another domain is refused without being spent | `HandoffService.issue` / `.redeem` (`GET`, then `DEL` = 1 wins), `SurfaceOwnerService.ownerById`; `handoff.service.spec.ts` | a leaked or replayed link signs a stranger in as the owner; one code opening two sessions |
+| 18 | Every act on another person's account asks `authorityOver` first (ADR-0103), first match wins: never the actor themself; never the tenant's `ownerUserId`, to anyone; allowed to the owner, and to platform staff in a reseller's tenant; otherwise only to an actor holding every key the target holds and one more. The target's keys are read from their role at the act | `users/authority.ts`, called by `ResellerUsersService` block/unblock; `authority.spec.ts`. Role assignment, password reset, session kill, delete and impersonation call it when built | a peer admin locks out another, or the owner, from their own tenant |

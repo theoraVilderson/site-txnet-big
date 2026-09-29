@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 29
-updated: 2026-09-20
+version: 37
+updated: 2026-09-29
 ---
 
 # Contract — auth-api / a named reseller's users
@@ -27,8 +27,9 @@ seats holding `tenant.manage`, or the platform owner's staff — judged against
 the **reseller the path names**, never the session's tenant. The path may
 also name the **platform's own tenant**, admitted to platform staff only
 (F-311-aa, ADR-0102); anyone else asking for it gets `not_allowed`. A `user` object is
-`{id, fullName, username, phoneMasked, status, createdAt}` and carries no phone
-number and no email.
+`{id, fullName, username, phoneMasked, status, createdAt, canAct, staff}` and carries no phone
+number and no email. `canAct` is whether the caller may block or unblock this
+person (ADR-0103); `staff` marks one who holds any permission, or the owner.
 
 | Route | Body / query | Answers | Rate limit | Auth |
 |---|---|---|---|---|
@@ -40,7 +41,7 @@ Both ids are `ParseUUIDPipe`d, so a malformed one is a 400 before any door runs.
 
 ## Refusals
 
-`ResellerAccess`'s four, and this surface's three, each as `{reason}`:
+`ResellerAccess`'s four, and this surface's four, each as `{reason}`:
 
 | reason | status | when |
 |---|---|---|
@@ -51,6 +52,7 @@ Both ids are `ParseUUIDPipe`d, so a malformed one is a 400 before any door runs.
 | `user_not_found` | 404 | no such user **in that reseller's scope** — another tenant's id gets this answer, not a 403 |
 | `user_banned` | 409 | the platform banned this account; a reseller neither deepens nor lifts that |
 | `cannot_block_self` | 400 | the caller is the user named |
+| `no_authority` | 403 | admitted to the tenant, but not over this person: they are its owner, or hold every key the caller holds (ADR-0103) |
 
 ## Consumers
 

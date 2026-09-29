@@ -21,7 +21,8 @@ export type UserRefusal =
   | "reseller_terminated"
   | "user_not_found"
   | "user_banned"
-  | "cannot_block_self";
+  | "cannot_block_self"
+  | "no_authority";
 
 export const USER_REFUSAL_KEYS: Record<UserRefusal, string> = K.refusals;
 

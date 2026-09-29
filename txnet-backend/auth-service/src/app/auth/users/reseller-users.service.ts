@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, SessionRevokedReason, UserStatus } from '@prisma/client';
+import { Prisma, SessionRevokedReason, TenantType, UserStatus } from '@prisma/client';
 import {
+  AdmittedReseller,
   ResellerAccess,
   ResellerAccessRefused,
   ResellerAccessRejection,
@@ -10,6 +11,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { maskPhone } from '../../common/validation/phone.schema';
 import { SessionService } from '../session/session.service';
+import { AuthorityTenant, TARGET_PERMISSIONS_SELECT, authorityOver, permissionsOf } from './authority';
 import { matchers } from './user-search.service';
 
 /** Who is asking, as `AuthGuard` left them on the request. */
@@ -20,7 +22,8 @@ export type ResellerUsersRejection =
   | ResellerAccessRejection
   | 'user_not_found'
   | 'user_banned'
-  | 'cannot_block_self';
+  | 'cannot_block_self'
+  | 'no_authority';
 
 export class ResellerUsersRefused extends Error {
   constructor(
@@ -32,7 +35,12 @@ export class ResellerUsersRefused extends Error {
   }
 }
 
-/** One row of the list. Enough to recognise a customer; never the number, never an email. */
+/**
+ * One row of the list. Enough to recognise a customer; never the number, never
+ * an email. `canAct` is the answer the authority rule (ADR-0103) gives the
+ * caller for this person, so the panel is told rather than left to guess;
+ * `staff` marks a person who holds any permission, or owns the tenant.
+ */
 export type ResellerUserView = {
   id: string;
   fullName: string;
@@ -40,6 +48,8 @@ export type ResellerUserView = {
   phoneMasked: string | null;
   status: UserStatus;
   createdAt: string;
+  canAct: boolean;
+  staff: boolean;
 };
 
 export type ResellerUserPage = {
@@ -58,7 +68,13 @@ const SELECT = {
   phoneNumber: true,
   status: true,
   createdAt: true,
+  ...TARGET_PERMISSIONS_SELECT,
 } as const;
+
+type UserRow = Prisma.UserGetPayload<{ select: typeof SELECT }>;
+
+/** What `view` needs to answer `canAct`: who asks, how they were admitted, and the tenant's owner. */
+type ViewContext = { actor: ResellerUsersActor; admitted: AdmittedReseller; tenant: AuthorityTenant };
 
 /**
  * A reseller's own users (F-311-a, spec F-311): read a page of them, and block
@@ -90,7 +106,8 @@ export class ResellerUsersService {
 
   /** One page of this reseller's users, newest first. `q` is F-018-ad's matcher, asked inside this scope. */
   list(actor: ResellerUsersActor, tenantId: string, input: ResellerUserListInput): Promise<ResellerUserPage> {
-    return this.run(actor, tenantId, 'read', async () => {
+    return this.run(actor, tenantId, 'read', async (admitted) => {
+      const ctx = { actor, admitted, tenant: await this.tenantOf(admitted.id) };
       const where: Prisma.UserWhereInput = { deletedAt: null };
       if (input.q) where.OR = matchers(input.q);
 
@@ -105,7 +122,7 @@ export class ResellerUsersService {
         this.prisma.user.count({ where }),
       ]);
 
-      return { items: rows.map(view), total, page: input.page, pageSize: input.pageSize };
+      return { items: rows.map((row) => view(row, ctx)), total, page: input.page, pageSize: input.pageSize };
     });
   }
 
@@ -134,13 +151,19 @@ export class ResellerUsersService {
   ): Promise<ResellerUserView> {
     return this.run(actor, tenantId, 'staffWrite', async (reseller) => {
       // Blocking yourself locks the reseller out of its own panel with a button.
+      // Rule 1 of the authority rule, answered with this surface's older reason.
       if (userId === actor.userId) throw new ResellerUsersRefused('cannot_block_self', userId);
+      const ctx = { actor, admitted: reseller, tenant: await this.tenantOf(reseller.id) };
 
       const changed = await this.prisma.$transaction(async (tx) => {
         // Inside the scope, so an id from another tenant is simply not found —
         // the same answer an id that never existed gets.
         const user = await tx.user.findFirst({ where: { id: userId, deletedAt: null }, select: SELECT });
         if (!user) throw new ResellerUsersRefused('user_not_found', userId);
+        // ADR-0103: the admission says who may administer this tenant; this says
+        // whether they may act on this one person. The target's keys are read
+        // here, at the act, from their role.
+        if (!view(user, ctx).canAct) throw new ResellerUsersRefused('no_authority', userId);
         if (user.status === UserStatus.banned) throw new ResellerUsersRefused('user_banned', userId);
         // Idempotent: the second click of a button is not a second audit row.
         if (user.status === status) return null;
@@ -163,14 +186,26 @@ export class ResellerUsersService {
         return updated;
       });
 
-      if (!changed) return view(await this.mustRead(userId));
+      if (!changed) return view(await this.mustRead(userId), ctx);
       // After the transaction: Redis is not transactional, and a marker dropped
       // for a write that then rolled back would sign out an account nobody blocked.
       if (status === UserStatus.suspended) {
         await this.sessions.revokeAllSessionsForUser(userId, SessionRevokedReason.admin_ban);
       }
-      return view(changed);
+      return view(changed, ctx);
     });
+  }
+
+  /** The tenant's owner and kind, on the app pool — `tenant.tenant` has no RLS. */
+  private async tenantOf(id: string): Promise<AuthorityTenant> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id },
+      select: { ownerUserId: true, tenantType: true },
+    });
+    return {
+      ownerUserId: tenant?.ownerUserId ?? null,
+      platform: tenant?.tenantType === TenantType.platform_owner,
+    };
   }
 
   private async mustRead(userId: string) {
@@ -184,7 +219,7 @@ export class ResellerUsersService {
     actor: ResellerUsersActor,
     tenantId: string,
     capability: TenantCapabilityName,
-    work: (reseller: { id: string }) => Promise<T>,
+    work: (reseller: AdmittedReseller) => Promise<T>,
   ): Promise<T> {
     try {
       return await this.access.runIncludingPlatform(actor, tenantId, capability, (reseller) => work(reseller));
@@ -197,14 +232,13 @@ export class ResellerUsersService {
   }
 }
 
-function view(row: {
-  id: string;
-  fullName: string;
-  username: string | null;
-  phoneNumber: string | null;
-  status: UserStatus;
-  createdAt: Date;
-}): ResellerUserView {
+function view(row: UserRow, ctx: ViewContext): ResellerUserView {
+  const permissions = permissionsOf(row);
+  const refusal = authorityOver(
+    { userId: ctx.actor.userId, permissions: ctx.actor.permissions, as: ctx.admitted.as },
+    { userId: row.id, permissions },
+    ctx.tenant,
+  );
   return {
     id: row.id,
     fullName: row.fullName,
@@ -212,5 +246,7 @@ function view(row: {
     phoneMasked: maskPhone(row.phoneNumber),
     status: row.status,
     createdAt: row.createdAt.toISOString(),
+    canAct: refusal === null,
+    staff: permissions.length > 0 || row.id === ctx.tenant.ownerUserId,
   };
 }

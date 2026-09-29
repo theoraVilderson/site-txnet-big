@@ -25,10 +25,21 @@ describe('ResellerUsersService', () => {
     phoneNumber: '+989121234567',
     status: UserStatus.active,
     createdAt: new Date('2026-09-01T00:00:00Z'),
+    role: { rolePermissions: [] as { permission: { key: string } }[] },
     ...over,
   });
 
-  const build = (options: { admit?: unknown; user?: unknown; rows?: unknown[]; count?: number } = {}) => {
+  const keys = (...k: string[]) => ({ role: { rolePermissions: k.map((key) => ({ permission: { key } })) } });
+
+  const build = (
+    options: {
+      admit?: unknown;
+      user?: unknown;
+      rows?: unknown[];
+      count?: number;
+      as?: 'owner' | 'member' | 'staff';
+    } = {},
+  ) => {
     const order: string[] = [];
     // The args are captured rather than read back off `mock.calls`: the spec
     // tsconfig types a bare `vi.fn()`'s call tuple as `[]`.
@@ -57,8 +68,12 @@ describe('ResellerUsersService', () => {
       }),
     };
     const tx = { user, adminAuditLog };
+    const tenant = {
+      findUnique: vi.fn(async () => ({ ownerUserId: 'u-owner', tenantType: 'reseller' })),
+    };
     const prisma = {
       ...tx,
+      tenant,
       $transaction: vi.fn(async (work: (t: unknown) => Promise<unknown>) => work(tx)),
     };
 
@@ -72,7 +87,7 @@ describe('ResellerUsersService', () => {
       runIncludingPlatform: vi.fn(async (_a: unknown, _t: unknown, capability: string, work: (r: unknown) => Promise<unknown>) => {
         order.push(`admit:${capability}`);
         if (options.admit) return (options.admit as () => Promise<unknown>)();
-        return work({ id: reseller, slug: 'vpnshop', as: 'owner' });
+        return work({ id: reseller, slug: 'vpnshop', as: options.as ?? 'staff' });
       }),
     };
 
@@ -99,6 +114,8 @@ describe('ResellerUsersService', () => {
             phoneMasked: expect.any(String),
             status: UserStatus.active,
             createdAt: '2026-09-01T00:00:00.000Z',
+            canAct: true,
+            staff: false,
           },
         ],
         total: 1,
@@ -116,6 +133,26 @@ describe('ResellerUsersService', () => {
       expect(JSON.stringify(asked.findMany?.where)).not.toContain('tenantId');
       expect(asked.findMany?.where.OR).toBeDefined();
       expect(asked.findMany?.skip).toBe(10);
+    });
+
+    it("answers `canAct` per row by the authority rule, and marks staff (ADR-0103)", async () => {
+      const member = { userId: 'u-admin', tenantId: reseller, permissions: ['tenant.manage'] };
+      const { service } = build({
+        as: 'member',
+        rows: [
+          aUser({ id: 'u-owner' }),
+          aUser({ id: 'u-peer', ...keys('tenant.manage') }),
+          aUser({ id: 'u-customer' }),
+        ],
+      });
+
+      const page = await service.list(member, reseller, { page: 1, pageSize: 20 });
+
+      expect(page.items.map((u) => [u.id, u.canAct, u.staff])).toEqual([
+        ['u-owner', false, true],
+        ['u-peer', false, true],
+        ['u-customer', true, false],
+      ]);
     });
 
     it('runs no query when the door refuses', async () => {
@@ -171,6 +208,30 @@ describe('ResellerUsersService', () => {
 
       await expect(service.block(actor, reseller, actor.userId, '10.0.0.1')).rejects.toMatchObject({
         reason: 'cannot_block_self',
+      });
+      expect(user.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses a peer who does not hold more than the target, with no write (ADR-0103)', async () => {
+      const member = { userId: 'u-admin', tenantId: reseller, permissions: ['tenant.manage'] };
+      const { service, user, adminAuditLog, sessions } = build({
+        as: 'member',
+        user: aUser({ id: 'u-peer', ...keys('tenant.manage') }),
+      });
+
+      await expect(service.block(member, reseller, 'u-peer', '10.0.0.1')).rejects.toMatchObject({
+        reason: 'no_authority',
+      });
+      expect(user.update).not.toHaveBeenCalled();
+      expect(adminAuditLog.create).not.toHaveBeenCalled();
+      expect(sessions.revokeAllSessionsForUser).not.toHaveBeenCalled();
+    });
+
+    it("refuses the tenant's owner even to platform staff", async () => {
+      const { service, user } = build({ user: aUser({ id: 'u-owner' }) });
+
+      await expect(service.block(actor, reseller, 'u-owner', '10.0.0.1')).rejects.toMatchObject({
+        reason: 'no_authority',
       });
       expect(user.update).not.toHaveBeenCalled();
     });

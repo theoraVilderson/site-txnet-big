@@ -2,8 +2,8 @@
 id: identity
 layer: domain
 status: active
-version: 23
-updated: 2026-09-20
+version: 25
+updated: 2026-09-29
 ---
 
 # Contract — identity / a reseller's own users
@@ -20,9 +20,9 @@ Code: `txnet-backend/auth-service/src/app/auth/users/reseller-users.service.ts`.
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| list a reseller's users | the reseller (named in the path), `q?` (3-64, the same matcher as "find a user"), `page`, `pageSize` (1-100) | `{items, total, page, pageSize}`, newest first; an item is `id, fullName, username, phoneMasked, status, createdAt` — never the number, never an email | sync | the door's four; nothing else |
-| block one | the reseller, the user's id, the caller's IP | that user at `suspended`, every live session of theirs revoked `admin_ban`, one `admin_audit_log` row `user_ban` under the reseller's `tenantId` | sync (tx) | `user_not_found`, `user_banned`, `cannot_block_self` |
-| unblock one | the same | that user at `active`, one `admin_audit_log` row `user_unban` | sync (tx) | `user_not_found`, `user_banned` |
+| list a reseller's users | the reseller (named in the path), `q?` (3-64, the same matcher as "find a user"), `page`, `pageSize` (1-100) | `{items, total, page, pageSize}`, newest first; an item is `id, fullName, username, phoneMasked, status, createdAt, canAct, staff` — never the number, never an email | sync | the door's four; nothing else |
+| block one | the reseller, the user's id, the caller's IP | that user at `suspended`, every live session of theirs revoked `admin_ban`, one `admin_audit_log` row `user_ban` under the reseller's `tenantId` | sync (tx) | `user_not_found`, `user_banned`, `cannot_block_self`, `no_authority` |
+| unblock one | the same | that user at `active`, one `admin_audit_log` row `user_unban` | sync (tx) | `user_not_found`, `user_banned`, `cannot_block_self`, `no_authority` |
 
 ## The rules this surface exists to hold
 
@@ -53,6 +53,16 @@ Code: `txnet-backend/auth-service/src/app/auth/users/reseller-users.service.ts`.
 - **Blocking yourself is refused.** A reseller's staff member is a user of that
   same tenant, so they are in this list; a button that locks the panel behind
   itself is not a decision anybody means to take.
+- **Admission is not authority over a person** (F-311-ac, ADR-0103,
+  invariant 18). The door says who may administer the tenant; block and
+  unblock then ask `authorityOver` (`users/authority.ts`) about the one person
+  named: never the tenant's owner, and among peers only a caller holding every
+  key the target holds and one more. The owner, and platform staff in a
+  reseller's tenant, act on anyone else. The target's keys are read from their
+  role at the act; a refusal is `no_authority` and writes nothing.
+- **The list is told, not left to guess.** Each row's `canAct` is that rule's
+  answer for the caller; `staff` marks a person holding any key, or the owner.
+  Staff are listed, not hidden — hiding protects nothing, the server does.
 - **Idempotent.** Blocking an already-blocked user changes nothing and writes
   no second audit row: the trail answers "who closed this account", and a
   double-click is not a second closure.

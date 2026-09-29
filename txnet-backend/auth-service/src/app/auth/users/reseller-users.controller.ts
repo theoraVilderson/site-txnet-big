@@ -41,6 +41,7 @@ const STATUS: Record<ResellerUsersRejection, 400 | 403 | 404 | 409> = {
   user_not_found: 404,
   user_banned: 409,
   cannot_block_self: 400,
+  no_authority: 403,
 };
 
 /**

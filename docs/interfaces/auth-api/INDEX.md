@@ -52,9 +52,9 @@ See [contract.md](contract.md) (HTTP API), [contract.roles.md](contract.roles.md
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-29 | Contract v36 -> **v37** (additive, F-311-ac, ADR-0103): `/auth/tenants/:id/users` rows gain `canAct` and `staff`; block/unblock may refuse `no_authority` (403). Consumers: panel-web (`UserRefusal` has the reason; `canAct` is F-311-ab's), bot-app (F-311-c) |
 | 2026-09-28 | Contract v35 -> **v36** (additive, F-601-u): `GET`/`PUT /auth/me/messenger` — Telegram, Bale or both; and `POST /internal/notify/user`'s `bot` follows it, unchosen telling every verified chat once. [contract.messenger.md](contract.messenger.md). Consumers: panel-web (same change), worker-service (none needed) |
 | 2026-09-28 | Contract v34 -> **v35** (additive, F-307-x): an entry of `services` on `POST /internal/notify/user` takes an optional `label` — the buyer's name for the service, told before the catalog name (`retention.serviceNamed`, fa + en). Sender `worker-service` in the same item |
 | 2026-09-28 | Contract v33 -> **v34** (additive, F-601-p): `POST /internal/notify/user` takes an optional `services` beside `count` — the services a combined retention notice is about, listed under its summary in the user's language (`retention.serviceLine…`, fa + en). Consumer `worker-service` in the same item |
 | 2026-09-25 | Contract v32 -> **v33** (additive, F-114-j): `/auth/user-groups` — a tenant's user groups and their members, `user_group.manage`; only the platform owner's may hold resellers or another tenant's users. [contract.user-groups.md](contract.user-groups.md). No consumer on the wire yet |
-| 2026-09-25 | Contract v31 -> **v32** (additive, F-067-p, ADR-0084 decision 3): `POST /internal/notify/user` takes an optional `count` (≥2) and tells the template's summary text; every template has one, fa + en. Consumer `worker-service` in the same item |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->
