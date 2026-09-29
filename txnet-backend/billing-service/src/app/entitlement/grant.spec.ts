@@ -305,6 +305,7 @@ describe('GrantService.issue locks the metered rate (F-027-p, ADR-0073)', () => 
           return row;
         }),
       },
+      grantMeter: { createMany: vi.fn(async () => ({ count: 1 })) },
     };
     return { tx: tx as unknown as Prisma.TransactionClient, grants };
   }

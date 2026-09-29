@@ -199,3 +199,33 @@ describe('a quota adjustment', () => {
     );
   });
 });
+
+describe("a Grant's meter (F-118-e, ADR-0105 decision 4)", () => {
+  const meter = (id: string, tenantId: string, over = '') =>
+    cross.$executeRawUnsafe(`
+      INSERT INTO entitlement.grant_meter (id, "tenantId", "grantId", "meterKey", "unitSize", "unitPrice", "currencyCode", mode, "includedQuantity", "afterIncluded")
+      VALUES ('${id}', '${tenantId}', '${GRANT_A}', 'vpn.traffic', 1073741824, ${over || '0.4'}, 'USD', 'prepaid', 0, 'metered')
+    `);
+  const METER = '88888888-8888-4888-8888-8888888888b1';
+
+  it("is on its Grant's tenant, once per meter", async () => {
+    await expect(meter(METER, TENANT_A)).resolves.toBe(1);
+    await expect(meter('88888888-8888-4888-8888-8888888888b2', TENANT_A)).rejects.toThrow(/grant_meter_grantId_meterKey_key|Unique constraint/);
+    await expect(meter('88888888-8888-4888-8888-8888888888b3', TENANT_B)).rejects.toThrow(/entitlement_tenant_mismatch/);
+  });
+
+  it('moves its counters, never its terms, and is never deleted', async () => {
+    await expect(
+      cross.$executeRawUnsafe(`UPDATE entitlement.grant_meter SET consumed = 10, billed = 5, funded = 20 WHERE id = '${METER}'`),
+    ).resolves.toBe(1);
+    await expect(cross.$executeRawUnsafe(`UPDATE entitlement.grant_meter SET "unitPrice" = 0.1 WHERE id = '${METER}'`)).rejects.toThrow(
+      /grant_meter_terms_are_locked/,
+    );
+    await expect(cross.$executeRawUnsafe(`UPDATE entitlement.grant_meter SET consumed = -1 WHERE id = '${METER}'`)).rejects.toThrow(
+      /grant_meter_counters_not_negative/,
+    );
+    await expect(cross.$executeRawUnsafe(`DELETE FROM entitlement.grant_meter WHERE id = '${METER}'`)).rejects.toThrow(
+      /grant_meter_terms_are_locked/,
+    );
+  });
+});

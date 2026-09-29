@@ -203,6 +203,7 @@ model Grant {
   quotaAdjustments QuotaAdjustment[]
   durationChanges  GrantDurationChange[]
   renewals         GrantRenewal[]
+  meters           GrantMeter[]
   deletion         GrantDeletion?
   configs          Config[]
   leaseClose       LeaseClose?
@@ -336,3 +337,42 @@ model QuotaAdjustment {
 }
 
 // =============================================================================
+
+/// A meter this Grant was sold with (F-118-e, ADR-0105 decision 4): the rate
+/// card in effect at the sale, copied beside the quotas as ADR-0073 copies
+/// `meteredRate` — a catalog change never reprices it. One row per meter; the
+/// terms never change (`grant_meter_terms_are_locked`), only the counters.
+///
+/// Counters are in the meter's unit. `consumed` is what was used, `billed` the
+/// rating cursor (how far the money has been taken), `funded` what is paid or
+/// held for. Until F-118-l a VPN Grant keeps its byte columns and they are the
+/// truth; this row's counters start at 0 and nothing advances them yet
+/// (F-118-f, F-118-g). A package plan has no row (decision 0).
+model GrantMeter {
+  id               String                @id @default(uuid()) @db.Uuid
+  tenantId         String                @db.Uuid
+  grantId          String                @db.Uuid
+  /// A `Meter.key` (`METER_KEYS`).
+  meterKey         String
+  /// The card copied. No foreign key: a card goes with its variant, the sale does not.
+  rateCardId       String?               @db.Uuid
+  unitSize         BigInt
+  unitPrice        Decimal               @db.Decimal(18, 8)
+  currencyCode     String
+  mode             RateCardMode
+  includedQuantity BigInt
+  afterIncluded    RateCardAfterIncluded
+  consumed         BigInt                @default(0)
+  billed           BigInt                @default(0)
+  funded           BigInt                @default(0)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @default(now()) @updatedAt
+
+  grant Grant @relation(fields: [grantId], references: [id])
+  meter Meter @relation(fields: [meterKey], references: [key], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([grantId, meterKey])
+  @@index([tenantId])
+  @@map("grant_meter")
+  @@schema("entitlement")
+}

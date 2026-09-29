@@ -134,7 +134,8 @@ model Meter {
   descriptionKey String?
   createdAt      DateTime  @default(now())
 
-  rateCards RateCard[]
+  rateCards   RateCard[]
+  grantMeters GrantMeter[]
 
   @@map("meter")
   @@schema("catalog")

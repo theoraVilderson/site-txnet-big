@@ -26,6 +26,7 @@ schema `entitlement`), migrations `20260914001600_entitlement_grant` and
 | quota_adjustment | a signed `delta` on one `metric` of a Grant, with its `source`, optional `capPercent` and `expiresAt`; append-only | yes, strict RLS | permanent |
 | grant_duration_change | an admin's move of a Grant's `endsAt` (F-311-i): `actorUserId` (no FK — may be platform staff), `endsAtBefore`, `endsAtAfter` (CHECK `grant_duration_change_moves`: they differ), `reason` (CHECK non-blank); index `(grantId, createdAt)`; append-only (`grant_duration_change_is_history`), its Grant's tenant's (`same_tenant()`) | yes, strict RLS | permanent |
 | grant_renewal | an admin's renewal of a Grant in place (F-311-d), one per request (unique `requestId`): `actorUserId` (no FK), `plan` (the plan's period, or typed), `bytes`, `days`, `forgivenBytes`, `purchasedBytesBefore`/`After`, `endsAtBefore`/`After` (null = permanent), optional `reason` — CHECK `grant_renewal_adds` (≥ 0, not both 0); index `(grantId, createdAt)`; append-only (`grant_renewal_is_history`), its Grant's tenant's (`same_tenant()`) | yes, strict RLS | permanent |
+| grant_meter | a meter the Grant was sold with (F-118-e, ADR-0105 decision 4), one per `(grantId, meterKey)`: the card in effect at issue copied — `rateCardId` (no FK: a card goes with its variant), `unitSize`, `unitPrice` `Decimal(18,8)`, `currencyCode`, `mode`, `includedQuantity`, `afterIncluded` — and the counters `consumed`, `billed` (the rating cursor), `funded`, in the meter's unit (CHECK ≥ 0). Terms locked, never deleted (`grant_meter_terms_are_locked`); the card's CHECKs held again; its Grant's tenant's (`same_tenant()`). No backfill: a Grant issued before it has only `meteredRate`. Until F-118-l a VPN Grant's byte cursors are the truth and these counters stay 0 | yes, strict RLS | permanent |
 | grant_deletion | an admin's delete of a Grant (F-311-m), one per Grant (unique `grantId`): `actorUserId` (no FK), `reason` (CHECK non-blank), `statusBefore`, `refundRemainder` (the admin's answer), `refundedAmount` `Decimal(18,2)` + `walletTransactionId` (no FK — billing's row; both or neither, only with `refundRemainder`), `refundSkipped` (F-027-r's reason a refund asked for credited nothing) — CHECK `grant_deletion_refund_asked`; append-only (`grant_deletion_is_history`), its Grant's tenant's (`same_tenant()`) | yes, strict RLS | permanent |
 
 `grant` is a reserved word: SQL quotes it (`entitlement."grant"`).
@@ -36,6 +37,7 @@ schema `entitlement`), migrations `20260914001600_entitlement_grant` and
 | grant.userId | -> | identity."user".id | whose |
 | grant.variantId | -> | catalog.product_variant.id | what was issued (null for a `migration` Grant) |
 | grant.tenantId | -> | tenant.tenant.purgeAfterDays | the purge window, read live (F-027-f) |
+| grant_meter.meterKey | -> | catalog.meter.key | what is counted (RESTRICT; a meter is immutable) |
 | grant (referenced) | <- | network.config.grantId | a config draws on its Grant's quota (§4.6) |
 
 ## Access rules

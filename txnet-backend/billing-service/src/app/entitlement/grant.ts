@@ -4,7 +4,6 @@ import { Injectable } from '@nestjs/common';
 import { ConfigStatus, Grant, GrantSource, GrantStatus, Prisma, QuotaAdjustment, QuotaMetric, VariantBillingMode } from '@prisma/client';
 import {
   TenantContext,
-  METER_KEYS,
   evaluateLineNameTemplate,
   operatingCurrencyOf,
   productCategoriesInclude,
@@ -16,6 +15,7 @@ import {
 import { isSellableBySku, vpnTrafficRateAt, type OfferFacts, type RateCardRow } from '../catalog/catalog-reads';
 import { trafficQuotaOf } from '../catalog/traffic-quota';
 import { PrismaService } from '../prisma/prisma.service';
+import { grantMetersFromVariant } from './grant-meter';
 import { GrantTokenSeal, NO_TOKEN_SEAL, type SealedToken } from './grant-token-seal';
 import { ADMIN_FROZEN } from './suspension';
 import { unusedClockOf } from './unused-clock';
@@ -53,6 +53,8 @@ export type EntitlementRejection =
   | 'metered_rate_missing'
   /** The rate in effect is zero: a block priced at nothing cannot be bought, so the Grant would stall (F-027-al). */
   | 'metered_rate_not_positive'
+  /** A rate card in effect on a meter nothing serves yet (F-118-e, ADR-0105 decision 7): its use could not be refused, so it is not sold. */
+  | 'meter_not_served'
   /** Renewal (F-027-dg): only an `active` Grant, or one `suspended`, is renewed in place. */
   | 'grant_not_renewable'
   /** Renewal: bytes on a metered Grant (its blocks buy them) or an unlimited one. */
@@ -474,10 +476,10 @@ export class GrantService {
     const variant = await tx.productVariant.findUnique({
       where: { id: input.variantId },
       // The rate cards come back with the variant — one round trip, and the
-      // rows are narrowed to the VPN meter's that could be in effect at the sale.
+      // rows are narrowed to every meter's that could be in effect at the sale.
       include: {
         product: { include: productCategoriesInclude },
-        rateCards: { where: rateCardsInEffect(startsAt, currencyCode, METER_KEYS.vpnTraffic) },
+        rateCards: { where: rateCardsInEffect(startsAt, currencyCode) },
       },
     });
     if (!variant) throw new EntitlementRefused('variant_not_found', input.variantId);
@@ -503,6 +505,9 @@ export class GrantService {
     if (shape.meteredRate !== null && shape.meteredRate.lte(0)) {
       throw new EntitlementRefused('metered_rate_not_positive', input.variantId);
     }
+    // Each card in effect is locked beside the quotas (F-118-e, ADR-0105 decision 4).
+    const { meters, unserved } = grantMetersFromVariant(variant, startsAt, currencyCode);
+    if (unserved) throw new EntitlementRefused('meter_not_served', `${input.variantId} ${unserved}`);
     // Born `active`, it is activated at its start (F-601-c); a purchase waits for `markDelivered`.
     const activatedAt = shape.status === GrantStatus.active ? startsAt : null;
     try {
@@ -522,6 +527,9 @@ export class GrantService {
           subscriptionTokenSealed: this.sealed(token),
         },
       });
+      if (meters.length > 0) {
+        await tx.grantMeter.createMany({ data: meters.map((m) => ({ ...m, tenantId: tenant.id, grantId: grant.id })) });
+      }
       return { grant, token };
     } catch (e) {
       // Postgres aborts the transaction on a unique violation, so the winner

@@ -144,7 +144,8 @@ sale** (`rateCardAt`): a card written tomorrow never reprices what was sold.
 Every `metered_rate` row became a `vpn.traffic` prepaid card per 2^30 bytes
 (`METERED_RATE_UNIT_BYTES`); `metered_rate` is read by nothing and written by
 no service role until F-118-l drops it. No route writes a card yet (F-118-m, F-118-k).
-Until `grant_meter` (F-118-e), a VPN Grant locks only a card the byte engine
+Every card in effect is locked on the Grant as a `grant_meter` row (F-118-e,
+entitlement `contract.md`); a VPN Grant still sells only a card the byte engine
 serves — prepaid, per 2^30 bytes, nothing included, then metered
 (`vpnTrafficRateAt`); a newer card of any other shape is no rate, so the sale
 is refused (`metered_rate_missing`), never made at the older card.

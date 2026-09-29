@@ -3,7 +3,7 @@ id: entitlement
 layer: domain
 status: draft
 version: 12
-updated: 2026-09-28
+updated: 2026-09-29
 ---
 
 # Contract — entitlement
@@ -23,7 +23,7 @@ and changes its quota only through `quota_adjustment` rows.
 
 | Operation | Input | Output | Sync/Async | Errors (`EntitlementRefused.reason`) |
 |---|---|---|---|---|
-| `issue(tx, …)` | userId, variantId, source, sourceReferenceId?, startsAt?, issuedByAdminId? | `{grant, token}` — the token, also kept sealed (ADR-0085); a repeat for the same cause answers the first Grant and `token: null` | inside the caller's transaction | `variant_not_found`, `variant_not_assignable`, `metered_rate_missing`, `metered_rate_not_positive`, `already_issued` (a concurrent issue won: retry) |
+| `issue(tx, …)` | userId, variantId, source, sourceReferenceId?, startsAt?, issuedByAdminId? | `{grant, token}` — the token, also kept sealed (ADR-0085); a repeat for the same cause answers the first Grant and `token: null` | inside the caller's transaction | `variant_not_found`, `variant_not_assignable`, `metered_rate_missing`, `metered_rate_not_positive`, `meter_not_served`, `already_issued` (a concurrent issue won: retry) |
 | `transition(tx, id, to, reason?)` | grantId, status | Grant; staying put is a no-op | caller's transaction | `grant_not_found`, `illegal_transition` |
 | `activeGrant` / `hasActiveGrant` | userId, featureKey, at? | the longest-lasting active Grant / boolean | own tenant transaction | — |
 | `adjustQuota(tx, …)` | grantId, metric, delta, source, capPercent?, expiresAt?, reason? | QuotaAdjustment | caller's transaction | `grant_not_found`, `grant_not_active` |
@@ -152,6 +152,11 @@ value (`rate_card_metered_price_positive`). Nothing is
 copied for any other billing mode: `grant_metered_rate_is_metered` refuses a
 rate on a prepaid Grant.
 
+**Its meters are locked beside it (F-118-e, ADR-0105 decision 4)** — `grant-meter.ts`: one
+`grant_meter` row per card in effect (terms, `rateCardId`, counters at 0). A metered VPN
+Grant's is the card `meteredRate` came from; a package plan has none (decision 0); a card on a
+meter nothing serves yet refuses the sale (`meter_not_served`, decision 7). Nothing reads the row until F-118-f/-l.
+
 **Delivery of a paid Grant (F-111-d, spec §5.8 step 3)** —
 `entitlement/delivery.ts`, proved by `delivery.spec.ts` and, against Postgres,
 `invoice/invoice-payment.int.spec.ts`. A purchase is issued `pending`;
@@ -232,6 +237,7 @@ Through the outbox (ADR-0021); the first two also live on the buyer's `user:` ch
 | `/sub` finds a Grant by the token's SHA-256 (lowercase hex, unique). The token is also kept sealed in `subscriptionTokenSealed`: AES-256-GCM under an HKDF key derived from the vault KEK, `{kekId, iv, authTag, ciphertext}`. Only `subscriptionTokenFor` opens it, for the Grant's own user (`grant_token_hash_shape`, `grant_token_sealed_shape`) | CHECK + unique index; D-43, ADR-0085 (reverses the hash-only call of 2026-09-14) |
 | One cause issues one Grant: `(source, sourceReferenceId)` unique when set | partial unique index |
 | A quota adjustment is never changed or deleted; `delta ≠ 0`; a rollover cap is 1..100 % (`quota_adjustment_is_history`) | trigger + CHECKs |
+| A Grant's meter is its tenant's, one per meter; terms never change and it is never deleted, counters never below 0 (`grant_meter_terms_are_locked`, `grant_meter_counters_not_negative`) | trigger + unique + CHECK (F-118-e) |
 | `endsAt = null` is permanent; when set it is after `startsAt`. Quota sits on the Grant, never on a config (§4.6) | CHECK; schema |
 
 ## Deprecations

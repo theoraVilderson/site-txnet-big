@@ -18,9 +18,9 @@ export type RateCardRow = {
   isActive: boolean;
 };
 
-/** The cards {@link rateCardAt} chooses among at `at`, for one meter in `currencyCode`, asked of the database. */
-export const rateCardsInEffect = (at: Date, currencyCode: string, meterKey: string) =>
-  ({ isActive: true, effectiveFrom: { lte: at }, currencyCode, meterKey }) satisfies Prisma.RateCardWhereInput;
+/** The cards {@link rateCardAt} chooses among at `at` in `currencyCode` — for one meter, or every meter when none is named (a Grant's issue, F-118-e) — asked of the database. */
+export const rateCardsInEffect = (at: Date, currencyCode: string, meterKey?: string) =>
+  ({ isActive: true, effectiveFrom: { lte: at }, currencyCode, ...(meterKey === undefined ? {} : { meterKey }) }) satisfies Prisma.RateCardWhereInput;
 
 /**
  * The card in effect at `at` for `meterKey`: the newest active one in the
