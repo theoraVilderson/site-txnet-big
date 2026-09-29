@@ -127,6 +127,14 @@ Two things in the current design stop that:
     currency. Later (F-118-n), one usage event on a platform-owned panel is
     rated a second time against the platform's card, held or debited on the
     reseller's `tenant_billing_wallet` — prepaid, per §14.5.
+    *Amended 2026-09-29 (user, F-118-n6):* on VPN the reseller pays wholesale
+    only for bytes served on **platform-owned** panels; a reseller's group may
+    mix its own panels with the platform's, and bytes on its own cost the
+    platform nothing. Those bytes are counted apart at metering, so the
+    wholesale cursor means the same thing from its first block. Charging
+    every byte of a Grant that touches a platform panel was rejected: it bills
+    the reseller for its own panels, and correcting it later would migrate
+    the cursor on open Grants.
 11. **Ledger reasons** `usage_charge` (a debit and a sale, `IS_SALE`) and
     `usage_refund` (a credit that undoes one). `traffic_consumption` and
     `traffic_refund` stay for the rows already written.

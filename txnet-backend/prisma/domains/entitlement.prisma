@@ -367,8 +367,14 @@ model GrantMeter {
   wholesaleUnitSize      BigInt?
   wholesaleUnitPrice     Decimal?        @db.Decimal(18, 8)
   wholesaleCurrencyCode  String?
-  /// The wholesale rating cursor over the same `consumed`, in the meter's unit.
+  /// The wholesale rating cursor, in the meter's unit: over `consumed`, or on
+  /// `vpn.traffic` over `wholesaleConsumed`.
   wholesaleBilled        BigInt          @default(0)
+  /// `vpn.traffic` only (F-118-n6, ADR-0105 decision 10): the bytes of this
+  /// Grant served on platform-owned panels — what the reseller owes wholesale
+  /// for. Bytes on its own panels are in `grant.consumedBytes` and not here.
+  /// Advanced by `metering-service` beside that cursor; zero with no wholesale leg.
+  wholesaleConsumed      BigInt          @default(0)
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @default(now()) @updatedAt
 

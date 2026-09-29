@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { HoldReason, Prisma, UsageDispositionState } from '@prisma/client';
+import { HoldReason, PanelOwnershipType, Prisma, UsageDispositionState } from '@prisma/client';
 import {
   endNoticeStep,
   heldUsageNotice,
   idleCheckOf,
+  METER_KEYS,
   remainingLabel,
   retentionEvent,
   retentionToTell,
@@ -85,7 +86,7 @@ class HoldAlreadyResolved extends Error {}
  *
  * | what arrived | where it lands |
  * |---|---|
- * | a delta whose config claims that remote client | `traffic_raw_log` + `grant.consumedBytes` |
+ * | a delta whose config claims that remote client | `traffic_raw_log` + `grant.consumedBytes` (+ `grant_meter.wholesaleConsumed` on a platform panel) |
  * | a delta whose config claims a *different* remote client | `usage_hold`, `attribution_ambiguous` |
  * | a delta naming a config this platform does not have | `unattributed_usage`, against the panel's own identifier |
  * | the pass's `quarantines` | `usage_delta_quarantine`, as the collector judged them |
@@ -148,7 +149,7 @@ export class MeteringService {
         else outcome.duplicates += 1;
         continue;
       }
-      if (await this.bill(message.panelId, config, delta)) outcome.applied += 1;
+      if (await this.bill(message.panelId, message.ownershipType, config, delta)) outcome.applied += 1;
       else outcome.duplicates += 1;
     }
 
@@ -187,6 +188,8 @@ export class MeteringService {
     });
     if (!hold) throw new UnknownHold(release.holdId);
     if (hold.state !== UsageDispositionState.pending) return 'already_resolved';
+    // A hold keeps its panel, not the pass's ownership; a panel's owner never changes.
+    const panel = await this.crossTenant.panel.findUnique({ where: { id: hold.panelId }, select: { ownershipType: true } });
 
     let total: bigint | undefined;
     try {
@@ -204,6 +207,7 @@ export class MeteringService {
         total = await this.charge(tx, {
           deltaId: usageReleaseDeltaId(hold.id),
           panelId: hold.panelId,
+          ownershipType: panel?.ownershipType ?? PanelOwnershipType.tenant,
           config: { id: hold.configId, tenantId: hold.config.tenantId, grantId: hold.config.grantId },
           up: hold.upBytes,
           down: hold.downBytes,
@@ -271,12 +275,13 @@ export class MeteringService {
    * Bill one delta. `false` means the unique index said it was already applied.
    * The Grant's total is published only once the transaction has committed.
    */
-  private async bill(panelId: string, config: ConfigAttribution, delta: UsageDeltaRow): Promise<boolean> {
+  private async bill(panelId: string, ownershipType: PanelOwnershipType, config: ConfigAttribution, delta: UsageDeltaRow): Promise<boolean> {
     let total = 0n;
     const applied = await this.onceUnder(config.tenantId, async (tx) => {
       total = await this.charge(tx, {
         deltaId: delta.deltaId,
         panelId,
+        ownershipType,
         config,
         up: BigInt(delta.upBytes),
         down: BigInt(delta.downBytes),
@@ -292,10 +297,22 @@ export class MeteringService {
    * Grant cursor. A collected delta and a released hold both come through
    * here, so a release cannot skip a rule the normal path holds (ADR-0080).
    * Returns the Grant's `consumedBytes` as this transaction left it.
+   *
+   * Bytes that crossed a platform-owned panel also advance the `vpn.traffic`
+   * meter's `wholesaleConsumed` when it has a wholesale leg (F-118-n6): what a
+   * reseller owes the platform for. Its own panels' bytes cost it nothing.
    */
   private async charge(
     tx: Prisma.TransactionClient,
-    c: { deltaId: string; panelId: string; config: Omit<ConfigAttribution, 'remoteId'>; up: bigint; down: bigint; observedAt: Date },
+    c: {
+      deltaId: string;
+      panelId: string;
+      ownershipType: PanelOwnershipType;
+      config: Omit<ConfigAttribution, 'remoteId'>;
+      up: bigint;
+      down: bigint;
+      observedAt: Date;
+    },
   ): Promise<bigint> {
     await tx.usageDeltaSeen.create({
       data: { deltaId: c.deltaId, configId: c.config.id, panelId: c.panelId, upBytes: c.up, downBytes: c.down, observedAt: c.observedAt },
@@ -328,6 +345,12 @@ export class MeteringService {
         usageNoticeSince: true,
       },
     });
+    if (c.ownershipType === PanelOwnershipType.platform && charged > 0n) {
+      await tx.grantMeter.updateMany({
+        where: { grantId: c.config.grantId, meterKey: METER_KEYS.vpnTraffic, wholesalePayerTenantId: { not: null } },
+        data: { wholesaleConsumed: { increment: charged } },
+      });
+    }
     await this.announceUsage(tx, c.config, grant.userId, grant.consumedBytes);
     await this.announceThreshold(tx, c.config, grant, charged);
     return grant.consumedBytes;

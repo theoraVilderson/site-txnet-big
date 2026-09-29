@@ -38,7 +38,7 @@ is made per row:
 
 | what arrived | where it lands |
 |---|---|
-| a delta whose `config` claims that remote client | `traffic_raw_log` + `grant.consumedBytes` |
+| a delta whose `config` claims that remote client | `traffic_raw_log` + `grant.consumedBytes` (+ `wholesaleConsumed` on a platform panel, below) |
 | a delta whose `config` claims a **different** remote client | `usage_hold`, reason `attribution_ambiguous` |
 | a delta naming a config this platform does not hold | `unattributed_usage`, against the panel's own identifier |
 | the pass's `quarantines` | `usage_delta_quarantine`, as the collector judged them |
@@ -87,6 +87,26 @@ hold that does not exist throws and dead-letters, as evidence.
 
 `metering.service.spec.ts` pins it: billed once, never after a write-off, and
 still once with the state pre-read defeated.
+
+## Wholesale bytes — platform panels only (F-118-n6)
+
+ADR-0105 (10), amended 2026-09-29: a reseller pays the platform wholesale only
+for bytes served on **platform-owned** panels; its own panels cost the platform
+nothing, and one Grant's group may mix both.
+
+1. **In the charge's transaction.** When the bytes crossed a platform panel,
+   the same `charge` that moves `consumedBytes` advances the `vpn.traffic`
+   meter's `grant_meter.wholesaleConsumed` by them — only on a meter with a
+   wholesale leg (`wholesalePayerTenantId` set, F-118-n2). The platform's own
+   Grants and a reseller's own-panel bytes advance nothing. A duplicate delta
+   commits nothing, so it counts nothing.
+2. **Whose panel.** A pass says it in `ownershipType` (`delta.json`), never by a
+   join back to `panel`. A released hold keeps only its `panelId`, so
+   `release` reads that panel's ownership across tenants; a panel's owner never
+   changes.
+3. **Counted, not charged.** F-118-n3's wholesale cursor (`wholesaleBilled`)
+   buys against it. `metering.service.spec.ts` "wholesale bytes" pins the
+   7 GB own + 3 GB platform = 3 GB case, the redelivery, and the no-leg Grant.
 
 ## Usage events — every meter but VPN (F-118-f)
 

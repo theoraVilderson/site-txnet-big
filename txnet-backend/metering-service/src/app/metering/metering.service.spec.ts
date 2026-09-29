@@ -10,6 +10,7 @@ import {
 } from '@prisma/client';
 import {
   IDLE_CHECK_AFTER_MS,
+  METER_KEYS,
   USAGE_DELTA_MESSAGE_VERSION,
   usageReleaseDeltaId,
   type UsageDeltaMessage,
@@ -79,7 +80,21 @@ function grantRow(over: Record<string, unknown> = {}) {
   };
 }
 
-function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> = [], grant: Record<string, unknown> = {}) {
+/**
+ * The Grant's `vpn.traffic` meter (F-118-n6): whether it carries a wholesale
+ * leg, and the panel a released hold's bytes crossed.
+ */
+interface MeterSetup {
+  wholesaleLeg?: boolean;
+  panelOwnership?: PanelOwnershipType;
+}
+
+function fakeStore(
+  configs: ConfigRow[],
+  stored: Array<Record<string, unknown>> = [],
+  grant: Record<string, unknown> = {},
+  meter: MeterSetup = {},
+) {
   const seen = new Map<string, Record<string, unknown>>();
   const rawLog: Array<Record<string, unknown>> = [];
   const holds: Array<Record<string, unknown>> = [...stored];
@@ -94,6 +109,8 @@ function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> 
   const idle: { at?: Date } = {};
   /** What `SET LOCAL app.tenant_id` bound, per transaction — the RLS scope. */
   const bound: Array<string | null> = [];
+  /** `grant_meter.wholesaleConsumed` on the Grant's `vpn.traffic` meter (F-118-n6). */
+  const wholesale = { consumed: 0n };
 
   const uniqueViolation = () =>
     new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
@@ -102,6 +119,20 @@ function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> 
     });
 
   const client = {
+    panel: {
+      findUnique: async ({ where }: { where: { id: string } }) =>
+        where.id === PANEL ? { ownershipType: meter.panelOwnership ?? PanelOwnershipType.tenant } : null,
+    },
+    grantMeter: {
+      updateMany: async ({ where, data }: {
+        where: { grantId: string; meterKey: string; wholesalePayerTenantId: { not: null } };
+        data: { wholesaleConsumed: { increment: bigint } };
+      }) => {
+        if (where.grantId !== GRANT || where.meterKey !== METER_KEYS.vpnTraffic || !meter.wholesaleLeg) return { count: 0 };
+        wholesale.consumed += data.wholesaleConsumed.increment;
+        return { count: 1 };
+      },
+    },
     config: {
       findMany: async ({ where }: { where: { id: { in: string[] } } }) =>
         configs.filter((c) => where.id.in.includes(c.id)).map((c) => ({ ...c })),
@@ -215,7 +246,7 @@ function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> 
     $transaction: async <R>(fn: (tx: unknown) => Promise<R>): Promise<R> => fn(client),
   };
 
-  return { client, seen, rawLog, holds, quarantines, unattributed, consumed, bound, outbox, notice, idle };
+  return { client, seen, rawLog, holds, quarantines, unattributed, consumed, bound, outbox, notice, idle, wholesale };
 }
 
 /** One pass, with whatever the caller wants in it. Bytes are decimal strings on the wire. */
@@ -552,11 +583,13 @@ describe('MeteringService', () => {
     const ADMIN = '88888888-8888-4888-8888-888888888888';
     const heldFrom = new Date('2026-09-21T10:00:00.000Z');
 
-    function heldStore(state: UsageDispositionState = UsageDispositionState.pending) {
+    function heldStore(state: UsageDispositionState = UsageDispositionState.pending, meter: MeterSetup = {}) {
       return fakeStore(
         [{ id: CONFIG, tenantId: TENANT, grantId: GRANT, remoteId: 'client-a' }],
         [{ id: HOLD, configId: CONFIG, panelId: PANEL, upBytes: 1000n, downBytes: 2000n, heldFrom,
            reason: HoldReason.attribution_ambiguous, state, resolvedAt: null, resolvedByAdminId: null, resolutionNote: null }],
+        {},
+        meter,
       );
     }
     const release: UsageReleasePayload = { holdId: HOLD, adminId: ADMIN, note: 'client-a is this config' };
@@ -606,6 +639,50 @@ describe('MeteringService', () => {
       expect(store.rawLog).toHaveLength(0);
       expect(store.seen.size).toBe(0);
       expect(store.holds[0]['state']).toBe(UsageDispositionState.written_off);
+    });
+
+    it("counts a released hold's bytes as wholesale when its panel is the platform's (F-118-n6)", async () => {
+      const store = heldStore(UsageDispositionState.pending, { wholesaleLeg: true, panelOwnership: PanelOwnershipType.platform });
+      await service(store).release(release);
+      await service(store).release(release);
+
+      expect(store.wholesale.consumed).toBe(3000n);
+    });
+  });
+
+  // F-118-n6, ADR-0105 (10): the reseller pays wholesale only for bytes that crossed a platform-owned panel.
+  describe('wholesale bytes', () => {
+    const config = [{ id: CONFIG, tenantId: TENANT, grantId: GRANT, remoteId: 'client-a' }];
+    const onPlatform = (over: Partial<UsageDeltaMessage> = {}) =>
+      pass({ ownershipType: PanelOwnershipType.platform, tenantId: null, ...over });
+
+    it("counts bytes on the platform's panels apart and leaves the reseller's own out: 7 GB own + 3 GB platform = 3 GB", async () => {
+      const GB = 1n << 30n;
+      const store = fakeStore(config, [], {}, { wholesaleLeg: true });
+      const metering = service(store);
+
+      await metering.apply(pass({ deltas: [delta({ upBytes: '0', downBytes: String(7n * GB) })] }));
+      await metering.apply(onPlatform({ deltas: [delta({ deltaId: '66666666-6666-4666-8666-666666666667', upBytes: String(GB), downBytes: String(2n * GB) })] }));
+
+      expect(store.consumed.get(GRANT)).toBe(10n * GB);
+      expect(store.wholesale.consumed).toBe(3n * GB);
+    });
+
+    it('counts a redelivered platform delta once', async () => {
+      const store = fakeStore(config, [], {}, { wholesaleLeg: true });
+      const metering = service(store);
+      await metering.apply(onPlatform({ deltas: [delta()] }));
+      await metering.apply(onPlatform({ deltas: [delta()] }));
+
+      expect(store.wholesale.consumed).toBe(3000n);
+    });
+
+    it('advances nothing on a meter with no wholesale leg — the platform\'s own Grant', async () => {
+      const store = fakeStore(config);
+      await service(store).apply(onPlatform({ deltas: [delta()] }));
+
+      expect(store.consumed.get(GRANT)).toBe(3000n);
+      expect(store.wholesale.consumed).toBe(0n);
     });
   });
 });
