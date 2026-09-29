@@ -28,6 +28,9 @@ export type Visibility = (typeof VISIBILITIES)[number];
 /** Prisma's `VariantBillingMode`. */
 export const BILLING_MODES = ["prepaid", "metered"] as const;
 export type BillingMode = (typeof BILLING_MODES)[number];
+/** Prisma's `RateCardMode` (F-118-d): the seller picks it per meter (F-118-m). */
+export const RATE_CARD_MODES = ["prepaid", "postpaid"] as const;
+export type RateCardMode = (typeof RATE_CARD_MODES)[number];
 /** Prisma's `QualityTier` (F-408). */
 export const QUALITY_TIERS = ["standard", "premium"] as const;
 export type QualityTier = (typeof QUALITY_TIERS)[number];
@@ -61,7 +64,10 @@ export type CatalogRejection =
   | "capability_not_found"
   | "capability_unknown"
   | "capability_in_use"
-  | "traffic_quota_required";
+  | "traffic_quota_required"
+  | "meter_not_found"
+  | "rate_card_not_found"
+  | "rate_card_not_served";
 
 /** Text by language code (F-1533-d/f); at least the item's source language. The key is billing's. */
 export type Texts = Record<string, string>;
@@ -174,6 +180,36 @@ export interface CatalogPrice {
   isActive: boolean;
 }
 
+/**
+ * One card of a variant's rate history (F-118-m, catalog `contract.md`): the
+ * price of `unitSize` of a meter's unit. Quantities are strings — bytes pass
+ * 2^53. A card is history, as a price is: a change is a new one.
+ */
+export interface CatalogRateCard {
+  id: string;
+  variantId: string;
+  meterKey: string;
+  unitSize: string;
+  unitPrice: string;
+  currencyCode: string;
+  mode: RateCardMode;
+  includedQuantity: string;
+  afterIncluded: "stop" | "metered";
+  effectiveFrom: string;
+  isActive: boolean;
+}
+
+/** A card's terms as billing's `setRateCardSchema` takes them. */
+export interface RateCardTerms {
+  meterKey: string;
+  unitSize: string;
+  unitPrice: string;
+  mode: RateCardMode;
+  includedQuantity?: string;
+  afterIncluded: "stop" | "metered";
+}
+export type SetRateCardBody = RateCardTerms & { effectiveFrom?: string };
+
 export interface CatalogVariant {
   id: string;
   tenantId: string | null;
@@ -190,6 +226,8 @@ export interface CatalogVariant {
   isActive: boolean;
   /** Newest `effectiveFrom` first. */
   prices: CatalogPrice[];
+  /** Every meter's card history, newest first (F-118-m). */
+  rateCards: CatalogRateCard[];
 }
 
 export type CatalogProductDetail = CatalogProduct & { variants: CatalogVariant[] };
@@ -246,6 +284,8 @@ export interface CreateVariantBody {
   /** The first price. */
   price: string;
   effectiveFrom?: string;
+  /** A metered variant's first card, from the same instant as the first price (F-118-m). */
+  rateCard?: RateCardTerms;
 }
 export type UpdateVariantBody = Partial<Pick<CreateVariantBody, "visibility" | "qualityTier" | "durationDays" | "quotas" | "nameKey" | "panelGroupId">> & { isActive?: boolean };
 
@@ -346,6 +386,15 @@ export function catalogAdminApi(tenantId: string | null) {
 
     async deactivatePrice(priceId: string): Promise<CatalogPrice> {
       return call<CatalogPrice>(`${at}/prices/${id(priceId)}/deactivate`, { method: "POST" });
+    },
+
+    /** A new rate card on a variant this surface's tenant owns; the old one stays as it was (F-118-m). */
+    async setRateCard(variantId: string, body: SetRateCardBody): Promise<CatalogRateCard> {
+      return call<CatalogRateCard>(`${at}/variants/${id(variantId)}/rate-cards`, { method: "POST", ...json(body) });
+    },
+
+    async deactivateRateCard(rateCardId: string): Promise<CatalogRateCard> {
+      return call<CatalogRateCard>(`${at}/rate-cards/${id(rateCardId)}/deactivate`, { method: "POST" });
     },
 
     /** The platform's capabilities and this surface's tenant's own; every one, with its tenant, for the platform owner (F-114-f-a). */

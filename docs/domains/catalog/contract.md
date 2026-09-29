@@ -3,7 +3,7 @@ id: catalog
 layer: domain
 status: draft
 version: 7
-updated: 2026-09-28
+updated: 2026-09-29
 ---
 
 # Contract — catalog
@@ -41,10 +41,12 @@ cross-tenant pool.
 | `GET /capabilities` (F-114-f-a) | — | the platform's and the caller's own (owner: all), each `{id, tenantId, key, nameKey, descriptionKey, sourceLang}` by key | — |
 | `POST /capabilities`, `PATCH /capabilities/:id` | `tenantId?`, `key` (the feature-key shape, `vpn.access`), `sourceLang?`, `name`, `description?`, `translateAll?`; patch has no key | capability | `key_taken` 409 (a key the new row's tenant already sees; for a platform row, a key any tenant holds), `not_platform_owner`, `capability_not_found` 404, the text refusals |
 | `POST /capabilities/:id/remove` | — | `{id, outcome: 'deleted'}` | `capability_in_use` 409 (a product or a Grant holds the key — a platform one counted across tenants), `capability_not_found` |
-| `POST /products/:id/variants`, `PATCH /variants/:id` | `sku`, `billingMode`, `visibility`, `quotas?`, `durationDays?`, `panelGroupId?`, `qualityTier?`, first `price`; patch has no SKU or billing mode | variant with prices | `variant_not_found`, `sku_taken`, `price_in_the_past`, `panel_group_not_found` (a group that is neither the platform's nor the variant's tenant's, F-027-bk), `traffic_quota_required` 400 (F-111-p: a `network_access` + `prepaid` variant with no `quotas.traffic_bytes` — on create, the product's `defaultQuotas` count; on a patch, only one that writes `quotas`). `traffic_bytes.limit: 0` = unlimited; `durationDays: 0` = unlimited, stored `null` |
+| `POST /products/:id/variants`, `PATCH /variants/:id` | `sku`, `billingMode`, `visibility`, `quotas?`, `durationDays?`, `panelGroupId?`, `qualityTier?`, first `price`, `rateCard?` (a metered variant's first card, from the price's instant; F-118-m); patch has no SKU or billing mode | variant with prices and `rateCards` | `variant_not_found`, `sku_taken`, `price_in_the_past`, `panel_group_not_found` (a group that is neither the platform's nor the variant's tenant's, F-027-bk), `traffic_quota_required` 400 (F-111-p: a `network_access` + `prepaid` variant with no `quotas.traffic_bytes` — on create, the product's `defaultQuotas` count; on a patch, only one that writes `quotas`). `traffic_bytes.limit: 0` = unlimited; `durationDays: 0` = unlimited, stored `null` |
 | `GET /panel-groups` (F-026-p) | — | `[{id, tenantId, name, strategy, protocols, healthyMembers}]` by name (`protocols`: what its members' inbounds sell — each member's assigned ones, else its panel's pool — sorted, F-114-b, F-027-ch; empty = nothing is placed): the groups a variant may name — the platform's and the caller's own (owner: all, so a variant is offered only the platform's and its own tenant's). `healthyMembers` counts what fulfilment places on now (`placeableMember`: not `drain`, accepted, `healthy`); only `mirror` is fulfilled | — |
 | `POST /variants/:id/prices` | `amount`, `effectiveFrom?` (default now; never in the past) | a **new** price row, `currencyCode` its tenant's operating currency (the platform's for a platform variant) — the amount is taken as typed, never converted (F-116-d) | `variant_not_found`, `price_in_the_past` 400 |
 | `POST /prices/:id/deactivate` | — | the price, switched off | `price_not_found` |
+| `POST /variants/:id/rate-cards` (F-118-m) | `meterKey`, `unitSize`, `unitPrice` (≤ 8 places), `mode`, `includedQuantity?`, `afterIncluded`, `effectiveFrom?` — quantities as strings; the DB CHECKs are schema 400s | a **new** card, `currencyCode` as a price's | `variant_not_found` (the platform's to a reseller), `meter_not_found` 404, `rate_card_not_served` 400 (below), `price_in_the_past` |
+| `POST /rate-cards/:id/deactivate` | — | the card, switched off | `rate_card_not_found` |
 | `GET /translations` | `lang?` | drafts: `{lang, key, draft, published, source: {lang, text}}` — the caller's items' (owner: all) | — |
 | `POST /translations/draft-missing` | — | `{drafted}` | `texts_unavailable` |
 | `POST /translations/publish` | `lang`, `keys[]` (1-200) | `{published}` — drafts as they are | `text_key_invalid` 400, `product_not_found` / `category_not_found` (not the caller's item) |
@@ -142,7 +144,10 @@ cards on its own variants only. A metered unit costs more than zero
 free usage is an included quantity that stops. Read **once, at the moment of
 sale** (`rateCardAt`): a card written tomorrow never reprices what was sold.
 Every `metered_rate` row became a `vpn.traffic` prepaid card per 2^30 bytes
-(`METERED_RATE_UNIT_BYTES`); F-118-l dropped `metered_rate`. No route writes a card yet (F-118-m, with the mode).
+(`METERED_RATE_UNIT_BYTES`); F-118-l dropped `metered_rate`. A seller writes and switches off its
+own cards through the routes above (F-118-m, ADR-0105 (10)); a card no sale would take is refused,
+not stored, since as the newest it would make the variant unsellable (`rate_card_not_served`): only
+`vpn.traffic` on a `metered` variant in the shape below (`servedByBytes`), no other meter until F-118-h.
 Every card in effect is locked on the Grant as a `grant_meter` row (F-118-e,
 entitlement `contract.md`); a VPN Grant still sells only a card the byte engine
 serves — per 2^30 bytes, nothing included, then metered; prepaid or, since

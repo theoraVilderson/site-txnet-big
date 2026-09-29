@@ -302,6 +302,7 @@ describe("the variant picker", () => {
     qualityTier: "standard",
     isActive: true,
     prices: [],
+    rateCards: [],
     ...patch,
   });
   const product = (patch: Partial<CatalogProductDetail>): CatalogProductDetail => ({

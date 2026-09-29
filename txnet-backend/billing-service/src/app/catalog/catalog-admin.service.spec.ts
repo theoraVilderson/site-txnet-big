@@ -32,7 +32,7 @@
 import { FulfilmentKind, Prisma, TenantType, VariantBillingMode, VariantVisibility } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 
-import { RETIRED_FULFILMENT_KINDS, createProductSchema, updateCapabilitySchema, updateCategorySchema } from './catalog-admin.schema';
+import { RETIRED_FULFILMENT_KINDS, createProductSchema, createVariantSchema, setRateCardSchema, updateCapabilitySchema, updateCategorySchema } from './catalog-admin.schema';
 import { CatalogAdminRefused, CatalogAdminService } from './catalog-admin.service';
 import { CatalogTextService, catalogTextKey } from './catalog-texts';
 
@@ -50,6 +50,11 @@ const RESELLER_PRODUCT = 'b0000000-0000-4000-8000-000000000002';
 const OTHER_PRODUCT = 'b0000000-0000-4000-8000-000000000003';
 const RESELLER_VARIANT = 'c0000000-0000-4000-8000-000000000002';
 const RESELLER_PRICE = 'd0000000-0000-4000-8000-000000000002';
+/** Metered variants (F-118-m): the platform's and the reseller's, each with a `vpn.traffic` card. */
+const PLATFORM_METERED = 'c0000000-0000-4000-8000-000000000011';
+const RESELLER_METERED = 'c0000000-0000-4000-8000-000000000012';
+const PLATFORM_CARD = '70000000-0000-4000-8000-000000000011';
+const RESELLER_CARD = '70000000-0000-4000-8000-000000000012';
 /** The reseller's second product: its variant backs a Grant, so it was sold. */
 const SOLD_PRODUCT = 'b0000000-0000-4000-8000-000000000004';
 const SOLD_VARIANT = 'c0000000-0000-4000-8000-000000000004';
@@ -230,6 +235,16 @@ function build() {
           durationDays: 30, billingMode: VariantBillingMode.prepaid, visibility: VariantVisibility.public, panelGroupId: null,
           qualityTier: 'standard', isActive: true,
         },
+        {
+          id: PLATFORM_METERED, tenantId: null, productId: PLATFORM_PRODUCT, sku: 'VPN-GB', nameKey: null, quotas: {},
+          durationDays: 30, billingMode: VariantBillingMode.metered, visibility: VariantVisibility.public, panelGroupId: null,
+          qualityTier: 'standard', isActive: true,
+        },
+        {
+          id: RESELLER_METERED, tenantId: RESELLER, productId: RESELLER_PRODUCT, sku: 'VPN-GB', nameKey: null, quotas: {},
+          durationDays: 30, billingMode: VariantBillingMode.metered, visibility: VariantVisibility.public, panelGroupId: null,
+          qualityTier: 'standard', isActive: true,
+        },
       ],
       'productVariant',
       writes,
@@ -271,6 +286,15 @@ function build() {
     price: table(
       [{ id: RESELLER_PRICE, tenantId: RESELLER, variantId: RESELLER_VARIANT, amount: new Prisma.Decimal('5.00'), effectiveFrom: new Date('2026-01-01T00:00:00Z'), isActive: true, createdByAdminId: ADMIN }],
       'price',
+      writes,
+    ),
+    meter: table([{ id: '60000000-0000-4000-8000-000000000001', key: 'vpn.traffic', unit: 'bytes', nameKey: 'catalog.meter.vpn.traffic.name' }], 'meter', writes),
+    rateCard: table(
+      [
+        { ...GIB_CARD, id: PLATFORM_CARD, tenantId: null, variantId: PLATFORM_METERED, unitSize: BigInt(GIB), unitPrice: new Prisma.Decimal('0.5'), includedQuantity: BigInt(0), currencyCode: 'USD', effectiveFrom: new Date('2026-01-01T00:00:00Z'), isActive: true },
+        { ...GIB_CARD, id: RESELLER_CARD, tenantId: RESELLER, variantId: RESELLER_METERED, unitSize: BigInt(GIB), unitPrice: new Prisma.Decimal('0.8'), includedQuantity: BigInt(0), currencyCode: 'IRR', effectiveFrom: new Date('2026-01-01T00:00:00Z'), isActive: true },
+      ],
+      'rateCard',
       writes,
     ),
     adminAuditLog: {
@@ -322,6 +346,11 @@ async function refusal(run: () => Promise<unknown>): Promise<CatalogAdminRefused
   }
   throw new Error('expected a refusal');
 }
+
+const GIB = 2 ** 30;
+/** A `vpn.traffic` card the byte engine serves: per GiB, nothing included, then metered (F-118-m). */
+const GIB_CARD = { meterKey: 'vpn.traffic', mode: 'postpaid' as const, afterIncluded: 'metered' as const };
+const NEW_CARD = { ...GIB_CARD, unitSize: String(GIB), unitPrice: '0.9' };
 
 const NEW_PRODUCT = { categoryIds: [PLATFORM_CATEGORY], key: 'vpn_pro', name: { fa: 'وی‌پی‌ان پرو', en: 'VPN Pro' }, fulfilmentKind: FulfilmentKind.network_access };
 const TRAFFIC_50G = { traffic_bytes: { limit: 50 * 1024 ** 3, resetPolicy: 'none' as const } };
@@ -443,6 +472,7 @@ describe('CatalogAdminService — variants and prices', () => {
 
   it('refuses a prepaid network variant that states no traffic, on create and on a quotas edit, and writes nothing (F-111-p)', async () => {
     const { service, db, writes } = build();
+    const variants = db.productVariant.rows.length;
     const { quotas: _none, ...noTraffic } = NEW_VARIANT;
     expect((await refusal(() => service.createVariant(actor(RESELLER), RESELLER_PRODUCT, noTraffic))).reason).toBe('traffic_quota_required');
     expect((await refusal(() => service.createVariant(actor(RESELLER), RESELLER_PRODUCT, { ...NEW_VARIANT, quotas: {} }))).reason).toBe('traffic_quota_required');
@@ -450,7 +480,7 @@ describe('CatalogAdminService — variants and prices', () => {
       'traffic_quota_required',
     );
     expect(writes.filter((w) => w.startsWith('productVariant') || w.startsWith('price'))).toEqual([]);
-    expect(db.productVariant.rows).toHaveLength(2);
+    expect(db.productVariant.rows).toHaveLength(variants);
   });
 
   it("takes traffic from the product's defaults, accepts 0 as unlimited, and asks none of a metered variant (F-111-p)", async () => {
@@ -1015,5 +1045,91 @@ describe('CatalogAdminService — capabilities are catalog rows (F-114-f-a, ADR-
     expect(audit).toEqual([expect.objectContaining({ action: 'catalog_capability_update', targetEntityType: 'product_capability', targetEntityId: RESELLER_CAPABILITY })]);
     const foreign = catalogTextKey(OTHER, 'capability', 'other.only', 'name');
     expect((await refusal(() => service.publishTextDrafts(actor(RESELLER), { lang: 'de', keys: [foreign] }))).reason).toBe('capability_not_found');
+  });
+});
+
+describe('CatalogAdminService — a seller writes its rate cards (F-118-m, ADR-0105 decisions 3 and 10)', () => {
+  const inCurrency = (db: ReturnType<typeof build>['db']) => {
+    for (const t of db.tenant.rows) t['operatingCurrencyCode'] = t['id'] === RESELLER ? 'IRR' : 'USD';
+  };
+
+  it("writes a new card in the variant's tenant's currency, with the mode picked, and leaves the old one as it was", async () => {
+    const { service, db, writes, audit } = build();
+    inCurrency(db);
+    const before = { ...db.rateCard.rows[1] };
+
+    const card = await service.setRateCard(actor(RESELLER), RESELLER_METERED, { ...NEW_CARD, mode: 'prepaid' });
+
+    expect(card).toMatchObject({ variantId: RESELLER_METERED, meterKey: 'vpn.traffic', unitSize: String(GIB), unitPrice: '0.9', currencyCode: 'IRR', mode: 'prepaid', includedQuantity: '0' });
+    expect(db.rateCard.rows.at(-1)).toMatchObject({ tenantId: RESELLER, unitSize: BigInt(GIB), createdByAdminId: ADMIN });
+    expect(db.rateCard.rows[1]).toEqual(before);
+    expect(writes).not.toContain('rateCard.update');
+    expect(audit.map((a) => [a['action'], a['targetEntityType']])).toEqual([['catalog_rate_card_set', 'rate_card']]);
+  });
+
+  it("answers a platform card as not found to a reseller, to write or to switch off; the platform owner writes it", async () => {
+    const { service, db, writes } = build();
+    inCurrency(db);
+    expect((await refusal(() => service.setRateCard(actor(RESELLER), PLATFORM_METERED, NEW_CARD))).reason).toBe('variant_not_found');
+    expect((await refusal(() => service.deactivateRateCard(actor(RESELLER), PLATFORM_CARD))).reason).toBe('rate_card_not_found');
+    expect((await refusal(() => service.deactivateRateCard(actor(OTHER), RESELLER_CARD))).reason).toBe('rate_card_not_found');
+    expect(writes.filter((w) => w.startsWith('rateCard'))).toEqual([]);
+    await expect(service.setRateCard(actor(OWNER), PLATFORM_METERED, NEW_CARD)).resolves.toMatchObject({ currencyCode: 'USD', mode: 'postpaid' });
+  });
+
+  it('refuses a card no sale would take, and writes nothing', async () => {
+    const { service, db, writes } = build();
+    inCurrency(db);
+    const refused = async (variantId: string, card: Record<string, unknown>) =>
+      (await refusal(() => service.setRateCard(actor(RESELLER), variantId, card as never))).reason;
+    expect(await refused(RESELLER_METERED, { ...NEW_CARD, meterKey: 'api.calls' })).toBe('meter_not_found');
+    // A package plan never reads a card, so one on it would price nothing.
+    expect(await refused(RESELLER_VARIANT, NEW_CARD)).toBe('rate_card_not_served');
+    // Shapes the byte engine does not serve would be the newest card and make the variant unsellable.
+    expect(await refused(RESELLER_METERED, { ...NEW_CARD, unitSize: '1000000000' })).toBe('rate_card_not_served');
+    expect(await refused(RESELLER_METERED, { ...NEW_CARD, includedQuantity: String(GIB) })).toBe('rate_card_not_served');
+    expect(await refused(RESELLER_METERED, { ...NEW_CARD, afterIncluded: 'stop', includedQuantity: String(GIB) })).toBe('rate_card_not_served');
+    expect(writes.filter((w) => w.startsWith('rateCard') || w === 'audit')).toEqual([]);
+  });
+
+  it('switches a card off and never deletes it', async () => {
+    const { service, db, writes, audit } = build();
+    await expect(service.deactivateRateCard(actor(RESELLER), RESELLER_CARD)).resolves.toMatchObject({ id: RESELLER_CARD, isActive: false, unitPrice: '0.8' });
+    expect(db.rateCard.rows).toHaveLength(2);
+    expect(writes.filter((w) => w.startsWith('rateCard.'))).toEqual(['rateCard.update']);
+    expect(audit.map((a) => a['action'])).toEqual(['catalog_rate_card_deactivate']);
+  });
+
+  it('writes a metered variant with its first card from the same instant as its first price, or neither', async () => {
+    const { service, db, writes } = build();
+    inCurrency(db);
+    const metered = { ...NEW_VARIANT, sku: 'VPN-PAYG', billingMode: VariantBillingMode.metered, quotas: {}, rateCard: NEW_CARD };
+
+    const view = await service.createVariant(actor(RESELLER), RESELLER_PRODUCT, metered);
+
+    expect(view.rateCards).toEqual([expect.objectContaining({ mode: 'postpaid', unitPrice: '0.9', currencyCode: 'IRR' })]);
+    expect(db.rateCard.rows.at(-1)?.['effectiveFrom']).toEqual(db.price.rows.at(-1)?.['effectiveFrom']);
+    const count = writes.length;
+    expect((await refusal(() => service.createVariant(actor(RESELLER), RESELLER_PRODUCT, { ...metered, sku: 'VPN-PAYG2', billingMode: VariantBillingMode.prepaid, quotas: TRAFFIC_50G }))).reason).toBe(
+      'rate_card_not_served',
+    );
+    expect(writes.slice(count)).toEqual([]);
+  });
+
+  it('answers every card with its variant', async () => {
+    const { service } = build();
+    const product = await service.getProduct(actor(RESELLER), RESELLER_PRODUCT);
+    expect(product.variants.find((v) => v.id === RESELLER_METERED)?.rateCards.map((c) => c.id)).toEqual([RESELLER_CARD]);
+  });
+
+  it("states the database's checks as 400s naming the field", () => {
+    const issue = (body: unknown) => setRateCardSchema.safeParse(body).error?.issues.map((i) => i.path.join('.'));
+    expect(issue({ ...NEW_CARD, unitPrice: '0' })).toEqual(['unitPrice']);
+    expect(issue({ ...NEW_CARD, afterIncluded: 'stop' })).toEqual(['includedQuantity']);
+    expect(issue({ ...NEW_CARD, unitSize: '0' })).toEqual(['unitSize']);
+    expect(issue({ ...NEW_CARD, unitPrice: '0.123456789' })).toEqual(['unitPrice']);
+    expect(issue({ ...NEW_CARD, currencyCode: 'USD' })).toEqual(['']);
+    expect(setRateCardSchema.safeParse({ ...NEW_CARD, unitPrice: '0.00012345' }).success).toBe(true);
+    expect(createVariantSchema.safeParse({ ...NEW_VARIANT, rateCard: { ...NEW_CARD, unitPrice: '0.00' } }).success).toBe(false);
   });
 });

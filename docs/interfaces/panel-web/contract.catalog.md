@@ -122,6 +122,17 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    shows its owner, the protocols its panels' picked inbounds sell ("no
    inbound ticked" when none, F-114-b), `healthyMembers` and, off `mirror`,
    "not delivered yet". A failed list costs the choices, never the form.
+10e. **A metered variant sells at a rate per GB** (F-118-m over billing's
+   rate-card routes). The new-variant form and the wizard ask a metered
+   variant its mode (`RATE_CARD_MODES`: prepaid, postpaid) and price per GB,
+   sent as `rateCard` in the one shape billing serves (`variantBody`:
+   `vpn.traffic`, 2^30, nothing included, then metered). A metered card shows
+   the rate in effect (`currentRateCard`, billing's `rateCardAt`) with every
+   place it was written in (`rateDecimals`), a new rate by price's rule 5
+   (`validateRateCardForm` / `rateCardBody`), and the history, switchable off
+   (`_components/RateCardSection.tsx`). None in effect reads "not for sale"
+   (`noRate`). The platform's cards are the platform owner's: billing answers
+   a reseller's screen only its own variants.
 10d. **A created product lands on the list, not in its sheet** (F-114-g,
    `afterWizard`): the wizard closes onto the products tab with every filter
    cleared, the new row outlined and the notice offering "open it" — the sheet
@@ -188,7 +199,9 @@ counts in the report (F-026-m); `RESTORE_CATEGORY` against billing's
 `wizardVariantTenant`, `variantBody` by kind, `panelGroupPatch` against
 billing's schema, `notForSale` (F-026-o); `capabilitiesFor`, `suggestCapabilityKey`,
 `validateCapabilityForm` / `capabilityBody`, `canEditCapability` (F-114-f-b);
-`afterWizard` (F-114-g).
+`afterWizard` (F-114-g); `RATE_CARD_MODES` against the Prisma enum,
+`variantBody`'s `rateCard`, `validateRateCardForm` / `rateCardBody`,
+`currentRateCard`, `noRate`, `rateDecimals` (F-118-m).
 
 `my-resellers/catalog.test.ts` (F-066-w8) — `catalogApiPrefix` on both
 surfaces against the controller's own `@Controller`, `surfaceActor` holding a

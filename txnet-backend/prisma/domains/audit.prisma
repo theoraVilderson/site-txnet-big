@@ -73,6 +73,9 @@ enum AdminAction {
   catalog_variant_update
   catalog_price_set
   catalog_price_deactivate
+  // F-118-m. A rate card is history, as a price is.
+  catalog_rate_card_set
+  catalog_rate_card_deactivate
   coupon_batch_deactivate
   campaign_send
   // F-018-q. A stopped campaign is sent again by hand.
@@ -159,6 +162,8 @@ enum AuditTargetType {
   product
   product_variant
   price
+  // F-118-m.
+  rate_card
   notification_campaign
   // F-311-u3. A bulk job by filter, not any one Grant it acted on.
   grant_bulk_job

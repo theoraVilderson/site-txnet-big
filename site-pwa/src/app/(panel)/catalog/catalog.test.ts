@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { Me } from "@/lib/auth-api";
-import type { CatalogCapability, CatalogPrice, PanelGroupOption } from "@/lib/catalog-api";
+import type { CatalogCapability, CatalogPrice, CatalogRateCard, PanelGroupOption } from "@/lib/catalog-api";
 import { PANEL_CATALOG } from "@/lib/routes";
 import { PANEL_MENU, isMenuGroup } from "../_lib/panel-menu";
 import {
@@ -72,6 +72,12 @@ import {
   panelGroupPatch,
   takesPanelGroup,
   wizardVariantTenant,
+  RATE_CARD_MODES,
+  currentRateCard,
+  noRate,
+  rateCardBody,
+  rateDecimals,
+  validateRateCardForm,
 } from "./_lib/catalog-form";
 
 /**
@@ -139,6 +145,7 @@ describe("what billing can refuse, and what it accepts", () => {
     ["FulfilmentKind", "prisma/domains/catalog.prisma", FULFILMENT_KINDS],
     ["QualityTier", "prisma/domains/catalog.prisma", QUALITY_TIERS],
     ["QuotaMetric", "prisma/domains/entitlement.prisma", QUOTA_METRICS],
+    ["RateCardMode", "prisma/domains/catalog.prisma", RATE_CARD_MODES],
   ])("offers exactly the %s enum", (name, file, offered) => {
     expect([...offered].sort()).toEqual(enumOf(file, name).sort());
   });
@@ -748,5 +755,61 @@ describe("every key this page can reach", () => {
   it.each(["en", "fa"])("resolves in %s", (lang) => {
     const keys = shipped(lang);
     expect(flatten(CATALOG_KEYS).filter((k) => !keys.has(k))).toEqual([]);
+  });
+});
+
+describe("a metered variant's rate per GB (F-118-m, ADR-0105 decision 10)", () => {
+  const GIB = String(2 ** 30);
+  const metered = () => ({ ...emptyVariantForm(), sku: "vpn-payg", price: "0", billingMode: "metered" as const, rateMode: "postpaid" as const, ratePerGb: "0.00045" });
+  const card = (id: string, effectiveFrom: string, patch: Partial<CatalogRateCard> = {}): CatalogRateCard => ({
+    id, variantId: "v1", meterKey: "vpn.traffic", unitSize: GIB, unitPrice: "0.5", currencyCode: "USD", mode: "prepaid",
+    includedQuantity: "0", afterIncluded: "metered", effectiveFrom, isActive: true, ...patch,
+  });
+  const NOW = new Date("2026-09-29T12:00:00Z");
+  const TODAY = "2026-09-29";
+
+  it("sends a metered variant with its first card: vpn.traffic per GiB, nothing included, the mode picked — the only shape billing serves", () => {
+    expect(validateVariantForm(metered())).toEqual({});
+    expect(variantBody(metered(), "network_access").rateCard).toEqual({
+      meterKey: "vpn.traffic", unitSize: GIB, unitPrice: "0.00045", mode: "postpaid", afterIncluded: "metered",
+    });
+    // A prepaid variant sends none: a package plan never reads a card, and billing refuses one on it.
+    expect(variantBody({ ...metered(), billingMode: "prepaid" }, "network_access")).not.toHaveProperty("rateCard");
+  });
+
+  it.each(["", "0", "0.000", "-1", "1.123456789", "abc"])("refuses %o as a metered variant's rate", (ratePerGb) => {
+    expect(validateVariantForm({ ...metered(), ratePerGb })).toHaveProperty("ratePerGb");
+  });
+
+  it("asks no rate of a prepaid variant", () => {
+    expect(validateVariantForm({ ...metered(), billingMode: "prepaid", ratePerGb: "", quotas: [] })).toEqual({});
+  });
+
+  it("writes a new card as a price is written: from now, or from a later day's first instant in Tehran; never a day past", () => {
+    expect(rateCardBody({ mode: "prepaid", unitPrice: "0.5", day: "" }, TODAY)).toEqual({
+      meterKey: "vpn.traffic", unitSize: GIB, unitPrice: "0.5", mode: "prepaid", afterIncluded: "metered",
+    });
+    expect(rateCardBody({ mode: "postpaid", unitPrice: "0.5", day: "2026-10-01" }, TODAY)).toMatchObject({ mode: "postpaid", effectiveFrom: "2026-10-01T00:00:00+03:30" });
+    expect(validateRateCardForm({ mode: "prepaid", unitPrice: "0.5", day: "2026-09-28" }, TODAY)).toHaveProperty("day");
+    expect(validateRateCardForm({ mode: "prepaid", unitPrice: "0", day: "" }, TODAY)).toHaveProperty("unitPrice");
+    expect(validateRateCardForm({ mode: "prepaid", unitPrice: "0.5", day: TODAY }, TODAY)).toEqual({});
+  });
+
+  it("shows billing's card in effect: the newest active vpn.traffic one, not a future or switched-off one", () => {
+    const history = [card("c1", "2026-01-01T00:00:00Z"), card("c2", "2026-06-01T00:00:00Z"), card("c3", "2026-09-01T00:00:00Z", { isActive: false }), card("c4", "2026-12-01T00:00:00Z")];
+    expect(currentRateCard(history, NOW)?.id).toBe("c2");
+    expect(currentRateCard([card("c5", "2026-01-01T00:00:00Z", { meterKey: "api.calls" })], NOW)).toBeNull();
+  });
+
+  it("marks a metered variant with no card in effect as not for sale; a prepaid one never", () => {
+    expect(noRate({ billingMode: "metered", rateCards: [] }, NOW)).toBe(true);
+    expect(noRate({ billingMode: "metered", rateCards: [card("c1", "2026-01-01T00:00:00Z")] }, NOW)).toBe(false);
+    expect(noRate({ billingMode: "prepaid", rateCards: [] }, NOW)).toBe(false);
+  });
+
+  it("shows a rate to every place it was written in, never fewer than the currency's own", () => {
+    expect(rateDecimals("0.00045", 2)).toBe(5);
+    expect(rateDecimals("0.5", 2)).toBe(2);
+    expect(rateDecimals("1500", 0)).toBe(0);
   });
 });

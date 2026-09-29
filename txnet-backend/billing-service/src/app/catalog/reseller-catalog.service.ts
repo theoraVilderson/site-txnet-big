@@ -24,10 +24,12 @@ import {
   ListProductsFilter,
   PanelGroupOption,
   PriceView,
+  RateCardView,
   ProductView,
   RemovalOutcome,
   PublishTextsInput,
   SetPriceInput,
+  SetRateCardInput,
   UpdateCapabilityInput,
   UpdateCategoryInput,
   UpdateProductInput,
@@ -188,6 +190,16 @@ export class ResellerCatalogService {
 
   deactivatePrice(actor: ResellerCatalogActor, tenantId: string, priceId: string): Promise<PriceView> {
     return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.deactivatePrice(as, priceId));
+  }
+
+  // ---------------------------------------------------------- rate cards (F-118-m)
+
+  setRateCard(actor: ResellerCatalogActor, tenantId: string, variantId: string, input: SetRateCardInput): Promise<RateCardView> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.setRateCard(as, variantId, input));
+  }
+
+  deactivateRateCard(actor: ResellerCatalogActor, tenantId: string, rateCardId: string): Promise<RateCardView> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.deactivateRateCard(as, rateCardId));
   }
 
   // ------------------------------------------------------------ translations

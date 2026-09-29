@@ -37,6 +37,21 @@ export function rateCardAt<T extends RateCardRow>(cards: readonly T[], at: Date,
 }
 
 /**
+ * Whether the byte engine serves a `vpn.traffic` card of this shape: per 2^30
+ * bytes, nothing included, then metered, in either mode. The one rule a sale
+ * ({@link vpnTrafficRateAt}) and a write (F-118-m: a card nothing would sell
+ * is refused, not stored) both ask.
+ */
+export function servedByBytes(card: Pick<RateCardRow, 'mode' | 'afterIncluded' | 'includedQuantity' | 'unitSize'>): boolean {
+  return (
+    (card.mode === 'prepaid' || card.mode === 'postpaid') &&
+    card.afterIncluded === 'metered' &&
+    card.includedQuantity === BigInt(0) &&
+    card.unitSize === BigInt(METERED_RATE_UNIT_BYTES)
+  );
+}
+
+/**
  * What a metered VPN Grant locks as its `vpn.traffic` meter at issue (ADR-0073, F-118-l): the
  * `vpn.traffic` card in effect, when it is one the byte engine serves — per
  * 2^30 bytes, nothing included, then metered; prepaid (every card
@@ -49,12 +64,6 @@ export function rateCardAt<T extends RateCardRow>(cards: readonly T[], at: Date,
  */
 export function vpnTrafficRateAt(cards: readonly RateCardRow[], at: Date, currencyCode: string): MeteredRateRow | null {
   const card = rateCardAt(cards, at, currencyCode, METER_KEYS.vpnTraffic);
-  if (!card) return null;
-  const servedByBytes =
-    (card.mode === 'prepaid' || card.mode === 'postpaid') &&
-    card.afterIncluded === 'metered' &&
-    card.includedQuantity === BigInt(0) &&
-    card.unitSize === BigInt(METERED_RATE_UNIT_BYTES);
-  if (!servedByBytes) return null;
+  if (!card || !servedByBytes(card)) return null;
   return { id: card.id, rate: card.unitPrice, currencyCode: card.currencyCode, effectiveFrom: card.effectiveFrom, isActive: card.isActive };
 }

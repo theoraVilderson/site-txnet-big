@@ -3,6 +3,7 @@ import type { Me } from "@/lib/auth-api";
 import type {
   BillingMode,
   CatalogPrice,
+  CatalogRateCard,
   CatalogRejection,
   CreateCapabilityBody,
   CreateCategoryBody,
@@ -15,13 +16,16 @@ import type {
   QualityTier,
   QuotaMetric,
   Quotas,
+  RateCardMode,
+  RateCardTerms,
   ResetPolicy,
   SetPriceBody,
+  SetRateCardBody,
   UpdateVariantBody,
   Visibility,
 } from "@/lib/catalog-api";
 
-export { BILLING_MODES, CREATABLE_FULFILMENT_KINDS, FULFILMENT_KINDS, QUALITY_TIERS, RETIRED_FULFILMENT_KINDS, QUOTA_METRICS, RESET_POLICIES, VISIBILITIES } from "@/lib/catalog-api";
+export { BILLING_MODES, CREATABLE_FULFILMENT_KINDS, FULFILMENT_KINDS, QUALITY_TIERS, RATE_CARD_MODES, RETIRED_FULFILMENT_KINDS, QUOTA_METRICS, RESET_POLICIES, VISIBILITIES } from "@/lib/catalog-api";
 
 /** Every string the catalog page can show (C-06). */
 export const CATALOG_KEYS = FrontendI18nKeys.common.catalog;
@@ -56,6 +60,9 @@ export const REFUSAL_KEYS: Record<CatalogRejection, string> = {
   capability_unknown: CATALOG_KEYS.refusals.capability_unknown,
   capability_in_use: CATALOG_KEYS.refusals.capability_in_use,
   traffic_quota_required: CATALOG_KEYS.refusals.traffic_quota_required,
+  meter_not_found: CATALOG_KEYS.refusals.meter_not_found,
+  rate_card_not_found: CATALOG_KEYS.refusals.rate_card_not_found,
+  rate_card_not_served: CATALOG_KEYS.refusals.rate_card_not_served,
 };
 
 /** The refusal's own sentence key, when billing named one this page knows. */
@@ -481,6 +488,9 @@ export interface VariantForm {
   quotas: QuotaRow[];
   /** A `network_access` variant's panel group; blank = none, and not for sale (F-026-o). */
   panelGroupId: string;
+  /** A metered variant's first card (F-118-m): how its traffic is paid, and the price per GB. */
+  rateMode: RateCardMode;
+  ratePerGb: string;
 }
 
 export const emptyVariantForm = (): VariantForm => ({
@@ -492,6 +502,8 @@ export const emptyVariantForm = (): VariantForm => ({
   price: "",
   quotas: [],
   panelGroupId: "",
+  rateMode: "prepaid",
+  ratePerGb: "",
 });
 
 export function validateVariantForm(f: VariantForm): Errors<VariantForm> {
@@ -504,6 +516,7 @@ export function validateVariantForm(f: VariantForm): Errors<VariantForm> {
   }
   if (f.quotas.some((q) => !WHOLE.test(q.limit.trim()))) errors.quotas = E.quota;
   else if (new Set(f.quotas.map((q) => q.metric)).size !== f.quotas.length) errors.quotas = E.quotaRepeat;
+  if (f.billingMode === "metered" && !isUnitPrice(f.ratePerGb)) errors.ratePerGb = E.unitPrice;
   return errors;
 }
 
@@ -536,6 +549,7 @@ export function variantBody(f: VariantForm, kind: FulfilmentKind): CreateVariant
     price: f.price.trim(),
     ...(f.quotas.length ? { quotas: quotasOf(f.quotas) } : {}),
     ...(takesPanelGroup(kind) && group ? { panelGroupId: group } : {}),
+    ...(f.billingMode === "metered" ? { rateCard: perGbCard(f.rateMode, f.ratePerGb) } : {}),
   };
 }
 
@@ -703,6 +717,64 @@ export function currentPrice(prices: readonly CatalogPrice[], now: Date = new Da
   }
   return best;
 }
+
+// ------------------------------------------------------------ rate (F-118-m)
+
+/** The one meter a card prices today, and the one shape billing serves on it (`servedByBytes`, F-118-m). */
+export const VPN_TRAFFIC = "vpn.traffic";
+const GIB_UNIT = String(GIB);
+
+/** `Decimal(18, 8)` above zero: billing's `rate_card_metered_price_positive`. */
+const UNIT_PRICE = /^(0|[1-9]\d{0,9})(\.\d{1,8})?$/;
+const isUnitPrice = (v: string) => UNIT_PRICE.test(v.trim()) && /[1-9]/.test(v);
+
+/** Per GiB, nothing included, then metered — any other `vpn.traffic` card billing refuses `rate_card_not_served`. */
+const perGbCard = (mode: RateCardMode, price: string): RateCardTerms => ({
+  meterKey: VPN_TRAFFIC,
+  unitSize: GIB_UNIT,
+  unitPrice: price.trim(),
+  mode,
+  afterIncluded: "metered",
+});
+
+export interface RateCardForm {
+  mode: RateCardMode;
+  unitPrice: string;
+  /** `YYYY-MM-DD`, Tehran's day; blank = from now — a price's rule. */
+  day: string;
+}
+
+export function validateRateCardForm(f: RateCardForm, today: string): Errors<RateCardForm> {
+  const errors: Errors<RateCardForm> = {};
+  if (!isUnitPrice(f.unitPrice)) errors.unitPrice = E.unitPrice;
+  if (!blank(f.day) && f.day < today) errors.day = E.pastDay;
+  return errors;
+}
+
+/** A new card, from now or a later day's first Tehran instant, as {@link priceBody}. */
+export function rateCardBody(f: RateCardForm, today: string): SetRateCardBody {
+  const card = perGbCard(f.mode, f.unitPrice);
+  return blank(f.day) || f.day <= today ? card : { ...card, effectiveFrom: `${f.day}T00:00:00${TEHRAN_OFFSET}` };
+}
+
+/** Billing's `rateCardAt` for `vpn.traffic`: the newest active card already in effect at `now`, or none. */
+export function currentRateCard(cards: readonly CatalogRateCard[], now: Date = new Date()): CatalogRateCard | null {
+  let best: CatalogRateCard | null = null;
+  for (const c of cards) {
+    const at = new Date(c.effectiveFrom).getTime();
+    if (c.meterKey !== VPN_TRAFFIC || !c.isActive || at > now.getTime()) continue;
+    if (!best || at > new Date(best.effectiveFrom).getTime()) best = c;
+  }
+  return best;
+}
+
+/** A metered variant with no card in effect is refused at sale (`metered_rate_missing`). */
+export const noRate = (v: { billingMode: BillingMode; rateCards: readonly CatalogRateCard[] }, now: Date = new Date()) =>
+  v.billingMode === "metered" && currentRateCard(v.rateCards, now) === null;
+
+/** A rate's places: all it was written with, never fewer than its currency shows — 0.00045 is not 0.00. */
+export const rateDecimals = (unitPrice: string, currencyDecimals: number) =>
+  Math.max(currencyDecimals, (unitPrice.split(".")[1] ?? "").replace(/0+$/, "").length);
 
 // ------------------------------------------------------------------ removal
 

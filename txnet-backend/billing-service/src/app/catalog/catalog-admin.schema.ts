@@ -1,4 +1,4 @@
-import { FulfilmentKind, QualityTier, QuotaMetric, VariantBillingMode, VariantVisibility } from '@prisma/client';
+import { FulfilmentKind, QualityTier, QuotaMetric, RateCardAfterIncluded, RateCardMode, VariantBillingMode, VariantVisibility } from '@prisma/client';
 import { z } from 'zod';
 
 /**
@@ -189,6 +189,38 @@ const variantFields = {
   qualityTier: z.nativeEnum(QualityTier).optional(),
 };
 
+/** `Decimal(18, 8)`: at most 10 whole digits and 8 places — a GiB can cost a fraction of a cent. */
+const UNIT_PRICE = /^(0|[1-9]\d{0,9})(\.\d{1,8})?$/;
+/** A quantity in the meter's unit, as a string: bytes pass 2^53. */
+const QUANTITY = /^(0|[1-9]\d{0,18})$/;
+const quantity = (what: string) => z.string({ message: `${what} must be a whole number string` }).regex(QUANTITY, { message: `${what} must be a whole number string` });
+
+/**
+ * A rate card's terms (F-118-m, ADR-0105 decision 3). The database's CHECKs,
+ * stated here so a client gets a 400 naming the field rather than a 500: a
+ * unit of at least one, a metered unit priced above zero, a `stop` card that
+ * includes some. Whether anything **serves** the card is the service's
+ * (`rate_card_not_served`).
+ */
+const rateCardTerms = z
+  .object({
+    meterKey: z.string().min(1).max(100),
+    unitSize: quantity('unitSize').refine((v) => v !== '0', { message: 'unitSize is at least 1' }),
+    unitPrice: z.string({ message: 'unitPrice must be a decimal string' }).regex(UNIT_PRICE, { message: 'unitPrice must be a decimal string' }),
+    mode: z.nativeEnum(RateCardMode),
+    includedQuantity: quantity('includedQuantity').optional(),
+    afterIncluded: z.nativeEnum(RateCardAfterIncluded),
+  })
+  .strict();
+const holdsTheChecks = (c: z.infer<typeof rateCardTerms>, ctx: z.RefinementCtx) => {
+  if (c.afterIncluded === RateCardAfterIncluded.metered && !/[1-9]/.test(c.unitPrice)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['unitPrice'], message: 'a metered unit costs more than zero' });
+  }
+  if (c.afterIncluded === RateCardAfterIncluded.stop && !/[1-9]/.test(c.includedQuantity ?? '0')) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['includedQuantity'], message: 'a card that stops includes some' });
+  }
+};
+
 export const createVariantSchema = z
   .object({
     ...variantFields,
@@ -197,8 +229,16 @@ export const createVariantSchema = z
     visibility: z.nativeEnum(VariantVisibility),
     price: decimal('price'),
     effectiveFrom: instant('effectiveFrom').optional(),
+    /** A metered variant's first card (F-118-m), from the variant's `effectiveFrom`. */
+    rateCard: rateCardTerms.superRefine(holdsTheChecks).optional(),
   })
   .strict();
+
+/** A new card for one meter on a variant; the old one stays as it was (F-118-m). */
+export const setRateCardSchema = rateCardTerms
+  .extend({ effectiveFrom: instant('effectiveFrom').optional() })
+  .strict()
+  .superRefine(holdsTheChecks);
 
 export const updateVariantSchema = z.object({ ...variantFields, isActive: z.boolean().optional() }).strict();
 
@@ -237,6 +277,7 @@ export type RemoveCategoriesBody = z.infer<typeof removeCategoriesSchema>;
 export type CreateVariantBody = z.infer<typeof createVariantSchema>;
 export type UpdateVariantBody = z.infer<typeof updateVariantSchema>;
 export type SetPriceBody = z.infer<typeof setPriceSchema>;
+export type SetRateCardBody = z.infer<typeof setRateCardSchema>;
 export type ListTextDraftsQuery = z.infer<typeof listTextDraftsSchema>;
 export type PublishTextsBody = z.infer<typeof publishTextsSchema>;
 export type EditTextsBody = z.infer<typeof editTextsSchema>;

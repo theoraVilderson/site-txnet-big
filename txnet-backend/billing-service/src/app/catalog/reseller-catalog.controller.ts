@@ -36,6 +36,7 @@ import {
   ListCategoriesQuery,
   RemoveProductsBody,
   SetPriceBody,
+  SetRateCardBody,
   UpdateCapabilityBody,
   UpdateCategoryBody,
   UpdateProductBody,
@@ -52,6 +53,7 @@ import {
   listCategoriesSchema,
   removeProductsSchema,
   setPriceSchema,
+  setRateCardSchema,
   updateCapabilitySchema,
   updateCategorySchema,
   updateProductSchema,
@@ -62,6 +64,7 @@ import {
   EditTextsInput,
   PublishTextsInput,
   SetPriceInput,
+  SetRateCardInput,
   UpdateCapabilityInput,
   UpdateCategoryInput,
   UpdateProductInput,
@@ -105,6 +108,9 @@ const STATUS: Record<ResellerCatalogRejection, 400 | 403 | 404 | 409 | 503> = {
   capability_unknown: 400,
   capability_in_use: 409,
   traffic_quota_required: 400,
+  meter_not_found: 404,
+  rate_card_not_found: 404,
+  rate_card_not_served: 400,
 };
 
 /**
@@ -336,6 +342,31 @@ export class ResellerCatalogController {
     @Ip() ip: string,
   ) {
     return this.refusing(() => this.catalog.deactivatePrice(this.actor(req, ip), tenantId, id));
+  }
+
+  @Post('variants/:id/rate-cards')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit(WRITE)
+  async setRateCard(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(setRateCardSchema)) body: SetRateCardBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return this.refusing(() => this.catalog.setRateCard(this.actor(req, ip), tenantId, id, body as SetRateCardInput));
+  }
+
+  @Post('rate-cards/:id/deactivate')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  async deactivateRateCard(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return this.refusing(() => this.catalog.deactivateRateCard(this.actor(req, ip), tenantId, id));
   }
 
   // ---------------------------------------------------- translations (F-1533-d)

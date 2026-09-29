@@ -1363,7 +1363,8 @@
       "duration": "A whole number of days from 1 to 3650",
       "quota": "Each limit is a whole number",
       "quotaRepeat": "Each metric once",
-      "pastDay": "A price cannot start on a day already past"
+      "pastDay": "A price cannot start on a day already past",
+      "unitPrice": "A price per GB above zero, like 0.5 or 0.00012 (up to 8 decimals)"
     },
     "refusals": {
       "not_platform_owner": "Only the platform owner manages the platform's or another tenant's catalog.",
@@ -1385,7 +1386,10 @@
       "capability_not_found": "That capability was not found, or is not yours to change.",
       "capability_unknown": "A capability picked is not on this product's list — the platform's or its own tenant's. Pick again.",
       "capability_in_use": "A product or a service already sold carries this capability, so it stays. Take it off those products first; a sold one keeps it.",
-      "traffic_quota_required": "A network variant must state its traffic. Add a traffic limit in GB; 0 means unlimited."
+      "traffic_quota_required": "A network variant must state its traffic. Add a traffic limit in GB; 0 means unlimited.",
+      "meter_not_found": "That meter does not exist. Reload the page and try again.",
+      "rate_card_not_found": "That rate was not found. It may belong to the platform, which only the platform owner can change.",
+      "rate_card_not_served": "Nothing would sell at this rate: a per-GB rate is only for a metered variant, charged per GB with nothing included."
     },
     "rename": "Edit names",
     "translations": {
@@ -1552,6 +1556,20 @@
       "restore": "Restore",
       "archivedEmpty": "No archived products.",
       "archivedHint": "These products were sold, so they are not deleted: they are not on sale and not in the list, but their buyers keep their service. Restore brings one back to the list, switched off."
+    },
+    "rateCard": {
+      "title": "Rate per GB of traffic",
+      "mode": "How it is paid",
+      "modes": {
+        "prepaid": "Prepaid — bought from the wallet before use",
+        "postpaid": "Postpaid — money held, charged after use"
+      },
+      "modeHint": "Prepaid buys traffic in blocks before it is used. Postpaid holds money in the buyer's wallet and charges what was used.",
+      "perGb": "Price per GB",
+      "perGbShown": "{{price}} per GB",
+      "none": "No rate in effect — not for sale",
+      "newRate": "New rate",
+      "history": "Rate history"
     }
   },
   "settings": {
@@ -2013,7 +2031,10 @@
       "capability_not_found": "That capability was not found, or is the platform's and not this reseller's to change.",
       "capability_unknown": "A capability picked is not on this reseller's list — the platform's or its own. Pick again.",
       "capability_in_use": "A product or a service already sold carries this capability, so it stays. Take it off those products first; a sold one keeps it.",
-      "traffic_quota_required": "A network variant must state its traffic. Add a traffic limit in GB; 0 means unlimited."
+      "traffic_quota_required": "A network variant must state its traffic. Add a traffic limit in GB; 0 means unlimited.",
+      "meter_not_found": "That meter does not exist. Reload the page and try again.",
+      "rate_card_not_found": "That rate was not found. It may belong to the platform, which only the platform owner can change.",
+      "rate_card_not_served": "Nothing would sell at this rate: a per-GB rate is only for a metered variant, charged per GB with nothing included."
     }
   },
   "resellerBots": {

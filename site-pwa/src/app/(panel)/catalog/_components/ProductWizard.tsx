@@ -52,6 +52,8 @@ const REFUSAL_STEP: Record<string, WizardStep> = {
   capability_unknown: "access",
   sku_taken: "variant",
   traffic_quota_required: "variant",
+  rate_card_not_served: "variant",
+  meter_not_found: "variant",
 };
 
 /**

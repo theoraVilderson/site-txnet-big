@@ -23,6 +23,7 @@ import {
   surfaceActor,
   emptyVariantForm,
   groupsForVariant,
+  noRate,
   notForSale,
   panelGroupPatch,
   takesPanelGroup,
@@ -39,6 +40,7 @@ import {
   type VariantForm,
 } from "../_lib/catalog-form";
 import { CapabilityPicker } from "./CapabilityPicker";
+import { FirstRateFields, RateCardSection } from "./RateCardSection";
 import { ProductCategories } from "./CategoryPickers";
 import { Alert, CopyId, Field, Sheet, input, primaryButton, quietButton, useMessage } from "./catalog-ui";
 
@@ -309,6 +311,7 @@ function VariantCard({
             {!v.isActive && ` · ${t("common", K.inactive)}`}
           </p>
           {notForSale(v, kind) && <p className="mt-1 text-[11px] font-bold text-error">{t("common", K.variant.notForSale)}</p>}
+          {noRate(v, now) && <p className="mt-1 text-[11px] font-bold text-error">{t("common", K.rateCard.none)}</p>}
         </div>
         <div className="flex flex-wrap items-center gap-1">
           <span className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-xs font-bold text-primary">
@@ -325,6 +328,8 @@ function VariantCard({
       {takesPanelGroup(kind) && (
         <PanelGroupSelect value={v.panelGroupId ?? ""} groups={groups} onChange={(id) => void act(() => api.updateVariant(v.id, panelGroupPatch(id)))} />
       )}
+
+      {v.billingMode === "metered" && <RateCardSection variant={v} act={act} />}
 
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
         <Field label={t("common", K.price.amount)} error={errors.amount}>
@@ -476,6 +481,15 @@ export function VariantFields({
         <ChevronDown size={14} className={advanced ? "rotate-180" : ""} aria-hidden />
         {t("common", K.wizard.advanced)}
       </button>
+      {form.billingMode === "metered" && (
+        <FirstRateFields
+          mode={form.rateMode}
+          price={form.ratePerGb}
+          error={errors.ratePerGb}
+          onMode={(m) => set("rateMode", m)}
+          onPrice={(p) => set("ratePerGb", p)}
+        />
+      )}
       {advanced && (
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label={t("common", K.variant.billingMode)} hint={t("common", K.variantHint.billingMode)}>

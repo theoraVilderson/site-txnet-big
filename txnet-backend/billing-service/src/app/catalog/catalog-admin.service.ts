@@ -1,7 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigProtocol, FulfilmentKind, PanelGroupStrategy, Prisma, QualityTier, TenantType, VariantBillingMode, VariantVisibility } from '@prisma/client';
+import {
+  ConfigProtocol,
+  FulfilmentKind,
+  PanelGroupStrategy,
+  Prisma,
+  QualityTier,
+  RateCardAfterIncluded,
+  RateCardMode,
+  TenantType,
+  VariantBillingMode,
+  VariantVisibility,
+} from '@prisma/client';
 
-import { CATEGORY_MAX_DEPTH, operatingCurrencyOf, platformCurrencyOf, tenantTransaction } from '@txnet-backend/shared-core';
+import { CATEGORY_MAX_DEPTH, METER_KEYS, operatingCurrencyOf, platformCurrencyOf, servedByBytes, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -53,6 +64,16 @@ import { mustStateTraffic, trafficQuotaOf } from './traffic-quota';
  * and it is deleted only while no product and no Grant holds it
  * (`capability_in_use`). The check and the delete lock the capability rows, so
  * neither can slip past the other.
+ *
+ * **A rate card is history too** (F-118-m, ADR-0105 decisions 3 and 10): a
+ * seller prices a platform meter on its own variant — mode, unit price, in its
+ * operating currency — as a new row, and switches one off; the platform's
+ * cards are the platform owner's, so a reseller finds them *not found* as it
+ * finds the platform's variant. A card nothing would sell is refused rather
+ * than stored (`rate_card_not_served`): today that is a `vpn.traffic` card on
+ * a metered variant in the shape the byte engine serves, and no other meter
+ * until its door exists (F-118-h). Stored, it would be the newest card and
+ * make the variant unsellable (`grantMetersFromVariant`).
  */
 
 export type CatalogActor = { adminId: string; tenantId: string; ip: string };
@@ -79,7 +100,12 @@ export type CatalogAdminRejection =
   | 'capability_unknown'
   | 'capability_in_use'
   /** A prepaid network variant with no `traffic_bytes` quota (F-111-p): 0 is unlimited, absent is refused. */
-  | 'traffic_quota_required';
+  | 'traffic_quota_required'
+  /** F-118-m: a card names a meter the registry does not have. */
+  | 'meter_not_found'
+  | 'rate_card_not_found'
+  /** F-118-m: a card no sale would take — see the class comment. */
+  | 'rate_card_not_served';
 
 /** One group a variant may name (F-026-p). */
 export type PanelGroupOption = {
@@ -147,6 +173,18 @@ export type VariantFields = {
   panelGroupId?: string | null;
   qualityTier?: QualityTier;
 };
+/** A rate card's terms (F-118-m). Quantities are strings in the meter's unit: bytes pass 2^53. */
+export type RateCardTerms = {
+  meterKey: string;
+  unitSize: string;
+  /** Per `unitSize`, in the variant's tenant's operating currency (C-02). */
+  unitPrice: string;
+  mode: RateCardMode;
+  /** Absent: nothing included. */
+  includedQuantity?: string;
+  afterIncluded: RateCardAfterIncluded;
+};
+export type SetRateCardInput = RateCardTerms & { effectiveFrom?: string };
 export type CreateVariantInput = VariantFields & {
   sku: string;
   billingMode: VariantBillingMode;
@@ -154,6 +192,8 @@ export type CreateVariantInput = VariantFields & {
   /** The first price, base currency (C-02). */
   price: string;
   effectiveFrom?: string;
+  /** A metered variant's first card, from the same instant as its first price (F-118-m). */
+  rateCard?: RateCardTerms;
 };
 export type UpdateVariantInput = VariantFields & { isActive?: boolean };
 export type SetPriceInput = { amount: string; effectiveFrom?: string };
@@ -177,6 +217,20 @@ export type PublishTextsInput = { lang: string; keys: string[] };
 export type EditTextsInput = { lang: string; texts: Record<string, string> };
 
 export type PriceView = { id: string; variantId: string; amount: string; currencyCode: string; effectiveFrom: Date; isActive: boolean };
+/** A rate card as the routes answer it (F-118-m); quantities as strings — JSON has no BigInt. */
+export type RateCardView = {
+  id: string;
+  variantId: string;
+  meterKey: string;
+  unitSize: string;
+  unitPrice: string;
+  currencyCode: string;
+  mode: RateCardMode;
+  includedQuantity: string;
+  afterIncluded: RateCardAfterIncluded;
+  effectiveFrom: Date;
+  isActive: boolean;
+};
 export type CategoryView = {
   id: string;
   tenantId: string | null;
@@ -231,6 +285,8 @@ export type VariantView = {
   isActive: boolean;
   /** Newest `effectiveFrom` first. */
   prices: PriceView[];
+  /** Every meter's card history, newest `effectiveFrom` first (F-118-m). */
+  rateCards: RateCardView[];
 };
 
 type Row = Record<string, unknown>;
@@ -309,7 +365,23 @@ const priceView = (r: Row): PriceView => ({
   isActive: r['isActive'] as boolean,
 });
 
-const variantView = (r: Row, prices: Row[]): VariantView => ({
+const rateCardView = (r: Row): RateCardView => ({
+  id: r['id'] as string,
+  variantId: r['variantId'] as string,
+  meterKey: r['meterKey'] as string,
+  unitSize: String(r['unitSize']),
+  unitPrice: new Prisma.Decimal(r['unitPrice'] as Prisma.Decimal.Value).toString(),
+  currencyCode: r['currencyCode'] as string,
+  mode: r['mode'] as RateCardMode,
+  includedQuantity: String(r['includedQuantity'] ?? 0),
+  afterIncluded: r['afterIncluded'] as RateCardAfterIncluded,
+  effectiveFrom: r['effectiveFrom'] as Date,
+  isActive: r['isActive'] as boolean,
+});
+
+const newestFirst = <T extends { effectiveFrom: Date }>(rows: T[]) => rows.sort((a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime());
+
+const variantView = (r: Row, prices: Row[], cards: Row[] = []): VariantView => ({
   id: r['id'] as string,
   tenantId: (r['tenantId'] as string | null) ?? null,
   productId: r['productId'] as string,
@@ -322,9 +394,8 @@ const variantView = (r: Row, prices: Row[]): VariantView => ({
   panelGroupId: (r['panelGroupId'] as string | null) ?? null,
   qualityTier: r['qualityTier'] as QualityTier,
   isActive: r['isActive'] as boolean,
-  prices: prices
-    .map(priceView)
-    .sort((a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime()),
+  prices: newestFirst(prices.map(priceView)),
+  rateCards: newestFirst(cards.map(rateCardView)),
 });
 
 /** The row a text key names, and how a review of it is refused and audited. */
@@ -751,7 +822,7 @@ export class CatalogAdminService {
     });
   }
 
-  /** A product with its variants and each variant's whole price history. */
+  /** A product with its variants and each variant's whole price and rate card history. */
   async getProduct(actor: CatalogActor, id: string): Promise<ProductView & { variants: VariantView[] }> {
     const { owner } = await this.access(actor);
     return this.within(owner, async (db) => {
@@ -759,7 +830,9 @@ export class CatalogAdminService {
       const variants = (await db.productVariant.findMany({ where: { productId: id }, orderBy: { sku: 'asc' } })) as unknown as Row[];
       const withPrices: VariantView[] = [];
       for (const v of variants) {
-        withPrices.push(variantView(v, (await db.price.findMany({ where: { variantId: v['id'] as string } })) as unknown as Row[]));
+        const variantId = v['id'] as string;
+        const prices = (await db.price.findMany({ where: { variantId } })) as unknown as Row[];
+        withPrices.push(variantView(v, prices, (await db.rateCard.findMany({ where: { variantId } })) as unknown as Row[]));
       }
       const categories = await this.categoryIdsOf(db, [id]);
       return { ...productView(product, this.texts.defaultLanguage(), categories.get(id) ?? []), variants: withPrices };
@@ -940,6 +1013,7 @@ export class CatalogAdminService {
       await this.usableGroup(tx, input.panelGroupId, tenantId);
       const quotas = input.quotas ?? product['defaultQuotas'] ?? {};
       this.refuseUnstatedTraffic(product['fulfilmentKind'] as FulfilmentKind, input.billingMode, quotas, input.sku);
+      if (input.rateCard) await this.refuseUnserved(tx, input.billingMode, input.rateCard);
       const variant = (await this.refuseDuplicate('sku_taken', input.sku, () =>
         tx.productVariant.create({
           data: {
@@ -966,7 +1040,10 @@ export class CatalogAdminService {
           createdByAdminId: actor.adminId,
         },
       })) as unknown as Row;
-      const view = variantView(variant, [price]);
+      const card = input.rateCard
+        ? await this.writeRateCard(tx, actor, tenantId, variant['id'] as string, input.rateCard, effectiveFrom)
+        : null;
+      const view = variantView(variant, [price], card ? [card] : []);
       await this.audit(tx, actor, tenantId, 'catalog_variant_create', 'product_variant', view.id, null, view);
       return view;
     });
@@ -995,8 +1072,13 @@ export class CatalogAdminService {
       };
       const row = (await tx.productVariant.update({ where: { id }, data })) as unknown as Row;
       const prices = (await tx.price.findMany({ where: { variantId: id } })) as unknown as Row[];
-      const view = variantView(row, prices);
-      await this.audit(tx, actor, view.tenantId, 'catalog_variant_update', 'product_variant', id, variantView(before, []), { ...view, prices: undefined });
+      const cards = (await tx.rateCard.findMany({ where: { variantId: id } })) as unknown as Row[];
+      const view = variantView(row, prices, cards);
+      await this.audit(tx, actor, view.tenantId, 'catalog_variant_update', 'product_variant', id, variantView(before, []), {
+        ...view,
+        prices: undefined,
+        rateCards: undefined,
+      });
       return view;
     });
   }
@@ -1035,6 +1117,86 @@ export class CatalogAdminService {
       await this.audit(tx, actor, (before['tenantId'] as string | null) ?? null, 'catalog_price_deactivate', 'price', priceId, priceView(before), view);
       return view;
     });
+  }
+
+  // ---------------------------------------------------------------- rate cards
+
+  /**
+   * A new card for one meter on a variant the caller manages, from
+   * `effectiveFrom` (default now) on; the old card is never touched. A
+   * platform variant's card is the platform owner's alone — to anyone else the
+   * variant is not found (ADR-0105 decision 10).
+   */
+  async setRateCard(actor: CatalogActor, variantId: string, input: SetRateCardInput): Promise<RateCardView> {
+    const { owner } = await this.access(actor);
+    const effectiveFrom = this.effectiveFrom(input.effectiveFrom);
+    return this.within(owner, async (tx) => {
+      const variant = await this.managed(tx, 'productVariant', 'variant_not_found', actor, variantId, owner);
+      await this.refuseUnserved(tx, variant['billingMode'] as VariantBillingMode, input);
+      const tenantId = (variant['tenantId'] as string | null) ?? null;
+      return rateCardView(await this.writeRateCard(tx, actor, tenantId, variantId, input, effectiveFrom));
+    });
+  }
+
+  /** Switches a card off. The row stays: a Grant sold under it locked its terms from it. */
+  async deactivateRateCard(actor: CatalogActor, rateCardId: string): Promise<RateCardView> {
+    const { owner } = await this.access(actor);
+    return this.within(owner, async (tx) => {
+      const before = await this.managed(tx, 'rateCard', 'rate_card_not_found', actor, rateCardId, owner);
+      const view = rateCardView((await tx.rateCard.update({ where: { id: rateCardId }, data: { isActive: false } })) as unknown as Row);
+      await this.audit(tx, actor, (before['tenantId'] as string | null) ?? null, 'catalog_rate_card_deactivate', 'rate_card', rateCardId, rateCardView(before), view);
+      return view;
+    });
+  }
+
+  /**
+   * A card on a meter that exists, which a sale would take (class comment):
+   * `vpn.traffic` on a metered variant, in the byte engine's shape. Any other
+   * meter has nothing that refuses unfunded use yet (F-118-h), and issue
+   * would refuse the variant `meter_not_served`.
+   */
+  private async refuseUnserved(db: Prisma.TransactionClient, billingMode: VariantBillingMode, card: RateCardTerms): Promise<void> {
+    const meter = await db.meter.findUnique({ where: { key: card.meterKey }, select: { key: true } });
+    if (!meter) throw new CatalogAdminRefused('meter_not_found', card.meterKey);
+    const served =
+      card.meterKey === METER_KEYS.vpnTraffic &&
+      billingMode === VariantBillingMode.metered &&
+      servedByBytes({
+        mode: card.mode,
+        afterIncluded: card.afterIncluded,
+        unitSize: BigInt(card.unitSize),
+        includedQuantity: BigInt(card.includedQuantity ?? '0'),
+      });
+    if (!served) throw new CatalogAdminRefused('rate_card_not_served', card.meterKey);
+  }
+
+  /** The card row, in its tenant's operating currency as a price is (F-116-d), and its audit row. */
+  private async writeRateCard(
+    tx: Prisma.TransactionClient,
+    actor: CatalogActor,
+    tenantId: string | null,
+    variantId: string,
+    card: RateCardTerms,
+    effectiveFrom: Date,
+  ): Promise<Row> {
+    const row = (await tx.rateCard.create({
+      data: {
+        tenantId,
+        variantId,
+        meterKey: card.meterKey,
+        unitSize: BigInt(card.unitSize),
+        unitPrice: new Prisma.Decimal(card.unitPrice),
+        currencyCode: await pricingCurrencyOf(tx, tenantId),
+        mode: card.mode,
+        includedQuantity: BigInt(card.includedQuantity ?? '0'),
+        afterIncluded: card.afterIncluded,
+        effectiveFrom,
+        createdByAdminId: actor.adminId,
+      },
+    })) as unknown as Row;
+    const view = rateCardView(row);
+    await this.audit(tx, actor, tenantId, 'catalog_rate_card_set', 'rate_card', view.id, null, view);
+    return row;
   }
 
   // ------------------------------------------------------------------- helpers
@@ -1230,7 +1392,7 @@ export class CatalogAdminService {
   /** A row the caller may manage, or the table's own *not found* — another tenant's and the platform's alike. */
   private async managed(
     db: Prisma.TransactionClient,
-    model: 'productCategory' | 'product' | 'productCapability' | 'productVariant' | 'price',
+    model: 'productCategory' | 'product' | 'productCapability' | 'productVariant' | 'price' | 'rateCard',
     missing: CatalogAdminRejection,
     actor: CatalogActor,
     id: string,
