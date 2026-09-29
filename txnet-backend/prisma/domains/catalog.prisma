@@ -104,6 +104,40 @@ model ProductCapability {
   @@schema("catalog")
 }
 
+/// What a meter counts (F-118-c, ADR-0105). `METER_UNITS` in shared-core
+/// mirrors it; a rate card's `unitSize` is in this unit.
+enum MeterUnit {
+  bytes
+  count
+  seconds
+  tokens
+
+  @@schema("catalog")
+}
+
+/// What is counted and billed on use (F-118-c, ADR-0105 decision 2): the
+/// registry a rate card prices. Platform rows only, shaped like
+/// `ProductCapability` (ADR-0086) but with no tenant: a meter exists only where
+/// code reports it, so a migration writes it and no service role may insert,
+/// update or delete one. `key` and `unit` never change (`meter_is_immutable`):
+/// rate cards and Grants hold them. Keys in code: `METER_KEYS` (shared-core).
+model Meter {
+  id             String    @id @default(uuid()) @db.Uuid
+  /// `vpn.traffic`. Immutable.
+  key            String    @unique
+  /// Immutable.
+  unit           MeterUnit
+  /// The service whose code reports this meter's usage, e.g. `network-service`.
+  reportedBy     String
+  /// `catalog.meter.<key>.name` in the `catalog` namespace (ADR-0050).
+  nameKey        String
+  descriptionKey String?
+  createdAt      DateTime  @default(now())
+
+  @@map("meter")
+  @@schema("catalog")
+}
+
 /// The marketing object (§4.2). Name and description are i18n keys (§4.3).
 model Product {
   id             String         @id @default(uuid()) @db.Uuid

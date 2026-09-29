@@ -14,7 +14,7 @@
  *   npm run test:int
  */
 import { Prisma, PrismaClient } from '@prisma/client';
-import { runWithTenant, tenantTransaction, withTenant } from '@txnet-backend/shared-core';
+import { METER_KEYS, runWithTenant, tenantTransaction, withTenant } from '@txnet-backend/shared-core';
 
 import {
   HARNESS_TIMEOUT_MS,
@@ -292,5 +292,26 @@ describe('capabilities are catalog rows (F-114-f-a, ADR-0086)', () => {
     const id = (await owner.productCapability.findFirstOrThrow({ where: { tenantId: RESELLER_A, key: 'alpha.extra' } })).id;
     const held = await runWithTenant({ id: RESELLER_A }, () => service.removeCapability(as, id)).catch((e: unknown) => e);
     expect((held as CatalogAdminRefused).reason).toBe('capability_in_use');
+  });
+});
+
+describe('meters are platform catalog rows (F-118-c, ADR-0105 decision 2)', () => {
+  it('holds vpn.traffic, counted in bytes and reported by network-service, readable by every tenant', async () => {
+    const seen = await asTenant(RESELLER_A, (tx) => tx.meter.findMany({ select: { key: true, unit: true, reportedBy: true, nameKey: true } }));
+    expect(seen).toContainEqual({ key: METER_KEYS.vpnTraffic, unit: 'bytes', reportedBy: 'network-service', nameKey: 'catalog.meter.vpn.traffic.name' });
+  });
+
+  it('is written only by a migration: no service role inserts, updates or deletes one', async () => {
+    const row = { key: 'sms.sent', unit: 'count' as const, reportedBy: 'notification-service', nameKey: 'catalog.meter.sms.sent.name' };
+    await expect(asTenant(PLATFORM, (tx) => tx.meter.create({ data: row }))).rejects.toThrow(/permission denied/);
+    await expect(cross.meter.create({ data: row })).rejects.toThrow(/permission denied/);
+    await expect(cross.meter.updateMany({ where: { key: METER_KEYS.vpnTraffic }, data: { reportedBy: 'x' } })).rejects.toThrow(/permission denied/);
+    await expect(cross.meter.deleteMany({ where: { key: METER_KEYS.vpnTraffic } })).rejects.toThrow(/permission denied/);
+  });
+
+  it('never changes its key or its unit, even for the owner — a rate card and a Grant hold them', async () => {
+    await expect(owner.$executeRawUnsafe(`UPDATE catalog.meter SET key = 'vpn.bytes' WHERE key = 'vpn.traffic'`)).rejects.toThrow(/meter_is_immutable/);
+    await expect(owner.$executeRawUnsafe(`UPDATE catalog.meter SET unit = 'count' WHERE key = 'vpn.traffic'`)).rejects.toThrow(/meter_is_immutable/);
+    await expect(owner.$executeRawUnsafe(`UPDATE catalog.meter SET "descriptionKey" = 'catalog.meter.vpn.traffic.description' WHERE key = 'vpn.traffic'`)).resolves.toBe(1);
   });
 });

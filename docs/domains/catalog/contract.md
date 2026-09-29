@@ -137,6 +137,10 @@ a rate written tomorrow never reprices bytes already sold. The unit is
 strictly positive (`metered_rate_is_positive`, F-027-al): unlike a price, zero
 is not "free" here — no block can be bought at nothing, so the Grant stalls.
 Free metered service is a quota with no rate.
+A **meter** (F-118-c, ADR-0105) is what is counted and billed on use: a
+platform-only `meter` row, written by a migration because a meter exists only
+where code reports it — seeded `vpn.traffic` (bytes). Code names it through
+`METER_KEYS` (`shared-core/src/lib/catalog/meter.ts`); a rate card prices it (F-118-d).
 
 ## Currency (F-116-d, ADR-0098 part 2)
 
@@ -195,6 +199,7 @@ None.
 | A category key, a product key and a SKU are unique inside a tenant, and once among platform rows | partial unique indexes |
 | A coupon scope row names exactly one product or one variant (`coupon_service_scope_names_one`) | CHECK |
 | Money is `Decimal(18,2)` in the row's `currencyCode` (`^[A-Z]{3}$`), never negative; zero is a free variant | column type + CHECKs (ADR-0098, C-02) |
+| A meter is a platform row every tenant reads and no service role writes; its `key` and `unit` never change, even for the owner (`meter_is_immutable`) — F-118-c | grants (SELECT only), trigger `catalog.meter_is_immutable` |
 | `visibility`: `public` listed; `unlisted` by SKU only; `admin_only` never sold, only assigned (F-506) | F-026-c |
 
 ## Deprecations

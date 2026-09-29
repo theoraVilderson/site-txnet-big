@@ -3,11 +3,11 @@ id: catalog
 layer: domain
 status: draft
 version: 7
-keywords: [catalog, price currency, currency of a price, product, category, subcategory, category tree, product in several categories, variant, sku, price, price history, visibility, fulfilment kind, product model, delete product, archive product, capability, capabilities, feature key, what a product unlocks, traffic quota, unlimited traffic, unlimited duration]
-source: [txnet-backend/prisma/domains/catalog.prisma, txnet-backend/prisma/domains/migrations/20260914001500_catalog_product_model/**, txnet-backend/prisma/domains/migrations/20260925000300_a_product_never_sold_can_be_deleted/**, txnet-backend/prisma/domains/migrations/20260925000800_a_category_with_no_products_can_be_deleted/**, txnet-backend/prisma/domains/migrations/20260925001000_categories_nest_and_a_product_sits_in_several/**, txnet-backend/prisma/domains/migrations/20260925001400_a_capability_is_a_catalog_row/**, txnet-backend/prisma/domains/migrations/20260928002600_a_price_is_in_its_tenants_currency/**, txnet-backend/billing-service/src/app/catalog/**, txnet-backend/shared-core/src/lib/catalog/**]
-owns_tables: [product_category, product_category_link, product_capability, product, product_variant, price]
+keywords: [catalog, meter, meters, meter registry, usage meter, what is counted, vpn.traffic, price currency, currency of a price, product, category, subcategory, category tree, product in several categories, variant, sku, price, price history, visibility, fulfilment kind, product model, delete product, archive product, capability, capabilities, feature key, what a product unlocks, traffic quota, unlimited traffic, unlimited duration]
+source: [txnet-backend/prisma/domains/catalog.prisma, txnet-backend/prisma/domains/migrations/20260914001500_catalog_product_model/**, txnet-backend/prisma/domains/migrations/20260925000300_a_product_never_sold_can_be_deleted/**, txnet-backend/prisma/domains/migrations/20260925000800_a_category_with_no_products_can_be_deleted/**, txnet-backend/prisma/domains/migrations/20260925001000_categories_nest_and_a_product_sits_in_several/**, txnet-backend/prisma/domains/migrations/20260925001400_a_capability_is_a_catalog_row/**, txnet-backend/prisma/domains/migrations/20260928002600_a_price_is_in_its_tenants_currency/**, txnet-backend/prisma/domains/migrations/20260929000200_a_meter_is_a_catalog_row/**, txnet-backend/billing-service/src/app/catalog/**, txnet-backend/shared-core/src/lib/catalog/**]
+owns_tables: [product_category, product_category_link, product_capability, meter, product, product_variant, price]
 depends_on: [tenant]
-updated: 2026-09-28
+updated: 2026-09-29
 ---
 
 # Catalog
