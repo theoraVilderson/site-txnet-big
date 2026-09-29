@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { GrantMeter, GrantStatus, Prisma, VariantBillingMode, WalletReasonType } from '@prisma/client';
-import { tenantTransaction } from '@txnet-backend/shared-core';
+import { TenantBillingLedger, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletCreditService } from '../wallet/wallet-credit.service';
@@ -8,6 +8,7 @@ import { GIB, rateUnitsOf } from './block-purchase';
 import { creditPrepaidRemainder } from './prepaid-remainder';
 import { vpnMeterOf } from './vpn-meter';
 import { releaseVpnReserve } from './vpn-reserve';
+import { VpnWholesale } from './vpn-wholesale';
 
 /**
  * The remainder credit (F-027-r; ADR-0072 rule 3).
@@ -128,6 +129,9 @@ export class RemainderCreditService {
     private readonly ledger: WalletCreditService,
   ) {}
 
+  /** Its ledger holds no state, so it needs no injection. */
+  private readonly wholesale = new VpnWholesale(new TenantBillingLedger());
+
   /** One credit in a transaction of its own, for a caller with no other work to commit with it. */
   creditForGrant(input: CreditRemainder): Promise<CreditedRemainder> {
     return tenantTransaction(this.prisma, (tx) => this.credit(tx, input));
@@ -145,6 +149,15 @@ export class RemainderCreditService {
     if (grant.billingMode === VariantBillingMode.prepaid) return creditPrepaidRemainder(tx, this.ledger, input);
     const back = await this.credit(tx, { grantId: input.grantId });
     return { amount: back.amount, walletTransactionId: back.walletTransactionId };
+  }
+
+  /**
+   * The reseller's side of a close (F-118-n3): wholesale bytes bought and never
+   * served on a platform panel, back on its billing wallet. Owed to the
+   * reseller whatever the admin answered about the user's own remainder.
+   */
+  wholesaleBack(tx: Prisma.TransactionClient, grantId: string): Promise<void> {
+    return this.wholesale.giveBack(tx, grantId);
   }
 
   /**

@@ -254,9 +254,12 @@ export class ResellerUserGrantsService {
    * choice written down with the reason. `staffWrite`, as for a freeze.
    */
   deleteGrant(actor: AdminActor, tenantId: string, userId: string, grantId: string, refund: boolean, reason: string): Promise<Deletion> {
-    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_delete', reason, outcome: (r) => r }, (tx) =>
-      deleteGrant(tx, grantId, { at: new Date(), actorUserId: actor.userId, reason, refund }, (t, id, clock) => this.remainders.settle(t, { grantId: id, ...clock })),
-    );
+    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_delete', reason, outcome: (r) => r }, async (tx) => {
+      const done = await deleteGrant(tx, grantId, { at: new Date(), actorUserId: actor.userId, reason, refund }, (t, id, clock) => this.remainders.settle(t, { grantId: id, ...clock }));
+      // The reseller's unserved wholesale comes back whatever the admin answered (F-118-n3).
+      await this.remainders.wholesaleBack(tx, grantId);
+      return done;
+    });
   }
 
   /**

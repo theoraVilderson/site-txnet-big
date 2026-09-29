@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
-import { BLOCK_REQUEST_MESSAGE_VERSION, WalletVersionConflict, runWithTenant, tenantTransaction, type BlockRequestMessage } from '@txnet-backend/shared-core';
+import { BLOCK_REQUEST_MESSAGE_VERSION, TenantBillingVersionConflict, WalletVersionConflict, runWithTenant, tenantTransaction, type BlockRequestMessage } from '@txnet-backend/shared-core';
 
 import { UsageSettlementRefused } from '../usage/usage-price';
+import { WholesaleCursorMoved } from '../usage/usage-wholesale';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BlockPurchaseRefused, BlockPurchaseService, type BlockPurchaseRejection, type PurchasedBlock } from './block-purchase';
@@ -102,7 +103,10 @@ export class BlockRequestService {
     try {
       await runWithTenant({ id: grant.tenantId }, () => this.buy(message));
     } catch (error) {
-      if (error instanceof WalletVersionConflict) return { grantId: message.grantId, outcome: 'raced' };
+      // Either wallet's version guard, or the reseller's wholesale cursor (F-118-n3): nothing written.
+      if (error instanceof WalletVersionConflict || error instanceof TenantBillingVersionConflict || error instanceof WholesaleCursorMoved) {
+        return { grantId: message.grantId, outcome: 'raced' };
+      }
       // A postpaid capture that raced the hourly one: nothing written, the planner asks again.
       if (error instanceof UsageSettlementRefused && error.reason === 'cursor_moved') return { grantId: message.grantId, outcome: 'raced' };
       throw error;

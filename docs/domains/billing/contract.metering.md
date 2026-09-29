@@ -104,9 +104,11 @@ nothing, and one Grant's group may mix both.
    join back to `panel`. A released hold keeps only its `panelId`, so
    `release` reads that panel's ownership across tenants; a panel's owner never
    changes.
-3. **Counted, not charged.** F-118-n3's wholesale cursor (`wholesaleBilled`)
-   buys against it. `metering.service.spec.ts` "wholesale bytes" pins the
-   7 GB own + 3 GB platform = 3 GB case, the redelivery, and the no-leg Grant.
+3. **Counted here, charged by the block.** The wholesale cursor
+   (`wholesaleBilled`) is bought up to it by the block purchaser and given back
+   down to it at close (F-118-n3, `contract.traffic-block.md`).
+   `metering.service.spec.ts` "wholesale bytes" pins the 7 GB own + 3 GB
+   platform = 3 GB case, the redelivery, and the no-leg Grant.
 
 ## Usage events — every meter but VPN (F-118-f)
 

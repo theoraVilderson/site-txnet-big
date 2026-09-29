@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { Grant, GrantStatus, Prisma, RateCardMode, VariantBillingMode, WalletReasonType } from '@prisma/client';
-import { METERED_RATE_UNIT_BYTES, tenantTransaction } from '@txnet-backend/shared-core';
+import { METERED_RATE_UNIT_BYTES, TenantBillingLedger, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { spendOnCap, withinCap } from '../usage/cap-funding';
 import { WalletLedgerService } from '../wallet/wallet-ledger.service';
 import { vpnMeterOf } from './vpn-meter';
 import { NO_VPN_RESERVE, VpnReserve } from './vpn-reserve';
+import { VpnWholesale } from './vpn-wholesale';
 
 /**
  * The block purchaser (F-027-q; ADR-0072, ADR-0073).
@@ -53,6 +54,8 @@ export type BlockPurchaseRejection =
   | 'cap_reached'
   /** A postpaid `vpn.traffic` card (F-118-k): held and captured (`vpn-postpaid.ts`), never sold a block. */
   | 'grant_postpaid'
+  /** The user could fund it, the reseller's billing wallet cannot fund its wholesale side (F-118-n3). Short of funds, as the others. */
+  | 'wholesale_unfunded'
   /** A rate so high that a whole cent buys less than one byte. Never a zero-byte block. */
   | 'block_below_one_byte'
   | 'target_not_positive';
@@ -175,6 +178,9 @@ export class BlockPurchaseService {
     private readonly reserve: VpnReserve = NO_VPN_RESERVE,
   ) {}
 
+  /** The reseller's side of a block (F-118-n3). Its ledger holds no state, so it needs no injection. */
+  private readonly wholesale = new VpnWholesale(new TenantBillingLedger());
+
   /** One purchase in a transaction of its own, for a caller with no other work to commit with it. */
   purchaseForGrant(input: PurchaseBlock): Promise<PurchasedBlock> {
     return tenantTransaction(this.prisma, (tx) => this.purchase(tx, input));
@@ -210,7 +216,18 @@ export class BlockPurchaseService {
     // Its spending cap, if the owner set one (F-118-i): the reserve is inside it.
     const maxSpend = await withinCap(tx, grant, free, reserved);
     if (maxSpend.lt(free) && maxSpend.lt('0.01')) throw new BlockPurchaseRefused('cap_reached', grant.id);
-    const block = sizeBlock({ rate: meter.unitPrice, targetBytes: input.targetBytes, maxSpend });
+    // The reseller's side bounds it first (F-118-n3): the block is what both wallets fund.
+    const wholesale = await this.wholesale.room(tx, grant, meter);
+    const room = wholesale?.room ?? null;
+    if (room !== null && room < BigInt(1)) throw new BlockPurchaseRefused('wholesale_unfunded', grant.id);
+    const targetBytes = room !== null && room < input.targetBytes ? room : input.targetBytes;
+    let block = sizeBlock({ rate: meter.unitPrice, targetBytes, maxSpend });
+    // A price rounded up can buy past the room; one cent less cannot reach the target.
+    if (room !== null && block.bytes > room) {
+      const less = block.amount.minus('0.01');
+      if (less.lt('0.01')) throw new BlockPurchaseRefused('wholesale_unfunded', grant.id);
+      block = sizeBlock({ rate: meter.unitPrice, targetBytes, maxSpend: less });
+    }
 
     // Sized before anything is written, so a refusal leaves the transaction clean.
     if (reserved.gt(0)) await this.reserve.release(tx, grant);
@@ -223,6 +240,8 @@ export class BlockPurchaseService {
       referenceId: grant.id,
     });
     await spendOnCap(tx, grant.id, block.amount);
+    // Read before the bag moves: the owed figure is computed from it.
+    if (wholesale) await this.wholesale.buy(tx, grant, meter, wholesale, block.bytes, movement.id);
 
     // `increment`, not a computed value: the cursors are advanced by the
     // database from whatever they hold, so nothing here can write back a

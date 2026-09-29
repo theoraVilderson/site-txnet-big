@@ -135,6 +135,11 @@ Two things in the current design stop that:
     every byte of a Grant that touches a platform panel was rejected: it bills
     the reseller for its own panels, and correcting it later would migrate
     the cursor on open Grants.
+    *Amended 2026-09-29 (user, F-118-n3):* a VPN block buys wholesale for the
+    headroom it leaves only while the Grant's group holds a platform panel;
+    bytes already served on one are owed on every block. A reseller at zero
+    therefore stops its users on groups with a platform panel and no others.
+    Prepaying every block was rejected: it cuts users the platform serves nothing.
 11. **Ledger reasons** `usage_charge` (a debit and a sale, `IS_SALE`) and
     `usage_refund` (a credit that undoes one). `traffic_consumption` and
     `traffic_refund` stay for the rows already written.

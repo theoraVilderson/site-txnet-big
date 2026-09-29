@@ -23,7 +23,7 @@ import { vpnMeterOf } from './vpn-meter';
  */
 
 /** What `purchase()` refuses when the money is the problem. Anything else is not a short wallet. */
-const SHORT_OF_FUNDS: ReadonlySet<BlockPurchaseRejection> = new Set<BlockPurchaseRejection>(['insufficient_funds', 'block_below_one_byte', 'cap_reached']);
+const SHORT_OF_FUNDS: ReadonlySet<BlockPurchaseRejection> = new Set<BlockPurchaseRejection>(['insufficient_funds', 'block_below_one_byte', 'cap_reached', 'wholesale_unfunded']);
 
 /** Whether a purchase refusal was the wallet being short, as opposed to the Grant or the rate. */
 export const isShortOfFunds = (error: unknown): boolean => error instanceof BlockPurchaseRefused && SHORT_OF_FUNDS.has(error.reason);

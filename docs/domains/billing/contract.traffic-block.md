@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 4
+version: 5
 updated: 2026-09-29
 ---
 
@@ -79,6 +79,23 @@ Only a balance under one cent is refused (`insufficient_funds`), and then the
 ceiling stays where it is and the panel cuts the user off by itself — ADR-0072's
 worst acceptable failure. Stalling with 99c unspent is that failure arriving
 early, so it is not a refusal.
+
+## The reseller's side — a wholesale leg (F-118-n3)
+
+On a meter with a wholesale leg (F-118-n2) the block is what **both** wallets
+fund, the reseller prepaid whatever the user's mode (ADR-0105 (10), §14.5).
+`VpnWholesale` (`traffic/vpn-wholesale.ts`) raises `wholesaleBilled` to
+`wholesaleConsumed` + the block's headroom, that only while the group holds a
+platform panel (user, 2026-09-29); never down — a byte an own panel served funds the next.
+
+1. **Bounded first.** The reseller's balance caps how far the bag may grow; a
+   block rounding past it is re-sized a cent down. No room is
+   `wholesale_unfunded`, short of funds (block request rule 3).
+2. **In the block's transaction**: one `metered_usage_charge`, `referenceId` the
+   block's wallet row, the cursor guarded (`WholesaleCursorMoved` is `raced`).
+3. **Back at close**: `wholesaleBilled − wholesaleConsumed`, priced down, as
+   `metered_usage_refund` against the Grant — on an admin's delete whatever it
+   answered about the user's remainder. `vpn-wholesale.spec.ts`.
 
 ## One transaction, both cursors
 
@@ -191,7 +208,8 @@ Each throws `BlockPurchaseRefused` and writes nothing: `grant_not_found`,
 `grant_not_metered`, `target_not_positive`, `insufficient_funds`,
 `block_below_one_byte` (a clamped block that buys no whole byte), `cap_reached`
 (the wallet could fund it, the Grant's spending cap cannot — short of funds, as
-the other two are), `grant_postpaid` (a postpaid `vpn.traffic` card, F-118-k:
+the other two are), `wholesale_unfunded` (nor could the reseller's billing
+wallet fund its side, F-118-n3 — short of funds too), `grant_postpaid` (a postpaid `vpn.traffic` card, F-118-k:
 held and captured, never sold a block), and
 `rate_not_priceable` — a zero rate, or one finer than `Decimal(18, 8)`. A free
 byte is a catalog decision, not an arithmetic one, so a zero rate is refused
