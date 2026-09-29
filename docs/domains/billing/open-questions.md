@@ -1,7 +1,7 @@
 ---
 id: billing
 layer: domain
-updated: 2026-09-28
+updated: 2026-09-29
 ---
 
 # Open questions — billing
@@ -18,6 +18,6 @@ updated: 2026-09-28
 | 2026-09-28 | A currency change divides a gateway's `staticRate`/`minRate`/`maxRate`/`fixedAmountModifier` by the rate at `DECIMAL(18,8)`; an inverse pair (USD -> IRR, a static rate of 1 USD per USD becoming ~0.0000017) keeps 2-3 significant digits (F-116-f) | resolved | **Fixed 2026-09-28**: the four columns are `DECIMAL(30,18)` on both gateway tables, converted to 18 places; the admin API and the panel take 18 places | -> contract.currency-change.md, contract.gateways.md |
 | 2026-09-28 | A late credit that converts to less than one minor unit (a 1,000 IRR refund into a USD wallet) rounds to zero and is refused `LedgerCurrencyMismatch`, so its settlement retries forever (F-116-f) | resolved | **Fixed 2026-09-28**: it is credited one minor unit (`convertedByChanges`), both ledgers | -> contract.currency-change.md rule 6a |
 | 2026-09-28 | A lent gateway's `gateway_settlement_entry` / `payout` rows keep the currency they were written in; after the owed tenant changes currency, "owed" sums two currencies (F-116-f) | resolved | **Fixed 2026-09-28**: summed per currency and converted through the tenant's changes into its currency now; a payout is checked in it | -> contract.currency-change.md rule 9, audit/contract.settlement.md |
-| 2026-09-29 | A postpaid Grant's hold (ADR-0105 (6)): how often is measured usage captured, and how large is the hold it keeps topped up? | no | ASSUMED(2026-09-29): captured hourly, at close and before each re-top; the hold is sized like a block — a horizon of the Grant's own rate | -> [contract.usage-rating.md](contract.usage-rating.md) (F-118-g) |
-| 2026-09-29 | A spending cap's `period` (ADR-0105 (9)): does `monthly` reset on the calendar month or on the cap's own start date? | no | ASSUMED(2026-09-29): `monthly` resets on the cap's own start date, the day clamped to a short month; built with `none` in F-118-i | -> [contract.spending-cap.md](contract.spending-cap.md) rule 6 |
-| 2026-09-29 | The per-use door (F-118-h): how long does a token reserve its money, is a reseller charged wholesale for a regenerate on its own panel, and does a give-back return spending-cap room? | no | ASSUMED(2026-09-29): 10 minutes, expired at the next authorization on the meter or the hourly sweep; wholesale on every regenerate, since billing-service does the work whatever the panel; a give-back does not lower the cap's `spent`, as a close's remainder does not | -> [contract.usage-rating.md](contract.usage-rating.md) |
+| 2026-09-29 | A postpaid Grant's hold (ADR-0105 (6)): how often is measured usage captured, and how large is the hold it keeps topped up? | resolved | **Answered 2026-09-29 by the user (D-59 (g))**: captured hourly, at close and before each re-top; the hold is sized like a block | -> [contract.usage-rating.md](contract.usage-rating.md) (F-118-g) |
+| 2026-09-29 | A spending cap's `period` (ADR-0105 (9)): does `monthly` reset on the calendar month or on the cap's own start date? | resolved | **Answered 2026-09-29 by the user (D-59 (g))**: `monthly` resets on the cap's own start date, the day clamped to a short month | -> [contract.spending-cap.md](contract.spending-cap.md) rule 6 |
+| 2026-09-29 | The per-use door (F-118-h): how long does a token reserve its money, is a reseller charged wholesale for a regenerate on its own panel, and does a give-back return spending-cap room? | resolved | **Answered 2026-09-29 by the user (D-59 (g))**: 10 minutes; wholesale on every regenerate, the reseller's own panel included; a give-back does not lower `spent` | -> [contract.usage-rating.md](contract.usage-rating.md) |
