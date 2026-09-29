@@ -39,7 +39,7 @@ carry one piece of the return (rules 7 and 8).
    `quotaLimit`) and price sit on the card over one buy. Tabs (`categoriesOf`,
    "All" first) only when the offers span more than one category.
 4. **Checkout is one page; no invoice for looking** (F-114-d). The order, the
-   codes, the figures, the wallet balance and pay sit together. An invoice is
+   codes, the figures, what the wallet can spend (`available`, F-118-j) and pay sit together. An invoice is
    made when a code is applied (to show billing's discount) or on the pay
    press. A code not applied is dropped from the chips and shown with billing's
    sentence. A total made on the pay press that differs from what was on

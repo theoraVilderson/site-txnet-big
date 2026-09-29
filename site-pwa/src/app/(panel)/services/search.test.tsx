@@ -34,6 +34,10 @@ vi.mock("@/lib/billing-api", async (importOriginal) => ({
   billingApi: { collectionHealth: vi.fn() },
 }));
 vi.mock("./_hooks/useGrantsPage", () => ({ useGrantsPage: vi.fn() }));
+// The wallet strip (F-118-j) reads the panel session; this suite is about the search.
+vi.mock("../_hooks/useWalletBalance", () => ({
+  useWalletBalance: () => ({ balance: null, held: null, available: null, currencyCode: null, isLoading: true, failed: false, refresh: () => {} }),
+}));
 vi.mock("./_components/ServiceRow", () => ({
   ServiceRow: ({ row }: { row: GrantRow }) => <li>{row.id}</li>,
 }));

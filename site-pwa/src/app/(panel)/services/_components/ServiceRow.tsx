@@ -13,6 +13,7 @@ import { useSubscriptionLink } from "../_hooks/useSubscriptionLink";
 import { GRANT_TONES, type CapabilityName } from "../_lib/my-services";
 import { buildStage } from "../_lib/pulse";
 import { matchesConfig, purgeCountdown } from "../_lib/service-configs";
+import { capOffered } from "../_lib/spending-cap";
 import { ConfigLines } from "./ConfigLines";
 import { GrantConfigs } from "./GrantConfigs";
 import { NoticeLevel } from "./NoticeLevel";
@@ -20,6 +21,7 @@ import { QrDialog } from "./QrDialog";
 import { ServiceBuilding, ServiceReady } from "./ServiceBuilding";
 import { ServiceName } from "./ServiceName";
 import { ServicePulse, useServicePulse } from "./ServicePulse";
+import { SpendingCap } from "./SpendingCap";
 import { UsageBars } from "./UsageBars";
 import { UsageMeter } from "./UsageMeter";
 
@@ -57,7 +59,9 @@ const READY_MS = 10_000;
  *    delete, and resetting the subscription link. Everything that can break a
  *    working setup is here, never above it. Also how much this service's
  *    notices tell (`NoticeLevel`, F-601-o); "essential only" shows as a chip
- *    beside the status, so a muted service is never a surprise.
+ *    beside the status, so a muted service is never a surprise. And the
+ *    owner's spending cap on it (`SpendingCap`, F-118-j) — who it is for, and
+ *    spent, held and left — on any service not yet closed.
  *
  * The configs and the link are read once per row and shared by 3–5, so a
  * reset under "manage" replaces the link row 4 copies. So is the search over
@@ -76,6 +80,8 @@ export const ServiceRow = memo(function ServiceRow({
   meteringDown = false,
   noticeLevel,
   onNoticeLevel,
+  walletCurrency,
+  onCapChanged,
 }: {
   row: GrantRow;
   name: string | null;
@@ -91,6 +97,10 @@ export const ServiceRow = memo(function ServiceRow({
   noticeLevel?: GrantNoticeLevel | null;
   /** The page's own copy of the levels, moved once a choice is stored. Stable, so the memo holds. */
   onNoticeLevel?: (grantId: string, level: GrantNoticeLevel) => void;
+  /** The wallet's currency, for a first cap's amount box (F-118-j). */
+  walletCurrency?: string | null;
+  /** A cap was set or removed: the page re-reads the wallet's held money. Stable, so the memo holds. */
+  onCapChanged?: () => void;
 }) {
   const { t, lang } = useLocale();
   const toMessage = useApiErrorMessage();
@@ -338,6 +348,7 @@ export const ServiceRow = memo(function ServiceRow({
           <UsageBars grantId={row.id} />
           <GrantConfigs configs={configs} shown={shown} />
           {noticeLevel !== undefined && onNoticeLevel && <NoticeLevel grantId={row.id} level={noticeLevel} onSaved={onNoticeLevel} />}
+          {capOffered(row.status) && <SpendingCap grantId={row.id} walletCurrency={walletCurrency} onChanged={onCapChanged} />}
 
           <section aria-label={t("common", L.resetTitle)} className="rounded-2xl border border-card-border p-3">
             <p className="text-sm font-bold text-text-primary">{t("common", L.resetTitle)}</p>

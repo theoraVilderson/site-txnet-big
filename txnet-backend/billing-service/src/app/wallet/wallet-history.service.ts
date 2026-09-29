@@ -122,6 +122,13 @@ export type LedgerPage = {
   /** A decimal string — the wallet's balance now, in `currencyCode`. */
   balance: string;
   /**
+   * The part of `balance` promised to open holds — a service's reserve, a
+   * meter's hold (F-118-a, `contract.holds.md`) — and `balance − held`, what a
+   * purchase or a block can spend (F-118-j). Both from the one row read here.
+   */
+  held: string;
+  available: string;
+  /**
    * The wallet's currency, or the tenant's operating one for a user with no
    * wallet yet — the currency its first credit will be in (F-116-h2).
    */
@@ -179,6 +186,9 @@ export type PaymentPage = {
 };
 
 const money = (v: Prisma.Decimal) => v.toFixed(2);
+
+type Money = Pick<LedgerPage, 'balance' | 'held' | 'available'>;
+const NO_MONEY: Money = { balance: '0.00', held: '0.00', available: '0.00' };
 
 /** `undefined` rather than an empty object: an empty `createdAt` filter is a Prisma error, not a no-op. */
 function between(from?: Date, to?: Date): Prisma.DateTimeFilter | undefined {
@@ -278,19 +288,23 @@ export class WalletHistoryService {
     const { page, pageSize } = paged(request);
 
     const reasonType = this.reasonFilter(request);
-    const empty = (balance: string, currencyCode: string): LedgerPage => ({ balance, currencyCode, total: 0, page, pageSize, rows: [] });
+    const empty = (figures: Money, currencyCode: string): LedgerPage => ({ ...figures, currencyCode, total: 0, page, pageSize, rows: [] });
 
     return tenantTransaction(this.prisma, async (tx) => {
       // `wallet` carries no `tenantId` and is reached through its owner, so the
       // scope is the gate's `X-User-Id` (ledger rule 2 in `contract.md`).
       const wallet = await tx.wallet.findUnique({
         where: { ownerUserId: userId },
-        select: { id: true, cachedBalance: true, currencyCode: true },
+        select: { id: true, cachedBalance: true, heldAmount: true, currencyCode: true },
       });
       // No wallet is a zero balance, as it is for a debit — not a 404. The page
       // exists before the first top-up does.
-      if (!wallet) return empty('0.00', await operatingCurrencyOf(tx, tenant.id));
-      const balance = money(wallet.cachedBalance);
+      if (!wallet) return empty(NO_MONEY, await operatingCurrencyOf(tx, tenant.id));
+      const balance = {
+        balance: money(wallet.cachedBalance),
+        held: money(wallet.heldAmount),
+        available: money(wallet.cachedBalance.sub(wallet.heldAmount)),
+      };
       // A search that matched no label. Answered here rather than as
       // `reasonType: { in: [] }`, so the filter cannot be dropped on the way to
       // the query and answer the whole ledger instead of none of it.
@@ -326,7 +340,7 @@ export class WalletHistoryService {
       ]);
 
       return {
-        balance,
+        ...balance,
         currencyCode: wallet.currencyCode,
         total,
         page,

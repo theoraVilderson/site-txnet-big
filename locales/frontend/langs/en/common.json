@@ -390,7 +390,10 @@
       "copied": "Copied",
       "serviceLink": "This service's subscription link is always in My services — copy it or scan its QR code there.",
       "toMyServices": "Go to My services"
-    }
+    },
+    "available": "Available",
+    "held": "Held for your services: {{amount}}",
+    "heldHint": "Set aside for services in use. They spend it as they run, and it comes back if they stop."
   },
   "notifications": {
     "label": "Notifications",
@@ -2341,6 +2344,48 @@
       "save": "Save name",
       "cancel": "Cancel",
       "hint": "Your own name for this service — shown here and in your notices."
+    },
+    "wallet": {
+      "title": "Your wallet",
+      "available": "Available",
+      "held": "Held for services",
+      "hint": "Held money is set aside for services in use: they spend it as they run, and it comes back if they stop.",
+      "unavailable": "Your wallet could not be read right now."
+    },
+    "cap": {
+      "title": "Spending cap",
+      "hint": "Bought it for someone else? Say who it is for and cap what its usage may cost. When the cap is spent the service stops, as it would on an empty wallet; your other services are not affected.",
+      "none": "No cap: this service's usage is bounded by your wallet alone.",
+      "forWhom": "For {{label}}",
+      "limit": "Cap: {{amount}}",
+      "spent": "Spent",
+      "held": "Held",
+      "left": "Left",
+      "periodLife": "One budget for the service's whole life",
+      "periodSince": "This month's budget, counted since {{date}}",
+      "reached": "The cap is spent: this service is stopped until you raise or remove the cap.",
+      "set": "Set a cap",
+      "edit": "Change",
+      "remove": "Remove cap",
+      "label": "Who is it for",
+      "labelPlaceholder": "e.g. Sara",
+      "amount": "Cap amount ({{currency}})",
+      "period": "Period",
+      "periodNone": "Once",
+      "periodNoneHint": "One budget for the service's whole life",
+      "periodMonthly": "Every month",
+      "periodMonthlyHint": "Starts again each month, on the day you set it",
+      "periodRestarts": "Changing the period starts the count again from today.",
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "invalidLabel": "Write a name of 1 to 40 characters.",
+      "invalidAmount": "Enter an amount above zero, with at most two decimals.",
+      "removeConfirm": "Remove the cap? This service may then spend up to your whole wallet.",
+      "removeYes": "Remove",
+      "removeNo": "Keep the cap",
+      "removing": "Removing…",
+      "retry": "Try again"
     }
   },
   "systems": {
@@ -3071,7 +3116,7 @@
       "addCode": "Apply",
       "removeCode": "Remove {{code}}",
       "summary": "Your order",
-      "balance": "Wallet balance: {{balance}}",
+      "balance": "Available in your wallet: {{balance}}",
       "priceChanged": "The price was updated. Check the amount, then pay."
     },
     "invoice": {

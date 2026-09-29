@@ -15,7 +15,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { PANEL_DEPOSIT, PANEL_FINANCIAL } from "@/lib/routes";
 import { useWalletBalance } from "../_hooks/useWalletBalance";
-import { formatMoney } from "../_lib/money";
+import { formatMoney, isNonZero } from "../_lib/money";
 import { GiftCodeModal } from "./GiftCodeModal";
 
 /** The control's strings as generated constants (C-06). */
@@ -80,7 +80,10 @@ const QUICK_ACTIONS: readonly QuickAction[] = [
  */
 export function WalletButton() {
   const { t, lang } = useLocale();
-  const { balance, currencyCode, isLoading, failed, refresh } = useWalletBalance();
+  // The figure is what can be spent (F-118-j): money held for a service is
+  // not, and a balance that included it would promise a purchase it refuses.
+  const { available: balance, held, currencyCode, isLoading, failed, refresh } = useWalletBalance();
+  const holding = isNonZero(held);
   const [open, setOpen] = useState(false);
   const [giftOpen, setGiftOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -167,7 +170,7 @@ export function WalletButton() {
           <span
             className={`text-[10px] font-bold ${open ? "text-white/80" : "text-text-secondary"}`}
           >
-            {t("common", W.label)}
+            {t("common", holding ? W.available : W.label)}
           </span>
           <span className="font-mono text-sm font-bold">{figure}</span>
         </span>
@@ -193,9 +196,19 @@ export function WalletButton() {
               hunt for, and this is the panel that every wallet action starts
               from. */}
           <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-leaf-bg px-3 py-2 sm:hidden">
-            <span className="text-[10px] font-bold text-text-secondary">{t("common", W.label)}</span>
+            <span className="text-[10px] font-bold text-text-secondary">{t("common", holding ? W.available : W.label)}</span>
             <span className="font-mono text-sm font-bold">{figure}</span>
           </div>
+
+          {/* Held money apart (F-118-j): part of the wallet, not spendable. */}
+          {holding && currencyCode !== null && (
+            <div className="mb-3 rounded-xl border border-card-border px-3 py-2">
+              <p className="text-xs font-bold text-text-primary" dir="auto">
+                {t("common", W.held, { amount: formatMoney(held, currencyCode, { lang, t }) })}
+              </p>
+              <p className="mt-0.5 text-[10px] leading-4 text-text-secondary">{t("common", W.heldHint)}</p>
+            </div>
+          )}
 
           <div className="mb-3 flex items-center justify-between px-1">
             <span className="text-xs font-bold text-text-secondary">

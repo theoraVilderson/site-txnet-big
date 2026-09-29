@@ -126,6 +126,8 @@ about the data path rather than the bar.
    with a dead href — a link that navigates nowhere is still announced as a link
    and offered to "open in a new tab". Legacy's fourth entry (`/services`) is
    not ported: it duplicated the sidebar's `my-services`.
+   Since F-118-j the figure is billing's `available` (the balance less held
+   money), with held said apart: [contract.spending-cap.md](contract.spending-cap.md) 6–8.
 5. **A failed read is not a zero.** `"0.00"` is a real balance — a user with no
    wallet reads as zero, not a 404 — so a failure shows its own line and a
    retry, and keeps the last good figure rather than blanking it.

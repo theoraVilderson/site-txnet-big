@@ -31,6 +31,8 @@ vi.mock("../_lib/clipboard", () => ({ copyText: vi.fn(async () => true) }));
 vi.mock("@/lib/billing-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/billing-api")>()),
   billingApi: {
+    // Under "manage" since F-118-j; no cap is an answer, and this suite is not about caps.
+    spendingCap: vi.fn(async (grantId: string) => ({ grantId, cap: null })),
     subscriptionLink: vi.fn(),
     resetSubscriptionLink: vi.fn(),
     grantConfigs: vi.fn(),

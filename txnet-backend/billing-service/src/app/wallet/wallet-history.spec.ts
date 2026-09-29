@@ -84,7 +84,7 @@ function paymentRow(overrides: Record<string, unknown> = {}) {
 }
 
 type Setup = {
-  wallet?: { id: string; cachedBalance: Prisma.Decimal; currencyCode: string } | null;
+  wallet?: { id: string; cachedBalance: Prisma.Decimal; heldAmount: Prisma.Decimal; currencyCode: string } | null;
   /** The tenant's operating currency now (ADR-0098 part 1). */
   operating?: string;
   rows?: ReturnType<typeof ledgerRow>[];
@@ -100,7 +100,7 @@ type Slice = { skip: number; take: number };
  * wrong slice.
  */
 function build({
-  wallet = { id: WALLET, cachedBalance: d('30.00'), currencyCode: 'USD' },
+  wallet = { id: WALLET, cachedBalance: d('30.00'), heldAmount: d('0'), currencyCode: 'USD' },
   operating = 'USD',
   rows = [ledgerRow()],
   payments = [paymentRow()],
@@ -189,7 +189,15 @@ describe('WalletHistoryService.ledger', () => {
     const { service } = build({ wallet: null });
     const result = await runWithTenant({ id: TENANT }, () => service.ledger({ userId: USER, lang: 'fa', ...page }));
 
-    expect(result).toEqual({ balance: '0.00', currencyCode: 'USD', total: 0, page: 1, pageSize: 10, rows: [] });
+    expect(result).toEqual({ balance: '0.00', held: '0.00', available: '0.00', currencyCode: 'USD', total: 0, page: 1, pageSize: 10, rows: [] });
+  });
+
+  it('answers held money apart, and available as the balance less it (F-118-j)', async () => {
+    const { service } = build({ wallet: { id: WALLET, cachedBalance: d('30.00'), heldAmount: d('7.25'), currencyCode: 'USD' } });
+    const result = await runWithTenant({ id: TENANT }, () => service.ledger({ userId: USER, lang: 'fa', ...page }));
+
+    // `balance` stays `cachedBalance`: the ledger's `balanceAfter` column is the same figure, rows and header agree.
+    expect(result).toMatchObject({ balance: '30.00', held: '7.25', available: '22.75' });
   });
 
   it('turns a search term into the reason types whose label matches it', async () => {
@@ -406,7 +414,7 @@ describe('WalletHistoryService.payment', () => {
 describe('WalletHistoryService — each amount names its own currency', () => {
   it("labels each ledger row with its own currency, and the balance with the wallet's", async () => {
     const { service } = build({
-      wallet: { id: WALLET, cachedBalance: d('600000.00'), currencyCode: 'IRR' },
+      wallet: { id: WALLET, cachedBalance: d('600000.00'), heldAmount: d('0'), currencyCode: 'IRR' },
       operating: 'IRR',
       rows: [
         ledgerRow({ id: 'opening', reasonType: WalletReasonType.currency_change, amount: d('600000.00'), balanceAfter: d('600000.00'), currencyCode: 'IRR' }),
@@ -433,7 +441,7 @@ describe('WalletHistoryService — each amount names its own currency', () => {
   });
 
   it("names the wallet's currency when a search matches no label, as for a full page", async () => {
-    const { service } = build({ wallet: { id: WALLET, cachedBalance: d('5.00'), currencyCode: 'EUR' }, operating: 'IRR' });
+    const { service } = build({ wallet: { id: WALLET, cachedBalance: d('5.00'), heldAmount: d('0'), currencyCode: 'EUR' }, operating: 'IRR' });
 
     const result = await runWithTenant({ id: TENANT }, () => service.ledger({ userId: USER, lang: 'fa', search: 'no-such-label', ...page }));
 

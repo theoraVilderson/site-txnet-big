@@ -12,8 +12,10 @@ import { Pagination } from "../../_components/kit/Pagination";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { useGrantsPage } from "../_hooks/useGrantsPage";
 import { capabilityNames, PASTE_MAX_LINES, pastedLines, serviceName } from "../_lib/my-services";
+import { useWalletBalance } from "../../_hooks/useWalletBalance";
 import { ServiceRow } from "./ServiceRow";
 import { ServiceSearch } from "./ServiceSearch";
+import { WalletFunds } from "./WalletFunds";
 
 const S = FrontendI18nKeys.common.myServices;
 
@@ -157,6 +159,9 @@ export function MyServicesView() {
       alive = false;
     };
   }, []);
+  // Held money apart from what can be spent (F-118-j); a cap written below re-reads it.
+  const wallet = useWalletBalance();
+
   const onNoticeLevel = useCallback((grantId: string, level: GrantNoticeLevel) => {
     setEssential((prev) => {
       const next = new Set(prev instanceof Set ? prev : []);
@@ -193,6 +198,8 @@ export function MyServicesView() {
         <h1 className="text-2xl font-bold text-text-primary md:text-3xl">{t("common", S.title)}</h1>
         <p className="mt-1 text-sm text-text-secondary">{t("common", S.subtitle)}</p>
       </header>
+
+      <WalletFunds available={wallet.available} held={wallet.held} currencyCode={wallet.currencyCode} failed={wallet.failed} />
 
       {meteringDown && (
         <p role="status" className="flex items-start gap-3 rounded-2xl border border-gold/20 bg-gold-bg px-4 py-3 text-sm font-medium text-gold">
@@ -268,6 +275,8 @@ export function MyServicesView() {
               meteringDown={meteringDown}
               noticeLevel={levelOf(row.id)}
               onNoticeLevel={onNoticeLevel}
+              walletCurrency={wallet.currencyCode}
+              onCapChanged={wallet.refresh}
             />
           ))}
         </ul>

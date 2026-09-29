@@ -13,6 +13,13 @@ export interface WalletBalanceState {
    * `"0.00"` is a real balance a user with no wallet yet has.
    */
   balance: string | null;
+  /**
+   * The part of `balance` held for the user's services, and what is left to
+   * spend (F-118-j) — billing's two figures, never `balance` minus anything
+   * here. `null` with `balance`.
+   */
+  held: string | null;
+  available: string | null;
   /** The wallet's currency, as the same answer named it (F-116-h3); `null` with `balance`. */
   currencyCode: string | null;
   isLoading: boolean;
@@ -47,6 +54,8 @@ export function useWalletBalance(): WalletBalanceState {
   const client = usePanelRealtime();
 
   const [balance, setBalance] = useState<string | null>(null);
+  const [held, setHeld] = useState<string | null>(null);
+  const [available, setAvailable] = useState<string | null>(null);
   const [currencyCode, setCurrencyCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -72,6 +81,8 @@ export function useWalletBalance(): WalletBalanceState {
         const next = await billingApi.walletBalance();
         if (!alive) return;
         setBalance(next.balance);
+        setHeld(next.held);
+        setAvailable(next.available);
         setCurrencyCode(next.currencyCode);
         setFailed(false);
       } catch {
@@ -91,7 +102,9 @@ export function useWalletBalance(): WalletBalanceState {
 
   useEffect(() => {
     if (!client || !userId) return;
-    // Any event on this user's own channel is a reason to ask again. Today only
+    // Any event on this user's own channel is a reason to ask again — though a
+    // hold moving writes none yet (billing `contract.holds.md`), so `held` is
+    // as of the last movement or read. Today only
     // a payment can move a wallet; tomorrow a transfer or a spin can, and a
     // filter written now would have to be widened by each of them.
     return client.subscribe(userChannel(userId), {
@@ -102,5 +115,5 @@ export function useWalletBalance(): WalletBalanceState {
     });
   }, [client, userId]);
 
-  return { balance, currencyCode, isLoading, failed, refresh };
+  return { balance, held, available, currencyCode, isLoading, failed, refresh };
 }

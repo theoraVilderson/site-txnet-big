@@ -195,8 +195,8 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
     "manage" by name, label, protocol or region (ی/ي, ک/ك and ۲/2 alike);
     "copy all", "select all" and a bulk action reach only the configs shown.
     The list is the Grant's whole list, so this never shortens a page.
-19. **A service is found by its configs, or by pasting them** — the box above
-    the list is [contract.service-search.md](contract.service-search.md).
+19. **Found by its configs or a pasted link:** [contract.service-search.md](contract.service-search.md).
+    **A spending cap under "manage", held money above the list:** [contract.spending-cap.md](contract.spending-cap.md).
 
 ## Proof
 

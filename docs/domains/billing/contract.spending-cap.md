@@ -55,6 +55,8 @@ below zero.
 hold it keeps, so it reaches the lease planner through Quota (network
 `contract.reserve.md`), never per config.
 
-**Not yet:** the panel form and the "available / held" view (F-118-j), bot
-screens, and a notice that says *cap* rather than *wallet* when a capped Grant
+**The panel:** the owner's form under a service's "manage" and held money
+apart — panel-web [contract.spending-cap.md](../../interfaces/panel-web/contract.spending-cap.md) (F-118-j).
+
+**Not yet:** bot screens, and a notice that says *cap* rather than *wallet* when a capped Grant
 is cut (it is told `GRANT_WALLET_SPENT` today).

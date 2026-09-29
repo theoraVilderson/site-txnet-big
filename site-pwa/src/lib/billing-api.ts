@@ -40,6 +40,13 @@ export interface WalletBalance {
    * nothing on this side adds to it or recomputes it.
    */
   balance: string;
+  /**
+   * The part of `balance` promised to the user's services — a VPN reserve, a
+   * meter's hold (F-118-a) — and `balance − held`, what a purchase can spend.
+   * Both billing's, from the same row as `balance` (F-118-j); never subtracted here.
+   */
+  held: string;
+  available: string;
   /** The wallet's currency; a user with no wallet yet, the one their first credit will take (F-116-h2). */
   currencyCode: string;
 }
@@ -345,6 +352,27 @@ export interface UserConfigRow {
    */
   lines: string[];
   linksCapturedAt: string | null;
+}
+
+/** A spending cap's `period` (F-118-i): one budget for the service's life, or one per month from its start date. */
+export const SPENDING_CAP_PERIODS = ["none", "monthly"] as const;
+export type SpendingCapPeriod = (typeof SPENDING_CAP_PERIODS)[number];
+
+/**
+ * The owner's cap on one service's usage (F-118-i, `billing/contract.spending-cap.md`):
+ * who it is for, and at most how much its usage may cost. Money is two-place
+ * strings in `currencyCode`, the wallet's; `left` is `amount − spent`, never below zero.
+ */
+export interface SpendingCap {
+  grantId: string;
+  label: string;
+  amount: string;
+  currencyCode: string;
+  period: SpendingCapPeriod;
+  periodStartsAt: string;
+  spent: string;
+  held: string;
+  left: string;
 }
 
 /**
@@ -1151,6 +1179,30 @@ export const billingApi = {
       method: "PUT",
       body: JSON.stringify({ label }),
     });
+  },
+
+  /** One service's spending cap (F-118-i); `cap` is null when none is set. Another user's service is a 404. */
+  async spendingCap(grantId: string): Promise<{ grantId: string; cap: SpendingCap | null }> {
+    return call<{ grantId: string; cap: SpendingCap | null }>(`/traffic/grants/${encodeURIComponent(grantId)}/cap`, { method: "GET" });
+  },
+
+  /**
+   * Sets, raises or lowers a service's cap. A new cap or a changed `period`
+   * counts from now; a changed amount or label keeps what was spent.
+   */
+  async setSpendingCap(
+    grantId: string,
+    body: { label: string; amount: string; period: SpendingCapPeriod },
+  ): Promise<{ grantId: string; cap: SpendingCap }> {
+    return call<{ grantId: string; cap: SpendingCap }>(`/traffic/grants/${encodeURIComponent(grantId)}/cap`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+
+  /** Removes a service's cap: its usage is bounded by the wallet alone again. No cap is a 204 too. */
+  async removeSpendingCap(grantId: string): Promise<void> {
+    await call<void>(`/traffic/grants/${encodeURIComponent(grantId)}/cap`, { method: "DELETE" });
   },
 
   /** Whether the collector is reading the user's panels (F-027-w) — the service page's "not cut off" sentence. */

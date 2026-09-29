@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 78
+version: 79
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -93,8 +93,8 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-29 | contract v79 (additive, F-118-j): `GET /api/billing/wallet/history` answers `held` (`heldAmount`) and `available` (`balance − held`) beside `balance`, for the panel to show held money apart. [contract.history.md](contract.history.md) |
 | 2026-09-29 | contract v78 (additive, F-118-i, ADR-0105 (9)): a spending cap on one Grant — `GET/PUT/DELETE /api/billing/traffic/grants/:grantId/cap`; every usage path funds a capped Grant to `min(free, cap − spent − held)`; `sub_account` dropped. [contract.spending-cap.md](contract.spending-cap.md) |
 | 2026-09-29 | contract v77 (additive, F-118-b, ADR-0105 (8)): the VPN reserve is held money — one hold per metered Grant (`VPN_RESERVE_BYTES`, default 1 GiB, at its rate), topped at issue/block/revive and by `POST internal/billing/traffic/reserve-due` (`vpn_reserve`, every minute), released when the Grant stops being planned; its own block spends it. `traffic/vpn-reserve.ts`, contract.holds.md, contract.traffic-block.md |
-| 2026-09-29 | contract v76 (additive, F-118-g, ADR-0105 (5)(6)(11)): rating and settlement — prepaid blocks, postpaid holds captured hourly, before a re-top and at close; reasons `usage_charge` (a sale) and `usage_refund`. No caller sells a non-VPN meter yet. See [contract.usage-rating.md](contract.usage-rating.md) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

@@ -381,7 +381,8 @@ function Checkout({
 }) {
   const { t, lang } = useLocale();
   const messageFor = useApiErrorMessage();
-  const { balance, currencyCode: walletCurrency } = useWalletBalance();
+  // What a purchase can spend: billing refuses held money (F-118-a), so the balance would promise more than it pays.
+  const { available: balance, currencyCode: walletCurrency } = useWalletBalance();
   const busy = useRef(false);
   const [isBusy, setIsBusy] = useState(false);
   const [invoice, setInvoice] = useState<ShopInvoice | null>(initial);

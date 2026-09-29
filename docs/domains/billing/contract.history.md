@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 6
-updated: 2026-09-22
+updated: 2026-09-29
 ---
 
 # Contract — billing / wallet history
@@ -22,7 +22,7 @@ query, so neither route has an id to authorise.
 
 | Route | Query | Answers `data` |
 |---|---|---|
-| `GET /api/billing/wallet/history` | `page`, `pageSize` (≤ 100), `types[]`, `direction`, `from`, `to`, `search` | `{balance, currencyCode, total, page, pageSize, rows[{id, amount, direction, reasonType, referenceId, balanceAfter, currencyCode, createdAt}]}` — each row's own currency, the page's the wallet's (F-116-h2) |
+| `GET /api/billing/wallet/history` | `page`, `pageSize` (≤ 100), `types[]`, `direction`, `from`, `to`, `search` | `{balance, held, available, currencyCode, total, page, pageSize, rows[{id, amount, direction, reasonType, referenceId, balanceAfter, currencyCode, createdAt}]}` — each row's own currency, the page's the wallet's (F-116-h2) |
 | `GET /api/billing/wallet/payments` | `page`, `pageSize` (≤ 100), `statuses[]`, `from`, `to` | `{total, page, pageSize, rows[{id, status, amountRequested, fee, tax, taxRatePercent, discount, amountCredited, currencyCode, charge{amountMinor, rate}, trackingCode, referenceId, cardPanMasked, failureCode, gateway{source, id, displayName}, createdAt, expiresAt}]}` |
 
 ## Rules
@@ -32,6 +32,7 @@ query, so neither route has an id to authorise.
 | **A page nobody narrowed leaves `traffic_consumption` out** — the filter is every other type by name, never a `notIn`, so a reason added to the enum joins the page rather than the exclusion. `traffic_refund` is the first to arrive that way (F-027-r), `product_purchase` the second (F-111-b), `product_refund` the third (F-111-d), `currency_change` the fourth (F-116-f, a balance restated in a new currency): money going **back** to a user is one row per closed Grant and belongs where they will see it. `types[]` naming traffic, or a term matching its label, answers it in full; a blank term narrows nothing and does not | the block purchaser debits once per block and a block is ~2 minutes of that user's spend (`contract.traffic-block.md`), so a heavy user writes hundreds of rows a day and unfiltered they bury what a person opened this page to read. Rolling the debit up is not available: the money moves before the bytes do (ADR-0072) and `balanceAfter` is the column the debiting transaction wrote, so the ledger keeps every row and the **read** side aggregates. Decided 2026-09-22 with the user (F-027-am), over a minimum block size — which would spend more of the wallet ahead of consumption without bounding the row count |
 | `balanceAfter` is the column the ledger wrote, and `balance` is `wallet.cachedBalance` — written only inside the same balance-changing transaction (invariant 1). Nothing on this page is recomputed from amounts | legacy walked back from the current balance over the rows it had skipped, counting `pending` and `failed` attempts as movements, so one abandoned top-up skewed the column on every row above it |
 | **A payment attempt is not a ledger row**, and the two are separate lists. Only a `success` payment has a ledger row (F-092-j writes it); a `pending` or `failed` one carries a `status` and no balance | they shared one Mongo collection in legacy, which is what let the arithmetic above count a failure as money |
+| `held` is `wallet.heldAmount` — money promised to open holds ([contract.holds.md](contract.holds.md)) — and `available` is `balance − held`, both read from the same row as `balance` (F-118-j). `balance` stays `cachedBalance`, so it and the rows' `balanceAfter` still agree | the panel shows what a purchase can spend beside what is held; a client that subtracted would be the recompute rule above broken |
 | A user with no wallet is `balance: "0.00"` and an empty page, not a **404** — as a debit reads a missing wallet as a zero balance ("Wallet ledger" in `contract.md`) | the page exists before the first top-up does |
 | The `search` term is matched against the **translated label of each `WalletReasonType`** in the request's language, and the types that match become the filter. A term matching no label answers an empty page, never the whole ledger | a `wallet_transaction` has no free text: legacy's Persian `title` column was itself derived from the type, so the label is the same string with no column to rot. Decided 2026-09-12 with the user, over adding a stored title (a schema change, and translated text in Postgres against C-01) |
 | The term is folded before it is matched: `آ`/`ا`, `ی`/`ي`/`ئ`, `ک`/`ك`, `ه`/`ة`, and a space and a ZWNJ (`‌`) as the same gap — in the term as well as in the label. It is escaped first, so a `.` a user typed is text, not a pattern | both spellings of every one of those are correct, and an exact match answers "no results" to a search typed right. The fold runs in process over eight labels, so nothing is interpolated into SQL (`persian-search.ts`) |

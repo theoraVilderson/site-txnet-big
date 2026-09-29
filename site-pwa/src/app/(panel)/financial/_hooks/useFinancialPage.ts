@@ -85,7 +85,7 @@ export function useFinancialPage(filters: FinancialFilters): FinancialPageState 
           if (!alive) return;
           setLedger(page.rows);
           setPayments(null);
-          setBalance({ balance: page.balance, currencyCode: page.currencyCode });
+          setBalance({ balance: page.balance, held: page.held, available: page.available, currencyCode: page.currencyCode });
           setTotal(page.total);
         } else {
           const page = await billingApi.walletPayments(query);

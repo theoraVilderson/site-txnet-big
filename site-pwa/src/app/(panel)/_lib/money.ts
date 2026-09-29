@@ -243,3 +243,11 @@ export function rialInTomanWords(rial: string, locale: MoneyLocale): string | nu
   const padded = whole.padStart(2, "0");
   return amountInWords(`${padded.slice(0, -1)}.${padded.slice(-1)}`, "IRT", locale);
 }
+
+/**
+ * Whether billing's decimal string is more than nothing — a held figure worth a
+ * line (F-118-j). Read off the string; a float would call `"0.001"` zero.
+ */
+export function isNonZero(amount: string | null): amount is string {
+  return amount !== null && !/^0*(\.0*)?$/.test(amount.trim());
+}
