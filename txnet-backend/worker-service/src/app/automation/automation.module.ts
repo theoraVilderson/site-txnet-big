@@ -17,6 +17,7 @@ import { GrantBulkJobDrainJob } from '../jobs/grant-bulk-job.job';
 import { GrantUnusedNoticeJob } from '../jobs/grant-unused-notice.job';
 import { GrantEndNoticeJob } from '../jobs/grant-end-notice.job';
 import { GrantIdleNoticeJob } from '../jobs/grant-idle-notice.job';
+import { UsageCaptureJob } from '../jobs/usage-capture.job';
 import { GrantExhaustionForecastJob } from '../jobs/grant-exhaustion-forecast.job';
 import { RetentionHeldNoticeJob } from '../jobs/retention-held-notice.job';
 import { GrantDeliveryJob } from '../jobs/grant-delivery.job';
@@ -58,6 +59,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     GrantUnusedNoticeJob,
     GrantEndNoticeJob,
     GrantIdleNoticeJob,
+    UsageCaptureJob,
     GrantExhaustionForecastJob,
     RetentionHeldNoticeJob,
     DepositExpiryJob,
@@ -83,7 +85,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     TenantDomainVerificationJob,
     {
       provide: JOBS,
-      inject: [HeartbeatJob, VaultRetentionJob, GrantPurgeJob, GrantBulkJobDrainJob, GrantGroupFulfilmentJob, GrantDeliveryJob, GrantUnusedNoticeJob, GrantEndNoticeJob, GrantIdleNoticeJob, RetentionHeldNoticeJob, DepositExpiryJob, InvoiceExpiryJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, TrafficRollupJob, CampaignFanOutJob, CampaignDeliveryJob, TenantSubscriptionRenewalJob, TenantDomainVerificationJob],
+      inject: [HeartbeatJob, VaultRetentionJob, GrantPurgeJob, GrantBulkJobDrainJob, GrantGroupFulfilmentJob, GrantDeliveryJob, GrantUnusedNoticeJob, GrantEndNoticeJob, GrantIdleNoticeJob, UsageCaptureJob, RetentionHeldNoticeJob, DepositExpiryJob, InvoiceExpiryJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, TrafficRollupJob, CampaignFanOutJob, CampaignDeliveryJob, TenantSubscriptionRenewalJob, TenantDomainVerificationJob],
       useFactory: (...jobs: Job[]) => jobs,
     },
     WorkerRegistryService,

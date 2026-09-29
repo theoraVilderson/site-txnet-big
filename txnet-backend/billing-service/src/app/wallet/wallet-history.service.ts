@@ -58,6 +58,9 @@ const LABEL_KEYS: Record<WalletReasonType, string> = {
   [WalletReasonType.product_refund]: REASON_LABEL_KEY.product_refund,
   // F-116-f: a wallet closed in the old currency and opened in the new — both rows, on the default page.
   [WalletReasonType.currency_change]: REASON_LABEL_KEY.currency_change,
+  // F-118-g: a meter's usage paid for, and a prepaid block's unused part given back — both on the default page.
+  [WalletReasonType.usage_charge]: REASON_LABEL_KEY.usage_charge,
+  [WalletReasonType.usage_refund]: REASON_LABEL_KEY.usage_refund,
 };
 
 /** The declaration order, which is the order a filter is answered in. */

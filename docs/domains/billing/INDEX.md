@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 75
+version: 76
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -52,6 +52,8 @@ source:
   - txnet-backend/prisma/domains/migrations/20260928003300_a_platform_coupon_serves_no_reseller/**
   - txnet-backend/prisma/domains/migrations/20260929000100_held_money_is_not_spendable/**
   - txnet-backend/prisma/domains/migrations/20260929000500_usage_arrives_as_idempotent_events/**
+  - txnet-backend/prisma/domains/migrations/20260929000600_usage_is_rated_and_settled/**
+  - txnet-backend/billing-service/src/app/usage/**
 owns_tables: [wallet, wallet_hold, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
 updated: 2026-09-29
@@ -79,7 +81,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 | [contract.coupon.md](contract.coupon.md) | whose a coupon is, whose users it serves, managing coupons and gift codes |
 | [contract.revenue.md](contract.revenue.md) | what one reseller sold and what its users paid in, over a period |
 | [contract.metering.md](contract.metering.md) | a collection pass becoming usage: what `metering-service` writes, and what it refuses to |
-| [contract.traffic-block.md](contract.traffic-block.md) | the money a metered Grant's bytes cost: block pricing, the debit, the cursors, and the remainder given back at close |
+| [contract.traffic-block.md](contract.traffic-block.md) | the money a metered Grant's bytes cost: block pricing, the debit, the cursors, and the remainder given back at close; any other meter's blocks, holds and captures: [contract.usage-rating.md](contract.usage-rating.md) |
 | [contract.systems.md](contract.systems.md) | the platform owner's systems routes: registering a panel, and what the systems page reads and acts on |
 | [contract.panel-lifecycle.md](contract.panel-lifecycle.md) | editing a registered panel's settings, deleting or archiving one, deleting a panel group |
 | [invariants.md](invariants.md) | writing any code that touches it |
@@ -90,8 +92,8 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-29 | contract v76 (additive, F-118-g, ADR-0105 (5)(6)(11)): rating and settlement — prepaid blocks, postpaid holds captured hourly, before a re-top and at close; reasons `usage_charge` (a sale) and `usage_refund`. No caller sells a non-VPN meter yet. See [contract.usage-rating.md](contract.usage-rating.md) |
 | 2026-09-29 | contract v75 (additive, F-118-f, ADR-0105 (5)): usage intake — `usage_event` advances `grant_meter.consumed` once per `(source, idempotencyKey)`, through `recordUsage` in-process or the outbox type `billing.usage.event`. No reporter exists yet; VPN keeps its delta path. See [contract.metering.md](contract.metering.md) |
 | 2026-09-29 | contract v74 (additive, F-118-a, ADR-0105 (6)): wallet holds — `hold`/`capture`/`release`, `wallet.heldAmount`; every debit is bounded by the free balance (`cachedBalance - heldAmount`). No hold exists until F-118-b, so no caller's answer changes. See [contract.holds.md](contract.holds.md) |
-| 2026-09-28 | contract v73 (**breaking** for revenue readers, F-116-h8, ADR-0098 part 3): the reseller revenue report sums each currency on its own (`byCurrency`) and converts every total into the reseller's currency now (`currencyCode`), `null` when it cannot. Consumer: bot-app (F-116-h9). See [contract.revenue.md](contract.revenue.md) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

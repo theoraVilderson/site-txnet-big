@@ -42,6 +42,8 @@ export const REASON_TYPES = [
   "product_purchase",
   "product_refund",
   "currency_change",
+  "usage_charge",
+  "usage_refund",
 ] as const;
 export type ReasonType = (typeof REASON_TYPES)[number];
 

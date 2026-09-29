@@ -98,6 +98,10 @@ const IS_SALE: Record<WalletReasonType, boolean> = {
   [WalletReasonType.product_refund]: false,
   // F-116-f: a balance restated in a new currency — a closing debit and an opening credit, nothing sold.
   [WalletReasonType.currency_change]: false,
+  // F-118-g: a meter's usage paid for — a prepaid block or a postpaid capture. The sale.
+  [WalletReasonType.usage_charge]: true,
+  // A credit: a prepaid block's unused part given back. Subtracted below.
+  [WalletReasonType.usage_refund]: false,
 };
 
 /** The reasons that count, derived from the table above rather than listed twice. */
@@ -121,6 +125,8 @@ const UNDOES: Record<WalletReasonType, WalletReasonType | null> = {
   [WalletReasonType.traffic_refund]: WalletReasonType.traffic_consumption,
   // F-111-d: the whole `total` of an invoice whose Grant was never delivered.
   [WalletReasonType.product_refund]: WalletReasonType.product_purchase,
+  // F-118-g: a closed prepaid Grant's unused block, given back.
+  [WalletReasonType.usage_refund]: WalletReasonType.usage_charge,
   [WalletReasonType.payment_gateway]: null,
   [WalletReasonType.coupon_redemption]: null,
   [WalletReasonType.affiliate_commission]: null,
@@ -132,6 +138,7 @@ const UNDOES: Record<WalletReasonType, WalletReasonType | null> = {
   [WalletReasonType.reseller_purchase]: null,
   [WalletReasonType.product_purchase]: null,
   [WalletReasonType.currency_change]: null,
+  [WalletReasonType.usage_charge]: null,
 };
 
 /** The credits that come off a sale, derived from the table above. */

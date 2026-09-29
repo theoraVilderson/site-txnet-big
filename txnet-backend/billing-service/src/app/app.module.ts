@@ -26,6 +26,7 @@ import { SettlementModule } from './settlement/settlement.module';
 import { SystemsModule } from './systems/systems.module';
 import { TenantBillingModule } from './tenant-billing/tenant-billing.module';
 import { TrafficModule } from './traffic/traffic.module';
+import { UsageModule } from './usage/usage.module';
 import { WalletModule } from './wallet/wallet.module';
 
 /**
@@ -68,6 +69,7 @@ const INTERNAL_ROUTES = 'internal/*path';
     TenantBillingModule,
     RevenueModule,
     TrafficModule,
+    UsageModule,
     SystemsModule,
   ],
   controllers: [HealthController],

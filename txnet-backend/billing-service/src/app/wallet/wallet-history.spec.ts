@@ -257,6 +257,8 @@ describe('WalletHistoryService.ledger', () => {
         WalletReasonType.product_refund,
         // A balance restated in a new currency (F-116-f): the user should see why it changed.
         WalletReasonType.currency_change,
+        WalletReasonType.usage_charge,
+        WalletReasonType.usage_refund,
       ],
     });
   });

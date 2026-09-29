@@ -169,7 +169,7 @@ describe('ResellerRevenueService.totals', () => {
 
     const where = seen[0].args.where;
     expect(where.direction).toBe(LedgerDirection.debit);
-    expect(where.reasonType.in).toEqual([WalletReasonType.traffic_consumption, WalletReasonType.product_purchase]);
+    expect(where.reasonType.in).toEqual([WalletReasonType.traffic_consumption, WalletReasonType.product_purchase, WalletReasonType.usage_charge]);
     // A transfer between two of this reseller's users sells nothing; an
     // operator's correction is not a sale either.
     expect(where.reasonType.in).not.toContain(WalletReasonType.wallet_transfer_out);
@@ -208,7 +208,7 @@ describe('ResellerRevenueService.totals', () => {
 
     const where = seen.find((c) => c.what === 'refunds')!.args.where;
     expect(where.direction).toBe(LedgerDirection.credit);
-    expect(where.reasonType.in).toEqual([WalletReasonType.traffic_refund, WalletReasonType.product_refund]);
+    expect(where.reasonType.in).toEqual([WalletReasonType.traffic_refund, WalletReasonType.product_refund, WalletReasonType.usage_refund]);
   });
 
   it('reports a close whose blocks were bought before the window, rather than dropping it', async () => {

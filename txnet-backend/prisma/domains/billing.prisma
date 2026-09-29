@@ -36,6 +36,13 @@ enum WalletReasonType {
   /// wallet with a balance gets a closing debit in the old currency and an
   /// opening credit in the new one; `referenceId` = the `currency_change`.
   currency_change
+  /// F-118-g: a metered Grant's usage paid for (ADR-0105 (11)) — a prepaid
+  /// block debited before it is served, or a postpaid hold captured;
+  /// `referenceId` = the Grant. Always a debit, and a sale (`IS_SALE`).
+  usage_charge
+  /// F-118-g: a prepaid block's units a closed Grant never used, given back;
+  /// `referenceId` = the Grant. Always a credit — it undoes `usage_charge` (`UNDOES`).
+  usage_refund
 
   @@schema("billing")
 }

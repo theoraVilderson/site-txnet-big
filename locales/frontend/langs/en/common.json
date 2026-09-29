@@ -559,7 +559,9 @@
       "traffic_refund": "Unused traffic returned",
       "product_purchase": "Product purchase",
       "product_refund": "Product refund — not delivered",
-      "currency_change": "Currency change"
+      "currency_change": "Currency change",
+      "usage_charge": "Service usage",
+      "usage_refund": "Unused service usage returned"
     },
     "status": {
       "pending": "Pending",

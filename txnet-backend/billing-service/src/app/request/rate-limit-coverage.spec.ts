@@ -59,8 +59,10 @@ const APP = join(__dirname, '..');
  * tick and argument as `DepositInternalController`.
  * `GrantBulkJobInternalController` is the bulk jobs' drain (F-311-u2), a
  * minute tick: throttling it would leave a started +3 days half applied.
+ * `UsageInternalController` is the postpaid capture (F-118-g), an hourly tick:
+ * throttling it would leave measured usage held and uncharged.
  */
-const EXEMPT = new Set(['HealthController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'ChargeCurrenciesController']);
+const EXEMPT = new Set(['HealthController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'UsageInternalController', 'ChargeCurrenciesController']);
 
 /**
  * Controllers with no identity to bucket on, and what they count instead.

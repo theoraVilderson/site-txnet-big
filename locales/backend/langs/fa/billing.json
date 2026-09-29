@@ -12,6 +12,8 @@
     "traffic_refund": "بازگشت ترافیک مصرف‌نشده",
     "product_purchase": "خرید محصول",
     "product_refund": "بازگشت وجه محصول — تحویل نشد",
-    "currency_change": "تغییر ارز"
+    "currency_change": "تغییر ارز",
+    "usage_charge": "هزینه‌ی مصرف سرویس",
+    "usage_refund": "بازگشت مصرف‌نشده‌ی سرویس"
   }
 }
