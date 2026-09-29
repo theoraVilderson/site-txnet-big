@@ -46,6 +46,8 @@ export const OutboxEventType = {
   TENANT_SUBSCRIPTION_SUSPENDED: 'tenant.subscription.suspended',
   /** F-027-at: the platform owner released a usage hold; `metering-service` bills it (ADR-0080 decision 3). */
   USAGE_RELEASE: 'network.usage.release',
+  /** F-118-f: a reporter's usage of a non-VPN meter; `metering-service` advances the Grant's `grant_meter.consumed` (ADR-0105 decision 5). */
+  USAGE_EVENT: 'billing.usage.event',
   /** F-111-b: a paid invoice issued a Grant, `pending` until delivery (spec §5.8 step 2). */
   GRANT_CREATED: 'entitlement.grant.created',
   /** F-111-n: `network-service` read a Grant's config back from its panel — `complete` (`converge.PostgresDesired.Record`). */
@@ -154,6 +156,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED]: 'worker-service',
   [OutboxEventType.USAGE_RELEASE]: 'metering-service',
+  [OutboxEventType.USAGE_EVENT]: 'metering-service',
   [OutboxEventType.GRANT_CREATED]: 'worker-service',
   [OutboxEventType.CONFIG_CONFIRMED]: 'worker-service',
   [OutboxEventType.GRANT_CLOSED]: 'worker-service',

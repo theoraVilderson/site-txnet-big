@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 1
-updated: 2026-09-27
+updated: 2026-09-29
 ---
 
 # Metering — a collection pass becomes usage
@@ -87,6 +87,34 @@ hold that does not exist throws and dead-letters, as evidence.
 
 `metering.service.spec.ts` pins it: billed once, never after a write-off, and
 still once with the state pre-read defeated.
+
+## Usage events — every meter but VPN (F-118-f)
+
+ADR-0105 decision 5: a use of a Grant's meter is a `usage_event` that advances
+`grant_meter.consumed`. Rating (F-118-g) reads `consumed − billed`; nothing here
+prices. `shared-core` `usage-event.ts` is the one writer, behind two doors
+(user, 2026-09-29) — **no HTTP door**: this process serves none (ADR-0077) and
+the platform has no service-to-service auth.
+
+1. **In-process:** `recordUsage(tx, event)` inside the caller's tenant-bound
+   transaction (F-118-h's `commit`). **Queued:** an `outbox_event` of type
+   `billing.usage.event` (aggregate `entitlement.grant`), payload
+   `usageEventPayloadSchema`; `MeteringService.intake` reads the meter's tenant
+   across tenants, as `configsOf` does, and runs the same function under it.
+2. **One `(source, idempotencyKey)`, one advance.** The insert is `ON CONFLICT
+   DO NOTHING`, never a caught unique violation, so a copy aborts no caller's
+   transaction; only an inserted row moves `consumed`. A copy with the same
+   figures is `duplicate` and acks. The key is the reporter's, scoped by
+   `source`.
+3. **Refused, thrown, dead-lettered:** `meter_not_on_grant` (no `grant_meter`
+   row: the Grant was not sold with it), `key_reused` (the key already recorded
+   a different figure), `meter_on_its_own_path` (`vpn.traffic`: its bytes keep
+   the delta path above until F-118-l).
+4. `quantity` is a whole number ≥ 1 in the meter's unit (a decimal string on
+   the wire, CHECK in the table); `usage_event` is append-only (INSERT and
+   SELECT granted) and its tenant is its meter's (`entitlement.same_tenant()`).
+
+`usage-intake.spec.ts` pins 2 and 3.
 
 ## Tenant scope — the label, not the permission
 

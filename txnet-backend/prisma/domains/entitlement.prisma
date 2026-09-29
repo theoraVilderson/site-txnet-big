@@ -368,8 +368,9 @@ model GrantMeter {
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @default(now()) @updatedAt
 
-  grant Grant @relation(fields: [grantId], references: [id])
-  meter Meter @relation(fields: [meterKey], references: [key], onDelete: Restrict, onUpdate: Restrict)
+  grant  Grant        @relation(fields: [grantId], references: [id])
+  meter  Meter        @relation(fields: [meterKey], references: [key], onDelete: Restrict, onUpdate: Restrict)
+  events UsageEvent[]
 
   @@unique([grantId, meterKey])
   @@index([tenantId])

@@ -37,6 +37,7 @@ export * from './lib/tenant/vault/credential-env';
 export * from './lib/tenant/vault/sms-line-credentials';
 export * from './lib/billing/wallet-ledger';
 export * from './lib/billing/wallet-hold';
+export * from './lib/billing/usage-event';
 export * from './lib/billing/operating-currency';
 export * from './lib/billing/currency-change';
 export * from './lib/currency/fx-rate';

@@ -8,11 +8,15 @@ import {
   retentionEvent,
   retentionToTell,
   OutboxEventType,
+  recordUsage,
   runWithTenant,
   tenantTransaction,
   USAGE_DELTA_MESSAGE_VERSION,
+  UsageRefused,
   usageReleaseDeltaId,
   type UsageDeltaMessage,
+  type UsageEvent,
+  type UsageRecorded,
   type UsageDeltaRow,
   type UsageQuarantineRow,
   type UsageReleasePayload,
@@ -214,6 +218,24 @@ export class MeteringService {
     if (total !== undefined) await this.subUsage.publish(hold.config.grantId, total);
     this.logger.log(`hold ${hold.id} released by ${release.adminId}: ${hold.upBytes + hold.downBytes} bytes billed`);
     return 'released';
+  }
+
+  /**
+   * One queued usage event (F-118-f, ADR-0105 decision 5): the meter's
+   * tenant is read across tenants — as `configsOf` produces a delta's — and
+   * {@link recordUsage} runs under it. A duplicate is an answer and acks; a
+   * refusal throws, so the message dead-letters as the evidence of what a
+   * reporter claimed.
+   */
+  async intake(event: UsageEvent): Promise<UsageRecorded> {
+    const meter = await this.crossTenant.grantMeter.findUnique({
+      where: { grantId_meterKey: { grantId: event.grantId, meterKey: event.meterKey } },
+      select: { tenantId: true },
+    });
+    if (!meter) throw new UsageRefused('meter_not_on_grant');
+    return runWithTenant({ id: meter.tenantId }, async () =>
+      await tenantTransaction(this.prisma, (tx) => recordUsage(tx, event)),
+    );
   }
 
   /**

@@ -1041,3 +1041,32 @@ model CurrencyChange {
   @@map("currency_change")
   @@schema("billing")
 }
+
+/// One report of usage on a Grant's meter (F-118-f, ADR-0105 decision 5).
+/// Append-only. The `(source, idempotencyKey)` insert is the deduplication:
+/// a copy advances nothing. `grant_meter.consumed` is the sum of these for
+/// every meter but `vpn.traffic`, whose bytes keep the delta path until F-118-l.
+model UsageEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  /// Its meter's tenant (`entitlement.same_tenant()`), bound by RLS.
+  tenantId       String   @db.Uuid
+  grantId        String   @db.Uuid
+  meterKey       String
+  /// In the meter's unit. Always > 0 (CHECK).
+  quantity       BigInt
+  /// When the reporter says the use happened.
+  occurredAt     DateTime
+  /// The reporting service, e.g. `notification-service`. Scopes the key.
+  source         String
+  /// The reporter's own key for this use: the same use, the same key.
+  idempotencyKey String
+  recordedAt     DateTime @default(now())
+
+  grantMeter GrantMeter @relation(fields: [grantId, meterKey], references: [grantId, meterKey], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([source, idempotencyKey])
+  @@index([grantId, meterKey, occurredAt])
+  @@index([tenantId])
+  @@map("usage_event")
+  @@schema("billing")
+}

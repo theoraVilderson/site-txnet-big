@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
-import type { UsageDeltaMessage, UsageReleasePayload } from '@txnet-backend/shared-core';
+import type { UsageDeltaMessage, UsageEvent, UsageReleasePayload } from '@txnet-backend/shared-core';
 
 import { BrokerService } from '../broker/broker.service';
 import { MeteringService } from './metering.service';
@@ -26,8 +26,9 @@ export class DeltaConsumer implements OnApplicationBootstrap {
     await this.broker.consumeUsage(
       (message) => this.handle(message),
       (release) => this.release(release),
+      (event) => this.usage(event),
     );
-    this.logger.log('consuming network.usage.# and released holds — every measured byte is billed, held or quarantined');
+    this.logger.log('consuming network.usage.#, released holds and usage events — every measured byte is billed, held or quarantined');
   }
 
   private async handle(message: UsageDeltaMessage): Promise<void> {
@@ -37,5 +38,10 @@ export class DeltaConsumer implements OnApplicationBootstrap {
   /** A released hold (F-027-at). `already_resolved` is an answer, not a failure: it acks. */
   private async release(release: UsageReleasePayload): Promise<void> {
     await this.metering.release(release);
+  }
+
+  /** A reported use of a non-VPN meter (F-118-f). `duplicate` is an answer and acks; a refusal throws and dead-letters. */
+  private async usage(event: UsageEvent): Promise<void> {
+    await this.metering.intake(event);
   }
 }

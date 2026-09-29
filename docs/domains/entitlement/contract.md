@@ -155,7 +155,7 @@ rate on a prepaid Grant.
 **Its meters are locked beside it (F-118-e, ADR-0105 decision 4)** — `grant-meter.ts`: one
 `grant_meter` row per card in effect (terms, `rateCardId`, counters at 0). A metered VPN
 Grant's is the card `meteredRate` came from; a package plan has none (decision 0); a card on a
-meter nothing serves yet refuses the sale (`meter_not_served`, decision 7). Nothing reads the row until F-118-f/-l.
+meter nothing serves yet refuses the sale (`meter_not_served`, decision 7). `usage_event` advances `consumed` (billing `contract.metering.md`, F-118-f); the rest waits for F-118-g/-l.
 
 **Delivery of a paid Grant (F-111-d, spec §5.8 step 3)** —
 `entitlement/delivery.ts`, proved by `delivery.spec.ts` and, against Postgres,
