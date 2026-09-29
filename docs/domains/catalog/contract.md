@@ -134,7 +134,7 @@ A **meter** (F-118-c, ADR-0105) is what is counted and billed on use: a
 platform-only `meter` row, written by a migration because a meter exists only
 where code reports it — seeded `vpn.traffic` (bytes, network-service) and
 `vpn.config.regenerate` (count, billing-service: one config regenerated,
-F-118-q; unsold until F-118-h's door). Code names it through
+F-118-q; sold behind the per-use door, F-118-h). Code names it through
 `METER_KEYS` (`shared-core/src/lib/catalog/meter.ts`).
 A **rate card** (F-118-d, ADR-0105 decision 3) prices one meter on one variant:
 `unitPrice` per `unitSize` of the meter's unit, `Decimal(18,8)`, in its
@@ -149,7 +149,7 @@ Every `metered_rate` row became a `vpn.traffic` prepaid card per 2^30 bytes
 (`METERED_RATE_UNIT_BYTES`); F-118-l dropped `metered_rate`. A seller writes and switches off its
 own cards through the routes above (F-118-m, ADR-0105 (10)); a card no sale would take is refused,
 not stored, since as the newest it would make the variant unsellable (`rate_card_not_served`): only
-`vpn.traffic` on a `metered` variant in the shape below (`servedByBytes`), no other meter until F-118-h.
+`vpn.traffic` on a `metered` variant in the shape below (`servedByBytes`), or a `DOOR_METERS` meter on any variant (F-118-h).
 Every card in effect is locked on the Grant as a `grant_meter` row (F-118-e,
 entitlement `contract.md`); a VPN Grant still sells only a card the byte engine
 serves — per 2^30 bytes, nothing included, then metered; prepaid or, since

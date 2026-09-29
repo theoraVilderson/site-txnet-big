@@ -90,6 +90,8 @@ enum TenantBillingReasonType {
   topup_payment
   subscription_charge
   metered_usage_charge
+  /// F-118-h: wholesale units bought on a per-use door and not used, given back; `referenceId` = the `usage_authorization`.
+  metered_usage_refund
   sms_usage_charge
   admin_manual_adjust
   /// F-019-h: the buyer's payment for the first period lands here before it is charged; `referenceId` = the tenant id.

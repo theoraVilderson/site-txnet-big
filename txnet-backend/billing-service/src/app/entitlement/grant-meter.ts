@@ -1,5 +1,5 @@
 import { Prisma, TenantType, VariantBillingMode, type RateCardAfterIncluded, type RateCardMode } from '@prisma/client';
-import { METER_KEYS, packageMeterRatesAt } from '@txnet-backend/shared-core';
+import { DOOR_METERS, METER_KEYS, packageMeterRatesAt } from '@txnet-backend/shared-core';
 
 import { rateCardAt, vpnTrafficRateAt, type RateCardRow } from '../catalog/catalog-reads';
 
@@ -46,8 +46,10 @@ type WholesaleReader = Pick<Prisma.TransactionClient, 'tenant' | 'tenantSubscrip
  *    from then on (F-118-l). With none, issue refuses `metered_rate_missing` first.
  *  - `vpn.traffic` on any other variant is not read at all: a package plan's
  *    path never looks at a card (decision 0).
- *  - Any other meter in effect is `unserved` until its door exists (F-118-h);
- *    issue refuses it as `meter_not_served`.
+ *  - A `DOOR_METERS` meter (`vpn.config.regenerate`), on any variant: the
+ *    per-use door refuses its unfunded use (F-118-h).
+ *  - Any other meter in effect is `unserved`: issue refuses it as
+ *    `meter_not_served`.
  */
 export function grantMetersFromVariant(
   v: { billingMode: VariantBillingMode; rateCards: readonly RateCardRow[] },
@@ -59,8 +61,8 @@ export function grantMetersFromVariant(
   for (const meterKey of keys) {
     const card = rateCardAt(v.rateCards, startsAt, currencyCode, meterKey);
     if (!card) continue;
-    if (meterKey !== METER_KEYS.vpnTraffic) return { meters: [], unserved: meterKey };
-    if (v.billingMode !== VariantBillingMode.metered || !vpnTrafficRateAt(v.rateCards, startsAt, currencyCode)) continue;
+    if (meterKey !== METER_KEYS.vpnTraffic && !DOOR_METERS.has(meterKey)) return { meters: [], unserved: meterKey };
+    if (meterKey === METER_KEYS.vpnTraffic && (v.billingMode !== VariantBillingMode.metered || !vpnTrafficRateAt(v.rateCards, startsAt, currencyCode))) continue;
     meters.push({
       meterKey,
       rateCardId: card.id,

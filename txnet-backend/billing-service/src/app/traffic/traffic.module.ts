@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { UsageModule } from '../usage/usage.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { BlockPurchaseService } from './block-purchase';
 import { BlockRequestService } from './block-request';
@@ -40,7 +41,7 @@ import { VpnReserveSweep } from './vpn-reserve';
  * over `drain-due`.
  */
 @Module({
-  imports: [WalletModule],
+  imports: [WalletModule, UsageModule],
   controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController, VpnReserveController],
   providers: [BlockPurchaseService, BlockRequestService, RemainderCreditService, BlockRequestQueue, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GroupFulfilmentService, GroupDrainService, GrantCloseService, VpnReserveSweep],
   exports: [BlockPurchaseService, RemainderCreditService, ConfigActionsService, GroupFulfilmentService, UserConfigsService, GrantUsageService],

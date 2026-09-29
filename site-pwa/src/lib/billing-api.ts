@@ -316,6 +316,7 @@ export const CONFIG_ACTION_REFUSALS = [
   "config_not_found",
   "config_retired",
   "regenerate_limit_reached",
+  "regenerate_unfunded",
   "config_changed",
   "same_panel",
   "actor_not_allowed",

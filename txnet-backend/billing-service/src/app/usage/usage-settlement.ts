@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GrantStatus, Prisma, RateCardAfterIncluded, RateCardMode, WalletReasonType } from '@prisma/client';
-import { METER_KEYS, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { DOOR_METERS, METER_KEYS, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -127,13 +127,16 @@ export class UsageSettlementService {
    * postpaid meter with usage past its cursor is captured, and its hold put
    * back to what it was, so it stays funded to the same target. Cross-tenant
    * scan, per-tenant write, one transaction per meter. A `vpn.traffic` one
-   * (F-118-k) reads its usage off the Grant's bytes (`vpnConsumed`).
+   * (F-118-k) reads its usage off the Grant's bytes (`vpnConsumed`). A
+   * per-use meter is not swept: its door captures at each commit, and its
+   * hold is only what open tokens reserve (F-118-h).
    */
   async captureDue(): Promise<CaptureDueResult> {
     const rows = await this.crossTenant.grantMeter.findMany({
       where: {
         mode: RateCardMode.postpaid,
         afterIncluded: RateCardAfterIncluded.metered,
+        meterKey: { notIn: [...DOOR_METERS] },
         grant: { status: GrantStatus.active },
       },
       select: {

@@ -201,7 +201,7 @@ the watchdog and the health flag: [contract.resilience.md](contract.resilience.m
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
 | provision / move / retire config (F-027-z) | grantId, panelId, protocol, actor | desired state on `config` + `config_action_log`; **no panel call** — `internal/converge` carries it ([contract.provisioning.md](contract.provisioning.md)) | sync, caller's tx | `grant_not_active`, `panel_not_found`, `config_retired` |
-| regenerate config (F-027-z) | configId, actor | new `uuid`, `regenerateUsedCount++`, held in the write | sync, caller's tx | `regenerate_limit_reached`, `config_changed` |
+| regenerate config (F-027-z) | configId, actor | new `uuid`, `regenerateUsedCount++`, held in the write; on a Grant sold with a `vpn.config.regenerate` meter, a user's is authorized on billing's per-use door instead and the count is not read or moved (F-118-h) | sync, caller's tx | `regenerate_limit_reached`, `regenerate_unfunded`, `config_changed` |
 | enable / disable config (F-027-z) | configId, reason, actor | `status` + `desiredEnabled` + `config_action_log` row | sync, caller's tx | `actor_not_allowed` for a user |
 | ingest traffic | panel -> {configId, up, down, at} | `traffic_raw_log` (partitioned) | async, high volume | — |
 | nightly aggregate | window | `traffic_daily_aggregate` rows, upserted per `(configId, date)`; the raw months past retention dropped (F-027-o) | async (`network_traffic_rollup`, seeded `15 3 * * *`) | a drop whose aggregate does not match the partition — refused, run fails |

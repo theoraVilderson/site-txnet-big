@@ -55,6 +55,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260929000600_usage_is_rated_and_settled/**
   - txnet-backend/prisma/domains/migrations/20260929000700_a_spending_cap_bounds_one_product/**
   - txnet-backend/prisma/domains/migrations/20260929000800_held_money_is_announced/**
+  - txnet-backend/prisma/domains/migrations/20260929001400_a_per_use_meter_is_served_through_a_door/**
   - txnet-backend/billing-service/src/app/usage/**
 owns_tables: [wallet, wallet_hold, wallet_transaction, spending_cap, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]

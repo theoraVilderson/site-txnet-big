@@ -13,7 +13,8 @@ ADR-0105 (5)(6)(11)): the money side of `grant_meter`. Intake
 ([contract.metering.md](contract.metering.md) "Usage events") advances
 `consumed`; this turns `consumed − billed` into ledger rows and says how far a
 meter is `funded` — what its enforcer may serve (ADR-0105 (7)). Read it before
-pricing a meter, before a second caller of any call below, or before F-118-h.
+pricing a meter, before a second caller of any call below, or before putting a
+new meter behind the per-use door (below).
 
 **A prepaid `vpn.traffic` is not here.** Its blocks are the block purchaser's
 ([contract.traffic-block.md](contract.traffic-block.md)), which moves its
@@ -79,11 +80,10 @@ All refuse `grant_not_found`, `meter_not_on_grant`, `meter_on_its_own_path`,
 `not_metered_past_included`, `rate_not_priceable` and `cursor_moved`, each
 writing nothing (`UsageSettlementRefused`).
 
-**Callers.** No non-VPN meter can be sold until its door exists (entitlement
-`meter_not_served`): F-118-h's `authorize`/`commit` will buy blocks and top
-holds up, and a Grant close call `settleAtClose`. Live today: the hourly sweep
-below, and VPN postpaid's own paths (next section), which share these holds
-through `PostpaidHolds` (`usage/postpaid-hold.ts`).
+**Callers.** A non-VPN meter is sold only behind the per-use door (below;
+any other is entitlement `meter_not_served`), which shares this arithmetic and
+`PostpaidHolds` (`usage/postpaid-hold.ts`) with the hourly sweep and VPN
+postpaid's own paths. No Grant close calls `settleAtClose` yet.
 
 ## The hourly capture
 
@@ -92,8 +92,11 @@ through `PostpaidHolds` (`usage/postpaid-hold.ts`).
 worker-service's `usage_capture` at `5 * * * *` (automation
 `contract.worker.md`). Hourly is ASSUMED (`open-questions.md` 2026-09-29).
 
+0. First, every per-use token past its `expiresAt` is expired (next section);
+   the answer adds `expired`, and its failures count in `errors`.
 1. Cross-tenant scan of active, postpaid, metered meters, `vpn.traffic`
-   included (500 a call); those with `consumed` past `max(billed, included)`
+   included and `DOOR_METERS` excluded — the door captures at each commit
+   (500 a call); those with `consumed` past `max(billed, included)`
    are due — a VPN one's `consumed` as the next section reads it.
 2. Each in its own tenant transaction: capture, then the hold topped back to
    what it held before — the target is the hold, so a meter stays funded as
@@ -134,9 +137,52 @@ picks the mode on the variant form from F-118-m (user, 2026-09-29).
 
 Tests: `traffic/vpn-postpaid.spec.ts`.
 
+## The per-use door (F-118-h, ADR-0105 (7))
+
+`UsageDoorService` (`usage/usage-door.ts`) is the enforcer of every meter in
+`DOOR_METERS` (`shared-core` `catalog/meter.ts`) — today `vpn.config.regenerate`.
+A card on one is sold on any variant (catalog `rate_card_not_served`,
+entitlement `meter_not_served` let it through). Its token is a
+`usage_authorization` row ([data-model.md](data-model.md)).
+
+| call | does | refuses |
+|---|---|---|
+| `authorize(tx, {grantId, meterKey, quantity, key, ttlMs?})` | expires this meter's overdue tokens, then funds `consumed + open tokens + quantity`: **the reseller first** — on a Grant with a wholesale leg, the units past `wholesaleBilled` bought on its `tenant_billing_wallet` at the locked rate (`metered_usage_charge`, `referenceId` the token) — then the user: nothing inside the included quantity or what `funded` covers; else prepaid, one block debited (`usage_charge`); postpaid, the meter's hold grown to the whole price. Answers `{token, quantity, status, expiresAt}` (10 min unless `ttlMs`) | `meter_not_on_door`, `quantity_not_positive`, `grant_not_active`, `not_metered_past_included` (a `stop` card), `insufficient_funds`, `wholesale_unfunded`, `key_reused`, the engine's own |
+| `commit(tx, {token, quantity})` | `quantity` (0..authorized) recorded through `recordUsage`, source `billing.usage-door`, key the token id; postpaid captures it; then gives back | `token_not_found`, `token_settled`, `token_expired`, `over_authorized` |
+| `cancel(tx, {token})` | records nothing; gives back | `token_settled` (a committed one) |
+
+1. **Every refusal before the first write**, so a refused authorization
+   leaves nothing — no token, no debit, no hold — even in a transaction the
+   caller goes on with. The same `key` answers the same token.
+2. **All or nothing.** A balance short of the whole price is refused, not
+   served less: a use is not divisible the way bytes are.
+3. **An open token reserves its `quantity`**, so two at once are each funded.
+   A settlement is guarded on `status = open`.
+4. **The give-back** after a commit, a cancel or an expiry brings each side
+   down to what was used plus what open tokens reserve, priced **down**:
+   prepaid, `usage_refund` with `billed`/`funded` down (`giveBackAbove`);
+   postpaid, the hold released to that price and closed at nothing;
+   the reseller, `metered_usage_refund` (`referenceId` the token) with
+   `wholesaleBilled` down (`usage/usage-wholesale.ts`, apart because it moves
+   the reseller's ledger, never a user's). Under a cent moves nothing; those units stay funded.
+5. **The wholesale leg has no included part**: the package rate prices every
+   unit, so a unit the user got free is still the reseller's (F-118-n1).
+6. **Expiry**: at the next `authorize` on the meter, or the hourly sweep —
+   so money can stay reserved up to the hour past `expiresAt`.
+
+**The regenerate** (`traffic/config-actions.ts`): on a Grant sold with the
+meter, a user's regenerate authorizes 1 before the write, commits after it,
+and cancels when the write is refused; the per-config cap is not read or
+spent (user, 2026-09-29). An admin's or the system's stays free. Refusals
+reach the user as `regenerate_limit_reached` (a `stop` card) or
+`regenerate_unfunded` (either wallet short).
+
+Tests: `usage/usage-door.spec.ts`; the regenerate in `traffic/config-actions.spec.ts`.
+
 ## Reasons (ADR-0105 (11))
 
 `usage_charge` — a debit and a sale (`IS_SALE`, [contract.revenue.md](contract.revenue.md));
+on the reseller's ledger, `metered_usage_charge` and `metered_usage_refund` (tenant `contract.billing.md`);
 `usage_refund` — a credit that undoes one (`UNDOES`). Both show on the
 unnarrowed `/wallet/history` page ([contract.history.md](contract.history.md)).
 `traffic_consumption` and `traffic_refund` stay for VPN's rows.

@@ -37,8 +37,10 @@ of `tenant_billing_wallet.cachedBalance` (invariant 3). The same shape as
 `reasonType` in use: `admin_manual_adjust` (F-019-a), `topup_payment` (F-019-b),
 `subscription_charge` (F-019-c), `reseller_purchase` (F-019-h: the buyer's
 payment for the first period, credited and charged in the purchase's
-transaction, `contract.admin.md`). `metered_usage_charge` and
-`sms_usage_charge` stay in the enum unused (D-41: no metering).
+transaction, `contract.admin.md`), `metered_usage_charge` /
+`metered_usage_refund` (F-118-h: wholesale units a per-use door buys, and
+gives back unused, `referenceId` the token; billing `contract.usage-rating.md`).
+`sms_usage_charge` stays in the enum unused.
 
 **The rate at the boundary (F-116-g, ADR-0098 part 4).** Every writer above
 charges an amount already in the platform's currency — a package price, a

@@ -65,6 +65,7 @@ export const REFUSAL_KEYS: Record<ConfigActionRefusal, string> = {
   config_not_found: C.refusal.config_not_found,
   config_retired: C.refusal.config_retired,
   regenerate_limit_reached: C.refusal.regenerate_limit_reached,
+  regenerate_unfunded: C.refusal.regenerate_unfunded,
   config_changed: C.refusal.config_changed,
   same_panel: C.refusal.failed,
   actor_not_allowed: C.refusal.failed,

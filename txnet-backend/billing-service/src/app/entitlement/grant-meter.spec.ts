@@ -18,7 +18,7 @@
  * `entitlement-schema.int.spec.ts`.
  */
 import { GrantSource, Prisma, VariantBillingMode, VariantVisibility } from '@prisma/client';
-import { runWithTenant, type RateCardRow } from '@txnet-backend/shared-core';
+import { METER_KEYS, runWithTenant, type RateCardRow } from '@txnet-backend/shared-core';
 
 import { GrantService } from './grant';
 import { grantMetersFromVariant } from './grant-meter';
@@ -151,6 +151,17 @@ describe('GrantService.issue writes the Grant\'s meters beside its quotas', () =
 
     expect(grants[0]).toMatchObject({ purchasedBytes: BigInt(50) * GIB });
     expect(meters).toHaveLength(0);
+  });
+
+  it('locks a per-use card on a package plan, the door being its enforcer (F-118-h); the bag is untouched', async () => {
+    const { tx, grants, meters } = fakeTx(
+      variantRow(VariantBillingMode.prepaid, [card('now', { meterKey: METER_KEYS.configRegenerate, unitSize: BigInt(1), includedQuantity: BigInt(2) })]),
+    );
+
+    await issue(tx);
+
+    expect(grants[0]).toMatchObject({ purchasedBytes: BigInt(50) * GIB });
+    expect(meters).toEqual([expect.objectContaining({ meterKey: METER_KEYS.configRegenerate, includedQuantity: BigInt(2), consumed: BigInt(0), funded: BigInt(0) })]);
   });
 
   it('refuses a variant carrying a card on a meter nothing serves, and writes nothing', async () => {

@@ -2220,6 +2220,7 @@
         "config_retired": "already deleted.",
         "grant_not_active": "the service is not active.",
         "regenerate_limit_reached": "No new links are left for this config.",
+        "regenerate_unfunded": "not enough money in your wallet for a new link.",
         "config_changed": "it changed while you were acting on it. Try again.",
         "failed": "could not be done. Try again."
       },

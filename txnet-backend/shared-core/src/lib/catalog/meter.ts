@@ -11,11 +11,20 @@ import type { MeterUnit } from '@prisma/client';
 export const METER_KEYS = {
   /** VPN bytes, reported by network-service's traffic accounting. */
   vpnTraffic: 'vpn.traffic',
-  /** One config regenerated on a VPN Grant, counted by billing-service, which runs it (F-118-q). Sold only through F-118-h's door. */
+  /** One config regenerated on a VPN Grant, counted by billing-service, which runs it (F-118-q). Served through the per-use door (F-118-h). */
   configRegenerate: 'vpn.config.regenerate',
 } as const;
 
 export type MeterKey = (typeof METER_KEYS)[keyof typeof METER_KEYS];
+
+/**
+ * Meters served through the per-use door (F-118-h, ADR-0105 decision 7):
+ * each use is authorized before the work — refused when unfunded — and
+ * committed after it (`billing-service` `usage/usage-door.ts`). A card on one
+ * is sold on any variant; a meter in neither this set nor `vpn.traffic`'s
+ * byte engine has nothing that refuses unfunded use, so it is not sold.
+ */
+export const DOOR_METERS: ReadonlySet<string> = new Set<string>([METER_KEYS.configRegenerate]);
 
 /** Exhaustive over the Prisma enum: a unit added there fails to compile here (C-09). */
 const UNITS: Record<MeterUnit, true> = { bytes: true, count: true, seconds: true, tokens: true };

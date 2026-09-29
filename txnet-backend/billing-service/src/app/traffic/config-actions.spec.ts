@@ -16,6 +16,7 @@
  */
 import { ActorType, ConfigStatus, DesiredRemote, EnforcementState, GrantStatus, Prisma } from '@prisma/client';
 
+import { UsageDoorRefused, type UsageDoorService } from '../usage/usage-door';
 import { ConfigActionRefused, ConfigActionsService } from './config-actions';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
@@ -33,12 +34,14 @@ function matches(row: Row, where: Record<string, unknown>) {
   return Object.entries(where).every(([key, want]) => row[key] === want);
 }
 
-function build(grantStatus: GrantStatus = GrantStatus.active, trafficUnlimited = false) {
+function build(grantStatus: GrantStatus = GrantStatus.active, trafficUnlimited = false, door: UsageDoorService | null = null) {
   const configs: Row[] = [];
   const logs: Row[] = [];
   let next = 0;
 
   const tx = {
+    // A Grant is sold with a regenerate meter only when a door is given.
+    grantMeter: { findUnique: async () => (door ? { id: 'meter-1' } : null) },
     grant: {
       findUnique: async ({ where }: { where: { id: string } }) =>
         where.id === GRANT ? { id: GRANT, tenantId: TENANT, userId: USER, status: grantStatus, trafficUnlimited } : null,
@@ -88,7 +91,7 @@ function build(grantStatus: GrantStatus = GrantStatus.active, trafficUnlimited =
     },
   };
 
-  const service = new ConfigActionsService();
+  const service = new ConfigActionsService(door);
   return { service, tx: tx as unknown as Prisma.TransactionClient, configs, logs };
 }
 
@@ -181,6 +184,40 @@ describe('ConfigActionsService', () => {
     expect(logs.at(-1)).toMatchObject({ actorType: ActorType.admin, action: 'regenerate' });
     // The user's own is still refused at the cap.
     await expect(service.regenerate(tx, { configId, actor: OWNER })).rejects.toEqual(refusal('regenerate_limit_reached'));
+  });
+
+  it('a priced regenerate goes through the door instead of the cap: authorized before, committed after, cancelled if refused (F-118-h)', async () => {
+    const calls: string[] = [];
+    let refuse: UsageDoorRefused | null = null;
+    const door = {
+      authorize: async () => {
+        if (refuse) throw refuse;
+        calls.push('authorize');
+        return { token: 'tok' };
+      },
+      commit: async (_tx: unknown, i: { token: string; quantity: bigint }) => void calls.push(`commit ${i.token} ${i.quantity}`),
+      cancel: async (_tx: unknown, i: { token: string }) => void calls.push(`cancel ${i.token}`),
+    } as unknown as UsageDoorService;
+    const { service, tx, configs } = build(GrantStatus.active, false, door);
+    const { configId } = await service.provision(tx, { grantId: GRANT, panelId: PANEL_A, protocol: 'vless', actor: OWNER });
+    configs[0].regenerateUsedCount = 3;
+
+    await service.regenerate(tx, { configId, actor: OWNER });
+    expect(calls).toEqual(['authorize', 'commit tok 1']);
+    expect(configs[0].regenerateUsedCount).toBe(3);
+
+    refuse = new UsageDoorRefused('insufficient_funds');
+    await expect(service.regenerate(tx, { configId, actor: OWNER })).rejects.toMatchObject({ reason: 'regenerate_unfunded' });
+    refuse = new UsageDoorRefused('not_metered_past_included');
+    await expect(service.regenerate(tx, { configId, actor: OWNER })).rejects.toMatchObject({ reason: 'regenerate_limit_reached' });
+
+    refuse = null;
+    calls.length = 0;
+    configs[0].status = ConfigStatus.disabled_by_admin;
+    const read = tx.config.findUnique.bind(tx.config);
+    (tx.config as unknown as { findUnique: unknown }).findUnique = async (args: { where: { id: string } }) => ({ ...((await read(args as never)) as Row), status: ConfigStatus.active });
+    await expect(service.regenerate(tx, { configId, actor: OWNER })).rejects.toEqual(refusal('config_changed'));
+    expect(calls).toEqual(['authorize', 'cancel tok']);
   });
 
   it('a regenerate that lost the race to another write is refused, not applied twice', async () => {

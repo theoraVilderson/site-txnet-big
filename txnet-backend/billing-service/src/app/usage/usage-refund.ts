@@ -35,4 +35,26 @@ export class UsageRefundService {
       referenceId: grant.id,
     });
   }
+
+  /**
+   * The per-use door's give-back (F-118-h): a prepaid meter's units bought
+   * past `usedTo` — what was used and what open tokens still reserve — priced
+   * **down** and credited as `usage_refund`, `billed` and `funded` brought down
+   * to it. Under a cent credits nothing and moves nothing: those units stay
+   * funded for the next use rather than being taken.
+   */
+  async giveBackAbove(tx: Prisma.TransactionClient, { grant, meter }: { grant: { id: string; userId: string }; meter: GrantMeter }, usedTo: bigint): Promise<void> {
+    const left = max(meter.funded, meter.includedQuantity) - usedTo;
+    if (left <= ZERO) return;
+    const cents = (left * priceUnits(meter)) / (meter.unitSize * CENT);
+    if (cents === ZERO) return;
+    await moveCursors(tx, meter, { billed: usedTo, funded: usedTo });
+    await this.credits.credit(tx, {
+      userId: grant.userId,
+      amount: toAmount(cents),
+      currencyCode: meter.currencyCode,
+      reasonType: WalletReasonType.usage_refund,
+      referenceId: grant.id,
+    });
+  }
 }

@@ -12,7 +12,7 @@ import {
   VariantVisibility,
 } from '@prisma/client';
 
-import { CATEGORY_MAX_DEPTH, METER_KEYS, operatingCurrencyOf, platformCurrencyOf, servedByBytes, tenantTransaction } from '@txnet-backend/shared-core';
+import { CATEGORY_MAX_DEPTH, DOOR_METERS, METER_KEYS, operatingCurrencyOf, platformCurrencyOf, servedByBytes, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -70,10 +70,10 @@ import { mustStateTraffic, trafficQuotaOf } from './traffic-quota';
  * operating currency — as a new row, and switches one off; the platform's
  * cards are the platform owner's, so a reseller finds them *not found* as it
  * finds the platform's variant. A card nothing would sell is refused rather
- * than stored (`rate_card_not_served`): today that is a `vpn.traffic` card on
- * a metered variant in the shape the byte engine serves, and no other meter
- * until its door exists (F-118-h). Stored, it would be the newest card and
- * make the variant unsellable (`grantMetersFromVariant`).
+ * than stored (`rate_card_not_served`): what is served is a `vpn.traffic` card
+ * on a metered variant in the shape the byte engine serves, and a card on a
+ * `DOOR_METERS` meter on any variant (F-118-h). Stored, anything else would be
+ * the newest card and make the variant unsellable (`grantMetersFromVariant`).
  */
 
 export type CatalogActor = { adminId: string; tenantId: string; ip: string };
@@ -1151,22 +1151,23 @@ export class CatalogAdminService {
 
   /**
    * A card on a meter that exists, which a sale would take (class comment):
-   * `vpn.traffic` on a metered variant, in the byte engine's shape. Any other
-   * meter has nothing that refuses unfunded use yet (F-118-h), and issue
-   * would refuse the variant `meter_not_served`.
+   * `vpn.traffic` on a metered variant, in the byte engine's shape, or a
+   * per-use meter the door serves (F-118-h). Any other meter has nothing that
+   * refuses unfunded use, and issue would refuse the variant `meter_not_served`.
    */
   private async refuseUnserved(db: Prisma.TransactionClient, billingMode: VariantBillingMode, card: RateCardTerms): Promise<void> {
     const meter = await db.meter.findUnique({ where: { key: card.meterKey }, select: { key: true } });
     if (!meter) throw new CatalogAdminRefused('meter_not_found', card.meterKey);
     const served =
-      card.meterKey === METER_KEYS.vpnTraffic &&
-      billingMode === VariantBillingMode.metered &&
-      servedByBytes({
-        mode: card.mode,
-        afterIncluded: card.afterIncluded,
-        unitSize: BigInt(card.unitSize),
-        includedQuantity: BigInt(card.includedQuantity ?? '0'),
-      });
+      DOOR_METERS.has(card.meterKey) ||
+      (card.meterKey === METER_KEYS.vpnTraffic &&
+        billingMode === VariantBillingMode.metered &&
+        servedByBytes({
+          mode: card.mode,
+          afterIncluded: card.afterIncluded,
+          unitSize: BigInt(card.unitSize),
+          includedQuantity: BigInt(card.includedQuantity ?? '0'),
+        }));
     if (!served) throw new CatalogAdminRefused('rate_card_not_served', card.meterKey);
   }
 

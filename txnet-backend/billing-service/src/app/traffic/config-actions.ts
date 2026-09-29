@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ActorType, ConfigProtocol, ConfigStatus, DesiredRemote, EnforcementState, GrantStatus, Prisma } from '@prisma/client';
+import { METER_KEYS } from '@txnet-backend/shared-core';
+
+import { UsageDoorRefused, UsageDoorService, type UsageDoorRefusal } from '../usage/usage-door';
 
 
 /**
@@ -30,6 +33,8 @@ export const CONFIG_ACTION_REJECTIONS = [
   'config_not_found',
   'config_retired',
   'regenerate_limit_reached',
+  /** A priced regenerate the wallet, or the reseller billing wallet behind it, cannot pay for (F-118-h). */
+  'regenerate_unfunded',
   'config_changed',
   'same_panel',
   'actor_not_allowed',
@@ -82,8 +87,24 @@ type ConfigRow = {
  * new one is provisioned on the target with a fresh `uuid` — the old client
  * holds the old one until it is deleted, and `uuid` is unique system-wide.
  */
+/** A door refusal as the user is told it; any other is not the user's to act on and is rethrown. */
+const DOOR_REFUSALS: Partial<Record<UsageDoorRefusal, ConfigActionRejection>> = {
+  grant_not_active: 'grant_not_active',
+  not_metered_past_included: 'regenerate_limit_reached',
+  insufficient_funds: 'regenerate_unfunded',
+  wholesale_unfunded: 'regenerate_unfunded',
+  block_below_one_unit: 'regenerate_unfunded',
+};
+
 @Injectable()
 export class ConfigActionsService {
+  /**
+   * The per-use door (F-118-h). Optional so a spec of another action builds
+   * this class bare; a priced regenerate without it is refused loudly, never
+   * done for free.
+   */
+  constructor(@Optional() private readonly door: UsageDoorService | null = null) {}
+
   async provision(
     tx: Prisma.TransactionClient,
     input: { grantId: string; panelId: string; protocol: ConfigProtocol | `${ConfigProtocol}`; actor: ConfigActor },
@@ -167,21 +188,62 @@ export class ConfigActionsService {
    * regenerate neither checks it nor spends it, so support rotating a leaked
    * credential never costs the user one of theirs. `config_action_log` says
    * who asked.
+   *
+   * **A priced regenerate replaces the cap** (F-118-h, user 2026-09-29): on a
+   * Grant sold with a `vpn.config.regenerate` meter, the user's regenerate is
+   * authorized on the per-use door before the write — its card's included
+   * count free, then paid or stopped — committed after it, cancelled if the
+   * write is refused. The per-config cap is not read and not spent.
    */
   async regenerate(tx: Prisma.TransactionClient, input: { configId: string; actor: ConfigActor }): Promise<{ uuid: string; regenerateUsedCount: number }> {
     const config = await this.live(tx, input.configId, input.actor);
-    const counted = input.actor.actorType === ActorType.user;
+    const byUser = input.actor.actorType === ActorType.user;
+    const priced = byUser && (await this.pricedRegenerate(tx, config.grantId));
+    const counted = byUser && !priced;
     if (counted && config.regenerateUsedCount >= config.maxRegenerateCount) {
       throw new ConfigActionRefused('regenerate_limit_reached', `${config.regenerateUsedCount}/${config.maxRegenerateCount}`);
     }
+    const token = priced ? await this.authorizeRegenerate(tx, config) : null;
     const uuid = randomUUID();
     const moved = await tx.config.updateMany({
       where: { id: config.id, status: config.status, regenerateUsedCount: config.regenerateUsedCount },
       data: { uuid, ...(counted ? { regenerateUsedCount: { increment: 1 } } : {}), enforcementState: EnforcementState.pending },
     });
-    if (moved.count === 0) throw new ConfigActionRefused('config_changed', config.id);
+    if (moved.count === 0) {
+      if (token) await this.door!.cancel(tx, { token });
+      throw new ConfigActionRefused('config_changed', config.id);
+    }
+    if (token) await this.door!.commit(tx, { token, quantity: BigInt(1) });
     await this.log(tx, config.id, input.actor, 'regenerate');
     return { uuid, regenerateUsedCount: config.regenerateUsedCount + (counted ? 1 : 0) };
+  }
+
+  /** Whether the Grant was sold with a regenerate meter: then the door, not the cap, decides. */
+  private async pricedRegenerate(tx: Prisma.TransactionClient, grantId: string): Promise<boolean> {
+    const meter = await tx.grantMeter.findUnique({
+      where: { grantId_meterKey: { grantId, meterKey: METER_KEYS.configRegenerate } },
+      select: { id: true },
+    });
+    if (meter && !this.door) throw new Error('a priced regenerate needs the usage door; ConfigActionsService was built without it');
+    return meter !== null;
+  }
+
+  /** One regenerate authorized on the door; its refusal as the user is told it. */
+  private async authorizeRegenerate(tx: Prisma.TransactionClient, config: ConfigRow): Promise<string> {
+    try {
+      const auth = await this.door!.authorize(tx, {
+        grantId: config.grantId,
+        meterKey: METER_KEYS.configRegenerate,
+        quantity: BigInt(1),
+        // Each press is its own use; the transaction, not the key, makes it once.
+        key: `config.regenerate:${config.id}:${randomUUID()}`,
+      });
+      return auth.token;
+    } catch (e) {
+      const told = e instanceof UsageDoorRefused ? DOOR_REFUSALS[e.reason] : undefined;
+      if (told) throw new ConfigActionRefused(told, (e as Error).message);
+      throw e;
+    }
   }
 
   /**

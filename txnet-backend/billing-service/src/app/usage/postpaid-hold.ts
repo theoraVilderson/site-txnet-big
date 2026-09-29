@@ -111,7 +111,7 @@ export class PostpaidHolds {
     return wallet ? wallet.cachedBalance.minus(wallet.heldAmount) : new Prisma.Decimal(0);
   }
 
-  private async openHold(tx: Prisma.TransactionClient, { grant, meter }: Ctx) {
+  async openHold(tx: Prisma.TransactionClient, { grant, meter }: Pick<Ctx, 'grant' | 'meter'>) {
     const wallet = await tx.wallet.findUnique({ where: { ownerUserId: grant.userId } });
     return wallet ? tx.walletHold.findFirst({ where: { walletId: wallet.id, ownerRef: meter.id, status: WalletHoldStatus.open } }) : null;
   }

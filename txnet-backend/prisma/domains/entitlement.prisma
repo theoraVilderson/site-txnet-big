@@ -375,6 +375,7 @@ model GrantMeter {
   grant  Grant        @relation(fields: [grantId], references: [id])
   meter  Meter        @relation(fields: [meterKey], references: [key], onDelete: Restrict, onUpdate: Restrict)
   events UsageEvent[]
+  authorizations UsageAuthorization[]
 
   @@unique([grantId, meterKey])
   @@index([tenantId])

@@ -215,6 +215,16 @@ enum WalletHoldStatus {
   @@schema("billing")
 }
 
+/// A per-use token's life (F-118-h). Only `open` reserves units; the other three are settled.
+enum UsageAuthorizationStatus {
+  open
+  committed
+  cancelled
+  expired
+
+  @@schema("billing")
+}
+
 /// F-118-a (ADR-0105 (6)): money locked on a wallet for one owner — a Grant's
 /// postpaid usage, a per-use token. Not a ledger row: a capture debits the
 /// ledger and takes the same amount off `amount`; a release takes it off with
@@ -1101,5 +1111,46 @@ model UsageEvent {
   @@index([grantId, meterKey, occurredAt])
   @@index([tenantId])
   @@map("usage_event")
+  @@schema("billing")
+}
+
+/// A per-use door's token (F-118-h, ADR-0105 decision 7): work on a per-use
+/// meter authorized before it is done. Open, it reserves `quantity` units the
+/// meter already funds — debited (`boughtUnits`, prepaid) or held (on the
+/// meter's hold, `heldAmount`, postpaid) — and, on a reseller's Grant, the
+/// `wholesaleUnits` it bought on the reseller's billing wallet. `commit`
+/// records the actual use as a `usage_event` keyed by the token's id; commit,
+/// `cancel` and expiry each give back what no open token still needs.
+/// Never deleted. `(grantId, meterKey, idempotencyKey)` unique: the same key
+/// answers the same token.
+model UsageAuthorization {
+  id                String                   @id @default(uuid()) @db.Uuid
+  /// Its meter's tenant (`entitlement.same_tenant()`), bound by RLS.
+  tenantId          String                   @db.Uuid
+  grantId           String                   @db.Uuid
+  meterKey          String
+  idempotencyKey    String
+  /// Units authorized, in the meter's unit. Always > 0 (CHECK).
+  quantity          BigInt
+  status            UsageAuthorizationStatus @default(open)
+  /// Prepaid: the units this token's block bought (0 when the meter already funded them).
+  boughtUnits       BigInt                   @default(0)
+  /// Postpaid: what this token added to the meter's hold, in the meter's currency.
+  heldAmount        Decimal                  @default(0) @db.Decimal(18, 2)
+  /// A reseller's Grant: the units this token bought on the reseller's billing wallet.
+  wholesaleUnits    BigInt                   @default(0)
+  /// Set by `commit` only, never above `quantity` (CHECK).
+  committedQuantity BigInt?
+  expiresAt         DateTime
+  createdAt         DateTime                 @default(now())
+  /// Set when it leaves `open` (CHECK).
+  settledAt         DateTime?
+
+  grantMeter GrantMeter @relation(fields: [grantId, meterKey], references: [grantId, meterKey], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([grantId, meterKey, idempotencyKey])
+  @@index([status, expiresAt])
+  @@index([tenantId])
+  @@map("usage_authorization")
   @@schema("billing")
 }
