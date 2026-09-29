@@ -78,4 +78,4 @@ failed read. Server side: billing `wallet/wallet-history.spec.ts` (`held`,
 The bot's screens for the same cap (a row of their own, F-608). A notice that
 says *cap* rather than *wallet* when a capped service is cut (billing
 contract.spending-cap.md "Not yet"). A live `held` figure — an event when a
-hold moves — is nobody's row yet. The cap is not shown on the folded row.
+hold moves — is F-118-o. The cap is not shown on the folded row.
