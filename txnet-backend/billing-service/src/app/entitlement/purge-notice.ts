@@ -7,9 +7,12 @@ import type { EnvConfig } from '../config/env.validation';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GRANT_AGGREGATE } from './delivered';
-import { ADMIN_FROZEN, PERIOD_ENDED } from './suspension';
+import { ADMIN_FROZEN, CAP_REACHED, PERIOD_ENDED } from './suspension';
 
-type PurgeNotice = typeof OutboxEventType.GRANT_PURGE_SOON | typeof OutboxEventType.GRANT_PURGE_SOON_METERED;
+type PurgeNotice =
+  | typeof OutboxEventType.GRANT_PURGE_SOON
+  | typeof OutboxEventType.GRANT_PURGE_SOON_METERED
+  | typeof OutboxEventType.GRANT_PURGE_SOON_CAPPED;
 
 /** One suspended Grant whose purge is a day or less away, and not yet told for this suspension. */
 export type PurgeNoticeDue = {
@@ -29,11 +32,13 @@ export type PurgeNoticeResult = { scanned: number; told: number };
  * metered one — a metered renewal adds days alone and revives nothing
  * (`reviveFundedGrants`), the reason F-601-b's cutoff notices split the same way.
  * A Grant whose days ran out (`period_ended`, F-027-do) is the exception: only
- * a renewal brings it back, whatever its billing mode.
+ * a renewal brings it back, whatever its billing mode. One its spending cap
+ * stopped (`cap_reached`, F-118-t) is kept by raising or removing the cap.
  */
 export function purgeNoticeType(billingMode: VariantBillingMode, statusReason: string | null): PurgeNotice {
   // Days that ran out come back by a renewal alone, a metered Grant's too (F-027-do).
   if (statusReason === PERIOD_ENDED) return OutboxEventType.GRANT_PURGE_SOON;
+  if (statusReason === CAP_REACHED) return OutboxEventType.GRANT_PURGE_SOON_CAPPED;
   return billingMode === VariantBillingMode.metered ? OutboxEventType.GRANT_PURGE_SOON_METERED : OutboxEventType.GRANT_PURGE_SOON;
 }
 

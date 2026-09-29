@@ -157,7 +157,7 @@ purge (`purge-due` answers `told` beside its counts).
 | A frozen Grant (`admin_frozen`, F-311-h) is never scanned | it is never purged, and a renewal would not unfreeze it |
 | Only while a config is still `present` | a Grant the purge got to first is not told "within a day" |
 | The clock is `purgeNoticeFor`, the `suspendedAt` told for; the write is conditional on the value read; `period` = `suspendedAt` | once per suspension; a revival clears `suspendedAt`, so the next one is due again with nothing reset |
-| Prepaid, or any Grant suspended as `period_ended`: `entitlement.grant.purge_soon` ("renew"); metered out of money: `.purge_soon_metered` ("top up") | a metered renewal revives only a lapsed Grant (F-027-do); a top-up only one out of money (as "Cutoff") |
+| Prepaid, or any Grant suspended as `period_ended`: `entitlement.grant.purge_soon` ("renew"); metered out of money: `.purge_soon_metered` ("top up"); stopped by its spending cap (`cap_reached`): `.purge_soon_capped` ("raise the cap", F-118-t) | a metered renewal revives only a lapsed Grant (F-027-do); a top-up only one out of money (as "Cutoff"); a cap-cut one comes back when its cap lets money through |
 | Never muted, never held for quiet hours (F-601-m) | the last chance to keep a config as it is |
 
 

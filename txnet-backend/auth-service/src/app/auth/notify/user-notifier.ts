@@ -34,6 +34,7 @@ export const NOTIFY_TEMPLATES = [
   'serviceWalletLow',
   'servicePurgeSoon',
   'servicePurgeSoonTopUp',
+  'servicePurgeSoonRaiseCap',
   'serviceReactivated',
   'serviceIdle',
   'serviceRunsOutSoon',
@@ -389,6 +390,17 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
     many: {
       read: (ns) => ns?.retention?.purgeSoonTopUpMany,
       fallback: '🗑️ {{count}} of your stopped services will be removed from the server within a day. Top up your wallet before then to keep their configs as they are.',
+      inbox: { read: (ns) => ns?.retention?.purgeSoonManyTitle, fallback: '{{count}} services removed within a day' },
+    },
+  },
+  // F-118-t: a service its own spending cap stopped — raising or removing the cap keeps the config.
+  servicePurgeSoonRaiseCap: {
+    read: (ns) => ns?.retention?.purgeSoonRaiseCap,
+    fallback: '🗑️ Your stopped service will be removed from the server within a day. Raise or remove its spending cap in My services before then to keep its config as it is — after that, a config you added by hand has to be added again.',
+    inbox: { read: (ns) => ns?.retention?.purgeSoonTitle, fallback: "Your service's config is removed within a day" },
+    many: {
+      read: (ns) => ns?.retention?.purgeSoonRaiseCapMany,
+      fallback: '🗑️ {{count}} of your stopped services will be removed from the server within a day. Raise or remove their spending caps in My services before then to keep their configs as they are.',
       inbox: { read: (ns) => ns?.retention?.purgeSoonManyTitle, fallback: '{{count}} services removed within a day' },
     },
   },

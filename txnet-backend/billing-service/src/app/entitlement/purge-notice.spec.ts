@@ -19,6 +19,7 @@ import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 import { OutboxEventType, TenantContext } from '@txnet-backend/shared-core';
 
 import { GrantPurgeNoticeService, PurgeNoticeDue, purgeNoticeType } from './purge-notice';
+import { CAP_REACHED } from './suspension';
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
 const TENANT_B = '22222222-2222-4222-8222-222222222222';
@@ -80,6 +81,8 @@ describe('purgeNoticeType (F-601-j)', () => {
   it('tells a prepaid Grant to renew and a metered one to top up', () => {
     expect(purgeNoticeType(VariantBillingMode.prepaid, null)).toBe(OutboxEventType.GRANT_PURGE_SOON);
     expect(purgeNoticeType(VariantBillingMode.metered, null)).toBe(OutboxEventType.GRANT_PURGE_SOON_METERED);
+    // F-118-t: a Grant its spending cap stopped is kept by raising the cap, not by a top-up.
+    expect(purgeNoticeType(VariantBillingMode.metered, CAP_REACHED)).toBe(OutboxEventType.GRANT_PURGE_SOON_CAPPED);
   });
 });
 

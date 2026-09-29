@@ -37,6 +37,7 @@ export const RETENTION_KIND_OF: Readonly<Partial<Record<OutboxEventType, Retenti
   [OutboxEventType.GRANT_CAP_REACHED]: 'cutoff',
   [OutboxEventType.GRANT_PURGE_SOON]: 'cutoff',
   [OutboxEventType.GRANT_PURGE_SOON_METERED]: 'cutoff',
+  [OutboxEventType.GRANT_PURGE_SOON_CAPPED]: 'cutoff',
   // F-311-s: an admin's act on the service — a person decided it about this user, so it is always told, at once;
   // and one that brought a stopped service back says so inside it, which a muted kind would swallow.
   [OutboxEventType.GRANT_ADMIN_FROZEN]: 'cutoff',

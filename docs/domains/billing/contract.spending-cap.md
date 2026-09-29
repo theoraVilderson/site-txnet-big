@@ -60,5 +60,6 @@ hold it keeps, so it reaches the lease planner through Quota (network
 **The panel:** the owner's form under a service's "manage" and held money
 apart — panel-web [contract.spending-cap.md](../../interfaces/panel-web/contract.spending-cap.md) (F-118-j).
 
-**Not yet:** bot screens; the purge warning a day before a cap-cut Grant's configs go still
-says "top up" (`purge_soon_metered`), not "raise the cap".
+A cap-cut Grant's purge warning is `purge_soon_capped` ("raise the cap"), not `purge_soon_metered`.
+
+**Not yet:** bot screens.

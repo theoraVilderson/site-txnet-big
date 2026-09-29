@@ -64,6 +64,8 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   // F-601-j: a suspended Grant's configs are dropped from the panel within a day — renew, or top up if metered. Never muted (F-601-m).
   [OutboxEventType.GRANT_PURGE_SOON]: { template: 'servicePurgeSoon', params: [] },
   [OutboxEventType.GRANT_PURGE_SOON_METERED]: { template: 'servicePurgeSoonTopUp', params: [] },
+  // F-118-t: the same for a service its spending cap stopped — raise or remove the cap.
+  [OutboxEventType.GRANT_PURGE_SOON_CAPPED]: { template: 'servicePurgeSoonRaiseCap', params: [] },
   // F-601-k: a stopped Grant runs again — told once per stop undone, the link unchanged.
   [OutboxEventType.GRANT_REACTIVATED]: { template: 'serviceReactivated', params: [] },
   // F-601-l: used, then nothing for 7 days — one check-in per idle stretch, and the tenant's support.

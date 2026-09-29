@@ -82,6 +82,8 @@ export const OutboxEventType = {
   GRANT_PURGE_SOON: 'entitlement.grant.purge_soon',
   /** F-601-j: the same for a metered Grant — a top-up keeps them, a renewal does not. */
   GRANT_PURGE_SOON_METERED: 'entitlement.grant.purge_soon_metered',
+  /** F-118-t: the same for a Grant its spending cap stopped — raising or removing the cap keeps them. */
+  GRANT_PURGE_SOON_CAPPED: 'entitlement.grant.purge_soon_capped',
   /** F-601-k: a stopped Grant runs again — a renewal or a top-up revived it, or a renewal broke the close that stood on it (`reactivated.ts`). */
   GRANT_REACTIVATED: 'entitlement.grant.reactivated',
   /** F-601-l: an active Grant that was used has consumed nothing for 7 days — one "trouble connecting?" per idle stretch (`idle-notice.ts`). */
@@ -176,6 +178,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.GRANT_CAP_REACHED]: 'worker-service',
   [OutboxEventType.GRANT_PURGE_SOON]: 'worker-service',
   [OutboxEventType.GRANT_PURGE_SOON_METERED]: 'worker-service',
+  [OutboxEventType.GRANT_PURGE_SOON_CAPPED]: 'worker-service',
   [OutboxEventType.GRANT_REACTIVATED]: 'worker-service',
   [OutboxEventType.GRANT_IDLE]: 'worker-service',
   [OutboxEventType.GRANT_RUNS_OUT_SOON]: 'worker-service',
