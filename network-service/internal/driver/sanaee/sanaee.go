@@ -63,6 +63,8 @@ type Driver struct {
 
 	mu      sync.Mutex
 	cookies []*http.Cookie
+	// refusals is held under mu: login counts the panel's refusals.
+	refusals driver.LoginRefusals
 }
 
 var _ driver.Driver = (*Driver)(nil)
@@ -261,7 +263,8 @@ func newSubID() (string, error) {
 
 // call sends one request with the current session. A 401 or a 404 may be an
 // expired session (package doc), so it is answered by one login and one retry;
-// a login refused is a blocked fault and is not retried (contract.budget.md).
+// a refused login is not retried within the call, and is blocked once it
+// repeats (driver.LoginRefusals, contract.budget.md).
 // A 404 that survives the fresh login is a real one.
 func (d *Driver) call(ctx context.Context, op, method string, path []string, body, out any) error {
 	cookies, err := d.currentSession(ctx, op)
@@ -313,11 +316,12 @@ func (d *Driver) login(ctx context.Context, op string) ([]*http.Cookie, error) {
 		return nil, driver.NewFault(driver.FaultProtocol, op, 0, fmt.Errorf("decoding the login answer: %w", err))
 	}
 	if !env.Success {
-		return nil, driver.NewFault(driver.FaultBlocked, op, resp.StatusCode, fmt.Errorf("login refused: %s", env.Msg))
+		return nil, d.refusals.Refused(op, resp.StatusCode, env.Msg)
 	}
 	if len(resp.Cookies()) == 0 {
 		return nil, driver.NewFault(driver.FaultProtocol, op, 0, errors.New("login set no session cookie"))
 	}
+	d.refusals.Succeeded()
 	d.cookies = resp.Cookies()
 	return d.cookies, nil
 }
@@ -357,7 +361,7 @@ func (d *Driver) do(ctx context.Context, op, method string, path []string, body,
 		return driver.NewFault(driver.FaultProtocol, op, 0, fmt.Errorf("decoding the answer: %w", err))
 	}
 	if !env.Success {
-		return driver.NewFault(driver.FaultProtocol, op, resp.StatusCode, fmt.Errorf("panel refused: %s", env.Msg))
+		return driver.RefusalFault(op, resp.StatusCode, env.Msg)
 	}
 	if out == nil {
 		return nil

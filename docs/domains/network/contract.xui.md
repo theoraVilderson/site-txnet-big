@@ -56,7 +56,17 @@ The rules:
    `checkLogin` sends a `307` to the login page. The panel's own ajax gets a
    `success=false` instead, which reads like any refusal, so requests are not
    marked as ajax. A redirect, `401` or `404` gets **one** login and one retry;
-   a login refused is `blocked` and is not retried.
+   a refused login is not retried within the call.
+1a. **"Wrong password" is not proof until it repeats** (user, 2026-09-29).
+   Every x-ui fork answers "wrong username or password" whenever its user
+   lookup fails, and a SQLite locked under load fails it (dev, 2026-09-29: one
+   such answer froze a working panel for the whole cool-off). Credentials that
+   already logged in on this driver are refused as `unavailable` — asked again
+   next pass — and `blocked` only on the 3rd refusal in a row; credentials that
+   never worked are `blocked` on the first. An edited row rebuilds the driver,
+   so a new password starts as "never worked". A `success=false` reading
+   `database is locked` is `unavailable`, not `protocol`. `driver.LoginRefusals`
+   and `driver.RefusalFault`, shared by all three x-ui drivers.
 2. **The claim tag rides in a key x-ui does not know.** x-ui stores the client
    map as sent and builds Xray's config from a whitelist of keys, so `comment`
    is kept and never reaches Xray. Saving the client in the panel's page drops

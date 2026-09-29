@@ -536,11 +536,22 @@ func TestExpiredSessionLogsInOnce(t *testing.T) {
 	before := f.calls
 	f.mu.Unlock()
 	_, err := d.GetUsage(context.Background())
-	if !driver.IsBlocked(err) {
-		t.Fatalf("a refused login gave %v, want a blocked fault", err)
+	// Credentials that worked are not called refused on one answer: x-ui
+	// says "wrong password" when its database is locked (driver.LoginRefusals).
+	if kind, _ := driver.KindOf(err); kind != driver.FaultUnavailable {
+		t.Fatalf("the first refused login of working credentials gave %v, want unavailable", err)
 	}
 	if got := f.calls - before; got != 3 {
 		t.Errorf("a refused login cost %d requests, want 3 (the 401, the token, one login)", got)
+	}
+	for i := 2; i < driver.LoginRefusalsToBlock; i++ {
+		_, err := d.GetUsage(context.Background())
+		if kind, _ := driver.KindOf(err); kind != driver.FaultUnavailable {
+			t.Fatalf("refused login %d gave %v, want unavailable", i, err)
+		}
+	}
+	if _, err := d.GetUsage(context.Background()); !driver.IsBlocked(err) {
+		t.Fatalf("refused login %d in a row gave %v, want a blocked fault", driver.LoginRefusalsToBlock, err)
 	}
 }
 

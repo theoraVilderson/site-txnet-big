@@ -62,6 +62,8 @@ type Driver struct {
 
 	mu      sync.Mutex
 	session *session
+	// refusals is held under mu: login counts the panel's refusals.
+	refusals driver.LoginRefusals
 }
 
 // session is a logged-in cookie jar and the CSRF token it was issued with.
@@ -252,8 +254,9 @@ func newSubID() (string, error) {
 // ---- transport -------------------------------------------------------------
 
 // call sends one request with the current session. A 401 is an expired
-// session (package doc): one login and one retry. A login refused is a blocked
-// fault and is not retried (contract.budget.md). A 404 is a real one: v3
+// session (package doc): one login and one retry. A refused login is not
+// retried within the call, and is blocked once it repeats
+// (driver.LoginRefusals, contract.budget.md). A 404 is a real one: v3
 // answers the panel's own ajax with a 401, so a 404 is a wrong base path.
 func (d *Driver) call(ctx context.Context, op, method string, path []string, body, out any) error {
 	s, err := d.currentSession(ctx, op)
@@ -318,12 +321,13 @@ func (d *Driver) login(ctx context.Context, op string) (*session, error) {
 		return nil, err
 	}
 	if !env.Success {
-		return nil, driver.NewFault(driver.FaultBlocked, op, status, fmt.Errorf("login refused: %s", env.Msg))
+		return nil, d.refusals.Refused(op, status, env.Msg)
 	}
 	s.cookies = merge(s.cookies, cookies)
 	if len(s.cookies) == 0 {
 		return nil, driver.NewFault(driver.FaultProtocol, op, 0, errors.New("login set no session cookie"))
 	}
+	d.refusals.Succeeded()
 	d.session = s
 	return s, nil
 }
@@ -374,7 +378,7 @@ func (d *Driver) do(ctx context.Context, op, method string, path []string, body,
 		return err
 	}
 	if !env.Success {
-		return driver.NewFault(driver.FaultProtocol, op, status, fmt.Errorf("panel refused: %s", env.Msg))
+		return driver.RefusalFault(op, status, env.Msg)
 	}
 	if out == nil {
 		return nil
