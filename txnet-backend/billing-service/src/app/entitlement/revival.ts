@@ -1,6 +1,7 @@
 import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 
 import { walletCanBuy } from '../traffic/exhaustion';
+import { HAS_VPN_METER, VPN_RATE_SELECT } from '../traffic/vpn-meter';
 import { withinCap } from '../usage/spending-cap';
 import { reviveOnTopUp } from './purge';
 import { emitReactivated, runs } from './reactivated';
@@ -75,16 +76,16 @@ export async function reviveFundedGrants(
       // an amnesty — `reviveOnTopUp` refuses those again in its own `where`.
       statusReason: QUOTA_EXHAUSTED,
       billingMode: VariantBillingMode.metered,
-      meteredRate: { not: null },
+      ...HAS_VPN_METER,
     },
-    select: { id: true, tenantId: true, meteredRate: true, suspendedAt: true, endsAt: true },
+    select: { id: true, tenantId: true, suspendedAt: true, endsAt: true, ...VPN_RATE_SELECT },
   });
   if (suspended.length === 0) return { scanned: 0, revived: 0 };
 
   let revived = 0;
   for (const grant of suspended) {
     // A Grant its spending cap cut stays cut until the cap is raised (F-118-i).
-    if (!walletCanBuy(grant.meteredRate as Prisma.Decimal, await withinCap(tx, { id: grant.id, userId }, balance))) continue;
+    if (!walletCanBuy(grant.meters[0].unitPrice, await withinCap(tx, { id: grant.id, userId }, balance))) continue;
     const revival = await reviveOnTopUp(tx, grant.id);
     if (!revival.revived) continue;
     revived++;

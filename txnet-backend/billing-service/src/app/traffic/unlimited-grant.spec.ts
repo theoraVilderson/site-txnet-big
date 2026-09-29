@@ -29,7 +29,6 @@ const unlimitedGrant = {
   userId: USER,
   status: GrantStatus.active,
   billingMode: VariantBillingMode.prepaid,
-  meteredRate: null,
   purchasedBytes: BigInt(0),
   consumedBytes: BigInt(5) * GB,
   trafficUnlimited: true,

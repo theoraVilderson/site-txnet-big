@@ -26,7 +26,8 @@ export type LowBalanceGrant = {
   id: string;
   tenantId: string;
   userId: string;
-  meteredRate: Prisma.Decimal | null;
+  /** Its `vpn.traffic` meter's `unitPrice` (F-118-l); null = no rate. */
+  rate: Prisma.Decimal | null;
   /** The crossing already told, or null when armed. */
   lowBalanceNoticeAt: Date | null;
 };
@@ -50,8 +51,8 @@ export async function noticeLowBalance(
   balance: Prisma.Decimal,
   now = new Date(),
 ): Promise<'told' | 'rearmed' | null> {
-  if (grant.meteredRate === null) return null;
-  const affordable = bytesAffordable(grant.meteredRate, balance);
+  if (grant.rate === null) return null;
+  const affordable = bytesAffordable(grant.rate, balance);
   if (affordable >= LOW_BALANCE_BYTES) {
     if (grant.lowBalanceNoticeAt === null) return null;
     await tx.grant.updateMany({ where: { id: grant.id, lowBalanceNoticeAt: grant.lowBalanceNoticeAt }, data: { lowBalanceNoticeAt: null } });

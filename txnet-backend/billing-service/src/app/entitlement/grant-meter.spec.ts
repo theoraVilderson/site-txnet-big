@@ -11,8 +11,8 @@
  *    left in its variant's history: its path never reads a card;
  *  - **a meter sold with nothing to refuse it** (decision 7). A card on a meter
  *    no engine serves yet is not sold, rather than served unfunded;
- *  - **two answers to one VPN rate.** Until F-118-l, a metered VPN Grant's row
- *    and its `meteredRate` are the same card.
+ *  - **two answers to one VPN rate.** Since F-118-l a metered VPN Grant's
+ *    meter is its only rate: nothing on the Grant row prices a byte.
  *
  * What the database holds (terms locked, one row per meter) is
  * `entitlement-schema.int.spec.ts`.
@@ -131,7 +131,7 @@ describe('GrantService.issue writes the Grant\'s meters beside its quotas', () =
       service.issue(tx, { userId: USER, variantId: VARIANT, source: GrantSource.coupon, sourceReferenceId: PAYMENT, startsAt: SALE }),
     );
 
-  it('locks a metered VPN Grant\'s card on its own row, the same card its meteredRate came from', async () => {
+  it('locks a metered VPN Grant\'s card on its own row, its only rate (F-118-l)', async () => {
     const { tx, grants, meters } = fakeTx(variantRow(VariantBillingMode.metered, [card('now')]));
 
     await issue(tx);
@@ -139,8 +139,9 @@ describe('GrantService.issue writes the Grant\'s meters beside its quotas', () =
     expect(meters).toEqual([
       expect.objectContaining({ tenantId: TENANT, grantId: 'grant-1', meterKey: 'vpn.traffic', rateCardId: 'now', mode: 'prepaid', consumed: BigInt(0) }),
     ]);
-    expect((meters[0]['unitPrice'] as Prisma.Decimal).equals(grants[0]['meteredRate'] as Prisma.Decimal)).toBe(true);
-    expect(meters[0]['currencyCode']).toBe(grants[0]['meteredRateCurrencyCode']);
+    expect((meters[0]['unitPrice'] as Prisma.Decimal).toString()).toBe(card('now').unitPrice.toString());
+    expect(meters[0]['currencyCode']).toBe('USD');
+    expect(grants[0]).not.toHaveProperty('meteredRate');
   });
 
   it('issues a package plan exactly as before: its bag filled, no meter row written', async () => {
@@ -148,7 +149,7 @@ describe('GrantService.issue writes the Grant\'s meters beside its quotas', () =
 
     await issue(tx);
 
-    expect(grants[0]).toMatchObject({ purchasedBytes: BigInt(50) * GIB, meteredRate: null });
+    expect(grants[0]).toMatchObject({ purchasedBytes: BigInt(50) * GIB });
     expect(meters).toHaveLength(0);
   });
 

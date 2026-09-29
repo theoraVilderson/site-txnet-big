@@ -72,6 +72,13 @@ Two things in the current design stop that:
 4. **The card is locked on the Grant at issue** as a `grant_meter` row (rate,
    mode, included, `consumed`, the `billed` cursor, `funded`) — ADR-0073 for
    every meter. A catalog change never reprices a sold Grant.
+   *Amended 2026-09-29 (user, F-118-l):* a tenant's currency change converts
+   an open Grant's meters — the price moves with its currency, the one change
+   `grant_meter_terms_are_locked` allows, because the same price in another
+   money is not a reprice. Refused instead, a converted wallet could not pay
+   an unconverted meter; converted at each debit instead, every money path
+   would carry the conversion and a refund could price off a different rate
+   than the block (ADR-0073).
 5. **Usage arrives as idempotent events** (`usage_event`, unique key) that
    advance `consumed`. Rating reads `consumed − billed`, so double billing is
    impossible (§8.5). The ledger gets whole minor units only (C-02), rounded
@@ -143,8 +150,9 @@ Two things in the current design stop that:
   held. The panel and the bot must show available and held separately.
 - Negative / accepted: a postpaid user needs free balance to start, and money
   sits held while a service runs.
-- Negative / accepted: two vocabularies (`traffic_*` and `usage_*`, byte
-  columns and `grant_meter`) until F-118-l.
+- Negative / accepted: two vocabularies of ledger reasons (`traffic_*` and
+  `usage_*`). The byte columns' half closed with F-118-l: a metered Grant's
+  rate and money cursor are its `grant_meter`'s.
 
 ## Alternatives rejected
 

@@ -49,7 +49,8 @@ const RATE = D('1.00000000');
  */
 const UNPRICEABLE = D('20000000.00000000');
 
-type Suspended = { id: string; meteredRate: Prisma.Decimal };
+/** A suspended Grant and its `vpn.traffic` meter's `unitPrice` (F-118-l). */
+type Suspended = { id: string; rate: Prisma.Decimal };
 
 function build(suspended: Suspended[]) {
   const scans: Array<Record<string, unknown>> = [];
@@ -59,7 +60,7 @@ function build(suspended: Suspended[]) {
     grant: {
       findMany: async (args: Record<string, unknown>) => {
         scans.push(args);
-        return suspended;
+        return suspended.map((g) => ({ id: g.id, meters: [{ unitPrice: g.rate, currencyCode: 'USD' }] }));
       },
       updateMany: async ({ where }: { where: Record<string, unknown> }) => {
         revived.push(where['id'] as string);
@@ -74,7 +75,7 @@ function build(suspended: Suspended[]) {
 
 describe('reviveFundedGrants', () => {
   it('revives a Grant the new balance can buy a block at', async () => {
-    const { tx, revived } = build([{ id: GRANT_1, meteredRate: RATE }]);
+    const { tx, revived } = build([{ id: GRANT_1, rate: RATE }]);
 
     const result = await reviveFundedGrants(tx as never, USER, D('5.00'));
 
@@ -83,7 +84,7 @@ describe('reviveFundedGrants', () => {
   });
 
   it('does not read the Grants at all when the balance is not positive', async () => {
-    const { tx, scans } = build([{ id: GRANT_1, meteredRate: RATE }]);
+    const { tx, scans } = build([{ id: GRANT_1, rate: RATE }]);
 
     // The common case by far — the wallet was empty, and this credit went
     // somewhere else. The scan runs on every credit in the platform, so the
@@ -94,8 +95,8 @@ describe('reviveFundedGrants', () => {
 
   it('judges each Grant against its own locked rate', async () => {
     const { tx, revived } = build([
-      { id: GRANT_1, meteredRate: RATE },
-      { id: GRANT_2, meteredRate: UNPRICEABLE },
+      { id: GRANT_1, rate: RATE },
+      { id: GRANT_2, rate: UNPRICEABLE },
     ]);
 
     const result = await reviveFundedGrants(tx as never, USER, D('0.01'));
@@ -118,7 +119,7 @@ describe('reviveFundedGrants', () => {
       status: GrantStatus.suspended,
       statusReason: QUOTA_EXHAUSTED,
       billingMode: VariantBillingMode.metered,
-      meteredRate: { not: null },
+      meters: { some: { meterKey: 'vpn.traffic' } },
     });
   });
 });

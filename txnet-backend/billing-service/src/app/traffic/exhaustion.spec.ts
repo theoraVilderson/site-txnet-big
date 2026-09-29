@@ -27,7 +27,8 @@ type GrantRow = {
   userId: string;
   status: GrantStatus;
   billingMode: VariantBillingMode;
-  meteredRate: Prisma.Decimal | null;
+  /** Its `vpn.traffic` meter's `unitPrice`; null = no meter (F-118-l). */
+  rate: Prisma.Decimal | null;
   purchasedBytes: bigint;
   consumedBytes: bigint;
 };
@@ -38,7 +39,7 @@ function fakeTx(input: { grant: Partial<GrantRow> | null; balance: string | null
         userId: USER,
         status: GrantStatus.active,
         billingMode: VariantBillingMode.metered,
-        meteredRate: RATE,
+        rate: RATE,
         purchasedBytes: BigInt(1000),
         consumedBytes: BigInt(1000),
         ...input.grant,
@@ -67,8 +68,8 @@ function fakeTx(input: { grant: Partial<GrantRow> | null; balance: string | null
       },
     },
     // No wallet row: the reserve release (F-118-b) holds nothing here; vpn-reserve.spec.ts holds it.
-    // No postpaid vpn.traffic meter: a prepaid Grant's path (F-118-k).
-    grantMeter: { findUnique: async () => null },
+    // Its prepaid vpn.traffic meter (F-118-l); none is not a metered Grant.
+    grantMeter: { findUnique: async () => (grant?.rate ? { mode: 'prepaid', unitPrice: grant.rate, currencyCode: 'USD' } : null) },
     wallet: { findUnique: async () => null },
     // The cutoff notice (F-601-b) — cut-off.spec.ts holds what it says.
     outboxEvent: { create: async () => ({ id: 'e1' }) },
@@ -132,7 +133,7 @@ describe('suspendIfExhausted', () => {
   it.each([
     ['a bag with bytes left', { consumedBytes: BigInt(999) }, '0.00', 'bag_not_empty'],
     ['a wallet that still funds a cent', {}, '0.01', 'wallet_can_buy'],
-    ['a prepaid Grant', { billingMode: VariantBillingMode.prepaid, meteredRate: null }, '0.00', 'not_metered'],
+    ['a prepaid Grant', { billingMode: VariantBillingMode.prepaid, rate: null }, '0.00', 'not_metered'],
     ['a Grant already suspended', { status: GrantStatus.suspended }, '0.00', 'not_active'],
     ['a Grant already expired', { status: GrantStatus.expired }, '0.00', 'not_active'],
   ] as const)('leaves %s alone and writes nothing', async (_name, grant, balance, verdict) => {

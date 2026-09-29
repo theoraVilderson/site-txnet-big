@@ -85,30 +85,20 @@ model Grant {
   /// again. Null for a Grant from before it, or issued with no KEK loaded.
   subscriptionTokenSealed Json?
   tokenRotatedAt        DateTime           @default(now())
-  /// Billing cursor for metered usage: how far the money has been taken.
-  billedBytes           BigInt             @default(0)
   /// What the panels have reported (F-027-n). Measured, not paid for: a panel
   /// whose limit was overridden can report past the ceiling, and that gap is
   /// what the holds queue exists to settle (ADR-0074).
   consumedBytes         BigInt             @default(0)
   /// What has been bought (ADR-0072). `Σ ceilings ≤ purchasedBytes` across
   /// every config of this Grant — this is the number the allocator is bounded
-  /// by, which is why it is not folded into `billedBytes`.
+  /// by. The bag of every Grant, a package plan's too; a metered one's money
+  /// cursor is its `vpn.traffic` meter's `billed` (F-118-l).
   purchasedBytes        BigInt             @default(0)
   /// Used (Σ lifetime counters) at the last admin traffic reset (F-311-k); 0
   /// = never reset. A reset adds `Used - this` to Quota and moves it to Used,
   /// so a second reset adds only what was used since the first. A cursor, not
   /// a meter: `consumedBytes` and the counters are never rewritten.
   trafficResetFromBytes BigInt             @default(0)
-  /// Price per 2^30 bytes, copied from the variant's rate history at issue
-  /// (ADR-0073), exactly as `quotas` and `featureKeys` are. Null unless
-  /// `billingMode = metered`. `(18, 8)` because a rate is not an amount: every
-  /// amount derived from it is still whole cents before the ledger (C-02).
-  meteredRate           Decimal?           @db.Decimal(18, 8)
-  /// The currency `meteredRate` is in, locked with it at issue (F-116-d): a
-  /// block is debited and a remainder credited in it. Set exactly when
-  /// `meteredRate` is (`grant_metered_rate_currency_with_rate`).
-  meteredRateCurrencyCode String?
   /// Sold with `traffic_bytes.limit = 0` (F-111-q): no ceiling, never
   /// exhausted, never buys a block. The catalog is the only place 0 means
   /// unlimited; here the bag stays 0 and this says why. Only on a prepaid
@@ -340,15 +330,16 @@ model QuotaAdjustment {
 // =============================================================================
 
 /// A meter this Grant was sold with (F-118-e, ADR-0105 decision 4): the rate
-/// card in effect at the sale, copied beside the quotas as ADR-0073 copies
-/// `meteredRate` — a catalog change never reprices it. One row per meter; the
-/// terms never change (`grant_meter_terms_are_locked`), only the counters.
+/// card in effect at the sale, copied beside the quotas (ADR-0073) — a
+/// catalog change never reprices it. One row per meter; the terms never change
+/// (`grant_meter_terms_are_locked`), only the counters — and the price with
+/// its currency, when the tenant's currency changes (F-118-l).
 ///
 /// Counters are in the meter's unit. `consumed` is what was used, `billed` the
 /// rating cursor (how far the money has been taken), `funded` what is paid or
-/// held for. Until F-118-l a VPN Grant keeps its byte columns and they are the
-/// truth; this row's counters start at 0 and nothing advances them yet
-/// (F-118-f, F-118-g). A package plan has no row (decision 0).
+/// held for. A `vpn.traffic` meter is a metered VPN Grant's rate and money
+/// cursor (F-118-l): per 2^30 bytes, its `consumed` read off the Grant's
+/// `consumedBytes` and its bag `purchasedBytes`. A package plan has no row (decision 0).
 model GrantMeter {
   id               String                @id @default(uuid()) @db.Uuid
   tenantId         String                @db.Uuid

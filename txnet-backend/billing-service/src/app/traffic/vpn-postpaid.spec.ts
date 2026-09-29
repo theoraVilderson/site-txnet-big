@@ -34,14 +34,10 @@ function world(opts: { balance?: string; mode?: 'prepaid' | 'postpaid'; consumed
     userId: USER,
     status: 'active',
     billingMode: VariantBillingMode.metered,
-    // $2.00 a GiB.
-    meteredRate: D('2'),
-    meteredRateCurrencyCode: 'USD',
     trafficUnlimited: false,
     lowBalanceNoticeAt: null,
     consumedBytes: opts.consumed ?? BigInt(0),
     purchasedBytes: opts.purchased ?? opts.funded ?? BigInt(0),
-    billedBytes: opts.billed ?? BigInt(0),
   };
   const meter = {
     id: METER_ID,
@@ -49,6 +45,7 @@ function world(opts: { balance?: string; mode?: 'prepaid' | 'postpaid'; consumed
     grantId: GRANT,
     meterKey: METER_KEYS.vpnTraffic,
     unitSize: GIB,
+    // $2.00 a GiB.
     unitPrice: D('2'),
     currencyCode: 'USD',
     mode: opts.mode ?? 'postpaid',
@@ -71,8 +68,7 @@ function world(opts: { balance?: string; mode?: 'prepaid' | 'postpaid'; consumed
   const tx = {
     grant: {
       findUnique: async () => ({ ...grant }),
-      update: async ({ data }: { data: { billedBytes?: { increment: bigint }; purchasedBytes?: { increment: bigint } } }) => {
-        grant.billedBytes += data.billedBytes?.increment ?? BigInt(0);
+      update: async ({ data }: { data: { purchasedBytes?: { increment: bigint } } }) => {
         grant.purchasedBytes += data.purchasedBytes?.increment ?? BigInt(0);
         return { ...grant };
       },
@@ -147,6 +143,7 @@ describe('a postpaid vpn.traffic card is sold (F-118-k)', () => {
     id: 'rc1',
     meterKey: METER_KEYS.vpnTraffic,
     unitSize: GIB,
+    // $2.00 a GiB.
     unitPrice: D('2'),
     currencyCode: 'USD',
     mode,
@@ -174,7 +171,7 @@ describe('the planner asks: held, never debited (ADR-0105 (6))', () => {
     expect(w.meter.funded).toBe(GIB);
     // The bag is what the hold covers; nothing billed, and no reserve of the Grant's own beside it.
     expect(w.grant.purchasedBytes).toBe(GIB);
-    expect(w.grant.billedBytes).toBe(BigInt(0));
+    expect(w.meter.billed).toBe(BigInt(0));
     expect(w.holds.has(GRANT)).toBe(false);
   });
 
@@ -184,7 +181,7 @@ describe('the planner asks: held, never debited (ADR-0105 (6))', () => {
     // 768 MiB = $1.50 captured, then $0.50 + $1.00 asked = $1.50 is under the $2.00 floor: back to $2.00.
     expect(w.calls).toEqual(['capture 1.50', 'hold meter 1.50']);
     expect(w.ledger).toEqual([{ amount: '1.50', reasonType: WalletReasonType.usage_charge }]);
-    expect(w.grant.billedBytes).toBe(BigInt(768) * MIB);
+    expect(w.meter.billed).toBe(BigInt(768) * MIB);
     expect(w.grant.purchasedBytes).toBe(BigInt(768) * MIB + GIB);
   });
 
@@ -240,7 +237,7 @@ describe('the reserve paths reach the meter hold (F-118-b)', () => {
     expect(released.toFixed(2)).toBe('0.50');
     expect(w.meter.funded).toBe(BigInt(768) * MIB);
     expect(w.grant.purchasedBytes).toBe(BigInt(768) * MIB);
-    expect(w.grant.billedBytes).toBe(BigInt(768) * MIB);
+    expect(w.meter.billed).toBe(BigInt(768) * MIB);
   });
 
   it('leaves a prepaid VPN Grant to its block and its own reserve', async () => {

@@ -15,9 +15,10 @@ ADR-0105 (5)(6)(11)): the money side of `grant_meter`. Intake
 meter is `funded` — what its enforcer may serve (ADR-0105 (7)). Read it before
 pricing a meter, before a second caller of any call below, or before F-118-h.
 
-**A prepaid `vpn.traffic` is not here.** Its bytes keep the block purchaser
-([contract.traffic-block.md](contract.traffic-block.md)) until F-118-l; every
-call refuses it as `meter_on_its_own_path`. A **postpaid** one is (F-118-k,
+**A prepaid `vpn.traffic` is not here.** Its blocks are the block purchaser's
+([contract.traffic-block.md](contract.traffic-block.md)), which moves its
+meter's `billed` and `funded` itself (F-118-l); every call refuses it as
+`meter_on_its_own_path`. A **postpaid** one is (F-118-k,
 "VPN postpaid" below). A package plan has no metered `grant_meter`, so nothing
 here ever reads it (ADR-0105 (0)).
 
@@ -104,8 +105,8 @@ worker-service's `usage_capture` at `5 * * * *` (automation
 ## VPN postpaid (F-118-k, ADR-0105 (6)(7)(12))
 
 A metered Grant sold on a postpaid `vpn.traffic` card (`vpnTrafficRateAt`
-takes one per 2^30 bytes, nothing included, then metered; its rate is locked
-as `meteredRate` too) is served on held money and charged after. The seller
+takes one per 2^30 bytes, nothing included, then metered; its `grant_meter`
+is its only rate, F-118-l) is served on held money and charged after. The seller
 picks the mode on the variant form from F-118-m (user, 2026-09-29).
 
 1. **Its hold is its `grant_meter`'s** (`ownerRef` = the meter id), never the
@@ -115,8 +116,8 @@ picks the mode on the variant form from F-118-m (user, 2026-09-29).
    the rate — only when the hold is under it (no capture a minute); a release
    (suspension, freeze, cancel, close) captures, releases the rest, and
    brings `funded` down to `billed`.
-2. **The bag is `funded`.** Every cursor move mirrors onto the Grant by the
-   same delta — `billedBytes` by `billed`, `purchasedBytes` by `funded` — so
+2. **The bag is `funded`.** Every `funded` move mirrors onto the Grant's
+   `purchasedBytes` by the same delta (`billed` lives on the meter alone) — so
    the planner leases `billed` plus what the hold covers: the ceiling stands
    at what was consumed plus the held bytes.
 3. **The planner's block request is a capture, then a hold**

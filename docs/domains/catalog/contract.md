@@ -142,8 +142,7 @@ cards on its own variants only. A metered unit costs more than zero
 free usage is an included quantity that stops. Read **once, at the moment of
 sale** (`rateCardAt`): a card written tomorrow never reprices what was sold.
 Every `metered_rate` row became a `vpn.traffic` prepaid card per 2^30 bytes
-(`METERED_RATE_UNIT_BYTES`); `metered_rate` is read by nothing and written by
-no service role until F-118-l drops it. No route writes a card yet (F-118-m, with the mode).
+(`METERED_RATE_UNIT_BYTES`); F-118-l dropped `metered_rate`. No route writes a card yet (F-118-m, with the mode).
 Every card in effect is locked on the Grant as a `grant_meter` row (F-118-e,
 entitlement `contract.md`); a VPN Grant still sells only a card the byte engine
 serves — per 2^30 bytes, nothing included, then metered; prepaid or, since
@@ -192,7 +191,7 @@ None.
 | Unit | What it reads |
 |---|---|
 | billing | `coupon_service_scope.productId` / `variantId`: a purchase matches a row naming its variant or its product; `sellableOfferById` + `invoice.variantId` / `priceId` (`Restrict`): what an invoice was priced at (F-111-a) |
-| entitlement | a variant's quotas, duration, billing mode and its product's feature keys, copied into a Grant (F-026-b, F-026-e); the `vpn.traffic` rate card in effect, locked onto `Grant.meteredRate` at issue (F-027-p, ADR-0073; `vpnTrafficRateAt`, F-118-d) |
+| entitlement | a variant's quotas, duration, billing mode and its product's feature keys, copied into a Grant (F-026-b, F-026-e); the `vpn.traffic` rate card in effect, locked as the Grant's `vpn.traffic` `grant_meter` at issue (ADR-0073; `vpnTrafficRateAt`, F-118-d; its only rate since F-118-l) |
 | network | a variant's `panelGroupId` (FK to `network.panel_group`, F-027-bk) and `qualityTier` (F-027) |
 | tenant | `offeredToTenant`: the onboarding checklist's `pricing` step (F-018-ah) |
 

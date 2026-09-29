@@ -224,7 +224,6 @@ model ProductVariant {
   product             Product              @relation(fields: [productId], references: [id])
   panelGroup          PanelGroup?          @relation(fields: [panelGroupId], references: [id], onDelete: Restrict)
   prices              Price[]
-  meteredRates        MeteredRate[]
   rateCards           RateCard[]
   couponServiceScopes CouponServiceScope[]
   grants              Grant[]
@@ -296,8 +295,8 @@ enum RateCardAfterIncluded {
 ///
 /// History, exactly as `Price` is: a change is a new row, and a trigger refuses
 /// any update but `isActive` and any delete but its variant's. A tenant writes
-/// cards on its own variants only (RLS, `same_tenant_as_parent`). Replaces
-/// `MeteredRate`: its rows became `vpn.traffic` prepaid cards.
+/// cards on its own variants only (RLS, `same_tenant_as_parent`). Replaced
+/// `metered_rate` (F-118-d; dropped by F-118-l): its rows became `vpn.traffic` prepaid cards.
 model RateCard {
   id               String                @id @default(uuid()) @db.Uuid
   tenantId         String?               @db.Uuid
@@ -324,45 +323,6 @@ model RateCard {
   @@index([variantId, meterKey, effectiveFrom(sort: Desc)])
   @@index([tenantId])
   @@map("rate_card")
-  @@schema("catalog")
-}
-
-/// Retired by F-118-d: its rows are `vpn.traffic` cards in `RateCard`, nothing
-/// reads it, and no service role may write it. Dropped with F-118-l.
-///
-/// What a `metered` variant charges per 2^30 bytes (ADR-0073, F-027-g), in the
-/// same currency as `Price` but at the precision a rate needs — `(18, 8)`, as
-/// `tenant_usage_meter.unitPrice` and `currency_exchange_rate.rate` already
-/// are. `C-02` governs amounts, and every amount derived from this rate is
-/// rounded to whole cents before the ledger sees it (ADR-0072).
-///
-/// History, exactly as `Price` is: a change is a new row, and a trigger refuses
-/// any update but `isActive` and any delete. `GrantService.issue` copies the
-/// rate in effect onto `Grant.meteredRate` (F-027-p), so a catalog edit
-/// tomorrow never reprices bytes already sold — or, under ADR-0072, blocks
-/// already bought.
-model MeteredRate {
-  id               String   @id @default(uuid()) @db.Uuid
-  tenantId         String?  @db.Uuid
-  variantId        String   @db.Uuid
-  /// Money per `METERED_RATE_UNIT_BYTES` (shared-core). Bytes are the only
-  /// stored unit; "GB" is a rendering concern. Strictly positive
-  /// (`metered_rate_is_positive`, F-027-al): a block priced at zero cents is
-  /// one nobody can buy, so a rate of zero stalls the user rather than
-  /// serving free traffic. Free metered service is a quota with no rate.
-  rate             Decimal  @db.Decimal(18, 8)
-  /// The currency `rate` is in, on the same terms as `Price.currencyCode` (F-116-d).
-  currencyCode     String
-  effectiveFrom    DateTime
-  isActive         Boolean  @default(true)
-  createdByAdminId String?  @db.Uuid
-  createdAt        DateTime @default(now())
-
-  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
-
-  @@index([variantId, effectiveFrom(sort: Desc)])
-  @@index([tenantId])
-  @@map("metered_rate")
   @@schema("catalog")
 }
 

@@ -13,7 +13,7 @@ What governs `metering-service` (ADR-0077, F-027-n): the process that consumes
 a delta does, or before adding a second consumer of the same pipeline.
 
 **Usage is visible here and nobody pays.** `grant.consumedBytes` is the
-measured cursor; `billedBytes` is the money one and belongs to the block
+measured cursor; the `vpn.traffic` meter's `billed` is the money one and belongs to the block
 purchaser (F-027-q, [contract.traffic-block.md](contract.traffic-block.md)).
 Nothing in this process reads a wallet, a price or a rate.
 
@@ -108,8 +108,9 @@ the platform has no service-to-service auth.
    `source`.
 3. **Refused, thrown, dead-lettered:** `meter_not_on_grant` (no `grant_meter`
    row: the Grant was not sold with it), `key_reused` (the key already recorded
-   a different figure), `meter_on_its_own_path` (`vpn.traffic`: its bytes keep
-   the delta path above until F-118-l).
+   a different figure), `meter_on_its_own_path` (`vpn.traffic`: its bytes are
+   `grant.consumedBytes`, every Grant's measure, on the delta path above;
+   F-118-l moved only its rate and money cursor to `grant_meter`).
 4. `quantity` is a whole number ≥ 1 in the meter's unit (a decimal string on
    the wire, CHECK in the table); `usage_event` is append-only (INSERT and
    SELECT granted) and its tenant is its meter's (`entitlement.same_tenant()`).

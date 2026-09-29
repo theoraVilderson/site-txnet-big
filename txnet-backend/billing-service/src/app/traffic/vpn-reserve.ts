@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { withinCap } from '../usage/spending-cap';
 import { WalletHoldService, WalletLedgerService } from '../wallet/wallet-ledger.service';
 import { postpaidVpnMeter, VpnPostpaid } from './vpn-postpaid';
+import { HAS_VPN_METER, vpnMeterOf } from './vpn-meter';
 
 /**
  * The VPN reserve as held money (F-118-b, ADR-0105 (8), network
@@ -34,9 +35,9 @@ import { postpaidVpnMeter, VpnPostpaid } from './vpn-postpaid';
  * topped to the same floor, captured and released on the same paths.
  */
 
-/** Bytes per unit of `grant.meteredRate` (ADR-0073). */
+/** Bytes per unit of a `vpn.traffic` rate (ADR-0073). */
 const GIB = BigInt(METERED_RATE_UNIT_BYTES);
-/** `grant.meteredRate` is `Decimal(18, 8)`. */
+/** `grant_meter.unitPrice` is `Decimal(18, 8)`. */
 const RATE_SCALE = 8;
 const RATE_UNIT = BigInt(100_000_000);
 const CENTS = BigInt(100);
@@ -63,8 +64,6 @@ export function sizeReserve(input: { rate: Prisma.Decimal; reserveBytes: bigint;
 type ReserveGrant = {
   status: GrantStatus;
   billingMode: VariantBillingMode;
-  meteredRate: Prisma.Decimal | null;
-  meteredRateCurrencyCode: string | null;
   trafficUnlimited: boolean;
 };
 
@@ -72,15 +71,13 @@ type ReserveGrant = {
 const RESERVED_WHERE = {
   status: { in: [GrantStatus.active, GrantStatus.pending] },
   billingMode: VariantBillingMode.metered,
-  meteredRate: { not: null },
+  ...HAS_VPN_METER,
   trafficUnlimited: false,
 } satisfies Prisma.GrantWhereInput;
 
 const isReserved = (g: ReserveGrant): boolean =>
   (g.status === GrantStatus.active || g.status === GrantStatus.pending) &&
   g.billingMode === VariantBillingMode.metered &&
-  g.meteredRate !== null &&
-  g.meteredRateCurrencyCode !== null &&
   !g.trafficUnlimited;
 
 function openReserve(tx: Prisma.TransactionClient, walletId: string, grantId: string) {
@@ -172,16 +169,17 @@ export class VpnReserve {
     if (await this.isPostpaid(tx, grantId)) return this.postpaid.top(tx, grantId);
     const grant = await tx.grant.findUnique({
       where: { id: grantId },
-      select: { id: true, userId: true, status: true, billingMode: true, meteredRate: true, meteredRateCurrencyCode: true, trafficUnlimited: true },
+      select: { id: true, userId: true, status: true, billingMode: true, trafficUnlimited: true },
     });
-    if (!grant || !isReserved(grant)) return ZERO;
+    const meter = grant && isReserved(grant) ? await vpnMeterOf(tx, grantId) : null;
+    if (!grant || !meter) return ZERO;
     const wallet = await tx.wallet.findUnique({ where: { ownerUserId: grant.userId } });
     // A rate in another currency than the wallet is not this code's to convert (C-02).
-    if (!wallet || wallet.currencyCode !== grant.meteredRateCurrencyCode) return ZERO;
+    if (!wallet || wallet.currencyCode !== meter.currencyCode) return ZERO;
 
     const held = (await openReserve(tx, wallet.id, grant.id))?.amount ?? ZERO;
     const target = sizeReserve({
-      rate: grant.meteredRate as Prisma.Decimal,
+      rate: meter.unitPrice,
       reserveBytes: this.bytes,
       // Inside the Grant's spending cap, if it has one (F-118-i).
       available: await withinCap(tx, grant, wallet.cachedBalance.minus(wallet.heldAmount).plus(held), held),

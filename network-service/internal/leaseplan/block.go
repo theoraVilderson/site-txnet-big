@@ -77,7 +77,7 @@ func blockDue(g Grant, rateNow, rateDemand float64, horizon time.Duration, at ti
 		RequestedAt: at}, true
 }
 
-// gib is the byte count one unit of `grant.meteredRate` prices (ADR-0073).
+// gib is the byte count one unit of a `vpn.traffic` meter's `unitPrice` prices (ADR-0073).
 var gib = big.NewRat(1<<30, 1)
 
 // BytesAffordable is what an amount of money buys at a metered rate: whole
@@ -86,7 +86,7 @@ var gib = big.NewRat(1<<30, 1)
 // `contracts/network/block-request.json`. The planner reads a Grant's
 // reserve through it: the amount is its open reserve hold (F-118-b), so what
 // it leases past the bag is money no other debit can spend. Both are the
-// columns' decimal text (`grant.meteredRate` Decimal(18,8),
+// columns' decimal text (`grant_meter.unitPrice` Decimal(18,8),
 // `wallet_hold.amount` Decimal(18,2)), never a float (C-02). No rate, no
 // amount, a rate of zero or an amount under a cent buys nothing; a figure
 // past int64 is capped.

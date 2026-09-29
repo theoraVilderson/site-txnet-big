@@ -137,25 +137,23 @@ Grant of a variant with a panel group is moved to `active` by group fulfilment
 once `minHealthyPanels` of its configs are confirmed (network
 `contract.groups.md` rule 10, F-027-bl).
 
-A **metered** variant also has its rate copied: the `vpn.traffic` rate card
-(`catalog.rate_card`, F-118-d; `metered_rate` before it) in effect at `startsAt`, in the tenant's operating currency, is locked onto
-`Grant.meteredRate` with its currency on `meteredRateCurrencyCode` (F-027-p,
-ADR-0073, F-116-d) — a block is debited in that currency,
-and every block bought against that Grant is priced from the Grant's own
-column — a catalog edit tomorrow never reprices what was sold. A metered
+A **metered** variant also has its rate locked: the `vpn.traffic` rate card
+(`catalog.rate_card`, F-118-d) in effect at `startsAt`, in the tenant's operating currency, is its
+`vpn.traffic` `grant_meter` below — the Grant's only rate since F-118-l (ADR-0073,
+F-116-d): a block is debited in its currency, and every block bought against
+that Grant is priced from it — a catalog edit tomorrow never reprices what was sold. A metered
 variant with **no** rate in effect in that currency — or whose newest card the byte engine
 cannot serve yet (postpaid, included, not per 2^30 bytes; `vpnTrafficRateAt`) — is refused (`metered_rate_missing`), and one
 whose rate in effect is **zero** with `metered_rate_not_positive` (F-027-al) —
 a block priced at nothing cannot be bought, so such a Grant stalls at its first
 block rather than serving free traffic; the catalog column refuses the same
-value (`rate_card_metered_price_positive`). Nothing is
-copied for any other billing mode: `grant_metered_rate_is_metered` refuses a
-rate on a prepaid Grant.
+value (`rate_card_metered_price_positive`). A prepaid Grant gets no
+`vpn.traffic` meter, so it carries no rate.
 
 **Its meters are locked beside it (F-118-e, ADR-0105 decision 4)** — `grant-meter.ts`: one
 `grant_meter` row per card in effect (terms, `rateCardId`, counters at 0). A metered VPN
-Grant's is the card `meteredRate` came from; a package plan has none (decision 0); a card on a
-meter nothing serves yet refuses the sale (`meter_not_served`, decision 7). `usage_event` advances `consumed` (billing `contract.metering.md`, F-118-f); the rest waits for F-118-g/-l.
+Grant's `vpn.traffic` row is its rate and money cursor (F-118-l, billing `contract.traffic-block.md`); a package plan has none (decision 0); a card on a
+meter nothing serves yet refuses the sale (`meter_not_served`, decision 7). `usage_event` advances `consumed` (billing `contract.metering.md`, F-118-f).
 
 **Delivery of a paid Grant (F-111-d, spec §5.8 step 3)** —
 `entitlement/delivery.ts`, proved by `delivery.spec.ts` and, against Postgres,

@@ -33,10 +33,11 @@ var _ Store = PostgresStore{}
 // `active`, or `pending` — a group's Grant activates on what its panels
 // confirm, so its configs need a ceiling first — and only if it sold a limit.
 //
-// Quota is `purchasedBytes`, read; on a metered Grant with a locked rate its
-// reserve is added to it (F-027-dc): what the Grant's own open hold on the
-// owner's wallet buys at that rate (F-118-b, ADR-0105 (8)), computed from the
-// columns' decimal text. Billing holds it (`ownerRef` = the Grant) and nothing
+// Quota is `purchasedBytes`, read; on a metered Grant — one with a
+// `vpn.traffic` `grant_meter`, its locked rate (F-118-l) — its reserve is
+// added to it (F-027-dc): what the Grant's own open hold on the owner's wallet
+// buys at that rate (F-118-b, ADR-0105 (8)), computed from the columns'
+// decimal text. Billing holds it (`ownerRef` = the Grant) and nothing
 // else can spend it, so two Grants or a purchase cannot lease the same money.
 // A Grant with no open reserve hold has a reserve of nothing. Used is summed in Go from each config's
 // lifetime counter (`contract.lease.md`), which the pass that called us has
@@ -55,8 +56,8 @@ WITH touched AS (
       OR (c."panelId" = $1::uuid AND c."allocatedCeilingBytes" IS NULL AND NOT c."trafficUnlimited"
           AND c.status = 'active' AND c."desiredEnabled" AND c."desiredRemote" = 'present'))
 SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresAt", lc."grantId" IS NOT NULL,
-       g."billingMode" = 'metered' AND g."meteredRate" IS NOT NULL,
-       coalesce(g."meteredRate"::text, ''), coalesce(h.amount::text, ''),
+       g."billingMode" = 'metered' AND m."unitPrice" IS NOT NULL,
+       coalesce(m."unitPrice"::text, ''), coalesce(h.amount::text, ''),
        c.id::text, c."panelId"::text,
        c.status = 'active' AND c."desiredEnabled" AND c."desiredRemote" = 'present',
        c."remoteId" IS NOT NULL,
@@ -76,6 +77,7 @@ SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresA
        p."outageWeight", p."outageWeightAt"
   FROM touched t
   JOIN entitlement."grant" g ON g.id = t."grantId"
+  LEFT JOIN entitlement.grant_meter m ON m."grantId" = g.id AND m."meterKey" = 'vpn.traffic'
   LEFT JOIN billing.wallet w ON w."ownerUserId" = g."userId"
   LEFT JOIN billing.wallet_hold h ON h."walletId" = w.id AND h."ownerRef" = g.id AND h.status = 'open'
   LEFT JOIN network.lease_close lc ON lc."grantId" = g.id

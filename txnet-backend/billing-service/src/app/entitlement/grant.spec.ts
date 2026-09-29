@@ -11,7 +11,7 @@
  *  - **a catalog edit changing what was sold.** Quotas, feature keys, billing
  *    mode and duration are copied from the variant at issue;
  *  - **yesterday's traffic repriced.** A metered variant's rate in effect is
- *    copied onto `Grant.meteredRate` at issue (F-027-p, ADR-0073), and a
+ *    locked on the Grant's `vpn.traffic` meter at issue (ADR-0073, F-118-l), and a
  *    metered variant with no rate is not issued at all;
  *  - **a working link in the database.** The token is written only as its
  *    SHA-256 and sealed (ADR-0085, `grant-token-seal.spec.ts`), never in clear;
@@ -137,8 +137,6 @@ describe('grantFromVariant', () => {
       billingMode: VariantBillingMode.prepaid,
       quotas: variant.quotas,
       featureKeys: ['vpn.access'],
-      meteredRate: null,
-      meteredRateCurrencyCode: null,
       purchasedBytes: BigInt(53687091200),
       trafficUnlimited: false,
     });
@@ -151,28 +149,11 @@ describe('grantFromVariant', () => {
     expect(grantFromVariant(start, { ...variant, quotas: {} }).purchasedBytes).toBe(BigInt(0));
   });
 
-  it('locks the rate in effect at the start onto a metered Grant, and never a later one', () => {
-    const metered = {
-      ...variant,
-      billingMode: VariantBillingMode.metered,
-      rateCards: [rate('r1', '0.40000000', '2026-01-01T00:00:00Z'), rate('r2', '0.25000000', '2026-10-01T00:00:00Z')],
-    };
+  it('carries no rate of its own: a metered Grant\'s rate is its vpn.traffic meter (F-118-l, grant-meter.spec.ts)', () => {
+    const metered = { ...variant, billingMode: VariantBillingMode.metered, rateCards: [rate('r1', '0.40000000', '2026-01-01T00:00:00Z')] };
     const g = grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T10:00:00Z'), currencyCode: 'USD' }, metered);
-    expect(g.meteredRate?.toString()).toBe('0.4');
-  });
-
-  it('carries no rate on a prepaid variant, whatever its rate history says', () => {
-    const priced = { ...variant, rateCards: [rate('r1', '0.40000000', '2026-01-01T00:00:00Z')] };
-    expect(grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T10:00:00Z'), currencyCode: 'USD' }, priced).meteredRate).toBeNull();
-  });
-
-  it('has no rate for a metered variant whose history starts later', () => {
-    const metered = {
-      ...variant,
-      billingMode: VariantBillingMode.metered,
-      rateCards: [rate('r1', '0.40000000', '2026-10-01T00:00:00Z')],
-    };
-    expect(grantFromVariant({ source: GrantSource.coupon, startsAt: at('2026-09-01T10:00:00Z'), currencyCode: 'USD' }, metered).meteredRate).toBeNull();
+    expect(g).not.toHaveProperty('meteredRate');
+    expect(g).not.toHaveProperty('billedBytes');
   });
 
   it('is permanent with no duration, and pending while a purchase settles', () => {
@@ -294,6 +275,7 @@ describe('GrantService.issue locks the metered rate (F-027-p, ADR-0073)', () => 
 
   function fakeTx(variant: ReturnType<typeof meteredVariant>) {
     const grants: Array<Record<string, unknown>> = [];
+    const meters: Array<Record<string, unknown>> = [];
     const tx = {
       tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
       productVariant: { findUnique: vi.fn(async () => variant) },
@@ -305,9 +287,14 @@ describe('GrantService.issue locks the metered rate (F-027-p, ADR-0073)', () => 
           return row;
         }),
       },
-      grantMeter: { createMany: vi.fn(async () => ({ count: 1 })) },
+      grantMeter: {
+        createMany: vi.fn(async ({ data }: { data: Array<Record<string, unknown>> }) => {
+          meters.push(...data);
+          return { count: data.length };
+        }),
+      },
     };
-    return { tx: tx as unknown as Prisma.TransactionClient, grants };
+    return { tx: tx as unknown as Prisma.TransactionClient, grants, meters };
   }
 
   const service = new GrantService({} as never);
@@ -317,7 +304,7 @@ describe('GrantService.issue locks the metered rate (F-027-p, ADR-0073)', () => 
     );
 
   it('writes the rate in effect at the sale, not the newest in the history', async () => {
-    const { tx, grants } = fakeTx(
+    const { tx, meters } = fakeTx(
       meteredVariant([
         { effectiveFrom: '2026-01-01T00:00:00Z', rate: '0.40000000' },
         { effectiveFrom: '2026-10-01T00:00:00Z', rate: '0.25000000' },
@@ -326,7 +313,7 @@ describe('GrantService.issue locks the metered rate (F-027-p, ADR-0073)', () => 
 
     await issue(tx, at('2026-09-01T10:00:00Z'));
 
-    expect((grants[0]['meteredRate'] as Prisma.Decimal).toString()).toBe('0.4');
+    expect((meters[0]['unitPrice'] as Prisma.Decimal).toString()).toBe('0.4');
   });
 
   it('refuses a metered variant with no rate in effect, rather than serving bytes at nothing', async () => {

@@ -12,7 +12,7 @@
  *    integer division rounding *down*, so the block is always at most what the
  *    debited cents buy at the Grant's own rate;
  *  - **yesterday's traffic repriced.** Every block is priced from
- *    `grant.meteredRate`, locked at issue (F-027-p); nothing here reads the
+ *    the Grant's `vpn.traffic` meter, locked at issue (F-118-l); nothing here reads the
  *    catalog;
  *  - **a stall with money still in the wallet.** A balance short of the target
  *    buys the largest whole-cent block it can fund, and only a balance under
@@ -86,9 +86,10 @@ type GrantRow = {
   userId: string;
   status: GrantStatus;
   billingMode: VariantBillingMode;
-  meteredRate: Prisma.Decimal | null;
-  meteredRateCurrencyCode: string | null;
-  billedBytes: bigint;
+  /** Its `vpn.traffic` meter's `unitPrice`; null = no meter (F-118-l). */
+  rate: Prisma.Decimal | null;
+  /** The meter's money cursor. */
+  billed: bigint;
   purchasedBytes: bigint;
 };
 
@@ -102,9 +103,8 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
     userId: USER,
     status: GrantStatus.active,
     billingMode: VariantBillingMode.metered,
-    meteredRate: D('0.40000000'),
-    meteredRateCurrencyCode: 'USD',
-    billedBytes: BigInt(0),
+    rate: D('0.40000000'),
+    billed: BigInt(0),
     purchasedBytes: BigInt(0),
     ...grant,
   };
@@ -118,13 +118,19 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
       findUnique: async ({ where }: { where: { id: string } }) => (where.id === row.id ? { ...row } : null),
       update: async ({ where, data }: { where: { id: string }; data: Record<string, { increment: bigint }> }) => {
         if (where.id !== row.id) throw new Error('no grant');
-        row.billedBytes += data['billedBytes'].increment;
         row.purchasedBytes += data['purchasedBytes'].increment;
         return { ...row };
       },
     },
-    // No postpaid vpn.traffic meter: a prepaid Grant's path (F-118-k).
-    grantMeter: { findUnique: async () => null },
+    // Its prepaid vpn.traffic meter (F-118-l): the rate and the money cursor.
+    grantMeter: {
+      findUnique: async () =>
+        row.rate === null ? null : { id: 'meter-1', mode: 'prepaid', unitPrice: row.rate, currencyCode: 'USD', billed: row.billed },
+      update: async ({ data }: { data: { billed: { increment: bigint } } }) => {
+        row.billed += data.billed.increment;
+        return { billed: row.billed };
+      },
+    },
     wallet: {
       findUnique: async () => ({ ...wallet }),
       findUniqueOrThrow: async () => ({ ...wallet }),
@@ -161,7 +167,7 @@ describe('BlockPurchaseService.purchase', () => {
 
     expect(block.amount.toFixed(2)).toBe('0.40');
     expect(row.purchasedBytes).toBe(block.bytes);
-    expect(row.billedBytes).toBe(block.bytes);
+    expect(row.billed).toBe(block.bytes);
     expect(wallet.cachedBalance.toFixed(2)).toBe('9.60');
     expect(ledger).toHaveLength(1);
     expect(ledger[0]).toMatchObject({
@@ -172,12 +178,12 @@ describe('BlockPurchaseService.purchase', () => {
   });
 
   it('adds to cursors that already moved, never overwrites them', async () => {
-    const { tx, row } = fakeTx({ id: GRANT, billedBytes: BigInt(5), purchasedBytes: BigInt(5) }, D('10.00'));
+    const { tx, row } = fakeTx({ id: GRANT, billed: BigInt(5), purchasedBytes: BigInt(5) }, D('10.00'));
 
     const block = await buy(tx);
 
     expect(row.purchasedBytes).toBe(BigInt(5) + block.bytes);
-    expect(row.billedBytes).toBe(BigInt(5) + block.bytes);
+    expect(row.billed).toBe(BigInt(5) + block.bytes);
   });
 
   it('buys the largest block the balance can fund rather than stalling on a full one', async () => {
@@ -199,8 +205,8 @@ describe('BlockPurchaseService.purchase', () => {
 
   it.each([
     [{ status: GrantStatus.suspended }, 'grant_not_active'],
-    [{ billingMode: VariantBillingMode.prepaid, meteredRate: null }, 'grant_not_metered'],
-    [{ meteredRate: null }, 'grant_not_metered'],
+    [{ billingMode: VariantBillingMode.prepaid, rate: null }, 'grant_not_metered'],
+    [{ rate: null }, 'grant_not_metered'],
   ])('refuses %o with %s', async (patch, reason) => {
     const { tx, ledger } = fakeTx({ id: GRANT, ...patch }, D('10.00'));
 

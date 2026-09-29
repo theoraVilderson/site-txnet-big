@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BlockPurchaseRefused, BlockPurchaseService, type BlockPurchaseRejection, type PurchasedBlock } from './block-purchase';
 import { type Exhaustion, isShortOfFunds, suspendIfExhausted } from './exhaustion';
 import { noticeLowBalance } from './low-balance';
+import { vpnMeterOf } from './vpn-meter';
 import { NO_VPN_RESERVE, VpnReserve } from './vpn-reserve';
 import type { ServedPostpaid } from './vpn-postpaid';
 
@@ -124,7 +125,6 @@ export class BlockRequestService {
         userId: true,
         status: true,
         billingMode: true,
-        meteredRate: true,
         trafficUnlimited: true,
         purchasedBytes: true,
         consumedBytes: true,
@@ -132,9 +132,8 @@ export class BlockRequestService {
       },
     });
     if (!grant) return { ...none, skipped: 'grant_not_found' };
-    if (grant.trafficUnlimited || grant.billingMode !== VariantBillingMode.metered || grant.meteredRate === null) {
-      return { ...none, skipped: 'not_metered' };
-    }
+    const meter = grant.trafficUnlimited || grant.billingMode !== VariantBillingMode.metered ? null : await vpnMeterOf(tx, grant.id);
+    if (!meter) return { ...none, skipped: 'not_metered' };
     if (grant.status !== GrantStatus.active) return { ...none, skipped: 'not_active' };
     if (grant.purchasedBytes !== BigInt(message.purchasedBytes)) return { ...none, skipped: 'stale' };
 
@@ -142,12 +141,13 @@ export class BlockRequestService {
     const requested = BigInt(message.targetBytes);
     const targetBytes = requested > floor ? requested : floor;
     if (targetBytes <= BigInt(0)) return { ...none, skipped: 'target_not_positive' };
-    if (await this.reserve.isPostpaid(tx, grant.id)) return this.servePostpaid(tx, grant, targetBytes, none);
+    const priced = { ...grant, rate: meter.unitPrice };
+    if (await this.reserve.isPostpaid(tx, grant.id)) return this.servePostpaid(tx, priced, targetBytes, none);
 
     try {
       const bought = await this.blocks.purchase(tx, { grantId: grant.id, targetBytes });
       // The balance the debit left, seen while the user is still served (F-601-g).
-      return { ...none, bought, skipped: null, lowBalance: await noticeLowBalance(tx, grant, bought.balanceAfter) };
+      return { ...none, bought, skipped: null, lowBalance: await noticeLowBalance(tx, priced, bought.balanceAfter) };
     } catch (error) {
       if (!isShortOfFunds(error)) throw error;
       // `purchase()` refuses before it writes, so the transaction is clean. A
@@ -160,7 +160,7 @@ export class BlockRequestService {
 
   private async servePostpaid(
     tx: Prisma.TransactionClient,
-    grant: { id: string; tenantId: string; userId: string; meteredRate: Prisma.Decimal | null; lowBalanceNoticeAt: Date | null; purchasedBytes: bigint; consumedBytes: bigint },
+    grant: { id: string; tenantId: string; userId: string; rate: Prisma.Decimal | null; lowBalanceNoticeAt: Date | null; purchasedBytes: bigint; consumedBytes: bigint },
     targetBytes: bigint,
     none: Omit<BlockRequestOutcome, 'skipped'>,
   ): Promise<BlockRequestOutcome> {

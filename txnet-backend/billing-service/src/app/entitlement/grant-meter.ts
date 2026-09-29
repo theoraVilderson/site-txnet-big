@@ -26,10 +26,10 @@ export type GrantMeterTerms = {
  * Only a meter something serves is locked, because a meter whose use nothing
  * refuses cannot be sold (decision 7):
  *  - `vpn.traffic` on a **metered** variant, when it is the card the byte
- *    engine serves (`vpnTrafficRateAt`) — so it is the same card as
- *    `meteredRate`. With none, issue refuses `metered_rate_missing` first.
+ *    engine serves (`vpnTrafficRateAt`): the Grant's rate and money cursor
+ *    from then on (F-118-l). With none, issue refuses `metered_rate_missing` first.
  *  - `vpn.traffic` on any other variant is not read at all: a package plan's
- *    path never looks at a card (decision 0), exactly as `meteredRate` ignores one.
+ *    path never looks at a card (decision 0).
  *  - Any other meter in effect is `unserved` until its door exists (F-118-h);
  *    issue refuses it as `meter_not_served`.
  */

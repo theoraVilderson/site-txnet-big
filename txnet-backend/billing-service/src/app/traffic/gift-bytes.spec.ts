@@ -3,10 +3,10 @@
  * break quietly here, and nowhere else:
  *
  *  - **a gift is bought by nobody.** `purchasedBytes` rises — the planner's
- *    Quota, so no block is bought while the gift lasts — and `billedBytes`,
- *    the money cursor, does not move; no wallet row is written;
+ *    Quota, so no block is bought while the gift lasts — and the meter's
+ *    `billed`, the money cursor, does not move; no wallet row is written;
  *  - **the remainder credit never pays a gift out as money.** It gives back
- *    `billedBytes - consumedBytes` at close (F-027-r), so a gift that never
+ *    `billed - consumedBytes` at close (F-027-r), so a gift that never
  *    reached the money cursor is never in it: a Grant closed with gifted bytes
  *    unused gets back what it paid for and did not use, and not a cent more;
  *  - **its own source**: the `quota_adjustment` row says `admin_gift`, so a
@@ -44,10 +44,9 @@ type Row = {
   suspendedAt: Date | null;
   billingMode: VariantBillingMode;
   trafficUnlimited: boolean;
-  meteredRate: Prisma.Decimal | null;
-  meteredRateCurrencyCode: string | null;
   purchasedBytes: bigint;
-  billedBytes: bigint;
+  /** Its prepaid `vpn.traffic` meter's money cursor (F-118-l). */
+  billed: bigint;
   consumedBytes: bigint;
   endsAt: Date | null;
 };
@@ -63,10 +62,8 @@ function build(row: Partial<Row>, balance = D('1.00')) {
     suspendedAt: null,
     billingMode: VariantBillingMode.metered,
     trafficUnlimited: false,
-    meteredRate: D('0.40000000'),
-    meteredRateCurrencyCode: 'USD',
     purchasedBytes: GIB,
-    billedBytes: GIB,
+    billed: GIB,
     consumedBytes: GIB,
     endsAt: new Date(AT.getTime() + 10 * DAY),
     ...row,
@@ -106,8 +103,15 @@ function build(row: Partial<Row>, balance = D('1.00')) {
     leaseClose: { findUnique: async () => null },
     // No reserve held: the release (F-118-b) writes nothing; vpn-reserve.spec.ts holds it.
     walletHold: { findFirst: async () => null },
-    // No postpaid vpn.traffic meter: a prepaid Grant's path (F-118-k).
-    grantMeter: { findUnique: async () => null },
+    // Its prepaid vpn.traffic meter at 40c/GiB (F-118-l): the rate and the money cursor.
+    grantMeter: {
+      findUnique: async () => ({ id: 'meter-1', mode: 'prepaid', unitPrice: D('0.40000000'), currencyCode: 'USD', billed: grant.billed }),
+      updateMany: async ({ where, data }: { where: { billed: bigint }; data: { billed: { decrement: bigint } } }) => {
+        if (where.billed !== grant.billed) return { count: 0 };
+        grant.billed -= data.billed.decrement;
+        return { count: 1 };
+      },
+    },
     wallet: {
       findUnique: async () => ({ ...wallet }),
       findUniqueOrThrow: async () => ({ ...wallet }),
@@ -142,7 +146,7 @@ describe('giftGrantBytes (F-311-l)', () => {
     const done = await giftGrantBytes(tx, GRANT, gift(BigInt(5) * GIB));
 
     expect(grant.purchasedBytes).toBe(BigInt(6) * GIB);
-    expect(grant.billedBytes).toBe(GIB);
+    expect(grant.billed).toBe(GIB);
     expect(ledger).toHaveLength(0);
     expect(wallet.cachedBalance.toFixed(2)).toBe('1.00');
     expect(done).toMatchObject({ adjustmentId: 'adjustment-1', purchasedBytesBefore: GIB, purchasedBytesAfter: BigInt(6) * GIB, usedBytes: GIB, spent: false });
@@ -165,7 +169,7 @@ describe('giftGrantBytes (F-311-l)', () => {
 
   it('gives back what was paid for and unused, and not a cent of the gift', async () => {
     // 2 GiB bought, 1 served, then 5 GiB gifted and the Grant cancelled: 1 GiB at 40c back, never 6.
-    const { tx, grant, wallet } = build({ purchasedBytes: BigInt(2) * GIB, billedBytes: BigInt(2) * GIB });
+    const { tx, grant, wallet } = build({ purchasedBytes: BigInt(2) * GIB, billed: BigInt(2) * GIB });
     await giftGrantBytes(tx, GRANT, gift(BigInt(5) * GIB));
     grant.status = GrantStatus.cancelled;
 

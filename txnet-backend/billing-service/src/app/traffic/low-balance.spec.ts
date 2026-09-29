@@ -12,7 +12,7 @@ const NOW = new Date('2026-09-27T12:00:00Z');
 const RATE = new Prisma.Decimal('0.5'); // $0.50 per GiB: $0.50 buys the threshold exactly
 
 function grant(input: Partial<LowBalanceGrant> = {}): LowBalanceGrant {
-  return { id: 'g1', tenantId: 't1', userId: 'u1', meteredRate: RATE, lowBalanceNoticeAt: null, ...input };
+  return { id: 'g1', tenantId: 't1', userId: 'u1', rate: RATE, lowBalanceNoticeAt: null, ...input };
 }
 
 function fakeTx(matches = true) {
@@ -82,7 +82,7 @@ describe('noticeLowBalance', () => {
 
   it('never tells a Grant with no rate, nor a balance that buys nothing at all — that is the cutoff notice', async () => {
     const { tx, updates, events } = fakeTx();
-    expect(await noticeLowBalance(tx, grant({ meteredRate: null }), new Prisma.Decimal('0.10'), NOW)).toBeNull();
+    expect(await noticeLowBalance(tx, grant({ rate: null }), new Prisma.Decimal('0.10'), NOW)).toBeNull();
     expect(await noticeLowBalance(tx, grant(), new Prisma.Decimal('0.00'), NOW)).toBeNull();
     expect(updates).toHaveLength(0);
     expect(events).toHaveLength(0);

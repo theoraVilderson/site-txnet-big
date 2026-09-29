@@ -18,7 +18,7 @@
     "Grant still holds exactly that figure: a request that arrives after another",
     "block was bought is stale, and is dropped rather than bought twice.",
     "",
-    "affordable is bytesAffordable(meteredRate, cachedBalance): whole cents of",
+    "affordable is bytesAffordable(rate, cachedBalance), rate the vpn.traffic meter's unitPrice: whole cents of",
     "the balance, floored, over the rate per 2^30 bytes, floored. Go computes the",
     "reserve it adds to Quota with it (ADR-0094 amendment); billing prices the",
     "block with it. Both sides are checked against these rows."

@@ -37,7 +37,7 @@ export function rateCardAt<T extends RateCardRow>(cards: readonly T[], at: Date,
 }
 
 /**
- * What a VPN Grant locks as `meteredRate` at issue (ADR-0073): the
+ * What a metered VPN Grant locks as its `vpn.traffic` meter at issue (ADR-0073, F-118-l): the
  * `vpn.traffic` card in effect, when it is one the byte engine serves — per
  * 2^30 bytes, nothing included, then metered; prepaid (every card
  * `metered_rate` became: blocks) or postpaid (F-118-k: a hold, captured).

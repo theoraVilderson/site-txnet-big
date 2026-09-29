@@ -90,7 +90,6 @@ function fakeTx(row: GrantRow | null) {
     userId: 'u',
     status: row.status ?? GrantStatus.active,
     billingMode: row.prepaid ? VariantBillingMode.prepaid : VariantBillingMode.metered,
-    meteredRate: row.prepaid ? null : new Prisma.Decimal('0.5'),
     trafficUnlimited: row.unlimited ?? false,
     purchasedBytes: row.purchasedBytes ?? BigInt(400) * MB,
     consumedBytes: row.consumedBytes ?? BigInt(0),
@@ -105,8 +104,8 @@ function fakeTx(row: GrantRow | null) {
       },
     },
     // No wallet row: the reserve release (F-118-b) holds nothing here; vpn-reserve.spec.ts holds it.
-    // No postpaid vpn.traffic meter: a prepaid Grant's path (F-118-k).
-    grantMeter: { findUnique: async () => null },
+    // A metered Grant's prepaid vpn.traffic meter at 50c/GiB (F-118-l); a prepaid Grant has none.
+    grantMeter: { findUnique: async () => (grant && !row?.prepaid ? { mode: 'prepaid', unitPrice: new Prisma.Decimal('0.5'), currencyCode: 'USD' } : null) },
     wallet: { findUnique: async () => null },
     $queryRaw: async () => [{ cachedBalance: new Prisma.Decimal('0.00') }],
     config: { updateMany: async () => ({ count: 1 }) },
@@ -126,7 +125,7 @@ function service(refuse?: Error, balanceAfter = new Prisma.Decimal('100.00')) {
     purchase: async (_tx: unknown, input: { grantId: string; targetBytes: bigint }) => {
       purchases.push(input);
       if (refuse) throw refuse;
-      return { grantId: input.grantId, bytes: input.targetBytes, amount: new Prisma.Decimal(1), walletTransactionId: 'w', purchasedBytes: BigInt(0), billedBytes: BigInt(0), balanceAfter };
+      return { grantId: input.grantId, bytes: input.targetBytes, amount: new Prisma.Decimal(1), walletTransactionId: 'w', purchasedBytes: BigInt(0), billed: BigInt(0), balanceAfter };
     },
   };
   return { requests: new BlockRequestService({} as never, {} as never, blocks as never), purchases };

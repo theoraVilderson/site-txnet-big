@@ -132,7 +132,6 @@ describe('cutoff notices on a metered exhaustion (suspendIfExhausted)', () => {
       userId: USER,
       status,
       billingMode: VariantBillingMode.metered,
-      meteredRate: new Prisma.Decimal('0.5'),
       purchasedBytes: BigInt(1000),
       consumedBytes: BigInt(1000),
       trafficUnlimited: false,
@@ -143,8 +142,8 @@ describe('cutoff notices on a metered exhaustion (suspendIfExhausted)', () => {
         updateMany: async (args: { where: { status?: GrantStatus } }) => ({ count: grant.status === args.where.status ? 1 : 0 }),
       },
       // No wallet row: the reserve release (F-118-b) holds nothing here; vpn-reserve.spec.ts holds it.
-      // No postpaid vpn.traffic meter: a prepaid Grant's path (F-118-k).
-      grantMeter: { findUnique: async () => null },
+      // Its prepaid vpn.traffic meter at 50c/GiB (F-118-l).
+      grantMeter: { findUnique: async () => ({ mode: 'prepaid', unitPrice: new Prisma.Decimal('0.5'), currencyCode: 'USD' }) },
       wallet: { findUnique: async () => null },
       config: { updateMany: async () => ({ count: 1 }) },
       $queryRaw: async () => [{ cachedBalance: new Prisma.Decimal('0.00') }],

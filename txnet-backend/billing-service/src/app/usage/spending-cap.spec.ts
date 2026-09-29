@@ -30,11 +30,12 @@ type GrantRow = {
   suspendedAt: Date | null;
   endsAt: Date | null;
   billingMode: VariantBillingMode;
-  meteredRate: Prisma.Decimal | null;
-  meteredRateCurrencyCode: string | null;
+  /** Its prepaid `vpn.traffic` meter's `unitPrice`; null = no meter (F-118-l). */
+  rate: Prisma.Decimal | null;
   trafficUnlimited: boolean;
   purchasedBytes: bigint;
-  billedBytes: bigint;
+  /** The meter's money cursor. */
+  billed: bigint;
 };
 
 type CapRow = {
@@ -69,11 +70,11 @@ function fakeStore() {
         return g ? { ...g } : null;
       },
       findMany: async ({ where }: { where: { userId: string; status: GrantStatus; statusReason: string } }) =>
-        [...grants.values()].filter((g) => g.userId === where.userId && g.status === where.status && g.statusReason === where.statusReason).map((g) => ({ ...g })),
-      update: async ({ where, data }: { where: { id: string }; data: { purchasedBytes: { increment: bigint }; billedBytes: { increment: bigint } } }) => {
+        [...grants.values()].filter((g) => g.userId === where.userId && g.status === where.status && g.statusReason === where.statusReason)
+          .map((g) => ({ ...g, meters: g.rate ? [{ unitPrice: g.rate, currencyCode: 'USD' }] : [] })),
+      update: async ({ where, data }: { where: { id: string }; data: { purchasedBytes: { increment: bigint } } }) => {
         const g = grants.get(where.id)!;
         g.purchasedBytes += data.purchasedBytes.increment;
-        g.billedBytes += data.billedBytes.increment;
         return { ...g };
       },
       updateMany: async ({ where, data }: { where: { id: string; status: GrantStatus; statusReason?: string }; data: Partial<GrantRow> }) => {
@@ -84,8 +85,16 @@ function fakeStore() {
       },
     },
     grantMeter: {
-      // No postpaid vpn.traffic meter: a prepaid Grant's path (F-118-k).
-      findUnique: async () => null,
+      // A metered Grant's prepaid vpn.traffic meter (F-118-l), id = the Grant's.
+      findUnique: async ({ where }: { where: { grantId_meterKey: { grantId: string } } }) => {
+        const g = grants.get(where.grantId_meterKey.grantId);
+        return g?.rate ? { id: g.id, mode: 'prepaid', unitPrice: g.rate, currencyCode: 'USD', billed: g.billed } : null;
+      },
+      update: async ({ where, data }: { where: { id: string }; data: { billed: { increment: bigint } } }) => {
+        const g = grants.get(where.id)!;
+        g.billed += data.billed.increment;
+        return { billed: g.billed };
+      },
       findMany: async ({ where }: { where: { grantId: string } }) => meters.filter((m) => m.grantId === where.grantId).map((m) => ({ id: m.id })),
     },
     config: { updateMany: async () => ({ count: 1 }) },
@@ -183,11 +192,10 @@ function fakeStore() {
         endsAt: null,
         billingMode: VariantBillingMode.metered,
         // 10.00 a GiB: the reserve of one GiB is 10.00.
-        meteredRate: D('10'),
-        meteredRateCurrencyCode: 'USD',
+        rate: D('10'),
         trafficUnlimited: false,
         purchasedBytes: BigInt(0),
-        billedBytes: BigInt(0),
+        billed: BigInt(0),
         ...over,
       });
       return grants.get(id)!;

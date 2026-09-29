@@ -368,12 +368,12 @@ describe('a rate card prices a meter on a variant (F-118-d, ADR-0105 decision 3)
     await expect(card(null, PLATFORM_VARIANT, { afterIncluded: `'stop'`, includedQuantity: '53687091200', unitPrice: '0' })).resolves.toBe(1);
   });
 
-  it('retires metered_rate: no service role writes one any more', async () => {
+  it('drops metered_rate (F-118-l): its rows are rate cards, and nothing writes one', async () => {
     await expect(
       cross.$executeRawUnsafe(`
         INSERT INTO catalog.metered_rate (id, "tenantId", "variantId", rate, "currencyCode", "effectiveFrom")
         VALUES (gen_random_uuid(), NULL, '${PLATFORM_VARIANT}', 0.4, 'USD', now())
       `),
-    ).rejects.toThrow(/permission denied/);
+    ).rejects.toThrow(/does not exist/);
   });
 });

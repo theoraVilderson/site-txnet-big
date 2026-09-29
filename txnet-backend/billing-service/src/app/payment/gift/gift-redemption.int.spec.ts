@@ -304,7 +304,7 @@ it('issues a Grant of the variant for a free-service code, in one transaction wi
   const stored = await owner.grant.findUniqueOrThrow({ where: { id: result.grant.id } });
   expect(stored.sourceReferenceId).toBe(result.redemptionId);
   expect(stored.subscriptionTokenHash).toBe(createHash('sha256').update(result.token).digest('hex'));
-  // `billedBytes` is a BigInt, which JSON.stringify refuses on its own.
+  // `purchasedBytes` is a BigInt, which JSON.stringify refuses on its own.
   expect(JSON.stringify(stored, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))).not.toContain(result.token);
 
   const redemption = await owner.couponRedemption.findFirstOrThrow({ where: { id: result.redemptionId } });

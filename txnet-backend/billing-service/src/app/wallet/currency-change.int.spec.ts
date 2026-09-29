@@ -171,8 +171,11 @@ async function seed() {
   await sql(`INSERT INTO billing.coupon_redemption (id, "couponId", "userId", "discountAppliedAmount", "currencyCode", status, "orderReferenceId")
     VALUES (gen_random_uuid(), '${FIXED_COUPON}', '${RICH}', 5.00, 'USD', 'pending', '${PENDING_INVOICE}')`);
 
-  await sql(`INSERT INTO entitlement."grant" (id, "tenantId", "userId", "variantId", source, status, "startsAt", "billingMode", "subscriptionTokenHash", "meteredRate", "meteredRateCurrencyCode")
-    VALUES ('${GRANT}', '${TENANT}', '${RICH}', '${VARIANT}', 'purchase', 'active', now(), 'metered', repeat('a', 64), 0.50000000, 'USD')`);
+  await sql(`INSERT INTO entitlement."grant" (id, "tenantId", "userId", "variantId", source, status, "startsAt", "billingMode", "subscriptionTokenHash")
+    VALUES ('${GRANT}', '${TENANT}', '${RICH}', '${VARIANT}', 'purchase', 'active', now(), 'metered', repeat('a', 64))`);
+  // Its rate is its vpn.traffic meter (F-118-l).
+  await sql(`INSERT INTO entitlement.grant_meter (id, "tenantId", "grantId", "meterKey", "unitSize", "unitPrice", "currencyCode", mode, "includedQuantity", "afterIncluded")
+    VALUES (gen_random_uuid(), '${TENANT}', '${GRANT}', 'vpn.traffic', 1073741824, 0.50000000, 'USD', 'prepaid', 0, 'metered')`);
 
   // The platform: a price of its own, a package, and the reseller's billing wallet.
   await sql(`INSERT INTO catalog.product (id, "tenantId", key, "nameKey", "fulfilmentKind") VALUES ('${PLATFORM_PRODUCT}', NULL, 'vpn_p', 'k', 'network_access')`);
@@ -249,7 +252,11 @@ describe('a reseller changes its operating currency USD -> EUR', () => {
         "staticRate"::text AS rate, "roundingStep"::text AS step, "currencyCode" AS c FROM tenant.tenant_gateway_config WHERE "tenantId" = '${TENANT}'`))
       // A static rate is charge units per unit of the tenant's currency, so it divides; its rounding step is in charge units and stays.
       .toEqual({ min: '4.60', max: '460.00', fee: '0.9200', p: '{9.20}', rate: '652173.913043478260869565', step: '1000.00000000', c: 'EUR' });
-    expect(await one(`SELECT "meteredRate"::text AS r, "meteredRateCurrencyCode" AS c FROM entitlement."grant" WHERE id = '${GRANT}'`)).toEqual({ r: '0.46000000', c: 'EUR' });
+    expect(await one(`SELECT "unitPrice"::text AS r, "currencyCode" AS c FROM entitlement.grant_meter WHERE "grantId" = '${GRANT}'`)).toEqual({ r: '0.46000000', c: 'EUR' });
+  });
+
+  it('converts a sold meter, and never reprices one in its own currency (F-118-l)', async () => {
+    await expect(sql(`UPDATE entitlement.grant_meter SET "unitPrice" = 0.10000000 WHERE "grantId" = '${GRANT}'`)).rejects.toThrow(/grant_meter_terms_are_locked/);
   });
 
   it('cancels an invoice still on its clock and gives its coupon hold back; a paid one is history', async () => {

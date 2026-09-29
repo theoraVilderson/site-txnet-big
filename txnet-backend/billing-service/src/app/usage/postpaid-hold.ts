@@ -10,14 +10,15 @@ import { capturable, max, min, moveCursors, toAmount, toCents, unitsCovered, Usa
  * Only `WalletHoldService` is needed, so the settlement's sweep and the VPN
  * reserve's free functions (F-118-k, `traffic/vpn-postpaid.ts`) share it.
  *
- * **`vpn.traffic` postpaid (F-118-k).** Its bytes arrive on the Grant's byte
- * columns, not on `grant_meter.consumed` (F-118-f), so its `consumed` is read
- * off `grant.consumedBytes` less what an admin gifted (`purchasedBytes −
- * funded`, F-311-l): gifted bytes are served first and never charged. Every
- * cursor move is mirrored onto the Grant — `billedBytes` by `billed`,
- * `purchasedBytes` by `funded` — so the planner's bag is `funded` (plus any
- * gift) and its ceiling what the hold covers past what was billed. A prepaid
- * `vpn.traffic` meter stays with the block purchaser (`meter_on_its_own_path`).
+ * **`vpn.traffic` postpaid (F-118-k).** Its bytes arrive on the Grant's
+ * `consumedBytes`, every Grant's measure, not on `grant_meter.consumed`
+ * (F-118-f), so its `consumed` is read off it less what an admin gifted
+ * (`purchasedBytes − funded`, F-311-l): gifted bytes are served first and
+ * never charged. A `funded` move is mirrored onto the Grant's bag,
+ * `purchasedBytes`, so the planner's bag is `funded` (plus any gift) and its
+ * ceiling what the hold covers past what was billed; `billed` lives on the
+ * meter alone (F-118-l). A prepaid `vpn.traffic` meter stays with the block
+ * purchaser (`meter_on_its_own_path`).
  */
 
 export type MeterRef = { grantId: string; meterKey: string };
@@ -115,16 +116,12 @@ export class PostpaidHolds {
     return wallet ? tx.walletHold.findFirst({ where: { walletId: wallet.id, ownerRef: meter.id, status: WalletHoldStatus.open } }) : null;
   }
 
-  /** The guarded cursor move; on `vpn.traffic`, the Grant's bag and billed cursor follow by the same deltas. */
+  /** The guarded cursor move; on `vpn.traffic`, the Grant's bag follows `funded` by the same delta. */
   private async move(tx: Prisma.TransactionClient, ctx: Ctx, data: { billed?: bigint; funded?: bigint }): Promise<void> {
     await moveCursors(tx, ctx.meter, data);
-    const billed = (data.billed ?? ctx.meter.billed) - ctx.meter.billed;
     const funded = (data.funded ?? ctx.meter.funded) - ctx.meter.funded;
     ctx.meter = { ...ctx.meter, ...data };
-    if (!isVpn(ctx.meter) || (billed === ZERO && funded === ZERO)) return;
-    await tx.grant.update({
-      where: { id: ctx.grant.id },
-      data: { billedBytes: { increment: billed }, purchasedBytes: { increment: funded } },
-    });
+    if (!isVpn(ctx.meter) || funded === ZERO) return;
+    await tx.grant.update({ where: { id: ctx.grant.id }, data: { purchasedBytes: { increment: funded } } });
   }
 }

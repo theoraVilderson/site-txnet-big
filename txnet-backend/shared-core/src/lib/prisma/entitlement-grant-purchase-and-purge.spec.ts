@@ -9,8 +9,11 @@ import { join } from 'node:path';
  * starts the purge clock, and `purgeAfterDays` says how long it runs, on the
  * tenant as the setting and on the Grant as an optional override.
  *
- * The failure worth a spec is the one with no symptom. `billedBytes` already
- * existed and is the money cursor; fold purchase into it and `Σ ceilings ≤
+ * F-118-l moved the rate and the money cursor (`billedBytes`) onto the Grant's
+ * `vpn.traffic` `grant_meter` (`unitPrice`, `billed`); the bag stayed here.
+ *
+ * The failure worth a spec is the one with no symptom. `billed` is the money
+ * cursor; fold purchase into it and `Σ ceilings ≤
  * purchasedBytes` (ADR-0072 rule 1) loses the column it is bounded by, so
  * ceilings are written against a number that moves for a different reason.
  * Nothing goes red — traffic is simply served past what anyone paid for.
@@ -56,7 +59,7 @@ function model(schema: string, name: string): string {
  * A name removed here is a job that silently stops advancing a cursor, so the
  * list is the contract between the four rows that follow this one.
  */
-const GRANT_COLUMNS = ['consumedBytes', 'purchasedBytes', 'meteredRate', 'suspendedAt', 'purgeAfterDays'];
+const GRANT_COLUMNS = ['consumedBytes', 'purchasedBytes', 'suspendedAt', 'purgeAfterDays'];
 
 describe('entitlement.Grant buys its bytes before it serves them', () => {
   const grant = model(entitlement, 'Grant');
@@ -70,13 +73,15 @@ describe('entitlement.Grant buys its bytes before it serves them', () => {
   });
 
   it('keeps what was purchased apart from what was billed and what was consumed', () => {
-    // ADR-0072: `purchasedBytes` is what `Σ ceilings` is bounded by,
-    // `billedBytes` stays the money cursor, and `consumedBytes` is what the
-    // panels actually reported. Folded together, a ceiling is written against
-    // a number that moves for a different reason — and nothing goes red.
-    for (const column of ['billedBytes', 'purchasedBytes', 'consumedBytes']) {
+    // ADR-0072: `purchasedBytes` is what `Σ ceilings` is bounded by, the
+    // meter's `billed` is the money cursor (F-118-l), and `consumedBytes` is
+    // what the panels actually reported. Folded together, a ceiling is written
+    // against a number that moves for a different reason — and nothing goes red.
+    for (const column of ['purchasedBytes', 'consumedBytes']) {
       expect(grant).toMatch(new RegExp(`^\\s*${column}\\s+BigInt\\s+@default\\(0\\)`, 'm'));
     }
+    expect(grant).not.toMatch(/^\s*billedBytes\s/m);
+    expect(model(entitlement, 'GrantMeter')).toMatch(/^\s*billed\s+BigInt\s+@default\(0\)/m);
   });
 
   it('counts bytes in 64 bits and refuses a negative one', () => {
@@ -86,18 +91,13 @@ describe('entitlement.Grant buys its bytes before it serves them', () => {
     expect(sql).toContain('grant_byte_counters_not_negative');
   });
 
-  it('locks the metered rate at (18, 8), not at the two places money uses', () => {
+  it('locks the metered rate at (18, 8), on the meter and not the Grant (F-118-l)', () => {
     // ADR-0073: `C-02` governs *amounts*; a rate at two places can only step
     // in whole cents per GiB. Every amount derived from it is still rounded
     // to whole cents before the ledger (ADR-0072), so `C-02` is untouched.
-    expect(grant).toMatch(/^\s*meteredRate\s+Decimal\?\s+@db\.Decimal\(18, 8\)/m);
-    expect(sql).toContain('grant_metered_rate_not_negative');
-  });
-
-  it('carries a rate only where something is metered', () => {
-    // A prepaid Grant priced per byte is a rate nobody will ever read and a
-    // second, contradictory answer to what the user owes.
-    expect(sql).toContain('grant_metered_rate_is_metered');
+    // A prepaid Grant has no meter, so it carries no rate at all.
+    expect(grant).not.toMatch(/^\s*meteredRate\s/m);
+    expect(model(entitlement, 'GrantMeter')).toMatch(/^\s*unitPrice\s+Decimal\s+@db\.Decimal\(18, 8\)/m);
   });
 
   it('cannot hold a suspended Grant with no clock on it', () => {

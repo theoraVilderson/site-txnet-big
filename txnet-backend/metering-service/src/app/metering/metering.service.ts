@@ -92,7 +92,7 @@ class HoldAlreadyResolved extends Error {}
  * | the pass's `unattributed` | `unattributed_usage` |
  *
  * Usage is *visible* here and nobody pays yet: `consumedBytes` is the measured
- * cursor and is deliberately not `billedBytes` (entitlement/data-model.md).
+ * cursor and is deliberately not the meter's `billed` (entitlement/data-model.md).
  *
  * **Two pools, for the reason `billing-service` gives.** `traffic_raw_log` and
  * `grant` carry RLS policies keyed on `app.tenant_id` (F-027-ak), and neither

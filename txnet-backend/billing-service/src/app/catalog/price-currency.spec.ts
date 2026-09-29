@@ -19,10 +19,10 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { FulfilmentKind, GrantSource, Prisma, VariantBillingMode, VariantVisibility } from '@prisma/client';
+import { FulfilmentKind, Prisma, VariantBillingMode, VariantVisibility } from '@prisma/client';
 import { METER_KEYS, offeredToTenant, pricesInEffect, rateCardsInEffect, runWithTenant } from '@txnet-backend/shared-core';
 
-import { grantFromVariant } from '../entitlement/grant';
+import { grantMetersFromVariant } from '../entitlement/grant-meter';
 import { priceAt, rateCardAt, sellableOfferById } from './catalog-reads';
 
 const D = (v: string) => new Prisma.Decimal(v);
@@ -135,17 +135,15 @@ describe('a metered Grant locks its rate’s currency with the rate', () => {
     product: { featureKeys: [] },
   };
 
+  // The rate is the Grant's vpn.traffic meter (F-118-l), locked with its currency.
   it('copies the rate in the tenant’s currency, and that currency', () => {
-    const g = grantFromVariant({ source: GrantSource.coupon, startsAt: NOW, currencyCode: 'IRR' }, metered);
-    expect(g.meteredRate?.toString()).toBe('0.5');
-    expect(g.meteredRateCurrencyCode).toBe('IRR');
+    const { meters } = grantMetersFromVariant(metered, NOW, 'IRR');
+    expect(meters.map((m) => [m.unitPrice.toString(), m.currencyCode])).toEqual([['0.5', 'IRR']]);
   });
 
   it('has neither with no rate in the tenant’s currency, nor on a prepaid Grant', () => {
-    const none = grantFromVariant({ source: GrantSource.coupon, startsAt: NOW, currencyCode: 'EUR' }, metered);
-    expect([none.meteredRate, none.meteredRateCurrencyCode]).toEqual([null, null]);
-    const prepaid = grantFromVariant({ source: GrantSource.coupon, startsAt: NOW, currencyCode: 'IRR' }, { ...metered, billingMode: VariantBillingMode.prepaid });
-    expect([prepaid.meteredRate, prepaid.meteredRateCurrencyCode]).toEqual([null, null]);
+    expect(grantMetersFromVariant(metered, NOW, 'EUR').meters).toEqual([]);
+    expect(grantMetersFromVariant({ ...metered, billingMode: VariantBillingMode.prepaid }, NOW, 'IRR').meters).toEqual([]);
   });
 });
 

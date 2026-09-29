@@ -17,8 +17,11 @@ adding a second caller of either.
 **No byte is served that has not been paid for.** The ceiling written to a
 panel is bounded by `grant.purchasedBytes` (F-027-s), and this is the only
 writer of that column that moves money. The other is an admin's gift (below). Nothing here reads the catalog: the price comes from
-`grant.meteredRate`, locked at issue (F-027-p, ADR-0073), so a rate change
-never reprices a block already bought.
+the Grant's `vpn.traffic` `grant_meter` (`vpn-meter.ts`, F-118-l) — its
+`unitPrice` per 2^30 bytes, debited in its `currencyCode` — locked at issue
+(ADR-0073), so a rate change never reprices a block already bought. Its
+`billed` is the money cursor; a Grant with no such meter (a package plan) is
+`grant_not_metered`, a postpaid one `grant_postpaid`.
 
 ## The call
 
@@ -38,7 +41,7 @@ debit writes a registered model (`tenant-context/contract.md` rule 5).
 | `amount` | whole cents, exactly as the ledger took them |
 | `bytes` | what those cents bought at this Grant's rate |
 | `walletTransactionId` | the debit that paid for it |
-| `purchasedBytes`, `billedBytes` | the cursors as they now stand |
+| `purchasedBytes`, `billed` | the bag and the meter's money cursor as they now stand |
 
 ## Priced first, then converted
 
@@ -79,11 +82,11 @@ early, so it is not a refusal.
 
 ## One transaction, both cursors
 
-The debit and the two cursors commit together, so a block billed and not
-granted — or granted and not billed — is not a reachable state. Both cursors
-advance by the same figure, with `increment`, so nothing writes back a number it
-read before the debit. They are separate columns because their **later**
-movements differ: the remainder credit below brings `billedBytes` down at close,
+The debit, the bag and the meter's `billed` and `funded` commit together, so a
+block billed and not granted — or granted and not billed — is not a reachable
+state. All advance by the same figure, with `increment`, so nothing writes back
+a number it read before the debit. The bag and `billed` are apart because their
+**later** movements differ: the remainder credit below brings `billed` down at close,
 and a written-off hold (ADR-0074) moves it alone too — neither touches what was
 bought.
 
@@ -127,12 +130,12 @@ still standing, and a live one would buy the money back within minutes.
 
 | | |
 |---|---|
-| what is unconsumed | `billedBytes - consumedBytes`. A Grant reported **past** what it bought (ADR-0074) has a negative remainder and is refused, never refunded into the red — that gap is not charged by anything (user 2026-09-26: network `open-questions.md`, 2026-09-26 overrun row) |
-| what it is worth | the remainder priced at `grant.meteredRate` and rounded **down** to a whole cent — the exact mirror of the purchase's round up, so a refund never exceeds what the blocks cost. Sub-cent dust stays taken |
-| what moves | one `traffic_refund` **credit**, `referenceId` the Grant, and `billedBytes` down by the bytes those cents paid for. `purchasedBytes` never moves: it is what was bought, and it bounds the ceilings that were written against it |
+| what is unconsumed | the meter's `billed` − `grant.consumedBytes`, read after the reserve's release. A Grant reported **past** what it bought (ADR-0074) has a negative remainder and is refused, never refunded into the red — that gap is not charged by anything (user 2026-09-26: network `open-questions.md`, 2026-09-26 overrun row) |
+| what it is worth | the remainder priced at the meter's `unitPrice` and rounded **down** to a whole cent — the exact mirror of the purchase's round up, so a refund never exceeds what the blocks cost. Sub-cent dust stays taken |
+| what moves | one `traffic_refund` **credit**, `referenceId` the Grant, and the meter's `billed` down by the bytes those cents paid for. `purchasedBytes` never moves: it is what was bought, and it bounds the ceilings that were written against it |
 
 **The money cursor is the record of the refund and its own guard.** After the
-credit, `billedBytes` sits at the consumed level, so a second close — a retried
+credit, `billed` sits at the consumed level, so a second close — a retried
 sweeper, a cancel racing an expiry — computes dust and refuses
 `nothing_to_credit`. That is the whole idempotency of this path; no column was
 added to say a Grant was settled. The cursor is claimed **before** the credit is
@@ -169,12 +172,12 @@ the one that does adds what it paid to this sum.
 
 `giftGrantBytes(tx, grantId, {at, actorUserId, bytes, reason})`
 (`traffic/gift-bytes.ts`) raises `purchasedBytes` by `bytes` and **leaves
-`billedBytes` where it is**; no wallet row is written. One `quota_adjustment`
+the meter's `billed` where it is**; no wallet row is written. One `quota_adjustment`
 row, source `admin_gift`, the admin and the reason. The planner sees a bigger
 bag and buys no block until it is spent; the remainder credit gives back
-`billedBytes - consumedBytes`, so the gift is never in it — every byte served
+`billed - consumedBytes`, so the gift is never in it — every byte served
 counts against what was paid for first, and bytes unused at close are the
-gift's before they are the wallet's. A Grant served past `billedBytes` on a gift
+gift's before they are the wallet's. A Grant served past `billed` on a gift
 is therefore normal, and its close refuses `nothing_to_credit` as the overrun
 case does. A gift that leaves room revives a Grant suspended because its bag was
 spent. Only an `active` or `suspended`, metered Grant: `grant_not_metered`,

@@ -23,7 +23,8 @@ hurts most.
 
 1. **Metered only, and held money** (F-118-b, ADR-0105 (8)). The reserve is
    what the Grant's own open hold on the owner's wallet buys at its locked
-   rate (`BytesAffordable(meteredRate, wallet_hold.amount)`, `ownerRef` = the
+   rate — its `vpn.traffic` `grant_meter`'s `unitPrice`, F-118-l —
+   (`BytesAffordable(unitPrice, wallet_hold.amount)`, `ownerRef` = the
    Grant). Billing holds `VPN_RESERVE_BYTES` (default 1 GiB) at that rate,
    rounded up to a cent, clamped to the free balance — a fixed size so the
    rest of the wallet stays spendable (user, 2026-09-29). No hold is a reserve

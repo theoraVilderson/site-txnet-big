@@ -7,12 +7,12 @@
  *    keeps money for service nobody received — ADR-0072's accepted cost turning
  *    into a charge;
  *  - **paying it twice.** The credit is idempotent through the money cursor:
- *    `billedBytes` comes down by exactly what was refunded, so a second close —
+ *    the meter's `billed` comes down by exactly what was refunded, so a second close —
  *    a retried sweeper, a cancel racing an expiry — finds nothing left;
  *  - **giving back more than was taken.** The remainder is priced and rounded
  *    **down** to a whole cent, the mirror of `sizeBlock`'s round up, so a
  *    refund never exceeds what the blocks cost;
- *  - **refunding what was served.** Only `billedBytes - consumedBytes` is
+ *  - **refunding what was served.** Only `billed - consumedBytes` is
  *    unconsumed; a Grant that used everything it bought gets nothing back, and
  *    one reported past its ceiling (ADR-0074) is not refunded into the red;
  *  - **an open Grant refunded.** Only a closed Grant is settled — refunding a
@@ -66,9 +66,10 @@ type GrantRow = {
   userId: string;
   status: GrantStatus;
   billingMode: VariantBillingMode;
-  meteredRate: Prisma.Decimal | null;
-  meteredRateCurrencyCode: string | null;
-  billedBytes: bigint;
+  /** Its `vpn.traffic` meter's `unitPrice`; null = no meter (F-118-l). */
+  rate: Prisma.Decimal | null;
+  /** The meter's money cursor. */
+  billed: bigint;
   purchasedBytes: bigint;
   consumedBytes: bigint;
 };
@@ -79,9 +80,8 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
     userId: USER,
     status: GrantStatus.expired,
     billingMode: VariantBillingMode.metered,
-    meteredRate: D('0.40000000'),
-    meteredRateCurrencyCode: 'USD',
-    billedBytes: GIB,
+    rate: D('0.40000000'),
+    billed: GIB,
     purchasedBytes: GIB,
     consumedBytes: BigInt(0),
     ...grant,
@@ -98,16 +98,19 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
       // ADR-0079). This user holds nothing suspended; `revival.spec.ts` owns
       // the case where they do.
       findMany: async () => [],
-      updateMany: async ({ where, data }: { where: { id: string; billedBytes: bigint }; data: { billedBytes: { decrement: bigint } } }) => {
-        if (where.id !== row.id || where.billedBytes !== row.billedBytes) return { count: 0 };
-        row.billedBytes -= data.billedBytes.decrement;
-        return { count: 1 };
-      },
     },
     // No reserve held: the release (F-118-b) writes nothing; vpn-reserve.spec.ts holds it.
     walletHold: { findFirst: async () => null },
-    // No postpaid vpn.traffic meter: a prepaid Grant's path (F-118-k).
-    grantMeter: { findUnique: async () => null },
+    // Its prepaid vpn.traffic meter (F-118-l): the rate and the money cursor.
+    grantMeter: {
+      findUnique: async () =>
+        row.rate === null ? null : { id: 'meter-1', mode: 'prepaid', unitPrice: row.rate, currencyCode: 'USD', billed: row.billed },
+      updateMany: async ({ where, data }: { where: { id: string; billed: bigint }; data: { billed: { decrement: bigint } } }) => {
+        if (where.id !== 'meter-1' || where.billed !== row.billed) return { count: 0 };
+        row.billed -= data.billed.decrement;
+        return { count: 1 };
+      },
+    },
     wallet: {
       findUnique: async () => ({ ...wallet }),
       findUniqueOrThrow: async () => ({ ...wallet }),
@@ -144,7 +147,7 @@ describe('RemainderCreditService.credit', () => {
     // A whole GiB bought at 40c and nothing served: 40c back.
     expect(back.amount.toFixed(2)).toBe('0.40');
     expect(wallet.cachedBalance.toFixed(2)).toBe('1.40');
-    expect(row.billedBytes).toBe(GIB - back.bytes);
+    expect(row.billed).toBe(GIB - back.bytes);
     // What was *bought* is history; only the money cursor moves (ADR-0074).
     expect(row.purchasedBytes).toBe(GIB);
     expect(ledger).toHaveLength(1);
@@ -162,7 +165,7 @@ describe('RemainderCreditService.credit', () => {
     const back = await close(tx);
 
     expect(back.amount.toFixed(2)).toBe('0.20');
-    expect(row.billedBytes >= consumedBytes).toBe(true);
+    expect(row.billed >= consumedBytes).toBe(true);
   });
 
   it('pays the remainder once: a second close finds nothing left', async () => {
@@ -182,8 +185,15 @@ describe('RemainderCreditService.credit', () => {
 
   it('loses to a writer that moved the cursor first, with nothing written', async () => {
     const { tx, row, ledger } = fakeTx({ id: GRANT }, D('0.00'));
+    // A block bought between each read of the meter and the guard.
+    const meters = (tx as unknown as { grantMeter: { findUnique: (a: unknown) => Promise<unknown> } }).grantMeter;
+    const read = meters.findUnique;
+    meters.findUnique = async (a) => {
+      const m = await read(a);
+      row.billed += BigInt(1);
+      return m;
+    };
     const raced = service().credit(tx, { grantId: GRANT });
-    row.billedBytes += BigInt(1); // a block bought between the read and the guard
 
     await expect(raced).rejects.toThrow(/cursor/i);
     expect(ledger).toHaveLength(0);
@@ -192,8 +202,8 @@ describe('RemainderCreditService.credit', () => {
   it.each([
     [{ status: GrantStatus.active }, 'grant_not_closed'],
     [{ status: GrantStatus.suspended }, 'grant_not_closed'],
-    [{ billingMode: VariantBillingMode.prepaid, meteredRate: null }, 'grant_not_metered'],
-    [{ meteredRate: null }, 'grant_not_metered'],
+    [{ billingMode: VariantBillingMode.prepaid, rate: null }, 'grant_not_metered'],
+    [{ rate: null }, 'grant_not_metered'],
   ])('refuses %o with %s', async (patch, reason) => {
     const { tx, ledger } = fakeTx({ id: GRANT, ...patch }, D('0.00'));
 

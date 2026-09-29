@@ -13,9 +13,9 @@ const CLOSED: readonly GrantStatus[] = [GrantStatus.expired, GrantStatus.exhaust
  * purchaser (invariant 15), and the only one that debits nothing.
  *
  * **Only the bag moves, never the money cursor.** `purchasedBytes` is the
- * planner's Quota, so no block is bought while the gift lasts; `billedBytes`
- * is what the wallet paid for, and it stays. That is the whole exclusion from
- * the remainder credit (F-027-r): it gives back `billedBytes - consumedBytes`,
+ * planner's Quota, so no block is bought while the gift lasts; the meter's
+ * `billed` is what the wallet paid for, and it stays. That is the whole exclusion from
+ * the remainder credit (F-027-r): it gives back `billed - consumedBytes`,
  * so a gift is never in it: every byte served counts against what was paid
  * for first, and bytes unused at close are the gift's before they are the
  * wallet's. One `quota_adjustment` row, source

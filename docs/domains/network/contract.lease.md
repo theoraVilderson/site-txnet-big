@@ -26,7 +26,7 @@ planner that loses it on a deploy boots blind and overshoots while it relearns.
 | quotaengine | here | written by |
 |---|---|---|
 | `subscriptions` (`quota.Account`) | `entitlement.grant` | billing |
-| `quota_bytes` (Quota) | `entitlement.grant.purchasedBytes`, read directly on every pass (ADR-0094); on a metered Grant plus its share of the reserve, `ReserveShare(meteredRate, wallet.cachedBalance, n)` (rule 20) | billing, never copied |
+| `quota_bytes` (Quota) | `entitlement.grant.purchasedBytes`, read directly on every pass (ADR-0094); on a metered Grant plus its share of the reserve, what its own reserve hold buys at its `vpn.traffic` meter's `unitPrice` ([contract.reserve.md](contract.reserve.md), F-118-b, F-118-l) | billing, never copied |
 | `used_bytes` (Used) | Σ `lifetimeUp+DownBytes` of `config_counter_state`, plus a push config's Σ `radius_session` high-water marks (F-027-du), over every config of the Grant, retired ones included (ADR-0094) | the collectors, never copied |
 | `panels` | `network.panel` | — |
 | `job_interval_ms` | `tickPeriodMs`, the `J` its phase mask is cut from; null = the family's interval | planner |
@@ -180,7 +180,7 @@ the money, so it decides whether one is bought (`billing/contract.traffic-block.
 "Who asks for a block"). The hot loop's guess from the delta stream is gone.
 
 20. **Quota is the bag plus the reserve.** On a Grant with `billingMode =
-    metered` and a `meteredRate`, `PostgresStore` adds what the owner's
+    metered` and a `vpn.traffic` `grant_meter` (its rate, F-118-l), `PostgresStore` adds what the owner's
     `billing.wallet.cachedBalance` still buys, split evenly over the owner's
     `n` metered Grants (`leaseplan.ReserveShare`, F-027-dt, whole cents over
     the rate per 2^30 — never a float, C-02). No wallet row is a reserve of 0.

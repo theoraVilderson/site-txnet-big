@@ -47,7 +47,8 @@ function build(row: Partial<Row>, opts: { usedBytes?: bigint; close?: Close | nu
     endsAt: new Date(AT.getTime() + 3 * DAY_MS),
     suspendedAt: null,
     consumedBytes: BigInt(0),
-    meteredRate: new Prisma.Decimal('1.00'),
+    // Its `vpn.traffic` meter, as revival selects it (F-118-l).
+    meters: [{ unitPrice: new Prisma.Decimal('1.00'), currencyCode: 'USD' }],
     ...row,
   };
   const used = opts.usedBytes ?? BigInt(0);

@@ -27,11 +27,12 @@ type GrantRow = {
   userId: string;
   status: GrantStatus;
   billingMode: VariantBillingMode;
-  meteredRate: Prisma.Decimal | null;
-  meteredRateCurrencyCode: string | null;
+  /** Its prepaid `vpn.traffic` meter's `unitPrice`; null = no meter (F-118-l). */
+  rate: Prisma.Decimal | null;
   trafficUnlimited: boolean;
   purchasedBytes: bigint;
-  billedBytes: bigint;
+  /** The meter's money cursor. */
+  billed: bigint;
   statusReason?: string | null;
 };
 
@@ -47,10 +48,9 @@ function fakeStore() {
         const g = grants.get(where.id);
         return g ? { ...g } : null;
       },
-      update: async ({ where, data }: { where: { id: string }; data: { purchasedBytes: { increment: bigint }; billedBytes: { increment: bigint } } }) => {
+      update: async ({ where, data }: { where: { id: string }; data: { purchasedBytes: { increment: bigint } } }) => {
         const g = grants.get(where.id)!;
         g.purchasedBytes += data.purchasedBytes.increment;
-        g.billedBytes += data.billedBytes.increment;
         return { ...g };
       },
       updateMany: async ({ where, data }: { where: { id: string; status: GrantStatus; statusReason?: string }; data: { status: GrantStatus } }) => {
@@ -61,8 +61,18 @@ function fakeStore() {
       },
     },
     config: { updateMany: async () => ({ count: 1 }) },
-    // No postpaid vpn.traffic meter: a prepaid Grant's path (F-118-k).
-    grantMeter: { findUnique: async () => null },
+    // A metered Grant's prepaid vpn.traffic meter (F-118-l): its rate and money cursor, id = the Grant's.
+    grantMeter: {
+      findUnique: async ({ where }: { where: { grantId_meterKey: { grantId: string } } }) => {
+        const g = grants.get(where.grantId_meterKey.grantId);
+        return g?.rate ? { id: g.id, mode: 'prepaid', unitPrice: g.rate, currencyCode: 'USD', billed: g.billed } : null;
+      },
+      update: async ({ where, data }: { where: { id: string }; data: { billed: { increment: bigint } } }) => {
+        const g = grants.get(where.id)!;
+        g.billed += data.billed.increment;
+        return { billed: g.billed };
+      },
+    },
     wallet: {
       findUnique: async ({ where }: { where: { ownerUserId: string } }) => (where.ownerUserId === wallet.ownerUserId ? { ...wallet } : null),
       updateMany: async ({ where, data }: { where: { id: string; version: number }; data: { cachedBalance?: Prisma.Decimal; heldAmount?: Prisma.Decimal; version: { increment: number } } }) => {
@@ -119,11 +129,10 @@ function fakeStore() {
         status: GrantStatus.active,
         billingMode: VariantBillingMode.metered,
         // 10.00 a GiB: the default reserve of one GiB is 10.00.
-        meteredRate: D('10'),
-        meteredRateCurrencyCode: 'USD',
+        rate: D('10'),
         trafficUnlimited: false,
         purchasedBytes: BigInt(0),
-        billedBytes: BigInt(0),
+        billed: BigInt(0),
         ...over,
       });
     },
@@ -200,7 +209,7 @@ describe('VpnReserve', () => {
   it('holds nothing for a Grant the planner leases no reserve to', async () => {
     const s = fakeStore();
     s.fund('50.00');
-    s.grant('prepaid', { billingMode: VariantBillingMode.prepaid, meteredRate: null, meteredRateCurrencyCode: null });
+    s.grant('prepaid', { billingMode: VariantBillingMode.prepaid, rate: null });
     s.grant('unlimited', { trafficUnlimited: true });
     s.grant('suspended', { status: GrantStatus.suspended });
     for (const id of ['prepaid', 'unlimited', 'suspended', 'missing']) {

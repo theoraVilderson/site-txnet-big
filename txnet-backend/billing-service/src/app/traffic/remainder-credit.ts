@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { GrantStatus, Prisma, VariantBillingMode, WalletReasonType } from '@prisma/client';
+import { GrantMeter, GrantStatus, Prisma, VariantBillingMode, WalletReasonType } from '@prisma/client';
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletCreditService } from '../wallet/wallet-credit.service';
 import { GIB, rateUnitsOf } from './block-purchase';
 import { creditPrepaidRemainder } from './prepaid-remainder';
+import { vpnMeterOf } from './vpn-meter';
 import { releaseVpnReserve } from './vpn-reserve';
 
 /**
@@ -21,9 +22,9 @@ import { releaseVpnReserve } from './vpn-reserve';
  * credit commits with the status move that closed the Grant and there is no
  * window where one landed and the other did not.
  *
- * Nothing here reads the catalog either: the refund prices on
- * `grant.meteredRate`, the same rate the blocks were bought at (F-027-p,
- * ADR-0073), so a rate raised after the sale never refunds more than was taken.
+ * Nothing here reads the catalog either: the refund prices on the Grant's
+ * `vpn.traffic` meter (F-118-l), the same rate the blocks were bought at
+ * (ADR-0073), so a rate raised after the sale never refunds more than was taken.
  */
 
 /** `wallet_transaction.amount` is `Decimal(18, 2)`: whole cents, never rounded (C-02). */
@@ -116,8 +117,8 @@ export type CreditedRemainder = RemainderSizing & {
   grantId: string;
   /** The ledger row that gave it back; `wallet_transaction.referenceId` is the Grant. */
   walletTransactionId: string;
-  /** The money cursor as it stands after the credit. */
-  billedBytes: bigint;
+  /** The meter's money cursor, `billed`, as it stands after the credit. */
+  billed: bigint;
 };
 
 @Injectable()
@@ -151,7 +152,7 @@ export class RemainderCreditService {
    * transaction.
    *
    * **The money cursor is the record of the refund, and its guard.** The
-   * remainder is `billedBytes - consumedBytes`, and `billedBytes` comes down by
+   * remainder is the meter's `billed` less `grant.consumedBytes`, and `billed` comes down by
    * exactly the bytes the refunded cents paid for — so a second call over the
    * same Grant computes a remainder of dust and refuses `nothing_to_credit`.
    * That is the whole idempotency of this path: a retried sweeper, or a cancel
@@ -172,25 +173,27 @@ export class RemainderCreditService {
     const grant = await tx.grant.findUnique({ where: { id: input.grantId } });
     if (!grant) throw new RemainderCreditRefused('grant_not_found', input.grantId);
     if (!IS_CLOSED[grant.status]) throw new RemainderCreditRefused('grant_not_closed', `${input.grantId} is ${grant.status}`);
-    if (grant.billingMode !== VariantBillingMode.metered || grant.meteredRate === null || grant.meteredRateCurrencyCode === null) {
+    if (grant.billingMode !== VariantBillingMode.metered || !(await vpnMeterOf(tx, grant.id))) {
       throw new RemainderCreditRefused('grant_not_metered', input.grantId);
     }
 
     // A closed Grant is not planned: its reserve is free again, whatever the remainder (F-118-b).
     await releaseVpnReserve(tx, grant);
-    const back = sizeRemainder({ rate: grant.meteredRate, remainderBytes: grant.billedBytes - grant.consumedBytes });
+    // Read after it: a postpaid meter's close captures, and moves `billed` (F-118-k).
+    const meter = (await vpnMeterOf(tx, grant.id)) as GrantMeter;
+    const back = sizeRemainder({ rate: meter.unitPrice, remainderBytes: meter.billed - grant.consumedBytes });
 
-    const claimed = await tx.grant.updateMany({
-      where: { id: grant.id, billedBytes: grant.billedBytes },
-      data: { billedBytes: { decrement: back.bytes } },
+    const claimed = await tx.grantMeter.updateMany({
+      where: { id: meter.id, billed: meter.billed },
+      data: { billed: { decrement: back.bytes } },
     });
     if (claimed.count === 0) throw new RemainderCreditRefused('cursor_moved', input.grantId);
 
     const movement = await this.ledger.credit(tx, {
       userId: grant.userId,
       amount: back.amount,
-      // The rate's own, locked onto the Grant with it at issue (F-116-d).
-      currencyCode: grant.meteredRateCurrencyCode,
+      // The rate's own, locked on the meter with it at issue (F-116-d).
+      currencyCode: meter.currencyCode,
       reasonType: WalletReasonType.traffic_refund,
       referenceId: grant.id,
     });
@@ -199,7 +202,7 @@ export class RemainderCreditService {
       ...back,
       grantId: grant.id,
       walletTransactionId: movement.id,
-      billedBytes: grant.billedBytes - back.bytes,
+      billed: meter.billed - back.bytes,
     };
   }
 }

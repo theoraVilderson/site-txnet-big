@@ -6,6 +6,7 @@ import { emitCutOff } from '../entitlement/cut-off';
 import { suspendForExhaustion, suspendForPeriodEnd } from '../entitlement/suspension';
 import { withinCap } from '../usage/spending-cap';
 import { BlockPurchaseRefused, type BlockPurchaseRejection, sizeBlock } from './block-purchase';
+import { vpnMeterOf } from './vpn-meter';
 
 /**
  * Exhaustion — the point where a metered Grant stops (F-027-x, ADR-0075).
@@ -92,20 +93,21 @@ export async function suspendIfExhausted(tx: Prisma.TransactionClient, grantId: 
   // Read again, after the lock: a block bought meanwhile moved these.
   const grant = await tx.grant.findUnique({
     where: { id: grantId },
-    select: { status: true, billingMode: true, meteredRate: true, purchasedBytes: true, consumedBytes: true, trafficUnlimited: true },
+    select: { status: true, billingMode: true, purchasedBytes: true, consumedBytes: true, trafficUnlimited: true },
   });
   if (!grant) return verdict('grant_not_found');
   if (grant.status !== GrantStatus.active) return verdict('not_active');
   // Its bag is 0 by construction and is not a bag (F-111-q): past it is not spent.
   if (grant.trafficUnlimited) return verdict('unlimited');
-  if (grant.billingMode !== VariantBillingMode.metered || grant.meteredRate === null) return verdict('not_metered');
+  const meter = grant.billingMode === VariantBillingMode.metered ? await vpnMeterOf(tx, grantId) : null;
+  if (!meter) return verdict('not_metered');
   // Past the bag counts as spent: an overrun is a debt for the holds queue (ADR-0074), never credit.
   if (grant.consumedBytes < grant.purchasedBytes) return verdict('bag_not_empty');
   // Its spending cap bounds what the wallet may buy for it (F-118-i).
   // No wallet row is a balance of zero — the same answer as an empty one.
   const free = new Prisma.Decimal(wallet?.free ?? 0);
   const spendable = await withinCap(tx, { id: grantId, userId: owner.userId }, free, new Prisma.Decimal(wallet?.own ?? 0));
-  if (walletCanBuy(grant.meteredRate, spendable)) return verdict('wallet_can_buy');
+  if (walletCanBuy(meter.unitPrice, spendable)) return verdict('wallet_can_buy');
 
   const suspension = await suspendForExhaustion(tx, grantId, at);
   if (!suspension.suspended) return verdict('not_active');

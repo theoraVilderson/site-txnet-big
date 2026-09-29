@@ -4,6 +4,7 @@ import { METER_KEYS } from '@txnet-backend/shared-core';
 import { PostpaidHolds, type Ctx } from '../usage/postpaid-hold';
 import { ceilDiv, CENT, max, priceUnits, UsageSettlementRefused } from '../usage/usage-price';
 import type { WalletHoldService } from '../wallet/wallet-ledger.service';
+import { vpnMeterOf } from './vpn-meter';
 
 /**
  * VPN postpaid (F-118-k, ADR-0105 (6)(7)(12)): a metered Grant whose
@@ -14,7 +15,7 @@ import type { WalletHoldService } from '../wallet/wallet-ledger.service';
  * postpaid meter's is — so it is not the Grant's VPN reserve (F-118-b), which
  * the planner would count a second time. There is no reserve beside it: the
  * hold is the headroom, never below `VPN_RESERVE_BYTES` at the rate. Every
- * cursor move mirrors onto the Grant (`usage/postpaid-hold.ts`), so the
+ * `funded` move mirrors onto the Grant's bag (`usage/postpaid-hold.ts`), so the
  * planner's bag, `purchasedBytes`, is `billed` plus what the hold covers —
  * the ceiling stands at what was consumed plus the held bytes (network
  * `contract.reserve.md`, unchanged: it leases the bag, and no reserve hold).
@@ -32,7 +33,7 @@ type Ref = { id: string; userId: string };
 
 /** The Grant's `vpn.traffic` meter when it is postpaid, else null — a prepaid one keeps its blocks. */
 export async function postpaidVpnMeter(tx: Prisma.TransactionClient, grantId: string) {
-  const meter = await tx.grantMeter.findUnique({ where: { grantId_meterKey: { grantId, meterKey: METER_KEYS.vpnTraffic } } });
+  const meter = await vpnMeterOf(tx, grantId);
   return meter?.mode === RateCardMode.postpaid ? meter : null;
 }
 

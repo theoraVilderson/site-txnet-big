@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Grant, GrantStatus, Prisma, VariantBillingMode, WalletReasonType } from '@prisma/client';
+import { Grant, GrantStatus, Prisma, RateCardMode, VariantBillingMode, WalletReasonType } from '@prisma/client';
 import { METERED_RATE_UNIT_BYTES, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { spendOnCap, withinCap } from '../usage/spending-cap';
 import { WalletLedgerService } from '../wallet/wallet-ledger.service';
+import { vpnMeterOf } from './vpn-meter';
 import { NO_VPN_RESERVE, VpnReserve } from './vpn-reserve';
 
 /**
@@ -23,14 +24,15 @@ import { NO_VPN_RESERVE, VpnReserve } from './vpn-reserve';
  * the transaction must come from `tenantTransaction`, because
  * `WalletLedgerService` writes a registered model.
  *
- * Nothing here reads the catalog: the rate is `grant.meteredRate`, locked at
- * issue (F-027-p), so yesterday's traffic prices at yesterday's rate.
+ * Nothing here reads the catalog: the rate is the Grant's `vpn.traffic`
+ * meter's (`vpn-meter.ts`, F-118-l), locked at issue (ADR-0073), so
+ * yesterday's traffic prices at yesterday's rate.
  */
 
-/** Bytes per unit of `grant.meteredRate` — 2^30, spelled once (ADR-0073). */
+/** Bytes per unit of a `vpn.traffic` rate — 2^30, spelled once (ADR-0073). */
 export const GIB = BigInt(METERED_RATE_UNIT_BYTES);
 
-/** `grant.meteredRate` is `Decimal(18, 8)`; a rate finer than that did not come from the column. */
+/** `grant_meter.unitPrice` is `Decimal(18, 8)`; a rate finer than that did not come from the column. */
 const RATE_SCALE = 8;
 const RATE_UNIT = BigInt(100_000_000);
 /** `wallet_transaction.amount` is `Decimal(18, 2)`: whole cents, never rounded (C-02). */
@@ -69,7 +71,7 @@ export class BlockPurchaseRefused extends Error {
 const ceilDiv = (a: bigint, b: bigint): bigint => (a + b - BigInt(1)) / b;
 
 /**
- * `grant.meteredRate` as an integer number of `1e-8` dollars per 2^30 bytes —
+ * A `vpn.traffic` rate as an integer number of `1e-8` dollars per 2^30 bytes —
  * the form every price here is computed in, so nothing rounds at `Decimal`'s
  * precision on the way. Refuses the rates no arithmetic can price: a zero rate
  * is a catalog decision (F-027-al) and one finer than the column's scale did
@@ -157,9 +159,9 @@ export type PurchasedBlock = BlockSizing & {
   grantId: string;
   /** The ledger row that paid for it; `wallet_transaction.referenceId` is the Grant. */
   walletTransactionId: string;
-  /** The cursors as they stand after this purchase. */
+  /** The bag and the meter's money cursor as they stand after this purchase. */
   purchasedBytes: bigint;
-  billedBytes: bigint;
+  billed: bigint;
   /** The wallet's balance after the debit — what the low-balance notice reads (F-601-g). */
   balanceAfter: Prisma.Decimal;
 };
@@ -179,12 +181,12 @@ export class BlockPurchaseService {
   }
 
   /**
-   * Buys the next block for a Grant and advances `purchasedBytes` and
-   * `billedBytes` by it, in the caller's transaction.
+   * Buys the next block for a Grant and advances the bag, `purchasedBytes`,
+   * and its meter's `billed` and `funded` by it, in the caller's transaction.
    *
-   * The two cursors move together and by the same figure — they are one number
-   * until a Grant closes (F-027-r credits the remainder back) or a hold is
-   * written off (ADR-0074). They are separate columns so that those later
+   * The bag and `billed` move together and by the same figure — they are one
+   * number until a Grant closes (F-027-r credits the remainder back) or a hold
+   * is written off (ADR-0074). They are separate so that those later
    * movements do not have to move the number a ceiling is written against.
    *
    * The balance is read once to size the block, and the debit re-reads it under
@@ -196,10 +198,9 @@ export class BlockPurchaseService {
     const grant = await tx.grant.findUnique({ where: { id: input.grantId } });
     if (!grant) throw new BlockPurchaseRefused('grant_not_found', input.grantId);
     if (grant.status !== GrantStatus.active) throw new BlockPurchaseRefused('grant_not_active', `${input.grantId} is ${grant.status}`);
-    if (grant.billingMode !== VariantBillingMode.metered || grant.meteredRate === null || grant.meteredRateCurrencyCode === null) {
-      throw new BlockPurchaseRefused('grant_not_metered', input.grantId);
-    }
-    if (await this.reserve.isPostpaid(tx, grant.id)) throw new BlockPurchaseRefused('grant_postpaid', input.grantId);
+    const meter = grant.billingMode === VariantBillingMode.metered ? await vpnMeterOf(tx, grant.id) : null;
+    if (!meter) throw new BlockPurchaseRefused('grant_not_metered', input.grantId);
+    if (meter.mode === RateCardMode.postpaid) throw new BlockPurchaseRefused('grant_postpaid', input.grantId);
 
     const wallet = await tx.wallet.findUnique({ where: { ownerUserId: grant.userId } });
     // The Grant's own reserve (F-118-b) is its money: the bytes it backed are
@@ -209,15 +210,15 @@ export class BlockPurchaseService {
     // Its spending cap, if the owner set one (F-118-i): the reserve is inside it.
     const maxSpend = await withinCap(tx, grant, free, reserved);
     if (maxSpend.lt(free) && maxSpend.lt('0.01')) throw new BlockPurchaseRefused('cap_reached', grant.id);
-    const block = sizeBlock({ rate: grant.meteredRate, targetBytes: input.targetBytes, maxSpend });
+    const block = sizeBlock({ rate: meter.unitPrice, targetBytes: input.targetBytes, maxSpend });
 
     // Sized before anything is written, so a refusal leaves the transaction clean.
     if (reserved.gt(0)) await this.reserve.release(tx, grant);
     const movement = await this.ledger.debit(tx, {
       userId: grant.userId,
       amount: block.amount,
-      // The rate's own, locked onto the Grant with it at issue (F-116-d).
-      currencyCode: grant.meteredRateCurrencyCode,
+      // The rate's own, locked on the meter with it at issue (F-116-d).
+      currencyCode: meter.currencyCode,
       reasonType: WalletReasonType.traffic_consumption,
       referenceId: grant.id,
     });
@@ -226,9 +227,10 @@ export class BlockPurchaseService {
     // `increment`, not a computed value: the cursors are advanced by the
     // database from whatever they hold, so nothing here can write back a
     // figure it read before the debit.
-    const advanced: Grant = await tx.grant.update({
-      where: { id: grant.id },
-      data: { purchasedBytes: { increment: block.bytes }, billedBytes: { increment: block.bytes } },
+    const advanced: Grant = await tx.grant.update({ where: { id: grant.id }, data: { purchasedBytes: { increment: block.bytes } } });
+    const billed = await tx.grantMeter.update({
+      where: { id: meter.id },
+      data: { billed: { increment: block.bytes }, funded: { increment: block.bytes } },
     });
     // The reserve back to its target from what the block left.
     await this.reserve.top(tx, grant.id);
@@ -238,7 +240,7 @@ export class BlockPurchaseService {
       grantId: grant.id,
       walletTransactionId: movement.id,
       purchasedBytes: advanced.purchasedBytes,
-      billedBytes: advanced.billedBytes,
+      billed: billed.billed,
       balanceAfter: movement.balanceAfter,
     };
   }

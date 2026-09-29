@@ -65,6 +65,7 @@ export type CurrencyChangeSummary = {
   prices: number;
   /** Rate cards repriced (F-118-d). The key predates them; the panel reads it. */
   meteredRates: number;
+  /** Open Grants' meters converted (F-118-l). The key predates them. */
   grants: number;
   /** Spending caps (F-118-i): the cap and what it has counted, with their wallet. */
   spendingCaps: number;
@@ -328,12 +329,17 @@ const repriceRateCards = (c: Conversion) => c.tx.$executeRaw`
             WHERE q."variantId" = p."variantId" AND q."meterKey" = p."meterKey" AND q."currencyCode" = ${c.from}
               AND q."isActive" AND q."effectiveFrom" <= now()))`;
 
-/** A Grant not yet closed keeps debiting bytes at its locked rate, so the rate follows its wallet. */
+/**
+ * A Grant not yet closed keeps charging at its locked rate, so each of its
+ * meters' price follows its wallet (F-118-l): the same price in the new
+ * money, the one change `grant_meter_terms_are_locked` allows.
+ */
 const convertGrants = (c: Conversion) => c.tx.$executeRaw`
-  UPDATE entitlement."grant"
-     SET "meteredRate" = round("meteredRate" * ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int), "meteredRateCurrencyCode" = ${c.to}
-   WHERE "tenantId" = ${c.tenantId}::uuid AND "meteredRateCurrencyCode" = ${c.from}
-     AND status IN ('pending', 'active', 'suspended', 'exhausted')`;
+  UPDATE entitlement.grant_meter m
+     SET "unitPrice" = round(m."unitPrice" * ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int), "currencyCode" = ${c.to}, "updatedAt" = now()
+    FROM entitlement."grant" g
+   WHERE g.id = m."grantId" AND m."tenantId" = ${c.tenantId}::uuid AND m."currencyCode" = ${c.from}
+     AND g.status IN ('pending', 'active', 'suspended', 'exhausted')`;
 
 /**
  * A spending cap is in its wallet's currency (F-118-i), so it converts with
