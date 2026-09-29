@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 14
-updated: 2026-09-12
+version: 15
+updated: 2026-09-29
 ---
 
 # Contract — panel-web: the financial page (F-093-d)
@@ -103,7 +103,12 @@ It is not the user's wallet and shares no list with the two tabs above.
   is the route's `balance`, a failure is the server's line and a retry, loading
   is derived. There are no filters (the route takes none).
 - Reason labels live in `common.tenantBilling.reason`, the tenant ledger's own
-  set; an unknown value renders as itself.
+  set; an unknown value renders as itself. **Every `TenantBillingReasonType` has
+  one** (F-118-n5, `resellers/packages.test.ts` reads the Prisma enum): the
+  wholesale leg's `metered_usage_charge` ("usage charge", a block's bytes bought
+  on the platform's panels) and `metered_usage_refund` (what was not used, back at
+  close — `billing/contract.traffic-block.md`). The owner's ledger on
+  `/resellers/[id]` renders the same row, so it names them too.
 - **The menu decides nothing about access.** The entry needs
   `tenant_billing.topup` — or being the tenant's owner, as the route admits
   (F-019-f) — *and* a reseller (`contract.shell.md` rule 2). A refusal is rendered as rule 7's failed read.

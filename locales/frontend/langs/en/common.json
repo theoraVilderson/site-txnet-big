@@ -1653,7 +1653,11 @@
       "topup_payment": "Online top-up",
       "admin_manual_adjust": "Adjustment by the platform",
       "subscription_charge": "Subscription renewal",
-      "reseller_purchase": "Package purchase (first period)"
+      "reseller_purchase": "Package purchase (first period)",
+      "metered_usage_charge": "Usage charge (VPN traffic, wholesale)",
+      "metered_usage_refund": "Unused usage refunded",
+      "sms_usage_charge": "SMS usage",
+      "currency_change": "Currency change"
     },
     "topup": "Top up",
     "topupPage": {
@@ -1787,9 +1791,75 @@
       "invalid_amount": "The amount is not valid.",
       "insufficient_balance": "The balance is too low for that debit.",
       "duplicate_request": "This adjustment was already recorded.",
-      "wallet_changed": "The balance moved meanwhile. Send it again."
+      "wallet_changed": "The balance moved meanwhile. Send it again.",
+      "package_name_taken": "Another package already has that name.",
+      "package_unpriced": "A package needs a monthly or a yearly price.",
+      "package_price_in_use": "Resellers are subscribed for that period, so its price cannot be cleared.",
+      "meter_not_found": "That meter does not exist on the platform."
     },
-    "retry": "Retry"
+    "retry": "Retry",
+    "packages": {
+      "title": "Reseller packages",
+      "subtitle": "What the platform sells resellers: the price per period, the features included and the wholesale rate for usage on the platform's panels",
+      "link": "Packages",
+      "back": "Resellers",
+      "new": "New package",
+      "empty": "No package yet.",
+      "active": "On sale",
+      "inactive": "Withdrawn",
+      "noRate": "No wholesale rate",
+      "perGib": "{{price}} {{currency}} per GiB",
+      "otherRate": "{{meter}}: {{price}} {{currency}} per {{size}}",
+      "columns": {
+        "name": "Package",
+        "monthly": "Monthly",
+        "yearly": "Yearly",
+        "features": "Features",
+        "rate": "Wholesale VPN traffic",
+        "state": "State"
+      },
+      "form": {
+        "createTitle": "New package",
+        "editTitle": "Edit {{name}}",
+        "name": "Name",
+        "monthly": "Monthly price ({{currency}})",
+        "yearly": "Yearly price ({{currency}})",
+        "priceHint": "Leave empty when the package is not sold for this period. At least one of the two is required.",
+        "features": "Included features",
+        "rate": "Wholesale price per GiB of VPN traffic ({{currency}})",
+        "rateHint": "What a reseller on this package pays the platform for each GiB its users use on the platform's panels. A change applies to services sold from now on. Empty: resellers on this package cannot sell pay-as-you-go VPN on the platform's panels.",
+        "otherRates": "Other rates in force — set through the API; this form leaves them as they are",
+        "submit": "Create package",
+        "save": "Save",
+        "nothingChanged": "Nothing has changed."
+      },
+      "deactivate": "Withdraw",
+      "activate": "Offer again",
+      "edit": "Edit",
+      "apply": "Apply to subscribers",
+      "applyConfirm": "Replace every subscriber's package features with this list now? A feature removed from the package is taken away at once, not at renewal.",
+      "applyDone": "Applied to {{count}} subscriber(s).",
+      "created": "Package {{name}} created.",
+      "saved": "Package {{name}} saved.",
+      "errors": {
+        "name": "Give the package a name of up to 80 characters.",
+        "price": "A positive amount with at most two decimal places.",
+        "unpriced": "Give the package a monthly or a yearly price.",
+        "rate": "A positive amount with at most eight decimal places."
+      },
+      "features": {
+        "ai_recommendation": "AI recommendations",
+        "spin_wheel": "Spin wheel",
+        "affiliate_system": "Affiliate system",
+        "coupon_engine": "Coupons and discounts",
+        "custom_bot_telegram": "Own Telegram bot",
+        "custom_bot_bale": "Own Bale bot",
+        "own_gateway": "Own payment gateway",
+        "own_sms": "Own SMS line",
+        "multi_currency": "Several currencies",
+        "dedicated_node_pool": "Dedicated servers"
+      }
+    }
   },
   "resellerPurchase": {
     "title": "Become a reseller",

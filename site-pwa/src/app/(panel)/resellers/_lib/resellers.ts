@@ -35,8 +35,8 @@ export const RESERVED_SLUGS = ["api", "panel", "www", "admin", "app", "mail", "s
 export const SETTABLE_STATUSES = ["active", "suspended", "terminated"] as const satisfies readonly SettableStatus[];
 
 /**
- * Every reason tenant-service (reseller, subscription, status) and billing (the
- * adjustment) can refuse this page with. The spec reads each service's closed
+ * Every reason tenant-service (reseller, subscription, status, packages) and
+ * billing (the adjustment) can refuse these pages with. The spec reads each service's closed
  * union, so a new reason does not ship without its sentence.
  */
 export type ResellerRefusal =
@@ -50,6 +50,10 @@ export type ResellerRefusal =
   | "package_not_found"
   | "package_inactive"
   | "package_not_sold_for_period"
+  | "package_name_taken"
+  | "package_unpriced"
+  | "package_price_in_use"
+  | "meter_not_found"
   | "status_unchanged"
   | "tenant_not_found"
   | "not_a_reseller"

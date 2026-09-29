@@ -189,7 +189,7 @@ platform owner's own tenant); `reseller_terminated`, `status_unchanged` 409.
 
 ## Not built here
 
-- The panel screen is `panel-web`'s `/resellers` (F-018-k, [contract.resellers.md](../../interfaces/panel-web/contract.resellers.md)); it only calls the routes above.
+- The panel screen is `panel-web`'s `/resellers` (F-018-k, [contract.resellers.md](../../interfaces/panel-web/contract.resellers.md)); it only calls the routes above. The packages, their wholesale rates included, are its `/resellers/packages` (F-118-n5, [contract.reseller-packages.md](../../interfaces/panel-web/contract.reseller-packages.md)).
 - Staff, branding, custom domains: F-018-j / h / i. The `/sub` refusal: `network`'s service (F-027), with `tenantAllows(state, 'subscriptionLink')`.
 - A reseller seeing its own subscription or the packages it can buy: not yet a row.
 - Charging and renewing: `contract.billing.md` "Subscription renewal". Checking an entitlement: F-018-g.

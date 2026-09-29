@@ -64,6 +64,7 @@ describe("what the services behind this page can refuse", () => {
       ...unionOf("tenant-service/src/app/resellers/reseller.service.ts", "ResellerRejection"),
       ...unionOf("tenant-service/src/app/subscription/tenant-subscription.service.ts", "TenantSubscriptionRejection"),
       ...unionOf("tenant-service/src/app/status/tenant-status.service.ts", "TenantStatusRejection"),
+      ...unionOf("tenant-service/src/app/packages/tenant-package.service.ts", "TenantPackageRejection"),
       ...unionOf("billing-service/src/app/tenant-billing/tenant-billing-admin.service.ts", "TenantBillingAdminRejection"),
     ]);
     expect(Object.keys(REFUSAL_KEYS).sort()).toEqual([...reasons].sort());
@@ -125,6 +126,7 @@ describe("creating a reseller", () => {
 describe("package and period", () => {
   const pkg = (id: string, over: Partial<TenantPackage> = {}): TenantPackage => ({
     currencyCode: "USD",
+    meterRates: [],
     id,
     name: id,
     monthlyPrice: "10",

@@ -95,6 +95,12 @@ export const PANEL_RESELLERS = "/resellers";
  */
 export const panelResellerPath = (id: string) => `${PANEL_RESELLERS}/${encodeURIComponent(id)}`;
 /**
+ * The packages the platform sells resellers (F-118-n5): prices, features and
+ * the wholesale rate per GiB. Under `PANEL_RESELLERS`, so that entry stays lit;
+ * the static segment wins over `[id]`, as `/buy` does.
+ */
+export const PANEL_RESELLER_PACKAGES = `${PANEL_RESELLERS}/packages`;
+/**
  * Where a platform user buys a reseller of their own (F-019-i). A sibling of
  * the owner's administration on purpose: `activeHref` takes the longest match,
  * so this lights its own menu entry and not `PANEL_RESELLERS`, and the static

@@ -52,6 +52,51 @@ export interface TenantPackage {
   currencyCode: string;
   includedFeatureKeys: string[];
   isActive: boolean;
+  /** The wholesale rates in force, one per meter (F-118-n1), in `currencyCode`. */
+  meterRates: PackageMeterRate[];
+}
+
+/**
+ * What the platform charges a reseller on a package for `unitSize` of a
+ * platform meter (F-118-n1) — 2^30 bytes for a GiB of `vpn.traffic`. Strings:
+ * `unitSize` passes 2^53, `unitPrice` has 8 places.
+ */
+export interface PackageMeterRate {
+  meterKey: string;
+  unitSize: string;
+  unitPrice: string;
+  currencyCode: string;
+  effectiveFrom: string;
+}
+
+/** A rate as the package routes take it; on an edit `unitPrice: null` switches the meter off. */
+export type MeterRateInput = { meterKey: string; unitSize: string; unitPrice: string };
+export type MeterRateEdit = MeterRateInput | { meterKey: string; unitPrice: null };
+
+/** `POST /tenant-packages`, `.strict()`: at least one of the two prices. */
+export interface CreatePackageBody {
+  name: string;
+  monthlyPrice?: string;
+  yearlyPrice?: string;
+  includedFeatureKeys: string[];
+  meterRates?: MeterRateInput[];
+}
+
+/** `PATCH /tenant-packages/:id`: only what changed; a price may be `null`. */
+export interface UpdatePackageBody {
+  name?: string;
+  monthlyPrice?: string | null;
+  yearlyPrice?: string | null;
+  includedFeatureKeys?: string[];
+  isActive?: boolean;
+  meterRates?: MeterRateEdit[];
+}
+
+/** What `apply` answers: the list forced on every subscriber, and how many. */
+export interface PackageApplied {
+  packageId: string;
+  includedFeatureKeys: string[];
+  subscribers: number;
 }
 
 /** A subscription view (F-018-e). */
@@ -148,6 +193,16 @@ export const tenantApi = {
   /** Every package, active or not: a reseller may stay on a deactivated one. */
   async packages(): Promise<TenantPackage[]> {
     return call<TenantPackage[]>("/tenant-packages", { method: "GET" });
+  },
+  async createPackage(body: CreatePackageBody): Promise<TenantPackage> {
+    return call<TenantPackage>("/tenant-packages", { method: "POST", body: JSON.stringify(body) });
+  },
+  async updatePackage(id: string, body: UpdatePackageBody): Promise<TenantPackage> {
+    return call<TenantPackage>(`/tenant-packages/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  /** Every subscriber's package features replaced by the package's now, removals included (F-018-o). */
+  async applyPackage(id: string): Promise<PackageApplied> {
+    return call<PackageApplied>(`/tenant-packages/${encodeURIComponent(id)}/apply`, { method: "POST" });
   },
 };
 
