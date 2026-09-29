@@ -132,7 +132,9 @@ in its `currencyCode` from `effectiveFrom` on, and a change is a new row. `tenan
 platform's row, readable by every tenant. Names are i18n keys (§4.3).
 A **meter** (F-118-c, ADR-0105) is what is counted and billed on use: a
 platform-only `meter` row, written by a migration because a meter exists only
-where code reports it — seeded `vpn.traffic` (bytes). Code names it through
+where code reports it — seeded `vpn.traffic` (bytes, network-service) and
+`vpn.config.regenerate` (count, billing-service: one config regenerated,
+F-118-q; unsold until F-118-h's door). Code names it through
 `METER_KEYS` (`shared-core/src/lib/catalog/meter.ts`).
 A **rate card** (F-118-d, ADR-0105 decision 3) prices one meter on one variant:
 `unitPrice` per `unitSize` of the meter's unit, `Decimal(18,8)`, in its

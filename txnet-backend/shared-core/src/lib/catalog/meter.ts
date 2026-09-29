@@ -11,6 +11,8 @@ import type { MeterUnit } from '@prisma/client';
 export const METER_KEYS = {
   /** VPN bytes, reported by network-service's traffic accounting. */
   vpnTraffic: 'vpn.traffic',
+  /** One config regenerated on a VPN Grant, counted by billing-service, which runs it (F-118-q). Sold only through F-118-h's door. */
+  configRegenerate: 'vpn.config.regenerate',
 } as const;
 
 export type MeterKey = (typeof METER_KEYS)[keyof typeof METER_KEYS];

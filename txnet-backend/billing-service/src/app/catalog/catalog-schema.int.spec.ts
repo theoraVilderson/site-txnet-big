@@ -301,6 +301,11 @@ describe('meters are platform catalog rows (F-118-c, ADR-0105 decision 2)', () =
     expect(seen).toContainEqual({ key: METER_KEYS.vpnTraffic, unit: 'bytes', reportedBy: 'network-service', nameKey: 'catalog.meter.vpn.traffic.name' });
   });
 
+  it('holds vpn.config.regenerate, one per config regenerated, reported by billing-service (F-118-q)', async () => {
+    const seen = await asTenant(RESELLER_A, (tx) => tx.meter.findMany({ select: { key: true, unit: true, reportedBy: true, nameKey: true } }));
+    expect(seen).toContainEqual({ key: METER_KEYS.configRegenerate, unit: 'count', reportedBy: 'billing-service', nameKey: 'catalog.meter.vpn.config.regenerate.name' });
+  });
+
   it('is written only by a migration: no service role inserts, updates or deletes one', async () => {
     const row = { key: 'sms.sent', unit: 'count' as const, reportedBy: 'notification-service', nameKey: 'catalog.meter.sms.sent.name' };
     await expect(asTenant(PLATFORM, (tx) => tx.meter.create({ data: row }))).rejects.toThrow(/permission denied/);
