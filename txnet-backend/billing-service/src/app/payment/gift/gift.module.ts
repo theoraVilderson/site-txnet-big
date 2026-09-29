@@ -3,6 +3,7 @@ import { ResellerAccess } from '@txnet-backend/shared-core';
 
 import { EntitlementModule } from '../../entitlement/entitlement.module';
 import { TrafficModule } from '../../traffic/traffic.module';
+import { UsageModule } from '../../usage/usage.module';
 import { WalletModule } from '../../wallet/wallet.module';
 import { GiftController } from './gift.controller';
 import { GrantListController } from './grant-list.controller';
@@ -30,7 +31,7 @@ import { SubscriptionLinkService } from './subscription-link.service';
  * or by a filter as a job the worker drains (F-311-u2).
  */
 @Module({
-  imports: [WalletModule, EntitlementModule, TrafficModule],
+  imports: [WalletModule, EntitlementModule, TrafficModule, UsageModule],
   controllers: [GiftController, GrantTokenController, GrantListController, ResellerUserGrantsController, ResellerGrantsByLinesController, ResellerGrantsBulkController, ResellerGrantsBulkJobController, GrantBulkJobInternalController, ResellerUsersCatalogController],
   providers: [GiftRedemptionService, SubscriptionLinkService, ResellerUserGrantsService, ResellerGrantBulkJobService, GrantBulkJobDrainService, ResellerAccess],
   exports: [GiftRedemptionService],

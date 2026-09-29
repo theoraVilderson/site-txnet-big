@@ -171,9 +171,9 @@ Same controller, over `deleteGrant` (entitlement `contract.admin.md` "Delete") w
 `RemainderCreditService.settle` ([contract.traffic-block.md](contract.traffic-block.md)
 "The remainder") as its settler: `cancelled`, every config released from its panel
 now, rows kept; `refund` credits the remainder — a metered bag's unserved bytes
-as `traffic_refund`, a prepaid Grant's unused share of its invoice (the larger
-of volume or time used, user 2026-09-28) as `product_refund` — and
-`refundSkipped` says why one asked for credited nothing.
+as `traffic_refund`, a prepaid Grant's unused share of its invoice (the larger of volume or time used, user 2026-09-28) as `product_refund`, and
+every other meter's through `settleAtClose` (F-118-u, [contract.usage-rating.md](contract.usage-rating.md): holds released on either answer) —
+`refundSkipped` says why one asked for credited nothing (the service's remainder only).
 
 | Rule | Why |
 |---|---|

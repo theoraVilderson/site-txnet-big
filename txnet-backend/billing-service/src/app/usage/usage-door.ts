@@ -196,6 +196,17 @@ export class UsageDoorService {
   }
 
   /**
+   * A Grant closing (F-118-u, an admin's delete): every open token of it is
+   * cancelled in the closing `tx`, each given back as a cancel is — the work
+   * it paid for will not be done. Answers how many; none open moves nothing.
+   */
+  async cancelOpen(tx: Prisma.TransactionClient, input: { grantId: string }, now: Date = new Date()): Promise<number> {
+    const open = await tx.usageAuthorization.findMany({ where: { grantId: input.grantId, status: UsageAuthorizationStatus.open }, select: { id: true } });
+    for (const t of open) await this.cancel(tx, { token: t.id }, now);
+    return open.length;
+  }
+
+  /**
    * The hourly sweep's half (`usage-internal.controller.ts`): every open token
    * past its `expiresAt`, expired in its tenant's transaction, one each.
    * Safe to run twice: an expired token is no longer open.

@@ -69,7 +69,7 @@ function build() {
     },
   };
 
-  const service = new ResellerUserGrantsService(prisma as never, access, {} as never, {} as never, {} as never, links as never, {} as never);
+  const service = new ResellerUserGrantsService(prisma as never, access, {} as never, {} as never, {} as never, links as never, {} as never, {} as never);
   return { called, service };
 }
 

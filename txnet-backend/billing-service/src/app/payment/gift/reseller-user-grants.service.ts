@@ -24,6 +24,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { GrantUsageService, GrantUsageView } from '../../traffic/grant-usage';
 import { RemainderCreditService } from '../../traffic/remainder-credit';
 import { AdminConfigCommand, UserConfigOutcome, UserConfigsService, UserConfigView } from '../../traffic/user-configs';
+import { UsageSettlementService } from '../../usage/usage-settlement';
 import { GrantBulkBody } from './grant-bulk.schema';
 import { GrantListQuery, GrantsByLinesBody } from './grant-list.schema';
 import { actOnEach, GrantBulkOutcome } from './reseller-grants-bulk';
@@ -83,6 +84,7 @@ export class ResellerUserGrantsService {
     private readonly usageService: GrantUsageService,
     private readonly links: SubscriptionLinkService,
     private readonly remainders: RemainderCreditService,
+    private readonly meters: UsageSettlementService,
   ) {}
 
   grants(actor: ResellerActor, tenantId: string, userId: string, query: GrantListQuery) {
@@ -256,6 +258,8 @@ export class ResellerUserGrantsService {
   deleteGrant(actor: AdminActor, tenantId: string, userId: string, grantId: string, refund: boolean, reason: string): Promise<Deletion> {
     return this.audited(actor, tenantId, userId, grantId, { action: 'grant_delete', reason, outcome: (r) => r }, async (tx) => {
       const done = await deleteGrant(tx, grantId, { at: new Date(), actorUserId: actor.userId, reason, refund }, (t, id, clock) => this.remainders.settle(t, { grantId: id, ...clock }));
+      // Every other meter settles too (F-118-u): holds captured and released always, a prepaid remainder only on `refund`.
+      await this.meters.settleAtClose(tx, { grantId, refund });
       // The reseller's unserved wholesale comes back whatever the admin answered (F-118-n3).
       await this.remainders.wholesaleBack(tx, grantId);
       return done;

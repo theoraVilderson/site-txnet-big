@@ -156,7 +156,7 @@ function build() {
     },
   };
   const prisma = { $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx) };
-  const service = new ResellerUserGrantsService(prisma as never, access, {} as never, {} as never, {} as never, {} as never, {} as never);
+  const service = new ResellerUserGrantsService(prisma as never, access, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
   return { service, reads, stored, racing };
 }
 

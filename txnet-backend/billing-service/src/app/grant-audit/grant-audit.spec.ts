@@ -117,7 +117,7 @@ function build() {
   const configs = new UserConfigsService(prisma as never, configActions as never);
   const links = { reset: async (_g: string, _u: string, around: (t: unknown, run: () => Promise<string>) => Promise<string>) => prisma.$transaction((t) => around(t, async () => (log.push('act'), 'https://sub.acme.test/sub/SECRET'))) };
   const remainders = { settle: async () => null, wholesaleBack: async () => undefined };
-  const service = new ResellerUserGrantsService(prisma as never, access, {} as never, configs, {} as never, links as never, remainders as never);
+  const service = new ResellerUserGrantsService(prisma as never, access, {} as never, configs, {} as never, links as never, remainders as never, { settleAtClose: async () => undefined } as never);
   return { service, rows, history, notices };
 }
 

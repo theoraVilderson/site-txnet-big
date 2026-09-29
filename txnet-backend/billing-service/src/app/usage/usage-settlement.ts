@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WalletHoldService, WalletLedgerService, WalletVersionConflict } from '../wallet/wallet-ledger.service';
 import { PostpaidHolds, vpnConsumed, type Captured, type Ctx, type MeterRef, type ToppedUp } from './postpaid-hold';
 import { blockFor, ceilDiv, CENT, max, moveCursors, priceUnits, toAmount, UsageSettlementRefused, ZERO } from './usage-price';
+import { UsageDoorService } from './usage-door';
 import { UsageRefundService } from './usage-refund';
 import { spendOnCap, withinCap } from './cap-funding';
 
@@ -63,6 +64,7 @@ export class UsageSettlementService {
     private readonly ledger: WalletLedgerService,
     private readonly holds: WalletHoldService,
     private readonly refunds: UsageRefundService,
+    private readonly door: UsageDoorService,
   ) {
     this.postpaid = new PostpaidHolds(holds);
   }
@@ -107,17 +109,25 @@ export class UsageSettlementService {
   /**
    * Every non-VPN meter of a Grant that is closing, in the closing `tx`:
    * prepaid gives back what was bought and not used (`usage_refund`, rounded
-   * down); postpaid captures, then releases the rest of its hold. `billed`
-   * lands where the money left it, so a second close moves nothing.
+   * down) unless `refund` is false — an admin's delete that answered no
+   * (F-118-u); postpaid captures, then releases the rest of its hold, whatever
+   * the answer, since held money was never paid. `billed` lands where the
+   * money left it, so a second close moves nothing. The Grant's open per-use
+   * tokens are cancelled first (`UsageDoorService.cancelOpen`), whatever the
+   * answer: what one reserves is not a remainder, the hourly expiry would give
+   * it back anyway, and crediting it here too would pay it twice.
    */
-  async settleAtClose(tx: Prisma.TransactionClient, input: { grantId: string }): Promise<void> {
+  async settleAtClose(tx: Prisma.TransactionClient, input: { grantId: string; refund?: boolean }): Promise<void> {
+    await this.door.cancelOpen(tx, { grantId: input.grantId });
     // A `stop` card sold nothing past its included part, so it has nothing to settle.
     const meters = await tx.grantMeter.findMany({
       where: { grantId: input.grantId, meterKey: { not: METER_KEYS.vpnTraffic }, afterIncluded: RateCardAfterIncluded.metered },
     });
     for (const m of meters) {
       const ctx = await this.load(tx, { grantId: input.grantId, meterKey: m.meterKey }, m.mode);
-      if (ctx.meter.mode === RateCardMode.prepaid) await this.refunds.creditRemainder(tx, ctx);
+      if (ctx.meter.mode === RateCardMode.prepaid) {
+        if (input.refund !== false) await this.refunds.creditRemainder(tx, ctx);
+      }
       else await this.postpaid.close(tx, ctx);
     }
   }

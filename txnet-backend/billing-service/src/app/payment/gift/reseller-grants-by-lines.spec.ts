@@ -93,7 +93,7 @@ function build(stored: { id: string; uuid: string; linksUuid: string | null; lin
     },
     tenantStaffMember: { findFirst: async () => null },
   } as never);
-  const service = new ResellerUserGrantsService(prisma as never, access, grants, {} as never, {} as never, {} as never, {} as never);
+  const service = new ResellerUserGrantsService(prisma as never, access, grants, {} as never, {} as never, {} as never, {} as never, {} as never);
   return { asked, grants, service };
 }
 

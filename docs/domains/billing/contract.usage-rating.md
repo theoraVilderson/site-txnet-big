@@ -74,7 +74,7 @@ id, so two postpaid meters on one Grant hold apart.
 | `buyBlock(tx, {grantId, meterKey, targetUnits})` | prepaid: `funded` and `billed` up by the block, then one `usage_charge` debit, `referenceId` the Grant | `wrong_mode`, `grant_not_active`, `target_not_positive`, `insufficient_funds`, `block_below_one_unit`, the ledger's own |
 | `topUp(tx, {grantId, meterKey, targetUnits})` | postpaid: **captures first**, then holds up to the target's price and sets `funded` | `wrong_mode`, `grant_not_active`, `target_not_positive`, `insufficient_funds` |
 | `capture(tx, {grantId, meterKey})` | postpaid: one `usage_charge` from the hold (`WalletHoldService.capture`); nothing due writes nothing | `wrong_mode` |
-| `settleAtClose(tx, {grantId})` | every metered non-VPN meter of a Grant being closed: prepaid, one `usage_refund` credit of the remainder; postpaid, a capture, the hold released, `funded` down to `billed`. A second close moves nothing | — (the caller closes the Grant in the same `tx`) |
+| `settleAtClose(tx, {grantId, refund?})` | the Grant's open per-use tokens cancelled first (`cancelOpen`, below), then every metered non-VPN meter of a Grant being closed: prepaid, one `usage_refund` credit of the remainder — none when `refund` is false; postpaid, a capture, the hold released, `funded` down to `billed`, whatever `refund` says. A second close moves nothing | — (the caller closes the Grant in the same `tx`) |
 
 All refuse `grant_not_found`, `meter_not_on_grant`, `meter_on_its_own_path`,
 `not_metered_past_included`, `rate_not_priceable` and `cursor_moved`, each
@@ -83,7 +83,10 @@ writing nothing (`UsageSettlementRefused`).
 **Callers.** A non-VPN meter is sold only behind the per-use door (below;
 any other is entitlement `meter_not_served`), which shares this arithmetic and
 `PostpaidHolds` (`usage/postpaid-hold.ts`) with the hourly sweep and VPN
-postpaid's own paths. No Grant close calls `settleAtClose` yet.
+postpaid's own paths. One Grant close calls `settleAtClose`: an admin's delete
+(F-118-u, [contract.reseller-grants.md](contract.reseller-grants.md)), `refund`
+the admin's answer. Held money was never paid, so it is released even on a
+no. The expiry sweeper's close is not built, as for the VPN remainder.
 
 ## The hourly capture
 
@@ -161,6 +164,7 @@ entitlement `meter_not_served` let it through). Its token is a
 | `authorize(tx, {grantId, meterKey, quantity, key, ttlMs?})` | expires this meter's overdue tokens, then funds `consumed + open tokens + quantity`: **the reseller first** — on a Grant with a wholesale leg, the units past `wholesaleBilled` bought on its `tenant_billing_wallet` at the locked rate (`metered_usage_charge`, `referenceId` the token) — then the user: nothing inside the included quantity or what `funded` covers; else prepaid, one block debited (`usage_charge`); postpaid, the meter's hold grown to the whole price. Answers `{token, quantity, status, expiresAt}` (10 min unless `ttlMs`) | `meter_not_on_door`, `quantity_not_positive`, `grant_not_active`, `not_metered_past_included` (a `stop` card), `insufficient_funds`, `wholesale_unfunded`, `key_reused`, the engine's own |
 | `commit(tx, {token, quantity})` | `quantity` (0..authorized) recorded through `recordUsage`, source `billing.usage-door`, key the token id; postpaid captures it; then gives back | `token_not_found`, `token_settled`, `token_expired`, `over_authorized` |
 | `cancel(tx, {token})` | records nothing; gives back | `token_settled` (a committed one) |
+| `cancelOpen(tx, {grantId})` | a closing Grant's every open token cancelled, each as `cancel` (F-118-u); answers how many. Always given back: a token is not a remainder, and its expiry would give it back within the hour | the `cancel`'s own |
 
 1. **Every refusal before the first write**, so a refused authorization
    leaves nothing — no token, no debit, no hold — even in a transaction the

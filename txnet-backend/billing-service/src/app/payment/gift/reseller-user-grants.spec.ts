@@ -94,7 +94,7 @@ function build() {
     },
   };
 
-  const service = new ResellerUserGrantsService(prisma as never, access, grants as never, configs as never, usage as never, links as never, {} as never);
+  const service = new ResellerUserGrantsService(prisma as never, access, grants as never, configs as never, usage as never, links as never, {} as never, {} as never);
   return { seen, service };
 }
 

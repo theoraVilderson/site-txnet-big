@@ -130,7 +130,9 @@ function world(meter: Partial<MeterRow> = {}, opts: { balance?: string; status?:
   const crossTenant = { grantMeter: { findMany: async () => [{ id: row.id, grantId: row.grantId, meterKey: row.meterKey, tenantId: 't1', consumed: row.consumed, billed: row.billed, includedQuantity: row.includedQuantity }] } };
   const prisma = { $transaction: async (fn: (t: unknown) => unknown) => fn(tx) };
   const refunds = new UsageRefundService(ledgerFake as never);
-  const service = new UsageSettlementService(prisma as never, crossTenant as never, ledgerFake as never, holdFake as never, refunds);
+  // Open per-use tokens are the door's own suite (`usage-door.spec.ts`); here none is open.
+  const door = { cancelOpen: async () => 0 };
+  const service = new UsageSettlementService(prisma as never, crossTenant as never, ledgerFake as never, holdFake as never, refunds, door as never);
   return { service, tx, row, wallet, holds, calls, ledger };
 }
 
@@ -208,6 +210,12 @@ describe('prepaid: a block is debited before it is served (ADR-0072)', () => {
     await w.service.settleAtClose(w.tx, { grantId: GRANT });
     expect(w.ledger).toHaveLength(1);
   });
+  it("keeps the remainder when the admin's delete answered no refund (F-118-u)", async () => {
+    const w = world({ mode: 'prepaid', funded: n(1000), billed: n(1000), consumed: n(333) });
+    await w.service.settleAtClose(w.tx, { grantId: GRANT, refund: false });
+    expect(w.ledger).toEqual([]);
+    expect(w.row.billed).toBe(n(1000));
+  });
 });
 
 describe('postpaid: held, then captured (ADR-0105 (6))', () => {
@@ -259,6 +267,15 @@ describe('postpaid: held, then captured (ADR-0105 (6))', () => {
     expect(w.calls).toEqual(['capture 1.50', 'release 1.50']);
     expect(w.row.billed).toBe(n(500));
     expect(w.row.funded).toBe(n(500));
+    expect(w.holds.has(METER_ID)).toBe(false);
+  });
+
+  it('at close without a refund still captures what was used and releases the hold: held money is never kept (F-118-u)', async () => {
+    const w = world({ funded: n(1000), consumed: n(500) });
+    w.holds.set(METER_ID, D('3.00'));
+    w.wallet.heldAmount = D('3.00');
+    await w.service.settleAtClose(w.tx, { grantId: GRANT, refund: false });
+    expect(w.calls).toEqual(['capture 1.50', 'release 1.50']);
     expect(w.holds.has(METER_ID)).toBe(false);
   });
 

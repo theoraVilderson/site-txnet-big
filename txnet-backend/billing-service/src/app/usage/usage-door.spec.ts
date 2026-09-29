@@ -399,6 +399,21 @@ describe('UsageDoorService (F-118-h)', () => {
       expect(await refusal(w.door.commit(w.tx, { token: b.token, quantity: n(1) }, new Date(NOW.getTime() + 1000)))).toBe('token_expired');
     });
 
+    it("a Grant's close cancels every open token of it, both legs given back, and a late commit is refused (F-118-u)", async () => {
+      const w = world(WHOLESALE, { reseller: '50' });
+      const a = await ask(w.door, w.tx, 'k1');
+      const b = await ask(w.door, w.tx, 'k2');
+      expect(await w.door.cancelOpen(w.tx, { grantId: GRANT }, NOW)).toBe(2);
+      expect(w.tokens.map((t) => t.status)).toEqual(['cancelled', 'cancelled']);
+      expect(w.row).toMatchObject({ consumed: n(0), billed: n(0), funded: n(0), wholesaleBilled: n(0) });
+      expect(w.wallet.cachedBalance.toFixed(2)).toBe('100.00');
+      expect(w.resellerWallet!.cachedBalance.toFixed(2)).toBe('50.00');
+      expect(await refusal(w.door.commit(w.tx, { token: a.token, quantity: n(1) }, NOW))).toBe('token_settled');
+      expect(b.status).toBe('open');
+      // Nothing left open: a second close moves nothing.
+      expect(await w.door.cancelOpen(w.tx, { grantId: GRANT }, NOW)).toBe(0);
+    });
+
     it('the sweep expires an open token past its time and gives its money back', async () => {
       const w = world();
       await w.door.authorize(w.tx, { grantId: GRANT, meterKey: KEY, quantity: n(1), key: 'k', ttlMs: -1 }, NOW);

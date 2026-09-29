@@ -92,7 +92,7 @@ function build() {
     move: record('move'),
   };
   const configs = new UserConfigsService(prisma as never, actions as never);
-  const service = new ResellerUserGrantsService(prisma as never, access, {} as never, configs, {} as never, {} as never, {} as never);
+  const service = new ResellerUserGrantsService(prisma as never, access, {} as never, configs, {} as never, {} as never, {} as never, {} as never);
   return { called, service };
 }
 
