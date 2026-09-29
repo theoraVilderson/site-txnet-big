@@ -123,6 +123,8 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
         return { ...row };
       },
     },
+    // No postpaid vpn.traffic meter: a prepaid Grant's path (F-118-k).
+    grantMeter: { findUnique: async () => null },
     wallet: {
       findUnique: async () => ({ ...wallet }),
       findUniqueOrThrow: async () => ({ ...wallet }),

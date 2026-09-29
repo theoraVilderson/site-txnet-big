@@ -273,8 +273,8 @@ describe('postpaid: held, then captured (ADR-0105 (6))', () => {
 });
 
 describe('boundaries', () => {
-  it('leaves vpn.traffic on its own path until F-118-k', async () => {
-    const w = world({ meterKey: METER_KEYS.vpnTraffic });
+  it('leaves a prepaid vpn.traffic on its byte engine (F-118-k moved only postpaid here)', async () => {
+    const w = world({ meterKey: METER_KEYS.vpnTraffic, mode: 'prepaid' });
     expect(await refusal(w.service.capture(w.tx, { grantId: GRANT, meterKey: METER_KEYS.vpnTraffic }))).toBe('meter_on_its_own_path');
   });
 

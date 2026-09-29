@@ -1,30 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GrantMeter, GrantStatus, Prisma, RateCardAfterIncluded, RateCardMode, WalletHoldStatus, WalletReasonType } from '@prisma/client';
+import { GrantStatus, Prisma, RateCardAfterIncluded, RateCardMode, WalletReasonType } from '@prisma/client';
 import { METER_KEYS, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletHoldService, WalletLedgerService, WalletVersionConflict } from '../wallet/wallet-ledger.service';
-import {
-  blockFor,
-  capturable,
-  ceilDiv,
-  CENT,
-  max,
-  min,
-  moveCursors,
-  priceUnits,
-  toAmount,
-  toCents,
-  unitsCovered,
-  UsageSettlementRefused,
-  ZERO,
-} from './usage-price';
+import { PostpaidHolds, vpnConsumed, type Captured, type Ctx, type MeterRef, type ToppedUp } from './postpaid-hold';
+import { blockFor, ceilDiv, CENT, max, moveCursors, priceUnits, toAmount, UsageSettlementRefused, ZERO } from './usage-price';
 import { UsageRefundService } from './usage-refund';
 import { spendOnCap, withinCap } from './spending-cap';
 
 export { blockFor, capturable, UsageSettlementRefused } from './usage-price';
 export type { UsageSettlementRefusal } from './usage-price';
+export type { Captured, Ctx, MeterRef, ToppedUp } from './postpaid-hold';
 
 /**
  * Rating and settlement of a Grant's meters (F-118-g, ADR-0105 (5)(6)(11)):
@@ -51,26 +39,23 @@ export type { UsageSettlementRefusal } from './usage-price';
  * is guarded on the value read, so a racing settlement loses with
  * `cursor_moved` and nothing written.
  *
- * `vpn.traffic` keeps its byte engine (`traffic/block-purchase.ts`) until
- * F-118-k moves VPN postpaid onto this one.
+ * `vpn.traffic` prepaid keeps its byte engine (`traffic/block-purchase.ts`)
+ * until F-118-l. A postpaid one is here (F-118-k): the hourly capture sweeps
+ * it, and its top-ups and close go through `traffic/vpn-postpaid.ts`.
  */
 
 
-export type MeterRef = { grantId: string; meterKey: string };
-
-export type Captured = { amount: Prisma.Decimal; billed: bigint; walletTransactionId: string | null };
 export type Bought = { amount: Prisma.Decimal; units: bigint; funded: bigint; walletTransactionId: string };
-export type ToppedUp = { captured: Prisma.Decimal; held: Prisma.Decimal; funded: bigint };
 /** Hold owners one sweep reads; each capture clears its own due. */
 const CAPTURE_BATCH = 500;
 
 export type CaptureDueResult = { scanned: number; captured: number; errors: number };
 
-export type Ctx = { grant: { id: string; userId: string; status: GrantStatus }; meter: GrantMeter };
 
 @Injectable()
 export class UsageSettlementService {
   private readonly logger = new Logger(UsageSettlementService.name);
+  private readonly postpaid: PostpaidHolds;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -78,7 +63,9 @@ export class UsageSettlementService {
     private readonly ledger: WalletLedgerService,
     private readonly holds: WalletHoldService,
     private readonly refunds: UsageRefundService,
-  ) {}
+  ) {
+    this.postpaid = new PostpaidHolds(holds);
+  }
 
   /** Prepaid: debits a block of about `targetUnits` (`usage_charge`), then `funded` and `billed` up by it. */
   async buyBlock(tx: Prisma.TransactionClient, input: MeterRef & { targetUnits: bigint }): Promise<Bought> {
@@ -131,7 +118,7 @@ export class UsageSettlementService {
     for (const m of meters) {
       const ctx = await this.load(tx, { grantId: input.grantId, meterKey: m.meterKey }, m.mode);
       if (ctx.meter.mode === RateCardMode.prepaid) await this.refunds.creditRemainder(tx, ctx);
-      else await this.closeHold(tx, ctx);
+      else await this.postpaid.close(tx, ctx);
     }
   }
 
@@ -139,21 +126,32 @@ export class UsageSettlementService {
    * The hourly capture (billing open-questions 2026-09-29): every active
    * postpaid meter with usage past its cursor is captured, and its hold put
    * back to what it was, so it stays funded to the same target. Cross-tenant
-   * scan, per-tenant write, one transaction per meter.
+   * scan, per-tenant write, one transaction per meter. A `vpn.traffic` one
+   * (F-118-k) reads its usage off the Grant's bytes (`vpnConsumed`).
    */
   async captureDue(): Promise<CaptureDueResult> {
     const rows = await this.crossTenant.grantMeter.findMany({
       where: {
         mode: RateCardMode.postpaid,
         afterIncluded: RateCardAfterIncluded.metered,
-        meterKey: { not: METER_KEYS.vpnTraffic },
         grant: { status: GrantStatus.active },
       },
-      select: { id: true, tenantId: true, grantId: true, meterKey: true, consumed: true, billed: true, includedQuantity: true },
+      select: {
+        id: true,
+        tenantId: true,
+        grantId: true,
+        meterKey: true,
+        consumed: true,
+        billed: true,
+        funded: true,
+        includedQuantity: true,
+        grant: { select: { consumedBytes: true, purchasedBytes: true } },
+      },
       orderBy: { updatedAt: 'asc' },
       take: CAPTURE_BATCH,
     });
-    const due = rows.filter((r) => r.consumed > max(r.billed, r.includedQuantity));
+    const consumedOf = (r: (typeof rows)[number]) => (r.meterKey === METER_KEYS.vpnTraffic ? vpnConsumed(r.grant, r) : r.consumed);
+    const due = rows.filter((r) => consumedOf(r) > max(r.billed, r.includedQuantity));
     let captured = 0;
     let errors = 0;
     for (const r of due) {
@@ -161,7 +159,7 @@ export class UsageSettlementService {
         const out = await runWithTenant({ id: r.tenantId }, () =>
           tenantTransaction(this.prisma, async (tx) => {
             const ctx = await this.load(tx, r, RateCardMode.postpaid);
-            const before = await this.heldCents(tx, ctx);
+            const before = await this.postpaid.heldCents(tx, ctx);
             return this.topUpTo(tx, ctx, before);
           }),
         );
@@ -177,73 +175,19 @@ export class UsageSettlementService {
     return { scanned: due.length, captured, errors };
   }
 
-  private async topUpTo(tx: Prisma.TransactionClient, ctx: Ctx, targetCents: bigint): Promise<ToppedUp> {
-    const captured = await this.captureIn(tx, ctx);
-    const heldBefore = await this.heldCents(tx, ctx);
-    // Inside the Grant's spending cap, if it has one (F-118-i): this hold is already counted in it.
-    const add = min(targetCents - heldBefore, toCents(await withinCap(tx, ctx.grant, await this.freeBalance(tx, ctx.grant.userId))));
-    if (add >= BigInt(1)) {
-      await this.holds.hold(tx, { userId: ctx.grant.userId, ownerRef: ctx.meter.id, amount: toAmount(add), currencyCode: ctx.meter.currencyCode });
-    } else if (heldBefore < BigInt(1) && targetCents > ZERO) {
-      throw new UsageSettlementRefused('insufficient_funds');
-    }
-    const held = heldBefore + max(add, ZERO);
-    const billed = captured.billed;
-    const funded = max(billed, ctx.meter.includedQuantity) + unitsCovered(ctx.meter, held);
-    await moveCursors(tx, ctx.meter, { funded });
-    return { captured: captured.amount, held: toAmount(held), funded };
+  private topUpTo(tx: Prisma.TransactionClient, ctx: Ctx, targetCents: bigint): Promise<ToppedUp> {
+    return this.postpaid.topUpTo(tx, ctx, targetCents);
   }
 
-  private async captureIn(tx: Prisma.TransactionClient, ctx: Ctx): Promise<Captured> {
-    const { meter, grant } = ctx;
-    const { cents, billedTo } = capturable(meter, meter.billed, meter.consumed, await this.heldCents(tx, ctx));
-    if (cents === ZERO) return { amount: new Prisma.Decimal(0), billed: meter.billed, walletTransactionId: null };
-
-    await moveCursors(tx, meter, { billed: billedTo });
-    ctx.meter = { ...meter, billed: billedTo };
-    const amount = toAmount(cents);
-    const row = await this.holds.capture(tx, {
-      userId: grant.userId,
-      ownerRef: meter.id,
-      amount,
-      currencyCode: meter.currencyCode,
-      reasonType: WalletReasonType.usage_charge,
-      referenceId: grant.id,
-    });
-    await spendOnCap(tx, grant.id, amount);
-    return { amount, billed: billedTo, walletTransactionId: row.id };
+  private captureIn(tx: Prisma.TransactionClient, ctx: Ctx): Promise<Captured> {
+    return this.postpaid.capture(tx, ctx);
   }
 
-  private async closeHold(tx: Prisma.TransactionClient, ctx: Ctx): Promise<void> {
-    const { billed } = await this.captureIn(tx, ctx);
-    if (await this.openHold(tx, ctx)) await this.holds.release(tx, { userId: ctx.grant.userId, ownerRef: ctx.meter.id });
-    // Nothing more is served: funded comes down to what was paid for.
-    if (ctx.meter.funded !== billed) await moveCursors(tx, ctx.meter, { funded: billed });
-  }
-
-  private async load(tx: Prisma.TransactionClient, ref: MeterRef, mode?: RateCardMode): Promise<Ctx> {
-    if (ref.meterKey === METER_KEYS.vpnTraffic) throw new UsageSettlementRefused('meter_on_its_own_path');
-    const grant = await tx.grant.findUnique({ where: { id: ref.grantId }, select: { id: true, userId: true, status: true } });
-    if (!grant) throw new UsageSettlementRefused('grant_not_found', ref.grantId);
-    const meter = await tx.grantMeter.findUnique({ where: { grantId_meterKey: { grantId: ref.grantId, meterKey: ref.meterKey } } });
-    if (!meter) throw new UsageSettlementRefused('meter_not_on_grant', ref.meterKey);
-    if (mode && meter.mode !== mode) throw new UsageSettlementRefused('wrong_mode', `${ref.meterKey} is ${meter.mode}`);
-    if (mode && meter.afterIncluded === RateCardAfterIncluded.stop) throw new UsageSettlementRefused('not_metered_past_included', ref.meterKey);
-    return { grant, meter };
+  private load(tx: Prisma.TransactionClient, ref: MeterRef, mode?: RateCardMode): Promise<Ctx> {
+    return this.postpaid.load(tx, ref, mode);
   }
 
   private async freeBalance(tx: Prisma.TransactionClient, userId: string): Promise<Prisma.Decimal> {
-    const wallet = await tx.wallet.findUnique({ where: { ownerUserId: userId } });
-    return wallet ? wallet.cachedBalance.minus(wallet.heldAmount) : new Prisma.Decimal(0);
-  }
-
-  private async openHold(tx: Prisma.TransactionClient, { grant, meter }: Ctx) {
-    const wallet = await tx.wallet.findUnique({ where: { ownerUserId: grant.userId } });
-    return wallet ? tx.walletHold.findFirst({ where: { walletId: wallet.id, ownerRef: meter.id, status: WalletHoldStatus.open } }) : null;
-  }
-
-  private async heldCents(tx: Prisma.TransactionClient, ctx: Ctx): Promise<bigint> {
-    const hold = await this.openHold(tx, ctx);
-    return hold ? toCents(hold.amount) : ZERO;
+    return this.postpaid.freeBalance(tx, userId);
   }
 }

@@ -1,0 +1,108 @@
+import { GrantStatus, Prisma, RateCardMode } from '@prisma/client';
+import { METER_KEYS } from '@txnet-backend/shared-core';
+
+import { PostpaidHolds, type Ctx } from '../usage/postpaid-hold';
+import { ceilDiv, CENT, max, priceUnits, UsageSettlementRefused } from '../usage/usage-price';
+import type { WalletHoldService } from '../wallet/wallet-ledger.service';
+
+/**
+ * VPN postpaid (F-118-k, ADR-0105 (6)(7)(12)): a metered Grant whose
+ * `vpn.traffic` card was `postpaid` at the sale is served on **held** money
+ * and charged after, never debited ahead.
+ *
+ * Its hold is its `grant_meter`'s (`ownerRef` = the meter id), as every
+ * postpaid meter's is — so it is not the Grant's VPN reserve (F-118-b), which
+ * the planner would count a second time. There is no reserve beside it: the
+ * hold is the headroom, never below `VPN_RESERVE_BYTES` at the rate. Every
+ * cursor move mirrors onto the Grant (`usage/postpaid-hold.ts`), so the
+ * planner's bag, `purchasedBytes`, is `billed` plus what the hold covers —
+ * the ceiling stands at what was consumed plus the held bytes (network
+ * `contract.reserve.md`, unchanged: it leases the bag, and no reserve hold).
+ *
+ * - **The planner's block request** (`block-request.ts`) captures what was
+ *   served, then holds what was asked on top of what is still held.
+ * - **A top** (issue, every way back to active, the minute's sweep) holds the
+ *   reserve's floor when the hold is short, and writes nothing otherwise —
+ *   no capture a minute; the hourly settlement sweep captures.
+ * - **A release** (suspension, freeze, cancel, close) captures what was
+ *   served, gives the rest back, and brings the bag down to what was billed.
+ */
+
+type Ref = { id: string; userId: string };
+
+/** The Grant's `vpn.traffic` meter when it is postpaid, else null — a prepaid one keeps its blocks. */
+export async function postpaidVpnMeter(tx: Prisma.TransactionClient, grantId: string) {
+  const meter = await tx.grantMeter.findUnique({ where: { grantId_meterKey: { grantId, meterKey: METER_KEYS.vpnTraffic } } });
+  return meter?.mode === RateCardMode.postpaid ? meter : null;
+}
+
+/** What the planner's request came to. The bag is `purchasedBytes` as it now stands. */
+export type ServedPostpaid = { captured: Prisma.Decimal; held: Prisma.Decimal; funded: bigint };
+
+export class VpnPostpaid {
+  private readonly postpaid: PostpaidHolds | null;
+
+  constructor(
+    holds: WalletHoldService | null,
+    /** The hold's floor, in bytes at the Grant's rate: `VPN_RESERVE_BYTES`. */
+    private readonly reserveBytes: bigint,
+  ) {
+    this.postpaid = holds ? new PostpaidHolds(holds) : null;
+  }
+
+  /**
+   * The planner asked for `extraBytes` more headroom: capture what was served,
+   * then hold that much on top of what is still held, and never less than
+   * the floor. A short balance holds less; none at all is `insufficient_funds`,
+   * which the block request reports as short, as it does a prepaid block's.
+   */
+  async serve(tx: Prisma.TransactionClient, grantId: string, extraBytes: bigint): Promise<ServedPostpaid> {
+    const ctx = await this.load(tx, grantId);
+    if (ctx.grant.status !== GrantStatus.active) throw new UsageSettlementRefused('grant_not_active', `${grantId} is ${ctx.grant.status}`);
+    const holds = this.postpaid as PostpaidHolds;
+    await holds.capture(tx, ctx);
+    const held = await holds.heldCents(tx, ctx);
+    const target = max(held + this.cents(ctx, extraBytes), this.cents(ctx, this.reserveBytes));
+    return holds.topUpTo(tx, ctx, target);
+  }
+
+  /** Holds the floor when the hold is under it; answers what is held. Only a Grant the planner leases to (active, pending) holds more. */
+  async top(tx: Prisma.TransactionClient, grantId: string): Promise<Prisma.Decimal> {
+    if (!this.postpaid) return new Prisma.Decimal(0);
+    const ctx = await this.load(tx, grantId);
+    const held = await this.postpaid.heldCents(tx, ctx);
+    const floor = this.cents(ctx, this.reserveBytes);
+    const leased = ctx.grant.status === GrantStatus.active || ctx.grant.status === GrantStatus.pending;
+    if (!leased || held >= floor) return new Prisma.Decimal(held.toString()).div(100);
+    try {
+      return (await this.postpaid.topUpTo(tx, ctx, floor)).held;
+    } catch (e) {
+      // An empty wallet holds nothing: the planner's bag stays where it is and the block request reports it.
+      if (e instanceof UsageSettlementRefused && e.reason === 'insufficient_funds') return new Prisma.Decimal(0);
+      throw e;
+    }
+  }
+
+  /** What is held for this Grant's traffic now. */
+  async heldFor(tx: Prisma.TransactionClient, grant: Ref): Promise<Prisma.Decimal> {
+    if (!this.postpaid) return new Prisma.Decimal(0);
+    const cents = await this.postpaid.heldCents(tx, await this.load(tx, grant.id));
+    return new Prisma.Decimal(cents.toString()).div(100);
+  }
+
+  /** Captures what was served and releases the rest; answers what was released. */
+  async close(tx: Prisma.TransactionClient, grant: Ref): Promise<Prisma.Decimal> {
+    if (!this.postpaid) return new Prisma.Decimal(0);
+    return this.postpaid.close(tx, await this.load(tx, grant.id));
+  }
+
+  private load(tx: Prisma.TransactionClient, grantId: string): Promise<Ctx> {
+    return (this.postpaid as PostpaidHolds).load(tx, { grantId, meterKey: METER_KEYS.vpnTraffic }, RateCardMode.postpaid);
+  }
+
+  /** `bytes` at the meter's rate, rounded **up** to a whole cent (the hold covers them). */
+  private cents({ meter }: Ctx, bytes: bigint): bigint {
+    if (bytes <= BigInt(0)) return BigInt(0);
+    return ceilDiv(bytes * priceUnits(meter), meter.unitSize * CENT);
+  }
+}

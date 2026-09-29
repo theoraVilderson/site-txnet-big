@@ -2,11 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 import { BLOCK_REQUEST_MESSAGE_VERSION, WalletVersionConflict, runWithTenant, tenantTransaction, type BlockRequestMessage } from '@txnet-backend/shared-core';
 
+import { UsageSettlementRefused } from '../usage/usage-price';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BlockPurchaseRefused, BlockPurchaseService, type BlockPurchaseRejection, type PurchasedBlock } from './block-purchase';
 import { type Exhaustion, isShortOfFunds, suspendIfExhausted } from './exhaustion';
 import { noticeLowBalance } from './low-balance';
+import { NO_VPN_RESERVE, VpnReserve } from './vpn-reserve';
+import type { ServedPostpaid } from './vpn-postpaid';
 
 /**
  * A metered Grant's next block, asked for by the lease planner (F-027-dc,
@@ -28,6 +31,11 @@ import { noticeLowBalance } from './low-balance';
  * measured rate less what is left, so a bag already past its end buys the
  * overrun with it. `MIN_BLOCK_SECONDS` of the same rate floors it here, and
  * `purchase()` still never clamps a target up.
+ *
+ * **A postpaid Grant is not sold a block** (F-118-k): the same request
+ * captures what was served from its hold and holds the target on top
+ * (`VpnReserve.servePostpaid`). The bag guard, the floor, the short-wallet
+ * report and the exhaustion check are the same.
  */
 
 /**
@@ -56,9 +64,11 @@ export class UnsupportedBlockRequestVersion extends Error {
 export type BlockRequestOutcome = {
   grantId: string;
   bought: PurchasedBlock | null;
+  /** A postpaid Grant's answer instead of a block: captured, then held (F-118-k). */
+  served?: ServedPostpaid | null;
   skipped: BlockRequestSkip | null;
   /** A wallet that could not fund the block. Nothing bought; reported, not thrown. */
-  refused: BlockPurchaseRejection | null;
+  refused: BlockPurchaseRejection | 'insufficient_funds' | null;
   /** Asked only when the wallet refused and the bag is spent (F-027-x). */
   exhausted: Exhaustion | null;
   /** After a purchase: the wallet's low-balance notice told, or re-armed by a balance back over it (F-601-g). */
@@ -80,6 +90,8 @@ export class BlockRequestService {
      */
     private readonly crossTenant: CrossTenantPrismaService,
     private readonly blocks: BlockPurchaseService,
+    // Defaulted so a spec that builds the request by hand serves no postpaid Grant.
+    private readonly reserve: VpnReserve = NO_VPN_RESERVE,
   ) {}
 
   async handle(message: BlockRequestMessage): Promise<BlockRequestHandled> {
@@ -90,6 +102,8 @@ export class BlockRequestService {
       await runWithTenant({ id: grant.tenantId }, () => this.buy(message));
     } catch (error) {
       if (error instanceof WalletVersionConflict) return { grantId: message.grantId, outcome: 'raced' };
+      // A postpaid capture that raced the hourly one: nothing written, the planner asks again.
+      if (error instanceof UsageSettlementRefused && error.reason === 'cursor_moved') return { grantId: message.grantId, outcome: 'raced' };
       throw error;
     }
     return { grantId: message.grantId, outcome: 'handled' };
@@ -128,6 +142,7 @@ export class BlockRequestService {
     const requested = BigInt(message.targetBytes);
     const targetBytes = requested > floor ? requested : floor;
     if (targetBytes <= BigInt(0)) return { ...none, skipped: 'target_not_positive' };
+    if (await this.reserve.isPostpaid(tx, grant.id)) return this.servePostpaid(tx, grant, targetBytes, none);
 
     try {
       const bought = await this.blocks.purchase(tx, { grantId: grant.id, targetBytes });
@@ -140,6 +155,26 @@ export class BlockRequestService {
       const refused = (error as BlockPurchaseRefused).reason;
       const spent = grant.purchasedBytes - grant.consumedBytes <= BigInt(0);
       return { ...none, skipped: null, refused, exhausted: spent ? await suspendIfExhausted(tx, grant.id) : null };
+    }
+  }
+
+  private async servePostpaid(
+    tx: Prisma.TransactionClient,
+    grant: { id: string; tenantId: string; userId: string; meteredRate: Prisma.Decimal | null; lowBalanceNoticeAt: Date | null; purchasedBytes: bigint; consumedBytes: bigint },
+    targetBytes: bigint,
+    none: Omit<BlockRequestOutcome, 'skipped'>,
+  ): Promise<BlockRequestOutcome> {
+    try {
+      const served = await this.reserve.servePostpaid(tx, grant.id, targetBytes);
+      // What is left to spend, seen while the user is still served (F-601-g).
+      const wallet = await tx.wallet.findUnique({ where: { ownerUserId: grant.userId } });
+      const free = wallet ? wallet.cachedBalance.minus(wallet.heldAmount) : new Prisma.Decimal(0);
+      return { ...none, served, skipped: null, lowBalance: await noticeLowBalance(tx, grant, free) };
+    } catch (error) {
+      if (!(error instanceof UsageSettlementRefused && error.reason === 'insufficient_funds')) throw error;
+      // Refused before any write: a hold of nothing captures nothing, so the transaction is clean.
+      const spent = grant.purchasedBytes - grant.consumedBytes <= BigInt(0);
+      return { ...none, skipped: null, refused: 'insufficient_funds', exhausted: spent ? await suspendIfExhausted(tx, grant.id) : null };
     }
   }
 }

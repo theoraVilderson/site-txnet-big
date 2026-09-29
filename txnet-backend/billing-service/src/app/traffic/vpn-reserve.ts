@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GrantStatus, Prisma, VariantBillingMode, WalletHoldStatus } from '@prisma/client';
-import { METERED_RATE_UNIT_BYTES, WalletVersionConflict, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { METER_KEYS, METERED_RATE_UNIT_BYTES, WalletVersionConflict, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { withinCap } from '../usage/spending-cap';
 import { WalletHoldService, WalletLedgerService } from '../wallet/wallet-ledger.service';
+import { postpaidVpnMeter, VpnPostpaid } from './vpn-postpaid';
 
 /**
  * The VPN reserve as held money (F-118-b, ADR-0105 (8), network
@@ -27,6 +28,10 @@ import { WalletHoldService, WalletLedgerService } from '../wallet/wallet-ledger.
  *   which counts it as its own money, so the overrun a reserve served is paid.
  * - **Released** when the Grant stops being planned: a suspension, a freeze,
  *   a cancel, a close; the sweep releases any a path missed.
+ *
+ * A **postpaid** VPN Grant (F-118-k) has no reserve: every call here hands it
+ * to `VpnPostpaid` (`vpn-postpaid.ts`), whose meter hold is its headroom —
+ * topped to the same floor, captured and released on the same paths.
  */
 
 /** Bytes per unit of `grant.meteredRate` (ADR-0073). */
@@ -96,11 +101,20 @@ export async function releaseVpnReserveOf(tx: Prisma.TransactionClient, grantId:
   return releaseVpnReserve(tx, grant);
 }
 
+/** A postpaid Grant's release, which needs no floor either. Built on first use: the modules import each other. */
+let postpaidRelease: VpnPostpaid | undefined;
+const POSTPAID = (): VpnPostpaid => (postpaidRelease ??= new VpnPostpaid(HOLDS, BigInt(0)));
+
 /**
  * Releases a Grant's reserve whole, in the caller's transaction, and answers
  * what it gave back. No reserve is no write, so a second call moves nothing.
+ * A postpaid Grant's meter hold is captured first, then released (F-118-k).
  */
 export async function releaseVpnReserve(tx: Prisma.TransactionClient, grant: { id: string; userId: string }): Promise<Prisma.Decimal> {
+  return (await postpaidVpnMeter(tx, grant.id)) ? POSTPAID().close(tx, grant) : releaseGrantReserve(tx, grant);
+}
+
+async function releaseGrantReserve(tx: Prisma.TransactionClient, grant: { id: string; userId: string }): Promise<Prisma.Decimal> {
   const wallet = await tx.wallet.findUnique({ where: { ownerUserId: grant.userId } });
   const open = wallet ? await openReserve(tx, wallet.id, grant.id) : null;
   if (!open) return ZERO;
@@ -109,6 +123,8 @@ export async function releaseVpnReserve(tx: Prisma.TransactionClient, grant: { i
 }
 
 export class VpnReserve {
+  private readonly postpaid: VpnPostpaid;
+
   /**
    * `holds` null is a service built by hand with no wallet — a spec of
    * something else — and holds nothing. `WalletModule` builds the real one
@@ -117,18 +133,32 @@ export class VpnReserve {
   constructor(
     private readonly holds: WalletHoldService | null,
     readonly bytes: bigint,
-  ) {}
+  ) {
+    this.postpaid = new VpnPostpaid(holds, bytes);
+  }
+
+  /** A Grant whose `vpn.traffic` is postpaid (F-118-k): held and captured, never sold a block. */
+  async isPostpaid(tx: Prisma.TransactionClient, grantId: string): Promise<boolean> {
+    return this.holds !== null && (await postpaidVpnMeter(tx, grantId)) !== null;
+  }
+
+  /** The planner's request for a postpaid Grant (`VpnPostpaid.serve`). */
+  servePostpaid(tx: Prisma.TransactionClient, grantId: string, extraBytes: bigint) {
+    return this.postpaid.serve(tx, grantId, extraBytes);
+  }
 
   /** What is held for this Grant now: the money its own block may spend. */
   async heldFor(tx: Prisma.TransactionClient, grant: { id: string; userId: string }): Promise<Prisma.Decimal> {
     if (!this.holds) return ZERO;
+    if (await this.isPostpaid(tx, grant.id)) return this.postpaid.heldFor(tx, grant);
     const wallet = await tx.wallet.findUnique({ where: { ownerUserId: grant.userId } });
     const open = wallet ? await openReserve(tx, wallet.id, grant.id) : null;
     return open?.amount ?? ZERO;
   }
 
-  release(tx: Prisma.TransactionClient, grant: { id: string; userId: string }): Promise<Prisma.Decimal> {
-    return this.holds ? releaseVpnReserve(tx, grant) : Promise.resolve(ZERO);
+  async release(tx: Prisma.TransactionClient, grant: { id: string; userId: string }): Promise<Prisma.Decimal> {
+    if (!this.holds) return ZERO;
+    return (await this.isPostpaid(tx, grant.id)) ? this.postpaid.close(tx, grant) : releaseGrantReserve(tx, grant);
   }
 
   /**
@@ -139,6 +169,7 @@ export class VpnReserve {
    */
   async top(tx: Prisma.TransactionClient, grantId: string): Promise<Prisma.Decimal> {
     if (!this.holds) return ZERO;
+    if (await this.isPostpaid(tx, grantId)) return this.postpaid.top(tx, grantId);
     const grant = await tx.grant.findUnique({
       where: { id: grantId },
       select: { id: true, userId: true, status: true, billingMode: true, meteredRate: true, meteredRateCurrencyCode: true, trafficUnlimited: true },
@@ -232,13 +263,23 @@ export class VpnReserveSweep {
       cursor = page[page.length - 1].id;
     }
 
-    // Open holds whose owner is a Grant no longer reserved. A hold owned by
-    // anything else (a postpaid `grant_meter`) matches no Grant id here.
+    // Open holds whose owner is a Grant no longer reserved, or a postpaid
+    // Grant's `vpn.traffic` meter (F-118-k). Any other meter's hold is its
+    // settlement's, and matches neither.
     const open = await this.crossTenant.walletHold.findMany({ where: { status: WalletHoldStatus.open }, select: { ownerRef: true } });
-    const stale = await this.crossTenant.grant.findMany({
-      where: { id: { in: open.map((h) => h.ownerRef) }, NOT: RESERVED_WHERE },
-      select: { id: true, tenantId: true, userId: true },
-    });
+    const owners = open.map((h) => h.ownerRef);
+    const stale = [
+      ...(await this.crossTenant.grant.findMany({
+        where: { id: { in: owners }, NOT: RESERVED_WHERE },
+        select: { id: true, tenantId: true, userId: true },
+      })),
+      ...(
+        await this.crossTenant.grantMeter.findMany({
+          where: { id: { in: owners }, meterKey: METER_KEYS.vpnTraffic, grant: { NOT: RESERVED_WHERE } },
+          select: { grant: { select: { id: true, tenantId: true, userId: true } } },
+        })
+      ).map((m) => m.grant),
+    ];
     for (const g of stale) {
       result.scanned++;
       await this.each(g, result, async (tx) => {

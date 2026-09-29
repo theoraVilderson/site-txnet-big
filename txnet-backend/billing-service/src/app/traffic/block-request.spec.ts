@@ -105,6 +105,8 @@ function fakeTx(row: GrantRow | null) {
       },
     },
     // No wallet row: the reserve release (F-118-b) holds nothing here; vpn-reserve.spec.ts holds it.
+    // No postpaid vpn.traffic meter: a prepaid Grant's path (F-118-k).
+    grantMeter: { findUnique: async () => null },
     wallet: { findUnique: async () => null },
     $queryRaw: async () => [{ cachedBalance: new Prisma.Decimal('0.00') }],
     config: { updateMany: async () => ({ count: 1 }) },

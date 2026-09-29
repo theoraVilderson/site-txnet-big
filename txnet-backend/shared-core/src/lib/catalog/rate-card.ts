@@ -38,20 +38,20 @@ export function rateCardAt<T extends RateCardRow>(cards: readonly T[], at: Date,
 
 /**
  * What a VPN Grant locks as `meteredRate` at issue (ADR-0073): the
- * `vpn.traffic` card in effect, when it is one the byte engine serves — prepaid,
- * per 2^30 bytes, nothing included, then metered. That is every card
- * `metered_rate` became.
+ * `vpn.traffic` card in effect, when it is one the byte engine serves — per
+ * 2^30 bytes, nothing included, then metered; prepaid (every card
+ * `metered_rate` became: blocks) or postpaid (F-118-k: a hold, captured).
  *
- * Any other newest card — postpaid (F-118-k), a hybrid or a stop (`grant_meter`,
- * F-118-e), another unit size — is **no rate**, and the older card behind it is
- * not taken in its place: the seller's latest word was not that price. The
- * Grant is then refused as having no rate, never sold at the wrong one.
+ * Any other newest card — a hybrid or a stop (`grant_meter`, F-118-e),
+ * another unit size — is **no rate**, and the older card behind it is not
+ * taken in its place: the seller's latest word was not that price. The Grant
+ * is then refused as having no rate, never sold at the wrong one.
  */
 export function vpnTrafficRateAt(cards: readonly RateCardRow[], at: Date, currencyCode: string): MeteredRateRow | null {
   const card = rateCardAt(cards, at, currencyCode, METER_KEYS.vpnTraffic);
   if (!card) return null;
   const servedByBytes =
-    card.mode === 'prepaid' &&
+    (card.mode === 'prepaid' || card.mode === 'postpaid') &&
     card.afterIncluded === 'metered' &&
     card.includedQuantity === BigInt(0) &&
     card.unitSize === BigInt(METERED_RATE_UNIT_BYTES);

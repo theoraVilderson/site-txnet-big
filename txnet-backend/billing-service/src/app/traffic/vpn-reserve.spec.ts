@@ -61,6 +61,8 @@ function fakeStore() {
       },
     },
     config: { updateMany: async () => ({ count: 1 }) },
+    // No postpaid vpn.traffic meter: a prepaid Grant's path (F-118-k).
+    grantMeter: { findUnique: async () => null },
     wallet: {
       findUnique: async ({ where }: { where: { ownerUserId: string } }) => (where.ownerUserId === wallet.ownerUserId ? { ...wallet } : null),
       updateMany: async ({ where, data }: { where: { id: string; version: number }; data: { cachedBalance?: Prisma.Decimal; heldAmount?: Prisma.Decimal; version: { increment: number } } }) => {

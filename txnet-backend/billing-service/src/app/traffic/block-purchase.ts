@@ -49,6 +49,8 @@ export type BlockPurchaseRejection =
   | 'insufficient_funds'
   /** The wallet could fund it, the Grant's spending cap cannot (F-118-i). Cut as an empty wallet cuts it. */
   | 'cap_reached'
+  /** A postpaid `vpn.traffic` card (F-118-k): held and captured (`vpn-postpaid.ts`), never sold a block. */
+  | 'grant_postpaid'
   /** A rate so high that a whole cent buys less than one byte. Never a zero-byte block. */
   | 'block_below_one_byte'
   | 'target_not_positive';
@@ -197,6 +199,7 @@ export class BlockPurchaseService {
     if (grant.billingMode !== VariantBillingMode.metered || grant.meteredRate === null || grant.meteredRateCurrencyCode === null) {
       throw new BlockPurchaseRefused('grant_not_metered', input.grantId);
     }
+    if (await this.reserve.isPostpaid(tx, grant.id)) throw new BlockPurchaseRefused('grant_postpaid', input.grantId);
 
     const wallet = await tx.wallet.findUnique({ where: { ownerUserId: grant.userId } });
     // The Grant's own reserve (F-118-b) is its money: the bytes it backed are

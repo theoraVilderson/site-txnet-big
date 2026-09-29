@@ -84,6 +84,8 @@ function fakeStore() {
       },
     },
     grantMeter: {
+      // No postpaid vpn.traffic meter: a prepaid Grant's path (F-118-k).
+      findUnique: async () => null,
       findMany: async ({ where }: { where: { grantId: string } }) => meters.filter((m) => m.grantId === where.grantId).map((m) => ({ id: m.id })),
     },
     config: { updateMany: async () => ({ count: 1 }) },

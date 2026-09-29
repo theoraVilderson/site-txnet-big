@@ -188,7 +188,8 @@ Each throws `BlockPurchaseRefused` and writes nothing: `grant_not_found`,
 `grant_not_metered`, `target_not_positive`, `insufficient_funds`,
 `block_below_one_byte` (a clamped block that buys no whole byte), `cap_reached`
 (the wallet could fund it, the Grant's spending cap cannot — short of funds, as
-the other two are), and
+the other two are), `grant_postpaid` (a postpaid `vpn.traffic` card, F-118-k:
+held and captured, never sold a block), and
 `rate_not_priceable` — a zero rate, or one finer than `Decimal(18, 8)`. A free
 byte is a catalog decision, not an arithmetic one, so a zero rate is refused
 here rather than read as free traffic.
@@ -214,7 +215,14 @@ before it is deleted (F-027-dk).
    less `purchasedBytes − Used`, so bytes served from the reserve past the bag
    are bought with the next block — from that reserve's held money if the free
    balance is short (F-118-b) — rather than left uncharged.
-5. **The balance a block leaves is read for the wallet-low notice** (F-601-g).
+5. **A postpaid Grant is not sold a block** (F-118-k,
+   [contract.usage-rating.md](contract.usage-rating.md) "VPN postpaid"): the
+   same request, past the same guard and floor, captures what was served from
+   its meter hold and holds the target on top (`VpnReserve.servePostpaid`). A
+   wallet that cannot hold a cent is short, as rule 3 says; a capture that
+   raced the hourly one is `raced`. The wallet-low notice reads the free
+   balance it leaves.
+6. **The balance a block leaves is read for the wallet-low notice** (F-601-g).
    `noticeLowBalance` (`traffic/low-balance.ts`) takes the debit's
    `balanceAfter` in the same transaction: under 1 GB at the Grant's rate it
    tells once per crossing, at or over it re-arms (entitlement

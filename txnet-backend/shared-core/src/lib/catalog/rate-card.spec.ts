@@ -15,9 +15,9 @@ import { rateCardAt, rateCardsInEffect, vpnTrafficRateAt, type RateCardRow } fro
  *  - **a card for one meter read as another's.** A variant may carry cards on
  *    several meters; the card in effect is chosen per meter, per currency.
  *  - **a card the byte engine cannot honour, locked as if it could.** Until
- *    `grant_meter` (F-118-e) and VPN postpaid (F-118-k), a VPN Grant holds one
- *    per-GiB prepaid rate. A newer postpaid, hybrid or differently sized card
- *    is no rate for it — and must not let an older card win in its place.
+ *    `grant_meter` (F-118-e) moves the rest, a VPN Grant holds one per-GiB
+ *    rate, prepaid or postpaid (F-118-k). A newer hybrid or differently sized
+ *    card is no rate for it — and must not let an older card win in its place.
  *  - **`metered_rate` rows lost on the way.** Each becomes a `vpn.traffic`
  *    prepaid card per 2^30 bytes, nothing included, then metered.
  */
@@ -77,8 +77,11 @@ describe('vpnTrafficRateAt — the rate a VPN Grant locks at issue (ADR-0073)', 
     });
   });
 
+  it('is a postpaid per-GiB card too (F-118-k): the same rate, held instead of debited', () => {
+    expect(vpnTrafficRateAt([card('c1', { mode: 'postpaid' })], now, 'USD')?.id).toBe('c1');
+  });
+
   it.each<[string, Partial<RateCardRow>]>([
-    ['postpaid (F-118-k)', { mode: 'postpaid' }],
     ['a hybrid with bytes included (F-118-e)', { includedQuantity: BigInt(50) * BigInt(METERED_RATE_UNIT_BYTES) }],
     ['stop after the included bytes', { afterIncluded: 'stop', includedQuantity: BigInt(1) }],
     ['a unit other than 2^30 bytes', { unitSize: BigInt(1_000_000_000) }],

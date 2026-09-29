@@ -143,6 +143,8 @@ describe('cutoff notices on a metered exhaustion (suspendIfExhausted)', () => {
         updateMany: async (args: { where: { status?: GrantStatus } }) => ({ count: grant.status === args.where.status ? 1 : 0 }),
       },
       // No wallet row: the reserve release (F-118-b) holds nothing here; vpn-reserve.spec.ts holds it.
+      // No postpaid vpn.traffic meter: a prepaid Grant's path (F-118-k).
+      grantMeter: { findUnique: async () => null },
       wallet: { findUnique: async () => null },
       config: { updateMany: async () => ({ count: 1 }) },
       $queryRaw: async () => [{ cachedBalance: new Prisma.Decimal('0.00') }],

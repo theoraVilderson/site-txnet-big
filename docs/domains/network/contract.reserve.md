@@ -29,7 +29,10 @@ hurts most.
    rest of the wallet stays spendable (user, 2026-09-29). No hold is a reserve
    of nothing. A Grant with a spending cap (F-118-i, billing
    `contract.spending-cap.md`) holds no more than its cap leaves, so the cap
-   reaches Quota here. A prepaid Grant has none: its bag is all there is, and `Σ
+   reaches Quota here. A **postpaid** metered Grant (F-118-k) has none either:
+   its hold belongs to its `vpn.traffic` meter, and billing writes what that
+   hold covers into `purchasedBytes`, so its bag is already billed plus held
+   bytes (billing `contract.usage-rating.md` "VPN postpaid"). A prepaid Grant has none: its bag is all there is, and `Σ
    ceilings ≤ purchasedBytes` holds for it unchanged (user, 2026-09-27).
 2. **It is a term of Quota, not a step per config.** The lease planner reads
    `purchasedBytes` plus its share of the reserve itself

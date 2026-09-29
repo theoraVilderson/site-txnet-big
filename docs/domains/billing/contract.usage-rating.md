@@ -13,12 +13,13 @@ ADR-0105 (5)(6)(11)): the money side of `grant_meter`. Intake
 ([contract.metering.md](contract.metering.md) "Usage events") advances
 `consumed`; this turns `consumed − billed` into ledger rows and says how far a
 meter is `funded` — what its enforcer may serve (ADR-0105 (7)). Read it before
-pricing a meter, before a second caller of any call below, or before F-118-h/k.
+pricing a meter, before a second caller of any call below, or before F-118-h.
 
-**`vpn.traffic` is not here yet.** Its bytes keep the block purchaser
-([contract.traffic-block.md](contract.traffic-block.md)) until F-118-k; every
-call refuses it as `meter_on_its_own_path`. A package plan has no metered
-`grant_meter`, so nothing here ever reads it (ADR-0105 (0)).
+**A prepaid `vpn.traffic` is not here.** Its bytes keep the block purchaser
+([contract.traffic-block.md](contract.traffic-block.md)) until F-118-l; every
+call refuses it as `meter_on_its_own_path`. A **postpaid** one is (F-118-k,
+"VPN postpaid" below). A package plan has no metered `grant_meter`, so nothing
+here ever reads it (ADR-0105 (0)).
 
 ## The cursors
 
@@ -77,10 +78,11 @@ All refuse `grant_not_found`, `meter_not_on_grant`, `meter_on_its_own_path`,
 `not_metered_past_included`, `rate_not_priceable` and `cursor_moved`, each
 writing nothing (`UsageSettlementRefused`).
 
-**Callers.** None in production yet: no non-VPN meter can be sold until its
-door exists (entitlement `meter_not_served`). F-118-h's `authorize`/`commit`
-buys blocks and tops holds up; F-118-k moves VPN postpaid here; a Grant close
-calls `settleAtClose`. The hourly sweep below is the one live path.
+**Callers.** No non-VPN meter can be sold until its door exists (entitlement
+`meter_not_served`): F-118-h's `authorize`/`commit` will buy blocks and top
+holds up, and a Grant close call `settleAtClose`. Live today: the hourly sweep
+below, and VPN postpaid's own paths (next section), which share these holds
+through `PostpaidHolds` (`usage/postpaid-hold.ts`).
 
 ## The hourly capture
 
@@ -89,14 +91,47 @@ calls `settleAtClose`. The hourly sweep below is the one live path.
 worker-service's `usage_capture` at `5 * * * *` (automation
 `contract.worker.md`). Hourly is ASSUMED (`open-questions.md` 2026-09-29).
 
-1. Cross-tenant scan of active, postpaid, metered, non-VPN meters (500 a
-   call); those with `consumed` past `max(billed, included)` are due.
+1. Cross-tenant scan of active, postpaid, metered meters, `vpn.traffic`
+   included (500 a call); those with `consumed` past `max(billed, included)`
+   are due — a VPN one's `consumed` as the next section reads it.
 2. Each in its own tenant transaction: capture, then the hold topped back to
    what it held before — the target is the hold, so a meter stays funded as
    far ahead as its caller last asked.
 3. A lost race (`WalletVersionConflict`, `cursor_moved`) is the next hour's;
    anything else is logged and counted in `errors`. Safe to run twice: a
    capture leaves nothing due behind it.
+
+## VPN postpaid (F-118-k, ADR-0105 (6)(7)(12))
+
+A metered Grant sold on a postpaid `vpn.traffic` card (`vpnTrafficRateAt`
+takes one per 2^30 bytes, nothing included, then metered; its rate is locked
+as `meteredRate` too) is served on held money and charged after. The seller
+picks the mode on the variant form from F-118-m (user, 2026-09-29).
+
+1. **Its hold is its `grant_meter`'s** (`ownerRef` = the meter id), never the
+   VPN reserve's, and it has no reserve beside it (network
+   `contract.reserve.md`). `traffic/vpn-postpaid.ts` answers every
+   `VpnReserve` call for it: a top holds the floor — `VPN_RESERVE_BYTES` at
+   the rate — only when the hold is under it (no capture a minute); a release
+   (suspension, freeze, cancel, close) captures, releases the rest, and
+   brings `funded` down to `billed`.
+2. **The bag is `funded`.** Every cursor move mirrors onto the Grant by the
+   same delta — `billedBytes` by `billed`, `purchasedBytes` by `funded` — so
+   the planner leases `billed` plus what the hold covers: the ceiling stands
+   at what was consumed plus the held bytes.
+3. **The planner's block request is a capture, then a hold**
+   ([contract.traffic-block.md](contract.traffic-block.md) "Who asks"): what
+   was served is captured, and the hold grows by the target's price on top of
+   what is still held, never below the floor. No `traffic_consumption` is
+   written; the block purchaser refuses it (`grant_postpaid`).
+4. **`consumed` is the Grant's bytes less its gifts.** VPN bytes land on
+   `grant.consumedBytes`, not on the meter (F-118-f), so `consumed` is read as
+   `consumedBytes − (purchasedBytes − funded)`, floored at 0: an admin's
+   gifted bytes (F-311-l) are served first and never charged.
+5. **At close nothing is refunded**: `billed ≤ consumed`, so the remainder
+   credit refuses `nothing_to_credit` after its release has captured.
+
+Tests: `traffic/vpn-postpaid.spec.ts`.
 
 ## Reasons (ADR-0105 (11))
 

@@ -67,6 +67,8 @@ function fakeTx(input: { grant: Partial<GrantRow> | null; balance: string | null
       },
     },
     // No wallet row: the reserve release (F-118-b) holds nothing here; vpn-reserve.spec.ts holds it.
+    // No postpaid vpn.traffic meter: a prepaid Grant's path (F-118-k).
+    grantMeter: { findUnique: async () => null },
     wallet: { findUnique: async () => null },
     // The cutoff notice (F-601-b) — cut-off.spec.ts holds what it says.
     outboxEvent: { create: async () => ({ id: 'e1' }) },
