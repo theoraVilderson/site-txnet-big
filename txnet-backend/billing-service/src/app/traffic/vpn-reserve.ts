@@ -19,8 +19,9 @@ import { WalletHoldService, WalletLedgerService } from '../wallet/wallet-ledger.
  * (user, 2026-09-29: a fixed size, so the rest of the wallet stays free), and
  * the planner leases what that hold buys and nothing more.
  *
- * - **Topped** at issue, after every block, and by the minute's sweep for any
- *   other way back to active (a revive, an unfreeze, a renewal, a deposit).
+ * - **Topped** at issue, after every block, on every way back to active (the
+ *   revive in `entitlement/purge.ts`, `unfreezeGrant`), and by the minute's
+ *   sweep as a backstop (a deposit into a short reserve, a missed path).
  * - **Spent** only by its own Grant's next block (`BlockPurchaseService`),
  *   which counts it as its own money, so the overrun a reserve served is paid.
  * - **Released** when the Grant stops being planned: a suspension, a freeze,
@@ -161,6 +162,26 @@ export class VpnReserve {
 
 /** For a service built by hand: holds nothing, reads nothing. */
 export const NO_VPN_RESERVE = new VpnReserve(null, BigInt(0));
+
+/**
+ * The reserve a Grant brought back to active is topped with: the one
+ * `WalletModule` built from `VPN_RESERVE_BYTES`, installed once at boot.
+ * Every way back — a top-up, a renewal, an unfreeze, a reseller's or a bulk
+ * job's — ends in `purge.ts`'s revive or `unfreezeGrant`, free functions its
+ * many callers reach without DI; they top through this rather than each
+ * caller threading a reserve. Until installed (a spec) it holds nothing.
+ */
+let installed: VpnReserve = NO_VPN_RESERVE;
+
+export function installVpnReserve(reserve: VpnReserve): VpnReserve {
+  installed = reserve;
+  return reserve;
+}
+
+/** Tops a Grant just brought back to active, in the caller's transaction (F-118-b). */
+export function topVpnReserve(tx: Prisma.TransactionClient, grantId: string): Promise<Prisma.Decimal> {
+  return installed.top(tx, grantId);
+}
 
 export type ReserveDueResult = { scanned: number; topped: number; released: number; errors: number };
 

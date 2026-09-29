@@ -6,7 +6,7 @@ import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 import type { EnvConfig } from '../config/env.validation';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { releaseVpnReserveOf } from '../traffic/vpn-reserve';
+import { releaseVpnReserveOf, topVpnReserve } from '../traffic/vpn-reserve';
 import { EntitlementRefused } from './grant';
 import { ADMIN_FROZEN } from './suspension';
 
@@ -44,7 +44,7 @@ export async function freezeGrant(tx: Prisma.TransactionClient, grantId: string,
     data: { status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: at, frozenUntil: until },
   });
   if (moved.count === 0) throw new EntitlementRefused('grant_not_active');
-  // A frozen Grant is not planned: its reserve is free until the unfreeze's sweep (F-118-b).
+  // A frozen Grant is not planned: its reserve is free until the unfreeze (F-118-b).
   await releaseVpnReserveOf(tx, grantId);
 
   const disabled = await tx.config.updateMany({
@@ -92,6 +92,8 @@ export async function unfreezeGrant(tx: Prisma.TransactionClient, grantId: strin
     where: { grantId, status: ConfigStatus.active },
     data: { desiredEnabled: true, desiredRemote: DesiredRemote.present, enforcementState: EnforcementState.pending },
   });
+  // The reserve the freeze gave back, held again with the unfreeze (F-118-b).
+  await topVpnReserve(tx, grantId);
   return { endsAt, configsRestored: restored.count };
 }
 

@@ -1,8 +1,10 @@
 import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 
+import { reviveOnRenewal, reviveOnTopUp } from '../entitlement/purge';
+import { PERIOD_ENDED, QUOTA_EXHAUSTED } from '../entitlement/suspension';
 import { InsufficientFunds, WalletHoldService, WalletLedgerService } from '../wallet/wallet-ledger.service';
 import { BlockPurchaseService, GIB } from './block-purchase';
-import { VpnReserve, releaseVpnReserve, sizeReserve } from './vpn-reserve';
+import { NO_VPN_RESERVE, VpnReserve, installVpnReserve, releaseVpnReserve, sizeReserve } from './vpn-reserve';
 
 /**
  * The VPN reserve is held money (F-118-b, ADR-0105 (8), network
@@ -30,6 +32,7 @@ type GrantRow = {
   trafficUnlimited: boolean;
   purchasedBytes: bigint;
   billedBytes: bigint;
+  statusReason?: string | null;
 };
 
 function fakeStore() {
@@ -50,7 +53,14 @@ function fakeStore() {
         g.billedBytes += data.billedBytes.increment;
         return { ...g };
       },
+      updateMany: async ({ where, data }: { where: { id: string; status: GrantStatus; statusReason?: string }; data: { status: GrantStatus } }) => {
+        const g = grants.get(where.id);
+        if (!g || g.status !== where.status || (where.statusReason !== undefined && g.statusReason !== where.statusReason)) return { count: 0 };
+        g.status = data.status;
+        return { count: 1 };
+      },
     },
+    config: { updateMany: async () => ({ count: 1 }) },
     wallet: {
       findUnique: async ({ where }: { where: { ownerUserId: string } }) => (where.ownerUserId === wallet.ownerUserId ? { ...wallet } : null),
       updateMany: async ({ where, data }: { where: { id: string; version: number }; data: { cachedBalance?: Prisma.Decimal; heldAmount?: Prisma.Decimal; version: { increment: number } } }) => {
@@ -239,5 +249,34 @@ describe('BlockPurchaseService with the reserve', () => {
     await expect(blocks.purchase(s.tx, { grantId: 'g1', targetBytes: GIB })).rejects.toMatchObject({ reason: 'insufficient_funds' });
     expect(s.openReserve('g2')).toBe('10.00');
     expect(s.ledger).toHaveLength(0);
+  });
+});
+
+describe('a Grant back to active', () => {
+  // Every way back — a top-up, a renewal, an unfreeze, a bulk job — goes
+  // through the revive in entitlement/purge.ts or unfreezeGrant, which top
+  // the reserve the WalletModule installed: no path waits for the sweep.
+  beforeEach(() => installVpnReserve(reserve));
+  afterEach(() => installVpnReserve(NO_VPN_RESERVE));
+
+  it.each([
+    ['a top-up', QUOTA_EXHAUSTED, reviveOnTopUp],
+    ['a renewal', PERIOD_ENDED, reviveOnRenewal],
+  ])('holds its reserve in the transaction that revives it: %s', async (_, reason, revive) => {
+    const s = fakeStore();
+    s.fund('30.00');
+    s.grant('g1', { status: GrantStatus.suspended, statusReason: reason });
+
+    await expect(revive(s.tx, 'g1')).resolves.toMatchObject({ revived: true });
+    expect(s.openReserve('g1')).toBe('10.00');
+  });
+
+  it('holds nothing when nothing was revived', async () => {
+    const s = fakeStore();
+    s.fund('30.00');
+    s.grant('g1', { status: GrantStatus.suspended, statusReason: 'admin_frozen' });
+
+    await expect(reviveOnTopUp(s.tx, 'g1')).resolves.toMatchObject({ revived: false });
+    expect(s.holds).toHaveLength(0);
   });
 });

@@ -15,10 +15,9 @@ const RESERVE_COUNTS = ['scanned', 'topped', 'released', 'errors'] as const;
  * Grant no longer planned released. Billing decides and moves the money
  * (`traffic/vpn-reserve.ts`); the clock is this service's, as `usage_capture`'s is.
  *
- * **Every minute**: issue and every block top a reserve at once, and every
- * stop releases one at once; this catches the rest — a revive, an unfreeze, a
- * renewal, a deposit into a short one — so a Grant back on waits a minute for
- * its headroom, not until its next block.
+ * **Every minute, as a backstop**: issue, every block and every way back to
+ * active top a reserve at once, and every stop releases one at once; this
+ * catches a deposit into a reserve held short and any path that missed a write.
  *
  * **Safe to run twice** (ADR-0027): a reserve at its target writes nothing.
  *
@@ -32,7 +31,7 @@ export class VpnReserveJob implements Job {
   readonly description =
     'Holds each metered VPN service its reserve past the bag, and releases the reserve of one no longer served (F-118-b).';
   readonly category = BotWorkerCategory.other;
-  /** Unscheduled, a revived Grant has no headroom past its bag until its next block. Every minute. */
+  /** Unscheduled, a reserve held short stays short until its next block, and a missed release stays locked. Every minute. */
   readonly defaultSchedule: DefaultSchedule = { scheduleType: 'cron_expression', cronExpression: '* * * * *' };
 
   private readonly logger = new Logger(VpnReserveJob.name);

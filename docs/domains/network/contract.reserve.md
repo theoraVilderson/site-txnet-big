@@ -45,9 +45,11 @@ hurts most.
    another meter, another Grant's block (billing `contract.holds.md`) — so
    two Grants cannot lease the same money, whatever their rates. Billing
    (`traffic/vpn-reserve.ts`) tops it at issue, after every block and in the
-   minute's sweep (`vpn_reserve`: a revive, an unfreeze, a renewal, a
-   deposit), and releases it when the Grant stops being planned (a
-   suspension, a freeze, a cancel, a close; the sweep catches a missed one).
+   transaction of every way back to active (a top-up, a renewal, an
+   unfreeze, a reseller's or bulk job's), and releases it when the Grant
+   stops being planned (a suspension, a freeze, a cancel, a close). The
+   minute's sweep (`vpn_reserve`) is the backstop: a deposit into a reserve
+   held short, and any path that missed a write.
    The Grant's own block spends it first (billing `contract.traffic-block.md`),
    so bytes served from it are paid by the next block.
 
@@ -62,5 +64,6 @@ A config can serve past its bag only as far as its Grant's hold buys, and
 that money is locked, so the overrun `contract.traffic-block.md` once left
 uncharged is paid by the block that follows. A smaller reserve than the old
 whole-balance lease means thinner headroom for a Grant with many inbounds:
-`VPN_RESERVE_BYTES` is the knob. A revived or unfrozen Grant waits up to a
-minute (the sweep) for its reserve.
+`VPN_RESERVE_BYTES` is the knob — one figure for the whole platform today.
+A reserve held short on a low wallet grows back only at the next block or the
+sweep, up to a minute after the deposit.

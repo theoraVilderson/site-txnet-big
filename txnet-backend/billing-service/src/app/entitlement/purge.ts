@@ -6,6 +6,7 @@ import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 import type { EnvConfig } from '../config/env.validation';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { topVpnReserve } from '../traffic/vpn-reserve';
 import { ADMIN_FROZEN, PERIOD_ENDED, QUOTA_EXHAUSTED } from './suspension';
 
 /**
@@ -181,5 +182,7 @@ async function revive(tx: Prisma.TransactionClient, grantId: string, statusReaso
       enforcementState: EnforcementState.pending,
     },
   });
+  // Served from its reserve before its next block: held with the revive (F-118-b).
+  await topVpnReserve(tx, grantId);
   return { revived: true, configsRestored: restored.count };
 }
