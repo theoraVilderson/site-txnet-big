@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import type { GrantActionResult, GrantRow, ResellerUserGrantsApi } from "@/lib/billing-api";
-import { catalogAdminApi } from "@/lib/catalog-api";
+import { usePanelSession } from "../../../../../_context/PanelSessionContext";
 import { DatePicker } from "../../../../../_components/kit/DatePicker";
 import { formatInstant } from "../../../../../_lib/datetime";
 import { formatMoney } from "../../../../../_lib/money";
@@ -21,7 +21,7 @@ import {
   type GrantAction,
   type GrantActionDraft,
 } from "../../../../_lib/grant-actions";
-import { USER_KEYS } from "../../../../_lib/users";
+import { USER_KEYS, usersCatalog, usersCatalogScope } from "../../../../_lib/users";
 import { useUserMessage } from "./useUserMessage";
 
 const button = "inline-flex items-center gap-1 rounded-xl border border-card-border bg-card-bg px-2.5 py-1.5 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:opacity-50";
@@ -259,6 +259,7 @@ export function IssueGrant({
   onIssued: () => void;
 }) {
   const { t } = useLocale();
+  const { me } = usePanelSession();
   const message = useUserMessage();
   const [open, setOpen] = useState(false);
   const [variants, setVariants] = useState<IssuableVariant[] | null>(null);
@@ -272,7 +273,7 @@ export function IssueGrant({
   const body = issueBody(variantId, requestId, reason);
 
   async function readVariants() {
-    const catalog = catalogAdminApi(tenantId);
+    const catalog = usersCatalog(usersCatalogScope(tenantId, me));
     const products = (await catalog.products()).filter((p) => p.isActive && p.archivedAt === null);
     const details = await Promise.all(products.map((p) => catalog.product(p.id)));
     return details.flatMap((p) =>

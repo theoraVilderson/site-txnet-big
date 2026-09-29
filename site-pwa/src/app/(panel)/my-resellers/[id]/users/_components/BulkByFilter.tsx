@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Square } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { resellerGrantsApi, type BulkJob, type BulkOutcomeRow, type BulkPanel } from "@/lib/billing-api";
-import { catalogAdminApi, catalogApi } from "@/lib/catalog-api";
+import { catalogApi } from "@/lib/catalog-api";
+import { usePanelSession } from "../../../../_context/PanelSessionContext";
 import { Pagination } from "../../../../_components/kit/Pagination";
 import { formatInstant } from "../../../../_lib/datetime";
 import { Alert, input, primaryButton, quietButton } from "../../../../catalog/_components/catalog-ui";
@@ -22,7 +23,7 @@ import {
   type BulkAction,
   type BulkScope,
 } from "../../../_lib/grant-bulk";
-import { USER_KEYS } from "../../../_lib/users";
+import { USER_KEYS, usersCatalog, usersCatalogScope } from "../../../_lib/users";
 import { ActionFields } from "../[userId]/_components/GrantActions";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
 
@@ -59,6 +60,7 @@ interface Product {
  */
 export function BulkByFilter({ id }: { id: string }) {
   const { t, lang } = useLocale();
+  const { me } = usePanelSession();
   const message = useUserMessage();
   const api = useMemo(() => resellerGrantsApi(id), [id]);
 
@@ -110,7 +112,7 @@ export function BulkByFilter({ id }: { id: string }) {
   useEffect(() => {
     if (kind !== "product" || products !== null) return;
     let alive = true;
-    const catalog = catalogAdminApi(id);
+    const catalog = usersCatalog(usersCatalogScope(id, me));
     Promise.all([catalog.products(), catalogApi.texts(lang).then(flattenTexts).catch(() => ({}) as Record<string, string>)])
       .then(async ([list, texts]) => {
         // Every product and plan: a service sold before one was switched off is still its.
@@ -126,7 +128,7 @@ export function BulkByFilter({ id }: { id: string }) {
     return () => {
       alive = false;
     };
-  }, [id, kind, lang, products]);
+  }, [id, me, kind, lang, products]);
 
   // The count follows the pick: what the confirm shows.
   useEffect(() => {

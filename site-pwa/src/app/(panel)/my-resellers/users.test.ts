@@ -14,6 +14,7 @@ import {
   adminActionBody,
   blockActionOf,
   userRefusalKey,
+  usersCatalogScope,
   usersQuery,
 } from "./_lib/users";
 
@@ -141,5 +142,19 @@ describe("blocking a user from the list (F-311-v4)", () => {
     expect(blockActionOf("suspended")).toBe("unblock");
     // A reseller neither deepens nor lifts the platform's ban (`user_banned`).
     expect(blockActionOf("banned")).toBeNull();
+  });
+});
+
+describe("the platform's own users (F-311-ab)", () => {
+  const me = (id: string, type: "platform_owner" | "reseller") => ({ tenant: { id, type } });
+
+  // The platform has no reseller catalog route: `/tenants/<platform>/…` is
+  // `admit`'s, which never finds it. Its products are the ambient catalog's,
+  // narrowed to `platform` — without it the platform owner gets every tenant's.
+  it("reads the catalog of the tenant the path names, the platform's through the ambient route", () => {
+    expect(usersCatalogScope("P", me("P", "platform_owner"))).toEqual({ tenantId: null, products: { tenantId: "platform" }, platform: true });
+    expect(usersCatalogScope("R", me("P", "platform_owner"))).toEqual({ tenantId: "R", products: {}, platform: false });
+    expect(usersCatalogScope("R", me("R", "reseller"))).toEqual({ tenantId: "R", products: {}, platform: false });
+    expect(usersCatalogScope("P", null)).toEqual({ tenantId: "P", products: {}, platform: false });
   });
 });

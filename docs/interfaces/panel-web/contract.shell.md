@@ -30,6 +30,9 @@ under `(panel)` renders in: `_components/PanelShell.tsx` = `PanelSidebar` +
    `tenantTypes` (F-019-d: `tenant-billing`, reseller only); `*` does not stand
    in for it, and no `me` hides it. `ownerSuffices` lets `me.tenant.isOwner` stand in for
    `requires`, never for `tenantTypes` (F-019-f: `tenant-billing`). Never a role word in a route (D-28, F-098).
+   A page inside the caller's own tenant has an `href` that is a function of
+   `me.tenant.id` (F-311-ab: `users` -> `myResellerUsersPath`), hidden while
+   that id is unknown; the route-tree test resolves it as `[id]`.
 3. **One entry is highlighted:** the longest href that is the path or a
    whole-segment prefix of it (`activeHref`). A detail page under
    `/financial/…` lights its parent without a second rule.

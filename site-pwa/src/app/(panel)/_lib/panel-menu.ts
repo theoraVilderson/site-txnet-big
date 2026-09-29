@@ -15,11 +15,12 @@ import {
   Store,
   ShoppingCart,
   TicketPercent,
+  UserCog,
   Users,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS } from "@/lib/routes";
+import { PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS, myResellerUsersPath } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { holdsEveryPermission } from "@/lib/permissions";
 
@@ -79,8 +80,10 @@ export interface PanelMenuLink extends PermissionGated {
    * `null` while the page does not exist. The entry is then hidden rather than
    * rendered as a dead link; the row that builds the page sets this to its
    * route constant, and `panel-menu.test.ts` checks the page is really there.
+   * A page inside the caller's own tenant is a function of `me.tenant.id`
+   * (F-311-ab), and is hidden while that id is unknown.
    */
-  href: string | null;
+  href: string | ((tenantId: string) => string) | null;
 }
 
 export interface PanelMenuGroup extends PermissionGated {
@@ -92,7 +95,7 @@ export interface PanelMenuGroup extends PermissionGated {
 
 export type PanelMenuEntry = PanelMenuLink | PanelMenuGroup;
 
-export type VisibleMenuLink = PanelMenuLink & { href: string };
+export type VisibleMenuLink = Omit<PanelMenuLink, "href"> & { href: string };
 export type VisibleMenuGroup = Omit<PanelMenuGroup, "children"> & {
   children: VisibleMenuLink[];
 };
@@ -174,6 +177,13 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
   // F-114-m. Every tenant has its own groups: the permission hides it, and
   // auth-service answers each tenant its own (F-114-j).
   { id: "user-groups", label: M.userGroups, icon: Users, href: PANEL_USER_GROUPS, requires: ["user_group.manage"] },
+  // F-311-ab. One users page for every tenant (D-55), opened on the tenant the
+  // session is in: platform staff reach the platform's own users (F-311-aa), a
+  // reseller's staff on its domain the reseller's. `tenant.manage` hides it;
+  // `ResellerAccess.…IncludingPlatform` is the door, and a seat it refuses reads
+  // as that page's refusal. The owner signs in to the platform (ADR-0059), so
+  // their reseller's users stay behind its console.
+  { id: "users", label: M.users, icon: UserCog, href: myResellerUsersPath, requires: ["tenant.manage"] },
   { id: "tutorials", label: M.tutorials, icon: BookOpen, href: null },
   { id: "support", label: M.support, icon: Headphones, href: null },
   { id: "settings", label: M.settings, icon: Settings, href: PANEL_SETTINGS },
@@ -206,6 +216,9 @@ export function isMenuGroup<T extends PanelMenuEntry | VisibleMenuEntry>(
  * `ownsReseller` is whether the caller holds a live reseller (`GET /purchase/mine`),
  * read only by an entry `hiddenFrom` `resellerOwner`; `null` is not yet known,
  * and hides it.
+ *
+ * `tenantId` is `me.tenant.id`, which builds an `href` that is a function of it
+ * (F-311-ab); `null` hides such an entry.
  */
 export function visibleMenu(
   entries: readonly PanelMenuEntry[],
@@ -213,6 +226,7 @@ export function visibleMenu(
   tenantType: TenantType | null = null,
   isOwner = false,
   ownsReseller: boolean | null = null,
+  tenantId: string | null = null,
 ): VisibleMenuEntry[] {
   const hidden = (e: PermissionGated) =>
     (e.hiddenFrom?.includes("tenantOwner") === true && isOwner) ||
@@ -222,17 +236,22 @@ export function visibleMenu(
     (!e.tenantTypes || (tenantType !== null && e.tenantTypes.includes(tenantType))) &&
     ((isOwner && e.ownerSuffices === true) ||
       holdsEveryPermission(held, e.requires ?? []));
-  const hasPage = (l: PanelMenuLink): l is VisibleMenuLink => l.href !== null;
+  const withPage = (l: PanelMenuLink): VisibleMenuLink | null => {
+    if (typeof l.href === "function") return tenantId === null ? null : { ...l, href: l.href(tenantId) };
+    return l.href === null ? null : { ...l, href: l.href };
+  };
   const out: VisibleMenuEntry[] = [];
   for (const entry of entries) {
     if (!permitted(entry)) continue;
     if (isMenuGroup(entry)) {
-      const children = entry.children.filter(
-        (c) => permitted(c) && hasPage(c),
-      ) as VisibleMenuLink[];
+      const children = entry.children
+        .filter(permitted)
+        .map(withPage)
+        .filter((c): c is VisibleMenuLink => c !== null);
       if (children.length > 0) out.push({ ...entry, children });
-    } else if (hasPage(entry)) {
-      out.push(entry);
+    } else {
+      const link = withPage(entry);
+      if (link) out.push(link);
     }
   }
   return out;

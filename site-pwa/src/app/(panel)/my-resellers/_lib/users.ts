@@ -1,6 +1,7 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { ResellerUser } from "@/lib/auth-api";
 import type { AdminConfigAction, AdminConfigActionBody, ConfigActionRefusal } from "@/lib/billing-api";
+import { catalogAdminApi } from "@/lib/catalog-api";
 import { REFUSAL_KEYS } from "../../services/_lib/service-configs";
 
 /** The screens' strings as generated constants (C-06). */
@@ -92,3 +93,25 @@ export const ADMIN_REFUSAL_KEYS: Record<ConfigActionRefusal, string> = {
   same_panel: K.actions.refusal.same_panel,
   panel_not_found: K.actions.refusal.panel_not_found,
 };
+
+/**
+ * Which catalog the users pages read products from (F-311-ab). The path names
+ * a tenant; when it is the platform's own — the caller's, signed in to the
+ * platform (F-311-aa) — there is no `/tenants/<platform>/…` catalog route
+ * (`admit` never finds it), so the ambient one is asked, narrowed to
+ * `platform`, which is otherwise every tenant's for the platform owner.
+ * `platform` also drops the console link: the platform has none.
+ */
+export function usersCatalogScope(
+  id: string,
+  me: { tenant: { id: string; type: "platform_owner" | "reseller" } } | null,
+): { tenantId: string | null; products: { tenantId?: "platform" }; platform: boolean } {
+  const platform = me?.tenant.type === "platform_owner" && me.tenant.id === id;
+  return platform ? { tenantId: null, products: { tenantId: "platform" }, platform } : { tenantId: id, products: {}, platform };
+}
+
+/** The two catalog reads the users pages make, over `usersCatalogScope`. */
+export function usersCatalog(scope: ReturnType<typeof usersCatalogScope>) {
+  const api = catalogAdminApi(scope.tenantId);
+  return { products: () => api.products(scope.products), product: (productId: string) => api.product(productId) };
+}

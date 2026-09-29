@@ -4,13 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Ban, RefreshCw, Search, Undo2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { authApi, resellerUsersApi, type ResellerUser } from "@/lib/auth-api";
 import { myResellerConsolePath, myResellerUserPath } from "@/lib/routes";
 import { Pagination } from "../../../../_components/kit/Pagination";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { formatInstant } from "../../../../_lib/datetime";
 import { Alert, input, primaryButton, quietButton } from "../../../../catalog/_components/catalog-ui";
-import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, blockActionOf, usersQuery } from "../../../_lib/users";
+import { usePanelSession } from "../../../../_context/PanelSessionContext";
+import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, blockActionOf, usersCatalogScope, usersQuery } from "../../../_lib/users";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
 import { BulkByFilter } from "./BulkByFilter";
 import { FindByLink } from "./FindByLink";
@@ -45,6 +47,9 @@ const STATUS_TONE: Record<ResellerUser["status"], string> = {
  */
 export function ResellerUsersView({ id }: { id: string }) {
   const { t, lang } = useLocale();
+  // The platform's own users (F-311-ab) have no console to go back to.
+  const { me } = usePanelSession();
+  const platform = usersCatalogScope(id, me).platform;
   const message = useUserMessage();
 
   const [typed, setTyped] = useState("");
@@ -125,12 +130,16 @@ export function ResellerUsersView({ id }: { id: string }) {
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
       <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <Link href={myResellerConsolePath(id)} className={`${quietButton} mb-2 -ms-2`}>
-            <ArrowRight size={12} className="ltr:rotate-180" aria-hidden />
-            {t("common", K.backToConsole)}
-          </Link>
+          {!platform && (
+            <Link href={myResellerConsolePath(id)} className={`${quietButton} mb-2 -ms-2`}>
+              <ArrowRight size={12} className="ltr:rotate-180" aria-hidden />
+              {t("common", K.backToConsole)}
+            </Link>
+          )}
           <h1 className="text-2xl font-bold text-text-primary md:text-3xl">
-            {slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}
+            {platform
+              ? t("common", FrontendI18nKeys.common.shell.menu.users)
+              : slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}
           </h1>
           <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
         </div>

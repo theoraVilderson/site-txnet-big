@@ -26,7 +26,8 @@
       "resellers": "Resellers",
       "buyReseller": "Become a reseller",
       "systems": "Systems",
-      "userGroups": "User groups"
+      "userGroups": "User groups",
+      "users": "Users"
     },
     "paymentCredited": {
       "title": "Payment confirmed",

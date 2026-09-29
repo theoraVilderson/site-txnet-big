@@ -11,7 +11,10 @@ updated: 2026-09-28
 A topic file of [contract.md](contract.md) (§10), and a screen pair of the
 reseller workspace described in [contract.resellers.md](contract.resellers.md)
 "A reseller's workspace" (ADR-0064 (4)) — its rules 18 and 25 hold here too.
-Reached from the console's "More settings" (`OnboardingConsoleView`).
+Reached from the console's "More settings" (`OnboardingConsoleView`), and
+from the sidebar's **Users** entry on the tenant the session is in (F-311-ab,
+[contract.shell.md](contract.shell.md) rule 2): the platform's own users for
+platform staff (F-311-aa, D-55), the reseller's for its staff on its domain.
 
 | page | route | files |
 |---|---|---|
@@ -53,6 +56,7 @@ over its "by a pasted line" (F-311-t) and [contract.reseller-grants-bulk.md](../
 | 20 | **A Grant's history on its sheet** (`GrantHistory`): read when opened and after an act, newest first, 20 a page — the act (`historyActionKey`, a later one a plain label), whether on a config, when, a short actor id, the reason. No IP | billing answers none (audit `contract.md`); the spec holds the labels to `grant-audit.ts`'s two unions |
 | 21 | **Bulk by a filter, as a job** (F-311-x1, `BulkByFilter` on the users page): the same acts and fields as rule 19, over every active service, a panel (billing's `bulk-jobs/panels`, read when picked, retired ones marked), or a product / one of its plans (`catalogAdminApi(id)`, switched-off ones included). `filterOf` sends the statuses the act reaches — `suspended` for unfreeze, `active` otherwise. The form shows billing's **count for this pick and this form** (re-counted per opened form), and the start is off while it is 0 or over 100 000; `bulkJobBody` is the bulk body with `filter` for `grantIds`, one `requestId` per form | the selection is frozen at the confirm, so the number shown is the number acted on; a double click answers the same job (F-311-u2) |
 | 22 | **The jobs, newest first, 10 a page**: act, filter, status, a progress bar over the frozen `total` (`jobPercent`), ok / refused / failed; read again every `JOB_POLL_MS` (10s) **only while one on the page runs** — the reads share one 300/900s bucket. A running job's **stop** is confirmed (what was done stands); **show refused** reads `outcomes?problems=true`, 20 a page, each with its sentence (`bulkRefusalKey`) and a short id, and says so once billing purged them. A job route's refusal is its sentence (`JOB_REFUSAL_KEYS`, held to the controller's `STATUS`) | an outage job of 8 000 services must be watchable and stoppable without costing the page its other reads |
+| 23 | **The platform's own tenant** (F-311-ab, `usersCatalogScope`: the path's id is `me.tenant.id` and the session is `platform_owner`): products for issue and bulk come from the ambient catalog narrowed to `tenantId=platform`, not `/tenants/:id/…`; no "back to console"; the title is the menu's "Users". Every other call is unchanged — auth and billing admit the platform there themselves (`…IncludingPlatform`) | `admit` never finds the platform (`reseller_not_found`), the ambient list is every tenant's for the platform owner, and the platform has no console |
 
 **Not covered:** re-dating to a picked day (billing takes `endsAt`; the sheet
 sends ±days), the panels a speed cap's refusal names (not flat, so not in

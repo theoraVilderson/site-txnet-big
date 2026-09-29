@@ -94,9 +94,10 @@ export function PanelSidebar() {
   const isOwner = me?.tenant.isOwner ?? false;
   const resellers = useOwnedResellers();
   const ownsReseller = useHoldsLiveReseller(me ? tenantType === "platform_owner" && !isOwner : null);
+  const tenantId = me?.tenant.id ?? null;
   const menu = useMemo(
-    () => visibleMenu(PANEL_MENU, held ?? [], tenantType, isOwner, ownsReseller),
-    [held, tenantType, isOwner, ownsReseller],
+    () => visibleMenu(PANEL_MENU, held ?? [], tenantType, isOwner, ownsReseller, tenantId),
+    [held, tenantType, isOwner, ownsReseller, tenantId],
   );
   const active = activeHref(menuHrefs(menu), pathname);
 

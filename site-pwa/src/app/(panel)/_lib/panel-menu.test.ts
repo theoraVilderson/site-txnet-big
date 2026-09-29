@@ -42,9 +42,12 @@ const HOLDS_EVERYTHING = ["settlement.manage", "worker.manage"];
 
 describe("PANEL_MENU", () => {
   it("links only to pages that exist under the (panel) route group", () => {
-    const hrefs = visibleMenu(PANEL_MENU, HOLDS_EVERYTHING).flatMap((entry) =>
+    // A tenant's own page is built from `me.tenant.id`; the route tree names it `[id]`.
+    const hrefs = visibleMenu(PANEL_MENU, [...HOLDS_EVERYTHING, "tenant.manage"], null, false, null, "TENANT").flatMap((entry) =>
       "children" in entry ? entry.children.map((c) => c.href) : [entry.href],
-    );
+    ).map((href) => href.replace("/TENANT", "/[id]"));
+
+    expect(hrefs).toContain("/my-resellers/[id]/users");
 
     expect(hrefs.length).toBeGreaterThan(0);
     for (const href of hrefs) {
@@ -232,6 +235,33 @@ describe("visibleMenu, for the tenant's owner", () => {
       "children" in e ? e.children.map((c) => c.href) : [e.href],
     );
     expect(hrefs).toContain("/financial/billing");
+  });
+});
+
+describe("visibleMenu, the caller's own tenant (F-311-ab)", () => {
+  // One users page for every tenant (D-55): platform staff open the platform's
+  // own users, a reseller's staff their reseller's — both are the tenant the
+  // session is in, so the href is built from `me.tenant.id`, never guessed.
+  const users = (type: "reseller" | "platform_owner", held: string[], tenantId: string | null = "T1") =>
+    visibleMenu(PANEL_MENU, held, type, false, null, tenantId).flatMap((e) =>
+      "children" in e ? e.children.map((c) => c.href) : [e.href],
+    ).filter((h) => h.endsWith("/users"));
+
+  it("links platform staff to the platform's own users, and a reseller's staff to the reseller's", () => {
+    expect(users("platform_owner", ["tenant.manage"])).toEqual(["/my-resellers/T1/users"]);
+    expect(users("platform_owner", ["*"])).toEqual(["/my-resellers/T1/users"]);
+    expect(users("reseller", ["tenant.manage"], "R 1")).toEqual(["/my-resellers/R%201/users"]);
+  });
+
+  it("is hidden from a caller without the permission, and while the tenant id is unknown", () => {
+    expect(users("platform_owner", [])).toEqual([]);
+    expect(users("reseller", ["user_group.manage"])).toEqual([]);
+    expect(users("platform_owner", ["*"], null)).toEqual([]);
+  });
+
+  it("lights up on one user's page under it", () => {
+    const hrefs = users("platform_owner", ["*"]);
+    expect(activeHref(["/", ...hrefs], "/my-resellers/T1/users/u-9")).toBe("/my-resellers/T1/users");
   });
 });
 
