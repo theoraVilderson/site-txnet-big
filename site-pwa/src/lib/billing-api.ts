@@ -758,6 +758,17 @@ export function resellerUserGrantsApi(tenantId: string, userId: string): Reselle
  */
 export const resellerGrantsPath = (tenantId: string) => `/tenants/${encodeURIComponent(tenantId)}/grants`;
 
+/** The users-admin door's catalog (F-311-ab1): what an admin issues and a bulk filter picks by product. */
+export const resellerUsersCatalogPath = (tenantId: string) => `/tenants/${encodeURIComponent(tenantId)}/users-catalog`;
+
+/** One product as that route answers it: no price, `tenantId` decided by billing. */
+export type UsersCatalogProduct = {
+  id: string;
+  nameKey: string;
+  isActive: boolean;
+  variants: { id: string; sku: string; nameKey: string | null; isActive: boolean }[];
+};
+
 /** A found service: the owner's row with the user it belongs to. */
 export type ResellerGrantRow = GrantRow & { userId: string };
 
@@ -773,6 +784,11 @@ export function resellerGrantsApi(tenantId: string) {
     /** One act on 1..50 Grants (F-311-u); a repeated `requestId` answers the first call (F-311-u1). */
     bulk: (body: Record<string, unknown>) =>
       call<{ action: string; results: BulkOutcomeRow[] }>(`${at}/bulk`, { method: "POST", body: JSON.stringify(body) }),
+    /**
+     * The tenant's own products and plans, switched-off ones included (F-311-ab1):
+     * the users-admin door's, so no `catalog.manage` — the platform's too (D-57).
+     */
+    usersCatalog: async () => (await call<{ products: UsersCatalogProduct[] }>(resellerUsersCatalogPath(tenantId), { method: "GET" })).products,
     /** The panels holding the reseller's services, the retired included (F-311-x1): a filter's picker. */
     bulkPanels: async () => (await call<{ panels: BulkPanel[] }>(`${at}/bulk-jobs/panels`, { method: "GET" })).panels,
     /** How many Grants a filter matches now (F-311-u2): what the confirm shows. */

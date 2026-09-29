@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { myResellerUserPath, myResellerUsersPath } from "@/lib/routes";
 import { resellerUserBlockPath, resellerUsersApiPath } from "@/lib/auth-api";
-import { resellerUserGrantsPath } from "@/lib/billing-api";
+import { resellerUserGrantsPath, resellerUsersCatalogPath } from "@/lib/billing-api";
 import {
   ADMIN_ACTIONS,
   ADMIN_REFUSAL_KEYS,
@@ -14,7 +14,8 @@ import {
   adminActionBody,
   blockActionOf,
   userRefusalKey,
-  usersCatalogScope,
+  isPlatformTenant,
+  issuableProducts,
   usersQuery,
 } from "./_lib/users";
 
@@ -145,16 +146,28 @@ describe("blocking a user from the list (F-311-v4)", () => {
   });
 });
 
-describe("the platform's own users (F-311-ab)", () => {
+describe("the platform's own users and the catalog the forms name (F-311-ab, -ab2)", () => {
   const me = (id: string, type: "platform_owner" | "reseller") => ({ tenant: { id, type } });
 
-  // The platform has no reseller catalog route: `/tenants/<platform>/…` is
-  // `admit`'s, which never finds it. Its products are the ambient catalog's,
-  // narrowed to `platform` — without it the platform owner gets every tenant's.
-  it("reads the catalog of the tenant the path names, the platform's through the ambient route", () => {
-    expect(usersCatalogScope("P", me("P", "platform_owner"))).toEqual({ tenantId: null, products: { tenantId: "platform" }, platform: true });
-    expect(usersCatalogScope("R", me("P", "platform_owner"))).toEqual({ tenantId: "R", products: {}, platform: false });
-    expect(usersCatalogScope("R", me("R", "reseller"))).toEqual({ tenantId: "R", products: {}, platform: false });
-    expect(usersCatalogScope("P", null)).toEqual({ tenantId: "P", products: {}, platform: false });
+  it("knows the path's tenant is the platform's only when it is the session's platform tenant", () => {
+    expect(isPlatformTenant("P", me("P", "platform_owner"))).toBe(true);
+    expect(isPlatformTenant("R", me("P", "platform_owner"))).toBe(false);
+    expect(isPlatformTenant("R", me("R", "reseller"))).toBe(false);
+    expect(isPlatformTenant("P", null)).toBe(false);
+  });
+
+  // D-57: the users-admin door's list, not the catalog admin routes — a support
+  // admin without `catalog.manage` still issues. One route for every tenant.
+  it("reads the catalog through the users-admin door, for the platform too", () => {
+    expect(resellerUsersCatalogPath("a b")).toBe("/tenants/a%20b/users-catalog");
+  });
+
+  it("issues only an active plan of an active product; the filter keeps the switched-off", () => {
+    const products = [
+      { id: "p1", nameKey: "n1", isActive: true, variants: [{ id: "v1", sku: "A", nameKey: null, isActive: true }, { id: "v2", sku: "B", nameKey: null, isActive: false }] },
+      { id: "p2", nameKey: "n2", isActive: false, variants: [{ id: "v3", sku: "C", nameKey: null, isActive: true }] },
+      { id: "p3", nameKey: "n3", isActive: true, variants: [{ id: "v4", sku: "D", nameKey: null, isActive: false }] },
+    ];
+    expect(issuableProducts(products)).toEqual([{ ...products[0], variants: [products[0].variants[0]] }]);
   });
 });

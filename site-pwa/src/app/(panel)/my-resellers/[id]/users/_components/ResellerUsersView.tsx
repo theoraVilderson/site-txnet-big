@@ -12,7 +12,7 @@ import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { formatInstant } from "../../../../_lib/datetime";
 import { Alert, input, primaryButton, quietButton } from "../../../../catalog/_components/catalog-ui";
 import { usePanelSession } from "../../../../_context/PanelSessionContext";
-import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, blockActionOf, usersCatalogScope, usersQuery } from "../../../_lib/users";
+import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, blockActionOf, isPlatformTenant, usersQuery } from "../../../_lib/users";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
 import { BulkByFilter } from "./BulkByFilter";
 import { FindByLink } from "./FindByLink";
@@ -49,7 +49,7 @@ export function ResellerUsersView({ id }: { id: string }) {
   const { t, lang } = useLocale();
   // The platform's own users (F-311-ab) have no console to go back to.
   const { me } = usePanelSession();
-  const platform = usersCatalogScope(id, me).platform;
+  const platform = isPlatformTenant(id, me);
   const message = useUserMessage();
 
   const [typed, setTyped] = useState("");

@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import type { GrantActionResult, GrantRow, ResellerUserGrantsApi } from "@/lib/billing-api";
-import { usePanelSession } from "../../../../../_context/PanelSessionContext";
+import { resellerGrantsApi, type GrantActionResult, type GrantRow, type ResellerUserGrantsApi } from "@/lib/billing-api";
 import { DatePicker } from "../../../../../_components/kit/DatePicker";
 import { formatInstant } from "../../../../../_lib/datetime";
 import { formatMoney } from "../../../../../_lib/money";
@@ -21,7 +20,7 @@ import {
   type GrantAction,
   type GrantActionDraft,
 } from "../../../../_lib/grant-actions";
-import { USER_KEYS, usersCatalog, usersCatalogScope } from "../../../../_lib/users";
+import { USER_KEYS, issuableProducts } from "../../../../_lib/users";
 import { useUserMessage } from "./useUserMessage";
 
 const button = "inline-flex items-center gap-1 rounded-xl border border-card-border bg-card-bg px-2.5 py-1.5 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:opacity-50";
@@ -259,7 +258,6 @@ export function IssueGrant({
   onIssued: () => void;
 }) {
   const { t } = useLocale();
-  const { me } = usePanelSession();
   const message = useUserMessage();
   const [open, setOpen] = useState(false);
   const [variants, setVariants] = useState<IssuableVariant[] | null>(null);
@@ -273,16 +271,13 @@ export function IssueGrant({
   const body = issueBody(variantId, requestId, reason);
 
   async function readVariants() {
-    const catalog = usersCatalog(usersCatalogScope(tenantId, me));
-    const products = (await catalog.products()).filter((p) => p.isActive && p.archivedAt === null);
-    const details = await Promise.all(products.map((p) => catalog.product(p.id)));
-    return details.flatMap((p) =>
-      p.variants
-        .filter((v) => v.isActive)
-        .map((v) => {
-          const name = texts[v.nameKey ?? p.nameKey] || texts[p.nameKey];
-          return { id: v.id, label: name ? `${name} · ${v.sku}` : v.sku };
-        }),
+    // The users-admin door's list (F-311-ab2, D-57): no `catalog.manage`, the platform's too.
+    const products = issuableProducts(await resellerGrantsApi(tenantId).usersCatalog());
+    return products.flatMap((p) =>
+      p.variants.map((v) => {
+        const name = texts[v.nameKey ?? p.nameKey] || texts[p.nameKey];
+        return { id: v.id, label: name ? `${name} · ${v.sku}` : v.sku };
+      }),
     );
   }
 

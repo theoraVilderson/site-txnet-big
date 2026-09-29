@@ -1,7 +1,6 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { ResellerUser } from "@/lib/auth-api";
-import type { AdminConfigAction, AdminConfigActionBody, ConfigActionRefusal } from "@/lib/billing-api";
-import { catalogAdminApi } from "@/lib/catalog-api";
+import type { AdminConfigAction, AdminConfigActionBody, ConfigActionRefusal, UsersCatalogProduct } from "@/lib/billing-api";
 import { REFUSAL_KEYS } from "../../services/_lib/service-configs";
 
 /** The screens' strings as generated constants (C-06). */
@@ -95,23 +94,25 @@ export const ADMIN_REFUSAL_KEYS: Record<ConfigActionRefusal, string> = {
 };
 
 /**
- * Which catalog the users pages read products from (F-311-ab). The path names
- * a tenant; when it is the platform's own — the caller's, signed in to the
- * platform (F-311-aa) — there is no `/tenants/<platform>/…` catalog route
- * (`admit` never finds it), so the ambient one is asked, narrowed to
- * `platform`, which is otherwise every tenant's for the platform owner.
- * `platform` also drops the console link: the platform has none.
+ * Whether the path's tenant is the platform's own (F-311-ab): the session's,
+ * signed in to the platform (F-311-aa). The platform has no console to go
+ * back to, and its page is titled as the menu entry that opened it.
  */
-export function usersCatalogScope(
+export function isPlatformTenant(
   id: string,
   me: { tenant: { id: string; type: "platform_owner" | "reseller" } } | null,
-): { tenantId: string | null; products: { tenantId?: "platform" }; platform: boolean } {
-  const platform = me?.tenant.type === "platform_owner" && me.tenant.id === id;
-  return platform ? { tenantId: null, products: { tenantId: "platform" }, platform } : { tenantId: id, products: {}, platform };
+): boolean {
+  return me?.tenant.type === "platform_owner" && me.tenant.id === id;
 }
 
-/** The two catalog reads the users pages make, over `usersCatalogScope`. */
-export function usersCatalog(scope: ReturnType<typeof usersCatalogScope>) {
-  const api = catalogAdminApi(scope.tenantId);
-  return { products: () => api.products(scope.products), product: (productId: string) => api.product(productId) };
+/**
+ * What the issue form offers (F-311-ab2): active plans of active products. The
+ * bulk filter takes the whole list — a service sold before a switch-off is
+ * still filtered by. Billing refuses what it cannot place either way.
+ */
+export function issuableProducts(products: readonly UsersCatalogProduct[]): UsersCatalogProduct[] {
+  return products
+    .filter((p) => p.isActive)
+    .map((p) => ({ ...p, variants: p.variants.filter((v) => v.isActive) }))
+    .filter((p) => p.variants.length > 0);
 }

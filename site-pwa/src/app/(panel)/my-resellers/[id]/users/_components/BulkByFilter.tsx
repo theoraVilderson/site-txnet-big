@@ -5,7 +5,6 @@ import { Loader2, Square } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { resellerGrantsApi, type BulkJob, type BulkOutcomeRow, type BulkPanel } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
-import { usePanelSession } from "../../../../_context/PanelSessionContext";
 import { Pagination } from "../../../../_components/kit/Pagination";
 import { formatInstant } from "../../../../_lib/datetime";
 import { Alert, input, primaryButton, quietButton } from "../../../../catalog/_components/catalog-ui";
@@ -23,7 +22,7 @@ import {
   type BulkAction,
   type BulkScope,
 } from "../../../_lib/grant-bulk";
-import { USER_KEYS, usersCatalog, usersCatalogScope } from "../../../_lib/users";
+import { USER_KEYS } from "../../../_lib/users";
 import { ActionFields } from "../[userId]/_components/GrantActions";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
 
@@ -60,7 +59,6 @@ interface Product {
  */
 export function BulkByFilter({ id }: { id: string }) {
   const { t, lang } = useLocale();
-  const { me } = usePanelSession();
   const message = useUserMessage();
   const api = useMemo(() => resellerGrantsApi(id), [id]);
 
@@ -112,23 +110,22 @@ export function BulkByFilter({ id }: { id: string }) {
   useEffect(() => {
     if (kind !== "product" || products !== null) return;
     let alive = true;
-    const catalog = usersCatalog(usersCatalogScope(id, me));
-    Promise.all([catalog.products(), catalogApi.texts(lang).then(flattenTexts).catch(() => ({}) as Record<string, string>)])
-      .then(async ([list, texts]) => {
+    // The users-admin door's list (F-311-ab2, D-57): no `catalog.manage`, the platform's too.
+    Promise.all([api.usersCatalog(), catalogApi.texts(lang).then(flattenTexts).catch(() => ({}) as Record<string, string>)])
+      .then(([list, texts]) =>
         // Every product and plan: a service sold before one was switched off is still its.
-        const details = await Promise.all(list.map((p) => catalog.product(p.id)));
-        return details.map((p) => ({
+        list.map((p) => ({
           id: p.id,
           label: texts[p.nameKey] || p.variants[0]?.sku || p.id.slice(0, 8),
           variants: p.variants.map((v) => ({ id: v.id, label: texts[v.nameKey ?? p.nameKey] ? `${texts[v.nameKey ?? p.nameKey]} · ${v.sku}` : v.sku })),
-        }));
-      })
+        })),
+      )
       .then((ps) => alive && setProducts(ps))
       .catch((e) => alive && setError(e));
     return () => {
       alive = false;
     };
-  }, [id, me, kind, lang, products]);
+  }, [api, kind, lang, products]);
 
   // The count follows the pick: what the confirm shows.
   useEffect(() => {
