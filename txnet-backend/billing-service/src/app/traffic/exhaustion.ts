@@ -4,7 +4,7 @@ import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import { emitCutOff } from '../entitlement/cut-off';
 import { suspendForExhaustion, suspendForPeriodEnd } from '../entitlement/suspension';
-import { withinCap } from '../usage/spending-cap';
+import { withinCap } from '../usage/cap-funding';
 import { BlockPurchaseRefused, type BlockPurchaseRejection, sizeBlock } from './block-purchase';
 import { vpnMeterOf } from './vpn-meter';
 

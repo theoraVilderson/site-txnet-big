@@ -4,7 +4,7 @@ import { METER_KEYS, METERED_RATE_UNIT_BYTES, WalletVersionConflict, runWithTena
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { withinCap } from '../usage/spending-cap';
+import { withinCap } from '../usage/cap-funding';
 import { WalletHoldService, WalletLedgerService } from '../wallet/wallet-ledger.service';
 import { postpaidVpnMeter, VpnPostpaid } from './vpn-postpaid';
 import { HAS_VPN_METER, vpnMeterOf } from './vpn-meter';

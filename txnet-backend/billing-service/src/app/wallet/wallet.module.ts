@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { LocaleModule } from '../locale/locale.module';
 import { VpnReserve, installVpnReserve } from '../traffic/vpn-reserve';
-import { SpendingCaps, installSpendingCaps } from '../usage/spending-cap';
+import { SpendingCaps, installSpendingCaps } from '../usage/cap-funding';
 import { WalletCreditService } from './wallet-credit.service';
 import { WalletHistoryController } from './wallet-history.controller';
 import { WalletHistoryService } from './wallet-history.service';

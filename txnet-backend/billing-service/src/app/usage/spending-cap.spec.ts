@@ -4,7 +4,8 @@ import { QUOTA_EXHAUSTED } from '../entitlement/suspension';
 import { BlockPurchaseRefused, BlockPurchaseService, GIB } from '../traffic/block-purchase';
 import { NO_VPN_RESERVE, VpnReserve, installVpnReserve } from '../traffic/vpn-reserve';
 import { WalletHoldService, WalletLedgerService } from '../wallet/wallet-ledger.service';
-import { NO_SPENDING_CAPS, SpendingCapRefused, SpendingCapService, SpendingCaps, installSpendingCaps, periodStart } from './spending-cap';
+import { NO_SPENDING_CAPS, SpendingCaps, installSpendingCaps, periodStart } from './cap-funding';
+import { SpendingCapRefused, SpendingCapService } from './spending-cap';
 
 /**
  * A spending cap on one product (F-118-i, ADR-0105 (9)).

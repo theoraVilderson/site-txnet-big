@@ -3,7 +3,7 @@ import { Grant, GrantStatus, Prisma, RateCardMode, VariantBillingMode, WalletRea
 import { METERED_RATE_UNIT_BYTES, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { spendOnCap, withinCap } from '../usage/spending-cap';
+import { spendOnCap, withinCap } from '../usage/cap-funding';
 import { WalletLedgerService } from '../wallet/wallet-ledger.service';
 import { vpnMeterOf } from './vpn-meter';
 import { NO_VPN_RESERVE, VpnReserve } from './vpn-reserve';

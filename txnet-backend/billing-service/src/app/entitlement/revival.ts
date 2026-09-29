@@ -2,7 +2,7 @@ import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 
 import { walletCanBuy } from '../traffic/exhaustion';
 import { HAS_VPN_METER, VPN_RATE_SELECT } from '../traffic/vpn-meter';
-import { withinCap } from '../usage/spending-cap';
+import { withinCap } from '../usage/cap-funding';
 import { reviveOnTopUp } from './purge';
 import { emitReactivated, runs } from './reactivated';
 import { QUOTA_EXHAUSTED } from './suspension';

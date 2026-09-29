@@ -8,7 +8,7 @@ import { WalletHoldService, WalletLedgerService, WalletVersionConflict } from '.
 import { PostpaidHolds, vpnConsumed, type Captured, type Ctx, type MeterRef, type ToppedUp } from './postpaid-hold';
 import { blockFor, ceilDiv, CENT, max, moveCursors, priceUnits, toAmount, UsageSettlementRefused, ZERO } from './usage-price';
 import { UsageRefundService } from './usage-refund';
-import { spendOnCap, withinCap } from './spending-cap';
+import { spendOnCap, withinCap } from './cap-funding';
 
 export { blockFor, capturable, UsageSettlementRefused } from './usage-price';
 export type { UsageSettlementRefusal } from './usage-price';

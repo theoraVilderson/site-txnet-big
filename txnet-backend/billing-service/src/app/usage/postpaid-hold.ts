@@ -2,7 +2,7 @@ import { GrantMeter, GrantStatus, Prisma, RateCardAfterIncluded, RateCardMode, W
 import { METER_KEYS } from '@txnet-backend/shared-core';
 
 import type { WalletHoldService } from '../wallet/wallet-ledger.service';
-import { spendOnCap, withinCap } from './spending-cap';
+import { spendOnCap, withinCap } from './cap-funding';
 import { capturable, max, min, moveCursors, toAmount, toCents, unitsCovered, UsageSettlementRefused, ZERO } from './usage-price';
 
 /**

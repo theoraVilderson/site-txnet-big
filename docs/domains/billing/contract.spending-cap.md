@@ -16,9 +16,11 @@ owner's routes below. It replaces `billing.sub_account`, a byte pocket on one
 config that nothing wrote (dropped by migration
 `20260929000700_a_spending_cap_bounds_one_product`).
 
-Code: `billing-service/src/app/usage/spending-cap.ts` (`SpendingCaps`,
-`withinCap`, `spendOnCap`, `SpendingCapService`), `spending-cap.controller.ts`,
-`spending-cap.schema.ts`. Proof: `usage/spending-cap.spec.ts`.
+Code: `billing-service/src/app/usage/cap-funding.ts` (the engine: `SpendingCaps`,
+`withinCap`, `spendOnCap` — it imports nothing of this service, so the money
+paths that call it and the routes that revive Grants form no cycle;
+`traffic/reserve-load-order.spec.ts`), `spending-cap.ts` (`SpendingCapService`),
+`spending-cap.controller.ts`, `spending-cap.schema.ts`. Proof: `usage/spending-cap.spec.ts`.
 
 ## The owner's routes
 
