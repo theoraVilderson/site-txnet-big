@@ -8,7 +8,8 @@ import { BackendI18nKeys } from './keys.backend.generated';
  *
  * CI already fails when this file is stale (`make i18n-keys && git diff
  * --exit-code`). This spec covers what that check cannot: that the generated
- * object actually *is* `locales/backend` — every key present, nothing invented,
+ * object actually *is* `locales/backend` plus `locales/shareds` — every key
+ * present, nothing invented,
  * every leaf equal to its own path — so a hand edit to the "do not edit" file
  * that happens to be regenerated consistently is still caught.
  *
@@ -18,6 +19,8 @@ import { BackendI18nKeys } from './keys.backend.generated';
 
 const LOCALES = join(__dirname, '../../../../../locales');
 const REFERENCE = join(LOCALES, 'backend', 'langs', 'fa');
+// Namespaces every scope gets (the generator's `readLangDir(shareds)`); a scope's own file of the same name wins.
+const SHARED = join(LOCALES, 'shareds', 'fa');
 
 type Tree = { [k: string]: Tree | string };
 
@@ -39,10 +42,13 @@ function leaves(tree: Tree, out: Array<[path: string, value: string]>, prefix = 
   }
 }
 
-const namespaces = readdirSync(REFERENCE)
-  .filter((f) => f.endsWith('.json') && f !== 'metadata.json')
-  .map((f) => f.slice(0, -'.json'.length))
-  .sort();
+const jsonIn = (dir: string) =>
+  readdirSync(dir)
+    .filter((f) => f.endsWith('.json') && f !== 'metadata.json')
+    .map((f) => f.slice(0, -'.json'.length));
+const own = new Set(jsonIn(REFERENCE));
+const namespaces = [...new Set([...jsonIn(SHARED), ...own])].sort();
+const fileOf = (ns: string) => join(own.has(ns) ? REFERENCE : SHARED, `${ns}.json`);
 
 describe('BackendI18nKeys', () => {
   it('has exactly the namespaces locales/backend has', () => {
@@ -51,7 +57,7 @@ describe('BackendI18nKeys', () => {
 
   it.each(namespaces)('holds every key of %s, and nothing else', (ns) => {
     const onDisk = new Set<string>();
-    flatten('', JSON.parse(readFileSync(join(REFERENCE, `${ns}.json`), 'utf8')), onDisk);
+    flatten('', JSON.parse(readFileSync(fileOf(ns), 'utf8')), onDisk);
 
     const generated: Array<[string, string]> = [];
     leaves((BackendI18nKeys as unknown as Record<string, Tree>)[ns], generated);
