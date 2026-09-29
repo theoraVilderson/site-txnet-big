@@ -62,8 +62,11 @@ async function insertGrant(
   `);
 }
 
+/** A suspension carries its purge clock, as every writer sets it (`grant_suspended_has_a_clock`, F-027-f). */
 const setStatus = (id: string, status: string) =>
-  cross.$executeRawUnsafe(`UPDATE entitlement."grant" SET status = '${status}' WHERE id = '${id}'`);
+  cross.$executeRawUnsafe(
+    `UPDATE entitlement."grant" SET status = '${status}', "suspendedAt" = ${status === 'suspended' ? 'now()' : 'NULL'} WHERE id = '${id}'`,
+  );
 
 beforeAll(async () => {
   pg = await startPostgresFixture();
