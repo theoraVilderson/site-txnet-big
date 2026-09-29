@@ -15,7 +15,7 @@ import {
 import { isSellableBySku, vpnTrafficRateAt, type OfferFacts, type RateCardRow } from '../catalog/catalog-reads';
 import { trafficQuotaOf } from '../catalog/traffic-quota';
 import { PrismaService } from '../prisma/prisma.service';
-import { grantMetersFromVariant } from './grant-meter';
+import { grantMetersFromVariant, lockWholesale } from './grant-meter';
 import { GrantTokenSeal, NO_TOKEN_SEAL, type SealedToken } from './grant-token-seal';
 import { ADMIN_FROZEN } from './suspension';
 import { unusedClockOf } from './unused-clock';
@@ -56,6 +56,8 @@ export type EntitlementRejection =
   | 'metered_rate_not_positive'
   /** A rate card in effect on a meter nothing serves yet (F-118-e, ADR-0105 decision 7): its use could not be refused, so it is not sold. */
   | 'meter_not_served'
+  /** A reseller's package prices none of the Grant's platform meters (F-118-n2, ADR-0105 decision 10): the platform could not bill its usage, so it is not sold. */
+  | 'wholesale_rate_missing'
   /** Renewal (F-027-dg): only an `active` Grant, or one `suspended`, is renewed in place. */
   | 'grant_not_renewable'
   /** Renewal: bytes on a metered Grant (its blocks buy them) or an unlimited one. */
@@ -506,8 +508,11 @@ export class GrantService {
       throw new EntitlementRefused('metered_rate_not_positive', input.variantId);
     }
     // Each card in effect is locked beside the quotas (F-118-e, ADR-0105 decision 4).
-    const { meters, unserved } = grantMetersFromVariant(variant, startsAt, currencyCode);
+    const { meters: retail, unserved } = grantMetersFromVariant(variant, startsAt, currencyCode);
     if (unserved) throw new EntitlementRefused('meter_not_served', `${input.variantId} ${unserved}`);
+    // A reseller's meter also locks what the platform charges it (F-118-n2).
+    const { meters, missing } = await lockWholesale(tx, tenant.id, retail, startsAt);
+    if (missing) throw new EntitlementRefused('wholesale_rate_missing', `${input.variantId} ${missing}`);
     // Born `active`, it is activated at its start (F-601-c); a purchase waits for `markDelivered`.
     const activatedAt = shape.status === GrantStatus.active ? startsAt : null;
     try {

@@ -357,6 +357,18 @@ model GrantMeter {
   consumed         BigInt                @default(0)
   billed           BigInt                @default(0)
   funded           BigInt                @default(0)
+  /// The wholesale leg (F-118-n2, ADR-0105 decision 10): on a reseller's
+  /// Grant, who pays the platform and the package rate in force at the sale
+  /// (`tenant_package_meter_rate`, recorded not keyed), in the platform's
+  /// currency. All five set or none (`grant_meter_wholesale_whole`); locked
+  /// like the retail terms. The platform's own Grants carry none.
+  wholesalePayerTenantId String?         @db.Uuid
+  wholesaleRateId        String?         @db.Uuid
+  wholesaleUnitSize      BigInt?
+  wholesaleUnitPrice     Decimal?        @db.Decimal(18, 8)
+  wholesaleCurrencyCode  String?
+  /// The wholesale rating cursor over the same `consumed`, in the meter's unit.
+  wholesaleBilled        BigInt          @default(0)
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @default(now()) @updatedAt
 

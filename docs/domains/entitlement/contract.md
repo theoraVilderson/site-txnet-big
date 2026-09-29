@@ -154,6 +154,7 @@ value (`rate_card_metered_price_positive`). A prepaid Grant gets no
 `grant_meter` row per card in effect (terms, `rateCardId`, counters at 0). A metered VPN
 Grant's `vpn.traffic` row is its rate and money cursor (F-118-l, billing `contract.traffic-block.md`); a package plan has none (decision 0); a card on a
 meter nothing serves yet refuses the sale (`meter_not_served`, decision 7). `usage_event` advances `consumed` (billing `contract.metering.md`, F-118-f).
+**A reseller's meter also locks its wholesale leg (F-118-n2, decision 10)** — `lockWholesale`: the payer (the Grant's tenant) and its package's `tenant_package_meter_rate` in force at `startsAt` (tenant `contract.admin.md`), in the platform's currency, `wholesaleBilled` at 0 — for **every** meter a reseller sells, whatever its panel group holds (user, 2026-09-29: members change after the sale; whether a unit is charged is its panel's owner's question, F-118-n3). A meter the package does not price, or no package, refuses the sale (`wholesale_rate_missing`, 409 on the admin route). The platform's own sales and package plans read no package.
 
 **Delivery of a paid Grant (F-111-d, spec §5.8 step 3)** —
 `entitlement/delivery.ts`, proved by `delivery.spec.ts` and, against Postgres,
@@ -215,7 +216,7 @@ Through the outbox (ADR-0021); the first two also live on the buyer's `user:` ch
 |---|---|---|
 | catalog | a variant's quotas, `durationDays`, `billingMode`, its product's feature keys, and — when metered — its `vpn.traffic` rate card in effect at the sale (F-027-p, F-118-d) | cannot issue |
 | identity | the user a Grant is issued to | cannot issue |
-| tenant | the ambient tenant (ADR-0024) | refuses |
+| tenant | the ambient tenant (ADR-0024); for a reseller's meter, its package's wholesale rate in force (F-118-n2) | refuses; `wholesale_rate_missing` |
 
 ## Consumers
 
@@ -235,7 +236,7 @@ Through the outbox (ADR-0021); the first two also live on the buyer's `user:` ch
 | `/sub` finds a Grant by the token's SHA-256 (lowercase hex, unique). The token is also kept sealed in `subscriptionTokenSealed`: AES-256-GCM under an HKDF key derived from the vault KEK, `{kekId, iv, authTag, ciphertext}`. Only `subscriptionTokenFor` opens it, for the Grant's own user (`grant_token_hash_shape`, `grant_token_sealed_shape`) | CHECK + unique index; D-43, ADR-0085 (reverses the hash-only call of 2026-09-14) |
 | One cause issues one Grant: `(source, sourceReferenceId)` unique when set | partial unique index |
 | A quota adjustment is never changed or deleted; `delta ≠ 0`; a rollover cap is 1..100 % (`quota_adjustment_is_history`) | trigger + CHECKs |
-| A Grant's meter is its tenant's, one per meter; terms never change and it is never deleted, counters never below 0 (`grant_meter_terms_are_locked`, `grant_meter_counters_not_negative`) | trigger + unique + CHECK (F-118-e) |
+| A Grant's meter is its tenant's, one per meter; terms never change and it is never deleted, counters never below 0 (`grant_meter_terms_are_locked`, `grant_meter_counters_not_negative`); its wholesale leg all set or none, locked the same way (`grant_meter_wholesale_whole`, F-118-n2) | trigger + unique + CHECK (F-118-e) |
 | `endsAt = null` is permanent; when set it is after `startsAt`. Quota sits on the Grant, never on a config (§4.6) | CHECK; schema |
 
 ## Deprecations

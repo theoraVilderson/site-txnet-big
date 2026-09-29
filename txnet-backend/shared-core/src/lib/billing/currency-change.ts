@@ -78,6 +78,8 @@ export type CurrencyChangeSummary = {
   packages: number;
   /** The platform's wholesale rates in force (F-118-n1), written again in the new money. */
   packageRates: number;
+  /** Open reseller Grants' wholesale legs (F-118-n2), converted with the platform's money. */
+  wholesaleMeters: number;
   usageMeters: number;
 };
 
@@ -165,6 +167,7 @@ export async function convertOperatingCurrency(
     billingWallets: c.platform ? await convertBillingWallets(c) : 0,
     packages: c.platform ? await convertPackages(c) : 0,
     packageRates: c.platform ? await repricePackageRates(c) : 0,
+    wholesaleMeters: c.platform ? await convertWholesaleMeters(c) : 0,
     usageMeters: c.platform ? await convertUsageMeters(c) : 0,
   };
 
@@ -462,6 +465,21 @@ const repricePackageRates = (c: Conversion) => c.tx.$executeRaw`
            SELECT max(q."effectiveFrom") FROM tenant.tenant_package_meter_rate q
             WHERE q."packageId" = p."packageId" AND q."meterKey" = p."meterKey" AND q."currencyCode" = ${c.from}
               AND q."isActive" AND q."effectiveFrom" <= now()))`;
+
+/**
+ * A reseller's open Grant keeps its locked wholesale rate (F-118-n2), and it is
+ * paid from the reseller's billing wallet, which converts with the platform:
+ * the same price in the new money, the one change `grant_meter_terms_are_locked`
+ * allows the wholesale leg. Every tenant's rows — this is the platform's change.
+ */
+const convertWholesaleMeters = (c: Conversion) => c.tx.$executeRaw`
+  UPDATE entitlement.grant_meter m
+     SET "wholesaleUnitPrice" = greatest(round(m."wholesaleUnitPrice" * ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int),
+                                         power(10::numeric, -${RATE_COLUMN_SCALE}::int)),
+         "wholesaleCurrencyCode" = ${c.to}, "updatedAt" = now()
+    FROM entitlement."grant" g
+   WHERE g.id = m."grantId" AND m."wholesaleCurrencyCode" = ${c.from}
+     AND g.status IN ('pending', 'active', 'suspended', 'exhausted')`;
 
 const convertUsageMeters = (c: Conversion) => c.tx.$executeRaw`
   UPDATE tenant.tenant_usage_meter

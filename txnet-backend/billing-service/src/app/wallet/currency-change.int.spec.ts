@@ -173,9 +173,11 @@ async function seed() {
 
   await sql(`INSERT INTO entitlement."grant" (id, "tenantId", "userId", "variantId", source, status, "startsAt", "billingMode", "subscriptionTokenHash")
     VALUES ('${GRANT}', '${TENANT}', '${RICH}', '${VARIANT}', 'purchase', 'active', now(), 'metered', repeat('a', 64))`);
-  // Its rate is its vpn.traffic meter (F-118-l).
-  await sql(`INSERT INTO entitlement.grant_meter (id, "tenantId", "grantId", "meterKey", "unitSize", "unitPrice", "currencyCode", mode, "includedQuantity", "afterIncluded")
-    VALUES (gen_random_uuid(), '${TENANT}', '${GRANT}', 'vpn.traffic', 1073741824, 0.50000000, 'USD', 'prepaid', 0, 'metered')`);
+  // Its rate is its vpn.traffic meter (F-118-l), with the wholesale leg its package locked, in the platform's money (F-118-n2).
+  await sql(`INSERT INTO entitlement.grant_meter (id, "tenantId", "grantId", "meterKey", "unitSize", "unitPrice", "currencyCode", mode, "includedQuantity", "afterIncluded",
+                                                  "wholesalePayerTenantId", "wholesaleRateId", "wholesaleUnitSize", "wholesaleUnitPrice", "wholesaleCurrencyCode")
+    VALUES (gen_random_uuid(), '${TENANT}', '${GRANT}', 'vpn.traffic', 1073741824, 0.50000000, 'USD', 'prepaid', 0, 'metered',
+            '${TENANT}', gen_random_uuid(), 1073741824, 0.15000000, 'USD')`);
 
   // The platform: a price of its own, a package, and the reseller's billing wallet.
   await sql(`INSERT INTO catalog.product (id, "tenantId", key, "nameKey", "fulfilmentKind") VALUES ('${PLATFORM_PRODUCT}', NULL, 'vpn_p', 'k', 'network_access')`);
@@ -255,6 +257,13 @@ describe('a reseller changes its operating currency USD -> EUR', () => {
     expect(await one(`SELECT "unitPrice"::text AS r, "currencyCode" AS c FROM entitlement.grant_meter WHERE "grantId" = '${GRANT}'`)).toEqual({ r: '0.46000000', c: 'EUR' });
   });
 
+  it('leaves a sold meter\'s wholesale leg in the platform\'s money: the reseller\'s change is not the platform\'s (F-118-n2)', async () => {
+    expect(await one(`SELECT "wholesaleUnitPrice"::text AS r, "wholesaleCurrencyCode" AS c FROM entitlement.grant_meter WHERE "grantId" = '${GRANT}'`)).toEqual({
+      r: '0.15000000',
+      c: 'USD',
+    });
+  });
+
   it('converts a sold meter, and never reprices one in its own currency (F-118-l)', async () => {
     await expect(sql(`UPDATE entitlement.grant_meter SET "unitPrice" = 0.10000000 WHERE "grantId" = '${GRANT}'`)).rejects.toThrow(/grant_meter_terms_are_locked/);
   });
@@ -304,6 +313,14 @@ describe('the platform changes its currency USD -> EUR', () => {
     ]);
     expect(await one(`SELECT "monthlyPrice"::text AS m, "currencyCode" AS c FROM tenant.tenant_feature_package`)).toEqual({ m: '9.20', c: 'EUR' });
     expect(await one(`SELECT amount::text AS a FROM catalog.price WHERE "variantId" = '${PLATFORM_VARIANT}' AND "currencyCode" = 'EUR'`)).toEqual({ a: '9.20' });
+  });
+
+  it('converts an open reseller Grant\'s locked wholesale rate with it, and never reprices one in its own currency (F-118-n2)', async () => {
+    expect(await one(`SELECT "wholesaleUnitPrice"::text AS r, "wholesaleCurrencyCode" AS c FROM entitlement.grant_meter WHERE "grantId" = '${GRANT}'`)).toEqual({
+      r: '0.13800000',
+      c: 'EUR',
+    });
+    await expect(sql(`UPDATE entitlement.grant_meter SET "wholesaleUnitPrice" = 0.1 WHERE "grantId" = '${GRANT}'`)).rejects.toThrow(/grant_meter_terms_are_locked/);
   });
 
   it('credits a billing top-up priced before the change at its rate', async () => {

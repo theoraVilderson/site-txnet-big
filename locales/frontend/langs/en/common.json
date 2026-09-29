@@ -3441,6 +3441,7 @@
         "variant_not_deliverable": "This product fits on no panel right now.",
         "metered_rate_missing": "This product has no usage rate set.",
         "metered_rate_not_positive": "This product's usage rate is not valid.",
+        "wholesale_rate_missing": "Your package has no usage price for this product yet; ask the platform to set one.",
         "request_reused": "This request was already sent for something else. Close the form and open it again.",
         "already_issued": "This request is already in progress. Refresh in a moment.",
         "grant_not_renewable": "This service cannot be renewed in its state; give a new service.",

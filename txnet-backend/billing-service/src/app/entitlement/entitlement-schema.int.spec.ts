@@ -231,4 +231,26 @@ describe("a Grant's meter (F-118-e, ADR-0105 decision 4)", () => {
       /grant_meter_terms_are_locked/,
     );
   });
+
+  it('holds its wholesale leg whole and locked, its price moving only with its currency (F-118-n2)', async () => {
+    const WHOLESALE = '88888888-8888-4888-8888-8888888888b4';
+    const insert = (terms: string) =>
+      cross.$executeRawUnsafe(`
+        INSERT INTO entitlement.grant_meter (id, "tenantId", "grantId", "meterKey", "unitSize", "unitPrice", "currencyCode", mode, "includedQuantity", "afterIncluded",
+                                             "wholesalePayerTenantId", "wholesaleRateId", "wholesaleUnitSize", "wholesaleUnitPrice", "wholesaleCurrencyCode")
+        VALUES ('${WHOLESALE}', '${TENANT_B}', '${GRANT_B}', 'vpn.traffic', 1073741824, 0.4, 'EUR', 'prepaid', 0, 'metered', ${terms})
+      `);
+    const update = (set: string) => cross.$executeRawUnsafe(`UPDATE entitlement.grant_meter SET ${set} WHERE id = '${WHOLESALE}'`);
+
+    await expect(insert(`'${TENANT_B}', gen_random_uuid(), 1073741824, 0.15, NULL`)).rejects.toThrow(/grant_meter_wholesale_whole/);
+    await expect(insert(`'${TENANT_B}', gen_random_uuid(), 1073741824, 0.15, 'USD'`)).resolves.toBe(1);
+
+    await expect(update(`"wholesaleBilled" = 3`)).resolves.toBe(1);
+    await expect(update(`"wholesaleUnitPrice" = 0.1`)).rejects.toThrow(/grant_meter_terms_are_locked/);
+    await expect(update(`"wholesaleRateId" = gen_random_uuid()`)).rejects.toThrow(/grant_meter_terms_are_locked/);
+    await expect(update(`"wholesaleUnitPrice" = 0.14, "wholesaleCurrencyCode" = 'EUR'`)).resolves.toBe(1);
+    await expect(
+      update(`"wholesalePayerTenantId" = NULL, "wholesaleRateId" = NULL, "wholesaleUnitSize" = NULL, "wholesaleUnitPrice" = NULL, "wholesaleCurrencyCode" = NULL, "wholesaleBilled" = 0`),
+    ).rejects.toThrow(/grant_meter_terms_are_locked/);
+  });
 });
