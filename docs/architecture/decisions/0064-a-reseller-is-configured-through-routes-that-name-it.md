@@ -9,6 +9,7 @@ updated: 2026-09-19
 - **Status:** accepted 2026-09-19 with F-066-w (user)
 - **Date:** 2026-09-19
 - **Affects units:** tenant, billing, catalog, automation, panel-web
+- **Amended by:** [ADR-0104](0104-platform-staff-see-a-resellers-people-only-with-its-consent.md) — platform staff reach a reseller's people only with its consent
 
 ## Context
 

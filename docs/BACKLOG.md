@@ -816,6 +816,14 @@ ingested rows reuse the catalog id verbatim as their row id.
 | F-116-l | Panel: the manual-rate card — the platform (`currency.pin`) pins or ends a rate on `/settings` beside the operating-currency card, a reseller in its workspace; over `GET /api/currency/pins/:code`, the unaccepted reading only as a one-click suggestion (D-53) | panel-web | done | F-0608-a F-116-j F-116-h |  | site-pwa/src/app/(panel)/_components/ManualRateCard.tsx, site-pwa/src/lib/currency-api.ts, site-pwa/src/app/(panel)/settings/page.tsx, …/ManualRateCard.test.tsx | Ingested 2026-09-28 (user): the pin routes were built with no panel surface. Done: /settings, any currency; not the workspace (pins are session-scoped). panel-web contract.currency.md 6–10 |
 | F-116-m | Toman (IRT) as a currency tied to the rial: a registry row whose rate is always IRR's ÷ 10, read through `readFxRate`, never fetched or pinned on its own (a rial pin moves it); selectable wherever a currency is | currency | done | F-116-l | — | txnet-backend/shared-core/src/lib/currency/fx-rate.ts, …/fx-rate.spec.ts, txnet-backend/prisma/domains/migrations/20260928003700_the_toman_is_tied_to_the_rial/migration.sql | Ingested 2026-09-28 (user: "toman, the rial ÷ 10"; tied, not independent) Done: IRT = IRR / 10 in readFxRate; pin IRT refused. currency contract.md reader rule 8 |
 | F-116-n | A manual rate may have no end: `hours: null` pins until ended by hand, and the panel's card defaults to it | currency | done | F-116-l | — | txnet-backend/currency-service/src/app/pins/pins.service.ts, txnet-backend/shared-core/src/lib/currency/fx-rate.ts, site-pwa/src/app/(panel)/_components/ManualRateCard.tsx, …/20260928003800_a_pin_may_have_no_end | Ingested 2026-09-28 (user: "an unlimited time, and that as the default"); ADR-0101 amended Done: hours null = no end, the card default. ADR-0101 part 6 |
+| F-117-a | Support consent records (ADR-0104 (4)): `SupportAccessConsent` — a reseller's owner or `tenant.manage` seat grants the platform `read` or `act` for a duration (default 4 h, tenant-configurable, cap 24 h), revokes it any time, lists its history; platform staff may only request one | audit | todo | — | — |  | D-57 (user, 2026-09-29). `spec.py --section 3.7`. Owns the table and routes; nothing reads it until F-117-b. |
+| F-117-b | The door checks consent (ADR-0104 (4)): `ResellerAccess` admits platform staff to a reseller's person-data routes (users-admin, user Grants, bulk jobs) only under a live consent, `read` refusing writes; config routes and the platform's own tenant unchanged | tenant | todo | F-117-a | — |  | D-57. Rewrites tenant invariant 21; revoke takes effect on the next request. Refusal reason distinct from `not_allowed`. |
+| F-117-c | Every platform act in a reseller's tenant under tier B or C is written to `admin_audit_log` with actor, tier, consent id, target and act; the reseller reads its own history | audit | todo | F-117-b | — |  | D-57, ADR-0104 (6). Reads also recorded (a list viewed), not only writes. |
+| F-117-d | Emergency entry (ADR-0104 (5)): a separate permission, a mandatory reason, a 1 h hard cap, no extension; the reseller is notified at entry | tenant | todo | F-117-b F-117-c | — |  | D-57. Notification channel per the notification unit; entry is recorded even if the notice fails. |
+| F-117-e | Impersonating a reseller's user (F-006) needs a live tier B `act` consent or tier C entry; the session ends when the consent is revoked or expires | identity | todo | F-117-b | — |  | D-57, ADR-0104; catalog `spec.py --section 3.6` layer 6. |
+| F-117-f | Panel, reseller side: a support-access card — pending platform requests, grant with scope and duration, revoke, and the history of what the platform did | panel-web | todo | F-117-a F-117-c | — |  | D-57. New `SURFACES.md` row in the same change. |
+| F-117-g | Panel, platform side: request access to a reseller, see the consent state and its time left on the reseller's users pages, and the emergency entry form | panel-web | todo | F-117-b F-117-d | — |  | D-57. The users pages show the refusal as "ask the reseller", not an error. |
+| F-117-h | Reseller statistics for the platform are tier A (ADR-0104 (2)(3)): counts, sums, trends, per-product splits with no names; a breakdown cell under 5 people shows "fewer than 5" | billing | todo | — | — |  | D-57. Extends the revenue report (ADR-0067); drilling into a figure's rows is tier B. |
 
 ## Order of work — the F-027 network metering series
 
@@ -1088,6 +1096,13 @@ row that moves money. Until `F-116-f` a tenant's currency is set only before
 its first transaction. `F-116-i` (sources) and `F-116-j` (a tenant's
 manual rate, after F-0608-a) can go any time after `F-116-c`.
 
+## Order of work — the F-117 support consent series
+
+Opened 2026-09-29 (user, D-57, ADR-0104). `F-117-a` → `F-117-b` → `F-117-c`,
+then `F-117-d` and `F-117-e` in either order, then the panel rows `F-117-f`
+and `F-117-g`. `F-117-h` (statistics) can go any time. Until `F-117-b` ships,
+platform staff still enter every reseller without asking.
+
 ## Rules
 
 - Never delete a row. Move it to `dropped` with a reason in `note`.
@@ -1162,6 +1177,7 @@ been ingested yet — not one of these.
 | D-54 | Where does the currency unit's HTTP API live? | 2026-09-28 | 2026-09-28 | **A new `currency-service`** (user; over tenant-service) — ADR-0100 |
 | D-55 | Where are the platform's own users managed — a separate page, or the resellers' users page with the platform as one more tenant? | 2026-09-28 | 2026-09-28 | **One page for every tenant** (user): the users-admin routes admit the platform's tenant for its staff; a second page would build every act twice — F-311-aa, F-311-ab |
 | D-56 | Who may block (or otherwise act on) another admin's account — staff are users of their own tenant and appear on the users page | 2026-09-29 | 2026-09-29 | **Authority over a person** (user): never yourself, never the owner; the owner and platform staff over a reseller; among peers only a strict superset of permissions — ADR-0103, F-311-ac |
+| D-57 | May platform staff see and act on a reseller's users at any time, or only with the reseller's consent — and do statistics need it? | 2026-09-29 | 2026-09-29 | **Consent, time-bound** (user): machines always; aggregates free, anything naming a person needs the reseller's grant; emergency entry audited and notified — ADR-0104, F-117-a..h |
 | D-57 | Where do the users pages read the products an admin issues or filters by — the catalog admin routes (`catalog.manage`), or the users-admin door? | 2026-09-29 | 2026-09-29 | **The users-admin door** (user: the principled, long-term option): a read-only list behind `runIncludingPlatform`, so support staff issue without catalog edit rights — F-311-ab1, F-311-ab2 |
 
 Decided in the same session, though never a `D-` row: **a request resolves its

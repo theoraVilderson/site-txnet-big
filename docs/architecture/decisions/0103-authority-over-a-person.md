@@ -9,6 +9,7 @@ updated: 2026-09-29
 - **Status:** accepted
 - **Date:** 2026-09-29 (user, D-56; row F-311-ac)
 - **Affects units:** identity, tenant, panel-web
+- **Amended by:** [ADR-0104](0104-platform-staff-see-a-resellers-people-only-with-its-consent.md) — platform staff reach a reseller's people only with its consent
 - **Builds on:** ADR-0062 (4) (grant only what you hold), ADR-0102 (the
   platform's own tenant on the users-admin routes)
 

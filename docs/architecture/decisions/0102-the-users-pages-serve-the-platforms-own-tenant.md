@@ -9,6 +9,7 @@ updated: 2026-09-28
 - **Status:** accepted
 - **Date:** 2026-09-28 (user, D-55; row F-311-aa)
 - **Affects units:** tenant (`ResellerAccess`), identity, billing
+- **Amended by:** [ADR-0104](0104-platform-staff-see-a-resellers-people-only-with-its-consent.md) — platform staff reach a reseller's people only with its consent
 - **Amends:** ADR-0064 (1)-(3) — the door names a reseller; here, on one family
   of routes, it may also name the platform
 
