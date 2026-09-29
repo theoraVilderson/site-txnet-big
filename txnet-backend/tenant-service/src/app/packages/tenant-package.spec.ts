@@ -42,9 +42,12 @@ describe('TenantPackageService', () => {
         update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('update'), stored({ ...opts.existing, ...data }))),
       },
       adminAuditLog: { create: vi.fn(async () => (writes.push('audit'), {})) },
+      // No wholesale rates (F-118-n1).
+      tenantPackageMeterRate: { findMany: vi.fn(async () => []) },
       tenantSubscription: { count: vi.fn(async () => opts.subscribersOnPeriod ?? 0) },
     };
     const prisma = {
+      tenantPackageMeterRate: { findMany: vi.fn(async () => []) },
       tenant: { findUnique: vi.fn(async () => ({ tenantType: opts.callerType ?? 'platform_owner' })) },
       tenantFeaturePackage: {
         findUnique: vi.fn(async ({ where }: { where: { id?: string; name?: string } }) =>

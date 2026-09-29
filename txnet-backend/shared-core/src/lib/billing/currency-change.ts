@@ -76,6 +76,8 @@ export type CurrencyChangeSummary = {
   invoicesCancelled: number;
   billingWallets: number;
   packages: number;
+  /** The platform's wholesale rates in force (F-118-n1), written again in the new money. */
+  packageRates: number;
   usageMeters: number;
 };
 
@@ -162,6 +164,7 @@ export async function convertOperatingCurrency(
     invoicesCancelled: await cancelPendingInvoices(c),
     billingWallets: c.platform ? await convertBillingWallets(c) : 0,
     packages: c.platform ? await convertPackages(c) : 0,
+    packageRates: c.platform ? await repricePackageRates(c) : 0,
     usageMeters: c.platform ? await convertUsageMeters(c) : 0,
   };
 
@@ -440,6 +443,25 @@ const convertPackages = (c: Conversion) => c.tx.$executeRaw`
   UPDATE tenant.tenant_feature_package
      SET "monthlyPrice" = ${money(c, Prisma.sql`"monthlyPrice"`)}, "yearlyPrice" = ${money(c, Prisma.sql`"yearlyPrice"`)}, "currencyCode" = ${c.to}
    WHERE "currencyCode" = ${c.from}`;
+
+/**
+ * The wholesale price list (F-118-n1) is history, like a rate card: each rate
+ * in force in the old money is written again in the new one, from now, and the
+ * old row stays — read by nothing, since a package reads rates in its own
+ * currency. Never rounded to nothing: the smallest price the column holds.
+ */
+const repricePackageRates = (c: Conversion) => c.tx.$executeRaw`
+  INSERT INTO tenant.tenant_package_meter_rate (id, "packageId", "meterKey", "unitSize", "unitPrice", "currencyCode",
+                                                "effectiveFrom", "isActive", "createdByAdminId", "createdAt")
+  SELECT gen_random_uuid(), p."packageId", p."meterKey", p."unitSize",
+         greatest(round(p."unitPrice" * ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int), power(10::numeric, -${RATE_COLUMN_SCALE}::int)),
+         ${c.to}, greatest(p."effectiveFrom", now()), true, ${c.actor}::uuid, now()
+    FROM tenant.tenant_package_meter_rate p
+   WHERE p."currencyCode" = ${c.from} AND p."isActive"
+     AND (p."effectiveFrom" > now() OR p."effectiveFrom" = (
+           SELECT max(q."effectiveFrom") FROM tenant.tenant_package_meter_rate q
+            WHERE q."packageId" = p."packageId" AND q."meterKey" = p."meterKey" AND q."currencyCode" = ${c.from}
+              AND q."isActive" AND q."effectiveFrom" <= now()))`;
 
 const convertUsageMeters = (c: Conversion) => c.tx.$executeRaw`
   UPDATE tenant.tenant_usage_meter

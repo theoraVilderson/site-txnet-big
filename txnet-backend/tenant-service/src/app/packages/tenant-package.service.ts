@@ -4,7 +4,8 @@ import { platformCurrencyOf } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { addPackageEntitlements, lockPackage, lockSubscribers, replacePackageEntitlements } from './package-entitlements';
-import type { CreatePackageInput, ListPackagesInput, UpdatePackageInput } from './tenant-package.schema';
+import { type MeterRateView, ratesOf, unknownMeters, writeMeterRates } from './package-meter-rates';
+import type { CreatePackageInput, ListPackagesInput, MeterRateEdit, UpdatePackageInput } from './tenant-package.schema';
 
 /**
  * The platform owner creates, edits, deactivates, lists and reads the
@@ -25,6 +26,10 @@ import type { CreatePackageInput, ListPackagesInput, UpdatePackageInput } from '
  * because the period was paid for with it. {@link apply} forces the full list,
  * removals included, onto every subscriber at once. Both run on the
  * cross-tenant pool — the entitlements are the subscribers' rows.
+ *
+ * **The wholesale price list rides along (F-118-n1).** `meterRates` writes
+ * `tenant_package_meter_rate` in the same transaction as the package and its
+ * audit row (`package-meter-rates.ts`); the view shows the rates in force.
  */
 
 export type TenantPackageActor = { adminId: string; tenantId: string; ip: string };
@@ -40,9 +45,11 @@ export type PackageView = {
   currencyCode: string;
   includedFeatureKeys: string[];
   isActive: boolean;
+  /** The wholesale rates in force, by meter key (F-118-n1), in `currencyCode`. */
+  meterRates: MeterRateView[];
 };
 
-export type TenantPackageRejection = 'not_platform_owner' | 'package_not_found' | 'package_name_taken' | 'package_unpriced' | 'package_price_in_use';
+export type TenantPackageRejection = 'not_platform_owner' | 'package_not_found' | 'package_name_taken' | 'package_unpriced' | 'package_price_in_use' | 'meter_not_found';
 
 export class TenantPackageRefused extends Error {
   constructor(
@@ -80,6 +87,7 @@ export class TenantPackageService {
     await this.nameFree(input.name);
     const view = await this.writing(input.name, () =>
       this.prisma.$transaction(async (tx) => {
+        await this.metersKnown(tx, input.meterRates ?? []);
         const row = await tx.tenantFeaturePackage.create({
           data: {
             name: input.name,
@@ -91,7 +99,8 @@ export class TenantPackageService {
           },
           select: PACKAGE_SELECT,
         });
-        const created = toView(row);
+        await writeMeterRates(tx, row, [], input.meterRates ?? [], actor.adminId);
+        const created = toView(row, await this.ratesOne(tx, row));
         await tx.adminAuditLog.create({ data: this.audit(actor, AdminAction.tenant_package_create, created.id, null, created) });
         return created;
       }),
@@ -119,7 +128,8 @@ export class TenantPackageService {
 
   async update(actor: TenantPackageActor, id: string, patch: UpdatePackageInput): Promise<PackageView> {
     await this.access(actor);
-    const before = toView(await this.find(id));
+    const found = await this.find(id);
+    const before = toView(found, await this.ratesOne(this.prisma, found));
     const monthly = patch.monthlyPrice === undefined ? before.monthlyPrice : patch.monthlyPrice;
     const yearly = patch.yearlyPrice === undefined ? before.yearlyPrice : patch.yearlyPrice;
     if (monthly === null && yearly === null) throw new TenantPackageRefused('package_unpriced', id);
@@ -136,14 +146,18 @@ export class TenantPackageService {
       this.all.$transaction(async (tx) => {
         await lockPackage(tx, id, 'update');
         await this.pricesStillSold(tx, id, before, patch);
+        await this.metersKnown(tx, patch.meterRates ?? []);
         const held = patch.includedFeatureKeys === undefined ? null : await tx.tenantFeaturePackage.findUnique({ where: { id }, select: { includedFeatureKeys: true } });
-        const after = toView(await tx.tenantFeaturePackage.update({ where: { id }, data, select: PACKAGE_SELECT }));
+        const row = await tx.tenantFeaturePackage.update({ where: { id }, data, select: PACKAGE_SELECT });
+        const repriced = await writeMeterRates(tx, row, before.meterRates, patch.meterRates ?? [], actor.adminId);
+        const after = toView(row, await this.ratesOne(tx, row));
         if (held) {
           const had = new Set(held.includedFeatureKeys as string[]);
           const added = after.includedFeatureKeys.filter((k) => !had.has(k));
           if (added.length > 0) await addPackageEntitlements(tx, await lockSubscribers(tx, id), added);
         }
         const changed = Object.keys(data) as (keyof PackageView)[];
+        if (repriced) changed.push('meterRates');
         await tx.adminAuditLog.create({
           data: this.audit(actor, AdminAction.tenant_package_update, id, pick(before, changed), pick(after, changed)),
         });
@@ -180,18 +194,30 @@ export class TenantPackageService {
       orderBy: { name: 'asc' },
       select: PACKAGE_SELECT,
     });
-    return rows.map(toView);
+    const rates = await ratesOf(this.prisma, rows);
+    return rows.map((row) => toView(row, rates.get(row.id) ?? []));
   }
 
   async read(actor: TenantPackageActor, id: string): Promise<PackageView> {
     await this.access(actor);
-    return toView(await this.find(id));
+    const row = await this.find(id);
+    return toView(row, await this.ratesOne(this.prisma, row));
   }
 
   private async find(id: string): Promise<PackageRow> {
     const row = await this.prisma.tenantFeaturePackage.findUnique({ where: { id }, select: PACKAGE_SELECT });
     if (!row) throw new TenantPackageRefused('package_not_found', id);
     return row;
+  }
+
+  private async ratesOne(db: Pick<Prisma.TransactionClient, 'tenantPackageMeterRate'>, row: PackageRow): Promise<MeterRateView[]> {
+    return (await ratesOf(db, [row])).get(row.id) ?? [];
+  }
+
+  /** A rate for a meter the catalog does not have is refused before anything is written (the FK would say it as a 500). */
+  private async metersKnown(tx: Prisma.TransactionClient, edits: MeterRateEdit[]): Promise<void> {
+    const unknown = await unknownMeters(tx, edits);
+    if (unknown.length > 0) throw new TenantPackageRefused('meter_not_found', unknown.join(', '));
   }
 
   private async nameFree(name: string): Promise<void> {
@@ -237,7 +263,7 @@ export class TenantPackageService {
   }
 }
 
-function toView(row: PackageRow): PackageView {
+function toView(row: PackageRow, meterRates: MeterRateView[]): PackageView {
   return {
     id: row.id,
     name: row.name,
@@ -246,6 +272,7 @@ function toView(row: PackageRow): PackageView {
     currencyCode: row.currencyCode,
     includedFeatureKeys: row.includedFeatureKeys as string[],
     isActive: row.isActive,
+    meterRates,
   };
 }
 

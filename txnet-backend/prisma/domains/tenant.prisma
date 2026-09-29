@@ -264,8 +264,36 @@ model TenantFeaturePackage {
   isActive            Boolean  @default(true)
 
   subscriptions TenantSubscription[]
+  meterRates    TenantPackageMeterRate[]
 
   @@map("tenant_feature_package")
+  @@schema("tenant")
+}
+
+/// F-118-n1 (ADR-0105 (10)): the wholesale price list — what the platform
+/// charges a reseller on this package per `unitSize` of a platform meter its
+/// users consume on the platform's panels. History like `rate_card`: a new
+/// price is a new row, only `isActive` changes (trigger). In force: the newest
+/// active row at or before the instant, in the package's currency.
+model TenantPackageMeterRate {
+  id               String   @id @default(uuid()) @db.Uuid
+  packageId        String   @db.Uuid
+  /// A `Meter.key` (`METER_KEYS`).
+  meterKey         String
+  unitSize         BigInt
+  unitPrice        Decimal  @db.Decimal(18, 8)
+  /// The package's, the platform's (ADR-0098 part 4); a currency change writes new rows (F-116-f).
+  currencyCode     String
+  effectiveFrom    DateTime @default(now())
+  isActive         Boolean  @default(true)
+  createdByAdminId String?  @db.Uuid
+  createdAt        DateTime @default(now())
+
+  package TenantFeaturePackage @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  meter   Meter                @relation(fields: [meterKey], references: [key], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([packageId, meterKey, effectiveFrom(sort: Desc)])
+  @@map("tenant_package_meter_rate")
   @@schema("tenant")
 }
 

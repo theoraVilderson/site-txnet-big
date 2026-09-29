@@ -29,6 +29,7 @@ export * from './lib/tenant/host-tenant';
 export * from './lib/tenant/door';
 export * from './lib/tenant/host-surface';
 export * from './lib/tenant/public-route';
+export * from './lib/tenant/package-meter-rate';
 export * from './lib/tenant/vault/kek.service';
 // Sealing only: the grant token (ADR-0085) seals under its own derived key, as the vault does.
 export { open, seal, VaultDecryptionError, type SealedValue } from './lib/tenant/vault/vault.crypto';

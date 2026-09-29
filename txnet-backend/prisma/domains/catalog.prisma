@@ -136,6 +136,8 @@ model Meter {
 
   rateCards   RateCard[]
   grantMeters GrantMeter[]
+  /// F-118-n1: what the platform charges a reseller for it.
+  packageRates TenantPackageMeterRate[]
 
   @@map("meter")
   @@schema("catalog")
