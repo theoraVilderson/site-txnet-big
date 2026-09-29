@@ -3,7 +3,7 @@ import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import { emitCutOff } from '../entitlement/cut-off';
-import { suspendForExhaustion, suspendForPeriodEnd } from '../entitlement/suspension';
+import { suspendForCap, suspendForExhaustion, suspendForPeriodEnd } from '../entitlement/suspension';
 import { withinCap } from '../usage/cap-funding';
 import { BlockPurchaseRefused, type BlockPurchaseRejection, sizeBlock } from './block-purchase';
 import { vpnMeterOf } from './vpn-meter';
@@ -109,10 +109,15 @@ export async function suspendIfExhausted(tx: Prisma.TransactionClient, grantId: 
   const spendable = await withinCap(tx, { id: grantId, userId: owner.userId }, free, new Prisma.Decimal(wallet?.own ?? 0));
   if (walletCanBuy(meter.unitPrice, spendable)) return verdict('wallet_can_buy');
 
-  const suspension = await suspendForExhaustion(tx, grantId, at);
+  // The cap, not the wallet, when the wallet alone would have bought it
+  // (F-118-t): "raise the cap", not "top up". A short wallet is told first —
+  // until it is topped up, raising the cap would bring nothing back.
+  const capCut = walletCanBuy(meter.unitPrice, free);
+  const suspension = await (capCut ? suspendForCap : suspendForExhaustion)(tx, grantId, at);
   if (!suspension.suspended) return verdict('not_active');
   // A top-up revives it, never a renewal (F-601-b): the notice says which.
-  await emitCutOff(tx, { grantId, tenantId: owner.tenantId, userId: owner.userId }, OutboxEventType.GRANT_WALLET_SPENT, at);
+  const cutOff = capCut ? OutboxEventType.GRANT_CAP_REACHED : OutboxEventType.GRANT_WALLET_SPENT;
+  await emitCutOff(tx, { grantId, tenantId: owner.tenantId, userId: owner.userId }, cutOff, at);
   return verdict('suspended', suspension.configsDisabled);
 }
 

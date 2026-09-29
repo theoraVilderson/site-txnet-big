@@ -7,7 +7,7 @@ import type { EnvConfig } from '../config/env.validation';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { topVpnReserve } from '../traffic/vpn-reserve';
-import { ADMIN_FROZEN, PERIOD_ENDED, QUOTA_EXHAUSTED } from './suspension';
+import { ADMIN_FROZEN, PERIOD_ENDED, SPENT_REASONS } from './suspension';
 
 /**
  * The second and third stages of ADR-0075 (F-027-y): the clock a suspension
@@ -135,7 +135,8 @@ export type Revival = {
  *
  * **Only this reason.** `suspended` carries two meanings (ADR-0075): out of
  * quota, and suspended by an admin or a tenant status change. A top-up buys
- * traffic, not an amnesty, so the guard is `statusReason = quota_exhausted`
+ * traffic, not an amnesty, so the guard is `statusReason` in `quota_exhausted`
+ * or `cap_reached` (F-118-t: the cap's cut, revived when the cap lets money through)
  * and it sits in the write's own `where` rather than in a read before it —
  * which is also what makes a second call a no-op instead of a second revive.
  *
@@ -154,7 +155,12 @@ export type Revival = {
  * answers it. `suspendForExhaustion` is the mirror of this (`suspension.ts`).
  */
 export async function reviveOnTopUp(tx: Prisma.TransactionClient, grantId: string): Promise<Revival> {
-  return revive(tx, grantId, QUOTA_EXHAUSTED);
+  // One guarded write per reason: a Grant carries one, so at most one moves.
+  for (const reason of SPENT_REASONS) {
+    const revival = await revive(tx, grantId, reason);
+    if (revival.revived) return revival;
+  }
+  return { revived: false, configsRestored: 0 };
 }
 
 /**

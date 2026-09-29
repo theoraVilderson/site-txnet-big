@@ -5,7 +5,7 @@ import { HAS_VPN_METER, VPN_RATE_SELECT } from '../traffic/vpn-meter';
 import { withinCap } from '../usage/cap-funding';
 import { reviveOnTopUp } from './purge';
 import { emitReactivated, runs } from './reactivated';
-import { QUOTA_EXHAUSTED } from './suspension';
+import { SPENT_REASONS } from './suspension';
 
 /**
  * What a top-up revives (F-027-ap, ADR-0079).
@@ -74,7 +74,9 @@ export async function reviveFundedGrants(
       // Only the reason this module imposed. `suspended` also means an admin
       // or a tenant status change (ADR-0075), and a top-up buys traffic, not
       // an amnesty — `reviveOnTopUp` refuses those again in its own `where`.
-      statusReason: QUOTA_EXHAUSTED,
+      // `cap_reached` too (F-118-t): a cap write runs this, and money a
+      // monthly cap's new period lets through revives it the same way.
+      statusReason: { in: [...SPENT_REASONS] },
       billingMode: VariantBillingMode.metered,
       ...HAS_VPN_METER,
     },

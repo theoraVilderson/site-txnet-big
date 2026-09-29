@@ -4,7 +4,7 @@ import { EntitlementRefused } from './grant';
 import { PackageWholesale } from './package-wholesale';
 import { reviveOnRenewal, reviveOnTopUp } from './purge';
 import { emitReactivated, runs, standingClose } from './reactivated';
-import { PERIOD_ENDED, QUOTA_EXHAUSTED } from './suspension';
+import { PERIOD_ENDED, QUOTA_EXHAUSTED, isSpentReason } from './suspension';
 
 /**
  * A renewal is `Quota += X` on the same Grant (F-027-dg; SPEC weakness #30).
@@ -167,7 +167,7 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
 
   const room = !bagged || purchasedBytes > usedBytes;
   let revived = false;
-  if (grant.status === GrantStatus.suspended && grant.statusReason === QUOTA_EXHAUSTED && bagged && room) {
+  if (grant.status === GrantStatus.suspended && isSpentReason(grant.statusReason) && bagged && room) {
     revived = (await reviveOnTopUp(tx, grant.id)).revived;
   } else if (grant.status === GrantStatus.suspended && grant.statusReason === PERIOD_ENDED && runs(endsAt, at)) {
     if (room) revived = (await reviveOnRenewal(tx, grant.id)).revived;

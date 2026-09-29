@@ -138,7 +138,7 @@ proved by `cut-off.spec.ts`. Payload `tenantId, userId, grantId, period`.
 | Rule | Why |
 |---|---|
 | `suspendIfClosed` suspending a prepaid Grant: `ended` when the close was on its end, else `volume_spent`; both say "renew" | a renewal moves the end or raises Quota, and revives it |
-| `suspendIfExhausted` suspending a metered Grant: `wallet_spent`, which says "top up" | a top-up revives it (`reviveFundedGrants`); a metered renewal adds days alone and revives nothing |
+| `suspendIfExhausted` suspending a metered Grant: `wallet_spent`, which says "top up" — or, when the wallet could buy the block and its spending cap refused it, `cap_reached` (`statusReason` too), which says "raise the cap" (F-118-t) | a top-up revives it (`reviveFundedGrants`); a metered renewal adds days alone and revives nothing. `cap_reached`: a cap raised or removed does (billing `contract.spending-cap.md` rule 5) |
 | An unlimited or metered Grant whose standing close is on a passed end: suspended as `period_ended` (F-027-do) and told `ended` | a renewal of days revives it (`reviveOnRenewal`) — the one way an unlimited Grant stops |
 | A close stands only while its Quota **and** end are the Grant's (`network/contract.lease.md` rule 25); one a renewal moved is `reopened`, untold | a late close never suspends, nor tells, a renewed Grant |
 | `period` = the end for `ended`, the suspension's instant otherwise; nothing is emitted when nothing stopped (a redelivered close finds it `suspended`) | notification's ledger holds each stop once (invariant 14); a renewal or revival opens a new one |

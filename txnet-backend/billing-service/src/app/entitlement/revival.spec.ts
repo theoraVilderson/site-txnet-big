@@ -32,7 +32,7 @@ import { basename, join, relative } from 'node:path';
 import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 
 import { reviveFundedGrants } from './revival';
-import { QUOTA_EXHAUSTED } from './suspension';
+import { CAP_REACHED, QUOTA_EXHAUSTED } from './suspension';
 
 const GRANT_1 = '99999999-9999-4999-8999-999999999991';
 const GRANT_2 = '99999999-9999-4999-8999-999999999992';
@@ -108,7 +108,7 @@ describe('reviveFundedGrants', () => {
     expect(revived).toEqual([GRANT_1]);
   });
 
-  it("asks only for this user's metered Grants suspended for quota", async () => {
+  it("asks only for this user's metered Grants suspended for quota or at their cap", async () => {
     const { tx, scans } = build([]);
 
     const result = await reviveFundedGrants(tx as never, USER, D('5.00'));
@@ -117,7 +117,7 @@ describe('reviveFundedGrants', () => {
     expect(scans[0]['where']).toEqual({
       userId: USER,
       status: GrantStatus.suspended,
-      statusReason: QUOTA_EXHAUSTED,
+      statusReason: { in: [QUOTA_EXHAUSTED, CAP_REACHED] },
       billingMode: VariantBillingMode.metered,
       meters: { some: { meterKey: 'vpn.traffic' } },
     });

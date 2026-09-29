@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 80
+version: 81
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -95,8 +95,8 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-29 | contract v81 (additive, F-118-t): a Grant its spending cap cuts while the wallet could still buy is suspended `statusReason = cap_reached` and emits `entitlement.grant.cap_reached` (`serviceCapReached`, "raise the cap"); every usage revive takes it like `quota_exhausted` ([contract.spending-cap.md](contract.spending-cap.md) rules 4-5) |
 | 2026-09-29 | contract v80 (additive, F-118-o): a hold or a release writes `billing.wallet.changed` `{tenantId, userId}` — no `walletTransactionId` — at most once per 30 s per wallet (`wallet.heldPushedAt`), so the panel's `held` follows. [contract.holds.md](contract.holds.md) |
 | 2026-09-29 | contract v79 (additive, F-118-j): `GET /api/billing/wallet/history` answers `held` (`heldAmount`) and `available` (`balance − held`) beside `balance`, for the panel to show held money apart. [contract.history.md](contract.history.md) |
-| 2026-09-29 | contract v78 (additive, F-118-i, ADR-0105 (9)): a spending cap on one Grant — `GET/PUT/DELETE /api/billing/traffic/grants/:grantId/cap`; every usage path funds a capped Grant to `min(free, cap − spent − held)`; `sub_account` dropped. [contract.spending-cap.md](contract.spending-cap.md) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

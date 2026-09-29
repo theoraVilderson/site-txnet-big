@@ -4,19 +4,22 @@ import { OutboxEventType } from '@txnet-backend/shared-core';
 import { GRANT_AGGREGATE } from './delivered';
 
 /**
- * The three ways a Grant's service stops, each told by its own text
+ * The ways a Grant's service stops, each told by its own text
  * (F-601-b, spec 9.5) — because each is brought back by something else:
  *
  * - `ended`: its time ran out; a renewal moves the end and the planner reopens it;
  * - `volume_spent`: a prepaid bag is spent; a renewal adds bytes and revives it;
  * - `wallet_spent`: a metered bag is spent and the wallet cannot buy the next
  *   block; a **top-up** revives it (`reviveFundedGrants`). A metered renewal
- *   adds days alone and revives nothing, so this one never says "renew".
+ *   adds days alone and revives nothing, so this one never says "renew";
+ * - `cap_reached`: the same stop, but the Grant's spending cap refused what the
+ *   wallet could buy (F-118-t); raising or removing the cap revives it.
  */
 export type CutOffType =
   | typeof OutboxEventType.GRANT_ENDED
   | typeof OutboxEventType.GRANT_VOLUME_SPENT
-  | typeof OutboxEventType.GRANT_WALLET_SPENT;
+  | typeof OutboxEventType.GRANT_WALLET_SPENT
+  | typeof OutboxEventType.GRANT_CAP_REACHED;
 
 export type CutOffGrant = { grantId: string; tenantId: string; userId: string };
 

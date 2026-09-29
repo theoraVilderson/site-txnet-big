@@ -34,6 +34,7 @@ export const RETENTION_KIND_OF: Readonly<Partial<Record<OutboxEventType, Retenti
   [OutboxEventType.GRANT_ENDED]: 'cutoff',
   [OutboxEventType.GRANT_VOLUME_SPENT]: 'cutoff',
   [OutboxEventType.GRANT_WALLET_SPENT]: 'cutoff',
+  [OutboxEventType.GRANT_CAP_REACHED]: 'cutoff',
   [OutboxEventType.GRANT_PURGE_SOON]: 'cutoff',
   [OutboxEventType.GRANT_PURGE_SOON_METERED]: 'cutoff',
   // F-311-s: an admin's act on the service — a person decided it about this user, so it is always told, at once;

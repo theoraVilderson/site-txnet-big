@@ -12,6 +12,21 @@ import { releaseVpnReserveOf } from '../traffic/vpn-reserve';
 export const QUOTA_EXHAUSTED = 'quota_exhausted';
 
 /**
+ * `grant.statusReason` for a Grant whose bag is spent and whose **spending
+ * cap** refuses the next block the wallet could buy (F-118-t, billing
+ * `contract.spending-cap.md`). Its own reason, so the user is told "raise the
+ * cap" rather than "top up". Revived like `quota_exhausted` — by bytes, or by
+ * money the cap lets through (`reviveFundedGrants`, which a cap write runs).
+ */
+export const CAP_REACHED = 'cap_reached';
+
+/** The reasons a usage stop carries: what a top-up, a cap write or new bytes revive (`reviveOnTopUp`). */
+export const SPENT_REASONS: readonly string[] = [QUOTA_EXHAUSTED, CAP_REACHED];
+
+/** Whether a Grant's `statusReason` is a usage stop — one bytes or money bring back. */
+export const isSpentReason = (statusReason: string | null): boolean => statusReason !== null && SPENT_REASONS.includes(statusReason);
+
+/**
  * `grant.statusReason` for a Grant an admin froze (F-311-h, `freeze.ts`): the
  * other meaning. Only `unfreezeGrant` lifts it, and it is never purged.
  */
@@ -52,6 +67,11 @@ export type Suspension = {
  */
 export async function suspendForExhaustion(tx: Prisma.TransactionClient, grantId: string, at: Date): Promise<Suspension> {
   return suspend(tx, grantId, at, QUOTA_EXHAUSTED);
+}
+
+/** The same stop when its spending cap, not the wallet, refuses the next block (F-118-t). */
+export async function suspendForCap(tx: Prisma.TransactionClient, grantId: string, at: Date): Promise<Suspension> {
+  return suspend(tx, grantId, at, CAP_REACHED);
 }
 
 /** The same stop for a Grant whose days ran out (F-027-do): its own reason, so bytes do not revive it. */

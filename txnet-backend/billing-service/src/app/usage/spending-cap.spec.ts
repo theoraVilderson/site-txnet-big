@@ -1,6 +1,10 @@
 import { GrantStatus, Prisma, SpendingCapPeriod, VariantBillingMode } from '@prisma/client';
 
-import { QUOTA_EXHAUSTED } from '../entitlement/suspension';
+import { OutboxEventType } from '@txnet-backend/shared-core';
+
+import { reviveFundedGrants } from '../entitlement/revival';
+import { CAP_REACHED, QUOTA_EXHAUSTED } from '../entitlement/suspension';
+import { suspendIfExhausted } from '../traffic/exhaustion';
 import { BlockPurchaseRefused, BlockPurchaseService, GIB } from '../traffic/block-purchase';
 import { NO_VPN_RESERVE, VpnReserve, installVpnReserve } from '../traffic/vpn-reserve';
 import { WalletHoldService, WalletLedgerService } from '../wallet/wallet-ledger.service';
@@ -35,6 +39,7 @@ type GrantRow = {
   rate: Prisma.Decimal | null;
   trafficUnlimited: boolean;
   purchasedBytes: bigint;
+  consumedBytes: bigint;
   /** The meter's money cursor. */
   billed: bigint;
 };
@@ -59,6 +64,10 @@ function fakeStore() {
   const wallet = { id: 'wallet-1', ownerUserId: 'user-1', currencyCode: 'USD', cachedBalance: D(0), heldAmount: D(0), version: 0 };
   const holds: Array<{ id: string; walletId: string; ownerRef: string; amount: Prisma.Decimal; captured: Prisma.Decimal; status: 'open' | 'closed'; currencyCode: string }> = [];
   const ledger: Array<Record<string, unknown>> = [];
+  const events: Array<Record<string, unknown>> = [];
+  // `statusReason` as a `where` takes a value or `{ in: [...] }`.
+  const reasonIs = (own: string | null, want: string | { in: string[] } | undefined) =>
+    want === undefined || (typeof want === 'string' ? own === want : want.in.includes(own ?? ''));
   const matches = (c: CapRow, where: Partial<CapRow>) => Object.entries(where).every(([k, v]) => {
     const own = c[k as keyof CapRow];
     return own instanceof Date && v instanceof Date ? own.getTime() === v.getTime() : own === v;
@@ -70,17 +79,17 @@ function fakeStore() {
         const g = grants.get(where.id);
         return g ? { ...g } : null;
       },
-      findMany: async ({ where }: { where: { userId: string; status: GrantStatus; statusReason: string } }) =>
-        [...grants.values()].filter((g) => g.userId === where.userId && g.status === where.status && g.statusReason === where.statusReason)
+      findMany: async ({ where }: { where: { userId: string; status: GrantStatus; statusReason: string | { in: string[] } } }) =>
+        [...grants.values()].filter((g) => g.userId === where.userId && g.status === where.status && reasonIs(g.statusReason, where.statusReason))
           .map((g) => ({ ...g, meters: g.rate ? [{ unitPrice: g.rate, currencyCode: 'USD' }] : [] })),
       update: async ({ where, data }: { where: { id: string }; data: { purchasedBytes: { increment: bigint } } }) => {
         const g = grants.get(where.id)!;
         g.purchasedBytes += data.purchasedBytes.increment;
         return { ...g };
       },
-      updateMany: async ({ where, data }: { where: { id: string; status: GrantStatus; statusReason?: string }; data: Partial<GrantRow> }) => {
+      updateMany: async ({ where, data }: { where: { id: string; status: GrantStatus; statusReason?: string | { in: string[] } }; data: Partial<GrantRow> }) => {
         const g = grants.get(where.id);
-        if (!g || g.status !== where.status || (where.statusReason !== undefined && g.statusReason !== where.statusReason)) return { count: 0 };
+        if (!g || g.status !== where.status || !reasonIs(g.statusReason, where.statusReason)) return { count: 0 };
         Object.assign(g, data);
         return { count: 1 };
       },
@@ -168,7 +177,17 @@ function fakeStore() {
         return row;
       },
     },
-    outboxEvent: { create: async ({ data }: { data: Record<string, unknown> }) => data },
+    outboxEvent: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        events.push(data);
+        return data;
+      },
+    },
+    // `suspendIfExhausted`'s locked read of the wallet: the free balance, this Grant's own reserve added back.
+    $queryRaw: async (_sql: TemplateStringsArray, grantId: string) => {
+      const own = holds.find((h) => h.ownerRef === grantId && h.status === 'open')?.amount ?? D(0);
+      return [{ free: wallet.cachedBalance.minus(wallet.heldAmount).plus(own), own }];
+    },
   };
 
   return {
@@ -178,6 +197,7 @@ function fakeStore() {
     caps,
     meters,
     ledger,
+    events,
     openHold: (ref: string) => holds.find((h) => h.ownerRef === ref && h.status === 'open')?.amount.toFixed(2) ?? null,
     fund(balance: string) {
       wallet.cachedBalance = D(balance);
@@ -196,6 +216,7 @@ function fakeStore() {
         rate: D('10'),
         trafficUnlimited: false,
         purchasedBytes: BigInt(0),
+        consumedBytes: BigInt(0),
         billed: BigInt(0),
         ...over,
       });
@@ -355,7 +376,7 @@ describe('the owner sets, raises and removes a cap', () => {
   it('raised or removed, it brings back the Grant it cut — and a Grant still at its cap stays cut', async () => {
     const s = fakeStore();
     s.fund('50.00');
-    s.grant('g1', { status: GrantStatus.suspended, statusReason: QUOTA_EXHAUSTED, suspendedAt: at });
+    s.grant('g1', { status: GrantStatus.suspended, statusReason: CAP_REACHED, suspendedAt: at });
     s.cap('g1', '10.00', { spent: D('10.00') });
 
     await service.setIn(s.tx, 'user-1', 'g1', { label: 'Sara', amount: '10', period: 'none' }, at);
@@ -369,5 +390,47 @@ describe('the owner sets, raises and removes a cap', () => {
     await service.removeIn(s.tx, 'user-1', 'g1');
     expect(s.caps).toHaveLength(0);
     expect(s.openHold('g1')).toBe('10.00');
+  });
+});
+
+describe('a Grant cut by its cap says so (F-118-t)', () => {
+  const at = new Date('2026-09-20T00:00:00Z');
+  const spentBag = { purchasedBytes: GIB, billed: GIB };
+  const kinds = (s: ReturnType<typeof fakeStore>) => s.events.map((e) => e.type);
+
+  it('is suspended `cap_reached` and told "raise the cap" when the wallet could buy what the cap refuses', async () => {
+    const s = fakeStore();
+    s.fund('100.00');
+    s.grant('g1', { ...spentBag, consumedBytes: GIB });
+    s.cap('g1', '10.00', { spent: D('10.00') });
+
+    await expect(suspendIfExhausted(s.tx, 'g1', at)).resolves.toMatchObject({ verdict: 'suspended' });
+    await expect(s.tx.grant.findUnique({ where: { id: 'g1' } })).resolves.toMatchObject({ status: GrantStatus.suspended, statusReason: CAP_REACHED });
+    expect(kinds(s)).toEqual([OutboxEventType.GRANT_CAP_REACHED]);
+  });
+
+  it('is `quota_exhausted` / `wallet_spent` when the wallet itself is short, capped or not — the top-up comes first', async () => {
+    const s = fakeStore();
+    s.grant('g1', { ...spentBag, consumedBytes: GIB });
+    s.cap('g1', '10.00', { spent: D('10.00') });
+
+    await suspendIfExhausted(s.tx, 'g1', at);
+    await expect(s.tx.grant.findUnique({ where: { id: 'g1' } })).resolves.toMatchObject({ statusReason: QUOTA_EXHAUSTED });
+    expect(kinds(s)).toEqual([OutboxEventType.GRANT_WALLET_SPENT]);
+  });
+
+  it('stays cut through a top-up, and a raised cap brings it back and says so', async () => {
+    const s = fakeStore();
+    s.fund('100.00');
+    s.grant('g1', { ...spentBag, status: GrantStatus.suspended, statusReason: CAP_REACHED, suspendedAt: at });
+    s.cap('g1', '10.00', { spent: D('10.00') });
+
+    await reviveFundedGrants(s.tx, 'user-1', D('150.00'), at);
+    await expect(s.tx.grant.findUnique({ where: { id: 'g1' } })).resolves.toMatchObject({ status: GrantStatus.suspended, statusReason: CAP_REACHED });
+    expect(kinds(s)).toEqual([]);
+
+    await new SpendingCapService(null as never).setIn(s.tx, 'user-1', 'g1', { label: 'Sara', amount: '30', period: 'none' }, at);
+    await expect(s.tx.grant.findUnique({ where: { id: 'g1' } })).resolves.toMatchObject({ status: GrantStatus.active, statusReason: null });
+    expect(kinds(s)).toEqual([OutboxEventType.GRANT_REACTIVATED]);
   });
 });

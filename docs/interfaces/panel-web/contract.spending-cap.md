@@ -75,8 +75,7 @@ failed read. Server side: billing `wallet/wallet-history.spec.ts` (`held`,
 
 ## Not covered
 
-The bot's screens for the same cap (a row of their own, F-608). A notice that
-says *cap* rather than *wallet* when a capped service is cut (billing
-contract.spending-cap.md "Not yet"). Since F-118-o a hold moving writes
+The bot's screens for the same cap (a row of their own, F-608). The cut
+itself is told by billing's `cap_reached` notice (F-118-t), not by this page. Since F-118-o a hold moving writes
 `billing.wallet.changed` (at most once per 30 s per wallet), so `held` follows
 the re-read the page already does on it. The cap is not shown on the folded row.

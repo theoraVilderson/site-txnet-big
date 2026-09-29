@@ -30,6 +30,7 @@ export const NOTIFY_TEMPLATES = [
   'serviceEnded',
   'serviceVolumeSpent',
   'serviceWalletSpent',
+  'serviceCapReached',
   'serviceWalletLow',
   'servicePurgeSoon',
   'servicePurgeSoonTopUp',
@@ -345,6 +346,17 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.retention?.walletSpentMany,
       fallback: '⛔ {{count}} of your services used up what your wallet could buy and have stopped. Top up your wallet and they turn back on by themselves.',
       inbox: { read: (ns) => ns?.retention?.walletSpentManyTitle, fallback: '{{count}} services stopped: wallet empty' },
+    },
+  },
+  // F-118-t: the service's own spending cap stopped it, the wallet has money — raising or removing the cap brings it back.
+  serviceCapReached: {
+    read: (ns) => ns?.retention?.capReached,
+    fallback: '⛔ Your service reached the spending cap you set for it and has stopped — your wallet still has money. Raise or remove the cap in My services and it turns back on by itself — its link stays the same.',
+    inbox: { read: (ns) => ns?.retention?.capReachedTitle, fallback: 'Your service reached its spending cap' },
+    many: {
+      read: (ns) => ns?.retention?.capReachedMany,
+      fallback: '⛔ {{count}} of your services reached the spending caps you set and have stopped — your wallet still has money. Raise or remove their caps in My services and they turn back on by themselves.',
+      inbox: { read: (ns) => ns?.retention?.capReachedManyTitle, fallback: '{{count}} services stopped at their spending cap' },
     },
   },
   // F-601-g: a metered Grant's wallet buys under a GB at its rate — once per crossing; the top-up keeps it running.

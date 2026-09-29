@@ -5,7 +5,7 @@ import { PackageWholesale } from './package-wholesale';
 import { reviveOnTopUp } from './purge';
 import { runs, standingClose } from './reactivated';
 import { usedBytesOf } from './renewal';
-import { QUOTA_EXHAUSTED } from './suspension';
+import { isSpentReason } from './suspension';
 
 export type TrafficChange = {
   adjustmentId: string;
@@ -91,7 +91,7 @@ async function adjustmentRow(tx: Prisma.TransactionClient, grant: Adjustable, de
 export async function settle(tx: Prisma.TransactionClient, grant: Settled, at: Date, before: bigint, after: bigint, usedBytes: bigint) {
   const spent = after <= usedBytes;
   const revived =
-    !spent && grant.status === GrantStatus.suspended && grant.statusReason === QUOTA_EXHAUSTED
+    !spent && grant.status === GrantStatus.suspended && isSpentReason(grant.statusReason)
       ? (await reviveOnTopUp(tx, grant.id)).revived
       : false;
   // F-601-k's test: a stop this raise undid — a revival, or a close that

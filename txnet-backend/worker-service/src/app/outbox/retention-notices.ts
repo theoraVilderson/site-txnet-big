@@ -57,6 +57,8 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   [OutboxEventType.GRANT_ENDED]: { template: 'serviceEnded', params: [] },
   [OutboxEventType.GRANT_VOLUME_SPENT]: { template: 'serviceVolumeSpent', params: [] },
   [OutboxEventType.GRANT_WALLET_SPENT]: { template: 'serviceWalletSpent', params: [] },
+  // F-118-t: the same stop when the service's spending cap refused it — "raise the cap", not "top up".
+  [OutboxEventType.GRANT_CAP_REACHED]: { template: 'serviceCapReached', params: [] },
   // F-601-g: a metered Grant's wallet buys under a GB at its rate — what it still buys; once per crossing.
   [OutboxEventType.GRANT_LOW_BALANCE]: { template: 'serviceWalletLow', params: ['remaining'] },
   // F-601-j: a suspended Grant's configs are dropped from the panel within a day — renew, or top up if metered. Never muted (F-601-m).
