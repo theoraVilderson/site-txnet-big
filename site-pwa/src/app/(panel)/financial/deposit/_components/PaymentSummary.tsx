@@ -5,7 +5,7 @@ import { AlertCircle, ChevronDown, Loader2, Receipt, ShieldCheck, Sparkles } fro
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { DepositQuote } from "@/lib/billing-api";
-import { amountInWords, formatMoney } from "../../../_lib/money";
+import { formatMoney, rialInTomanWords } from "../../../_lib/money";
 import { numberLocale } from "../../../_lib/digits";
 import { fromMinor, tomanFromRial } from "../_lib/deposit-amount";
 
@@ -62,8 +62,7 @@ export function PaymentSummary({
   const rial = quote?.charge?.currency === "IRR" && quote.charge.decimals === 0 ? quote.charge.amountMinor : null;
   const toman = rial ? tomanFromRial(rial) : null;
   const tomanWhole = toman !== null && !toman.includes(".");
-  const chargeWords =
-    toman === null ? null : tomanWhole ? amountInWords(toman, "IRT", { lang, t }) : amountInWords(rial!, "IRR", { lang, t });
+  const chargeWords = rial ? rialInTomanWords(rial, { lang, t }) : null;
 
   const lines = quote && (
     <div className="space-y-3">

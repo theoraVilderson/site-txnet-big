@@ -228,3 +228,18 @@ export function amountInWords(
   }
   return rounded.negative ? t("common", W.negative, { words: phrase }) : phrase;
 }
+
+/**
+ * A rial amount spelled in toman — how a person says it, and what they check
+ * against the bank's page: `"2500000"`, fa -> `دویست و پنجاه هزار تومان`. Ten
+ * rial to the toman is a unit. An odd rial rounds to the nearest toman: "صد
+ * هزار تومان و دو ریال" confused people (user, 2026-09-29), and the exact
+ * figure is printed beside the words anyway. Null for anything but a whole
+ * rial amount.
+ */
+export function rialInTomanWords(rial: string, locale: MoneyLocale): string | null {
+  const whole = rial.replace(/\.0*$/, "");
+  if (!/^\d+$/.test(whole)) return null;
+  const padded = whole.padStart(2, "0");
+  return amountInWords(`${padded.slice(0, -1)}.${padded.slice(-1)}`, "IRT", locale);
+}

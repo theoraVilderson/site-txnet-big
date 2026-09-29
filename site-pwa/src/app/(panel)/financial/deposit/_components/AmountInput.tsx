@@ -6,7 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { DepositGateway } from "@/lib/billing-api";
 import { toEnglishDigits } from "@/util/helper";
-import { amountInWords, formatMoney } from "../../../_lib/money";
+import { amountInWords, formatMoney, rialInTomanWords } from "../../../_lib/money";
 import { fromCents, offeredPresets, toCents } from "../_lib/deposit-amount";
 
 const D = FrontendI18nKeys.common.deposit.amount;
@@ -50,7 +50,9 @@ export function AmountInput({ amount, onAmountChange, gateway, currency, disable
   const inputId = useId();
 
   const money = (value: string) => formatMoney(value, currency ?? "", { lang, t });
-  const words = currency ? amountInWords(amount, currency, { lang, t }) : null;
+  // A rial gateway's figure is spelled in toman, as the bill below spells it.
+  const words =
+    currency === "IRR" ? rialInTomanWords(amount, { lang, t }) : currency ? amountInWords(amount, currency, { lang, t }) : null;
 
   const cents = toCents(amount);
   // A bound the gateway left open is `null`: no check on that side, and no slider without both.

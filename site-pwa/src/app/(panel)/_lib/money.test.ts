@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { toEnglishDigits } from "@/util/helper";
-import { amountInWords, currencyDecimals, formatMoney, type MoneyLocale } from "./money";
+import { amountInWords, currencyDecimals, formatMoney, rialInTomanWords, type MoneyLocale } from "./money";
 
 /**
  * F-093-b. What breaks silently here is an amount the user reads wrong: a
@@ -140,5 +140,26 @@ describe("amountInWords", () => {
   it("answers null — not a guess — for a currency or input it has no words for", () => {
     expect(amountInWords("10", "EUR", en)).toBeNull();
     expect(amountInWords("abc", "IRT", en)).toBeNull();
+  });
+});
+
+describe("rialInTomanWords", () => {
+  // A rial gateway's figure, read aloud in toman: what a person says, and
+  // what they check against the bank's page. Ten rial is a unit, not a rate.
+  it("spells a rial amount in toman", () => {
+    expect(rialInTomanWords("2500000", fa)).toBe("دویست و پنجاه هزار تومان");
+    expect(rialInTomanWords("10", en)).toBe("one Toman");
+    expect(rialInTomanWords("2500000.00", fa)).toBe("دویست و پنجاه هزار تومان");
+  });
+
+  it("rounds an odd rial to the nearest toman — no trailing rial for a person to parse", () => {
+    expect(rialInTomanWords("1000002", fa)).toBe("صد هزار تومان");
+    expect(rialInTomanWords("4563015", fa)).toBe("چهارصد و پنجاه و شش هزار و سیصد و دو تومان");
+  });
+
+  it("answers null for what is not a whole rial amount", () => {
+    expect(rialInTomanWords("", fa)).toBeNull();
+    expect(rialInTomanWords("12.5", fa)).toBeNull();
+    expect(rialInTomanWords("abc", fa)).toBeNull();
   });
 });
