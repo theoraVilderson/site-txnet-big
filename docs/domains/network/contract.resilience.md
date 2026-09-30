@@ -55,7 +55,7 @@ A failure is logged and never fatal: exiting non-zero over it would give the
 orchestrator a container to restart in a loop. `cmd/server` runs it first
 on the way out (F-027-bv): `shutdown.PostgresReserves` reads the share and
 `walletBackedCeilingBytes` of every `present`, enabled config with a client
-whose Grant the lease planner has not closed (`contract.lease.md` rule 24),
+whose Grant the lease planner has not closed (`contract.lease-close.md` rule 24),
 and a config billing has not sized is left where it is. It extends the panels
 the bulk pass already opened, with their drivers and the cursor cache — the
 exit budget is not spent on vault reads — and it takes each panel's turn

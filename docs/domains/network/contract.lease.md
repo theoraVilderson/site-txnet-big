@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: draft
-version: 6
-updated: 2026-09-27
+version: 7
+updated: 2026-09-30
 ---
 
 # The lease planner's state — what it learns, and where it keeps it
@@ -191,7 +191,9 @@ the money, so it decides whether one is bought (`billing/contract.traffic-block.
     speed. The target is `ΣRate.Demand × Horizon − (Purchased − Used)`, so an
     overrun served from the reserve is bought with it. No rate and bytes left
     is not due; no rate past the bag asks for the overrun alone. A closed
-    account asks for nothing.
+    account asks for nothing — except a metered one whose bag is spent
+    (`Used ≥ Purchased`, F-118-ad): what its reserve served past the bag is
+    bought with it, and billing's refusal is the only thing that suspends it.
 22. **One bag is asked for once per `BlockRetry` (30 s).** The request names
     `purchasedBytes`; billing buys only while the Grant holds it, so a second
     request for the same bag is dropped there. A request is remembered only
@@ -208,26 +210,8 @@ rule 5).
 
 ## Close by disable (F-027-dd, SPEC §6-2)
 
-24. **A closed Grant is disabled, not only capped.** The planner closes a
-    Grant when it has expired, when `Quota − Used ≤ 0`, or when every active
-    replica is blocked and `avail < max(FinishMin, ΣvNow × FinishTime)` —
-    never on `avail ≤ 0` alone, which is only the rest being eaten inside the
-    panel's lag (SPEC weakness #7). The close is a row on
-    `network.lease_close` — the Quota and end it closed on — written by the
-    planner alone. While it stands, the convergence pass desires every config
-    of the Grant disabled (`desiredEnabled AND NOT EXISTS lease_close`, the
-    same test in its record guard), so the panel drops the client at once
-    rather than a tick after its counter meets the ceiling; the ceiling is
-    still written at the counter beside it. The shutdown extension skips a
-    closed Grant. `desiredEnabled` stays billing's. The close is announced in its own statement (`network.grant.closed`,
-    ADR-0096): billing suspends a prepaid Grant on it, and a renewal revives it.
-25. **Only a renewal reopens it**: Quota or the end moved since the close,
-    and `avail ≥ ReopenMin` (8 MB). A process restarted onto a closed Grant
-    restores the close from the row (`Account.RestoreClosed`), so forgetting
-    is never a reopen; a close row that cannot be written drops the account,
-    and the next turn restores it from what was written. A disabled client
-    on 3x-ui is `RemoveUser`'d, which keeps its open connections unless the
-    panel restarts Xray on disable (F-027-cm, open-questions 2026-09-26).
+Rules 24–25 — when the planner closes a Grant, and what reopens it — are
+[contract.lease-close.md](contract.lease-close.md).
 
 ## The poll schedule (F-027-de, SPEC §6-6)
 

@@ -546,7 +546,10 @@ func (s *Planner) planLocked(p collect.Panel, snap Snapshot, got map[string]driv
 			}
 		}
 		pl := Plan{GrantID: g.ID, Quota: a.Quota, Used: a.Used, Avail: res.Avail, Endgame: res.Endgame, Closed: a.Closed}
-		if !a.Closed {
+		// A closed metered Grant still asks for its spent bag (F-118-ad, rule
+		// 21): what its reserve served past the bag is bought with it, and
+		// billing's refusal is the only thing that suspends it.
+		if !a.Closed || (g.Metered && g.Used >= g.Purchased) {
 			pl.Block = s.blockLocked(g, a, at)
 		}
 		pl.Closure, pl.ClosureMoved = closureOf(g, a)

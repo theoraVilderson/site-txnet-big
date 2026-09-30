@@ -155,7 +155,7 @@ A pass reads every row on its panel except a delete already confirmed
 (`absent`, no `remoteId`, `complete`); served bytes are the counter cursor's
 lifetime figure. **An outcome is recorded only over the desired state it was
 judged against** — `uuid`, `desiredEnabled` (false too while the lease
-planner holds the Grant closed, `contract.lease.md` rule 24), `desiredRemote`
+planner holds the Grant closed, `contract.lease-close.md` rule 24), `desiredRemote`
 in the update's `where` — so an action landing mid-pass leaves no row to update, and a
 `complete` nobody checked is never written (group fulfilment activates on it).
 The pass runs in each collected panel's turn, started in `cmd` with the loop

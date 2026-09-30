@@ -153,6 +153,42 @@ func TestARequestThatDidNotLeaveIsTriedOnTheNextTurn(t *testing.T) {
 	}
 }
 
+// A closed metered Grant still asks for its spent bag (F-118-ad, rule 21):
+// the reserve it served past the bag is bought with it, and billing's
+// refusal is the only thing that suspends it. Seen live on 2026-09-30: a
+// Grant served its 30 MB reserve and 20 MB past it, closed, and asked for
+// nothing — the reserve was never charged and the Grant read `active`.
+func TestAClosedMeteredGrantStillAsksForItsSpentBag(t *testing.T) {
+	b := newMetered(t, 0, 30*quota.MB)
+	b.turn(5)
+	if len(b.req.sent) != 1 {
+		t.Fatalf("a Grant closed past its bag asks for the overrun, got %d requests", len(b.req.sent))
+	}
+	if r := b.req.sent[0]; r.PurchasedBytes != 0 || r.TargetBytes < b.counter {
+		t.Fatalf("the request covers what was served past the bag: %+v, served %d", r, b.counter)
+	}
+	b.turn(int(leaseplan.BlockRetry.Seconds()) + 1)
+	if len(b.req.sent) != 2 {
+		t.Fatalf("it is asked again every retry until billing answers, got %d", len(b.req.sent))
+	}
+}
+
+// A close with bytes still in the bag and nothing moving asks for nothing:
+// rule 21's "no rate and bytes left is not due" holds for a closed account.
+func TestAClosedGrantWithBytesLeftAndNoRateAsksNothing(t *testing.T) {
+	b := newMetered(t, 400*quota.MB, 0)
+	b.s.grants[0].ExpiresAt = b.at.Add(time.Minute)
+	b.turn(1)
+	n := len(b.req.sent)
+	b.turn(0)
+	b.at = b.at.Add(2 * time.Minute)
+	b.turn(0)
+	b.turn(int(leaseplan.BlockRetry.Seconds()) + 1)
+	if len(b.req.sent) != n {
+		t.Fatalf("an expired close with bytes left and no traffic asks for no block: %+v", b.req.sent[n:])
+	}
+}
+
 // The reserve is part of Quota, so the planner leases past the bag: a
 // metered user is not cut at the end of a block billing has not bought yet.
 func TestTheReserveIsLeasedPastTheBag(t *testing.T) {
