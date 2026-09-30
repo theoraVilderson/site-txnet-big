@@ -32,6 +32,9 @@ import { coverable, priceOf } from '../usage/usage-wholesale';
  * reseller's own panel funds the next platform byte instead. F-118-n3's rule
  * for a metered block, on a bag bought whole.
  *
+ * A plan sold with no leg locks one at its next renewal (F-118-ab, D-59
+ * (e)); the bag it still held is `inherited`, never charged nor given back.
+ *
  * Refusals are returned, not thrown: `EntitlementRefused` lives in `grant.ts`,
  * which calls this. The caller throws, so a refusal rolls the sale back.
  */
@@ -62,31 +65,33 @@ export class PackageWholesale {
    * own panels the reseller sells as before, with no leg.
    */
   async open(tx: Prisma.TransactionClient, grant: Plan, at: Date): Promise<PackageWholesaleRefusal | null> {
-    if (grant.billingMode !== VariantBillingMode.prepaid) return null;
-    if (!grant.trafficUnlimited && grant.purchasedBytes <= ZERO) return null;
-    const tenant = await tx.tenant.findUnique({ where: { id: grant.tenantId }, select: { tenantType: true } });
-    if (tenant?.tenantType !== TenantType.reseller) return null;
-
-    const meterKey = grant.trafficUnlimited ? METER_KEYS.unlimitedTime : METER_KEYS.vpnTraffic;
-    const rate = await this.rateAt(tx, grant.tenantId, meterKey, at);
-    // An unlimited plan with no end has no period to price: on a platform panel it is as unpriced.
-    const priced = rate && (!grant.trafficUnlimited || grant.endsAt !== null) ? rate : null;
-    if (!priced) return (await onPlatformPanel(tx, grant.variantId)) ? 'wholesale_rate_missing' : null;
-    const leg = await tx.grantWholesale.create({
-      data: {
-        tenantId: grant.tenantId,
-        grantId: grant.id,
-        payerTenantId: grant.tenantId,
-        rateId: priced.id,
-        meterKey,
-        unitSize: priced.unitSize,
-        unitPrice: priced.unitPrice,
-        currencyCode: priced.currencyCode,
-      },
-    });
+    const leg = await this.lock(tx, grant, at, ZERO);
+    if (leg === null) return null;
+    if (typeof leg === 'string') return leg;
     if (!grant.trafficUnlimited) return this.settle(tx, grant.id, grant.id);
     const sold = BigInt(Math.ceil(((grant.endsAt as Date).getTime() - grant.startsAt.getTime()) / SECOND_MS));
     return this.buyTime(tx, leg, grant.variantId, sold, grant.id);
+  }
+
+  /**
+   * A plan sold with no leg — before F-118-p, or with no rate on its own
+   * panels — locks the package's rate in force at its renewal `at` (F-118-ab,
+   * D-59 (e)), before the renewal moves the plan, and is charged from there on
+   * by the renewal's own `settle` / `renew`. Nothing for the past: the bag
+   * left from before is `inherited` — counted as bought, so only what the
+   * renewal adds is charged, and never given back at close. An unlimited plan
+   * inherits nothing: its days left come first, so the close's `min` already
+   * keeps them. The sale's checks hold: no rate on a platform panel is
+   * `wholesale_rate_missing`. A permanent unlimited plan's renewal sells no
+   * days and locks nothing.
+   */
+  async lockAtRenewal(tx: Prisma.TransactionClient, grant: Omit<Plan, 'startsAt'>, at: Date): Promise<PackageWholesaleRefusal | null> {
+    if (grant.billingMode !== VariantBillingMode.prepaid) return null;
+    if (grant.trafficUnlimited && grant.endsAt === null) return null;
+    if (await tx.grantWholesale.findUnique({ where: { grantId: grant.id } })) return null;
+    const inherited = grant.trafficUnlimited ? ZERO : max(ZERO, grant.purchasedBytes - grant.consumedBytes);
+    const leg = await this.lock(tx, grant, at, inherited);
+    return typeof leg === 'string' ? leg : null;
   }
 
   /**
@@ -179,11 +184,13 @@ export class PackageWholesale {
       }
       return short - plan.units;
     }
-    const left = leg.billed - leg.consumed;
+    // Bytes held from before the leg (F-118-ab) are served first and never come back.
+    const kept = max(leg.consumed, leg.inherited);
+    const left = leg.billed - kept;
     if (left <= ZERO) return ZERO;
     const cents = (left * priceUnits(rate)) / (rate.unitSize * CENT);
     if (cents === ZERO) return ZERO;
-    await this.moveCursor(tx, leg, leg.consumed);
+    await this.moveCursor(tx, leg, kept);
     await this.ledger.credit(tx, {
       tenantId: leg.payerTenantId,
       amount: toAmount(cents),
@@ -243,6 +250,39 @@ export class PackageWholesale {
       referenceId,
     });
     return null;
+  }
+
+  /**
+   * A reseller's prepaid plan locks its package's rate in force at `at`: the
+   * leg, `billed` starting at `inherited` (F-118-ab). Null for a sale that
+   * has none — the platform's own, a metered Grant, an empty bag, or no rate
+   * on the reseller's own panels; a refusal for no rate on a platform panel.
+   */
+  private async lock(tx: Prisma.TransactionClient, grant: Omit<Plan, 'startsAt'>, at: Date, inherited: bigint): Promise<GrantWholesale | PackageWholesaleRefusal | null> {
+    if (grant.billingMode !== VariantBillingMode.prepaid) return null;
+    if (!grant.trafficUnlimited && grant.purchasedBytes <= ZERO) return null;
+    const tenant = await tx.tenant.findUnique({ where: { id: grant.tenantId }, select: { tenantType: true } });
+    if (tenant?.tenantType !== TenantType.reseller) return null;
+
+    const meterKey = grant.trafficUnlimited ? METER_KEYS.unlimitedTime : METER_KEYS.vpnTraffic;
+    const rate = await this.rateAt(tx, grant.tenantId, meterKey, at);
+    // An unlimited plan with no end has no period to price: on a platform panel it is as unpriced.
+    const priced = rate && (!grant.trafficUnlimited || grant.endsAt !== null) ? rate : null;
+    if (!priced) return (await onPlatformPanel(tx, grant.variantId)) ? 'wholesale_rate_missing' : null;
+    return tx.grantWholesale.create({
+      data: {
+        tenantId: grant.tenantId,
+        grantId: grant.id,
+        payerTenantId: grant.tenantId,
+        rateId: priced.id,
+        meterKey,
+        unitSize: priced.unitSize,
+        unitPrice: priced.unitPrice,
+        currencyCode: priced.currencyCode,
+        billed: inherited,
+        inherited,
+      },
+    });
   }
 
   /** The reseller's package rate for `meterKey` in force at `at`, or null. */

@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-version: 26
+version: 27
 updated: 2026-09-30
 ---
 
@@ -29,9 +29,28 @@ in bytes — `billed` (what the reseller paid for) and `consumed` (bytes of the
 Grant served on **platform-owned** panels, advanced by `metering-service`,
 billing `contract.metering.md`).
 
-No row for: the platform's own sales, a metered Grant, and a plan sold before
-this row existed (no backfill). An unlimited plan's row buys days, not bytes —
+No row for: the platform's own sales and a metered Grant. A plan sold with no
+row (before F-118-p, or with no rate on its own panels) gets one at its next
+renewal — below; no backfill. An unlimited plan's row buys days, not bytes —
 below. `meterKey` says which: `vpn.traffic` or `vpn.unlimited.time`.
+
+## A plan sold before its leg locks at its next renewal (F-118-ab, D-59 (e))
+
+`renewGrant` → `lockAtRenewal`, before the renewal moves the plan: the
+package's rate in force **at the renewal** is locked as at a sale, and the
+renewal's own `settle` / `renew` charges from there on. Nothing for the past:
+
+- **A bag**: what it still held (`purchasedBytes − consumedBytes`, ≥ 0) is
+  `inherited` and starts `billed` — counted as bought, so only what the
+  renewal adds is charged. At close, bytes served draw on it first and it
+  never comes back: the refund is `billed − max(consumed, inherited)`.
+- **An unlimited plan** inherits nothing: its days left come first, so the
+  close's give-back (`min(days left, billed)`) already keeps them. A plan with
+  no end sells no days at a renewal and locks nothing.
+- The sale's checks hold (rules 3, 4): no rate on a platform panel refuses the
+  renewal `wholesale_rate_missing`; on the reseller's own panels it renews with
+  no leg, and the next renewal tries again. An admin's raise, reset or added
+  days on a plan with no leg still buys nothing — only a renewal locks.
 
 ## An unlimited plan buys its days (F-118-z, D-59 (c))
 
@@ -87,7 +106,8 @@ a `vpn.traffic` leg).
 5. **Settled at close, both ways** (user; D-59 (d), F-118-y). Only for a
    closed Grant (`cancelled`, `expired`, `exhausted`), by `settleAtClose`:
    - `billed > consumed`: `billed − consumed`, priced **down**, as
-     `metered_usage_refund` naming the Grant, `billed` to `consumed`;
+     `metered_usage_refund` naming the Grant, `billed` to `consumed` — or to
+     `inherited` when that is higher (F-118-ab: held bytes never come back);
    - `consumed > billed` (a platform panel joined the group after the last
      raise): those bytes charged as `metered_usage_charge` naming the Grant,
      priced **up**, as far as the reseller's balance covers them

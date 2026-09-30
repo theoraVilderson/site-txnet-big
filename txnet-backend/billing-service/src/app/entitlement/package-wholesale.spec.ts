@@ -44,7 +44,7 @@ type World = {
   resellerBalance?: string;
   status?: GrantStatus;
   /** An existing leg's cursors; none = no row yet. */
-  leg?: { billed: bigint; consumed: bigint };
+  leg?: { billed: bigint; consumed: bigint; inherited?: bigint };
   /** $3.00 per 30 days for `vpn.unlimited.time` when true (F-118-z). */
   timeRate?: boolean;
   /** Days the plan was sold for; null = no end. 30 unless given. */
@@ -67,7 +67,7 @@ function world(w: World = {}) {
     endsAt: w.days === null ? null : new Date(SALE.getTime() + (w.days ?? 30) * DAY_S * 1000),
   };
   const legs: Array<Record<string, unknown> & { billed: bigint; consumed: bigint }> = w.leg
-    ? [{ id: 'leg-1', tenantId: RESELLER, grantId: GRANT, payerTenantId: RESELLER, rateId: 'rate-1', unitSize: GIB, unitPrice: D('0.20000000'), currencyCode: 'USD', meterKey: 'vpn.traffic', ...w.leg }]
+    ? [{ id: 'leg-1', tenantId: RESELLER, grantId: GRANT, payerTenantId: RESELLER, rateId: 'rate-1', unitSize: GIB, unitPrice: D('0.20000000'), currencyCode: 'USD', meterKey: 'vpn.traffic', inherited: BigInt(0), ...w.leg }]
     : [];
   if (w.leg && w.timeLeg) Object.assign(legs[0], { meterKey: 'vpn.unlimited.time', rateId: 'rate-t', unitSize: MONTH_S, unitPrice: D('3.00000000') });
   const timeRate = { id: 'rate-t', packageId: PACKAGE, meterKey: 'vpn.unlimited.time', unitSize: MONTH_S, unitPrice: D('3.00000000'), currencyCode: 'USD', effectiveFrom: new Date('2026-06-01T00:00:00Z') };
@@ -94,7 +94,7 @@ function world(w: World = {}) {
     grantWholesale: {
       findUnique: async () => (legs[0] ? { ...legs[0] } : null),
       create: async ({ data }: { data: Record<string, unknown> }) => {
-        const row = { id: 'leg-1', billed: BigInt(0), consumed: BigInt(0), meterKey: 'vpn.traffic', ...data };
+        const row = { id: 'leg-1', billed: BigInt(0), consumed: BigInt(0), inherited: BigInt(0), meterKey: 'vpn.traffic', ...data };
         legs.push(row);
         return { ...row };
       },
@@ -402,5 +402,80 @@ describe('an unlimited plan closed early gives back its unused days (F-118-z)', 
     const open = closed({ status: GrantStatus.active });
     await leg.settleAtClose(open.tx, GRANT, DAY10);
     expect(open.resellerLedger).toEqual([]);
+  });
+});
+
+describe('a plan sold before F-118-p locks its rate at its next renewal (F-118-ab, D-59 (e))', () => {
+  const RENEWAL = new Date(SALE.getTime() + 20 * DAY_S * 1000);
+
+  it('locks the package\'s rate with no charge; the bag left from before is held, never bought', async () => {
+    // 50 GiB sold before the leg existed, 20 of them used.
+    const w = world({ platformPanel: true, consumedBytes: gib(20) });
+
+    expect(await leg.lockAtRenewal(w.tx, w.grant, RENEWAL)).toBeNull();
+
+    expect(w.resellerLedger).toEqual([]);
+    expect(w.legs[0]).toMatchObject({ rateId: 'rate-1', meterKey: 'vpn.traffic', billed: gib(30), inherited: gib(30), consumed: BigInt(0) });
+  });
+
+  it('the renewal\'s raise is charged, and only it', async () => {
+    const w = world({ platformPanel: true, consumedBytes: gib(20) });
+    await leg.lockAtRenewal(w.tx, w.grant, RENEWAL);
+
+    w.grant.purchasedBytes = gib(100);
+    expect(await leg.settle(w.tx, GRANT, 'adjustment-1')).toBeNull();
+
+    // 50 GiB added at $0.20; the 30 left from before stay free.
+    expect(w.resellerLedger).toEqual([expect.objectContaining({ amount: D('10.00'), reasonType: TenantBillingReasonType.metered_usage_charge, referenceId: 'adjustment-1' })]);
+    expect(w.legs[0].billed).toBe(gib(80));
+  });
+
+  it('at close gives back only bought bytes: what was held from before never comes back', async () => {
+    // 30 GiB held from before, 50 bought at the renewal; 10 served on a platform panel since.
+    const w = world({ status: GrantStatus.cancelled, leg: { billed: gib(80), consumed: gib(10), inherited: gib(30) } });
+
+    await leg.settleAtClose(w.tx, GRANT);
+    await leg.settleAtClose(w.tx, GRANT);
+
+    // The 50 bought are all unserved: the first 30 served draw on the held bytes.
+    expect(w.resellerLedger).toEqual([expect.objectContaining({ amount: D('10.00'), reasonType: TenantBillingReasonType.metered_usage_refund, referenceId: GRANT })]);
+
+    const past = world({ status: GrantStatus.cancelled, leg: { billed: gib(80), consumed: gib(40), inherited: gib(30) } });
+    await leg.settleAtClose(past.tx, GRANT);
+    // 40 served: 30 held, 10 bought; 40 of the bought come back.
+    expect(past.resellerLedger).toEqual([expect.objectContaining({ amount: D('8.00'), reasonType: TenantBillingReasonType.metered_usage_refund })]);
+  });
+
+  it('an unlimited plan locks its time rate and the renewal buys only the days it adds', async () => {
+    const w = world({ platformPanel: true, trafficUnlimited: true, purchasedBytes: BigInt(0), timeRate: true });
+
+    expect(await leg.lockAtRenewal(w.tx, w.grant, RENEWAL)).toBeNull();
+    expect(w.legs[0]).toMatchObject({ meterKey: 'vpn.unlimited.time', billed: BigInt(0), inherited: BigInt(0) });
+    expect(await leg.renew(w.tx, GRANT, 30, 'renewal-1')).toBeNull();
+
+    expect(w.resellerLedger).toEqual([expect.objectContaining({ amount: D('3.00'), referenceId: 'renewal-1' })]);
+  });
+
+  it('a plan with a leg, the platform\'s own, or a metered Grant is left as it is', async () => {
+    for (const w of [
+      world({ platformPanel: true, leg: { billed: gib(50), consumed: BigInt(0) } }),
+      world({ platformPanel: true, tenantType: TenantType.platform_owner }),
+      world({ platformPanel: true, billingMode: VariantBillingMode.metered }),
+    ]) {
+      const before = w.legs.length;
+      expect(await leg.lockAtRenewal(w.tx, w.grant, RENEWAL)).toBeNull();
+      expect(w.legs.length).toBe(before);
+      expect(w.resellerLedger).toEqual([]);
+    }
+  });
+
+  it('no rate is refused `wholesale_rate_missing` on a platform panel, as at a sale; on its own panels it renews with no leg', async () => {
+    const onPlatform = world({ platformPanel: true, rate: false });
+    expect(await leg.lockAtRenewal(onPlatform.tx, onPlatform.grant, RENEWAL)).toBe('wholesale_rate_missing');
+    expect(onPlatform.legs).toEqual([]);
+
+    const own = world({ platformPanel: false, rate: false });
+    expect(await leg.lockAtRenewal(own.tx, own.grant, RENEWAL)).toBeNull();
+    expect(own.legs).toEqual([]);
   });
 });

@@ -65,6 +65,8 @@ function build(row: Partial<Row>, opts: { usedBytes?: bigint; close?: Close | nu
     },
     leaseClose: { findUnique: async () => opts.close ?? null },
     grantWholesale: { findUnique: async () => null },
+    // The platform's own plan: no leg to lock at a renewal (F-118-ab).
+    tenant: { findUnique: async () => ({ tenantType: 'platform_owner' }) },
     quotaAdjustment: { create: async ({ data }: { data: unknown }) => data },
     outboxEvent: {
       create: async ({ data }: { data: { type: string; payload: Record<string, unknown> } }) => {

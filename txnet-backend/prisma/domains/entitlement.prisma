@@ -416,6 +416,8 @@ model GrantWholesale {
   currencyCode  String
   billed        BigInt   @default(0)
   consumed      BigInt   @default(0)
+  /// The bag a plan sold before its leg still held when the leg was locked at its renewal (F-118-ab): counted in `billed`, never charged, never given back.
+  inherited     BigInt   @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
 

@@ -68,6 +68,8 @@ function build(row: Partial<Row> | null, usedPerConfig: bigint[], opts: { moved?
     leaseClose: { findUnique: async () => null },
     outboxEvent: { create: async () => ({ id: 'e' }) },
     grantWholesale: { findUnique: async () => null },
+    // The platform's own plan: no leg to lock at a renewal (F-118-ab).
+    tenant: { findUnique: async () => ({ tenantType: 'platform_owner' }) },
     quotaAdjustment: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         adjustments.push(data);

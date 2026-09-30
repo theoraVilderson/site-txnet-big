@@ -111,7 +111,7 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
 
   const grant = await tx.grant.findUnique({
     where: { id: input.grantId },
-    select: { id: true, tenantId: true, userId: true, suspendedAt: true, status: true, statusReason: true, billingMode: true, trafficUnlimited: true, purchasedBytes: true, endsAt: true, consumedBytes: true },
+    select: { id: true, tenantId: true, variantId: true, userId: true, suspendedAt: true, status: true, statusReason: true, billingMode: true, trafficUnlimited: true, purchasedBytes: true, endsAt: true, consumedBytes: true },
   });
   if (!grant) throw new EntitlementRefused('grant_not_found', input.grantId);
   if (!RENEWABLE.has(grant.status)) throw new EntitlementRefused('grant_not_renewable', `${grant.id} is ${grant.status}`);
@@ -125,6 +125,10 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
   const carry = bagged
     ? carryOver({ purchasedBytes: grant.purchasedBytes, usedBytes, bytes: input.bytes })
     : { debtBytes: BigInt(0), forgivenBytes: BigInt(0), raiseBytes: BigInt(0) };
+
+  // A plan sold with no leg locks its package's rate now, before it moves (F-118-ab).
+  const unlocked = await PACKAGE_WHOLESALE.lockAtRenewal(tx, grant, at);
+  if (unlocked) throw new EntitlementRefused(unlocked, grant.id);
 
   const purchasedBytes = grant.purchasedBytes + carry.raiseBytes;
   const from = grant.endsAt && grant.endsAt.getTime() > at.getTime() ? grant.endsAt : at;

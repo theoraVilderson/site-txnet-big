@@ -129,6 +129,8 @@ describe('renewGrant on a Grant whose period ended', () => {
         },
       },
       grantWholesale: { findUnique: async () => null },
+      // The platform's own plan: no leg to lock at a renewal (F-118-ab).
+      tenant: { findUnique: async () => ({ tenantType: 'platform_owner' }) },
       quotaAdjustment: { create: async ({ data }: { data: unknown }) => data },
     };
     return { tx: tx as unknown as Prisma.TransactionClient, writes, events };
