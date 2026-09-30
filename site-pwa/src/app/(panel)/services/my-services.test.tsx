@@ -222,7 +222,7 @@ describe("the verdicts, config statuses and refusals billing can answer", () => 
     for (const state of DRIFT_STATES) {
       expect(DRIFT_VERDICTS[state].whyKey === null).toBe(state === "synced");
     }
-    // The list never answers a retired config: the user deleted it.
+    // The list never answers a retired config: an admin or a drain retired it.
     expect([...CONFIG_STATUSES, "retired"].sort()).toEqual(enumOf(NETWORK_PRISMA, "ConfigStatus").sort());
     expect([...CONFIG_ACTION_REFUSALS].sort()).toEqual([...rejectionsBillingCanAnswer(), "failed"].sort());
     expect(Object.keys(REFUSAL_KEYS).sort()).toEqual([...CONFIG_ACTION_REFUSALS].sort());
@@ -355,9 +355,8 @@ describe("a Grant's servers, under details", () => {
   });
 
   it("acts on the ticked configs in one request, names the refused one, and reads the list again", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     configAction.mockResolvedValue({
-      action: "retire",
+      action: "regenerate",
       results: [
         { configId: "c1", ok: true },
         { configId: "c2", ok: false, reason: "config_changed" },
@@ -366,9 +365,9 @@ describe("a Grant's servers, under details", () => {
     const user = await open([CONFIG, { ...CONFIG, id: "c2", protocol: "trojan" }]);
 
     await user.click(screen.getByRole("checkbox", { name: "myServices.configs.selectAll" }));
-    await user.click(screen.getByRole("button", { name: "myServices.configs.bulkRetire" }));
+    await user.click(screen.getByRole("button", { name: "myServices.configs.bulkRegenerate" }));
 
-    await waitFor(() => expect(configAction).toHaveBeenCalledWith("retire", ["c1", "c2"]));
+    await waitFor(() => expect(configAction).toHaveBeenCalledWith("regenerate", ["c1", "c2"]));
     expect(await screen.findByText("myServices.configs.done:1")).toBeInTheDocument();
     const refused = screen.getByRole("alert");
     expect(refused).toHaveTextContent("trojan · de-fra");
@@ -376,11 +375,11 @@ describe("a Grant's servers, under details", () => {
     await waitFor(() => expect(grantConfigs).toHaveBeenCalledTimes(2));
   });
 
-  it("deletes nothing when the confirmation is declined", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(false);
-    const user = await open([CONFIG]);
-    await user.click(screen.getByRole("button", { name: "myServices.configs.retire" }));
-    expect(configAction).not.toHaveBeenCalled();
+  it("offers no delete, on one config or the ticked ones (F-027-ac1)", async () => {
+    const user = await open([CONFIG, { ...CONFIG, id: "c2", protocol: "trojan" }]);
+    await user.click(screen.getByRole("checkbox", { name: "myServices.configs.selectAll" }));
+    expect(screen.getByRole("button", { name: "myServices.configs.bulkRegenerate" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /retire|delete/i })).not.toBeInTheDocument();
   });
 
   it("names a server by its panel's label, else its protocol and region", () => {

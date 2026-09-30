@@ -56,8 +56,8 @@ const READY_MS = 10_000;
  *    (`autoOpen`); one tap on any other.
  * 4. **Subscription link** — one row: copy, and a QR in a dialog. Read only
  *    when a copy or the QR needs it.
- * 5. **Manage** — folded: the 30 days, each server with a new link and
- *    delete, and resetting the subscription link. Everything that can break a
+ * 5. **Manage** — folded: the 30 days, each server with a new link (no
+ *    delete, F-027-ac1), and resetting the subscription link. Everything that can break a
  *    working setup is here, never above it. Also how much this service's
  *    notices tell (`NoticeLevel`, F-601-o); "essential only" shows as a chip
  *    beside the status, so a muted service is never a surprise. And the
@@ -67,7 +67,7 @@ const READY_MS = 10_000;
  * The configs and the link are read once per row and shared by 3–5, so a
  * reset under "manage" replaces the link row 4 copies. So is the search over
  * them: one box narrows both 3 and 5, and what it hides is neither copied nor
- * deleted.
+ * given a new link.
  *
  * Memoised: the page re-renders when its URL or data moves, and a row whose
  * props did not move has nothing to redraw.

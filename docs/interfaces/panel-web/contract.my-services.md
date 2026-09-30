@@ -106,10 +106,9 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
     a word and nothing else). Each `DriftState` has a label and — except
     `synced` — a sentence; the spec reads the enum out of `network.prisma`, so
     a new verdict is red there, not a blank pill. A ceiling the panel has not fully taken reads as queued.
-11. **An action answers per config** (user, 2026-09-23). New key and delete, on
-    one config or the ticked ones, in one request; delete asks first. The done
-    count and each refused config — by the label it had when pressed, with its
-    reason's sentence — are shown, then the list is read again. A 4xx is the
+11. **An action answers per config** (user, 2026-09-23). New key, on one or the ticked ones, in one request;
+    **no delete** (F-027-ac1: it cannot be undone). The done count and each refused config — by its label
+    when pressed, with its reason's sentence — are shown, then the list is read again. A 4xx is the
     request itself and changes nothing on screen. A spent allowance offers no new key; a priced
     Grant says its free ones left, the price, or none instead (F-118-r, `regenerateOffer`). Read only when opened.
 12. **Metering down is not service down.** While `collection-health` answers
@@ -168,7 +167,7 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
     inline block. **The configs are open from the start on the page's first
     three `active`/`pending` rows** and one tap on the rest: each open row is
     one `CONFIG_LIST` read and a page holds 20. **"Manage"**, folded at the
-    card's foot, holds the 30 days, the configs' new link and delete, and
+    card's foot, holds the 30 days, the configs' new link, and
     reset — what can break a working setup, never above it. The row holds one
     config read and one link, so a reset replaces the link the row copies.
     The 30 days (billing's `GRANT_USAGE`) are read only under "manage": one
@@ -210,7 +209,7 @@ nothing, and one ask at a time; copy and QR on the row, reset only under
 `ConfigStatus` against `network.prisma` and the refusals against billing's
 tuple; usage, days left, the countdown, the verdict button and a healthy server's
 silence, a server's name, the queued ceiling, a bulk
-delete with one refusal, a declined confirm, and a spent allowance. F-111-f:
+new link with one refusal, no delete offered, and a spent allowance. F-111-f:
 the "being prepared" line on a pending row only, and
 `services/_hooks/useGrantsPage.test.ts` — a delivery and a refund each re-read
 without a skeleton, an event for a row not shown pending (or with no
@@ -230,14 +229,14 @@ name, the key only where none was published.
 F-307-c: `services/connection.test.tsx` — the `.conf` for a whole line and
 none for a partial one, a line's name, shares exact past 2^53 and a bar
 never full with bytes left, 30 bars read under "manage" only, an open row
-offering no new link, delete or reset, per-line copy and a QR dialog, "copy
+offering no new link or reset, per-line copy and a QR dialog, "copy
 all", a closed row opening with one tap, the download on a whole WireGuard
 line only, the two empty-lines sentences, and the link row unread until
 asked. F-307-i: one rename per config, a save that re-reads and copies the
 line billing named, an empty name clearing to the default, Escape writing
 nothing, and a refusal keeping the field. F-307-l: the matcher's folding,
 no box under 6 configs, the lines narrowed with a "none" sentence, and a
-bulk delete reaching only the configs shown.
+bulk action reaching only the configs shown.
 
 ## Not covered
 

@@ -14,9 +14,9 @@ import { ConfigActionBody, configActionSchema, ConfigLabelBody, configLabelSchem
 const E = BackendI18nKeys.errors.billing;
 
 /**
- * A user's own configs (F-027-ac): the list under one Grant, and the actions
- * the user may take on them — `regenerate` and `retire`, on one config or up
- * to fifty.
+ * A user's own configs (F-027-ac): the list under one Grant, and the action
+ * the user may take on them — `regenerate`, on one config or up to fifty. No
+ * `retire`: a user does not delete a config (F-027-ac1); a reseller's admin does.
  *
  * Whose configs is the gate's `X-User-Id`, never a field. Another user's Grant
  * is the same 404 as a missing one; another user's config is the same

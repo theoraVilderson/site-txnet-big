@@ -203,7 +203,7 @@ describe("a row's configs", () => {
   it("offers nothing that changes a server: no new link, no delete, no reset", async () => {
     await open([CONFIG]);
     expect(grantUsage).not.toHaveBeenCalled();
-    for (const name of ["myServices.configs.regenerate", "myServices.configs.retire", "myServices.link.reset"]) {
+    for (const name of ["myServices.configs.regenerate", "myServices.link.reset"]) {
       expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
     }
   });
@@ -421,17 +421,16 @@ describe("finding one config among many (user, 2026-09-26)", () => {
     expect(screen.getByText("myServices.search.none:ams-9")).toBeInTheDocument();
   });
 
-  it("under manage, ticks and deletes only the configs it shows", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("under manage, ticks and acts on only the configs it shows", async () => {
     const configAction = vi.mocked(billingApi.configAction);
-    configAction.mockResolvedValue({ action: "retire", results: [{ ok: true, configId: "c1" }] } as never);
+    configAction.mockResolvedValue({ action: "regenerate", results: [{ ok: true, configId: "c1" }] } as never);
     const { user } = await openRow(many(), "manage");
 
-    // A config ticked before the search is not deleted by one it hid.
+    // A config ticked before the search is not acted on once it is hidden.
     await user.click(screen.getByRole("checkbox", { name: "NL 1" }));
     await user.type(screen.getByRole("searchbox"), "ams-2");
     await user.click(screen.getByRole("checkbox", { name: "myServices.configs.selectAll" }));
-    await user.click(screen.getByRole("button", { name: "myServices.configs.bulkRetire" }));
-    await waitFor(() => expect(configAction).toHaveBeenCalledWith("retire", ["c2"]));
+    await user.click(screen.getByRole("button", { name: "myServices.configs.bulkRegenerate" }));
+    await waitFor(() => expect(configAction).toHaveBeenCalledWith("regenerate", ["c2"]));
   });
 });

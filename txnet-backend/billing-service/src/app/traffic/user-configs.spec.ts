@@ -304,10 +304,12 @@ describe('UserConfigsService.act', () => {
   it('runs each config in its own transaction, as the gate’s user', async () => {
     const { service, actions, asked, inTenant } = build();
 
-    const results = await inTenant(() => service.act(USER, 'retire', [C1, C2]));
+    const results = await inTenant(() => service.act(USER, 'regenerate', [C1, C2]));
 
     expect(asked.transactions).toBe(2);
-    expect(actions.retire).toHaveBeenCalledWith(expect.anything(), { configId: C1, actor: { actorType: ActorType.user, actorId: USER } });
+    expect(actions.regenerate).toHaveBeenCalledWith(expect.anything(), { configId: C1, actor: { actorType: ActorType.user, actorId: USER } });
+    // A user never retires a config of their own (F-027-ac1): that is an admin's step.
+    expect(actions.retire).not.toHaveBeenCalled();
     expect(results).toEqual([
       { configId: C1, ok: true },
       { configId: C2, ok: true },
@@ -332,11 +334,11 @@ describe('UserConfigsService.act', () => {
 
   it('reports a throw that is not a refusal as `failed`, after committing the ones before it', async () => {
     const { service, actions, inTenant } = build();
-    actions.retire.mockImplementationOnce(async () => undefined).mockImplementationOnce(async () => {
+    actions.regenerate.mockImplementationOnce(async () => ({ uuid: 'u', regenerateUsedCount: 1 })).mockImplementationOnce(async () => {
       throw new Error('connection reset');
     });
 
-    const results = await inTenant(() => service.act(USER, 'retire', [C1, C2]));
+    const results = await inTenant(() => service.act(USER, 'regenerate', [C1, C2]));
 
     expect(results).toEqual([
       { configId: C1, ok: true },
@@ -353,14 +355,15 @@ describe('UserConfigsService.act', () => {
 });
 
 describe('configActionSchema', () => {
-  it('takes the two user actions on one to fifty config ids', () => {
-    expect(configActionSchema.parse({ action: 'retire', configIds: [C1] })).toEqual({ action: 'retire', configIds: [C1] });
+  it('takes a new link, the one user action, on one to fifty config ids — never a delete (F-027-ac1)', () => {
+    expect(configActionSchema.parse({ action: 'regenerate', configIds: [C1] })).toEqual({ action: 'regenerate', configIds: [C1] });
+    expect(configActionSchema.safeParse({ action: 'retire', configIds: [C1] }).success).toBe(false);
     expect(configActionSchema.safeParse({ action: 'disable', configIds: [C1] }).success).toBe(false);
     expect(configActionSchema.safeParse({ action: 'move', configIds: [C1] }).success).toBe(false);
-    expect(configActionSchema.safeParse({ action: 'retire', configIds: [] }).success).toBe(false);
-    expect(configActionSchema.safeParse({ action: 'retire', configIds: ['nope'] }).success).toBe(false);
+    expect(configActionSchema.safeParse({ action: 'regenerate', configIds: [] }).success).toBe(false);
+    expect(configActionSchema.safeParse({ action: 'regenerate', configIds: ['nope'] }).success).toBe(false);
     const tooMany = Array.from({ length: MAX_BULK_CONFIGS + 1 }, () => C1);
-    expect(configActionSchema.safeParse({ action: 'retire', configIds: tooMany }).success).toBe(false);
+    expect(configActionSchema.safeParse({ action: 'regenerate', configIds: tooMany }).success).toBe(false);
   });
 });
 
@@ -430,8 +433,8 @@ describe('UserConfigsController', () => {
     await expect(controller.list(GRANT, req(USER) as never)).rejects.toBeInstanceOf(NotFoundException);
     expect(configs.listForGrant).toHaveBeenCalledWith(USER, GRANT);
 
-    await controller.act({ action: 'retire', configIds: [C1] }, { ...req(USER), body: { userId: 'someone-else' } } as never);
-    expect(configs.act).toHaveBeenCalledWith(USER, 'retire', [C1]);
+    await controller.act({ action: 'regenerate', configIds: [C1] }, { ...req(USER), body: { userId: 'someone-else' } } as never);
+    expect(configs.act).toHaveBeenCalledWith(USER, 'regenerate', [C1]);
   });
 
   it('reads and acts under two buckets of their own', () => {

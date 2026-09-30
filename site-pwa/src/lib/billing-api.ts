@@ -319,8 +319,8 @@ export type DriftState = (typeof DRIFT_STATES)[number];
 export const CONFIG_STATUSES = ["active", "frozen", "disabled_by_admin", "disabled_by_system"] as const;
 export type ConfigStatus = (typeof CONFIG_STATUSES)[number];
 
-/** The two actions a user may take on a config (user, 2026-09-23). */
-export type ConfigAction = "regenerate" | "retire";
+/** The one action a user may take on a config: a new link. No delete (F-027-ac1). */
+export type ConfigAction = "regenerate";
 
 /**
  * Why one config's action wrote nothing: billing's `CONFIG_ACTION_REJECTIONS`

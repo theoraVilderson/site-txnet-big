@@ -7,13 +7,20 @@ import { ConfigActionRefused, ConfigActionsService, type ConfigActionRejection }
 import { nameGrantLines } from './line-names';
 import { foldConfigText } from './config-text';
 
-/** What a user may do to their own config from the panel (user, 2026-09-23). Enable/disable is an operator's switch; a move needs a panel list users do not have. */
-export const USER_CONFIG_ACTIONS = ['regenerate', 'retire'] as const;
+/**
+ * What a user may do to their own config from the panel: a new link, and
+ * nothing else. Enable/disable is an operator's switch and a move needs a
+ * panel list users do not have (user, 2026-09-23); a delete is gone too
+ * (F-027-ac1, user 2026-09-30) — it cannot be undone, and a user who ticked
+ * every config was left with a paid service and no way to connect. Retiring is
+ * an admin's step (`ADMIN_CONFIG_ACTIONS`).
+ */
+export const USER_CONFIG_ACTIONS = ['regenerate'] as const;
 export type UserConfigAction = (typeof USER_CONFIG_ACTIONS)[number];
 
 /**
  * What a reseller's admin may do to one of its users' configs (F-311-g): the
- * user's two, plus the operator's switch and a move. A regenerate here is
+ * user's new link, plus the operator's switch, a retire and a move. A regenerate here is
  * outside the user's cap (`ConfigActionsService.regenerate`).
  */
 export const ADMIN_CONFIG_ACTIONS = ['regenerate', 'disable', 'enable', 'retire', 'move'] as const;
@@ -233,8 +240,7 @@ export class UserConfigsService {
   act(userId: string, action: UserConfigAction, configIds: readonly string[]): Promise<UserConfigOutcome[]> {
     const actor = { actorType: ActorType.user, actorId: userId };
     return this.each(action, configIds, async (tx, configId) => {
-      if (action === 'regenerate') await this.actions.regenerate(tx, { configId, actor });
-      else await this.actions.retire(tx, { configId, actor });
+      await this.actions.regenerate(tx, { configId, actor });
     });
   }
 

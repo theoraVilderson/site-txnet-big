@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, KeyRound, Loader2, Trash2 } from "lucide-react";
+import { AlertCircle, KeyRound, Loader2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
@@ -27,8 +27,12 @@ type Refused = Extract<ConfigActionOutcome, { ok: false }>;
 
 /**
  * One Grant's servers under "details" (F-027-ac): each one's share of the
- * traffic, and the two actions a user may take — a new link and delete — on
- * one server or on the ones ticked. How to connect is not here; it is the
+ * traffic, and the one action a user may take — a new link — on one server
+ * or on the ones ticked. No delete (F-027-ac1, user 2026-09-30): it cannot be
+ * undone, and ticking every server left a paid service with nothing to
+ * connect to; a reseller's admin retires one (`AdminConfigs`).
+ *
+ * How to connect is not here; it is the
  * row's "connect", so nothing on this list is pressed by someone who only
  * wanted a link.
  *
@@ -38,13 +42,12 @@ type Refused = Extract<ConfigActionOutcome, { ok: false }>;
  * a green "synced" on every row taught users a word and nothing else.
  *
  * **An action answers per server** (user, 2026-09-23). The list is read again
- * after every action, because a deleted one leaves it and a new link spends
- * one of its allowance; the refused ones are named with billing's reason
+ * after every action, because a new link spends one of its allowance; the refused ones are named with billing's reason
  * under the list, by the name they had when they were pressed.
  *
  * **Only what is shown is acted on.** `shown` is the row's search over the
  * list (user, 2026-09-26); a config ticked and then hidden by a search is not
- * a target, so "delete selected" never reaches one the user cannot see.
+ * a target, so "new link for selected" never reaches one the user cannot see.
  */
 export function GrantConfigs({
   configs,
@@ -74,7 +77,6 @@ export function GrantConfigs({
 
   async function act(action: ConfigAction, ids: string[]) {
     if (busy || ids.length === 0) return;
-    if (action === "retire" && !window.confirm(t("common", C.retireConfirm, { count: ids.length }))) return;
     const labels = new Map(every.map((r) => [r.id, configName(r)]));
     setBusy(action);
     setActError(null);
@@ -152,14 +154,6 @@ export function GrantConfigs({
             className="rounded-xl border border-card-border bg-card-bg px-3 py-1.5 font-bold text-text-primary disabled:opacity-50"
           >
             {t("common", C.bulkRegenerate)}
-          </button>
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() => void act("retire", [...selected])}
-            className="rounded-xl border border-error-border bg-card-bg px-3 py-1.5 font-bold text-error disabled:opacity-50"
-          >
-            {t("common", C.bulkRetire)}
           </button>
         </div>
       )}
@@ -316,15 +310,6 @@ function ConfigItem({
           {t("common", C.regenerate)}
         </button>
         <span className="text-xs text-text-secondary">{offerText(offer)}</span>
-        <button
-          type="button"
-          disabled={busy !== null}
-          onClick={() => onAct("retire")}
-          className="ms-auto flex items-center gap-1.5 rounded-xl border border-error-border px-3 py-1.5 text-xs font-bold text-error hover:bg-error-bg disabled:opacity-50"
-        >
-          <Trash2 size={14} aria-hidden />
-          {t("common", C.retire)}
-        </button>
       </div>
     </li>
   );
