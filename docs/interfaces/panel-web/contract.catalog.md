@@ -123,7 +123,10 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    inbound ticked" when none, F-114-b), `healthyMembers` and, off `mirror`,
    "not delivered yet". A failed list costs the choices, never the form.
 10e. **A metered variant sells at a rate per GB** (F-118-m over billing's
-   rate-card routes). The new-variant form and the wizard ask a metered
+   rate-card routes). The billing mode leads the variant form (`VariantFields`),
+   never under "more settings": it decides what the price means. A metered
+   variant's price is an optional one-off at purchase, blank sends `0`
+   (`firstPrice`). The new-variant form and the wizard ask a metered
    variant its mode (`RATE_CARD_MODES`: prepaid, postpaid) and price per GB,
    sent as `rateCard` in the one shape billing serves (`variantBody`:
    `vpn.traffic`, 2^30, nothing included, then metered). A metered card shows

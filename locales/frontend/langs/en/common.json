@@ -1296,6 +1296,8 @@
       "permanent": "Permanent",
       "days": "{{count}} days",
       "price": "First price (USD)",
+      "meteredPrice": "One-off fee at purchase (optional)",
+      "meteredPriceHint": "A metered variant earns from its price per GB. Blank means 0: buying it is free and only usage is charged.",
       "quotas": "Quotas",
       "addQuota": "Add a quota",
       "metric": "Metric",
@@ -1562,7 +1564,7 @@
     },
     "rateCard": {
       "title": "{{meter}} — rate per GB",
-      "mode": "How it is paid",
+      "mode": "When usage is charged",
       "modes": {
         "prepaid": "Prepaid — bought from the wallet before use",
         "postpaid": "Postpaid — money held, charged after use"

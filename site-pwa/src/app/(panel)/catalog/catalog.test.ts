@@ -782,6 +782,14 @@ describe("a metered variant's rate per GB (F-118-m, ADR-0105 decision 10)", () =
     expect(validateVariantForm({ ...metered(), ratePerGb })).toHaveProperty("ratePerGb");
   });
 
+  it("takes a metered variant's price as an optional one-off at purchase: blank sends 0, a prepaid one still needs it", () => {
+    expect(validateVariantForm({ ...metered(), price: "" })).toEqual({});
+    expect(variantBody({ ...metered(), price: " " }, "network_access").price).toBe("0");
+    expect(variantBody({ ...metered(), price: "2" }, "network_access").price).toBe("2");
+    expect(validateVariantForm({ ...metered(), price: "-1" })).toHaveProperty("price");
+    expect(validateVariantForm({ ...metered(), billingMode: "prepaid", price: "", quotas: [] })).toHaveProperty("price");
+  });
+
   it("asks no rate of a prepaid variant", () => {
     expect(validateVariantForm({ ...metered(), billingMode: "prepaid", ratePerGb: "", quotas: [] })).toEqual({});
   });

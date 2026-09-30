@@ -406,17 +406,39 @@ export function VariantFields({
 }) {
   const { t } = useLocale();
   const [advanced, setAdvanced] = useState(false);
+  const metered = form.billingMode === "metered";
   const setQuota = (i: number, patch: Partial<VariantForm["quotas"][number]>) =>
     set("quotas", form.quotas.map((q, j) => (j === i ? { ...q, ...patch } : q)));
 
   return (
     <div className="flex flex-col gap-3">
+      {/* The billing mode leads, not under "advanced": it decides what the price means and whether a rate is asked. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={t("common", K.variant.billingMode)} hint={t("common", K.variantHint.billingMode)}>
+          <Select value={form.billingMode} onChange={(v) => set("billingMode", v as VariantForm["billingMode"])} options={BILLING_MODES.map((m) => ({ value: m, label: t("common", K.billingMode[m]) }))} />
+        </Field>
+        {metered ? (
+          <Field label={t("common", K.variant.meteredPrice)} error={errors.price} hint={t("common", K.variant.meteredPriceHint)}>
+            <input className={input} dir="ltr" inputMode="decimal" placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} />
+          </Field>
+        ) : (
+          <Field label={t("common", K.variant.price)} error={errors.price}>
+            <input className={input} dir="ltr" inputMode="decimal" value={form.price} onChange={(e) => set("price", e.target.value)} />
+          </Field>
+        )}
+      </div>
+      {metered && (
+        <FirstRateFields
+          mode={form.rateMode}
+          price={form.ratePerGb}
+          error={errors.ratePerGb}
+          onMode={(m) => set("rateMode", m)}
+          onPrice={(p) => set("ratePerGb", p)}
+        />
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={t("common", K.variant.durationDays)} error={errors.durationDays} hint={t("common", K.variant.durationHint)}>
           <input className={input} dir="ltr" inputMode="numeric" value={form.durationDays} onChange={(e) => set("durationDays", e.target.value)} />
-        </Field>
-        <Field label={t("common", K.variant.price)} error={errors.price}>
-          <input className={input} dir="ltr" inputMode="decimal" value={form.price} onChange={(e) => set("price", e.target.value)} />
         </Field>
         <Field label={t("common", K.variant.sku)} error={errors.sku} hint={t("common", K.variant.skuHint)}>
           <span className="flex gap-1">
@@ -482,20 +504,8 @@ export function VariantFields({
         <ChevronDown size={14} className={advanced ? "rotate-180" : ""} aria-hidden />
         {t("common", K.wizard.advanced)}
       </button>
-      {form.billingMode === "metered" && (
-        <FirstRateFields
-          mode={form.rateMode}
-          price={form.ratePerGb}
-          error={errors.ratePerGb}
-          onMode={(m) => set("rateMode", m)}
-          onPrice={(p) => set("ratePerGb", p)}
-        />
-      )}
       {advanced && (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field label={t("common", K.variant.billingMode)} hint={t("common", K.variantHint.billingMode)}>
-            <Select value={form.billingMode} onChange={(v) => set("billingMode", v as VariantForm["billingMode"])} options={BILLING_MODES.map((m) => ({ value: m, label: t("common", K.billingMode[m]) }))} />
-          </Field>
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t("common", K.variant.visibility)} hint={t("common", K.variantHint.visibility)}>
             <Select value={form.visibility} onChange={(v) => set("visibility", v as VariantForm["visibility"])} options={VISIBILITIES.map((m) => ({ value: m, label: t("common", K.visibility[m]) }))} />
           </Field>

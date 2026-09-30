@@ -400,7 +400,15 @@ export function ProductWizard({
                 {" · "}
                 {w.variant.durationDays ? t("common", K.variant.days, { count: Number(w.variant.durationDays) }) : t("common", K.variant.permanent)}
                 {" · "}
-                <span dir="ltr">{w.variant.price} USD</span>
+                <span dir="ltr">{w.variant.price.trim() || "0"} USD</span>
+                {w.variant.billingMode === "metered" && (
+                  <>
+                    {" · "}
+                    {t("common", K.billingMode.metered)}
+                    {" · "}
+                    {t("common", K.rateCard.perGbShown, { price: `${w.variant.ratePerGb.trim()} USD` })}
+                  </>
+                )}
                 {takesPanelGroup(kind) && (
                   <>
                     {" · "}

@@ -515,10 +515,13 @@ export const emptyVariantForm = (): VariantForm => ({
   ratePerGb: "",
 });
 
+/** A metered variant earns on its rate, so its price is an optional one-off at purchase: blank is 0. */
+const firstPrice = (f: VariantForm) => (f.billingMode === "metered" && blank(f.price) ? "0" : f.price.trim());
+
 export function validateVariantForm(f: VariantForm): Errors<VariantForm> {
   const errors: Errors<VariantForm> = {};
   if (!SKU.test(f.sku.trim().toUpperCase())) errors.sku = E.sku;
-  if (!DECIMAL.test(f.price.trim())) errors.price = E.decimal;
+  if (!DECIMAL.test(firstPrice(f))) errors.price = E.decimal;
   if (!blank(f.durationDays)) {
     const days = Number(f.durationDays.trim());
     if (!/^\d+$/.test(f.durationDays.trim()) || days < 1 || days > 3650) errors.durationDays = E.duration;
@@ -555,7 +558,7 @@ export function variantBody(f: VariantForm, kind: FulfilmentKind): CreateVariant
     visibility: f.visibility,
     qualityTier: f.qualityTier,
     durationDays: blank(f.durationDays) ? null : Number(f.durationDays.trim()),
-    price: f.price.trim(),
+    price: firstPrice(f),
     ...(f.quotas.length ? { quotas: quotasOf(f.quotas) } : {}),
     ...(takesPanelGroup(kind) && group ? { panelGroupId: group } : {}),
     ...(f.billingMode === "metered" ? { rateCard: perGbCard(f.rateMode, f.ratePerGb) } : {}),
