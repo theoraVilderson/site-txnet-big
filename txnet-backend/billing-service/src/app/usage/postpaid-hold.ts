@@ -40,6 +40,9 @@ export type FundingLeg = {
   buy(tx: Prisma.TransactionClient, ctx: Ctx, grow: bigint): Promise<void>;
 };
 
+/** A Grant that is never served again: its last capture leaves nothing to carry. */
+const CLOSED: ReadonlySet<GrantStatus> = new Set([GrantStatus.expired, GrantStatus.cancelled, GrantStatus.exhausted]);
+
 const isVpn = (meter: Pick<GrantMeter, 'meterKey'>) => meter.meterKey === METER_KEYS.vpnTraffic;
 
 /** A postpaid `vpn.traffic` meter's `consumed`: the Grant's bytes less its gifts, which are served first. */
@@ -66,10 +69,10 @@ export class PostpaidHolds {
     return { grant, meter: { ...meter, consumed: vpnConsumed(grant, meter) } };
   }
 
-  /** `consumed − billed` captured from the hold (`usage_charge`), rounded down, never past the hold. */
-  async capture(tx: Prisma.TransactionClient, ctx: Ctx): Promise<Captured> {
+  /** `consumed − billed` captured from the hold (`usage_charge`), rounded down unless `up`, never past the hold. */
+  async capture(tx: Prisma.TransactionClient, ctx: Ctx, round: 'down' | 'up' = 'down'): Promise<Captured> {
     const { meter, grant } = ctx;
-    const { cents, billedTo } = capturable(meter, meter.billed, meter.consumed, await this.heldCents(tx, ctx));
+    const { cents, billedTo } = capturable(meter, meter.billed, meter.consumed, await this.heldCents(tx, ctx), round);
     if (cents === ZERO) return { amount: new Prisma.Decimal(0), billed: meter.billed, walletTransactionId: null };
 
     await this.move(tx, ctx, { billed: billedTo });
@@ -115,9 +118,13 @@ export class PostpaidHolds {
     return { captured: captured.amount, held: toAmount(held), funded };
   }
 
-  /** Captures, releases the rest of the hold, and brings `funded` down to what was paid for. */
+  /**
+   * Captures, releases the rest of the hold, and brings `funded` down to what was paid for.
+   * A closed Grant's capture is its last, so it rounds **up** (F-118-al); a suspended or
+   * frozen one may come back, and its dust is carried to the next capture as ever.
+   */
   async close(tx: Prisma.TransactionClient, ctx: Ctx): Promise<Prisma.Decimal> {
-    const { billed } = await this.capture(tx, ctx);
+    const { billed } = await this.capture(tx, ctx, CLOSED.has(ctx.grant.status) ? 'up' : 'down');
     const open = await this.openHold(tx, ctx);
     if (open) await this.holds.release(tx, { userId: ctx.grant.userId, ownerRef: ctx.meter.id });
     if (ctx.meter.funded !== billed) await this.move(tx, ctx, { funded: billed });

@@ -27,12 +27,12 @@ const GRANT = '11111111-1111-4111-8111-111111111111';
 const USER = '22222222-2222-4222-8222-222222222222';
 const METER_ID = '33333333-3333-4333-8333-333333333333';
 
-function world(opts: { balance?: string; mode?: 'prepaid' | 'postpaid'; consumed?: bigint; purchased?: bigint; billed?: bigint; funded?: bigint; held?: string } = {}) {
+function world(opts: { status?: string; balance?: string; mode?: 'prepaid' | 'postpaid'; consumed?: bigint; purchased?: bigint; billed?: bigint; funded?: bigint; held?: string } = {}) {
   const grant = {
     id: GRANT,
     tenantId: 't1',
     userId: USER,
-    status: 'active',
+    status: opts.status ?? 'active',
     billingMode: VariantBillingMode.metered,
     trafficUnlimited: false,
     lowBalanceNoticeAt: null,
@@ -244,6 +244,18 @@ describe('the reserve paths reach the meter hold (F-118-b)', () => {
     expect(w.meter.funded).toBe(BigInt(768) * MIB);
     expect(w.grant.purchasedBytes).toBe(BigInt(768) * MIB);
     expect(w.meter.billed).toBe(BigInt(768) * MIB);
+  });
+
+  it('a closed Grant releasing charges the last bytes up to a cent; a suspended one carries them (F-118-al)', async () => {
+    // 1 MiB at $2.00 a GiB is 0.2c.
+    const closed = world({ status: 'cancelled', funded: GIB, held: '2.00', consumed: MIB });
+    await closed.reserve.release(closed.tx, { id: GRANT, userId: USER });
+    expect(closed.calls).toEqual(['capture 0.01', 'release 1.99']);
+    expect(closed.meter.billed).toBe(MIB);
+    const suspended = world({ status: 'suspended', funded: GIB, held: '2.00', consumed: MIB });
+    await suspended.reserve.release(suspended.tx, { id: GRANT, userId: USER });
+    expect(suspended.calls).toEqual(['release 2.00']);
+    expect(suspended.meter.billed).toBe(BigInt(0));
   });
 
   it('leaves a prepaid VPN Grant to its block and its own reserve', async () => {

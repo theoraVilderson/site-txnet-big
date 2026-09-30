@@ -71,12 +71,15 @@ export function unitsCovered(meter: Priced, cents: bigint): bigint {
  * A capture over `(billed, consumed]`: the cents it charges, rounded **down**,
  * and where `billed` then stands — past the included part, and only as far as
  * those cents cover. `cents` 0 moves nothing. `limitCents` caps it at a hold.
+ * `up` is a closed Grant's last capture (F-118-al): nothing is carried after
+ * it, so the rest is charged up to a cent rather than forgiven.
  */
-export function capturable(meter: Priced, billed: bigint, consumed: bigint, limitCents?: bigint): { cents: bigint; billedTo: bigint } {
+export function capturable(meter: Priced, billed: bigint, consumed: bigint, limitCents?: bigint, round: 'down' | 'up' = 'down'): { cents: bigint; billedTo: bigint } {
   const from = max(billed, meter.includedQuantity);
   const due = consumed - from;
   if (due <= ZERO) return { cents: ZERO, billedTo: billed };
-  let cents = (due * priceUnits(meter)) / (meter.unitSize * CENT);
+  const priced = due * priceUnits(meter);
+  let cents = round === 'up' ? ceilDiv(priced, meter.unitSize * CENT) : priced / (meter.unitSize * CENT);
   if (limitCents !== undefined) cents = min(cents, limitCents);
   if (cents <= ZERO) return { cents: ZERO, billedTo: billed };
   return { cents, billedTo: from + min(due, unitsCovered(meter, cents)) };

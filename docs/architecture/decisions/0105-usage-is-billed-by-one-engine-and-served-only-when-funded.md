@@ -93,6 +93,11 @@ Two things in the current design stop that:
    impossible (§8.5). The ledger gets whole minor units only (C-02), rounded
    in the buyer's favour; the cursor advances only by what the charged amount
    covers.
+   *Amended 2026-09-30 (user, F-118-al):* a closed Grant's last postpaid
+   capture rounds **up**. Forgiving the dust let a Grant with no start price
+   be opened, used to just under a cent, closed and opened again for free.
+   At most one cent, once per Grant, from the hold; as a prepaid remainder
+   already keeps its dust. A suspension or freeze still rounds down and carries.
 6. **A wallet hold is locked money, not a ledger row.** `wallet_hold` rows and
    `wallet.heldAmount`, written only together, with `CHECK (cachedBalance −
    heldAmount >= 0)`: no debit path — a purchase, a transfer, a block — can

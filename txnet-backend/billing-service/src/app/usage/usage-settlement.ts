@@ -31,8 +31,9 @@ export type { Captured, Ctx, MeterRef, ToppedUp } from './postpaid-hold';
  * **Whole cents, in the buyer's favour.** A block's price is rounded up and
  * buys the units its cents cover, rounded down; a capture is rounded down and
  * `billed` advances only by the units its cents cover, so the rounded-away
- * part is carried to the next capture rather than charged or lost. What is
- * left under a cent at close is never charged. The included quantity is free:
+ * part is carried to the next capture rather than charged or lost. A closed
+ * Grant's last capture has nothing to carry to, so it rounds **up** (F-118-al);
+ * a suspension or freeze still carries. The included quantity is free:
  * the cursors jump over it and nothing prices it.
  *
  * Every write here is in the caller's `tx`, which must come from

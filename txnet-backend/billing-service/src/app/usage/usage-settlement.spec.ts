@@ -156,6 +156,15 @@ describe('usage settlement arithmetic (F-118-g)', () => {
     expect(capturable(meter, n(0), n(3))).toEqual({ cents: n(0), billedTo: n(0) });
   });
 
+  it('rounds a final capture up to a whole cent, so a closed meter owes nothing under a cent (F-118-al)', () => {
+    // 7 messages are 2.1c: 3c charged, all 7 billed — nothing is left to forgive.
+    expect(capturable(meter, n(0), n(7), undefined, 'up')).toEqual({ cents: n(3), billedTo: n(7) });
+    expect(capturable(meter, n(0), n(1), undefined, 'up')).toEqual({ cents: n(1), billedTo: n(1) });
+    // Nothing used is nothing charged; a short hold still caps it.
+    expect(capturable(meter, n(5), n(5), undefined, 'up')).toEqual({ cents: n(0), billedTo: n(5) });
+    expect(capturable(meter, n(0), n(7), n(2), 'up')).toEqual({ cents: n(2), billedTo: n(6) });
+  });
+
   it('never charges the included quantity', () => {
     const plan = { ...meter, includedQuantity: n(100) };
     expect(capturable(plan, n(0), n(100))).toEqual({ cents: n(0), billedTo: n(0) });
@@ -258,16 +267,34 @@ describe('postpaid: held, then captured (ADR-0105 (6))', () => {
     expect(w.row.billed).toBe(n(100));
   });
 
-  it('at close captures, releases the rest, and leaves sub-cent dust uncharged', async () => {
-    const w = world({ funded: n(1000), consumed: n(501) });
+  it('at a final close captures the rest rounded up to a cent, and releases what is left (F-118-al)', async () => {
+    const w = world({ funded: n(1000), consumed: n(501) }, { status: 'expired' });
     w.holds.set(METER_ID, D('3.00'));
     w.wallet.heldAmount = D('3.00');
     await w.service.settleAtClose(w.tx, { grantId: GRANT });
-    // 501 = 150.3c: 150c captured, 500 billed, the 501st never charged.
+    // 501 = 150.3c: 151c captured, all 501 billed — a reopened Grant gets no dust for free.
+    expect(w.calls).toEqual(['capture 1.51', 'release 1.49']);
+    expect(w.row.billed).toBe(n(501));
+    expect(w.row.funded).toBe(n(501));
+    expect(w.holds.has(METER_ID)).toBe(false);
+  });
+
+  it('a close of a Grant that may come back rounds down and carries the dust to its next capture', async () => {
+    const w = world({ funded: n(1000), consumed: n(501) }, { status: 'suspended' });
+    w.holds.set(METER_ID, D('3.00'));
+    w.wallet.heldAmount = D('3.00');
+    await w.service.settleAtClose(w.tx, { grantId: GRANT });
     expect(w.calls).toEqual(['capture 1.50', 'release 1.50']);
     expect(w.row.billed).toBe(n(500));
-    expect(w.row.funded).toBe(n(500));
-    expect(w.holds.has(METER_ID)).toBe(false);
+  });
+
+  it('a final close with nothing used past the last capture charges nothing', async () => {
+    const w = world({ funded: n(1000), consumed: n(500), billed: n(500) }, { status: 'cancelled' });
+    w.holds.set(METER_ID, D('3.00'));
+    w.wallet.heldAmount = D('3.00');
+    await w.service.settleAtClose(w.tx, { grantId: GRANT });
+    expect(w.calls).toEqual(['release 3.00']);
+    expect(w.ledger).toEqual([]);
   });
 
   it('at close without a refund still captures what was used and releases the hold: held money is never kept (F-118-u)', async () => {

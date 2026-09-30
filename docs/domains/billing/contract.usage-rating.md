@@ -53,6 +53,7 @@ the block purchaser's; a zero price or one finer than `Decimal(18, 8)` is
 | a block (prepaid) | the target's price **up** to a cent, clamped to the free balance | buys the units its cents cover, **down**: covers the target, never more than paid |
 | a hold (postpaid) | the target's price **up** to a cent, clamped to the free balance | `funded` = `billed` + the units the hold covers, **down** |
 | a capture | `consumed − billed` priced **down** to a cent, never more than the hold | `billed` advances only by the units those cents cover; the rest is carried to the next capture, not charged and not lost |
+| a closed Grant's last capture (expired, cancelled, exhausted) | `consumed − billed` priced **up** to a cent, never more than the hold; nothing used, nothing charged | `billed` to `consumed`: nothing is left to forgive (F-118-al). A suspension or freeze is not last: it rounds down and carries |
 | a prepaid remainder | `billed − consumed` priced **down** to a cent | `billed` down to `consumed`; sub-cent dust stays taken |
 
 "The free balance" is bounded by the Grant's spending cap, if it has one, and
@@ -60,8 +61,8 @@ each block and capture is counted on it (F-118-i,
 [contract.spending-cap.md](contract.spending-cap.md)).
 A short balance buys a smaller block or holds less, not nothing; only under
 one cent is `insufficient_funds` (a top-up that still has a hold is not
-refused). At close, what is left under a cent of a postpaid meter is never
-charged.
+refused). A closed Grant owes nothing under a cent: its last capture rounds up,
+as a prepaid remainder keeps its dust (ADR-0105 (5), amended).
 
 ## The calls
 
