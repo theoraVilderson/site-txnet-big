@@ -1809,13 +1809,14 @@
       "inactive": "Withdrawn",
       "noRate": "No wholesale rate",
       "perGib": "{{price}} {{currency}} per GiB",
+      "perPeriod": "{{price}} {{currency}} per 30 days of unlimited",
       "otherRate": "{{meter}}: {{price}} {{currency}} per {{size}}",
       "columns": {
         "name": "Package",
         "monthly": "Monthly",
         "yearly": "Yearly",
         "features": "Features",
-        "rate": "Wholesale VPN traffic",
+        "rate": "Wholesale rates",
         "state": "State"
       },
       "form": {
@@ -1828,6 +1829,8 @@
         "features": "Included features",
         "rate": "Wholesale price per GiB of {{meter}} ({{currency}})",
         "rateHint": "What a reseller on this package pays the platform for each GiB its users use on the platform's panels. A change applies to services sold from now on. Empty: resellers on this package cannot sell pay-as-you-go VPN on the platform's panels.",
+        "unlimitedRate": "Wholesale price of an unlimited plan per 30 days of {{meter}} ({{currency}})",
+        "unlimitedRateHint": "What a reseller on this package pays the platform for each 30 days of an unlimited plan it sells on the platform's panels, charged pro rata to the days sold: a 90-day plan pays three times this, a 15-day renewal half of it. Days left when a service closes early come back. A change applies to services sold from now on. Empty: resellers on this package cannot sell unlimited plans on the platform's panels.",
         "otherRates": "Other rates in force — set through the API; this form leaves them as they are",
         "submit": "Create package",
         "save": "Save",

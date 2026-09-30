@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -77,8 +77,25 @@ describe("what the page offers is the service's own set", () => {
     for (const reason of reasons) expect(labels[reason], reason).toBeTruthy();
   });
 
-  it("the wholesale meter is VPN traffic, priced per GiB", () => {
-    expect(WHOLESALE_METERS).toEqual([{ meterKey: "vpn.traffic", unitSize: 1073741824 }]);
+  it("the wholesale meters are VPN traffic per GiB and an unlimited plan's time per 30 days (D-59 (c))", () => {
+    expect(WHOLESALE_METERS.map(({ meterKey, unitSize }) => ({ meterKey, unitSize }))).toEqual([
+      { meterKey: "vpn.traffic", unitSize: 1073741824 },
+      { meterKey: "vpn.unlimited.time", unitSize: 2592000 },
+    ]);
+  });
+
+  it("each wholesale meter is a meter the catalog defines, with the unit it counts in", () => {
+    const sql = readdirSync(join(REPO, "txnet-backend/prisma/domains/migrations"))
+      .map((dir) => {
+        try {
+          return read(`prisma/domains/migrations/${dir}/migration.sql`);
+        } catch {
+          return "";
+        }
+      })
+      .join("\n");
+    expect(sql).toMatch(/'vpn\.traffic',\s*'bytes'/);
+    expect(sql).toMatch(/'vpn\.unlimited\.time',\s*'seconds'/);
   });
 });
 
@@ -92,9 +109,10 @@ describe("validatePackage", () => {
     expect(validatePackage(filled({ monthlyPrice: "" })).monthlyPrice).toBeTruthy();
     expect(validatePackage(filled({ monthlyPrice: "1.234" })).monthlyPrice).toBeTruthy();
     expect(validatePackage(filled({ yearlyPrice: "0" })).yearlyPrice).toBeTruthy();
-    expect(validatePackage(filled({ rates: { "vpn.traffic": "0.000000001" } })).rates).toBeTruthy();
-    expect(validatePackage(filled({ rates: { "vpn.traffic": "0" } })).rates).toBeTruthy();
-    expect(validatePackage(filled({ rates: { "vpn.traffic": "0.00000001" } }))).toEqual({});
+    expect(validatePackage(filled({ rates: { ...emptyPackageForm().rates, "vpn.traffic": "0.000000001" } })).rates).toBeTruthy();
+    expect(validatePackage(filled({ rates: { ...emptyPackageForm().rates, "vpn.traffic": "0" } })).rates).toBeTruthy();
+    expect(validatePackage(filled({ rates: { ...emptyPackageForm().rates, "vpn.traffic": "0.00000001" } }))).toEqual({});
+    expect(validatePackage(filled({ rates: { ...emptyPackageForm().rates, "vpn.unlimited.time": "0" } })).rates).toBeTruthy();
   });
 });
 
@@ -105,8 +123,14 @@ describe("createPackageBody", () => {
       monthlyPrice: "40",
       includedFeatureKeys: ["own_sms"],
     });
-    expect(createPackageBody(filled({ rates: { "vpn.traffic": " 0.1 " } })).meterRates).toEqual([
+    expect(createPackageBody(filled({ rates: { "vpn.traffic": " 0.1 ", "vpn.unlimited.time": "" } })).meterRates).toEqual([
       { meterKey: "vpn.traffic", unitSize: "1073741824", unitPrice: "0.1" },
+    ]);
+  });
+
+  it("an unlimited plan's flat price is sent per 30 days, in seconds", () => {
+    expect(createPackageBody(filled({ rates: { "vpn.traffic": "", "vpn.unlimited.time": "4.5" } })).meterRates).toEqual([
+      { meterKey: "vpn.unlimited.time", unitSize: "2592000", unitPrice: "4.5" },
     ]);
   });
 });
@@ -124,10 +148,10 @@ describe("updatePackageBody", () => {
   });
 
   it("a new rate is a whole rate per GiB; a cleared one switches the meter off", () => {
-    expect(updatePackageBody(PKG, { ...packageFormOf(PKG), rates: { "vpn.traffic": "0.15" } })).toEqual({
+    expect(updatePackageBody(PKG, { ...packageFormOf(PKG), rates: { ...packageFormOf(PKG).rates, "vpn.traffic": "0.15" } })).toEqual({
       meterRates: [{ meterKey: "vpn.traffic", unitSize: "1073741824", unitPrice: "0.15" }],
     });
-    expect(updatePackageBody(PKG, { ...packageFormOf(PKG), rates: { "vpn.traffic": "" } })).toEqual({
+    expect(updatePackageBody(PKG, { ...packageFormOf(PKG), rates: { ...packageFormOf(PKG).rates, "vpn.traffic": "" } })).toEqual({
       meterRates: [{ meterKey: "vpn.traffic", unitPrice: null }],
     });
   });
@@ -138,5 +162,31 @@ describe("updatePackageBody", () => {
     expect(otherRates(odd)).toEqual(odd.meterRates);
     expect(updatePackageBody(odd, packageFormOf(odd))).toBeNull();
     expect(otherRates(PKG)).toEqual([]);
+  });
+
+  it("the unlimited rate is read, changed and cleared on its own, never touching the traffic rate", () => {
+    const flat = { meterKey: "vpn.unlimited.time", unitSize: "2592000", unitPrice: "5", currencyCode: "USD", effectiveFrom: "2026-09-30T00:00:00.000Z" };
+    const both: TenantPackage = { ...PKG, meterRates: [...PKG.meterRates, flat] };
+    expect(packageFormOf(both).rates).toEqual({ "vpn.traffic": "0.12", "vpn.unlimited.time": "5" });
+    expect(otherRates(both)).toEqual([]);
+    expect(updatePackageBody(both, { ...packageFormOf(both), rates: { "vpn.traffic": "0.12", "vpn.unlimited.time": "6" } })).toEqual({
+      meterRates: [{ meterKey: "vpn.unlimited.time", unitSize: "2592000", unitPrice: "6" }],
+    });
+    expect(updatePackageBody(both, { ...packageFormOf(both), rates: { "vpn.traffic": "0.12", "vpn.unlimited.time": "" } })).toEqual({
+      meterRates: [{ meterKey: "vpn.unlimited.time", unitPrice: null }],
+    });
+    // a flat price per day through the API is not a 30-day price
+    const daily: TenantPackage = { ...PKG, meterRates: [{ ...flat, unitSize: "86400" }] };
+    expect(packageFormOf(daily).rates["vpn.unlimited.time"]).toBe("");
+    expect(otherRates(daily)).toEqual(daily.meterRates);
+  });
+
+  it("each wholesale field has its own label, hint and list line", () => {
+    for (const m of WHOLESALE_METERS) {
+      expect(m.label, m.meterKey).toBeTruthy();
+      expect(m.hint, m.meterKey).toBeTruthy();
+      expect(m.perUnit, m.meterKey).toBeTruthy();
+    }
+    expect(new Set(WHOLESALE_METERS.map((m) => m.hint)).size).toBe(WHOLESALE_METERS.length);
   });
 });

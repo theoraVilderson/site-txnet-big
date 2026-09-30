@@ -105,8 +105,11 @@ export function PackagesView() {
   const money = (amount: string | null, code: string) => (amount === null ? "—" : formatMoney(amount, code, { lang, t }));
   const rateOf = (p: TenantPackage) => {
     const form = packageFormOf(p);
-    const price = form.rates[WHOLESALE_METERS[0].meterKey];
-    return price ? t("common", K.perGib, { price, currency: p.currencyCode }) : t("common", K.noRate);
+    const lines = WHOLESALE_METERS.flatMap((m) => {
+      const price = form.rates[m.meterKey];
+      return price ? [t("common", m.perUnit, { price, currency: p.currencyCode })] : [];
+    });
+    return lines.length > 0 ? lines.join(" · ") : t("common", K.noRate);
   };
   const cell = "px-3 py-2 text-start";
 

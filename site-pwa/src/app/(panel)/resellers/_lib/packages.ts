@@ -22,13 +22,26 @@ export const PACKAGE_FEATURE_KEYS = [
 /** A GiB in bytes: `vpn.traffic`'s unit, as a rate card prices it (F-118-m). */
 export const GIB = 2 ** 30;
 
+/** 30 days in seconds: the period an unlimited plan's flat wholesale price is asked for (D-59 (c)). */
+export const WHOLESALE_PERIOD = 30 * 24 * 3600;
+
 /**
  * The platform meters a package prices on this form (F-118-n1): what a
- * reseller resells on the platform's panels. Only VPN traffic has a wholesale
- * leg (F-118-n3); a rate on another meter, or in another unit, is shown and
- * left alone ({@link otherRates}).
+ * reseller resells on the platform's panels, each with the field's own words.
+ * VPN traffic per GiB (F-118-n3), and an unlimited plan's flat price per 30
+ * days, charged pro rata to the days sold (F-118-z). A rate on another meter,
+ * or in another unit, is shown and left alone ({@link otherRates}).
  */
-export const WHOLESALE_METERS = [{ meterKey: "vpn.traffic", unitSize: GIB }] as const;
+export const WHOLESALE_METERS = [
+  { meterKey: "vpn.traffic", unitSize: GIB, label: K.form.rate, hint: K.form.rateHint, perUnit: K.perGib },
+  {
+    meterKey: "vpn.unlimited.time",
+    unitSize: WHOLESALE_PERIOD,
+    label: K.form.unlimitedRate,
+    hint: K.form.unlimitedRateHint,
+    perUnit: K.perPeriod,
+  },
+] as const;
 type WholesaleMeter = (typeof WHOLESALE_METERS)[number]["meterKey"];
 
 // tenant-package.schema.ts's shapes, so a refusal is caught before the call.
@@ -36,6 +49,12 @@ const PRICE = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 const UNIT_PRICE = /^(0|[1-9]\d{0,9})(\.\d{1,8})?$/;
 const NAME_MAX = 80;
 const positive = (s: string) => /[1-9]/.test(s);
+
+/** A rate field that is filled but not a rate the schema takes. */
+export function badRate(raw: string): boolean {
+  const v = raw.trim();
+  return v !== "" && (!UNIT_PRICE.test(v) || !positive(v));
+}
 
 export interface PackageForm {
   name: string;
@@ -65,7 +84,7 @@ export function packageFormOf(p: TenantPackage): PackageForm {
 /**
  * The rates in force this form does not edit — another meter, or another
  * unit — shown as they are. A blank field never touches one: the form cannot
- * say what it would mean per GiB.
+ * say what it would mean per GiB or per 30 days.
  */
 export function otherRates(p: TenantPackage): PackageMeterRate[] {
   return p.meterRates.filter((r) => !WHOLESALE_METERS.some((m) => formRate(p, m) === r));
@@ -82,10 +101,7 @@ export function validatePackage(form: PackageForm): Errors<PackageForm> {
   if (bad(form.monthlyPrice)) errors.monthlyPrice = K.errors.price;
   if (bad(form.yearlyPrice)) errors.yearlyPrice = K.errors.price;
   if (!form.monthlyPrice.trim() && !form.yearlyPrice.trim()) errors.monthlyPrice = K.errors.unpriced;
-  for (const m of WHOLESALE_METERS) {
-    const v = form.rates[m.meterKey].trim();
-    if (v !== "" && (!UNIT_PRICE.test(v) || !positive(v))) errors.rates = K.errors.rate;
-  }
+  if (WHOLESALE_METERS.some((m) => badRate(form.rates[m.meterKey]))) errors.rates = K.errors.rate;
   return errors;
 }
 

@@ -10,6 +10,7 @@ import {
   PACKAGE_FEATURE_KEYS,
   PACKAGE_KEYS as K,
   WHOLESALE_METERS,
+  badRate,
   createPackageBody,
   emptyPackageForm,
   otherRates,
@@ -22,8 +23,8 @@ import { useMeterNames } from "../../../catalog/_lib/meter-names";
 
 /**
  * Creating or editing one package (F-018-d, F-118-n5): name, the two prices,
- * the features it includes and the wholesale price per GiB of VPN traffic
- * (F-118-n1). An edit sends only what changed; a rate is history at the
+ * the features it includes and the wholesale prices — per GiB of VPN traffic
+ * (F-118-n1), and an unlimited plan's flat price per 30 days (F-118-aa). An edit sends only what changed; a rate is history at the
  * service, so a new price reaches Grants sold from now on and never one already
  * sold (F-118-n2). `currency` is the platform's: a new package is priced in it.
  */
@@ -120,7 +121,12 @@ export function PackageSheet({
       </Field>
 
       {WHOLESALE_METERS.map((m) => (
-        <Field key={m.meterKey} label={t("common", K.form.rate, { meter: meterName(m.meterKey), currency: code })} hint={t("common", K.form.rateHint)} error={errors.rates}>
+        <Field
+          key={m.meterKey}
+          label={t("common", m.label, { meter: meterName(m.meterKey), currency: code })}
+          hint={t("common", m.hint)}
+          error={errors.rates && badRate(form.rates[m.meterKey]) ? errors.rates : undefined}
+        >
           <input
             className={input}
             dir="ltr"
