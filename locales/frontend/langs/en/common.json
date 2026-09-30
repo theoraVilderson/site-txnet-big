@@ -2354,7 +2354,8 @@
       "resetNo": "Cancel",
       "resetDone": "A new link was created. The previous link no longer works.",
       "resetTitle": "Subscription link",
-      "resetHint": "If someone else has your subscription link, make a new one. The old link stops working."
+      "resetHint": "If someone else has your subscription link, make a new one. The old link stops working. At most 3 times a day.",
+      "resetLimited": "This link was reset {{limit}} times in the last 24 hours. The next reset is allowed at {{at}}."
     },
     "ring": {
       "label": "{{used}} used of {{bought}} — {{remaining}} left"

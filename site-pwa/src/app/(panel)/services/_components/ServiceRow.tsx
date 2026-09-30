@@ -111,6 +111,8 @@ export const ServiceRow = memo(function ServiceRow({
   const [confirmReset, setConfirmReset] = useState(false);
   const configs = useGrantConfigs(row.id, configsOpen || manageOpen, configsAsked);
   const sub = useSubscriptionLink(row.id);
+  // Refused for the day: the page offers no reset until it is reloaded after the time it names.
+  const resetWaits = sub.resetLimited !== null;
   // A pay-as-you-go service counts its billing period, not a bag (F-118-aj).
   const period = useGrantPeriod(row.id, row.billingMode === "metered" && !row.trafficUnlimited, row.consumedBytes);
   const [query, setQuery] = useState("");
@@ -385,7 +387,7 @@ export const ServiceRow = memo(function ServiceRow({
               <button
                 type="button"
                 onClick={() => setConfirmReset(true)}
-                disabled={sub.isResetting}
+                disabled={sub.isResetting || resetWaits}
                 className="mt-3 flex items-center gap-2 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {sub.isResetting ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <RotateCcw size={14} aria-hidden />}
@@ -401,7 +403,18 @@ export const ServiceRow = memo(function ServiceRow({
                 </code>
               </div>
             )}
-            {/* A refused reset shows in the link row above, beside the link it did not change. */}
+            {sub.resetLimited && (
+              <div role="alert" className="mt-3 flex items-start gap-2 rounded-2xl border border-error-border bg-error-bg px-3 py-2 text-xs font-medium text-error">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" aria-hidden />
+                <span className="min-w-0">
+                  {t("common", L.resetLimited, {
+                    limit: sub.resetLimited.limit,
+                    at: formatInstant(sub.resetLimited.nextAt, lang) ?? sub.resetLimited.nextAt,
+                  })}
+                </span>
+              </div>
+            )}
+            {/* Any other refused reset shows in the link row above, beside the link it did not change. */}
           </section>
         </div>
       )}

@@ -8,6 +8,7 @@ import { billingApi, type GrantRow } from "@/lib/billing-api";
 import { ApiError } from "@/lib/api-error";
 import { notificationApi } from "@/lib/notification-api";
 import { copyText } from "../_lib/clipboard";
+import { formatInstant } from "../_lib/datetime";
 import { ServiceRow } from "./_components/ServiceRow";
 import { GRANT_STATUSES, GRANT_TONES, capabilityNames } from "./_lib/my-services";
 import {
@@ -528,6 +529,24 @@ describe("resetting a link", () => {
     // The QR still open above shows the first link: nothing was replaced.
     expect(screen.getByText(LINK_1)).toBeInTheDocument();
     expect(subscriptionLink).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the daily reset limit and when the next reset is allowed, and offers none before then (F-114-e-d/e)", async () => {
+    const nextAtMs = Date.now() + 5 * 3_600_000;
+    resetSubscriptionLink.mockRejectedValue(
+      new ApiError("reset 3 times in 24 hours", { status: 429, ref: "req-8", reason: "link_reset_limit", facts: { limit: 3, nextAtMs } }),
+    );
+    const user = userEvent.setup();
+    show();
+    details();
+    await user.click(button(`${L}.reset`));
+    await user.click(button(`${L}.resetYes`));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(`${L}.resetLimited:3,${formatInstant(new Date(nextAtMs).toISOString(), "en")}`);
+    expect(alert).not.toHaveTextContent("reset 3 times in 24 hours");
+    expect(button(`${L}.reset`)).toBeDisabled();
+    expect(screen.queryByText(`${L}.resetDone`)).not.toBeInTheDocument();
   });
 
   it("never asks twice while a reset is in flight — each call destroys a working link", async () => {

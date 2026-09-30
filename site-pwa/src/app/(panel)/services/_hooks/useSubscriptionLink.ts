@@ -16,6 +16,11 @@ export interface SubscriptionLinkState {
   isResetting: boolean;
   resetDone: boolean;
   error: { message: string; ref?: string } | null;
+  /**
+   * The owner reset this link as often as a day allows (F-114-e-d): how many,
+   * and when the next reset is — an ISO instant. `null` until billing says so.
+   */
+  resetLimited: { limit: number; nextAt: string } | null;
   /** The link, read once per row; `null` after a refusal, which is on screen. */
   readLink: () => Promise<string | null>;
   copy: () => Promise<void>;
@@ -44,6 +49,7 @@ export function useSubscriptionLink(grantId: string): SubscriptionLinkState {
   const [isResetting, setIsResetting] = useState(false);
   const [resetDone, setResetDone] = useState(false);
   const [error, setError] = useState<{ message: string; ref?: string } | null>(null);
+  const [resetLimited, setResetLimited] = useState<{ limit: number; nextAt: string } | null>(null);
 
   function refused(e: unknown) {
     // Billing's own sentence, laid out (`contract.errors.md`) — `link_not_kept`
@@ -90,11 +96,26 @@ export function useSubscriptionLink(grantId: string): SubscriptionLinkState {
       setCopied(false);
     } catch (e) {
       // Nothing was reset, so whatever is on screen is still the link.
-      refused(e);
+      const limited = resetLimitOf(e);
+      if (limited) setResetLimited(limited);
+      else refused(e);
     } finally {
       setIsResetting(false);
     }
   }
 
-  return { link, isReading, copied, showLink, isResetting, resetDone, error, readLink, copy, reset };
+  return { link, isReading, copied, showLink, isResetting, resetDone, error, resetLimited, readLink, copy, reset };
+}
+
+/**
+ * `link_reset_limit` (F-114-e-d) with the figures it carries: the limit and
+ * when the next reset is allowed, as epoch ms (`facts` carries no text). Any
+ * other refusal, or one missing a figure, is `null` and read as billing's
+ * sentence instead.
+ */
+export function resetLimitOf(e: unknown): { limit: number; nextAt: string } | null {
+  if (!(e instanceof ApiError) || e.reason !== "link_reset_limit") return null;
+  const { limit, nextAtMs } = e.facts;
+  if (typeof limit !== "number" || typeof nextAtMs !== "number" || !Number.isFinite(nextAtMs)) return null;
+  return { limit, nextAt: new Date(nextAtMs).toISOString() };
 }

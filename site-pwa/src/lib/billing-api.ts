@@ -1182,8 +1182,10 @@ export const billingApi = {
   /**
    * "Reset link" (F-502-p, F-114-e-b): a new token for a link that leaked. The
    * old link stops working in billing's transaction, and the answer is the new
-   * one. Its own bucket, 5 per 900s: each call destroys a working link, so a
-   * caller that retried on the user's behalf would spend the budget for it.
+   * one. Its own bucket, 5 per 900s, and at most 3 per Grant in 24 hours
+   * (F-114-e-d: 429 `link_reset_limit`, `facts: {limit, nextAtMs}`): each call
+   * destroys a working link, so a caller that retried on the user's behalf
+   * would spend the budget for it.
    */
   async resetSubscriptionLink(grantId: string): Promise<{ grantId: string; subscriptionUrl: string }> {
     return call<{ grantId: string; subscriptionUrl: string }>(

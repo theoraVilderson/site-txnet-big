@@ -59,14 +59,14 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
    inside billing's transaction — with "the previous link no longer works". A
    refusal minted nothing, so the link on screen stays and only billing's
    sentence is added, `role="alert"`, with its `ref`
-   ([contract.errors.md](contract.errors.md)). Disabled while in flight, never
-   retried: the bucket is 5 per 900s and each call destroys a working link.
+   ([contract.errors.md](contract.errors.md)). Disabled in flight, never retried.
+   `link_reset_limit` (3 per Grant a day, F-114-e-d) gets the panel's own
+   sentence — the limit and `nextAtMs` as local time — and reset stays off.
 5. **A refusal to read is billing's sentence, and reset stays offered.**
    `link_not_kept` (a Grant from before the token was kept) tells the user to
    reset once; `no_subscription_domain` to contact support. The panel branches
-   on neither: the sentence is the answer and the reset button is always there.
-   The texts are `common.myServices.link.*`; the gift modal's key sentences
-   are gone with the key.
+   on neither: the sentence is the answer and reset is offered. Texts:
+   `common.myServices.link.*`.
 6. **A name is a `nameKey` this page resolves, and a failure costs the names
    only.** The list answers the variant's key, not its text, so the published
    `catalog` namespace is read beside it — the same route and the same
