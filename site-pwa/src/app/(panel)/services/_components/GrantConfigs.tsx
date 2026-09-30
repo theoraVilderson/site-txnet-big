@@ -6,7 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { ApiError } from "@/lib/api-error";
-import { billingApi, type ConfigAction, type ConfigActionOutcome, type UserConfigRow } from "@/lib/billing-api";
+import { billingApi, type ConfigAction, type ConfigActionOutcome, type RegenerateTerms, type UserConfigRow } from "@/lib/billing-api";
 import type { GrantConfigsState } from "../_hooks/useGrantConfigs";
 import {
   CONFIG_STATUS_KEYS,
@@ -15,7 +15,11 @@ import {
   ceilingQueued,
   configName,
   formatBytes,
+  regenerateOffer,
+  type RegenerateOffer,
 } from "../_lib/service-configs";
+import { rateDecimals } from "../../catalog/_lib/catalog-form";
+import { currencyDecimals, formatMoney } from "../../_lib/money";
 
 const C = FrontendI18nKeys.common.myServices.configs;
 
@@ -166,6 +170,7 @@ export function GrantConfigs({
             <ConfigItem
               key={row.id}
               row={row}
+              regenerate={configs.regenerate}
               label={configName(row)}
               lang={lang}
               selectable={every.length > 1}
@@ -221,6 +226,7 @@ export function GrantConfigs({
 
 function ConfigItem({
   row,
+  regenerate,
   label,
   lang,
   selectable,
@@ -232,6 +238,7 @@ function ConfigItem({
   onAct,
 }: {
   row: UserConfigRow;
+  regenerate: RegenerateTerms | null;
   label: string;
   lang: string;
   selectable: boolean;
@@ -244,9 +251,16 @@ function ConfigItem({
 }) {
   const { t } = useLocale();
   const verdict = DRIFT_VERDICTS[row.driftState];
+  const offerText = (o: RegenerateOffer) => {
+    if (o.kind === "capped") return t("common", C.regenerateLeft, { left: o.left, max: o.max });
+    if (o.kind === "free") return t("common", C.regenerateFree, { left: o.left });
+    if (o.kind === "none") return t("common", C.regenerateNone);
+    const price = formatMoney(o.price, o.currencyCode, { lang, t }, { decimals: rateDecimals(o.price, currencyDecimals(o.currencyCode)) });
+    return o.per === 1 ? t("common", C.regenerateCost, { price }) : t("common", C.regenerateCostPer, { price, count: o.per });
+  };
   const allocated = formatBytes(row.allocatedCeilingBytes, lang);
   const applied = formatBytes(row.appliedCeilingBytes, lang) ?? "0 B";
-  const keysLeft = Math.max(0, row.maxRegenerateCount - row.regenerateUsedCount);
+  const offer = regenerateOffer(regenerate, row);
 
   const ceiling =
     allocated === null
@@ -294,16 +308,14 @@ function ConfigItem({
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
           type="button"
-          disabled={busy !== null || keysLeft === 0}
+          disabled={busy !== null || offer.disabled}
           onClick={() => onAct("regenerate")}
           className="flex items-center gap-1.5 rounded-xl border border-card-border px-3 py-1.5 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:opacity-50"
         >
           <KeyRound size={14} aria-hidden />
           {t("common", C.regenerate)}
         </button>
-        <span className="text-xs text-text-secondary">
-          {t("common", C.regenerateLeft, { left: keysLeft, max: row.maxRegenerateCount })}
-        </span>
+        <span className="text-xs text-text-secondary">{offerText(offer)}</span>
         <button
           type="button"
           disabled={busy !== null}

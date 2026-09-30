@@ -43,7 +43,9 @@ export class UserConfigsController {
   })
   async list(@Param('grantId', ParseUUIDPipe) grantId: string, @Req() req: Request) {
     try {
-      return { grantId, rows: await this.configs.listForGrant(identityOf(req).userId, grantId) };
+      const userId = identityOf(req).userId;
+      const rows = await this.configs.listForGrant(userId, grantId);
+      return { grantId, rows, regenerate: await this.configs.regenerateTerms(userId, grantId) };
     } catch (e) {
       if (e instanceof ConfigActionRefused && e.reason === 'grant_not_found') {
         throw new NotFoundException({ i18nKey: E.grant.notFound, reason: e.reason, message: `${e.name}: ${e.message}` });

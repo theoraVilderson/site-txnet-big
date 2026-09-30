@@ -1364,7 +1364,10 @@
       "quota": "Each limit is a whole number",
       "quotaRepeat": "Each metric once",
       "pastDay": "A price cannot start on a day already past",
-      "unitPrice": "A price per GB above zero, like 0.5 or 0.00012 (up to 8 decimals)"
+      "unitPrice": "A price per GB above zero, like 0.5 or 0.00012 (up to 8 decimals)",
+      "includedCount": "A whole number, 0 or more",
+      "stopIncludes": "With no more after the free ones, give at least one free",
+      "usePrice": "A price above zero, like 0.5 (up to 8 decimals)"
     },
     "refusals": {
       "not_platform_owner": "Only the platform owner manages the platform's or another tenant's catalog.",
@@ -1570,6 +1573,23 @@
       "none": "No rate in effect — not for sale",
       "newRate": "New rate",
       "history": "Rate history"
+    },
+    "regenerateCard": {
+      "title": "{{meter}} — price",
+      "included": "Free per service",
+      "includedHint": "How many new links each service gets at no charge. Blank means none.",
+      "after": "After the free ones",
+      "afters": {
+        "metered": "Charge for each one",
+        "stop": "No more"
+      },
+      "modeHint": "Prepaid takes the price from the wallet before the link is made. Postpaid holds it in the buyer's wallet and charges it after.",
+      "perUse": "Price per new link",
+      "shownMetered": "{{included}} free, then {{price}} each",
+      "shownStop": "{{included}} free, then no more",
+      "none": "No price — the variant's count limit applies",
+      "newCard": "New price",
+      "history": "Price history"
     }
   },
   "settings": {
@@ -1834,7 +1854,9 @@
         "otherRates": "Other rates in force — set through the API; this form leaves them as they are",
         "submit": "Create package",
         "save": "Save",
-        "nothingChanged": "Nothing has changed."
+        "nothingChanged": "Nothing has changed.",
+        "regenerateRate": "Wholesale price of each {{meter}} ({{currency}})",
+        "regenerateRateHint": "What a reseller on this package pays the platform for each new link its users make, free ones included. A change applies to services sold from now on. Empty: resellers on this package cannot sell a priced new link."
       },
       "deactivate": "Withdraw",
       "activate": "Offer again",
@@ -1861,7 +1883,8 @@
         "own_sms": "Own SMS line",
         "multi_currency": "Several currencies",
         "dedicated_node_pool": "Dedicated servers"
-      }
+      },
+      "perUse": "{{price}} {{currency}} per new link"
     }
   },
   "resellerPurchase": {
@@ -2298,7 +2321,11 @@
         "failed": "could not be done. Try again."
       },
       "title": "This service's configs",
-      "show": "Show configs"
+      "show": "Show configs",
+      "regenerateFree": "{{left}} free left",
+      "regenerateCost": "costs {{price}}",
+      "regenerateCostPer": "{{price}} per {{count}}",
+      "regenerateNone": "none left"
     },
     "status": {
       "pending": "Being prepared",

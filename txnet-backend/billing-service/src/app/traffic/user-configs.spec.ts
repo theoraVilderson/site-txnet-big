@@ -62,7 +62,13 @@ function configRow(overrides: Record<string, unknown> = {}) {
 type Branding = { brandName: string; lineNameTemplate: string | null } | null;
 
 function build(
-  opts: { grant?: { id: string; tenantId: string } | null; configs?: ReturnType<typeof configRow>[]; updated?: number; branding?: Branding } = {},
+  opts: {
+    grant?: { id: string; tenantId: string } | null;
+    configs?: ReturnType<typeof configRow>[];
+    updated?: number;
+    branding?: Branding;
+    regenerateMeter?: Record<string, unknown> | null;
+  } = {},
 ) {
   const asked: {
     grantWhere?: unknown;
@@ -72,6 +78,7 @@ function build(
     orderBy?: unknown;
     updateWhere?: unknown;
     updateData?: unknown;
+    meterWhere?: unknown;
     transactions: number;
   } = { transactions: 0 };
   const tx = {
@@ -80,6 +87,12 @@ function build(
       findFirst: async (args: { where: unknown }) => {
         asked.grantWhere = args.where;
         return opts.grant === undefined ? { id: GRANT, tenantId: TENANT } : opts.grant;
+      },
+    },
+    grantMeter: {
+      findFirst: async (args: { where: unknown }) => {
+        asked.meterWhere = args.where;
+        return opts.regenerateMeter ?? null;
       },
     },
     tenantBranding: {
@@ -365,7 +378,46 @@ describe('configLabelSchema', () => {
   });
 });
 
+describe('UserConfigsService.regenerateTerms — what a new link costs (F-118-r)', () => {
+  const meter = {
+    unitSize: BigInt(1),
+    unitPrice: { toString: () => '0.50000000' },
+    currencyCode: 'USD',
+    mode: 'prepaid',
+    includedQuantity: BigInt(2),
+    afterIncluded: 'metered',
+    consumed: BigInt(3),
+  };
+
+  it('answers the terms the Grant locked at sale, and how many it has used', async () => {
+    const { service, asked, inTenant } = build({ regenerateMeter: meter });
+    const terms = await inTenant(() => service.regenerateTerms(USER, GRANT));
+    expect(terms).toEqual({ unitSize: '1', unitPrice: '0.50000000', currencyCode: 'USD', mode: 'prepaid', includedQuantity: '2', afterIncluded: 'metered', used: '3' });
+    expect(asked.meterWhere).toEqual({ grantId: GRANT, meterKey: 'vpn.config.regenerate' });
+  });
+
+  it('answers null for a Grant sold with no regenerate price: the count cap still decides', async () => {
+    const { service, inTenant } = build({ regenerateMeter: null });
+    expect(await inTenant(() => service.regenerateTerms(USER, GRANT))).toBeNull();
+  });
+
+  it('reads the meter only under the user’s own Grant', async () => {
+    const { service, asked, inTenant } = build({ grant: null, regenerateMeter: meter });
+    await expect(inTenant(() => service.regenerateTerms(USER, GRANT))).rejects.toMatchObject({ reason: 'grant_not_found' });
+    expect(asked.grantWhere).toEqual({ id: GRANT, userId: USER });
+    expect(asked.meterWhere).toBeUndefined();
+  });
+});
+
 describe('UserConfigsController', () => {
+  it('answers the regenerate terms beside the rows (F-118-r)', async () => {
+    const terms = { unitSize: '1', unitPrice: '0.5', currencyCode: 'USD', mode: 'prepaid', includedQuantity: '0', afterIncluded: 'metered', used: '0' };
+    const configs = { listForGrant: vi.fn(async () => []), regenerateTerms: vi.fn(async () => terms) };
+    const controller = new UserConfigsController(configs as never, {} as never);
+    expect(await controller.list(GRANT, req(USER) as never)).toEqual({ grantId: GRANT, rows: [], regenerate: terms });
+    expect(configs.regenerateTerms).toHaveBeenCalledWith(USER, GRANT);
+  });
+
   it('passes the gate’s user, and answers another user’s Grant as a 404', async () => {
     const configs = {
       listForGrant: vi.fn(async () => {

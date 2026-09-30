@@ -41,6 +41,8 @@ export const WHOLESALE_METERS = [
     hint: K.form.unlimitedRateHint,
     perUnit: K.perPeriod,
   },
+  // F-118-r: a reseller's priced new link buys its use here first (F-118-h's wholesale leg).
+  { meterKey: "vpn.config.regenerate", unitSize: 1, label: K.form.regenerateRate, hint: K.form.regenerateRateHint, perUnit: K.perUse },
 ] as const;
 type WholesaleMeter = (typeof WHOLESALE_METERS)[number]["meterKey"];
 

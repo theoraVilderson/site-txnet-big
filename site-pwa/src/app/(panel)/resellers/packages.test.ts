@@ -77,10 +77,11 @@ describe("what the page offers is the service's own set", () => {
     for (const reason of reasons) expect(labels[reason], reason).toBeTruthy();
   });
 
-  it("the wholesale meters are VPN traffic per GiB and an unlimited plan's time per 30 days (D-59 (c))", () => {
+  it("the wholesale meters are VPN traffic per GiB, an unlimited plan's time per 30 days (D-59 (c)) and a new link per use (F-118-r)", () => {
     expect(WHOLESALE_METERS.map(({ meterKey, unitSize }) => ({ meterKey, unitSize }))).toEqual([
       { meterKey: "vpn.traffic", unitSize: 1073741824 },
       { meterKey: "vpn.unlimited.time", unitSize: 2592000 },
+      { meterKey: "vpn.config.regenerate", unitSize: 1 },
     ]);
   });
 
@@ -96,6 +97,7 @@ describe("what the page offers is the service's own set", () => {
       .join("\n");
     expect(sql).toMatch(/'vpn\.traffic',\s*'bytes'/);
     expect(sql).toMatch(/'vpn\.unlimited\.time',\s*'seconds'/);
+    expect(sql).toMatch(/'vpn\.config\.regenerate',\s*'count'/);
   });
 });
 
@@ -123,13 +125,13 @@ describe("createPackageBody", () => {
       monthlyPrice: "40",
       includedFeatureKeys: ["own_sms"],
     });
-    expect(createPackageBody(filled({ rates: { "vpn.traffic": " 0.1 ", "vpn.unlimited.time": "" } })).meterRates).toEqual([
+    expect(createPackageBody(filled({ rates: { "vpn.traffic": " 0.1 ", "vpn.unlimited.time": "", "vpn.config.regenerate": "" } })).meterRates).toEqual([
       { meterKey: "vpn.traffic", unitSize: "1073741824", unitPrice: "0.1" },
     ]);
   });
 
   it("an unlimited plan's flat price is sent per 30 days, in seconds", () => {
-    expect(createPackageBody(filled({ rates: { "vpn.traffic": "", "vpn.unlimited.time": "4.5" } })).meterRates).toEqual([
+    expect(createPackageBody(filled({ rates: { "vpn.traffic": "", "vpn.unlimited.time": "4.5", "vpn.config.regenerate": "" } })).meterRates).toEqual([
       { meterKey: "vpn.unlimited.time", unitSize: "2592000", unitPrice: "4.5" },
     ]);
   });
@@ -167,12 +169,12 @@ describe("updatePackageBody", () => {
   it("the unlimited rate is read, changed and cleared on its own, never touching the traffic rate", () => {
     const flat = { meterKey: "vpn.unlimited.time", unitSize: "2592000", unitPrice: "5", currencyCode: "USD", effectiveFrom: "2026-09-30T00:00:00.000Z" };
     const both: TenantPackage = { ...PKG, meterRates: [...PKG.meterRates, flat] };
-    expect(packageFormOf(both).rates).toEqual({ "vpn.traffic": "0.12", "vpn.unlimited.time": "5" });
+    expect(packageFormOf(both).rates).toEqual({ "vpn.traffic": "0.12", "vpn.unlimited.time": "5", "vpn.config.regenerate": "" });
     expect(otherRates(both)).toEqual([]);
-    expect(updatePackageBody(both, { ...packageFormOf(both), rates: { "vpn.traffic": "0.12", "vpn.unlimited.time": "6" } })).toEqual({
+    expect(updatePackageBody(both, { ...packageFormOf(both), rates: { "vpn.traffic": "0.12", "vpn.unlimited.time": "6", "vpn.config.regenerate": "" } })).toEqual({
       meterRates: [{ meterKey: "vpn.unlimited.time", unitSize: "2592000", unitPrice: "6" }],
     });
-    expect(updatePackageBody(both, { ...packageFormOf(both), rates: { "vpn.traffic": "0.12", "vpn.unlimited.time": "" } })).toEqual({
+    expect(updatePackageBody(both, { ...packageFormOf(both), rates: { "vpn.traffic": "0.12", "vpn.unlimited.time": "", "vpn.config.regenerate": "" } })).toEqual({
       meterRates: [{ meterKey: "vpn.unlimited.time", unitPrice: null }],
     });
     // a flat price per day through the API is not a 30-day price

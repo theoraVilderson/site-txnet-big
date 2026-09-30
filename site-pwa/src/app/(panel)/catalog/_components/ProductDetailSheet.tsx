@@ -40,7 +40,7 @@ import {
   type VariantForm,
 } from "../_lib/catalog-form";
 import { CapabilityPicker } from "./CapabilityPicker";
-import { FirstRateFields, RateCardSection } from "./RateCardSection";
+import { FirstRateFields, RateCardSection, RegenerateCardSection } from "./RateCardSection";
 import { ProductCategories } from "./CategoryPickers";
 import { Alert, CopyId, Field, Sheet, input, primaryButton, quietButton, useMessage } from "./catalog-ui";
 
@@ -330,6 +330,7 @@ function VariantCard({
       )}
 
       {v.billingMode === "metered" && <RateCardSection variant={v} act={act} />}
+      {takesPanelGroup(kind) && <RegenerateCardSection variant={v} act={act} />}
 
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
         <Field label={t("common", K.price.amount)} error={errors.amount}>

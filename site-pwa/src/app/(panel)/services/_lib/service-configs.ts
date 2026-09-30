@@ -6,6 +6,7 @@ import {
   type ConfigActionRefusal,
   type ConfigStatus,
   type DriftState,
+  type RegenerateTerms,
   type UserConfigRow,
 } from "@/lib/billing-api";
 import { numberLocale } from "../../_lib/digits";
@@ -158,4 +159,31 @@ export function matchesConfig(row: Pick<UserConfigRow, "label" | "lines" | "prot
   if (q === "") return true;
   const names = [row.label ?? "", configName(row), row.protocol, row.region, ...row.lines.map(lineLabel)];
   return names.some((name) => fold(name).includes(q));
+}
+
+/** What pressing "new link" on one config costs, as the row says it (F-118-r). */
+export type RegenerateOffer =
+  | { kind: "capped"; left: number; max: number; disabled: boolean }
+  | { kind: "free"; left: number; disabled: false }
+  | { kind: "priced"; price: string; currencyCode: string; per: number; disabled: false }
+  | { kind: "none"; disabled: true };
+
+/**
+ * A Grant sold with a regenerate price is the door's (F-118-h): its free ones
+ * left, then the price, or none on a card that stops — never the count cap,
+ * which a priced regenerate neither checks nor spends. Without one, the cap.
+ * The free ones are the Grant's, shared by its configs.
+ */
+export function regenerateOffer(
+  terms: RegenerateTerms | null | undefined,
+  row: Pick<UserConfigRow, "regenerateUsedCount" | "maxRegenerateCount">,
+): RegenerateOffer {
+  if (!terms) {
+    const left = Math.max(0, row.maxRegenerateCount - row.regenerateUsedCount);
+    return { kind: "capped", left, max: row.maxRegenerateCount, disabled: left === 0 };
+  }
+  const free = Number(terms.includedQuantity) - Number(terms.used);
+  if (free > 0) return { kind: "free", left: free, disabled: false };
+  if (terms.afterIncluded !== "metered") return { kind: "none", disabled: true };
+  return { kind: "priced", price: terms.unitPrice, currencyCode: terms.currencyCode, per: Number(terms.unitSize), disabled: false };
 }

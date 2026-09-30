@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { billingApi, type UserConfigRow } from "@/lib/billing-api";
+import { billingApi, type RegenerateTerms, type UserConfigRow } from "@/lib/billing-api";
 
 export interface GrantConfigsState {
   rows: UserConfigRow[] | null;
+  /** What a new link costs on this Grant (F-118-r); null without a price. */
+  regenerate: RegenerateTerms | null;
   readError: unknown;
   isLoading: boolean;
   /** Read the list again, loudly — after an action, or a retry. */
@@ -24,6 +26,7 @@ export interface GrantConfigsState {
  */
 export function useGrantConfigs(grantId: string, open: boolean, told = 0): GrantConfigsState {
   const [rows, setRows] = useState<UserConfigRow[] | null>(null);
+  const [regenerate, setRegenerate] = useState<RegenerateTerms | null>(null);
   const [readError, setReadError] = useState<unknown>(null);
   const [asked, setAsked] = useState(0);
   // Loading is derived, as in `useGrantsPage`: the read in flight is the one
@@ -44,6 +47,7 @@ export function useGrantConfigs(grantId: string, open: boolean, told = 0): Grant
       .then((answer) => {
         if (!alive) return;
         setRows(answer.rows);
+        setRegenerate(answer.regenerate ?? null);
         setReadError(null);
       })
       .catch(() => {
@@ -62,6 +66,7 @@ export function useGrantConfigs(grantId: string, open: boolean, told = 0): Grant
       .then((answer) => {
         if (!alive) return;
         setRows(answer.rows);
+        setRegenerate(answer.regenerate ?? null);
         setReadError(null);
       })
       .catch((e) => {
@@ -79,5 +84,5 @@ export function useGrantConfigs(grantId: string, open: boolean, told = 0): Grant
 
   const reload = useCallback(() => setAsked((n) => n + 1), []);
 
-  return { rows, readError, isLoading, reload };
+  return { rows, regenerate, readError, isLoading, reload };
 }

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ActorType, ConfigProtocol, ConfigStatus, DriftState, DriverType, EnforcementState, Prisma } from '@prisma/client';
-import { tenantTransaction } from '@txnet-backend/shared-core';
+import { METER_KEYS, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionRefused, ConfigActionsService, type ConfigActionRejection } from './config-actions';
@@ -66,6 +66,22 @@ export type UserConfigView = {
   login: { username: string; password: string } | null;
   /** The router's shared `.ovpn`, for an OpenVPN config with a `login`; `null` when its admin uploaded none. */
   ovpnProfile: string | null;
+};
+
+/**
+ * What a new link costs on this Grant (F-118-r): the `vpn.config.regenerate`
+ * terms it locked at sale and how many it has used. The door prices from the
+ * same row (F-118-h), so the page shows what pressing will charge. Null on a
+ * Grant sold without one: the count cap decides instead.
+ */
+export type RegenerateTerms = {
+  unitSize: string;
+  unitPrice: string;
+  currencyCode: string;
+  mode: string;
+  includedQuantity: string;
+  afterIncluded: string;
+  used: string;
 };
 
 export type UserConfigOutcome =
@@ -169,6 +185,28 @@ export class UserConfigsService {
           ovpnProfile: login && r.protocol === ConfigProtocol.openvpn ? r.panel.ovpnProfile : null,
         };
       });
+    });
+  }
+
+  /** {@link RegenerateTerms} of the user's own Grant; another user's is `grant_not_found`, as for the list. */
+  regenerateTerms(userId: string, grantId: string): Promise<RegenerateTerms | null> {
+    return tenantTransaction(this.prisma, async (tx) => {
+      const grant = await tx.grant.findFirst({ where: { id: grantId, userId }, select: { id: true } });
+      if (!grant) throw new ConfigActionRefused('grant_not_found', grantId);
+      const m = await tx.grantMeter.findFirst({
+        where: { grantId, meterKey: METER_KEYS.configRegenerate },
+        select: { unitSize: true, unitPrice: true, currencyCode: true, mode: true, includedQuantity: true, afterIncluded: true, consumed: true },
+      });
+      if (!m) return null;
+      return {
+        unitSize: m.unitSize.toString(),
+        unitPrice: m.unitPrice.toString(),
+        currencyCode: m.currencyCode,
+        mode: m.mode,
+        includedQuantity: m.includedQuantity.toString(),
+        afterIncluded: m.afterIncluded,
+        used: m.consumed.toString(),
+      };
     });
   }
 

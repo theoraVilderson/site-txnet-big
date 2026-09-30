@@ -325,6 +325,29 @@ export const CONFIG_ACTION_REFUSALS = [
 export type ConfigActionRefusal = (typeof CONFIG_ACTION_REFUSALS)[number];
 
 /**
+ * What a new link costs on one Grant (F-118-r): the `vpn.config.regenerate`
+ * terms it locked at sale, and how many it has used — the row billing's door
+ * prices from (F-118-h). `null` on a Grant sold without one: the count cap.
+ */
+export interface RegenerateTerms {
+  unitSize: string;
+  unitPrice: string;
+  currencyCode: string;
+  mode: string;
+  includedQuantity: string;
+  afterIncluded: string;
+  used: string;
+}
+
+/** `GET /traffic/grants/:id/configs` for the user's own Grant. */
+export interface UserGrantConfigs {
+  grantId: string;
+  rows: UserConfigRow[];
+  /** Absent from an older billing: read as none. */
+  regenerate?: RegenerateTerms | null;
+}
+
+/**
  * One config of a Grant, as `GET /traffic/grants/:id/configs` answers it
  * (F-027-ac, `billing/contract.gift.md`). Never its `uuid`: that is the
  * credential, and `/sub` is what hands it out.
@@ -1133,8 +1156,8 @@ export const billingApi = {
    * One Grant's configs, with each one's ceiling and drift verdict (F-027-ac).
    * Another user's Grant is the same 404 as a missing one.
    */
-  async grantConfigs(grantId: string): Promise<{ grantId: string; rows: UserConfigRow[] }> {
-    return call<{ grantId: string; rows: UserConfigRow[] }>(
+  async grantConfigs(grantId: string): Promise<UserGrantConfigs> {
+    return call<UserGrantConfigs>(
       `/traffic/grants/${encodeURIComponent(grantId)}/configs`,
       { method: "GET" },
     );

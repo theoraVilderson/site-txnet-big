@@ -118,7 +118,7 @@ still a desired-state write, and nothing here calls a panel.
 
 | Route | In | Answers `data` |
 |---|---|---|
-| `GET /api/billing/traffic/grants/:grantId/configs` | the Grant id | `{grantId, rows[{id, protocol, status, region, allocatedCeilingBytes, appliedCeilingBytes, driftState, enforcementState, regenerateUsedCount, maxRegenerateCount, lastReconciledAt, label, lines[], linksCapturedAt, login, ovpnProfile}]}` |
+| `GET /api/billing/traffic/grants/:grantId/configs` | the Grant id | `{grantId, rows[{id, protocol, status, region, allocatedCeilingBytes, appliedCeilingBytes, driftState, enforcementState, regenerateUsedCount, maxRegenerateCount, lastReconciledAt, label, lines[], linksCapturedAt, login, ovpnProfile}], regenerate}` — `regenerate` (F-118-r) is the Grant's locked `vpn.config.regenerate` terms `{unitSize, unitPrice, currencyCode, mode, includedQuantity, afterIncluded, used}` (`used` = the meter's `consumed`), or `null` when it was sold without one; the owner route of `contract.reseller-grants.md` does not answer it |
 | `POST /api/billing/traffic/configs/actions` | `{action: regenerate \| retire, configIds[1..50]}` | `{action, results[{configId, ok: true} \| {configId, ok: false, reason}]}` — always **200** |
 | `PUT /api/billing/traffic/configs/:configId/label` | `{label: string \| null}` — trimmed, ≤ 40; empty or `null` is the default | `{configId, label}` — the label as saved, in one spelling (F-307-o); another user's, retired or missing config **404** `configNotFound` (F-307-g) |
 

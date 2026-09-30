@@ -110,8 +110,8 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
     one config or the ticked ones, in one request; delete asks first. The done
     count and each refused config — by the label it had when pressed, with its
     reason's sentence — are shown, then the list is read again. A 4xx is the
-    request itself and changes nothing on screen. No new key is offered once a
-    config's allowance is spent. Configs are read only when opened.
+    request itself and changes nothing on screen. A spent allowance offers no new key; a priced
+    Grant says its free ones left, the price, or none instead (F-118-r, `regenerateOffer`). Read only when opened.
 12. **Metering down is not service down.** While `collection-health` answers
     `unavailable` the page says the service is not cut off; a failed read of
     that flag shows nothing.

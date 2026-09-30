@@ -766,15 +766,59 @@ export function rateCardBody(f: RateCardForm, today: string): SetRateCardBody {
   return blank(f.day) || f.day <= today ? card : { ...card, effectiveFrom: `${f.day}T00:00:00${TEHRAN_OFFSET}` };
 }
 
-/** Billing's `rateCardAt` for `vpn.traffic`: the newest active card already in effect at `now`, or none. */
-export function currentRateCard(cards: readonly CatalogRateCard[], now: Date = new Date()): CatalogRateCard | null {
+/** Billing's `rateCardAt` for one meter (`vpn.traffic` unless named): the newest active card already in effect at `now`, or none. */
+export function currentRateCard(cards: readonly CatalogRateCard[], now: Date = new Date(), meterKey: string = VPN_TRAFFIC): CatalogRateCard | null {
   let best: CatalogRateCard | null = null;
   for (const c of cards) {
     const at = new Date(c.effectiveFrom).getTime();
-    if (c.meterKey !== VPN_TRAFFIC || !c.isActive || at > now.getTime()) continue;
+    if (c.meterKey !== meterKey || !c.isActive || at > now.getTime()) continue;
     if (!best || at > new Date(best.effectiveFrom).getTime()) best = c;
   }
   return best;
+}
+
+/**
+ * A new link's price (F-118-r, ADR-0105 (7)): a `vpn.config.regenerate` card
+ * on any variant, sold behind billing's per-use door (F-118-h). One link per
+ * unit; `included` free per service, then each one charged or none — the
+ * shapes billing's checks take (`rate_card_metered_price_positive`,
+ * `rate_card_stop_includes_some`). With no card the count cap decides.
+ */
+export const CONFIG_REGENERATE = "vpn.config.regenerate";
+const COUNT = /^(0|[1-9]\d{0,8})$/;
+
+export interface RegenerateCardForm {
+  mode: RateCardMode;
+  /** Free per service; blank = none. */
+  included: string;
+  after: "metered" | "stop";
+  /** Per new link past the free ones; unused when `after` is `stop`. */
+  unitPrice: string;
+  /** `YYYY-MM-DD`, Tehran's day; blank = from now — a price's rule. */
+  day: string;
+}
+
+export function validateRegenerateCardForm(f: RegenerateCardForm, today: string): Errors<RegenerateCardForm> {
+  const errors: Errors<RegenerateCardForm> = {};
+  const included = f.included.trim() || "0";
+  if (!COUNT.test(included)) errors.included = E.includedCount;
+  else if (f.after === "stop" && included === "0") errors.included = E.stopIncludes;
+  if (f.after === "metered" && !isUnitPrice(f.unitPrice)) errors.unitPrice = E.usePrice;
+  if (!blank(f.day) && f.day < today) errors.day = E.pastDay;
+  return errors;
+}
+
+/** A new regenerate card, from now or a later day's first Tehran instant, as {@link rateCardBody}. */
+export function regenerateCardBody(f: RegenerateCardForm, today: string): SetRateCardBody {
+  const card: RateCardTerms = {
+    meterKey: CONFIG_REGENERATE,
+    unitSize: "1",
+    unitPrice: f.after === "metered" ? f.unitPrice.trim() : "0",
+    mode: f.mode,
+    includedQuantity: f.included.trim() || "0",
+    afterIncluded: f.after,
+  };
+  return blank(f.day) || f.day <= today ? card : { ...card, effectiveFrom: `${f.day}T00:00:00${TEHRAN_OFFSET}` };
 }
 
 /** A metered variant with no card in effect is refused at sale (`metered_rate_missing`). */
