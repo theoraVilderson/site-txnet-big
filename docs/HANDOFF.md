@@ -1,8 +1,8 @@
 ---
 id: handoff
-status: empty            # empty | active
-item: —                  # the backlog id currently mid-flight
-updated: YYYY-MM-DD
+status: active           # empty | active
+item: F-027-dx           # the backlog id currently mid-flight
+updated: 2026-09-30
 ---
 
 # Handoff — the state a fresh session cannot recover on its own
@@ -29,44 +29,43 @@ If a session ended cleanly — item `done`, or never started — this file stays
 
 ## Item
 
-`—` · unit `—` · spec: `python3 tools/spec.py <F-id>`
+`F-027-dx` · unit `network` · spec: the row's note (no catalog id)
 
 ## Where it stands
 
-<2–4 lines. What actually works *right now*, and how that was verified. Not
-what is planned. "The service compiles and the happy path returns 200; nothing
-touches the ledger yet" — that shape.>
+Nothing committed; the working tree was reverted. The approach below passes
+`internal/lease/quota` and `internal/lease/sim` (bursty scenario back inside
+[-8,5]%) but fails `leaseplan` `TestAShareMovesOnlyThroughWhatIsFree`
+(seeds 1 and 9: used + room > quota right after a settle-reopen).
 
 ## Files touched, and their state
 
 | file | state |
 |---|---|
-| _apps/api/src/modules/billing/billing.service.ts_ | _debit() written and tested; refund() is a stub that throws_ |
-| _apps/api/src/modules/billing/billing.repository.ts_ | _complete_ |
-
-`state` must be honest and specific. "in progress" tells the next session
-nothing. "half-written, the transaction wrapper is missing" tells it everything.
+| `network-service/internal/lease/quota/planner.go` | reverted. The attempt, in `Account.Plan` before the close check: `settled := a.closeWatched && a.Used == a.closedUsed && every v: v.r.LimitPeak <= v.r.LimitSeen && v.r.effAt.After(a.closedAt.Add(v.lag))`; `renewed := Quota or end moved`; reopen when `!expired && avail >= reopenAt && (renewed \|\| settled)`, `reopenAt = ReopenMin` on a renewal, else `max(ReopenMin, FinishMin, Σ vDem × FinishTime)`. Set `closeWatched, closedAt` where the close is taken; `closedUsed = Used` on every plan that stays closed |
+| `network-service/internal/lease/quota/types.go`, `persist.go` | reverted. `closeWatched bool`, `closedUsed Bytes`, `closedAt time.Time` on `Account`; `RestoreClosed` sets `closeWatched = false` (a restored close still waits for a renewal — the old test's restart guarantee holds) |
+| `network-service/internal/leaseplan/close_test.go` | reverted. `TestACloseWithBytesLeftReopensOnceItSettles`: 64 MB bench, two replicas at 20 MB/turn closes with ~10 MB left (blocked branch); `turn(nil)` up to 20 times must reopen and enable a config |
 
 ## The next concrete step
 
-<One action, specific enough to begin without re-reading anything above tier 1.>
+Decide whether the `TestAShareMovesOnlyThroughWhatIsFree` breach is real: the
+bench has no enable flag (`exposure()` counts a disabled config's room) and
+`emit` resets `LimitPeak` when re-enabling a dead replica. Model enable in the
+bench, or prove the reopen write lands after every older one, before touching
+the rule again.
 
 ## Dead ends — do not retry
 
 | tried | why it failed |
 |---|---|
-| _wrapping the two writes in a Prisma `$transaction`_ | _the ledger trigger fires per-statement, so the balance check saw a half-applied transaction_ |
-
-**This is the most valuable section in the file.** A fresh session has no memory
-of what did not work, so without it, it will confidently rediscover the same
-wall you already hit — usually twice.
+| reopen on `avail ≥ ReopenMin` alone | sim over +6.45% (1 GB/5 devices, bursty): bytes in flight read as avail |
+| settle = all replicas `!enabled && !active` | a blocked replica keeps its rate, so it never settles |
+| settle = `Used` unchanged for a turn + read after close+lag | bursty sim +6.45%: 68 MB left at 20 MB/s reopened into a 132 MB overshoot — hence the `Σ vDem × FinishTime` threshold |
+| settle on `LimitSeen == LimitWant` | an older in-flight write with a higher limit still pending; use `LimitPeak` |
 
 ## Decided in conversation, not yet written down
 
 | decision | where it must land |
 |---|---|
-| _refunds go to the wallet, never to the card_ | _an ADR, or a `D-nn` row in the catalog_ |
-
-Anything here is a **leak**. It is real project knowledge that currently exists
-only in a chat log. Empty this table by writing each row into its proper home —
-that is part of finishing the item, not a follow-up.
+| User 2026-09-30: stranded paid bytes are fixed by reopening on its own, not by a refund only | lease-close rule 25, when this lands |
+| A prepaid (package) Grant closed on the same blocked branch is suspended `quota_exhausted` by billing at once, bytes left — the planner's reopen never reaches it (it reads active/pending only) | user 2026-09-30: a close-reason column — row F-027-dz |
