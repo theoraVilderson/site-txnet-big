@@ -1,15 +1,17 @@
 "use client";
 
-import { AlertTriangle, CalendarClock, Gauge, Infinity as Unlimited } from "lucide-react";
+import { AlertTriangle, CalendarClock, Gauge, Infinity as Unlimited, Wallet } from "lucide-react";
 import type { ReactNode } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { GrantRow } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
+import { formatMoney } from "../../_lib/money";
+import type { PeriodRead } from "../_hooks/useGrantPeriod";
 import { useTimeLeft } from "../_hooks/useTimeLeft";
 import { levelOf, percentLeft, type Level } from "../_lib/pulse";
 import { formatBytes } from "../_lib/service-configs";
-import { remainingBytes, usedShare } from "../_lib/usage";
+import { livePeriodBytes, remainingBytes, usedShare } from "../_lib/usage";
 
 const S = FrontendI18nKeys.common.myServices;
 const M = S.meter;
@@ -38,11 +40,13 @@ const TILE: Record<Level, string> = {
  * tenth. Under it, the
  * plain sentence of used-of-bought, so no figure has to be decoded.
  *
- * The bound is the row's (contract.my-services.md rule 15): what a metered
- * Grant bought, a capped prepaid one's cap, none for unlimited traffic — which
- * says so — or for a prepaid one billing answered no cap for, which shows what
- * it used. Time counts down in the browser (`useTimeLeft`, F-307-s). Nothing
- * here reads anything.
+ * The bound is the row's (contract.my-services.md rule 15): a capped prepaid
+ * one's cap, none for unlimited traffic — which says so — or for a prepaid one
+ * billing answered no cap for, which shows what it used. A metered Grant has
+ * no bound at all (F-118-aj, contract.service-pulse.md rule 7): what billing
+ * bought for it is a bag, not a limit, so its tile is `PaygTraffic` — this
+ * billing period's bytes, from `period` when the row has read it. Time counts
+ * down in the browser (`useTimeLeft`, F-307-s). Nothing here reads anything.
  *
  * The bar is a tank (`Tank`, `globals.css` "My services"): it fills up when
  * the page opens and a glowing head rides its edge. `live` (in use) runs a
@@ -52,15 +56,25 @@ const TILE: Record<Level, string> = {
  * `warn` asks for the running-out lines — only a live-state Grant gets them;
  * a suspended one already says what to do.
  */
-export function UsageMeter({ row, live, warn, splash }: { row: GrantRow; live: boolean; warn: boolean; splash?: number }) {
+export function UsageMeter({
+  row,
+  live,
+  warn,
+  splash,
+  period = null,
+}: {
+  row: GrantRow;
+  live: boolean;
+  warn: boolean;
+  splash?: number;
+  /** A metered Grant's billing period, as its row read it; none is the lifetime total. */
+  period?: PeriodRead | null;
+}) {
   const { t, lang } = useLocale();
 
   const consumed = formatBytes(row.consumedBytes, lang) ?? row.consumedBytes;
-  const bound = row.trafficUnlimited
-    ? null
-    : row.billingMode === "metered"
-      ? row.purchasedBytes
-      : row.trafficCapBytes;
+  const payg = row.billingMode === "metered" && !row.trafficUnlimited;
+  const bound = row.trafficUnlimited || payg ? null : row.trafficCapBytes;
   const share = bound !== null ? usedShare(row.consumedBytes, bound) : null;
   const boundText = bound !== null ? (formatBytes(bound, lang) ?? bound) : "";
   const remaining = bound !== null ? (formatBytes(remainingBytes(row.consumedBytes, bound), lang) ?? "") : "";
@@ -90,7 +104,9 @@ export function UsageMeter({ row, live, warn, splash }: { row: GrantRow; live: b
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-2">
         {/* Traffic */}
-        {trafficLeft !== null && share !== null ? (
+        {payg ? (
+          <PaygTraffic row={row} period={period} live={live} splash={splash} />
+        ) : trafficLeft !== null && share !== null ? (
           <Tile icon={<Gauge size={14} aria-hidden />} label={t("common", M.traffic)} level={trafficLevel}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
               <p className="meter-figure flex flex-wrap items-baseline gap-x-1.5">
@@ -164,6 +180,56 @@ export function UsageMeter({ row, live, warn, splash }: { row: GrantRow; live: b
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * A pay-as-you-go service's traffic (F-118-aj; user, 2026-09-30): no cap, so
+ * no "left" and no bar toward one. It leads with this billing period's bytes
+ * — pushes added live (`livePeriodBytes`) — then the period's cost and dates,
+ * the last period, what the balance still covers, and the lifetime total
+ * small. Without a period (a failed read, an admin's view) it says "no cap"
+ * and what was used in all, which is still true.
+ */
+function PaygTraffic({ row, period, live, splash }: { row: GrantRow; period: PeriodRead | null; live: boolean; splash?: number }) {
+  const { t, lang } = useLocale();
+  const bytes = (v: string) => formatBytes(v, lang) ?? v;
+  const lifetime = bytes(row.consumedBytes);
+  const view = period?.view ?? null;
+  const money = (v: string) => (view?.currencyCode ? formatMoney(v, view.currencyCode, { lang, t }) : null);
+  const day = (v: string) => formatInstant(v, lang, { withTime: false }) ?? v;
+
+  return (
+    <Tile icon={<Gauge size={14} aria-hidden />} label={t("common", view ? M.thisPeriod : M.trafficUsed)}>
+      <p className="meter-figure text-xl font-black tabular-nums leading-tight text-text-primary" dir="ltr">
+        {view && period ? bytes(livePeriodBytes(view.current.consumedBytes, period.baseline, row.consumedBytes)) : lifetime}
+      </p>
+      <p className="flex items-center gap-1 text-[11px] font-bold text-primary">
+        <Unlimited size={14} aria-hidden />
+        {t("common", M.payg)}
+      </p>
+      <Tank used={1} level="ok" live={live} splash={splash} />
+      {view && (
+        <div className="space-y-0.5 text-[11px] text-text-secondary">
+          {money(view.current.spent) && <p className="font-bold text-text-primary">{t("common", M.periodCost, { amount: money(view.current.spent)! })}</p>}
+          <p>{t("common", M.periodRange, { from: day(view.current.from), to: day(view.current.to) })}</p>
+          {view.previous && (
+            <p>
+              {money(view.previous.spent)
+                ? t("common", M.previousPeriod, { bytes: bytes(view.previous.consumedBytes), amount: money(view.previous.spent)! })
+                : t("common", M.previousPeriodBytes, { bytes: bytes(view.previous.consumedBytes) })}
+            </p>
+          )}
+          {view.coversBytes !== null && (
+            <p className="flex items-center gap-1">
+              <Wallet size={12} aria-hidden />
+              {BigInt(view.coversBytes) > BigInt(0) ? t("common", M.covers, { bytes: bytes(view.coversBytes) }) : t("common", M.coversNothing)}
+            </p>
+          )}
+          <p>{t("common", M.lifetime, { bytes: lifetime })}</p>
+        </div>
+      )}
+    </Tile>
   );
 }
 

@@ -32,6 +32,7 @@ vi.mock("@/lib/billing-api", async (importOriginal) => ({
     resetSubscriptionLink: vi.fn(),
     grantConfigs: vi.fn(),
     grantUsage: vi.fn(() => new Promise(() => {})),
+    grantPeriod: vi.fn(() => new Promise(() => {})),
     configAction: vi.fn(),
   },
 }));
@@ -166,12 +167,14 @@ describe("a service row's pulse", () => {
   });
 
   it("turns live when a push raises the used bytes, and shows what the push added", () => {
-    const { rerender } = render(<ServiceRow row={{ ...GRANT, lastTrafficAt: ago(3_600_000) }} name="VPN" capabilities={[]} />);
+    // A capped prepaid Grant, whose tank is labelled; a metered one's is the period tile (F-118-aj).
+    const GRANT_ = { ...GRANT, billingMode: "prepaid" as const, trafficCapBytes: GRANT.purchasedBytes };
+    const { rerender } = render(<ServiceRow row={{ ...GRANT_, lastTrafficAt: ago(3_600_000) }} name="VPN" capabilities={[]} />);
     expect(screen.getByRole("status", { name: "myServices.pulse.idle" })).toBeInTheDocument();
 
     // What `useGrantsPage` hands a row after a push: a larger total, stamped now.
     rerender(
-      <ServiceRow row={{ ...GRANT, consumedBytes: "1715470336", lastTrafficAt: NOW.toISOString() }} name="VPN" capabilities={[]} />,
+      <ServiceRow row={{ ...GRANT_, consumedBytes: "1715470336", lastTrafficAt: NOW.toISOString() }} name="VPN" capabilities={[]} />,
     );
     expect(screen.getByRole("status", { name: "myServices.pulse.live" })).toBeInTheDocument();
     expect(screen.getByText("+100 MB")).toBeInTheDocument();
@@ -197,7 +200,9 @@ describe("a service row's pulse", () => {
 
 describe("the traffic meter", () => {
   it("leads with what is left, says of how much, and warns when nearly out", () => {
-    const { unmount } = render(<ServiceRow row={GRANT} name="VPN" capabilities={[]} />);
+    // A capped prepaid Grant: a metered one has no bound (F-118-aj, period.test.tsx).
+    const CAPPED = { ...GRANT, billingMode: "prepaid" as const, trafficCapBytes: GRANT.purchasedBytes };
+    const { unmount } = render(<ServiceRow row={CAPPED} name="VPN" capabilities={[]} />);
     expect(screen.getByText("512 MB")).toBeInTheDocument();
     expect(screen.getByText("myServices.meter.of:2 GB")).toBeInTheDocument();
     expect(screen.getByText("myServices.meter.percentLeft:25")).toBeInTheDocument();
@@ -208,7 +213,7 @@ describe("the traffic meter", () => {
     expect(fill?.querySelector(".tank-glint")).toBeNull();
     expect(screen.queryByText("myServices.meter.lowTraffic")).toBeNull();
     unmount();
-    render(<ServiceRow row={{ ...GRANT, consumedBytes: "2040109466" }} name="VPN" capabilities={[]} />);
+    render(<ServiceRow row={{ ...CAPPED, consumedBytes: "2040109466" }} name="VPN" capabilities={[]} />);
     expect(screen.getByText("myServices.meter.lowTraffic")).toBeInTheDocument();
     const spent = screen.getByRole("img", { name: /myServices\.ring\.label/ });
     expect(spent).toHaveAttribute("data-level", "critical");

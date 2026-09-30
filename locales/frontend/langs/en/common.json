@@ -2440,7 +2440,16 @@
       "unlimited": "Unlimited",
       "until": "until {{at}}",
       "lowTraffic": "This service is almost out of traffic; it disconnects when it runs out.",
-      "lowTime": "Less than a day is left on this service."
+      "lowTime": "Less than a day is left on this service.",
+      "payg": "No cap · pay as you go",
+      "thisPeriod": "Used this period",
+      "periodCost": "This period: {{amount}}",
+      "periodRange": "Period: {{from}} to {{to}}",
+      "previousPeriod": "Last period: {{bytes}} · {{amount}}",
+      "previousPeriodBytes": "Last period: {{bytes}}",
+      "covers": "Your balance covers about {{bytes}} more",
+      "coversNothing": "Your balance does not cover more usage; top up your wallet",
+      "lifetime": "Used in all: {{bytes}}"
     },
     "build": {
       "title": "Getting your service ready",

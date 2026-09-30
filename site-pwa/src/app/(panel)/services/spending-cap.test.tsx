@@ -33,6 +33,7 @@ vi.mock("@/lib/billing-api", async (importOriginal) => ({
     subscriptionLink: vi.fn(),
     grantConfigs: vi.fn(),
     grantUsage: vi.fn(),
+    grantPeriod: vi.fn(() => new Promise(() => {})),
   },
 }));
 

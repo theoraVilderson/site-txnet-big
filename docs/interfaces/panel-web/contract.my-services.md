@@ -160,8 +160,8 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
     "take the idea from Marzban's"). One column: name, status and whether it is
     in use; traffic left and time left ([contract.service-pulse.md](contract.service-pulse.md),
     F-307-u), from the row, no read (time as days and hours, then hours and
-    minutes — F-307-s, `useTimeLeft`) — a metered
-    Grant against what it bought, a capped prepaid one against its cap
+    minutes — F-307-s, `useTimeLeft`) — a metered Grant
+    has no bound (service-pulse rule 7), a capped prepaid one against its cap
     (F-111-t), no bar for unlimited traffic; then the configs, every line a
     row with copy and QR icons and "copy all" (one line each); then the
     subscription link as one row, copy and QR. A QR is a dialog, never an

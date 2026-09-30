@@ -9,6 +9,7 @@ import type { GrantRow } from "@/lib/billing-api";
 import type { GrantNoticeLevel } from "@/lib/notification-api";
 import { formatInstant } from "../../_lib/datetime";
 import { useGrantConfigs } from "../_hooks/useGrantConfigs";
+import { useGrantPeriod } from "../_hooks/useGrantPeriod";
 import { useSubscriptionLink } from "../_hooks/useSubscriptionLink";
 import { GRANT_TONES, type CapabilityName } from "../_lib/my-services";
 import { buildStage } from "../_lib/pulse";
@@ -110,6 +111,8 @@ export const ServiceRow = memo(function ServiceRow({
   const [confirmReset, setConfirmReset] = useState(false);
   const configs = useGrantConfigs(row.id, configsOpen || manageOpen, configsAsked);
   const sub = useSubscriptionLink(row.id);
+  // A pay-as-you-go service counts its billing period, not a bag (F-118-aj).
+  const period = useGrantPeriod(row.id, row.billingMode === "metered" && !row.trafficUnlimited, row.consumedBytes);
   const [query, setQuery] = useState("");
   const searchable = (configs.rows?.length ?? 0) >= SEARCH_FROM;
   // Below the threshold a leftover query would hide configs with no box to clear it.
@@ -177,7 +180,7 @@ export const ServiceRow = memo(function ServiceRow({
         ) : (
           <>
             {ready && <ServiceReady />}
-            <UsageMeter row={row} live={live} warn={row.status === "active"} splash={pulse.bump?.n} />
+            <UsageMeter row={row} live={live} warn={row.status === "active"} splash={pulse.bump?.n} period={period} />
           </>
         )}
 

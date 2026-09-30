@@ -86,6 +86,7 @@ vi.mock("@/lib/billing-api", async (importOriginal) => ({
     resetSubscriptionLink: vi.fn(),
     grantConfigs: vi.fn(),
     grantUsage: vi.fn(() => new Promise(() => {})),
+    grantPeriod: vi.fn(() => new Promise(() => {})),
     configAction: vi.fn(),
     setGrantLabel: vi.fn(),
   },
@@ -229,9 +230,11 @@ describe("the verdicts, config statuses and refusals billing can answer", () => 
 });
 
 describe("usage and the purge clock", () => {
-  it("shows consumed against purchased for a metered Grant", () => {
+  it("shows a metered Grant no cap and what it used, never against what billing bought (F-118-aj)", () => {
     show();
-    expect(screen.getByText("myServices.usage:1.5 GB,2 GB")).toBeInTheDocument();
+    expect(screen.getByText("myServices.meter.payg")).toBeInTheDocument();
+    expect(screen.getByText("1.5 GB")).toBeInTheDocument();
+    expect(screen.queryByText(/^myServices\.usage:/)).toBeNull();
   });
 
   it("says unlimited traffic and unlimited time, never 0 bought or a blank end (F-111-s)", () => {

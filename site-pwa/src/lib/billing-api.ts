@@ -424,6 +424,28 @@ export interface GrantUsage {
   days: { date: string; uploadBytes: string; downloadBytes: string }[];
 }
 
+/** One billing period of a metered Grant (F-118-ai): instants, bytes as a decimal string, money in the wallet's currency. */
+export interface GrantPeriod {
+  from: string;
+  to: string;
+  consumedBytes: string;
+  spent: string;
+}
+
+/**
+ * `GET /traffic/grants/:id/period` (F-118-ai): a metered Grant's month — from
+ * the latest anniversary of its start to the next — and the one before
+ * (`null` in the first). `coversBytes` is billing's estimate of what is still
+ * paid for or payable; `null` when it cannot say.
+ */
+export interface GrantPeriodView {
+  grantId: string;
+  current: GrantPeriod;
+  previous: GrantPeriod | null;
+  currencyCode: string | null;
+  coversBytes: string | null;
+}
+
 export type ConfigActionOutcome =
   | { configId: string; ok: true }
   | { configId: string; ok: false; reason: ConfigActionRefusal };
@@ -1179,6 +1201,11 @@ export const billingApi = {
   /** A Grant's daily bytes over the last 30 days (F-307-b) — the same 404 as `grantConfigs` for another user's Grant. */
   async grantUsage(grantId: string): Promise<GrantUsage> {
     return call<GrantUsage>(`/traffic/grants/${encodeURIComponent(grantId)}/usage`, { method: "GET" });
+  },
+
+  /** A metered Grant's billing period (F-118-ai); 404 another user's, 409 a Grant that is not metered. */
+  async grantPeriod(grantId: string): Promise<GrantPeriodView> {
+    return call<GrantPeriodView>(`/traffic/grants/${encodeURIComponent(grantId)}/period`, { method: "GET" });
   },
 
   /**

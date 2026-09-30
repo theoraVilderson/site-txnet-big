@@ -105,3 +105,14 @@ export function timeLeft(
   const total = Math.ceil(left / MINUTE_MS);
   return { days: Math.floor(total / 1440), hours: Math.floor((total % 1440) / 60), minutes: total % 60, spent };
 }
+
+/**
+ * A metered Grant's bytes this billing period (F-118-aj), live: what billing
+ * answered, plus what the pushed lifetime total rose by since that read
+ * (`baseline`). A total that has not risen adds nothing; the period never shrinks.
+ */
+export function livePeriodBytes(periodBytes: string, baseline: string, consumedNow: string): string {
+  const period = big(periodBytes) ?? ZERO;
+  const rise = (big(consumedNow) ?? ZERO) - (big(baseline) ?? ZERO);
+  return (rise > ZERO ? period + rise : period).toString();
+}

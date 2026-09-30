@@ -77,6 +77,16 @@ should say so; the usage bar is confusing".
 6. **Motion is decoration, never the message.** Every state has its words.
    Under `prefers-reduced-motion` the fill-up, glint, beat, ripple,
    bump, ring and sweep stop, and nothing else changes (`globals.css`, "My services").
+7. **A pay-as-you-go service has no limit** (F-118-aj; user, 2026-09-30: the
+   bag read as a cap, and a lifetime total that only grows confuses). A metered
+   Grant with a traffic meter has no "left", no percent, no red line, and no
+   bar toward `purchasedBytes`. Its tile reads "no cap, pay as you go" and
+   leads with this billing period's bytes (billing's `billing-grant-period`,
+   F-118-ai, read once per card; pushes add what the lifetime total rose by
+   since that read). Under the figure: the period's cost, its dates, the last
+   period, what the balance covers (or "top up" at none), and the lifetime
+   total, small. No period (a failed read, a reseller's admin view) is "no
+   cap" and the lifetime total. The time tile is unchanged.
 
 ## Proof
 
@@ -90,7 +100,7 @@ never-used row. A push that makes a row live, shows "+100 MB", runs the
 tank's ring. A critical tank. Nothing shown
 while metering is down or on a non-active Grant. The meter's figure, its "of",
 its percent and the red line. Unlimited traffic. The steps while pending. The
-links step after delivery, then "ready". `useGrantsPage.test.ts` checks that a
+links step after delivery, then "ready". `period.test.tsx` covers rule 7. `useGrantsPage.test.ts` checks that a
 push stamps `lastTrafficAt`, that any reconnect re-reads, and that the tab
 coming into view re-reads at most once per 15 s. `connection.test.tsx` checks the links step while
 every config waits. Billing's `grant-list.spec.ts` checks `lastTrafficAt`.

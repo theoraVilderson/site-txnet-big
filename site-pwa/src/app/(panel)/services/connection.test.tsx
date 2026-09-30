@@ -37,6 +37,7 @@ vi.mock("@/lib/billing-api", async (importOriginal) => ({
     resetSubscriptionLink: vi.fn(),
     grantConfigs: vi.fn(),
     grantUsage: vi.fn(),
+    grantPeriod: vi.fn(() => new Promise(() => {})),
     configAction: vi.fn(),
     setConfigLabel: vi.fn(),
   },
@@ -169,7 +170,8 @@ describe("the bytes behind the ring and the bars", () => {
   });
 
   it("puts the used share on the row without a read", () => {
-    render(<ServiceRow row={GRANT} name="VPN" capabilities={[]} />);
+    // A capped prepaid Grant: a metered one has no bound to share (F-118-aj).
+    render(<ServiceRow row={{ ...GRANT, billingMode: "prepaid", trafficCapBytes: GRANT.purchasedBytes }} name="VPN" capabilities={[]} />);
     expect(screen.getByRole("img", { name: /myServices\.ring\.label/ })).toBeInTheDocument();
     expect(grantUsage).not.toHaveBeenCalled();
     expect(grantConfigs).not.toHaveBeenCalled();
