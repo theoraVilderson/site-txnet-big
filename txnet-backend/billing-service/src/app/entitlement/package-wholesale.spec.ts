@@ -98,9 +98,10 @@ function world(w: World = {}) {
         legs.push(row);
         return { ...row };
       },
-      updateMany: async ({ where, data }: { where: { id: string; billed: bigint }; data: { billed: bigint } }) => {
+      updateMany: async ({ where, data }: { where: { id: string; billed: bigint; consumed?: bigint }; data: { billed: bigint; consumed?: bigint } }) => {
         if (!legs[0] || where.billed !== legs[0].billed) return { count: 0 };
-        legs[0].billed = data.billed;
+        if (where.consumed !== undefined && where.consumed !== legs[0].consumed) return { count: 0 };
+        Object.assign(legs[0], data);
         return { count: 1 };
       },
     },
@@ -349,13 +350,57 @@ describe('an unlimited plan buys its days wholesale, flat per period (F-118-z, D
     expect(short.legs[0].billed).toBe(BigInt(0));
   });
 
-  it('a bag\'s settle and a close move nothing on a time leg', async () => {
-    const w = unlimited({ platformPanel: true, status: GrantStatus.cancelled, leg: { billed: BigInt(30 * DAY_S), consumed: BigInt(0) }, timeLeg: true });
+  it('a bag\'s settle moves nothing on a time leg', async () => {
+    const w = unlimited({ platformPanel: true, leg: { billed: BigInt(30 * DAY_S), consumed: BigInt(0) }, timeLeg: true });
 
     expect(await leg.settle(w.tx, GRANT, 'adjustment-1')).toBeNull();
-    expect(await leg.settleAtClose(w.tx, GRANT)).toBe(BigInt(0));
 
     expect(w.resellerLedger).toEqual([]);
     expect(w.legs[0].billed).toBe(BigInt(30 * DAY_S));
+  });
+
+  it('an admin\'s added days are bought like a renewal\'s, naming the move, to the second', async () => {
+    const w = unlimited({ platformPanel: true, leg: { billed: BigInt(30 * DAY_S), consumed: BigInt(0) }, timeLeg: true });
+
+    expect(await leg.extend(w.tx, GRANT, BigInt(10 * DAY_S), 'change-1')).toBeNull();
+
+    // 10 days of $3.00 per 30 = $1.00.
+    expect(w.resellerLedger).toEqual([expect.objectContaining({ amount: D('1.00'), reasonType: TenantBillingReasonType.metered_usage_charge, referenceId: 'change-1' })]);
+    expect(w.legs[0].billed).toBe(BigInt(40 * DAY_S));
+  });
+});
+
+describe('an unlimited plan closed early gives back its unused days (F-118-z)', () => {
+  const closed = (w: World = {}) =>
+    world({ trafficUnlimited: true, purchasedBytes: BigInt(0), timeRate: true, timeLeg: true, status: GrantStatus.cancelled, leg: { billed: BigInt(30 * DAY_S), consumed: BigInt(0) }, ...w });
+  const DAY10 = new Date(SALE.getTime() + 10 * DAY_S * 1000);
+
+  it('credits the days left to its end, priced down, once — the leg marked settled', async () => {
+    const w = closed();
+
+    expect(await leg.settleAtClose(w.tx, GRANT, DAY10)).toBe(BigInt(0));
+    expect(await leg.settleAtClose(w.tx, GRANT, DAY10)).toBe(BigInt(0));
+
+    // 20 of 30 days left at $3.00 per 30.
+    expect(w.resellerLedger).toEqual([
+      expect.objectContaining({ amount: D('2.00'), reasonType: TenantBillingReasonType.metered_usage_refund, referenceId: GRANT }),
+    ]);
+    expect(w.legs[0]).toMatchObject({ billed: BigInt(10 * DAY_S), consumed: BigInt(10 * DAY_S) });
+  });
+
+  it('gives back no more than was paid for, and nothing past its end or on an open Grant', async () => {
+    // 30 days left, only 5 of them bought (sold on its own panels, then a renewal on a platform one).
+    const capped = closed({ leg: { billed: BigInt(5 * DAY_S), consumed: BigInt(0) } });
+    await leg.settleAtClose(capped.tx, GRANT, SALE);
+    expect(capped.resellerLedger).toEqual([expect.objectContaining({ amount: D('0.50'), reasonType: TenantBillingReasonType.metered_usage_refund })]);
+
+    const past = closed();
+    await leg.settleAtClose(past.tx, GRANT, new Date(SALE.getTime() + 31 * DAY_S * 1000));
+    expect(past.resellerLedger).toEqual([]);
+    expect(past.legs[0]).toMatchObject({ billed: BigInt(30 * DAY_S), consumed: BigInt(30 * DAY_S) });
+
+    const open = closed({ status: GrantStatus.active });
+    await leg.settleAtClose(open.tx, GRANT, DAY10);
+    expect(open.resellerLedger).toEqual([]);
   });
 });

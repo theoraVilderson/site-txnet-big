@@ -2,7 +2,7 @@ import { Grant, GrantStatus, GrantWholesale, Prisma, TenantBillingReasonType, Te
 import { METER_KEYS, packageMeterRatesAt, TenantBillingLedger } from '@txnet-backend/shared-core';
 
 import { onPlatformPanel } from '../traffic/vpn-wholesale';
-import { CENT, max, priceUnits, toAmount, toCents, unitsCovered, ZERO, type Priced } from '../usage/usage-price';
+import { CENT, max, min, priceUnits, toAmount, toCents, unitsCovered, ZERO, type Priced } from '../usage/usage-price';
 import { coverable, priceOf } from '../usage/usage-wholesale';
 
 /**
@@ -17,8 +17,9 @@ import { coverable, priceOf } from '../usage/usage-wholesale';
  * An unlimited plan has no bag, so it buys its days instead (F-118-z, D-59
  * (c)): the package's `vpn.unlimited.time` rate — a flat price per period,
  * `unitSize` seconds — times the days sold, rounded up to a cent, at the sale
- * and at every renewal. Its leg's `billed` counts seconds; nothing is given
- * back or charged at close. A plan with no end is refused on a platform panel
+ * at every renewal and at every day an admin adds. Its leg's `billed` counts
+ * seconds; at close the days left to its end come back, priced down, never
+ * more than were bought. A plan with no end is refused on a platform panel
  * (`wholesale_rate_missing`): there is no period to price.
  *
  * `billed` is the cursor, over `consumed` — the bytes served on **platform**
@@ -94,13 +95,23 @@ export class PackageWholesale {
    * for a bag's leg (its raise is `settle`), a Grant with no leg, or a group of
    * the reseller's own panels today.
    */
-  async renew(tx: Prisma.TransactionClient, grantId: string, days: number, referenceId: string): Promise<PackageWholesaleRefusal | null> {
-    if (days <= 0) return null;
+  renew(tx: Prisma.TransactionClient, grantId: string, days: number, referenceId: string): Promise<PackageWholesaleRefusal | null> {
+    return this.extend(tx, grantId, BigInt(days) * DAY_S, referenceId);
+  }
+
+  /**
+   * `seconds` added to an unlimited plan's end — a renewal's days, or an
+   * admin's move of the end (`duration.ts`, naming its `grant_duration_change`)
+   * — bought as at the sale. A cut buys nothing and gives nothing back until
+   * close, where the days left are what comes back.
+   */
+  async extend(tx: Prisma.TransactionClient, grantId: string, seconds: bigint, referenceId: string): Promise<PackageWholesaleRefusal | null> {
+    if (seconds <= ZERO) return null;
     const leg = await tx.grantWholesale.findUnique({ where: { grantId } });
     if (!leg || !isTime(leg)) return null;
     const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { variantId: true } });
     if (!grant) return null;
-    return this.buyTime(tx, leg, grant.variantId, BigInt(days) * DAY_S, referenceId);
+    return this.buyTime(tx, leg, grant.variantId, seconds, referenceId);
   }
 
   /**
@@ -143,12 +154,14 @@ export class PackageWholesale {
    * up to the reseller's balance. Answers the bytes it could not charge — they
    * stay below the cursor, never a negative wallet. The cursor is the guard,
    * so a second close moves nothing; an open Grant, or one with no leg, neither.
+   * An unlimited plan's leg gives back its days left at `at` instead (F-118-z).
    */
-  async settleAtClose(tx: Prisma.TransactionClient, grantId: string): Promise<bigint> {
-    const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { status: true } });
+  async settleAtClose(tx: Prisma.TransactionClient, grantId: string, at: Date = new Date()): Promise<bigint> {
+    const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { status: true, endsAt: true } });
     if (!grant || !CLOSED.has(grant.status)) return ZERO;
     const leg = await tx.grantWholesale.findUnique({ where: { grantId } });
-    if (!leg || isTime(leg)) return ZERO;
+    if (!leg) return ZERO;
+    if (isTime(leg)) return this.giveBackDays(tx, leg, grant.endsAt, at);
     const rate = rateOf(leg);
     if (leg.consumed > leg.billed) {
       const short = leg.consumed - leg.billed;
@@ -177,6 +190,36 @@ export class PackageWholesale {
       currencyCode: leg.currencyCode,
       reasonType: TenantBillingReasonType.metered_usage_refund,
       referenceId: grantId,
+    });
+    return ZERO;
+  }
+
+  /**
+   * At close, an unlimited plan's seconds left to its end — no more than
+   * `billed` — back as `metered_usage_refund` naming the Grant, priced
+   * **down**. `consumed` is raised to the lowered `billed`: on a time leg that
+   * equality means settled, so a second close moves nothing. Nothing is ever
+   * left unpaid here, so it answers 0.
+   */
+  private async giveBackDays(tx: Prisma.TransactionClient, leg: GrantWholesale, endsAt: Date | null, at: Date): Promise<bigint> {
+    if (leg.consumed === leg.billed) return ZERO;
+    const left = endsAt ? max(ZERO, BigInt(Math.floor((endsAt.getTime() - at.getTime()) / SECOND_MS))) : ZERO;
+    const back = min(left, leg.billed);
+    const kept = leg.billed - back;
+    const { count } = await tx.grantWholesale.updateMany({
+      where: { id: leg.id, billed: leg.billed, consumed: leg.consumed },
+      data: { billed: kept, consumed: kept },
+    });
+    if (count !== 1) throw new Error(`grant_wholesale ${leg.id}: billed moved`);
+    const rate = rateOf(leg);
+    const cents = (back * priceUnits(rate)) / (rate.unitSize * CENT);
+    if (cents === ZERO) return ZERO;
+    await this.ledger.credit(tx, {
+      tenantId: leg.payerTenantId,
+      amount: toAmount(cents),
+      currencyCode: leg.currencyCode,
+      reasonType: TenantBillingReasonType.metered_usage_refund,
+      referenceId: leg.grantId,
     });
     return ZERO;
   }

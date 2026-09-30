@@ -1,11 +1,13 @@
 import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 
 import { EntitlementRefused } from './grant';
+import { PackageWholesale } from './package-wholesale';
 import { reviveOnRenewal } from './purge';
 import { lapseToQuota, usedBytesOf } from './renewal';
 import { PERIOD_ENDED } from './suspension';
 
 const DAY_MS = 86_400_000;
+const PACKAGE_WHOLESALE = new PackageWholesale();
 
 /** ±N whole days from the end it has, or a new end. */
 export type DurationMove = { days: number } | { endsAt: Date };
@@ -41,6 +43,11 @@ const CLOSED: readonly GrantStatus[] = [GrantStatus.expired, GrantStatus.exhaust
  * back exactly as a renewal of days brings it (`renewal.ts`) — `active` and
  * told (F-601-k) when its bag has room or it has no bag, or waiting as
  * `quota_exhausted` on a spent bag. Otherwise it would be purged with days on it.
+ *
+ * **Days added to a reseller's unlimited plan are bought** (F-118-z): the
+ * seconds the end moved, at its locked `vpn.unlimited.time` rate, naming the
+ * `grant_duration_change` row — as an admin's raise of a bag buys
+ * (`contract.package-wholesale.md` rule 2). A cut gives nothing back until close.
  *
  * The write is conditional on the status and end read, so a renewal or an
  * unfreeze in between is `grant_moved` — retry — and never an end moved twice.
@@ -86,6 +93,11 @@ export async function changeGrantDuration(
     data: { tenantId: grant.tenantId, grantId, actorUserId: input.actorUserId, endsAtBefore: before, endsAtAfter: after, reason: input.reason },
     select: { id: true },
   });
+  if (grant.trafficUnlimited && after.getTime() > before.getTime()) {
+    const seconds = BigInt(Math.ceil((after.getTime() - before.getTime()) / 1000));
+    const refused = await PACKAGE_WHOLESALE.extend(tx, grantId, seconds, row.id);
+    if (refused) throw new EntitlementRefused(refused, grantId);
+  }
 
   // The new end is in the future (refused above otherwise), so a lapsed Grant
   // has its time back; a bag must have room too, as for a renewal.

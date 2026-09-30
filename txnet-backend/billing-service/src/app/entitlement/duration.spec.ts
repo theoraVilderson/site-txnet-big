@@ -26,6 +26,7 @@ import { OutboxEventType } from '@txnet-backend/shared-core';
 import { changeGrantDuration } from './duration';
 import { ADMIN_FROZEN } from './freeze';
 import { EntitlementRefused } from './grant';
+import { PackageWholesale } from './package-wholesale';
 import { PERIOD_ENDED, QUOTA_EXHAUSTED } from './suspension';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
@@ -103,6 +104,8 @@ function build(row: Partial<Row> | null, usedBytes = BigInt(0)) {
         return { id: 'change-1' };
       },
     },
+    // No wholesale leg: the Grant is not a reseller's unlimited plan (F-118-z has its own spec).
+    grantWholesale: { findUnique: async () => null },
   };
   return { tx: tx as never, grant, writes, changes, configs, events };
 }
@@ -190,6 +193,24 @@ describe('changeGrantDuration', () => {
     expect(await refusal(changeGrantDuration(tx, GRANT, by(3)))).toBe('grant_moved');
     expect(writes[0].where).toMatchObject({ id: GRANT, status: GrantStatus.active, endsAt: END });
     expect(changes).toEqual([]);
+  });
+
+  it('buys the days added to a reseller\'s unlimited plan, naming the move; a cut buys nothing; a refusal throws', async () => {
+    const extend = vi.spyOn(PackageWholesale.prototype, 'extend').mockResolvedValue(null);
+    try {
+      await changeGrantDuration(build({ trafficUnlimited: true, purchasedBytes: BigInt(0) }).tx, GRANT, by(3));
+      expect(extend).toHaveBeenCalledWith(expect.anything(), GRANT, BigInt(3 * 86_400), 'change-1');
+
+      extend.mockClear();
+      await changeGrantDuration(build({ trafficUnlimited: true, purchasedBytes: BigInt(0) }).tx, GRANT, by(-3));
+      await changeGrantDuration(build({}).tx, GRANT, by(3));
+      expect(extend).not.toHaveBeenCalled();
+
+      extend.mockResolvedValueOnce('wholesale_unfunded');
+      expect(await refusal(changeGrantDuration(build({ trafficUnlimited: true, purchasedBytes: BigInt(0) }).tx, GRANT, by(3)))).toBe('wholesale_unfunded');
+    } finally {
+      extend.mockRestore();
+    }
   });
 
   describe('a lapsed Grant (F-311-z)', () => {

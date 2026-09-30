@@ -39,7 +39,10 @@ in `entitlement/duration.ts`, proved by `duration.spec.ts`. `change` is `{days}`
 duration is `endsAt`, not a quota metric (§4.5). Refused: `grant_closed`
 (expired / exhausted / cancelled: a renewal's, F-311-d), `grant_not_active`
 (pending), `grant_permanent`, `duration_unchanged`, `duration_end_not_future`
-(cutting off is a delete, F-311-m), `grant_moved`. Route: billing `contract.reseller-grants.md`.
+(cutting off is a delete, F-311-m), `grant_moved`. Days added to a reseller's
+unlimited plan are bought wholesale, naming the row (`wholesale_unfunded` /
+`wholesale_rate_missing` roll the move back; `contract.package-wholesale.md`,
+F-118-z). Route: billing `contract.reseller-grants.md`.
 **A lapsed Grant's days revive it (F-311-z):** `suspended` as `period_ended`, its end
 moved ahead is a renewal of days (`reviveOnRenewal`, told inside the days notice, F-311-s; a spent bag →
 `quota_exhausted`, purge clock running), so it is never purged with days left. `revived`.
