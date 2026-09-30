@@ -15,6 +15,9 @@ export { MeteredCapReached };
  */
 export const PLATFORM_METERED_CAP = 5;
 
+/** The highest number staff may set (F-118-ap): above it is a typo, not a ticket's answer. */
+export const MAX_METERED_CAP = 1000;
+
 /** What holds a seat: every state but the three that end a Grant. */
 export const OPEN_GRANT_STATUSES: readonly GrantStatus[] = [GrantStatus.pending, GrantStatus.active, GrantStatus.suspended];
 

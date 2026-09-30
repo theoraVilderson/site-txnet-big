@@ -14,6 +14,8 @@ import { ResellerGrantsBulkController } from './reseller-grants-bulk.controller'
 import { GrantBulkJobInternalController, ResellerGrantsBulkJobController } from './reseller-grants-bulk-job.controller';
 import { ResellerGrantsByLinesController } from './reseller-grants-by-lines.controller';
 import { ResellerUsersCatalogController } from './reseller-users-catalog.controller';
+import { GrantLimitsController } from './grant-limits.controller';
+import { GrantLimitsService } from './grant-limits.service';
 import { ResellerUserGrantsController } from './reseller-user-grants.controller';
 import { ResellerUserGrantsService } from './reseller-user-grants.service';
 import { SubscriptionLinkService } from './subscription-link.service';
@@ -32,8 +34,8 @@ import { SubscriptionLinkService } from './subscription-link.service';
  */
 @Module({
   imports: [WalletModule, EntitlementModule, TrafficModule, UsageModule],
-  controllers: [GiftController, GrantTokenController, GrantListController, ResellerUserGrantsController, ResellerGrantsByLinesController, ResellerGrantsBulkController, ResellerGrantsBulkJobController, GrantBulkJobInternalController, ResellerUsersCatalogController],
-  providers: [GiftRedemptionService, SubscriptionLinkService, ResellerUserGrantsService, ResellerGrantBulkJobService, GrantBulkJobDrainService, ResellerAccess],
+  controllers: [GiftController, GrantTokenController, GrantListController, ResellerUserGrantsController, ResellerGrantsByLinesController, ResellerGrantsBulkController, ResellerGrantsBulkJobController, GrantBulkJobInternalController, ResellerUsersCatalogController, GrantLimitsController],
+  providers: [GrantLimitsService, GiftRedemptionService, SubscriptionLinkService, ResellerUserGrantsService, ResellerGrantBulkJobService, GrantBulkJobDrainService, ResellerAccess],
   exports: [GiftRedemptionService],
 })
 export class GiftModule {}

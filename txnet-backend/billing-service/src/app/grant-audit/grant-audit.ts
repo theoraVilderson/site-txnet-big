@@ -95,6 +95,28 @@ export async function auditedConfigAct<T extends string | void>(
 
 export type BulkJobAuditAction = Extract<AdminAction, 'grant_bulk_start' | 'grant_bulk_cancel'>;
 
+export type LimitAuditAction = Extract<AdminAction, 'grant_limit_tenant_set' | 'grant_limit_user_set' | 'grant_limit_user_remove'>;
+
+/**
+ * A metered cap changed by staff (F-118-ap): a tenant's default, against the
+ * tenant, or one user's number, against the user — before, after and the
+ * reason, in the change's transaction. Nobody is told: it changes what may be
+ * bought, not anything the user holds.
+ */
+export async function auditLimit(
+  tx: Prisma.TransactionClient,
+  actor: AuditActor,
+  tenantId: string,
+  action: LimitAuditAction,
+  target: { type: 'tenant' | 'user'; id: string },
+  before: number | null,
+  after: number | null,
+  reason: string | null,
+): Promise<void> {
+  const type = target.type === 'tenant' ? AuditTargetType.tenant : AuditTargetType.user;
+  await write(tx, actor, tenantId, action, type, target.id, { meteredOpenCap: before }, { meteredOpenCap: after }, reason);
+}
+
 /**
  * A bulk job by filter, written down as one admin act (F-311-u3): its start
  * and its cancel, against the job, in that act's own transaction. Nobody is

@@ -10,6 +10,7 @@ source:
   - txnet-backend/billing-service/src/app/settlement/**
   - txnet-backend/prisma/domains/migrations/20260912000300_settlement_admin_actions/**
   - txnet-backend/prisma/domains/migrations/20260918000200_bot_scope_key_tenant/**
+  - txnet-backend/prisma/domains/migrations/20260930000900_staff_set_a_users_metered_cap/**
   - txnet-backend/billing-service/src/app/grant-audit/**
   - txnet-backend/prisma/domains/migrations/20260928000800_an_admin_action_on_a_grant_is_audited/**
 owns_tables: [admin_audit_log, impersonation_session, linked_account_group, linked_account_member]

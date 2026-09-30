@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-version: 28
+version: 30
 updated: 2026-09-30
 ---
 
@@ -52,9 +52,36 @@ carries `cap` and `open`. Over HTTP (`invoice.controller.ts`, create and pay):
 **409**, `i18nKey` `errors.billing.invoice.meteredCapReached` ("open a support
 ticket"), `error.facts = { cap, open }`.
 
-## Not yet
+## Staff routes (F-118-ap)
 
-Staff read and set both numbers through F-118-ap; the panel shows them and the
-shop names the refusal in F-118-aq. Until then a row is written by hand.
+`GrantLimitsController` / `GrantLimitsService` (`billing-service/.../payment/gift/`),
+on the users-admin door, `ResellerAccess.runIncludingPlatform`: the
+platform's staff (`tenant.manage`) on any tenant and on the platform's own; a
+reseller's owner and its staff on theirs. The tenant is the path's, never the
+caller's session.
 
-Proved by `entitlement/metered-cap.spec.ts`.
+| Route | Body | Answers |
+|---|---|---|
+| `GET /api/billing/tenants/:tenantId/grant-limits` | — | `{platformDefault, tenantDefault \| null, effective}` |
+| `PUT` the same | `{meteredOpenCap: 0..1000 \| null}` — `null` = back to the platform's | the same view |
+| `GET .../users/:userId/grant-limit` | — | `{userId, own: {meteredOpenCap, reason, setByUserId, updatedAt} \| null, tenantDefault, platformDefault, effective, open}` |
+| `PUT` the same | `{meteredOpenCap: 0..1000, reason: 1..500}` | the same view |
+| `DELETE` the same | — | the same view, `own: null` |
+
+| Rule | Why |
+|---|---|
+| `effective` is `meteredCapOf`'s, `open` counts `OPEN_GRANT_STATUSES` metered Grants | the panel shows the number a sale is refused by, never one it computed |
+| Reads pass `read`, writes `staffWrite`: a suspended reseller sees its numbers and changes none | the door's matrix, as every write on a user |
+| A user the tenant does not hold is **404** `user_not_found`, before anything is read or written; the door's refusals are the user-grants surface's (`resellerRefusal`) | C-15; one set of answers for one door |
+| A user's number needs a `reason`; the tenant's takes none. Out of range: **400** `errors.billing.grantLimitInvalid` | the number is a ticket's answer, and the reason is how the next person finds it. 1000 catches a typo; 0 sells none |
+| Every change writes `admin_audit_log` in its transaction (`auditLimit`): `grant_limit_tenant_set` against the tenant, `grant_limit_user_set` / `grant_limit_user_remove` against the user, before/after `{meteredOpenCap}`. A change to nothing (same number, removing none) writes no row and is not refused | who raised whom is the question a panel full of seats asks |
+| Buckets: reads `RESELLER_USER_GRANTS_READ`, writes `RESELLER_USER_CONFIG_ACTION` | part of reading a user's services, and an admin's act on a user |
+| Nobody is notified | it changes what may be bought, not what the user holds |
+
+**Open:** a reseller may raise its own users' number with no platform ceiling,
+though its metered Grants on the platform's panels hold the platform's seats.
+F-118-ar decides whether the platform bounds it.
+
+The panel shows both numbers and the shop names the refusal in F-118-aq.
+
+Proved by `entitlement/metered-cap.spec.ts` and `payment/gift/grant-limits.spec.ts`.

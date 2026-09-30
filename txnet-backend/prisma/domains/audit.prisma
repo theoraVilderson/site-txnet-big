@@ -133,6 +133,10 @@ enum AdminAction {
   config_enable
   config_retire
   config_move
+  // F-118-ap. The metered cap: a tenant's default, and one user's own number.
+  grant_limit_tenant_set
+  grant_limit_user_set
+  grant_limit_user_remove
 
   @@schema("audit")
 }
