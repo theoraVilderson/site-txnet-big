@@ -206,8 +206,8 @@ describe('what no platform panel served comes back at close (F-118-p)', () => {
   it('credits the unserved part, priced down, once', async () => {
     const w = world({ status: GrantStatus.cancelled, leg: { billed: gib(50), consumed: gib(10) } });
 
-    await leg.giveBack(w.tx, GRANT);
-    await leg.giveBack(w.tx, GRANT);
+    await leg.settleAtClose(w.tx, GRANT);
+    await leg.settleAtClose(w.tx, GRANT);
 
     // 40 GiB at $0.20.
     expect(w.resellerLedger).toEqual([
@@ -219,7 +219,42 @@ describe('what no platform panel served comes back at close (F-118-p)', () => {
   it('gives nothing back on an open Grant', async () => {
     const w = world({ status: GrantStatus.suspended, leg: { billed: gib(50), consumed: gib(10) } });
 
-    await leg.giveBack(w.tx, GRANT);
+    await leg.settleAtClose(w.tx, GRANT);
+
+    expect(w.resellerLedger).toEqual([]);
+  });
+});
+
+describe('a close charges what a platform panel served past the cursor (F-118-y)', () => {
+  // A platform panel joined the group after the last raise: its bytes were never bought.
+  it('charges the bytes served past `billed`, the cursor to `consumed`, once', async () => {
+    const w = world({ status: GrantStatus.expired, leg: { billed: gib(10), consumed: gib(30) } });
+
+    expect(await leg.settleAtClose(w.tx, GRANT)).toBe(BigInt(0));
+    expect(await leg.settleAtClose(w.tx, GRANT)).toBe(BigInt(0));
+
+    // 20 GiB at $0.20.
+    expect(w.resellerLedger).toEqual([
+      expect.objectContaining({ amount: D('4.00'), reasonType: TenantBillingReasonType.metered_usage_charge, referenceId: GRANT }),
+    ]);
+    expect(w.legs[0].billed).toBe(gib(30));
+  });
+
+  it('charges only what the balance covers and answers the rest, never below zero', async () => {
+    const w = world({ status: GrantStatus.expired, leg: { billed: gib(10), consumed: gib(30) }, resellerBalance: '1.00' });
+
+    // $1.00 buys 5 GiB; 15 GiB stay unpaid, the gap left on the cursor.
+    expect(await leg.settleAtClose(w.tx, GRANT)).toBe(gib(15));
+
+    expect(w.resellerLedger).toEqual([expect.objectContaining({ amount: D('1.00'), reasonType: TenantBillingReasonType.metered_usage_charge })]);
+    expect(w.resellerWallet.cachedBalance.toFixed(2)).toBe('0.00');
+    expect(w.legs[0].billed).toBe(gib(15));
+  });
+
+  it('charges nothing on an open Grant', async () => {
+    const w = world({ status: GrantStatus.suspended, leg: { billed: gib(10), consumed: gib(30) } });
+
+    expect(await leg.settleAtClose(w.tx, GRANT)).toBe(BigInt(0));
 
     expect(w.resellerLedger).toEqual([]);
   });

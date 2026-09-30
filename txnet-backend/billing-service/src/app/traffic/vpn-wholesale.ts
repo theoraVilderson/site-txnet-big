@@ -20,7 +20,7 @@ import { vpnMeterOf } from './vpn-meter';
  *
  * and never down: a byte the reseller bought ahead and its own panel served
  * funds the next platform byte instead of being charged again, and whatever is
- * left comes back at close (`giveBack`). Headroom is prepaid only where a
+ * left comes back at close (`settleAtClose`). Headroom is prepaid only where a
  * platform panel could serve it (user, 2026-09-29), so a reseller at zero cuts
  * the users on groups holding a platform panel and no others.
  */
@@ -82,16 +82,20 @@ export class VpnWholesale {
   }
 
   /**
-   * At close: what the reseller bought and no platform panel served, back as
-   * `metered_usage_refund` priced down, the cursor to `wholesaleConsumed`. The
-   * cursor is the guard, so a second close gives nothing. An open Grant, or one
-   * with no leg, moves nothing.
+   * At close, both ways (F-118-y): what the reseller bought and no platform
+   * panel served back as `metered_usage_refund` priced down, the cursor to
+   * `wholesaleConsumed`; or, when a platform panel served past the cursor (one
+   * added after the last block), those bytes charged up to the reseller's
+   * balance. Answers the bytes it could not charge. The cursor is the guard,
+   * so a second close moves nothing; an open Grant, or one with no leg, neither.
    */
-  async giveBack(tx: Prisma.TransactionClient, grantId: string): Promise<void> {
+  async settleAtClose(tx: Prisma.TransactionClient, grantId: string): Promise<bigint> {
     const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { status: true } });
-    if (!grant || !CLOSED.has(grant.status)) return;
+    if (!grant || !CLOSED.has(grant.status)) return ZERO;
     const meter = await vpnMeterOf(tx, grantId);
-    if (!meter?.wholesalePayerTenantId) return;
+    if (!meter?.wholesalePayerTenantId) return ZERO;
+    if (meter.wholesaleConsumed > meter.wholesaleBilled) return this.leg.chargeTo(tx, meter, meter.wholesaleConsumed, grantId);
     await this.leg.giveBack(tx, meter, meter.wholesaleConsumed, grantId);
+    return ZERO;
   }
 }

@@ -117,7 +117,7 @@ export class GrantCloseStageService {
       if (!(e instanceof RemainderCreditRefused) || FATAL.includes(e.reason)) throw e;
     }
     await this.meters.settleAtClose(tx, { grantId: grant.id, refund: true });
-    await this.remainders.wholesaleBack(tx, grant.id);
+    await this.remainders.wholesaleAtClose(tx, grant.id);
     return true;
   }
 }

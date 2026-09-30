@@ -55,14 +55,22 @@ bag), a metered Grant, and a plan sold before this row existed (no backfill).
    at the sale; on the reseller's own panels the plan sells with no leg. The
    rate is locked whenever the package has one, so a platform panel added to
    the group later is still charged at the next raise.
-5. **Back at close** (user): `billed − consumed`, priced **down**, as
-   `metered_usage_refund` naming the Grant, `billed` to `consumed`; only for a
-   closed Grant (`cancelled`, `expired`, `exhausted`). The cursor is the guard,
-   so a second close gives nothing. Run by an admin's delete
-   (`RemainderCreditService.wholesaleBack`, whatever the admin answered about
-   the user's remainder) and a failed delivery's refund (`delivery.ts`). A plan
-   whose days or bag ran out is `suspended` and renewable, not closed: it
-   keeps what it bought.
+5. **Settled at close, both ways** (user; D-59 (d), F-118-y). Only for a
+   closed Grant (`cancelled`, `expired`, `exhausted`), by `settleAtClose`:
+   - `billed > consumed`: `billed − consumed`, priced **down**, as
+     `metered_usage_refund` naming the Grant, `billed` to `consumed`;
+   - `consumed > billed` (a platform panel joined the group after the last
+     raise): those bytes charged as `metered_usage_charge` naming the Grant,
+     priced **up**, as far as the reseller's balance covers them
+     (`coverable`, `usage-wholesale.ts`). What it cannot cover stays below the
+     cursor and is logged (`RemainderCreditService.wholesaleAtClose`) — never a
+     negative wallet (§5.4), never a debt row.
+
+   The cursor is the guard, so a second close moves nothing. Run by the close
+   stage ([contract.close.md](contract.close.md)), an admin's delete (whatever
+   the admin answered about the user's remainder) and a failed delivery's
+   refund (`delivery.ts`). A plan whose days or bag ran out is `suspended` and
+   renewable, not closed: it keeps what it bought.
 
 ## What each surface answers
 
@@ -76,6 +84,6 @@ bag), a metered Grant, and a plan sold before this row existed (no backfill).
 
 - **An unlimited plan on a platform panel costs the reseller nothing**: it
   has no bag to price. Open: `open-questions.md` (2026-09-29).
-- **Bytes served on a platform panel added after the last raise** are
-  charged at the next raise and never at close (rule 5 only gives back), as
-  for a metered Grant's last block.
+- **Bytes a reseller could not pay for at close** are only logged: the gap
+  `consumed − billed` on the closed Grant's leg is the record, and nothing
+  collects it later (F-118-y).

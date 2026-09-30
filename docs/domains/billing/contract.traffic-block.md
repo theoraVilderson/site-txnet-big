@@ -93,9 +93,9 @@ platform panel (user, 2026-09-29); never down — a byte an own panel served fun
    `wholesale_unfunded`, short of funds (block request rule 3). The planner's reserve, and so the shutdown ceiling, holds the same `room` (`leaseplan.WholesaleRoom`, F-118-v).
 2. **In the block's transaction**: one `metered_usage_charge`, `referenceId` the
    block's wallet row, the cursor guarded (`WholesaleCursorMoved` is `raced`).
-3. **Back at close**: `wholesaleBilled − wholesaleConsumed`, priced down, as
-   `metered_usage_refund` against the Grant — on an admin's delete whatever it
-   answered about the user's remainder. `vpn-wholesale.spec.ts`.
+3. **Settled at close, both ways** (F-118-y): `wholesaleBilled − wholesaleConsumed` priced down as `metered_usage_refund` against the Grant, on an admin's delete whatever it answered about the user's remainder;
+   bytes served past the cursor (a platform panel added after the last block) charged as `metered_usage_charge` up to the reseller's balance,
+   the rest logged and left below the cursor, never a negative wallet. `vpn-wholesale.spec.ts`.
 
 ## One transaction, both cursors
 

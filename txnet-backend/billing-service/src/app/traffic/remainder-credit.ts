@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { GrantMeter, GrantStatus, Prisma, VariantBillingMode, WalletReasonType } from '@prisma/client';
 import { TenantBillingLedger, tenantTransaction } from '@txnet-backend/shared-core';
 
@@ -125,6 +125,8 @@ export type CreditedRemainder = RemainderSizing & {
 
 @Injectable()
 export class RemainderCreditService {
+  private readonly logger = new Logger(RemainderCreditService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: WalletCreditService,
@@ -154,15 +156,20 @@ export class RemainderCreditService {
   }
 
   /**
-   * The reseller's side of a close (F-118-n3, F-118-p): wholesale bytes bought
-   * and never served on a platform panel — a metered Grant's blocks, or a
-   * package plan's bag — back on its billing wallet. Owed to the reseller
-   * whatever the admin answered about the user's own remainder. A Grant has
-   * at most one of the two legs; the other gives nothing.
+   * The reseller's side of a close (F-118-n3, F-118-p), settled both ways
+   * (F-118-y): wholesale bytes bought and never served on a platform panel — a
+   * metered Grant's blocks, or a package plan's bag — back on its billing
+   * wallet; bytes a platform panel served past what it bought charged, up to
+   * its balance. Owed whatever the admin answered about the user's own
+   * remainder. A Grant has at most one of the two legs; the other moves nothing.
+   * What the balance cannot cover is logged and left on the cursor, never a
+   * negative wallet (§5.4).
    */
-  async wholesaleBack(tx: Prisma.TransactionClient, grantId: string): Promise<void> {
-    await this.wholesale.giveBack(tx, grantId);
-    await this.packageWholesale.giveBack(tx, grantId);
+  async wholesaleAtClose(tx: Prisma.TransactionClient, grantId: string): Promise<void> {
+    const unpaid = (await this.wholesale.settleAtClose(tx, grantId)) + (await this.packageWholesale.settleAtClose(tx, grantId));
+    if (unpaid > BigInt(0)) {
+      this.logger.warn(`Grant ${grantId} closed with ${unpaid} wholesale bytes served on platform panels that the reseller's balance could not pay for`);
+    }
   }
 
   /**

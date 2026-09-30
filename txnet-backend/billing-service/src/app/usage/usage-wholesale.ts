@@ -1,7 +1,7 @@
 import { GrantMeter, Prisma, TenantBillingReasonType } from '@prisma/client';
 import type { TenantBillingLedger } from '@txnet-backend/shared-core';
 
-import { blockFor, ceilDiv, CENT, priceUnits, toAmount, toCents, ZERO, type Priced } from './usage-price';
+import { blockFor, ceilDiv, CENT, priceUnits, toAmount, toCents, unitsCovered, ZERO, type Priced } from './usage-price';
 
 /**
  * The reseller's side of a per-use door (F-118-h, ADR-0105 (10), §14.5): the
@@ -22,6 +22,19 @@ const rateOf = (m: GrantMeter): Priced => ({ unitSize: m.wholesaleUnitSize!, uni
 
 /** The price of `units`, rounded **up** to a cent: what a block for them costs. */
 export const priceOf = (rate: Priced, units: bigint): bigint => ceilDiv(units * priceUnits(rate), rate.unitSize * CENT);
+
+/**
+ * What a balance of `balanceCents` buys of `short` units owed after the fact
+ * (F-118-y, a close): all of them at the rounded-up price when it covers it,
+ * else the whole units it covers. Never more than the balance, so the charge
+ * cannot take the wallet below zero; `short - units` is what stays unpaid.
+ */
+export function coverable(rate: Priced, short: bigint, balanceCents: bigint): WholesalePlan {
+  const whole = priceOf(rate, short);
+  if (whole <= balanceCents) return { units: short, cents: whole };
+  const units = unitsCovered(rate, balanceCents);
+  return { units, cents: priceOf(rate, units) };
+}
 
 /** Why the reseller cannot pay. */
 export class WholesaleUnfunded extends Error {
@@ -82,6 +95,22 @@ export class WholesaleLeg {
       reasonType: TenantBillingReasonType.metered_usage_refund,
       referenceId: tokenId,
     });
+  }
+
+  /**
+   * At close (F-118-y): units served past the cursor, up to `usedTo`, charged
+   * as one `metered_usage_charge` naming `referenceId`, as far as the balance
+   * covers them. Answers the units it could not charge; they stay below the
+   * cursor, never on the wallet as a debt.
+   */
+  async chargeTo(tx: Prisma.TransactionClient, meter: GrantMeter, usedTo: bigint, referenceId: string): Promise<bigint> {
+    if (!meter.wholesalePayerTenantId) return ZERO;
+    const short = usedTo - meter.wholesaleBilled;
+    if (short <= ZERO) return ZERO;
+    const wallet = await tx.tenantBillingWallet.findUnique({ where: { tenantId: meter.wholesalePayerTenantId } });
+    const plan = coverable(rateOf(meter), short, toCents(wallet?.cachedBalance ?? new Prisma.Decimal(0)));
+    if (plan.units > ZERO) await this.buy(tx, meter, plan, referenceId);
+    return short - plan.units;
   }
 
   private async moveCursor(tx: Prisma.TransactionClient, meter: GrantMeter, to: bigint): Promise<void> {

@@ -37,7 +37,7 @@ nobody renewed is closed for good, and the money it still ties up is given back.
 | 2. configs | any config still `desiredRemote = present` (purge not run yet) goes `absent`, disabled, `pending` — as the admin delete does. No row is deleted (invariant 13). |
 | 3. VPN remainder | `RemainderCreditService.settle` with `stoppedAt = null` — a metered bag's unserved bytes, a prepaid Grant's unused share (billing [contract.traffic-block.md](../../domains/billing/contract.traffic-block.md)). A refusal that means "nothing to give back" (`nothing_to_credit`, `nothing_paid`, `not_measurable`, `grant_not_metered`, `rate_not_priceable`) still closes. |
 | 4. other meters | `settleAtClose(tx, {grantId, refund: true})` — billing [contract.usage-rating.md](../../domains/billing/contract.usage-rating.md). Always `refund`: the user did nothing wrong, the service ran out and was not renewed. |
-| 5. wholesale | `wholesaleBack` — a reseller's unserved wholesale bytes back on its billing wallet ([contract.package-wholesale.md](contract.package-wholesale.md) rule 5). |
+| 5. wholesale | `wholesaleAtClose`, both ways (F-118-y) — a reseller's unserved wholesale bytes back on its billing wallet; bytes a platform panel served past what it bought charged up to its balance, the rest logged ([contract.package-wholesale.md](contract.package-wholesale.md) rule 5, billing [contract.traffic-block.md](../../domains/billing/contract.traffic-block.md) wholesale rule 3). |
 
 Step 1 comes first because the remainder credit refuses a Grant that is not
 closed (`grant_not_closed`). `cursor_moved` (a block bought between read and

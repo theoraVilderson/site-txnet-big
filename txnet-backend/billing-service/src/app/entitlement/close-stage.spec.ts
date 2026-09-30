@@ -70,7 +70,7 @@ function build(setup: { due?: Due[]; moved?: boolean; refuse?: Record<string, Re
       if (reason) throw new RemainderCreditRefused(reason);
       return { amount: 1, walletTransactionId: 'w' };
     },
-    wholesaleBack: async (_tx: unknown, grantId: string) => void log.push(`wholesale ${grantId}`),
+    wholesaleAtClose: async (_tx: unknown, grantId: string) => void log.push(`wholesale ${grantId}`),
   };
   const meters = {
     settleAtClose: async (_tx: unknown, input: { grantId: string; refund?: boolean }) => void log.push(`meters ${input.grantId} refund=${input.refund}`),

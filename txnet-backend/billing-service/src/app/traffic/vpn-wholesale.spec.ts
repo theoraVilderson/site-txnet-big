@@ -227,7 +227,7 @@ describe('the wholesale remainder at close (F-118-n3)', () => {
   it('gives back what the reseller bought and no platform panel served, priced down', async () => {
     const w = world({ status: GrantStatus.cancelled, wholesaleBilled: n(10) * GIB, wholesaleConsumed: n(3) * GIB });
 
-    await wholesale().giveBack(w.tx, GRANT);
+    await wholesale().settleAtClose(w.tx, GRANT);
 
     expect(w.resellerLedger).toHaveLength(1);
     expect(w.resellerLedger[0]).toMatchObject({ direction: 'credit', reasonType: TenantBillingReasonType.metered_usage_refund, referenceId: GRANT });
@@ -235,17 +235,41 @@ describe('the wholesale remainder at close (F-118-n3)', () => {
     expect(w.meter.wholesaleBilled).toBe(n(3) * GIB);
 
     // The cursor is the guard: a second close finds nothing.
-    await wholesale().giveBack(w.tx, GRANT);
+    await wholesale().settleAtClose(w.tx, GRANT);
     expect(w.resellerLedger).toHaveLength(1);
   });
 
   it('moves nothing on a Grant with no leg, or one still open', async () => {
     const none = world({ payer: null, status: GrantStatus.cancelled, wholesaleBilled: GIB });
-    await wholesale().giveBack(none.tx, GRANT);
+    await wholesale().settleAtClose(none.tx, GRANT);
     expect(none.resellerLedger).toHaveLength(0);
 
     const open = world({ wholesaleBilled: GIB });
-    await wholesale().giveBack(open.tx, GRANT);
+    await wholesale().settleAtClose(open.tx, GRANT);
     expect(open.resellerLedger).toHaveLength(0);
+  });
+
+  // F-118-y: a platform panel joined the group after the last block, and served bytes nobody bought.
+  it('charges the bytes served past `wholesaleBilled`, the cursor to `wholesaleConsumed`, once', async () => {
+    const w = world({ status: GrantStatus.expired, wholesaleBilled: n(3) * GIB, wholesaleConsumed: n(8) * GIB });
+
+    expect(await wholesale().settleAtClose(w.tx, GRANT)).toBe(n(0));
+    expect(await wholesale().settleAtClose(w.tx, GRANT)).toBe(n(0));
+
+    // 5 GiB at $0.20.
+    expect(w.resellerLedger).toHaveLength(1);
+    expect(w.resellerLedger[0]).toMatchObject({ direction: 'debit', reasonType: TenantBillingReasonType.metered_usage_charge, referenceId: GRANT });
+    expect(w.resellerWallet.cachedBalance.toFixed(2)).toBe('9.00');
+    expect(w.meter.wholesaleBilled).toBe(n(8) * GIB);
+  });
+
+  it('charges only what the reseller\'s balance covers and answers the rest, never below zero', async () => {
+    const w = world({ status: GrantStatus.expired, wholesaleBilled: n(3) * GIB, wholesaleConsumed: n(8) * GIB, resellerBalance: '0.50' });
+
+    // $0.50 buys 2.5 GiB of the 5.
+    expect(await wholesale().settleAtClose(w.tx, GRANT)).toBe((n(5) * GIB) / n(2));
+
+    expect(w.resellerWallet.cachedBalance.toFixed(2)).toBe('0.00');
+    expect(w.meter.wholesaleBilled).toBe(n(3) * GIB + (n(5) * GIB) / n(2));
   });
 });

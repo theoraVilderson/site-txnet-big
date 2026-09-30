@@ -3,15 +3,16 @@ import { METER_KEYS, packageMeterRatesAt, TenantBillingLedger } from '@txnet-bac
 
 import { onPlatformPanel } from '../traffic/vpn-wholesale';
 import { CENT, max, priceUnits, toAmount, toCents, unitsCovered, ZERO, type Priced } from '../usage/usage-price';
-import { priceOf } from '../usage/usage-wholesale';
+import { coverable, priceOf } from '../usage/usage-wholesale';
 
 /**
  * A reseller's package plan, bought wholesale (F-118-p, ADR-0105 decision 0
  * amended 2026-09-29). A plan paid in full has no meter, and its user's path
  * stays exactly that; only the reseller's side is added. The bag its user
  * bought is charged at the package's `vpn.traffic` rate on the reseller's
- * `tenant_billing_wallet`, at the sale and at every raise of the bag, and what
- * no platform panel served comes back at close.
+ * `tenant_billing_wallet`, at the sale and at every raise of the bag, and at
+ * close what no platform panel served comes back, or what one served past the
+ * cursor is charged (F-118-y).
  *
  * `billed` is the cursor, over `consumed` — the bytes served on **platform**
  * panels (`metering-service`). After the bag moves it is owed to
@@ -100,21 +101,40 @@ export class PackageWholesale {
   }
 
   /**
-   * At close: bytes bought and never served on a platform panel back as
-   * `metered_usage_refund` naming the Grant, priced down, the cursor to
-   * `consumed`. The cursor is the guard, so a second close gives nothing; an
-   * open Grant, or one with no leg, moves nothing.
+   * At close, both ways (F-118-y): bytes bought and never served on a platform
+   * panel back as `metered_usage_refund` naming the Grant, priced down, the
+   * cursor to `consumed`; or bytes a platform panel served past the cursor (one
+   * added to the group after the last raise) charged as `metered_usage_charge`,
+   * up to the reseller's balance. Answers the bytes it could not charge — they
+   * stay below the cursor, never a negative wallet. The cursor is the guard,
+   * so a second close moves nothing; an open Grant, or one with no leg, neither.
    */
-  async giveBack(tx: Prisma.TransactionClient, grantId: string): Promise<void> {
+  async settleAtClose(tx: Prisma.TransactionClient, grantId: string): Promise<bigint> {
     const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { status: true } });
-    if (!grant || !CLOSED.has(grant.status)) return;
+    if (!grant || !CLOSED.has(grant.status)) return ZERO;
     const leg = await tx.grantWholesale.findUnique({ where: { grantId } });
-    if (!leg) return;
-    const left = leg.billed - leg.consumed;
-    if (left <= ZERO) return;
+    if (!leg) return ZERO;
     const rate = rateOf(leg);
+    if (leg.consumed > leg.billed) {
+      const short = leg.consumed - leg.billed;
+      const wallet = await tx.tenantBillingWallet.findUnique({ where: { tenantId: leg.payerTenantId } });
+      const plan = coverable(rate, short, toCents(wallet?.cachedBalance ?? new Prisma.Decimal(0)));
+      if (plan.units > ZERO) {
+        await this.moveCursor(tx, leg, leg.billed + plan.units);
+        await this.ledger.debit(tx, {
+          tenantId: leg.payerTenantId,
+          amount: toAmount(plan.cents),
+          currencyCode: leg.currencyCode,
+          reasonType: TenantBillingReasonType.metered_usage_charge,
+          referenceId: grantId,
+        });
+      }
+      return short - plan.units;
+    }
+    const left = leg.billed - leg.consumed;
+    if (left <= ZERO) return ZERO;
     const cents = (left * priceUnits(rate)) / (rate.unitSize * CENT);
-    if (cents === ZERO) return;
+    if (cents === ZERO) return ZERO;
     await this.moveCursor(tx, leg, leg.consumed);
     await this.ledger.credit(tx, {
       tenantId: leg.payerTenantId,
@@ -123,6 +143,7 @@ export class PackageWholesale {
       reasonType: TenantBillingReasonType.metered_usage_refund,
       referenceId: grantId,
     });
+    return ZERO;
   }
 
   /** The reseller's package rate for `vpn.traffic` in force at `at`, or null. */

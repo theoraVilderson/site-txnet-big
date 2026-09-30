@@ -234,7 +234,7 @@ export class GrantDeliveryService {
     // Held at issue for a metered Grant; a cancel gives it back before the refund (F-118-b).
     await releaseVpnReserveOf(tx, grantId);
     // A reseller's plan bought wholesale at the sale; never served, it all comes back (F-118-p).
-    await this.wholesale.giveBack(tx, grantId);
+    await this.wholesale.settleAtClose(tx, grantId);
     const configs = await tx.config.findMany({ where: { grantId, status: { not: ConfigStatus.retired } }, select: { id: true } });
     for (const { id } of configs) await this.actions.retire(tx, { configId: id, actor: GRANT_DELIVERY_ACTOR });
 

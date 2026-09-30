@@ -261,7 +261,7 @@ export class ResellerUserGrantsService {
       // Every other meter settles too (F-118-u): holds captured and released always, a prepaid remainder only on `refund`.
       await this.meters.settleAtClose(tx, { grantId, refund });
       // The reseller's unserved wholesale comes back whatever the admin answered (F-118-n3).
-      await this.remainders.wholesaleBack(tx, grantId);
+      await this.remainders.wholesaleAtClose(tx, grantId);
       return done;
     });
   }
