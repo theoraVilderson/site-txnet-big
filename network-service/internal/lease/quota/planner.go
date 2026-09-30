@@ -137,6 +137,11 @@ func (a *Account) Plan(now time.Time, p Params) PlanResult {
 		(a.Quota != a.closedQuota || !a.ExpiresAt.Equal(a.closedExpiry)) {
 		a.Closed = false // renewed
 	}
+	// An end that passes on a Grant already closed moves the close to it
+	// (F-027-dy): the close is written again, and billing reads it as ended.
+	if a.Closed && expired && !a.ExpiresAt.Equal(a.closedExpiry) {
+		a.closedQuota, a.closedExpiry = a.Quota, a.ExpiresAt
+	}
 	anyActive, activeBlocked := false, true
 	for _, v := range vs {
 		if v.active && v.healthy {

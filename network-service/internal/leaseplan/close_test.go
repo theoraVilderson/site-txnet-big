@@ -2,6 +2,7 @@ package leaseplan_test
 
 import (
 	"testing"
+	"time"
 
 	"network-service/internal/lease/quota"
 	"network-service/internal/leaseplan"
@@ -66,4 +67,30 @@ func TestAClosedGrantIsDisabledAndReopensOnlyOnARenewal(t *testing.T) {
 	if pl.Closed || !enabled {
 		t.Fatalf("the reopening plan enabled nothing: %+v", pl)
 	}
+}
+
+// An end that passes on a Grant already closed on its bytes moves the close
+// to that end (F-027-dy): the row changes, so the close is announced again
+// and billing reads it as `period_ended`. Seen live on 2026-09-30: an admin
+// ended a Grant closed on its bytes, and it read `active` with no purge clock.
+func TestAnEndPassingOnAClosedGrantMovesTheClose(t *testing.T) {
+	b := newBench(t, 64*quota.MB, "a", "b")
+	end := b.at.Add(30 * 24 * time.Hour)
+	b.s.grants[0].ExpiresAt = end
+	for i := 0; i < 60 && b.s.closure("grant-1") == nil; i++ {
+		b.turn(map[string]int64{"a": 20 * quota.MB, "b": 20 * quota.MB})
+	}
+	c := b.s.closure("grant-1")
+	if c == nil || !c.ExpiresAt.Equal(end) {
+		t.Fatalf("a spent bag closes on the end it had: %+v", c)
+	}
+
+	// The end is moved into the past: the close moves to it.
+	past := b.at.Add(-time.Minute)
+	b.s.grants[0].ExpiresAt = past
+	b.turn(nil)
+	if c = b.s.closure("grant-1"); c == nil || !c.ExpiresAt.Equal(past) || c.Quota != 64*quota.MB {
+		t.Fatalf("an end that passed on a closed Grant moves its close to that end: %+v", c)
+	}
+
 }

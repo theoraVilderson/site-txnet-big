@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 1
+version: 2
 updated: 2026-09-30
 ---
 
@@ -27,6 +27,10 @@ is told about it. Split out of [contract.lease.md](contract.lease.md) on
     still written at the counter beside it. The shutdown extension skips a
     closed Grant. `desiredEnabled` stays billing's. The close is announced in its own statement (`network.grant.closed`,
     ADR-0096): billing suspends a prepaid Grant on it, and a renewal revives it.
+    **An end that passes on a Grant already closed moves the close to that
+    end** (F-027-dy): the row is written again, so the close is announced
+    again and billing suspends it `period_ended` (purge clock, close,
+    remainder). A close taken on bytes otherwise kept the old end for good.
 25. **Only a renewal reopens it**: Quota or the end moved since the close,
     and `avail ≥ ReopenMin` (8 MB). A process restarted onto a closed Grant
     restores the close from the row (`Account.RestoreClosed`), so forgetting
