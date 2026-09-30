@@ -153,5 +153,19 @@ Its consumer is `panel-web/contract.my-services.md`.
 
 **Not covered:** per-config breakdown and a window other than 30 days are nobody's row. Its consumer is F-307-c.
 
+## A metered Grant's billing period (built — F-118-ai)
+
+`GET /api/billing/traffic/grants/:grantId/period`, on the same controller, over
+`traffic/grant-period.ts`. Answers `data` `{grantId, current, previous, currencyCode, coversBytes}`,
+each period `{from, to, consumedBytes, spent}`. User, 2026-09-30: the bag read as a limit and a lifetime total only grows.
+
+| Rule | Why |
+|---|---|
+| The period is the Grant's month: from the latest anniversary of `startsAt` to the next, the day clamped (`periodBounds`, the monthly cap's clamp). `previous` is the one before; `null` in the first | one month per service, the one its bill turns on (F-118-ak moves the cap onto it) |
+| Current `consumedBytes` = the live `grant.consumedBytes` less `traffic_daily_aggregate` before the period's UTC day; `previous` = the aggregate between its two turns. The turning day counts in the new period. Read through the owned Grant's configs, as the 30-day chart | the rollup runs nightly: a sum of the period's own days would miss today until tomorrow night |
+| `spent` = this Grant's `traffic_consumption` + `usage_charge` debits less `traffic_refund` + `usage_refund` credits in the period, in the wallet's currency, never below 0; no wallet is `"0.00"` | the ledger is the only money truth (C-02); a prepaid block is counted when bought |
+| `coversBytes` = the bag left + whole units at the meter's rate of `within(free balance + its prepaid reserve)`; the bag alone with no wallet; `null` when the rate's currency is not the wallet's. An estimate: siblings' shares (F-118-ag) and the wholesale leg are not taken off | "enough for about N GB" is what a pay-as-you-go user plans by |
+| Another user's Grant **404** as missing; not metered, or unlimited, **409** `errors.billing.grant.notMetered`. Bucket `GRANT_USAGE`, `subscriptionLink` | read once per metered card; a package plan has no period of this kind |
+
 **A reseller's admin on one of its users' services** (F-311: the reads, config
 actions, freeze, days, traffic, reset) is [contract.reseller-grants.md](contract.reseller-grants.md).

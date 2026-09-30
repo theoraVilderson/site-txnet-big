@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, NotFoundException, Param, ParseUUIDPipe, Post, Put, Req } from '@nestjs/common';
+import { Body, ConflictException, Controller, Get, HttpCode, HttpStatus, NotFoundException, Param, ParseUUIDPipe, Post, Put, Req } from '@nestjs/common';
 import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
@@ -6,6 +6,7 @@ import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { ConfigActionRefused } from './config-actions';
+import { GrantPeriodRefused, GrantPeriodService } from './grant-period';
 import { GrantUsageService } from './grant-usage';
 import { UserConfigsService } from './user-configs';
 import { ConfigActionBody, configActionSchema, ConfigLabelBody, configLabelSchema } from './user-configs.schema';
@@ -32,6 +33,7 @@ export class UserConfigsController {
   constructor(
     private readonly configs: UserConfigsService,
     private readonly usageOf: GrantUsageService,
+    private readonly periodOf: GrantPeriodService,
   ) {}
 
   @TenantCapability('subscriptionLink')
@@ -70,6 +72,29 @@ export class UserConfigsController {
         throw new NotFoundException({ i18nKey: E.grant.notFound, reason: e.reason, message: `${e.name}: ${e.message}` });
       }
       throw e;
+    }
+  }
+
+  /**
+   * A metered Grant's billing period (F-118-ai): this one and the last, bytes
+   * and usage money, and what the balance covers. Under `GRANT_USAGE`: one
+   * more read of the same kind, one per metered service on the page.
+   */
+  @TenantCapability('subscriptionLink')
+  @Get('grants/:grantId/period')
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.GRANT_USAGE, identityOf(req).userId),
+    configKey: 'GRANT_USAGE_RATE_LIMIT',
+    windowSec: 900,
+  })
+  async period(@Param('grantId', ParseUUIDPipe) grantId: string, @Req() req: Request) {
+    try {
+      return { grantId, ...(await this.periodOf.forGrant(identityOf(req).userId, grantId)) };
+    } catch (e) {
+      if (!(e instanceof GrantPeriodRefused)) throw e;
+      const payload = { reason: e.reason, message: `${e.name}: ${e.message}` };
+      if (e.reason === 'grant_not_found') throw new NotFoundException({ i18nKey: E.grant.notFound, ...payload });
+      throw new ConflictException({ i18nKey: E.grant.notMetered, ...payload });
     }
   }
 

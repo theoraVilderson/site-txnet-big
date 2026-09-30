@@ -133,13 +133,13 @@ describe('UserConfigsController.usage', () => {
 
   it('answers a Grant the user does not own as 404', async () => {
     const { service } = build({ grant: null });
-    const controller = new UserConfigsController({} as UserConfigsService, service);
+    const controller = new UserConfigsController({} as UserConfigsService, service, {} as never);
     await expect(inTenant(() => controller.usage(GRANT, req(USER) as never))).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('answers the grant id with the days', async () => {
     const { service } = build();
-    const controller = new UserConfigsController({} as UserConfigsService, service);
+    const controller = new UserConfigsController({} as UserConfigsService, service, {} as never);
     const out = await inTenant(() => controller.usage(GRANT, req(USER) as never));
     expect(out.grantId).toBe(GRANT);
     expect(out.days).toHaveLength(30);

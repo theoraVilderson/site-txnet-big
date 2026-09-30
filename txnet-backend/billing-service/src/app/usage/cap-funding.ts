@@ -28,13 +28,19 @@ function addMonths(anchor: Date, months: number): Date {
   return new Date(Date.UTC(y, m, day, anchor.getUTCHours(), anchor.getUTCMinutes(), anchor.getUTCSeconds(), anchor.getUTCMilliseconds()));
 }
 
+/**
+ * The monthly period `at` falls in: from the latest anniversary of `anchor`
+ * not after it, to the next one. Before `anchor`, the first period.
+ */
+export function periodBounds(anchor: Date, at: Date): { from: Date; to: Date } {
+  let months = Math.max(0, (at.getUTCFullYear() - anchor.getUTCFullYear()) * 12 + (at.getUTCMonth() - anchor.getUTCMonth()));
+  while (months > 0 && addMonths(anchor, months).getTime() > at.getTime()) months--;
+  return { from: months === 0 ? anchor : addMonths(anchor, months), to: addMonths(anchor, months + 1) };
+}
+
 /** The start of the monthly period `at` falls in: the latest anniversary of `anchor` not after it. */
 export function periodStart(anchor: Date, at: Date): Date {
-  let months = (at.getUTCFullYear() - anchor.getUTCFullYear()) * 12 + (at.getUTCMonth() - anchor.getUTCMonth());
-  if (months <= 0) return anchor;
-  let start = addMonths(anchor, months);
-  while (start.getTime() > at.getTime() && months > 0) start = addMonths(anchor, --months);
-  return start;
+  return periodBounds(anchor, at).from;
 }
 
 export class SpendingCaps {

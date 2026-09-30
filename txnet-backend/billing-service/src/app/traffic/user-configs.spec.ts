@@ -413,7 +413,7 @@ describe('UserConfigsController', () => {
   it('answers the regenerate terms beside the rows (F-118-r)', async () => {
     const terms = { unitSize: '1', unitPrice: '0.5', currencyCode: 'USD', mode: 'prepaid', includedQuantity: '0', afterIncluded: 'metered', used: '0' };
     const configs = { listForGrant: vi.fn(async () => []), regenerateTerms: vi.fn(async () => terms) };
-    const controller = new UserConfigsController(configs as never, {} as never);
+    const controller = new UserConfigsController(configs as never, {} as never, {} as never);
     expect(await controller.list(GRANT, req(USER) as never)).toEqual({ grantId: GRANT, rows: [], regenerate: terms });
     expect(configs.regenerateTerms).toHaveBeenCalledWith(USER, GRANT);
   });
@@ -425,7 +425,7 @@ describe('UserConfigsController', () => {
       }),
       act: vi.fn(async () => []),
     };
-    const controller = new UserConfigsController(configs as never, {} as never);
+    const controller = new UserConfigsController(configs as never, {} as never, {} as never);
 
     await expect(controller.list(GRANT, req(USER) as never)).rejects.toBeInstanceOf(NotFoundException);
     expect(configs.listForGrant).toHaveBeenCalledWith(USER, GRANT);
@@ -463,7 +463,7 @@ describe('UserConfigsController', () => {
         throw new ConfigActionRefused('config_not_found', C1);
       }),
     };
-    const controller = new UserConfigsController(configs as never, {} as never);
+    const controller = new UserConfigsController(configs as never, {} as never, {} as never);
     await expect(controller.setLabel(C1, { label: 'x' }, req(USER) as never)).rejects.toBeInstanceOf(NotFoundException);
     expect(configs.setLabel).toHaveBeenCalledWith(USER, C1, 'x');
 

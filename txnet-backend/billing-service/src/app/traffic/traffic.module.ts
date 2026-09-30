@@ -15,6 +15,7 @@ import { BlockRequestQueue } from './block-request.queue';
 import { RemainderCreditService } from './remainder-credit';
 import { UserConfigsController } from './user-configs.controller';
 import { UserConfigsService } from './user-configs';
+import { GrantPeriodService } from './grant-period';
 import { GrantUsageService } from './grant-usage';
 import { VpnReserveController } from './vpn-reserve.controller';
 import { VpnReserveSweep } from './vpn-reserve';
@@ -43,7 +44,7 @@ import { VpnReserveSweep } from './vpn-reserve';
 @Module({
   imports: [WalletModule, UsageModule],
   controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController, VpnReserveController],
-  providers: [BlockPurchaseService, BlockRequestService, RemainderCreditService, BlockRequestQueue, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GroupFulfilmentService, GroupDrainService, GrantCloseService, VpnReserveSweep],
+  providers: [BlockPurchaseService, BlockRequestService, RemainderCreditService, BlockRequestQueue, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GrantPeriodService, GroupFulfilmentService, GroupDrainService, GrantCloseService, VpnReserveSweep],
   exports: [BlockPurchaseService, RemainderCreditService, ConfigActionsService, GroupFulfilmentService, UserConfigsService, GrantUsageService],
 })
 export class TrafficModule {}
