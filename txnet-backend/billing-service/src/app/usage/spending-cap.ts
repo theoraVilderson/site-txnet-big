@@ -24,9 +24,9 @@ import { topVpnReserve } from '../traffic/vpn-reserve';
  *   out of the room before anything new is funded. A capture moves money from
  *   held to spent and leaves the room where it was.
  * - **`spent`** is advanced in the transaction of every usage charge
- *   (`spend`), and restarts when a `monthly` period does — on the cap's own
- *   start date (billing open-questions 2026-09-29), read lazily by the next
- *   funding decision rather than by a clock.
+ *   (`spend`), and restarts when a `monthly` period does — on its Grant's
+ *   billing period (F-118-ak, the anniversaries of `grant.startsAt`), read
+ *   lazily by the next funding decision rather than by a clock.
  *
  * The planner reads none of this: the cap bounds the bag billing sells and
  * the hold it keeps, so it reaches Quota through them (network

@@ -34,6 +34,8 @@ type GrantRow = {
   statusReason: string | null;
   suspendedAt: Date | null;
   endsAt: Date | null;
+  /** Its billing period turns on this date's anniversaries (F-118-ai). */
+  startsAt: Date;
   billingMode: VariantBillingMode;
   /** Its prepaid `vpn.traffic` meter's `unitPrice`; null = no meter (F-118-l). */
   rate: Prisma.Decimal | null;
@@ -211,6 +213,7 @@ function fakeStore() {
         statusReason: null,
         suspendedAt: null,
         endsAt: null,
+        startsAt: new Date('2026-09-01T00:00:00Z'),
         billingMode: VariantBillingMode.metered,
         // 10.00 a GiB: the reserve of one GiB is 10.00.
         rate: D('10'),
@@ -256,7 +259,7 @@ afterEach(() => {
   installSpendingCaps(NO_SPENDING_CAPS);
 });
 
-describe('periodStart — a monthly cap restarts on its own start date', () => {
+describe('periodStart — a monthly period turns on an anniversary', () => {
   const anchor = new Date('2026-01-31T10:00:00Z');
 
   it('clamps the day to a shorter month, and keeps the time of day', () => {
@@ -323,20 +326,25 @@ describe('a capped Grant is funded to min(wallet, cap − spent)', () => {
     expect((await capped.within(s.tx, { id: 'g2', userId: 'user-1' }, D('95.00'))).toFixed(2)).toBe('95.00');
   });
 
-  it('starts a monthly cap over on its own date, and a `none` cap never', async () => {
+  it('starts a monthly cap over on its Grant\'s billing period, not its own date, and a `none` cap never', async () => {
     const s = fakeStore();
     s.fund('100.00');
-    s.grant('g1');
-    s.grant('g2');
-    const start = new Date('2026-01-31T10:00:00Z');
-    s.cap('g1', '15.00', { period: SpendingCapPeriod.monthly, startsAt: start, periodStartsAt: start, spent: D('15.00') });
-    s.cap('g2', '15.00', { startsAt: start, periodStartsAt: start, spent: D('15.00') });
+    // The Grant's month turns on the 31st (clamped); the cap was set mid-month, on the 10th.
+    s.grant('g1', { startsAt: new Date('2026-01-31T10:00:00Z') });
+    s.grant('g2', { startsAt: new Date('2026-01-31T10:00:00Z') });
+    const set = new Date('2026-02-10T08:00:00Z');
+    s.cap('g1', '15.00', { period: SpendingCapPeriod.monthly, startsAt: set, periodStartsAt: set, spent: D('15.00') });
+    s.cap('g2', '15.00', { startsAt: set, periodStartsAt: set, spent: D('15.00') });
     const g1 = { id: 'g1', userId: 'user-1' };
 
     expect((await capped.within(s.tx, g1, D('100.00'), D(0), new Date('2026-02-28T09:00:00Z'))).toFixed(2)).toBe('0.00');
+    // The Grant's anniversary restarts it — the cap's own (10 March) does not.
     expect((await capped.within(s.tx, g1, D('100.00'), D(0), new Date('2026-02-28T10:00:00Z'))).toFixed(2)).toBe('15.00');
     expect(s.caps[0].spent.toFixed(2)).toBe('0.00');
     expect(s.caps[0].periodStartsAt.toISOString()).toBe('2026-02-28T10:00:00.000Z');
+    s.caps[0].spent = D('15.00');
+    expect((await capped.within(s.tx, g1, D('100.00'), D(0), new Date('2026-03-10T08:00:00Z'))).toFixed(2)).toBe('0.00');
+    expect((await capped.within(s.tx, g1, D('100.00'), D(0), new Date('2026-03-31T10:00:00Z'))).toFixed(2)).toBe('15.00');
     expect((await capped.within(s.tx, { id: 'g2', userId: 'user-1' }, D('100.00'), D(0), new Date('2026-06-01T00:00:00Z'))).toFixed(2)).toBe('0.00');
   });
 });

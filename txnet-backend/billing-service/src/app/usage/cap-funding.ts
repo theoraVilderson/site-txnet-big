@@ -50,12 +50,19 @@ export class SpendingCaps {
    */
   constructor(private readonly off = false) {}
 
-  /** The Grant's cap with its period brought up to `at`, or null for none. */
+  /**
+   * The Grant's cap with its period brought up to `at`, or null for none. A
+   * `monthly` cap turns with its Grant's billing period — the anniversaries of
+   * `grant.startsAt` (F-118-ak) — so the card shows one month; a cap set
+   * mid-period counts from its own `startsAt` until the Grant's next turn.
+   */
   async of(tx: Prisma.TransactionClient, grantId: string, at: Date = new Date()): Promise<SpendingCap | null> {
     if (this.off) return null;
     const cap = await tx.spendingCap.findUnique({ where: { grantId } });
     if (!cap || cap.period !== SpendingCapPeriod.monthly) return cap;
-    const start = periodStart(cap.startsAt, at);
+    const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { startsAt: true } });
+    if (!grant) return cap;
+    const start = periodStart(grant.startsAt, at);
     if (start.getTime() <= cap.periodStartsAt.getTime()) return cap;
     // Guarded on the period read: two decisions crossing the date restart it once.
     await tx.spendingCap.updateMany({ where: { grantId, periodStartsAt: cap.periodStartsAt }, data: { periodStartsAt: start, spent: ZERO } });

@@ -161,7 +161,7 @@ each period `{from, to, consumedBytes, spent}`. User, 2026-09-30: the bag read a
 
 | Rule | Why |
 |---|---|
-| The period is the Grant's month: from the latest anniversary of `startsAt` to the next, the day clamped (`periodBounds`, the monthly cap's clamp). `previous` is the one before; `null` in the first | one month per service, the one its bill turns on (F-118-ak moves the cap onto it) |
+| The period is the Grant's month: from the latest anniversary of `startsAt` to the next, the day clamped (`periodBounds`, the monthly cap's clamp). `previous` is the one before; `null` in the first | one month per service, the one its bill turns on and a `monthly` spending cap's (F-118-ak) |
 | Current `consumedBytes` = the live `grant.consumedBytes` less `traffic_daily_aggregate` before the period's UTC day; `previous` = the aggregate between its two turns. The turning day counts in the new period. Read through the owned Grant's configs, as the 30-day chart | the rollup runs nightly: a sum of the period's own days would miss today until tomorrow night |
 | `spent` = this Grant's `traffic_consumption` + `usage_charge` debits less `traffic_refund` + `usage_refund` credits in the period, in the wallet's currency, never below 0; no wallet is `"0.00"` | the ledger is the only money truth (C-02); a prepaid block is counted when bought |
 | `coversBytes` = the bag left + whole units at the meter's rate of `within(free balance + its prepaid reserve)`; the bag alone with no wallet; `null` when the rate's currency is not the wallet's. An estimate: siblings' shares (F-118-ag) and the wholesale leg are not taken off | "enough for about N GB" is what a pay-as-you-go user plans by |

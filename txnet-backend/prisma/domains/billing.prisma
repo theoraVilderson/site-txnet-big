@@ -312,7 +312,7 @@ model SpendingCap {
   amount         Decimal           @db.Decimal(18, 2)
   currencyCode   String
   period         SpendingCapPeriod @default(none)
-  /// The cap's own start: a `monthly` period restarts on its day of the month.
+  /// The cap's own start. A `monthly` period restarts on its Grant's billing period (F-118-ak).
   startsAt       DateTime          @default(now())
   /// Where the period `spent` counts from began.
   periodStartsAt DateTime          @default(now())
