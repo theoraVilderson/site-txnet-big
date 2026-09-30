@@ -11,6 +11,7 @@ import { type Exhaustion, isShortOfFunds, suspendIfExhausted } from './exhaustio
 import { noticeLowBalance } from './low-balance';
 import { vpnMeterOf } from './vpn-meter';
 import { NO_VPN_RESERVE, VpnReserve } from './vpn-reserve';
+import { noticeWholesaleUnfunded, rearmWholesaleNotice } from './wholesale-unfunded';
 import type { ServedPostpaid } from './vpn-postpaid';
 
 /**
@@ -38,6 +39,11 @@ import type { ServedPostpaid } from './vpn-postpaid';
  * captures what was served from its hold and holds the target on top
  * (`VpnReserve.servePostpaid`). The bag guard, the floor, the short-wallet
  * report and the exhaustion check are the same.
+ *
+ * **A reseller at zero is told, not its user** (F-118-w): a `wholesale_unfunded`
+ * refusal tells the reseller's owner once per spell, and the next block its
+ * wallet funds on a platform panel re-arms it (`wholesale-unfunded.ts`). The
+ * exhaustion check reads the user's wallet alone, so the Grant stays active.
  */
 
 /**
@@ -75,6 +81,8 @@ export type BlockRequestOutcome = {
   exhausted: Exhaustion | null;
   /** After a purchase: the wallet's low-balance notice told, or re-armed by a balance back over it (F-601-g). */
   lowBalance: 'told' | 'rearmed' | null;
+  /** The reseller's refusal spell (F-118-w): told on a `wholesale_unfunded`, re-armed by a funded platform block. */
+  wholesaleNotice: 'told' | 'rearmed' | null;
 };
 
 /** What one message came to. `raced` is a purchase another transaction won: routine, not a failure. */
@@ -120,13 +128,14 @@ export class BlockRequestService {
   }
 
   async buyIn(tx: Prisma.TransactionClient, message: BlockRequestMessage): Promise<BlockRequestOutcome> {
-    const none = { grantId: message.grantId, bought: null, refused: null, exhausted: null, lowBalance: null };
+    const none = { grantId: message.grantId, bought: null, refused: null, exhausted: null, lowBalance: null, wholesaleNotice: null };
     const grant = await tx.grant.findUnique({
       where: { id: message.grantId },
       select: {
         id: true,
         tenantId: true,
         userId: true,
+        variantId: true,
         status: true,
         billingMode: true,
         trafficUnlimited: true,
@@ -146,12 +155,20 @@ export class BlockRequestService {
     const targetBytes = requested > floor ? requested : floor;
     if (targetBytes <= BigInt(0)) return { ...none, skipped: 'target_not_positive' };
     const priced = { ...grant, rate: meter.unitPrice };
-    if (await this.reserve.isPostpaid(tx, grant.id)) return this.servePostpaid(tx, priced, targetBytes, none);
+    const outcome = (await this.reserve.isPostpaid(tx, grant.id)) ? await this.servePostpaid(tx, priced, targetBytes, none) : await this.sell(tx, priced, targetBytes, none);
+    return { ...outcome, wholesaleNotice: await this.wholesaleNotice(tx, grant, meter, outcome) };
+  }
 
+  private async sell(
+    tx: Prisma.TransactionClient,
+    grant: { id: string; tenantId: string; userId: string; rate: Prisma.Decimal | null; lowBalanceNoticeAt: Date | null; purchasedBytes: bigint; consumedBytes: bigint },
+    targetBytes: bigint,
+    none: Omit<BlockRequestOutcome, 'skipped'>,
+  ): Promise<BlockRequestOutcome> {
     try {
       const bought = await this.blocks.purchase(tx, { grantId: grant.id, targetBytes });
       // The balance the debit left, seen while the user is still served (F-601-g).
-      return { ...none, bought, skipped: null, lowBalance: await noticeLowBalance(tx, priced, bought.balanceAfter) };
+      return { ...none, bought, skipped: null, lowBalance: await noticeLowBalance(tx, grant, bought.balanceAfter) };
     } catch (error) {
       if (!isShortOfFunds(error)) throw error;
       // `purchase()` refuses before it writes, so the transaction is clean. A
@@ -160,6 +177,19 @@ export class BlockRequestService {
       const spent = grant.purchasedBytes - grant.consumedBytes <= BigInt(0);
       return { ...none, skipped: null, refused, exhausted: spent ? await suspendIfExhausted(tx, grant.id) : null };
     }
+  }
+
+  /** The reseller's side of the answer (F-118-w): a refusal of its leg told once, a funded block re-arming it. */
+  private async wholesaleNotice(
+    tx: Prisma.TransactionClient,
+    grant: { variantId: string },
+    meter: { wholesalePayerTenantId: string | null },
+    outcome: BlockRequestOutcome,
+  ): Promise<'told' | 'rearmed' | null> {
+    if (!meter.wholesalePayerTenantId) return null;
+    if (outcome.refused === 'wholesale_unfunded') return noticeWholesaleUnfunded(tx, meter.wholesalePayerTenantId);
+    if (!outcome.bought && !outcome.served) return null;
+    return (await rearmWholesaleNotice(tx, grant, meter)) ? 'rearmed' : null;
   }
 
   private async servePostpaid(

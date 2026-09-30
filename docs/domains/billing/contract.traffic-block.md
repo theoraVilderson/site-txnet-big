@@ -84,8 +84,7 @@ early, so it is not a refusal.
 
 On a meter with a wholesale leg (F-118-n2) the block is what **both** wallets
 fund, the reseller prepaid whatever the user's mode (ADR-0105 (10), §14.5; a postpaid hold's growth too, F-118-n4, [contract.usage-rating.md](contract.usage-rating.md) rule 6).
-`VpnWholesale` (`traffic/vpn-wholesale.ts`) raises `wholesaleBilled` to
-`wholesaleConsumed` + the block's headroom, that only while the group holds a
+`VpnWholesale` (`traffic/vpn-wholesale.ts`) raises `wholesaleBilled` to `wholesaleConsumed` + the block's headroom, that only while the group holds a
 platform panel (user, 2026-09-29); never down — a byte an own panel served funds the next.
 
 1. **Bounded first.** The reseller's balance caps how far the bag may grow; a
@@ -96,6 +95,7 @@ platform panel (user, 2026-09-29); never down — a byte an own panel served fun
 3. **Settled at close, both ways** (F-118-y): `wholesaleBilled − wholesaleConsumed` priced down as `metered_usage_refund` against the Grant, on an admin's delete whatever it answered about the user's remainder;
    bytes served past the cursor (a platform panel added after the last block) charged as `metered_usage_charge` up to the reseller's balance,
    the rest logged and left below the cursor, never a negative wallet. `vpn-wholesale.spec.ts`.
+4. **A reseller at zero is told once per spell** (F-118-w, `traffic/wholesale-unfunded.ts`): a `wholesale_unfunded` refusal, prepaid or postpaid, sets `tenant_billing_wallet.unfundedNoticeAt` only while null and emits `tenant.billing.wholesale_unfunded` `{tenantId, ownerUserId, period}` to the owner (`resellerWholesaleUnfunded`); a block the wallet funds on a platform panel clears it. The Grant is never suspended for it (exhaustion reads the user's wallet alone), so its own panels keep serving; the planner re-asks every `WholesaleRetry` (network `contract.lease.md` rule 22).
 
 ## One transaction, both cursors
 

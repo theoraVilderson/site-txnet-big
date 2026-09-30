@@ -13,14 +13,16 @@
  *    meanwhile (`cursor_moved`) rolls that Grant back for the next tick, and the
  *    rest of the batch goes on;
  *  - **the window follows the purge, and either `0` means never**, resolved in
- *    the scan for the reason `purge.ts` gives; a frozen Grant is never scanned.
+ *    the scan for the reason `purge.ts` gives;
+ *  - **only a listed reason closes** — a usage or period stop. A close cannot be
+ *    undone, so a frozen Grant, or a reason added later, is never scanned.
  */
 import { DesiredRemote, EnforcementState, GrantStatus } from '@prisma/client';
 import { TenantContext } from '@txnet-backend/shared-core';
 
 import { RemainderCreditRefused } from '../traffic/remainder-credit';
 import { CLOSED_AFTER_PURGE, GrantCloseStageService } from './close-stage';
-import { ADMIN_FROZEN, QUOTA_EXHAUSTED } from './suspension';
+import { ADMIN_FROZEN, CAP_REACHED, PERIOD_ENDED, QUOTA_EXHAUSTED } from './suspension';
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
 const TENANT_B = '22222222-2222-4222-8222-222222222222';
@@ -120,14 +122,17 @@ describe('GrantCloseStageService.closeDue', () => {
     expect(log).toContain(`wholesale ${GRANT_2}`);
   });
 
-  it('scans across tenants, writes inside each, and never scans a frozen or never-closing Grant', async () => {
+  it('scans across tenants, writes inside each, and only a listed reason or a closing window', async () => {
     const { service, grantWrites, scans } = build({ due: [due(GRANT_1), due(GRANT_2, TENANT_B)] });
 
     await service.closeDue(NOW);
 
     expect(scans[0].tenant).toBeNull();
     expect(grantWrites.map((w) => w.tenant)).toEqual([TENANT_A, TENANT_B]);
-    expect(scans[0].values).toContain(ADMIN_FROZEN);
+    const reasons = scans[0].values.find(Array.isArray) as string[];
+    expect([...reasons].sort()).toEqual([CAP_REACHED, PERIOD_ENDED, QUOTA_EXHAUSTED].sort());
+    expect(reasons).not.toContain(ADMIN_FROZEN);
+    expect(scans[0].sql).toContain('"statusReason" = ANY(');
     expect(scans[0].values).toContain(NOW);
     const sql = scans[0].sql.replace(/\s+/g, ' ');
     expect(sql).toContain('COALESCE(g."purgeAfterDays", t."purgeAfterDays") > 0');

@@ -37,13 +37,18 @@ const PURGE_DUE_PATH = '/api/internal/billing/entitlement/purge-due';
  * due" if the run reports zero and success — and a retention sweep is exactly
  * the kind of job nobody looks at while it is working. Each one throws, and
  * `TickConsumer` records a `failed` run (automation invariant #3).
+ *
+ * **The same call closes Grants past their close window (F-118-x)**, and a
+ * close moves money. A close that rolled back is asked again next hour, so it
+ * is an error of this run (`partial`, or `failed` with nothing else done) —
+ * never a quiet `success` that repeats every hour unseen.
  */
 @Injectable()
 export class GrantPurgeJob implements Job {
   readonly key = 'grant_config_purge';
   readonly name = 'Suspended Grant purge';
   readonly description =
-    'Releases the panel seats of suspended Grants past their purgeAfterDays, without deleting our rows (ADR-0075), and tells those a day away (F-601-j).';
+    'Releases the panel seats of suspended Grants past their purgeAfterDays, without deleting our rows (ADR-0075), tells those a day away (F-601-j), and closes those past their close window (F-118-x).';
   readonly category = BotWorkerCategory.other;
   /** Unscheduled, a spent Grant's clients hold their panel seats for ever. Hourly: the window is days; twenty past, off the hour. */
   readonly defaultSchedule: DefaultSchedule = { scheduleType: 'cron_expression', cronExpression: '20 * * * *' };
@@ -73,14 +78,15 @@ export class GrantPurgeJob implements Job {
         `purged ${result.configsPurged} config(s) of ${result.grantsPurged} suspended Grant(s)`,
       );
     }
+    if (result.closeFailed > 0) this.logger.warn(`${result.closeFailed} Grant close(s) rolled back; asked again next hour`);
     return {
-      itemsProcessed: result.configsPurged,
-      errorsCount: 0,
+      itemsProcessed: result.configsPurged + result.closed,
+      errorsCount: result.closeFailed,
       metrics: { ...result },
     };
   }
 
-  private async purgeDue(): Promise<{ scanned: number; grantsPurged: number; configsPurged: number; told: number }> {
+  private async purgeDue(): Promise<{ scanned: number; grantsPurged: number; configsPurged: number; told: number; closed: number; closeFailed: number }> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
@@ -103,13 +109,14 @@ export class GrantPurgeJob implements Job {
 
       // billing answers `{ ok, msg, data }` (`envelopeData`).
       const body = envelopeData(await response.json());
-      // `told`: the suspended Grants told their purge is within a day (F-601-j), swept in the same call.
-      const counts = ['scanned', 'grantsPurged', 'configsPurged', 'told'].map((k) => body?.[k]);
+      // `told`: the suspended Grants told their purge is within a day (F-601-j), swept in the same call;
+      // `closed`/`closeFailed`: the close stage, run last in it (F-118-x).
+      const counts = ['scanned', 'grantsPurged', 'configsPurged', 'told', 'closed', 'closeFailed'].map((k) => body?.[k]);
       if (!counts.every((v) => typeof v === 'number')) {
-        throw new Error(`billing answered ${PURGE_DUE_PATH} without its four counts`);
+        throw new Error(`billing answered ${PURGE_DUE_PATH} without its counts`);
       }
-      const [scanned, grantsPurged, configsPurged, told] = counts as number[];
-      return { scanned, grantsPurged, configsPurged, told };
+      const [scanned, grantsPurged, configsPurged, told, closed, closeFailed] = counts as number[];
+      return { scanned, grantsPurged, configsPurged, told, closed, closeFailed };
     } finally {
       clearTimeout(timer);
     }

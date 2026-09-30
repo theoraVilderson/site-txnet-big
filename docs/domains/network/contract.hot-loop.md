@@ -108,7 +108,7 @@ measures a rate asks for the block, overrun included.
 
 A block request the wallet refused on a spent bag asks `suspendIfExhausted`
 (`traffic/exhaustion.ts`), in the same transaction. The planner re-asks every
-`BlockRetry` (30 s) while the bag stays inside its horizon, and a cut-off
+`BlockRetry` (30 s; `WholesaleRetry` for a reseller at zero, F-118-w) while the bag stays inside its horizon, and a cut-off
 config's overrun keeps a spent bag there, so a refused Grant is asked again
 rather than forgotten. A bag at exactly zero with no rate is not asked for:
 nothing is being served, and the panel already holds it at its share. A wallet that can

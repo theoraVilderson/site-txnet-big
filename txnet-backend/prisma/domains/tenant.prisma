@@ -422,6 +422,8 @@ model TenantBillingWallet {
   /// The platform's currency (ADR-0098 part 4), converted with it (F-116-f).
   currencyCode  String
   version       Int     @default(0) // Optimistic Locking
+  /// F-118-w: when a refused wholesale leg told the owner; null = armed. A block this wallet funds on a platform panel clears it.
+  unfundedNoticeAt DateTime?
 
   tenant       Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   transactions TenantBillingTransaction[]

@@ -219,3 +219,34 @@ func TestTheResellerWalletBoundsTheReserve(t *testing.T) {
 }
 
 func ptr(v int64) *int64 { return &v }
+
+// A reseller at zero (F-118-w): billing can only refuse its platform Grant's
+// block `wholesale_unfunded`, and tells the reseller once, so the planner asks
+// for that bag every WholesaleRetry, not every BlockRetry — and is back on
+// BlockRetry the pass a top-up gives the Grant room again.
+// The reserve keeps the Grant open here, so only the retry is tested: in a
+// running planner an unfunded Grant's Quota is its bag, and a close at it
+// asks for nothing until a top-up grows Quota and reopens it.
+func TestAResellerAtZeroIsAskedForSeldom(t *testing.T) {
+	b := newMetered(t, 400*quota.MB, 10*quota.GB)
+	b.s.grants[0].Unfunded = true
+	for range 4 {
+		b.turn(5)
+	}
+	if len(b.req.sent) != 1 {
+		t.Fatalf("an unfunded Grant's bag is still asked for once, got %d", len(b.req.sent))
+	}
+	b.turn(int(leaseplan.BlockRetry.Seconds()) + 1)
+	if len(b.req.sent) != 1 {
+		t.Fatalf("not again when BlockRetry is due, got %d", len(b.req.sent))
+	}
+	b.turn(int(leaseplan.WholesaleRetry.Seconds()))
+	if len(b.req.sent) != 2 {
+		t.Fatalf("again once WholesaleRetry is due, got %d", len(b.req.sent))
+	}
+	b.s.grants[0].Unfunded = false
+	b.turn(int(leaseplan.BlockRetry.Seconds()) + 1)
+	if len(b.req.sent) != 3 {
+		t.Fatalf("a funded reseller is back on BlockRetry at once, got %d", len(b.req.sent))
+	}
+}

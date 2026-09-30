@@ -196,7 +196,7 @@ the money, so it decides whether one is bought (`billing/contract.traffic-block.
     `purchasedBytes`; billing buys only while the Grant holds it, so a second
     request for the same bag is dropped there. A request is remembered only
     once it has left: a failed publish is sent on the next turn, logged,
-    failing nothing (rule 8).
+    failing nothing (rule 8). A Grant live on a platform panel whose reseller's wallet funds nothing past the bag (`WholesaleRoom` 0, `Unfunded`) is asked every `WholesaleRetry` (10 min) instead — billing can only refuse it, and tells the reseller once (F-118-w); a load with room is back on `BlockRetry`.
 23. **It rides the broker, not a call** (`network.lease.block_request`,
     `publish.BlockRequests`): a planner turn never waits on billing. Its own
     prefix, because metering dead-letters any other key under

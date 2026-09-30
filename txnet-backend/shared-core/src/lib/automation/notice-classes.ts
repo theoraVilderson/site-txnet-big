@@ -52,6 +52,7 @@ export const NOTICE_CLASS_OF: Readonly<Record<string, NoticeClass>> = {
   purchaseStuckWriteUnconfirmed: 'critical',
   purchaseStuckStrategyNotBuilt: 'critical',
   subscriptionSuspended: 'critical',
+  resellerWholesaleUnfunded: 'critical',
   paymentCredited: 'important',
   purchaseDelivered: 'important',
   purchaseDelayed: 'important',

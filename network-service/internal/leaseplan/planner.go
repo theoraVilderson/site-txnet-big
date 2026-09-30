@@ -37,6 +37,10 @@ type Grant struct {
 	Used      int64
 	Metered   bool
 	Purchased int64
+	// Unfunded is a metered Grant live on a platform panel whose reseller's
+	// wallet funds no byte past the bag (WholesaleRoom 0, F-118-w): its block
+	// is asked for every WholesaleRetry, not every BlockRetry.
+	Unfunded  bool
 	ExpiresAt time.Time // zero = no end
 	Configs   []Config
 	// Closure is the Grant's row on `network.lease_close`; nil = open.
@@ -400,7 +404,7 @@ func (s *Planner) plan(ctx context.Context, p collect.Panel, readings []driver.C
 }
 
 // blockLocked is the block a Grant's plan asks for, unless the same bag was
-// asked for inside BlockRetry. The rates are the replicas' own, summed: the
+// asked for inside BlockRetry — WholesaleRetry for an Unfunded Grant. The rates are the replicas' own, summed: the
 // fast one for when, the demand for how much, as the planner reads them.
 func (s *Planner) blockLocked(g Grant, a *quota.Account, at time.Time) *BlockRequest {
 	var now, demand float64
@@ -412,7 +416,11 @@ func (s *Planner) blockLocked(g Grant, a *quota.Account, at time.Time) *BlockReq
 	if !due {
 		return nil
 	}
-	if prev, ok := s.asked[g.ID]; ok && prev.purchased == g.Purchased && at.Sub(prev.at) < BlockRetry {
+	retry := BlockRetry
+	if g.Unfunded {
+		retry = WholesaleRetry
+	}
+	if prev, ok := s.asked[g.ID]; ok && prev.purchased == g.Purchased && at.Sub(prev.at) < retry {
 		return nil
 	}
 	return &req

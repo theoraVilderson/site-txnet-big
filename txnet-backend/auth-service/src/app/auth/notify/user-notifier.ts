@@ -12,6 +12,7 @@ export const NOTIFY_TEMPLATES = [
   'paymentReversed',
   'subscriptionPaymentDue',
   'subscriptionSuspended',
+  'resellerWholesaleUnfunded',
   'panelAccepted',
   'panelRefused',
   'purchaseDelivered',
@@ -95,7 +96,7 @@ export type NotifyRequest = {
 export type NotifyResult = { sent: Array<BotPlatform | 'sms'> };
 
 type Texts = Partial<Record<string, string>>;
-type NotificationsNamespace = { payment?: Texts; subscription?: Texts; panel?: Texts; purchase?: Texts; retention?: Texts };
+type NotificationsNamespace = { payment?: Texts; subscription?: Texts; resellerBilling?: Texts; panel?: Texts; purchase?: Texts; retention?: Texts };
 type Text = { read: (ns: NotificationsNamespace | undefined) => string | undefined; fallback: string };
 type Notice = Text & { inbox: Text };
 
@@ -150,6 +151,18 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.subscription?.suspendedMany,
       fallback: '⛔ Your panel was suspended {{count}} times for unpaid renewals. Nothing was deleted: top up your billing balance and it is reactivated at once.',
       inbox: { read: (ns) => ns?.subscription?.suspendedManyTitle, fallback: 'Panel suspended for non-payment ({{count}})' },
+    },
+  },
+  // F-118-w: a reseller's billing wallet no longer funds its users on platform panels — once per refusal spell.
+  resellerWholesaleUnfunded: {
+    read: (ns) => ns?.resellerBilling?.wholesaleUnfunded,
+    fallback:
+      "⛔ Your billing balance has run out, so your users whose services run on the platform's servers have stopped as their traffic ran out. Services on your own panels keep running. Top up your billing balance and they resume by themselves — their links stay the same.",
+    inbox: { read: (ns) => ns?.resellerBilling?.wholesaleUnfundedTitle, fallback: 'Your users on platform servers have stopped' },
+    many: {
+      read: (ns) => ns?.resellerBilling?.wholesaleUnfundedMany,
+      fallback: "⛔ Your billing balance has run out ({{count}} times), so your users on the platform's servers stopped as their traffic ran out. Top up your billing balance and they resume by themselves.",
+      inbox: { read: (ns) => ns?.resellerBilling?.wholesaleUnfundedManyTitle, fallback: 'Your users on platform servers have stopped ({{count}})' },
     },
   },
   // F-067-o: a connection test's verdict, told to the owner (`accepted_low_trust` is an acceptance).

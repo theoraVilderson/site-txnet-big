@@ -8,7 +8,7 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
 import { PrismaService } from '../prisma/prisma.service';
 import { RemainderCreditRefused, RemainderCreditService } from '../traffic/remainder-credit';
 import { UsageSettlementService } from '../usage/usage-settlement';
-import { ADMIN_FROZEN } from './suspension';
+import { CLOSABLE_REASONS } from './suspension';
 
 /**
  * `grant.statusReason` for a Grant the close stage ended (F-118-x): suspended
@@ -45,7 +45,8 @@ const FATAL: readonly RemainderCreditRefused['reason'][] = ['cursor_moved', 'gra
  * tenant, default 30), counted from the purge, because a renewal or top-up
  * still revives a purged Grant (ADR-0075) and this is where that ends. Either
  * window at `0` means never: a tenant that keeps dead clients keeps the Grant.
- * A frozen Grant is never closed, as it is never purged.
+ * Only a usage or period stop closes (`CLOSABLE_REASONS`): a frozen Grant
+ * never, and any reason added later not until it is listed there.
  */
 @Injectable()
 export class GrantCloseStageService {
@@ -75,7 +76,7 @@ export class GrantCloseStageService {
         JOIN "tenant"."tenant" t ON t."id" = g."tenantId"
        WHERE g."status" = ${GrantStatus.suspended}::"entitlement"."GrantStatus"
          AND g."suspendedAt" IS NOT NULL
-         AND g."statusReason" IS DISTINCT FROM ${ADMIN_FROZEN}
+         AND g."statusReason" = ANY(${CLOSABLE_REASONS as string[]}::text[])
          AND COALESCE(g."purgeAfterDays", t."purgeAfterDays") > 0
          AND COALESCE(g."closeAfterDays", t."closeAfterDays") > 0
          AND g."suspendedAt" + make_interval(days => COALESCE(g."purgeAfterDays", t."purgeAfterDays") + COALESCE(g."closeAfterDays", t."closeAfterDays")) <= ${now}

@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 81
+version: 82
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -56,6 +56,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260929000700_a_spending_cap_bounds_one_product/**
   - txnet-backend/prisma/domains/migrations/20260929000800_held_money_is_announced/**
   - txnet-backend/prisma/domains/migrations/20260929001400_a_per_use_meter_is_served_through_a_door/**
+  - txnet-backend/prisma/domains/migrations/20260929001700_a_reseller_at_zero_is_told_once/**
   - txnet-backend/billing-service/src/app/usage/**
 owns_tables: [wallet, wallet_hold, wallet_transaction, spending_cap, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
@@ -95,8 +96,8 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-29 | contract v82 (additive, F-118-w): a `wholesale_unfunded` block refusal emits `tenant.billing.wholesale_unfunded` `{tenantId, ownerUserId, period}` once per spell (`tenant_billing_wallet.unfundedNoticeAt`); the Grant stays active. [contract.traffic-block.md](contract.traffic-block.md) wholesale rule 4 |
 | 2026-09-29 | contract v81 (additive, F-118-t): a Grant its spending cap cuts while the wallet could still buy is suspended `statusReason = cap_reached` and emits `entitlement.grant.cap_reached` (`serviceCapReached`, "raise the cap"); every usage revive takes it like `quota_exhausted` ([contract.spending-cap.md](contract.spending-cap.md) rules 4-5) |
 | 2026-09-29 | contract v80 (additive, F-118-o): a hold or a release writes `billing.wallet.changed` `{tenantId, userId}` — no `walletTransactionId` — at most once per 30 s per wallet (`wallet.heldPushedAt`), so the panel's `held` follows. [contract.holds.md](contract.holds.md) |
-| 2026-09-29 | contract v79 (additive, F-118-j): `GET /api/billing/wallet/history` answers `held` (`heldAmount`) and `available` (`balance − held`) beside `balance`, for the panel to show held money apart. [contract.history.md](contract.history.md) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

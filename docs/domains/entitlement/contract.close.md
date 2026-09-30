@@ -24,8 +24,11 @@ nobody renewed is closed for good, and the money it still ties up is given back.
 - **Either window at `0` means never.** A tenant that never purges keeps its
   dead clients, and so keeps the Grant. Resolved in the scan, not after it — a
   never row would fill every bounded batch (`purge.ts`, data-model "The purge clock").
-- **A frozen Grant is never closed** (`statusReason = admin_frozen`), as it is
-  never purged. Every other suspension reason is closed.
+- **Only a listed reason closes** (`CLOSABLE_REASONS`, `suspension.ts`):
+  `quota_exhausted`, `cap_reached`, `period_ended` — the user stopped paying or
+  renewing. A list of what may close, not of what may not, because a close
+  cannot be undone: a frozen Grant never closes, and a reason added later (a
+  tenant's suspension, a fraud hold) does not until someone lists it.
 - Batch size is `GRANT_PURGE_BATCH_SIZE`, oldest `suspendedAt` first; the scan is
   cross-tenant and each close runs in its tenant (`deposit-expiry.service.ts`).
 
@@ -53,3 +56,5 @@ in their wallet. The close tells nobody; no event is emitted.
 No clock of its own: the hourly `purge-due` call (`grant_config_purge`,
 [contract.md](contract.md) "Purge and restore") runs it last, after the purge
 and its notices, and answers `closed` and `closeFailed` beside its counts.
+The worker records both in `bot_execution_log`; a `closeFailed` is an error of
+that run (`partial`, or `failed` with nothing else done), never a quiet success.

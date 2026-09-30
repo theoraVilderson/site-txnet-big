@@ -189,6 +189,7 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 			bound = &r.room
 		}
 		snap.Grants[i].Quota += ReserveBytes(r.user, bound)
+		snap.Grants[i].Unfunded = bound != nil && *bound == 0
 	}
 	return snap, rows.Err()
 }

@@ -18,6 +18,14 @@ import (
 // bag, and the next request is for the new one.
 const BlockRetry = 30 * time.Second
 
+// WholesaleRetry replaces BlockRetry for a Grant whose reseller's billing
+// wallet funds nothing past its bag on a platform panel (F-118-w): billing
+// can only refuse it `wholesale_unfunded`, and tells the reseller once. It is
+// still asked, this seldom, because billing's platform test (the group holds
+// a platform panel) is not the planner's (a live config on one). A top-up
+// gives the Grant room again, and the next pass is back on BlockRetry.
+const WholesaleRetry = 10 * time.Minute
+
 // BlockRequest asks billing for the next block of a metered Grant
 // (`contracts/network/block-request.json`). PurchasedBytes is the bag the
 // planner saw: billing buys only while the Grant still holds that figure, so

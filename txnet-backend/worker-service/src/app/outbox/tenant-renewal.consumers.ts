@@ -69,7 +69,8 @@ export class TenantBillingCreditedConsumer implements OnApplicationBootstrap {
 
 /**
  * Tell a reseller's owner its renewal is unpaid, or that the panel was
- * suspended for it (F-019-c) — through `EventNoticeSender` (F-067-o): the
+ * suspended for it (F-019-c), or that its billing wallet no longer funds its
+ * users on platform panels (F-118-w, once per refusal spell) — through `EventNoticeSender` (F-067-o): the
  * owner's inbox and bot, each once under its own marker. No live push of its
  * own: the inbox row's `notification.created` already reaches every open
  * device (F-035-b), and no page reads a subscription event.
@@ -90,15 +91,20 @@ export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap 
 
   async onApplicationBootstrap() {
     await this.broker.consumeTenantSubscriptionNotices((event) => this.handle(event));
-    this.logger.log('consuming tenant.subscription.* for the owner notice');
+    this.logger.log('consuming tenant.subscription.* and tenant.billing.wholesale_unfunded for the owner notice');
   }
 
   async handle(event: OutboxMessage): Promise<void> {
     const p = (event.payload ?? {}) as Record<string, unknown>;
     const tenantId = str(p, 'tenantId');
     const ownerUserId = str(p, 'ownerUserId');
+    if (!tenantId || !ownerUserId) throw new Error(`outbox event ${event.id} has a payload without its tenant or owner`);
+    if (event.type === OutboxEventType.TENANT_WHOLESALE_UNFUNDED) {
+      await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId: ownerUserId, template: 'resellerWholesaleUnfunded', params: {} } });
+      return;
+    }
     const amount = str(p, 'amount');
-    if (!tenantId || !ownerUserId || !amount) throw new Error(`outbox event ${event.id} has a payload without its tenant, owner or amount`);
+    if (!amount) throw new Error(`outbox event ${event.id} has a payload without its amount`);
     const template =
       event.type === OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE
         ? 'subscriptionPaymentDue'

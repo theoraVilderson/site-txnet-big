@@ -40,6 +40,14 @@ export const ADMIN_FROZEN = 'admin_frozen';
  */
 export const PERIOD_ENDED = 'period_ended';
 
+/**
+ * The reasons the close stage may end a Grant for (F-118-x): the user stopped
+ * paying or renewing. A list of what may close, not of what may not: a close
+ * is `expired` and cannot be undone, so a reason added later — a tenant's
+ * suspension, a fraud hold — is never closed until someone adds it here.
+ */
+export const CLOSABLE_REASONS: readonly string[] = [QUOTA_EXHAUSTED, CAP_REACHED, PERIOD_ENDED];
+
 export type Suspension = {
   /** False where the Grant was no longer `active` when the write reached it. Nothing was written. */
   suspended: boolean;

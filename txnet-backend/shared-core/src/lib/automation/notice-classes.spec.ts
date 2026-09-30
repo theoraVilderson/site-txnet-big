@@ -41,6 +41,7 @@ describe('notice classes (F-601-s)', () => {
       'purchaseStuckPanelUnavailable',
       'purchaseStuckStrategyNotBuilt',
       'purchaseStuckWriteUnconfirmed',
+      'resellerWholesaleUnfunded',
       'subscriptionSuspended',
     ]);
     expect(by('important')).toEqual(['panelRefused', 'paymentCredited', 'purchaseDelayed', 'purchaseDelivered', 'subscriptionPaymentDue']);

@@ -48,6 +48,12 @@
     "suspendedMany": "⛔ Your panel was suspended {{count}} times for unpaid renewals. Nothing was deleted: top up your billing balance and it is reactivated at once.",
     "suspendedManyTitle": "Panel suspended for non-payment ({{count}})"
   },
+  "resellerBilling": {
+    "wholesaleUnfundedTitle": "Your users on platform servers have stopped",
+    "wholesaleUnfunded": "⛔ Your billing balance has run out, so your users whose services run on the platform's servers have stopped as their traffic ran out. Services on your own panels keep running. Top up your billing balance and they resume by themselves — their links stay the same.",
+    "wholesaleUnfundedMany": "⛔ Your billing balance has run out ({{count}} times), so your users on the platform's servers stopped as their traffic ran out. Top up your billing balance and they resume by themselves.",
+    "wholesaleUnfundedManyTitle": "Your users on platform servers have stopped ({{count}})"
+  },
   "panel": {
     "acceptedTitle": "Panel accepted",
     "accepted": "✅ Your panel {{panel}} passed its connection test and was accepted.",
