@@ -235,6 +235,7 @@ export class OffersController {
       quotas: o.quotas,
       price: o.price.amount,
       currencyCode: o.price.currencyCode,
+      rateCards: o.rateCards,
     }));
   }
 }

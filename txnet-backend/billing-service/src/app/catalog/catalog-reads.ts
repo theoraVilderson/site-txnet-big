@@ -10,6 +10,7 @@ import {
   pricesInEffect,
   tenantTransaction,
   rateCardAt,
+  rateCardsInEffect,
   vpnTrafficRateAt,
   type OfferFacts,
   type RateCardRow,
@@ -69,9 +70,46 @@ export type CatalogOffer = {
   panelGroupId: string | null;
   /** In the tenant's operating currency — a price in any other is no price (F-116-d). */
   price: { id: string; amount: string; currencyCode: string; effectiveFrom: Date };
+  /** The card in effect for each meter, by meter key (F-118-ae): what a sale now would lock. */
+  rateCards: OfferRateCard[];
 };
 
-type VariantRow = Prisma.ProductVariantGetPayload<{ include: { product: { include: typeof productCategoriesInclude }; prices: true } }>;
+/** A rate card as an offer names it; quantities and money as strings (C-02, bytes pass 2^53). */
+export type OfferRateCard = {
+  meterKey: string;
+  unitSize: string;
+  unitPrice: string;
+  currencyCode: string;
+  mode: RateCardRow['mode'];
+  includedQuantity: string;
+  afterIncluded: RateCardRow['afterIncluded'];
+};
+
+/**
+ * The card in effect at `at` for each meter among `cards` (F-118-ae) — the
+ * rule a sale locks by (`rateCardAt`), so the shop names the rate the Grant
+ * will carry, never an older card or one in another currency.
+ */
+export function offerRateCards(cards: readonly RateCardRow[], at: Date, currencyCode: string): OfferRateCard[] {
+  const meters = [...new Set(cards.map((c) => c.meterKey))].sort();
+  return meters.flatMap((meterKey) => {
+    const c = rateCardAt(cards, at, currencyCode, meterKey);
+    if (!c) return [];
+    return [
+      {
+        meterKey,
+        unitSize: c.unitSize.toString(),
+        unitPrice: c.unitPrice.toString(),
+        currencyCode: c.currencyCode,
+        mode: c.mode,
+        includedQuantity: c.includedQuantity.toString(),
+        afterIncluded: c.afterIncluded,
+      },
+    ];
+  });
+}
+
+type VariantRow = Prisma.ProductVariantGetPayload<{ include: { product: { include: typeof productCategoriesInclude }; prices: true; rateCards: true } }>;
 
 /**
  * A variant with its product, its categories (each with its chain up) and the
@@ -84,6 +122,7 @@ const withPrices = (at: Date, currencyCode: string) =>
       where: pricesInEffect(at, currencyCode),
       orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }],
     },
+    rateCards: { where: rateCardsInEffect(at, currencyCode) },
   }) satisfies Prisma.ProductVariantInclude;
 
 /**
@@ -128,6 +167,7 @@ function toOffer(v: VariantRow, at: Date, currencyCode: string, offered: (f: Off
     visibility: v.visibility,
     panelGroupId: v.panelGroupId,
     price: { id: price.id, amount: price.amount.toFixed(2), currencyCode: price.currencyCode, effectiveFrom: price.effectiveFrom },
+    rateCards: offerRateCards(v.rateCards ?? [], at, currencyCode),
   };
 }
 

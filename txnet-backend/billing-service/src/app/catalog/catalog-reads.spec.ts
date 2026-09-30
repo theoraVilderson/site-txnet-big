@@ -9,7 +9,11 @@
  *    sold only by its SKU; `admin_only` is never sold, only assigned (F-506);
  *    anything under an inactive product or category is not offered at all;
  *  - **the platform's SKU shadowing a tenant's.** A tenant and the platform may
- *    both sell `VPN-30`; the caller's own row wins.
+ *    both sell `VPN-30`; the caller's own row wins;
+ *  - **a metered offer with no rate on it** (F-118-ae). The shop showed 0.00
+ *    and "metered" for a 10 USD/GB variant: an offer carries the card in
+ *    effect for each meter, the one its sale will lock — never an older one,
+ *    never one in another currency.
  *
  * Which rows a tenant can read at all is RLS: `catalog-schema.int.spec.ts`.
  */
@@ -17,7 +21,7 @@ import { Prisma, VariantVisibility } from '@prisma/client';
 
 import { CATEGORY_MAX_DEPTH, categoryLive, firstLiveCategory, liveCategoryWhere, productCategoriesLive } from '@txnet-backend/shared-core';
 
-import { isListed, isSellableBySku, pickBySku, priceAt, type PriceRow } from './catalog-reads';
+import { isListed, isSellableBySku, offerRateCards, pickBySku, priceAt, type PriceRow, type RateCardRow } from './catalog-reads';
 
 const d = (v: string) => new Prisma.Decimal(v);
 const at = (iso: string) => new Date(iso);
@@ -140,5 +144,45 @@ describe('a category is live when it and every one above it are on (F-026-r)', (
     }
     expect(levels).toBe(CATEGORY_MAX_DEPTH);
     expect(where).toEqual({ isActive: true, parentId: null });
+  });
+});
+
+describe('the rate an offer names (F-118-ae)', () => {
+  const card = (id: string, meterKey: string, unitPrice: string, effectiveFrom: string, over: Partial<RateCardRow> = {}): RateCardRow => ({
+    id,
+    meterKey,
+    unitSize: BigInt(1073741824),
+    unitPrice: d(unitPrice),
+    currencyCode: 'USD',
+    mode: 'prepaid',
+    includedQuantity: BigInt(0),
+    afterIncluded: 'metered',
+    effectiveFrom: at(effectiveFrom),
+    isActive: true,
+    ...over,
+  });
+  const now = at('2026-09-30T06:00:00Z');
+
+  it('names the card in effect for each meter, as strings, the one the sale locks', () => {
+    const cards = [
+      card('old', 'vpn.traffic', '8', '2026-09-01T00:00:00Z'),
+      card('new', 'vpn.traffic', '10', '2026-09-29T00:00:00Z'),
+      card('regen', 'vpn.config.regenerate', '0.5', '2026-09-01T00:00:00Z', { unitSize: BigInt(1), mode: 'postpaid', includedQuantity: BigInt(2) }),
+    ];
+    expect(offerRateCards(cards, now, 'USD')).toEqual([
+      { meterKey: 'vpn.config.regenerate', unitSize: '1', unitPrice: '0.5', currencyCode: 'USD', mode: 'postpaid', includedQuantity: '2', afterIncluded: 'metered' },
+      { meterKey: 'vpn.traffic', unitSize: '1073741824', unitPrice: '10', currencyCode: 'USD', mode: 'prepaid', includedQuantity: '0', afterIncluded: 'metered' },
+    ]);
+  });
+
+  it('never names a card not yet in effect, switched off, or in another currency', () => {
+    const cards = [
+      card('future', 'vpn.traffic', '12', '2026-10-01T00:00:00Z'),
+      card('off', 'vpn.traffic', '9', '2026-09-02T00:00:00Z', { isActive: false }),
+      card('eur', 'vpn.traffic', '7', '2026-09-03T00:00:00Z', { currencyCode: 'EUR' }),
+      card('live', 'vpn.traffic', '8', '2026-09-01T00:00:00Z'),
+    ];
+    expect(offerRateCards(cards, now, 'USD').map((c) => c.unitPrice)).toEqual(['8']);
+    expect(offerRateCards([], now, 'USD')).toEqual([]);
   });
 });
