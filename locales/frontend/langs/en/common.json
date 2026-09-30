@@ -3294,7 +3294,8 @@
       "title": "Your wallet is too low to start this service.",
       "hint": "Its usage is taken from your wallet, and it will not connect until the wallet is topped up. One GB needs at least {{amount}} more.",
       "topUp": "Top up the wallet"
-    }
+    },
+    "meteredCap": "You already have {{open}} open pay-as-you-go services — the most allowed for you is {{cap}}. To have more, open a support ticket and ask for a higher limit."
   },
   "userGroups": {
     "title": "User groups",
@@ -3685,6 +3686,25 @@
         "selection_too_large": "Too many services match; split it by panel or product.",
         "job_not_found": "This job is not one of yours."
       }
+    },
+    "grantLimit": {
+      "title": "Pay-as-you-go service limit",
+      "tenantHint": "How many open pay-as-you-go services each user may hold at once. A user's own number, set on their page, replaces this.",
+      "inEffect": "In effect: {{count}}",
+      "platformDefault": "platform default: {{count}}",
+      "tenantInput": "Limit for each user",
+      "tenantInputHint": "A whole number from 0 to 1000; 0 sells none. Leave it empty to use the platform default.",
+      "save": "Save",
+      "saved": "Saved.",
+      "userHint": "When this user asks for more in a ticket, set their own number here. It replaces the default, higher or lower.",
+      "userOpen": "Open now: {{open}} of {{effective}}",
+      "userOwn": "This user's own number: {{count}}",
+      "userFromDefault": "From the default: {{count}}",
+      "userReasonShown": "Why: {{reason}}",
+      "userInput": "New number",
+      "userReason": "Reason (for example, the ticket)",
+      "userSet": "Set for this user",
+      "userRemove": "Back to the default"
     }
   },
   "operatingCurrency": {

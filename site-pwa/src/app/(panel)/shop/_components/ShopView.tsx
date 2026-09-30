@@ -15,7 +15,7 @@ import { formatBytes } from "../../services/_lib/service-configs";
 import { useWalletBalance } from "../../_hooks/useWalletBalance";
 import { formatInstant } from "../../_lib/datetime";
 import { formatMoney } from "../../_lib/money";
-import { categoriesOf, forgetReturnInvoice, groupOffers, hasOwnName, meteredStartShortOf, quotaLimit, shortfallOf, trafficRateOf, type OfferGroup } from "../_lib/shop";
+import { categoriesOf, forgetReturnInvoice, groupOffers, hasOwnName, meteredCapOf, meteredStartShortOf, quotaLimit, shortfallOf, trafficRateOf, type OfferGroup } from "../_lib/shop";
 
 const S = FrontendI18nKeys.common.shop;
 
@@ -449,7 +449,10 @@ function Checkout({
     try {
       await step();
     } catch (e) {
-      setError({ message: messageFor(e), ref: e instanceof ApiError ? e.ref : undefined });
+      // Past the limit (F-118-ao): the numbers and the way to more, not only billing's sentence.
+      const capped = meteredCapOf(e);
+      const message = capped ? t("common", S.meteredCap, { open: capped.open, cap: capped.cap }) : messageFor(e);
+      setError({ message, ref: e instanceof ApiError ? e.ref : undefined });
     }
     busy.current = false;
     setIsBusy(false);

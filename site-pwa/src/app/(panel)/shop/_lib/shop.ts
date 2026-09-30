@@ -19,6 +19,17 @@ export function shortfallOf(e: unknown): string | null {
   return typeof missing === "string" && /^\d+(\.\d+)?$/.test(missing) ? missing : null;
 }
 
+/**
+ * Billing's refusal of a pay-as-you-go service past the user's limit
+ * (F-118-ao): the limit and how many they hold, or `null`. The shop names both
+ * and sends the user to a ticket (F-118-aq).
+ */
+export function meteredCapOf(e: unknown): { cap: number; open: number } | null {
+  if (!(e instanceof ApiError) || e.reason !== "metered_cap_reached") return null;
+  const { cap, open } = e.facts;
+  return typeof cap === "number" && typeof open === "number" ? { cap, open } : null;
+}
+
 /** A non-negative decimal string as an integer at `scale` places — exact, never a float (C-02). */
 function scaled(value: string, scale: number): bigint {
   const [whole, frac = ""] = value.split(".");

@@ -20,6 +20,7 @@ import { UsageBars } from "../../../../../services/_components/UsageBars";
 import { UsageMeter } from "../../../../../services/_components/UsageMeter";
 import { GRANT_TONES, serviceName } from "../../../../../services/_lib/my-services";
 import { USER_KEYS as K } from "../../../../_lib/users";
+import { UserGrantLimitCard } from "../../../../_components/GrantLimitCards";
 import { AdminConfigs } from "./AdminConfigs";
 import { GrantActions, IssueGrant } from "./GrantActions";
 import { GrantHistory } from "./GrantHistory";
@@ -121,6 +122,9 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
           <IssueGrant api={api} tenantId={id} texts={texts} onIssued={retry} />
         </div>
       </header>
+
+      {/* Read again with the list: an issue or a refresh changes how many are open. */}
+      <UserGrantLimitCard key={asked} tenantId={id} userId={userId} />
 
       {loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">

@@ -82,6 +82,7 @@ caller's session.
 though its metered Grants on the platform's panels hold the platform's seats.
 F-118-ar decides whether the platform bounds it.
 
-The panel shows both numbers and the shop names the refusal in F-118-aq.
+The panel shows both numbers on the users pages and the shop names the refusal
+(F-118-aq, `panel-web/contract.reseller-users.md` rule 24, `contract.shop.md` rule 7a).
 
 Proved by `entitlement/metered-cap.spec.ts` and `payment/gift/grant-limits.spec.ts`.

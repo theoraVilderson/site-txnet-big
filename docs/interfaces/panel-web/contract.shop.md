@@ -69,6 +69,12 @@ carry one piece of the return (rules 7 and 8).
    The top-up page ([contract.deposit.md](contract.deposit.md) rule 18)
    pre-fills `missing` raised to the chosen gateway's `minAmount`
    (`prefillAmount`, exact decimal compare, C-02) and links back.
+7a. **Past the pay-as-you-go limit, the numbers and a ticket** (F-118-aq).
+   `metered_cap_reached` (at the invoice or the pay, `billing/contract.purchase.md`)
+   carries `{cap, open}` in `facts`; `meteredCapOf` reads them and the box says
+   `shop.meteredCap` — how many are open, the most allowed, "open a support
+   ticket". No link: the panel has no ticket page until F-033, which adds one.
+   Nothing to top up; the invoice is not re-read (none was written).
 8. **Back to the same invoice.** `/shop?invoice=<id>` opens on
    `GET /invoices/:id` instead of the list — its price and its held codes, not
    a new invoice. The bank returns to `/payment/success`, which has no other
@@ -107,6 +113,8 @@ rejected code dropped, the top-up link carrying the invoice and `missing`, no ke
 shown, only the My services link, one pay per press, and the return on
 `?invoice=` — pending pays, expired does not; a metered buy under 1 GB of
 wallet told so, with its top-up link and the pay still offered.
+`my-resellers/grant-limits.test.tsx` — `meteredCapOf` reads `{cap, open}` from
+`metered_cap_reached` only.
 
 ## Not covered
 

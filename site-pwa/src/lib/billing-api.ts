@@ -843,6 +843,46 @@ export function resellerUserGrantsApi(tenantId: string, userId: string): Reselle
   };
 }
 
+/** The metered cap as staff read it (F-118-ap): billing computes `effective`, never the panel. */
+export interface TenantGrantLimit {
+  platformDefault: number;
+  /** The tenant's own default, or `null` when the platform's applies. */
+  tenantDefault: number | null;
+  effective: number;
+}
+
+export interface UserGrantLimit {
+  userId: string;
+  /** The number staff set for this user, or `null` when a default applies. */
+  own: { meteredOpenCap: number; reason: string | null; setByUserId: string; updatedAt: string } | null;
+  tenantDefault: number | null;
+  platformDefault: number;
+  effective: number;
+  /** Open pay-as-you-go services the user holds now. */
+  open: number;
+}
+
+/**
+ * How many open pay-as-you-go services a user may hold (F-118-ap,
+ * `entitlement/contract.limits.md`): the tenant's default and one user's own
+ * number, on the users-admin door by the **path's** tenant. Every answer is
+ * the whole view, so a save shows what billing kept.
+ */
+export function grantLimitsApi(tenantId: string) {
+  const at = `/tenants/${encodeURIComponent(tenantId)}`;
+  const user = (userId: string) => `${at}/users/${encodeURIComponent(userId)}/grant-limit`;
+  return {
+    tenant: () => call<TenantGrantLimit>(`${at}/grant-limits`, { method: "GET" }),
+    /** `null` goes back to the platform's default. */
+    setTenant: (meteredOpenCap: number | null) =>
+      call<TenantGrantLimit>(`${at}/grant-limits`, { method: "PUT", body: JSON.stringify({ meteredOpenCap }) }),
+    user: (userId: string) => call<UserGrantLimit>(user(userId), { method: "GET" }),
+    setUser: (userId: string, meteredOpenCap: number, reason: string) =>
+      call<UserGrantLimit>(user(userId), { method: "PUT", body: JSON.stringify({ meteredOpenCap, reason }) }),
+    removeUser: (userId: string) => call<UserGrantLimit>(user(userId), { method: "DELETE" }),
+  };
+}
+
 /**
  * A reseller's services across all its users (F-311-t, -u): `/tenants/:tenantId/grants`,
  * no user in the path — the paste or the ticked ids name them, each fenced by

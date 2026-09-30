@@ -14,6 +14,7 @@ import { Alert, input, primaryButton, quietButton } from "../../../../catalog/_c
 import { usePanelSession } from "../../../../_context/PanelSessionContext";
 import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, blockActionOf, isPlatformTenant, usersQuery } from "../../../_lib/users";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
+import { TenantGrantLimitCard } from "../../../_components/GrantLimitCards";
 import { BulkByFilter } from "./BulkByFilter";
 import { FindByLink } from "./FindByLink";
 
@@ -166,6 +167,7 @@ export function ResellerUsersView({ id }: { id: string }) {
 
       <FindByLink id={id} />
       <BulkByFilter id={id} />
+      <TenantGrantLimitCard tenantId={id} />
 
       {blockError !== null && <Alert>{message(blockError)}</Alert>}
 
