@@ -67,3 +67,13 @@ is told about it. Split out of [contract.lease.md](contract.lease.md) on
     disabled client on 3x-ui is `RemoveUser`'d, which keeps its open
     connections unless the panel restarts Xray on disable (F-027-cm,
     open-questions 2026-09-26).
+26. **A metered guard close too small to reopen on is spent** (F-027-ec, live
+    run 2026-09-30: a capped service closed with 3.6 MB left read `active`,
+    cut off, and nobody was told). With `Quota − Used < ReopenMin` no settle
+    reopens it (rule 25), so for a metered Grant the planner rewrites the
+    close `spent` (`Account.Stranded`, `Spend`) and asks its block (lease
+    rule 21). Billing reads a standing `spent` close as a spent bag
+    (`spentByThePlanner`): a bigger bag reopens it as a renewal, a refusal
+    suspends it `cap_reached` or `quota_exhausted` and tells the user; the
+    paid rest comes back with the remainder at close. A package plan's guard
+    close is left as it was (ADR-0105 (0)).

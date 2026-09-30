@@ -236,3 +236,48 @@ func TestARestoredGuardCloseReopensOnceItSettles(t *testing.T) {
 		t.Fatal("a restored spent close reopened without a renewal")
 	}
 }
+
+// A guard close with less left than ReopenMin can never reopen on what is
+// paid (F-027-ec, rule 26): on a metered Grant it is spent, and its block is
+// asked — at least enough to reopen on — so billing's answer ends it: a
+// bigger bag reopens it, a refusal suspends it and says why. Seen live on
+// 2026-09-30: a capped service closed with 3.6 MB left read `active`, cut
+// off, and nobody was told. A package plan's close is left as it was.
+func TestAMeteredCloseTooSmallToReopenIsSpentAndAsksItsBlock(t *testing.T) {
+	for _, metered := range []bool{true, false} {
+		b := newBench(t, 64*quota.MB, "a", "b")
+		req := &requests{}
+		b.pl.Blocks = req
+		b.s.grants[0].Metered, b.s.grants[0].Purchased = metered, 64*quota.MB
+		for i := 0; i < 60 && b.s.closure("grant-1") == nil; i++ {
+			b.turn(map[string]int64{"a": 20 * quota.MB, "b": 20 * quota.MB})
+		}
+		if c := b.s.closure("grant-1"); c == nil || c.Reason != quota.CloseGuard {
+			t.Fatalf("metered=%v: want a guard close: %+v", metered, c)
+		}
+		// The panel serves all but 4 MB before the close's write lands.
+		left := b.s.grants[0].Quota - b.s.grants[0].Used
+		b.inflight["a"], b.inflight["b"] = nil, nil
+		b.applied["a"] += left - 4*quota.MB
+		b.counter["a"] += left - 4*quota.MB
+		asked := len(req.sent)
+		b.turn(nil)
+
+		c := b.s.closure("grant-1")
+		if !metered {
+			if c == nil || c.Reason != quota.CloseGuard || len(req.sent) != asked {
+				t.Fatalf("a package plan's guard close is left as it was: %+v, %d new requests", c, len(req.sent)-asked)
+			}
+			continue
+		}
+		if c == nil || c.Reason != quota.CloseSpent {
+			t.Fatalf("a metered close with 4 MB left is spent: %+v", c)
+		}
+		if len(req.sent) == asked {
+			t.Fatal("a spent metered close asked for no block")
+		}
+		if r := req.sent[len(req.sent)-1]; r.TargetBytes < 4*quota.MB {
+			t.Fatalf("the block must reach ReopenMin past the 4 MB left: %+v", r)
+		}
+	}
+}

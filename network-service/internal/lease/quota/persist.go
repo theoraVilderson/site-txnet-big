@@ -50,6 +50,21 @@ func (a *Account) watchRestored(now time.Time, vs []*view) {
 	}
 }
 
+// Stranded: a guard close with less left than ReopenMin, the least any
+// reopen takes (rule 26, F-027-ec). Without new money no panel serves the rest.
+func (a *Account) Stranded(p Params) bool {
+	return a.Closed && a.closedWhy == CloseGuard && a.Quota-a.Used < p.ReopenMin
+}
+
+// Spend rewrites a close as spent (F-027-ec). The lease planner calls it for
+// a stranded metered Grant only, so billing reads its bag as spent; a
+// package plan's guard close is left as it was (ADR-0105 (0)).
+func (a *Account) Spend() {
+	if a.Closed {
+		a.closedWhy = CloseSpent
+	}
+}
+
 // ClosedOn is the Quota and expiry the account closed on, and why; ok is
 // false while it is open.
 func (a *Account) ClosedOn() (quota Bytes, expiresAt time.Time, why CloseReason, ok bool) {

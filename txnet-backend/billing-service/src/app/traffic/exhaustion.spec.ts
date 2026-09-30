@@ -33,7 +33,7 @@ type GrantRow = {
   consumedBytes: bigint;
 };
 
-function fakeTx(input: { grant: Partial<GrantRow> | null; balance: string | null }) {
+function fakeTx(input: { grant: Partial<GrantRow> | null; balance: string | null; close?: { quotaBytes: bigint; reason: string } }) {
   const grant: GrantRow | null = input.grant
     ? {
         userId: USER,
@@ -71,6 +71,8 @@ function fakeTx(input: { grant: Partial<GrantRow> | null; balance: string | null
     // Its prepaid vpn.traffic meter (F-118-l); none is not a metered Grant.
     grantMeter: { findUnique: async () => (grant?.rate ? { mode: 'prepaid', unitPrice: grant.rate, currencyCode: 'USD' } : null) },
     wallet: { findUnique: async () => null },
+    // The planner's close, if any (F-027-ec).
+    leaseClose: { findUnique: async () => input.close ?? null },
     // The cutoff notice (F-601-b) — cut-off.spec.ts holds what it says.
     outboxEvent: { create: async () => ({ id: 'e1' }) },
     $queryRaw: async () => {
@@ -110,6 +112,22 @@ describe('suspendIfExhausted', () => {
     const { tx } = fakeTx({ grant: { consumedBytes: BigInt(1500) }, balance: '0.00' });
 
     expect((await suspendIfExhausted(tx, GRANT, AT)).verdict).toBe('suspended');
+  });
+
+  // A guard close with less left than the planner reopens on can never be
+  // served (F-027-ec): the planner calls it spent, and so does this — or the
+  // Grant reads active, cut off, with nobody told (live run 2026-09-30).
+  it('counts a bag with bytes left as spent when the planner closed it spent on this Quota', async () => {
+    const { tx } = fakeTx({ grant: { consumedBytes: BigInt(900) }, balance: '0.00', close: { quotaBytes: BigInt(1000), reason: 'spent' } });
+
+    expect((await suspendIfExhausted(tx, GRANT, AT)).verdict).toBe('suspended');
+  });
+
+  it('leaves a bag with bytes left alone on a guard close, or on a spent close of an older Quota', async () => {
+    const guard = fakeTx({ grant: { consumedBytes: BigInt(900) }, balance: '0.00', close: { quotaBytes: BigInt(1000), reason: 'guard' } });
+    expect((await suspendIfExhausted(guard.tx, GRANT, AT)).verdict).toBe('bag_not_empty');
+    const older = fakeTx({ grant: { consumedBytes: BigInt(900) }, balance: '0.00', close: { quotaBytes: BigInt(800), reason: 'spent' } });
+    expect((await suspendIfExhausted(older.tx, GRANT, AT)).verdict).toBe('bag_not_empty');
   });
 
   it('treats a user with no wallet row as one with an empty wallet', async () => {

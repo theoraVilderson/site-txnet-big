@@ -192,8 +192,10 @@ the money, so it decides whether one is bought (`billing/contract.traffic-block.
     overrun served from the reserve is bought with it. No rate and bytes left
     is not due; no rate past the bag asks for the overrun alone. A closed
     account asks for nothing — except a metered one whose bag is spent
-    (`Used ≥ Purchased`, F-118-ad): what its reserve served past the bag is
-    bought with it, and billing's refusal is the only thing that suspends it.
+    (`Used ≥ Purchased`, F-118-ad) or whose close is `spent` (lease-close
+    rule 26): what its reserve served past the bag is bought with it, and
+    billing's refusal is the only thing that suspends it. A closed account's
+    request is due at once and reaches `ReopenMin` past what is left (F-027-ec).
 22. **One bag is asked for once per `BlockRetry` (30 s).** The request names
     `purchasedBytes`; billing buys only while the Grant holds it, so a second
     request for the same bag is dropped there. A request is remembered only

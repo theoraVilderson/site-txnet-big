@@ -89,6 +89,8 @@ function world(w: World = {}) {
   const resellerLedger: Array<Record<string, unknown>> = [];
 
   const tx = {
+    // No planner close (F-027-ec).
+    leaseClose: { findUnique: async () => null },
     tenant: { findFirst: async () => ({ id: 'platform' }), findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
     grant: {
       // The fair share's reads (F-118-ag): this fake's one Grant, its meter and its holds.

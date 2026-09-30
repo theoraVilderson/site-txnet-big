@@ -409,13 +409,19 @@ func (s *Planner) plan(ctx context.Context, p collect.Panel, readings []driver.C
 // blockLocked is the block a Grant's plan asks for, unless the same bag was
 // asked for inside BlockRetry — WholesaleRetry for an Unfunded Grant. The rates are the replicas' own, summed: the
 // fast one for when, the demand for how much, as the planner reads them.
-func (s *Planner) blockLocked(g Grant, a *quota.Account, at time.Time) *BlockRequest {
+func (s *Planner) blockLocked(g Grant, a *quota.Account, at time.Time, closed bool) *BlockRequest {
 	var now, demand float64
 	for _, r := range a.Replicas {
 		now += r.Rate.Now()
 		demand += r.Rate.Demand()
 	}
-	req, due := blockDue(g, now, demand, s.params().Horizon, at)
+	// A closed Grant asks for at least what it reopens on (F-027-ec): a
+	// smaller block moves the bag and still leaves it closed.
+	reopen := int64(0)
+	if closed {
+		reopen = s.params().ReopenMin
+	}
+	req, due := blockDue(g, now, demand, s.params().Horizon, at, reopen)
 	if !due {
 		return nil
 	}
@@ -549,11 +555,17 @@ func (s *Planner) planLocked(p collect.Panel, snap Snapshot, got map[string]driv
 			}
 		}
 		pl := Plan{GrantID: g.ID, Quota: a.Quota, Used: a.Used, Avail: res.Avail, Endgame: res.Endgame, Closed: a.Closed}
+		// A metered guard close too small to reopen on is spent (F-027-ec,
+		// rule 26); a package plan's is left as it was.
+		if g.Metered && a.Stranded(s.params()) {
+			a.Spend()
+		}
 		// A closed metered Grant still asks for its spent bag (F-118-ad, rule
 		// 21): what its reserve served past the bag is bought with it, and
 		// billing's refusal is the only thing that suspends it.
-		if !a.Closed || (g.Metered && g.Used >= g.Purchased) {
-			pl.Block = s.blockLocked(g, a, at)
+		_, _, why, closed := a.ClosedOn()
+		if !closed || (g.Metered && (g.Used >= g.Purchased || why == quota.CloseSpent)) {
+			pl.Block = s.blockLocked(g, a, at, closed)
 		}
 		pl.Closure, pl.ClosureMoved = closureOf(g, a)
 		byID := map[string]Config{}

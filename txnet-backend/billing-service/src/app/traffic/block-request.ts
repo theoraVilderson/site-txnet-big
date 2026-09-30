@@ -7,7 +7,7 @@ import { WholesaleCursorMoved } from '../usage/usage-wholesale';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BlockPurchaseRefused, BlockPurchaseService, type BlockPurchaseRejection, type PurchasedBlock } from './block-purchase';
-import { type Exhaustion, isShortOfFunds, suspendIfExhausted } from './exhaustion';
+import { type Exhaustion, isShortOfFunds, spentByThePlanner, suspendIfExhausted } from './exhaustion';
 import { noticeLowBalance } from './low-balance';
 import { vpnMeterOf } from './vpn-meter';
 import { NO_VPN_RESERVE, VpnReserve } from './vpn-reserve';
@@ -174,7 +174,7 @@ export class BlockRequestService {
       // `purchase()` refuses before it writes, so the transaction is clean. A
       // short wallet with bytes still in the bag is not exhaustion yet.
       const refused = (error as BlockPurchaseRefused).reason;
-      const spent = grant.purchasedBytes - grant.consumedBytes <= BigInt(0);
+      const spent = grant.purchasedBytes - grant.consumedBytes <= BigInt(0) || (await spentByThePlanner(tx, grant.id, grant.purchasedBytes));
       return { ...none, skipped: null, refused, exhausted: spent ? await suspendIfExhausted(tx, grant.id) : null };
     }
   }
@@ -209,7 +209,7 @@ export class BlockRequestService {
       const short = error instanceof UsageSettlementRefused && (error.reason === 'insufficient_funds' || error.reason === 'wholesale_unfunded');
       if (!short) throw error;
       // Refused before any write: a hold of nothing captures nothing, so the transaction is clean.
-      const spent = grant.purchasedBytes - grant.consumedBytes <= BigInt(0);
+      const spent = grant.purchasedBytes - grant.consumedBytes <= BigInt(0) || (await spentByThePlanner(tx, grant.id, grant.purchasedBytes));
       return { ...none, skipped: null, refused: error.reason as 'insufficient_funds' | 'wholesale_unfunded', exhausted: spent ? await suspendIfExhausted(tx, grant.id) : null };
     }
   }

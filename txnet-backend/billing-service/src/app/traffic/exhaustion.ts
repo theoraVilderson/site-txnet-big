@@ -103,7 +103,9 @@ export async function suspendIfExhausted(tx: Prisma.TransactionClient, grantId: 
   const meter = grant.billingMode === VariantBillingMode.metered ? await vpnMeterOf(tx, grantId) : null;
   if (!meter) return verdict('not_metered');
   // Past the bag counts as spent: an overrun is a debt for the holds queue (ADR-0074), never credit.
-  if (grant.consumedBytes < grant.purchasedBytes) return verdict('bag_not_empty');
+  // So is a rest the planner closed `spent` on this Quota (F-027-ec): a guard
+  // close with less left than it reopens on, which no panel will serve.
+  if (grant.consumedBytes < grant.purchasedBytes && !(await spentByThePlanner(tx, grantId, grant.purchasedBytes))) return verdict('bag_not_empty');
   // Its spending cap bounds what the wallet may buy for it (F-118-i).
   // No wallet row is a balance of zero — the same answer as an empty one.
   // Its even share of the owner's headroom counts as its own (F-118-ag): a
@@ -124,6 +126,12 @@ export async function suspendIfExhausted(tx: Prisma.TransactionClient, grantId: 
   const cutOff = capCut ? OutboxEventType.GRANT_CAP_REACHED : OutboxEventType.GRANT_WALLET_SPENT;
   await emitCutOff(tx, { grantId, tenantId: owner.tenantId, userId: owner.userId }, cutOff, at);
   return verdict('suspended', suspension.configsDisabled);
+}
+
+/** A close the planner took as `spent` on exactly this bag (network `contract.lease-close.md` rule 26). */
+export async function spentByThePlanner(tx: Prisma.TransactionClient, grantId: string, purchasedBytes: bigint): Promise<boolean> {
+  const close = await tx.leaseClose.findUnique({ where: { grantId }, select: { quotaBytes: true, reason: true } });
+  return close?.reason === LeaseCloseReason.spent && close.quotaBytes === purchasedBytes;
 }
 
 export type ClosedVerdict = 'suspended' | 'grant_not_found' | 'not_active' | 'unlimited' | 'not_prepaid' | 'reopened' | 'guarded';
@@ -166,8 +174,9 @@ export type Closed = {
  * **A guard close is not spent (F-027-dz).** The planner says why it closed
  * (`lease_close.reason`): `guard` is every replica blocked with bytes still
  * paid, which reopens by itself once it settles (rule 25). It answers
- * `guarded` and suspends nothing; were the rest then served, the planner
- * rewrites the close `spent` and this is asked again.
+ * `guarded` and suspends nothing; were the rest then served — or were it
+ * too small to reopen on, for a metered Grant (rule 26, F-027-ec) — the
+ * planner rewrites the close `spent` and this is asked again.
  *
  * **The user is told (F-601-b).** A suspension emits `volume_spent`, or
  * `ended` when the close was on the Grant's end.

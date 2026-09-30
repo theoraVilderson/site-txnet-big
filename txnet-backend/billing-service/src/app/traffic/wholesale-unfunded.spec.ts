@@ -38,6 +38,8 @@ function fakeTx(world: World = {}) {
   const grantUpdates: Update[] = [];
   const events: Event[] = [];
   const tx = {
+    // No planner close (F-027-ec).
+    leaseClose: { findUnique: async () => null },
     tenantBillingWallet: {
       findUnique: async () => ({ unfundedNoticeAt: wallet.noticeAt }),
       updateMany: async (args: Update) => {

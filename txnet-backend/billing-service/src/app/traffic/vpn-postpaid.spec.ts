@@ -66,6 +66,8 @@ function world(opts: { balance?: string; mode?: 'prepaid' | 'postpaid'; consumed
   const ledger: Array<{ amount: string; reasonType: WalletReasonType }> = [];
 
   const tx = {
+    // No planner close (F-027-ec).
+    leaseClose: { findUnique: async () => null },
     grant: {
       // The fair share's reads (F-118-ag): this fake's one Grant, its meter and its holds.
       findMany: async () => [{ id: grant.id }],

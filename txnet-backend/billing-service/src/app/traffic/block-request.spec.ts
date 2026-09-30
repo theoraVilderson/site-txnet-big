@@ -107,6 +107,8 @@ function fakeTx(row: GrantRow | null) {
     // A metered Grant's prepaid vpn.traffic meter at 50c/GiB (F-118-l); a prepaid Grant has none.
     grantMeter: { findUnique: async () => (grant && !row?.prepaid ? { mode: 'prepaid', unitPrice: new Prisma.Decimal('0.5'), currencyCode: 'USD' } : null) },
     wallet: { findUnique: async () => null },
+    // No planner close (F-027-ec): a bag with bytes left is not spent here.
+    leaseClose: { findUnique: async () => null },
     $queryRaw: async () => [{ cachedBalance: new Prisma.Decimal('0.00') }],
     config: { updateMany: async () => ({ count: 1 }) },
     outboxEvent: {

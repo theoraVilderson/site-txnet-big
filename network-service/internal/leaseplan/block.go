@@ -61,14 +61,14 @@ type asked struct {
 // with no rate is not, unless it is already past its bag, and then only the
 // overrun is asked for. rateNow is the trigger's rate (the planner's own
 // tEnd reads the fast one), rateDemand the size's.
-func blockDue(g Grant, rateNow, rateDemand float64, horizon time.Duration, at time.Time) (BlockRequest, bool) {
+func blockDue(g Grant, rateNow, rateDemand float64, horizon time.Duration, at time.Time, reopen int64) (BlockRequest, bool) {
 	if !g.Metered {
 		return BlockRequest{}, false
 	}
 	headroom := g.Purchased - g.Used
 	tEnd := math.Inf(1)
 	switch {
-	case headroom <= 0:
+	case headroom <= 0, headroom < reopen:
 		tEnd = 0
 	case rateNow > 0:
 		tEnd = float64(headroom) / rateNow
@@ -77,7 +77,7 @@ func blockDue(g Grant, rateNow, rateDemand float64, horizon time.Duration, at ti
 		return BlockRequest{}, false
 	}
 	perSecond := int64(rateDemand)
-	target := perSecond*int64(horizon.Seconds()) - headroom
+	target := max(perSecond*int64(horizon.Seconds()), reopen) - headroom
 	if target <= 0 {
 		return BlockRequest{}, false
 	}
