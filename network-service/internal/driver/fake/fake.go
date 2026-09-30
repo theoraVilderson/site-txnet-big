@@ -43,6 +43,9 @@ type Config struct {
 	// Inbounds is what ListInbounds reports; nil is one enabled vless inbound,
 	// `inbound-1`.
 	Inbounds []driver.Inbound
+	// CutOffAsOneByte stores a ceiling of 0 as driver.CutOffBytes, as every
+	// family with a per-client limit does: 0 is "no limit" on their wire.
+	CutOffAsOneByte bool
 }
 
 type client struct {
@@ -571,6 +574,9 @@ func (p *Panel) SetClientDataLimit(ctx context.Context, remoteID string, ceiling
 	c := p.clients[remoteID]
 	if c == nil {
 		return p.notFound("SetClientDataLimit", remoteID)
+	}
+	if p.cfg.CutOffAsOneByte {
+		ceilingBytes = max(ceilingBytes, driver.CutOffBytes)
 	}
 	if p.ceilingDelay > 0 {
 		c.pending, c.pendingReads = ceilingBytes, p.ceilingDelay

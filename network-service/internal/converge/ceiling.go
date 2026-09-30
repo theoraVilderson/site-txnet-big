@@ -289,7 +289,8 @@ func (c *Ceilings) pass(
 			})
 		}
 
-		if have == want && want > 0 {
+		// A cut-off is held as one byte (driver.CutOffBytes): already ours.
+		if (have == want && want > 0) || (want == 0 && have == driver.CutOffBytes) {
 			report.Synced++
 			continue
 		}

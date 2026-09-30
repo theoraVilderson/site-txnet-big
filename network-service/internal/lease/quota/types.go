@@ -122,10 +122,20 @@ func (r *Replica) Hold() Bytes {
 // disabling a client on its own at the limit is NOT a pending write.)
 func (r *Replica) Pending() bool { return r.writePending }
 
+// CutOffBytes is a ceiling of 0 as a panel holds it (driver.CutOffBytes):
+// every family with a per-client limit writes our 0 as one byte.
+const CutOffBytes Bytes = 1
+
 // landed: the panel shows the state we asked for. A client we enabled that
 // the panel already cut at its (new) limit also counts as landed.
 func (r *Replica) landed(limit Bytes, enabled bool, counter Bytes) bool {
-	return limit == r.LimitWant && (enabled == r.WantEnabled || (r.WantEnabled && counter >= limit))
+	return holds(limit, r.LimitWant) && (enabled == r.WantEnabled || (r.WantEnabled && counter >= limit))
+}
+
+// holds: a panel showing seen enforces want — the same figure, or the
+// cut-off byte for a want of 0 (CutOffBytes).
+func holds(seen, want Bytes) bool {
+	return seen == want || (want == 0 && seen == CutOffBytes)
 }
 
 // CloseReason is why the planner closed an account (F-027-dz): billing

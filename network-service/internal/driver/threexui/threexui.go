@@ -216,7 +216,7 @@ func (r record) remote() driver.RemoteClient {
 // unlimited (package doc).
 func ceiling(bytes int64) int64 {
 	if bytes < 1 {
-		return 1
+		return driver.CutOffBytes
 	}
 	return bytes
 }

@@ -284,6 +284,32 @@ func TestAnAllowanceAlreadySpentBecomesACeilingOfZero(t *testing.T) {
 	}
 }
 
+// A family with a per-client limit stores a ceiling of 0 as one byte, since 0
+// is "no limit" on its wire (driver.CutOffBytes). Read back, that byte is our
+// 0: the cut-off is written once, not again on every pass. Seen live on
+// 2026-09-30: three closed configs rewritten on x-ui every few seconds.
+func TestACutOffReadBackAsOneByteIsNotWrittenAgain(t *testing.T) {
+	r := newRig(t, fake.Config{CutOffAsOneByte: true}, "c1")
+	r.allocate("c1", 3*gb)
+	r.pass(t)
+	r.allocate("c1", 0)
+	r.pass(t)
+	if got := r.enforcing(t, "c1"); got != driver.CutOffBytes {
+		t.Fatalf("panel is enforcing %d, want the cut-off byte", got)
+	}
+	writes := r.panel.CallCount("SetClientDataLimit")
+
+	report := r.pass(t)
+	report = r.pass(t)
+
+	if n := r.panel.CallCount("SetClientDataLimit") - writes; n != 0 {
+		t.Errorf("a cut-off the panel holds was written %d more times", n)
+	}
+	if report.Synced != 1 {
+		t.Errorf("synced = %d, want 1", report.Synced)
+	}
+}
+
 // ---- what it refuses to touch ----------------------------------------------
 
 func TestAConfigWithNoAllocationIsNotWrittenTo(t *testing.T) {

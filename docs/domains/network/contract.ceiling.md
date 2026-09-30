@@ -163,8 +163,12 @@ a counter zeroed between two reads publishes **no delta at all** — the
 post-reset figure can be zero — and that is exactly the case the rewrite exists
 for.
 
-`allowance_exhausted` is a ceiling of zero, and it is rewritten every pass
-rather than converged, because a panel cannot confirm zero back. Cutting the
+`allowance_exhausted` is a ceiling of zero. A family with a per-client limit
+stores it as one byte, since 0 is "no limit" on its wire (`driver.CutOffBytes`),
+and reading that byte back is the confirmation: it is written once, not on
+every pass (F-027-eb; live 2026-09-30, three closed configs rewritten on x-ui
+every few seconds). A panel reading back a literal zero confirms nothing, so
+that one is still rewritten every pass. Cutting the
 user off for real is the Grant suspension (F-027-x) and `desiredEnabled`
 (F-027-z), not this number.
 

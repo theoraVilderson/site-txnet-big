@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+// CutOffBytes is what a ceiling of 0 is written as on every family with a
+// per-client limit: their wire reads 0 as "no limit", so a cut-off is one
+// byte. Read back, that byte is our 0 — the planner (quota.CutOffBytes) and
+// the convergence pass treat it as the cut-off it was written for.
+const CutOffBytes int64 = 1
+
 // Driver is the whole surface of one panel family (catalog 7.1). Everything
 // above it — the collection loop, the ceiling allocator, the convergence loop
 // — is written once against this interface and knows nothing about inbounds,

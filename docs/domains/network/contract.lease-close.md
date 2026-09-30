@@ -47,7 +47,8 @@ is told about it. Split out of [contract.lease.md](contract.lease.md) on
     reopens at `avail ≥ ReopenMin` (8 MB). Without one, a close this process
     took reopens once it has settled: Used unchanged since the last plan that
     kept it, every close write landed (none pending, the panel showing the
-    figure written), every reading from a panel tick past the close plus
+    figure written — for a written 0, the one byte every family stores it
+    as, `quota.CutOffBytes`, F-027-eb), every reading from a panel tick past the close plus
     that panel's lag, and `avail ≥ max(ReopenMin, FinishMin, ΣvDem ×
     FinishTime)` — enough to finish on at the demand that closed it, or it
     closes again at once. Either way, a figure written before the close and

@@ -488,7 +488,7 @@ func (a *Account) settled(vs []*view) bool {
 		if !r.Exists && !r.Pending() && r.LimitPeak == 0 {
 			continue // no client, nothing in flight: it serves nothing
 		}
-		if r.Pending() || r.LimitSeen != r.LimitWant || !r.effAt.After(a.closedAt.Add(v.lag)) {
+		if r.Pending() || !holds(r.LimitSeen, r.LimitWant) || !r.effAt.After(a.closedAt.Add(v.lag)) {
 			return false
 		}
 	}

@@ -210,7 +210,7 @@ func parseDate(raw string) time.Time {
 // stores as no limit (package doc).
 func ceiling(bytes int64) *int64 {
 	if bytes < 1 {
-		bytes = 1
+		bytes = driver.CutOffBytes
 	}
 	return &bytes
 }
