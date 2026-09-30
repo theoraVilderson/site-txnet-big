@@ -147,6 +147,9 @@ model Tenant {
   /// before they are purged and the seats released. `0` = never. Read as it is
   /// now, so shortening it applies to the Grants already waiting.
   purgeAfterDays  Int                    @default(7)
+  /// F-118-x: days after the purge before a suspended Grant is closed (`expired`),
+  /// its remainder and wholesale given back. `0` = never. Read live, like the purge.
+  closeAfterDays  Int                    @default(30)
   /// F-116-a, ADR-0098 part 1. The currency this tenant keeps its books in;
   /// the `platform_owner` row's is the platform's. A CHECK holds the shape
   /// (`^[A-Z]{3}$`); tenant-service admits only a currency with a rate. Changed

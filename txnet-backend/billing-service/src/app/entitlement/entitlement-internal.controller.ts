@@ -1,6 +1,7 @@
 import { Body, Controller, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 
+import { GrantCloseStageService } from './close-stage';
 import { DeliverDueResult, DeliveryOutcome, GrantDeliveryService } from './delivery';
 import { EndNoticeResult, GrantEndNoticeService } from './end-notice';
 import { ForecastResult, GrantExhaustionForecastService } from './exhaustion-forecast';
@@ -46,6 +47,7 @@ export class EntitlementInternalController {
     private readonly forecast: GrantExhaustionForecastService,
     private readonly unfreeze: GrantUnfreezeService,
     private readonly grantNames: GrantNamesService,
+    private readonly closeStage: GrantCloseStageService,
   ) {}
 
   /**
@@ -54,7 +56,9 @@ export class EntitlementInternalController {
    * each suspended Grant whose purge is within a day (F-601-j, `told`). After,
    * not before: a Grant purged in this call is not told it will be. First of
    * all, every timed freeze whose `frozenUntil` has come is unfrozen
-   * (F-311-h, `unfrozen`); a frozen Grant is never purged either way.
+   * (F-311-h, `unfrozen`); a frozen Grant is never purged either way. Last,
+   * every suspended Grant past its purge and close windows is expired and its
+   * money settled (F-118-x, `closed`, `closeFailed`).
    *
    * Answers the raw counts rather than this service's usual envelope, for the
    * reason the deposit seam gives: the only caller is a job that records them
@@ -62,11 +66,12 @@ export class EntitlementInternalController {
    */
   @Post('purge-due')
   @HttpCode(200)
-  async purgeDue(): Promise<PurgeResult & { told: number; unfrozen: number }> {
+  async purgeDue(): Promise<PurgeResult & { told: number; unfrozen: number; closed: number; closeFailed: number }> {
     const { unfrozen } = await this.unfreeze.unfreezeDue();
     const purged = await this.purge.purgeDue();
     const { told } = await this.purgeNotice.noticeDue();
-    return { ...purged, told, unfrozen };
+    const { closed, failed: closeFailed } = await this.closeStage.closeDue();
+    return { ...purged, told, unfrozen, closed, closeFailed };
   }
 
   /**

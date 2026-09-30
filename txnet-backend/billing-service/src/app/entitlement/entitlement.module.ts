@@ -2,12 +2,14 @@ import { Module } from '@nestjs/common';
 import { KekService } from '@txnet-backend/shared-core';
 
 import { TrafficModule } from '../traffic/traffic.module';
+import { UsageModule } from '../usage/usage.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { GrantDeliveryService } from './delivery';
 import { EntitlementInternalController } from './entitlement-internal.controller';
 import { GrantNamesService } from './grant-names';
 import { GrantService } from './grant';
 import { GrantTokenSeal } from './grant-token-seal';
+import { GrantCloseStageService } from './close-stage';
 import { GrantPurgeService } from './purge';
 import { GrantPurgeNoticeService } from './purge-notice';
 import { GrantUnusedNoticeService } from './unused-notice';
@@ -23,18 +25,18 @@ import { GrantUnfreezeService } from './freeze';
  * Six sweeps, and none faces a user: purge (F-027-y), "not connected yet?"
  * (F-601-c), time thresholds (F-601-e), "trouble connecting?" (F-601-l) and
  * the exhaustion forecast (F-602), asked hourly — the purge tick also ends
- * timed freezes (F-311-h) — and delivery
+ * timed freezes (F-311-h) and closes Grants past it (F-118-x) — and delivery
  * (F-111-d), every minute, all by
  * `worker-service` over the internal seam. ADR-0027 is why the clocks are not
  * here — background work does not run inside a request-serving process.
  * Delivery hands a network Grant to group fulfilment and a refund to the
- * wallet, hence the two imports. `KekService` is for the sealed subscription
+ * wallet, hence those imports; the close settles every meter, hence usage. `KekService` is for the sealed subscription
  * token (ADR-0085): the same KEK file the gateway module reads.
  */
 @Module({
-  imports: [TrafficModule, WalletModule],
+  imports: [TrafficModule, WalletModule, UsageModule],
   controllers: [EntitlementInternalController],
-  providers: [KekService, GrantTokenSeal, GrantService, GrantPurgeService, GrantDeliveryService, GrantUnusedNoticeService, GrantEndNoticeService, GrantPurgeNoticeService, GrantIdleNoticeService, GrantExhaustionForecastService, GrantUnfreezeService, GrantNamesService],
+  providers: [KekService, GrantTokenSeal, GrantService, GrantPurgeService, GrantCloseStageService, GrantDeliveryService, GrantUnusedNoticeService, GrantEndNoticeService, GrantPurgeNoticeService, GrantIdleNoticeService, GrantExhaustionForecastService, GrantUnfreezeService, GrantNamesService],
   exports: [GrantService, GrantPurgeService],
 })
 export class EntitlementModule {}

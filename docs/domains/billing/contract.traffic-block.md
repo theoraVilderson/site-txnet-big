@@ -168,9 +168,9 @@ user reads without narrowing. It also comes off the reseller's sales figure —
 Refusals, each writing nothing: `grant_not_found`, `grant_not_closed`,
 `grant_not_metered`, `rate_not_priceable`, `nothing_to_credit`, `cursor_moved`.
 
-**One caller: an admin's delete** (entitlement F-311-m, `deleteGrant`), and only
-when the admin answers `refund` — its `cursor_moved` rolls the delete back. The
-expiry sweeper's close is not built; a Grant expired today keeps its remainder.
+**Two callers: an admin's delete** (entitlement F-311-m, `deleteGrant`), only when
+the admin answers `refund`, and the close stage after the purge, always (F-118-x,
+entitlement `contract.close.md`). `cursor_moved` rolls either one back.
 
 **A prepaid Grant's remainder (F-311-m, user 2026-09-28).** `settle(tx, {grantId,
 at, stoppedAt})` sends a prepaid Grant to `creditPrepaidRemainder`

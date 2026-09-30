@@ -83,10 +83,10 @@ writing nothing (`UsageSettlementRefused`).
 **Callers.** A non-VPN meter is sold only behind the per-use door (below;
 any other is entitlement `meter_not_served`), which shares this arithmetic and
 `PostpaidHolds` (`usage/postpaid-hold.ts`) with the hourly sweep and VPN
-postpaid's own paths. One Grant close calls `settleAtClose`: an admin's delete
+postpaid's own paths. Two Grant closes call `settleAtClose`: an admin's delete
 (F-118-u, [contract.reseller-grants.md](contract.reseller-grants.md)), `refund`
-the admin's answer. Held money was never paid, so it is released even on a
-no. The expiry sweeper's close is not built, as for the VPN remainder.
+the admin's answer — held money was never paid, so it is released even on a
+no — and the close stage after the purge, `refund` always (F-118-x, entitlement `contract.close.md`).
 
 ## The hourly capture
 

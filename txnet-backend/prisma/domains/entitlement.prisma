@@ -114,6 +114,9 @@ model Grant {
   /// Per-Grant override of the tenant's purge window. Null = use
   /// `tenant.purgeAfterDays`; `0` = never purge.
   purgeAfterDays        Int?
+  /// F-118-x: per-Grant override of the tenant's close window, counted from the
+  /// purge. Null = use `tenant.closeAfterDays`; `0` = never close.
+  closeAfterDays        Int?
   /// The owning reseller node (C-15). Always null until reseller nodes exist (F-901).
   resellerPath          String?
   issuedByAdminId       String?            @db.Uuid

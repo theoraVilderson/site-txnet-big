@@ -95,7 +95,8 @@ The clock is not here. `worker-service` holds it and asks hourly over `POST
 /api/internal/billing/entitlement/purge-due` (`ServiceOnlyGuard`, key
 `grant_config_purge`), because background work does not run in a
 request-serving process (ADR-0027, `automation/contract.worker.md`). The same
-call tells the Grants a day from their purge (F-601-j, `contract.retention.md`).
+call tells the Grants a day from their purge (F-601-j, `contract.retention.md`),
+then closes those past their close window (F-118-x, [contract.close.md](contract.close.md)).
 
 **Renewal is `Quota += X` on the same Grant (F-027-dg, SPEC weakness #30)** —
 `renewGrant(tx, {grantId, bytes, days, source, …})` in

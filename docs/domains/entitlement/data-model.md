@@ -38,6 +38,7 @@ schema `entitlement`), migrations `20260914001600_entitlement_grant` and
 | grant.userId | -> | identity."user".id | whose |
 | grant.variantId | -> | catalog.product_variant.id | what was issued (null for a `migration` Grant) |
 | grant.tenantId | -> | tenant.tenant.purgeAfterDays | the purge window, read live (F-027-f) |
+| grant.tenantId | -> | tenant.tenant.closeAfterDays | the close window after the purge, read live (F-118-x) |
 | grant_meter.meterKey | -> | catalog.meter.key | what is counted (RESTRICT; a meter is immutable) |
 | grant (referenced) | <- | network.config.grantId | a config draws on its Grant's quota (§4.6) |
 
@@ -85,6 +86,12 @@ takes a bounded batch, so a `0` filtered out afterwards would occupy the batch
 for ever and starve the rows behind it. A frozen Grant (`statusReason =
 admin_frozen`, F-311-h) carries the clock the CHECK asks for but is never
 purged: the scan excludes the reason.
+
+**The close window (F-118-x)** runs on after it: `tenant.closeAfterDays`
+(default 30, CHECK `tenant_close_days_not_negative`) and the nullable override
+`grant.closeAfterDays` (`grant_close_days_not_negative`), resolved the same way
+and in the same kind of scan; either window at `0` = never. Past both, the Grant
+is `expired` with `statusReason = closed_after_purge` ([contract.close.md](contract.close.md)).
 
 ## Migration notes
 
