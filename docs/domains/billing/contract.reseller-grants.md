@@ -152,7 +152,7 @@ GiB given (> 0, fractions allowed, ≤ 100 000); `reason` 1..500 chars ->
 revived}` (bytes as strings). Same controller, over `giftGrantBytes`
 ([contract.traffic-block.md](contract.traffic-block.md) "An admin's gift"):
 the bag rises, no wallet debit, and the remainder credit at close never pays a
-gifted byte back as money.
+gifted byte back as money. On a reseller's wholesale leg platform staff's gift is the platform's and its own staff's is bought wholesale, refused `wholesale_unfunded` 409 (F-118-ac).
 
 | Rule | Why |
 |---|---|

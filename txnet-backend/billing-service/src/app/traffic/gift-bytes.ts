@@ -1,11 +1,23 @@
-import { GrantSource, GrantStatus, Prisma, QuotaMetric, VariantBillingMode } from '@prisma/client';
+import { GrantMeter, GrantSource, GrantStatus, Prisma, QuotaMetric, VariantBillingMode } from '@prisma/client';
+import { AdmittedReseller, TenantBillingLedger } from '@txnet-backend/shared-core';
 
 import { EntitlementRefused } from '../entitlement/grant';
 import { usedBytesOf } from '../entitlement/renewal';
 import { settle, TrafficChange } from '../entitlement/traffic';
+import { WholesaleCursorMoved, WholesaleUnfunded } from '../usage/usage-wholesale';
+import { vpnMeterOf } from './vpn-meter';
+import { VpnWholesale, type WholesaleRoom } from './vpn-wholesale';
 
 /** A Grant whose bytes only a renewal brings back (§4.4 one way, F-311-d). */
 const CLOSED: readonly GrantStatus[] = [GrantStatus.expired, GrantStatus.exhausted, GrantStatus.cancelled];
+
+/** Whose gift it is on a reseller's Grant (F-118-ac): the platform's staff's, or the reseller's own. */
+export type GiftGiver = 'platform' | 'reseller';
+
+/** The door's answer says it: platform staff are admitted `as: 'staff'`. */
+export const giverOf = (admitted: Pick<AdmittedReseller, 'as'>): GiftGiver => (admitted.as === 'staff' ? 'platform' : 'reseller');
+
+const WHOLESALE = new VpnWholesale(new TenantBillingLedger());
 
 /**
  * An admin gifts bytes to a metered Grant (F-311-l), in the caller's
@@ -21,6 +33,12 @@ const CLOSED: readonly GrantStatus[] = [GrantStatus.expired, GrantStatus.exhaust
  * wallet's. One `quota_adjustment` row, source
  * `admin_gift`, says whose bytes they were (invariant 3).
  *
+ * On a reseller's Grant with a wholesale leg (F-118-ac, D-59 (f)) the
+ * `giver` decides the reseller's side: a platform gift raises its cursor at no
+ * charge (`VpnWholesale.gift`); its own staff's gift is bought as a block's
+ * headroom is, the charge naming the adjustment row, and refused
+ * `wholesale_unfunded` before anything moves when its wallet cannot fund it.
+ *
  * A gift that leaves room revives a Grant suspended because its bag was spent
  * and is told (`settle`, as a prepaid raise). The write is conditional on the
  * status and bag read, so a block bought in between is `grant_moved` — retry.
@@ -28,7 +46,7 @@ const CLOSED: readonly GrantStatus[] = [GrantStatus.expired, GrantStatus.exhaust
 export async function giftGrantBytes(
   tx: Prisma.TransactionClient,
   grantId: string,
-  input: { at: Date; actorUserId: string; bytes: bigint; reason: string },
+  input: { at: Date; actorUserId: string; bytes: bigint; reason: string; giver: GiftGiver },
 ): Promise<TrafficChange> {
   if (input.bytes <= BigInt(0)) throw new RangeError(`a gift adds bytes: ${input.bytes}`);
 
@@ -43,7 +61,9 @@ export async function giftGrantBytes(
       suspendedAt: true,
       billingMode: true,
       trafficUnlimited: true,
+      variantId: true,
       purchasedBytes: true,
+      consumedBytes: true,
       endsAt: true,
     },
   });
@@ -51,6 +71,11 @@ export async function giftGrantBytes(
   if (CLOSED.includes(grant.status)) throw new EntitlementRefused('grant_closed', grant.status);
   if (grant.status !== GrantStatus.active && grant.status !== GrantStatus.suspended) throw new EntitlementRefused('grant_not_active', grant.status);
   if (grant.billingMode !== VariantBillingMode.metered || grant.trafficUnlimited) throw new EntitlementRefused('grant_not_metered', grantId);
+
+  const meter = await vpnMeterOf(tx, grantId);
+  const leg = meter?.wholesalePayerTenantId ? meter : null;
+  const room = leg && input.giver === 'reseller' ? await WHOLESALE.room(tx, grant, leg) : null;
+  if (room?.room != null && room.room < input.bytes) throw new EntitlementRefused('wholesale_unfunded', grantId);
 
   const before = grant.purchasedBytes;
   const after = before + input.bytes;
@@ -72,7 +97,27 @@ export async function giftGrantBytes(
     },
     select: { id: true },
   });
+  if (leg) await wholesaleOf(tx, grant, leg, room, input, row.id);
   const usedBytes = await usedBytesOf(tx, grantId);
   const settled = await settle(tx, grant, input.at, before, after, usedBytes);
   return { adjustmentId: row.id, purchasedBytesBefore: before, purchasedBytesAfter: after, usedBytes, ...settled };
+}
+
+/** The reseller's side of the gift, after the bag moved; the leg's errors as this route's refusals. */
+async function wholesaleOf(
+  tx: Prisma.TransactionClient,
+  grant: { variantId: string; purchasedBytes: bigint; consumedBytes: bigint },
+  meter: GrantMeter,
+  room: WholesaleRoom | null,
+  input: { bytes: bigint; giver: GiftGiver },
+  adjustmentId: string,
+): Promise<void> {
+  try {
+    if (input.giver === 'platform') await WHOLESALE.gift(tx, meter, input.bytes);
+    else await WHOLESALE.buy(tx, grant, meter, room as WholesaleRoom, input.bytes, adjustmentId);
+  } catch (e) {
+    if (e instanceof WholesaleUnfunded) throw new EntitlementRefused('wholesale_unfunded', meter.grantId);
+    if (e instanceof WholesaleCursorMoved) throw new EntitlementRefused('grant_moved', meter.grantId);
+    throw e;
+  }
 }

@@ -92,7 +92,7 @@ platform panel (user, 2026-09-29); never down — a byte an own panel served fun
    `wholesale_unfunded`, short of funds (block request rule 3). The planner's reserve, and so the shutdown ceiling, holds the same `room` (`leaseplan.WholesaleRoom`, F-118-v).
 2. **In the block's transaction**: one `metered_usage_charge`, `referenceId` the
    block's wallet row, the cursor guarded (`WholesaleCursorMoved` is `raced`).
-3. **Settled at close, both ways** (F-118-y): `wholesaleBilled − wholesaleConsumed` priced down as `metered_usage_refund` against the Grant, on an admin's delete whatever it answered about the user's remainder;
+3. **Settled at close, both ways** (F-118-y): `wholesaleBilled − wholesaleConsumed − wholesaleGifted` (a platform gift is unused first, F-118-ac) priced down as `metered_usage_refund` against the Grant, on an admin's delete whatever it answered about the user's remainder;
    bytes served past the cursor (a platform panel added after the last block) charged as `metered_usage_charge` up to the reseller's balance,
    the rest logged and left below the cursor, never a negative wallet. `vpn-wholesale.spec.ts`.
 4. **A reseller at zero is told once per spell** (F-118-w, `traffic/wholesale-unfunded.ts`): a `wholesale_unfunded` refusal, prepaid or postpaid, sets `tenant_billing_wallet.unfundedNoticeAt` only while null and emits `tenant.billing.wholesale_unfunded` `{tenantId, ownerUserId, period}` to the owner (`resellerWholesaleUnfunded`); a block the wallet funds on a platform panel clears it. The Grant is never suspended for it (exhaustion reads the user's wallet alone), so its own panels keep serving; the planner re-asks every `WholesaleRetry` (network `contract.lease.md` rule 22).
@@ -187,7 +187,7 @@ the one that does adds what it paid to this sum.
 
 ## An admin's gift — bytes nobody bought (F-311-l)
 
-`giftGrantBytes(tx, grantId, {at, actorUserId, bytes, reason})`
+`giftGrantBytes(tx, grantId, {at, actorUserId, bytes, reason, giver})`
 (`traffic/gift-bytes.ts`) raises `purchasedBytes` by `bytes` and **leaves
 the meter's `billed` where it is**; no wallet row is written. One `quota_adjustment`
 row, source `admin_gift`, the admin and the reason. The planner sees a bigger
@@ -197,7 +197,7 @@ counts against what was paid for first, and bytes unused at close are the
 gift's before they are the wallet's. A Grant served past `billed` on a gift
 is therefore normal, and its close refuses `nothing_to_credit` as the overrun
 case does. A gift that leaves room revives a Grant suspended because its bag was
-spent. Only an `active` or `suspended`, metered Grant: `grant_not_metered`,
+spent. **On a reseller's wholesale leg the giver decides** (F-118-ac, D-59 (f), `giverOf`: admitted `as: 'staff'` is the platform): a platform gift raises `wholesaleBilled` and `wholesaleGifted` by the bytes at no charge (`VpnWholesale.gift`), so no block buys them and close never pays them back; the reseller's own staff's is bought as a block's headroom (`room` then `buy`, the charge naming the `quota_adjustment`), refused `wholesale_unfunded` before the bag moves. `gift-wholesale.spec.ts`. Only an `active` or `suspended`, metered Grant: `grant_not_metered`,
 `grant_closed`, `grant_not_active`; a block bought between the read and the
 write is `grant_moved`. Route: [contract.reseller-grants.md](contract.reseller-grants.md).
 

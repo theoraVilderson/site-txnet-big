@@ -17,7 +17,7 @@ import { changeGrantDuration, DurationChange, DurationMove } from '../../entitle
 import { Freeze, freezeGrant, Unfreeze, unfreezeGrant } from '../../entitlement/freeze';
 import { EntitlementRefused, GrantPage, GrantService, TenantGrantView } from '../../entitlement/grant';
 import { adjustGrantTraffic, resetGrantTraffic, TrafficChange, TrafficReset } from '../../entitlement/traffic';
-import { giftGrantBytes } from '../../traffic/gift-bytes';
+import { giftGrantBytes, giverOf } from '../../traffic/gift-bytes';
 import { setGrantSpeed, SpeedChange } from '../../traffic/grant-speed';
 import { AuditSpec, auditedConfigAct, auditedGrantAct, grantHistory } from '../../grant-audit/grant-audit';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -221,10 +221,11 @@ export class ResellerUserGrantsService {
   /**
    * An admin gifts bytes to this user's metered Grant (F-311-l): the bag rises,
    * nothing is debited, and the remainder credit never pays them out. `staffWrite`.
+   * Platform staff's gift is the platform's; the reseller's own staff's is bought wholesale (F-118-ac).
    */
   giftTraffic(actor: AdminActor, tenantId: string, userId: string, grantId: string, bytes: bigint, reason: string): Promise<TrafficChange> {
-    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_traffic_gift', reason, outcome: (r) => r }, (tx) =>
-      giftGrantBytes(tx, grantId, { at: new Date(), actorUserId: actor.userId, bytes, reason }),
+    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_traffic_gift', reason, outcome: (r) => r }, (tx, admitted) =>
+      giftGrantBytes(tx, grantId, { at: new Date(), actorUserId: actor.userId, bytes, reason, giver: giverOf(admitted) }),
     );
   }
 
@@ -317,7 +318,7 @@ export class ResellerUserGrantsService {
    * its own transaction, one outcome each (`reseller-grants-bulk.ts`).
    */
   bulk(actor: AdminActor, tenantId: string, command: GrantBulkBody): Promise<GrantBulkOutcome[]> {
-    return this.admitted(actor, tenantId, 'staffWrite', () => actOnEach(this.prisma, actor, tenantId, command));
+    return this.admitted(actor, tenantId, 'staffWrite', (admitted) => actOnEach(this.prisma, { ...actor, giver: giverOf(admitted) }, tenantId, command));
   }
 
   /**
@@ -336,9 +337,9 @@ export class ResellerUserGrantsService {
     userId: string,
     grantId: string,
     spec: AuditSpec<T>,
-    work: (tx: Prisma.TransactionClient) => Promise<T>,
+    work: (tx: Prisma.TransactionClient, admitted: AdmittedReseller) => Promise<T>,
   ): Promise<T> {
-    return this.run(actor, tenantId, userId, () => this.onGrant(userId, grantId, (tx) => auditedGrantAct(tx, actor, tenantId, grantId, spec, () => work(tx))), 'staffWrite');
+    return this.run(actor, tenantId, userId, (admitted) => this.onGrant(userId, grantId, (tx) => auditedGrantAct(tx, actor, tenantId, grantId, spec, () => work(tx, admitted))), 'staffWrite');
   }
 
   /** `work` on the Grant, in one transaction, only if it is the path's user's. */
@@ -355,13 +356,13 @@ export class ResellerUserGrantsService {
     actor: ResellerActor,
     tenantId: string,
     userId: string,
-    work: () => Promise<T>,
+    work: (admitted: AdmittedReseller) => Promise<T>,
     capability: 'read' | 'staffWrite' = 'read',
   ): Promise<T> {
-    return this.admitted(actor, tenantId, capability, async () => {
+    return this.admitted(actor, tenantId, capability, async (admitted) => {
       const user = await tenantTransaction(this.prisma, (tx) => tx.user.findFirst({ where: { id: userId }, select: { id: true } }));
       if (!user) throw new ResellerUserGrantsRefused('user_not_found', userId);
-      return await work();
+      return await work(admitted);
     });
   }
 

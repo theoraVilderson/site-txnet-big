@@ -1,16 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GrantBulkJob, GrantBulkJobStatus, Prisma } from '@prisma/client';
-import { ResellerAccess, ResellerAccessRefused, ResellerActor, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { AdmittedReseller, ResellerAccess, ResellerAccessRefused, ResellerActor, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../../config/env.validation';
 import { auditBulkJob } from '../../grant-audit/grant-audit';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { giverOf } from '../../traffic/gift-bytes';
 import { GrantBulkCommand } from './grant-bulk.schema';
 import { GrantBulkFilter, GrantBulkJobBody, GrantBulkPage } from './grant-bulk-job.schema';
 import { countSelection, GrantBulkPanel, insertSelection, panelsOfSelection } from './grant-bulk-selection';
-import { actOnce, bulkFingerprint, GRANT_BULK_FAILED, GrantBulkOutcome } from './reseller-grants-bulk';
+import { actOnce, BulkActor, bulkFingerprint, GRANT_BULK_FAILED, GrantBulkOutcome } from './reseller-grants-bulk';
 import { AdminActor, ResellerUserGrantsRefused } from './reseller-user-grants.service';
 
 /** The most Grants one job may hold. A reseller past it splits by panel or product; one job must not hold a tick for hours. */
@@ -104,7 +105,7 @@ export class ResellerGrantBulkJobService {
   }
 
   start(actor: AdminActor, tenantId: string, body: GrantBulkJobBody): Promise<GrantBulkJobView> {
-    return this.admitted(actor, tenantId, 'staffWrite', () => this.startAdmitted(actor, tenantId, body));
+    return this.admitted(actor, tenantId, 'staffWrite', (admitted) => this.startAdmitted(actor, tenantId, body, giverOf(admitted) === 'platform'));
   }
 
   job(actor: ResellerActor, tenantId: string, jobId: string): Promise<GrantBulkJobView> {
@@ -168,7 +169,7 @@ export class ResellerGrantBulkJobService {
     );
   }
 
-  private async startAdmitted(actor: AdminActor, tenantId: string, body: GrantBulkJobBody): Promise<GrantBulkJobView> {
+  private async startAdmitted(actor: AdminActor, tenantId: string, body: GrantBulkJobBody, byPlatform: boolean): Promise<GrantBulkJobView> {
     const { requestId, filter, ...command } = body;
     const fingerprint = bulkFingerprint({ ...command, filter });
     const key = { tenantId_requestId: { tenantId, requestId } };
@@ -180,7 +181,7 @@ export class ResellerGrantBulkJobService {
         if (byIds) throw new GrantBulkJobRefused('request_reused', requestId);
 
         const job = await tx.grantBulkJob.create({
-          data: { tenantId, requestId, fingerprint, actorUserId: actor.userId, actorIp: actor.ip, action: command.action, command: command as Prisma.InputJsonValue, filter, total: 0 },
+          data: { tenantId, requestId, fingerprint, actorUserId: actor.userId, actorIp: actor.ip, byPlatform, action: command.action, command: command as Prisma.InputJsonValue, filter, total: 0 },
         });
         const total = await insertSelection(tx, job.id, tenantId, filter, GRANT_BULK_JOB_MAX_GRANTS + 1);
         if (total === 0) throw new GrantBulkJobRefused('selection_empty');
@@ -206,7 +207,7 @@ export class ResellerGrantBulkJobService {
     return job;
   }
 
-  private async admitted<T>(actor: ResellerActor, tenantId: string, capability: 'read' | 'staffWrite', work: () => Promise<T>): Promise<T> {
+  private async admitted<T>(actor: ResellerActor, tenantId: string, capability: 'read' | 'staffWrite', work: (admitted: AdmittedReseller) => Promise<T>): Promise<T> {
     try {
       return await this.access.runIncludingPlatform(actor, tenantId, capability, work);
     } catch (e) {
@@ -330,7 +331,7 @@ export class GrantBulkJobDrainService {
     const still = await tenantTransaction(this.prisma, (tx) => tx.grantBulkJob.findFirst({ where: { id: job.id, status: GrantBulkJobStatus.running }, select: { id: true } }));
     if (!still) return { acted: 0, finished: false };
 
-    const actor = { userId: job.actorUserId, ip: job.actorIp };
+    const actor: BulkActor = { userId: job.actorUserId, ip: job.actorIp, giver: job.byPlatform ? 'platform' : 'reseller' };
     const command = job.command as GrantBulkCommand;
     const counts = { okCount: 0, refusedCount: 0, failedCount: 0 };
     let acted = 0;

@@ -10,7 +10,7 @@ import { EntitlementRefused } from '../../entitlement/grant';
 import { adjustGrantTraffic, resetGrantTraffic, TrafficChange } from '../../entitlement/traffic';
 import { AuditActor, auditedGrantAct, GrantAuditAction } from '../../grant-audit/grant-audit';
 import { PrismaService } from '../../prisma/prisma.service';
-import { giftGrantBytes } from '../../traffic/gift-bytes';
+import { GiftGiver, giftGrantBytes } from '../../traffic/gift-bytes';
 import { setGrantSpeed, SpeedCapRefused } from '../../traffic/grant-speed';
 import { GrantBulkAction, GrantBulkBody, GrantBulkCommand } from './grant-bulk.schema';
 import { bytesOfGb } from './grant-traffic.schema';
@@ -57,9 +57,12 @@ const logger = new Logger('ResellerGrantsBulk');
  * acting — a double click on +3 days never gives 6. The same id with another
  * body is `request_reused`, before any Grant is read.
  */
+/** The admin behind a bulk act, and whose gift a `traffic_gift` is (F-118-ac) — the door's answer, kept by a filter job. */
+export type BulkActor = AuditActor & { giver: GiftGiver };
+
 export async function actOnEach(
   prisma: PrismaService,
-  actor: AuditActor,
+  actor: BulkActor,
   tenantId: string,
   command: GrantBulkBody,
 ): Promise<GrantBulkOutcome[]> {
@@ -87,7 +90,7 @@ export type OutcomeRow = { tenantId: string; requestId: string; grantId: string;
  * rolls back, and the outcome the other call committed is the answer. Also
  * a filter job's act on one of its frozen Grants (F-311-u2).
  */
-export async function actOnce(prisma: PrismaService, actor: AuditActor, command: GrantBulkCommand, row: OutcomeRow): Promise<GrantBulkOutcome> {
+export async function actOnce(prisma: PrismaService, actor: BulkActor, command: GrantBulkCommand, row: OutcomeRow): Promise<GrantBulkOutcome> {
   const { tenantId, requestId, grantId } = row;
   const key = { tenantId_requestId_grantId: { tenantId, requestId, grantId } };
   try {
@@ -97,7 +100,7 @@ export async function actOnce(prisma: PrismaService, actor: AuditActor, command:
       const grant = await tx.grant.findFirst({ where: { id: grantId, tenantId }, select: { id: true, userId: true } });
       if (!grant) throw new EntitlementRefused('grant_not_found');
       const audited: Audited = (step) => auditedGrantAct(tx, actor, tenantId, grantId, { action: AUDIT[command.action], reason: command.reason, outcome: (r) => r }, step);
-      const outcome: GrantBulkOutcome = { grantId, userId: grant.userId, ok: true, result: await act(tx, audited, actor.userId, grantId, command) };
+      const outcome: GrantBulkOutcome = { grantId, userId: grant.userId, ok: true, result: await act(tx, audited, actor, grantId, command) };
       await tx.grantBulkOutcome.create({ data: { ...row, ok: true, outcome: outcome as Prisma.InputJsonValue } });
       return outcome;
     });
@@ -142,8 +145,9 @@ export function bulkFingerprint(body: Record<string, unknown>): string {
 type Audited = <T>(step: () => Promise<T>) => Promise<T>;
 
 /** The single-Grant act, audited, and its result as the single route answers it (dates ISO, bytes as strings). */
-async function act(tx: Prisma.TransactionClient, audited: Audited, actorUserId: string, grantId: string, command: GrantBulkCommand): Promise<Record<string, unknown>> {
+async function act(tx: Prisma.TransactionClient, audited: Audited, actor: BulkActor, grantId: string, command: GrantBulkCommand): Promise<Record<string, unknown>> {
   const at = new Date();
+  const actorUserId = actor.userId;
   const { reason } = command;
   switch (command.action) {
     case 'freeze': {
@@ -165,7 +169,7 @@ async function act(tx: Prisma.TransactionClient, audited: Audited, actorUserId: 
       return { ...bytes(r), resetBytes: r.resetBytes.toString() };
     }
     case 'traffic_gift': {
-      const { spent: _spent, ...r } = bytes(await audited(() => giftGrantBytes(tx, grantId, { at, actorUserId, bytes: bytesOfGb(command.gb), reason })));
+      const { spent: _spent, ...r } = bytes(await audited(() => giftGrantBytes(tx, grantId, { at, actorUserId, bytes: bytesOfGb(command.gb), reason, giver: actor.giver })));
       return r;
     }
     case 'speed': {

@@ -1016,6 +1016,8 @@ model GrantBulkJob {
   fingerprint  String
   actorUserId  String             @db.Uuid
   actorIp      String
+  /// The actor was admitted as platform staff (F-118-ac): its gift is the platform's, never the reseller's to buy.
+  byPlatform   Boolean            @default(false)
   action       String
   /// The bulk body without `requestId` and `filter`: `{action, reason, …the action's input}`.
   command      Json

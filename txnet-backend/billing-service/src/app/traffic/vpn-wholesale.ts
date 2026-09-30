@@ -2,7 +2,7 @@ import { Grant, GrantMeter, GrantStatus, PanelOwnershipType, Prisma } from '@pri
 import type { TenantBillingLedger } from '@txnet-backend/shared-core';
 
 import { toCents, unitsCovered, ZERO } from '../usage/usage-price';
-import { WholesaleLeg } from '../usage/usage-wholesale';
+import { WholesaleCursorMoved, WholesaleLeg } from '../usage/usage-wholesale';
 import { vpnMeterOf } from './vpn-meter';
 
 /**
@@ -82,9 +82,23 @@ export class VpnWholesale {
   }
 
   /**
+   * Platform staff gift `bytes` (F-118-ac, D-59 (f)): the cursor up by them at
+   * no charge, so no block buys them, and `wholesaleGifted` up by as many, so
+   * the close never gives them back. Guarded on the cursor read.
+   */
+  async gift(tx: Prisma.TransactionClient, meter: GrantMeter, bytes: bigint): Promise<void> {
+    const { count } = await tx.grantMeter.updateMany({
+      where: { id: meter.id, wholesaleBilled: meter.wholesaleBilled },
+      data: { wholesaleBilled: meter.wholesaleBilled + bytes, wholesaleGifted: meter.wholesaleGifted + bytes },
+    });
+    if (count !== 1) throw new WholesaleCursorMoved(meter.id);
+  }
+
+  /**
    * At close, both ways (F-118-y): what the reseller bought and no platform
    * panel served back as `metered_usage_refund` priced down, the cursor to
-   * `wholesaleConsumed`; or, when a platform panel served past the cursor (one
+   * `wholesaleConsumed` + `wholesaleGifted` — a platform gift is unused before
+   * the reseller's bytes are (F-118-ac); or, when a platform panel served past the cursor (one
    * added after the last block), those bytes charged up to the reseller's
    * balance. Answers the bytes it could not charge. The cursor is the guard,
    * so a second close moves nothing; an open Grant, or one with no leg, neither.
@@ -95,7 +109,7 @@ export class VpnWholesale {
     const meter = await vpnMeterOf(tx, grantId);
     if (!meter?.wholesalePayerTenantId) return ZERO;
     if (meter.wholesaleConsumed > meter.wholesaleBilled) return this.leg.chargeTo(tx, meter, meter.wholesaleConsumed, grantId);
-    await this.leg.giveBack(tx, meter, meter.wholesaleConsumed, grantId);
+    await this.leg.giveBack(tx, meter, meter.wholesaleConsumed + meter.wholesaleGifted, grantId);
     return ZERO;
   }
 }

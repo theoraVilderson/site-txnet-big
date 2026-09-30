@@ -29,7 +29,8 @@ vi.mock('../entitlement/traffic', () => ({
   adjustGrantTraffic: vi.fn(async () => (log.push('act'), { adjustmentId: 'a1', purchasedBytesBefore: BigInt(10), purchasedBytesAfter: BigInt(20), usedBytes: BigInt(5), spent: false, revived: false })),
   resetGrantTraffic: vi.fn(async () => (log.push('act'), { adjustmentId: 'a2', purchasedBytesBefore: BigInt(10), purchasedBytesAfter: BigInt(15), usedBytes: BigInt(5), resetBytes: BigInt(5), spent: false, revived: false })),
 }));
-vi.mock('../traffic/gift-bytes', () => ({
+vi.mock('../traffic/gift-bytes', async (real) => ({
+  ...(await real<typeof import('../traffic/gift-bytes')>()),
   giftGrantBytes: vi.fn(async () => (log.push('act'), { adjustmentId: 'a3', purchasedBytesBefore: BigInt(10), purchasedBytesAfter: BigInt(30), usedBytes: BigInt(5), spent: false, revived: false })),
 }));
 vi.mock('../traffic/grant-speed', () => ({

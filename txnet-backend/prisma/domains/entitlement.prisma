@@ -379,6 +379,11 @@ model GrantMeter {
   /// for. Bytes on its own panels are in `grant.consumedBytes` and not here.
   /// Advanced by `metering-service` beside that cursor; zero with no wholesale leg.
   wholesaleConsumed      BigInt          @default(0)
+  /// `vpn.traffic` only (F-118-ac, D-59 (f)): the bytes platform staff gifted
+  /// this Grant. They are in `wholesaleBilled` at no charge — the reseller
+  /// never owes them — and at close they are unused before its own, so never
+  /// given back as money. A reseller staff's gift is bought and not here.
+  wholesaleGifted        BigInt          @default(0)
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @default(now()) @updatedAt
 

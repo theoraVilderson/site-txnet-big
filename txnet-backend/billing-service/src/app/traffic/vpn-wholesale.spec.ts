@@ -66,6 +66,7 @@ function world(w: World = {}) {
     wholesaleCurrencyCode: payer ? 'USD' : null,
     wholesaleBilled: w.wholesaleBilled ?? n(0),
     wholesaleConsumed: w.wholesaleConsumed ?? n(0),
+    wholesaleGifted: n(0),
   };
   const wallet = { id: 'wallet-1', ownerUserId: USER, currencyCode: 'USD', cachedBalance: D(w.userBalance ?? '10.00'), heldAmount: D(0), version: 0 };
   const resellerWallet = { id: 'twallet-1', tenantId: RESELLER, currencyCode: 'USD', cachedBalance: D(w.resellerBalance ?? '10.00'), version: 0 };

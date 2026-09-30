@@ -56,7 +56,8 @@ vi.mock('../../entitlement/traffic', () => ({
   adjustGrantTraffic: (_tx: unknown, id: string, input: unknown) => step('traffic', id, input, trafficResult),
   resetGrantTraffic: (_tx: unknown, id: string, input: unknown) => step('reset', id, input, { ...trafficResult, resetBytes: BigInt(5) }),
 }));
-vi.mock('../../traffic/gift-bytes', () => ({
+vi.mock('../../traffic/gift-bytes', async (real) => ({
+  ...(await real<typeof import('../../traffic/gift-bytes')>()),
   giftGrantBytes: (_tx: unknown, id: string, input: unknown) => step('gift', id, input, trafficResult),
 }));
 vi.mock('../../traffic/grant-speed', async (orig) => ({

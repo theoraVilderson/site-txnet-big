@@ -135,7 +135,7 @@ function build(row: Partial<Row>, balance = D('1.00')) {
   return { tx: tx as unknown as Prisma.TransactionClient, grant, wallet, ledger, adjustments, writes };
 }
 
-const gift = (bytes: bigint, reason = 'outage 2026-09-27') => ({ at: AT, actorUserId: ADMIN, bytes, reason });
+const gift = (bytes: bigint, reason = 'outage 2026-09-27') => ({ at: AT, actorUserId: ADMIN, bytes, reason, giver: 'reseller' as const });
 const credit = (tx: Prisma.TransactionClient) =>
   new RemainderCreditService({} as never, new WalletCreditService(new WalletLedgerService())).credit(tx, { grantId: GRANT });
 
