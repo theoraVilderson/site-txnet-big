@@ -9,6 +9,7 @@ import (
 
 	"network-service/internal/db"
 	"network-service/internal/driver"
+	"network-service/internal/lease/quota"
 )
 
 // DB is what the store needs of the pool: db.Pool satisfies it.
@@ -58,7 +59,7 @@ WITH touched AS (
    WHERE c.id = ANY($2::uuid[])
       OR (c."panelId" = $1::uuid AND c."allocatedCeilingBytes" IS NULL AND NOT c."trafficUnlimited"
           AND c.status = 'active' AND c."desiredEnabled" AND c."desiredRemote" = 'present'))
-SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresAt", lc."grantId" IS NOT NULL,
+SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresAt", lc."grantId" IS NOT NULL, coalesce(lc.reason::text, ''),
        g."billingMode" = 'metered' AND m."unitPrice" IS NOT NULL,
        coalesce(m."unitPrice"::text, ''), coalesce(h.amount::text, ''),
        m."wholesalePayerTenantId" IS NOT NULL, coalesce(m."wholesaleUnitSize", 0), coalesce(m."wholesaleUnitPrice"::text, ''),
@@ -118,12 +119,13 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 			leg, platform       bool
 			ws                  Wholesale
 			consumed            int64
-			quota, lifetime     int64
+			purchased, lifetime int64
 			applied             int64
 			endsAt              *time.Time
 			closedQuota         *int64
 			closedEnd           *time.Time
 			closed              bool
+			closedWhy           string
 			live                bool
 			c                   Config
 			pn                  Panel
@@ -131,7 +133,7 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 			tickMask            *int64
 			outageAt            *time.Time
 		)
-		if err := rows.Scan(&grantID, &quota, &endsAt, &closedQuota, &closedEnd, &closed, &metered, &rate, &reserve,
+		if err := rows.Scan(&grantID, &purchased, &endsAt, &closedQuota, &closedEnd, &closed, &closedWhy, &metered, &rate, &reserve,
 			&leg, &ws.UnitSize, &ws.UnitPrice, &ws.Billed, &ws.Consumed, &ws.Balance, &consumed, &platform, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
 			&applied, &c.Enabled, &c.Allocated, &c.Peak, &c.Pending, &driverType, &pn.CanSetLimit, &pn.Healthy,
 			&tickMs, &tickMask, &pn.Learned.LagMeanSec, &pn.Learned.LagVarianceSec2, &pn.Learned.LagSamples,
@@ -139,12 +141,12 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 			return Snapshot{}, fmt.Errorf("reading a Grant's config: %w", err)
 		}
 		if n := len(snap.Grants); n == 0 || snap.Grants[n-1].ID != grantID {
-			g := Grant{ID: grantID, Quota: quota, Purchased: quota, Metered: metered}
+			g := Grant{ID: grantID, Quota: purchased, Purchased: purchased, Metered: metered}
 			r := owed{leg: leg}
 			if metered {
 				r.user = BytesAffordable(rate, reserve)
 				if leg {
-					r.room = WholesaleRoom(ws, quota, consumed)
+					r.room = WholesaleRoom(ws, purchased, consumed)
 				}
 			}
 			reserves = append(reserves, r)
@@ -152,7 +154,7 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 				g.ExpiresAt = *endsAt
 			}
 			if closed {
-				g.Closure = &Closure{Quota: *closedQuota}
+				g.Closure = &Closure{Quota: *closedQuota, Reason: quota.CloseReason(closedWhy)}
 				if closedEnd != nil {
 					g.Closure.ExpiresAt = *closedEnd
 				}
@@ -232,6 +234,7 @@ const ClosedEvent = "network.grant.closed"
 // same statement ($4, ADR-0021), so the event and the row commit or fail
 // together. The owner is read from `entitlement.grant."userId"`, a column
 // ADR-0094 already lists; the tenant is not (billing finds it from the Grant).
+// The row says why it closed (F-027-dz), and billing reads that from the row.
 // deleteClosureSQL reopens it, silently — a renewal revived the Grant
 // itself, and a close with bytes left that settled (F-027-dx) left billing
 // nothing to undo on a metered one. The planner is the only writer of
@@ -239,10 +242,11 @@ const ClosedEvent = "network.grant.closed"
 const (
 	saveClosureSQL = `
 WITH saved AS (
-INSERT INTO network.lease_close ("grantId", "quotaBytes", "expiresAt", "closedAt")
-VALUES ($1::uuid, $2, $3, now())
+INSERT INTO network.lease_close ("grantId", "quotaBytes", "expiresAt", reason, "closedAt")
+VALUES ($1::uuid, $2, $3, $5::network."LeaseCloseReason", now())
 ON CONFLICT ("grantId") DO UPDATE
-   SET "quotaBytes" = excluded."quotaBytes", "expiresAt" = excluded."expiresAt", "closedAt" = excluded."closedAt"
+   SET "quotaBytes" = excluded."quotaBytes", "expiresAt" = excluded."expiresAt", reason = excluded.reason,
+       "closedAt" = excluded."closedAt"
 RETURNING "grantId", "quotaBytes")
 INSERT INTO automation.outbox_event (id, aggregate, "aggregateId", type, payload)
 SELECT gen_random_uuid(), 'network.lease_close', s."grantId"::text, $4::text,
@@ -265,7 +269,7 @@ func (s PostgresStore) SaveClosure(ctx context.Context, grantID string, c *Closu
 		if !c.ExpiresAt.IsZero() {
 			end = &c.ExpiresAt
 		}
-		_, err = s.DB.Exec(ctx, saveClosureSQL, grantID, c.Quota, end, ClosedEvent)
+		_, err = s.DB.Exec(ctx, saveClosureSQL, grantID, c.Quota, end, ClosedEvent, string(c.Reason))
 	}
 	if err != nil {
 		return fmt.Errorf("writing the close of Grant %s: %w", grantID, err)

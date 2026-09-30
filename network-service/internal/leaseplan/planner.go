@@ -55,6 +55,9 @@ type Grant struct {
 type Closure struct {
 	Quota     int64
 	ExpiresAt time.Time // zero = no end
+	// Reason is why it closed (F-027-dz): billing suspends a prepaid Grant
+	// on spent or ended, never on guard.
+	Reason quota.CloseReason
 }
 
 // Config is one of the Grant's configs, as its row holds it.
@@ -765,7 +768,7 @@ func (s *Planner) account(g Grant) *quota.Account {
 	if a == nil {
 		a = &quota.Account{ID: g.ID}
 		if g.Closure != nil {
-			a.RestoreClosed(g.Closure.Quota, g.Closure.ExpiresAt)
+			a.RestoreClosed(g.Closure.Quota, g.Closure.ExpiresAt, g.Closure.Reason)
 		}
 		s.accounts[g.ID] = a
 	}
@@ -781,12 +784,12 @@ func (s *Planner) forgetAccount(grantID string) {
 // closureOf is the Grant's close after a plan, and whether it differs from
 // the row the snapshot read.
 func closureOf(g Grant, a *quota.Account) (*Closure, bool) {
-	q, end, closed := a.ClosedOn()
+	q, end, why, closed := a.ClosedOn()
 	if !closed {
 		return nil, g.Closure != nil
 	}
-	c := &Closure{Quota: q, ExpiresAt: end}
-	return c, g.Closure == nil || g.Closure.Quota != c.Quota || !g.Closure.ExpiresAt.Equal(c.ExpiresAt)
+	c := &Closure{Quota: q, ExpiresAt: end, Reason: why}
+	return c, g.Closure == nil || g.Closure.Quota != c.Quota || !g.Closure.ExpiresAt.Equal(c.ExpiresAt) || g.Closure.Reason != c.Reason
 }
 
 func (s *Planner) params() quota.Params {

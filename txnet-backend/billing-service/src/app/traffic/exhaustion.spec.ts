@@ -198,7 +198,7 @@ describe('walletCanBuy', () => {
 describe('suspendIfClosed', () => {
   type Row = { status: GrantStatus; billingMode: VariantBillingMode; trafficUnlimited: boolean; purchasedBytes: bigint };
 
-  function closedTx(input: { grant: Partial<Row> | null; closedAt: bigint | null }) {
+  function closedTx(input: { grant: Partial<Row> | null; closedAt: bigint | null; reason?: 'spent' | 'ended' | 'guard' }) {
     const grant: Row | null = input.grant
       ? { status: GrantStatus.active, billingMode: VariantBillingMode.prepaid, trafficUnlimited: false, purchasedBytes: BigInt(1000), ...input.grant }
       : null;
@@ -212,7 +212,7 @@ describe('suspendIfClosed', () => {
           return grant ? [grant] : [];
         }
         calls.push('close.read');
-        return input.closedAt === null ? [] : [{ quotaBytes: input.closedAt }];
+        return input.closedAt === null ? [] : [{ quotaBytes: input.closedAt, reason: input.reason ?? 'spent' }];
       },
       grant: {
         // The reserve release (F-118-b) reads the Grant; vpn-reserve.spec.ts holds it.
@@ -239,6 +239,16 @@ describe('suspendIfClosed', () => {
     expect(grantWrites[0].data).toEqual({ status: GrantStatus.suspended, statusReason: QUOTA_EXHAUSTED, suspendedAt: AT });
     // The Grant row is locked before the close is read: a renewal waits, then finds it suspended and revives it.
     expect(calls).toEqual(['grant.lock', 'close.read', 'grant.write', 'config.write']);
+  });
+
+  // F-027-dz: the planner's guard close — every replica blocked with bytes
+  // still paid — is not the bag spent. It reopens by itself once it settles
+  // (network rule 25), so a suspension here would strand a package's bytes.
+  it('suspends nothing on a guard close, even one standing on its Quota', async () => {
+    const { tx, calls, grantWrites } = closedTx({ grant: {}, closedAt: BigInt(1000), reason: 'guard' });
+    await expect(suspendIfClosed(tx, GRANT, AT)).resolves.toMatchObject({ verdict: 'guarded' });
+    expect(grantWrites).toEqual([]);
+    expect(calls).toEqual(['grant.lock', 'close.read']);
   });
 
   it('suspends nothing once a renewal moved Quota past the close, or the close was deleted', async () => {

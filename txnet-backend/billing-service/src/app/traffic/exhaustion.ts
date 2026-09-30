@@ -1,4 +1,4 @@
-import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
+import { GrantStatus, LeaseCloseReason, Prisma, VariantBillingMode } from '@prisma/client';
 
 import { OutboxEventType } from '@txnet-backend/shared-core';
 
@@ -121,7 +121,7 @@ export async function suspendIfExhausted(tx: Prisma.TransactionClient, grantId: 
   return verdict('suspended', suspension.configsDisabled);
 }
 
-export type ClosedVerdict = 'suspended' | 'grant_not_found' | 'not_active' | 'unlimited' | 'not_prepaid' | 'reopened';
+export type ClosedVerdict = 'suspended' | 'grant_not_found' | 'not_active' | 'unlimited' | 'not_prepaid' | 'reopened' | 'guarded';
 
 export type Closed = {
   grantId: string;
@@ -158,6 +158,12 @@ export type Closed = {
  * of days does — and starts its purge clock. It wins over a Quota that moved:
  * bytes alone buy no time.
  *
+ * **A guard close is not spent (F-027-dz).** The planner says why it closed
+ * (`lease_close.reason`): `guard` is every replica blocked with bytes still
+ * paid, which reopens by itself once it settles (rule 25). It answers
+ * `guarded` and suspends nothing; were the rest then served, the planner
+ * rewrites the close `spent` and this is asked again.
+ *
  * **The user is told (F-601-b).** A suspension emits `volume_spent`, or
  * `ended` when the close was on the Grant's end.
  */
@@ -171,8 +177,8 @@ export async function suspendIfClosed(tx: Prisma.TransactionClient, grantId: str
   if (!grant) return verdict('grant_not_found');
   if (grant.status !== GrantStatus.active) return verdict('not_active');
 
-  const [close] = await tx.$queryRaw<{ quotaBytes: bigint; expiresAt: Date | null }[]>`
-    SELECT "quotaBytes", "expiresAt" FROM "network"."lease_close" WHERE "grantId" = ${grantId}::uuid`;
+  const [close] = await tx.$queryRaw<{ quotaBytes: bigint; expiresAt: Date | null; reason: LeaseCloseReason }[]>`
+    SELECT "quotaBytes", "expiresAt", "reason" FROM "network"."lease_close" WHERE "grantId" = ${grantId}::uuid`;
   const endStands = !!close && close.expiresAt?.getTime() === grant.endsAt?.getTime();
   // The close's end, when the Grant has reached it: the notice's period.
   const ended = endStands && close.expiresAt !== null && close.expiresAt <= at ? close.expiresAt : null;
@@ -190,6 +196,7 @@ export async function suspendIfClosed(tx: Prisma.TransactionClient, grantId: str
   const bagless = grant.trafficUnlimited ? 'unlimited' : grant.billingMode !== VariantBillingMode.prepaid ? 'not_prepaid' : null;
   if (bagless) return verdict(bagless);
   if (!endStands || close.quotaBytes !== grant.purchasedBytes) return verdict('reopened');
+  if (close.reason === LeaseCloseReason.guard) return verdict('guarded');
 
   const suspension = await suspendForExhaustion(tx, grantId, at);
   if (!suspension.suspended) return verdict('not_active');

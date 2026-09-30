@@ -27,6 +27,16 @@ is told about it. Split out of [contract.lease.md](contract.lease.md) on
     still written at the counter beside it. The shutdown extension skips a
     closed Grant. `desiredEnabled` stays billing's. The close is announced in its own statement (`network.grant.closed`,
     ADR-0096): billing suspends a prepaid Grant on it, and a renewal revives it.
+    **A close says why** (`lease_close.reason`, F-027-dz, user 2026-09-30):
+    `ended` when the end has passed, else `spent` when `Quota − Used ≤ 0`,
+    else `guard` — the blocked-replica branch, bytes still paid. Billing
+    suspends a prepaid Grant only on `spent` or `ended`; a guard close is
+    left to reopen as rule 25 says. The reason moves with the Grant while
+    the close stands — a guard close whose rest the panels' lag served
+    becomes `spent`, and any close whose end comes becomes `ended`, even an
+    end that did not move — and the row is written again, so billing is
+    asked again. Rows from before the column read `ended` if closed on or
+    past their end, else `spent`, as billing had already read them.
     **An end that passes on a Grant already closed moves the close to that
     end** (F-027-dy): the row is written again, so the close is announced
     again and billing suspends it `period_ended` (purge clock, close,

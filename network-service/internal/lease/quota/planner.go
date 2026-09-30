@@ -150,9 +150,10 @@ func (a *Account) Plan(now time.Time, p Params) PlanResult {
 		}
 	}
 	// An end that passes on a Grant already closed moves the close to it
-	// (F-027-dy): the close is written again, and billing reads it as ended.
-	if a.Closed && expired && !a.ExpiresAt.Equal(a.closedExpiry) {
-		a.closedQuota, a.closedExpiry = a.Quota, a.ExpiresAt
+	// (F-027-dy): the close is written again, and billing reads it as ended
+	// (F-027-dz) — also when the end came without moving.
+	if a.Closed && expired && (!a.ExpiresAt.Equal(a.closedExpiry) || a.closedWhy != CloseEnded) {
+		a.closedQuota, a.closedExpiry, a.closedWhy = a.Quota, a.ExpiresAt, CloseEnded
 	}
 	anyActive, activeBlocked := false, true
 	for _, v := range vs {
@@ -174,6 +175,18 @@ func (a *Account) Plan(now time.Time, p Params) PlanResult {
 	if !a.Closed && (expired || remaining <= 0 || (anyActive && activeBlocked && avail < finish)) {
 		a.Closed, a.closedQuota, a.closedExpiry = true, a.Quota, a.ExpiresAt
 		a.closeWatched, a.closedAt = true, now
+		a.closedWhy = CloseGuard
+		switch {
+		case expired:
+			a.closedWhy = CloseEnded
+		case remaining <= 0:
+			a.closedWhy = CloseSpent
+		}
+	}
+	// A guard close whose rest the panels' lag served is spent (F-027-dz):
+	// the close is written again, and billing suspends it.
+	if a.Closed && a.closedWhy == CloseGuard && remaining <= 0 {
+		a.closedWhy = CloseSpent
 	}
 	if a.Closed {
 		a.closedUsed = a.Used

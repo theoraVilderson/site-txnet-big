@@ -128,6 +128,18 @@ func (r *Replica) landed(limit Bytes, enabled bool, counter Bytes) bool {
 	return limit == r.LimitWant && (enabled == r.WantEnabled || (r.WantEnabled && counter >= limit))
 }
 
+// CloseReason is why the planner closed an account (F-027-dz): billing
+// suspends a prepaid Grant on `spent` or `ended`, never on `guard`, which is
+// the blocked branch with bytes still paid. The values are
+// `network.LeaseCloseReason`'s.
+type CloseReason string
+
+const (
+	CloseSpent CloseReason = "spent" // Quota − Used ≤ 0
+	CloseEnded CloseReason = "ended" // the end passed; wins over spent
+	CloseGuard CloseReason = "guard" // every active replica blocked, too little left to finish on
+)
+
 // Account is one subscription (the thing the end user bought).
 //
 // Quota and Used are cumulative over the subscription's whole life. A renewal
@@ -142,6 +154,7 @@ type Account struct {
 	Closed       bool
 	closedQuota  Bytes
 	closedExpiry time.Time
+	closedWhy    CloseReason
 	// A close this process took (not one restored): when, and Used on the
 	// last plan that kept it, so a close with bytes left can reopen once
 	// what was in flight has settled (F-027-dx).

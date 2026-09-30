@@ -132,3 +132,70 @@ func TestACloseWithBytesLeftReopensOnceItSettles(t *testing.T) {
 		t.Fatal("the bench renewed the bag; this is the no-renewal path")
 	}
 }
+
+// A close says why (F-027-dz, user 2026-09-30): the blocked branch with bytes
+// left is `guard`, and billing suspends a prepaid Grant only on `spent` or
+// `ended`. A guard close whose rest is then served in the panels' lag becomes
+// `spent`, and one whose end passes becomes `ended` — either way the row
+// changes, so billing is asked again. Seen live: guard closes with hundreds
+// of MB paid, suspended as `quota_exhausted` at once.
+func TestACloseSaysWhy(t *testing.T) {
+	b := newBench(t, 64*quota.MB, "a", "b")
+	for i := 0; i < 60 && b.s.closure("grant-1") == nil; i++ {
+		b.turn(map[string]int64{"a": 20 * quota.MB, "b": 20 * quota.MB})
+	}
+	c := b.s.closure("grant-1")
+	left := b.s.grants[0].Quota - b.s.grants[0].Used
+	if c == nil || left <= 0 {
+		t.Fatalf("the bench must close on the blocked branch with bytes left: %+v, %d left", c, left)
+	}
+	if c.Reason != quota.CloseGuard {
+		t.Fatalf("a close with %d MiB left says %q, want %q", left/quota.MB, c.Reason, quota.CloseGuard)
+	}
+
+	// The panel serves the rest before the close's write lands: spent.
+	b.inflight["a"], b.inflight["b"] = nil, nil
+	b.applied["a"] += left
+	b.counter["a"] += left
+	b.turn(nil)
+	if c = b.s.closure("grant-1"); c == nil || c.Reason != quota.CloseSpent {
+		t.Fatalf("a guard close whose rest was served is spent: %+v", c)
+	}
+
+	// Its end passes: ended, and it wins over spent.
+	b.s.grants[0].ExpiresAt = b.at.Add(-time.Minute)
+	b.turn(nil)
+	if c = b.s.closure("grant-1"); c == nil || c.Reason != quota.CloseEnded {
+		t.Fatalf("a close whose end passed is ended: %+v", c)
+	}
+
+	// A restart reads the reason back and does not rewrite it.
+	b.pl = &leaseplan.Planner{Store: b.s}
+	n := len(b.plans)
+	b.turn(nil)
+	for _, pl := range b.plans[n:] {
+		if pl.ClosureMoved {
+			t.Fatalf("a restart rewrote a close it read back: %+v", pl.Closure)
+		}
+	}
+}
+
+// A close whose end had already passed when it was taken is `ended`, and an
+// end reached by a Grant closed on its bytes moves the reason with it, even
+// when the end itself did not change (F-027-dz).
+func TestAnEndReachedOnAGuardCloseIsEnded(t *testing.T) {
+	b := newBench(t, 64*quota.MB, "a", "b")
+	end := b.at.Add(time.Hour)
+	b.s.grants[0].ExpiresAt = end
+	for i := 0; i < 60 && b.s.closure("grant-1") == nil; i++ {
+		b.turn(map[string]int64{"a": 20 * quota.MB, "b": 20 * quota.MB})
+	}
+	if c := b.s.closure("grant-1"); c == nil || c.Reason != quota.CloseGuard {
+		t.Fatalf("want a guard close: %+v", c)
+	}
+	b.at = end.Add(time.Second)
+	b.turn(nil)
+	if c := b.s.closure("grant-1"); c == nil || c.Reason != quota.CloseEnded || !c.ExpiresAt.Equal(end) {
+		t.Fatalf("a guard close whose end came is ended on that end: %+v", c)
+	}
+}

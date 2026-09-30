@@ -44,7 +44,8 @@ billing's `traffic/exhaustion.ts` decides it: for a metered Grant under a
 wallet lock, asked by a refused block request (`network/contract.hot-loop.md`);
 for a prepaid one (F-027-dw, ADR-0096) by `suspendIfClosed` under the Grant's
 row lock, asked by `network.grant.closed` — the lease planner's close, read
-again against Quota and end, so a renewal that reopened it is never undone.
+again against Quota and end, so a renewal that reopened it is never undone,
+and only a close `spent` or `ended`: a `guard` one has bytes left (F-027-dz).
 Each stop is told to the user (F-601-b, `contract.retention.md` "Cutoff"). A renewal
 (`renewal.ts`) revives it; a wallet top-up does not. That revival, and a top-up's of a metered Grant, is told (F-601-k, `contract.retention.md` "Active again"). `transition()` cannot do this: it writes no
 `suspendedAt`, which `grant_suspended_has_a_clock` refuses.

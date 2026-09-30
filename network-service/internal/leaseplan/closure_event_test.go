@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"network-service/internal/db"
+	"network-service/internal/lease/quota"
 	"network-service/internal/leaseplan"
 )
 
@@ -31,7 +32,7 @@ func (r *recDB) Exec(_ context.Context, sql string, args ...any) (pgconn.Command
 func TestAClosureIsAnnouncedInTheStatementThatWritesIt(t *testing.T) {
 	r := &recDB{}
 	s := leaseplan.PostgresStore{DB: r}
-	c := &leaseplan.Closure{Quota: 1 << 30, ExpiresAt: time.Date(2026, 9, 28, 9, 42, 58, 0, time.UTC)}
+	c := &leaseplan.Closure{Quota: 1 << 30, ExpiresAt: time.Date(2026, 9, 28, 9, 42, 58, 0, time.UTC), Reason: quota.CloseGuard}
 	if err := s.SaveClosure(context.Background(), "grant-1", c); err != nil {
 		t.Fatalf("SaveClosure: %v", err)
 	}
@@ -43,6 +44,10 @@ func TestAClosureIsAnnouncedInTheStatementThatWritesIt(t *testing.T) {
 	// ADR-0094 lists the foreign columns this service may read; tenantId is not one.
 	if strings.Contains(r.sql[0], `"tenantId"`) {
 		t.Error("the close reads entitlement.grant.tenantId, which ADR-0094 does not list")
+	}
+	// The row says why it closed (F-027-dz): billing suspends on it.
+	if got := r.args[0][4]; got != string(quota.CloseGuard) {
+		t.Errorf("the close was written with reason %v, want guard", got)
 	}
 	if got := r.args[0][3]; got != leaseplan.ClosedEvent {
 		t.Errorf("announced as %v, want %s", got, leaseplan.ClosedEvent)

@@ -563,6 +563,18 @@ model Config {
   @@schema("network")
 }
 
+/// Why the lease planner closed a Grant (F-027-dz). `spent`: Quota − Used ≤ 0.
+/// `ended`: its end passed (wins over spent). `guard`: every active replica
+/// ran dry with too little left to finish on — bytes are still paid, and the
+/// close reopens once it settles (network contract.lease-close.md rule 25).
+enum LeaseCloseReason {
+  spent
+  ended
+  guard
+
+  @@schema("network")
+}
+
 /// A Grant the lease planner closed (F-027-dd, SPEC §6-2). While the row
 /// stands every config of the Grant is desired disabled on its panel — the
 /// client is dropped at once, not a tick after its counter meets the ceiling —
@@ -570,11 +582,14 @@ model Config {
 /// and end the Grant closed on: only a renewal past them, with ReopenMin
 /// available, deletes it. The planner is its only writer.
 model LeaseClose {
-  grantId    String    @id @db.Uuid
+  grantId    String           @id @db.Uuid
   quotaBytes BigInt
   /// The Grant's `endsAt` at the close; null = no end.
   expiresAt  DateTime?
-  closedAt   DateTime  @default(now())
+  /// Why it closed (F-027-dz): billing suspends a prepaid Grant on `spent`
+  /// or `ended`, never on `guard`.
+  reason     LeaseCloseReason
+  closedAt   DateTime         @default(now())
 
   grant Grant @relation(fields: [grantId], references: [id], onDelete: Cascade)
 

@@ -90,8 +90,9 @@ var RequiredColumns = map[string][]string{
 		// Its Grant sold no limit (F-111-r).
 		"trafficUnlimited",
 	},
-	// A Grant the lease planner closed, and what it closed on (F-027-dd).
-	"lease_close": {"grantId", "quotaBytes", "expiresAt", "closedAt"},
+	// A Grant the lease planner closed, what it closed on (F-027-dd) and why
+	// (F-027-dz).
+	"lease_close": {"grantId", "quotaBytes", "expiresAt", "reason", "closedAt"},
 	// An admin's speed cap on a Grant (F-311-p).
 	"grant_rate_limit": {"grantId", "rateMbps"},
 	// Where the counter was, so that a figure going backward is a reset and
