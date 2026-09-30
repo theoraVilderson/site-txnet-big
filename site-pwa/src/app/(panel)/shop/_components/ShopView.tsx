@@ -15,7 +15,7 @@ import { formatBytes } from "../../services/_lib/service-configs";
 import { useWalletBalance } from "../../_hooks/useWalletBalance";
 import { formatInstant } from "../../_lib/datetime";
 import { formatMoney } from "../../_lib/money";
-import { categoriesOf, forgetReturnInvoice, groupOffers, hasOwnName, quotaLimit, shortfallOf, type OfferGroup } from "../_lib/shop";
+import { categoriesOf, forgetReturnInvoice, groupOffers, hasOwnName, quotaLimit, shortfallOf, trafficRateOf, type OfferGroup } from "../_lib/shop";
 
 const S = FrontendI18nKeys.common.shop;
 
@@ -315,9 +315,7 @@ function ProductCard({
           {group.variants.length === 1 && hasOwnName(offer) && (
             <p className="truncate text-xs font-bold text-text-secondary">{names.of(offer.nameKey, offer.sku)}</p>
           )}
-          <p dir="ltr" className="text-2xl font-black text-text-primary">
-            {money(offer.price, offer.currencyCode)}
-          </p>
+          <OfferPrice offer={offer} money={money} />
         </div>
         <button
           type="button"
@@ -343,8 +341,47 @@ function Facts({ offer }: { offer: ShopOffer }) {
         <Fact icon={<Gauge size={16} aria-hidden />}>{t("common", S.traffic, { amount: formatBytes(String(traffic), lang) ?? "" })}</Fact>
       )}
       {devices !== null && <Fact icon={<Smartphone size={16} aria-hidden />}>{t("common", S.devices, { count: devices })}</Fact>}
-      {offer.billingMode === "metered" && <Fact icon={<Wallet size={16} aria-hidden />}>{t("common", S.metered)}</Fact>}
+      {offer.billingMode === "metered" && (
+        <Fact icon={<Wallet size={16} aria-hidden />}>{t("common", meteredLine(offer))}</Fact>
+      )}
     </ul>
+  );
+}
+
+/** Paid ahead or after, when the offer names its traffic rate; else the plain "pay as you use". */
+function meteredLine(offer: ShopOffer): string {
+  const rate = trafficRateOf(offer);
+  if (!rate) return S.metered;
+  return rate.mode === "postpaid" ? S.meteredPostpaid : S.meteredPrepaid;
+}
+
+/**
+ * The card's figure (F-118-af): a metered offer with a traffic rate is priced
+ * by its rate per GB — its sale price is usually 0.00, which is not what it
+ * costs — and an upfront price beside it is still shown.
+ */
+function OfferPrice({ offer, money }: { offer: ShopOffer; money: (v: string, currency: string) => string }) {
+  const { t } = useLocale();
+  const rate = offer.billingMode === "metered" ? trafficRateOf(offer) : null;
+  if (!rate) {
+    return (
+      <p dir="ltr" className="text-2xl font-black text-text-primary">
+        {money(offer.price, offer.currencyCode)}
+      </p>
+    );
+  }
+  return (
+    <div>
+      <p className="flex items-baseline gap-1">
+        <span dir="ltr" className="text-2xl font-black text-text-primary">
+          {money(rate.unitPrice, rate.currencyCode)}
+        </span>
+        <span className="text-sm font-bold text-text-secondary">{t("common", S.perGb)}</span>
+      </p>
+      {Number(offer.price) > 0 && (
+        <p className="text-xs text-text-secondary">{t("common", S.upfront, { amount: money(offer.price, offer.currencyCode) })}</p>
+      )}
+    </div>
   );
 }
 

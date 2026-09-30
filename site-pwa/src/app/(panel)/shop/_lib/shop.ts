@@ -79,6 +79,20 @@ export function quotaLimit(quotas: unknown, metric: "traffic_bytes" | "concurren
 }
 
 /** Whether the variant carries a name of its own, rather than its product's — then the chip says it (F-114-d). */
+/** Bytes one `vpn.traffic` unit prices (ADR-0073): the byte engine sells per 2^30 bytes only. */
+const GIB = "1073741824";
+
+/**
+ * A metered offer's traffic rate per GB (F-118-af), off its `vpn.traffic`
+ * card — the one its sale locks — or `null`: no card, or one the byte engine
+ * does not sell (another unit size).
+ */
+export function trafficRateOf(offer: ShopOffer): { unitPrice: string; currencyCode: string; mode: "prepaid" | "postpaid" } | null {
+  const card = (offer.rateCards ?? []).find((c) => c.meterKey === "vpn.traffic");
+  if (!card || card.unitSize !== GIB) return null;
+  return { unitPrice: card.unitPrice, currencyCode: card.currencyCode, mode: card.mode };
+}
+
 export const hasOwnName = (offer: ShopOffer) => offer.nameKey !== offer.productNameKey;
 
 /** The shop's hand-off to the top-up page (`panelDepositForInvoicePath`). */

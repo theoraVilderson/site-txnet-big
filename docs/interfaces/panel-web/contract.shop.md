@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 33
-updated: 2026-09-25
+version: 34
+updated: 2026-09-30
 ---
 
 # Contract — panel-web: the shop (F-111-e, rebuilt by F-114-d)
@@ -38,6 +38,12 @@ carry one piece of the return (rules 7 and 8).
    traffic, devices, "pay as you use" for `metered`: only what the catalog set,
    `quotaLimit`) and price sit on the card over one buy. Tabs (`categoriesOf`,
    "All" first) only when the offers span more than one category.
+   **A metered card is priced by its rate** (F-118-af): with a `vpn.traffic`
+   card per 2^30 bytes in the offer's `rateCards` (`trafficRateOf`), the
+   figure is its `unitPrice` "per GB" — never the sale's 0.00 — with any
+   upfront price under it, and the fact says paid ahead (`prepaid`) or held
+   and taken after (`postpaid`). No such card: the plain price and "pay as
+   you use".
 4. **Checkout is one page; no invoice for looking** (F-114-d). The order, the
    codes, the figures, what the wallet can spend (`available`, F-118-j) and pay sit together. An invoice is
    made when a code is applied (to show billing's discount) or on the pay

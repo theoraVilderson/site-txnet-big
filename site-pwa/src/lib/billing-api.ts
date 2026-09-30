@@ -240,6 +240,19 @@ export interface ShopOffer {
   price: string;
   /** What `price` is in: the price row's own (F-116-h3). */
   currencyCode: string;
+  /** The card in effect for each meter (F-118-ae): what a sale now would lock. */
+  rateCards: ShopRateCard[];
+}
+
+/** A rate card as an offer names it; quantities and money as strings. */
+export interface ShopRateCard {
+  meterKey: string;
+  unitSize: string;
+  unitPrice: string;
+  currencyCode: string;
+  mode: "prepaid" | "postpaid";
+  includedQuantity: string;
+  afterIncluded: "stop" | "metered";
 }
 
 /** The statuses an invoice can be in, as `billing.prisma` declares `InvoiceStatus` (C-09). */

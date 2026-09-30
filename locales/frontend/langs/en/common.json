@@ -3272,7 +3272,11 @@
     "pick": "Choose an option",
     "traffic": "{{amount}} of traffic",
     "devices": "{{count}} devices at once",
-    "metered": "Pay as you use"
+    "metered": "Pay as you use",
+    "perGb": "per GB",
+    "meteredPrepaid": "Pay as you use — taken from your wallet before you use it",
+    "meteredPostpaid": "Pay as you use — held in your wallet and taken after you use it",
+    "upfront": "plus {{amount}} at purchase"
   },
   "userGroups": {
     "title": "User groups",

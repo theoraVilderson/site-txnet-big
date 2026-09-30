@@ -6,7 +6,7 @@ import { ApiError } from "@/lib/api-error";
 import { billingApi, type ShopInvoice, type ShopOffer } from "@/lib/billing-api";
 import { PANEL_MY_SERVICES } from "@/lib/routes";
 import { ShopView } from "./_components/ShopView";
-import { categoriesOf, groupOffers, prefillAmount, quotaLimit, shortfallOf } from "./_lib/shop";
+import { categoriesOf, groupOffers, prefillAmount, quotaLimit, shortfallOf, trafficRateOf } from "./_lib/shop";
 
 /**
  * The shop page (F-111-e), and what breaks silently on it:
@@ -27,6 +27,11 @@ import { categoriesOf, groupOffers, prefillAmount, quotaLimit, shortfallOf } fro
  * > **One press pays once.** The server pays exactly once under concurrency
  * > anyway; a button that stays live sends the second request into a
  * > refusal the user then reads as a failure of the first.
+ *
+ * > **A metered offer is priced by its rate, not its 0.00** (F-118-ae/af). A
+ * > live run sold a 10 USD/GB product whose card read "$0.00, pay as you
+ * > use": the card names the rate per GB billing sends and whether it is
+ * > paid ahead or after, so the price is seen before the buy.
  *
  * > **An invoice replaced is cancelled first** (F-114-d). A code held by an
  * > unpaid invoice counts as a use for its 30 minutes, so a new invoice made
@@ -69,6 +74,7 @@ const OFFER: ShopOffer = {
   billingMode: "prepaid",
   quotas: { traffic_bytes: { limit: 50 * 1024 ** 3, resetPolicy: "never" } },
   price: "12.50",
+  rateCards: [],
 };
 
 const OFFER_90: ShopOffer = { ...OFFER, variantId: "v-90", sku: "VPN-90", durationDays: 90, price: "30.00" };
@@ -82,6 +88,20 @@ const MAIL: ShopOffer = {
   categoryKey: "mail",
   categories: [{ key: "mail", nameKey: "catalog.category.mail.name" }],
   price: "3.00",
+};
+
+const GIB = "1073741824";
+const PAYG: ShopOffer = {
+  ...OFFER,
+  variantId: "v-payg",
+  sku: "PAYG",
+  billingMode: "metered",
+  quotas: {},
+  price: "0.00",
+  rateCards: [
+    { meterKey: "vpn.config.regenerate", unitSize: "1", unitPrice: "0.5", currencyCode: "USD", mode: "postpaid", includedQuantity: "2", afterIncluded: "metered" },
+    { meterKey: "vpn.traffic", unitSize: GIB, unitPrice: "10", currencyCode: "USD", mode: "prepaid", includedQuantity: "0", afterIncluded: "metered" },
+  ],
 };
 
 const INVOICE: ShopInvoice = {
@@ -165,6 +185,23 @@ describe("the list", () => {
     await user.click(screen.getByRole("button", { name: "shop.buy" }));
     await user.click(await screen.findByRole("button", { name: "shop.invoice.pay" }));
     await waitFor(() => expect(createInvoice).toHaveBeenCalledWith("v-90", []));
+  });
+
+  it("reads a metered offer's traffic rate per GB off its vpn.traffic card, and nothing else", () => {
+    expect(trafficRateOf(PAYG)).toEqual({ unitPrice: "10", currencyCode: "USD", mode: "prepaid" });
+    expect(trafficRateOf(OFFER)).toBeNull();
+    const perMb = { ...PAYG, rateCards: [{ ...PAYG.rateCards[1], unitSize: "1048576" }] };
+    expect(trafficRateOf(perMb)).toBeNull();
+    expect(trafficRateOf({ ...PAYG, rateCards: undefined as unknown as ShopOffer["rateCards"] })).toBeNull();
+  });
+
+  it("prices a metered card by its rate per GB and says it is paid ahead — never $0.00", async () => {
+    shopOffers.mockResolvedValue([PAYG]);
+    render(<ShopView invoiceId={null} />);
+    expect(await screen.findByText("$10.00")).toBeTruthy();
+    expect(screen.getByText("shop.perGb")).toBeTruthy();
+    expect(screen.getByText("shop.meteredPrepaid")).toBeTruthy();
+    expect(screen.queryByText("$0.00")).toBeNull();
   });
 
   it("filters the cards by category tab, and shows no tabs for one category", async () => {
