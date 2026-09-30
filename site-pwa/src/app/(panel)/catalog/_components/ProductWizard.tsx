@@ -4,7 +4,8 @@ import { useState, type ReactNode } from "react";
 import { Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { type CatalogCapability, type CatalogCategory } from "@/lib/catalog-api";
-import { useCatalogSurface } from "../_lib/surface";
+import { PricingCurrencyContext, useCatalogSurface, usePricingCurrency } from "../_lib/surface";
+import { currencyDecimals, formatMoney } from "../../_lib/money";
 import { DEFAULT_LOCALE } from "@/env";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Select } from "../../_components/kit/Select";
@@ -28,6 +29,7 @@ import {
   wizardStepErrors,
   emptyWizard,
   firstInvalidStep,
+  rateDecimals,
   type ProductForm,
   type ProductWizard as Wizard,
   type VariantForm,
@@ -88,7 +90,7 @@ export function ProductWizard({
   onClose: () => void;
   onCreated: (productId: string, variantFailed: boolean) => Promise<void>;
 }) {
-  const { t } = useLocale();
+  const { t, lang } = useLocale();
   const message = useMessage();
   const { api, tenantId } = useCatalogSurface();
   const dirOf = useDirOf();
@@ -113,6 +115,10 @@ export function ProductWizard({
   const kind = w.product.fulfilmentKind;
   const groups = usePanelGroups(takesPanelGroup(kind));
   const productTenant = wizardVariantTenant(w.product, actor);
+  const currency = usePricingCurrency(productTenant);
+  /** The review names billing's code with every place typed (F-116-h10); before it answers, the figure alone. */
+  const shown = (amount: string) =>
+    currency ? formatMoney(amount, currency, { lang, t }, { decimals: rateDecimals(amount, currencyDecimals(currency)) }) : amount;
   const offered = { ...groups, options: groupsForVariant(groups.options, productTenant) };
   const capabilityName = (k: string) => {
     const c = capabilities.find((x) => x.key === k);
@@ -206,7 +212,7 @@ export function ProductWizard({
     </div>
   );
 
-  return (
+  const sheet = (
     <Sheet title={t("common", K.wizard.title)} onClose={onClose} footer={footer}>
       <ol className="flex flex-wrap gap-1.5">
         {WIZARD_STEPS.map((s, i) => {
@@ -400,13 +406,13 @@ export function ProductWizard({
                 {" · "}
                 {w.variant.durationDays ? t("common", K.variant.days, { count: Number(w.variant.durationDays) }) : t("common", K.variant.permanent)}
                 {" · "}
-                <span dir="ltr">{w.variant.price.trim() || "0"} USD</span>
+                <span dir="ltr">{shown(w.variant.price.trim() || "0")}</span>
                 {w.variant.billingMode === "metered" && (
                   <>
                     {" · "}
                     {t("common", K.billingMode.metered)}
                     {" · "}
-                    {t("common", K.rateCard.perGbShown, { price: `${w.variant.ratePerGb.trim()} USD` })}
+                    {t("common", K.rateCard.perGbShown, { price: shown(w.variant.ratePerGb.trim()) })}
                   </>
                 )}
                 {takesPanelGroup(kind) && (
@@ -426,6 +432,7 @@ export function ProductWizard({
       {error && <Alert>{error}</Alert>}
     </Sheet>
   );
+  return <PricingCurrencyContext.Provider value={currency}>{sheet}</PricingCurrencyContext.Provider>;
 }
 
 function Choice({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {

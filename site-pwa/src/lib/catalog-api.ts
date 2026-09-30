@@ -324,6 +324,15 @@ export function catalogAdminApi(tenantId: string | null) {
       return call<PanelGroupOption[]>(`${at}/panel-groups`, { method: "GET" });
     },
 
+    /**
+     * The currency a new price on these rows is written in (F-116-h10a).
+     * `query` is `pricingCurrencyQuery`'s; a reseller's path answers its own
+     * and takes none.
+     */
+    async pricingCurrency(query = ""): Promise<{ code: string }> {
+      return call<{ code: string }>(`${at}/pricing-currency${at ? "" : query}`, { method: "GET" });
+    },
+
     async categories(query: { archived?: "true" } = {}): Promise<CatalogCategory[]> {
       const qs = new URLSearchParams(query).toString();
       return call<CatalogCategory[]>(`${at}/categories${qs ? `?${qs}` : ""}`, { method: "GET" });

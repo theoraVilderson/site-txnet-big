@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import type { CatalogRateCard, CatalogVariant } from "@/lib/catalog-api";
-import { useCatalogSurface } from "../_lib/surface";
+import { useCatalogSurface, usePricedIn } from "../_lib/surface";
 import { useMeterNames } from "../_lib/meter-names";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Select } from "../../_components/kit/Select";
@@ -22,6 +22,7 @@ import {
   tehranToday,
   validateRateCardForm,
   validateRegenerateCardForm,
+  pricedIn,
   type Errors,
   type RateCardForm,
   type RegenerateCardForm,
@@ -37,6 +38,7 @@ import { Field, input, primaryButton, quietButton } from "./catalog-ui";
  */
 export function RateCardSection({ variant: v, act }: { variant: CatalogVariant; act: (run: () => Promise<unknown>) => Promise<void> }) {
   const { t, lang } = useLocale();
+  const currency = usePricedIn();
   const { api } = useCatalogSurface();
   const meterName = useMeterNames();
   const [form, setForm] = useState<RateCardForm>({ mode: "prepaid", unitPrice: "", day: "" });
@@ -81,7 +83,7 @@ export function RateCardSection({ variant: v, act }: { variant: CatalogVariant; 
             options={RATE_CARD_MODES.map((m) => ({ value: m, label: t("common", K.rateCard.modes[m]) }))}
           />
         </Field>
-        <Field label={t("common", K.rateCard.perGb)} error={errors.unitPrice}>
+        <Field label={pricedIn(t("common", K.rateCard.perGb), currency)} error={errors.unitPrice}>
           <input className={input} dir="ltr" inputMode="decimal" value={form.unitPrice} onChange={(e) => setForm((f) => ({ ...f, unitPrice: e.target.value }))} />
         </Field>
         <Field label={t("common", K.price.day)} error={errors.day} hint={t("common", K.price.dayHint)}>
@@ -270,12 +272,13 @@ export function FirstRateFields({
   onPrice: (p: string) => void;
 }) {
   const { t } = useLocale();
+  const currency = usePricedIn();
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <Field label={t("common", K.rateCard.mode)} hint={t("common", K.rateCard.modeHint)}>
         <Select value={mode} onChange={(m) => onMode(m as RateCardForm["mode"])} options={RATE_CARD_MODES.map((m) => ({ value: m, label: t("common", K.rateCard.modes[m]) }))} />
       </Field>
-      <Field label={t("common", K.rateCard.perGb)} error={error}>
+      <Field label={pricedIn(t("common", K.rateCard.perGb), currency)} error={error}>
         <input className={input} dir="ltr" inputMode="decimal" value={price} onChange={(e) => onPrice(e.target.value)} />
       </Field>
     </div>

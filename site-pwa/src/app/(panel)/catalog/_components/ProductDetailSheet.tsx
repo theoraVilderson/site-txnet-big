@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, Loader2, Plus, Power, Sparkles } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { type CatalogCapability, type CatalogCategory, type CatalogPrice, type CatalogProduct, type CatalogProductDetail, type CatalogVariant, type FulfilmentKind, type PanelGroupOption, type Quotas } from "@/lib/catalog-api";
-import { useCatalogSurface } from "../_lib/surface";
+import { PricingCurrencyContext, useCatalogSurface, usePricedIn, usePricingCurrency } from "../_lib/surface";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Select } from "../../_components/kit/Select";
@@ -33,6 +33,7 @@ import {
   suggestSku,
   tehranToday,
   validatePriceForm,
+  pricedIn,
   validateVariantForm,
   variantBody,
   type Errors,
@@ -99,8 +100,9 @@ export function ProductDetailSheet({
   }, [load]);
 
   const money = (price: CatalogPrice) => formatMoney(price.amount, price.currencyCode, { lang, t });
+  const currency = usePricingCurrency(product.tenantId);
 
-  return (
+  const sheet = (
     <Sheet
       title={
         <span className="flex flex-col">
@@ -153,6 +155,7 @@ export function ProductDetailSheet({
         ))}
     </Sheet>
   );
+  return <PricingCurrencyContext.Provider value={currency}>{sheet}</PricingCurrencyContext.Provider>;
 }
 
 function Capabilities({
@@ -269,6 +272,7 @@ function VariantCard({
   onChanged: () => Promise<void>;
 }) {
   const { t, lang } = useLocale();
+  const currency = usePricedIn();
   const message = useMessage();
   const { api } = useCatalogSurface();
   const [form, setForm] = useState<PriceForm>({ amount: "", day: "" });
@@ -333,7 +337,7 @@ function VariantCard({
       {takesPanelGroup(kind) && <RegenerateCardSection variant={v} act={act} />}
 
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-        <Field label={t("common", K.price.amount)} error={errors.amount}>
+        <Field label={pricedIn(t("common", K.price.amount), currency)} error={errors.amount}>
           <input className={input} dir="ltr" inputMode="decimal" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
         </Field>
         <Field label={t("common", K.price.day)} error={errors.day} hint={t("common", K.price.dayHint)}>
@@ -405,6 +409,7 @@ export function VariantFields({
   groups: PanelGroups;
 }) {
   const { t } = useLocale();
+  const currency = usePricedIn();
   const [advanced, setAdvanced] = useState(false);
   const metered = form.billingMode === "metered";
   const setQuota = (i: number, patch: Partial<VariantForm["quotas"][number]>) =>
@@ -418,11 +423,11 @@ export function VariantFields({
           <Select value={form.billingMode} onChange={(v) => set("billingMode", v as VariantForm["billingMode"])} options={BILLING_MODES.map((m) => ({ value: m, label: t("common", K.billingMode[m]) }))} />
         </Field>
         {metered ? (
-          <Field label={t("common", K.variant.meteredPrice)} error={errors.price} hint={t("common", K.variant.meteredPriceHint)}>
+          <Field label={pricedIn(t("common", K.variant.meteredPrice), currency)} error={errors.price} hint={t("common", K.variant.meteredPriceHint)}>
             <input className={input} dir="ltr" inputMode="decimal" placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} />
           </Field>
         ) : (
-          <Field label={t("common", K.variant.price)} error={errors.price}>
+          <Field label={pricedIn(t("common", K.variant.price), currency)} error={errors.price}>
             <input className={input} dir="ltr" inputMode="decimal" value={form.price} onChange={(e) => set("price", e.target.value)} />
           </Field>
         )}

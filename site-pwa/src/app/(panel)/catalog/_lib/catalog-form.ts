@@ -580,6 +580,21 @@ export function groupsForVariant(groups: readonly PanelGroupOption[], tenantId: 
   return tenantId === undefined ? [...groups] : groups.filter((g) => g.tenantId === null || g.tenantId === tenantId);
 }
 
+/**
+ * Billing's `?tenantId=` for the currency a price field names (F-116-h10,
+ * catalog `GET /pricing-currency`): none for the surface's own rows,
+ * `platform` for a platform row, a tenant the owner chose. `null` while a
+ * typed tenant is no uuid yet — nothing to ask, rather than a 400 to show.
+ */
+export function pricingCurrencyQuery(owner: string | null | undefined): string | null {
+  if (owner === undefined) return "";
+  if (owner === null) return "?tenantId=platform";
+  return UUID.test(owner.trim()) ? `?tenantId=${owner.trim()}` : null;
+}
+
+/** A price field's label with the code billing writes it in; before the answer, none — never a guessed one (ADR-0098). */
+export const pricedIn = (label: string, code: string | null) => (code ? `${label} (${code})` : label);
+
 /** Whose the wizard's variant will be, when the platform owner chose it; anyone else's is billing's to narrow. */
 export function wizardVariantTenant(f: ProductForm, me: Me | null): string | null | undefined {
   if (!isPlatformOwner(me)) return undefined;

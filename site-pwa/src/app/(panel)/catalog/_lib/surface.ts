@@ -1,8 +1,15 @@
 "use client";
 
-import { createContext, useContext, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import { catalogApi, type CatalogAdminApi } from "@/lib/catalog-api";
 import { PANEL_CATALOG, PANEL_CATALOG_TRANSLATIONS } from "@/lib/routes";
+import { pricingCurrencyQuery } from "./catalog-form";
 
 /**
  * Which tenant's catalog a catalog screen manages (F-066-w8).
@@ -49,3 +56,36 @@ export const CatalogSurfaceProvider = CatalogSurfaceContext.Provider;
 
 /** The surface the screen around this component set; the ambient one where none did. */
 export const useCatalogSurface = () => useContext(CatalogSurfaceContext);
+
+/**
+ * The code a price field names (F-116-h10): billing's answer for whose rows are
+ * priced — `product.tenantId`, or the wizard's `wizardVariantTenant`. `null`
+ * until it answers, or when it refuses; a label then names no currency.
+ */
+export function usePricingCurrency(
+  owner: string | null | undefined,
+): string | null {
+  const { api } = useCatalogSurface();
+  const query = pricingCurrencyQuery(owner);
+  const [answer, setAnswer] = useState<{ query: string; code: string } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (query === null) return;
+    let live = true;
+    api.pricingCurrency(query).then(
+      ({ code }) => live && setAnswer({ query, code }),
+      () => live && setAnswer(null),
+    );
+    return () => {
+      live = false;
+    };
+    // The surface's api is fixed for the page; whose rows is what decides a load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+  return answer && answer.query === query ? answer.code : null;
+}
+
+/** The code `usePricingCurrency` answered for the sheet or wizard around a field — the fields sit several components deep. */
+export const PricingCurrencyContext = createContext<string | null>(null);
+export const usePricedIn = () => useContext(PricingCurrencyContext);

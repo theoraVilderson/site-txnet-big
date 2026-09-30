@@ -1295,7 +1295,7 @@
       "durationHint": "Leave empty for permanent access.",
       "permanent": "Permanent",
       "days": "{{count}} days",
-      "price": "First price (USD)",
+      "price": "First price",
       "meteredPrice": "One-off fee at purchase (optional)",
       "meteredPriceHint": "A metered variant earns from its price per GB. Blank means 0: buying it is free and only usage is charged.",
       "quotas": "Quotas",
@@ -1315,7 +1315,7 @@
       "noInbound": "no inbound ticked"
     },
     "price": {
-      "amount": "Price (USD)",
+      "amount": "Price",
       "day": "From day",
       "dayHint": "Empty or today: from now. A change never rewrites an old price.",
       "current": "Current",

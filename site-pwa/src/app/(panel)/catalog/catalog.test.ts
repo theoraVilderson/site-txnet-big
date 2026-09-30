@@ -6,6 +6,8 @@ import type { CatalogCapability, CatalogPrice, CatalogRateCard, PanelGroupOption
 import { PANEL_CATALOG } from "@/lib/routes";
 import { PANEL_MENU, isMenuGroup } from "../_lib/panel-menu";
 import {
+  pricedIn,
+  pricingCurrencyQuery,
   BILLING_MODES,
   CATALOG_KEYS,
   CATALOG_MANAGE,
@@ -837,5 +839,25 @@ describe("a meter is shown by its name, never its key (F-118-s, D-59 (a))", () =
 
   it("falls back to the key only when the texts did not load", () => {
     expect(meterName({}, "vpn.traffic")).toBe("vpn.traffic");
+  });
+});
+
+describe("a price field names the currency billing writes it in, never a fixed USD (F-116-h10)", () => {
+  it("asks billing whose rows are priced: the surface's own, the platform's, or a tenant the owner typed", () => {
+    expect(pricingCurrencyQuery(undefined)).toBe("");
+    expect(pricingCurrencyQuery(null)).toBe("?tenantId=platform");
+    expect(pricingCurrencyQuery("22222222-2222-4222-8222-222222222222")).toBe("?tenantId=22222222-2222-4222-8222-222222222222");
+    // Half-typed: no question yet, rather than a 400 shown as a failure.
+    expect(pricingCurrencyQuery("2222")).toBeNull();
+  });
+
+  it("labels the field with the answer's code, and with none before it arrives", () => {
+    expect(pricedIn("Price", "IRR")).toBe("Price (IRR)");
+    expect(pricedIn("Price", null)).toBe("Price");
+  });
+
+  it("keeps no currency code in a price label's text", () => {
+    const en = JSON.parse(readFileSync(join(LOCALES, "en/common.json"), "utf8")).catalog;
+    for (const label of [en.variant.price, en.variant.meteredPrice, en.price.amount, en.rateCard.perGb]) expect(label).not.toMatch(/\b[A-Z]{3}\b/);
   });
 });

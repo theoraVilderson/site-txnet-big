@@ -143,6 +143,14 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    then charged (mode + price) or none (`regenerateCardBody`, checked by
    `validateRegenerateCardForm` as billing's CHECKs would). No card reads "the
    count limit applies"; the history is rule 10e's.
+10g. **A price field names the currency billing writes it in** (F-116-h10,
+   ADR-0098): never a fixed `USD`. The detail sheet and the wizard ask billing's
+   `GET /pricing-currency` for whose rows are priced (`usePricingCurrency`:
+   `product.tenantId`, or `wizardVariantTenant`, as `pricingCurrencyQuery`;
+   the reseller path answers its own) and pass the code down by context.
+   First price, new price, rate per GB are labelled `pricedIn`; the wizard's
+   review formats both figures in it with every place typed. Before the answer,
+   or on a refusal, a label names no code — never a guessed one.
 10d. **A created product lands on the list, not in its sheet** (F-114-g,
    `afterWizard`): the wizard closes onto the products tab with every filter
    cleared, the new row outlined and the notice offering "open it" — the sheet
@@ -211,7 +219,8 @@ billing's schema, `notForSale` (F-026-o); `capabilitiesFor`, `suggestCapabilityK
 `validateCapabilityForm` / `capabilityBody`, `canEditCapability` (F-114-f-b);
 `afterWizard` (F-114-g); `RATE_CARD_MODES` against the Prisma enum,
 `variantBody`'s `rateCard`, `validateRateCardForm` / `rateCardBody`,
-`currentRateCard`, `noRate`, `rateDecimals` (F-118-m). `catalog/regenerate-price.test.ts`:
+`currentRateCard`, `noRate`, `rateDecimals` (F-118-m); `pricingCurrencyQuery`,
+`pricedIn`, no code in a price label's text (F-116-h10). `catalog/regenerate-price.test.ts`:
 the regenerate card, the user's `regenerateOffer`, its wholesale meter (F-118-r).
 
 `my-resellers/catalog.test.ts` (F-066-w8) — `catalogApiPrefix` on both
