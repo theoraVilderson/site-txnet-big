@@ -88,6 +88,14 @@ carry one piece of the return (rules 7 and 8).
    A paid Grant is `pending` until delivery — "being prepared" — and My
    services turns it active live
    ([contract.my-services.md](contract.my-services.md) rule 13, F-111-f).
+11. **A metered buy on a low wallet is told before the pay** (F-118-ah, live
+   run 2026-09-30: bought on 0.00, it stayed `pending` and nothing said why).
+   Its usage is taken from the wallet, so under 1 GB at its `vpn.traffic`
+   rate — the wallet-low line (F-601-g) — of `available`, in the rate's
+   currency, the checkout says it will not start until a top-up and links to
+   the top-up page (with the invoice and the shortfall once there is one).
+   The pay stays: the Grant starts on its own once the wallet is topped up.
+   `meteredStartShortOf` rounds the shortfall **up** to a cent.
 
 ## Proof
 
@@ -97,7 +105,8 @@ picking the variant bought, no invoice until a code or the pay, a changed
 total not paid, the replaced invoice cancelled before the next is made, a
 rejected code dropped, the top-up link carrying the invoice and `missing`, no key
 shown, only the My services link, one pay per press, and the return on
-`?invoice=` — pending pays, expired does not.
+`?invoice=` — pending pays, expired does not; a metered buy under 1 GB of
+wallet told so, with its top-up link and the pay still offered.
 
 ## Not covered
 

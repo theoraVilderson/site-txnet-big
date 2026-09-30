@@ -3276,7 +3276,12 @@
     "perGb": "per GB",
     "meteredPrepaid": "Pay as you use — taken from your wallet before you use it",
     "meteredPostpaid": "Pay as you use — held in your wallet and taken after you use it",
-    "upfront": "plus {{amount}} at purchase"
+    "upfront": "plus {{amount}} at purchase",
+    "meteredStart": {
+      "title": "Your wallet is too low to start this service.",
+      "hint": "Its usage is taken from your wallet, and it will not connect until the wallet is topped up. One GB needs at least {{amount}} more.",
+      "topUp": "Top up the wallet"
+    }
   },
   "userGroups": {
     "title": "User groups",

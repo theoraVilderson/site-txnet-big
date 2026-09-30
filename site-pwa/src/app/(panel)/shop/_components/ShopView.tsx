@@ -9,13 +9,13 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import { ApiError } from "@/lib/api-error";
 import { billingApi, type InvoicePaid, type ShopInvoice, type ShopOffer } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
-import { PANEL_MY_SERVICES, panelDepositForInvoicePath } from "@/lib/routes";
+import { PANEL_DEPOSIT, PANEL_MY_SERVICES, panelDepositForInvoicePath } from "@/lib/routes";
 import { flattenTexts } from "../../catalog/_lib/catalog-form";
 import { formatBytes } from "../../services/_lib/service-configs";
 import { useWalletBalance } from "../../_hooks/useWalletBalance";
 import { formatInstant } from "../../_lib/datetime";
 import { formatMoney } from "../../_lib/money";
-import { categoriesOf, forgetReturnInvoice, groupOffers, hasOwnName, quotaLimit, shortfallOf, trafficRateOf, type OfferGroup } from "../_lib/shop";
+import { categoriesOf, forgetReturnInvoice, groupOffers, hasOwnName, meteredStartShortOf, quotaLimit, shortfallOf, trafficRateOf, type OfferGroup } from "../_lib/shop";
 
 const S = FrontendI18nKeys.common.shop;
 
@@ -420,6 +420,8 @@ function Checkout({
   const messageFor = useApiErrorMessage();
   // What a purchase can spend: billing refuses held money (F-118-a), so the balance would promise more than it pays.
   const { available: balance, currencyCode: walletCurrency } = useWalletBalance();
+  // A metered buy on a wallet that cannot start it is told before the pay (F-118-ah).
+  const startShort = buying.offer ? meteredStartShortOf(buying.offer, balance, walletCurrency) : null;
   const busy = useRef(false);
   const [isBusy, setIsBusy] = useState(false);
   const [invoice, setInvoice] = useState<ShopInvoice | null>(initial);
@@ -614,6 +616,19 @@ function Checkout({
             <Wallet size={14} aria-hidden />
             <span dir="auto">{t("common", S.checkout.balance, { balance: money(balance, walletCurrency) })}</span>
           </p>
+        )}
+
+        {startShort && open && !missing && (
+          <div role="status" className="rounded-2xl border border-card-border bg-bg-inner p-4 text-sm">
+            <p className="font-bold text-text-primary">{t("common", S.meteredStart.title)}</p>
+            <p className="mt-1 text-text-secondary">{t("common", S.meteredStart.hint, { amount: money(startShort, walletCurrency ?? currency) })}</p>
+            <Link
+              href={invoice ? panelDepositForInvoicePath(invoice.id, startShort, invoice.currencyCode) : PANEL_DEPOSIT}
+              className="mt-3 inline-block rounded-2xl bg-primary px-4 py-2 font-bold text-white hover:brightness-110"
+            >
+              {t("common", S.meteredStart.topUp)}
+            </Link>
+          </div>
         )}
 
         {invoice && !open && (

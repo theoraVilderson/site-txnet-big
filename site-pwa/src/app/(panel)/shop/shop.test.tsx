@@ -6,7 +6,7 @@ import { ApiError } from "@/lib/api-error";
 import { billingApi, type ShopInvoice, type ShopOffer } from "@/lib/billing-api";
 import { PANEL_MY_SERVICES } from "@/lib/routes";
 import { ShopView } from "./_components/ShopView";
-import { categoriesOf, groupOffers, prefillAmount, quotaLimit, shortfallOf, trafficRateOf } from "./_lib/shop";
+import { categoriesOf, groupOffers, meteredStartShortOf, prefillAmount, quotaLimit, shortfallOf, trafficRateOf } from "./_lib/shop";
 
 /**
  * The shop page (F-111-e), and what breaks silently on it:
@@ -43,8 +43,17 @@ vi.mock("@/lib/billing-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/billing-api")>()),
   billingApi: { shopOffers: vi.fn(), createInvoice: vi.fn(), invoice: vi.fn(), payInvoice: vi.fn(), cancelInvoice: vi.fn() },
 }));
+const wallet = vi.hoisted(() => ({ available: null as string | null }));
 vi.mock("../_hooks/useWalletBalance", () => ({
-  useWalletBalance: () => ({ balance: "5.00", isLoading: false, failed: false, refresh: () => {} }),
+  useWalletBalance: () => ({
+    balance: "5.00",
+    held: wallet.available === null ? null : "0.00",
+    available: wallet.available,
+    currencyCode: wallet.available === null ? null : "USD",
+    isLoading: false,
+    failed: false,
+    refresh: () => {},
+  }),
 }));
 vi.mock("@/lib/catalog-api", () => ({ catalogApi: { texts: vi.fn().mockRejectedValue(new Error("404")) } }));
 
@@ -128,6 +137,7 @@ const insufficient = (missing: string) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  wallet.available = null;
   vi.mocked(useLocale).mockReturnValue({ lang: "en", t } as ReturnType<typeof useLocale>);
   shopOffers.mockResolvedValue([OFFER]);
   createInvoice.mockResolvedValue(INVOICE);
@@ -322,6 +332,54 @@ describe("one page: pick, codes, pay", () => {
     expect(payInvoice).toHaveBeenCalledTimes(1);
     expect((pay as HTMLButtonElement).disabled).toBe(true);
     settle(undefined as never);
+  });
+});
+
+/**
+ * > **A metered service bought on an empty wallet is told so before the pay**
+ * > (F-118-ah). Its usage is taken from the wallet, so on 0.00 it stays
+ * > pending and connects nothing, and nothing said why (live run
+ * > 2026-09-30). Under 1 GB at its rate — the wallet-low line (F-601-g) — the
+ * > checkout says it will not start and links to the top-up. The pay stays:
+ * > it starts on its own once the wallet is topped up.
+ */
+describe("a metered buy on a low wallet", () => {
+  it("is short of 1 GB at the offer's rate, in the wallet's currency, and nothing else is", () => {
+    expect(meteredStartShortOf(PAYG, "0.00", "USD")).toBe("10.00");
+    expect(meteredStartShortOf(PAYG, "3.25", "USD")).toBe("6.75");
+    expect(meteredStartShortOf(PAYG, "10.00", "USD")).toBeNull();
+    expect(meteredStartShortOf(OFFER, "0.00", "USD")).toBeNull();
+    expect(meteredStartShortOf(PAYG, "0.00", "EUR")).toBeNull();
+    expect(meteredStartShortOf(PAYG, null, null)).toBeNull();
+  });
+
+  async function checkoutFor(offer: ShopOffer) {
+    shopOffers.mockResolvedValue([offer]);
+    const user = userEvent.setup();
+    render(<ShopView invoiceId={null} />);
+    await user.click(await screen.findByRole("button", { name: "shop.buy" }));
+    await screen.findByRole("button", { name: "shop.invoice.pay" });
+  }
+
+  it("says it will not start and links to the top-up, and still lets the user pay", async () => {
+    wallet.available = "0.00";
+    await checkoutFor(PAYG);
+    expect(screen.getByText("shop.meteredStart.title")).toBeTruthy();
+    const link = screen.getByRole("link", { name: "shop.meteredStart.topUp" });
+    expect(new URL(link.getAttribute("href")!, "https://panel.test").pathname).toBe("/financial/deposit");
+    expect(screen.getByRole("button", { name: "shop.invoice.pay" })).toBeTruthy();
+  });
+
+  it("says nothing on a wallet that covers 1 GB, or for a plan paid up front", async () => {
+    wallet.available = "25.00";
+    await checkoutFor(PAYG);
+    expect(screen.queryByText("shop.meteredStart.title")).toBeNull();
+  });
+
+  it("says nothing for a plan paid up front, whatever the wallet", async () => {
+    wallet.available = "0.00";
+    await checkoutFor(OFFER);
+    expect(screen.queryByText("shop.meteredStart.title")).toBeNull();
   });
 });
 

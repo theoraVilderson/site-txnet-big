@@ -93,6 +93,23 @@ export function trafficRateOf(offer: ShopOffer): { unitPrice: string; currencyCo
   return { unitPrice: card.unitPrice, currencyCode: card.currencyCode, mode: card.mode };
 }
 
+/**
+ * What a metered offer's wallet is short of starting it (F-118-ah): 1 GB at its
+ * traffic rate — the wallet-low line (F-601-g) — less what is available,
+ * rounded **up** to a cent; `null` when it covers that, when the offer is not
+ * sold by the GB, or when the wallet is in another currency than the rate.
+ * Its usage is taken from the wallet, so bought on less it waits and connects
+ * nothing until a top-up (live run 2026-09-30).
+ */
+export function meteredStartShortOf(offer: ShopOffer, available: string | null, currencyCode: string | null): string | null {
+  const rate = offer.billingMode === "metered" ? trafficRateOf(offer) : null;
+  if (!rate || available === null || currencyCode !== rate.currencyCode || !/^\d+(\.\d+)?$/.test(available)) return null;
+  const short = scaled(rate.unitPrice, 8) - scaled(available, 8);
+  if (short <= BigInt(0)) return null;
+  const cents = (short + BigInt(999_999)) / BigInt(1_000_000);
+  return `${cents / BigInt(100)}.${(cents % BigInt(100)).toString().padStart(2, "0")}`;
+}
+
 export const hasOwnName = (offer: ShopOffer) => offer.nameKey !== offer.productNameKey;
 
 /** The shop's hand-off to the top-up page (`panelDepositForInvoicePath`). */
