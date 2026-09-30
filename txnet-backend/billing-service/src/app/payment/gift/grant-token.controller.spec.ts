@@ -24,18 +24,18 @@ const req = (userId: string) => ({ identity: { userId, tenantId: 't-1', roleId: 
 
 describe('GrantTokenController', () => {
   it('answers the new link, never a bare key, for the id in the path and the user from the gate', async () => {
-    const links = { reset: vi.fn(async () => 'https://sub.example.com/sub/sub-key-0001') };
+    const links = { resetOwn: vi.fn(async () => 'https://sub.example.com/sub/sub-key-0001') };
     const controller = new GrantTokenController(links as never);
 
     const answer = await controller.rotate(GRANT, req('u-1') as never);
 
-    expect(links.reset).toHaveBeenCalledWith(GRANT, 'u-1');
+    expect(links.resetOwn).toHaveBeenCalledWith(GRANT, 'u-1');
     expect(answer).toEqual({ grantId: GRANT, subscriptionUrl: 'https://sub.example.com/sub/sub-key-0001' });
   });
 
   it('lets a refusal through as the service raised it: another user’s Grant stays the 404', async () => {
     const notFound = new NotFoundException({ i18nKey: BackendI18nKeys.errors.billing.grant.notFound, reason: 'grant_not_found' });
-    const links = { reset: vi.fn(async () => Promise.reject(notFound)) };
+    const links = { resetOwn: vi.fn(async () => Promise.reject(notFound)) };
     const controller = new GrantTokenController(links as never);
 
     await expect(controller.rotate(GRANT, req('u-2') as never)).rejects.toBe(notFound);

@@ -10,7 +10,8 @@ import { SubscriptionLinkService } from './subscription-link.service';
  * A Grant's subscription link (F-114-e-b, ADR-0085): `GET
  * /api/billing/gift/grants/:id/subscription-link` answers it as often as
  * asked, and `POST .../rotate-token` — "reset link" — replaces it for a link
- * that leaked and answers the new one.
+ * that leaked and answers the new one — at most 3 times per Grant in 24
+ * hours (F-114-e-d; the bucket below is per user, across every Grant).
  *
  * Reset was built as "reissue key" (F-502-p), when a key was shown once and
  * only hashed; since the token is kept sealed it is a security action, not
@@ -48,6 +49,6 @@ export class GrantTokenController {
     windowSec: 900,
   })
   async rotate(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    return { grantId: id, subscriptionUrl: await this.links.reset(id, identityOf(req).userId) };
+    return { grantId: id, subscriptionUrl: await this.links.resetOwn(id, identityOf(req).userId) };
   }
 }

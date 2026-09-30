@@ -31,6 +31,7 @@ schema `entitlement`), migrations `20260914001600_entitlement_grant` and
 | grant_deletion | an admin's delete of a Grant (F-311-m), one per Grant (unique `grantId`): `actorUserId` (no FK), `reason` (CHECK non-blank), `statusBefore`, `refundRemainder` (the admin's answer), `refundedAmount` `Decimal(18,2)` + `walletTransactionId` (no FK — billing's row; both or neither, only with `refundRemainder`), `refundSkipped` (F-027-r's reason a refund asked for credited nothing) — CHECK `grant_deletion_refund_asked`; append-only (`grant_deletion_is_history`), its Grant's tenant's (`same_tenant()`) | yes, strict RLS | permanent |
 | grant_limit_setting | a tenant's default cap of open metered Grants per user (F-118-ao, [contract.limits.md](contract.limits.md)), one per tenant (PK `tenantId`): `meteredOpenCap` (CHECK ≥ 0), `updatedByUserId` (no FK); none = the platform's 5 | yes, strict RLS | permanent |
 | user_grant_limit | one user's own cap, set by staff (F-118-ao), unique `(tenantId, userId)`: `meteredOpenCap` (CHECK ≥ 0), optional `reason`, `setByUserId` (no FK); replaces the tenant's default | yes, strict RLS | permanent |
+| grant_link_reset | one reset of a Grant's link on the owner's path (F-114-e-d): `grantId`, `createdAt`; at most 3 in any 24 hours (`link-reset.ts`), counted under the Grant's row lock; staff and a reseller's admin write none; index `(grantId, createdAt)`; append-only (`grant_link_reset_is_history`), its Grant's tenant's (`same_tenant()`) | yes, strict RLS | permanent |
 
 `grant` is a reserved word: SQL quotes it (`entitlement."grant"`).
 

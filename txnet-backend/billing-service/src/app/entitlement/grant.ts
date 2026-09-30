@@ -101,7 +101,9 @@ export type EntitlementRejection =
   /** Device limit (F-311-q): the limit the Grant already has, or a lift of none. */
   | 'devices_unchanged'
   /** A purchase past the user's cap of open metered Grants (F-118-ao, `MeteredCapReached`): nothing is sold, nothing written. */
-  | 'metered_cap_reached';
+  | 'metered_cap_reached'
+  /** The owner's fourth link reset of a Grant in 24 hours (F-114-e-d, `LinkResetLimited`): nothing rotated. */
+  | 'link_reset_limit';
 
 export class EntitlementRefused extends Error {
   constructor(

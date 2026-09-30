@@ -1,8 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, HttpException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { DomainVerificationStatus, Prisma, TenantDomainPurpose, TenantDomainType } from '@prisma/client';
 import { BackendI18nKeys, isCnameTarget, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { EntitlementRefused, GrantService } from '../../entitlement/grant';
+import { assertOwnerResetRoom, LinkResetLimited } from '../../entitlement/link-reset';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const E = BackendI18nKeys.errors.billing.grant;
@@ -74,6 +75,20 @@ export class SubscriptionLinkService {
     );
   }
 
+  /**
+   * The owner's own reset (F-114-e-d): at most 3 per Grant in 24 hours, counted
+   * under the Grant's lock and recorded in the rotation's transaction. Staff
+   * and a reseller's admin call `reset` and are not bounded by it.
+   */
+  resetOwn(grantId: string, userId: string): Promise<string> {
+    return this.reset(grantId, userId, async (tx, rotate) => {
+      const tenantId = await assertOwnerResetRoom(tx, grantId, userId);
+      const url = await rotate();
+      await tx.grantLinkReset.create({ data: { tenantId, grantId } });
+      return url;
+    });
+  }
+
   private async host(tx: Prisma.TransactionClient): Promise<string> {
     const rows = await tx.tenantDomain.findMany({
       where: {
@@ -98,6 +113,19 @@ export class SubscriptionLinkService {
     try {
       return await fn();
     } catch (e) {
+      // The owner's fourth reset in a day: the old link keeps working, and the
+      // refusal says when the next is allowed, as epoch ms (`facts` carries no text).
+      if (e instanceof LinkResetLimited) {
+        throw new HttpException(
+          {
+            i18nKey: E.linkResetLimited,
+            reason: e.reason,
+            message: `${e.name}: ${e.message}`,
+            facts: { limit: e.limit, nextAtMs: e.nextAt.getTime() },
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
       if (e instanceof EntitlementRefused && e.reason === 'grant_not_found') {
         throw new NotFoundException({ i18nKey: E.notFound, reason: e.reason, message: `${e.name}: ${e.message}` });
       }

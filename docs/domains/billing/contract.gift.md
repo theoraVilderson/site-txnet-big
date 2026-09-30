@@ -51,7 +51,7 @@ Migration `20260915000200_gift_redeems_free_grant`; `GiftRedemptionService` with
 | The answer is `{kind: "free_grant", code, grant: {id, variantId, startsAt, endsAt, featureKeys}}` — **no token**: the link is `GET .../subscription-link`'s, as often as asked. A credit answers `{kind: "wallet_credit", code, credited, balance}` | the user's call, 2026-09-14; the token left the answer with F-114-e-c (ADR-0085) — one place hands out the link |
 | A variant switched off after the coupon was made refuses the issue and rolls the use back (500) | an admin's broken coupon, never a user's mistake |
 
-## A Grant's subscription link, and resetting it (built — F-502-p, F-114-e-b)
+## A Grant's subscription link, and resetting it (built — F-502-p, F-114-e-b, F-114-e-d)
 
 `GrantTokenController` beside the box, over `SubscriptionLinkService`
 (`subscription-link.service.ts`), which calls `GrantService.subscriptionTokenFor`
@@ -74,6 +74,7 @@ link that leaked, no longer how a lost key comes back.
 | A reset finds the host **before** it rotates, in the rotation's transaction; with none it refuses and the old link keeps working | rotating first would destroy a working link and answer nothing |
 | The rotation is one transaction and the old token stops working in it | there is no window in which both links open, and none in which neither does |
 | Buckets: `SUBSCRIPTION_LINK`, default **60** per 900s, for reading; `GRANT_ROTATE_TOKEN`, default **5**, for a reset; **429** past either | each reset destroys a working link, so it stays a security limit; copying the link must never spend the budget for revoking a leaked one |
+| **The owner resets one Grant at most 3 times in any 24 hours** (F-114-e-d, `entitlement/link-reset.ts`): the fourth is **429**, `errors.billing.grant.linkResetLimited`, `reason: link_reset_limit`, `error.facts: {limit, nextAtMs}` — when the oldest of the three leaves the window, epoch ms. Counted from `grant_link_reset` under the Grant's row lock, after ownership, and written in the rotation's transaction; nothing rotates on a refusal. Staff and a reseller's admin (`reset`, not `resetOwn`) are not bounded and write no row | the bucket is per user and read as unlimited (480 a day, user 2026-09-30); every reset breaks the link in every app that holds it. Counted in the database, not Redis, so a stranger's request never spends a Grant's budget, and the answer can say when |
 | Capability `subscriptionLink`, not `endUserDeposit` | neither moves money and both answer the `/sub` credential, so they are open exactly when `/sub` is: a suspended tenant's user until the grace ends, a terminated tenant's never |
 | The Grant's **status is not a gate** | a link grants nothing on its own — `/sub` reads the Grant — so a dead Grant's link opens nothing rather than something it should not |
 
