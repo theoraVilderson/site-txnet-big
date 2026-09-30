@@ -25,10 +25,11 @@ func (r *Replica) RestorePending(pending bool) { r.writePending = pending }
 
 // RestoreClosed marks an account the planner closed before the process
 // stopped (F-027-dd, `network.lease_close`), at the Quota and expiry it
-// closed on: only a renewal past them reopens it, as it would have in the
-// process that closed it.
+// closed on: only a renewal past them reopens it. The settled reopen of a
+// close with bytes left (F-027-dx) is for a close this process watched.
 func (a *Account) RestoreClosed(quota Bytes, expiresAt time.Time) {
 	a.Closed, a.closedQuota, a.closedExpiry = true, quota, expiresAt
+	a.closeWatched = false
 }
 
 // ClosedOn is the Quota and expiry the account closed on; ok is false while

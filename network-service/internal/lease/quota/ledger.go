@@ -134,6 +134,9 @@ func (a *Account) Observe(r *Replica, o Observation, driftAfter time.Duration) O
 		r.LimitPeak = o.Limit
 		r.writePending = false
 	}
+	if o.Limit >= r.closePeak || reset {
+		r.closePeak = 0 // the write in flight at the close has landed
+	}
 	if r.Pending() && o.At.Sub(r.LastWriteAt) > driftAfter {
 		res.Drift = true
 		r.writePending = false // give up waiting; the planner re-emits

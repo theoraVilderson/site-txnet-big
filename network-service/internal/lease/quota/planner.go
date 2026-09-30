@@ -133,9 +133,21 @@ func (a *Account) Plan(now time.Time, p Params) PlanResult {
 	expired := !a.ExpiresAt.IsZero() && !now.Before(a.ExpiresAt)
 
 	// ---- open / close ------------------------------------------------------
-	if a.Closed && !expired && avail >= p.ReopenMin &&
-		(a.Quota != a.closedQuota || !a.ExpiresAt.Equal(a.closedExpiry)) {
-		a.Closed = false // renewed
+	if a.Closed && !expired {
+		renewed := a.Quota != a.closedQuota || !a.ExpiresAt.Equal(a.closedExpiry)
+		reopenAt := p.ReopenMin
+		if !renewed {
+			var dem float64
+			for _, v := range vs {
+				dem += v.vDem
+			}
+			reopenAt = max(p.ReopenMin, p.FinishMin, toBytes(dem*p.FinishTime.Seconds()))
+		}
+		// A figure still in flight from before the close is not ours to
+		// hand out again (Replica.closePeak).
+		if avail-holdAll >= reopenAt && (renewed || a.settled(vs)) {
+			a.Closed, a.closeWatched = false, false
+		}
 	}
 	// An end that passes on a Grant already closed moves the close to it
 	// (F-027-dy): the close is written again, and billing reads it as ended.
@@ -161,8 +173,10 @@ func (a *Account) Plan(now time.Time, p Params) PlanResult {
 	finish := max(p.FinishMin, toBytes(totNow*p.FinishTime.Seconds()))
 	if !a.Closed && (expired || remaining <= 0 || (anyActive && activeBlocked && avail < finish)) {
 		a.Closed, a.closedQuota, a.closedExpiry = true, a.Quota, a.ExpiresAt
+		a.closeWatched, a.closedAt = true, now
 	}
 	if a.Closed {
+		a.closedUsed = a.Used
 		a.planClose(now, p, vs, &res)
 		return res
 	}
@@ -446,6 +460,25 @@ func (a *Account) planReactive(now time.Time, p Params, v *view, res *PlanResult
 	}
 }
 
+// settled: a close this process took has nothing left in flight — Used did
+// not move since the last plan that kept it, every write has landed, and
+// every reading describes a panel tick past the close plus its lag.
+func (a *Account) settled(vs []*view) bool {
+	if !a.closeWatched || a.Used != a.closedUsed {
+		return false
+	}
+	for _, v := range vs {
+		r := v.r
+		if !r.Exists && !r.Pending() && r.LimitPeak == 0 {
+			continue // no client, nothing in flight: it serves nothing
+		}
+		if r.Pending() || r.LimitSeen != r.LimitWant || !r.effAt.After(a.closedAt.Add(v.lag)) {
+			return false
+		}
+	}
+	return true
+}
+
 func (a *Account) planClose(now time.Time, p Params, vs []*view, res *PlanResult) {
 	res.Closed = true
 	for _, v := range vs {
@@ -455,6 +488,9 @@ func (a *Account) planClose(now time.Time, p Params, vs []*view, res *PlanResult
 		}
 		drift := r.EnabledSeen && now.Sub(r.LastWriteAt) > p.DriftAfter
 		if r.WantEnabled || drift {
+			if v.writable && (r.Pending() || r.LimitPeak > r.LimitSeen) {
+				r.closePeak = max(r.closePeak, r.LimitPeak, r.LimitSeen)
+			}
 			// Hard disable (not just limit=counter): removes the user from
 			// xray immediately instead of waiting for the panel's job.
 			a.emit(res, now, r, r.Counter, false, PClose, "close")

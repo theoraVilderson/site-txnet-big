@@ -84,6 +84,13 @@ type Replica struct {
 	LastWriteAt  time.Time
 	writePending bool // a write we emitted has not been seen on the panel yet
 
+	// closePeak is the highest figure a write in flight when the account
+	// closed may still land (F-027-dx). The close writes the counter, which
+	// can equal what the panel already shows, so a reading of it cannot tell
+	// the close from the older write still queued; the figure stays in Hold
+	// until a reading shows it or more.
+	closePeak Bytes
+
 	Rate Rate
 
 	depl struct { // pending lag-calibration sample
@@ -101,13 +108,14 @@ func (r *Replica) Hold() Bytes {
 	if !r.Panel.CanSetLimit {
 		return 0
 	}
+	stale := max(r.closePeak-r.Counter, 0)
 	if !r.EnabledSeen && !r.WantEnabled {
-		return 0
+		return stale
 	}
 	if !r.Exists && r.LimitPeak == 0 {
-		return 0
+		return stale
 	}
-	return max(r.LimitPeak-r.Counter, 0)
+	return max(r.LimitPeak-r.Counter, stale)
 }
 
 // Pending reports whether a write we emitted has not landed yet. (A panel
@@ -134,6 +142,12 @@ type Account struct {
 	Closed       bool
 	closedQuota  Bytes
 	closedExpiry time.Time
+	// A close this process took (not one restored): when, and Used on the
+	// last plan that kept it, so a close with bytes left can reopen once
+	// what was in flight has settled (F-027-dx).
+	closeWatched bool
+	closedAt     time.Time
+	closedUsed   Bytes
 
 	PeakRate    float64 // decayed max of the account's total raw rate
 	PeakReplica float64 // decayed max of any single replica's raw rate

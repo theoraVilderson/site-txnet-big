@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 2
+version: 3
 updated: 2026-09-30
 ---
 
@@ -31,10 +31,25 @@ is told about it. Split out of [contract.lease.md](contract.lease.md) on
     end** (F-027-dy): the row is written again, so the close is announced
     again and billing suspends it `period_ended` (purge clock, close,
     remainder). A close taken on bytes otherwise kept the old end for good.
-25. **Only a renewal reopens it**: Quota or the end moved since the close,
-    and `avail ≥ ReopenMin` (8 MB). A process restarted onto a closed Grant
-    restores the close from the row (`Account.RestoreClosed`), so forgetting
-    is never a reopen; a close row that cannot be written drops the account,
-    and the next turn restores it from what was written. A disabled client
-    on 3x-ui is `RemoveUser`'d, which keeps its open connections unless the
-    panel restarts Xray on disable (F-027-cm, open-questions 2026-09-26).
+25. **A renewal reopens it, and so does a close with bytes left once it has
+    settled** (F-027-dx, user 2026-09-30: stranded paid bytes are served,
+    not only refunded). A renewal — Quota or the end moved since the close —
+    reopens at `avail ≥ ReopenMin` (8 MB). Without one, a close this process
+    took reopens once it has settled: Used unchanged since the last plan that
+    kept it, every close write landed (none pending, the panel showing the
+    figure written), every reading from a panel tick past the close plus
+    that panel's lag, and `avail ≥ max(ReopenMin, FinishMin, ΣvDem ×
+    FinishTime)` — enough to finish on at the demand that closed it, or it
+    closes again at once. Either way, a figure written before the close and
+    still in flight counts against avail (`Replica.closePeak`): the close
+    writes the counter, which the panel may already show, so a reading of it
+    cannot prove the older write landed; the figure is held until a reading
+    shows it or more. The close row is deleted silently, as on a renewal.
+    A process restarted onto a closed Grant restores the close from the row
+    (`Account.RestoreClosed`) and waits for a renewal — forgetting is never
+    a reopen; a close row that cannot be written drops the account, and the
+    next turn restores it from what was written. A prepaid Grant billing
+    suspended on the close is not read again by the planner (F-027-dz). A
+    disabled client on 3x-ui is `RemoveUser`'d, which keeps its open
+    connections unless the panel restarts Xray on disable (F-027-cm,
+    open-questions 2026-09-26).

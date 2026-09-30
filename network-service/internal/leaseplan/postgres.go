@@ -232,9 +232,10 @@ const ClosedEvent = "network.grant.closed"
 // same statement ($4, ADR-0021), so the event and the row commit or fail
 // together. The owner is read from `entitlement.grant."userId"`, a column
 // ADR-0094 already lists; the tenant is not (billing finds it from the Grant).
-// deleteClosureSQL reopens it, silently — only a renewal reopens,
-// and the renewal revived the Grant itself. The planner is the only writer
-// of `network.lease_close`.
+// deleteClosureSQL reopens it, silently — a renewal revived the Grant
+// itself, and a close with bytes left that settled (F-027-dx) left billing
+// nothing to undo on a metered one. The planner is the only writer of
+// `network.lease_close`.
 const (
 	saveClosureSQL = `
 WITH saved AS (

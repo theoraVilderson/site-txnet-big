@@ -56,8 +56,8 @@ label would be one series per sale.
    / `quotaBytes`, per Grant closed between 5 minutes and 7 days ago. Served is
    the sum of every config's lifetime counter, as the planner's read sums it.
    The 5 minutes let the last tick land. Below zero, the close left bytes
-   behind. A Grant on two families is `mixed`. A renewal deletes the close
-   (F-027-dd), so a renewed Grant leaves the window.
+   behind. A Grant on two families is `mixed`. A reopen deletes the close
+   (F-027-dd, F-027-dx), so a reopened Grant leaves the window.
 5. **Not built:** a Grafana dashboard (no dashboard is provisioned from the
    repo), alert rules on these series (no threshold has been chosen), and
    §10's 429 rate, breaker state and anomaly/drift counts. Those are
