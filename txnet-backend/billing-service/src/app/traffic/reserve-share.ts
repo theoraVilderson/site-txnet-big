@@ -22,9 +22,21 @@ import { HAS_VPN_METER } from './vpn-meter';
  * and the short Grant then holds its own. Money a block already bought is not
  * headroom and is not shared. A postpaid floor counts in the pool but is not
  * released: part of it can be usage served and not yet captured.
+ *
+ * **Bounded in money, not only in bytes (F-118-an).** `VPN_RESERVE_BYTES` is a
+ * size in bytes, so its money follows the price: at 1000 a GiB the floor held
+ * a whole 1000 wallet idle, and a purchase from it was refused. So all the
+ * headroom of one owner together is at most a quarter of the pool — each
+ * Grant's `headroom` is its even share of that quarter. A fraction, not an
+ * amount: it holds in every currency and at every wallet size, with nothing
+ * to convert when a tenant changes currency and nothing for a tenant to get
+ * wrong. At an ordinary price the bytes are the smaller bound and nothing
+ * changes; usage served past the headroom is still bought or held as it comes.
  */
 
 const ZERO = new Prisma.Decimal(0);
+/** All of an owner's headroom together is at most `pool ÷ HEADROOM_PART` (F-118-an): a quarter. */
+export const HEADROOM_PART = 4;
 const HOLDS = new WalletHoldService(new WalletLedgerService());
 
 /** The Grants the lease planner leases headroom to: `vpn-reserve.ts`'s and the planner's own condition. */
@@ -38,10 +50,16 @@ export const RESERVED_WHERE = {
 export type ReserveShare = {
   /** Whole cents: (free balance + the owner's headroom holds) ÷ `count`, rounded down. */
   share: Prisma.Decimal;
+  /**
+   * Whole cents: the most this Grant's headroom — a prepaid reserve, a
+   * postpaid floor — may hold, `pool ÷ (count × HEADROOM_PART)` rounded down
+   * (F-118-an). What bounds a hold's size, and what a sibling above it gives back.
+   */
+  headroom: Prisma.Decimal;
   /** The owner's leased VPN Grants, the asking one counted once whatever its status. */
   count: number;
   walletId: string;
-  /** Open prepaid reserves of the other Grants — the only holds a share releases. */
+  /** Open prepaid reserves of the other Grants — the only holds `releaseAboveShare` releases. */
   siblings: Array<{ grantId: string; amount: Prisma.Decimal }>;
 };
 
@@ -64,20 +82,23 @@ export async function reserveShareOf(tx: Prisma.TransactionClient, grant: { id: 
     : [];
   const pool = holds.reduce((sum, h) => sum.plus(h.amount), wallet.cachedBalance.minus(wallet.heldAmount));
   const share = pool.lte(0) ? ZERO : pool.div(count).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
+  const headroom = pool.lte(0) ? ZERO : pool.div(count * HEADROOM_PART).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
   const siblings = holds
     .filter((h) => h.ownerRef !== grant.id && leased.includes(h.ownerRef))
     .map((h) => ({ grantId: h.ownerRef, amount: h.amount }));
-  return { share, count, walletId: wallet.id, siblings };
+  return { share, headroom, count, walletId: wallet.id, siblings };
 }
 
 /**
- * Releases every sibling prepaid reserve above `share` down to it, in the
- * caller's transaction; answers what was released. Nothing above it, nothing written.
+ * Releases every sibling prepaid reserve above its `headroom` down to it, in
+ * the caller's transaction; answers what was released. Nothing above it,
+ * nothing written. Released there, not at `share`, so a Grant that held the
+ * quarter alone gives the newcomer its part and all of it stays a quarter (F-118-an).
  */
 export async function releaseAboveShare(tx: Prisma.TransactionClient, userId: string, s: ReserveShare): Promise<Prisma.Decimal> {
   let released = ZERO;
   for (const sibling of s.siblings) {
-    const excess = sibling.amount.minus(s.share);
+    const excess = sibling.amount.minus(s.headroom);
     if (excess.lte(0)) continue;
     await HOLDS.release(tx, { userId, ownerRef: sibling.grantId, amount: excess });
     released = released.plus(excess);

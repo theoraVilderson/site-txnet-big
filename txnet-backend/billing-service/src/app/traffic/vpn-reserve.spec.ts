@@ -175,27 +175,27 @@ describe('sizeReserve', () => {
 describe('VpnReserve', () => {
   it('locks the reserve so a purchase that knows nothing of it cannot spend it', async () => {
     const s = fakeStore();
-    s.fund('25.00');
+    s.fund('50.00');
     s.grant('g1');
 
     expect((await reserve.top(s.tx, 'g1')).toFixed(2)).toBe('10.00');
     expect(s.wallet.heldAmount.toFixed(2)).toBe('10.00');
 
-    // A product of 15.01 fits the balance, but 10.00 of it is the panels'.
+    // A product of 40.01 fits the balance, but 10.00 of it is the panels'.
     await expect(
-      ledgerService.debit(s.tx, { userId: 'user-1', amount: D('15.01'), currencyCode: 'USD', reasonType: 'product_purchase' as never }),
+      ledgerService.debit(s.tx, { userId: 'user-1', amount: D('40.01'), currencyCode: 'USD', reasonType: 'product_purchase' as never }),
     ).rejects.toBeInstanceOf(InsufficientFunds);
-    await ledgerService.debit(s.tx, { userId: 'user-1', amount: D('15.00'), currencyCode: 'USD', reasonType: 'product_purchase' as never });
+    await ledgerService.debit(s.tx, { userId: 'user-1', amount: D('40.00'), currencyCode: 'USD', reasonType: 'product_purchase' as never });
     expect(s.openReserve('g1')).toBe('10.00');
   });
 
   it('tops the one open hold up to its target, and a second top moves nothing', async () => {
     const s = fakeStore();
-    s.fund('4.00');
+    s.fund('16.00');
     s.grant('g1');
-    expect((await reserve.top(s.tx, 'g1')).toFixed(2)).toBe('4.00');
+    expect((await reserve.top(s.tx, 'g1')).toFixed(2)).toBe('4.00'); // a quarter of the wallet (F-118-an)
 
-    s.fund('30.00'); // a deposit
+    s.fund('50.00'); // a deposit
     expect((await reserve.top(s.tx, 'g1')).toFixed(2)).toBe('10.00');
     expect((await reserve.top(s.tx, 'g1')).toFixed(2)).toBe('10.00');
     expect(s.holds.filter((h) => h.status === 'open')).toHaveLength(1);
@@ -205,7 +205,7 @@ describe('VpnReserve', () => {
 
   it('gives each metered Grant its own reserve, so two never promise the same money', async () => {
     const s = fakeStore();
-    s.fund('25.00');
+    s.fund('100.00');
     s.grant('g1');
     s.grant('g2');
     await reserve.top(s.tx, 'g1');
@@ -229,7 +229,7 @@ describe('VpnReserve', () => {
 
   it('is released whole when the Grant stops being served, and a second release moves nothing', async () => {
     const s = fakeStore();
-    s.fund('20.00');
+    s.fund('50.00');
     s.grant('g1');
     await reserve.top(s.tx, 'g1');
 
@@ -247,7 +247,7 @@ describe('the fair share (F-118-ag)', () => {
 
   it('splits a wallet smaller than the reserves evenly', async () => {
     const s = fakeStore();
-    s.fund('15.00');
+    s.fund('60.00'); // a quarter of it is 15.00 of headroom, under the two 10.00 reserves
     s.grant('g1');
     s.grant('g2');
     await reserve.top(s.tx, 'g1');
@@ -258,7 +258,7 @@ describe('the fair share (F-118-ag)', () => {
 
   it('takes a new Grant share back from one that held the whole wallet, spending nothing', async () => {
     const s = fakeStore();
-    s.fund('13.00');
+    s.fund('52.00');
     s.grant('g1');
     expect((await reserve.top(s.tx, 'g1')).toFixed(2)).toBe('10.00'); // alone, up to its size
     s.grant('g2', { status: GrantStatus.pending });
@@ -266,13 +266,13 @@ describe('the fair share (F-118-ag)', () => {
     expect((await reserve.top(s.tx, 'g2')).toFixed(2)).toBe('6.50');
     expect(s.openReserve('g1')).toBe('6.50');
     expect(s.wallet.heldAmount.toFixed(2)).toBe('13.00');
-    expect(s.wallet.cachedBalance.toFixed(2)).toBe('13.00');
+    expect(s.wallet.cachedBalance.toFixed(2)).toBe('52.00');
     expect(s.ledger).toHaveLength(0);
   });
 
   it('leaves a wallet large enough for every reserve as it was', async () => {
     const s = fakeStore();
-    s.fund('100.00');
+    s.fund('120.00');
     for (const id of ['g1', 'g2', 'g3']) s.grant(id);
     for (const id of ['g1', 'g2', 'g3']) expect((await reserve.top(s.tx, id)).toFixed(2)).toBe('10.00');
   });
@@ -281,9 +281,9 @@ describe('the fair share (F-118-ag)', () => {
     installVpnReserve(reserve);
     try {
       const s = fakeStore();
-      s.fund('8.00');
+      s.fund('32.00');
       s.grant('g1');
-      await reserve.top(s.tx, 'g1'); // 8.00, alone
+      await reserve.top(s.tx, 'g1'); // 8.00, alone: a quarter of the wallet
       s.grant('g2', { status: GrantStatus.suspended, statusReason: QUOTA_EXHAUSTED });
 
       await expect(reviveOnTopUp(s.tx, 'g2')).resolves.toMatchObject({ revived: true });
@@ -295,54 +295,86 @@ describe('the fair share (F-118-ag)', () => {
   });
 });
 
+describe('the reserve is bounded in money, not only in bytes (F-118-an)', () => {
+  it('holds at most a quarter of the wallet when a GiB costs more, so the rest can be spent', async () => {
+    const s = fakeStore();
+    s.fund('1000.00');
+    s.grant('g1', { rate: D('1000') });
+    expect((await reserve.top(s.tx, 'g1')).toFixed(2)).toBe('250.00');
+    await ledgerService.debit(s.tx, { userId: 'user-1', amount: D('750.00'), currencyCode: 'USD', reasonType: 'product_purchase' as never });
+    expect(s.wallet.cachedBalance.toFixed(2)).toBe('250.00');
+  });
+
+  it('shares the quarter between Grants: all headroom together stays within it', async () => {
+    const s = fakeStore();
+    s.fund('1000.00');
+    s.grant('g1', { rate: D('1000') });
+    s.grant('g2', { rate: D('1000') });
+    await reserve.top(s.tx, 'g1');
+    await reserve.top(s.tx, 'g2');
+    expect(s.openReserve('g1')).toBe('125.00');
+    expect(s.openReserve('g2')).toBe('125.00');
+    expect(s.wallet.heldAmount.toFixed(2)).toBe('250.00');
+  });
+
+  it('gives back a reserve above the bound at its next top', async () => {
+    const s = fakeStore();
+    s.fund('1000.00');
+    s.grant('g1', { rate: D('1000') });
+    await holds.hold(s.tx, { userId: 'user-1', ownerRef: 'g1', amount: D('1000.00'), currencyCode: 'USD' });
+    expect((await reserve.top(s.tx, 'g1')).toFixed(2)).toBe('250.00');
+    expect(s.wallet.heldAmount.toFixed(2)).toBe('250.00');
+  });
+});
+
 describe('BlockPurchaseService with the reserve', () => {
   const blocks = new BlockPurchaseService({} as never, ledgerService, reserve);
 
   it('pays the Grant own block from its reserve when the free balance is short, then holds the reserve again', async () => {
     const s = fakeStore();
-    s.fund('12.00');
+    s.fund('48.00');
     s.grant('g1');
-    await reserve.top(s.tx, 'g1'); // 10.00 held, 2.00 free
+    await reserve.top(s.tx, 'g1'); // 10.00 held, 38.00 free
 
-    // Half a GiB is 5.00: more than is free, less than free plus the reserve.
-    const bought = await blocks.purchase(s.tx, { grantId: 'g1', targetBytes: GIB / BigInt(2) });
+    // 4 GiB is 40.00: more than is free, less than free plus the reserve.
+    const bought = await blocks.purchase(s.tx, { grantId: 'g1', targetBytes: BigInt(4) * GIB });
 
-    expect(bought.amount.toFixed(2)).toBe('5.00');
-    expect(s.wallet.cachedBalance.toFixed(2)).toBe('7.00');
-    // Topped back from what is left: all of it, since 7.00 is under the target.
-    expect(s.openReserve('g1')).toBe('7.00');
-    expect(s.wallet.heldAmount.toFixed(2)).toBe('7.00');
+    expect(bought.amount.toFixed(2)).toBe('40.00');
+    expect(s.wallet.cachedBalance.toFixed(2)).toBe('8.00');
+    // Topped back from what is left: a quarter of it (F-118-an).
+    expect(s.openReserve('g1')).toBe('2.00');
+    expect(s.wallet.heldAmount.toFixed(2)).toBe('2.00');
   });
 
   it('never pays one Grant block from another Grant reserve', async () => {
     const s = fakeStore();
-    s.fund('10.00');
+    s.fund('80.00');
     s.grant('g1');
     s.grant('g2');
-    await reserve.top(s.tx, 'g2'); // its share: 5.00 promised to g2
+    await reserve.top(s.tx, 'g2'); // its part: 10.00 promised to g2
 
-    // A GiB is 10.00: g1 buys what is free (5.00), never g2's 5.00.
-    const bought = await blocks.purchase(s.tx, { grantId: 'g1', targetBytes: GIB });
-    expect(bought.amount.toFixed(2)).toBe('5.00');
-    // What is left is headroom again, split evenly — and still all there.
-    expect(s.wallet.cachedBalance.toFixed(2)).toBe('5.00');
-    expect(s.openReserve('g2')).toBe('2.50');
-    expect(s.openReserve('g1')).toBe('2.50');
+    // 8 GiB is 80.00: g1 buys what is free (70.00), never g2's 10.00.
+    const bought = await blocks.purchase(s.tx, { grantId: 'g1', targetBytes: BigInt(8) * GIB });
+    expect(bought.amount.toFixed(2)).toBe('70.00');
+    // What is left is headroom again, a quarter of it split evenly — and still all there.
+    expect(s.wallet.cachedBalance.toFixed(2)).toBe('10.00');
+    expect(s.openReserve('g2')).toBe('1.25');
+    expect(s.openReserve('g1')).toBe('1.25');
   });
 
   it('takes its share back before a block, when another Grant holds more than its share', async () => {
     const s = fakeStore();
-    s.fund('10.00');
+    s.fund('40.00');
     s.grant('g2');
-    await reserve.top(s.tx, 'g2'); // alone: all 10.00
+    await reserve.top(s.tx, 'g2'); // alone: 10.00, a quarter of the wallet
     s.grant('g1');
 
-    // g1's share is 5.00: g2's reserve above it is released, never spent.
-    const bought = await blocks.purchase(s.tx, { grantId: 'g1', targetBytes: GIB });
-    expect(bought.amount.toFixed(2)).toBe('5.00');
-    expect(s.ledger.map((r) => r.amount?.toString())).toEqual(['5']); // g1's block, and nothing else
+    // Each part is now 5.00: g2's reserve above it is released, never spent.
+    const bought = await blocks.purchase(s.tx, { grantId: 'g1', targetBytes: BigInt(4) * GIB });
+    expect(bought.amount.toFixed(2)).toBe('35.00');
+    expect(s.ledger.map((r) => r.amount?.toString())).toEqual(['35']); // g1's block, and nothing else
     expect(s.wallet.cachedBalance.toFixed(2)).toBe('5.00');
-    expect(s.openReserve('g2')).toBe('2.50');
+    expect(s.openReserve('g2')).toBe('0.62');
   });
 });
 
@@ -358,7 +390,7 @@ describe('a Grant back to active', () => {
     ['a renewal', PERIOD_ENDED, reviveOnRenewal],
   ])('holds its reserve in the transaction that revives it: %s', async (_, reason, revive) => {
     const s = fakeStore();
-    s.fund('30.00');
+    s.fund('40.00');
     s.grant('g1', { status: GrantStatus.suspended, statusReason: reason });
 
     await expect(revive(s.tx, 'g1')).resolves.toMatchObject({ revived: true });

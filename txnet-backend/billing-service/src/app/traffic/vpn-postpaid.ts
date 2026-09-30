@@ -6,7 +6,7 @@ import { METER_KEYS, TenantBillingLedger } from '@txnet-backend/shared-core';
 import { PostpaidHolds, type Ctx, type FundingLeg } from '../usage/postpaid-hold';
 import { ceilDiv, CENT, max, priceUnits, UsageSettlementRefused } from '../usage/usage-price';
 import type { WalletHoldService } from '../wallet/wallet-ledger.service';
-import { releaseAboveShare, reserveShareOf } from './reserve-share';
+import { releaseAboveShare, reserveShareOf, type ReserveShare } from './reserve-share';
 import { vpnMeterOf } from './vpn-meter';
 import { VpnWholesale, type WholesaleRoom } from './vpn-wholesale';
 
@@ -18,7 +18,8 @@ import { VpnWholesale, type WholesaleRoom } from './vpn-wholesale';
  * Its hold is its `grant_meter`'s (`ownerRef` = the meter id), as every
  * postpaid meter's is — so it is not the Grant's VPN reserve (F-118-b), which
  * the planner would count a second time. There is no reserve beside it: the
- * hold is the headroom, never below `VPN_RESERVE_BYTES` at the rate. Every
+ * hold is the headroom, never below `VPN_RESERVE_BYTES` at the rate, within a
+ * quarter of the wallet (F-118-an, `reserve-share.ts`). Every
  * `funded` move mirrors onto the Grant's bag (`usage/postpaid-hold.ts`), so the
  * planner's bag, `purchasedBytes`, is `billed` plus what the hold covers —
  * the ceiling stands at what was consumed plus the held bytes (network
@@ -76,7 +77,7 @@ export class VpnPostpaid {
     const holds = this.postpaid as PostpaidHolds;
     await holds.capture(tx, ctx);
     const held = await holds.heldCents(tx, ctx);
-    const target = max(held + this.cents(ctx, extraBytes), this.cents(ctx, this.reserveBytes));
+    const target = max(held + this.cents(ctx, extraBytes), await this.floor(tx, ctx));
     return holds.topUpTo(tx, ctx, target, this.legOf(ctx));
   }
 
@@ -85,18 +86,14 @@ export class VpnPostpaid {
     if (!this.postpaid) return new Prisma.Decimal(0);
     const ctx = await this.load(tx, grantId);
     const held = await this.postpaid.heldCents(tx, ctx);
-    let floor = this.cents(ctx, this.reserveBytes);
     const leased = ctx.grant.status === GrantStatus.active || ctx.grant.status === GrantStatus.pending;
-    if (!leased || held >= floor) return new Prisma.Decimal(held.toString()).div(100);
-    // The floor is headroom, so never more than its even share (F-118-ag); a
-    // prepaid reserve above its share gives the rest back first.
+    if (!leased || held >= this.cents(ctx, this.reserveBytes)) return new Prisma.Decimal(held.toString()).div(100);
+    // The floor is headroom, so never more than its part of the owner's
+    // (F-118-ag, F-118-an); a prepaid reserve above its share gives the rest back first.
     const share = await reserveShareOf(tx, ctx.grant);
-    if (share) {
-      await releaseAboveShare(tx, ctx.grant.userId, share);
-      const cents = BigInt(share.share.mul(100).toFixed(0));
-      if (cents < floor) floor = max(held, cents);
-      if (held >= floor) return new Prisma.Decimal(held.toString()).div(100);
-    }
+    if (share) await releaseAboveShare(tx, ctx.grant.userId, share);
+    const floor = max(held, this.bounded(ctx, share));
+    if (held >= floor) return new Prisma.Decimal(held.toString()).div(100);
     try {
       return (await this.postpaid.topUpTo(tx, ctx, floor, this.legOf(ctx))).held;
     } catch (e) {
@@ -132,6 +129,18 @@ export class VpnPostpaid {
 
   private load(tx: Prisma.TransactionClient, grantId: string): Promise<Ctx> {
     return (this.postpaid as PostpaidHolds).load(tx, { grantId, meterKey: METER_KEYS.vpnTraffic }, RateCardMode.postpaid);
+  }
+
+  /** The floor in cents: `VPN_RESERVE_BYTES` at the rate, within this Grant's part of the headroom (F-118-an). */
+  private async floor(tx: Prisma.TransactionClient, ctx: Ctx): Promise<bigint> {
+    return this.bounded(ctx, await reserveShareOf(tx, ctx.grant));
+  }
+
+  private bounded(ctx: Ctx, share: ReserveShare | null): bigint {
+    const bytes = this.cents(ctx, this.reserveBytes);
+    if (!share) return bytes;
+    const headroom = BigInt(share.headroom.mul(100).toFixed(0));
+    return headroom < bytes ? headroom : bytes;
   }
 
   /** `bytes` at the meter's rate, rounded **up** to a whole cent (the hold covers them). */

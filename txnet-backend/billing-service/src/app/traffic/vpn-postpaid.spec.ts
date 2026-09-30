@@ -27,7 +27,7 @@ const GRANT = '11111111-1111-4111-8111-111111111111';
 const USER = '22222222-2222-4222-8222-222222222222';
 const METER_ID = '33333333-3333-4333-8333-333333333333';
 
-function world(opts: { status?: string; balance?: string; mode?: 'prepaid' | 'postpaid'; consumed?: bigint; purchased?: bigint; billed?: bigint; funded?: bigint; held?: string } = {}) {
+function world(opts: { status?: string; balance?: string; mode?: 'prepaid' | 'postpaid'; consumed?: bigint; purchased?: bigint; billed?: bigint; funded?: bigint; held?: string; price?: string } = {}) {
   const grant = {
     id: GRANT,
     tenantId: 't1',
@@ -46,7 +46,7 @@ function world(opts: { status?: string; balance?: string; mode?: 'prepaid' | 'po
     meterKey: METER_KEYS.vpnTraffic,
     unitSize: GIB,
     // $2.00 a GiB.
-    unitPrice: D('2'),
+    unitPrice: D(opts.price ?? '2'),
     currencyCode: 'USD',
     mode: opts.mode ?? 'postpaid',
     includedQuantity: BigInt(0),
@@ -89,6 +89,8 @@ function world(opts: { status?: string; balance?: string; mode?: 'prepaid' | 'po
       },
     },
     wallet: { findUnique: async () => ({ ...wallet }) },
+    // A low-balance notice (F-601-g), when a hold leaves little free.
+    outboxEvent: { create: async ({ data }: { data: unknown }) => data },
     walletHold: {
       findMany: async () => [...holds].map(([ownerRef, amount]) => ({ ownerRef, amount })),
       findFirst: async ({ where }: { where: { ownerRef: string } }) => {
@@ -222,6 +224,32 @@ describe('the planner asks: held, never debited (ADR-0105 (6))', () => {
     const w = world();
     await expect(w.blocks.purchase(w.tx, { grantId: GRANT, targetBytes: GIB })).rejects.toThrow(BlockPurchaseRefused);
     expect(w.calls).toEqual([]);
+  });
+});
+
+describe('the floor is bounded in money, not only in bytes (F-118-an)', () => {
+  // At 1000 a GiB the 1 GiB floor was the whole 1000 wallet, held idle.
+  it('holds at most a quarter of the wallet as the floor when a GiB costs more', async () => {
+    const w = world({ balance: '1000', price: '1000' });
+    await w.reserve.top(w.tx, GRANT);
+    expect(w.calls).toEqual(['hold meter 250.00']);
+    expect(w.meter.funded).toBe(GIB / BigInt(4));
+  });
+
+  it('bounds the floor the planner asks on top of, never the bytes it asks for', async () => {
+    const small = world({ balance: '1000', price: '1000' });
+    await small.ask(MIB);
+    expect(small.calls).toEqual(['hold meter 250.00']);
+    // 512 MiB asked is 500.00: usage asked for is held as it comes.
+    const asked = world({ balance: '1000', price: '1000' });
+    await asked.ask(BigInt(512) * MIB);
+    expect(asked.calls).toEqual(['hold meter 500.00']);
+  });
+
+  it('changes nothing at an ordinary price: the bytes are the smaller bound', async () => {
+    const w = world({ balance: '10' });
+    await w.reserve.top(w.tx, GRANT);
+    expect(w.calls).toEqual(['hold meter 2.00']);
   });
 });
 

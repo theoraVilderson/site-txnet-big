@@ -120,7 +120,8 @@ picks the mode on the variant form from F-118-m (user, 2026-09-29).
    VPN reserve's, and it has no reserve beside it (network
    `contract.reserve.md`). `traffic/vpn-postpaid.ts` answers every
    `VpnReserve` call for it: a top holds the floor — `VPN_RESERVE_BYTES` at
-   the rate — only when the hold is under it (no capture a minute); a release
+   the rate, within its part of a quarter of the wallet (F-118-an) — only
+   when the hold is under it (no capture a minute); a release
    (suspension, freeze, cancel, close) captures, releases the rest, and
    brings `funded` down to `billed`.
 2. **The bag is `funded`.** Every `funded` move mirrors onto the Grant's

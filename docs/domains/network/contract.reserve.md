@@ -71,6 +71,10 @@ hurts most.
    of it can be served and not yet captured). A wallet large enough for every
    reserve is untouched. The exhaustion verdict counts the share as the
    Grant's, so a cap that stops it reads `cap_reached`, not "top up".
+   **And at most a quarter of it, together** (F-118-an): each hold is sized
+   within `pool ÷ (leased Grants × 4)`, and a sibling reserve above that is
+   what is released. A size in bytes alone locked a whole wallet at a high
+   price (1000 a GiB). At an ordinary price the bytes bind first.
 
 Billing's per-config step (`allocateCeilings`, `ceiling ≥ served + min(reserve,
 lineFloor)` on every config) ran until F-027-db and was deleted in F-027-dk;

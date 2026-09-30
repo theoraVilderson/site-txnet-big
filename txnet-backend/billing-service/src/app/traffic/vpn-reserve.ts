@@ -172,7 +172,7 @@ export class VpnReserve {
     if (!wallet || wallet.currencyCode !== meter.currencyCode) return ZERO;
 
     const held = (await openReserve(tx, wallet.id, grant.id))?.amount ?? ZERO;
-    // Never more than its even share of the owner's headroom (F-118-ag):
+    // Never more than its part of the owner's headroom (F-118-ag, F-118-an):
     // another Grant holding more gives the rest back first, spending nothing.
     const share = await reserveShareOf(tx, grant);
     if (share && (await releaseAboveShare(tx, grant.userId, share)).gt(0)) {
@@ -182,8 +182,9 @@ export class VpnReserve {
     const target = sizeReserve({
       rate: meter.unitPrice,
       reserveBytes: this.bytes,
-      // Inside the Grant's spending cap, if it has one (F-118-i).
-      available: await withinCap(tx, grant, share && share.share.lt(free) ? share.share : free, held),
+      // Inside the Grant's spending cap, if it has one (F-118-i), and its part
+      // of the quarter all headroom may hold (F-118-an).
+      available: await withinCap(tx, grant, share && share.headroom.lt(free) ? share.headroom : free, held),
     });
     const entry = { userId: grant.userId, ownerRef: grant.id };
     if (target.gt(held)) await this.holds.hold(tx, { ...entry, amount: target.minus(held), currencyCode: wallet.currencyCode });
