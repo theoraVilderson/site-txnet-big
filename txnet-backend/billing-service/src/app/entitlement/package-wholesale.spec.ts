@@ -29,6 +29,8 @@ const PACKAGE = '33333333-3333-4333-8333-333333333333';
 const GRANT = '77777777-7777-4777-8777-777777777777';
 const GROUP = '88888888-8888-4888-8888-888888888888';
 const SALE = new Date('2026-09-29T10:00:00Z');
+const DAY_S = 86_400;
+const MONTH_S = BigInt(30 * DAY_S);
 
 type World = {
   tenantType?: TenantType;
@@ -43,6 +45,12 @@ type World = {
   status?: GrantStatus;
   /** An existing leg's cursors; none = no row yet. */
   leg?: { billed: bigint; consumed: bigint };
+  /** $3.00 per 30 days for `vpn.unlimited.time` when true (F-118-z). */
+  timeRate?: boolean;
+  /** Days the plan was sold for; null = no end. 30 unless given. */
+  days?: number | null;
+  /** The existing leg prices time, not bytes. */
+  timeLeg?: boolean;
 };
 
 function world(w: World = {}) {
@@ -55,10 +63,14 @@ function world(w: World = {}) {
     trafficUnlimited: w.trafficUnlimited ?? false,
     purchasedBytes: w.purchasedBytes ?? gib(50),
     consumedBytes: w.consumedBytes ?? BigInt(0),
+    startsAt: SALE,
+    endsAt: w.days === null ? null : new Date(SALE.getTime() + (w.days ?? 30) * DAY_S * 1000),
   };
   const legs: Array<Record<string, unknown> & { billed: bigint; consumed: bigint }> = w.leg
-    ? [{ id: 'leg-1', tenantId: RESELLER, grantId: GRANT, payerTenantId: RESELLER, rateId: 'rate-1', unitSize: GIB, unitPrice: D('0.20000000'), currencyCode: 'USD', ...w.leg }]
+    ? [{ id: 'leg-1', tenantId: RESELLER, grantId: GRANT, payerTenantId: RESELLER, rateId: 'rate-1', unitSize: GIB, unitPrice: D('0.20000000'), currencyCode: 'USD', meterKey: 'vpn.traffic', ...w.leg }]
     : [];
+  if (w.leg && w.timeLeg) Object.assign(legs[0], { meterKey: 'vpn.unlimited.time', rateId: 'rate-t', unitSize: MONTH_S, unitPrice: D('3.00000000') });
+  const timeRate = { id: 'rate-t', packageId: PACKAGE, meterKey: 'vpn.unlimited.time', unitSize: MONTH_S, unitPrice: D('3.00000000'), currencyCode: 'USD', effectiveFrom: new Date('2026-06-01T00:00:00Z') };
   const resellerWallet = { id: 'twallet-1', tenantId: RESELLER, currencyCode: 'USD', cachedBalance: D(w.resellerBalance ?? '100.00'), version: 0 };
   const resellerLedger: Array<Record<string, unknown>> = [];
 
@@ -66,10 +78,12 @@ function world(w: World = {}) {
     tenant: { findUnique: async () => ({ tenantType: w.tenantType ?? TenantType.reseller }) },
     tenantSubscription: { findUnique: async () => ({ package: { id: PACKAGE, currencyCode: 'USD' } }) },
     tenantPackageMeterRate: {
-      findMany: async () =>
-        w.rate === false
+      findMany: async () => [
+        ...(w.rate === false
           ? []
-          : [{ id: 'rate-1', packageId: PACKAGE, meterKey: 'vpn.traffic', unitSize: GIB, unitPrice: D('0.20000000'), currencyCode: 'USD', effectiveFrom: new Date('2026-06-01T00:00:00Z') }],
+          : [{ id: 'rate-1', packageId: PACKAGE, meterKey: 'vpn.traffic', unitSize: GIB, unitPrice: D('0.20000000'), currencyCode: 'USD', effectiveFrom: new Date('2026-06-01T00:00:00Z') }]),
+        ...(w.timeRate ? [timeRate] : []),
+      ],
     },
     productVariant: { findUnique: async () => ({ panelGroupId: GROUP }) },
     panelGroupMember: {
@@ -80,7 +94,7 @@ function world(w: World = {}) {
     grantWholesale: {
       findUnique: async () => (legs[0] ? { ...legs[0] } : null),
       create: async ({ data }: { data: Record<string, unknown> }) => {
-        const row = { id: 'leg-1', billed: BigInt(0), consumed: BigInt(0), ...data };
+        const row = { id: 'leg-1', billed: BigInt(0), consumed: BigInt(0), meterKey: 'vpn.traffic', ...data };
         legs.push(row);
         return { ...row };
       },
@@ -156,10 +170,10 @@ describe('a reseller\'s package plan is bought wholesale at the sale (F-118-p)',
     expect(own.legs).toEqual([]);
   });
 
-  it('reads nothing for the platform\'s own sale, an unlimited plan or a metered Grant', async () => {
+  it('reads nothing for the platform\'s own sale or a metered Grant', async () => {
     for (const w of [
       world({ platformPanel: true, tenantType: TenantType.platform_owner }),
-      world({ platformPanel: true, trafficUnlimited: true, purchasedBytes: BigInt(0) }),
+      world({ platformPanel: true, tenantType: TenantType.platform_owner, trafficUnlimited: true, purchasedBytes: BigInt(0), timeRate: true }),
       world({ platformPanel: true, billingMode: VariantBillingMode.metered }),
     ]) {
       expect(await leg.open(w.tx, w.grant, SALE)).toBeNull();
@@ -257,5 +271,91 @@ describe('a close charges what a platform panel served past the cursor (F-118-y)
     expect(await leg.settleAtClose(w.tx, GRANT)).toBe(BigInt(0));
 
     expect(w.resellerLedger).toEqual([]);
+  });
+});
+
+describe('an unlimited plan buys its days wholesale, flat per period (F-118-z, D-59 (c))', () => {
+  const unlimited = (w: World = {}) => world({ trafficUnlimited: true, purchasedBytes: BigInt(0), timeRate: true, ...w });
+
+  it('buys the days it was sold for at the package\'s `vpn.unlimited.time` rate, naming the Grant', async () => {
+    const w = unlimited({ platformPanel: true, days: 90 });
+
+    expect(await leg.open(w.tx, w.grant, SALE)).toBeNull();
+
+    // $3.00 per 30 days, 90 days sold.
+    expect(w.resellerLedger).toEqual([
+      expect.objectContaining({ amount: D('9.00'), currencyCode: 'USD', reasonType: TenantBillingReasonType.metered_usage_charge, referenceId: GRANT }),
+    ]);
+    expect(w.legs[0]).toMatchObject({ meterKey: 'vpn.unlimited.time', rateId: 'rate-t', unitSize: MONTH_S, billed: BigInt(90 * DAY_S), consumed: BigInt(0) });
+  });
+
+  it('locks the rate but charges nothing on a group of the reseller\'s own panels', async () => {
+    const w = unlimited({ platformPanel: false });
+
+    expect(await leg.open(w.tx, w.grant, SALE)).toBeNull();
+
+    expect(w.resellerLedger).toEqual([]);
+    expect(w.legs[0]).toMatchObject({ meterKey: 'vpn.unlimited.time', billed: BigInt(0) });
+  });
+
+  it('no price, or no end, is no platform panel: refused `wholesale_rate_missing`; on its own panels it sells', async () => {
+    for (const w of [unlimited({ platformPanel: true, timeRate: false }), unlimited({ platformPanel: true, days: null })]) {
+      expect(await leg.open(w.tx, w.grant, SALE)).toBe('wholesale_rate_missing');
+      expect(w.legs).toEqual([]);
+      expect(w.resellerLedger).toEqual([]);
+    }
+    const own = unlimited({ platformPanel: false, timeRate: false });
+    expect(await leg.open(own.tx, own.grant, SALE)).toBeNull();
+    expect(own.legs).toEqual([]);
+  });
+
+  it('refuses a sale the reseller cannot pay for', async () => {
+    const w = unlimited({ platformPanel: true, resellerBalance: '2.99' });
+
+    expect(await leg.open(w.tx, w.grant, SALE)).toBe('wholesale_unfunded');
+
+    expect(w.resellerLedger).toEqual([]);
+  });
+
+  it('a renewal buys the days it adds, pro rata and rounded up to a cent, naming the renewal', async () => {
+    const w = unlimited({ platformPanel: true, leg: { billed: BigInt(30 * DAY_S), consumed: BigInt(0) }, timeLeg: true });
+
+    expect(await leg.renew(w.tx, GRANT, 15, 'renewal-1')).toBeNull();
+    expect(await leg.renew(w.tx, GRANT, 7, 'renewal-2')).toBeNull();
+
+    expect(w.resellerLedger).toEqual([
+      expect.objectContaining({ amount: D('1.50'), reasonType: TenantBillingReasonType.metered_usage_charge, referenceId: 'renewal-1' }),
+      // 7 days of $3.00 per 30 = $0.70.
+      expect.objectContaining({ amount: D('0.70'), referenceId: 'renewal-2' }),
+    ]);
+    expect(w.legs[0].billed).toBe(BigInt(52 * DAY_S));
+  });
+
+  it('a renewal on its own panels, of a bag, or with no leg charges nothing; one it cannot pay is refused', async () => {
+    const own = unlimited({ platformPanel: false, leg: { billed: BigInt(0), consumed: BigInt(0) }, timeLeg: true });
+    expect(await leg.renew(own.tx, GRANT, 30, 'renewal-1')).toBeNull();
+    expect(own.resellerLedger).toEqual([]);
+
+    const bag = world({ platformPanel: true, leg: { billed: gib(50), consumed: BigInt(0) } });
+    expect(await leg.renew(bag.tx, GRANT, 30, 'renewal-1')).toBeNull();
+    expect(bag.resellerLedger).toEqual([]);
+
+    const none = unlimited({ platformPanel: true });
+    expect(await leg.renew(none.tx, GRANT, 30, 'renewal-1')).toBeNull();
+    expect(none.resellerLedger).toEqual([]);
+
+    const short = unlimited({ platformPanel: true, leg: { billed: BigInt(0), consumed: BigInt(0) }, timeLeg: true, resellerBalance: '1.00' });
+    expect(await leg.renew(short.tx, GRANT, 30, 'renewal-1')).toBe('wholesale_unfunded');
+    expect(short.legs[0].billed).toBe(BigInt(0));
+  });
+
+  it('a bag\'s settle and a close move nothing on a time leg', async () => {
+    const w = unlimited({ platformPanel: true, status: GrantStatus.cancelled, leg: { billed: BigInt(30 * DAY_S), consumed: BigInt(0) }, timeLeg: true });
+
+    expect(await leg.settle(w.tx, GRANT, 'adjustment-1')).toBeNull();
+    expect(await leg.settleAtClose(w.tx, GRANT)).toBe(BigInt(0));
+
+    expect(w.resellerLedger).toEqual([]);
+    expect(w.legs[0].billed).toBe(BigInt(30 * DAY_S));
   });
 });

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { GrantSource, GrantStatus, Prisma, QuotaMetric, VariantBillingMode } from '@prisma/client';
 
 import { EntitlementRefused } from './grant';
@@ -71,6 +73,8 @@ export type RenewGrant = {
   createdByAdminId?: string | null;
   /** False: the caller tells the revival in its own notice (an admin's renewal, F-311-s); `reactivated` reports it. */
   tellReactivated?: boolean;
+  /** The renewal's own record, named by an unlimited plan's wholesale charge for its days (F-118-z); days alone write no adjustment row. */
+  referenceId?: string;
 };
 
 export type Renewal = CarryOver & {
@@ -162,6 +166,11 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
   const raise = added ?? forgiven;
   if (raise) {
     const refused = await PACKAGE_WHOLESALE.settle(tx, grant.id, raise.id);
+    if (refused) throw new EntitlementRefused(refused, grant.id);
+  }
+  // An unlimited plan buys the days it adds, flat per period (F-118-z); a dated end only.
+  if (grant.trafficUnlimited && endsAt !== null && input.days > 0) {
+    const refused = await PACKAGE_WHOLESALE.renew(tx, grant.id, input.days, input.referenceId ?? randomUUID());
     if (refused) throw new EntitlementRefused(refused, grant.id);
   }
 

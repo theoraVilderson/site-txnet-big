@@ -14,6 +14,13 @@ import { coverable, priceOf } from '../usage/usage-wholesale';
  * close what no platform panel served comes back, or what one served past the
  * cursor is charged (F-118-y).
  *
+ * An unlimited plan has no bag, so it buys its days instead (F-118-z, D-59
+ * (c)): the package's `vpn.unlimited.time` rate — a flat price per period,
+ * `unitSize` seconds — times the days sold, rounded up to a cent, at the sale
+ * and at every renewal. Its leg's `billed` counts seconds; nothing is given
+ * back or charged at close. A plan with no end is refused on a platform panel
+ * (`wholesale_rate_missing`): there is no period to price.
+ *
  * `billed` is the cursor, over `consumed` — the bytes served on **platform**
  * panels (`metering-service`). After the bag moves it is owed to
  *
@@ -31,11 +38,17 @@ import { coverable, priceOf } from '../usage/usage-wholesale';
 /** Why a sale or a raise is refused: the package prices no VPN traffic on a platform panel, or the reseller cannot pay. */
 export type PackageWholesaleRefusal = 'wholesale_rate_missing' | 'wholesale_unfunded';
 
-type Plan = Pick<Grant, 'id' | 'tenantId' | 'variantId' | 'billingMode' | 'trafficUnlimited' | 'purchasedBytes' | 'consumedBytes'>;
+type Plan = Pick<Grant, 'id' | 'tenantId' | 'variantId' | 'billingMode' | 'trafficUnlimited' | 'purchasedBytes' | 'consumedBytes' | 'startsAt' | 'endsAt'>;
+
+const SECOND_MS = 1000;
+const DAY_S = BigInt(86_400);
 
 const CLOSED: ReadonlySet<GrantStatus> = new Set([GrantStatus.expired, GrantStatus.cancelled, GrantStatus.exhausted]);
 
 const rateOf = (leg: GrantWholesale): Priced => ({ unitSize: leg.unitSize, unitPrice: leg.unitPrice, includedQuantity: ZERO });
+
+/** A leg that buys days, not bytes (F-118-z): no bag to settle, nothing at close. */
+const isTime = (leg: GrantWholesale) => leg.meterKey === METER_KEYS.unlimitedTime;
 
 export class PackageWholesale {
   constructor(private readonly ledger: TenantBillingLedger = new TenantBillingLedger()) {}
@@ -48,24 +61,46 @@ export class PackageWholesale {
    * own panels the reseller sells as before, with no leg.
    */
   async open(tx: Prisma.TransactionClient, grant: Plan, at: Date): Promise<PackageWholesaleRefusal | null> {
-    if (grant.billingMode !== VariantBillingMode.prepaid || grant.trafficUnlimited || grant.purchasedBytes <= ZERO) return null;
+    if (grant.billingMode !== VariantBillingMode.prepaid) return null;
+    if (!grant.trafficUnlimited && grant.purchasedBytes <= ZERO) return null;
     const tenant = await tx.tenant.findUnique({ where: { id: grant.tenantId }, select: { tenantType: true } });
     if (tenant?.tenantType !== TenantType.reseller) return null;
 
-    const rate = await this.rateAt(tx, grant.tenantId, at);
-    if (!rate) return (await onPlatformPanel(tx, grant.variantId)) ? 'wholesale_rate_missing' : null;
-    await tx.grantWholesale.create({
+    const meterKey = grant.trafficUnlimited ? METER_KEYS.unlimitedTime : METER_KEYS.vpnTraffic;
+    const rate = await this.rateAt(tx, grant.tenantId, meterKey, at);
+    // An unlimited plan with no end has no period to price: on a platform panel it is as unpriced.
+    const priced = rate && (!grant.trafficUnlimited || grant.endsAt !== null) ? rate : null;
+    if (!priced) return (await onPlatformPanel(tx, grant.variantId)) ? 'wholesale_rate_missing' : null;
+    const leg = await tx.grantWholesale.create({
       data: {
         tenantId: grant.tenantId,
         grantId: grant.id,
         payerTenantId: grant.tenantId,
-        rateId: rate.id,
-        unitSize: rate.unitSize,
-        unitPrice: rate.unitPrice,
-        currencyCode: rate.currencyCode,
+        rateId: priced.id,
+        meterKey,
+        unitSize: priced.unitSize,
+        unitPrice: priced.unitPrice,
+        currencyCode: priced.currencyCode,
       },
     });
-    return this.settle(tx, grant.id, grant.id);
+    if (!grant.trafficUnlimited) return this.settle(tx, grant.id, grant.id);
+    const sold = BigInt(Math.ceil(((grant.endsAt as Date).getTime() - grant.startsAt.getTime()) / SECOND_MS));
+    return this.buyTime(tx, leg, grant.variantId, sold, grant.id);
+  }
+
+  /**
+   * A renewal of an unlimited plan buys the days it adds (F-118-z), one
+   * `metered_usage_charge` naming `referenceId` (the renewal's record). Nothing
+   * for a bag's leg (its raise is `settle`), a Grant with no leg, or a group of
+   * the reseller's own panels today.
+   */
+  async renew(tx: Prisma.TransactionClient, grantId: string, days: number, referenceId: string): Promise<PackageWholesaleRefusal | null> {
+    if (days <= 0) return null;
+    const leg = await tx.grantWholesale.findUnique({ where: { grantId } });
+    if (!leg || !isTime(leg)) return null;
+    const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { variantId: true } });
+    if (!grant) return null;
+    return this.buyTime(tx, leg, grant.variantId, BigInt(days) * DAY_S, referenceId);
   }
 
   /**
@@ -75,7 +110,7 @@ export class PackageWholesale {
    */
   async settle(tx: Prisma.TransactionClient, grantId: string, referenceId: string): Promise<PackageWholesaleRefusal | null> {
     const leg = await tx.grantWholesale.findUnique({ where: { grantId } });
-    if (!leg) return null;
+    if (!leg || isTime(leg)) return null;
     const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { variantId: true, purchasedBytes: true, consumedBytes: true } });
     if (!grant) return null;
 
@@ -113,7 +148,7 @@ export class PackageWholesale {
     const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { status: true } });
     if (!grant || !CLOSED.has(grant.status)) return ZERO;
     const leg = await tx.grantWholesale.findUnique({ where: { grantId } });
-    if (!leg) return ZERO;
+    if (!leg || isTime(leg)) return ZERO;
     const rate = rateOf(leg);
     if (leg.consumed > leg.billed) {
       const short = leg.consumed - leg.billed;
@@ -146,8 +181,29 @@ export class PackageWholesale {
     return ZERO;
   }
 
-  /** The reseller's package rate for `vpn.traffic` in force at `at`, or null. */
-  private async rateAt(tx: Prisma.TransactionClient, tenantId: string, at: Date) {
+  /**
+   * `seconds` of an unlimited plan, priced **up** to a cent when the group
+   * holds a platform panel now; the cursor moves by the seconds sold.
+   */
+  private async buyTime(tx: Prisma.TransactionClient, leg: GrantWholesale, variantId: string | null, seconds: bigint, referenceId: string): Promise<PackageWholesaleRefusal | null> {
+    if (seconds <= ZERO || variantId === null || !(await onPlatformPanel(tx, variantId))) return null;
+    const cents = priceOf(rateOf(leg), seconds);
+    const wallet = await tx.tenantBillingWallet.findUnique({ where: { tenantId: leg.payerTenantId } });
+    if (cents > toCents(wallet?.cachedBalance ?? new Prisma.Decimal(0))) return 'wholesale_unfunded';
+    await this.moveCursor(tx, leg, leg.billed + seconds);
+    if (cents === ZERO) return null;
+    await this.ledger.debit(tx, {
+      tenantId: leg.payerTenantId,
+      amount: toAmount(cents),
+      currencyCode: leg.currencyCode,
+      reasonType: TenantBillingReasonType.metered_usage_charge,
+      referenceId,
+    });
+    return null;
+  }
+
+  /** The reseller's package rate for `meterKey` in force at `at`, or null. */
+  private async rateAt(tx: Prisma.TransactionClient, tenantId: string, meterKey: string, at: Date) {
     const subscription = await tx.tenantSubscription.findUnique({
       where: { tenantId },
       select: { package: { select: { id: true, currencyCode: true } } },
@@ -155,7 +211,7 @@ export class PackageWholesale {
     if (!subscription) return null;
     const { id, currencyCode } = subscription.package;
     const rates = (await packageMeterRatesAt(tx, new Map([[id, currencyCode]]), at)).get(id) ?? [];
-    return rates.find((r) => r.meterKey === METER_KEYS.vpnTraffic) ?? null;
+    return rates.find((r) => r.meterKey === meterKey) ?? null;
   }
 
   private async moveCursor(tx: Prisma.TransactionClient, leg: GrantWholesale, to: bigint): Promise<void> {

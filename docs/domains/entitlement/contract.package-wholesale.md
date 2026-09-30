@@ -2,8 +2,8 @@
 id: entitlement
 layer: domain
 status: draft
-version: 24
-updated: 2026-09-29
+version: 26
+updated: 2026-09-30
 ---
 
 # Entitlement — a reseller's package plan, bought wholesale (F-118-p)
@@ -29,8 +29,31 @@ in bytes — `billed` (what the reseller paid for) and `consumed` (bytes of the
 Grant served on **platform-owned** panels, advanced by `metering-service`,
 billing `contract.metering.md`).
 
-No row for: the platform's own sales, an unlimited plan (`trafficUnlimited`, no
-bag), a metered Grant, and a plan sold before this row existed (no backfill).
+No row for: the platform's own sales, a metered Grant, and a plan sold before
+this row existed (no backfill). An unlimited plan's row buys days, not bytes —
+below. `meterKey` says which: `vpn.traffic` or `vpn.unlimited.time`.
+
+## An unlimited plan buys its days (F-118-z, D-59 (c))
+
+An unlimited plan (`trafficUnlimited`) has no bag, so it locks the package's
+`vpn.unlimited.time` rate instead — a flat price per period, `unitSize` seconds
+(30 days = 2 592 000), set in `meterRates` like any wholesale rate (tenant
+`contract.admin.md`). Charged pro rata to the days sold (user, 2026-09-30:
+a 90-day plan is 3 periods, a 15-day renewal half of one), priced **up** to a
+cent, `billed` counting the seconds; `consumed` stays 0 (metering advances only
+a `vpn.traffic` leg).
+
+- **Sale** (`open`): `endsAt − startsAt`, naming the Grant. **Renewal**
+  (`renewGrant` → `renew`): the days added, naming the renewal's record
+  (`grant_renewal.id`, chosen before the row). An admin's days change
+  (`contract.admin.md`) charges nothing.
+- Charged only when the group holds a platform panel **now**; the rate is
+  locked whenever the package has one. Rules 3 and 4 hold as for a bag:
+  `wholesale_unfunded` rolls the act back; no `vpn.unlimited.time` rate, **or a
+  plan with no end** (user, 2026-09-30: no period to price), is
+  `wholesale_rate_missing` on a platform panel and sells with no leg otherwise.
+- Nothing at close: the days were sold whole. `settle` and `settleAtClose`
+  move nothing on this leg.
 
 ## Rules
 
@@ -82,8 +105,8 @@ bag), a metered Grant, and a plan sold before this row existed (no backfill).
 
 ## Known gaps
 
-- **An unlimited plan on a platform panel costs the reseller nothing**: it
-  has no bag to price. Open: `open-questions.md` (2026-09-29).
+- **An unlimited plan's unserved days are not given back** at an early close
+  (an admin's delete), and an admin's added days are free (F-118-z).
 - **Bytes a reseller could not pay for at close** are only logged: the gap
   `consumed − billed` on the closed Grant's leg is the record, and nothing
   collects it later (F-118-y).

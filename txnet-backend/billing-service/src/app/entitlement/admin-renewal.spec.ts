@@ -90,7 +90,7 @@ beforeEach(() => vi.mocked(renewGrant).mockReset());
 describe('renewGrantByAdmin — one period of the plan the user bought, by default', () => {
   it('renews the Grant’s own bag and period days, as admin_grant, with the admin on it', async () => {
     vi.mocked(renewGrant).mockResolvedValue(renewed());
-    const { tx } = fakeTx(grantRow());
+    const { tx, raw } = fakeTx(grantRow());
 
     const out = await renewGrantByAdmin(tx, input({ reason: 'paid cash' }));
 
@@ -103,7 +103,10 @@ describe('renewGrantByAdmin — one period of the plan the user bought, by defau
       reason: 'paid cash',
       createdByAdminId: ADMIN,
       tellReactivated: false,
+      // The renewal row's own id, chosen first: an unlimited plan's wholesale charge names it (F-118-z).
+      referenceId: expect.any(String),
     });
+    expect(raw.grantRenewal.create.mock.calls[0][0].data.id).toBe(vi.mocked(renewGrant).mock.calls[0][1].referenceId);
     expect(out).toMatchObject({ plan: true, bytes: BigInt(50) * GIB, days: 30, renewed: true, revived: true });
   });
 
@@ -188,7 +191,7 @@ describe('renewGrantByAdmin — written down, once per request', () => {
         reason: 'paid cash',
       }),
     ]);
-    expect(out.renewalId).toBe('renewal-1');
+    expect(out.renewalId).toBe(rows[0].id);
   });
 
   it('answers a repeat of the request with the first renewal, and renews nothing', async () => {

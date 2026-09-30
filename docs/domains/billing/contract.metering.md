@@ -112,7 +112,8 @@ nothing, and one Grant's group may mix both.
 4. **A package plan counts the same bytes on its own leg** (F-118-p): the same
    charge advances `grant_wholesale.consumed` (entitlement
    `contract.package-wholesale.md`); a Grant has that row or a metered leg,
-   never both.
+   never both. Only a `vpn.traffic` leg counts: an unlimited plan's
+   `vpn.unlimited.time` leg buys days, not bytes (F-118-z).
 
 ## Usage events — every meter but VPN (F-118-f)
 

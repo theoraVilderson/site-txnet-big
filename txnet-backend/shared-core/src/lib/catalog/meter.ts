@@ -13,6 +13,8 @@ export const METER_KEYS = {
   vpnTraffic: 'vpn.traffic',
   /** One config regenerated on a VPN Grant, counted by billing-service, which runs it (F-118-q). Served through the per-use door (F-118-h). */
   configRegenerate: 'vpn.config.regenerate',
+  /** A second of an unlimited package plan a reseller sells, bought wholesale by the days sold (F-118-z). A package rate only, never a rate card. */
+  unlimitedTime: 'vpn.unlimited.time',
 } as const;
 
 export type MeterKey = (typeof METER_KEYS)[keyof typeof METER_KEYS];

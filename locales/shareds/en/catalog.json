@@ -8,6 +8,11 @@
         "regenerate": {
           "name": "VPN config regeneration"
         }
+      },
+      "unlimited": {
+        "time": {
+          "name": "Unlimited VPN time"
+        }
       }
     }
   }

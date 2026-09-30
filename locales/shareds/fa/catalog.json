@@ -8,6 +8,11 @@
         "regenerate": {
           "name": "ساختن دوباره‌ی کانفیگ VPN"
         }
+      },
+      "unlimited": {
+        "time": {
+          "name": "زمان VPN نامحدود"
+        }
       }
     }
   }

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { GrantSource, Prisma, VariantBillingMode } from '@prisma/client';
 
 import { trafficQuotaOf } from '../catalog/traffic-quota';
@@ -86,6 +88,8 @@ export async function renewGrantByAdmin(tx: Prisma.TransactionClient, input: Adm
   if (!grant) throw new EntitlementRefused('grant_not_found', input.grantId);
 
   const amount = input.amount ?? planPeriodOf(grant);
+  // Chosen before the row exists: an unlimited plan's wholesale charge names it (F-118-z).
+  const renewalId = randomUUID();
   const done = await renewGrant(tx, {
     grantId: grant.id,
     bytes: amount.bytes,
@@ -95,11 +99,13 @@ export async function renewGrantByAdmin(tx: Prisma.TransactionClient, input: Adm
     reason: input.reason,
     createdByAdminId: input.actorUserId,
     tellReactivated: false,
+    referenceId: renewalId,
   });
 
   try {
     const row = await tx.grantRenewal.create({
       data: {
+        id: renewalId,
         tenantId: grant.tenantId,
         grantId: grant.id,
         requestId: input.requestId,

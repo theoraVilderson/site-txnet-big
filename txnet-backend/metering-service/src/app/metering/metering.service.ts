@@ -352,7 +352,11 @@ export class MeteringService {
         data: { wholesaleConsumed: { increment: charged } },
       });
       // A reseller's package plan has no meter; its leg counts the same bytes (F-118-p).
-      await tx.grantWholesale.updateMany({ where: { grantId: c.config.grantId }, data: { consumed: { increment: charged } } });
+      // An unlimited plan's leg buys days, not bytes (F-118-z): it counts none.
+      await tx.grantWholesale.updateMany({
+        where: { grantId: c.config.grantId, meterKey: METER_KEYS.vpnTraffic },
+        data: { consumed: { increment: charged } },
+      });
     }
     await this.announceUsage(tx, c.config, grant.userId, grant.consumedBytes);
     await this.announceThreshold(tx, c.config, grant, charged);
