@@ -80,6 +80,11 @@ export interface WalletLedgerRow {
   balanceAfter: string;
   /** The row's own currency — a USD row written before a switch to IRR stays dollars (F-116-h3). */
   currencyCode: string;
+  /** A postpaid capture's meter and the units it paid for, a decimal string — bytes on `vpn.traffic` (F-118-am). */
+  meterKey: string | null;
+  usageQuantity: string | null;
+  /** `final_usage_rounded_up`: a closed service's last usage, priced up to a cent (F-118-al). */
+  note: "final_usage_rounded_up" | null;
   createdAt: string;
 }
 

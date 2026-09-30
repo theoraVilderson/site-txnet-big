@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { LedgerDirection, PaymentStatus, Prisma, WalletReasonType } from '@prisma/client';
+import { LedgerDirection, PaymentStatus, Prisma, WalletReasonType, WalletTransactionNote } from '@prisma/client';
 import { BackendI18nKeys, TenantContext, operatingCurrencyOf, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { LocaleService } from '../locale/locale.service';
@@ -115,6 +115,14 @@ export type LedgerRow = {
    * A row written before a currency change keeps the old one (F-116-h2).
    */
   currencyCode: string;
+  /**
+   * A postpaid capture's usage (F-118-am): its meter, and the units it paid
+   * for as a decimal string — bytes on `vpn.traffic`. Both null on any other row.
+   */
+  meterKey: string | null;
+  usageQuantity: string | null;
+  /** `final_usage_rounded_up`: a closed service's last usage, priced up to a cent (F-118-al). */
+  note: WalletTransactionNote | null;
   createdAt: string;
 };
 
@@ -333,6 +341,9 @@ export class WalletHistoryService {
             referenceId: true,
             balanceAfter: true,
             currencyCode: true,
+            meterKey: true,
+            usageQuantity: true,
+            note: true,
             createdAt: true,
           },
         }),
@@ -353,6 +364,9 @@ export class WalletHistoryService {
           referenceId: r.referenceId,
           balanceAfter: money(r.balanceAfter),
           currencyCode: r.currencyCode,
+          meterKey: r.meterKey,
+          usageQuantity: r.usageQuantity?.toString() ?? null,
+          note: r.note,
           createdAt: r.createdAt.toISOString(),
         })),
       };

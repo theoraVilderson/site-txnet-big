@@ -1,4 +1,4 @@
-import { GrantMeter, GrantStatus, Prisma, RateCardAfterIncluded, RateCardMode, WalletHoldStatus, WalletReasonType } from '@prisma/client';
+import { GrantMeter, GrantStatus, Prisma, RateCardAfterIncluded, RateCardMode, WalletHoldStatus, WalletReasonType, WalletTransactionNote } from '@prisma/client';
 import { METER_KEYS } from '@txnet-backend/shared-core';
 
 import type { WalletHoldService } from '../wallet/wallet-ledger.service';
@@ -69,12 +69,17 @@ export class PostpaidHolds {
     return { grant, meter: { ...meter, consumed: vpnConsumed(grant, meter) } };
   }
 
-  /** `consumed − billed` captured from the hold (`usage_charge`), rounded down unless `up`, never past the hold. */
+  /**
+   * `consumed − billed` captured from the hold (`usage_charge`), rounded down unless `up`, never past the hold.
+   * The row names the units it paid for; one priced up past their exact price says so (F-118-am).
+   */
   async capture(tx: Prisma.TransactionClient, ctx: Ctx, round: 'down' | 'up' = 'down'): Promise<Captured> {
     const { meter, grant } = ctx;
     const { cents, billedTo } = capturable(meter, meter.billed, meter.consumed, await this.heldCents(tx, ctx), round);
     if (cents === ZERO) return { amount: new Prisma.Decimal(0), billed: meter.billed, walletTransactionId: null };
 
+    const quantity = billedTo - max(meter.billed, meter.includedQuantity);
+    const roundedUp = round === 'up' && cents * meter.unitSize * CENT > quantity * priceUnits(meter);
     await this.move(tx, ctx, { billed: billedTo });
     const amount = toAmount(cents);
     const row = await this.holds.capture(tx, {
@@ -84,6 +89,8 @@ export class PostpaidHolds {
       currencyCode: meter.currencyCode,
       reasonType: WalletReasonType.usage_charge,
       referenceId: grant.id,
+      ...(quantity > ZERO ? { usage: { meterKey: meter.meterKey, quantity } } : {}),
+      ...(roundedUp && quantity > ZERO ? { note: WalletTransactionNote.final_usage_rounded_up } : {}),
     });
     await spendOnCap(tx, grant.id, amount);
     return { amount, billed: billedTo, walletTransactionId: row.id };

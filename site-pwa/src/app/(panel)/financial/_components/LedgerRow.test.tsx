@@ -16,7 +16,7 @@ import { LedgerRow } from "./LedgerRow";
 
 vi.mock("@/context/LocaleContext", () => ({ useLocale: () => ({ t, lang: "en" }) }));
 
-const t = (_ns: string, key: string) => key;
+const t = (_ns: string, key: string, vars?: Record<string, string>) => (vars ? `${key} ${Object.values(vars).join(" ")}` : key);
 
 const row = (over: Partial<WalletLedgerRow>): WalletLedgerRow => ({
   id: "row-1",
@@ -26,6 +26,9 @@ const row = (over: Partial<WalletLedgerRow>): WalletLedgerRow => ({
   referenceId: null,
   balanceAfter: "12.00",
   currencyCode: "USD",
+  meterKey: null,
+  usageQuantity: null,
+  note: null,
   createdAt: "2026-09-01T10:00:00Z",
   ...over,
 });
@@ -47,5 +50,28 @@ describe("a ledger row's money", () => {
 
   it("has no default currency to fall back to", () => {
     expect("BASE_CURRENCY" in money).toBe(false);
+  });
+});
+
+describe("a closed service's last usage (F-118-am)", () => {
+  it("says it was rounded up, with the traffic it covers", () => {
+    render(
+      <LedgerRow
+        row={row({
+          direction: "debit",
+          amount: "0.01",
+          reasonType: "usage_charge",
+          meterKey: "vpn.traffic",
+          usageQuantity: String(3 * 1024 * 1024),
+          note: "final_usage_rounded_up",
+        })}
+      />,
+    );
+    expect(screen.getByText("financial.note.final_usage_rounded_up 3 MB")).toBeTruthy();
+  });
+
+  it("says nothing of rounding on a capture priced exactly", () => {
+    render(<LedgerRow row={row({ direction: "debit", reasonType: "usage_charge", meterKey: "vpn.traffic", usageQuantity: "1024" })} />);
+    expect(screen.queryByText(/financial\.note\./)).toBeNull();
   });
 });

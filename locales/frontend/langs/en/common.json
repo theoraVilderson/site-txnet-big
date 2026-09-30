@@ -593,7 +593,11 @@
       "failureCode": "Gateway failure code",
       "expiresAt": "Pay before",
       "balanceAfter": "Balance after this row",
-      "noCoupons": "This service does not answer the individual gift codes."
+      "noCoupons": "This service does not answer the individual gift codes.",
+      "usage": "Usage paid for"
+    },
+    "note": {
+      "final_usage_rounded_up": "Last usage of a closed service: {{usage}}, rounded up to the smallest amount the wallet records"
     }
   },
   "accounts": {

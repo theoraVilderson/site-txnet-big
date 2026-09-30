@@ -98,6 +98,8 @@ Two things in the current design stop that:
    be opened, used to just under a cent, closed and opened again for free.
    At most one cent, once per Grant, from the hold; as a prepaid remainder
    already keeps its dust. A suspension or freeze still rounds down and carries.
+   Its wallet row says so — `note = final_usage_rounded_up`, with the units it
+   covers (F-118-am).
 6. **A wallet hold is locked money, not a ledger row.** `wallet_hold` rows and
    `wallet.heldAmount`, written only together, with `CHECK (cachedBalance −
    heldAmount >= 0)`: no debit path — a purchase, a transfer, a block — can

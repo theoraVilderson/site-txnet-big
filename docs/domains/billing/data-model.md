@@ -64,6 +64,11 @@ which also added `currencyCode` to the four tenant <-> platform tables — tenan
 data-model). `currency_change` is the `WalletReasonType` of a change's closing and
 opening rows (`20260928002800`, alone because a new enum value is unusable in the
 transaction that adds it).
+A postpaid capture names its usage: `wallet_transaction.meterKey` + `usageQuantity`
+(units of that meter, bytes on `vpn.traffic`), both or neither; `note`
+(`WalletTransactionNote`) says what `reasonType` cannot — `final_usage_rounded_up`
+on a closed Grant's last capture priced up to a cent, only on a `usage_charge`
+naming its usage (F-118-am, CHECKs in `20260930000600_a_final_usage_charge_says_it_was_rounded`).
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |

@@ -52,6 +52,9 @@ function ledgerRow(overrides: Record<string, unknown> = {}) {
     referenceId: null,
     balanceAfter: d('30.00'),
     currencyCode: 'USD',
+    meterKey: null,
+    usageQuantity: null,
+    note: null,
     createdAt: new Date('2026-09-10T10:00:00Z'),
     ...overrides,
   };
@@ -183,6 +186,27 @@ describe('WalletHistoryService.ledger', () => {
     expect(result.balance).toBe('30.00');
     expect(result.rows.map((r) => r.balanceAfter)).toEqual(['30.00', '20.00']);
     expect(result.total).toBe(2);
+  });
+
+  it('answers a final capture with the usage it covers and that it was rounded up (F-118-am)', async () => {
+    const { service } = build({
+      rows: [
+        ledgerRow({
+          reasonType: WalletReasonType.usage_charge,
+          direction: 'debit',
+          amount: d('0.01'),
+          meterKey: 'vpn.traffic',
+          // Past 2^53: a string, never a rounded number.
+          usageQuantity: BigInt('9007199254740993'),
+          note: 'final_usage_rounded_up',
+        }),
+        ledgerRow({ id: 'b' }),
+      ],
+    });
+    const result = await runWithTenant({ id: TENANT }, () => service.ledger({ userId: USER, lang: 'fa', ...page }));
+
+    expect(result.rows[0]).toMatchObject({ meterKey: 'vpn.traffic', usageQuantity: '9007199254740993', note: 'final_usage_rounded_up' });
+    expect(result.rows[1]).toMatchObject({ meterKey: null, usageQuantity: null, note: null });
   });
 
   it('is an empty page, not an error, for a user with no wallet yet', async () => {

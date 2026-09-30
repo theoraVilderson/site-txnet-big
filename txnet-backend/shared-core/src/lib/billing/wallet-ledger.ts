@@ -4,6 +4,7 @@ import {
   Prisma,
   WalletReasonType,
   WalletTransaction,
+  WalletTransactionNote,
 } from '@prisma/client';
 
 import { OutboxEventType } from '../automation/routing-keys';
@@ -62,6 +63,10 @@ export type LedgerEntry = {
   reasonType: WalletReasonType;
   /** The row that caused this movement — a payment, a redemption, a transfer. */
   referenceId?: string;
+  /** A postpaid capture's usage (F-118-am): the meter and the units it paid for. */
+  usage?: { meterKey: string; quantity: bigint };
+  /** A fact about the row beyond `reasonType` (F-118-am). */
+  note?: WalletTransactionNote;
   /**
    * The wallet owner's tenant, for a `tx` the tenant extension does not stamp
    * (a cross-tenant pool). Inside `tenantTransaction` leave it out: the
@@ -206,6 +211,8 @@ export class WalletLedgerService {
         direction,
         reasonType: entry.reasonType,
         referenceId: entry.referenceId,
+        ...(entry.usage ? { meterKey: entry.usage.meterKey, usageQuantity: entry.usage.quantity } : {}),
+        ...(entry.note ? { note: entry.note } : {}),
         currencyCode: wallet.currencyCode,
         ...(source ?? {}),
         ...(entry.tenantId ? { tenantId: entry.tenantId } : {}),

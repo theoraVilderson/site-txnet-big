@@ -1,18 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { Hash, Wallet } from "lucide-react";
+import { Gauge, Hash, Wallet } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { WalletLedgerRow } from "@/lib/billing-api";
 import { formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
+import { formatBytes } from "../../services/_lib/service-configs";
 import { DIRECTION_TONES, reasonLabelKey } from "../_lib/tones";
 import { Badge } from "./Badge";
 import { DetailItem } from "./DetailItem";
 import { ExpandableRow } from "./ExpandableRow";
 
 const F = FrontendI18nKeys.common.financial;
+
+/** The meter whose units are bytes; any other meter's are counted as they are. */
+const VPN_TRAFFIC = "vpn.traffic";
 
 /**
  * One movement of money (F-093-d).
@@ -25,6 +29,10 @@ const F = FrontendI18nKeys.common.financial;
  * `balanceAfter` is printed as the ledger wrote it. Nothing on this page adds
  * an amount to a balance or walks one backwards, which is the single thing
  * legacy's version of this row did wrong (F-092-n's note).
+ *
+ * A postpaid capture names the usage it paid for, and a closed service's last
+ * one says it was rounded up to the smallest amount the wallet records
+ * (F-118-am) — so a one-cent charge after a close explains itself.
  */
 export function LedgerRow({ row }: { row: WalletLedgerRow }) {
   const { lang, t } = useLocale();
@@ -37,14 +45,22 @@ export function LedgerRow({ row }: { row: WalletLedgerRow }) {
   const title = reasonKey ? t("common", reasonKey) : row.reasonType;
   const money = (amount: string) => formatMoney(amount, row.currencyCode, { lang, t });
   const when = formatInstant(row.createdAt, lang);
+  const usage =
+    row.usageQuantity === null
+      ? null
+      : row.meterKey === VPN_TRAFFIC
+        ? formatBytes(row.usageQuantity, lang)
+        : row.usageQuantity;
+  const note = row.note && usage ? t("common", F.note[row.note], { usage }) : null;
 
   return (
     <ExpandableRow
       expanded={expanded}
       onToggle={() => setExpanded((open) => !open)}
-      canExpand={row.referenceId !== null}
+      canExpand={row.referenceId !== null || usage !== null}
       details={
         <>
+          {usage && <DetailItem icon={Gauge} label={t("common", F.detail.usage)} value={usage} ltr />}
           {row.referenceId && (
             <DetailItem icon={Hash} label={t("common", F.detail.reference)} value={row.referenceId} copyable ltr />
           )}
@@ -66,6 +82,7 @@ export function LedgerRow({ row }: { row: WalletLedgerRow }) {
 
         <div className="col-span-10 min-w-0 md:col-span-4">
           <p className="truncate text-sm font-bold text-text-primary">{title}</p>
+          {note && <p className="mt-0.5 text-xs text-text-secondary">{note}</p>}
           <p className="mt-0.5 truncate font-mono text-[10px] text-text-secondary" dir="ltr">
             {row.id}
           </p>

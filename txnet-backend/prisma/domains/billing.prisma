@@ -47,6 +47,15 @@ enum WalletReasonType {
   @@schema("billing")
 }
 
+/// F-118-am: what a `wallet_transaction` says beyond its `reasonType`.
+enum WalletTransactionNote {
+  /// A closed Grant's last capture, priced **up** to a whole cent (F-118-al);
+  /// only on a `usage_charge` that names its usage.
+  final_usage_rounded_up
+
+  @@schema("billing")
+}
+
 enum TransferStatus {
   pending_otp
   confirmed
@@ -269,6 +278,12 @@ model WalletTransaction {
   /// rate. Both or neither, CHECK in the migration.
   sourceAmount       Decimal?    @db.Decimal(18, 2)
   sourceCurrencyCode String?
+  /// A postpaid capture's usage (F-118-am): the meter and the units it paid
+  /// for — bytes on `vpn.traffic`. Both or neither, CHECK in the migration.
+  meterKey      String?
+  usageQuantity BigInt?
+  /// A fact about the row beyond its `reasonType` (F-118-am); null is none.
+  note          WalletTransactionNote?
   createdAt    DateTime          @default(now())
 
   wallet                Wallet                 @relation(fields: [walletId], references: [id])

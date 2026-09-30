@@ -63,7 +63,7 @@ function world(opts: { status?: string; balance?: string; mode?: 'prepaid' | 'po
     wallet.heldAmount = D(opts.held);
   }
   const calls: string[] = [];
-  const ledger: Array<{ amount: string; reasonType: WalletReasonType }> = [];
+  const ledger: Array<{ amount: string; reasonType: WalletReasonType; usage?: { meterKey: string; quantity: bigint }; note?: string }> = [];
 
   const tx = {
     // No planner close (F-027-ec).
@@ -108,11 +108,11 @@ function world(opts: { status?: string; balance?: string; mode?: 'prepaid' | 'po
       wallet.heldAmount = wallet.heldAmount.plus(e.amount);
       calls.push(`hold ${e.ownerRef === METER_ID ? 'meter' : 'grant'} ${e.amount.toFixed(2)}`);
     },
-    capture: async (_tx: unknown, e: { ownerRef: string; amount: Prisma.Decimal; reasonType: WalletReasonType }) => {
+    capture: async (_tx: unknown, e: { ownerRef: string; amount: Prisma.Decimal; reasonType: WalletReasonType; usage?: { meterKey: string; quantity: bigint }; note?: string }) => {
       holds.set(e.ownerRef, holds.get(e.ownerRef)!.minus(e.amount));
       wallet.heldAmount = wallet.heldAmount.minus(e.amount);
       wallet.cachedBalance = wallet.cachedBalance.minus(e.amount);
-      ledger.push({ amount: e.amount.toFixed(2), reasonType: e.reasonType });
+      ledger.push({ amount: e.amount.toFixed(2), reasonType: e.reasonType, ...(e.usage ? { usage: e.usage } : {}), ...(e.note ? { note: e.note } : {}) });
       calls.push(`capture ${e.amount.toFixed(2)}`);
       return { id: `tx-${ledger.length}` };
     },
@@ -188,7 +188,8 @@ describe('the planner asks: held, never debited (ADR-0105 (6))', () => {
     await w.ask(BigInt(512) * MIB);
     // 768 MiB = $1.50 captured, then $0.50 + $1.00 asked = $1.50 is under the $2.00 floor: back to $2.00.
     expect(w.calls).toEqual(['capture 1.50', 'hold meter 1.50']);
-    expect(w.ledger).toEqual([{ amount: '1.50', reasonType: WalletReasonType.usage_charge }]);
+    // The row names the bytes it paid for (F-118-am); priced exactly, it says nothing more.
+    expect(w.ledger).toEqual([{ amount: '1.50', reasonType: WalletReasonType.usage_charge, usage: { meterKey: METER_KEYS.vpnTraffic, quantity: BigInt(768) * MIB } }]);
     expect(w.meter.billed).toBe(BigInt(768) * MIB);
     expect(w.grant.purchasedBytes).toBe(BigInt(768) * MIB + GIB);
   });
@@ -280,10 +281,21 @@ describe('the reserve paths reach the meter hold (F-118-b)', () => {
     await closed.reserve.release(closed.tx, { id: GRANT, userId: USER });
     expect(closed.calls).toEqual(['capture 0.01', 'release 1.99']);
     expect(closed.meter.billed).toBe(MIB);
+    // Its wallet line says it was rounded up, and what it covers (F-118-am).
+    expect(closed.ledger).toEqual([
+      { amount: '0.01', reasonType: WalletReasonType.usage_charge, usage: { meterKey: METER_KEYS.vpnTraffic, quantity: MIB }, note: 'final_usage_rounded_up' },
+    ]);
     const suspended = world({ status: 'suspended', funded: GIB, held: '2.00', consumed: MIB });
     await suspended.reserve.release(suspended.tx, { id: GRANT, userId: USER });
     expect(suspended.calls).toEqual(['release 2.00']);
     expect(suspended.meter.billed).toBe(BigInt(0));
+  });
+
+  it('a closed Grant whose last bytes price exactly says nothing of rounding (F-118-am)', async () => {
+    // 512 MiB at $2.00 a GiB is exactly $1.00.
+    const w = world({ status: 'expired', funded: GIB, held: '2.00', consumed: BigInt(512) * MIB });
+    await w.reserve.release(w.tx, { id: GRANT, userId: USER });
+    expect(w.ledger).toEqual([{ amount: '1.00', reasonType: WalletReasonType.usage_charge, usage: { meterKey: METER_KEYS.vpnTraffic, quantity: BigInt(512) * MIB } }]);
   });
 
   it('leaves a prepaid VPN Grant to its block and its own reserve', async () => {
