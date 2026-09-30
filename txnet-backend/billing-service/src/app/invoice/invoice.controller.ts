@@ -26,7 +26,7 @@ import { LocaleService } from '../locale/locale.service';
 import { COUPON_REJECTION_KEY } from '../payment/deposit/deposit.controller';
 import { CouponReservationRefused } from '../payment/coupon/coupon-reservation';
 import { identityOf } from '../request/identity.middleware';
-import { EntitlementRefused } from '../entitlement/grant';
+import { EntitlementRefused, MeteredCapReached } from '../entitlement/grant';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { InvoicePayRejection, InvoicePaymentService, InvoiceUnpayable } from './invoice-payment.service';
@@ -71,6 +71,17 @@ function toHttp(e: unknown): unknown {
       currencyCode: e.shortfall.currencyCode,
     };
     return new ConflictException(facts ? { ...body, facts } : body);
+  }
+  // Past the user's cap of open metered Grants (F-118-ao), at the invoice or
+  // at its payment: nothing was written. The cap rides as `facts`, so the
+  // panel can name it and point to a ticket.
+  if (e instanceof MeteredCapReached) {
+    return new ConflictException({
+      i18nKey: E.invoice.meteredCapReached,
+      reason: e.reason,
+      message,
+      facts: { cap: e.cap, open: e.open },
+    });
   }
   // The variant was switched off between the invoice and its payment: nothing was written.
   if (e instanceof EntitlementRefused && (e.reason === 'variant_not_found' || e.reason === 'variant_not_assignable')) {

@@ -432,3 +432,35 @@ model GrantWholesale {
   @@map("grant_wholesale")
   @@schema("entitlement")
 }
+
+/// How many open metered Grants a user of this tenant may buy (F-118-ao).
+/// One row per tenant; none = the platform's default (`PLATFORM_METERED_CAP`).
+model GrantLimitSetting {
+  tenantId        String   @id @db.Uuid
+  /// Open = `pending`, `active` or `suspended`. >= 0 (CHECK); 0 sells none.
+  meteredOpenCap  Int
+  updatedByUserId String?  @db.Uuid
+  updatedAt       DateTime @updatedAt
+
+  @@map("grant_limit_setting")
+  @@schema("entitlement")
+}
+
+/// One user's own number (F-118-ao), set by staff — the answer to a ticket.
+/// It replaces the tenant's default for that user, higher or lower.
+model UserGrantLimit {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @db.Uuid
+  userId          String   @db.Uuid
+  /// >= 0 (CHECK).
+  meteredOpenCap  Int
+  /// Why: the ticket, in a line. Optional.
+  reason          String?
+  setByUserId     String   @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, userId])
+  @@map("user_grant_limit")
+  @@schema("entitlement")
+}

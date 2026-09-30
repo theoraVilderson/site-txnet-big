@@ -23,7 +23,7 @@ and changes its quota only through `quota_adjustment` rows.
 
 | Operation | Input | Output | Sync/Async | Errors (`EntitlementRefused.reason`) |
 |---|---|---|---|---|
-| `issue(tx, …)` | userId, variantId, source, sourceReferenceId?, startsAt?, issuedByAdminId? | `{grant, token}` — the token, also kept sealed (ADR-0085); a repeat for the same cause answers the first Grant and `token: null` | inside the caller's transaction | `variant_not_found`, `variant_not_assignable`, `metered_rate_missing`, `metered_rate_not_positive`, `meter_not_served`, `already_issued` (a concurrent issue won: retry) |
+| `issue(tx, …)` | userId, variantId, source, sourceReferenceId?, startsAt?, issuedByAdminId? | `{grant, token}` — the token, also kept sealed (ADR-0085); a repeat for the same cause answers the first Grant and `token: null` | inside the caller's transaction | `variant_not_found`, `variant_not_assignable`, `metered_rate_missing`, `metered_rate_not_positive`, `meter_not_served`, `metered_cap_reached` (a purchase past the user's cap, [contract.limits.md](contract.limits.md)), `already_issued` (a concurrent issue won: retry) |
 | `transition(tx, id, to, reason?)` | grantId, status | Grant; staying put is a no-op | caller's transaction | `grant_not_found`, `illegal_transition` |
 | `activeGrant` / `hasActiveGrant` | userId, featureKey, at? | the longest-lasting active Grant / boolean | own tenant transaction | — |
 | `adjustQuota(tx, …)` | grantId, metric, delta, source, capPercent?, expiresAt?, reason? | QuotaAdjustment | caller's transaction | `grant_not_found`, `grant_not_active` |

@@ -18,6 +18,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { grantMetersFromVariant, lockWholesale } from './grant-meter';
 import { PackageWholesale } from './package-wholesale';
 import { GrantTokenSeal, NO_TOKEN_SEAL, type SealedToken } from './grant-token-seal';
+import { assertMeteredRoom } from './metered-cap';
 import { ADMIN_FROZEN } from './suspension';
 import { unusedClockOf } from './unused-clock';
 import { configIdentityOf, storedLineIdentity } from '../traffic/config-identity';
@@ -98,7 +99,9 @@ export type EntitlementRejection =
   /** Admin renewal: a concurrent repeat of the same request won; retry to read its renewal. */
   | 'already_renewed'
   /** Device limit (F-311-q): the limit the Grant already has, or a lift of none. */
-  | 'devices_unchanged';
+  | 'devices_unchanged'
+  /** A purchase past the user's cap of open metered Grants (F-118-ao, `MeteredCapReached`): nothing is sold, nothing written. */
+  | 'metered_cap_reached';
 
 export class EntitlementRefused extends Error {
   constructor(
@@ -107,6 +110,16 @@ export class EntitlementRefused extends Error {
   ) {
     super(`entitlement refused: ${reason}${detail ? ` (${detail})` : ''}`);
     this.name = 'EntitlementRefused';
+  }
+}
+
+/** A metered purchase past the cap: the refusal names the cap, so the panel can say "open a ticket". */
+export class MeteredCapReached extends EntitlementRefused {
+  constructor(
+    readonly cap: number,
+    readonly open: number,
+  ) {
+    super('metered_cap_reached', `${open} open, cap ${cap}`);
   }
 }
 
@@ -519,6 +532,11 @@ export class GrantService {
     // A reseller's meter also locks what the platform charges it (F-118-n2).
     const { meters, missing } = await lockWholesale(tx, tenant.id, retail, startsAt);
     if (missing) throw new EntitlementRefused('wholesale_rate_missing', `${input.variantId} ${missing}`);
+    // A metered Grant costs nothing at the sale: a buyer holds at most a few
+    // open (F-118-ao). Staff's own issue counts and is never refused.
+    if (input.source === GrantSource.purchase && variant.billingMode === VariantBillingMode.metered) {
+      await assertMeteredRoom(tx, input.userId);
+    }
     // Born `active`, it is activated at its start (F-601-c); a purchase waits for `markDelivered`.
     const activatedAt = shape.status === GrantStatus.active ? startsAt : null;
     try {

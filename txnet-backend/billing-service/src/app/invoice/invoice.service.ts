@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { CouponChannel, InvoiceStatus, Prisma, RedemptionStatus } from '@prisma/client';
+import { CouponChannel, InvoiceStatus, Prisma, RedemptionStatus, VariantBillingMode } from '@prisma/client';
 import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import { CatalogOffer, listOffersIn, sellableOfferById } from '../catalog/catalog-reads';
 import { sellsTrafficToday } from '../catalog/traffic-quota';
 import { deliveryRouteOf } from '../entitlement/delivery';
+import { assertMeteredRoom } from '../entitlement/metered-cap';
 import { deliverableGroupIds } from '../traffic/group-fulfilment';
 import { discountRuleFor } from './discount/discount-rule';
 import { PrismaService } from '../prisma/prisma.service';
@@ -117,7 +118,7 @@ export class InvoiceService {
       if (!offer) throw new InvoiceVariantNotFound(variantId);
       // Nothing is sold that nothing can deliver (F-111-d, the user's call
       // 2026-09-25): a paid Grant with no handler could only be refunded.
-      const routed = await tx.productVariant.findUnique({ where: { id: offer.variantId }, select: { panelGroupId: true } });
+      const routed = await tx.productVariant.findUnique({ where: { id: offer.variantId }, select: { panelGroupId: true, billingMode: true } });
       const groupId = routed?.panelGroupId ?? null;
       const route = deliveryRouteOf(offer.fulfilmentKind, groupId);
       // ...nor a prepaid network Grant with no traffic to fill it (F-111-p).
@@ -126,6 +127,10 @@ export class InvoiceService {
       if (route === 'panel_group' && groupId && !(await deliverableGroupIds(tx, [groupId])).has(groupId)) {
         throw new InvoiceVariantNotFound(variantId);
       }
+
+      // A metered buy past the cap is refused before an invoice exists, and
+      // again at issue under the same lock (F-118-ao).
+      if (routed?.billingMode === VariantBillingMode.metered) await assertMeteredRoom(tx, userId);
 
       const amount = new Prisma.Decimal(offer.price.amount);
       // The best rule with no code comes first; the coupons see what it left (D-45).

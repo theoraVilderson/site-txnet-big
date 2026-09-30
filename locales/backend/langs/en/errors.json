@@ -218,6 +218,7 @@
     "invoice": {
       "variantInvalid": "Choose a product to buy.",
       "variantNotFound": "This product is not available to buy.",
+      "meteredCapReached": "You already have as many open pay-as-you-go services as allowed. To have more, open a support ticket.",
       "notFound": "This invoice was not found.",
       "alreadyPaid": "This invoice is already paid.",
       "expired": "This invoice has expired. Start the purchase again.",
