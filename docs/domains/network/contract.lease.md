@@ -220,7 +220,8 @@ Rules 24–25 — when the planner closes a Grant, and what reopens it — are
 26. **The planner says when a panel is read next.** Each plan's `PollBy`
     hints are kept per panel, the earliest since that panel's last read;
     `NextPoll` aligns it to `PollGuard` after the tick, floors it at
-    `max(MinPoll, PollGap)` after the read, and every `ProbeEvery` puts one
+    `MinPoll` after the tick the read saw and `PollGap` after the read
+    (F-027-ed), and every `ProbeEvery` puts one
     poll mid-tick. Memory only: a restart has no hint, and the bulk pass reads
     the panel until a plan gives one. `collect.Poller` runs it; the rules are
     `contract.hot-loop.md` "The collector's half".

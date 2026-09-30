@@ -541,6 +541,11 @@ func (a *Account) hints(now time.Time, p Params, vs []*view, tEnd float64, res *
 			left := float64(v.hold)/rate - v.pollAge.Seconds()
 			d = clampDur(secs(left/div), minP, p.MaxPoll)
 		}
+		if v.writable && v.enabled && float64(a.Quota-a.Used) < peak*v.lag.Seconds() {
+			// The panel would serve the bag's rest before its own ceiling
+			// bites: only our close stops it, one read after (F-027-ed).
+			d = min(d, p.MinPoll)
+		}
 		if r.Pending() {
 			d = min(d, max(p.WriteLatency+time.Second, p.MinPoll))
 		}

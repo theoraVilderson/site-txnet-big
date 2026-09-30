@@ -49,9 +49,18 @@ less than a tick apart, which a minute's pass never is.
    (active: a third of the seconds its hold lasts, idle: half the seconds at
    `BurstRate`, a write in flight: `WriteLatency` + 1 s, endgame: a third of
    `tEnd`). A panel's read drops its old hints; the earliest since is kept.
+   **A bag the panel's lag would outrun is read at `MinPoll`** (F-027-ed):
+   an enabled config whose Grant has less left (`Quota − Used`) than
+   `max(PeakReplica, BurstRate)` × the panel's lag reserve, idle or not.
+   There the panel serves the rest before its own ceiling bites, so only
+   the planner's close stops it, one read after. Live on x-ui (35 s lag), an
+   idle 51 MB bag read every 20 s was served 34.8 MB past at ~36 MB/s.
 2. **Then aligned**: `PollGuard` (1 s) after the panel's tick
    (`TickClock.AlignPoll`) — a read between two ticks sees nothing new — and
-   no sooner than `max(MinPoll, PollGap)` after the last read.
+   no sooner than `MinPoll` after **the tick the last read saw**, nor
+   `PollGap` after the read itself. Counted from the read, a read a sweep
+   late put the next tick inside `MinPoll`, and a 5 s panel was read every
+   10 s (F-027-ed).
 3. **`PollGap` is the panel's own budget**: polls spend at most half of
    `maxRequestsPerMinute`, two requests each (`GetUsage` + `ListClients`), so
    `4 min / maxRequestsPerMinute`. `Paced` still holds every request.

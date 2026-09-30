@@ -641,7 +641,18 @@ func (s *Planner) NextPoll(panelID string, minPoll time.Duration) (time.Time, bo
 	last := s.lastRead[panelID]
 	var lo time.Time
 	if !last.IsZero() {
-		lo = last.Add(max(s.params().MinPoll, minPoll))
+		// MinPoll counts from the tick the read saw: a read a sweep late
+		// would otherwise put the next tick inside it, and a panel whose J
+		// is MinPoll would be read every second tick (F-027-ed). The budget
+		// counts from the read.
+		seen := last
+		if off, ok := st.Clock.SinceTick(last); ok {
+			seen = last.Add(-off)
+		}
+		lo = seen.Add(s.params().MinPoll)
+		if b := last.Add(minPoll); b.After(lo) {
+			lo = b
+		}
 	}
 	if want.Before(lo) {
 		want = lo
