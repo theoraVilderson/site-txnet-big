@@ -112,6 +112,11 @@ export class ResellerCatalogService {
     return this.run(actor, tenantId, 'read', (as) => this.catalog.listPanelGroups(as));
   }
 
+  /** F-116-h10a: the reseller's own, never another's — the work runs as the reseller. */
+  pricingCurrency(actor: ResellerCatalogActor, tenantId: string): Promise<{ code: string }> {
+    return this.run(actor, tenantId, 'read', (as) => this.catalog.pricingCurrency(as, undefined));
+  }
+
   // ---------------------------------------------------------------- categories
 
   listCategories(actor: ResellerCatalogActor, tenantId: string, filter: ListCategoriesFilter = {}): Promise<CategoryView[]> {

@@ -1133,3 +1133,26 @@ describe('CatalogAdminService — a seller writes its rate cards (F-118-m, ADR-0
     expect(createVariantSchema.safeParse({ ...NEW_VARIANT, rateCard: { ...NEW_CARD, unitPrice: '0.00' } }).success).toBe(false);
   });
 });
+
+describe('CatalogAdminService — the currency a form names beside a price (F-116-h10a, ADR-0098)', () => {
+  const inCurrency = (db: ReturnType<typeof build>['db']) => {
+    for (const t of db.tenant.rows) t['operatingCurrencyCode'] = t['id'] === RESELLER ? 'IRR' : t['id'] === OTHER ? 'EUR' : 'USD';
+  };
+
+  it("answers the owner of the row being priced: the caller's own, the platform's for a platform row, a tenant's for the platform owner", async () => {
+    const { service, db, writes } = build();
+    inCurrency(db);
+    await expect(service.pricingCurrency(actor(RESELLER), undefined)).resolves.toEqual({ code: 'IRR' });
+    await expect(service.pricingCurrency(actor(OWNER), undefined)).resolves.toEqual({ code: 'USD' });
+    await expect(service.pricingCurrency(actor(OWNER), null)).resolves.toEqual({ code: 'USD' });
+    await expect(service.pricingCurrency(actor(OWNER), OTHER)).resolves.toEqual({ code: 'EUR' });
+    expect(writes).toEqual([]);
+  });
+
+  it('refuses a reseller what it may not price, as a write would: a platform row or another tenant\'s', async () => {
+    const { service, db } = build();
+    inCurrency(db);
+    expect((await refusal(() => service.pricingCurrency(actor(RESELLER), null))).reason).toBe('not_platform_owner');
+    expect((await refusal(() => service.pricingCurrency(actor(RESELLER), OTHER))).reason).toBe('not_platform_owner');
+  });
+});

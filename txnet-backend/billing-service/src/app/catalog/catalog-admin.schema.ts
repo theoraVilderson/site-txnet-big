@@ -261,11 +261,15 @@ export const editTextsSchema = z
 export const createResellerCategorySchema = createCategorySchema.omit({ tenantId: true }).strict();
 export const createResellerProductSchema = createProductSchema.omit({ tenantId: true }).strict();
 export const createResellerCapabilitySchema = createCapabilitySchema.omit({ tenantId: true }).strict();
+/** F-116-h10a: whose rows are being priced — absent = the caller's own; `platform` or a tenant id, as `ownerOfNew` takes. */
+export const pricingCurrencySchema = z.object({ tenantId: z.union([z.literal('platform'), uuid('tenantId')]).optional() }).strict();
+
 export const listResellerProductsSchema = listProductsSchema.omit({ tenantId: true }).strict();
 
 export type CreateCategoryBody = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryBody = z.infer<typeof updateCategorySchema>;
 export type ListProductsQuery = z.infer<typeof listProductsSchema>;
+export type PricingCurrencyQuery = z.infer<typeof pricingCurrencySchema>;
 export type ListCategoriesQuery = z.infer<typeof listCategoriesSchema>;
 export type CreateProductBody = z.infer<typeof createProductSchema>;
 export type UpdateProductBody = z.infer<typeof updateProductSchema>;

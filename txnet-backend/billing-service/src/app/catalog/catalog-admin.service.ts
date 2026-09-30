@@ -467,6 +467,17 @@ export class CatalogAdminService {
     return tenantId;
   }
 
+  /**
+   * The currency a new price or rate card on this owner's rows is written in
+   * (F-116-h10a, ADR-0098): what a form names beside the amount. Whose row is
+   * `ownerOfNew`'s, so a caller learns only the code of rows it may price.
+   */
+  async pricingCurrency(actor: CatalogActor, requested: string | null | undefined): Promise<{ code: string }> {
+    const tenantId = await this.ownerOfNew(actor, requested);
+    const { owner } = await this.access(actor);
+    return { code: await this.within(owner, (tx) => pricingCurrencyOf(tx, tenantId)) };
+  }
+
   // -------------------------------------------------------------- panel groups
 
   /**

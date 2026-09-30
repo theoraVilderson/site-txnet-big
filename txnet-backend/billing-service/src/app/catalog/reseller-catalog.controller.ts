@@ -143,6 +143,13 @@ export class ResellerCatalogController {
     return this.refusing(() => this.catalog.listPanelGroups(this.actor(req, ip), tenantId));
   }
 
+  /** F-116-h10a: the currency this reseller's new prices are written in — its operating currency. */
+  @Get('pricing-currency')
+  @RateLimit(READ)
+  async pricingCurrency(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.pricingCurrency(this.actor(req, ip), tenantId));
+  }
+
   @Get('categories')
   @RateLimit(READ)
   async listCategories(

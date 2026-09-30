@@ -3,7 +3,7 @@ id: catalog
 layer: domain
 status: draft
 version: 7
-updated: 2026-09-29
+updated: 2026-09-30
 ---
 
 # Contract — catalog
@@ -44,6 +44,7 @@ cross-tenant pool.
 | `POST /products/:id/variants`, `PATCH /variants/:id` | `sku`, `billingMode`, `visibility`, `quotas?`, `durationDays?`, `panelGroupId?`, `qualityTier?`, first `price`, `rateCard?` (a metered variant's first card, from the price's instant; F-118-m); patch has no SKU or billing mode | variant with prices and `rateCards` | `variant_not_found`, `sku_taken`, `price_in_the_past`, `panel_group_not_found` (a group that is neither the platform's nor the variant's tenant's, F-027-bk), `traffic_quota_required` 400 (F-111-p: a `network_access` + `prepaid` variant with no `quotas.traffic_bytes` — on create, the product's `defaultQuotas` count; on a patch, only one that writes `quotas`). `traffic_bytes.limit: 0` = unlimited; `durationDays: 0` = unlimited, stored `null` |
 | `GET /panel-groups` (F-026-p) | — | `[{id, tenantId, name, strategy, protocols, healthyMembers}]` by name (`protocols`: what its members' inbounds sell — each member's assigned ones, else its panel's pool — sorted, F-114-b, F-027-ch; empty = nothing is placed): the groups a variant may name — the platform's and the caller's own (owner: all, so a variant is offered only the platform's and its own tenant's). `healthyMembers` counts what fulfilment places on now (`placeableMember`: not `drain`, accepted, `healthy`); only `mirror` is fulfilled | — |
 | `POST /variants/:id/prices` | `amount`, `effectiveFrom?` (default now; never in the past) | a **new** price row, `currencyCode` its tenant's operating currency (the platform's for a platform variant) — the amount is taken as typed, never converted (F-116-d) | `variant_not_found`, `price_in_the_past` 400 |
+| `GET /pricing-currency` (F-116-h10a) | `tenantId?` (owner: uuid or `platform`; absent = the caller's) | `{code}` — what a new price or rate card on that owner's rows is written in (`pricingCurrencyOf`), the code a form names beside the amount; whose is `ownerOfNew`'s. Under the reseller prefix: no query, the path's | `not_platform_owner`, `tenant_not_found` |
 | `POST /prices/:id/deactivate` | — | the price, switched off | `price_not_found` |
 | `POST /variants/:id/rate-cards` (F-118-m) | `meterKey`, `unitSize`, `unitPrice` (≤ 8 places), `mode`, `includedQuantity?`, `afterIncluded`, `effectiveFrom?` — quantities as strings; the DB CHECKs are schema 400s | a **new** card, `currencyCode` as a price's | `variant_not_found` (the platform's to a reseller), `meter_not_found` 404, `rate_card_not_served` 400 (below), `price_in_the_past` |
 | `POST /rate-cards/:id/deactivate` | — | the card, switched off | `rate_card_not_found` |

@@ -31,6 +31,7 @@ import {
   CreateVariantBody,
   EditTextsBody,
   ListProductsQuery,
+  PricingCurrencyQuery,
   ListTextDraftsQuery,
   PublishTextsBody,
   RemoveCategoriesBody,
@@ -48,6 +49,7 @@ import {
   createVariantSchema,
   editTextsSchema,
   listProductsSchema,
+  pricingCurrencySchema,
   listTextDraftsSchema,
   publishTextsSchema,
   removeCategoriesSchema,
@@ -132,6 +134,14 @@ export class CatalogAdminController {
   @RateLimit(READ)
   async listPanelGroups(@Req() req: Request, @Ip() ip: string) {
     return this.refusing(() => this.catalog.listPanelGroups(this.actor(req, ip)));
+  }
+
+  /** F-116-h10a: the currency a new price on these rows is written in — what the form names beside the amount. */
+  @Get('pricing-currency')
+  @RateLimit(READ)
+  async pricingCurrency(@Query(new ZodValidationPipe(pricingCurrencySchema)) query: PricingCurrencyQuery, @Req() req: Request, @Ip() ip: string) {
+    const owner = query.tenantId === 'platform' ? null : query.tenantId;
+    return this.refusing(() => this.catalog.pricingCurrency(this.actor(req, ip), owner));
   }
 
   @Get('categories')
