@@ -5,6 +5,7 @@ import { METERED_RATE_UNIT_BYTES, TenantBillingLedger, tenantTransaction } from 
 import { PrismaService } from '../prisma/prisma.service';
 import { spendOnCap, withinCap } from '../usage/cap-funding';
 import { WalletLedgerService } from '../wallet/wallet-ledger.service';
+import { releaseAboveShare, reserveShareOf } from './reserve-share';
 import { vpnMeterOf } from './vpn-meter';
 import { NO_VPN_RESERVE, VpnReserve } from './vpn-reserve';
 import { VpnWholesale } from './vpn-wholesale';
@@ -208,10 +209,16 @@ export class BlockPurchaseService {
     if (!meter) throw new BlockPurchaseRefused('grant_not_metered', input.grantId);
     if (meter.mode === RateCardMode.postpaid) throw new BlockPurchaseRefused('grant_postpaid', input.grantId);
 
-    const wallet = await tx.wallet.findUnique({ where: { ownerUserId: grant.userId } });
+    let wallet = await tx.wallet.findUnique({ where: { ownerUserId: grant.userId } });
     // The Grant's own reserve (F-118-b) is its money: the bytes it backed are
     // what this block pays for. Another hold is not (F-118-a).
     const reserved = await this.reserve.heldFor(tx, grant);
+    // Short of its even share while another Grant's reserve holds more
+    // (F-118-ag): that excess is released first — never spent by this block.
+    const share = wallet ? await reserveShareOf(tx, grant) : null;
+    if (share && (await releaseAboveShare(tx, grant.userId, share)).gt(0)) {
+      wallet = await tx.wallet.findUnique({ where: { ownerUserId: grant.userId } });
+    }
     const free = wallet ? wallet.cachedBalance.minus(wallet.heldAmount).plus(reserved) : new Prisma.Decimal(0);
     // Its spending cap, if the owner set one (F-118-i): the reserve is inside it.
     const maxSpend = await withinCap(tx, grant, free, reserved);

@@ -76,6 +76,8 @@ function world(w: World = {}) {
   const tx = {
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
     grant: {
+      // The fair share's reads (F-118-ag): this fake's one Grant, its meter and its holds.
+      findMany: async () => [{ id: grant.id }],
       findUnique: async ({ where }: { where: { id: string } }) => (where.id === grant.id ? { ...grant } : null),
       update: async ({ data }: { data: { purchasedBytes: { increment: bigint } } }) => {
         grant.purchasedBytes += data.purchasedBytes.increment;
@@ -88,6 +90,7 @@ function world(w: World = {}) {
         where.groupId === GROUP && where.panel.ownershipType === PanelOwnershipType.platform && w.platformPanel ? { panelId: 'panel-p' } : null,
     },
     grantMeter: {
+      findMany: async () => [{ id: meter.id }],
       findUnique: async () => ({ ...meter }),
       update: async ({ data }: { data: { billed: { increment: bigint }; funded: { increment: bigint } } }) => {
         meter.billed += data.billed.increment;
@@ -100,6 +103,7 @@ function world(w: World = {}) {
         return { count: 1 };
       },
     },
+    walletHold: { findMany: async () => [] },
     wallet: {
       findUnique: async () => ({ ...wallet }),
       findUniqueOrThrow: async () => ({ ...wallet }),

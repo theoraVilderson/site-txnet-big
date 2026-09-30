@@ -58,6 +58,19 @@ hurts most.
    held short, and any path that missed a write.
    The Grant's own block spends it first (billing `contract.traffic-block.md`),
    so bytes served from it are paid by the next block.
+6. **No more than an even share of the wallet** (F-118-ag, live run
+   2026-09-30). Where the wallet is smaller than the reserves together, the
+   first Grant topped held all of it and the next held nothing: a second
+   service stayed `pending`, and a capped one was cut as "top up" with 7.83
+   in the wallet. Each Grant's headroom hold — a prepaid reserve, a postpaid
+   floor — is bounded by `(free balance + the owner's headroom holds) ÷
+   leased VPN Grants`, rounded down to a cent (`traffic/reserve-share.ts`).
+   A Grant short of it, when it tops, buys a block or is revived, first
+   **releases** every sibling prepaid reserve above the share — never spends
+   it — and holds its own. A postpaid floor is counted, never released (part
+   of it can be served and not yet captured). A wallet large enough for every
+   reserve is untouched. The exhaustion verdict counts the share as the
+   Grant's, so a cap that stops it reads `cap_reached`, not "top up".
 
 Billing's per-config step (`allocateCeilings`, `ceiling ≥ served + min(reserve,
 lineFloor)` on every config) ran until F-027-db and was deleted in F-027-dk;

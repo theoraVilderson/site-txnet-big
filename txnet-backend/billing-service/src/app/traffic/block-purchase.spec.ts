@@ -115,6 +115,8 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
     // Every tenant here keeps its books in USD (F-116-b).
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
     grant: {
+      // The fair share's reads (F-118-ag): this fake's one Grant, its meter and its holds.
+      findMany: async () => [{ id: row.id }],
       findUnique: async ({ where }: { where: { id: string } }) => (where.id === row.id ? { ...row } : null),
       update: async ({ where, data }: { where: { id: string }; data: Record<string, { increment: bigint }> }) => {
         if (where.id !== row.id) throw new Error('no grant');
@@ -124,6 +126,7 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
     },
     // Its prepaid vpn.traffic meter (F-118-l): the rate and the money cursor.
     grantMeter: {
+      findMany: async () => [{ id: 'meter-1' }],
       findUnique: async () =>
         row.rate === null ? null : { id: 'meter-1', mode: 'prepaid', unitPrice: row.rate, currencyCode: 'USD', billed: row.billed },
       update: async ({ data }: { data: { billed: { increment: bigint } } }) => {
@@ -131,6 +134,7 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
         return { billed: row.billed };
       },
     },
+    walletHold: { findMany: async () => [] },
     wallet: {
       findUnique: async () => ({ ...wallet }),
       findUniqueOrThrow: async () => ({ ...wallet }),

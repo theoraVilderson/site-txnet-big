@@ -67,6 +67,8 @@ function world(opts: { balance?: string; mode?: 'prepaid' | 'postpaid'; consumed
 
   const tx = {
     grant: {
+      // The fair share's reads (F-118-ag): this fake's one Grant, its meter and its holds.
+      findMany: async () => [{ id: grant.id }],
       findUnique: async () => ({ ...grant }),
       update: async ({ data }: { data: { purchasedBytes?: { increment: bigint } } }) => {
         grant.purchasedBytes += data.purchasedBytes?.increment ?? BigInt(0);
@@ -75,6 +77,7 @@ function world(opts: { balance?: string; mode?: 'prepaid' | 'postpaid'; consumed
       updateMany: async () => ({ count: 1 }),
     },
     grantMeter: {
+      findMany: async () => [{ id: METER_ID }],
       findUnique: async ({ where }: { where: { grantId_meterKey: { meterKey: string } } }) =>
         where.grantId_meterKey.meterKey === meter.meterKey ? { ...meter } : null,
       updateMany: async ({ where, data }: { where: { billed: bigint; funded: bigint }; data: { billed?: bigint; funded?: bigint } }) => {
@@ -85,6 +88,7 @@ function world(opts: { balance?: string; mode?: 'prepaid' | 'postpaid'; consumed
     },
     wallet: { findUnique: async () => ({ ...wallet }) },
     walletHold: {
+      findMany: async () => [...holds].map(([ownerRef, amount]) => ({ ownerRef, amount })),
       findFirst: async ({ where }: { where: { ownerRef: string } }) => {
         const amount = holds.get(where.ownerRef);
         return amount ? { id: 'h1', ownerRef: where.ownerRef, amount } : null;

@@ -91,6 +91,8 @@ function world(w: World = {}) {
   const tx = {
     tenant: { findFirst: async () => ({ id: 'platform' }), findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
     grant: {
+      // The fair share's reads (F-118-ag): this fake's one Grant, its meter and its holds.
+      findMany: async () => [{ id: grant.id }],
       findUnique: async () => ({ ...grant }),
       update: async ({ data }: { data: { purchasedBytes?: { increment: bigint } } }) => {
         grant.purchasedBytes += data.purchasedBytes?.increment ?? BigInt(0);
@@ -103,6 +105,7 @@ function world(w: World = {}) {
         where.panel.ownershipType === PanelOwnershipType.platform && w.platformPanel ? { panelId: 'panel-p' } : null,
     },
     grantMeter: {
+      findMany: async () => [{ id: METER_ID }],
       findUnique: async () => ({ ...meter }),
       updateMany: async ({ where, data }: { where: Partial<typeof meter>; data: Partial<typeof meter> }) => {
         if (where.wholesaleBilled !== undefined && where.wholesaleBilled !== meter.wholesaleBilled) return { count: 0 };
@@ -114,6 +117,7 @@ function world(w: World = {}) {
     },
     wallet: { findUnique: async () => ({ ...wallet }) },
     walletHold: {
+      findMany: async () => [...holds].map(([ownerRef, amount]) => ({ ownerRef, amount })),
       findFirst: async ({ where }: { where: { ownerRef: string } }) => {
         const amount = holds.get(where.ownerRef);
         return amount ? { id: 'h1', ownerRef: where.ownerRef, amount } : null;

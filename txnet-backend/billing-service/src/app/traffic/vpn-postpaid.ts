@@ -6,6 +6,7 @@ import { METER_KEYS, TenantBillingLedger } from '@txnet-backend/shared-core';
 import { PostpaidHolds, type Ctx, type FundingLeg } from '../usage/postpaid-hold';
 import { ceilDiv, CENT, max, priceUnits, UsageSettlementRefused } from '../usage/usage-price';
 import type { WalletHoldService } from '../wallet/wallet-ledger.service';
+import { releaseAboveShare, reserveShareOf } from './reserve-share';
 import { vpnMeterOf } from './vpn-meter';
 import { VpnWholesale, type WholesaleRoom } from './vpn-wholesale';
 
@@ -84,9 +85,18 @@ export class VpnPostpaid {
     if (!this.postpaid) return new Prisma.Decimal(0);
     const ctx = await this.load(tx, grantId);
     const held = await this.postpaid.heldCents(tx, ctx);
-    const floor = this.cents(ctx, this.reserveBytes);
+    let floor = this.cents(ctx, this.reserveBytes);
     const leased = ctx.grant.status === GrantStatus.active || ctx.grant.status === GrantStatus.pending;
     if (!leased || held >= floor) return new Prisma.Decimal(held.toString()).div(100);
+    // The floor is headroom, so never more than its even share (F-118-ag); a
+    // prepaid reserve above its share gives the rest back first.
+    const share = await reserveShareOf(tx, ctx.grant);
+    if (share) {
+      await releaseAboveShare(tx, ctx.grant.userId, share);
+      const cents = BigInt(share.share.mul(100).toFixed(0));
+      if (cents < floor) floor = max(held, cents);
+      if (held >= floor) return new Prisma.Decimal(held.toString()).div(100);
+    }
     try {
       return (await this.postpaid.topUpTo(tx, ctx, floor, this.legOf(ctx))).held;
     } catch (e) {

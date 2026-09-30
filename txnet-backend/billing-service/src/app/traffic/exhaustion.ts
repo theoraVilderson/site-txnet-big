@@ -6,6 +6,7 @@ import { emitCutOff } from '../entitlement/cut-off';
 import { suspendForCap, suspendForExhaustion, suspendForPeriodEnd } from '../entitlement/suspension';
 import { withinCap } from '../usage/cap-funding';
 import { BlockPurchaseRefused, type BlockPurchaseRejection, sizeBlock } from './block-purchase';
+import { reserveShareOf } from './reserve-share';
 import { vpnMeterOf } from './vpn-meter';
 
 /**
@@ -105,7 +106,11 @@ export async function suspendIfExhausted(tx: Prisma.TransactionClient, grantId: 
   if (grant.consumedBytes < grant.purchasedBytes) return verdict('bag_not_empty');
   // Its spending cap bounds what the wallet may buy for it (F-118-i).
   // No wallet row is a balance of zero — the same answer as an empty one.
-  const free = new Prisma.Decimal(wallet?.free ?? 0);
+  // Its even share of the owner's headroom counts as its own (F-118-ag): a
+  // sibling holding more gives it back at the next block or top, so a Grant
+  // is not cut — nor told "top up" — while the wallet holds its share.
+  const share = wallet ? await reserveShareOf(tx, { id: grantId, userId: owner.userId }) : null;
+  const free = Prisma.Decimal.max(new Prisma.Decimal(wallet?.free ?? 0), share?.share ?? 0);
   const spendable = await withinCap(tx, { id: grantId, userId: owner.userId }, free, new Prisma.Decimal(wallet?.own ?? 0));
   if (walletCanBuy(meter.unitPrice, spendable)) return verdict('wallet_can_buy');
 

@@ -7,7 +7,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { withinCap } from '../usage/cap-funding';
 import { WalletHoldService, WalletLedgerService } from '../wallet/wallet-ledger.service';
 import { postpaidVpnMeter, VpnPostpaid } from './vpn-postpaid';
-import { HAS_VPN_METER, vpnMeterOf } from './vpn-meter';
+import { RESERVED_WHERE, releaseAboveShare, reserveShareOf } from './reserve-share';
+import { vpnMeterOf } from './vpn-meter';
 
 /**
  * The VPN reserve as held money (F-118-b, ADR-0105 (8), network
@@ -67,13 +68,6 @@ type ReserveGrant = {
   trafficUnlimited: boolean;
 };
 
-/** The Grants the lease planner leases a reserve to: its own `loadSQL` condition. */
-const RESERVED_WHERE = {
-  status: { in: [GrantStatus.active, GrantStatus.pending] },
-  billingMode: VariantBillingMode.metered,
-  ...HAS_VPN_METER,
-  trafficUnlimited: false,
-} satisfies Prisma.GrantWhereInput;
 
 const isReserved = (g: ReserveGrant): boolean =>
   (g.status === GrantStatus.active || g.status === GrantStatus.pending) &&
@@ -173,16 +167,23 @@ export class VpnReserve {
     });
     const meter = grant && isReserved(grant) ? await vpnMeterOf(tx, grantId) : null;
     if (!grant || !meter) return ZERO;
-    const wallet = await tx.wallet.findUnique({ where: { ownerUserId: grant.userId } });
+    let wallet = await tx.wallet.findUnique({ where: { ownerUserId: grant.userId } });
     // A rate in another currency than the wallet is not this code's to convert (C-02).
     if (!wallet || wallet.currencyCode !== meter.currencyCode) return ZERO;
 
     const held = (await openReserve(tx, wallet.id, grant.id))?.amount ?? ZERO;
+    // Never more than its even share of the owner's headroom (F-118-ag):
+    // another Grant holding more gives the rest back first, spending nothing.
+    const share = await reserveShareOf(tx, grant);
+    if (share && (await releaseAboveShare(tx, grant.userId, share)).gt(0)) {
+      wallet = (await tx.wallet.findUnique({ where: { ownerUserId: grant.userId } })) ?? wallet;
+    }
+    const free = wallet.cachedBalance.minus(wallet.heldAmount).plus(held);
     const target = sizeReserve({
       rate: meter.unitPrice,
       reserveBytes: this.bytes,
       // Inside the Grant's spending cap, if it has one (F-118-i).
-      available: await withinCap(tx, grant, wallet.cachedBalance.minus(wallet.heldAmount).plus(held), held),
+      available: await withinCap(tx, grant, share && share.share.lt(free) ? share.share : free, held),
     });
     const entry = { userId: grant.userId, ownerRef: grant.id };
     if (target.gt(held)) await this.holds.hold(tx, { ...entry, amount: target.minus(held), currencyCode: wallet.currencyCode });
