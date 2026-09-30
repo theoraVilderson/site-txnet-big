@@ -133,6 +133,9 @@ func (a *Account) Plan(now time.Time, p Params) PlanResult {
 	expired := !a.ExpiresAt.IsZero() && !now.Before(a.ExpiresAt)
 
 	// ---- open / close ------------------------------------------------------
+	if a.watchOnRestore {
+		a.watchRestored(now, vs)
+	}
 	if a.Closed && !expired {
 		renewed := a.Quota != a.closedQuota || !a.ExpiresAt.Equal(a.closedExpiry)
 		reopenAt := p.ReopenMin

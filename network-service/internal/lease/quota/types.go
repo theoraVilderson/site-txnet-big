@@ -161,6 +161,9 @@ type Account struct {
 	closeWatched bool
 	closedAt     time.Time
 	closedUsed   Bytes
+	// A guard close read back after a restart (F-027-ea): its first plan
+	// watches it from then on, as if this process had taken it.
+	watchOnRestore bool
 
 	PeakRate    float64 // decayed max of the account's total raw rate
 	PeakReplica float64 // decayed max of any single replica's raw rate

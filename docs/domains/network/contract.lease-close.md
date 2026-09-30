@@ -56,8 +56,11 @@ is told about it. Split out of [contract.lease.md](contract.lease.md) on
     cannot prove the older write landed; the figure is held until a reading
     shows it or more. The close row is deleted silently, as on a renewal.
     A process restarted onto a closed Grant restores the close from the row
-    (`Account.RestoreClosed`) and waits for a renewal — forgetting is never
-    a reopen; a close row that cannot be written drops the account, and the
+    (`Account.RestoreClosed`) — forgetting is never a reopen. A `spent` or
+    `ended` one waits for a renewal; a `guard` one, which billing does not
+    suspend, is watched from its first plan after the restore and reopens
+    once it settles as above, with every figure the row still shows in
+    flight held (F-027-ea); a close row that cannot be written drops the account, and the
     next turn restores it from what was written. A prepaid Grant billing
     suspended on the close is not read again by the planner (F-027-dz). A
     disabled client on 3x-ui is `RemoveUser`'d, which keeps its open

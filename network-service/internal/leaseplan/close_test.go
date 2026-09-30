@@ -199,3 +199,40 @@ func TestAnEndReachedOnAGuardCloseIsEnded(t *testing.T) {
 		t.Fatalf("a guard close whose end came is ended on that end: %+v", c)
 	}
 }
+
+// A guard close read back after a restart reopens once it settles (F-027-ea):
+// billing does not suspend a guard close (F-027-dz), so waiting for a renewal
+// would leave paid bytes off on the panels. The settle rule is watched from
+// the restore; a spent close read back still waits for a renewal.
+func TestARestoredGuardCloseReopensOnceItSettles(t *testing.T) {
+	b := newBench(t, 64*quota.MB, "a", "b")
+	for i := 0; i < 60 && b.s.closure("grant-1") == nil; i++ {
+		b.turn(map[string]int64{"a": 20 * quota.MB, "b": 20 * quota.MB})
+	}
+	if c := b.s.closure("grant-1"); c == nil || c.Reason != quota.CloseGuard {
+		t.Fatalf("want a guard close: %+v", c)
+	}
+	b.pl = &leaseplan.Planner{Store: b.s} // restart at once, writes still in flight
+	for i := 0; i < 20 && b.s.closure("grant-1") != nil; i++ {
+		b.turn(nil)
+	}
+	if b.s.closure("grant-1") != nil {
+		t.Fatal("a restored guard close never reopened without a renewal")
+	}
+
+	// A spent close read back waits for a renewal, as before.
+	b2 := newBench(t, 64*quota.MB, "a", "b")
+	for i := 0; i < 60 && b2.s.closure("grant-1") == nil; i++ {
+		b2.turn(map[string]int64{"a": 20 * quota.MB, "b": 20 * quota.MB})
+	}
+	c := *b2.s.closure("grant-1")
+	c.Reason = quota.CloseSpent
+	b2.s.closures["grant-1"] = c
+	b2.pl = &leaseplan.Planner{Store: b2.s}
+	for i := 0; i < 20; i++ {
+		b2.turn(nil)
+	}
+	if b2.s.closure("grant-1") == nil {
+		t.Fatal("a restored spent close reopened without a renewal")
+	}
+}
