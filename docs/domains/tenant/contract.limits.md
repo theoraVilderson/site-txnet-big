@@ -2,11 +2,11 @@
 id: tenant
 layer: domain
 status: active
-version: 44
+version: 45
 updated: 2026-10-01
 ---
 
-# Contract — tenant: what a reseller may spend (F-019-m, ADR-0106)
+# Contract — tenant: what a reseller may spend (F-019-m, ADR-0106; F-019-v1, ADR-0107)
 
 A reseller acts on things the platform owns — its panels, its certificates.
 Each such thing has a **limit key**, set at three levels; the most specific
@@ -44,6 +44,25 @@ or `exempt` (not a reseller: the platform's own tenant has no limits).
 A new key is a line in `RESELLER_LIMITS`, a line in `RESELLER_LIMIT_USAGE`,
 and the one place that refuses past it. No table changes.
 
+## Two kinds of key, and past a quota (F-019-v1, ADR-0107 points 1, 2)
+
+Every registry line declares `kind`. Today `campaign_sends_daily_max` is the
+only `quota`; every other key is a `guard`. `RESELLER_QUOTA_KEYS` lists them.
+
+| Rule | Why |
+|---|---|
+| A `quota` counts units consumed in a period and may be sold past its number; a `guard` is a safety or capacity ceiling and **always refuses** | protection is never bought with money (ADR-0107, rejected: overage on guards) |
+| A guard becomes a quota only by changing its registry line (and a decision), never by a setting | the kind is what the key *is*, not a tier's option |
+| `resellerOverageOf(tx, tenantId, key)` → `{mode, unitPrice, currencyCode, source}`: `stop`, or `overage` at a unit price. Levels as the number — `reseller_quota_overage` → `package_quota_overage` (its subscription's package) → `quota_overage_setting` → `stop` (`default`); `exempt` for a non-reseller. `resellerOveragesOf` answers every quota key | one place resolves it; every consumer and page reads the same answer |
+| The mode resolves **apart from the number**: its own three tables, not columns on the limit rows | a reseller given a larger number keeps its package's price; a row there means "this level's number" (ADR-0106) |
+| A guard key always resolves `stop` (`default`), whatever a row says | a stray row cannot sell a guard |
+| `unitPrice` is a positive `Decimal(18,2)` in `currencyCode` — the **platform's**, stamped at write. It is debited from the reseller's billing wallet, which is in the platform's money, so the platform's currency change converts every level's price with it (never to nothing: one minor unit) | C-02; `billing/contract.currency-change.md` |
+| No row anywhere is `stop` | refusal is what ADR-0106 did; selling is a decision |
+
+What consumes this — counting, fixed periods, the wallet debit, the
+reseller's spend cap — is F-019-v2; until then a quota key still refuses
+at its number.
+
 ## What is used (`shared-core/src/lib/tenant/reseller-limit-usage.ts`, F-019-s)
 
 | Rule | Why |
@@ -61,20 +80,24 @@ path has three segments or more, so none is read as `GET /api/tenants/:id`.
 
 | Route | Body | Answers |
 |---|---|---|
-| `GET /api/tenants/limits/settings` | — | per key: `{key, codeDefault, max, platform: {value} \| null, packages: [{packageId, name, value}], resellers: [{tenantId, slug, value, reason}]}` |
+| `GET /api/tenants/limits/settings` | — | per key: `{key, kind, codeDefault, max, platform: {value} \| null, packages: [{packageId, name, value}], resellers: [{tenantId, slug, value, reason}], overage}` — `overage` null for a guard, else `{platform: O \| null, packages: [{packageId, name, ...O}], resellers: [{tenantId, slug, reason, ...O}]}`, `O` = `{mode, unitPrice: "0.50" \| null, currencyCode \| null}` |
 | `PUT /api/tenants/limits/settings/:key` | `{value: int ≥ 0 \| null}` | 204 |
 | `DELETE` the same | — | 204 — back to the code default |
 | `PUT /api/tenants/limits/packages/:packageId/:key` | `{value}` | 204 |
 | `DELETE` the same | — | 204 — back to the platform's |
 | `PUT /api/tenants/limits/resellers/:key` | `{tenantIds: 1..100 distinct, value, reason: 1..500}` | `{key, value, tenantIds}` |
 | `POST /api/tenants/limits/resellers/:key/clear` | `{tenantIds}` | `{key, cleared}` — back to each one's package or the platform |
-| `GET /api/tenants/:id/limits` (F-019-r, F-019-s) | — | `[{key, limit, source, used}]` — `resellerLimitsOf` and `resellerUsagesOf` for that reseller, on the cross-tenant pool. **Not** behind the guard: `ResellerAccess.admit(…, 'read')` lets in the reseller's owner, its team and the platform's staff; its refusals are `not_allowed` **403**, `reseller_not_found` **404** (staff only learn it), `reseller_suspended` **403**, `reseller_terminated` **409** |
+| `PUT` / `DELETE /api/tenants/limits/settings/:key/overage` | `{mode: "stop"}` or `{mode: "overage", unitPrice: "0.50"}` (string, > 0, ≤ 2 places), strict | 204 — `DELETE`: back to `stop` |
+| `PUT` / `DELETE /api/tenants/limits/packages/:packageId/:key/overage` | the same | 204 — `DELETE`: back to the platform's |
+| `PUT /api/tenants/limits/resellers/:key/overage` | the same + `{tenantIds, reason}` | `{key, mode, unitPrice, currencyCode, tenantIds}` |
+| `POST /api/tenants/limits/resellers/:key/overage/clear` | `{tenantIds}` | `{key, cleared}` |
+| `GET /api/tenants/:id/limits` (F-019-r, F-019-s, F-019-v1) | — | `[{key, kind, limit, source, used, overage}]` (`overage`: `{mode, unitPrice, currencyCode, source}`, null for a guard) — `resellerLimitsOf` and `resellerUsagesOf` for that reseller, on the cross-tenant pool. **Not** behind the guard: `ResellerAccess.admit(…, 'read')` lets in the reseller's owner, its team and the platform's staff; its refusals are `not_allowed` **403**, `reseller_not_found` **404** (staff only learn it), `reseller_suspended` **403**, `reseller_terminated` **409** |
 
 | Rule | Why |
 |---|---|
-| An unknown key is **404** `unknown_limit`; a value past the key's highest **422** `limit_out_of_range`; an unknown package **404** `package_not_found` | a typo is never a limit |
+| An unknown key is **404** `unknown_limit`; a value past the key's highest **422** `limit_out_of_range`; an unknown package **404** `package_not_found`; an `/overage` write on a guard key **422** `not_a_quota` | a typo is never a limit; a guard is never sold past |
 | Several resellers are **all or none**: every id is checked to be a live reseller first; one that is not is **404** `reseller_not_found` naming it, and nothing is written | half a request applied is a state nobody asked for |
-| Every write is audited in its transaction: `reseller_limit_set` / `reseller_limit_clear`, `{level, key, value}` before and after (`'unset'` = no row), against the platform's tenant, the package, or each reseller (one row each, with the reason). Clearing what has no row writes nothing | who raised whom, and why |
+| Every write is audited in its transaction: `reseller_limit_set` / `reseller_limit_clear`, `{level, key, value}` before and after (`'unset'` = no row) — and for overage `reseller_overage_set` / `reseller_overage_clear`, `{level, key, overage: O \| 'unset'}` — against the platform's tenant, the package, or each reseller (one row each, with the reason). Clearing what has no row writes nothing | who raised whom, and why |
 | Writes go through the cross-tenant pool | a reseller's row is that reseller's (RLS) |
 
 Proved by `shared-core/.../reseller-limits.spec.ts` and

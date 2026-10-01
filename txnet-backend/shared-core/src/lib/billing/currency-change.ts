@@ -81,6 +81,8 @@ export type CurrencyChangeSummary = {
   /** Open reseller Grants' wholesale legs (F-118-n2), converted with the platform's money. */
   wholesaleMeters: number;
   usageMeters: number;
+  /** Quota overage prices at the platform's, packages' and resellers' levels (F-019-v1, ADR-0107). */
+  quotaOverages: number;
 };
 
 export type CurrencyChangeOutcome = {
@@ -169,6 +171,7 @@ export async function convertOperatingCurrency(
     packageRates: c.platform ? await repricePackageRates(c) : 0,
     wholesaleMeters: c.platform ? await convertWholesaleMeters(c) : 0,
     usageMeters: c.platform ? await convertUsageMeters(c) : 0,
+    quotaOverages: c.platform ? await convertQuotaOverages(c) : 0,
   };
 
   await tx.$executeRaw`UPDATE tenant.tenant SET "operatingCurrencyCode" = ${toCode}, "updatedAt" = now() WHERE id = ${tenantId}::uuid`;
@@ -485,3 +488,20 @@ const convertUsageMeters = (c: Conversion) => c.tx.$executeRaw`
   UPDATE tenant.tenant_usage_meter
      SET "unitPrice" = round("unitPrice" * ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int), "currencyCode" = ${c.to}
    WHERE "currencyCode" = ${c.from} AND NOT "isBilled"`;
+
+/**
+ * A quota's overage price (F-019-v1, ADR-0107 point 2) is paid from the
+ * reseller's billing wallet, so it is in the platform's money and converts
+ * with it, at every level. Never to nothing: a price the column rounds to zero
+ * is one minor unit — a free overage is a decision, not a rounding.
+ */
+async function convertQuotaOverages(c: Conversion): Promise<number> {
+  const price = Prisma.sql`greatest(round("unitPrice" * ${c.rate}::numeric, ${c.dp}::int), power(10::numeric, -${c.dp}::int))`;
+  const platform = await c.tx.$executeRaw`
+    UPDATE tenant.quota_overage_setting SET "unitPrice" = ${price}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
+  const packages = await c.tx.$executeRaw`
+    UPDATE tenant.package_quota_overage SET "unitPrice" = ${price}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
+  const resellers = await c.tx.$executeRaw`
+    UPDATE tenant.reseller_quota_overage SET "unitPrice" = ${price}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
+  return platform + packages + resellers;
+}

@@ -19,3 +19,26 @@ export const clearResellersLimitSchema = z.object({ tenantIds }).strict();
 export type SetLimitInput = z.infer<typeof setLimitSchema>;
 export type SetResellersLimitInput = z.infer<typeof setResellersLimitSchema>;
 export type ClearResellersLimitInput = z.infer<typeof clearResellersLimitSchema>;
+
+/**
+ * Past a quota key (ADR-0107 point 2): `stop`, or `overage` at a unit price —
+ * a positive amount with at most 2 decimals, as a string so it is never a
+ * float (C-02). Its currency is the platform's, stamped by the service.
+ */
+const unitPrice = z
+  .string()
+  .regex(/^\d{1,16}(\.\d{1,2})?$/, 'unitPrice must be a decimal with at most 2 places')
+  .refine((v) => Number(v) > 0, { message: 'unitPrice must be above zero' });
+
+const overage = z.discriminatedUnion('mode', [z.object({ mode: z.literal('stop') }).strict(), z.object({ mode: z.literal('overage'), unitPrice }).strict()]);
+
+export const setOverageSchema = overage;
+
+export const setResellersOverageSchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('stop'), tenantIds, reason: z.string().trim().min(1).max(500) }).strict(),
+  z.object({ mode: z.literal('overage'), unitPrice, tenantIds, reason: z.string().trim().min(1).max(500) }).strict(),
+]);
+
+/** Written out rather than inferred: this project's tsconfig infers every field optional, and `mode` is the union's tag. */
+export type SetOverageInput = { mode: 'stop' } | { mode: 'overage'; unitPrice: string };
+export type SetResellersOverageInput = SetOverageInput & { tenantIds: string[]; reason: string };

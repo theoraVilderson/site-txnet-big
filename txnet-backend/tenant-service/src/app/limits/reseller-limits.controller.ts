@@ -28,8 +28,12 @@ import {
   clearResellersLimitSchema,
   SetLimitInput,
   setLimitSchema,
+  SetOverageInput,
+  setOverageSchema,
   SetResellersLimitInput,
   setResellersLimitSchema,
+  SetResellersOverageInput,
+  setResellersOverageSchema,
 } from './reseller-limits.schema';
 import { LimitInEffectRow, LimitRow, ResellerLimitsActor, ResellerLimitsRefused, ResellerLimitsRejection, ResellerLimitsService } from './reseller-limits.service';
 
@@ -40,6 +44,7 @@ const STATUS: Record<ResellerLimitsRejection, 403 | 404 | 422> = {
   package_not_found: 404,
   reseller_not_found: 404,
   limit_out_of_range: 422,
+  not_a_quota: 422,
 };
 
 /**
@@ -51,7 +56,10 @@ const STATUS: Record<ResellerLimitsRejection, 403 | 404 | 422> = {
  *  - `PUT|DELETE settings/:key` — the platform's value (`DELETE`: the code default);
  *  - `PUT|DELETE packages/:packageId/:key` — a package's;
  *  - `PUT resellers/:key`, `POST resellers/:key/clear` — one or several
- *    resellers' own, `{tenantIds, value, reason}` / `{tenantIds}`.
+ *    resellers' own, `{tenantIds, value, reason}` / `{tenantIds}`;
+ *  - the same four places + `/overage` — past a quota key, `{mode: 'stop'}`
+ *    or `{mode: 'overage', unitPrice}` (ADR-0107 point 2); a guard key is
+ *    `422 not_a_quota`.
  *
  * `value` null is no limit. Writes answer `204`; the table is read again.
  */
@@ -104,6 +112,48 @@ export class ResellerLimitsController {
   @HttpCode(HttpStatus.OK)
   clearResellers(@Req() req: Request, @Ip() ip: string, @Param('key') key: string, @Body(new ZodValidationPipe(clearResellersLimitSchema)) body: ClearResellersLimitInput) {
     return this.refusing(() => this.limits.clearResellers(actorOf(req, ip), key, body.tenantIds));
+  }
+
+  @Put('settings/:key/overage')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  setPlatformOverage(@Req() req: Request, @Ip() ip: string, @Param('key') key: string, @Body(new ZodValidationPipe(setOverageSchema)) body: SetOverageInput) {
+    return this.refusing(() => this.limits.setPlatformOverage(actorOf(req, ip), key, body));
+  }
+
+  @Delete('settings/:key/overage')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  clearPlatformOverage(@Req() req: Request, @Ip() ip: string, @Param('key') key: string) {
+    return this.refusing(() => this.limits.clearPlatformOverage(actorOf(req, ip), key));
+  }
+
+  @Put('packages/:packageId/:key/overage')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  setPackageOverage(
+    @Req() req: Request,
+    @Ip() ip: string,
+    @Param('packageId', new ParseUUIDPipe()) packageId: string,
+    @Param('key') key: string,
+    @Body(new ZodValidationPipe(setOverageSchema)) body: SetOverageInput,
+  ) {
+    return this.refusing(() => this.limits.setPackageOverage(actorOf(req, ip), packageId, key, body));
+  }
+
+  @Delete('packages/:packageId/:key/overage')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  clearPackageOverage(@Req() req: Request, @Ip() ip: string, @Param('packageId', new ParseUUIDPipe()) packageId: string, @Param('key') key: string) {
+    return this.refusing(() => this.limits.clearPackageOverage(actorOf(req, ip), packageId, key));
+  }
+
+  @Put('resellers/:key/overage')
+  setResellersOverage(@Req() req: Request, @Ip() ip: string, @Param('key') key: string, @Body(new ZodValidationPipe(setResellersOverageSchema)) body: SetResellersOverageInput) {
+    const input: SetOverageInput = body.mode === 'stop' ? { mode: 'stop' } : { mode: 'overage', unitPrice: body.unitPrice };
+    return this.refusing(() => this.limits.setResellersOverage(actorOf(req, ip), key, body.tenantIds, input, body.reason));
+  }
+
+  @Post('resellers/:key/overage/clear')
+  @HttpCode(HttpStatus.OK)
+  clearResellersOverage(@Req() req: Request, @Ip() ip: string, @Param('key') key: string, @Body(new ZodValidationPipe(clearResellersLimitSchema)) body: ClearResellersLimitInput) {
+    return this.refusing(() => this.limits.clearResellersOverage(actorOf(req, ip), key, body.tenantIds));
   }
 
   private refusing<T>(work: () => Promise<T>): Promise<T> {

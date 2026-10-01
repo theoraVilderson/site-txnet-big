@@ -7,15 +7,23 @@
  *  - **the platform bounded by itself.** Only a reseller has limits; the
  *    platform's own tenant (and any other kind) answers no limit;
  *  - **a reseller with no package.** It skips that level, never errors;
- *  - **a refusal with no figures.** It carries the key, the limit and the use.
+ *  - **a refusal with no figures.** It carries the key, the limit and the use;
+ *  - **a guard sold past** (F-019-v1, ADR-0107). Only a `quota` key resolves
+ *    an overage; its mode has the same three levels, apart from the number,
+ *    and is `stop` with no row.
  */
+import { Prisma } from '@prisma/client';
+
 import {
   assertUnderLimit,
   RESELLER_LIMIT_KEYS,
   RESELLER_LIMITS,
   ResellerLimitReached,
+  RESELLER_QUOTA_KEYS,
   resellerLimitOf,
   resellerLimitsOf,
+  resellerOverageOf,
+  resellerOveragesOf,
 } from './reseller-limits';
 
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -48,6 +56,69 @@ describe('RESELLER_LIMITS', () => {
       const def = RESELLER_LIMITS[key];
       expect(def.default === null || (def.default >= 0 && def.default <= def.max)).toBe(true);
     }
+  });
+});
+
+describe('RESELLER_LIMITS kinds (ADR-0107 point 1)', () => {
+  it('every key has a kind; only campaign sends is a quota today, every ceiling a guard', () => {
+    for (const key of RESELLER_LIMIT_KEYS) expect(['quota', 'guard']).toContain(RESELLER_LIMITS[key].kind);
+    expect(RESELLER_QUOTA_KEYS).toEqual(['campaign_sends_daily_max']);
+  });
+});
+
+type Over = { mode: 'stop' | 'overage'; unitPrice?: string; currencyCode?: string };
+
+function overageTx(rows: { tenantType?: string; packageId?: string | null; own?: Record<string, Over>; pkg?: Record<string, Over>; platform?: Record<string, Over> }) {
+  const toRows = (m: Record<string, Over> = {}) => (args: { where: { key: { in: string[] } } }) =>
+    Object.entries(m)
+      .filter(([key]) => args.where.key.in.includes(key))
+      .map(([key, o]) => ({ key, mode: o.mode, unitPrice: o.unitPrice ? new Prisma.Decimal(o.unitPrice) : null, currencyCode: o.currencyCode ?? null }));
+  return {
+    tenant: { findUnique: async () => ({ tenantType: rows.tenantType ?? 'reseller' }) },
+    tenantSubscription: { findUnique: async () => (rows.packageId === null ? null : { packageId: rows.packageId ?? PACKAGE }) },
+    resellerQuotaOverage: { findMany: async (a: never) => toRows(rows.own)(a) },
+    packageQuotaOverage: { findMany: async (a: never) => toRows(rows.pkg)(a) },
+    quotaOverageSetting: { findMany: async (a: never) => toRows(rows.platform)(a) },
+  };
+}
+
+describe('resellerOverageOf', () => {
+  const KEY = 'campaign_sends_daily_max';
+  const priced = (p: string): Over => ({ mode: 'overage', unitPrice: p, currencyCode: 'USD' });
+
+  it('is stop with no row at any level', async () => {
+    await expect(resellerOverageOf(overageTx({}) as never, RESELLER, KEY)).resolves.toEqual({ mode: 'stop', unitPrice: null, currencyCode: null, source: 'default' });
+  });
+
+  it('the reseller over its package over the platform, the price with its currency', async () => {
+    const tx = overageTx({ platform: { [KEY]: priced('1.00') }, pkg: { [KEY]: { mode: 'stop' } }, own: { [KEY]: priced('0.40') } });
+    const got = await resellerOverageOf(tx as never, RESELLER, KEY);
+    expect(got).toMatchObject({ mode: 'overage', currencyCode: 'USD', source: 'reseller' });
+    expect(got.unitPrice?.toFixed(2)).toBe('0.40');
+    await expect(resellerOverageOf(overageTx({ platform: { [KEY]: priced('1.00') }, pkg: { [KEY]: { mode: 'stop' } } }) as never, RESELLER, KEY)).resolves.toMatchObject({
+      mode: 'stop',
+      source: 'package',
+    });
+  });
+
+  it('skips the package level with no subscription', async () => {
+    await expect(resellerOverageOf(overageTx({ packageId: null, pkg: { [KEY]: priced('5') } }) as never, RESELLER, KEY)).resolves.toMatchObject({ mode: 'stop', source: 'default' });
+  });
+
+  it('a guard is always stop, whatever a row says; the platform\'s own tenant is exempt', async () => {
+    await expect(resellerOverageOf(overageTx({ own: { custom_domains_max: priced('1') } }) as never, RESELLER, 'custom_domains_max')).resolves.toEqual({
+      mode: 'stop',
+      unitPrice: null,
+      currencyCode: null,
+      source: 'default',
+    });
+    await expect(resellerOverageOf(overageTx({ tenantType: 'platform_owner', own: { [KEY]: priced('1') } }) as never, PLATFORM, KEY)).resolves.toMatchObject({ mode: 'stop', source: 'exempt' });
+  });
+
+  it('every quota key at once', async () => {
+    const all = await resellerOveragesOf(overageTx({ platform: { [KEY]: priced('2') } }) as never, RESELLER);
+    expect([...all.keys()]).toEqual(RESELLER_QUOTA_KEYS);
+    expect(all.get(KEY)).toMatchObject({ mode: 'overage', source: 'platform' });
   });
 });
 

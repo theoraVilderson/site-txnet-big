@@ -29,6 +29,9 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 | reseller_limit_setting | the platform's value for one reseller limit key (ADR-0106, F-019-m), PK `key` (CHECK shape), `value` (null = no limit, else ≥ 0), `updatedByUserId` (no FK); no row = the code default | no tenant, no RLS | permanent |
 | package_limit | a package's value for one key, PK `(packageId, key)`, `value` as above; cascades with its package | no tenant, no RLS | permanent |
 | reseller_limit | one reseller's own value for one key, PK `(tenantId, key)`, `value` as above, `reason` (CHECK non-blank), `setByUserId` (no FK) | yes, strict RLS | permanent |
+| quota_overage_setting | the platform's answer past one **quota** key (ADR-0107, F-019-v1), PK `key` (CHECK shape), `mode` (`QuotaOverageMode` stop/overage), `unitPrice` `Decimal(18,2)` + `currencyCode` (the platform's) set exactly when `overage` (CHECK, price > 0), `updatedByUserId`; no row = `stop`. The kind is checked in code | no tenant, no RLS | permanent |
+| package_quota_overage | a package's answer past one quota key, PK `(packageId, key)`, columns as above; FK package, cascade | no tenant, no RLS | permanent |
+| reseller_quota_overage | one reseller's own answer, PK `(tenantId, key)`, columns as above + `reason` (CHECK non-blank), `setByUserId` | yes, strict RLS | permanent |
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |

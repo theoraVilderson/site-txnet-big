@@ -1,7 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AdminAction, AuditTargetType, Prisma, TenantType } from '@prisma/client';
+import { AdminAction, AuditTargetType, Prisma, QuotaOverageMode, TenantType } from '@prisma/client';
 import {
   isResellerLimitKey,
+  isResellerQuotaKey,
+  overageTermsOf,
+  platformCurrencyOf,
+  type QuotaOverageTerms,
+  RESELLER_QUOTA_KEYS,
+  type ResellerLimitKind,
+  resellerOveragesOf,
+  type ResellerQuotaKey,
   RESELLER_LIMIT_KEYS,
   RESELLER_LIMITS,
   ResellerAccess,
@@ -12,12 +20,13 @@ import {
   resellerUsagesOf,
 } from '@txnet-backend/shared-core';
 
+import type { SetOverageInput as OverageInput } from './reseller-limits.schema';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type ResellerLimitsActor = { adminId: string; tenantId: string; ip: string };
 
-export type ResellerLimitsRejection = 'not_platform_owner' | 'unknown_limit' | 'limit_out_of_range' | 'package_not_found' | 'reseller_not_found';
+export type ResellerLimitsRejection = 'not_platform_owner' | 'unknown_limit' | 'limit_out_of_range' | 'package_not_found' | 'reseller_not_found' | 'not_a_quota';
 
 export class ResellerLimitsRefused extends Error {
   constructor(
@@ -29,21 +38,50 @@ export class ResellerLimitsRefused extends Error {
   }
 }
 
+/** Past a quota key, as JSON: the price a decimal string with its currency, `null` for `stop`. */
+export type OverageView = { mode: QuotaOverageMode; unitPrice: string | null; currencyCode: string | null };
+
 /** One key, every level that sets it. `platform` null = no row (the code default applies); a `value` null = no limit. */
 export type LimitRow = {
   key: ResellerLimitKey;
+  kind: ResellerLimitKind;
   codeDefault: number | null;
   max: number;
   platform: { value: number | null } | null;
   packages: Array<{ packageId: string; name: string; value: number | null }>;
   resellers: Array<{ tenantId: string; slug: string; value: number | null; reason: string }>;
+  /** A quota's answer past its number at each level (ADR-0107); `null` for a guard, which always stops. `platform` null = no row (`stop`). */
+  overage: {
+    platform: OverageView | null;
+    packages: Array<OverageView & { packageId: string; name: string }>;
+    resellers: Array<OverageView & { tenantId: string; slug: string; reason: string }>;
+  } | null;
 };
 
-/** One key in effect for one reseller: `used` is the count its refusal compares, `null` for a key that counts nothing. */
-export type LimitInEffectRow = ResellerLimitInEffect & { key: ResellerLimitKey; used: number | null };
+/**
+ * One key in effect for one reseller: `used` is the count its refusal compares,
+ * `null` for a key that counts nothing; `overage` what happens past it and where
+ * that comes from, `null` for a guard.
+ */
+export type LimitInEffectRow = ResellerLimitInEffect & {
+  key: ResellerLimitKey;
+  kind: ResellerLimitKind;
+  used: number | null;
+  overage: (OverageView & { source: ResellerLimitInEffect['source'] }) | null;
+};
 
 /** What an audit row says a level held: a value, `null` (no limit), or `'unset'` (no row). */
 type Held = number | null | 'unset';
+
+
+/** What an overage audit row says a level held. */
+type HeldOverage = OverageView | 'unset';
+
+const OVERAGE_SELECT = { mode: true, unitPrice: true, currencyCode: true } as const;
+
+export function overageView(terms: QuotaOverageTerms): OverageView {
+  return { mode: terms.mode, unitPrice: terms.unitPrice?.toFixed(2) ?? null, currencyCode: terms.currencyCode };
+}
 
 /**
  * The platform owner's reseller limits (F-019-m, ADR-0106): the platform's
@@ -67,7 +105,7 @@ export class ResellerLimitsService {
 
   async table(actor: ResellerLimitsActor): Promise<LimitRow[]> {
     await this.access(actor);
-    const [platform, packages, resellers] = await Promise.all([
+    const [platform, packages, resellers, overage] = await Promise.all([
       this.all.resellerLimitSetting.findMany({ select: { key: true, value: true } }),
       this.all.packageLimit.findMany({ select: { packageId: true, key: true, value: true, package: { select: { name: true } } }, orderBy: { packageId: 'asc' } }),
       Promise.all(
@@ -79,18 +117,43 @@ export class ResellerLimitsService {
           }),
         ),
       ).then((rows) => rows.flat()),
+      this.overageTable(),
     ]);
     return RESELLER_LIMIT_KEYS.map((key) => {
       const p = platform.find((r) => r.key === key);
       return {
         key,
+        kind: RESELLER_LIMITS[key].kind,
         codeDefault: RESELLER_LIMITS[key].default,
         max: RESELLER_LIMITS[key].max,
         platform: p ? { value: p.value } : null,
         packages: packages.filter((r) => r.key === key).map((r) => ({ packageId: r.packageId, name: r.package.name, value: r.value })),
         resellers: resellers.filter((r) => r.key === key).map((r) => ({ tenantId: r.tenantId, slug: r.tenant.slug, value: r.value, reason: r.reason })),
+        overage: isResellerQuotaKey(key) ? overage(key) : null,
       };
     });
+  }
+
+  /** Every level's overage row of every quota key, as one lookup per key. */
+  private async overageTable() {
+    const keys = { key: { in: [...RESELLER_QUOTA_KEYS] as string[] } };
+    const [platform, packages, resellers] = await Promise.all([
+      this.all.quotaOverageSetting.findMany({ where: keys, select: { key: true, ...OVERAGE_SELECT } }),
+      this.all.packageQuotaOverage.findMany({ where: keys, select: { key: true, packageId: true, ...OVERAGE_SELECT, package: { select: { name: true } } }, orderBy: { packageId: 'asc' } }),
+      this.all.resellerQuotaOverage.findMany({
+        where: keys,
+        select: { key: true, tenantId: true, reason: true, ...OVERAGE_SELECT, tenant: { select: { slug: true } } },
+        orderBy: { tenantId: 'asc' },
+      }),
+    ]);
+    return (key: ResellerQuotaKey): NonNullable<LimitRow['overage']> => {
+      const p = platform.find((r) => r.key === key);
+      return {
+        platform: p ? overageView(overageTermsOf(p)) : null,
+        packages: packages.filter((r) => r.key === key).map((r) => ({ packageId: r.packageId, name: r.package.name, ...overageView(overageTermsOf(r)) })),
+        resellers: resellers.filter((r) => r.key === key).map((r) => ({ tenantId: r.tenantId, slug: r.tenant.slug, reason: r.reason, ...overageView(overageTermsOf(r)) })),
+      };
+    };
   }
 
   /**
@@ -102,8 +165,11 @@ export class ResellerLimitsService {
    */
   async ofReseller(actor: ResellerActor, tenantId: string): Promise<LimitInEffectRow[]> {
     const reseller = await this.door.admit(actor, tenantId, 'read');
-    const [limits, used] = await Promise.all([resellerLimitsOf(this.all, reseller.id), resellerUsagesOf(this.all, reseller.id)]);
-    return limits.map((row) => ({ ...row, used: used[row.key] }));
+    const [limits, used, overages] = await Promise.all([resellerLimitsOf(this.all, reseller.id), resellerUsagesOf(this.all, reseller.id), resellerOveragesOf(this.all, reseller.id)]);
+    return limits.map((row) => {
+      const over = isResellerQuotaKey(row.key) ? overages.get(row.key) : undefined;
+      return { ...row, kind: RESELLER_LIMITS[row.key].kind, used: used[row.key], overage: over ? { ...overageView(over), source: over.source } : null };
+    });
   }
 
   async setPlatform(actor: ResellerLimitsActor, key: string, value: number | null): Promise<void> {
@@ -193,6 +259,125 @@ export class ResellerLimitsService {
     return { key: k, cleared };
   }
 
+  /** The platform's answer past a quota key (ADR-0107 point 2), over the code default `stop`. */
+  async setPlatformOverage(actor: ResellerLimitsActor, key: string, input: OverageInput): Promise<void> {
+    const k = await this.quota(actor, key);
+    await this.all.$transaction(async (tx) => {
+      const data = await this.overageData(tx, input, actor.adminId);
+      const before = await tx.quotaOverageSetting.findUnique({ where: { key: k }, select: OVERAGE_SELECT });
+      await tx.quotaOverageSetting.upsert({ where: { key: k }, create: { key: k, ...data }, update: data });
+      await tx.adminAuditLog.create({ data: this.overageAudit(actor, AdminAction.reseller_overage_set, 'platform', k, held(before), viewOf(data)) });
+    });
+  }
+
+  async clearPlatformOverage(actor: ResellerLimitsActor, key: string): Promise<void> {
+    const k = await this.quota(actor, key);
+    await this.all.$transaction(async (tx) => {
+      const before = await tx.quotaOverageSetting.findUnique({ where: { key: k }, select: OVERAGE_SELECT });
+      if (!before) return;
+      await tx.quotaOverageSetting.deleteMany({ where: { key: k } });
+      await tx.adminAuditLog.create({ data: this.overageAudit(actor, AdminAction.reseller_overage_clear, 'platform', k, held(before), 'unset') });
+    });
+  }
+
+  async setPackageOverage(actor: ResellerLimitsActor, packageId: string, key: string, input: OverageInput): Promise<void> {
+    const k = await this.quota(actor, key);
+    await this.all.$transaction(async (tx) => {
+      if (!(await tx.tenantFeaturePackage.findUnique({ where: { id: packageId }, select: { id: true } }))) throw new ResellerLimitsRefused('package_not_found', packageId);
+      const data = await this.overageData(tx, input, actor.adminId);
+      const where = { packageId_key: { packageId, key: k } };
+      const before = await tx.packageQuotaOverage.findUnique({ where, select: OVERAGE_SELECT });
+      await tx.packageQuotaOverage.upsert({ where, create: { packageId, key: k, ...data }, update: data });
+      await tx.adminAuditLog.create({
+        data: this.overageAudit(actor, AdminAction.reseller_overage_set, 'package', k, held(before), viewOf(data), { type: AuditTargetType.tenant_feature_package, id: packageId }),
+      });
+    });
+  }
+
+  async clearPackageOverage(actor: ResellerLimitsActor, packageId: string, key: string): Promise<void> {
+    const k = await this.quota(actor, key);
+    await this.all.$transaction(async (tx) => {
+      const before = await tx.packageQuotaOverage.findUnique({ where: { packageId_key: { packageId, key: k } }, select: OVERAGE_SELECT });
+      if (!before) return;
+      await tx.packageQuotaOverage.deleteMany({ where: { packageId, key: k } });
+      await tx.adminAuditLog.create({
+        data: this.overageAudit(actor, AdminAction.reseller_overage_clear, 'package', k, held(before), 'unset', { type: AuditTargetType.tenant_feature_package, id: packageId }),
+      });
+    });
+  }
+
+  /** One or several resellers, all or none, as `setResellers`. */
+  async setResellersOverage(actor: ResellerLimitsActor, key: string, tenantIds: string[], input: OverageInput, reason: string) {
+    const k = await this.quota(actor, key);
+    const view = await this.all.$transaction(async (tx) => {
+      await this.resellersExist(tx, tenantIds);
+      const { updatedByUserId, ...terms } = await this.overageData(tx, input, actor.adminId);
+      const before = new Map(
+        (await tx.resellerQuotaOverage.findMany({ where: { key: k, tenantId: { in: tenantIds } }, select: { tenantId: true, ...OVERAGE_SELECT } })).map((r) => [r.tenantId, r]),
+      );
+      for (const tenantId of tenantIds) {
+        const data = { ...terms, reason, setByUserId: updatedByUserId };
+        await tx.resellerQuotaOverage.upsert({ where: { tenantId_key: { tenantId, key: k } }, create: { tenantId, key: k, ...data }, update: data });
+        await tx.adminAuditLog.create({
+          data: this.overageAudit(actor, AdminAction.reseller_overage_set, 'reseller', k, held(before.get(tenantId) ?? null), viewOf(terms), { type: AuditTargetType.tenant, id: tenantId }, reason),
+        });
+      }
+      return viewOf(terms);
+    });
+    this.logger.log(`overage ${k} = ${view.mode}${view.unitPrice ? ` ${view.unitPrice} ${view.currencyCode}` : ''} for ${tenantIds.length} reseller(s) by ${actor.adminId}`);
+    return { key: k, ...view, tenantIds };
+  }
+
+  async clearResellersOverage(actor: ResellerLimitsActor, key: string, tenantIds: string[]) {
+    const k = await this.quota(actor, key);
+    const cleared = await this.all.$transaction(async (tx) => {
+      const rows = await tx.resellerQuotaOverage.findMany({ where: { key: k, tenantId: { in: tenantIds } }, select: { tenantId: true, ...OVERAGE_SELECT } });
+      if (rows.length === 0) return 0;
+      await tx.resellerQuotaOverage.deleteMany({ where: { key: k, tenantId: { in: rows.map((r) => r.tenantId) } } });
+      for (const r of rows) {
+        await tx.adminAuditLog.create({ data: this.overageAudit(actor, AdminAction.reseller_overage_clear, 'reseller', k, held(r), 'unset', { type: AuditTargetType.tenant, id: r.tenantId }) });
+      }
+      return rows.length;
+    });
+    return { key: k, cleared };
+  }
+
+  /** The row's terms: an overage price is stamped with the platform's currency now, which every reseller's billing wallet is kept in. */
+  private async overageData(tx: Prisma.TransactionClient, input: OverageInput, adminId: string) {
+    if (input.mode === 'stop') return { mode: QuotaOverageMode.stop, unitPrice: null, currencyCode: null, updatedByUserId: adminId };
+    return { mode: QuotaOverageMode.overage, unitPrice: new Prisma.Decimal(input.unitPrice), currencyCode: await platformCurrencyOf(tx), updatedByUserId: adminId };
+  }
+
+  /** A known key whose registry kind is `quota`; a guard is never sold past (ADR-0107 point 1). */
+  private async quota(actor: ResellerLimitsActor, key: string): Promise<ResellerQuotaKey> {
+    const k = await this.known(actor, key);
+    if (!isResellerQuotaKey(k)) throw new ResellerLimitsRefused('not_a_quota', k);
+    return k;
+  }
+
+  private overageAudit(
+    actor: ResellerLimitsActor,
+    action: AdminAction,
+    level: 'platform' | 'package' | 'reseller',
+    key: ResellerQuotaKey,
+    before: HeldOverage,
+    after: HeldOverage,
+    target: { type: AuditTargetType; id: string } = { type: AuditTargetType.tenant, id: actor.tenantId },
+    reason: string | null = null,
+  ): Prisma.AdminAuditLogUncheckedCreateInput {
+    return {
+      tenantId: actor.tenantId,
+      adminId: actor.adminId,
+      action,
+      targetEntityType: target.type,
+      targetEntityId: target.id,
+      oldValue: { level, key, overage: before },
+      newValue: { level, key, overage: after },
+      adminIpAddress: actor.ip,
+      reason,
+    };
+  }
+
   private async resellersExist(tx: Prisma.TransactionClient, tenantIds: string[]): Promise<void> {
     const found = new Set(
       (await tx.tenant.findMany({ where: { id: { in: tenantIds }, tenantType: TenantType.reseller, deletedAt: null }, select: { id: true } })).map((t) => t.id),
@@ -242,4 +427,12 @@ export class ResellerLimitsService {
       reason,
     };
   }
+}
+
+function viewOf(row: { mode: QuotaOverageMode; unitPrice: Prisma.Decimal | null; currencyCode: string | null }): OverageView {
+  return overageView(overageTermsOf(row));
+}
+
+function held(row: { mode: QuotaOverageMode; unitPrice: Prisma.Decimal | null; currencyCode: string | null } | null): HeldOverage {
+  return row ? viewOf(row) : 'unset';
 }

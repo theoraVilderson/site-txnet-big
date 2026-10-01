@@ -10,12 +10,15 @@
  *  - **a limit nobody can account for.** One audit row per level written, with
  *    the value before and after, and the reason for a reseller's own;
  *  - **no limit confused with not set.** `null` is written as a row (no
- *    limit); clearing deletes it (the next level applies).
+ *    limit); clearing deletes it (the next level applies);
+ *  - **a guard sold past** (F-019-v1, ADR-0107). Overage is refused on any key
+ *    whose kind is not `quota`; a price is stamped with the platform's
+ *    currency, and the mode is resolved apart from the number.
  */
 import { ResellerAccessRefused, type ResellerAccessRejection } from '@txnet-backend/shared-core';
 
 import { ResellerLimitsRefused, ResellerLimitsService } from './reseller-limits.service';
-import { setLimitSchema, setResellersLimitSchema, clearResellersLimitSchema } from './reseller-limits.schema';
+import { setLimitSchema, setOverageSchema, setResellersLimitSchema, setResellersOverageSchema, clearResellersLimitSchema } from './reseller-limits.schema';
 
 const OWNER_TENANT = '11111111-1111-4111-8111-111111111111';
 const RESELLER_A = '22222222-2222-4222-8222-222222222222';
@@ -42,6 +45,23 @@ function build(
   const own = new Map<string, { value: number | null; reason: string }>();
   const resellers = new Set(opts.resellers ?? [RESELLER_A, RESELLER_B]);
   const packages = new Set(opts.packages ?? [PKG]);
+  type Over = { key: string; mode: string; unitPrice: unknown; currencyCode: string | null };
+  const overage = { platform: new Map<string, Over>(), pkg: new Map<string, Over & { packageId: string }>(), own: new Map<string, Over & { tenantId: string; reason: string }>() };
+  const keyIn = (where: { key?: string | { in: string[] } }, key: string) => !where.key || (typeof where.key === 'string' ? where.key === key : where.key.in.includes(key));
+  const overageTable = <T extends Over>(rows: Map<string, T>, label: string, idOf: (w: Record<string, unknown>) => string, extra: (r: T) => Record<string, unknown>) => ({
+    findUnique: async ({ where }: { where: Record<string, unknown> }) => rows.get(idOf(where)) ?? null,
+    findMany: async ({ where }: { where: { key?: string | { in: string[] }; tenantId?: { in: string[] } } }) =>
+      [...rows.values()].filter((r) => keyIn(where, r.key) && (!where.tenantId || where.tenantId.in.includes((r as unknown as { tenantId: string }).tenantId))).map((r) => ({ ...r, ...extra(r) })),
+    upsert: async ({ where, create }: { where: Record<string, unknown>; create: T }) => (writes.push(`${label}-overage:${create.key}`), rows.set(idOf(where), create)),
+    deleteMany: async ({ where }: { where: { key: string; tenantId?: { in: string[] }; packageId?: string } }) => {
+      let count = 0;
+      for (const [id, r] of rows) {
+        const t = r as unknown as { tenantId?: string; packageId?: string };
+        if (r.key === where.key && (!where.tenantId || where.tenantId.in.includes(t.tenantId as string)) && (!where.packageId || t.packageId === where.packageId)) count += rows.delete(id) ? 1 : 0;
+      }
+      return { count };
+    },
+  });
 
   const tx = {
     resellerLimitSetting: {
@@ -80,9 +100,23 @@ function build(
         return { count };
       },
     },
+    quotaOverageSetting: overageTable(overage.platform, 'platform', (w) => w.key as string, () => ({})),
+    packageQuotaOverage: overageTable(
+      overage.pkg,
+      'package',
+      (w) => `${(w.packageId_key as { packageId: string }).packageId}:${(w.packageId_key as { key: string }).key}`,
+      () => ({ package: { name: 'Growth' } }),
+    ),
+    resellerQuotaOverage: overageTable(
+      overage.own,
+      'reseller',
+      (w) => `${(w.tenantId_key as { tenantId: string }).tenantId}:${(w.tenantId_key as { key: string }).key}`,
+      () => ({ tenant: { slug: 'acme' } }),
+    ),
     tenant: {
       findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.filter((id) => resellers.has(id)).map((id) => ({ id })),
       findUnique: async ({ where }: { where: { id: string } }) => (resellers.has(where.id) ? { tenantType: 'reseller' } : null),
+      findFirst: async () => ({ operatingCurrencyCode: 'USD' }),
     },
     tenantSubscription: { findUnique: async () => null },
     tenantFeaturePackage: { findUnique: async ({ where }: { where: { id: string } }) => (packages.has(where.id) ? { id: where.id } : null) },
@@ -103,7 +137,7 @@ function build(
       return { id: tenantId, slug: 'acme', as: 'owner' };
     },
   };
-  return { service: new ResellerLimitsService(prisma as never, all as never, access as never), audit, writes, setting, own, admitted };
+  return { service: new ResellerLimitsService(prisma as never, all as never, access as never), audit, writes, setting, own, admitted, overage };
 }
 
 const refusal = async (p: Promise<unknown>) => {
@@ -183,13 +217,100 @@ describe('ResellerLimitsService', () => {
     const table = await service.table(actor);
     expect(table.find((r) => r.key === 'custom_domains_max')).toEqual({
       key: 'custom_domains_max',
+      kind: 'guard',
       codeDefault: 5,
       max: 1000,
       platform: { value: 3 },
       packages: [{ packageId: PKG, name: 'Growth', value: 8 }],
       resellers: [{ tenantId: RESELLER_A, slug: 'acme', value: null, reason: 'no limit for A' }],
+      overage: null,
     });
     expect(table.find((r) => r.key === 'admin_issues_30d_max')).toMatchObject({ platform: null, packages: [], resellers: [] });
+  });
+});
+
+describe('ResellerLimitsService overage (F-019-v1, ADR-0107)', () => {
+  it('refuses overage on a guard key, before anything is written: a guard is never bought past', async () => {
+    const { service, writes } = build();
+    for (const key of ['custom_domains_max', 'platform_traffic_gib_monthly_max', 'user_purchases_daily_max']) {
+      expect(await refusal(service.setPlatformOverage(actor, key, { mode: 'overage', unitPrice: '1.00' }))).toBe('not_a_quota');
+      expect(await refusal(service.setPackageOverage(actor, PKG, key, { mode: 'stop' }))).toBe('not_a_quota');
+      expect(await refusal(service.setResellersOverage(actor, key, [RESELLER_A], { mode: 'overage', unitPrice: '1' }, 'r'))).toBe('not_a_quota');
+    }
+    expect(await refusal(service.setPlatformOverage(actor, 'nope', { mode: 'stop' }))).toBe('unknown_limit');
+    expect(writes).toEqual([]);
+  });
+
+  it('refuses anyone but the platform owner', async () => {
+    const { service, writes } = build({ callerType: 'reseller' });
+    expect(await refusal(service.setPlatformOverage(actor, 'campaign_sends_daily_max', { mode: 'overage', unitPrice: '1' }))).toBe('not_platform_owner');
+    expect(writes).toEqual([]);
+  });
+
+  it('stamps the price with the platform\'s currency and audits before and after at each level', async () => {
+    const { service, audit, overage } = build();
+    await service.setPlatformOverage(actor, 'campaign_sends_daily_max', { mode: 'overage', unitPrice: '0.5' });
+    expect(overage.platform.get('campaign_sends_daily_max')).toMatchObject({ mode: 'overage', currencyCode: 'USD' });
+    await service.setPackageOverage(actor, PKG, 'campaign_sends_daily_max', { mode: 'stop' });
+    await service.clearPlatformOverage(actor, 'campaign_sends_daily_max');
+    await service.clearPlatformOverage(actor, 'campaign_sends_daily_max');
+    expect(audit.map((a) => [a.action, a.targetEntityType, a.oldValue, a.newValue])).toEqual([
+      [
+        'reseller_overage_set',
+        'tenant',
+        { level: 'platform', key: 'campaign_sends_daily_max', overage: 'unset' },
+        { level: 'platform', key: 'campaign_sends_daily_max', overage: { mode: 'overage', unitPrice: '0.50', currencyCode: 'USD' } },
+      ],
+      [
+        'reseller_overage_set',
+        'tenant_feature_package',
+        { level: 'package', key: 'campaign_sends_daily_max', overage: 'unset' },
+        { level: 'package', key: 'campaign_sends_daily_max', overage: { mode: 'stop', unitPrice: null, currencyCode: null } },
+      ],
+      [
+        'reseller_overage_clear',
+        'tenant',
+        { level: 'platform', key: 'campaign_sends_daily_max', overage: { mode: 'overage', unitPrice: '0.50', currencyCode: 'USD' } },
+        { level: 'platform', key: 'campaign_sends_daily_max', overage: 'unset' },
+      ],
+    ]);
+    expect(await refusal(service.setPackageOverage(actor, RESELLER_A, 'campaign_sends_daily_max', { mode: 'stop' }))).toBe('package_not_found');
+  });
+
+  it('sets several resellers all or none, each with the reason; clears only what existed', async () => {
+    const { service, audit, writes } = build({ resellers: [RESELLER_A] });
+    expect(await refusal(service.setResellersOverage(actor, 'campaign_sends_daily_max', [RESELLER_A, RESELLER_B], { mode: 'stop' }, 'x'))).toBe('reseller_not_found');
+    expect(writes).toEqual([]);
+    const done = await service.setResellersOverage(actor, 'campaign_sends_daily_max', [RESELLER_A], { mode: 'overage', unitPrice: '2' }, 'big sender');
+    expect(done).toEqual({ key: 'campaign_sends_daily_max', mode: 'overage', unitPrice: '2.00', currencyCode: 'USD', tenantIds: [RESELLER_A] });
+    expect(audit[0]).toMatchObject({ action: 'reseller_overage_set', targetEntityId: RESELLER_A, reason: 'big sender' });
+    await expect(service.clearResellersOverage(actor, 'campaign_sends_daily_max', [RESELLER_A, RESELLER_B])).resolves.toEqual({ key: 'campaign_sends_daily_max', cleared: 1 });
+    await expect(service.clearResellersOverage(actor, 'campaign_sends_daily_max', [RESELLER_A])).resolves.toEqual({ key: 'campaign_sends_daily_max', cleared: 0 });
+  });
+
+  it('the table shows each quota\'s overage at every level, and none for a guard', async () => {
+    const { service } = build();
+    await service.setPlatformOverage(actor, 'campaign_sends_daily_max', { mode: 'overage', unitPrice: '1.25' });
+    await service.setPackageOverage(actor, PKG, 'campaign_sends_daily_max', { mode: 'stop' });
+    await service.setResellersOverage(actor, 'campaign_sends_daily_max', [RESELLER_A], { mode: 'overage', unitPrice: '0.75' }, 'deal');
+    const table = await service.table(actor);
+    expect(table.find((r) => r.key === 'campaign_sends_daily_max')).toMatchObject({
+      kind: 'quota',
+      overage: {
+        platform: { mode: 'overage', unitPrice: '1.25', currencyCode: 'USD' },
+        packages: [{ packageId: PKG, name: 'Growth', mode: 'stop', unitPrice: null, currencyCode: null }],
+        resellers: [{ tenantId: RESELLER_A, slug: 'acme', reason: 'deal', mode: 'overage', unitPrice: '0.75', currencyCode: 'USD' }],
+      },
+    });
+    expect(table.find((r) => r.key === 'staff_members_max')).toMatchObject({ kind: 'guard', overage: null });
+  });
+
+  it('a reseller\'s own number does not reset its overage: the two resolve apart', async () => {
+    const { service } = build();
+    await service.setPlatformOverage(actor, 'campaign_sends_daily_max', { mode: 'overage', unitPrice: '3' });
+    await service.setResellers(actor, 'campaign_sends_daily_max', [RESELLER_A], 50, 'more room');
+    const row = (await service.ofReseller({ userId: ADMIN, tenantId: RESELLER_A, permissions: [] }, RESELLER_A)).find((r) => r.key === 'campaign_sends_daily_max');
+    expect(row).toMatchObject({ limit: 50, source: 'reseller', overage: { mode: 'overage', unitPrice: '3.00', currencyCode: 'USD', source: 'platform' } });
   });
 });
 
@@ -203,18 +324,18 @@ describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
     const view = await service.ofReseller(owner, RESELLER_A);
     expect(admitted).toEqual([{ tenantId: RESELLER_A, capability: 'read' }]);
     expect(view).toEqual([
-      { key: 'user_metered_cap_max', limit: 20, source: 'default', used: null },
-      { key: 'platform_open_grants_max', limit: 500, source: 'default', used: 7 },
-      { key: 'admin_issues_30d_max', limit: null, source: 'reseller', used: 4 },
-      { key: 'custom_domains_max', limit: 3, source: 'platform', used: 2 },
-      { key: 'staff_members_max', limit: 20, source: 'default', used: 6 },
-      { key: 'bulk_job_grants_max', limit: 10_000, source: 'default', used: null },
-      { key: 'campaign_sends_daily_max', limit: 10, source: 'default', used: 1 },
-      { key: 'end_users_max', limit: 50_000, source: 'default', used: 120 },
-      { key: 'platform_traffic_gib_monthly_max', limit: null, source: 'default', used: 37 },
-      { key: 'user_purchases_daily_max', limit: null, source: 'default', used: null },
-      { key: 'user_purchases_weekly_max', limit: null, source: 'default', used: null },
-      { key: 'user_purchases_monthly_max', limit: null, source: 'default', used: null },
+      { key: 'user_metered_cap_max', kind: 'guard', limit: 20, source: 'default', used: null, overage: null },
+      { key: 'platform_open_grants_max', kind: 'guard', limit: 500, source: 'default', used: 7, overage: null },
+      { key: 'admin_issues_30d_max', kind: 'guard', limit: null, source: 'reseller', used: 4, overage: null },
+      { key: 'custom_domains_max', kind: 'guard', limit: 3, source: 'platform', used: 2, overage: null },
+      { key: 'staff_members_max', kind: 'guard', limit: 20, source: 'default', used: 6, overage: null },
+      { key: 'bulk_job_grants_max', kind: 'guard', limit: 10_000, source: 'default', used: null, overage: null },
+      { key: 'campaign_sends_daily_max', kind: 'quota', limit: 10, source: 'default', used: 1, overage: { mode: 'stop', unitPrice: null, currencyCode: null, source: 'default' } },
+      { key: 'end_users_max', kind: 'guard', limit: 50_000, source: 'default', used: 120, overage: null },
+      { key: 'platform_traffic_gib_monthly_max', kind: 'guard', limit: null, source: 'default', used: 37, overage: null },
+      { key: 'user_purchases_daily_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null },
+      { key: 'user_purchases_weekly_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null },
+      { key: 'user_purchases_monthly_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null },
     ]);
   });
 
@@ -227,6 +348,19 @@ describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
 });
 
 describe('the bodies', () => {
+  it('overage: stop, or overage with a positive price of at most 2 places, as a string', () => {
+    expect(setOverageSchema.safeParse({ mode: 'stop' }).success).toBe(true);
+    expect(setOverageSchema.safeParse({ mode: 'overage', unitPrice: '0.50' }).success).toBe(true);
+    expect(setOverageSchema.safeParse({ mode: 'overage' }).success).toBe(false);
+    expect(setOverageSchema.safeParse({ mode: 'overage', unitPrice: '0' }).success).toBe(false);
+    expect(setOverageSchema.safeParse({ mode: 'overage', unitPrice: '0.001' }).success).toBe(false);
+    expect(setOverageSchema.safeParse({ mode: 'overage', unitPrice: 1 }).success).toBe(false);
+    expect(setOverageSchema.safeParse({ mode: 'stop', unitPrice: '1' }).success).toBe(false);
+    expect(setOverageSchema.safeParse({ mode: 'bill_later' }).success).toBe(false);
+    expect(setResellersOverageSchema.safeParse({ mode: 'stop', tenantIds: [RESELLER_A], reason: 'r' }).success).toBe(true);
+    expect(setResellersOverageSchema.safeParse({ mode: 'overage', unitPrice: '1', tenantIds: [RESELLER_A] }).success).toBe(false);
+  });
+
   it('a value is a whole number or null, and required', () => {
     expect(setLimitSchema.parse({ value: null })).toEqual({ value: null });
     expect(setLimitSchema.safeParse({}).success).toBe(false);

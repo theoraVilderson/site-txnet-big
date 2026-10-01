@@ -170,6 +170,7 @@ model Tenant {
   gatewayConfigs      TenantGatewayConfig[]
   smsConfigs          TenantSmsConfig[]
   limits              ResellerLimit[]
+  quotaOverages       ResellerQuotaOverage[]
   deks                TenantDek[]
   credentials         TenantCredential[]
   subscription        TenantSubscription?
@@ -271,6 +272,7 @@ model TenantFeaturePackage {
   subscriptions TenantSubscription[]
   meterRates    TenantPackageMeterRate[]
   limits        PackageLimit[]
+  quotaOverages PackageQuotaOverage[]
 
   @@map("tenant_feature_package")
   @@schema("tenant")
@@ -609,6 +611,69 @@ model ResellerLimit {
 
   @@id([tenantId, key])
   @@map("reseller_limit")
+  @@schema("tenant")
+}
+
+/// ADR-0107 point 2: past a quota key's number, refuse (`stop`) or sell each
+/// further unit from the reseller's billing wallet (`overage`). Only keys whose
+/// registry `kind` is `quota` (checked in code); a guard always stops.
+enum QuotaOverageMode {
+  stop
+  overage
+
+  @@schema("tenant")
+}
+
+/// ADR-0107 point 2: the platform's answer past one quota key, over the code
+/// default (`stop`). `unitPrice` + `currencyCode` (the platform's) are set
+/// exactly when `mode` is `overage` (CHECK). Kept apart from
+/// `reseller_limit_setting` so setting the number never resets the mode.
+model QuotaOverageSetting {
+  key             String           @id
+  mode            QuotaOverageMode
+  unitPrice       Decimal?         @db.Decimal(18, 2)
+  currencyCode    String?
+  updatedByUserId String           @db.Uuid
+  updatedAt       DateTime         @updatedAt
+
+  @@map("quota_overage_setting")
+  @@schema("tenant")
+}
+
+/// ADR-0107 point 2: a package's answer past one quota key, over the platform's.
+model PackageQuotaOverage {
+  packageId       String           @db.Uuid
+  key             String
+  mode            QuotaOverageMode
+  unitPrice       Decimal?         @db.Decimal(18, 2)
+  currencyCode    String?
+  updatedByUserId String           @db.Uuid
+  updatedAt       DateTime         @updatedAt
+
+  package TenantFeaturePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@id([packageId, key])
+  @@map("package_quota_overage")
+  @@schema("tenant")
+}
+
+/// ADR-0107 point 2: one reseller's own answer past one quota key, over its
+/// package's — set by the platform's staff with a reason. Strict tenant RLS.
+model ResellerQuotaOverage {
+  tenantId     String           @db.Uuid
+  key          String
+  mode         QuotaOverageMode
+  unitPrice    Decimal?         @db.Decimal(18, 2)
+  currencyCode String?
+  reason       String
+  setByUserId  String           @db.Uuid
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, key])
+  @@map("reseller_quota_overage")
   @@schema("tenant")
 }
 

@@ -140,6 +140,9 @@ enum AdminAction {
   // F-019-m (ADR-0106). A reseller limit set or cleared at one level.
   reseller_limit_set
   reseller_limit_clear
+  // F-019-v1 (ADR-0107). What happens past a quota key, set or cleared at one level.
+  reseller_overage_set
+  reseller_overage_clear
 
   @@schema("audit")
 }
