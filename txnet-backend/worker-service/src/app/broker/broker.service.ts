@@ -216,6 +216,9 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   /** The bot-update and outbox consumers' own channels (F-067-b, F-067-p), closed on shutdown. */
   private readonly consumerChannels: amqp.Channel[] = [];
 
+  /** Set when this service closes the connection itself, so its `close` is not read as the broker's. */
+  private stopping = false;
+
   constructor(config: ConfigService) {
     this.url = config.getOrThrow<string>('RABBITMQ_URL');
     this.exchange = config.getOrThrow<string>('AUTOMATION_EXCHANGE');
@@ -425,6 +428,8 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       this.logger.error(`broker connection error: ${err.message}`),
     );
     this.connection.on('close', () => {
+      // Our own close (a deploy, a dev reload) is not the broker going away.
+      if (this.stopping) return;
       this.logger.error('broker connection closed — exiting');
       process.exit(1);
     });
@@ -774,6 +779,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   }
 
   async onApplicationShutdown() {
+    this.stopping = true;
     for (const channel of this.consumerChannels) {
       await channel.close().catch((): void => undefined);
     }

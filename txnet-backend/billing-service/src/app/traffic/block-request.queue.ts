@@ -43,6 +43,9 @@ export class BlockRequestQueue implements OnApplicationBootstrap, OnApplicationS
   private readonly queue: string;
   private readonly deadExchange: string;
 
+  /** Set when this service closes the connection itself, so its `close` is not read as the broker's. */
+  private stopping = false;
+
   constructor(
     config: ConfigService,
     private readonly blockRequests: BlockRequestService,
@@ -73,6 +76,8 @@ export class BlockRequestQueue implements OnApplicationBootstrap, OnApplicationS
     // bag nobody refills.
     this.connection.on('error', (err: Error) => this.logger.error(`broker connection error: ${err.message}`));
     this.connection.on('close', () => {
+      // Our own close (a deploy, a dev reload) is not the broker going away.
+      if (this.stopping) return;
       this.logger.error('broker connection closed — exiting');
       process.exit(1);
     });
@@ -107,6 +112,7 @@ export class BlockRequestQueue implements OnApplicationBootstrap, OnApplicationS
   }
 
   async onApplicationShutdown() {
+    this.stopping = true;
     await this.channel?.close().catch((): void => undefined);
     await this.connection?.close().catch((): void => undefined);
   }

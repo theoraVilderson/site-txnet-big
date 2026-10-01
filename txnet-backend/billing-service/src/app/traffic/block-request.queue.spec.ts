@@ -10,6 +10,7 @@
  * that still buys, and it must still reach `BlockRequestService`.
  */
 import { BLOCK_REQUEST_MESSAGE_VERSION, BLOCK_REQUEST_ROUTING_KEY, NETWORK_USAGE_ROUTING_PREFIX, USAGE_DELTA_ROUTING_KEY, topicBindingAll } from '@txnet-backend/shared-core';
+import { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const broker = vi.hoisted(() => ({
@@ -18,12 +19,14 @@ const broker = vi.hoisted(() => ({
   acked: 0,
   nacked: 0,
   onMessage: undefined as undefined | ((m: unknown) => Promise<void>),
+  handlers: {} as Record<string, () => void>,
 }));
 
 vi.mock('amqplib', () => ({
   connect: async () => ({
-    on: () => undefined,
-    close: async () => undefined,
+    on: (event: string, fn: () => void) => void (broker.handlers[event] = fn),
+    // amqplib emits `close` for a close it was asked for, too.
+    close: async () => broker.handlers['close']?.(),
     createChannel: async () => ({
       assertExchange: async () => undefined,
       assertQueue: async () => undefined,
@@ -49,8 +52,9 @@ function message(routingKey: string, body: unknown) {
 async function boot() {
   const handled: unknown[] = [];
   const blockRequests = { handle: async (req: { grantId: string }) => (handled.push(req), { outcome: 'handled', grantId: req.grantId }) };
-  await new BlockRequestQueue(config as never, blockRequests as never).onApplicationBootstrap();
-  return { handled };
+  const queue = new BlockRequestQueue(config as never, blockRequests as never);
+  await queue.onApplicationBootstrap();
+  return { handled, queue };
 }
 
 beforeEach(() => {
@@ -59,6 +63,28 @@ beforeEach(() => {
   broker.acked = 0;
   broker.nacked = 0;
   broker.onMessage = undefined;
+  broker.handlers = {};
+});
+
+describe('BlockRequestQueue — losing the broker', () => {
+  it('exits when the broker drops the connection: a consumer consuming nothing hides itself', async () => {
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    await boot();
+    broker.handlers['close']?.();
+    expect(exit).toHaveBeenCalledWith(1);
+    exit.mockRestore();
+  });
+
+  it('neither exits nor logs an error when the service itself is shutting down (a deploy, a dev reload)', async () => {
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const error = vi.spyOn(Logger.prototype, 'error');
+    const { queue } = await boot();
+    await queue.onApplicationShutdown();
+    expect(exit).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    exit.mockRestore();
+    error.mockRestore();
+  });
 });
 
 describe('BlockRequestQueue', () => {

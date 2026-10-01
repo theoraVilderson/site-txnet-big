@@ -70,6 +70,9 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly prefetch: number;
   private readonly deadExchange: string;
 
+  /** Set when this service closes the connection itself, so its `close` is not read as the broker's. */
+  private stopping = false;
+
   constructor(config: ConfigService) {
     this.url = config.getOrThrow<string>('RABBITMQ_URL');
     this.exchange = config.getOrThrow<string>('AUTOMATION_EXCHANGE');
@@ -102,6 +105,8 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     // hides itself, and here it hides as usage that stopped being recorded.
     this.connection.on('error', (err: Error) => this.logger.error(`broker connection error: ${err.message}`));
     this.connection.on('close', () => {
+      // Our own close (a deploy, a dev reload) is not the broker going away.
+      if (this.stopping) return;
       this.logger.error('broker connection closed — exiting');
       process.exit(1);
     });
@@ -180,6 +185,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   }
 
   async onApplicationShutdown() {
+    this.stopping = true;
     await this.channel?.close().catch((): void => undefined);
     await this.connection?.close().catch((): void => undefined);
   }
