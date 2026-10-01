@@ -1,7 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GrantBulkJob, GrantBulkJobStatus, Prisma } from '@prisma/client';
-import { AdmittedReseller, ResellerAccess, ResellerAccessRefused, ResellerActor, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import {
+  AdmittedReseller,
+  ResellerAccess,
+  ResellerAccessRefused,
+  ResellerActor,
+  ResellerLimitReached,
+  resellerLimitOf,
+  runWithTenant,
+  tenantTransaction,
+} from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../../config/env.validation';
 import { auditBulkJob } from '../../grant-audit/grant-audit';
@@ -186,6 +195,12 @@ export class ResellerGrantBulkJobService {
         const total = await insertSelection(tx, job.id, tenantId, filter, GRANT_BULK_JOB_MAX_GRANTS + 1);
         if (total === 0) throw new GrantBulkJobRefused('selection_empty');
         if (total > GRANT_BULK_JOB_MAX_GRANTS) throw new GrantBulkJobRefused('selection_too_large', String(GRANT_BULK_JOB_MAX_GRANTS));
+        // The reseller's own ceiling on one job (F-019-t5, ADR-0106): its people
+        // are refused past it, the platform's staff are not. At it is allowed.
+        if (!byPlatform) {
+          const inEffect = await resellerLimitOf(tx, tenantId, 'bulk_job_grants_max');
+          if (inEffect.limit !== null && total > inEffect.limit) throw new ResellerLimitReached('bulk_job_grants_max', inEffect.limit, total);
+        }
         const started = await tx.grantBulkJob.update({ where: { id: job.id }, data: { total } });
         // The admin's one decision, written once (F-311-u3); a repeat returned above and writes none.
         await auditBulkJob(tx, actor, tenantId, 'grant_bulk_start', job.id, null, auditState(started), command.reason);

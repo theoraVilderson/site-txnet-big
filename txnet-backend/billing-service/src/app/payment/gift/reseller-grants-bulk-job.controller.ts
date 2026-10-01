@@ -16,7 +16,7 @@ import {
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey, ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
@@ -36,6 +36,10 @@ const STATUS: Record<GrantBulkJobRejection, 404 | 409 | 422> = {
 
 function refusal(e: unknown): unknown {
   if (e instanceof ResellerUserGrantsRefused) return resellerRefusal(e);
+  // Past the reseller's bulk_job_grants_max (F-019-t5): `used` is the job's size.
+  if (e instanceof ResellerLimitReached) {
+    return new ConflictException({ i18nKey: BackendI18nKeys.errors.billing.resellerLimitReached, reason: e.reason, message: e.message, facts: e.facts });
+  }
   if (!(e instanceof GrantBulkJobRefused)) return e;
   const payload = { reason: e.reason, message: e.message };
   const Exception: new (p: object) => HttpException = { 404: NotFoundException, 409: ConflictException, 422: UnprocessableEntityException }[STATUS[e.reason]];

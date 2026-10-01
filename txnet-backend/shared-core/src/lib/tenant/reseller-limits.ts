@@ -20,6 +20,8 @@ export const RESELLER_LIMITS = {
   custom_domains_max: { default: 5, max: 1000 },
   /** People on the reseller's team: seats not removed and not expired (F-019-t1). */
   staff_members_max: { default: 20, max: 1000 },
+  /** Services one bulk job of the reseller's own people may act on, under billing's fixed 100 000 (F-019-t5). A ceiling: `used` is the job's size. */
+  bulk_job_grants_max: { default: 10_000, max: 100_000 },
 } as const satisfies Record<string, { default: number | null; max: number }>;
 
 export type ResellerLimitKey = keyof typeof RESELLER_LIMITS;

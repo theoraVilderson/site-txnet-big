@@ -655,7 +655,8 @@
   },
   "errors": {
     "unreachable": "Could not reach the server. Check your connection and try again.",
-    "resellerLimitReached": "The limit on “{{name}}” is reached: {{used}} of {{limit}}."
+    "resellerLimitReached": "The limit on “{{name}}” is reached: {{used}} of {{limit}}.",
+    "resellerLimitAbove": "“{{name}}” allows at most {{limit}}; this asks for {{used}}."
   },
   "kit": {
     "loading": "Loading…",
@@ -1918,6 +1919,10 @@
         "staff_members_max": {
           "name": "Team members",
           "hint": "How many people a reseller may have on its team — invited or joined, not removed or expired."
+        },
+        "bulk_job_grants_max": {
+          "name": "Services in one bulk job",
+          "hint": "The most services one bulk job of a reseller's admins may act on (the platform's own cap is 100 000)."
         }
       },
       "codeDefault": "Default: {{count}}",

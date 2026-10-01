@@ -205,6 +205,7 @@ describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
       { key: 'admin_issues_30d_max', limit: null, source: 'reseller', used: 4 },
       { key: 'custom_domains_max', limit: 3, source: 'platform', used: 2 },
       { key: 'staff_members_max', limit: 20, source: 'default', used: 6 },
+      { key: 'bulk_job_grants_max', limit: 10_000, source: 'default', used: null },
     ]);
   });
 

@@ -45,7 +45,7 @@ the operating currency: each key, what is used and where the limit comes from.
 | 8 | By the path's reseller (`ofReseller(id)`), never the session's tenant; tenant-service admits the owner, its team and platform staff | ADR-0064, invariant 21 |
 | 9 | `limitReading` reads `limit` and `used` as they came: a count against a limit (a bar, **Full** at or past it), a count with no limit, `used: null` as "up to N" (a key that counts nothing), both null as no limit. Nothing is counted here | the count is the refusal's own (`tenant/contract.limits.md` "What is used") |
 | 10 | Read-only; the card says a limit is raised by a ticket | the platform sets limits, the reseller does not |
-| 11 | A `reseller_limit_reached` refusal is said once, in `useApiErrorMessage` (`lib/reseller-limits.ts` `resellerLimitReachedOf`): the key's name from this page, `used` and `limit` from `facts`. A key the panel does not know, figures that are not numbers, or `user_metered_cap_max` (its `used` is the number asked; billing's own sentence) keep the server's text | billing and tenant refuse with figures only; every screen gets the name without its own copy |
+| 11 | A `reseller_limit_reached` refusal is said once, in `useApiErrorMessage` (`lib/reseller-limits.ts` `resellerLimitReachedOf`): the key's name from this page, `used` and `limit` from `facts`; a ceiling (`bulk_job_grants_max`) as "at most `limit`, this asks `used`". A key the panel does not know, figures that are not numbers, or `user_metered_cap_max` (its `used` is the number asked; billing's own sentence) keep the server's text | billing and tenant refuse with figures only; every screen gets the name without its own copy |
 
 ## Proof
 

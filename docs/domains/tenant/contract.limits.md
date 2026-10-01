@@ -21,6 +21,7 @@ level that has a row wins.
 | `admin_issues_30d_max` | services its own people issue by hand in any 30 days | 50 | 100 000 | F-019-p |
 | `custom_domains_max` | its custom domains | 5 | 1000 | F-019-q |
 | `staff_members_max` | people on its team (seats neither removed nor expired) | 20 | 1000 | F-019-t1, `contract.staff.md` rule 8 |
+| `bulk_job_grants_max` | services one bulk job of its people acts on — a ceiling, refused past it, `used` = the job's size | 10 000 | 100 000 | F-019-t5, `billing/contract.reseller-grants-bulk.md` |
 
 `resellerLimitOf(tx, tenantId, key)` → `{limit, source}`; `resellerLimitsOf`
 answers every key. `source` is `reseller`, `package`, `platform`, `default`,
@@ -44,7 +45,7 @@ and the one place that refuses past it. No table changes.
 | Rule | Why |
 |---|---|
 | `RESELLER_LIMIT_USAGE[key](tx, tenantId, now)` is **the** count of a key: every refusal compares it with the limit, and `resellerUsagesOf` shows it to the reseller | the figure on the workspace is the figure that refuses; two counts drift |
-| `null` for a key that bounds a number typed, not a count: `user_metered_cap_max` | "0 used" there would be a lie |
+| `null` for a key that bounds a number typed or a size asked, not a count: `user_metered_cap_max`, `bulk_job_grants_max` | "0 used" there would be a lie |
 | `platform_open_grants_max`: open Grants (`OPEN_GRANT_STATUSES`) of variants whose group holds a platform panel; `admin_issues_30d_max`: `admin_grant`s created in the last 30 days; `custom_domains_max`: its custom domains, proved or not | each is the refusing row's own definition (F-019-o, p, q) |
 | The record is typed over `ResellerLimitKey` | a new key does not compile without its count |
 

@@ -28,7 +28,7 @@ export function useApiErrorMessage(): (e: unknown) => string {
     const limit = resellerLimitReachedOf(e);
     if (limit) {
       const name = t("common", C.resellers.limits.keys[limit.key].name);
-      return t("common", C.errors.resellerLimitReached, { name, used: limit.used, limit: limit.limit });
+      return t("common", limit.ceiling ? C.errors.resellerLimitAbove : C.errors.resellerLimitReached, { name, used: limit.used, limit: limit.limit });
     }
     if (e instanceof ApiError && !e.unreachable) return e.message;
     return t("common", C.errors.unreachable);

@@ -22,7 +22,7 @@
  *    job's summary stays — a repeat of its `requestId` still acts on nothing.
  */
 import { Prisma } from '@prisma/client';
-import { ResellerAccess, TenantContext } from '@txnet-backend/shared-core';
+import { ResellerAccess, ResellerLimitReached, TenantContext } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 import { vi } from 'vitest';
 
@@ -102,7 +102,7 @@ const apply = (r: Row, data: Row) => {
   return r;
 };
 
-function build(batch = 200) {
+function build(batch = 200, bulkLimit?: number | null) {
   GRANTS.clear();
   calls.length = 0;
   audits.length = 0;
@@ -127,8 +127,15 @@ function build(batch = 200) {
   } as never);
   /** Every tenant read is fenced by the ambient scope, as RLS fences it. */
   const inScope = (rows: Row[]) => rows.filter((r) => scope() === undefined || r.tenantId === scope());
+  const limitRows = bulkLimit === undefined ? [] : [{ key: 'bulk_job_grants_max', value: bulkLimit }];
   const tx = {
     $executeRaw: async () => 1,
+    // The reseller's limits, read in its own scope (ADR-0106).
+    tenant: { findUnique: async ({ where }: { where: { id: string } }) => tenants[where.id] ?? null },
+    tenantSubscription: { findUnique: async () => null },
+    resellerLimit: { findMany: async () => limitRows },
+    packageLimit: { findMany: async () => [] },
+    resellerLimitSetting: { findMany: async () => [] },
     grant: {
       findFirst: async ({ where }: { where: { id: string; tenantId: string } }) => {
         const gr = GRANTS.get(where.id);
@@ -280,6 +287,19 @@ describe('bulk act by filter, as a job (F-311-u2)', () => {
     expect(again.id).toBe(first.id);
     expect(items).toHaveLength(3);
     await expect(service.start(owner, RESELLER, days({}, req))).rejects.toMatchObject({ reason: 'request_reused' });
+  });
+
+  it("refuses a job larger than the reseller's bulk_job_grants_max to its own people, creating nothing; the platform's staff pass (F-019-t5)", async () => {
+    const { service, jobs } = build(200, 2);
+    const e = await service.start(owner, RESELLER, days({ panelId: PANEL })).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(ResellerLimitReached);
+    expect((e as ResellerLimitReached).facts).toEqual({ key: 'bulk_job_grants_max', limit: 2, used: 3 });
+    expect(jobs).toHaveLength(0);
+
+    const staff = { userId: OWNER.replace('5555', '7777'), tenantId: PLATFORM, permissions: ['tenant.manage'], ip: '203.0.113.8' };
+    await expect(service.start(staff, RESELLER, days({ panelId: PANEL }))).resolves.toMatchObject({ total: 3 });
+    // At the limit is not past it.
+    await expect(build(200, 3).service.start(owner, RESELLER, days({ panelId: PANEL }))).resolves.toMatchObject({ total: 3 });
   });
 
   it('refuses a requestId a bulk-by-id call already used, and a filter that matches nothing, creating no job', async () => {

@@ -75,9 +75,14 @@ describe("a reseller_limit_reached refusal", () => {
     new ApiError("reseller limit reached: custom_domains_max (5 of 5)", { status: 409, reason: "reseller_limit_reached", facts });
 
   it("names the limit and both figures", () => {
-    expect(resellerLimitReachedOf(refused({ key: "custom_domains_max", limit: 5, used: 5 }))).toEqual({ key: "custom_domains_max", limit: 5, used: 5 });
+    expect(resellerLimitReachedOf(refused({ key: "custom_domains_max", limit: 5, used: 5 }))).toEqual({ key: "custom_domains_max", limit: 5, used: 5, ceiling: false });
     const { result } = renderHook(() => useApiErrorMessage());
     expect(result.current(refused({ key: "custom_domains_max", limit: 5, used: 5 }))).toBe("errors.resellerLimitReached:resellers.limits.keys.custom_domains_max.name,5,5");
+  });
+
+  it("says a ceiling as the most allowed and the size asked (F-019-t5)", () => {
+    const { result } = renderHook(() => useApiErrorMessage());
+    expect(result.current(refused({ key: "bulk_job_grants_max", limit: 100, used: 340 }))).toBe("errors.resellerLimitAbove:resellers.limits.keys.bulk_job_grants_max.name,340,100");
   });
 
   it("keeps the server's text for a key or figures this panel does not know", () => {

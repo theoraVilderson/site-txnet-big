@@ -16,7 +16,8 @@ type Count = (tx: ResellerUsageReader, tenantId: string, now: Date) => Promise<n
  * How much of each limit a reseller holds (F-019-s): the one count each
  * refusal compares with the limit, so the workspace shows the same figure
  * that refuses. `null`: the key bounds a number set elsewhere, not a count —
- * `user_metered_cap_max` is checked against the value typed (F-019-n).
+ * `user_metered_cap_max` is checked against the value typed (F-019-n),
+ * `bulk_job_grants_max` against one job's size (F-019-t5).
  * A new key is a line here too; the record does not compile without it.
  */
 export const RESELLER_LIMIT_USAGE: Record<ResellerLimitKey, Count | null> = {
@@ -38,6 +39,8 @@ export const RESELLER_LIMIT_USAGE: Record<ResellerLimitKey, Count | null> = {
   /** Seats invited or accepted, neither removed nor expired — tenant's `staffState` other than `revoked`/`expired` (F-019-t1). */
   staff_members_max: (tx, tenantId, now) =>
     tx.tenantStaffMember.count({ where: { tenantId, revokedAt: null, OR: [{ accessExpiresAt: null }, { accessExpiresAt: { gt: now } }] } }),
+  /** A ceiling on one job's size, checked against the job (F-019-t5). */
+  bulk_job_grants_max: null,
 };
 
 /** One key's count, or `null` for a key that counts nothing. */
