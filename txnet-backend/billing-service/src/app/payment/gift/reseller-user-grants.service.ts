@@ -307,8 +307,9 @@ export class ResellerUserGrantsService {
     grantId: string,
     input: Pick<AdminRenew, 'requestId' | 'reason' | 'amount'>,
   ): Promise<AdminRenewed> {
-    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_renew', reason: input.reason, changed: (r) => r.renewed, outcome: (r) => r }, (tx) =>
-      renewGrantByAdmin(tx, { ...input, grantId, actorUserId: actor.userId, at: new Date() }),
+    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_renew', reason: input.reason, changed: (r) => r.renewed, outcome: (r) => r }, (tx, admitted) =>
+      // The reseller's own people are bounded by its month's traffic on platform panels (F-019-t6); the platform's staff are not.
+      renewGrantByAdmin(tx, { ...input, grantId, actorUserId: actor.userId, at: new Date(), bounded: admitted.as !== 'staff' }),
     );
   }
 

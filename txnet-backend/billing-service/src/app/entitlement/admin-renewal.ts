@@ -5,6 +5,7 @@ import { GrantSource, Prisma, VariantBillingMode } from '@prisma/client';
 import { trafficQuotaOf } from '../catalog/traffic-quota';
 import { EntitlementRefused } from './grant';
 import { renewGrant } from './renewal';
+import { assertPlatformTrafficRoom } from './reseller-room';
 
 export type AdminRenew = {
   grantId: string;
@@ -15,6 +16,8 @@ export type AdminRenew = {
   reason: string | null;
   /** What the admin typed; absent = one period of the plan the user bought. */
   amount?: { bytes: bigint; days: number };
+  /** The reseller's own people (not the platform's staff): bounded by its month's traffic on platform panels (F-019-t6). */
+  bounded?: boolean;
 };
 
 export type AdminRenewed = {
@@ -83,9 +86,11 @@ export async function renewGrantByAdmin(tx: Prisma.TransactionClient, input: Adm
 
   const grant = await tx.grant.findUnique({
     where: { id: input.grantId },
-    select: { id: true, tenantId: true, billingMode: true, trafficUnlimited: true, quotas: true, periodDays: true, purchasedBytes: true, endsAt: true },
+    select: { id: true, tenantId: true, variantId: true, billingMode: true, trafficUnlimited: true, quotas: true, periodDays: true, purchasedBytes: true, endsAt: true },
   });
   if (!grant) throw new EntitlementRefused('grant_not_found', input.grantId);
+  // After the repeat above, so asking again for the same renewal is never refused.
+  if (input.bounded && grant.variantId) await assertPlatformTrafficRoom(tx, grant.variantId, input.at);
 
   const amount = input.amount ?? planPeriodOf(grant);
   // Chosen before the row exists: an unlimited plan's wholesale charge names it (F-118-z).

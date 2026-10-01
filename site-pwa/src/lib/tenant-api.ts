@@ -207,7 +207,7 @@ export const tenantApi = {
 };
 
 /** A reseller limit key (ADR-0106): shared-core's `RESELLER_LIMITS`; `resellers/_lib/limits.ts` holds the list. */
-export type ResellerLimitKey = "user_metered_cap_max" | "platform_open_grants_max" | "admin_issues_30d_max" | "custom_domains_max" | "staff_members_max" | "bulk_job_grants_max" | "campaign_sends_daily_max" | "end_users_max";
+export type ResellerLimitKey = "user_metered_cap_max" | "platform_open_grants_max" | "admin_issues_30d_max" | "custom_domains_max" | "staff_members_max" | "bulk_job_grants_max" | "campaign_sends_daily_max" | "end_users_max" | "platform_traffic_gib_monthly_max";
 
 /** `GET /tenants/limits/settings`: one key, every level that sets it. A `value` null is no limit; `platform` null is "not set" (the code default). */
 export interface ResellerLimitRow {

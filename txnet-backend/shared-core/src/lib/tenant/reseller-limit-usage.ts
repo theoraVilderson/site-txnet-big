@@ -6,9 +6,10 @@ import { RESELLER_LIMIT_KEYS, type ResellerLimitKey } from './reseller-limits';
 export const OPEN_GRANT_STATUSES: readonly GrantStatus[] = [GrantStatus.pending, GrantStatus.active, GrantStatus.suspended];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const GIB = BigInt(1024 ** 3);
 
 /** The reads the counts need. Pass the reseller's own scope, or a cross-tenant pool. */
-export type ResellerUsageReader = Pick<Prisma.TransactionClient, 'grant' | 'tenantDomain' | 'tenantStaffMember' | 'notificationCampaign' | 'user'>;
+export type ResellerUsageReader = Pick<Prisma.TransactionClient, 'grant' | 'tenantDomain' | 'tenantStaffMember' | 'notificationCampaign' | 'user' | 'trafficDailyAggregate'>;
 
 type Count = (tx: ResellerUsageReader, tenantId: string, now: Date) => Promise<number>;
 
@@ -44,6 +45,18 @@ export const RESELLER_LIMIT_USAGE: Record<ResellerLimitKey, Count | null> = {
   /** Its campaigns whose send started in the last 24 hours, stopped or done since (F-019-t4). */
   /** Its users, blocked ones too, not deleted — a blocked account still holds its phone and username (F-019-t2). */
   end_users_max: (tx, tenantId) => tx.user.count({ where: { tenantId, deletedAt: null } }),
+  /**
+   * Whole GiB, up and down, on its configs on platform panels since the first
+   * of this UTC month — `traffic_daily_aggregate`, which the rollup re-rolls
+   * for today on every run, so today is as of the last run (F-019-t6).
+   */
+  platform_traffic_gib_monthly_max: async (tx, tenantId, now) => {
+    const { _sum } = await tx.trafficDailyAggregate.aggregate({
+      where: { date: { gte: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)) }, config: { tenantId, panel: { ownershipType: PanelOwnershipType.platform } } },
+      _sum: { totalUploadBytes: true, totalDownloadBytes: true },
+    });
+    return Number(((_sum.totalUploadBytes ?? BigInt(0)) + (_sum.totalDownloadBytes ?? BigInt(0))) / GIB);
+  },
   campaign_sends_daily_max: (tx, tenantId, now) => tx.notificationCampaign.count({ where: { tenantId, sendStartedAt: { gt: new Date(now.getTime() - DAY_MS) } } }),
 };
 

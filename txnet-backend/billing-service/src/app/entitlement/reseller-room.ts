@@ -28,7 +28,29 @@ async function room(tx: Prisma.TransactionClient, key: 'platform_open_grants_max
  */
 export async function assertPlatformGrantRoom(tx: Prisma.TransactionClient, variantId: string): Promise<void> {
   if (!(await onPlatformPanel(tx, variantId))) return;
-  await room(tx, 'platform_open_grants_max', new Date());
+  const now = new Date();
+  await room(tx, 'platform_open_grants_max', now);
+  await trafficRoom(tx, now);
+}
+
+/**
+ * The month's traffic on the platform's panels (F-019-t6,
+ * `platform_traffic_gib_monthly_max`): past it, no new service and no renewal
+ * on a variant whose group holds a platform panel until the month ends.
+ * Nothing already open is cut (ADR-0106 point 3). No lock: the act being
+ * checked adds no traffic.
+ */
+export async function assertPlatformTrafficRoom(tx: Prisma.TransactionClient, variantId: string, now = new Date()): Promise<void> {
+  if (!(await onPlatformPanel(tx, variantId))) return;
+  await trafficRoom(tx, now);
+}
+
+async function trafficRoom(tx: Prisma.TransactionClient, now: Date): Promise<void> {
+  const key = 'platform_traffic_gib_monthly_max';
+  const tenantId = TenantContext.current(`reseller limit ${key}`).id;
+  const inEffect = await resellerLimitOf(tx, tenantId, key);
+  if (inEffect.limit === null) return;
+  assertUnderLimit(key, inEffect, await RESELLER_LIMIT_USAGE[key](tx, tenantId, now));
 }
 
 /**

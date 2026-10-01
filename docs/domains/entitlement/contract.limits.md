@@ -68,12 +68,13 @@ tenant, counts nothing.
 | Check | Counts | Where |
 |---|---|---|
 | `assertPlatformGrantRoom` (`platform_open_grants_max`) | the tenant's open (`OPEN_GRANT_STATUSES`) Grants whose variant's group holds a platform panel — only when the new one's does (`onPlatformPanel`) | invoice create; `GrantService.issue` for `purchase` and `coupon`; a reseller admin's issue |
+| `assertPlatformTrafficRoom` (`platform_traffic_gib_monthly_max`, F-019-t6) — also inside `assertPlatformGrantRoom` | whole GiB, up and down, of the tenant's configs on platform panels since the 1st of this UTC month (`traffic_daily_aggregate`, as of the rollup's last run); no lock — the act adds no traffic. No limit by default | everywhere `assertPlatformGrantRoom` is; a reseller admin's renewal (`renewGrantByAdmin`, `bounded`) of a Grant whose variant is on a platform panel |
 | `assertAdminIssueRoom` (`admin_issues_30d_max`) | the tenant's `admin_grant` Grants created in the last 30 days, whoever issued them (the issuer's tenant is not readable in the reseller's scope) | a reseller admin's issue |
 
 | Rule | Why |
 |---|---|
 | A reseller admin's issue (`issueGrantByAdmin`) is bounded only when the door admitted the reseller's own people (`bounded: as !== 'staff'`); the platform's staff pass. A repeat of an issue already made is answered before either check | ADR-0106 point 4; asking again is never a new service |
-| A renewal, a migration and a rollover are never counted against | they continue a service, they do not add one |
+| A renewal, a migration and a rollover are never counted against an open-service or issue limit. The month's traffic is the one exception: past it, a reseller admin's renewal on a platform panel is refused until the month ends (user 2026-10-01); nothing open is cut | a renewal adds a month of traffic; ADR-0106 point 3 |
 | Refused to a reseller admin: **409** `errors.billing.resellerLimitReached`, `facts {key, limit, used}`; to a buyer or a code's user: `notAvailableNow`, no facts | the admin can ask for a raise; the buyer cannot and need not know |
 
 ## Staff routes (F-118-ap)

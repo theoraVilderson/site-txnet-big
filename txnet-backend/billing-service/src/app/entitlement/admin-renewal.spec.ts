@@ -23,8 +23,10 @@ import { GrantSource, GrantStatus, Prisma, VariantBillingMode } from '@prisma/cl
 import { renewGrantByAdmin } from './admin-renewal';
 import { EntitlementRefused } from './grant';
 import { renewGrant } from './renewal';
+import { assertPlatformTrafficRoom } from './reseller-room';
 
 vi.mock('./renewal', () => ({ renewGrant: vi.fn() }));
+vi.mock('./reseller-room', () => ({ assertPlatformTrafficRoom: vi.fn() }));
 
 const GRANT = '11111111-1111-4111-8111-111111111111';
 const OTHER_GRANT = '33333333-3333-4333-8333-333333333333';
@@ -40,6 +42,7 @@ type GrantOver = { billingMode?: VariantBillingMode; trafficUnlimited?: boolean;
 const grantRow = (over: GrantOver = {}) => ({
   id: GRANT,
   tenantId: TENANT,
+  variantId: 'variant-1',
   status: GrantStatus.suspended,
   billingMode: over.billingMode ?? VariantBillingMode.prepaid,
   trafficUnlimited: over.trafficUnlimited ?? false,
@@ -85,7 +88,27 @@ const input = (over: Partial<Parameters<typeof renewGrantByAdmin>[1]> = {}) => (
   ...over,
 });
 
-beforeEach(() => vi.mocked(renewGrant).mockReset());
+beforeEach(() => {
+  vi.mocked(renewGrant).mockReset();
+  vi.mocked(assertPlatformTrafficRoom).mockReset();
+});
+
+describe('renewGrantByAdmin — the month\'s traffic on platform panels (F-019-t6)', () => {
+  it('asks the reseller\'s room for its own people; a refusal renews nothing', async () => {
+    const { tx } = fakeTx(grantRow());
+    vi.mocked(assertPlatformTrafficRoom).mockRejectedValue(new Error('reseller limit reached'));
+    await expect(renewGrantByAdmin(tx, input({ bounded: true }))).rejects.toThrow('reseller limit reached');
+    expect(assertPlatformTrafficRoom).toHaveBeenCalledWith(tx, 'variant-1', AT);
+    expect(renewGrant).not.toHaveBeenCalled();
+  });
+
+  it('never asks it for the platform\'s staff', async () => {
+    const { tx } = fakeTx(grantRow());
+    vi.mocked(renewGrant).mockResolvedValue(renewed() as never);
+    await renewGrantByAdmin(tx, input({ bounded: false }));
+    expect(assertPlatformTrafficRoom).not.toHaveBeenCalled();
+  });
+});
 
 describe('renewGrantByAdmin — one period of the plan the user bought, by default', () => {
   it('renews the Grant’s own bag and period days, as admin_grant, with the admin on it', async () => {

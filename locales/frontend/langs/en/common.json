@@ -1931,6 +1931,10 @@
         "end_users_max": {
           "name": "End users",
           "hint": "How many users a reseller may have. Past it, a new registration on its panel or bot is refused; nobody is removed."
+        },
+        "platform_traffic_gib_monthly_max": {
+          "name": "Traffic on the platform's panels per month (GiB)",
+          "hint": "How much a reseller's users may move on the platform's panels in one calendar month. Past it, no new service or renewal on them until the month ends; nothing open is cut. No limit unless set."
         }
       },
       "codeDefault": "Default: {{count}}",
