@@ -292,6 +292,20 @@ describe("one page: pick, codes, pay", () => {
     expect(await screen.findByRole("button", { name: "shop.buy" })).toBeTruthy();
   });
 
+  it("past the pay-as-you-go limit, names how many are open and the limit, and offers no top-up (F-118-aq)", async () => {
+    createInvoice.mockRejectedValue(
+      new ApiError("open a support ticket", { status: 409, ref: "req-5", reason: "metered_cap_reached", facts: { cap: 5, open: 5 } }),
+    );
+    const user = await toCheckout();
+    await user.click(screen.getByRole("button", { name: "shop.invoice.pay" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("shop.meteredCap:5,5");
+    expect(alert).toHaveTextContent("req-5");
+    expect(payInvoice).not.toHaveBeenCalled();
+    expect(screen.queryByRole("link", { name: /shop\.shortfall\.topUp/ })).not.toBeInTheDocument();
+  });
+
   it("on a shortfall, offers the top-up for exactly it and a way back to this invoice", async () => {
     payInvoice.mockRejectedValue(insufficient("7.50"));
     const user = await toCheckout();
