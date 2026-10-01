@@ -21,6 +21,7 @@ import { COUPON_REJECTION_KEY } from '../payment/deposit/deposit.controller';
 import { CouponReservationRefused } from '../payment/coupon/coupon-reservation';
 import { identityOf } from '../request/identity.middleware';
 import { EntitlementRefused, MeteredCapReached } from '../entitlement/grant';
+import { PurchaseLimitReached } from '../entitlement/purchase-limits';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { InvoicePayRejection, InvoicePaymentService, InvoiceUnpayable } from './invoice-payment.service';
@@ -74,6 +75,12 @@ function toHttp(e: unknown): unknown {
   // business, so no figures ride along. Nothing was written.
   if (e instanceof ResellerLimitReached) {
     return new ConflictException({ i18nKey: E.invoice.notAvailableNow, reason: e.reason, message });
+  }
+  // Past the buyer's own purchases in a day, week or month (F-019-t7): the
+  // buyer is the one bounded, so the window and the limit ride as `facts`.
+  if (e instanceof PurchaseLimitReached) {
+    const i18nKey = { day: E.invoice.purchaseLimitDay, week: E.invoice.purchaseLimitWeek, month: E.invoice.purchaseLimitMonth }[e.window];
+    return new ConflictException({ i18nKey, reason: e.reason, message, facts: e.facts });
   }
   if (e instanceof MeteredCapReached) {
     return new ConflictException({

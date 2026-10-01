@@ -212,6 +212,9 @@ describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
       { key: 'campaign_sends_daily_max', limit: 10, source: 'default', used: 1 },
       { key: 'end_users_max', limit: 50_000, source: 'default', used: 120 },
       { key: 'platform_traffic_gib_monthly_max', limit: null, source: 'default', used: 37 },
+      { key: 'user_purchases_daily_max', limit: null, source: 'default', used: null },
+      { key: 'user_purchases_weekly_max', limit: null, source: 'default', used: null },
+      { key: 'user_purchases_monthly_max', limit: null, source: 'default', used: null },
     ]);
   });
 

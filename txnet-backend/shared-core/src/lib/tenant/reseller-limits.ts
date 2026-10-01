@@ -33,6 +33,10 @@ export const RESELLER_LIMITS = {
    * already bought from the reseller's wallet.
    */
   platform_traffic_gib_monthly_max: { default: null as number | null, max: 10_000_000 },
+  /** Services one user of the reseller may buy in any 24 hours, 7 days, 30 days; no limit unless set (F-019-t7, user 2026-10-01). */
+  user_purchases_daily_max: { default: null as number | null, max: 100_000 },
+  user_purchases_weekly_max: { default: null as number | null, max: 100_000 },
+  user_purchases_monthly_max: { default: null as number | null, max: 100_000 },
 } as const satisfies Record<string, { default: number | null; max: number }>;
 
 export type ResellerLimitKey = keyof typeof RESELLER_LIMITS;

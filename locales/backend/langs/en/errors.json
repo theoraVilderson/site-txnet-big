@@ -228,7 +228,10 @@
       "expired": "This invoice has expired. Start the purchase again.",
       "cancelled": "This invoice was cancelled.",
       "insufficientBalance": "Your wallet balance is not enough to pay this invoice.",
-      "notAvailableNow": "This service can't be bought right now. Please try again later or contact support."
+      "notAvailableNow": "This service can't be bought right now. Please try again later or contact support.",
+      "purchaseLimitDay": "You've bought as many services as allowed in 24 hours. Please try again later.",
+      "purchaseLimitWeek": "You've bought as many services as allowed in 7 days. Please try again later.",
+      "purchaseLimitMonth": "You've bought as many services as allowed in 30 days. Please try again later."
     },
     "resellerLimitReached": "You have reached a limit of your plan for this. Ask the platform to raise it."
   },

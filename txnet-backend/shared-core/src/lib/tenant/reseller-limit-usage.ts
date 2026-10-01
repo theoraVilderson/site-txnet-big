@@ -18,7 +18,8 @@ type Count = (tx: ResellerUsageReader, tenantId: string, now: Date) => Promise<n
  * refusal compares with the limit, so the workspace shows the same figure
  * that refuses. `null`: the key bounds a number set elsewhere, not a count —
  * `user_metered_cap_max` is checked against the value typed (F-019-n),
- * `bulk_job_grants_max` against one job's size (F-019-t5).
+ * `bulk_job_grants_max` against one job's size (F-019-t5), the purchase
+ * windows against one buyer's own buys (F-019-t7).
  * A new key is a line here too; the record does not compile without it.
  */
 export const RESELLER_LIMIT_USAGE: Record<ResellerLimitKey, Count | null> = {
@@ -42,6 +43,10 @@ export const RESELLER_LIMIT_USAGE: Record<ResellerLimitKey, Count | null> = {
     tx.tenantStaffMember.count({ where: { tenantId, revokedAt: null, OR: [{ accessExpiresAt: null }, { accessExpiresAt: { gt: now } }] } }),
   /** A ceiling on one job's size, checked against the job (F-019-t5). */
   bulk_job_grants_max: null,
+  /** Per user, not per reseller: counted for the buyer at the buy (F-019-t7). */
+  user_purchases_daily_max: null,
+  user_purchases_weekly_max: null,
+  user_purchases_monthly_max: null,
   /** Its campaigns whose send started in the last 24 hours, stopped or done since (F-019-t4). */
   /** Its users, blocked ones too, not deleted — a blocked account still holds its phone and username (F-019-t2). */
   end_users_max: (tx, tenantId) => tx.user.count({ where: { tenantId, deletedAt: null } }),

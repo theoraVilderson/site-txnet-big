@@ -19,6 +19,7 @@ import { grantMetersFromVariant, lockWholesale } from './grant-meter';
 import { PackageWholesale } from './package-wholesale';
 import { GrantTokenSeal, NO_TOKEN_SEAL, type SealedToken } from './grant-token-seal';
 import { assertMeteredRoom } from './metered-cap';
+import { assertPurchaseRoom } from './purchase-limits';
 import { assertPlatformGrantRoom } from './reseller-room';
 import { ADMIN_FROZEN } from './suspension';
 import { unusedClockOf } from './unused-clock';
@@ -103,6 +104,8 @@ export type EntitlementRejection =
   | 'devices_unchanged'
   /** A purchase past the user's cap of open metered Grants (F-118-ao, `MeteredCapReached`): nothing is sold, nothing written. */
   | 'metered_cap_reached'
+  /** A user's buys in a window past its reseller's limit (F-019-t7). */
+  | 'purchase_limit_reached'
   /** The owner's fourth link reset of a Grant in 24 hours (F-114-e-d, `LinkResetLimited`): nothing rotated. */
   | 'link_reset_limit';
 
@@ -123,6 +126,25 @@ export class MeteredCapReached extends EntitlementRefused {
     readonly open: number,
   ) {
     super('metered_cap_reached', `${open} open, cap ${cap}`);
+  }
+}
+
+/** The window a purchase limit counts over (F-019-t7). */
+export type PurchaseWindow = 'day' | 'week' | 'month';
+
+/** A buy past one window's limit (F-019-t7, `purchase-limits.ts`). The buyer is the one bounded, so the figures are theirs to see. */
+export class PurchaseLimitReached extends EntitlementRefused {
+  constructor(
+    readonly window: PurchaseWindow,
+    readonly limit: number,
+    readonly bought: number,
+  ) {
+    super('purchase_limit_reached', `${bought} bought in a ${window}, limit ${limit}`);
+  }
+
+  /** As `error.facts`: flat, no text (`sanitizeError`). */
+  get facts(): { window: PurchaseWindow; limit: number; bought: number } {
+    return { window: this.window, limit: this.limit, bought: this.bought };
   }
 }
 
@@ -540,6 +562,8 @@ export class GrantService {
     if (input.source === GrantSource.purchase && variant.billingMode === VariantBillingMode.metered) {
       await assertMeteredRoom(tx, input.userId);
     }
+    // The buyer's purchases in a day, week or month (F-019-t7), under the same lock the invoice took.
+    if (input.source === GrantSource.purchase) await assertPurchaseRoom(tx, input.userId);
     // A reseller's open services on the platform's panels (F-019-o, ADR-0106):
     // what its users buy or redeem. A reseller admin's issue is bounded by its
     // caller (`issueGrantByAdmin`); a renewal or a migration never is.

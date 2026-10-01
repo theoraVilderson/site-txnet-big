@@ -23,6 +23,7 @@ level that has a row wins.
 | `staff_members_max` | people on its team (seats neither removed nor expired) | 20 | 1000 | F-019-t1, `contract.staff.md` rule 8 |
 | `end_users_max` | its users, any status, not deleted — a new registration is refused, to the stranger without figures | 50 000 | 10 000 000 | F-019-t2, `auth-api/contract.md` register |
 | `platform_traffic_gib_monthly_max` | whole GiB its users moved on platform panels this UTC month — past it no new service or renewal there until the month ends | **none** | 10 000 000 | F-019-t6, `entitlement/contract.limits.md` |
+| `user_purchases_daily_max`, `user_purchases_weekly_max`, `user_purchases_monthly_max` | services **one user** buys in any 24 hours / 7 days / 30 days — per buyer, so `used` is null here | **none** | 100 000 | F-019-t7, `entitlement/contract.limits.md` |
 | `campaign_sends_daily_max` | campaigns it starts sending in any 24 hours | 10 | 1000 | F-019-t4, `notification/contract.reseller.md` |
 | `bulk_job_grants_max` | services one bulk job of its people acts on — a ceiling, refused past it, `used` = the job's size | 10 000 | 100 000 | F-019-t5, `billing/contract.reseller-grants-bulk.md` |
 

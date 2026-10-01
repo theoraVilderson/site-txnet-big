@@ -12,6 +12,9 @@ export const RESELLER_LIMIT_KEYS = [
   "campaign_sends_daily_max",
   "end_users_max",
   "platform_traffic_gib_monthly_max",
+  "user_purchases_daily_max",
+  "user_purchases_weekly_max",
+  "user_purchases_monthly_max",
 ] as const satisfies readonly ResellerLimitKey[];
 
 /**

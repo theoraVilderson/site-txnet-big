@@ -43,7 +43,7 @@ function fakeTx(rows: Rows) {
 
 describe('RESELLER_LIMITS', () => {
   it('holds its keys, each with a default within its bound', () => {
-    expect([...RESELLER_LIMIT_KEYS].sort()).toEqual(['admin_issues_30d_max', 'bulk_job_grants_max', 'campaign_sends_daily_max', 'custom_domains_max', 'end_users_max', 'platform_open_grants_max', 'platform_traffic_gib_monthly_max', 'staff_members_max', 'user_metered_cap_max']);
+    expect([...RESELLER_LIMIT_KEYS].sort()).toEqual(['admin_issues_30d_max', 'bulk_job_grants_max', 'campaign_sends_daily_max', 'custom_domains_max', 'end_users_max', 'platform_open_grants_max', 'platform_traffic_gib_monthly_max', 'staff_members_max', 'user_metered_cap_max', 'user_purchases_daily_max', 'user_purchases_monthly_max', 'user_purchases_weekly_max']);
     for (const key of RESELLER_LIMIT_KEYS) {
       const def = RESELLER_LIMITS[key];
       expect(def.default === null || (def.default >= 0 && def.default <= def.max)).toBe(true);

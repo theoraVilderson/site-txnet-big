@@ -7,6 +7,7 @@ import { CatalogOffer, listOffersIn, sellableOfferById } from '../catalog/catalo
 import { sellsTrafficToday } from '../catalog/traffic-quota';
 import { deliveryRouteOf } from '../entitlement/delivery';
 import { assertMeteredRoom } from '../entitlement/metered-cap';
+import { assertPurchaseRoom } from '../entitlement/purchase-limits';
 import { assertPlatformGrantRoom } from '../entitlement/reseller-room';
 import { deliverableGroupIds } from '../traffic/group-fulfilment';
 import { discountRuleFor } from './discount/discount-rule';
@@ -132,6 +133,8 @@ export class InvoiceService {
       // A metered buy past the cap is refused before an invoice exists, and
       // again at issue under the same lock (F-118-ao).
       if (routed?.billingMode === VariantBillingMode.metered) await assertMeteredRoom(tx, userId);
+      // ...nor past the buyer's purchases in a day, week or month (F-019-t7), told before paying and again at issue.
+      await assertPurchaseRoom(tx, userId);
       // ...nor past its reseller's room on the platform's panels (F-019-o), told before paying.
       await assertPlatformGrantRoom(tx, offer.variantId);
 

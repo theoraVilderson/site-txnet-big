@@ -1935,6 +1935,18 @@
         "platform_traffic_gib_monthly_max": {
           "name": "Traffic on the platform's panels per month (GiB)",
           "hint": "How much a reseller's users may move on the platform's panels in one calendar month. Past it, no new service or renewal on them until the month ends; nothing open is cut. No limit unless set."
+        },
+        "user_purchases_daily_max": {
+          "name": "Purchases per user, 24 hours",
+          "hint": "How many services one user may buy in any 24 hours. No limit unless set."
+        },
+        "user_purchases_weekly_max": {
+          "name": "Purchases per user, 7 days",
+          "hint": "How many services one user may buy in any 7 days. No limit unless set."
+        },
+        "user_purchases_monthly_max": {
+          "name": "Purchases per user, 30 days",
+          "hint": "How many services one user may buy in any 30 days. No limit unless set."
         }
       },
       "codeDefault": "Default: {{count}}",
