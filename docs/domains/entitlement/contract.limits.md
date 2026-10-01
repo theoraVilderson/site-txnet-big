@@ -27,6 +27,11 @@ N, first found wins (`meteredCapOf`, `entitlement/metered-cap.ts`):
 
 `0` at either level sells that user, or every user of the tenant, none.
 
+**Never above the reseller's ceiling** (F-019-n, ADR-0106 key
+`user_metered_cap_max`, default 20): N in effect is `min(N, ceiling)`
+(`meteredCeilingOf`, `underCeiling`), so a number set before the ceiling was
+lowered counts as the ceiling. The platform's own tenant has none.
+
 A cap, not an entry fee: a fee bounds nothing a paying user does, and the
 problem is seats, not money (user, 2026-09-30).
 
@@ -77,10 +82,8 @@ caller's session.
 | Every change writes `admin_audit_log` in its transaction (`auditLimit`): `grant_limit_tenant_set` against the tenant, `grant_limit_user_set` / `grant_limit_user_remove` against the user, before/after `{meteredOpenCap}`. A change to nothing (same number, removing none) writes no row and is not refused | who raised whom is the question a panel full of seats asks |
 | Buckets: reads `RESELLER_USER_GRANTS_READ`, writes `RESELLER_USER_CONFIG_ACTION` | part of reading a user's services, and an admin's act on a user |
 | Nobody is notified | it changes what may be bought, not what the user holds |
+| A user's number or a tenant default **above the reseller's ceiling** is **409** `reseller_limit_reached`, `errors.billing.grantLimitAboveCeiling`, `facts {key, limit, used}` (`used` = the number asked), **whoever asks** — the platform's staff too; nothing is written. Both views carry `ceiling` (`null`: none) | the ceiling bounds the number in effect anyway, so one stored above it would read as something it is not; the platform's staff raise the ceiling itself, one row (`tenant/contract.limits.md`) |
 
-**Open:** a reseller may raise its own users' number with no platform ceiling,
-though its metered Grants on the platform's panels hold the platform's seats.
-F-118-ar decides whether the platform bounds it.
 
 The panel shows both numbers on the users pages and the shop names the refusal
 (F-118-aq, `panel-web/contract.reseller-users.md` rule 24, `contract.shop.md` rule 7a).

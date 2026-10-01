@@ -1,5 +1,5 @@
 import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
-import { TenantContext } from '@txnet-backend/shared-core';
+import { resellerLimitOf, TenantContext } from '@txnet-backend/shared-core';
 
 import { MeteredCapReached } from './grant';
 
@@ -21,13 +21,25 @@ export const MAX_METERED_CAP = 1000;
 /** What holds a seat: every state but the three that end a Grant. */
 export const OPEN_GRANT_STATUSES: readonly GrantStatus[] = [GrantStatus.pending, GrantStatus.active, GrantStatus.suspended];
 
-/** The number in effect for this user of the current tenant. */
+/**
+ * The reseller's ceiling on the number it gives a user (F-019-n, ADR-0106
+ * `user_metered_cap_max`), or `null` for none — the platform's own tenant
+ * has none. Read in the current tenant's scope.
+ */
+export async function meteredCeilingOf(tx: Prisma.TransactionClient): Promise<number | null> {
+  return (await resellerLimitOf(tx, TenantContext.current('metered ceiling').id, 'user_metered_cap_max')).limit;
+}
+
+/** `n`, bounded by the ceiling: a number set before the ceiling was lowered counts as the ceiling. */
+export const underCeiling = (n: number, ceiling: number | null): number => (ceiling === null ? n : Math.min(n, ceiling));
+
+/** The number in effect for this user of the current tenant — never above its reseller's ceiling. */
 export async function meteredCapOf(tx: Prisma.TransactionClient, userId: string): Promise<number> {
   const tenantId = TenantContext.current('metered cap').id;
   const own = await tx.userGrantLimit.findUnique({ where: { tenantId_userId: { tenantId, userId } }, select: { meteredOpenCap: true } });
-  if (own) return own.meteredOpenCap;
-  const tenant = await tx.grantLimitSetting.findUnique({ where: { tenantId }, select: { meteredOpenCap: true } });
-  return tenant?.meteredOpenCap ?? PLATFORM_METERED_CAP;
+  const tenant = own ? null : await tx.grantLimitSetting.findUnique({ where: { tenantId }, select: { meteredOpenCap: true } });
+  const n = own?.meteredOpenCap ?? tenant?.meteredOpenCap ?? PLATFORM_METERED_CAP;
+  return underCeiling(n, await meteredCeilingOf(tx));
 }
 
 /**

@@ -15,7 +15,7 @@
  *  - **the effective number lies.** It is `meteredCapOf`'s, the same the sale
  *    is refused by: the user's own, else the tenant's, else the platform's 5.
  */
-import { ResellerAccess, TenantContext } from '@txnet-backend/shared-core';
+import { ResellerAccess, ResellerLimitReached, TenantContext } from '@txnet-backend/shared-core';
 
 import { grantLimitSchema, tenantGrantLimitSchema, userGrantLimitSchema } from './grant-limits.schema';
 import { GrantLimitsService } from './grant-limits.service';
@@ -32,7 +32,7 @@ const owner = { userId: OWNER_USER, tenantId: PLATFORM, permissions: [] as strin
 const staff = { userId: STAFF_USER, tenantId: PLATFORM, permissions: ['tenant.manage'], ip: '203.0.113.8' };
 const stranger = { userId: CUSTOMER, tenantId: PLATFORM, permissions: [] as string[], ip: '203.0.113.9' };
 
-function build(seed: { tenantCap?: number; userCap?: { meteredOpenCap: number; reason: string | null }; open?: number } = {}) {
+function build(seed: { tenantCap?: number; userCap?: { meteredOpenCap: number; reason: string | null }; open?: number; ceiling?: number | null } = {}) {
   const scope = () => TenantContext.currentOrNull()?.id;
   const tenants: Record<string, unknown> = {
     [PLATFORM]: { id: PLATFORM, slug: 'platform', tenantType: 'platform_owner', ownerUserId: null, status: 'active', graceEndsAt: null, deletedAt: null },
@@ -56,7 +56,16 @@ function build(seed: { tenantCap?: number; userCap?: { meteredOpenCap: number; r
   const audit: Array<Record<string, unknown>> = [];
   const writes: Array<{ what: string; scope: string | undefined; data: unknown }> = [];
 
+  // ADR-0106: the reseller's ceiling on the number it gives a user, set at the platform's level here.
+  const limitTables = {
+    tenant: { findUnique: async ({ where }: { where: { id: string } }) => ({ tenantType: where.id === PLATFORM ? 'platform_owner' : 'reseller' }) },
+    tenantSubscription: { findUnique: async () => null },
+    resellerLimit: { findMany: async () => [] },
+    packageLimit: { findMany: async () => [] },
+    resellerLimitSetting: { findMany: async () => (seed.ceiling === undefined ? [] : [{ key: 'user_metered_cap_max', value: seed.ceiling }]) },
+  };
   const tx = {
+    ...limitTables,
     $executeRaw: async () => 1,
     user: { findFirst: async ({ where }: { where: { id: string } }) => (userTenant[where.id] === scope() ? { id: where.id } : null) },
     grant: { count: async () => seed.open ?? 0 },
@@ -102,13 +111,13 @@ function build(seed: { tenantCap?: number; userCap?: { meteredOpenCap: number; r
 
 describe('GrantLimitsService — the tenant default', () => {
   it('reads the platform default, the tenant\'s own and the one in effect', async () => {
-    await expect(build().service.tenantLimit(owner, RESELLER)).resolves.toEqual({ platformDefault: 5, tenantDefault: null, effective: 5 });
-    await expect(build({ tenantCap: 2 }).service.tenantLimit(owner, RESELLER)).resolves.toEqual({ platformDefault: 5, tenantDefault: 2, effective: 2 });
+    await expect(build().service.tenantLimit(owner, RESELLER)).resolves.toEqual({ platformDefault: 5, tenantDefault: null, effective: 5, ceiling: 20 });
+    await expect(build({ tenantCap: 2 }).service.tenantLimit(owner, RESELLER)).resolves.toEqual({ platformDefault: 5, tenantDefault: 2, effective: 2, ceiling: 20 });
   });
 
   it('sets it in the path\'s tenant and audits before and after', async () => {
     const { service, audit, writes } = build({ tenantCap: 2 });
-    await expect(service.setTenantLimit(owner, RESELLER, 8)).resolves.toEqual({ platformDefault: 5, tenantDefault: 8, effective: 8 });
+    await expect(service.setTenantLimit(owner, RESELLER, 8)).resolves.toEqual({ platformDefault: 5, tenantDefault: 8, effective: 8, ceiling: 20 });
     expect(writes).toEqual([{ what: 'tenant.upsert', scope: RESELLER, data: { tenantId: RESELLER, meteredOpenCap: 8, updatedByUserId: OWNER_USER } }]);
     expect(audit).toEqual([
       expect.objectContaining({
@@ -126,7 +135,7 @@ describe('GrantLimitsService — the tenant default', () => {
 
   it('null goes back to the platform\'s default; nothing to remove writes no audit row', async () => {
     const { service, audit } = build({ tenantCap: 2 });
-    await expect(service.setTenantLimit(owner, RESELLER, null)).resolves.toEqual({ platformDefault: 5, tenantDefault: null, effective: 5 });
+    await expect(service.setTenantLimit(owner, RESELLER, null)).resolves.toEqual({ platformDefault: 5, tenantDefault: null, effective: 5, ceiling: 20 });
     expect(audit).toHaveLength(1);
     expect(audit[0]).toMatchObject({ oldValue: { meteredOpenCap: 2 }, newValue: { meteredOpenCap: null } });
     await service.setTenantLimit(owner, RESELLER, null);
@@ -156,6 +165,7 @@ describe('GrantLimitsService — one user\'s number', () => {
       tenantDefault: 2,
       platformDefault: 5,
       effective: 10,
+      ceiling: 20,
       open: 4,
     });
   });
@@ -193,6 +203,32 @@ describe('GrantLimitsService — one user\'s number', () => {
     await expect(service.userLimit(owner, RESELLER, LATE_CUSTOMER)).rejects.toMatchObject({ reason: 'user_not_found' });
     expect(writes).toEqual([]);
     expect(audit).toEqual([]);
+  });
+});
+
+describe('the reseller\'s ceiling (F-019-n, ADR-0106 user_metered_cap_max)', () => {
+  it('refuses a user\'s number or a tenant default above it, whoever asks, and writes nothing', async () => {
+    const { service, writes, audit } = build({ ceiling: 10 });
+    for (const who of [owner, staff]) {
+      const err = await service.setUserLimit(who, RESELLER, CUSTOMER, 11, 'ticket').catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ResellerLimitReached);
+      expect(err).toMatchObject({ key: 'user_metered_cap_max', limit: 10, used: 11 });
+    }
+    await expect(service.setTenantLimit(owner, RESELLER, 11)).rejects.toBeInstanceOf(ResellerLimitReached);
+    await expect(service.setUserLimit(owner, RESELLER, CUSTOMER, 10, 'ticket')).resolves.toMatchObject({ effective: 10, ceiling: 10 });
+    expect(writes.map((w) => w.what)).toEqual(['user.upsert']);
+    expect(audit).toHaveLength(1);
+  });
+
+  it('a number set before the ceiling was lowered counts as the ceiling', async () => {
+    const { service } = build({ ceiling: 3, tenantCap: 8, userCap: { meteredOpenCap: 50, reason: 'old ticket' } });
+    await expect(service.userLimit(owner, RESELLER, CUSTOMER)).resolves.toMatchObject({ own: { meteredOpenCap: 50 }, effective: 3, ceiling: 3 });
+    await expect(service.tenantLimit(owner, RESELLER)).resolves.toMatchObject({ tenantDefault: 8, effective: 3, ceiling: 3 });
+  });
+
+  it('no ceiling (null) bounds nothing; the platform\'s own tenant has none', async () => {
+    await expect(build({ ceiling: null }).service.setUserLimit(owner, RESELLER, CUSTOMER, 1000, 'big')).resolves.toMatchObject({ effective: 1000, ceiling: null });
+    await expect(build({ ceiling: 1 }).service.setTenantLimit(staff, PLATFORM, 30)).resolves.toMatchObject({ effective: 30, ceiling: null });
   });
 });
 

@@ -86,6 +86,18 @@ describe("TenantGrantLimitCard", () => {
   });
 });
 
+describe("the reseller's ceiling (F-019-n)", () => {
+  it("is named on both cards when there is one, and not when there is none", async () => {
+    api.tenant.mockResolvedValue({ platformDefault: 5, tenantDefault: null, effective: 5, ceiling: 20 });
+    api.user.mockResolvedValue({ userId: USER, own: null, tenantDefault: null, platformDefault: 5, effective: 5, ceiling: null, open: 0 });
+    render(<TenantGrantLimitCard tenantId={TENANT} />);
+    expect(await screen.findByText(`${L}.ceiling:20`)).toBeInTheDocument();
+    render(<UserGrantLimitCard tenantId={TENANT} userId={USER} />);
+    await screen.findByText(`${L}.userOpen:0,5`);
+    expect(screen.getAllByText(/\.ceiling:/)).toHaveLength(1);
+  });
+});
+
 describe("UserGrantLimitCard", () => {
   const view = { userId: USER, own: null, tenantDefault: 2, platformDefault: 5, effective: 2, open: 2 };
 

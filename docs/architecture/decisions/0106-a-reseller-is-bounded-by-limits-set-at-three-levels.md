@@ -59,6 +59,11 @@ for one or several resellers.
    (`staff`) pass, as they pass a suspended reseller. The platform's own
    tenant has no limits.
 
+   **A ceiling key binds everyone's writes** (`user_metered_cap_max`, F-019-n):
+   it bounds the number *in effect*, so a number written above it would
+   read as something it is not — such a write is refused even to the
+   platform's staff, whose answer is to raise the ceiling itself (one row).
+
 5. **The first four keys** — the ones that spend what the platform owns:
 
    | key | bounds | default | refused at |

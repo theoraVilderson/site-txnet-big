@@ -849,6 +849,8 @@ export interface TenantGrantLimit {
   /** The tenant's own default, or `null` when the platform's applies. */
   tenantDefault: number | null;
   effective: number;
+  /** The reseller's ceiling (F-019-n): nothing is in effect above it; absent or null: none. */
+  ceiling?: number | null;
 }
 
 export interface UserGrantLimit {
@@ -858,6 +860,8 @@ export interface UserGrantLimit {
   tenantDefault: number | null;
   platformDefault: number;
   effective: number;
+  /** The reseller's ceiling (F-019-n); absent or null: none. */
+  ceiling?: number | null;
   /** Open pay-as-you-go services the user holds now. */
   open: number;
 }

@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, Ip, Param, ParseUUIDPipe, Put, Req } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { Body, ConflictException, Controller, Delete, Get, Ip, Param, ParseUUIDPipe, Put, Req } from '@nestjs/common';
+import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
@@ -91,6 +91,10 @@ export class GrantLimitsController {
       return await fn();
     } catch (e) {
       if (e instanceof ResellerUserGrantsRefused) throw resellerRefusal(e);
+      // Above the reseller's ceiling (F-019-n): `used` is the number asked for.
+      if (e instanceof ResellerLimitReached) {
+        throw new ConflictException({ i18nKey: BackendI18nKeys.errors.billing.grantLimitAboveCeiling, reason: e.reason, message: e.message, facts: e.facts });
+      }
       throw e;
     }
   }

@@ -80,6 +80,7 @@ export function TenantGrantLimitCard({ tenantId }: { tenantId: string }) {
           {t("common", L.inEffect, { count: view.effective })} · {t("common", L.platformDefault, { count: view.platformDefault })}
         </p>
       )}
+      {typeof view?.ceiling === "number" && <p className="text-xs text-text-secondary">{t("common", L.ceiling, { count: view.ceiling })}</p>}
       <div className="flex flex-wrap items-end gap-2">
         <label className="block min-w-40 flex-1">
           <span className="mb-1 block text-xs font-bold text-text-secondary">{t("common", L.tenantInput)}</span>
@@ -167,6 +168,7 @@ export function UserGrantLimitCard({ tenantId, userId }: { tenantId: string; use
               : t("common", L.userFromDefault, { count: view.tenantDefault ?? view.platformDefault })}
           </p>
           {view.own?.reason && <p>{t("common", L.userReasonShown, { reason: view.own.reason })}</p>}
+          {typeof view.ceiling === "number" && <p>{t("common", L.ceiling, { count: view.ceiling })}</p>}
         </div>
       )}
       <div className="grid gap-2 sm:grid-cols-[8rem_1fr_auto] sm:items-end">

@@ -178,6 +178,7 @@
     "historyRangeInvalid": "The selected date range is not valid.",
     "giftCodeInvalid": "Enter a valid gift code.",
     "configActionInvalid": "Choose a new key or delete, for between 1 and 50 of your configs.",
+    "grantLimitAboveCeiling": "This number is above the most your plan allows for one user. Ask the platform to raise your limit.",
     "grantLimitInvalid": "Enter a whole number from 0 to 1000. A user’s own number also needs a reason, such as the ticket it answers.",
     "configLabelInvalid": "A config's name is 1 to 40 characters.",
     "serviceLabelInvalid": "A service's name is 1 to 40 characters.",

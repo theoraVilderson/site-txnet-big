@@ -3704,7 +3704,8 @@
       "userInput": "New number",
       "userReason": "Reason (for example, the ticket)",
       "userSet": "Set for this user",
-      "userRemove": "Back to the default"
+      "userRemove": "Back to the default",
+      "ceiling": "The most your plan allows for one user: {{count}}"
     }
   },
   "operatingCurrency": {

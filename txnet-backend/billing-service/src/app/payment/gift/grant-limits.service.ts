@@ -1,14 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, VariantBillingMode } from '@prisma/client';
-import { ResellerAccess, ResellerAccessRefused, ResellerActor, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { ResellerAccess, ResellerAccessRefused, ResellerActor, ResellerLimitReached, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
-import { meteredCapOf, OPEN_GRANT_STATUSES, PLATFORM_METERED_CAP } from '../../entitlement/metered-cap';
+import { meteredCapOf, meteredCeilingOf, OPEN_GRANT_STATUSES, PLATFORM_METERED_CAP, underCeiling } from '../../entitlement/metered-cap';
 import { auditLimit } from '../../grant-audit/grant-audit';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ResellerUserGrantsRefused } from './reseller-user-grants.service';
 import type { AdminActor } from './reseller-user-grants.service';
 
-export type TenantGrantLimit = { platformDefault: number; tenantDefault: number | null; effective: number };
+export type TenantGrantLimit = {
+  platformDefault: number;
+  tenantDefault: number | null;
+  effective: number;
+  /** The reseller's ceiling (F-019-n): no number here is in effect above it. `null`: none. */
+  ceiling: number | null;
+};
 
 export type UserGrantLimitView = {
   userId: string;
@@ -18,6 +24,8 @@ export type UserGrantLimitView = {
   platformDefault: number;
   /** What a sale is refused by: `meteredCapOf`, the same function. */
   effective: number;
+  /** The reseller's ceiling (F-019-n); `null`: none. */
+  ceiling: number | null;
   /** Open metered Grants the user holds now. */
   open: number;
 };
@@ -49,6 +57,7 @@ export class GrantLimitsService {
     return this.admitted(actor, tenantId, 'staffWrite', () =>
       tenantTransaction(this.prisma, async (tx) => {
         const scoped = TenantContext.current('grant limits').id;
+        await aboveNoCeiling(tx, cap);
         const before = await tx.grantLimitSetting.findUnique({ where: { tenantId: scoped }, select: { meteredOpenCap: true } });
         const was = before?.meteredOpenCap ?? null;
         if (was !== cap) {
@@ -75,6 +84,7 @@ export class GrantLimitsService {
   setUserLimit(actor: AdminActor, tenantId: string, userId: string, cap: number, reason: string): Promise<UserGrantLimitView> {
     return this.onUser(actor, tenantId, userId, 'staffWrite', async (tx) => {
       const scoped = TenantContext.current('grant limits').id;
+      await aboveNoCeiling(tx, cap);
       const where = { tenantId_userId: { tenantId: scoped, userId } };
       const before = await tx.userGrantLimit.findUnique({ where, select: { meteredOpenCap: true, reason: true } });
       if (before?.meteredOpenCap !== cap || before?.reason !== reason) {
@@ -106,7 +116,8 @@ export class GrantLimitsService {
     const tenantId = TenantContext.current('grant limits').id;
     const row = await tx.grantLimitSetting.findUnique({ where: { tenantId }, select: { meteredOpenCap: true } });
     const tenantDefault = row?.meteredOpenCap ?? null;
-    return { platformDefault: PLATFORM_METERED_CAP, tenantDefault, effective: tenantDefault ?? PLATFORM_METERED_CAP };
+    const ceiling = await meteredCeilingOf(tx);
+    return { platformDefault: PLATFORM_METERED_CAP, tenantDefault, effective: underCeiling(tenantDefault ?? PLATFORM_METERED_CAP, ceiling), ceiling };
   }
 
   private async userView(tx: Prisma.TransactionClient, userId: string): Promise<UserGrantLimitView> {
@@ -115,7 +126,7 @@ export class GrantLimitsService {
       where: { tenantId_userId: { tenantId, userId } },
       select: { meteredOpenCap: true, reason: true, setByUserId: true, updatedAt: true },
     });
-    const { tenantDefault, platformDefault } = await this.tenantView(tx);
+    const { tenantDefault, platformDefault, ceiling } = await this.tenantView(tx);
     const open = await tx.grant.count({
       where: { userId, billingMode: VariantBillingMode.metered, status: { in: [...OPEN_GRANT_STATUSES] } },
     });
@@ -125,6 +136,7 @@ export class GrantLimitsService {
       tenantDefault,
       platformDefault,
       effective: await meteredCapOf(tx, userId),
+      ceiling,
       open,
     };
   }
@@ -154,4 +166,17 @@ export class GrantLimitsService {
       throw e;
     }
   }
+}
+
+/**
+ * A number above the reseller's ceiling is refused, whoever asks (F-019-n):
+ * the ceiling bounds the number in effect anyway, so one stored above it
+ * would read as something it is not. The platform's staff raise the ceiling
+ * itself (`/api/tenants/limits/…`) — one row. `null` (back to a default) is
+ * never above it.
+ */
+async function aboveNoCeiling(tx: Prisma.TransactionClient, cap: number | null): Promise<void> {
+  if (cap === null) return;
+  const ceiling = await meteredCeilingOf(tx);
+  if (ceiling !== null && cap > ceiling) throw new ResellerLimitReached('user_metered_cap_max', ceiling, cap);
 }
