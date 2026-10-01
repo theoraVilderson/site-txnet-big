@@ -226,8 +226,10 @@
       "alreadyPaid": "This invoice is already paid.",
       "expired": "This invoice has expired. Start the purchase again.",
       "cancelled": "This invoice was cancelled.",
-      "insufficientBalance": "Your wallet balance is not enough to pay this invoice."
-    }
+      "insufficientBalance": "Your wallet balance is not enough to pay this invoice.",
+      "notAvailableNow": "This service can't be bought right now. Please try again later or contact support."
+    },
+    "resellerLimitReached": "You have reached a limit of your plan for this. Ask the platform to raise it."
   },
   "role": {
     "list": "Roles",

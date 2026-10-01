@@ -284,10 +284,11 @@ export class ResellerUserGrantsService {
       actor,
       tenantId,
       userId,
-      () =>
+      (admitted) =>
         tenantTransaction(this.prisma, (tx) =>
           auditedGrantAct(tx, actor, tenantId, null, spec, () =>
-            issueGrantByAdmin(tx, this.grantService, { userId, variantId, requestId, actorUserId: actor.userId, at: new Date() }),
+            // The reseller's own people are bounded by its limits (ADR-0106); the platform's staff are not.
+            issueGrantByAdmin(tx, this.grantService, { userId, variantId, requestId, actorUserId: actor.userId, at: new Date(), bounded: admitted.as !== 'staff' }),
           ),
         ),
       'staffWrite',

@@ -13,13 +13,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CouponChannel } from '@prisma/client';
-import {
-  BackendI18nKeys,
-  presentsServiceToken,
-  RateLimitBucket,
-  rateLimitBucketKey,
-  TenantCapability,
-} from '@txnet-backend/shared-core';
+import { BackendI18nKeys, presentsServiceToken, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { LocaleService } from '../locale/locale.service';
@@ -75,6 +69,12 @@ function toHttp(e: unknown): unknown {
   // Past the user's cap of open metered Grants (F-118-ao), at the invoice or
   // at its payment: nothing was written. The cap rides as `facts`, so the
   // panel can name it and point to a ticket.
+  // Past the reseller's room on the platform's panels (F-019-o): the buyer is
+  // told it is not available now — the reseller's limit is not the buyer's
+  // business, so no figures ride along. Nothing was written.
+  if (e instanceof ResellerLimitReached) {
+    return new ConflictException({ i18nKey: E.invoice.notAvailableNow, reason: e.reason, message });
+  }
   if (e instanceof MeteredCapReached) {
     return new ConflictException({
       i18nKey: E.invoice.meteredCapReached,

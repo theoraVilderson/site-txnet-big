@@ -4,6 +4,7 @@ import { sellsTrafficToday } from '../catalog/traffic-quota';
 import { deliverableGroupIds } from '../traffic/group-fulfilment';
 import { deliveryRouteOf } from './delivery';
 import { EntitlementRefused, GrantService } from './grant';
+import { assertAdminIssueRoom, assertPlatformGrantRoom } from './reseller-room';
 
 export type AdminIssue = {
   userId: string;
@@ -12,6 +13,12 @@ export type AdminIssue = {
   requestId: string;
   actorUserId: string;
   at: Date;
+  /**
+   * The reseller's own people (ADR-0106): its limits on services issued by
+   * hand (F-019-p) and on the platform's panels (F-019-o) apply. False for the
+   * platform's staff, who are never bounded.
+   */
+  bounded?: boolean;
 };
 
 /** `issued` is false for a repeat of a request that already issued this Grant. */
@@ -61,6 +68,11 @@ export async function issueGrantByAdmin(tx: Prisma.TransactionClient, grants: Gr
     sellsTrafficToday({ fulfilmentKind: variant.product.fulfilmentKind, billingMode: variant.billingMode, quotas: variant.quotas }) &&
     (route !== 'panel_group' || (await deliverableGroupIds(tx, [variant.panelGroupId as string])).has(variant.panelGroupId as string));
   if (!deliverable) throw new EntitlementRefused('variant_not_deliverable', input.variantId);
+  // After the repeat above, so asking again for the same issue is never refused.
+  if (input.bounded) {
+    await assertAdminIssueRoom(tx, input.at);
+    await assertPlatformGrantRoom(tx, input.variantId);
+  }
 
   const { grant, token } = await grants.issue(tx, {
     userId: input.userId,

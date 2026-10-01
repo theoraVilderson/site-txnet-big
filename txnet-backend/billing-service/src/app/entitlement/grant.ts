@@ -19,6 +19,7 @@ import { grantMetersFromVariant, lockWholesale } from './grant-meter';
 import { PackageWholesale } from './package-wholesale';
 import { GrantTokenSeal, NO_TOKEN_SEAL, type SealedToken } from './grant-token-seal';
 import { assertMeteredRoom } from './metered-cap';
+import { assertPlatformGrantRoom } from './reseller-room';
 import { ADMIN_FROZEN } from './suspension';
 import { unusedClockOf } from './unused-clock';
 import { configIdentityOf, storedLineIdentity } from '../traffic/config-identity';
@@ -538,6 +539,12 @@ export class GrantService {
     // open (F-118-ao). Staff's own issue counts and is never refused.
     if (input.source === GrantSource.purchase && variant.billingMode === VariantBillingMode.metered) {
       await assertMeteredRoom(tx, input.userId);
+    }
+    // A reseller's open services on the platform's panels (F-019-o, ADR-0106):
+    // what its users buy or redeem. A reseller admin's issue is bounded by its
+    // caller (`issueGrantByAdmin`); a renewal or a migration never is.
+    if (input.source === GrantSource.purchase || input.source === GrantSource.coupon) {
+      await assertPlatformGrantRoom(tx, input.variantId);
     }
     // Born `active`, it is activated at its start (F-601-c); a purchase waits for `markDelivered`.
     const activatedAt = shape.status === GrantStatus.active ? startsAt : null;

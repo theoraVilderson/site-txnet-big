@@ -7,6 +7,7 @@ import { CatalogOffer, listOffersIn, sellableOfferById } from '../catalog/catalo
 import { sellsTrafficToday } from '../catalog/traffic-quota';
 import { deliveryRouteOf } from '../entitlement/delivery';
 import { assertMeteredRoom } from '../entitlement/metered-cap';
+import { assertPlatformGrantRoom } from '../entitlement/reseller-room';
 import { deliverableGroupIds } from '../traffic/group-fulfilment';
 import { discountRuleFor } from './discount/discount-rule';
 import { PrismaService } from '../prisma/prisma.service';
@@ -131,6 +132,8 @@ export class InvoiceService {
       // A metered buy past the cap is refused before an invoice exists, and
       // again at issue under the same lock (F-118-ao).
       if (routed?.billingMode === VariantBillingMode.metered) await assertMeteredRoom(tx, userId);
+      // ...nor past its reseller's room on the platform's panels (F-019-o), told before paying.
+      await assertPlatformGrantRoom(tx, offer.variantId);
 
       const amount = new Prisma.Decimal(offer.price.amount);
       // The best rule with no code comes first; the coupons see what it left (D-45).

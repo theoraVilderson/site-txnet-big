@@ -112,6 +112,8 @@ function buildCreate(setup: CreateSetup = {}) {
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
     $executeRaw: async () => 0,
     productVariant: { findUnique: async () => variant },
+    // No platform panel in the group: a reseller's room there (F-019-o) is not this suite's.
+    panelGroupMember: { findFirst: async () => null },
     panelGroup: {
       findMany: async (q: unknown) => {
         calls.groupQueries.push(q);

@@ -90,6 +90,45 @@ const issue = (tx: Prisma.TransactionClient, over: Partial<Parameters<typeof iss
     issueGrantByAdmin(tx, service, { userId: USER, variantId: VARIANT, requestId: REQUEST, actorUserId: ADMIN, at: AT, ...over }),
   );
 
+/** The same issue in a reseller's tenant whose limit on services issued by hand (F-019-p) is `limit`, with `issued` already this month. */
+function boundedTx(limit: number, issued: number) {
+  const base = fakeTx(variantRow());
+  const tx = base.tx as unknown as Record<string, unknown>;
+  Object.assign(tx, {
+    tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD', tenantType: 'reseller' }) },
+    tenantSubscription: { findUnique: async () => null },
+    resellerLimit: { findMany: async () => [] },
+    packageLimit: { findMany: async () => [] },
+    resellerLimitSetting: { findMany: async () => [{ key: 'admin_issues_30d_max', value: limit }] },
+    $executeRaw: async () => 1,
+    // The reseller's own panels: the platform's room (F-019-o) is not asked.
+    panelGroupMember: { findFirst: async () => null },
+  });
+  (tx['grant'] as Record<string, unknown>)['count'] = async () => issued;
+  return base;
+}
+
+describe('issueGrantByAdmin — the reseller\'s limits (F-019-p, F-019-o, ADR-0106)', () => {
+  it('refuses the reseller\'s own people past the limit on services issued by hand, writing nothing', async () => {
+    const { tx, grants } = boundedTx(2, 2);
+    await expect(issue(tx, { bounded: true })).rejects.toMatchObject({ reason: 'reseller_limit_reached', key: 'admin_issues_30d_max', limit: 2, used: 2 });
+    expect(grants).toHaveLength(0);
+  });
+
+  it('lets the platform\'s staff through, and below the limit the reseller\'s people too', async () => {
+    await expect(issue(boundedTx(2, 2).tx, { bounded: false })).resolves.toMatchObject({ issued: true });
+    await expect(issue(boundedTx(2, 1).tx, { bounded: true })).resolves.toMatchObject({ issued: true });
+  });
+
+  it('never refuses asking again for an issue already made', async () => {
+    const { tx, grants } = boundedTx(1, 0);
+    const first = await issue(tx, { bounded: true });
+    (tx as unknown as { grant: Record<string, unknown> }).grant['count'] = async () => 1;
+    await expect(issue(tx, { bounded: true })).resolves.toMatchObject({ grantId: first.grantId, issued: false });
+    expect(grants).toHaveLength(1);
+  });
+});
+
 describe('issueGrantByAdmin (F-311-o)', () => {
   it('issues an active admin_grant Grant, the request as its cause and the admin on it', async () => {
     const { tx, grants } = fakeTx(variantRow());

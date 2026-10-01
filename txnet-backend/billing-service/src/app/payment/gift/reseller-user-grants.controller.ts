@@ -16,7 +16,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
@@ -502,6 +502,10 @@ export class ResellerUserGrantsController {
         if (GRANT_ACTION_STATUS[e.reason] === 400) throw new BadRequestException(payload);
         if (GRANT_ACTION_STATUS[e.reason] === 409) throw new ConflictException(payload);
         throw e;
+      }
+      // The reseller's own limit (ADR-0106: issued by hand, F-019-p; platform panels, F-019-o): its figures, so the admin knows what to ask to raise.
+      if (e instanceof ResellerLimitReached) {
+        throw new ConflictException({ i18nKey: E.resellerLimitReached, reason: e.reason, message: e.message, facts: e.facts });
       }
       if (!(e instanceof ResellerUserGrantsRefused)) throw e;
       throw resellerRefusal(e);

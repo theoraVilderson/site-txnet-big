@@ -57,6 +57,25 @@ carries `cap` and `open`. Over HTTP (`invoice.controller.ts`, create and pay):
 **409**, `i18nKey` `errors.billing.invoice.meteredCapReached` ("open a support
 ticket"), `error.facts = { cap, open }`.
 
+## A reseller's room (F-019-o, F-019-p, ADR-0106)
+
+`entitlement/reseller-room.ts`, over `resellerLimitOf` (`tenant/contract.limits.md`):
+each reads the limit in effect for the tenant in scope, takes
+`pg_advisory_xact_lock(hashtext('reseller_limit:<key>:<tenantId>'))`, counts,
+and throws `ResellerLimitReached` at the limit. No limit, or the platform's own
+tenant, counts nothing.
+
+| Check | Counts | Where |
+|---|---|---|
+| `assertPlatformGrantRoom` (`platform_open_grants_max`) | the tenant's open (`OPEN_GRANT_STATUSES`) Grants whose variant's group holds a platform panel — only when the new one's does (`onPlatformPanel`) | invoice create; `GrantService.issue` for `purchase` and `coupon`; a reseller admin's issue |
+| `assertAdminIssueRoom` (`admin_issues_30d_max`) | the tenant's `admin_grant` Grants created in the last 30 days, whoever issued them (the issuer's tenant is not readable in the reseller's scope) | a reseller admin's issue |
+
+| Rule | Why |
+|---|---|
+| A reseller admin's issue (`issueGrantByAdmin`) is bounded only when the door admitted the reseller's own people (`bounded: as !== 'staff'`); the platform's staff pass. A repeat of an issue already made is answered before either check | ADR-0106 point 4; asking again is never a new service |
+| A renewal, a migration and a rollover are never counted against | they continue a service, they do not add one |
+| Refused to a reseller admin: **409** `errors.billing.resellerLimitReached`, `facts {key, limit, used}`; to a buyer or a code's user: `notAvailableNow`, no facts | the admin can ask for a raise; the buyer cannot and need not know |
+
 ## Staff routes (F-118-ap)
 
 `GrantLimitsController` / `GrantLimitsService` (`billing-service/.../payment/gift/`),
