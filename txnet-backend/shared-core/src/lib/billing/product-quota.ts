@@ -3,7 +3,7 @@ import { TenantType, type Prisma } from '@prisma/client';
 import { overageTermsOf } from '../tenant/reseller-limits';
 import { kinderQuotaTerms, type QuotaLockScope, type QuotaTermsInEffect } from './quota-terms-lock';
 import type { QuotaPeriodKind } from './quota-period';
-import { ResellerQuota, type QuotaMeterTerms, type QuotaWindow } from './reseller-quota';
+import { ResellerQuota, type QuotaMeterStatement, type QuotaMeterTerms, type QuotaWindow } from './reseller-quota';
 
 /**
  * A product's sales quota (ADR-0107 point 3, F-019-v6): what a reseller's
@@ -101,6 +101,46 @@ export function termsFrom(productId: string, live: ProductQuotaRow | null, locks
     return { period, included: kinderQuotaTerms(held, inEffect(live[COLUMN[period]], live)).included };
   });
   return { meter: productQuotaMeter(productId), windows, overage };
+}
+
+/** One product a reseller sells of the platform's, and what it has sold of it in each window (F-019-v10). */
+export type ProductQuotaStatement = QuotaMeterStatement & {
+  productId: string;
+  /** False for a product taken off the package this period: still sold, on its locked terms, until the period ends. */
+  listed: boolean;
+};
+
+/**
+ * Every platform product the reseller sells now — its package's listing and
+ * any held for the period after being taken off, as `platformProductsSoldBy`
+ * counts them — each with the terms the engine applies (`termsFrom`) and the
+ * engine's statement per window. Empty for a tenant that is not a reseller or
+ * has no subscription: it sells none of the platform's products.
+ */
+export async function productQuotaStatementsOf(tx: Prisma.TransactionClient, tenantId: string, now = new Date()): Promise<ProductQuotaStatement[]> {
+  const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
+  if (tenant?.tenantType !== TenantType.reseller) return [];
+  const sub = await tx.tenantSubscription.findUnique({ where: { tenantId }, select: { packageId: true, currentPeriodEnd: true } });
+  if (!sub) return [];
+  const [rows, locks] = await Promise.all([
+    tx.packageProduct.findMany({ where: { packageId: sub.packageId } }),
+    tx.resellerQuotaTermsLock.findMany({
+      where: { tenantId, periodEnd: sub.currentPeriodEnd, key: { startsWith: 'product:' } },
+      select: { key: true, included: true, mode: true, unitPrice: true, currencyCode: true },
+    }),
+  ]);
+  const live = new Map(rows.map((r) => [r.productId, r]));
+  const ids = [...new Set([...rows.map((r) => r.productId), ...locks.flatMap((l): string[] => {
+    const id = productOfLockKey(l.key);
+    return id ? [id] : [];
+  })])].sort();
+  const out: ProductQuotaStatement[] = [];
+  for (const productId of ids) {
+    const terms = termsFrom(productId, live.get(productId) ?? null, locks.filter((l) => productOfLockKey(l.key) === productId));
+    if (!terms) continue;
+    out.push({ productId, listed: live.has(productId), ...(await ResellerQuota.meterStatementOf(tx, tenantId, terms, now)) });
+  }
+  return out;
 }
 
 /**

@@ -385,21 +385,54 @@ async function statementOf(tx: Prisma.TransactionClient, tenantId: string, key: 
   if (!terms) return null;
   const [window] = terms.windows;
   const clock = await clockOf(tx, tenantId);
+  const { period, included, includedUsed, overageQty, overageAmount } = await windowStatement(tx, tenantId, terms.meter, window, now, clock);
+  return {
+    meter: terms.meter,
+    period,
+    included,
+    includedUsed,
+    overageQty,
+    overageAmount,
+    overage: overageOut(terms.overage),
+    spend: await spendOf(tx, tenantId, now, clock),
+  };
+}
+
+/** One window of a meter, counted over its own fixed period: what is included, used of it, and sold past it. */
+export type QuotaWindowStatement = { period: QuotaPeriod; included: number | null; includedUsed: number; overageQty: number; overageAmount: string };
+
+/** A meter of several windows (a product's sales, F-019-v10): each window's statement, shortest first, and the one price past them. */
+export type QuotaMeterStatement = { meter: string; windows: QuotaWindowStatement[]; overage: QuotaStatement['overage'] };
+
+/**
+ * The statement of a meter the caller resolved (`QuotaMeterTerms`, as
+ * `consumeMeter` takes it): rule 4 per window — the live rows created in that
+ * window's period. A unit sold past one window is in every window's
+ * `overageQty` whose period holds it; it was charged once (rule 4b).
+ */
+async function meterStatementOf(tx: Prisma.TransactionClient, tenantId: string, terms: QuotaMeterTerms, now = new Date()): Promise<QuotaMeterStatement> {
+  const clock = await clockOf(tx, tenantId);
+  const windows = await Promise.all(terms.windows.map((w) => windowStatement(tx, tenantId, terms.meter, w, now, clock)));
+  return { meter: terms.meter, windows, overage: overageOut(terms.overage) };
+}
+
+async function windowStatement(tx: Prisma.TransactionClient, tenantId: string, meter: string, window: QuotaWindow, now: Date, clock: Clock): Promise<QuotaWindowStatement> {
   const period = quotaPeriodAt(window.period, now, clock.zone, clock.subscriptionEnd);
   const sums = await tx.resellerQuotaUsage.aggregate({
-    where: { tenantId, meter: terms.meter, releasedAt: null, createdAt: { gte: period.start, lt: period.end } },
+    where: { tenantId, meter, releasedAt: null, createdAt: { gte: period.start, lt: period.end } },
     _sum: { includedQty: true, overageQty: true, overageAmount: true },
   });
   return {
-    meter: terms.meter,
     period,
     included: window.included,
     includedUsed: sums._sum.includedQty ?? 0,
     overageQty: sums._sum.overageQty ?? 0,
     overageAmount: (sums._sum.overageAmount ?? new Prisma.Decimal(0)).toFixed(2),
-    overage: { mode: terms.overage.mode, unitPrice: terms.overage.unitPrice?.toFixed(2) ?? null, currencyCode: terms.overage.currencyCode },
-    spend: await spendOf(tx, tenantId, now, clock),
   };
+}
+
+function overageOut(o: QuotaOverageTerms): QuotaStatement['overage'] {
+  return { mode: o.mode, unitPrice: o.unitPrice?.toFixed(2) ?? null, currencyCode: o.currencyCode };
 }
 
 /** What overage cost the reseller this subscription month, against its own cap (point 6); `cap` null = none. */
@@ -417,7 +450,7 @@ async function spendOf(tx: Prisma.TransactionClient, tenantId: string, now = new
   };
 }
 
-export const ResellerQuota = { consume, consumeMeter, admit, release, statementOf, spendOf: (tx: Prisma.TransactionClient, tenantId: string, now?: Date) => spendOf(tx, tenantId, now) };
+export const ResellerQuota = { consume, consumeMeter, admit, release, statementOf, meterStatementOf, spendOf: (tx: Prisma.TransactionClient, tenantId: string, now?: Date) => spendOf(tx, tenantId, now) };
 
 type Clock = { zone: string; subscriptionEnd: Date | null };
 

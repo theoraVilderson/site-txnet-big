@@ -2,7 +2,7 @@
 
 import { useLocale } from "@/context/LocaleContext";
 import { ApiError } from "@/lib/api-error";
-import { resellerLimitReachedOf } from "@/lib/reseller-limits";
+import { resellerLimitReachedOf, resellerQuotaExhaustedOf } from "@/lib/reseller-limits";
 
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
@@ -29,6 +29,11 @@ export function useApiErrorMessage(): (e: unknown) => string {
     if (limit) {
       const name = t("common", C.resellers.limits.keys[limit.key].name);
       return t("common", limit.ceiling ? C.errors.resellerLimitAbove : C.errors.resellerLimitReached, { name, used: limit.used, limit: limit.limit });
+    }
+    const quota = resellerQuotaExhaustedOf(e);
+    if (quota) {
+      const name = quota.key ? t("common", C.resellers.limits.keys[quota.key].name) : t("common", C.errors.resellerQuotaExhausted.aProduct);
+      return t("common", C.errors.resellerQuotaExhausted[quota.stoppedBy], { name });
     }
     if (e instanceof ApiError && !e.unreachable) return e.message;
     return t("common", C.errors.unreachable);

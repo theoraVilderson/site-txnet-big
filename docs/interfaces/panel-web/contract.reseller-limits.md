@@ -6,7 +6,7 @@ version: 41
 updated: 2026-10-01
 ---
 
-# Contract — panel-web: reseller limits (F-019-r, ADR-0106; F-019-v9, ADR-0107)
+# Contract — panel-web: reseller limits (F-019-r, ADR-0106; F-019-v9, F-019-v10, ADR-0107)
 
 A §10 split of [contract.resellers.md](contract.resellers.md), which is at its
 ceiling. The routes and their rules are tenant's
@@ -64,6 +64,20 @@ the operating currency: each key, what is used and where the limit comes from.
 | 10 | Read-only; the card says a limit is raised by a ticket | the platform sets limits, the reseller does not |
 | 11 | A `reseller_limit_reached` refusal is said once, in `useApiErrorMessage` (`lib/reseller-limits.ts` `resellerLimitReachedOf`): the key's name from this page, `used` and `limit` from `facts`; a ceiling (`bulk_job_grants_max`) as "at most `limit`, this asks `used`". A key the panel does not know, figures that are not numbers, or `user_metered_cap_max` (its `used` is the number asked; billing's own sentence) keep the server's text | billing and tenant refuse with figures only; every screen gets the name without its own copy |
 
+## The reseller's quotas, its cap on extras and its package (F-019-v10, ADR-0107 points 6, 9, 11)
+
+On the same console, below the limits card: `ProductQuotasCard`, `OverageCapCard`,
+`PackageChangeCard` (`[id]/_components/QuotaCards.tsx`); the pure parts in
+`my-resellers/_lib/limits.ts`. Every call is by the path's reseller (rule 8).
+
+| # | Rule | Why |
+|---|---|---|
+| 18 | A quota row's bar is the statement's `includedUsed` against `limit` (**Full** at it); units sold past it are a line of their own — how many and what they cost — then the period ("today, from 00:00"), the answer past it (refused, or the price per extra unit), and `lockedUntil` when the platform's change waits | "1000 included, 43 extra this week" (ADR-0107 point 7); one bar mixing paid and included units says neither |
+| 19 | **Platform products you sell**: `GET …/limits/products`, one group per product named from the catalog's texts, a line and bar per window (`includedReading`: no bound has no bar), this month's extras' cost, and "taken off — sold until your period ends" for `listed: false` | the engine's count per window; a product held for the period is still being sold |
+| 20 | **Your cap on extras**: this month's spend against the cap ("no cap" when null), a box taking 0 or more with two places (`capAmountOf`, 0 = no extras at all), **Remove cap** sending `null`. The service's answer replaces the view | ADR-0107 point 6; the route is the reseller's `tenantBilling` door |
+| 21 | **Change package**: an active package (`resellerPurchaseApi.packages`) and a period, then the preview (`GET …/subscription/change`), read by `changeVerdict`: `now` shows the prorated charge and the balance, asks, then `POST`; `short` (balance below the charge, compared exactly — `compareAmounts`) shows no button but a top-up link; `renewal` says the date and offers **Switch at renewal**; `none` is the package held. Nothing is priced here | the price is the service's (F-019-v7); a click that would be `insufficient_balance` is never offered |
+| 22 | A `reseller_quota_exhausted` refusal **with** `facts.stoppedBy` is said once, in `useApiErrorMessage` (`resellerQuotaExhaustedOf`): `stop`, `wallet_empty`, `spend_cap`, `price_unavailable` each with what to do, naming the key when the meter is one (else "a product's sales quota"). Without facts — the buyer's — the server's "not available now" stays | the reseller learns whether to wait, top up or raise its cap; the buyer never learns the reseller's package (point 11) |
+
 ## Proof
 
 `resellers/limits.test.tsx` — the keys against shared-core's file, `limitValueOf`,
@@ -72,6 +86,10 @@ no limit, several resellers only with someone picked and a reason, one
 reseller's own value removed, nobody but the platform owner; `unitPriceOf`,
 `overageBodyOf`, `productQuotaBodyOf`, a quota's overage per level (none on a
 guard), a package's products re-termed and taken off.
+`my-resellers/limits.test.tsx` also: `includedReading`, `capAmountOf`,
+`compareAmounts`, `changeVerdict`, the quota sentences and the buyer's text kept,
+a quota row's extras, a product's windows, the cap set and removed, an
+upgrade shown, asked and applied, and no button when short.
 `my-resellers/limits.test.tsx` — `limitReading` for each shape, the card for
 the path's reseller, the refusal sentence and when the server's text stays.
 

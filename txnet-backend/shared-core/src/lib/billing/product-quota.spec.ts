@@ -12,11 +12,14 @@
  *    would — an empty wallet included — and writes nothing;
  *  - **a cut mid-period.** The kinder of the locked and the live terms wins,
  *    window by window; a product taken off keeps its locked terms;
- *  - **the reseller's own product counted.** Nothing is read or written.
+ *  - **the reseller's own product counted.** Nothing is read or written;
+ *  - **a statement that disagrees with the engine** (F-019-v10). Each window is
+ *    counted over its own fixed period, as the sale was; a product taken off
+ *    but held this period is still shown, on its locked terms.
  */
 import { Prisma, QuotaOverageMode } from '@prisma/client';
 
-import { admitProductSale, consumeProductSale, lockProductQuotaTerms, productQuotaMeter, termsFrom, type ProductQuotaRow } from './product-quota';
+import { admitProductSale, consumeProductSale, lockProductQuotaTerms, productQuotaLockKey, productQuotaMeter, productQuotaStatementsOf, termsFrom, type ProductQuotaRow } from './product-quota';
 import { ResellerQuotaExhausted } from './reseller-quota';
 
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -198,5 +201,37 @@ describe('product terms held for the paid period (F-019-v6, ADR-0107 point 8)', 
       [RESELLER, `product:${PRODUCT}:week`, 3],
       [RESELLER, `product:${PRODUCT}:month`, null],
     ]);
+  });
+});
+
+describe("productQuotaStatementsOf — the reseller's product quotas, as the engine counts them (F-019-v10)", () => {
+  const figures = (st: Awaited<ReturnType<typeof productQuotaStatementsOf>>[number]) =>
+    st.windows.map((w) => [w.period.kind, w.included, w.includedUsed, w.overageQty]);
+
+  it('counts each window over its own fixed period', async () => {
+    const w = world();
+    for (const ref of ['a', 'b', 'c']) await sell(w, ref, THU); // 2 included + 1 sold past the day
+
+    const [thu] = await productQuotaStatementsOf(w.tx, RESELLER, THU);
+    expect(thu).toMatchObject({ productId: PRODUCT, listed: true, meter: productQuotaMeter(PRODUCT), overage: { mode: 'overage', unitPrice: '2.00', currencyCode: 'USD' } });
+    expect(figures(thu)).toEqual([
+      ['day', 2, 2, 1],
+      ['week', 3, 2, 1],
+      ['month', null, 2, 1],
+    ]);
+    const [fri] = await productQuotaStatementsOf(w.tx, RESELLER, FRI); // a new day; the same week
+    expect(figures(fri).slice(0, 2)).toEqual([
+      ['day', 2, 0, 0],
+      ['week', 3, 2, 1],
+    ]);
+  });
+
+  it('shows a product taken off but held this period on its locked terms, and nothing for a non-reseller', async () => {
+    const locks = (['day', 'week', 'month'] as const).map((p) => ({ key: productQuotaLockKey(PRODUCT, p), included: p === 'day' ? 5 : null, mode: QuotaOverageMode.stop, unitPrice: null, currencyCode: null }));
+    const [held] = await productQuotaStatementsOf(world({ row: null, locks }).tx, RESELLER, THU);
+    expect(held).toMatchObject({ productId: PRODUCT, listed: false, overage: { mode: 'stop' } });
+    expect(held.windows[0]).toMatchObject({ included: 5, includedUsed: 0 });
+
+    expect(await productQuotaStatementsOf(world({ tenantType: 'platform_owner' }).tx, RESELLER, THU)).toEqual([]);
   });
 });

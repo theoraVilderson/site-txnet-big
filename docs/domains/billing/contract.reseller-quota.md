@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 2
+version: 3
 updated: 2026-10-01
 ---
 
@@ -28,6 +28,7 @@ Proof: `reseller-quota.spec.ts`, `product-quota.spec.ts` (same folder).
 | `ResellerQuota.admit(tx, {tenantId, terms, qty, now?})` | throws what `consumeMeter` would now — `wallet_empty` read from the balance — and writes nothing: a check before the act exists (an invoice, F-019-v6) |
 | `ResellerQuota.release(tx, {tenantId, sourceRef, now?})` | gives back every live row of the act, in meter order → `{released, refunded: [{amount, currencyCode}]}` |
 | `ResellerQuota.statementOf(tx, tenantId, key, now?)` | `{meter, period, included, includedUsed, overageQty, overageAmount, overage, spend}` — "10 included, 4 used, 2 extra today" |
+| `ResellerQuota.meterStatementOf(tx, tenantId, terms, now?)` | `{meter, windows: [{period, included, includedUsed, overageQty, overageAmount}], overage}` — a meter of several windows (a product's), each counted over its own period by rule 4; a unit sold past is in every window whose period holds it, charged once (4b) |
 | `ResellerQuota.spendOf(tx, tenantId, now?)` | `{month, cap, spent, currencyCode}` — this subscription month's overage against the reseller's cap |
 
 Each takes the caller's `tx` and opens none: the act and its quota commit
@@ -106,8 +107,7 @@ counted; its own products and the platform's tenant never are.
 | Asked at invoice create too, writing nothing (`admit`) — the buyer is refused before paying; the issue asks again under the lock | `admitProductSale` in `InvoiceService.create` |
 | **Given back only by a sale never served** (user, 2026-10-01): a purchase whose delivery failed and was refunded whole releases its units and overage. A service used, then deleted by the reseller, keeps them | `release` in `GrantDeliveryService.refund`; `deleteGrant` does not release |
 | Terms held for the paid period, window by window, the kinder part winning; a listing taken off is still sold on them until the period ends | `productQuotaTermsOf`, `lockProductQuotaTerms` (tenant `contract.limits.md`) |
+| The reseller's statement: every product it sells now — listed, or taken off and held this period, as `platformProductsSoldBy` counts — with `termsFrom`'s terms and `meterStatementOf`; nothing for a non-reseller or one with no subscription (F-019-v10) | `productQuotaStatementsOf`; tenant `GET …/limits/products` |
 | Refused: the buyer (invoice, payment, gift code) **409** `notAvailableNow`, `reason` `reseller_quota_exhausted`, no figures; the reseller's admin **409** `e.refusal` with them | the routes' error maps |
 
-## Not yet
-
-A reseller's statement of its product quotas (and the panel) is F-019-v9 / v10.
+The panel names a refusal by `stoppedBy` (panel-web `contract.reseller-limits.md` rule 22).

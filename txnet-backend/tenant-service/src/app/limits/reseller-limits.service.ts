@@ -23,6 +23,8 @@ import {
   resellerLimitsOf,
   type ResellerLimitInEffect,
   resellerUsagesOf,
+  productQuotaStatementsOf,
+  type QuotaMeterStatement,
 } from '@txnet-backend/shared-core';
 
 import type { SetOverageInput as OverageInput } from './reseller-limits.schema';
@@ -78,6 +80,9 @@ export type LimitInEffectRow = ResellerLimitInEffect & {
   /** A quota whose terms the platform changed this period: the end of the period they hold until (F-019-v3); else null. */
   lockedUntil: Date | null;
 };
+
+/** One platform product the reseller sells, and each window's statement (F-019-v10). */
+export type ProductQuotaInEffectRow = QuotaMeterStatement & { productId: string; key: string; nameKey: string; listed: boolean };
 
 /** The reseller's own cap on overage per subscription month and what it has spent (F-019-v2, ADR-0107 point 6). */
 export type OverageCapView = QuotaSpend;
@@ -199,6 +204,23 @@ export class ResellerLimitsService {
         statement: st ? { period: st.period, includedUsed: st.includedUsed, overageQty: st.overageQty, overageAmount: st.overageAmount } : null,
         lockedUntil: t?.lockedUntil ?? null,
       };
+    });
+  }
+
+  /**
+   * The platform products the reseller sells and what it sold of each, per
+   * window, as the engine counts them (F-019-v10, `productQuotaStatementsOf`).
+   * The same door as `ofReseller`: a `read`.
+   */
+  async productsOf(actor: ResellerActor, tenantId: string): Promise<ProductQuotaInEffectRow[]> {
+    const reseller = await this.door.admit(actor, tenantId, 'read');
+    const statements = await productQuotaStatementsOf(this.all, reseller.id);
+    if (statements.length === 0) return [];
+    const products = await this.all.product.findMany({ where: { id: { in: statements.map((s) => s.productId) } }, select: { id: true, key: true, nameKey: true } });
+    const byId = new Map(products.map((p) => [p.id, p]));
+    return statements.flatMap((s) => {
+      const p = byId.get(s.productId);
+      return p ? [{ ...s, key: p.key, nameKey: p.nameKey }] : [];
     });
   }
 

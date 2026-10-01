@@ -40,7 +40,7 @@ import {
   setResellersOverageSchema,
 } from './reseller-limits.schema';
 import { PackageProductsService, PackageProductView } from './package-products.service';
-import { LimitInEffectRow, LimitRow, OverageCapView, ResellerLimitsActor, ResellerLimitsRefused, ResellerLimitsRejection, ResellerLimitsService } from './reseller-limits.service';
+import { LimitInEffectRow, LimitRow, OverageCapView, ProductQuotaInEffectRow, ResellerLimitsActor, ResellerLimitsRefused, ResellerLimitsRejection, ResellerLimitsService } from './reseller-limits.service';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
 const STATUS: Record<ResellerLimitsRejection, 403 | 404 | 422> = {
@@ -188,6 +188,12 @@ export class ResellerLimitsOfController {
   @Get()
   ofReseller(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string): Promise<LimitInEffectRow[]> {
     return admitting(() => this.limits.ofReseller(identityOf(req), id));
+  }
+
+  /** The platform products it sells and each one's sales quota statement, per window (F-019-v10). */
+  @Get('products')
+  products(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string): Promise<ProductQuotaInEffectRow[]> {
+    return admitting(() => this.limits.productsOf(identityOf(req), id));
   }
 
   /** The reseller's own overage cap and this month's spend (F-019-v2). */

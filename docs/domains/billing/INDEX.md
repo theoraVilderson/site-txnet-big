@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 84
+version: 85
 keywords: [quota engine, consume a quota, release a quota, overage charge, reseller spend cap, سهمیه نماینده, wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -100,7 +100,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-01 | contract v85 (additive, F-019-v10): `ResellerQuota.meterStatementOf` and `productQuotaStatementsOf` — a reseller's product quotas, window by window ([contract.reseller-quota.md](contract.reseller-quota.md)). Consumer: tenant |
 | 2026-10-01 | contract v84 (**break** inside shared-core, F-019-v6, ADR-0107 points 3, 10): `QuotaMeterTerms` carries `windows[]`; `ResellerQuota.admit`; a product's sales quota consumed at issue, asked at invoice, released when never delivered. Consumers: notification (via `consume`, unchanged), tenant (`quotaTermsOf`) |
-| 2026-10-01 | contract v83 (additive, F-019-v2, ADR-0107): the quota engine — `ResellerQuota.consume`/`release`, fixed periods, prepaid overage on the billing wallet, the reseller's spend cap ([contract.reseller-quota.md](contract.reseller-quota.md)) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

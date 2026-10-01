@@ -187,6 +187,15 @@ export const tenantApi = {
   async setSubscription(id: string, body: { packageId: string; billingModel: ResellerBillingModel }): Promise<TenantSubscription> {
     return call<TenantSubscription>(`/tenants/${encodeURIComponent(id)}/subscription`, { method: "PUT", body: JSON.stringify(body) });
   },
+  /** What changing to `packageId` would do now (F-019-v7); the reseller's own team may ask. */
+  async subscriptionChange(id: string, packageId: string, billingModel: ResellerBillingModel): Promise<SubscriptionChangePreview> {
+    const q = new URLSearchParams({ packageId, billingModel });
+    return call<SubscriptionChangePreview>(`/tenants/${encodeURIComponent(id)}/subscription/change?${q}`, { method: "GET" });
+  },
+  /** An upgrade applies at once, prorated from the billing wallet; anything else waits for the renewal. */
+  async changeSubscription(id: string, body: { packageId: string; billingModel: ResellerBillingModel }): Promise<TenantSubscription> {
+    return call<TenantSubscription>(`/tenants/${encodeURIComponent(id)}/subscription/change`, { method: "POST", body: JSON.stringify(body) });
+  },
   async setStatus(id: string, body: { status: SettableStatus; reason?: string }): Promise<StatusChange> {
     return call<StatusChange>(`/tenants/${encodeURIComponent(id)}/status`, { method: "PUT", body: JSON.stringify(body) });
   },
@@ -278,6 +287,58 @@ export interface ResellerLimitInEffect {
   source: ResellerLimitSource;
   /** What the reseller holds of it — the count its refusal compares; `null` for a key that counts nothing (F-019-s). */
   used: number | null;
+  kind?: ResellerLimitKind;
+  /** Past a quota: the answer in effect and where it comes from; `null` for a guard (F-019-v1). */
+  overage?: (OverageView & { source: ResellerLimitSource }) | null;
+  /** A quota's period, what is included and used of it, and what was sold past it (F-019-v2); `null` for a guard. */
+  statement?: QuotaStatementView | null;
+  /** The end of the paid period the quota's terms are held to, when the platform changed them (F-019-v3). */
+  lockedUntil?: string | null;
+}
+
+/** A fixed period the engine counts in (`day` from 00:00, `week` from Saturday, `month` = the subscription month). */
+export interface QuotaPeriodView {
+  kind: "day" | "week" | "month";
+  start: string;
+  end: string;
+}
+
+/** One quota's statement for the period: units included and used, units sold past, what they cost. */
+export interface QuotaStatementView {
+  period: QuotaPeriodView;
+  includedUsed: number;
+  overageQty: number;
+  overageAmount: string;
+}
+
+/** `GET /tenants/:id/limits/products` (F-019-v10): a platform product the reseller sells, each window's statement. */
+export interface ProductQuotaInEffect {
+  productId: string;
+  key: string;
+  nameKey: string;
+  /** False: taken off the package this period, still sold on its held terms until the period ends. */
+  listed: boolean;
+  windows: (QuotaStatementView & { included: number | null })[];
+  overage: OverageView;
+}
+
+/** `GET`/`PUT /tenants/:id/limits/overage-cap` (F-019-v2): the cap on extras per subscription month and what was spent. */
+export interface OverageCapView {
+  month: QuotaPeriodView;
+  /** `null` = no cap; `"0.00"` = no extras at all. */
+  cap: string | null;
+  spent: string;
+  currencyCode: string;
+}
+
+/** `GET /tenants/:id/subscription/change` (F-019-v7): what a package change would do now — nothing written. */
+export interface SubscriptionChangePreview {
+  /** `now`: an upgrade, charged prorated; `renewal`: waits for the renewal; `none`: the package it already holds. */
+  when: "now" | "renewal" | "none";
+  charge: string;
+  currencyCode: string;
+  balance: string;
+  currentPeriodEnd: string;
 }
 
 /**
@@ -303,6 +364,12 @@ export const resellerLimitsApi = {
     }),
   clearResellers: (key: ResellerLimitKey, tenantIds: string[]) =>
     call<{ key: ResellerLimitKey; cleared: number }>(`/tenants/limits/resellers/${key}/clear`, { method: "POST", body: JSON.stringify({ tenantIds }) }),
+  /** The platform products the reseller sells, and what it sold of each per window (F-019-v10). */
+  productsOf: (tenantId: string) => call<ProductQuotaInEffect[]>(`/tenants/${encodeURIComponent(tenantId)}/limits/products`, { method: "GET" }),
+  overageCap: (tenantId: string) => call<OverageCapView>(`/tenants/${encodeURIComponent(tenantId)}/limits/overage-cap`, { method: "GET" }),
+  /** `null` removes the cap; `"0"` allows no extras at all. */
+  setOverageCap: (tenantId: string, amount: string | null) =>
+    call<OverageCapView>(`/tenants/${encodeURIComponent(tenantId)}/limits/overage-cap`, { method: "PUT", body: JSON.stringify({ amount }) }),
   /** Past a quota (F-019-v1): the platform's and a package's answer; a guard key is `not_a_quota`. */
   setPlatformOverage: (key: ResellerLimitKey, body: OverageBody) =>
     call<void>(`/tenants/limits/settings/${key}/overage`, { method: "PUT", body: JSON.stringify(body) }),

@@ -656,7 +656,14 @@
   "errors": {
     "unreachable": "Could not reach the server. Check your connection and try again.",
     "resellerLimitReached": "The limit on “{{name}}” is reached: {{used}} of {{limit}}.",
-    "resellerLimitAbove": "“{{name}}” allows at most {{limit}}; this asks for {{used}}."
+    "resellerLimitAbove": "“{{name}}” allows at most {{limit}}; this asks for {{used}}.",
+    "resellerQuotaExhausted": {
+      "aProduct": "a product's sales quota",
+      "stop": "The quota on “{{name}}” is used up for this period. Upgrade your package or wait for the next period.",
+      "wallet_empty": "“{{name}}” is past its quota, and your billing wallet cannot pay for the extra unit. Top it up.",
+      "spend_cap": "“{{name}}” is past its quota, and your monthly cap on extras is reached. Raise the cap or wait for next month.",
+      "price_unavailable": "“{{name}}” is past its quota, and its extra price is not available in your wallet's currency. Contact the platform."
+    }
   },
   "kit": {
     "loading": "Loading…",
@@ -2210,6 +2217,60 @@
         "exempt": "no limits"
       },
       "raise": "To raise a limit, open a ticket with the platform."
+    },
+    "quotas": {
+      "extra": "{{count}} sold past it · {{cost}}",
+      "extraMonth": "Sold past it this month: {{cost}}",
+      "periods": {
+        "day": "Today, from 00:00",
+        "week": "This week, from Saturday",
+        "month": "This subscription month"
+      },
+      "pastStop": "Past it: refused until the next period",
+      "pastPrice": "Past it: {{price}} per extra unit, from your billing wallet",
+      "lockedUntil": "These terms hold until {{date}}",
+      "windows": {
+        "day": "Today",
+        "week": "This week",
+        "month": "This month"
+      },
+      "products": {
+        "title": "Platform products you sell",
+        "subtitle": "What your package includes of each platform product, and how much of it your sales have used.",
+        "none": "Your package lists no platform products.",
+        "heldUntilEnd": "taken off your package — sold until your period ends"
+      },
+      "cap": {
+        "title": "Your cap on extras",
+        "subtitle": "The most that units sold past your quotas may cost per subscription month. Reaching it refuses the next extra unit, as if your package stopped there.",
+        "spentOf": "{{spent}} of {{cap}} spent this month",
+        "spentNoCap": "{{spent}} spent this month · no cap",
+        "month": "This month ends {{end}}",
+        "amount": "Cap per month",
+        "save": "Save cap",
+        "remove": "Remove cap",
+        "hint": "0 allows no extras at all. Lowering it never takes back what was already sold."
+      },
+      "change": {
+        "title": "Change package",
+        "subtitle": "An upgrade applies at once: you pay the new package's price for the days left, less what is unused of yours. A cheaper package waits for your renewal.",
+        "package": "Package",
+        "period": "Billing period",
+        "pick": "Choose a package",
+        "monthly": "Monthly",
+        "yearly": "Yearly",
+        "now": "Applies now · {{charge}} from your billing wallet (balance {{balance}})",
+        "short": "Costs {{charge}} now, but your billing wallet holds {{balance}}",
+        "renewal": "Applies at your renewal on {{date}} · nothing charged now",
+        "none": "This is your package now.",
+        "upgrade": "Upgrade now",
+        "atRenewal": "Switch at renewal",
+        "topUp": "Top up your billing wallet",
+        "confirmNow": "Upgrade now? {{charge}} will be taken from your billing wallet.",
+        "confirmRenewal": "Switch at your renewal on {{date}}?",
+        "doneNow": "Upgraded. The new package's quotas apply now.",
+        "doneRenewal": "Saved. The new package starts at your renewal."
+      }
     }
   },
   "resellerGateways": {

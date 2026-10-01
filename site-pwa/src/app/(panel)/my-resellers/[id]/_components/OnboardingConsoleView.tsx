@@ -12,6 +12,7 @@ import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-api
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { OperatingCurrencyCard } from "../../../_components/OperatingCurrencyCard";
 import { ResellerLimitsCard } from "./ResellerLimitsCard";
+import { OverageCapCard, PackageChangeCard, ProductQuotasCard } from "./QuotaCards";
 import { Badge } from "../../../financial/_components/Badge";
 import { Alert, primaryButton, quietButton } from "../../../catalog/_components/catalog-ui";
 import {
@@ -194,6 +195,9 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
         {/* F-116-h. By the path's reseller, like every card here (invariant 21). */}
         <OperatingCurrencyCard tenantId={id} scope="reseller" />
         <ResellerLimitsCard tenantId={id} />
+        <ProductQuotasCard tenantId={id} />
+        <OverageCapCard tenantId={id} />
+        <PackageChangeCard tenantId={id} />
       </div>
     </>
   );

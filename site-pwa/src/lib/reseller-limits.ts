@@ -42,3 +42,22 @@ export function resellerLimitReachedOf(e: unknown): { key: ResellerLimitKey; lim
   if (!isSaidHere(key) || typeof limit !== "number" || typeof used !== "number") return null;
   return { key, limit, used, ceiling: CEILINGS.includes(key) };
 }
+
+/** Why the engine refused a unit past a quota (`billing/contract.reseller-quota.md` rule 6). */
+export const QUOTA_STOP_REASONS = ["stop", "wallet_empty", "spend_cap", "price_unavailable"] as const;
+export type QuotaStopReason = (typeof QUOTA_STOP_REASONS)[number];
+
+/**
+ * A `reseller_quota_exhausted` refusal the reseller is meant to read (F-019-v10):
+ * why — an empty billing wallet, its own spend cap, a price not in the
+ * wallet's currency, or `stop` — and the quota's key when the meter is one the
+ * panel names (a product's meter is not). `null` with no `stoppedBy`: the
+ * buyer's refusal carries no figures (ADR-0107 point 11) and keeps the server's text.
+ */
+export function resellerQuotaExhaustedOf(e: unknown): { stoppedBy: QuotaStopReason; key: ResellerLimitKey | null } | null {
+  if (!(e instanceof ApiError) || e.reason !== "reseller_quota_exhausted") return null;
+  const { stoppedBy, meter } = e.facts;
+  if (!(QUOTA_STOP_REASONS as readonly unknown[]).includes(stoppedBy)) return null;
+  const key = (RESELLER_LIMIT_KEYS as readonly unknown[]).includes(meter) ? (meter as ResellerLimitKey) : null;
+  return { stoppedBy: stoppedBy as QuotaStopReason, key };
+}

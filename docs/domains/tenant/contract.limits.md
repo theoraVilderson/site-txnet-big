@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 49
+version: 51
 updated: 2026-10-01
 ---
 
@@ -122,6 +122,7 @@ path has three segments or more, so none is read as `GET /api/tenants/:id`.
 | `GET /api/tenants/limits/packages/:packageId/products` (F-019-v5) | — | `[{productId, key, nameKey, isActive, listedAt, quota: {day, week, month, overage: O}}]` by key — the platform products the package lets its subscribers sell, and each one's sales quota (F-019-v6); `404 package_not_found` |
 | `PUT` / `DELETE /api/tenants/limits/packages/:packageId/products/:productId` | `{day?, week?, month?, overage?}` strict — included sales per fixed window (int 0..10 000 000, absent/`null` = no bound), `overage` as on `/overage` (absent = `stop`); the **whole** terms each time, `{}` = listed with no quota | 204 — listed or re-termed / taken off; the same terms again write nothing. Not a platform product (or none) **404** `product_not_found`; audited `package_product_set` / `package_product_clear` `{productId, quota: {day, week, month, overage} \| 'unlisted'}` against the package. A change or a removal first freezes each subscriber's terms (`lockProductQuotaTerms`, below). What reads it: catalog `contract.md` "What a reseller may sell", billing `contract.reseller-quota.md` "A product's sales" |
 
+| `GET /api/tenants/:id/limits/products` (F-019-v10) | — | `[{productId, key, nameKey, listed, meter, windows: [{period: {kind, start, end}, included, includedUsed, overageQty, overageAmount}], overage: O}]` by product id — every platform product the reseller sells now (its package's listing, and one taken off but held this period: `listed: false`), each window counted by the engine (billing `productQuotaStatementsOf`); `[]` with no subscription. `ResellerAccess` `read`, the refusals above |
 | `GET /api/tenants/:id/limits/overage-cap` (F-019-v2) | — | `{month: {kind, start, end}, cap: "50.00" \| null, spent, currencyCode}` — `ResellerAccess` `read`, the refusals above |
 | `PUT` the same | `{amount: "50.00" \| null}` (≥ 0, ≤ 2 places; `0` = no overage at all; `null` removes it), strict | the same shape — `ResellerAccess` `tenantBilling`: its owner, its team, the platform's staff; audited `reseller_overage_cap_set` `{cap}` before/after in the **reseller's** log. Stamped with the platform's currency, converted by its change |
 
