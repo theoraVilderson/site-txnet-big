@@ -209,14 +209,63 @@ export const tenantApi = {
 /** A reseller limit key (ADR-0106): shared-core's `RESELLER_LIMITS`; `resellers/_lib/limits.ts` holds the list. */
 export type ResellerLimitKey = "user_metered_cap_max" | "platform_open_grants_max" | "admin_issues_30d_max" | "custom_domains_max" | "staff_members_max" | "bulk_job_grants_max" | "campaign_sends_daily_max" | "end_users_max" | "platform_traffic_gib_monthly_max" | "user_purchases_daily_max" | "user_purchases_weekly_max" | "user_purchases_monthly_max";
 
+/** A `quota` is sold past (or stopped at); a `guard` always refuses (ADR-0107 point 1). */
+export type ResellerLimitKind = "quota" | "guard";
+
+/** Past what a quota includes: refuse, or sell each unit at `unitPrice` (ADR-0107 point 2). */
+export type QuotaOverageMode = "stop" | "overage";
+
+/** One level's answer past a quota; `unitPrice` a decimal string in the platform's currency, `null` under `stop`. */
+export interface OverageView {
+  mode: QuotaOverageMode;
+  unitPrice: string | null;
+  currencyCode: string | null;
+}
+
+/** What an `/overage` route takes (`tenant/contract.limits.md`). */
+export type OverageBody = { mode: "stop" } | { mode: "overage"; unitPrice: string };
+
 /** `GET /tenants/limits/settings`: one key, every level that sets it. A `value` null is no limit; `platform` null is "not set" (the code default). */
 export interface ResellerLimitRow {
   key: ResellerLimitKey;
+  kind: ResellerLimitKind;
   codeDefault: number | null;
   max: number;
   platform: { value: number | null } | null;
   packages: { packageId: string; name: string; value: number | null }[];
   resellers: { tenantId: string; slug: string; value: number | null; reason: string }[];
+  /** Every level's overage row — `null` for a guard; `platform` null is "not set" (`stop`). */
+  overage: {
+    platform: OverageView | null;
+    packages: (OverageView & { packageId: string; name: string })[];
+    resellers: (OverageView & { tenantId: string; slug: string; reason: string })[];
+  } | null;
+}
+
+/** A product's sales quota on one package (F-019-v6): included per fixed window, `null` = no bound there. */
+export interface ProductQuota {
+  day: number | null;
+  week: number | null;
+  month: number | null;
+  overage: OverageView;
+}
+
+/** `GET /tenants/limits/packages/:packageId/products`: a platform product the package lets its subscribers sell. */
+export interface PackageProduct {
+  productId: string;
+  key: string;
+  nameKey: string;
+  isActive: boolean;
+  listedAt: string;
+  quota: ProductQuota;
+}
+
+/** `PUT …/products/:productId`: the whole terms each time; a window left out has no bound, `overage` left out is `stop`. */
+export interface PackageProductBody {
+  day?: number;
+  week?: number;
+  month?: number;
+  overage?: OverageBody;
 }
 
 /** Where a reseller's limit in effect came from. */
@@ -254,6 +303,22 @@ export const resellerLimitsApi = {
     }),
   clearResellers: (key: ResellerLimitKey, tenantIds: string[]) =>
     call<{ key: ResellerLimitKey; cleared: number }>(`/tenants/limits/resellers/${key}/clear`, { method: "POST", body: JSON.stringify({ tenantIds }) }),
+  /** Past a quota (F-019-v1): the platform's and a package's answer; a guard key is `not_a_quota`. */
+  setPlatformOverage: (key: ResellerLimitKey, body: OverageBody) =>
+    call<void>(`/tenants/limits/settings/${key}/overage`, { method: "PUT", body: JSON.stringify(body) }),
+  clearPlatformOverage: (key: ResellerLimitKey) => call<void>(`/tenants/limits/settings/${key}/overage`, { method: "DELETE" }),
+  setPackageOverage: (packageId: string, key: ResellerLimitKey, body: OverageBody) =>
+    call<void>(`/tenants/limits/packages/${encodeURIComponent(packageId)}/${key}/overage`, { method: "PUT", body: JSON.stringify(body) }),
+  clearPackageOverage: (packageId: string, key: ResellerLimitKey) =>
+    call<void>(`/tenants/limits/packages/${encodeURIComponent(packageId)}/${key}/overage`, { method: "DELETE" }),
+  clearResellersOverage: (key: ResellerLimitKey, tenantIds: string[]) =>
+    call<{ key: ResellerLimitKey; cleared: number }>(`/tenants/limits/resellers/${key}/overage/clear`, { method: "POST", body: JSON.stringify({ tenantIds }) }),
+  /** The platform products a package lists, each with its sales quota (F-019-v5, F-019-v6). */
+  packageProducts: (packageId: string) => call<PackageProduct[]>(`/tenants/limits/packages/${encodeURIComponent(packageId)}/products`, { method: "GET" }),
+  setPackageProduct: (packageId: string, productId: string, body: PackageProductBody) =>
+    call<void>(`/tenants/limits/packages/${encodeURIComponent(packageId)}/products/${encodeURIComponent(productId)}`, { method: "PUT", body: JSON.stringify(body) }),
+  clearPackageProduct: (packageId: string, productId: string) =>
+    call<void>(`/tenants/limits/packages/${encodeURIComponent(packageId)}/products/${encodeURIComponent(productId)}`, { method: "DELETE" }),
 };
 
 /** A custom domain as the reseller sees it; `revalidating` is `verified` inside its grace. */

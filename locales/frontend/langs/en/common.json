@@ -1927,8 +1927,8 @@
           "hint": "The most services one bulk job of a reseller's admins may act on (the platform's own cap is 100 000)."
         },
         "campaign_sends_daily_max": {
-          "name": "Campaigns sent per 24 hours",
-          "hint": "How many campaigns a reseller may start sending in any 24 hours."
+          "name": "Campaigns sent per day",
+          "hint": "How many campaigns a reseller may start sending per day, from 00:00."
         },
         "end_users_max": {
           "name": "End users",
@@ -1975,6 +1975,34 @@
         "platform": "for every reseller",
         "default": "the default",
         "exempt": "no limits"
+      },
+      "overage": {
+        "title": "Past what is included",
+        "hint": "What happens once a reseller has used what its package includes: refuse until the next period, or sell each extra unit from its billing wallet at a price in the platform's currency. A change reaches a reseller from its next paid period.",
+        "for": "Past the quota for {{name}}",
+        "refuse": "Refuse",
+        "sell": "Sell each extra unit",
+        "priceFor": "Price per extra unit for {{name}}",
+        "stopped": "refused",
+        "priced": "{{price}} {{currency}} per extra unit",
+        "remove": "Remove {{slug}}'s own answer"
+      },
+      "products": {
+        "title": "Platform products each package sells",
+        "hint": "A reseller sells a platform product only if its package lists it. For each one, how many sales are included per day (from 00:00), week (from Saturday) and month (the reseller's subscription month) — blank is no bound — and what happens past them.",
+        "package": "Package",
+        "pick": "Choose a package",
+        "inactive": "not on sale",
+        "notListed": "Not sold by this package",
+        "listed": "Sold · day {{day}} · week {{week}} · month {{month}} · past them: {{past}}",
+        "windows": {
+          "day": "Per day",
+          "week": "Per week",
+          "month": "Per month"
+        },
+        "list": "Let this package sell it",
+        "unlist": "Take off this package",
+        "unlistConfirm": "Take {{name}} off this package? Resellers already on it keep selling it on their current terms until their paid period ends."
       }
     }
   },

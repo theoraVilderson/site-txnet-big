@@ -11,6 +11,8 @@ import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { Alert, primaryButton, quietButton, useMessage } from "../../_components/resellers-ui";
 import { RESELLER_KEYS, canAdministerResellers } from "../../_lib/resellers";
 import { LIMIT_KEYS as K, limitValueOf } from "../../_lib/limits";
+import { PackageProducts } from "./PackageProducts";
+import { QuotaOverage } from "./QuotaOverage";
 
 const input = "w-28 rounded-xl border border-card-border bg-bg-inner px-3 py-2 text-sm text-text-primary outline-none focus:border-primary";
 
@@ -18,7 +20,9 @@ const input = "w-28 rounded-xl border border-card-border bg-bg-inner px-3 py-2 t
  * What a reseller may spend of the platform's (F-019-r, ADR-0106,
  * `tenant/contract.limits.md`): per key, the platform's value, each package's,
  * and the resellers holding one of their own — and setting it for one or
- * several resellers at once, with a reason.
+ * several resellers at once, with a reason. A quota key also says what happens
+ * past it, per level, and each package's platform products and their sales
+ * quotas are set below the keys (F-019-v9, ADR-0107 points 2, 3).
  *
  * Every number shown is tenant-service's answer, read again after each save;
  * nothing here decides which level wins. Who may see it is tenant-service's to
@@ -91,6 +95,8 @@ export function LimitsView() {
       ) : (
         rows.map((row) => <LimitCard key={row.key} row={row} packages={packages} resellers={resellers} onSaved={reload} />)
       )}
+
+      {error === null && rows !== null && packages.length > 0 && <PackageProducts packages={packages} />}
     </div>
   );
 }
@@ -191,6 +197,8 @@ function LimitCard({ row, packages, resellers, onSaved }: { row: ResellerLimitRo
       )}
 
       <ForResellers row={row} resellers={resellers} busy={busy} onApply={(ids, v, reason) => run(() => resellerLimitsApi.setResellers(row.key, ids, v, reason))} />
+
+      <QuotaOverage row={row} packages={packages} busy={busy} run={run} />
 
       {notice && <p className="text-xs font-bold text-primary">{notice}</p>}
       {failure && <Alert>{failure}</Alert>}
