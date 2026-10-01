@@ -8,7 +8,7 @@ export const OPEN_GRANT_STATUSES: readonly GrantStatus[] = [GrantStatus.pending,
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The reads the counts need. Pass the reseller's own scope, or a cross-tenant pool. */
-export type ResellerUsageReader = Pick<Prisma.TransactionClient, 'grant' | 'tenantDomain'>;
+export type ResellerUsageReader = Pick<Prisma.TransactionClient, 'grant' | 'tenantDomain' | 'tenantStaffMember'>;
 
 type Count = (tx: ResellerUsageReader, tenantId: string, now: Date) => Promise<number>;
 
@@ -35,6 +35,9 @@ export const RESELLER_LIMIT_USAGE: Record<ResellerLimitKey, Count | null> = {
     tx.grant.count({ where: { tenantId, source: GrantSource.admin_grant, createdAt: { gt: new Date(now.getTime() - 30 * DAY_MS) } } }),
   /** Its custom domains, proved or not — each asks a certificate (F-019-q). */
   custom_domains_max: (tx, tenantId) => tx.tenantDomain.count({ where: { tenantId, domainType: TenantDomainType.custom_domain } }),
+  /** Seats invited or accepted, neither removed nor expired — tenant's `staffState` other than `revoked`/`expired` (F-019-t1). */
+  staff_members_max: (tx, tenantId, now) =>
+    tx.tenantStaffMember.count({ where: { tenantId, revokedAt: null, OR: [{ accessExpiresAt: null }, { accessExpiresAt: { gt: now } }] } }),
 };
 
 /** One key's count, or `null` for a key that counts nothing. */

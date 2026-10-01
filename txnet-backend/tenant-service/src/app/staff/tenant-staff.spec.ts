@@ -1,4 +1,4 @@
-import { ResellerAccess } from '@txnet-backend/shared-core';
+import { ResellerAccess, ResellerLimitReached } from '@txnet-backend/shared-core';
 import { inviteStaffSchema } from './tenant-staff.schema';
 import { StaffRefused, TenantStaffService } from './tenant-staff.service';
 
@@ -24,6 +24,8 @@ describe('TenantStaffService', () => {
   const MEMBER = '66666666-6666-6666-6666-666666666666';
   const OUTSIDER = '77777777-7777-7777-7777-777777777777';
   const SUPPORT_ROLE = '88888888-8888-8888-8888-888888888888';
+  const SECOND = '99999999-9999-4999-8999-999999999991';
+  const THIRD = '99999999-9999-4999-8999-999999999992';
   const T0 = new Date('2026-09-19T10:00:00Z');
   const LATER = new Date('2026-10-19T10:00:00Z');
 
@@ -42,7 +44,7 @@ describe('TenantStaffService', () => {
     revokedAt: Date | null;
   };
 
-  const build = (opts: { status?: string; rows?: Partial<Row>[] } = {}) => {
+  const build = (opts: { status?: string; rows?: Partial<Row>[]; staffLimit?: number | null } = {}) => {
     const tenants: Record<string, Record<string, unknown>> = {
       [PLATFORM]: { id: PLATFORM, tenantType: 'platform_owner', slug: 'platform_owner', ownerUserId: STAFF, status: 'active' },
       [RESELLER]: { id: RESELLER, tenantType: 'reseller', slug: 'ali', ownerUserId: OWNER, status: opts.status ?? 'active', graceEndsAt: null },
@@ -50,6 +52,8 @@ describe('TenantStaffService', () => {
     const users: Record<string, Record<string, unknown>> = {
       [MEMBER]: { id: MEMBER, tenantId: RESELLER, fullName: 'Sara', username: 'sara', phoneNumber: '+989120000001', status: 'active', deletedAt: null, roleId: SUPPORT_ROLE, role: { id: SUPPORT_ROLE, name: 'Support' } },
       [OUTSIDER]: { id: OUTSIDER, tenantId: PLATFORM, fullName: 'Reza', username: 'reza', phoneNumber: null, status: 'active', deletedAt: null, roleId: SUPPORT_ROLE, role: { id: SUPPORT_ROLE, name: 'Support' } },
+      [SECOND]: { id: SECOND, tenantId: RESELLER, fullName: 'Nima', username: 'nima', phoneNumber: null, status: 'active', deletedAt: null, roleId: SUPPORT_ROLE, role: { id: SUPPORT_ROLE, name: 'Support' } },
+      [THIRD]: { id: THIRD, tenantId: RESELLER, fullName: 'Mina', username: 'mina', phoneNumber: null, status: 'active', deletedAt: null, roleId: SUPPORT_ROLE, role: { id: SUPPORT_ROLE, name: 'Support' } },
       [OWNER]: { id: OWNER, tenantId: PLATFORM, fullName: 'Ali', username: 'ali', phoneNumber: null, status: 'active', deletedAt: null, roleId: SUPPORT_ROLE, role: { id: SUPPORT_ROLE, name: 'Support' } },
     };
 
@@ -74,6 +78,11 @@ describe('TenantStaffService', () => {
       });
 
     const staffMember = {
+      // The seats that count against `staff_members_max`: not removed, not expired.
+      count: vi.fn(async ({ where }: { where: { tenantId: string; revokedAt: null; OR: Array<{ accessExpiresAt: null | { gt: Date } }> } }) => {
+        const gt = (where.OR.find((o) => o.accessExpiresAt !== null)?.accessExpiresAt as { gt: Date }).gt;
+        return rows.filter((r) => r.tenantId === where.tenantId && !r.revokedAt && (!r.accessExpiresAt || r.accessExpiresAt > gt)).length;
+      }),
       findFirst: vi.fn(async ({ where }: { where: Record<string, any> }) => rows.find((r) => match(r, where)) ?? null),
       findMany: vi.fn(async ({ where }: { where: Record<string, any> }) => rows.filter((r) => match(r, where))),
       create: vi.fn(async ({ data }: { data: Record<string, any> }) => {
@@ -96,8 +105,16 @@ describe('TenantStaffService', () => {
       },
       tenantStaffMember: staffMember,
     };
-    const all = {
+    const limitRows = opts.staffLimit === undefined ? [] : [{ key: 'staff_members_max', value: opts.staffLimit }];
+    const all: Record<string, unknown> = {
       tenantStaffMember: staffMember,
+      tenant: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => tenants[where.id] ?? null) },
+      tenantSubscription: { findUnique: vi.fn(async () => null) },
+      resellerLimit: { findMany: vi.fn(async () => limitRows) },
+      packageLimit: { findMany: vi.fn(async () => []) },
+      resellerLimitSetting: { findMany: vi.fn(async () => []) },
+      $executeRaw: vi.fn(async () => 0),
+      $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(all)),
       user: {
         findFirst: vi.fn(async ({ where }: { where: Record<string, any> }) => {
           const row = users[where.id];
@@ -192,6 +209,24 @@ describe('TenantStaffService', () => {
     expect(inviteStaffSchema.safeParse({ userId: 'sara' }).success).toBe(false);
     expect(inviteStaffSchema.safeParse({ userId: MEMBER, joinedAt: '2026-10-19T10:00:00.000Z' }).success).toBe(false);
     expect(inviteStaffSchema.safeParse({ userId: MEMBER, accessExpiresAt: 'soon' }).success).toBe(false);
+  });
+
+  it('refuses a seat past the reseller\'s staff_members_max to its own people only; removed and expired seats do not count (F-019-t1)', async () => {
+    const { service, rows } = build({
+      staffLimit: 2,
+      rows: [
+        { userId: SECOND, joinedAt: T0 },
+        { userId: OUTSIDER, revokedAt: T0 },
+        { userId: OWNER, accessExpiresAt: T0 },
+      ],
+    });
+    await service.invite(owner, RESELLER, { userId: MEMBER }, LATER);
+    const e = await service.invite(owner, RESELLER, { userId: THIRD }, LATER).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(ResellerLimitReached);
+    expect((e as ResellerLimitReached).facts).toEqual({ key: 'staff_members_max', limit: 2, used: 2 });
+    expect(rows.filter((r) => r.userId === THIRD)).toHaveLength(0);
+    // The platform's staff acting on the reseller are never bounded (ADR-0106 point 4).
+    await expect(service.invite(platformStaff, RESELLER, { userId: THIRD }, LATER)).resolves.toMatchObject({ userId: THIRD });
   });
 
   it('names every refusal', () => {

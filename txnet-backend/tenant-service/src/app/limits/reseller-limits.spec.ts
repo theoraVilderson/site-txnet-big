@@ -29,11 +29,11 @@ function build(
     callerType?: string;
     resellers?: string[];
     packages?: string[];
-    usage?: { open: number; issued: number; domains: number };
+    usage?: { open?: number; issued?: number; domains?: number; staff?: number };
     refuse?: ResellerAccessRejection;
   } = {},
 ) {
-  const usage = opts.usage ?? { open: 0, issued: 0, domains: 0 };
+  const usage = { open: 0, issued: 0, domains: 0, staff: 0, ...opts.usage };
   const admitted: Array<{ tenantId: string; capability: string }> = [];
   const audit: Array<Record<string, unknown>> = [];
   const writes: string[] = [];
@@ -89,6 +89,7 @@ function build(
     adminAuditLog: { create: async ({ data }: { data: Record<string, unknown> }) => (audit.push(data), {}) },
     grant: { count: async ({ where }: { where: { source?: string } }) => (where.source === 'admin_grant' ? usage.issued : usage.open) },
     tenantDomain: { count: async () => usage.domains },
+    tenantStaffMember: { count: async () => usage.staff },
   };
   const prisma = { tenant: { findUnique: async () => ({ tenantType: opts.callerType ?? 'platform_owner' }) } };
   const all = { ...tx, $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx) };
@@ -193,7 +194,7 @@ describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
   const owner = { userId: ADMIN, tenantId: RESELLER_A, permissions: [] };
 
   it('answers each key in effect, where it comes from and how much is used — the refusals\' own counts', async () => {
-    const { service, admitted } = build({ usage: { open: 7, issued: 4, domains: 2 } });
+    const { service, admitted } = build({ usage: { open: 7, issued: 4, domains: 2, staff: 6 } });
     await service.setPlatform(actor, 'custom_domains_max', 3);
     await service.setResellers(actor, 'admin_issues_30d_max', [RESELLER_A], null, 'trusted');
     const view = await service.ofReseller(owner, RESELLER_A);
@@ -203,6 +204,7 @@ describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
       { key: 'platform_open_grants_max', limit: 500, source: 'default', used: 7 },
       { key: 'admin_issues_30d_max', limit: null, source: 'reseller', used: 4 },
       { key: 'custom_domains_max', limit: 3, source: 'platform', used: 2 },
+      { key: 'staff_members_max', limit: 20, source: 'default', used: 6 },
     ]);
   });
 

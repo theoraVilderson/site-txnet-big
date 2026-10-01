@@ -1914,6 +1914,10 @@
         "custom_domains_max": {
           "name": "Custom domains",
           "hint": "How many custom domains a reseller may add. Each one needs a certificate."
+        },
+        "staff_members_max": {
+          "name": "Team members",
+          "hint": "How many people a reseller may have on its team — invited or joined, not removed or expired."
         }
       },
       "codeDefault": "Default: {{count}}",

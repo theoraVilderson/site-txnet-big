@@ -1,6 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, UserStatus } from '@prisma/client';
-import { ResellerAccess, ResellerAccessRefused, ResellerAccessRejection, ResellerActor } from '@txnet-backend/shared-core';
+import {
+  assertUnderLimit,
+  RESELLER_LIMIT_USAGE,
+  ResellerAccess,
+  ResellerAccessRefused,
+  ResellerAccessRejection,
+  ResellerActor,
+  resellerLimitOf,
+} from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -123,14 +131,25 @@ export class TenantStaffService {
 
     // A removed member is re-invited **in place**: `(tenantId, userId)` is
     // unique, so the alternative is not a second row but a lost history.
-    const seat = existing
-      ? await this.all.tenantStaffMember.update({
-          where: { id: existing.id },
-          data: { invitedByUserId: actor.userId, invitedAt: now, joinedAt: null, accessExpiresAt: input.accessExpiresAt ?? null, revokedAt: null },
-        })
-      : await this.all.tenantStaffMember.create({
-          data: { tenantId: reseller.id, userId: person.id, invitedByUserId: actor.userId, invitedAt: now, accessExpiresAt: input.accessExpiresAt ?? null },
-        });
+    const seat = await this.all.$transaction(async (tx) => {
+      // One more seat is bounded by the reseller's limit (F-019-t1, ADR-0106):
+      // its own people are refused past it; the platform's staff are not.
+      if (reseller.as !== 'staff') {
+        const inEffect = await resellerLimitOf(tx, reseller.id, 'staff_members_max');
+        if (inEffect.limit !== null) {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_limit:staff_members_max:${reseller.id}`}))`;
+          assertUnderLimit('staff_members_max', inEffect, await RESELLER_LIMIT_USAGE.staff_members_max(tx, reseller.id, now));
+        }
+      }
+      return existing
+        ? tx.tenantStaffMember.update({
+            where: { id: existing.id },
+            data: { invitedByUserId: actor.userId, invitedAt: now, joinedAt: null, accessExpiresAt: input.accessExpiresAt ?? null, revokedAt: null },
+          })
+        : tx.tenantStaffMember.create({
+            data: { tenantId: reseller.id, userId: person.id, invitedByUserId: actor.userId, invitedAt: now, accessExpiresAt: input.accessExpiresAt ?? null },
+          });
+    });
     this.logger.log(`staff seat ${seat.id} on ${reseller.slug} invited ${person.id} by ${actor.userId}`);
     return this.view(seat, person, now);
   }

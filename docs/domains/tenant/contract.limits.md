@@ -20,6 +20,7 @@ level that has a row wins.
 | `platform_open_grants_max` | open Grants of its users on platform panels | 500 | 1 000 000 | F-019-o |
 | `admin_issues_30d_max` | services its own people issue by hand in any 30 days | 50 | 100 000 | F-019-p |
 | `custom_domains_max` | its custom domains | 5 | 1000 | F-019-q |
+| `staff_members_max` | people on its team (seats neither removed nor expired) | 20 | 1000 | F-019-t1, `contract.staff.md` rule 8 |
 
 `resellerLimitOf(tx, tenantId, key)` → `{limit, source}`; `resellerLimitsOf`
 answers every key. `source` is `reseller`, `package`, `platform`, `default`,

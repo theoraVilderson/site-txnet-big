@@ -7,6 +7,7 @@ export const RESELLER_LIMIT_KEYS = [
   "platform_open_grants_max",
   "admin_issues_30d_max",
   "custom_domains_max",
+  "staff_members_max",
 ] as const satisfies readonly ResellerLimitKey[];
 
 /**

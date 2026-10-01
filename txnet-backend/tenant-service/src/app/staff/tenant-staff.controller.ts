@@ -14,6 +14,7 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { ResellerLimitReached } from '@txnet-backend/shared-core';
 
 import { identityOf } from '../request/identity.middleware';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
@@ -82,6 +83,8 @@ export class TenantStaffController {
     try {
       return await work();
     } catch (e) {
+      // Past the reseller's staff_members_max (F-019-t1): the figures say what to raise.
+      if (e instanceof ResellerLimitReached) throw new ConflictException({ reason: e.reason, message: e.message, facts: e.facts });
       if (!(e instanceof StaffRefused)) throw e;
       const payload = { reason: e.reason, message: e.message };
       switch (STATUS[e.reason]) {

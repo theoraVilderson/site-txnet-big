@@ -18,6 +18,8 @@ export const RESELLER_LIMITS = {
   admin_issues_30d_max: { default: 50, max: 100_000 },
   /** The reseller's custom domains — each a certificate (F-019-q). */
   custom_domains_max: { default: 5, max: 1000 },
+  /** People on the reseller's team: seats not removed and not expired (F-019-t1). */
+  staff_members_max: { default: 20, max: 1000 },
 } as const satisfies Record<string, { default: number | null; max: number }>;
 
 export type ResellerLimitKey = keyof typeof RESELLER_LIMITS;

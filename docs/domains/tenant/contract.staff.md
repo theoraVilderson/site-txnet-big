@@ -64,6 +64,7 @@ door can never disagree — one function, `staffState`.
 | 5 | Acceptance is the invitee's own call, on their own session, once | a seat nobody accepted is not access, and `accept` is therefore the one route `ResellerAccess` cannot guard — an unaccepted member is exactly who it refuses |
 | 6 | An `accessExpiresAt` in the past is refused (`expiry_past`) | a seat that is expired the moment it is written is a mistake, not a policy |
 | 7 | A member reaches reseller self-service only with `tenant.manage`, in a role of that tenant | the seat says they are on the team; the permission says this member administers the reseller. A `Support` role gets a seat and no administration (invariant 21) |
+| 8 | An invite past the reseller's `staff_members_max` is **409** `reseller_limit_reached`, `facts {key, limit, used}`, to its owner and team; the platform's staff pass. Counted: seats neither removed nor expired, under a per-reseller lock (F-019-t1, [contract.limits.md](contract.limits.md)) | a team is bounded like the other things a reseller adds; lowering it removes nobody |
 
 Refusals: `not_allowed` 403 and `reseller_not_found` 404 as
 [contract.domains.md](contract.domains.md) (only platform staff learn a
