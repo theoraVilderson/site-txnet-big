@@ -18,7 +18,7 @@
  *    audience is what recipients were chosen by.
  */
 import { CampaignStatus, NotificationChannel, TenantType, UserStatus } from '@prisma/client';
-import { runWithTenant } from '@txnet-backend/shared-core';
+import { ResellerLimitReached, runWithTenant } from '@txnet-backend/shared-core';
 
 import { audienceFilterSchema } from './campaign-admin.schema';
 import { CampaignAdminRefused, CampaignAdminService } from './campaign-admin.service';
@@ -64,9 +64,14 @@ function transactionOf(client: Record<string, unknown>) {
   );
 }
 
-function fakes(callerType: TenantType = TenantType.reseller, ownSmsLine = false) {
+function fakes(callerType: TenantType = TenantType.reseller, ownSmsLine = false, sendsLimit?: number) {
   const prisma: Record<string, unknown> & { notificationCampaign: ReturnType<typeof campaignDelegate>; adminAuditLog: { create: ReturnType<typeof vi.fn> } } = {
     tenant: { findUnique: vi.fn().mockResolvedValue({ tenantType: callerType }) },
+    // The reseller's limits (ADR-0106), read in its own scope.
+    tenantSubscription: { findUnique: vi.fn().mockResolvedValue(null) },
+    resellerLimit: { findMany: vi.fn().mockResolvedValue(sendsLimit === undefined ? [] : [{ key: 'campaign_sends_daily_max', value: sendsLimit }]) },
+    packageLimit: { findMany: vi.fn().mockResolvedValue([]) },
+    resellerLimitSetting: { findMany: vi.fn().mockResolvedValue([]) },
     notificationCampaign: campaignDelegate(),
     notificationCampaignText: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
@@ -329,6 +334,19 @@ describe('CampaignAdminService', () => {
       reason: 'campaign_not_draft',
     });
     expect(prisma.adminAuditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses a send past the reseller\'s campaign_sends_daily_max, counting sends started in the last 24 hours (F-019-t4)', async () => {
+    const { prisma, service } = fakes(TenantType.reseller, false, 3);
+    prisma.notificationCampaign.count.mockResolvedValue(3);
+    const e = await as(TENANT, () => service.send(tenantAdmin, CAMPAIGN, '10.0.0.1')).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(ResellerLimitReached);
+    expect((e as ResellerLimitReached).facts).toEqual({ key: 'campaign_sends_daily_max', limit: 3, used: 3 });
+    expect(prisma.notificationCampaign.count).toHaveBeenCalledWith({ where: { tenantId: TENANT, sendStartedAt: { gt: expect.any(Date) } } });
+    expect(prisma.notificationCampaign.updateMany).not.toHaveBeenCalled();
+
+    prisma.notificationCampaign.count.mockResolvedValue(2);
+    await expect(as(TENANT, () => service.send(tenantAdmin, CAMPAIGN, '10.0.0.1'))).resolves.toBeDefined();
   });
 
   it('never lets a tenant admin send the platform\'s campaign', async () => {

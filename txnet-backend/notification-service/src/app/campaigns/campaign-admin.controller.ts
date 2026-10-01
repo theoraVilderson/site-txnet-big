@@ -19,7 +19,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Language } from '@prisma/client';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ResellerLimitReached } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
@@ -192,6 +192,8 @@ export class CampaignAdminController {
     try {
       return await run();
     } catch (e) {
+      // Past the reseller's campaign_sends_daily_max (F-019-t4): the figures say what to raise.
+      if (e instanceof ResellerLimitReached) throw new ConflictException({ reason: e.reason, message: e.message, facts: e.facts });
       if (!(e instanceof CampaignAdminRefused)) throw e;
       const payload = { reason: e.reason, message: e.message };
       switch (CAMPAIGN_REFUSAL_STATUS[e.reason]) {

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AdminAction, AuditTargetType, CampaignStatus, DeliveryStatus, Language, NotificationChannel, Prisma, TenantStatus, TenantType } from '@prisma/client';
-import { tenantTransaction } from '@txnet-backend/shared-core';
+import { assertUnderLimit, RESELLER_LIMIT_USAGE, resellerLimitOf, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -249,6 +249,16 @@ export class CampaignAdminService {
     const before = await this.loadManaged(actor, owner, db, id);
 
     const run = async (tx: Prisma.TransactionClient) => {
+      // One more send is bounded by the reseller's limit (F-019-t4, ADR-0106);
+      // the platform owner's people pass. A tenant that is not a reseller is exempt.
+      if (!owner) {
+        const tenantId = before.tenantId ?? actor.tenantId;
+        const inEffect = await resellerLimitOf(tx, tenantId, 'campaign_sends_daily_max');
+        if (inEffect.limit !== null) {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_limit:campaign_sends_daily_max:${tenantId}`}))`;
+          assertUnderLimit('campaign_sends_daily_max', inEffect, await RESELLER_LIMIT_USAGE.campaign_sends_daily_max(tx, tenantId, new Date()));
+        }
+      }
       const { count } = await tx.notificationCampaign.updateMany({
         where: { id, status: CampaignStatus.draft },
         data: { status: CampaignStatus.sending, sendStartedAt: new Date() },

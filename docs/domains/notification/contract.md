@@ -38,7 +38,7 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | read one | `GET notifications/campaigns/:id` | — | the campaign | 403; 404 `campaign_not_found` |
 | edit a draft | `PATCH notifications/campaigns/:id` | any of `channel`, `messageBody`, `subject`, `sourceLang`, `audience` (≥1) | the campaign | 400, 403, 404; 409 `campaign_not_draft`, `sms_not_available`, `email_not_available` |
 | read its languages | `GET notifications/campaigns/:id/texts` | — | `{ sourceLang, subject, messageBody, texts[], missing[] }`; text = `lang, subject, body, state, updatedAt` | 403; 404 |
-| draft the missing ones | `POST notifications/campaigns/:id/texts/draft` | — | the same, plus `drafted`, 200 | 403, 404; 409 `campaign_not_draft` |
+| draft the missing ones | `POST notifications/campaigns/:id/texts/draft` | — | the same, plus `drafted`, 200 | 403, 404; 409 `campaign_not_draft`, `reseller_limit_reached` ([contract.reseller.md](contract.reseller.md) "Sends per day") |
 | write one | `PUT notifications/campaigns/:id/texts/:lang` | `{ subject?: ≤200\|null, body ≤4000 }` | the text, `published` | 400 (`text_is_source` too), 403, 404; 409 `campaign_not_draft` |
 | publish a draft | `POST notifications/campaigns/:id/texts/:lang/publish` | — | the text, `published`, 200 | 400 `text_is_source`, 403; 404 `campaign_not_found`, `text_not_found`; 409 |
 | start a send | `POST notifications/campaigns/:id/send` | — | the campaign, `status: sending`, 200 | 403, 404; 409 `campaign_not_draft` |

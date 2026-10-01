@@ -1923,6 +1923,10 @@
         "bulk_job_grants_max": {
           "name": "Services in one bulk job",
           "hint": "The most services one bulk job of a reseller's admins may act on (the platform's own cap is 100 000)."
+        },
+        "campaign_sends_daily_max": {
+          "name": "Campaigns sent per 24 hours",
+          "hint": "How many campaigns a reseller may start sending in any 24 hours."
         }
       },
       "codeDefault": "Default: {{count}}",

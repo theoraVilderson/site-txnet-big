@@ -101,6 +101,13 @@ counted by the send and not by the count.
 A new audience key therefore lands in three places — the schema, the fan-out
 and nothing else, because this route reuses both.
 
+## Sends per day (F-019-t4, ADR-0106)
+
+| Rule | Why |
+|---|---|
+| A reseller's `send` past its `campaign_sends_daily_max` is **409** `reseller_limit_reached`, `facts {key, limit, used}`; nothing is flipped. Counted: its campaigns whose `sendStartedAt` is in the last 24 hours, under a per-reseller lock, in the write's transaction | the platform's bots and lines carry every send; the key is in `tenant/contract.limits.md` |
+| The platform owner's pool is never checked; a tenant that is not a reseller is exempt; `resume` is not a new send | ADR-0106 point 4; a stopped send was already counted |
+
 ## Not here
 
 Editing a draft (`PATCH`), the per-language texts (F-035-h) and `resume`
