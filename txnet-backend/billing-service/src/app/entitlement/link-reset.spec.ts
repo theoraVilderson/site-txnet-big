@@ -27,6 +27,8 @@ const OTHER = '55555555-5555-4555-8555-555555555555';
 const GRANT = '22222222-2222-4222-8222-222222222222';
 const NOW = new Date('2026-09-30T12:00:00Z');
 const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3_600_000);
+/** `resetOwn` / `reset` read the real clock, so their rows are placed against it — pinned to NOW they fell out of the 24 hours on 2026-10-01. */
+const realHoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000);
 
 function fakeTx(opts: { owner?: string | null; recent?: Date[] }) {
   const calls: string[] = [];
@@ -121,7 +123,7 @@ describe('SubscriptionLinkService.resetOwn', () => {
   });
 
   it('answers the fourth 429 link_reset_limit with {limit, nextAtMs}, and the old link keeps working', async () => {
-    const { links, inTenant, grants, written } = build({ recent: [hoursAgo(1), hoursAgo(2), hoursAgo(3)] });
+    const { links, inTenant, grants, written } = build({ recent: [realHoursAgo(1), realHoursAgo(2), realHoursAgo(3)] });
     const err = await inTenant(() => links.resetOwn(GRANT, USER)).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(HttpException);
     expect((err as HttpException).getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
@@ -140,7 +142,7 @@ describe('SubscriptionLinkService.resetOwn', () => {
   });
 
   it('leaves the staff path unbounded: reset() neither counts nor records', async () => {
-    const { links, inTenant, calls } = build({ recent: [hoursAgo(1), hoursAgo(2), hoursAgo(3)] });
+    const { links, inTenant, calls } = build({ recent: [realHoursAgo(1), realHoursAgo(2), realHoursAgo(3)] });
     await inTenant(() => links.reset(GRANT, USER));
     expect(calls).toEqual(['rotate']);
   });
