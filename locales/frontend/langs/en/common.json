@@ -1685,7 +1685,9 @@
       "metered_usage_charge": "Usage charge (VPN traffic, wholesale)",
       "metered_usage_refund": "Unused usage refunded",
       "sms_usage_charge": "SMS usage",
-      "currency_change": "Currency change"
+      "currency_change": "Currency change",
+      "quota_overage_charge": "Quota overage (units past your package)",
+      "quota_overage_refund": "Quota overage refunded"
     },
     "topup": "Top up",
     "topupPage": {

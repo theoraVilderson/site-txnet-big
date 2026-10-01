@@ -132,8 +132,8 @@ after it is on the cross-tenant pool.
 | `PUT /api/tenants/:id/subscription` | `{packageId, billingModel}`, `.strict()` | a subscription view |
 | `GET /api/tenants/:id/subscription` | — | a subscription view |
 | `POST /api/tenants/:id/subscription/grace` | `{days, reason}` — integer 1..90, 1..500 chars, `.strict()` | `200 {tenantId, currentPeriodEnd, graceUntil, status, suspensionCause}` |
-| `GET /api/tenant-subscription-settings` | — | `{trialDays, suspensionHoldDays, renewalGraceDays}` |
-| `PATCH /api/tenant-subscription-settings` | `{trialDays?, suspensionHoldDays?, renewalGraceDays?}` — integers 0..365 / 0..90 / 0..30, at least one, `.strict()` | `{trialDays, suspensionHoldDays, renewalGraceDays}` |
+| `GET /api/tenant-subscription-settings` | — | `{trialDays, suspensionHoldDays, renewalGraceDays, quotaTimeZone}` |
+| `PATCH /api/tenant-subscription-settings` | `{trialDays?, suspensionHoldDays?, renewalGraceDays?, quotaTimeZone?}` — integers 0..365 / 0..90 / 0..30, an IANA zone the runtime knows, at least one, `.strict()` | `{trialDays, suspensionHoldDays, renewalGraceDays, quotaTimeZone}` |
 
 A subscription view: `tenantId, packageId, packageName, billingModel,
 currentPeriodEnd, startedAt, includedFeatureKeys`. Refusals:
@@ -151,7 +151,7 @@ currentPeriodEnd, startedAt, includedFeatureKeys`. Refusals:
 | A `terminated` reseller is refused; `trial`, `active`, `suspended` are not | what each status blocks is F-018-f |
 | **One transaction, the tenant row locked `FOR UPDATE`:** the subscription, `billingModel` if changed, the tenant's `package_included` entitlements deleted and one per `includedFeatureKeys` written (`isEnabled`, no `expiresAt`), and an audit row (`tenant_subscription_set`, target `tenant`, the reseller's tenant) | two concurrent `PUT`s cannot interleave the replace; entitlements from `addon_purchased` / `admin_granted` are never touched |
 | The keys are read under a shared lock on the package | a concurrent package edit is wholly before or after the `PUT` (F-018-o) |
-| `trialDays` is the platform's one `tenant_subscription_setting` row (`id = 1`, CHECK 0..365, default 14), edited with an audit row (`tenant_subscription_setting_update`); it applies to trials started after the edit. `renewalGraceDays` (CHECK 0..30, default 3) is on the same row and read by each renewal | a setting the platform owner changes without a deploy (user, 2026-09-17) |
+| `trialDays` is the platform's one `tenant_subscription_setting` row (`id = 1`, CHECK 0..365, default 14), edited with an audit row (`tenant_subscription_setting_update`); it applies to trials started after the edit. `renewalGraceDays` (CHECK 0..30, default 3) is on the same row and read by each renewal; so is `quotaTimeZone` (default `Asia/Tehran`), the clock a sold quota's day and week are read on (F-019-v2, billing `contract.reseller-quota.md`) | a setting the platform owner changes without a deploy (user, 2026-09-17) |
 
 ### More time to pay (F-019-g)
 

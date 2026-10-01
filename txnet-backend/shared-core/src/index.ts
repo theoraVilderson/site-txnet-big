@@ -42,6 +42,8 @@ export * from './lib/billing/wallet-ledger';
 export * from './lib/billing/wallet-hold';
 export * from './lib/billing/usage-event';
 export * from './lib/billing/operating-currency';
+export * from './lib/billing/quota-period';
+export * from './lib/billing/reseller-quota';
 export * from './lib/billing/currency-change';
 export * from './lib/currency/fx-rate';
 export * from './lib/catalog/offers';

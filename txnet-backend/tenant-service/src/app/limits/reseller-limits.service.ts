@@ -9,6 +9,9 @@ import {
   RESELLER_QUOTA_KEYS,
   type ResellerLimitKind,
   resellerOveragesOf,
+  ResellerQuota,
+  type QuotaSpend,
+  type QuotaStatement,
   type ResellerQuotaKey,
   RESELLER_LIMIT_KEYS,
   RESELLER_LIMITS,
@@ -68,7 +71,12 @@ export type LimitInEffectRow = ResellerLimitInEffect & {
   kind: ResellerLimitKind;
   used: number | null;
   overage: (OverageView & { source: ResellerLimitInEffect['source'] }) | null;
+  /** A quota's period, what is included and used in it, and what was sold past it (F-019-v2); `null` for a guard. */
+  statement: Pick<QuotaStatement, 'period' | 'includedUsed' | 'overageQty' | 'overageAmount'> | null;
 };
+
+/** The reseller's own cap on overage per subscription month and what it has spent (F-019-v2, ADR-0107 point 6). */
+export type OverageCapView = QuotaSpend;
 
 /** What an audit row says a level held: a value, `null` (no limit), or `'unset'` (no row). */
 type Held = number | null | 'unset';
@@ -165,11 +173,65 @@ export class ResellerLimitsService {
    */
   async ofReseller(actor: ResellerActor, tenantId: string): Promise<LimitInEffectRow[]> {
     const reseller = await this.door.admit(actor, tenantId, 'read');
-    const [limits, used, overages] = await Promise.all([resellerLimitsOf(this.all, reseller.id), resellerUsagesOf(this.all, reseller.id), resellerOveragesOf(this.all, reseller.id)]);
+    const [limits, used, overages, statements] = await Promise.all([
+      resellerLimitsOf(this.all, reseller.id),
+      resellerUsagesOf(this.all, reseller.id),
+      resellerOveragesOf(this.all, reseller.id),
+      Promise.all(RESELLER_QUOTA_KEYS.map((key) => ResellerQuota.statementOf(this.all, reseller.id, key))),
+    ]);
     return limits.map((row) => {
-      const over = isResellerQuotaKey(row.key) ? overages.get(row.key) : undefined;
-      return { ...row, kind: RESELLER_LIMITS[row.key].kind, used: used[row.key], overage: over ? { ...overageView(over), source: over.source } : null };
+      const key = row.key;
+      const over = isResellerQuotaKey(key) ? overages.get(key) : undefined;
+      const st = isResellerQuotaKey(key) ? statements[RESELLER_QUOTA_KEYS.indexOf(key)] : null;
+      return {
+        ...row,
+        kind: RESELLER_LIMITS[row.key].kind,
+        used: used[row.key],
+        overage: over ? { ...overageView(over), source: over.source } : null,
+        statement: st ? { period: st.period, includedUsed: st.includedUsed, overageQty: st.overageQty, overageAmount: st.overageAmount } : null,
+      };
     });
+  }
+
+  /** The reseller's overage cap and this month's spend. A `read`: its owner and team, and the platform's staff. */
+  async overageCapOf(actor: ResellerActor, tenantId: string): Promise<OverageCapView> {
+    const reseller = await this.door.admit(actor, tenantId, 'read');
+    return ResellerQuota.spendOf(this.all, reseller.id);
+  }
+
+  /**
+   * Sets (or, with `null`, removes) the reseller's own cap, in the platform's
+   * currency — the wallet's. A money decision of the reseller's, so the door is
+   * `tenantBilling` (who may top up may bound what overage spends); audited
+   * in the reseller's own log. Lowering it below this month's spend refuses
+   * the next overage unit, never takes back one already sold.
+   */
+  async setOverageCap(actor: ResellerActor & { ip: string }, tenantId: string, amount: string | null): Promise<OverageCapView> {
+    const reseller = await this.door.admit(actor, tenantId, 'tenantBilling');
+    await this.all.$transaction(async (tx) => {
+      const before = await tx.resellerOverageCap.findUnique({ where: { tenantId: reseller.id }, select: { amount: true, currencyCode: true } });
+      if (amount === null) {
+        if (!before) return;
+        await tx.resellerOverageCap.delete({ where: { tenantId: reseller.id } });
+      } else {
+        const data = { amount: new Prisma.Decimal(amount), currencyCode: await platformCurrencyOf(tx), setByUserId: actor.userId };
+        await tx.resellerOverageCap.upsert({ where: { tenantId: reseller.id }, create: { tenantId: reseller.id, ...data }, update: data });
+      }
+      const view = (row: { amount: Prisma.Decimal; currencyCode: string } | null) => (row ? { amount: row.amount.toFixed(2), currencyCode: row.currencyCode } : null);
+      await tx.adminAuditLog.create({
+        data: {
+          tenantId: reseller.id,
+          adminId: actor.userId,
+          action: AdminAction.reseller_overage_cap_set,
+          targetEntityType: AuditTargetType.tenant,
+          targetEntityId: reseller.id,
+          oldValue: { cap: view(before) },
+          newValue: { cap: amount === null ? null : { amount: new Prisma.Decimal(amount).toFixed(2), currencyCode: await platformCurrencyOf(tx) } },
+          adminIpAddress: actor.ip,
+        },
+      });
+    });
+    return ResellerQuota.spendOf(this.all, reseller.id);
   }
 
   async setPlatform(actor: ResellerLimitsActor, key: string, value: number | null): Promise<void> {

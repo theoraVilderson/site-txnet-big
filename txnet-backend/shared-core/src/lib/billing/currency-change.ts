@@ -81,7 +81,7 @@ export type CurrencyChangeSummary = {
   /** Open reseller Grants' wholesale legs (F-118-n2), converted with the platform's money. */
   wholesaleMeters: number;
   usageMeters: number;
-  /** Quota overage prices at the platform's, packages' and resellers' levels (F-019-v1, ADR-0107). */
+  /** Quota overage prices at the platform's, packages' and resellers' levels (F-019-v1), and resellers' overage caps (F-019-v2). */
   quotaOverages: number;
 };
 
@@ -492,7 +492,7 @@ const convertUsageMeters = (c: Conversion) => c.tx.$executeRaw`
 /**
  * A quota's overage price (F-019-v1, ADR-0107 point 2) is paid from the
  * reseller's billing wallet, so it is in the platform's money and converts
- * with it, at every level. Never to nothing: a price the column rounds to zero
+ * with it, at every level — and so does the reseller's cap on it. Never to nothing: a price the column rounds to zero
  * is one minor unit — a free overage is a decision, not a rounding.
  */
 async function convertQuotaOverages(c: Conversion): Promise<number> {
@@ -503,5 +503,8 @@ async function convertQuotaOverages(c: Conversion): Promise<number> {
     UPDATE tenant.package_quota_overage SET "unitPrice" = ${price}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
   const resellers = await c.tx.$executeRaw`
     UPDATE tenant.reseller_quota_overage SET "unitPrice" = ${price}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
-  return platform + packages + resellers;
+  // A reseller's own ceiling on overage (F-019-v2): plain rounding — a cap of 0 stays "no overage at all".
+  const caps = await c.tx.$executeRaw`
+    UPDATE tenant.reseller_overage_cap SET amount = ${money(c, Prisma.sql`amount`)}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
+  return platform + packages + resellers + caps;
 }

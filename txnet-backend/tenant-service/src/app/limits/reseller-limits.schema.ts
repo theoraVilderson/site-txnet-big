@@ -42,3 +42,10 @@ export const setResellersOverageSchema = z.discriminatedUnion('mode', [
 /** Written out rather than inferred: this project's tsconfig infers every field optional, and `mode` is the union's tag. */
 export type SetOverageInput = { mode: 'stop' } | { mode: 'overage'; unitPrice: string };
 export type SetResellersOverageInput = SetOverageInput & { tenantIds: string[]; reason: string };
+
+/** The reseller's own overage cap per subscription month (F-019-v2): an amount ≥ 0 with at most 2 places, or `null` for none. `0` = no overage at all. */
+export const setOverageCapSchema = z
+  .object({ amount: z.string().regex(/^\d{1,16}(\.\d{1,2})?$/, 'amount must be a decimal with at most 2 places').nullable() })
+  .strict();
+
+export type SetOverageCapInput = { amount: string | null };

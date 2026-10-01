@@ -1,5 +1,7 @@
 import { QuotaOverageMode, TenantType, type Prisma } from '@prisma/client';
 
+import type { QuotaPeriodKind } from '../billing/quota-period';
+
 /**
  * What a reseller may do with the platform's shared things (ADR-0106,
  * F-019-m): one registry of keys, each a number bounded at three levels.
@@ -9,8 +11,9 @@ import { QuotaOverageMode, TenantType, type Prisma } from '@prisma/client';
  * the one place that refuses past it — no table changes. `default: null` would
  * be "no limit unless someone sets one".
  *
- * `kind` (ADR-0107 point 1): a `quota` counts units consumed in a period and
- * may be sold past its number (`stop` or `overage`, `resellerOverageOf`); a
+ * `kind` (ADR-0107 point 1): a `quota` counts units consumed in its `period`
+ * (fixed: day, week, or the subscription month — `quota-period.ts`) and may be
+ * sold past its number (`stop` or `overage`, `resellerOverageOf`); a
  * `guard` is a safety or capacity ceiling and always refuses. A guard becomes
  * a quota only by changing its line here, never by a setting.
  */
@@ -30,8 +33,8 @@ export const RESELLER_LIMITS = {
   staff_members_max: { kind: 'guard', default: 20, max: 1000 },
   /** Services one bulk job of the reseller's own people may act on, under billing's fixed 100 000 (F-019-t5). A ceiling: `used` is the job's size. */
   bulk_job_grants_max: { kind: 'guard', default: 10_000, max: 100_000 },
-  /** Campaigns the reseller starts sending in any 24 hours (F-019-t4). */
-  campaign_sends_daily_max: { kind: 'quota', default: 10, max: 1000 },
+  /** Campaigns the reseller starts sending — counted per day once F-019-v4 moves it onto the quota engine; until then in any 24 hours (F-019-t4). */
+  campaign_sends_daily_max: { kind: 'quota', period: 'day', default: 10, max: 1000 },
   /** The reseller's end users, any status, not deleted; a new registration is refused at it (F-019-t2). */
   end_users_max: { kind: 'guard', default: 50_000, max: 10_000_000 },
   /**
@@ -45,7 +48,7 @@ export const RESELLER_LIMITS = {
   user_purchases_daily_max: { kind: 'guard', default: null as number | null, max: 100_000 },
   user_purchases_weekly_max: { kind: 'guard', default: null as number | null, max: 100_000 },
   user_purchases_monthly_max: { kind: 'guard', default: null as number | null, max: 100_000 },
-} as const satisfies Record<string, { kind: ResellerLimitKind; default: number | null; max: number }>;
+} as const satisfies Record<string, { kind: ResellerLimitKind; period?: QuotaPeriodKind; default: number | null; max: number }>;
 
 export type ResellerLimitKey = keyof typeof RESELLER_LIMITS;
 

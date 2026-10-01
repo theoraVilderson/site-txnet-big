@@ -143,6 +143,8 @@ enum AdminAction {
   // F-019-v1 (ADR-0107). What happens past a quota key, set or cleared at one level.
   reseller_overage_set
   reseller_overage_clear
+  // F-019-v2 (ADR-0107 point 6). A reseller's own cap on what overage may cost it per month.
+  reseller_overage_cap_set
 
   @@schema("audit")
 }

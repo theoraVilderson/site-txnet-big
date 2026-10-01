@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 45
+version: 46
 updated: 2026-10-01
 ---
 
@@ -60,8 +60,11 @@ only `quota`; every other key is a `guard`. `RESELLER_QUOTA_KEYS` lists them.
 | No row anywhere is `stop` | refusal is what ADR-0106 did; selling is a decision |
 
 What consumes this — counting, fixed periods, the wallet debit, the
-reseller's spend cap — is F-019-v2; until then a quota key still refuses
-at its number.
+reseller's spend cap — is billing's quota engine (F-019-v2,
+[billing/contract.reseller-quota.md](../billing/contract.reseller-quota.md)).
+A quota key's registry line also names its `period` (`day`, `week`, `month`).
+`campaign_sends_daily_max` is still refused by F-019-t4's own count until
+F-019-v4 moves it onto the engine.
 
 ## What is used (`shared-core/src/lib/tenant/reseller-limit-usage.ts`, F-019-s)
 
@@ -91,7 +94,10 @@ path has three segments or more, so none is read as `GET /api/tenants/:id`.
 | `PUT` / `DELETE /api/tenants/limits/packages/:packageId/:key/overage` | the same | 204 — `DELETE`: back to the platform's |
 | `PUT /api/tenants/limits/resellers/:key/overage` | the same + `{tenantIds, reason}` | `{key, mode, unitPrice, currencyCode, tenantIds}` |
 | `POST /api/tenants/limits/resellers/:key/overage/clear` | `{tenantIds}` | `{key, cleared}` |
-| `GET /api/tenants/:id/limits` (F-019-r, F-019-s, F-019-v1) | — | `[{key, kind, limit, source, used, overage}]` (`overage`: `{mode, unitPrice, currencyCode, source}`, null for a guard) — `resellerLimitsOf` and `resellerUsagesOf` for that reseller, on the cross-tenant pool. **Not** behind the guard: `ResellerAccess.admit(…, 'read')` lets in the reseller's owner, its team and the platform's staff; its refusals are `not_allowed` **403**, `reseller_not_found` **404** (staff only learn it), `reseller_suspended` **403**, `reseller_terminated` **409** |
+| `GET /api/tenants/:id/limits` (F-019-r, F-019-s, F-019-v1, F-019-v2) | — | `[{key, kind, limit, source, used, overage, statement}]` (`overage`: `{mode, unitPrice, currencyCode, source}`; `statement`: `{period: {kind, start, end}, includedUsed, overageQty, overageAmount}` from the engine; both null for a guard) — `resellerLimitsOf` and `resellerUsagesOf` for that reseller, on the cross-tenant pool. **Not** behind the guard: `ResellerAccess.admit(…, 'read')` lets in the reseller's owner, its team and the platform's staff; its refusals are `not_allowed` **403**, `reseller_not_found` **404** (staff only learn it), `reseller_suspended` **403**, `reseller_terminated` **409** |
+
+| `GET /api/tenants/:id/limits/overage-cap` (F-019-v2) | — | `{month: {kind, start, end}, cap: "50.00" \| null, spent, currencyCode}` — `ResellerAccess` `read`, the refusals above |
+| `PUT` the same | `{amount: "50.00" \| null}` (≥ 0, ≤ 2 places; `0` = no overage at all; `null` removes it), strict | the same shape — `ResellerAccess` `tenantBilling`: its owner, its team, the platform's staff; audited `reseller_overage_cap_set` `{cap}` before/after in the **reseller's** log. Stamped with the platform's currency, converted by its change |
 
 | Rule | Why |
 |---|---|

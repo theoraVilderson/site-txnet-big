@@ -1685,7 +1685,9 @@
       "metered_usage_charge": "هزینه‌ی مصرف (ترافیک VPN، عمده)",
       "metered_usage_refund": "بازگشت مصرفِ استفاده‌نشده",
       "sms_usage_charge": "هزینه‌ی پیامک",
-      "currency_change": "تغییر ارز"
+      "currency_change": "تغییر ارز",
+      "quota_overage_charge": "اضافه‌مصرفِ سهمیه (بیش از پکیج)",
+      "quota_overage_refund": "بازگشت اضافه‌مصرفِ سهمیه"
     },
     "topup": "افزایش موجودی",
     "topupPage": {

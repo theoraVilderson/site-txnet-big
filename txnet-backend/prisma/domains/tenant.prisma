@@ -98,6 +98,10 @@ enum TenantBillingReasonType {
   reseller_purchase
   /// F-116-f: the platform's currency changed; a closing and an opening row, `referenceId` = the `billing.currency_change`.
   currency_change
+  /// F-019-v2 (ADR-0107 point 5): units sold past a quota, prepaid at the act; `referenceId` = the `reseller_quota_usage` row.
+  quota_overage_charge
+  /// F-019-v2 (ADR-0107 point 10): an overage charge given back when its act is cancelled; `referenceId` = the same usage row.
+  quota_overage_refund
 
   @@schema("tenant")
 }
@@ -171,6 +175,8 @@ model Tenant {
   smsConfigs          TenantSmsConfig[]
   limits              ResellerLimit[]
   quotaOverages       ResellerQuotaOverage[]
+  quotaUsages         ResellerQuotaUsage[]
+  overageCap          ResellerOverageCap?
   deks                TenantDek[]
   credentials         TenantCredential[]
   subscription        TenantSubscription?
@@ -340,6 +346,8 @@ model TenantSubscriptionSetting {
   suspensionHoldDays Int      @default(7)
   /// F-019-c. Days an unpaid renewal is waited for before the tenant is suspended (CHECK 0..30).
   renewalGraceDays   Int      @default(3)
+  /// F-019-v2 (ADR-0107 point 7). The clock a sold quota's day and week are read on (an IANA zone, checked in code).
+  quotaTimeZone      String   @default("Asia/Tehran")
   updatedByUserId    String?  @db.Uuid
   updatedAt          DateTime @updatedAt
 
@@ -674,6 +682,57 @@ model ResellerQuotaOverage {
 
   @@id([tenantId, key])
   @@map("reseller_quota_overage")
+  @@schema("tenant")
+}
+
+/// ADR-0107 point 4 (F-019-v2): one act's units of one quota meter — the
+/// engine's whole state. One row per (tenant, meter, sourceRef): consuming the
+/// same act again answers the same row. `includedQty + overageQty = qty`; an
+/// overage row carries its price and the `tenant_billing_transaction` that paid
+/// it (`overageAmount = overageQty × unitPrice`, CHECK). Released = given back:
+/// its included units return to the period, its charge to the wallet. Append
+/// and release only. Strict tenant RLS.
+model ResellerQuotaUsage {
+  id                  String    @id @db.Uuid
+  tenantId            String    @db.Uuid
+  meter               String
+  sourceRef           String
+  periodStart         DateTime
+  periodEnd           DateTime
+  qty                 Int
+  includedQty         Int
+  overageQty          Int
+  unitPrice           Decimal?  @db.Decimal(18, 2)
+  overageAmount       Decimal   @default(0) @db.Decimal(18, 2)
+  currencyCode        String?
+  chargeTransactionId String?   @db.Uuid
+  releasedAt          DateTime?
+  refundTransactionId String?   @db.Uuid
+  createdAt           DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, meter, sourceRef])
+  @@index([tenantId, meter, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("reseller_quota_usage")
+  @@schema("tenant")
+}
+
+/// ADR-0107 point 6 (F-019-v2): the most a reseller lets overage cost it per
+/// subscription month, in the platform's currency; reaching it is `stop`. No
+/// row = no cap of its own (the wallet still bounds it). Set by the reseller.
+/// Strict tenant RLS.
+model ResellerOverageCap {
+  tenantId     String   @id @db.Uuid
+  amount       Decimal  @db.Decimal(18, 2)
+  currencyCode String
+  setByUserId  String   @db.Uuid
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("reseller_overage_cap")
   @@schema("tenant")
 }
 

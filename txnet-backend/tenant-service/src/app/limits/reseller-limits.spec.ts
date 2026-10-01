@@ -18,7 +18,7 @@
 import { ResellerAccessRefused, type ResellerAccessRejection } from '@txnet-backend/shared-core';
 
 import { ResellerLimitsRefused, ResellerLimitsService } from './reseller-limits.service';
-import { setLimitSchema, setOverageSchema, setResellersLimitSchema, setResellersOverageSchema, clearResellersLimitSchema } from './reseller-limits.schema';
+import { setLimitSchema, setOverageCapSchema, setOverageSchema, setResellersLimitSchema, setResellersOverageSchema, clearResellersLimitSchema } from './reseller-limits.schema';
 
 const OWNER_TENANT = '11111111-1111-4111-8111-111111111111';
 const RESELLER_A = '22222222-2222-4222-8222-222222222222';
@@ -45,6 +45,7 @@ function build(
   const own = new Map<string, { value: number | null; reason: string }>();
   const resellers = new Set(opts.resellers ?? [RESELLER_A, RESELLER_B]);
   const packages = new Set(opts.packages ?? [PKG]);
+  const cap: { row: { amount: unknown; currencyCode: string } | null } = { row: null };
   type Over = { key: string; mode: string; unitPrice: unknown; currencyCode: string | null };
   const overage = { platform: new Map<string, Over>(), pkg: new Map<string, Over & { packageId: string }>(), own: new Map<string, Over & { tenantId: string; reason: string }>() };
   const keyIn = (where: { key?: string | { in: string[] } }, key: string) => !where.key || (typeof where.key === 'string' ? where.key === key : where.key.in.includes(key));
@@ -119,6 +120,13 @@ function build(
       findFirst: async () => ({ operatingCurrencyCode: 'USD' }),
     },
     tenantSubscription: { findUnique: async () => null },
+    tenantSubscriptionSetting: { findUnique: async () => ({ quotaTimeZone: 'Asia/Tehran' }) },
+    resellerQuotaUsage: { aggregate: async () => ({ _sum: { includedQty: usage.sends || null, overageQty: null, overageAmount: null } }) },
+    resellerOverageCap: {
+      findUnique: async () => cap.row,
+      upsert: async ({ create }: { create: { amount: unknown; currencyCode: string } }) => (writes.push('cap'), (cap.row = create)),
+      delete: async () => (writes.push('cap-clear'), (cap.row = null)),
+    },
     tenantFeaturePackage: { findUnique: async ({ where }: { where: { id: string } }) => (packages.has(where.id) ? { id: where.id } : null) },
     adminAuditLog: { create: async ({ data }: { data: Record<string, unknown> }) => (audit.push(data), {}) },
     grant: { count: async ({ where }: { where: { source?: string } }) => (where.source === 'admin_grant' ? usage.issued : usage.open) },
@@ -324,19 +332,40 @@ describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
     const view = await service.ofReseller(owner, RESELLER_A);
     expect(admitted).toEqual([{ tenantId: RESELLER_A, capability: 'read' }]);
     expect(view).toEqual([
-      { key: 'user_metered_cap_max', kind: 'guard', limit: 20, source: 'default', used: null, overage: null },
-      { key: 'platform_open_grants_max', kind: 'guard', limit: 500, source: 'default', used: 7, overage: null },
-      { key: 'admin_issues_30d_max', kind: 'guard', limit: null, source: 'reseller', used: 4, overage: null },
-      { key: 'custom_domains_max', kind: 'guard', limit: 3, source: 'platform', used: 2, overage: null },
-      { key: 'staff_members_max', kind: 'guard', limit: 20, source: 'default', used: 6, overage: null },
-      { key: 'bulk_job_grants_max', kind: 'guard', limit: 10_000, source: 'default', used: null, overage: null },
-      { key: 'campaign_sends_daily_max', kind: 'quota', limit: 10, source: 'default', used: 1, overage: { mode: 'stop', unitPrice: null, currencyCode: null, source: 'default' } },
-      { key: 'end_users_max', kind: 'guard', limit: 50_000, source: 'default', used: 120, overage: null },
-      { key: 'platform_traffic_gib_monthly_max', kind: 'guard', limit: null, source: 'default', used: 37, overage: null },
-      { key: 'user_purchases_daily_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null },
-      { key: 'user_purchases_weekly_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null },
-      { key: 'user_purchases_monthly_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null },
+      { key: 'user_metered_cap_max', kind: 'guard', limit: 20, source: 'default', used: null, overage: null, statement: null },
+      { key: 'platform_open_grants_max', kind: 'guard', limit: 500, source: 'default', used: 7, overage: null, statement: null },
+      { key: 'admin_issues_30d_max', kind: 'guard', limit: null, source: 'reseller', used: 4, overage: null, statement: null },
+      { key: 'custom_domains_max', kind: 'guard', limit: 3, source: 'platform', used: 2, overage: null, statement: null },
+      { key: 'staff_members_max', kind: 'guard', limit: 20, source: 'default', used: 6, overage: null, statement: null },
+      { key: 'bulk_job_grants_max', kind: 'guard', limit: 10_000, source: 'default', used: null, overage: null, statement: null },
+      { key: 'campaign_sends_daily_max', kind: 'quota', limit: 10, source: 'default', used: 1, overage: { mode: 'stop', unitPrice: null, currencyCode: null, source: 'default' }, statement: { period: expect.objectContaining({ kind: 'day' }), includedUsed: 1, overageQty: 0, overageAmount: '0.00' } },
+      { key: 'end_users_max', kind: 'guard', limit: 50_000, source: 'default', used: 120, overage: null, statement: null },
+      { key: 'platform_traffic_gib_monthly_max', kind: 'guard', limit: null, source: 'default', used: 37, overage: null, statement: null },
+      { key: 'user_purchases_daily_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null, statement: null },
+      { key: 'user_purchases_weekly_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null, statement: null },
+      { key: 'user_purchases_monthly_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null, statement: null },
     ]);
+  });
+
+  it('the reseller sets its own overage cap through the billing door, in the platform\'s money, audited in its own log; null removes it', async () => {
+    const { service, admitted, audit, writes } = build();
+    const view = await service.setOverageCap({ ...owner, ip: '203.0.113.9' }, RESELLER_A, '25.5');
+    expect(admitted).toEqual([{ tenantId: RESELLER_A, capability: 'tenantBilling' }]);
+    expect(view).toMatchObject({ cap: '25.50', spent: '0.00', currencyCode: 'USD', month: expect.objectContaining({ kind: 'month' }) });
+    expect(audit[0]).toMatchObject({
+      tenantId: RESELLER_A,
+      action: 'reseller_overage_cap_set',
+      targetEntityId: RESELLER_A,
+      oldValue: { cap: null },
+      newValue: { cap: { amount: '25.50', currencyCode: 'USD' } },
+    });
+    await expect(service.setOverageCap({ ...owner, ip: '203.0.113.9' }, RESELLER_A, null)).resolves.toMatchObject({ cap: null });
+    expect(audit[1]).toMatchObject({ oldValue: { cap: { amount: '25.50', currencyCode: 'USD' } }, newValue: { cap: null } });
+    // Removing what is not there writes nothing.
+    await service.setOverageCap({ ...owner, ip: '203.0.113.9' }, RESELLER_A, null);
+    expect(writes.filter((w) => w.startsWith('cap'))).toEqual(['cap', 'cap-clear']);
+    expect(audit).toHaveLength(2);
+    await expect(service.overageCapOf(owner, RESELLER_A)).resolves.toMatchObject({ cap: null });
   });
 
   it('is ResellerAccess\'s door: whoever it refuses learns nothing', async () => {
@@ -359,6 +388,10 @@ describe('the bodies', () => {
     expect(setOverageSchema.safeParse({ mode: 'bill_later' }).success).toBe(false);
     expect(setResellersOverageSchema.safeParse({ mode: 'stop', tenantIds: [RESELLER_A], reason: 'r' }).success).toBe(true);
     expect(setResellersOverageSchema.safeParse({ mode: 'overage', unitPrice: '1', tenantIds: [RESELLER_A] }).success).toBe(false);
+    expect(setOverageCapSchema.safeParse({ amount: '0' }).success).toBe(true);
+    expect(setOverageCapSchema.safeParse({ amount: null }).success).toBe(true);
+    expect(setOverageCapSchema.safeParse({ amount: '-1' }).success).toBe(false);
+    expect(setOverageCapSchema.safeParse({}).success).toBe(false);
   });
 
   it('a value is a whole number or null, and required', () => {

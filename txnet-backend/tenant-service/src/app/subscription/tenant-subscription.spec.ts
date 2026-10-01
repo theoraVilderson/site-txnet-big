@@ -156,5 +156,8 @@ describe('TenantSubscriptionService', () => {
     expect(updateSubscriptionSettingsSchema.safeParse({ trialDays: 1.5 }).success).toBe(false);
     expect(updateSubscriptionSettingsSchema.safeParse({ renewalGraceDays: 3 }).success).toBe(true);
     expect(updateSubscriptionSettingsSchema.safeParse({ renewalGraceDays: 31 }).success).toBe(false);
+    // F-019-v2: the clock a sold quota's day and week are read on — a zone the runtime knows, never a guess.
+    expect(updateSubscriptionSettingsSchema.safeParse({ quotaTimeZone: 'Asia/Tehran' }).success).toBe(true);
+    expect(updateSubscriptionSettingsSchema.safeParse({ quotaTimeZone: 'Mars/Olympus' }).success).toBe(false);
   });
 });

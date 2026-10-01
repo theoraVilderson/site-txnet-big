@@ -1,4 +1,5 @@
 import { TenantBillingModel } from '@prisma/client';
+import { isTimeZone } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 /**
@@ -29,16 +30,24 @@ export type PutSubscriptionInput = z.infer<typeof putSubscriptionSchema>;
  * and is charged, at once (F-019-c). `suspensionHoldDays`: how long a
  * suspended tenant's `/sub` links are still served (F-018-f); 0 refuses them
  * at once. `renewalGraceDays`: how long an unpaid renewal is waited for before
- * the reseller is suspended (F-019-c).
+ * the reseller is suspended (F-019-c). `quotaTimeZone`: the IANA zone a sold
+ * quota's day and week are read on (F-019-v2, ADR-0107 point 7).
  */
 export const updateSubscriptionSettingsSchema = z
   .object({
     trialDays: z.number().int().min(0).max(365).optional(),
     suspensionHoldDays: z.number().int().min(0).max(90).optional(),
     renewalGraceDays: z.number().int().min(0).max(30).optional(),
+    quotaTimeZone: z
+      .string()
+      .regex(/^[A-Za-z][A-Za-z0-9_+/-]{0,63}$/)
+      .refine(isTimeZone, { message: 'quotaTimeZone must be an IANA time zone' })
+      .optional(),
   })
   .strict()
-  .refine((v) => v.trialDays !== undefined || v.suspensionHoldDays !== undefined || v.renewalGraceDays !== undefined, { message: 'at least one setting' });
+  .refine((v) => v.trialDays !== undefined || v.suspensionHoldDays !== undefined || v.renewalGraceDays !== undefined || v.quotaTimeZone !== undefined, {
+    message: 'at least one setting',
+  });
 
 export type UpdateSubscriptionSettingsInput = z.infer<typeof updateSubscriptionSettingsSchema>;
 

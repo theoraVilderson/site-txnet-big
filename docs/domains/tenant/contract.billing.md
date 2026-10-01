@@ -39,7 +39,10 @@ of `tenant_billing_wallet.cachedBalance` (invariant 3). The same shape as
 payment for the first period, credited and charged in the purchase's
 transaction, `contract.admin.md`), `metered_usage_charge` /
 `metered_usage_refund` (F-118-h: wholesale units a per-use door buys, and
-gives back unused, `referenceId` the token; billing `contract.usage-rating.md`).
+gives back unused, `referenceId` the token; billing `contract.usage-rating.md`),
+`quota_overage_charge` / `quota_overage_refund` (F-019-v2: units sold past a
+quota at the act, and given back when it is cancelled, `referenceId` the
+`reseller_quota_usage` row; billing `contract.reseller-quota.md`).
 `sms_usage_charge` stays in the enum unused.
 
 **The rate at the boundary (F-116-g, ADR-0098 part 4).** Every writer above

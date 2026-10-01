@@ -28,6 +28,8 @@ import {
   clearResellersLimitSchema,
   SetLimitInput,
   setLimitSchema,
+  SetOverageCapInput,
+  setOverageCapSchema,
   SetOverageInput,
   setOverageSchema,
   SetResellersLimitInput,
@@ -35,7 +37,7 @@ import {
   SetResellersOverageInput,
   setResellersOverageSchema,
 } from './reseller-limits.schema';
-import { LimitInEffectRow, LimitRow, ResellerLimitsActor, ResellerLimitsRefused, ResellerLimitsRejection, ResellerLimitsService } from './reseller-limits.service';
+import { LimitInEffectRow, LimitRow, OverageCapView, ResellerLimitsActor, ResellerLimitsRefused, ResellerLimitsRejection, ResellerLimitsService } from './reseller-limits.service';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
 const STATUS: Record<ResellerLimitsRejection, 403 | 404 | 422> = {
@@ -180,21 +182,36 @@ export class ResellerLimitsOfController {
   constructor(private readonly limits: ResellerLimitsService) {}
 
   @Get()
-  async ofReseller(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string): Promise<LimitInEffectRow[]> {
-    const { userId, tenantId, permissions } = identityOf(req);
-    try {
-      return await this.limits.ofReseller({ userId, tenantId, permissions }, id);
-    } catch (e) {
-      if (!(e instanceof ResellerAccessRefused)) throw e;
-      const payload = { reason: e.reason, message: e.message };
-      switch (ACCESS_STATUS[e.reason]) {
-        case 403:
-          throw new ForbiddenException(payload);
-        case 404:
-          throw new NotFoundException(payload);
-        default:
-          throw new ConflictException(payload);
-      }
+  ofReseller(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string): Promise<LimitInEffectRow[]> {
+    return admitting(() => this.limits.ofReseller(identityOf(req), id));
+  }
+
+  /** The reseller's own overage cap and this month's spend (F-019-v2). */
+  @Get('overage-cap')
+  overageCap(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string): Promise<OverageCapView> {
+    return admitting(() => this.limits.overageCapOf(identityOf(req), id));
+  }
+
+  /** `{amount: "50.00"}` sets it, `{amount: null}` removes it; answers the cap and the spend. */
+  @Put('overage-cap')
+  setOverageCap(@Req() req: Request, @Ip() ip: string, @Param('id', new ParseUUIDPipe()) id: string, @Body(new ZodValidationPipe(setOverageCapSchema)) body: SetOverageCapInput) {
+    return admitting(() => this.limits.setOverageCap({ ...identityOf(req), ip }, id, body.amount));
+  }
+}
+
+async function admitting<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (e) {
+    if (!(e instanceof ResellerAccessRefused)) throw e;
+    const payload = { reason: e.reason, message: e.message };
+    switch (ACCESS_STATUS[e.reason]) {
+      case 403:
+        throw new ForbiddenException(payload);
+      case 404:
+        throw new NotFoundException(payload);
+      default:
+        throw new ConflictException(payload);
     }
   }
 }
