@@ -102,6 +102,8 @@ enum TenantBillingReasonType {
   quota_overage_charge
   /// F-019-v2 (ADR-0107 point 10): an overage charge given back when its act is cancelled; `referenceId` = the same usage row.
   quota_overage_refund
+  /// F-019-v7 (ADR-0107 point 9): an upgrade mid-period, prorated for the days left; `referenceId` = a name-based UUID of (tenant, period end, package, billing model).
+  subscription_upgrade_charge
 
   @@schema("tenant")
 }
@@ -276,7 +278,9 @@ model TenantFeaturePackage {
   // Deactivated: not offered any more; its subscribers keep it until renewal.
   isActive            Boolean  @default(true)
 
-  subscriptions TenantSubscription[]
+  subscriptions TenantSubscription[] @relation("TenantSubscriptionPackage")
+  /// F-019-v7: subscribers whose renewal moves them onto this package.
+  scheduledSubscriptions TenantSubscription[] @relation("TenantSubscriptionNextPackage")
   meterRates    TenantPackageMeterRate[]
   limits        PackageLimit[]
   quotaOverages PackageQuotaOverage[]
@@ -327,13 +331,18 @@ model TenantSubscription {
   renewalWarnedAt  DateTime?
   /// F-019-g. The platform owner's extra time to pay: the renewal does not suspend before it. Cleared by a paid renewal.
   graceUntil       DateTime?
+  /// F-019-v7 (ADR-0107 point 9). A package and period that wait for the renewal: a downgrade, yearly -> monthly. Both set or both null (CHECK); the renewal applies and clears them.
+  nextPackageId    String?   @db.Uuid
+  nextBillingModel TenantBillingModel?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  tenant  Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  package TenantFeaturePackage @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  package     TenantFeaturePackage  @relation("TenantSubscriptionPackage", fields: [packageId], references: [id], onDelete: Restrict)
+  nextPackage TenantFeaturePackage? @relation("TenantSubscriptionNextPackage", fields: [nextPackageId], references: [id], onDelete: Restrict)
 
   @@index([packageId])
+  @@index([nextPackageId])
   @@index([currentPeriodEnd])
   @@map("tenant_subscription")
   @@schema("tenant")

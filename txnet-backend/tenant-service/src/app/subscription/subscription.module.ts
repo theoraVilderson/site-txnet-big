@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { TenantBillingLedger } from '@txnet-backend/shared-core';
+import { ResellerAccess, TenantBillingLedger } from '@txnet-backend/shared-core';
 
 import { TenantRenewalInternalController } from '../renewal/tenant-renewal-internal.controller';
 import { TenantRenewalService } from '../renewal/tenant-renewal.service';
-import { TenantSubscriptionController } from './tenant-subscription.controller';
+import { ResellerSubscriptionChangeController, TenantSubscriptionController } from './tenant-subscription.controller';
 import { TenantSubscriptionService } from './tenant-subscription.service';
 
 /**
@@ -20,7 +20,7 @@ import { TenantSubscriptionService } from './tenant-subscription.service';
  * tables (ADR-0056).
  */
 @Module({
-  controllers: [TenantSubscriptionController, TenantRenewalInternalController],
-  providers: [TenantSubscriptionService, TenantRenewalService, TenantBillingLedger],
+  controllers: [TenantSubscriptionController, ResellerSubscriptionChangeController, TenantRenewalInternalController],
+  providers: [TenantSubscriptionService, TenantRenewalService, TenantBillingLedger, ResellerAccess],
 })
 export class SubscriptionModule {}

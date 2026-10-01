@@ -60,7 +60,7 @@ describe('TenantSubscriptionService.grantGrace', () => {
       tenantSubscriptionSetting: { findUnique: vi.fn(async () => ({ renewalGraceDays: 3 })) },
       $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
     };
-    return { service: new TenantSubscriptionService(prisma as never, all as never), all, tx, writes };
+    return { service: new TenantSubscriptionService(prisma as never, all as never, {} as never, {} as never), all, tx, writes };
   };
 
   const input = { days: 7, reason: 'bank transfer delayed' };

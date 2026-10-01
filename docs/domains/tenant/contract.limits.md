@@ -87,7 +87,7 @@ listing's terms change, before it is taken off, and before a package switch;
 `productQuotaTermsOf` takes the kinder part window by window. A listing taken
 off is still sold, on its locked terms, until the period ends.
 
-An upgrade that applies at once and clears the lock is F-019-v7.
+A paid upgrade applies at once and deletes the period's lock rows, so the new package's terms apply (F-019-v7, `contract.admin.md`).
 
 ## What is used (`shared-core/src/lib/tenant/reseller-limit-usage.ts`, F-019-s)
 

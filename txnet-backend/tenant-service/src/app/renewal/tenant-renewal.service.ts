@@ -57,10 +57,11 @@ type LockedTenant = {
   ownerUserId: string;
 };
 
-/** `from` plus one calendar period (UTC), clamped to the month's last day: Jan 31 -> Feb 28. */
-export function addBillingPeriod(from: Date, model: TenantBillingModel): Date {
-  const months = MONTHS_OF[model];
-  if (!months) throw new Error(`billing model ${model} has no subscription period`);
+/** `from` plus `periods` calendar periods (UTC; `-1` steps back to a period's start), clamped to the month's last day: Jan 31 -> Feb 28. */
+export function addBillingPeriod(from: Date, model: TenantBillingModel, periods = 1): Date {
+  const perPeriod = MONTHS_OF[model];
+  if (!perPeriod) throw new Error(`billing model ${model} has no subscription period`);
+  const months = perPeriod * periods;
   const target = new Date(from.getTime());
   const day = target.getUTCDate();
   target.setUTCDate(1);
@@ -81,7 +82,12 @@ export function renewalDeadline(periodEnd: Date, renewalGraceDays: number, grace
 
 /** The charge's `referenceId`: a name-based UUID of the tenant and the period end it pays for, so a period is charged once. */
 export function periodChargeReference(tenantId: string, periodEnd: Date): string {
-  const h = createHash('sha1').update(`tenant-subscription:${tenantId}:${periodEnd.toISOString()}`).digest('hex');
+  return nameBasedUuid(`tenant-subscription:${tenantId}:${periodEnd.toISOString()}`);
+}
+
+/** A version-5-shaped UUID from a name: the same name, the same id. */
+export function nameBasedUuid(name: string): string {
+  const h = createHash('sha1').update(name).digest('hex');
   const variant = ((parseInt(h[16], 16) & 0x3) | 0x8).toString(16);
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-${variant}${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
@@ -129,9 +135,11 @@ export class TenantRenewalService {
     if (!settings) throw new Error('tenant_subscription_setting row is missing — run the migrations');
 
     const outcome = await this.all.$transaction(async (tx) => {
-      const sub = await tx.tenantSubscription.findUnique({ where: { tenantId }, select: { packageId: true } });
+      const sub = await tx.tenantSubscription.findUnique({ where: { tenantId }, select: { packageId: true, nextPackageId: true } });
       if (!sub) return 'skipped';
       await lockPackage(tx, sub.packageId, 'share');
+      // A package scheduled for this renewal (F-019-v7) is read under the same kind of lock.
+      if (sub.nextPackageId && sub.nextPackageId !== sub.packageId) await lockPackage(tx, sub.nextPackageId, 'share');
       const [tenant] = await tx.$queryRaw<LockedTenant[]>`
         SELECT id, "tenantType", status, "suspensionCause", "billingModel", "ownerUserId"
         FROM "tenant"."tenant"
@@ -146,16 +154,30 @@ export class TenantRenewalService {
           currentPeriodEnd: true,
           renewalWarnedAt: true,
           graceUntil: true,
+          nextPackageId: true,
+          nextBillingModel: true,
           package: { select: { monthlyPrice: true, yearlyPrice: true, includedFeatureKeys: true } },
+          nextPackage: { select: { monthlyPrice: true, yearlyPrice: true, includedFeatureKeys: true } },
         },
       });
       if (!current || current.packageId !== sub.packageId) throw new Error(`tenant ${tenantId} changed package during its renewal`);
       if (current.currentPeriodEnd > now) return 'not_due';
 
-      const priceField = PRICE_OF[tenant.billingModel];
-      const price = priceField ? current.package[priceField] : null;
+      // A change that waited for this renewal — a downgrade, yearly -> monthly (F-019-v7) — is what this period is
+      // charged and served on. One whose price was cleared since is dropped, and the reseller renews where it is.
+      const nextField = current.nextBillingModel ? PRICE_OF[current.nextBillingModel] : undefined;
+      const scheduled =
+        current.nextPackageId && current.nextBillingModel && current.nextPackage && nextField && current.nextPackage[nextField]
+          ? { packageId: current.nextPackageId, model: current.nextBillingModel, pkg: current.nextPackage }
+          : null;
+      if (current.nextPackageId && !scheduled) this.logger.warn(`tenant ${tenantId}'s scheduled package has no price for its period; renewing on the current one`);
+      const model = scheduled?.model ?? tenant.billingModel;
+      const pkg = scheduled?.pkg ?? current.package;
+
+      const priceField = PRICE_OF[model];
+      const price = priceField ? pkg[priceField] : null;
       // `package_price_in_use` refuses clearing a price a subscriber's period uses, so this is a broken row, not a business case.
-      if (!price) throw new Error(`tenant ${tenantId}'s package has no price for ${tenant.billingModel}`);
+      if (!price) throw new Error(`tenant ${tenantId}'s package has no price for ${model}`);
 
       const wallet = await tx.tenantBillingWallet.findUnique({ where: { tenantId }, select: { cachedBalance: true } });
       const balance = wallet?.cachedBalance ?? new Prisma.Decimal(0);
@@ -168,11 +190,13 @@ export class TenantRenewalService {
           reasonType: TenantBillingReasonType.subscription_charge,
           referenceId: periodChargeReference(tenantId, current.currentPeriodEnd),
         });
-        let next = addBillingPeriod(unpaidSuspension ? now : current.currentPeriodEnd, tenant.billingModel);
+        let next = addBillingPeriod(unpaidSuspension ? now : current.currentPeriodEnd, model);
         // A sweep that did not run for a whole period does not charge the missed ones back to back.
-        if (next <= now) next = addBillingPeriod(now, tenant.billingModel);
-        await tx.tenantSubscription.update({ where: { tenantId }, data: { currentPeriodEnd: next, renewalWarnedAt: null, graceUntil: null } });
-        await replacePackageEntitlements(tx, [tenantId], current.package.includedFeatureKeys as string[]);
+        if (next <= now) next = addBillingPeriod(now, model);
+        const switching = current.nextPackageId ? { packageId: scheduled?.packageId ?? current.packageId, nextPackageId: null, nextBillingModel: null } : {};
+        await tx.tenantSubscription.update({ where: { tenantId }, data: { currentPeriodEnd: next, renewalWarnedAt: null, graceUntil: null, ...switching } });
+        if (model !== tenant.billingModel) await tx.tenant.update({ where: { id: tenantId }, data: { billingModel: model } });
+        await replacePackageEntitlements(tx, [tenantId], pkg.includedFeatureKeys as string[]);
         if (tenant.status === TenantStatus.trial || unpaidSuspension) {
           await applyTenantStatus(tx, tenantId, { from: tenant.status, to: TenantStatus.active, reason: 'subscription_renewed', actorUserId: null, now });
         }

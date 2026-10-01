@@ -131,21 +131,29 @@ after it is on the cross-tenant pool.
 |---|---|---|
 | `PUT /api/tenants/:id/subscription` | `{packageId, billingModel}`, `.strict()` | a subscription view |
 | `GET /api/tenants/:id/subscription` | — | a subscription view |
+| `GET /api/tenants/:id/subscription/change?packageId&billingModel` (F-019-v7; `ResellerAccess` `read`) | — | `{when: now\|renewal\|none, charge, currencyCode, balance, currentPeriodEnd}` — nothing written |
+| `POST /api/tenants/:id/subscription/change` (F-019-v7; `ResellerAccess` `tenantBilling`) | as `PUT` | `200` a subscription view |
 | `POST /api/tenants/:id/subscription/grace` | `{days, reason}` — integer 1..90, 1..500 chars, `.strict()` | `200 {tenantId, currentPeriodEnd, graceUntil, status, suspensionCause}` |
 | `GET /api/tenant-subscription-settings` | — | `{trialDays, suspensionHoldDays, renewalGraceDays, quotaTimeZone}` |
 | `PATCH /api/tenant-subscription-settings` | `{trialDays?, suspensionHoldDays?, renewalGraceDays?, quotaTimeZone?}` — integers 0..365 / 0..90 / 0..30, an IANA zone the runtime knows, at least one, `.strict()` | `{trialDays, suspensionHoldDays, renewalGraceDays, quotaTimeZone}` |
 
 A subscription view: `tenantId, packageId, packageName, billingModel,
-currentPeriodEnd, startedAt, includedFeatureKeys`. Refusals:
-`not_platform_owner` 403; `reseller_not_found`, `subscription_not_found`,
-`package_not_found` 404; `reseller_terminated` 409; `package_inactive`,
-`package_not_sold_for_period` 422.
+currentPeriodEnd, startedAt, includedFeatureKeys, next` (`{packageId,
+billingModel}` waiting for the renewal, or null) and, on a write, `charged`.
+Refusals: `not_platform_owner` 403; `reseller_not_found`, `subscription_not_found`,
+`package_not_found` 404; `reseller_terminated`, `insufficient_balance` 409;
+`package_inactive`, `package_not_sold_for_period` 422. The reseller's two
+routes answer `ResellerAccess`'s refusals first; they never start a subscription.
 
 | Rule | Why |
 |---|---|
 | One `tenant_subscription` row per tenant: the package and `currentPeriodEnd`. The period is `tenant.billingModel`, which a `PUT` sets | one place for the period; F-018-c already writes it |
 | **The first package starts the trial:** `currentPeriodEnd` = now + `trialDays`. Creating a reseller starts nothing | without a package there is nothing to try (user, 2026-09-17) |
-| **A later `PUT` keeps `currentPeriodEnd`** — a new package or period is charged at that renewal. No proration. Another package first locks the reseller's quota terms for the period (`contract.limits.md`, F-019-v3): a kinder package's apply at once, a meaner one's at the renewal | no charge here; the first charge and every renewal are `contract.billing.md` "Subscription renewal" (user, 2026-09-17) |
+| **A later change, by `PUT` or the reseller's own `POST`, is one rule** (F-019-v7, ADR-0107 point 9, `subscription/package-change.ts`). **Paid period** (not `trial`, `currentPeriodEnd` in the future): a package priced higher on the same period applies **at once**, debiting (new − old) × days left / days in the period; **monthly -> yearly** applies at once, debiting the year's price less the month's unused days, and the year starts now — unless the new package is cheaper by the year. Anything else — a cheaper or equal package, yearly -> monthly — is written to `next` and applied by the renewal | an upgrade unlocks a stopped reseller now; a quota is never used high and paid low, and a year paid is never refunded (user, 2026-10-01) |
+| Prices are the packages' current ones, platform currency; whole days, a day begun counted as left; the charge rounded half up to the cent. A wallet short of it is `insufficient_balance`, before any write. The debit is `subscription_upgrade_charge`, `referenceId` a name-based UUID of (tenant, period end, package, period kind) | prepaid only (invariant 14); a retried change is charged once (invariant 15) |
+| A paid change at once deletes the period's `reseller_quota_terms_lock` rows: the new package's terms apply now (ADR-0107 point 8) | the platform's own changes held for the period apply with it — the upgrade starts fresh terms |
+| **Unpaid period** (`trial`, or `currentPeriodEnd` passed): any change applies at once and free, as before — the renewal charges the new price. Another package first locks the quota terms (`contract.limits.md`, F-019-v3) | nothing paid, nothing to prorate |
+| Asking for the package and period it is on clears `next`; a later change replaces it | one change waits at a time |
 | The package must have a price for the period asked | a package may be sold for one period only (F-018-d) |
 | An inactive package is refused unless the tenant is already on it | a deactivated package keeps its subscribers and takes no new ones |
 | A `terminated` reseller is refused; `trial`, `active`, `suspended` are not | what each status blocks is F-018-f |

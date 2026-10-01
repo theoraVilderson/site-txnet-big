@@ -29,7 +29,7 @@ describe('TenantSubscriptionService', () => {
     callerType?: string;
     reseller?: { id: string; status: string; billingModel: string } | null;
     pkg?: { id: string; name: string; monthlyPrice: unknown; yearlyPrice: unknown; includedFeatureKeys: string[]; isActive: boolean } | null;
-    current?: { packageId: string; currentPeriodEnd: Date; createdAt: Date } | null;
+    current?: { packageId: string; currentPeriodEnd: Date; createdAt: Date; package?: { name: string } } | null;
     trialDays?: number;
   };
 
@@ -54,10 +54,11 @@ describe('TenantSubscriptionService', () => {
             : { ...create, createdAt: new Date() };
         }),
       },
-      tenant: { update: vi.fn(async () => (writes.push('tenant'), {})) },
+      tenant: { findUnique: vi.fn(async () => reseller), update: vi.fn(async () => (writes.push('tenant'), {})) },
       tenantFeatureEntitlement: {
         deleteMany: vi.fn(async () => (writes.push('entitlements.delete'), { count: 1 })),
         createMany: vi.fn(async () => (writes.push('entitlements.create'), { count: 2 })),
+        findMany: vi.fn(async () => []),
       },
       tenantBillingTransaction: { create: vi.fn() },
       adminAuditLog: { create: vi.fn(async () => (writes.push('audit'), {})) },
@@ -69,7 +70,7 @@ describe('TenantSubscriptionService', () => {
       tenantSubscriptionSetting: { findUnique: vi.fn(async () => ({ trialDays: opts.trialDays ?? 14 })) },
       $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
     };
-    return { service: new TenantSubscriptionService(prisma as never, all as never), all, tx, writes };
+    return { service: new TenantSubscriptionService(prisma as never, all as never, {} as never, {} as never), all, tx, writes };
   };
 
   const put = { packageId: PKG, billingModel: 'subscription_monthly' as const };
@@ -118,7 +119,8 @@ describe('TenantSubscriptionService', () => {
 
     expect(all.tenantSubscriptionSetting.findUnique).not.toHaveBeenCalled();
     const upsert = (tx.tenantSubscription.upsert.mock.calls[0] as unknown as [{ update: Record<string, unknown> }])[0];
-    expect(upsert.update).toEqual({ packageId: PKG });
+    // An unpaid period (a trial) changes at once and free; a change that was waiting is dropped (F-019-v7).
+    expect(upsert.update).toEqual({ packageId: PKG, currentPeriodEnd: periodEnd, nextPackageId: null, nextBillingModel: null });
     expect(tx.tenant.update).toHaveBeenCalledWith({ where: { id: RESELLER }, data: { billingModel: 'subscription_yearly' } });
     expect(view.currentPeriodEnd).toEqual(periodEnd);
     expect(view.includedFeatureKeys).toEqual(['own_sms']);
@@ -140,7 +142,7 @@ describe('TenantSubscriptionService', () => {
     const fresh = build({ pkg: inactive });
     await expect(fresh.service.put(actor, RESELLER, put)).rejects.toMatchObject({ reason: 'package_inactive' });
 
-    const kept = build({ pkg: inactive, current: { packageId: PKG, currentPeriodEnd: new Date(), createdAt: new Date() } });
+    const kept = build({ pkg: inactive, current: { packageId: PKG, currentPeriodEnd: new Date(), createdAt: new Date(), package: { name: 'Growth' } } });
     await expect(kept.service.put(actor, RESELLER, put)).resolves.toMatchObject({ packageId: PKG });
   });
 

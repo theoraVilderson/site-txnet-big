@@ -42,7 +42,9 @@ transaction, `contract.admin.md`), `metered_usage_charge` /
 gives back unused, `referenceId` the token; billing `contract.usage-rating.md`),
 `quota_overage_charge` / `quota_overage_refund` (F-019-v2: units sold past a
 quota at the act, and given back when it is cancelled, `referenceId` the
-`reseller_quota_usage` row; billing `contract.reseller-quota.md`).
+`reseller_quota_usage` row; billing `contract.reseller-quota.md`),
+`subscription_upgrade_charge` (F-019-v7: an upgrade mid-period, prorated;
+`contract.admin.md`).
 `sms_usage_charge` stays in the enum unused.
 
 **The rate at the boundary (F-116-g, ADR-0098 part 4).** Every writer above
@@ -174,6 +176,7 @@ invariant is 19.
 | **Paid** (`cachedBalance >= price`): one `subscription_charge` debit, `referenceId` = a name-based UUID of (tenant, the `currentPeriodEnd` it pays for) | a period is charged once; invariant 15 stands behind the lock |
 | The new `currentPeriodEnd` = one calendar month / year (UTC, clamped to the month end) from the old end — or **from now** after a `non_payment` suspension; if that is still not in the future, from now | paid in grace, the grace days were used; paid after suspension, those days were not served (user, 2026-09-17); a stopped sweep never charges missed periods back to back |
 | The same transaction clears `renewalWarnedAt` and `graceUntil` and replaces the tenant's `package_included` entitlements with the package's keys | F-018-o: a key removed from the package goes at renewal |
+| **A change waiting in `next`** (F-019-v7, `contract.admin.md`) is what the renewal charges and serves: its package's price for its period, its keys, its `billingModel`; applied and cleared only when paid. One whose price was cleared since is dropped with a warning and the reseller renews where it is. Both packages are locked `FOR SHARE` before the tenant | a downgrade takes effect exactly when the period it waited for ends |
 | **Short:** nothing is debited — prepaid only (invariant 14) | D-01 |
 | Short before the deadline — `currentPeriodEnd` + `renewalGraceDays`, or the platform owner's later `graceUntil` (F-019-g, `contract.admin.md`) — warns; at or after it, suspends | more time is given by moving the deadline, not by crediting money that never arrived |
 | Every notice is an outbox row in the renewal's transaction: `tenant.subscription.payment_due` `{tenantId, ownerUserId, amount, balance, suspendsAt}`, `tenant.subscription.suspended` `{tenantId, ownerUserId, amount, balance}` | a warning is owed exactly when the state that caused it committed (ADR-0021) |
