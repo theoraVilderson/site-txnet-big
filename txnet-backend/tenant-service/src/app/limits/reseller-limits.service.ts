@@ -3,12 +3,14 @@ import { AdminAction, AuditTargetType, Prisma, QuotaOverageMode, TenantType } fr
 import {
   isResellerLimitKey,
   isResellerQuotaKey,
+  lockQuotaTerms,
   overageTermsOf,
+  type QuotaLockScope,
+  quotaTermsInEffectOf,
   platformCurrencyOf,
   type QuotaOverageTerms,
   RESELLER_QUOTA_KEYS,
   type ResellerLimitKind,
-  resellerOveragesOf,
   ResellerQuota,
   type QuotaSpend,
   type QuotaStatement,
@@ -73,6 +75,8 @@ export type LimitInEffectRow = ResellerLimitInEffect & {
   overage: (OverageView & { source: ResellerLimitInEffect['source'] }) | null;
   /** A quota's period, what is included and used in it, and what was sold past it (F-019-v2); `null` for a guard. */
   statement: Pick<QuotaStatement, 'period' | 'includedUsed' | 'overageQty' | 'overageAmount'> | null;
+  /** A quota whose terms the platform changed this period: the end of the period they hold until (F-019-v3); else null. */
+  lockedUntil: Date | null;
 };
 
 /** The reseller's own cap on overage per subscription month and what it has spent (F-019-v2, ADR-0107 point 6). */
@@ -173,22 +177,26 @@ export class ResellerLimitsService {
    */
   async ofReseller(actor: ResellerActor, tenantId: string): Promise<LimitInEffectRow[]> {
     const reseller = await this.door.admit(actor, tenantId, 'read');
-    const [limits, used, overages, statements] = await Promise.all([
+    const [limits, used, statements, terms] = await Promise.all([
       resellerLimitsOf(this.all, reseller.id),
       resellerUsagesOf(this.all, reseller.id),
-      resellerOveragesOf(this.all, reseller.id),
       Promise.all(RESELLER_QUOTA_KEYS.map((key) => ResellerQuota.statementOf(this.all, reseller.id, key))),
+      Promise.all(RESELLER_QUOTA_KEYS.map((key) => quotaTermsInEffectOf(this.all, reseller.id, key))),
     ]);
     return limits.map((row) => {
       const key = row.key;
-      const over = isResellerQuotaKey(key) ? overages.get(key) : undefined;
-      const st = isResellerQuotaKey(key) ? statements[RESELLER_QUOTA_KEYS.indexOf(key)] : null;
+      const at = isResellerQuotaKey(key) ? RESELLER_QUOTA_KEYS.indexOf(key) : -1;
+      const st = at >= 0 ? statements[at] : null;
+      // A quota shows the terms the engine applies: the period's locked ones where kinder (F-019-v3).
+      const t = at >= 0 ? terms[at] : null;
       return {
         ...row,
+        ...(t ? { limit: t.included, source: t.includedSource } : {}),
         kind: RESELLER_LIMITS[row.key].kind,
         used: used[row.key],
-        overage: over ? { ...overageView(over), source: over.source } : null,
+        overage: t ? { ...overageView(t.overage), source: t.overageSource } : null,
         statement: st ? { period: st.period, includedUsed: st.includedUsed, overageQty: st.overageQty, overageAmount: st.overageAmount } : null,
+        lockedUntil: t?.lockedUntil ?? null,
       };
     });
   }
@@ -238,6 +246,7 @@ export class ResellerLimitsService {
     const k = await this.writable(actor, key, value);
     await this.all.$transaction(async (tx) => {
       const before = await tx.resellerLimitSetting.findUnique({ where: { key: k }, select: { value: true } });
+      await freeze(tx, k, { everyReseller: true });
       await tx.resellerLimitSetting.upsert({
         where: { key: k },
         create: { key: k, value, updatedByUserId: actor.adminId },
@@ -252,6 +261,7 @@ export class ResellerLimitsService {
     await this.all.$transaction(async (tx) => {
       const before = await tx.resellerLimitSetting.findUnique({ where: { key: k }, select: { value: true } });
       if (!before) return;
+      await freeze(tx, k, { everyReseller: true });
       await tx.resellerLimitSetting.deleteMany({ where: { key: k } });
       await tx.adminAuditLog.create({ data: this.audit(actor, AdminAction.reseller_limit_clear, 'platform', k, before.value, 'unset') });
     });
@@ -263,6 +273,7 @@ export class ResellerLimitsService {
       if (!(await tx.tenantFeaturePackage.findUnique({ where: { id: packageId }, select: { id: true } }))) throw new ResellerLimitsRefused('package_not_found', packageId);
       const where = { packageId_key: { packageId, key: k } };
       const before = await tx.packageLimit.findUnique({ where, select: { value: true } });
+      await freeze(tx, k, { packageId });
       await tx.packageLimit.upsert({ where, create: { packageId, key: k, value, updatedByUserId: actor.adminId }, update: { value, updatedByUserId: actor.adminId } });
       await tx.adminAuditLog.create({
         data: this.audit(actor, AdminAction.reseller_limit_set, 'package', k, before ? before.value : 'unset', value, { type: AuditTargetType.tenant_feature_package, id: packageId }),
@@ -275,6 +286,7 @@ export class ResellerLimitsService {
     await this.all.$transaction(async (tx) => {
       const before = await tx.packageLimit.findUnique({ where: { packageId_key: { packageId, key: k } }, select: { value: true } });
       if (!before) return;
+      await freeze(tx, k, { packageId });
       await tx.packageLimit.deleteMany({ where: { packageId, key: k } });
       await tx.adminAuditLog.create({
         data: this.audit(actor, AdminAction.reseller_limit_clear, 'package', k, before.value, 'unset', { type: AuditTargetType.tenant_feature_package, id: packageId }),
@@ -290,6 +302,7 @@ export class ResellerLimitsService {
       const before = new Map(
         (await tx.resellerLimit.findMany({ where: { key: k, tenantId: { in: tenantIds } }, select: { tenantId: true, value: true } })).map((r) => [r.tenantId, r.value]),
       );
+      await freeze(tx, k, { tenantIds });
       for (const tenantId of tenantIds) {
         await tx.resellerLimit.upsert({
           where: { tenantId_key: { tenantId, key: k } },
@@ -312,6 +325,7 @@ export class ResellerLimitsService {
     const cleared = await this.all.$transaction(async (tx) => {
       const rows = await tx.resellerLimit.findMany({ where: { key: k, tenantId: { in: tenantIds } }, select: { tenantId: true, value: true } });
       if (rows.length === 0) return 0;
+      await freeze(tx, k, { tenantIds: rows.map((r) => r.tenantId) });
       await tx.resellerLimit.deleteMany({ where: { key: k, tenantId: { in: rows.map((r) => r.tenantId) } } });
       for (const r of rows) {
         await tx.adminAuditLog.create({ data: this.audit(actor, AdminAction.reseller_limit_clear, 'reseller', k, r.value, 'unset', { type: AuditTargetType.tenant, id: r.tenantId }) });
@@ -327,6 +341,7 @@ export class ResellerLimitsService {
     await this.all.$transaction(async (tx) => {
       const data = await this.overageData(tx, input, actor.adminId);
       const before = await tx.quotaOverageSetting.findUnique({ where: { key: k }, select: OVERAGE_SELECT });
+      await freeze(tx, k, { everyReseller: true });
       await tx.quotaOverageSetting.upsert({ where: { key: k }, create: { key: k, ...data }, update: data });
       await tx.adminAuditLog.create({ data: this.overageAudit(actor, AdminAction.reseller_overage_set, 'platform', k, held(before), viewOf(data)) });
     });
@@ -337,6 +352,7 @@ export class ResellerLimitsService {
     await this.all.$transaction(async (tx) => {
       const before = await tx.quotaOverageSetting.findUnique({ where: { key: k }, select: OVERAGE_SELECT });
       if (!before) return;
+      await freeze(tx, k, { everyReseller: true });
       await tx.quotaOverageSetting.deleteMany({ where: { key: k } });
       await tx.adminAuditLog.create({ data: this.overageAudit(actor, AdminAction.reseller_overage_clear, 'platform', k, held(before), 'unset') });
     });
@@ -349,6 +365,7 @@ export class ResellerLimitsService {
       const data = await this.overageData(tx, input, actor.adminId);
       const where = { packageId_key: { packageId, key: k } };
       const before = await tx.packageQuotaOverage.findUnique({ where, select: OVERAGE_SELECT });
+      await freeze(tx, k, { packageId });
       await tx.packageQuotaOverage.upsert({ where, create: { packageId, key: k, ...data }, update: data });
       await tx.adminAuditLog.create({
         data: this.overageAudit(actor, AdminAction.reseller_overage_set, 'package', k, held(before), viewOf(data), { type: AuditTargetType.tenant_feature_package, id: packageId }),
@@ -361,6 +378,7 @@ export class ResellerLimitsService {
     await this.all.$transaction(async (tx) => {
       const before = await tx.packageQuotaOverage.findUnique({ where: { packageId_key: { packageId, key: k } }, select: OVERAGE_SELECT });
       if (!before) return;
+      await freeze(tx, k, { packageId });
       await tx.packageQuotaOverage.deleteMany({ where: { packageId, key: k } });
       await tx.adminAuditLog.create({
         data: this.overageAudit(actor, AdminAction.reseller_overage_clear, 'package', k, held(before), 'unset', { type: AuditTargetType.tenant_feature_package, id: packageId }),
@@ -377,6 +395,7 @@ export class ResellerLimitsService {
       const before = new Map(
         (await tx.resellerQuotaOverage.findMany({ where: { key: k, tenantId: { in: tenantIds } }, select: { tenantId: true, ...OVERAGE_SELECT } })).map((r) => [r.tenantId, r]),
       );
+      await freeze(tx, k, { tenantIds });
       for (const tenantId of tenantIds) {
         const data = { ...terms, reason, setByUserId: updatedByUserId };
         await tx.resellerQuotaOverage.upsert({ where: { tenantId_key: { tenantId, key: k } }, create: { tenantId, key: k, ...data }, update: data });
@@ -395,6 +414,7 @@ export class ResellerLimitsService {
     const cleared = await this.all.$transaction(async (tx) => {
       const rows = await tx.resellerQuotaOverage.findMany({ where: { key: k, tenantId: { in: tenantIds } }, select: { tenantId: true, ...OVERAGE_SELECT } });
       if (rows.length === 0) return 0;
+      await freeze(tx, k, { tenantIds: rows.map((r) => r.tenantId) });
       await tx.resellerQuotaOverage.deleteMany({ where: { key: k, tenantId: { in: rows.map((r) => r.tenantId) } } });
       for (const r of rows) {
         await tx.adminAuditLog.create({ data: this.overageAudit(actor, AdminAction.reseller_overage_clear, 'reseller', k, held(r), 'unset', { type: AuditTargetType.tenant, id: r.tenantId }) });
@@ -489,6 +509,15 @@ export class ResellerLimitsService {
       reason,
     };
   }
+}
+
+/**
+ * Before a quota key's terms change at any level, the resellers it reaches keep
+ * theirs for the period they paid for (ADR-0107 point 8, F-019-v3). A guard is
+ * never locked: it is protection, not something sold.
+ */
+async function freeze(tx: Prisma.TransactionClient, key: ResellerLimitKey, scope: QuotaLockScope): Promise<void> {
+  if (isResellerQuotaKey(key)) await lockQuotaTerms(tx, scope, [key]);
 }
 
 function viewOf(row: { mode: QuotaOverageMode; unitPrice: Prisma.Decimal | null; currencyCode: string | null }): OverageView {

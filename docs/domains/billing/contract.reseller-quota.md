@@ -22,7 +22,7 @@ Proof: `shared-core/src/lib/billing/reseller-quota.spec.ts`.
 
 | Call | Does |
 |---|---|
-| `ResellerQuota.consume(tx, {tenantId, meter, qty, sourceRef, now?})` | a registry quota key: resolves its number (`resellerLimitOf`) and overage (`resellerOverageOf`), then `consumeMeter` |
+| `ResellerQuota.consume(tx, {tenantId, meter, qty, sourceRef, now?})` | a registry quota key: resolves its terms (`quotaTermsOf`: number and overage at their levels, held for the paid period — tenant `contract.limits.md`, F-019-v3), then `consumeMeter` |
 | `ResellerQuota.consumeMeter(tx, {tenantId, terms, qty, sourceRef, now?})` | against `QuotaMeterTerms` the caller resolved (`{meter, period, included, overage}`) — how a meter not in the registry (a product's sales, F-019-v6) uses the same engine |
 | `ResellerQuota.release(tx, {tenantId, sourceRef, now?})` | gives back every live row of the act, in meter order → `{released, refunded: [{amount, currencyCode}]}` |
 | `ResellerQuota.statementOf(tx, tenantId, key, now?)` | `{meter, period, included, includedUsed, overageQty, overageAmount, overage, spend}` — "10 included, 4 used, 2 extra today" |
@@ -65,5 +65,5 @@ reseller's statement already list every quota key.
 ## Not yet
 
 The first consumer is F-019-v4 (`campaign_sends_daily_max`, still counted
-by F-019-t4's rolling 24 hours until then). Terms locked per period are
-F-019-v3; product sales quotas F-019-v6; alerts F-019-v8.
+by F-019-t4's rolling 24 hours until then). Product sales quotas are
+F-019-v6 (a `consumeMeter` caller brings its own terms, so it locks them itself); alerts F-019-v8.

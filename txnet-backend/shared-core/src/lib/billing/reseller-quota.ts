@@ -2,9 +2,10 @@ import { randomUUID } from 'node:crypto';
 
 import { Prisma, TenantBillingReasonType, type ResellerQuotaUsage } from '@prisma/client';
 
-import { RESELLER_LIMITS, resellerLimitOf, resellerOverageOf, type QuotaOverageTerms, type ResellerQuotaKey } from '../tenant/reseller-limits';
+import { RESELLER_LIMITS, type QuotaOverageTerms, type ResellerQuotaKey } from '../tenant/reseller-limits';
 import { TenantBillingInsufficientBalance, TenantBillingLedger } from '../tenant/billing/tenant-billing-ledger';
 import { platformCurrencyOf } from './operating-currency';
+import { quotaTermsInEffectOf } from './quota-terms-lock';
 import { DEFAULT_QUOTA_TIME_ZONE, isTimeZone, quotaPeriodAt, type QuotaPeriod, type QuotaPeriodKind } from './quota-period';
 
 /**
@@ -106,11 +107,15 @@ export class ResellerQuotaSourceReleased extends Error {
 const ledger = new TenantBillingLedger();
 const SETTINGS_ID = 1;
 
-/** A registry quota key's terms for one reseller: its number and overage, each at its own most specific level. `null` = exempt. */
+/**
+ * A registry quota key's terms for one reseller: its number and overage, each
+ * at its own most specific level, held for the subscription period it paid
+ * for (`quota-terms-lock.ts`, F-019-v3). `null` = exempt.
+ */
 export async function quotaTermsOf(tx: Prisma.TransactionClient, tenantId: string, key: ResellerQuotaKey): Promise<QuotaMeterTerms | null> {
-  const [limit, overage] = await Promise.all([resellerLimitOf(tx, tenantId, key), resellerOverageOf(tx, tenantId, key)]);
-  if (limit.source === 'exempt') return null;
-  return { meter: key, period: RESELLER_LIMITS[key].period, included: limit.limit, overage };
+  const terms = await quotaTermsInEffectOf(tx, tenantId, key);
+  if (!terms) return null;
+  return { meter: key, period: RESELLER_LIMITS[key].period, included: terms.included, overage: terms.overage };
 }
 
 /** Consumes `qty` units of a registry quota key for this act. */

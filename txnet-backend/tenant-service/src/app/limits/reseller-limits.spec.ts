@@ -119,7 +119,7 @@ function build(
       findUnique: async ({ where }: { where: { id: string } }) => (resellers.has(where.id) ? { tenantType: 'reseller' } : null),
       findFirst: async () => ({ operatingCurrencyCode: 'USD' }),
     },
-    tenantSubscription: { findUnique: async () => null },
+    tenantSubscription: { findUnique: async () => null, findMany: async () => [] },
     tenantSubscriptionSetting: { findUnique: async () => ({ quotaTimeZone: 'Asia/Tehran' }) },
     resellerQuotaUsage: { aggregate: async () => ({ _sum: { includedQty: usage.sends || null, overageQty: null, overageAmount: null } }) },
     resellerOverageCap: {
@@ -332,18 +332,18 @@ describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
     const view = await service.ofReseller(owner, RESELLER_A);
     expect(admitted).toEqual([{ tenantId: RESELLER_A, capability: 'read' }]);
     expect(view).toEqual([
-      { key: 'user_metered_cap_max', kind: 'guard', limit: 20, source: 'default', used: null, overage: null, statement: null },
-      { key: 'platform_open_grants_max', kind: 'guard', limit: 500, source: 'default', used: 7, overage: null, statement: null },
-      { key: 'admin_issues_30d_max', kind: 'guard', limit: null, source: 'reseller', used: 4, overage: null, statement: null },
-      { key: 'custom_domains_max', kind: 'guard', limit: 3, source: 'platform', used: 2, overage: null, statement: null },
-      { key: 'staff_members_max', kind: 'guard', limit: 20, source: 'default', used: 6, overage: null, statement: null },
-      { key: 'bulk_job_grants_max', kind: 'guard', limit: 10_000, source: 'default', used: null, overage: null, statement: null },
-      { key: 'campaign_sends_daily_max', kind: 'quota', limit: 10, source: 'default', used: 1, overage: { mode: 'stop', unitPrice: null, currencyCode: null, source: 'default' }, statement: { period: expect.objectContaining({ kind: 'day' }), includedUsed: 1, overageQty: 0, overageAmount: '0.00' } },
-      { key: 'end_users_max', kind: 'guard', limit: 50_000, source: 'default', used: 120, overage: null, statement: null },
-      { key: 'platform_traffic_gib_monthly_max', kind: 'guard', limit: null, source: 'default', used: 37, overage: null, statement: null },
-      { key: 'user_purchases_daily_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null, statement: null },
-      { key: 'user_purchases_weekly_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null, statement: null },
-      { key: 'user_purchases_monthly_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null, statement: null },
+      { key: 'user_metered_cap_max', kind: 'guard', limit: 20, source: 'default', used: null, overage: null, statement: null , lockedUntil: null },
+      { key: 'platform_open_grants_max', kind: 'guard', limit: 500, source: 'default', used: 7, overage: null, statement: null , lockedUntil: null },
+      { key: 'admin_issues_30d_max', kind: 'guard', limit: null, source: 'reseller', used: 4, overage: null, statement: null , lockedUntil: null },
+      { key: 'custom_domains_max', kind: 'guard', limit: 3, source: 'platform', used: 2, overage: null, statement: null , lockedUntil: null },
+      { key: 'staff_members_max', kind: 'guard', limit: 20, source: 'default', used: 6, overage: null, statement: null , lockedUntil: null },
+      { key: 'bulk_job_grants_max', kind: 'guard', limit: 10_000, source: 'default', used: null, overage: null, statement: null , lockedUntil: null },
+      { key: 'campaign_sends_daily_max', kind: 'quota', limit: 10, source: 'default', used: 1, overage: { mode: 'stop', unitPrice: null, currencyCode: null, source: 'default' }, statement: { period: expect.objectContaining({ kind: 'day' }), includedUsed: 1, overageQty: 0, overageAmount: '0.00' } , lockedUntil: null },
+      { key: 'end_users_max', kind: 'guard', limit: 50_000, source: 'default', used: 120, overage: null, statement: null , lockedUntil: null },
+      { key: 'platform_traffic_gib_monthly_max', kind: 'guard', limit: null, source: 'default', used: 37, overage: null, statement: null , lockedUntil: null },
+      { key: 'user_purchases_daily_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null, statement: null , lockedUntil: null },
+      { key: 'user_purchases_weekly_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null, statement: null , lockedUntil: null },
+      { key: 'user_purchases_monthly_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null, statement: null , lockedUntil: null },
     ]);
   });
 

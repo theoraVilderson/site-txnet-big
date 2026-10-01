@@ -104,18 +104,22 @@ async function limitsOf(tx: ResellerLimitReader, tenantId: string, keys: readonl
     sub ? tx.packageLimit.findMany({ where: { packageId: sub.packageId, ...where }, select: { key: true, value: true } }) : Promise.resolve([]),
     tx.resellerLimitSetting.findMany({ where, select: { key: true, value: true } }),
   ]);
-  const levels: Array<[Exclude<ResellerLimitSource, 'default' | 'exempt'>, Map<string, number | null>]> = [
-    ['reseller', new Map(own.map((r) => [r.key, r.value]))],
-    ['package', new Map(pkg.map((r) => [r.key, r.value]))],
-    ['platform', new Map(platform.map((r) => [r.key, r.value]))],
-  ];
-  return keys.map((key) => {
-    for (const [source, rows] of levels) {
-      // A row, even a null one, is this level's answer: null is "no limit", on purpose.
-      if (rows.has(key)) return { key, limit: rows.get(key) ?? null, source };
-    }
-    return { key, limit: RESELLER_LIMITS[key].default, source: 'default' as const };
-  });
+  const find = (rows: Array<{ key: string; value: number | null }>, key: string) => rows.find((r) => r.key === key);
+  return keys.map((key) => ({ key, ...limitFromLevels(key, find(own, key), find(pkg, key), find(platform, key)) }));
+}
+
+/** The level walk itself, over the rows one reseller has for one key; `quota-terms-lock.ts` walks many resellers at once with it. */
+export function limitFromLevels(
+  key: ResellerLimitKey,
+  own: { value: number | null } | undefined,
+  pkg: { value: number | null } | undefined,
+  platform: { value: number | null } | undefined,
+): ResellerLimitInEffect {
+  // A row, even a null one, is this level's answer: null is "no limit", on purpose.
+  if (own) return { limit: own.value, source: 'reseller' };
+  if (pkg) return { limit: pkg.value, source: 'package' };
+  if (platform) return { limit: platform.value, source: 'platform' };
+  return { limit: RESELLER_LIMITS[key].default, source: 'default' };
 }
 
 /** One more past the reseller's limit. Nothing was written; the figures say what to raise. */
@@ -159,7 +163,7 @@ export type ResellerOverageReader = Pick<
   'tenant' | 'tenantSubscription' | 'resellerQuotaOverage' | 'packageQuotaOverage' | 'quotaOverageSetting'
 >;
 
-type OverageRow = { key: string; mode: QuotaOverageMode; unitPrice: Prisma.Decimal | null; currencyCode: string | null };
+export type OverageRow = { key: string; mode: QuotaOverageMode; unitPrice: Prisma.Decimal | null; currencyCode: string | null };
 
 /** A stored row as terms: a row the CHECK let through always has both or neither. */
 export function overageTermsOf(row: Pick<OverageRow, 'mode' | 'unitPrice' | 'currencyCode'>): QuotaOverageTerms {
@@ -198,17 +202,20 @@ async function overagesOf(tx: ResellerOverageReader, tenantId: string, keys: rea
     sub ? tx.packageQuotaOverage.findMany({ where: { packageId: sub.packageId, ...where }, select }) : Promise.resolve([] as OverageRow[]),
     tx.quotaOverageSetting.findMany({ where, select }),
   ]);
-  const levels: Array<[Exclude<ResellerLimitSource, 'default' | 'exempt'>, Map<string, OverageRow>]> = [
-    ['reseller', new Map(own.map((r) => [r.key, r]))],
-    ['package', new Map(pkg.map((r) => [r.key, r]))],
-    ['platform', new Map(platform.map((r) => [r.key, r]))],
-  ];
-  return keys.map((key) => {
-    if (!isResellerQuotaKey(key)) return { ...STOP, source: 'default' as const };
-    for (const [source, rows] of levels) {
-      const row = rows.get(key);
-      if (row) return { ...overageTermsOf(row), source };
-    }
-    return { ...STOP, source: 'default' as const };
-  });
+  const find = (rows: OverageRow[], key: string) => rows.find((r) => r.key === key);
+  return keys.map((key) => overageFromLevels(key, find(own, key), find(pkg, key), find(platform, key)));
+}
+
+/** The overage level walk over one reseller's rows for one key, as `limitFromLevels`. A guard is `stop` whatever a row says. */
+export function overageFromLevels(
+  key: ResellerLimitKey,
+  own: OverageRow | undefined,
+  pkg: OverageRow | undefined,
+  platform: OverageRow | undefined,
+): QuotaOverageInEffect {
+  if (!isResellerQuotaKey(key)) return { ...STOP, source: 'default' };
+  if (own) return { ...overageTermsOf(own), source: 'reseller' };
+  if (pkg) return { ...overageTermsOf(pkg), source: 'package' };
+  if (platform) return { ...overageTermsOf(platform), source: 'platform' };
+  return { ...STOP, source: 'default' };
 }

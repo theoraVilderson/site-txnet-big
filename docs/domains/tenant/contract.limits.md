@@ -2,11 +2,11 @@
 id: tenant
 layer: domain
 status: active
-version: 46
+version: 47
 updated: 2026-10-01
 ---
 
-# Contract — tenant: what a reseller may spend (F-019-m, ADR-0106; F-019-v1, ADR-0107)
+# Contract — tenant: what a reseller may spend (F-019-m, ADR-0106; F-019-v1, F-019-v3, ADR-0107)
 
 A reseller acts on things the platform owns — its panels, its certificates.
 Each such thing has a **limit key**, set at three levels; the most specific
@@ -66,6 +66,23 @@ A quota key's registry line also names its `period` (`day`, `week`, `month`).
 `campaign_sends_daily_max` is still refused by F-019-t4's own count until
 F-019-v4 moves it onto the engine.
 
+## Terms held for the paid period (F-019-v3, ADR-0107 point 8)
+
+A quota key's terms — the number, `stop`/`overage`, the unit price — hold for
+the subscription period the reseller paid for. Code:
+`shared-core/src/lib/billing/quota-terms-lock.ts`.
+
+| Rule | Why |
+|---|---|
+| Every write that can change a quota key's terms — the six number routes and the six `/overage` routes above, at any level, and a package switch (`contract.admin.md`) — first calls `lockQuotaTerms(tx, scope)` in its transaction: each reseller it reaches (named ones, the package's subscribers, or every reseller) with a subscription and no `reseller_quota_terms_lock` row for its period gets the terms in force now. A guard key is never locked | the row holds what the period started with; a second change finds it and freezes nothing |
+| **The kinder part wins** (`kinderQuotaTerms`), each on its own: the larger number (no limit the largest), `overage` over `stop`, the lower price (only within one currency) | a gift reaches the reseller at once, a cut waits for the next period (user, 2026-10-01) |
+| The period is the paid one — a year on a yearly plan — keyed by `currentPeriodEnd` | the renewal that moves it ends the lock with no write (user, 2026-10-01) |
+| No subscription, no lock: the live terms | there is no paid period to hold |
+| `quotaTermsInEffectOf` is what the engine (`quotaTermsOf`) and `GET /api/tenants/:id/limits` read; each part keeps the level it came from (`includedSource`, `overageSource`), and `lockedUntil` says until when a lock holds | the figure shown is the figure that refuses |
+| A locked price converts with the platform's currency change, as every level's does | `billing/contract.currency-change.md` |
+
+An upgrade that applies at once and clears the lock is F-019-v7.
+
 ## What is used (`shared-core/src/lib/tenant/reseller-limit-usage.ts`, F-019-s)
 
 | Rule | Why |
@@ -94,7 +111,7 @@ path has three segments or more, so none is read as `GET /api/tenants/:id`.
 | `PUT` / `DELETE /api/tenants/limits/packages/:packageId/:key/overage` | the same | 204 — `DELETE`: back to the platform's |
 | `PUT /api/tenants/limits/resellers/:key/overage` | the same + `{tenantIds, reason}` | `{key, mode, unitPrice, currencyCode, tenantIds}` |
 | `POST /api/tenants/limits/resellers/:key/overage/clear` | `{tenantIds}` | `{key, cleared}` |
-| `GET /api/tenants/:id/limits` (F-019-r, F-019-s, F-019-v1, F-019-v2) | — | `[{key, kind, limit, source, used, overage, statement}]` (`overage`: `{mode, unitPrice, currencyCode, source}`; `statement`: `{period: {kind, start, end}, includedUsed, overageQty, overageAmount}` from the engine; both null for a guard) — `resellerLimitsOf` and `resellerUsagesOf` for that reseller, on the cross-tenant pool. **Not** behind the guard: `ResellerAccess.admit(…, 'read')` lets in the reseller's owner, its team and the platform's staff; its refusals are `not_allowed` **403**, `reseller_not_found` **404** (staff only learn it), `reseller_suspended` **403**, `reseller_terminated` **409** |
+| `GET /api/tenants/:id/limits` (F-019-r, F-019-s, F-019-v1, F-019-v2) | — | `[{key, kind, limit, source, used, overage, statement, lockedUntil}]` (`overage`: `{mode, unitPrice, currencyCode, source}`; `statement`: `{period: {kind, start, end}, includedUsed, overageQty, overageAmount}` from the engine; both null for a guard; a quota's `limit`, `source` and `overage` are the period's terms, F-019-v3; `lockedUntil` the period end a lock holds them to, else null) — `resellerLimitsOf` and `resellerUsagesOf` for that reseller, on the cross-tenant pool. **Not** behind the guard: `ResellerAccess.admit(…, 'read')` lets in the reseller's owner, its team and the platform's staff; its refusals are `not_allowed` **403**, `reseller_not_found` **404** (staff only learn it), `reseller_suspended` **403**, `reseller_terminated` **409** |
 
 | `GET /api/tenants/:id/limits/overage-cap` (F-019-v2) | — | `{month: {kind, start, end}, cap: "50.00" \| null, spent, currencyCode}` — `ResellerAccess` `read`, the refusals above |
 | `PUT` the same | `{amount: "50.00" \| null}` (≥ 0, ≤ 2 places; `0` = no overage at all; `null` removes it), strict | the same shape — `ResellerAccess` `tenantBilling`: its owner, its team, the platform's staff; audited `reseller_overage_cap_set` `{cap}` before/after in the **reseller's** log. Stamped with the platform's currency, converted by its change |

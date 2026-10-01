@@ -176,6 +176,7 @@ model Tenant {
   limits              ResellerLimit[]
   quotaOverages       ResellerQuotaOverage[]
   quotaUsages         ResellerQuotaUsage[]
+  quotaTermsLocks     ResellerQuotaTermsLock[]
   overageCap          ResellerOverageCap?
   deks                TenantDek[]
   credentials         TenantCredential[]
@@ -682,6 +683,32 @@ model ResellerQuotaOverage {
 
   @@id([tenantId, key])
   @@map("reseller_quota_overage")
+  @@schema("tenant")
+}
+
+/// ADR-0107 point 8 (F-019-v3): one reseller's terms for one quota key, frozen
+/// for one subscription period (`periodEnd` = its `currentPeriodEnd` then) the
+/// moment before the platform first changes them in it. Read with the live
+/// terms, the kinder part winning (user 2026-10-01). A renewal moves
+/// `currentPeriodEnd`, so a past period's row is never read again. Insert only.
+/// Strict tenant RLS.
+model ResellerQuotaTermsLock {
+  tenantId       String           @db.Uuid
+  key            String
+  periodEnd      DateTime
+  /// null = no limit.
+  included       Int?
+  includedSource String
+  mode           QuotaOverageMode
+  unitPrice      Decimal?         @db.Decimal(18, 2)
+  currencyCode   String?
+  overageSource  String
+  lockedAt       DateTime         @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, key, periodEnd])
+  @@map("reseller_quota_terms_lock")
   @@schema("tenant")
 }
 

@@ -45,6 +45,8 @@ describe('TenantSubscriptionService', () => {
       tenantFeaturePackage: { findUnique: vi.fn(async () => pkg) },
       tenantSubscription: {
         findUnique: vi.fn(async () => opts.current ?? null),
+        // F-019-v3's lock reads the reseller's period; nothing frozen here (no quota rows to read).
+        findMany: vi.fn(async () => (writes.push('quota.lock'), [])),
         upsert: vi.fn(async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
           writes.push('subscription');
           return opts.current
@@ -108,7 +110,7 @@ describe('TenantSubscriptionService', () => {
 
   it('keeps currentPeriodEnd on a package and period change, and moves the tenant to the new period', async () => {
     const periodEnd = new Date('2026-10-12T00:00:00Z');
-    const { service, tx, all } = build({
+    const { service, tx, all, writes } = build({
       current: { packageId: OTHER_PKG, currentPeriodEnd: periodEnd, createdAt: new Date('2026-09-01T00:00:00Z') },
       pkg: { id: PKG, name: 'Growth', monthlyPrice: null, yearlyPrice: { toString: () => '15000000' }, includedFeatureKeys: ['own_sms'], isActive: true },
     });
@@ -120,6 +122,9 @@ describe('TenantSubscriptionService', () => {
     expect(tx.tenant.update).toHaveBeenCalledWith({ where: { id: RESELLER }, data: { billingModel: 'subscription_yearly' } });
     expect(view.currentPeriodEnd).toEqual(periodEnd);
     expect(view.includedFeatureKeys).toEqual(['own_sms']);
+    // The old package's quotas are frozen for the period before the switch (F-019-v3).
+    expect(tx.tenantSubscription.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { tenantId: { in: [RESELLER] } } }));
+    expect(writes.indexOf('quota.lock')).toBeLessThan(writes.indexOf('subscription'));
   });
 
   it('refuses a package not sold for the period asked', async () => {

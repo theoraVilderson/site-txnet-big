@@ -145,7 +145,7 @@ currentPeriodEnd, startedAt, includedFeatureKeys`. Refusals:
 |---|---|
 | One `tenant_subscription` row per tenant: the package and `currentPeriodEnd`. The period is `tenant.billingModel`, which a `PUT` sets | one place for the period; F-018-c already writes it |
 | **The first package starts the trial:** `currentPeriodEnd` = now + `trialDays`. Creating a reseller starts nothing | without a package there is nothing to try (user, 2026-09-17) |
-| **A later `PUT` keeps `currentPeriodEnd`** — a new package or period is charged at that renewal. No proration | no charge here; the first charge and every renewal are `contract.billing.md` "Subscription renewal" (user, 2026-09-17) |
+| **A later `PUT` keeps `currentPeriodEnd`** — a new package or period is charged at that renewal. No proration. Another package first locks the reseller's quota terms for the period (`contract.limits.md`, F-019-v3): a kinder package's apply at once, a meaner one's at the renewal | no charge here; the first charge and every renewal are `contract.billing.md` "Subscription renewal" (user, 2026-09-17) |
 | The package must have a price for the period asked | a package may be sold for one period only (F-018-d) |
 | An inactive package is refused unless the tenant is already on it | a deactivated package keeps its subscribers and takes no new ones |
 | A `terminated` reseller is refused; `trial`, `active`, `suspended` are not | what each status blocks is F-018-f |
