@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AdminAction, AuditTargetType, Prisma, TenantType } from '@prisma/client';
-import { isResellerLimitKey, RESELLER_LIMIT_KEYS, RESELLER_LIMITS, type ResellerLimitKey } from '@txnet-backend/shared-core';
+import { isResellerLimitKey, RESELLER_LIMIT_KEYS, RESELLER_LIMITS, type ResellerLimitKey, resellerLimitsOf, type ResellerLimitInEffect } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -77,6 +77,18 @@ export class ResellerLimitsService {
         resellers: resellers.filter((r) => r.key === key).map((r) => ({ tenantId: r.tenantId, slug: r.tenant.slug, value: r.value, reason: r.reason })),
       };
     });
+  }
+
+  /**
+   * One reseller's limits in effect and where each comes from (F-019-r) —
+   * `resellerLimitsOf`'s answer, so the page never resolves the levels itself.
+   * Read on the cross-tenant pool: the reseller's own rows are its (RLS).
+   */
+  async ofReseller(actor: ResellerLimitsActor, tenantId: string): Promise<Array<ResellerLimitInEffect & { key: ResellerLimitKey }>> {
+    await this.access(actor);
+    const tenant = await this.all.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
+    if (tenant?.tenantType !== TenantType.reseller) throw new ResellerLimitsRefused('reseller_not_found', tenantId);
+    return resellerLimitsOf(this.all, tenantId);
   }
 
   async setPlatform(actor: ResellerLimitsActor, key: string, value: number | null): Promise<void> {

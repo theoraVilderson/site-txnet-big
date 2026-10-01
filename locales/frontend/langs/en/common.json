@@ -1891,6 +1891,55 @@
         "dedicated_node_pool": "Dedicated servers"
       },
       "perUse": "{{price}} {{currency}} per new link"
+    },
+    "limits": {
+      "link": "Limits",
+      "back": "Resellers",
+      "title": "Reseller limits",
+      "subtitle": "What a reseller may use of the platform's resources. A reseller's own value wins over its package's, and a package's over the value for every reseller. Lowering a limit takes nothing away: only the next one past it is refused.",
+      "keys": {
+        "user_metered_cap_max": {
+          "name": "Pay-as-you-go services per user",
+          "hint": "The most a reseller may set as one user's limit of open pay-as-you-go services, or as its default for all its users."
+        },
+        "platform_open_grants_max": {
+          "name": "Open services on the platform's panels",
+          "hint": "How many open services a reseller's users may hold on the platform's panels. Its own panels don't count."
+        },
+        "admin_issues_30d_max": {
+          "name": "Services issued by hand, per 30 days",
+          "hint": "How many services a reseller's admins may give users by hand, free, in any 30 days."
+        },
+        "custom_domains_max": {
+          "name": "Custom domains",
+          "hint": "How many custom domains a reseller may add. Each one needs a certificate."
+        }
+      },
+      "codeDefault": "Default: {{count}}",
+      "max": "highest allowed: {{count}}",
+      "platform": "For every reseller",
+      "perPackage": "Per package",
+      "ownValues": "Resellers with their own value",
+      "forResellers": "Set for chosen resellers",
+      "current": "Now: {{value}}",
+      "notSet": "not set",
+      "noLimit": "No limit",
+      "valueFor": "Limit for {{name}}",
+      "save": "Save",
+      "clear": "Back to the next level",
+      "remove": "Remove {{slug}}'s own value",
+      "reason": "Reason (for example, the ticket)",
+      "apply": "Apply to {{count}} reseller(s)",
+      "saved": "Saved.",
+      "sectionTitle": "Limits",
+      "edit": "Change limits",
+      "sources": {
+        "reseller": "this reseller's own",
+        "package": "from its package",
+        "platform": "for every reseller",
+        "default": "the default",
+        "exempt": "no limits"
+      }
     }
   },
   "resellerPurchase": {

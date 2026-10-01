@@ -104,20 +104,39 @@ export class ResellerLimitsController {
     return this.refusing(() => this.limits.clearResellers(actorOf(req, ip), key, body.tenantIds));
   }
 
-  private async refusing<T>(work: () => Promise<T>): Promise<T> {
-    try {
-      return await work();
-    } catch (e) {
-      if (!(e instanceof ResellerLimitsRefused)) throw e;
-      const payload = { reason: e.reason, message: e.message };
-      switch (STATUS[e.reason]) {
-        case 403:
-          throw new ForbiddenException(payload);
-        case 404:
-          throw new NotFoundException(payload);
-        default:
-          throw new UnprocessableEntityException(payload);
-      }
+  private refusing<T>(work: () => Promise<T>): Promise<T> {
+    return refusing(work);
+  }
+}
+
+/**
+ * One reseller's limits in effect, each with where it comes from (F-019-r):
+ * `GET /api/tenants/:id/limits`. The platform owner's, as the table.
+ */
+@Controller('tenants/:id/limits')
+@UseGuards(TenantPermissionGuard)
+export class ResellerLimitsOfController {
+  constructor(private readonly limits: ResellerLimitsService) {}
+
+  @Get()
+  ofReseller(@Req() req: Request, @Ip() ip: string, @Param('id', new ParseUUIDPipe()) id: string) {
+    return refusing(() => this.limits.ofReseller(actorOf(req, ip), id));
+  }
+}
+
+async function refusing<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (e) {
+    if (!(e instanceof ResellerLimitsRefused)) throw e;
+    const payload = { reason: e.reason, message: e.message };
+    switch (STATUS[e.reason]) {
+      case 403:
+        throw new ForbiddenException(payload);
+      case 404:
+        throw new NotFoundException(payload);
+      default:
+        throw new UnprocessableEntityException(payload);
     }
   }
 }

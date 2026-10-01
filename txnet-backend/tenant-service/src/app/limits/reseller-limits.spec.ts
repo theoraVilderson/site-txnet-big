@@ -34,7 +34,8 @@ function build(opts: { callerType?: string; resellers?: string[]; packages?: str
   const tx = {
     resellerLimitSetting: {
       findUnique: async ({ where }: { where: { key: string } }) => (setting.has(where.key) ? { value: setting.get(where.key) } : null),
-      findMany: async () => [...setting].map(([key, value]) => ({ key, value })),
+      findMany: async (args?: { where?: { key?: { in: string[] } } }) =>
+        [...setting].map(([key, value]) => ({ key, value })).filter((r) => !args?.where?.key || args.where.key.in.includes(r.key)),
       upsert: async ({ where, create }: { where: { key: string }; create: { value: number | null } }) => (writes.push(`platform:${where.key}`), setting.set(where.key, create.value)),
       deleteMany: async ({ where }: { where: { key: string } }) => (writes.push(`platform-clear:${where.key}`), { count: setting.delete(where.key) ? 1 : 0 }),
     },
@@ -51,10 +52,11 @@ function build(opts: { callerType?: string; resellers?: string[]; packages?: str
       deleteMany: async ({ where }: { where: { packageId: string; key: string } }) => ({ count: pkg.delete(`${where.packageId}:${where.key}`) ? 1 : 0 }),
     },
     resellerLimit: {
-      findMany: async ({ where }: { where: { key: string; tenantId?: { in: string[] } } }) =>
+      findMany: async ({ where }: { where: { key: string | { in: string[] }; tenantId?: string | { in: string[] } } }) =>
         [...own]
-          .filter(([k]) => k.endsWith(`:${where.key}`) && (!where.tenantId || where.tenantId.in.includes(k.split(':')[0])))
-          .map(([k, v]) => ({ tenantId: k.split(':')[0], key: where.key, ...v, tenant: { slug: 'acme' } })),
+          .map(([k, v]) => ({ tenantId: k.split(':')[0], key: k.split(':')[1], ...v, tenant: { slug: 'acme' } }))
+          .filter((r) => (typeof where.key === 'string' ? r.key === where.key : where.key.in.includes(r.key)))
+          .filter((r) => !where.tenantId || (typeof where.tenantId === 'string' ? r.tenantId === where.tenantId : where.tenantId.in.includes(r.tenantId))),
       upsert: async ({ where, create }: { where: { tenantId_key: { tenantId: string; key: string } }; create: { value: number | null; reason: string } }) => {
         writes.push(`reseller:${where.tenantId_key.tenantId}`);
         own.set(`${where.tenantId_key.tenantId}:${where.tenantId_key.key}`, { value: create.value, reason: create.reason });
@@ -68,7 +70,9 @@ function build(opts: { callerType?: string; resellers?: string[]; packages?: str
     },
     tenant: {
       findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.filter((id) => resellers.has(id)).map((id) => ({ id })),
+      findUnique: async ({ where }: { where: { id: string } }) => (resellers.has(where.id) ? { tenantType: 'reseller' } : null),
     },
+    tenantSubscription: { findUnique: async () => null },
     tenantFeaturePackage: { findUnique: async ({ where }: { where: { id: string } }) => (packages.has(where.id) ? { id: where.id } : null) },
     adminAuditLog: { create: async ({ data }: { data: Record<string, unknown> }) => (audit.push(data), {}) },
   };
@@ -161,6 +165,27 @@ describe('ResellerLimitsService', () => {
       resellers: [{ tenantId: RESELLER_A, slug: 'acme', value: null, reason: 'no limit for A' }],
     });
     expect(table.find((r) => r.key === 'admin_issues_30d_max')).toMatchObject({ platform: null, packages: [], resellers: [] });
+  });
+});
+
+describe('ResellerLimitsService.ofReseller', () => {
+  it('answers each key in effect for one reseller and where it comes from — the resolver\'s answer', async () => {
+    const { service } = build();
+    await service.setPlatform(actor, 'custom_domains_max', 3);
+    await service.setResellers(actor, 'admin_issues_30d_max', [RESELLER_A], null, 'trusted');
+    const view = await service.ofReseller(actor, RESELLER_A);
+    expect(view).toEqual(
+      expect.arrayContaining([
+        { key: 'custom_domains_max', limit: 3, source: 'platform' },
+        { key: 'admin_issues_30d_max', limit: null, source: 'reseller' },
+        { key: 'platform_open_grants_max', limit: 500, source: 'default' },
+      ]),
+    );
+  });
+
+  it('is the platform owner\'s only, and a reseller that does not exist is reseller_not_found', async () => {
+    expect(await refusal(build({ callerType: 'reseller' }).service.ofReseller(actor, RESELLER_A))).toBe('not_platform_owner');
+    expect(await refusal(build({ resellers: [] }).service.ofReseller(actor, RESELLER_A))).toBe('reseller_not_found');
   });
 });
 

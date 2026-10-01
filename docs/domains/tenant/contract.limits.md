@@ -53,6 +53,7 @@ path has three segments or more, so none is read as `GET /api/tenants/:id`.
 | `DELETE` the same | — | 204 — back to the platform's |
 | `PUT /api/tenants/limits/resellers/:key` | `{tenantIds: 1..100 distinct, value, reason: 1..500}` | `{key, value, tenantIds}` |
 | `POST /api/tenants/limits/resellers/:key/clear` | `{tenantIds}` | `{key, cleared}` — back to each one's package or the platform |
+| `GET /api/tenants/:id/limits` (F-019-r) | — | `[{key, limit, source}]` — `resellerLimitsOf` for that reseller, on the cross-tenant pool; not a reseller: **404** `reseller_not_found` |
 
 | Rule | Why |
 |---|---|
@@ -66,6 +67,6 @@ Proved by `shared-core/.../reseller-limits.spec.ts` and
 
 ## Not yet
 
-The page (F-019-r) and a reseller seeing its own (F-019-s). Removing the
+The page is F-019-r (`panel-web/contract.reseller-limits.md`); a reseller seeing its own is F-019-s. Removing the
 unused `tenant_restriction` is F-019-u. The four refusals are built: F-019-n,
 o, p in `entitlement/contract.limits.md`, F-019-q in [contract.domains.md](contract.domains.md).

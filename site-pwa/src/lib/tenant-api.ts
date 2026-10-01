@@ -206,6 +206,54 @@ export const tenantApi = {
   },
 };
 
+/** A reseller limit key (ADR-0106): shared-core's `RESELLER_LIMITS`; `resellers/_lib/limits.ts` holds the list. */
+export type ResellerLimitKey = "user_metered_cap_max" | "platform_open_grants_max" | "admin_issues_30d_max" | "custom_domains_max";
+
+/** `GET /tenants/limits/settings`: one key, every level that sets it. A `value` null is no limit; `platform` null is "not set" (the code default). */
+export interface ResellerLimitRow {
+  key: ResellerLimitKey;
+  codeDefault: number | null;
+  max: number;
+  platform: { value: number | null } | null;
+  packages: { packageId: string; name: string; value: number | null }[];
+  resellers: { tenantId: string; slug: string; value: number | null; reason: string }[];
+}
+
+/** Where a reseller's limit in effect came from. */
+export type ResellerLimitSource = "reseller" | "package" | "platform" | "default" | "exempt";
+
+/** `GET /tenants/:id/limits`: the resolver's answer for one reseller; `limit` null is no limit. */
+export interface ResellerLimitInEffect {
+  key: ResellerLimitKey;
+  limit: number | null;
+  source: ResellerLimitSource;
+}
+
+/**
+ * Reseller limits at three levels (F-019-m/r, ADR-0106) — the platform
+ * owner's. `value` null is no limit; clearing a level hands the key to the
+ * next one down.
+ */
+export const resellerLimitsApi = {
+  table: () => call<ResellerLimitRow[]>("/tenants/limits/settings", { method: "GET" }),
+  ofReseller: (tenantId: string) => call<ResellerLimitInEffect[]>(`/tenants/${encodeURIComponent(tenantId)}/limits`, { method: "GET" }),
+  setPlatform: (key: ResellerLimitKey, value: number | null) =>
+    call<void>(`/tenants/limits/settings/${key}`, { method: "PUT", body: JSON.stringify({ value }) }),
+  clearPlatform: (key: ResellerLimitKey) => call<void>(`/tenants/limits/settings/${key}`, { method: "DELETE" }),
+  setPackage: (packageId: string, key: ResellerLimitKey, value: number | null) =>
+    call<void>(`/tenants/limits/packages/${encodeURIComponent(packageId)}/${key}`, { method: "PUT", body: JSON.stringify({ value }) }),
+  clearPackage: (packageId: string, key: ResellerLimitKey) =>
+    call<void>(`/tenants/limits/packages/${encodeURIComponent(packageId)}/${key}`, { method: "DELETE" }),
+  /** One or several resellers at once, all or none, with a reason kept on each. */
+  setResellers: (key: ResellerLimitKey, tenantIds: string[], value: number | null, reason: string) =>
+    call<{ key: ResellerLimitKey; value: number | null; tenantIds: string[] }>(`/tenants/limits/resellers/${key}`, {
+      method: "PUT",
+      body: JSON.stringify({ tenantIds, value, reason }),
+    }),
+  clearResellers: (key: ResellerLimitKey, tenantIds: string[]) =>
+    call<{ key: ResellerLimitKey; cleared: number }>(`/tenants/limits/resellers/${key}/clear`, { method: "POST", body: JSON.stringify({ tenantIds }) }),
+};
+
 /** A custom domain as the reseller sees it; `revalidating` is `verified` inside its grace. */
 export type DomainStatus = "pending" | "verifying" | "verified" | "revalidating" | "failed";
 /** Prisma's `TenantDomainPurpose`. */

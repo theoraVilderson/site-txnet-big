@@ -101,6 +101,12 @@ export const panelResellerPath = (id: string) => `${PANEL_RESELLERS}/${encodeURI
  */
 export const PANEL_RESELLER_PACKAGES = `${PANEL_RESELLERS}/packages`;
 /**
+ * What a reseller may spend of the platform's (F-019-r, ADR-0106): each limit
+ * for every reseller, per package, and for one or several resellers. Under
+ * `PANEL_RESELLERS`; the static segment wins over `[id]`, as `/packages` does.
+ */
+export const PANEL_RESELLER_LIMITS = `${PANEL_RESELLERS}/limits`;
+/**
  * Where a platform user buys a reseller of their own (F-019-i). A sibling of
  * the owner's administration on purpose: `activeHref` takes the longest match,
  * so this lights its own menu entry and not `PANEL_RESELLERS`, and the static

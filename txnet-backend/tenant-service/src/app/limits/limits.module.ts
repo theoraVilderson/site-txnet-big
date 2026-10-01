@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 
-import { ResellerLimitsController } from './reseller-limits.controller';
+import { ResellerLimitsController, ResellerLimitsOfController } from './reseller-limits.controller';
 import { ResellerLimitsService } from './reseller-limits.service';
 
 /**
@@ -9,7 +9,7 @@ import { ResellerLimitsService } from './reseller-limits.service';
  * module only sets the numbers. Both Prisma pools come from the global `PrismaModule`.
  */
 @Module({
-  controllers: [ResellerLimitsController],
+  controllers: [ResellerLimitsController, ResellerLimitsOfController],
   providers: [ResellerLimitsService],
 })
 export class LimitsModule {}

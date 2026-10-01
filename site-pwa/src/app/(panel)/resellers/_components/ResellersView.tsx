@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Package, Plus, RotateCw, Store } from "lucide-react";
+import { Gauge, Package, Plus, RotateCw, Store } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { tenantApi, type Reseller } from "@/lib/tenant-api";
-import { PANEL_RESELLER_PACKAGES, panelResellerPath } from "@/lib/routes";
+import { PANEL_RESELLER_LIMITS, PANEL_RESELLER_PACKAGES, panelResellerPath } from "@/lib/routes";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { formatInstant } from "../../_lib/datetime";
 import { formatMoney } from "../../_lib/money";
@@ -102,6 +102,10 @@ export function ResellersView() {
           <Link href={PANEL_RESELLER_PACKAGES} className={quietButton}>
             <Package size={14} aria-hidden />
             {t("common", K.packages.link)}
+          </Link>
+          <Link href={PANEL_RESELLER_LIMITS} className={quietButton}>
+            <Gauge size={14} aria-hidden />
+            {t("common", K.limits.link)}
           </Link>
           <button type="button" className={primaryButton} onClick={() => setCreating(true)}>
             <Plus size={14} aria-hidden />

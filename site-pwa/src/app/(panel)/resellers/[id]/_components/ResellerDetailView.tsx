@@ -13,8 +13,10 @@ import {
   type SettableStatus,
   type TenantPackage,
   type TenantSubscription,
+  resellerLimitsApi,
+  type ResellerLimitInEffect,
 } from "@/lib/tenant-api";
-import { PANEL_RESELLERS } from "@/lib/routes";
+import { PANEL_RESELLER_LIMITS, PANEL_RESELLERS } from "@/lib/routes";
 import { Select } from "../../../_components/kit/Select";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatInstant } from "../../../_lib/datetime";
@@ -41,6 +43,7 @@ import {
   type StatusForm,
 } from "../../_lib/resellers";
 import { Alert, Field, StatusBadge, input, primaryButton, useMessage } from "../../_components/resellers-ui";
+import { LIMIT_KEYS } from "../../_lib/limits";
 import { ResellerLedger } from "./ResellerLedger";
 
 type Loaded = { reseller: Reseller; subscription: TenantSubscription | null; packages: TenantPackage[] };
@@ -203,6 +206,7 @@ export function ResellerDetailView({ id }: { id: string }) {
               </dl>
 
               <SubscriptionSection loaded={data} onSaved={changed} />
+              <LimitsSection tenantId={r.id} reloadKey={asked} />
               <StatusSection reseller={r} onSaved={changed} />
             </div>
           ) : (
@@ -232,6 +236,49 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <h2 className="text-sm font-bold text-text-primary">{title}</h2>
       {children}
     </section>
+  );
+}
+
+/**
+ * This reseller's limits in effect and where each comes from (F-019-r) —
+ * tenant-service's resolver, never worked out here. Set on `/resellers/limits`.
+ */
+function LimitsSection({ tenantId, reloadKey }: { tenantId: string; reloadKey: number }) {
+  const { t } = useLocale();
+  const message = useMessage();
+  const [rows, setRows] = useState<ResellerLimitInEffect[] | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  useEffect(() => {
+    let alive = true;
+    resellerLimitsApi.ofReseller(tenantId).then(
+      (v) => alive && setRows(v),
+      (e) => alive && setError(e),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [tenantId, reloadKey]);
+  const L = LIMIT_KEYS;
+  return (
+    <Section title={t("common", L.sectionTitle)}>
+      {error !== null && <Alert>{message(error)}</Alert>}
+      {rows && (
+        <dl className="grid gap-2 text-xs sm:grid-cols-2">
+          {rows.map((row) => (
+            <div key={row.key} className="rounded-xl bg-bg-inner p-3">
+              <dt className="text-[11px] text-text-secondary">{t("common", (L.keys as Record<string, { name: string }>)[row.key].name)}</dt>
+              <dd className="mt-1 font-bold text-text-primary">
+                {row.limit === null ? t("common", L.noLimit) : row.limit}
+                <span className="ms-2 text-[11px] font-normal text-text-secondary">{t("common", (L.sources as Record<string, string>)[row.source])}</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <Link href={PANEL_RESELLER_LIMITS} className="text-xs font-bold text-primary hover:underline">
+        {t("common", L.edit)}
+      </Link>
+    </Section>
   );
 }
 
