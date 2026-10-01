@@ -9,6 +9,7 @@ import {
 import {
   AdmittedReseller,
   assertUnderLimit,
+  RESELLER_LIMIT_USAGE,
   cnameTargetHost,
   normalizeHost,
   ResellerAccess,
@@ -157,7 +158,7 @@ export class TenantDomainService {
           const inEffect = await resellerLimitOf(tx, reseller.id, 'custom_domains_max');
           if (inEffect.limit !== null) {
             await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_limit:custom_domains_max:${reseller.id}`}))`;
-            const used = await tx.tenantDomain.count({ where: { tenantId: reseller.id, domainType: TenantDomainType.custom_domain } });
+            const used = await RESELLER_LIMIT_USAGE.custom_domains_max(tx, reseller.id, new Date());
             assertUnderLimit('custom_domains_max', inEffect, used);
           }
         }

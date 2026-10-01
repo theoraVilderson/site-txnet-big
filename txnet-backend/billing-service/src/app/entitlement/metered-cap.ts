@@ -1,5 +1,5 @@
-import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
-import { resellerLimitOf, TenantContext } from '@txnet-backend/shared-core';
+import { Prisma, VariantBillingMode } from '@prisma/client';
+import { OPEN_GRANT_STATUSES, resellerLimitOf, TenantContext } from '@txnet-backend/shared-core';
 
 import { MeteredCapReached } from './grant';
 
@@ -18,8 +18,8 @@ export const PLATFORM_METERED_CAP = 5;
 /** The highest number staff may set (F-118-ap): above it is a typo, not a ticket's answer. */
 export const MAX_METERED_CAP = 1000;
 
-/** What holds a seat: every state but the three that end a Grant. */
-export const OPEN_GRANT_STATUSES: readonly GrantStatus[] = [GrantStatus.pending, GrantStatus.active, GrantStatus.suspended];
+/** What holds a seat — shared-core's, which the reseller limits count with too. */
+export { OPEN_GRANT_STATUSES };
 
 /**
  * The reseller's ceiling on the number it gives a user (F-019-n, ADR-0106

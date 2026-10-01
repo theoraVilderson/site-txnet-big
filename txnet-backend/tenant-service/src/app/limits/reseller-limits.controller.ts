@@ -1,5 +1,6 @@
 import {
   Body,
+  ConflictException,
   Controller,
   Delete,
   ForbiddenException,
@@ -17,6 +18,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { ResellerAccessRefused, type ResellerAccessRejection } from '@txnet-backend/shared-core';
 
 import { identityOf } from '../request/identity.middleware';
 import { TenantPermissionGuard } from '../request/tenant-permission.guard';
@@ -29,7 +31,7 @@ import {
   SetResellersLimitInput,
   setResellersLimitSchema,
 } from './reseller-limits.schema';
-import { LimitRow, ResellerLimitsActor, ResellerLimitsRefused, ResellerLimitsRejection, ResellerLimitsService } from './reseller-limits.service';
+import { LimitInEffectRow, LimitRow, ResellerLimitsActor, ResellerLimitsRefused, ResellerLimitsRejection, ResellerLimitsService } from './reseller-limits.service';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
 const STATUS: Record<ResellerLimitsRejection, 403 | 404 | 422> = {
@@ -109,18 +111,41 @@ export class ResellerLimitsController {
   }
 }
 
+/** `ResellerAccess`'s refusals; `read` still admits a suspended reseller. */
+const ACCESS_STATUS: Record<ResellerAccessRejection, 403 | 404 | 409> = {
+  not_allowed: 403,
+  reseller_not_found: 404,
+  reseller_suspended: 403,
+  reseller_terminated: 409,
+};
+
 /**
- * One reseller's limits in effect, each with where it comes from (F-019-r):
- * `GET /api/tenants/:id/limits`. The platform owner's, as the table.
+ * One reseller's limits in effect, where each comes from and how much is used
+ * (F-019-r, F-019-s): `GET /api/tenants/:id/limits`. No `TenantPermissionGuard`:
+ * the reseller's owner holds no `tenant.manage` and is let in by
+ * `ResellerAccess`, as its team and the platform's staff are.
  */
 @Controller('tenants/:id/limits')
-@UseGuards(TenantPermissionGuard)
 export class ResellerLimitsOfController {
   constructor(private readonly limits: ResellerLimitsService) {}
 
   @Get()
-  ofReseller(@Req() req: Request, @Ip() ip: string, @Param('id', new ParseUUIDPipe()) id: string) {
-    return refusing(() => this.limits.ofReseller(actorOf(req, ip), id));
+  async ofReseller(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string): Promise<LimitInEffectRow[]> {
+    const { userId, tenantId, permissions } = identityOf(req);
+    try {
+      return await this.limits.ofReseller({ userId, tenantId, permissions }, id);
+    } catch (e) {
+      if (!(e instanceof ResellerAccessRefused)) throw e;
+      const payload = { reason: e.reason, message: e.message };
+      switch (ACCESS_STATUS[e.reason]) {
+        case 403:
+          throw new ForbiddenException(payload);
+        case 404:
+          throw new NotFoundException(payload);
+        default:
+          throw new ConflictException(payload);
+      }
+    }
   }
 }
 

@@ -12,6 +12,8 @@
  *  - **no limit confused with not set.** `null` is written as a row (no
  *    limit); clearing deletes it (the next level applies).
  */
+import { ResellerAccessRefused, type ResellerAccessRejection } from '@txnet-backend/shared-core';
+
 import { ResellerLimitsRefused, ResellerLimitsService } from './reseller-limits.service';
 import { setLimitSchema, setResellersLimitSchema, clearResellersLimitSchema } from './reseller-limits.schema';
 
@@ -22,7 +24,17 @@ const PKG = '44444444-4444-4444-8444-444444444444';
 const ADMIN = '55555555-5555-4555-8555-555555555555';
 const actor = { adminId: ADMIN, tenantId: OWNER_TENANT, ip: '203.0.113.1' };
 
-function build(opts: { callerType?: string; resellers?: string[]; packages?: string[] } = {}) {
+function build(
+  opts: {
+    callerType?: string;
+    resellers?: string[];
+    packages?: string[];
+    usage?: { open: number; issued: number; domains: number };
+    refuse?: ResellerAccessRejection;
+  } = {},
+) {
+  const usage = opts.usage ?? { open: 0, issued: 0, domains: 0 };
+  const admitted: Array<{ tenantId: string; capability: string }> = [];
   const audit: Array<Record<string, unknown>> = [];
   const writes: string[] = [];
   const setting = new Map<string, number | null>();
@@ -75,10 +87,19 @@ function build(opts: { callerType?: string; resellers?: string[]; packages?: str
     tenantSubscription: { findUnique: async () => null },
     tenantFeaturePackage: { findUnique: async ({ where }: { where: { id: string } }) => (packages.has(where.id) ? { id: where.id } : null) },
     adminAuditLog: { create: async ({ data }: { data: Record<string, unknown> }) => (audit.push(data), {}) },
+    grant: { count: async ({ where }: { where: { source?: string } }) => (where.source === 'admin_grant' ? usage.issued : usage.open) },
+    tenantDomain: { count: async () => usage.domains },
   };
   const prisma = { tenant: { findUnique: async () => ({ tenantType: opts.callerType ?? 'platform_owner' }) } };
   const all = { ...tx, $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx) };
-  return { service: new ResellerLimitsService(prisma as never, all as never), audit, writes, setting, own };
+  const access = {
+    admit: async (_actor: unknown, tenantId: string, capability: string) => {
+      if (opts.refuse) throw new ResellerAccessRefused(opts.refuse, tenantId);
+      admitted.push({ tenantId, capability });
+      return { id: tenantId, slug: 'acme', as: 'owner' };
+    },
+  };
+  return { service: new ResellerLimitsService(prisma as never, all as never, access as never), audit, writes, setting, own, admitted };
 }
 
 const refusal = async (p: Promise<unknown>) => {
@@ -168,24 +189,28 @@ describe('ResellerLimitsService', () => {
   });
 });
 
-describe('ResellerLimitsService.ofReseller', () => {
-  it('answers each key in effect for one reseller and where it comes from — the resolver\'s answer', async () => {
-    const { service } = build();
+describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
+  const owner = { userId: ADMIN, tenantId: RESELLER_A, permissions: [] };
+
+  it('answers each key in effect, where it comes from and how much is used — the refusals\' own counts', async () => {
+    const { service, admitted } = build({ usage: { open: 7, issued: 4, domains: 2 } });
     await service.setPlatform(actor, 'custom_domains_max', 3);
     await service.setResellers(actor, 'admin_issues_30d_max', [RESELLER_A], null, 'trusted');
-    const view = await service.ofReseller(actor, RESELLER_A);
-    expect(view).toEqual(
-      expect.arrayContaining([
-        { key: 'custom_domains_max', limit: 3, source: 'platform' },
-        { key: 'admin_issues_30d_max', limit: null, source: 'reseller' },
-        { key: 'platform_open_grants_max', limit: 500, source: 'default' },
-      ]),
-    );
+    const view = await service.ofReseller(owner, RESELLER_A);
+    expect(admitted).toEqual([{ tenantId: RESELLER_A, capability: 'read' }]);
+    expect(view).toEqual([
+      { key: 'user_metered_cap_max', limit: 20, source: 'default', used: null },
+      { key: 'platform_open_grants_max', limit: 500, source: 'default', used: 7 },
+      { key: 'admin_issues_30d_max', limit: null, source: 'reseller', used: 4 },
+      { key: 'custom_domains_max', limit: 3, source: 'platform', used: 2 },
+    ]);
   });
 
-  it('is the platform owner\'s only, and a reseller that does not exist is reseller_not_found', async () => {
-    expect(await refusal(build({ callerType: 'reseller' }).service.ofReseller(actor, RESELLER_A))).toBe('not_platform_owner');
-    expect(await refusal(build({ resellers: [] }).service.ofReseller(actor, RESELLER_A))).toBe('reseller_not_found');
+  it('is ResellerAccess\'s door: whoever it refuses learns nothing', async () => {
+    const { service } = build({ refuse: 'not_allowed' });
+    const e = await service.ofReseller(owner, RESELLER_A).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(ResellerAccessRefused);
+    expect((e as ResellerAccessRefused).reason).toBe('not_allowed');
   });
 });
 

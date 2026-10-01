@@ -1,16 +1,10 @@
-import type { ResellerLimitKey } from "@/lib/tenant-api";
 import { RESELLER_KEYS } from "./resellers";
 
 /** The limits page's strings (C-06). */
 export const LIMIT_KEYS = RESELLER_KEYS.limits;
 
-/** shared-core's `RESELLER_LIMITS`, in its order; the spec holds the two together. */
-export const RESELLER_LIMIT_KEYS = [
-  "user_metered_cap_max",
-  "platform_open_grants_max",
-  "admin_issues_30d_max",
-  "custom_domains_max",
-] as const satisfies readonly ResellerLimitKey[];
+/** shared-core's `RESELLER_LIMITS`, in its order — one list for the panel, in `lib/reseller-limits.ts`. */
+export { RESELLER_LIMIT_KEYS } from "@/lib/reseller-limits";
 
 /**
  * A limit typed in a box: a whole number, or `null` when "no limit" is ticked;

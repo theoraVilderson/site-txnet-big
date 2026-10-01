@@ -35,14 +35,27 @@ ceiling. The routes and their rules are tenant's
 | 6 | A reseller's own value is listed with its reason and removed alone (`clearResellers(key, [id])`) | a reseller's limit stays that reseller's |
 | 7 | Refusals are tenant-service's sentence (`useMessage`), on the card that asked | `unknown_limit`, `limit_out_of_range`, `package_not_found`, `reseller_not_found` |
 
+## The reseller's own (F-019-s)
+
+On its workspace console (`/my-resellers/:id`, `ResellerLimitsCard`), under
+the operating currency: each key, what is used and where the limit comes from.
+
+| # | Rule | Why |
+|---|---|---|
+| 8 | By the path's reseller (`ofReseller(id)`), never the session's tenant; tenant-service admits the owner, its team and platform staff | ADR-0064, invariant 21 |
+| 9 | `limitReading` reads `limit` and `used` as they came: a count against a limit (a bar, **Full** at or past it), a count with no limit, `used: null` as "up to N" (a key that counts nothing), both null as no limit. Nothing is counted here | the count is the refusal's own (`tenant/contract.limits.md` "What is used") |
+| 10 | Read-only; the card says a limit is raised by a ticket | the platform sets limits, the reseller does not |
+| 11 | A `reseller_limit_reached` refusal is said once, in `useApiErrorMessage` (`lib/reseller-limits.ts` `resellerLimitReachedOf`): the key's name from this page, `used` and `limit` from `facts`. A key the panel does not know, figures that are not numbers, or `user_metered_cap_max` (its `used` is the number asked; billing's own sentence) keep the server's text | billing and tenant refuse with figures only; every screen gets the name without its own copy |
+
 ## Proof
 
 `resellers/limits.test.tsx` — the keys against shared-core's file, `limitValueOf`,
 each level's value from the table, the platform's saved as a number and as
 no limit, several resellers only with someone picked and a reason, one
 reseller's own value removed, nobody but the platform owner.
+`my-resellers/limits.test.tsx` — `limitReading` for each shape, the card for
+the path's reseller, the refusal sentence and when the server's text stays.
 
 ## Not covered
 
-More than 100 resellers to pick from (the list asks one page); a reseller
-seeing its own limits (F-019-s).
+More than 100 resellers to pick from (the list asks one page).

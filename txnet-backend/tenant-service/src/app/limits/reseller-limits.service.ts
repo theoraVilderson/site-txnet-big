@@ -1,6 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AdminAction, AuditTargetType, Prisma, TenantType } from '@prisma/client';
-import { isResellerLimitKey, RESELLER_LIMIT_KEYS, RESELLER_LIMITS, type ResellerLimitKey, resellerLimitsOf, type ResellerLimitInEffect } from '@txnet-backend/shared-core';
+import {
+  isResellerLimitKey,
+  RESELLER_LIMIT_KEYS,
+  RESELLER_LIMITS,
+  ResellerAccess,
+  type ResellerActor,
+  type ResellerLimitKey,
+  resellerLimitsOf,
+  type ResellerLimitInEffect,
+  resellerUsagesOf,
+} from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -29,6 +39,9 @@ export type LimitRow = {
   resellers: Array<{ tenantId: string; slug: string; value: number | null; reason: string }>;
 };
 
+/** One key in effect for one reseller: `used` is the count its refusal compares, `null` for a key that counts nothing. */
+export type LimitInEffectRow = ResellerLimitInEffect & { key: ResellerLimitKey; used: number | null };
+
 /** What an audit row says a level held: a value, `null` (no limit), or `'unset'` (no row). */
 type Held = number | null | 'unset';
 
@@ -49,6 +62,7 @@ export class ResellerLimitsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly all: CrossTenantPrismaService,
+    private readonly door: ResellerAccess,
   ) {}
 
   async table(actor: ResellerLimitsActor): Promise<LimitRow[]> {
@@ -80,15 +94,16 @@ export class ResellerLimitsService {
   }
 
   /**
-   * One reseller's limits in effect and where each comes from (F-019-r) —
-   * `resellerLimitsOf`'s answer, so the page never resolves the levels itself.
+   * One reseller's limits in effect, where each comes from and how much of it
+   * is used (F-019-r, F-019-s) — `resellerLimitsOf` and `resellerUsagesOf`, so
+   * the page never resolves a level or counts on its own. `ResellerAccess` is
+   * the door, a `read`: the reseller's owner and team, and the platform's staff.
    * Read on the cross-tenant pool: the reseller's own rows are its (RLS).
    */
-  async ofReseller(actor: ResellerLimitsActor, tenantId: string): Promise<Array<ResellerLimitInEffect & { key: ResellerLimitKey }>> {
-    await this.access(actor);
-    const tenant = await this.all.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
-    if (tenant?.tenantType !== TenantType.reseller) throw new ResellerLimitsRefused('reseller_not_found', tenantId);
-    return resellerLimitsOf(this.all, tenantId);
+  async ofReseller(actor: ResellerActor, tenantId: string): Promise<LimitInEffectRow[]> {
+    const reseller = await this.door.admit(actor, tenantId, 'read');
+    const [limits, used] = await Promise.all([resellerLimitsOf(this.all, reseller.id), resellerUsagesOf(this.all, reseller.id)]);
+    return limits.map((row) => ({ ...row, used: used[row.key] }));
   }
 
   async setPlatform(actor: ResellerLimitsActor, key: string, value: number | null): Promise<void> {

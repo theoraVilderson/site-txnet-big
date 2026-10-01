@@ -35,8 +35,17 @@ or `exempt` (not a reseller: the platform's own tenant has no limits).
 | `assertUnderLimit(key, inEffect, used)` throws `ResellerLimitReached` (`reason` `reseller_limit_reached`, `facts {key, limit, used}`) when `used ≥ limit` | only a **new** item is refused (user): lowering a limit takes nothing away |
 | A limit binds the reseller's owner, its staff and its users' purchases — never the platform's staff acting on it | the enforcing row's rule (ADR-0106 point 4) |
 
-A new key is a line in `RESELLER_LIMITS` plus the one place that refuses
-past it. No table changes.
+A new key is a line in `RESELLER_LIMITS`, a line in `RESELLER_LIMIT_USAGE`,
+and the one place that refuses past it. No table changes.
+
+## What is used (`shared-core/src/lib/tenant/reseller-limit-usage.ts`, F-019-s)
+
+| Rule | Why |
+|---|---|
+| `RESELLER_LIMIT_USAGE[key](tx, tenantId, now)` is **the** count of a key: every refusal compares it with the limit, and `resellerUsagesOf` shows it to the reseller | the figure on the workspace is the figure that refuses; two counts drift |
+| `null` for a key that bounds a number typed, not a count: `user_metered_cap_max` | "0 used" there would be a lie |
+| `platform_open_grants_max`: open Grants (`OPEN_GRANT_STATUSES`) of variants whose group holds a platform panel; `admin_issues_30d_max`: `admin_grant`s created in the last 30 days; `custom_domains_max`: its custom domains, proved or not | each is the refusing row's own definition (F-019-o, p, q) |
+| The record is typed over `ResellerLimitKey` | a new key does not compile without its count |
 
 ## The platform owner's routes (`tenant-service/src/app/limits/`)
 
@@ -53,7 +62,7 @@ path has three segments or more, so none is read as `GET /api/tenants/:id`.
 | `DELETE` the same | — | 204 — back to the platform's |
 | `PUT /api/tenants/limits/resellers/:key` | `{tenantIds: 1..100 distinct, value, reason: 1..500}` | `{key, value, tenantIds}` |
 | `POST /api/tenants/limits/resellers/:key/clear` | `{tenantIds}` | `{key, cleared}` — back to each one's package or the platform |
-| `GET /api/tenants/:id/limits` (F-019-r) | — | `[{key, limit, source}]` — `resellerLimitsOf` for that reseller, on the cross-tenant pool; not a reseller: **404** `reseller_not_found` |
+| `GET /api/tenants/:id/limits` (F-019-r, F-019-s) | — | `[{key, limit, source, used}]` — `resellerLimitsOf` and `resellerUsagesOf` for that reseller, on the cross-tenant pool. **Not** behind the guard: `ResellerAccess.admit(…, 'read')` lets in the reseller's owner, its team and the platform's staff; its refusals are `not_allowed` **403**, `reseller_not_found` **404** (staff only learn it), `reseller_suspended` **403**, `reseller_terminated` **409** |
 
 | Rule | Why |
 |---|---|
@@ -67,6 +76,6 @@ Proved by `shared-core/.../reseller-limits.spec.ts` and
 
 ## Not yet
 
-The page is F-019-r (`panel-web/contract.reseller-limits.md`); a reseller seeing its own is F-019-s. The unused
+The pages are F-019-r and F-019-s (`panel-web/contract.reseller-limits.md`). The unused
 `tenant_restriction` was dropped by F-019-u. The four refusals are built: F-019-n,
 o, p in `entitlement/contract.limits.md`, F-019-q in [contract.domains.md](contract.domains.md).

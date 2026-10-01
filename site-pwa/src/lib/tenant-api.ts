@@ -227,6 +227,8 @@ export interface ResellerLimitInEffect {
   key: ResellerLimitKey;
   limit: number | null;
   source: ResellerLimitSource;
+  /** What the reseller holds of it — the count its refusal compares; `null` for a key that counts nothing (F-019-s). */
+  used: number | null;
 }
 
 /**

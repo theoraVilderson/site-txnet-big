@@ -654,7 +654,8 @@
     "seconds": "seconds"
   },
   "errors": {
-    "unreachable": "Could not reach the server. Check your connection and try again."
+    "unreachable": "Could not reach the server. Check your connection and try again.",
+    "resellerLimitReached": "The limit on “{{name}}” is reached: {{used}} of {{limit}}."
   },
   "kit": {
     "loading": "Loading…",
@@ -2129,6 +2130,23 @@
         "title": "Brand",
         "hint": "How your configs are named in your customers' VPN apps."
       }
+    },
+    "limits": {
+      "title": "Your limits",
+      "subtitle": "What your reseller may use of the platform's resources, and how much of it is in use. Only the next one past a limit is refused; nothing you have is taken away.",
+      "usedOf": "{{used}} of {{limit}}",
+      "usedNoLimit": "{{used}} in use · no limit",
+      "upTo": "Up to {{limit}}",
+      "noLimit": "No limit",
+      "full": "Full",
+      "sources": {
+        "reseller": "set for you",
+        "package": "from your package",
+        "platform": "the platform's, for every reseller",
+        "default": "the default",
+        "exempt": "no limits"
+      },
+      "raise": "To raise a limit, open a ticket with the platform."
     }
   },
   "resellerGateways": {
