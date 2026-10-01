@@ -41,14 +41,23 @@ const PENDING_KEY = `register:pending:${TENANT.id}:${PHONE}`;
 
 type Harness = ReturnType<typeof harness>;
 
-function harness() {
-  const prisma = {
+function harness(limits: { tenantType?: string; endUsers?: number; users?: number } = {}) {
+  const prisma: Record<string, any> = {
     role: { findFirst: vi.fn().mockResolvedValue({ id: 'role-user' }) },
     user: {
       findFirst: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      count: vi.fn().mockResolvedValue(limits.users ?? 0),
     },
+    // The reseller's limits (ADR-0106, F-019-t2); the platform's own tenant is exempt.
+    tenant: { findUnique: vi.fn().mockResolvedValue({ tenantType: limits.tenantType ?? 'platform_owner' }) },
+    tenantSubscription: { findUnique: vi.fn().mockResolvedValue(null) },
+    resellerLimit: { findMany: vi.fn().mockResolvedValue(limits.endUsers === undefined ? [] : [{ key: 'end_users_max', value: limits.endUsers }]) },
+    packageLimit: { findMany: vi.fn().mockResolvedValue([]) },
+    resellerLimitSetting: { findMany: vi.fn().mockResolvedValue([]) },
+    $executeRaw: vi.fn().mockResolvedValue(0),
   };
+  prisma.$transaction = vi.fn((fn: (tx: unknown) => unknown) => fn(prisma));
   const redis = {
     setJson: vi.fn().mockResolvedValue(undefined),
     getJson: vi.fn(),
@@ -282,6 +291,33 @@ describe('RegisterService.register — refusals', () => {
       error: null,
     });
     expect(h.otpService.issueOtp).not.toHaveBeenCalled();
+  });
+});
+
+describe('RegisterService — a reseller full of users (F-019-t2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    argon2.hash.mockResolvedValue('argon2-hash');
+  });
+
+  it('refuses a new registration at the reseller\'s end_users_max, before a code is sent, naming no figure', async () => {
+    const h = harness({ tenantType: 'reseller', endUsers: 2, users: 2 });
+    const res = await register(h);
+    expect(res).toEqual({ ok: false, msg: 'register.closed', error: null });
+    expect(h.redis.setJson).not.toHaveBeenCalled();
+    expect(h.otpService.issueOtp).not.toHaveBeenCalled();
+
+    const under = harness({ tenantType: 'reseller', endUsers: 2, users: 1 });
+    expect((await register(under)).ok).toBe(true);
+  });
+
+  it('checks again at verify, under the lock, so a reseller that filled meanwhile creates nobody', async () => {
+    const h = harness({ tenantType: 'reseller', endUsers: 2, users: 2 });
+    h.redis.getJson.mockResolvedValue({ fullName: 'B', username: 'b', phoneNumber: PHONE, passwordHash: 'h', tenantId: 'tenant-1', roleId: 'role-user' });
+    const res = await runWithTenant(TENANT as never, () => h.service.verifyPhone({ phoneNumber: PHONE, otpCode: '123456' } as never));
+    expect(res).toEqual({ ok: false, msg: 'register.closed', error: null });
+    expect(h.prisma.user.create).not.toHaveBeenCalled();
+    expect(h.prisma.$executeRaw).toHaveBeenCalled();
   });
 });
 

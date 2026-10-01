@@ -10,6 +10,7 @@ export const RESELLER_LIMIT_KEYS = [
   "staff_members_max",
   "bulk_job_grants_max",
   "campaign_sends_daily_max",
+  "end_users_max",
 ] as const satisfies readonly ResellerLimitKey[];
 
 /**

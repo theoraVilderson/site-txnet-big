@@ -29,11 +29,11 @@ function build(
     callerType?: string;
     resellers?: string[];
     packages?: string[];
-    usage?: { open?: number; issued?: number; domains?: number; staff?: number; sends?: number };
+    usage?: { open?: number; issued?: number; domains?: number; staff?: number; sends?: number; users?: number };
     refuse?: ResellerAccessRejection;
   } = {},
 ) {
-  const usage = { open: 0, issued: 0, domains: 0, staff: 0, sends: 0, ...opts.usage };
+  const usage = { open: 0, issued: 0, domains: 0, staff: 0, sends: 0, users: 0, ...opts.usage };
   const admitted: Array<{ tenantId: string; capability: string }> = [];
   const audit: Array<Record<string, unknown>> = [];
   const writes: string[] = [];
@@ -91,6 +91,7 @@ function build(
     tenantDomain: { count: async () => usage.domains },
     tenantStaffMember: { count: async () => usage.staff },
     notificationCampaign: { count: async () => usage.sends },
+    user: { count: async () => usage.users },
   };
   const prisma = { tenant: { findUnique: async () => ({ tenantType: opts.callerType ?? 'platform_owner' }) } };
   const all = { ...tx, $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx) };
@@ -195,7 +196,7 @@ describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
   const owner = { userId: ADMIN, tenantId: RESELLER_A, permissions: [] };
 
   it('answers each key in effect, where it comes from and how much is used — the refusals\' own counts', async () => {
-    const { service, admitted } = build({ usage: { open: 7, issued: 4, domains: 2, staff: 6, sends: 1 } });
+    const { service, admitted } = build({ usage: { open: 7, issued: 4, domains: 2, staff: 6, sends: 1, users: 120 } });
     await service.setPlatform(actor, 'custom_domains_max', 3);
     await service.setResellers(actor, 'admin_issues_30d_max', [RESELLER_A], null, 'trusted');
     const view = await service.ofReseller(owner, RESELLER_A);
@@ -208,6 +209,7 @@ describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
       { key: 'staff_members_max', limit: 20, source: 'default', used: 6 },
       { key: 'bulk_job_grants_max', limit: 10_000, source: 'default', used: null },
       { key: 'campaign_sends_daily_max', limit: 10, source: 'default', used: 1 },
+      { key: 'end_users_max', limit: 50_000, source: 'default', used: 120 },
     ]);
   });
 

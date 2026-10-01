@@ -8,7 +8,7 @@ export const OPEN_GRANT_STATUSES: readonly GrantStatus[] = [GrantStatus.pending,
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The reads the counts need. Pass the reseller's own scope, or a cross-tenant pool. */
-export type ResellerUsageReader = Pick<Prisma.TransactionClient, 'grant' | 'tenantDomain' | 'tenantStaffMember' | 'notificationCampaign'>;
+export type ResellerUsageReader = Pick<Prisma.TransactionClient, 'grant' | 'tenantDomain' | 'tenantStaffMember' | 'notificationCampaign' | 'user'>;
 
 type Count = (tx: ResellerUsageReader, tenantId: string, now: Date) => Promise<number>;
 
@@ -42,6 +42,8 @@ export const RESELLER_LIMIT_USAGE: Record<ResellerLimitKey, Count | null> = {
   /** A ceiling on one job's size, checked against the job (F-019-t5). */
   bulk_job_grants_max: null,
   /** Its campaigns whose send started in the last 24 hours, stopped or done since (F-019-t4). */
+  /** Its users, blocked ones too, not deleted — a blocked account still holds its phone and username (F-019-t2). */
+  end_users_max: (tx, tenantId) => tx.user.count({ where: { tenantId, deletedAt: null } }),
   campaign_sends_daily_max: (tx, tenantId, now) => tx.notificationCampaign.count({ where: { tenantId, sendStartedAt: { gt: new Date(now.getTime() - DAY_MS) } } }),
 };
 

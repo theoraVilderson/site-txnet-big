@@ -14,7 +14,7 @@ import {
   OtpPurpose,
 } from '../otp/otp.interface';
 import { OtpChannelRegistry } from '../otp/otp-channels.service';
-import { otpRealtimeChannel } from '@txnet-backend/shared-core';
+import { otpRealtimeChannel, RESELLER_LIMIT_USAGE, resellerLimitOf, type ResellerLimitReader, type ResellerUsageReader } from '@txnet-backend/shared-core';
 import { OtpDeliveryStore } from '../otp/otp-delivery.store';
 import { BotLinkService } from '../bot-link/bot-link.service';
 import { BotPlatform } from '@txnet-backend/messenger';
@@ -86,6 +86,9 @@ export class RegisterService {
       if (!tenant) {
         return err('register.tenantUnresolved');
       }
+      // A reseller full of users takes no more (F-019-t2, ADR-0106): said
+      // before a code is sent, and to the stranger without the figures.
+      if (await this.full(this.prisma, tenant.id)) return err('register.closed');
       const role = await this.prisma.role.findFirst({
         where: { name: 'user' },
       });
@@ -182,6 +185,16 @@ export class RegisterService {
     });
   }
 
+  /**
+   * Whether the tenant is a reseller at its `end_users_max` (F-019-t2). The
+   * platform's own tenant and a reseller with no limit never are.
+   */
+  private async full(db: unknown, tenantId: string): Promise<boolean> {
+    const inEffect = await resellerLimitOf(db as ResellerLimitReader, tenantId, 'end_users_max');
+    if (inEffect.limit === null) return false;
+    return (await RESELLER_LIMIT_USAGE.end_users_max(db as ResellerUsageReader, tenantId, new Date())) >= inEffect.limit;
+  }
+
   async verifyPhone(input: VerifyPhoneInput) {
     return safeExecute(async () => {
       const phoneNumber = normalizePhone(input.phoneNumber);
@@ -204,19 +217,26 @@ export class RegisterService {
 
       // Create user with unique constraint handling
       try {
-        const user = await this.prisma.user.create({
-          data: {
-            fullName: pending.fullName,
-            username: pending.username,
-            phoneNumber: pending.phoneNumber,
-            passwordHash: pending.passwordHash,
-            tenantId: pending.tenantId,
-            roleId: pending.roleId,
-            status: 'active',
-            phoneVerifiedAt: new Date(),
-          },
-          select: { id: true },
+        // Checked again under a per-reseller lock: the reseller may have
+        // filled while this code was on its way (F-019-t2).
+        const user = await this.prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_limit:end_users_max:${pending.tenantId}`}))`;
+          if (await this.full(tx, pending.tenantId)) return null;
+          return tx.user.create({
+            data: {
+              fullName: pending.fullName,
+              username: pending.username,
+              phoneNumber: pending.phoneNumber,
+              passwordHash: pending.passwordHash,
+              tenantId: pending.tenantId,
+              roleId: pending.roleId,
+              status: 'active',
+              phoneVerifiedAt: new Date(),
+            },
+            select: { id: true },
+          });
         });
+        if (!user) return err('register.closed');
 
         await this.redis.del(RedisKeys.registerPending(phoneNumber));
 

@@ -1927,6 +1927,10 @@
         "campaign_sends_daily_max": {
           "name": "Campaigns sent per 24 hours",
           "hint": "How many campaigns a reseller may start sending in any 24 hours."
+        },
+        "end_users_max": {
+          "name": "End users",
+          "hint": "How many users a reseller may have. Past it, a new registration on its panel or bot is refused; nobody is removed."
         }
       },
       "codeDefault": "Default: {{count}}",

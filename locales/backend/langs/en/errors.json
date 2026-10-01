@@ -138,7 +138,8 @@
     },
     "defaultRoleMissing": "Registration is unavailable right now. Please contact support.",
     "tenantUnresolved": "Registration is unavailable from this address. Please contact support.",
-    "phoneVerified": "Your phone number is verified"
+    "phoneVerified": "Your phone number is verified",
+    "closed": "Registration is closed here for now. Please try again later or contact support."
   },
   "tenant": {
     "claimMismatch": "This session does not belong to this address. Sign in again.",
