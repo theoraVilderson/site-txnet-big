@@ -97,7 +97,7 @@ function world() {
 
 const termsOf = async (tx: Prisma.TransactionClient, tenantId: string) => {
   const t = await quotaTermsOf(tx, tenantId, KEY);
-  return { included: t?.included, mode: t?.overage.mode, unitPrice: t?.overage.unitPrice?.toFixed(2) ?? null };
+  return { included: t?.windows[0].included, mode: t?.overage.mode, unitPrice: t?.overage.unitPrice?.toFixed(2) ?? null };
 };
 
 describe('kinderQuotaTerms (user 2026-10-01: in the reseller\'s favour at once, against it next period)', () => {

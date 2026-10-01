@@ -9,6 +9,8 @@ import {
   productCategoriesInclude,
   productCategoriesLive,
   rateCardsInEffect,
+  consumeProductSale,
+  productSaleRef,
   tenantSellsProduct,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
@@ -597,6 +599,11 @@ export class GrantService {
       });
       if (meters.length > 0) {
         await tx.grantMeter.createMany({ data: meters.map((m) => ({ ...m, tenantId: tenant.id, grantId: grant.id })) });
+      }
+      // One sale of a platform product against its reseller's package quota (F-019-v6): refused or
+      // charged past it, with the Grant. A reseller admin's issue is consumed by its caller.
+      if (input.source === GrantSource.purchase || input.source === GrantSource.coupon) {
+        await consumeProductSale(tx, { tenantId: tenant.id, product: variant.product, sourceRef: productSaleRef(grant.id), now: startsAt });
       }
       // A reseller's package plan is bought wholesale with the sale (F-118-p, ADR-0105 (0)).
       const refused = await this.wholesale.open(tx, grant, startsAt);

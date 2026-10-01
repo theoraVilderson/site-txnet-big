@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AdminAction, AuditTargetType, EntitlementSource, Prisma, TenantBillingModel, TenantStatus, TenantSuspensionCause, TenantType } from '@prisma/client';
-import { lockQuotaTerms } from '@txnet-backend/shared-core';
+import { lockProductQuotaTerms, lockQuotaTerms } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { renewalDeadline } from '../renewal/tenant-renewal.service';
@@ -121,7 +121,11 @@ export class TenantSubscriptionService {
 
       const currentPeriodEnd = current ? current.currentPeriodEnd : new Date(Date.now() + (await this.trialDays()) * DAY_MS);
       // Another package mid-period: the quotas it paid for hold until the renewal; a kinder package's apply at once (F-019-v3).
-      if (current && current.packageId !== pkg.id) await lockQuotaTerms(tx, { tenantIds: [tenantId] });
+      if (current && current.packageId !== pkg.id) {
+        await lockQuotaTerms(tx, { tenantIds: [tenantId] });
+        // ...and the product quotas its old package sold it (F-019-v6).
+        await lockProductQuotaTerms(tx, { tenantIds: [tenantId] });
+      }
       const row = await tx.tenantSubscription.upsert({
         where: { tenantId },
         create: { tenantId, packageId: pkg.id, currentPeriodEnd },

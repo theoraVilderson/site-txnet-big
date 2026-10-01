@@ -182,6 +182,7 @@ is refused (`metered_rate_missing`), never made at the older card.
 |---|---|
 | A **platform** product is sold by a reseller only if its package lists it; its own products never are bounded by it; the platform's tenant is not bounded | `platformProductsSoldBy`, `sellsProduct`, `tenantSellsProduct` |
 | No subscription, no package: none of the platform's (user, 2026-10-01) | `platformProductsSoldBy` → empty set |
+| A product taken off the package mid-period stays sellable until the reseller's paid period ends: its quota's period lock holds it (F-019-v6, ADR-0107 point 8) | `platformProductsSoldBy` reads `product:` locks |
 | Asked at every sale: the shop list, `offerBySku`, an invoice (`sellableOfferById`), a Grant bought or redeemed (`variant_not_assignable`), a reseller admin's issue; and by the onboarding checklist (`offeredToTenant`'s `listed`). Not a renewal, not the platform's staff | the readers here; entitlement `issue`, `issueGrantByAdmin` |
 
 ## Provides (intended)

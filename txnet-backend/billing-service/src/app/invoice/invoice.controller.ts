@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CouponChannel } from '@prisma/client';
-import { BackendI18nKeys, presentsServiceToken, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, TenantCapability } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, presentsServiceToken, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ResellerQuotaExhausted, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { LocaleService } from '../locale/locale.service';
@@ -74,6 +74,11 @@ function toHttp(e: unknown): unknown {
   // told it is not available now — the reseller's limit is not the buyer's
   // business, so no figures ride along. Nothing was written.
   if (e instanceof ResellerLimitReached) {
+    return new ConflictException({ i18nKey: E.invoice.notAvailableNow, reason: e.reason, message });
+  }
+  // Past the reseller's package quota for the product, or overage it cannot pay (F-019-v6, ADR-0107
+  // point 11): the same "not available now", at the invoice or at its payment. No figures.
+  if (e instanceof ResellerQuotaExhausted) {
     return new ConflictException({ i18nKey: E.invoice.notAvailableNow, reason: e.reason, message });
   }
   // Past the buyer's own purchases in a day, week or month (F-019-t7): the

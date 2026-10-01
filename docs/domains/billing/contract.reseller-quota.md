@@ -2,28 +2,30 @@
 id: billing
 layer: domain
 status: active
-version: 1
+version: 2
 updated: 2026-10-01
 ---
 
 # Reseller quota — what a package sells, counted, and sold past or stopped
 
-What governs the quota engine (F-019-v2, ADR-0107 points 4-7, 10, 12): one
+What governs the quota engine (F-019-v2, F-019-v6, ADR-0107 points 3-7, 10, 12): one
 call where a quota is consumed, one where the act is given back. What a quota key
 *is* — kind, number, `stop`/`overage` at three levels — is
 [tenant/contract.limits.md](../tenant/contract.limits.md). Read this before
 consuming a quota anywhere, or before adding a new one (tickets, AI requests).
 
 Code: `shared-core/src/lib/billing/reseller-quota.ts` (`ResellerQuota`,
-`quotaTermsOf`, `ResellerQuotaExhausted`), `quota-period.ts` (`quotaPeriodAt`).
-Proof: `shared-core/src/lib/billing/reseller-quota.spec.ts`.
+`quotaTermsOf`, `ResellerQuotaExhausted`), `quota-period.ts` (`quotaPeriodAt`),
+`product-quota.ts` (a product's sales, F-019-v6).
+Proof: `reseller-quota.spec.ts`, `product-quota.spec.ts` (same folder).
 
 ## The calls
 
 | Call | Does |
 |---|---|
 | `ResellerQuota.consume(tx, {tenantId, meter, qty, sourceRef, now?})` | a registry quota key: resolves its terms (`quotaTermsOf`: number and overage at their levels, held for the paid period — tenant `contract.limits.md`, F-019-v3), then `consumeMeter` |
-| `ResellerQuota.consumeMeter(tx, {tenantId, terms, qty, sourceRef, now?})` | against `QuotaMeterTerms` the caller resolved (`{meter, period, included, overage}`) — how a meter not in the registry (a product's sales, F-019-v6) uses the same engine |
+| `ResellerQuota.consumeMeter(tx, {tenantId, terms, qty, sourceRef, now?})` | against `QuotaMeterTerms` the caller resolved (`{meter, windows: [{period, included}], overage}`, shortest window first; a registry key has one) — how a meter not in the registry (a product's sales, F-019-v6) uses the same engine |
+| `ResellerQuota.admit(tx, {tenantId, terms, qty, now?})` | throws what `consumeMeter` would now — `wallet_empty` read from the balance — and writes nothing: a check before the act exists (an invoice, F-019-v6) |
 | `ResellerQuota.release(tx, {tenantId, sourceRef, now?})` | gives back every live row of the act, in meter order → `{released, refunded: [{amount, currencyCode}]}` |
 | `ResellerQuota.statementOf(tx, tenantId, key, now?)` | `{meter, period, included, includedUsed, overageQty, overageAmount, overage, spend}` — "10 included, 4 used, 2 extra today" |
 | `ResellerQuota.spendOf(tx, tenantId, now?)` | `{month, cap, spent, currencyCode}` — this subscription month's overage against the reseller's cap |
@@ -39,7 +41,8 @@ together or not at all. On the app pool, call it in the reseller's own scope
 | 1. **One row per act**: `reseller_quota_usage` is unique on (tenant, meter, `sourceRef`). Consuming the same act again answers that row (`replay: true`), writes and charges nothing | a retried request is harmless |
 | 2. A released act cannot consume again under its reference (`ResellerQuotaSourceReleased`) | a new attempt is a new act with its own `sourceRef` |
 | 3. **Fixed periods** (point 7): `day` from 00:00, `week` from Saturday 00:00, on `tenant_subscription_setting.quotaTimeZone` (default `Asia/Tehran`); `month` = the subscription month, stepped a calendar month from `currentPeriodEnd` (UTC, clamped like the renewal), or the calendar month on that clock with no subscription | a statement must be explainable; a yearly plan is counted in its months |
-| 4. Used = the `includedQty` of live rows **created** in the period. Each row also stores the period it fell in, for the statement | a released row gives its units back; a changed zone or a renewal never moves past rows |
+| 4. Used = the `includedQty` of live rows **created** in the period. Each row also stores the period it fell in (its first window's), for the statement | a released row gives its units back; a changed zone or a renewal never moves past rows |
+| 4b. **Several windows** (F-019-v6, user 2026-10-01): each window bounds the units *included* in it; the act takes the least room any window has; a unit past any window is overage once, at the meter's one price — never once per window — and uses no window's included room. A `stop` refusal names the tightest window's `included` / `used` | "10 a day, 50 a week" is explainable on a statement, and one sale is never charged twice |
 | 5. A per-(tenant, meter) advisory lock before reading; one act's units are split into included and overage under it | two acts cannot both take the last included unit |
 | 6. **Past what is included, the whole act or nothing**: `stop` mode, an empty wallet (`wallet_empty`), the reseller's spend cap (`spend_cap`), or a price not in the wallet's currency (`price_unavailable`) throws `ResellerQuotaExhausted` before any write — no usage row, no ledger row | a caller never gets half its units; an act paid half is a state nobody asked for |
 | 7. **Prepaid overage** (point 5): `overageQty × unitPrice` debited from the reseller's billing wallet through `TenantBillingLedger` (`quota_overage_charge`, `referenceId` = the usage row) in the caller's transaction; the row names the entry (`chargeTransactionId`), and a CHECK holds `overageAmount = overageQty × unitPrice` | no invoice, no debt (ADR-0107, rejected: month-end invoices) |
@@ -83,7 +86,22 @@ reseller is alerted by F-019-v8.
 No table, no migration, no new route: the `/overage` routes, the period lock
 (F-019-v3) and the reseller's statement already cover every quota key.
 
+## A product's sales (F-019-v6, ADR-0107 points 3, 10, 11)
+
+`product-quota.ts`. The terms are the package's listing (tenant `contract.limits.md`,
+`package_product`): `day` / `week` / `month` included, each optional, and one
+`stop`/`overage` with its price. Only a **platform** product sold by a reseller is
+counted; its own products and the platform's tenant never are.
+
+| Rule | Held by |
+|---|---|
+| One meter per product, `product:<productId>`, counted over **all** the reseller's sales of it | `productQuotaMeter` |
+| A sale is a Grant of it **bought, redeemed from a gift code, or issued by the reseller's own people** (user, 2026-10-01) — not a renewal, not the platform's staff. `sourceRef` = `grant:<grantId>`, consumed in the Grant's transaction after its row | `consumeProductSale` in entitlement `issue` (purchase, coupon) and `issueGrantByAdmin` (bounded) |
+| Asked at invoice create too, writing nothing (`admit`) — the buyer is refused before paying; the issue asks again under the lock | `admitProductSale` in `InvoiceService.create` |
+| **Given back only by a sale never served** (user, 2026-10-01): a purchase whose delivery failed and was refunded whole releases its units and overage. A service used, then deleted by the reseller, keeps them | `release` in `GrantDeliveryService.refund`; `deleteGrant` does not release |
+| Terms held for the paid period, window by window, the kinder part winning; a listing taken off is still sold on them until the period ends | `productQuotaTermsOf`, `lockProductQuotaTerms` (tenant `contract.limits.md`) |
+| Refused: the buyer (invoice, payment, gift code) **409** `notAvailableNow`, `reason` `reseller_quota_exhausted`, no figures; the reseller's admin **409** `e.refusal` with them | the routes' error maps |
+
 ## Not yet
 
-Product sales quotas are
-F-019-v6 (a `consumeMeter` caller brings its own terms, so it locks them itself); alerts F-019-v8.
+Alerts F-019-v8. A reseller's statement of its product quotas (and the panel) is F-019-v9 / v10.

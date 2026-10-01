@@ -21,7 +21,7 @@ import { ResellerAccessRefused, type ResellerAccessRejection } from '@txnet-back
 
 import { PackageProductsService } from './package-products.service';
 import { ResellerLimitsRefused, ResellerLimitsService } from './reseller-limits.service';
-import { setLimitSchema, setOverageCapSchema, setOverageSchema, setResellersLimitSchema, setResellersOverageSchema, clearResellersLimitSchema } from './reseller-limits.schema';
+import { setLimitSchema, setOverageCapSchema, setPackageProductSchema, setOverageSchema, setResellersLimitSchema, setResellersOverageSchema, clearResellersLimitSchema } from './reseller-limits.schema';
 
 const OWNER_TENANT = '11111111-1111-4111-8111-111111111111';
 const RESELLER_A = '22222222-2222-4222-8222-222222222222';
@@ -418,30 +418,44 @@ describe('PackageProductsService — the platform products a package sells (F-01
   const OWN_PRODUCT = '77777777-7777-4777-8777-777777777777';
 
   function products(callerType = 'platform_owner') {
-    const listed = new Set<string>();
+    const listed = new Map<string, Record<string, unknown>>();
     const audit: Array<Record<string, unknown>> = [];
+    const order: string[] = [];
     const tx = {
       tenantFeaturePackage: { findUnique: async ({ where }: { where: { id: string } }) => (where.id === PKG ? { id: PKG } : null) },
       product: { findUnique: async ({ where }: { where: { id: string } }) => ({ [PLATFORM_PRODUCT]: { tenantId: null }, [OWN_PRODUCT]: { tenantId: RESELLER_A } })[where.id] ?? null },
       packageProduct: {
-        findUnique: async ({ where }: { where: { packageId_productId: { productId: string } } }) => (listed.has(where.packageId_productId.productId) ? { productId: where.packageId_productId.productId } : null),
-        create: async ({ data }: { data: { productId: string } }) => listed.add(data.productId),
-        deleteMany: async ({ where }: { where: { productId: string } }) => ({ count: listed.delete(where.productId) ? 1 : 0 }),
+        findUnique: async ({ where }: { where: { packageId_productId: { productId: string } } }) => listed.get(where.packageId_productId.productId) ?? null,
+        findMany: async () => [],
+        upsert: async ({ create, update }: { create: Record<string, unknown> & { productId: string }; update: Record<string, unknown> }) => {
+          order.push('write');
+          listed.set(create.productId, { ...(listed.get(create.productId) ?? create), ...update });
+        },
+        deleteMany: async ({ where }: { where: { productId: string } }) => (order.push('delete'), { count: listed.delete(where.productId) ? 1 : 0 }),
       },
+      // lockProductQuotaTerms: the package's subscribers, read before the write.
+      tenantSubscription: { findMany: async () => (order.push('lock'), []) },
+      tenant: { findFirst: async () => ({ id: OWNER_TENANT, operatingCurrencyCode: 'USD' }) },
       adminAuditLog: { create: async ({ data }: { data: Record<string, unknown> }) => audit.push(data) },
     };
     const all = { ...tx, $transaction: async <T>(fn: (t: typeof tx) => Promise<T>) => fn(tx) };
     const prisma = { tenant: { findUnique: async () => ({ tenantType: callerType }) } };
-    return { service: new PackageProductsService(prisma as never, all as never), listed, audit };
+    return { service: new PackageProductsService(prisma as never, all as never), listed, audit, order };
   }
 
   it('lists a platform product once, audited once against the package', async () => {
     const { service, listed, audit } = products();
     await service.set(actor, PKG, PLATFORM_PRODUCT);
     await service.set(actor, PKG, PLATFORM_PRODUCT);
-    expect([...listed]).toEqual([PLATFORM_PRODUCT]);
+    expect([...listed.keys()]).toEqual([PLATFORM_PRODUCT]);
     expect(audit).toEqual([
-      expect.objectContaining({ action: 'package_product_set', targetEntityType: 'tenant_feature_package', targetEntityId: PKG, newValue: { productId: PLATFORM_PRODUCT, listed: true } }),
+      expect.objectContaining({
+        action: 'package_product_set',
+        targetEntityType: 'tenant_feature_package',
+        targetEntityId: PKG,
+        oldValue: { productId: PLATFORM_PRODUCT, quota: 'unlisted' },
+        newValue: { productId: PLATFORM_PRODUCT, quota: { day: null, week: null, month: null, overage: { mode: 'stop', unitPrice: null, currencyCode: null } } },
+      }),
     ]);
   });
 
@@ -453,12 +467,31 @@ describe('PackageProductsService — the platform products a package sells (F-01
     expect(listed.size).toBe(0);
   });
 
-  it('takes a product off, and clearing what is not listed writes nothing', async () => {
-    const { service, listed, audit } = products();
+  it('takes a product off after freezing its subscribers\' terms, and clearing what is not listed writes nothing', async () => {
+    const { service, listed, audit, order } = products();
     await service.set(actor, PKG, PLATFORM_PRODUCT);
     await service.clear(actor, PKG, PLATFORM_PRODUCT);
     await service.clear(actor, PKG, PLATFORM_PRODUCT);
     expect(listed.size).toBe(0);
+    expect(order).toEqual(['write', 'lock', 'delete']);
     expect(audit.map((a) => a.action)).toEqual(['package_product_set', 'package_product_clear']);
+  });
+
+  it('stores the sales quota, its price in the platform\'s currency, and freezes the old terms before a change (F-019-v6)', async () => {
+    const { service, listed, order } = products();
+    await service.set(actor, PKG, PLATFORM_PRODUCT, { day: 10, week: 50 });
+    await service.set(actor, PKG, PLATFORM_PRODUCT, { day: 10, week: 50 });
+    await service.set(actor, PKG, PLATFORM_PRODUCT, { day: 5, overage: { mode: 'overage', unitPrice: '2.00' } });
+    expect(order).toEqual(['write', 'lock', 'write']);
+    expect(listed.get(PLATFORM_PRODUCT)).toMatchObject({ dayIncluded: 5, weekIncluded: null, monthIncluded: null, mode: 'overage', currencyCode: 'USD' });
+    expect(String(listed.get(PLATFORM_PRODUCT)?.unitPrice)).toBe('2');
+  });
+
+  it('takes the whole terms in one strict body', () => {
+    expect(setPackageProductSchema.safeParse({}).success).toBe(true);
+    expect(setPackageProductSchema.safeParse({ day: 10, week: null, overage: { mode: 'overage', unitPrice: '0.50' } }).success).toBe(true);
+    expect(setPackageProductSchema.safeParse({ day: -1 }).success).toBe(false);
+    expect(setPackageProductSchema.safeParse({ year: 1 }).success).toBe(false);
+    expect(setPackageProductSchema.safeParse({ overage: { mode: 'overage' } }).success).toBe(false);
   });
 });

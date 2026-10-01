@@ -23,11 +23,12 @@ const PACKAGE = '33333333-3333-4333-8333-333333333333';
 const LISTED = '44444444-4444-4444-8444-444444444444';
 const UNLISTED = '55555555-5555-4555-8555-555555555555';
 
-function fakeTx(opts: { tenantType?: TenantType; packageId?: string | null; listed?: string[] }) {
+function fakeTx(opts: { tenantType?: TenantType; packageId?: string | null; listed?: string[]; held?: string[] }) {
   const asked: Array<Record<string, unknown>> = [];
   const tx = {
     tenant: { findUnique: async () => ({ tenantType: opts.tenantType ?? TenantType.reseller }) },
-    tenantSubscription: { findUnique: async () => (opts.packageId === null ? null : { packageId: opts.packageId ?? PACKAGE }) },
+    tenantSubscription: { findUnique: async () => (opts.packageId === null ? null : { packageId: opts.packageId ?? PACKAGE, currentPeriodEnd: new Date('2026-11-01T00:00:00Z') }) },
+    resellerQuotaTermsLock: { findMany: async () => (opts.held ?? []).map((id) => ({ key: `product:${id}:day` })) },
     packageProduct: {
       findMany: async (args: { where: Record<string, unknown> }) => {
         asked.push(args.where);
@@ -44,6 +45,11 @@ describe('platformProductsSoldBy (F-019-v5)', () => {
     const listed = await platformProductsSoldBy(tx as never, RESELLER);
     expect(listed).toEqual(new Set([LISTED]));
     expect(asked).toEqual([{ packageId: PACKAGE }]);
+  });
+
+  it('keeps a product taken off this period, held by its period lock (F-019-v6)', async () => {
+    const { tx } = fakeTx({ listed: [LISTED], held: [UNLISTED] });
+    expect(await platformProductsSoldBy(tx as never, RESELLER)).toEqual(new Set([LISTED, UNLISTED]));
   });
 
   it('answers nothing for a reseller with no subscription, without reading any list', async () => {

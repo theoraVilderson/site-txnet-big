@@ -74,6 +74,20 @@ not unlock anything.
     `CONVENTIONS.md`; every debit and give-back is a ledger row naming its
     `sourceRef`.
 
+## Amendments
+
+- **2026-10-01, F-019-v5 / v6 (user):** a reseller with no subscription sells
+  none of the platform's products; packages existing when F-019-v5 shipped list
+  every platform product then existing. A sale is a Grant bought, redeemed from
+  a gift code, or issued by the reseller's own people. Several windows on one
+  product (point 3) bound only the units *included* in each; a sale past any
+  of them is overage **once**, at the product's one price, and uses no
+  window's room. Point 10 is narrowed: only a sale **never served** (delivery
+  failed, refunded whole) gives its units and overage back — a service used
+  and then deleted keeps them, so a quota cannot be sold past and bought back
+  by deleting late. A listing changed or taken off mid-period is held for the
+  paid period like any quota term (point 8).
+
 ## Consequences
 
 - New capabilities are limited and sold without new design: a key with

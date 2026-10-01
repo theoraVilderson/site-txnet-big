@@ -1,5 +1,5 @@
 import { GrantSource, GrantStatus, Prisma } from '@prisma/client';
-import { TenantContext, tenantSellsProduct } from '@txnet-backend/shared-core';
+import { consumeProductSale, productSaleRef, TenantContext, tenantSellsProduct } from '@txnet-backend/shared-core';
 
 import { sellsTrafficToday } from '../catalog/traffic-quota';
 import { deliverableGroupIds } from '../traffic/group-fulfilment';
@@ -87,5 +87,9 @@ export async function issueGrantByAdmin(tx: Prisma.TransactionClient, grants: Gr
     startsAt: input.at,
     issuedByAdminId: input.actorUserId,
   });
+  // Handed out by the reseller's own people, it is one of its sales of the product (F-019-v6).
+  if (input.bounded && token !== null) {
+    await consumeProductSale(tx, { tenantId: grant.tenantId, product: variant.product, sourceRef: productSaleRef(grant.id), now: input.at });
+  }
   return issuedOf(grant, token !== null);
 }

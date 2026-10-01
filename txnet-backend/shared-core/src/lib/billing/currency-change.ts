@@ -501,6 +501,9 @@ async function convertQuotaOverages(c: Conversion): Promise<number> {
     UPDATE tenant.quota_overage_setting SET "unitPrice" = ${price}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
   const packages = await c.tx.$executeRaw`
     UPDATE tenant.package_quota_overage SET "unitPrice" = ${price}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
+  // A product's overage on a package (F-019-v6) is the same kind of price.
+  const products = await c.tx.$executeRaw`
+    UPDATE tenant.package_product SET "unitPrice" = ${price}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
   const resellers = await c.tx.$executeRaw`
     UPDATE tenant.reseller_quota_overage SET "unitPrice" = ${price}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
   // A price frozen for a reseller's paid period (F-019-v3) is the same price, so it converts the same way.
@@ -509,5 +512,5 @@ async function convertQuotaOverages(c: Conversion): Promise<number> {
   // A reseller's own ceiling on overage (F-019-v2): plain rounding — a cap of 0 stays "no overage at all".
   const caps = await c.tx.$executeRaw`
     UPDATE tenant.reseller_overage_cap SET amount = ${money(c, Prisma.sql`amount`)}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
-  return platform + packages + resellers + locked + caps;
+  return platform + packages + products + resellers + locked + caps;
 }

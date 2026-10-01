@@ -205,9 +205,10 @@ export class ResellerLimitsOfController {
 
 /**
  * The platform products a package lets its subscribers sell (F-019-v5,
- * ADR-0107 point 3): `GET` the list, `PUT …/:productId` (empty body) lists one,
- * `DELETE` takes it off. A product that is not the platform's is
- * `404 product_not_found`. Writes answer `204`.
+ * ADR-0107 point 3): `GET` the list with each one's sales quota, `PUT
+ * …/:productId` `{day?, week?, month?, overage?}` lists one with its quota
+ * (F-019-v6; `{}` = none), `DELETE` takes it off. A product that is not the
+ * platform's is `404 product_not_found`. Writes answer `204`.
  */
 @Controller('tenants/limits/packages/:packageId/products')
 @UseGuards(TenantPermissionGuard)
@@ -226,9 +227,9 @@ export class PackageProductsController {
     @Ip() ip: string,
     @Param('packageId', new ParseUUIDPipe()) packageId: string,
     @Param('productId', new ParseUUIDPipe()) productId: string,
-    @Body(new ZodValidationPipe(setPackageProductSchema)) _body: SetPackageProductInput,
+    @Body(new ZodValidationPipe(setPackageProductSchema)) body: SetPackageProductInput,
   ) {
-    return refusing(() => this.products.set(actorOf(req, ip), packageId, productId));
+    return refusing(() => this.products.set(actorOf(req, ip), packageId, productId, body));
   }
 
   @Delete(':productId')

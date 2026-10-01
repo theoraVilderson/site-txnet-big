@@ -15,6 +15,7 @@ import { DEFAULT_QUOTA_TIME_ZONE, isTimeZone, quotaPeriodAt, type QuotaPeriod, t
  *
  *   consume(tx, {tenantId, meter, qty, sourceRef})  — at the act, in its transaction
  *   release(tx, {tenantId, sourceRef})              — when the act is cancelled or refunded
+ *   admit(tx, {tenantId, terms, qty})               — would it be refused now? (writes nothing)
  *
  * A new limited thing (tickets, AI requests) is a `kind: 'quota'` line in
  * `RESELLER_LIMITS` with its `period`, plus one `consume` where it happens. No
@@ -26,6 +27,12 @@ import { DEFAULT_QUOTA_TIME_ZONE, isTimeZone, quotaPeriodAt, type QuotaPeriod, t
  * - **Fixed periods** (point 7, `quota-period.ts`). The included units of
  *   live rows created in the period are what is used. A released row gives
  *   its units back.
+ * - **Several windows, one meter** (F-019-v6, user 2026-10-01). A meter may
+ *   be bounded per day, week and month at once: each window bounds the
+ *   units *included* in it, the act takes the least room any window has,
+ *   and a unit past any of them is sold once, at the meter's one price —
+ *   never once per window. A unit sold past does not use a window's
+ *   included room.
  * - **Prepaid overage** (point 5). Units past what is included are debited
  *   from the reseller's billing wallet (`quota_overage_charge`, reference =
  *   the usage row) in the caller's transaction. No invoice, no debt.
@@ -48,12 +55,18 @@ import { DEFAULT_QUOTA_TIME_ZONE, isTimeZone, quotaPeriodAt, type QuotaPeriod, t
 /** Why an act was refused past its quota. The buyer is told only "not available now" (point 11). */
 export type QuotaStopReason = 'stop' | 'wallet_empty' | 'spend_cap' | 'price_unavailable';
 
-/** Everything the engine needs to know about one meter for one reseller. A product meter (F-019-v6) brings its own. */
+/** One window a meter is counted in: its fixed period and the units included per period; `null` = no limit there. */
+export type QuotaWindow = { period: QuotaPeriodKind; included: number | null };
+
+/**
+ * Everything the engine needs to know about one meter for one reseller. A
+ * registry key has one window; a product's sales (F-019-v6) up to three, and
+ * bring their own terms. `windows` is never empty, shortest first: a usage row
+ * records the first window's period.
+ */
 export type QuotaMeterTerms = {
   meter: string;
-  period: QuotaPeriodKind;
-  /** Units included per period; `null` = no limit (counted, never sold past). */
-  included: number | null;
+  windows: readonly QuotaWindow[];
   overage: QuotaOverageTerms;
 };
 
@@ -132,7 +145,7 @@ const SETTINGS_ID = 1;
 export async function quotaTermsOf(tx: Prisma.TransactionClient, tenantId: string, key: ResellerQuotaKey): Promise<QuotaMeterTerms | null> {
   const terms = await quotaTermsInEffectOf(tx, tenantId, key);
   if (!terms) return null;
-  return { meter: key, period: RESELLER_LIMITS[key].period, included: terms.included, overage: terms.overage };
+  return { meter: key, windows: [{ period: RESELLER_LIMITS[key].period, included: terms.included }], overage: terms.overage };
 }
 
 /** Consumes `qty` units of a registry quota key for this act. */
@@ -145,46 +158,78 @@ async function consume(
   return consumeMeter(tx, { ...input, terms });
 }
 
+/** One act's split, decided under the meter's lock; nothing is written yet. */
+type Plan = {
+  period: QuotaPeriod;
+  includedQty: number;
+  overageQty: number;
+  /** What the overage would cost, with its price; null with none. */
+  charge: { unitPrice: Prisma.Decimal; amount: Prisma.Decimal; currencyCode: string } | null;
+  /** The window with the least room, for a refusal's figures. */
+  stop: (why: QuotaStopReason) => ResellerQuotaExhausted;
+};
+
+/**
+ * Splits `qty` into what the windows still include and what is sold past them,
+ * and refuses what cannot be sold (`stop`, a stale price, the spend cap) —
+ * everything `consumeMeter` decides before its first write. The caller holds
+ * the meter's lock.
+ */
+async function plan(
+  tx: Prisma.TransactionClient,
+  input: { tenantId: string; terms: QuotaMeterTerms; qty: number; now: Date },
+  clock: Clock,
+): Promise<Plan> {
+  const { tenantId, terms, qty, now } = input;
+  if (!Number.isInteger(qty) || qty <= 0) throw new Error(`quota ${terms.meter}: qty must be a whole number above zero, got ${qty}`);
+  if (terms.windows.length === 0) throw new Error(`quota ${terms.meter}: no window`);
+  const windows = await Promise.all(
+    terms.windows.map(async (w) => {
+      const period = quotaPeriodAt(w.period, now, clock.zone, clock.subscriptionEnd);
+      const used = w.included === null ? 0 : await includedUsed(tx, tenantId, terms.meter, period);
+      return { included: w.included, period, used, room: w.included === null ? Infinity : Math.max(0, w.included - used) };
+    }),
+  );
+  // The tightest window decides; a unit past it is past the act's quota, whatever the others still include.
+  const binding = windows.reduce((a, b) => (b.room < a.room ? b : a));
+  const includedQty = Math.min(qty, binding.room);
+  const overageQty = qty - includedQty;
+  const stop = (why: QuotaStopReason) => new ResellerQuotaExhausted(terms.meter, why, binding.included ?? 0, binding.used);
+  if (overageQty === 0) return { period: windows[0].period, includedQty, overageQty, charge: null, stop };
+
+  if (terms.overage.mode === 'stop') throw stop('stop');
+  const { unitPrice, currencyCode } = terms.overage;
+  // The wallet is in the platform's money; a price left in another (a change not converted) is not guessed at.
+  if (currencyCode !== (await platformCurrencyOf(tx))) throw stop('price_unavailable');
+  const amount = unitPrice.mul(overageQty);
+  if (!(await underSpendCap(tx, tenantId, amount, currencyCode, now, clock))) throw stop('spend_cap');
+  return { period: windows[0].period, includedQty, overageQty, charge: { unitPrice, amount, currencyCode }, stop };
+}
+
 /** Consumes against terms the caller resolved; the registry path above is one caller of it. */
 async function consumeMeter(
   tx: Prisma.TransactionClient,
   input: { tenantId: string; terms: QuotaMeterTerms; qty: number; sourceRef: string; now?: Date },
 ): Promise<QuotaConsumption> {
   const { tenantId, terms, qty, sourceRef } = input;
-  if (!Number.isInteger(qty) || qty <= 0) throw new Error(`quota ${terms.meter}: qty must be a whole number above zero, got ${qty}`);
   const now = input.now ?? new Date();
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_quota:${tenantId}:${terms.meter}`}))`;
 
   const existing = await tx.resellerQuotaUsage.findUnique({ where: { tenantId_meter_sourceRef: { tenantId, meter: terms.meter, sourceRef } } });
   if (existing) {
     if (existing.releasedAt) throw new ResellerQuotaSourceReleased(terms.meter, sourceRef);
-    return consumption(existing, terms.period, true);
+    return consumption(existing, terms.windows[0].period, true);
   }
 
   const clock = await clockOf(tx, tenantId);
-  const period = quotaPeriodAt(terms.period, now, clock.zone, clock.subscriptionEnd);
-  let includedQty = qty;
-  let used = 0;
-  if (terms.included !== null) {
-    used = await includedUsed(tx, tenantId, terms.meter, period);
-    includedQty = Math.min(qty, Math.max(0, terms.included - used));
-  }
-  const overageQty = qty - includedQty;
+  const { period, includedQty, overageQty, charge: priced, stop } = await plan(tx, { tenantId, terms, qty, now }, clock);
   const id = randomUUID();
   let charge: { unitPrice: Prisma.Decimal; amount: Prisma.Decimal; currencyCode: string; transactionId: string } | null = null;
 
-  if (overageQty > 0) {
-    const included = terms.included ?? 0;
-    const stop = (why: QuotaStopReason) => new ResellerQuotaExhausted(terms.meter, why, included, used);
-    if (terms.overage.mode === 'stop') throw stop('stop');
-    const { unitPrice, currencyCode } = terms.overage;
-    // The wallet is in the platform's money; a price left in another (a change not converted) is not guessed at.
-    if (currencyCode !== (await platformCurrencyOf(tx))) throw stop('price_unavailable');
-    const amount = unitPrice.mul(overageQty);
-    if (!(await underSpendCap(tx, tenantId, amount, currencyCode, now, clock))) throw stop('spend_cap');
+  if (priced) {
     try {
-      const moved = await ledger.debit(tx, { tenantId, amount, currencyCode, reasonType: TenantBillingReasonType.quota_overage_charge, referenceId: id });
-      charge = { unitPrice, amount, currencyCode, transactionId: moved.id };
+      const moved = await ledger.debit(tx, { tenantId, amount: priced.amount, currencyCode: priced.currencyCode, reasonType: TenantBillingReasonType.quota_overage_charge, referenceId: id });
+      charge = { ...priced, transactionId: moved.id };
     } catch (e) {
       // Thrown before the ledger wrote anything, so the caller's transaction is still whole.
       if (e instanceof TenantBillingInsufficientBalance) throw stop('wallet_empty');
@@ -210,7 +255,23 @@ async function consumeMeter(
       createdAt: now,
     },
   });
-  return consumption(row, terms.period, false);
+  return consumption(row, terms.windows[0].period, false);
+}
+
+/**
+ * Would `qty` more units be refused now? Throws the `ResellerQuotaExhausted`
+ * that `consumeMeter` would — `wallet_empty` included, read from the balance —
+ * and writes nothing. For a check before the act exists (an invoice, F-019-v6),
+ * which the act's own `consumeMeter` repeats under the same lock.
+ */
+async function admit(tx: Prisma.TransactionClient, input: { tenantId: string; terms: QuotaMeterTerms; qty: number; now?: Date }): Promise<void> {
+  const now = input.now ?? new Date();
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_quota:${input.tenantId}:${input.terms.meter}`}))`;
+  const clock = await clockOf(tx, input.tenantId);
+  const { charge, stop } = await plan(tx, { ...input, now }, clock);
+  if (!charge) return;
+  const wallet = await tx.tenantBillingWallet.findUnique({ where: { tenantId: input.tenantId }, select: { cachedBalance: true, currencyCode: true } });
+  if (!wallet || wallet.currencyCode !== charge.currencyCode || wallet.cachedBalance.lt(charge.amount)) throw stop('wallet_empty');
 }
 
 /**
@@ -263,8 +324,9 @@ export type QuotaStatement = {
 async function statementOf(tx: Prisma.TransactionClient, tenantId: string, key: ResellerQuotaKey, now = new Date()): Promise<QuotaStatement | null> {
   const terms = await quotaTermsOf(tx, tenantId, key);
   if (!terms) return null;
+  const [window] = terms.windows;
   const clock = await clockOf(tx, tenantId);
-  const period = quotaPeriodAt(terms.period, now, clock.zone, clock.subscriptionEnd);
+  const period = quotaPeriodAt(window.period, now, clock.zone, clock.subscriptionEnd);
   const sums = await tx.resellerQuotaUsage.aggregate({
     where: { tenantId, meter: terms.meter, releasedAt: null, createdAt: { gte: period.start, lt: period.end } },
     _sum: { includedQty: true, overageQty: true, overageAmount: true },
@@ -272,7 +334,7 @@ async function statementOf(tx: Prisma.TransactionClient, tenantId: string, key: 
   return {
     meter: terms.meter,
     period,
-    included: terms.included,
+    included: window.included,
     includedUsed: sums._sum.includedQty ?? 0,
     overageQty: sums._sum.overageQty ?? 0,
     overageAmount: (sums._sum.overageAmount ?? new Prisma.Decimal(0)).toFixed(2),
@@ -296,7 +358,7 @@ async function spendOf(tx: Prisma.TransactionClient, tenantId: string, now = new
   };
 }
 
-export const ResellerQuota = { consume, consumeMeter, release, statementOf, spendOf: (tx: Prisma.TransactionClient, tenantId: string, now?: Date) => spendOf(tx, tenantId, now) };
+export const ResellerQuota = { consume, consumeMeter, admit, release, statementOf, spendOf: (tx: Prisma.TransactionClient, tenantId: string, now?: Date) => spendOf(tx, tenantId, now) };
 
 type Clock = { zone: string; subscriptionEnd: Date | null };
 

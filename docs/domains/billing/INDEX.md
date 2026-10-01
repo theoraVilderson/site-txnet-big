@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 83
+version: 84
 keywords: [quota engine, consume a quota, release a quota, overage charge, reseller spend cap, سهمیه نماینده, wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -91,7 +91,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 | [contract.traffic-block.md](contract.traffic-block.md) | the money a metered Grant's bytes cost: block pricing, the debit, the cursors, and the remainder given back at close; any other meter's blocks, holds and captures: [contract.usage-rating.md](contract.usage-rating.md) |
 | [contract.systems.md](contract.systems.md) | the platform owner's systems routes: registering a panel, and what the systems page reads and acts on |
 | [contract.panel-lifecycle.md](contract.panel-lifecycle.md) | editing a registered panel's settings, deleting or archiving one, deleting a panel group |
-| [contract.reseller-quota.md](contract.reseller-quota.md) | consuming or giving back a quota a reseller's package sells; adding a new quota (F-019-v2) |
+| [contract.reseller-quota.md](contract.reseller-quota.md) | consuming or giving back a quota a reseller's package sells — a key, or a product's sales per day/week/month; adding a new quota (F-019-v2, F-019-v6) |
 | [invariants.md](invariants.md) | writing any code that touches it |
 | [data-model.md](data-model.md) | changing storage |
 | [rules.md](rules.md) | implementing inside this unit |
@@ -100,7 +100,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-01 | contract v84 (**break** inside shared-core, F-019-v6, ADR-0107 points 3, 10): `QuotaMeterTerms` carries `windows[]`; `ResellerQuota.admit`; a product's sales quota consumed at issue, asked at invoice, released when never delivered. Consumers: notification (via `consume`, unchanged), tenant (`quotaTermsOf`) |
 | 2026-10-01 | contract v83 (additive, F-019-v2, ADR-0107): the quota engine — `ResellerQuota.consume`/`release`, fixed periods, prepaid overage on the billing wallet, the reseller's spend cap ([contract.reseller-quota.md](contract.reseller-quota.md)) |
-| 2026-09-29 | contract v82 (additive, F-118-w): a `wholesale_unfunded` block refusal emits `tenant.billing.wholesale_unfunded` `{tenantId, ownerUserId, period}` once per spell (`tenant_billing_wallet.unfundedNoticeAt`); the Grant stays active. [contract.traffic-block.md](contract.traffic-block.md) wholesale rule 4 |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

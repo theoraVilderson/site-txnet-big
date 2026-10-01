@@ -50,7 +50,16 @@ export const setOverageCapSchema = z
 
 export type SetOverageCapInput = { amount: string | null };
 
-/** Lists a platform product on a package (F-019-v5): nothing to say yet, so an empty body. */
-export const setPackageProductSchema = z.object({}).strict();
+/** A window's included sales (F-019-v6): a whole number ≥ 0, or `null` (or absent) for no bound in it. */
+const included = z.number().int().min(0).max(10_000_000).nullable().optional();
 
-export type SetPackageProductInput = Record<string, never>;
+/**
+ * Lists a platform product on a package (F-019-v5) and states its sales quota
+ * (F-019-v6): included per fixed day / week / month, and past any of them
+ * `stop` (the default) or `overage` at one unit price. The whole terms each
+ * time: a field left out is no bound, an `overage` left out is `stop`. `{}`
+ * lists it with no quota.
+ */
+export const setPackageProductSchema = z.object({ day: included, week: included, month: included, overage: overage.optional() }).strict();
+
+export type SetPackageProductInput = { day?: number | null; week?: number | null; month?: number | null; overage?: SetOverageInput };

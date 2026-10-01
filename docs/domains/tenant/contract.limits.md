@@ -2,11 +2,11 @@
 id: tenant
 layer: domain
 status: active
-version: 48
+version: 49
 updated: 2026-10-01
 ---
 
-# Contract — tenant: what a reseller may spend (F-019-m, ADR-0106; F-019-v1, F-019-v3, F-019-v5, ADR-0107)
+# Contract — tenant: what a reseller may spend (F-019-m, ADR-0106; F-019-v1, F-019-v3, F-019-v5, F-019-v6, ADR-0107)
 
 A reseller acts on things the platform owns — its panels, its certificates.
 Each such thing has a **limit key**, set at three levels; the most specific
@@ -80,6 +80,13 @@ the subscription period the reseller paid for. Code:
 | `quotaTermsInEffectOf` is what the engine (`quotaTermsOf`) and `GET /api/tenants/:id/limits` read; each part keeps the level it came from (`includedSource`, `overageSource`), and `lockedUntil` says until when a lock holds | the figure shown is the figure that refuses |
 | A locked price converts with the platform's currency change, as every level's does | `billing/contract.currency-change.md` |
 
+**A product's sales quota is held the same way** (F-019-v6,
+`shared-core/src/lib/billing/product-quota.ts`): `lockProductQuotaTerms` writes
+one lock row per window (`product:<productId>:day|week|month`) before a
+listing's terms change, before it is taken off, and before a package switch;
+`productQuotaTermsOf` takes the kinder part window by window. A listing taken
+off is still sold, on its locked terms, until the period ends.
+
 An upgrade that applies at once and clears the lock is F-019-v7.
 
 ## What is used (`shared-core/src/lib/tenant/reseller-limit-usage.ts`, F-019-s)
@@ -112,8 +119,8 @@ path has three segments or more, so none is read as `GET /api/tenants/:id`.
 | `POST /api/tenants/limits/resellers/:key/overage/clear` | `{tenantIds}` | `{key, cleared}` |
 | `GET /api/tenants/:id/limits` (F-019-r, F-019-s, F-019-v1, F-019-v2) | — | `[{key, kind, limit, source, used, overage, statement, lockedUntil}]` (`overage`: `{mode, unitPrice, currencyCode, source}`; `statement`: `{period: {kind, start, end}, includedUsed, overageQty, overageAmount}` from the engine; both null for a guard; a quota's `limit`, `source` and `overage` are the period's terms, F-019-v3; `lockedUntil` the period end a lock holds them to, else null) — `resellerLimitsOf` and `resellerUsagesOf` for that reseller, on the cross-tenant pool. **Not** behind the guard: `ResellerAccess.admit(…, 'read')` lets in the reseller's owner, its team and the platform's staff; its refusals are `not_allowed` **403**, `reseller_not_found` **404** (staff only learn it), `reseller_suspended` **403**, `reseller_terminated` **409** |
 
-| `GET /api/tenants/limits/packages/:packageId/products` (F-019-v5) | — | `[{productId, key, nameKey, isActive, listedAt}]` by key — the platform products the package lets its subscribers sell; `404 package_not_found` |
-| `PUT` / `DELETE /api/tenants/limits/packages/:packageId/products/:productId` | `{}`, strict | 204 — listed / taken off; again writes nothing. Not a platform product (or none) **404** `product_not_found`; audited `package_product_set` / `package_product_clear` `{productId, listed}` against the package. What reads it: catalog `contract.md` "What a reseller may sell" |
+| `GET /api/tenants/limits/packages/:packageId/products` (F-019-v5) | — | `[{productId, key, nameKey, isActive, listedAt, quota: {day, week, month, overage: O}}]` by key — the platform products the package lets its subscribers sell, and each one's sales quota (F-019-v6); `404 package_not_found` |
+| `PUT` / `DELETE /api/tenants/limits/packages/:packageId/products/:productId` | `{day?, week?, month?, overage?}` strict — included sales per fixed window (int 0..10 000 000, absent/`null` = no bound), `overage` as on `/overage` (absent = `stop`); the **whole** terms each time, `{}` = listed with no quota | 204 — listed or re-termed / taken off; the same terms again write nothing. Not a platform product (or none) **404** `product_not_found`; audited `package_product_set` / `package_product_clear` `{productId, quota: {day, week, month, overage} \| 'unlisted'}` against the package. A change or a removal first freezes each subscriber's terms (`lockProductQuotaTerms`, below). What reads it: catalog `contract.md` "What a reseller may sell", billing `contract.reseller-quota.md` "A product's sales" |
 
 | `GET /api/tenants/:id/limits/overage-cap` (F-019-v2) | — | `{month: {kind, start, end}, cap: "50.00" \| null, spent, currencyCode}` — `ResellerAccess` `read`, the refusals above |
 | `PUT` the same | `{amount: "50.00" \| null}` (≥ 0, ≤ 2 places; `0` = no overage at all; `null` removes it), strict | the same shape — `ResellerAccess` `tenantBilling`: its owner, its team, the platform's staff; audited `reseller_overage_cap_set` `{cap}` before/after in the **reseller's** log. Stamped with the platform's currency, converted by its change |

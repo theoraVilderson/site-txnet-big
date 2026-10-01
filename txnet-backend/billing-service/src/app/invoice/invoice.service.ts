@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CouponChannel, InvoiceStatus, Prisma, RedemptionStatus, VariantBillingMode } from '@prisma/client';
-import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { admitProductSale, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import { CatalogOffer, listOffersIn, sellableOfferById } from '../catalog/catalog-reads';
@@ -137,6 +137,9 @@ export class InvoiceService {
       await assertPurchaseRoom(tx, userId);
       // ...nor past its reseller's room on the platform's panels (F-019-o), told before paying.
       await assertPlatformGrantRoom(tx, offer.variantId);
+      // ...nor past its reseller's package quota for the product, or overage it cannot pay (F-019-v6):
+      // asked now, consumed at issue.
+      await admitProductSale(tx, { tenantId: tenant.id, product: { id: offer.productId, tenantId: offer.tenantId }, now });
 
       const amount = new Prisma.Decimal(offer.price.amount);
       // The best rule with no code comes first; the coupons see what it left (D-45).

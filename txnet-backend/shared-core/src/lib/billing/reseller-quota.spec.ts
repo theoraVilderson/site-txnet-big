@@ -160,13 +160,15 @@ function world(opts: { balance?: string; cap?: { amount: string; currencyCode?: 
   return { tx: tx as unknown as Prisma.TransactionClient, usage, ledgerRows, wallet };
 }
 
-const terms = (over: Partial<QuotaMeterTerms> = {}): QuotaMeterTerms => ({
-  meter: 'campaign_sends_daily_max',
-  period: 'day',
-  included: 2,
-  overage: { mode: 'overage', unitPrice: new Prisma.Decimal('0.50'), currencyCode: 'USD' },
-  ...over,
-});
+const terms = (over: Partial<Omit<QuotaMeterTerms, 'windows'>> & { included?: number | null } = {}): QuotaMeterTerms => {
+  const { included = 2, ...rest } = over;
+  return {
+    meter: 'campaign_sends_daily_max',
+    windows: [{ period: 'day', included }],
+    overage: { mode: 'overage', unitPrice: new Prisma.Decimal('0.50'), currencyCode: 'USD' },
+    ...rest,
+  };
+};
 const NOW = new Date('2026-10-01T10:00:00Z');
 const consume = (tx: Prisma.TransactionClient, sourceRef: string, qty = 1, t = terms(), now = NOW) => ResellerQuota.consumeMeter(tx, { tenantId: RESELLER, terms: t, qty, sourceRef, now });
 const stoppedBy = async (p: Promise<unknown>) => {

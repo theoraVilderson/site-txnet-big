@@ -226,8 +226,9 @@ describe("a reseller sells the platform's products its package lists (F-019-v5)"
   function txFor(tenantType: TenantType, listed: string[]) {
     const tx = {
       tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD', tenantType }) },
-      tenantSubscription: { findUnique: async () => ({ packageId: 'pkg' }) },
+      tenantSubscription: { findUnique: async () => ({ packageId: 'pkg', currentPeriodEnd: now }) },
       packageProduct: { findMany: async () => listed.map((productId) => ({ productId })) },
+      resellerQuotaTermsLock: { findMany: async () => [] },
       productVariant: {
         findMany: async () => rows,
         findUnique: async ({ where }: { where: { id: string } }) => rows.find((r) => r.id === where.id) ?? null,

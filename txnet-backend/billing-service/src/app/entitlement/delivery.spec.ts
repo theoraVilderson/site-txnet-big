@@ -82,12 +82,15 @@ function build(
     outbox: [] as Array<{ type: string; payload: Record<string, unknown> }>,
     credits: [] as Array<{ userId: string; amount: Prisma.Decimal; reasonType: WalletReasonType; referenceId?: string }>,
     retired: [] as string[],
+    quotaReleased: [] as string[],
     fulfilled: [] as string[],
     doorQueries: [] as Array<Record<string, unknown>>,
   };
 
   const tx = {
     grantWholesale: { findUnique: async () => null },
+    // F-019-v6: a sale never served gives its package quota back; nothing was consumed here.
+    resellerQuotaUsage: { findMany: async ({ where }: { where: { sourceRef: string } }) => (seen.quotaReleased.push(where.sourceRef), []) },
     grant: {
       findUnique: async () => ({
         id: GRANT,
@@ -268,6 +271,7 @@ describe('GrantDeliveryService.deliver', () => {
       data: { status: GrantStatus.cancelled, statusReason: 'delivery_timed_out', deliveryAttempts: 7, nextDeliveryAt: null },
     });
     expect(seen.retired).toEqual(['c1', 'c2']);
+    expect(seen.quotaReleased).toEqual([`grant:${GRANT}`]);
     expect(seen.invoiceWrites).toEqual([{ where: { id: INVOICE, status: InvoiceStatus.paid }, data: { status: InvoiceStatus.refunded } }]);
     expect(seen.credits).toHaveLength(1);
     expect(seen.credits[0]).toMatchObject({ userId: USER, reasonType: WalletReasonType.product_refund, referenceId: INVOICE });

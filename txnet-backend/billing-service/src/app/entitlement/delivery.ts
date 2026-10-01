@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ActorType, ConfigStatus, FulfilmentKind, GrantSource, GrantStatus, InvoiceStatus, Prisma, WalletReasonType } from '@prisma/client';
-import { OutboxEventType, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { OutboxEventType, productSaleRef, ResellerQuota, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -235,6 +235,8 @@ export class GrantDeliveryService {
     await releaseVpnReserveOf(tx, grantId);
     // A reseller's plan bought wholesale at the sale; never served, it all comes back (F-118-p).
     await this.wholesale.settleAtClose(tx, grantId);
+    // Never served, the sale gives its package quota back, and any overage to the reseller's wallet (F-019-v6).
+    await ResellerQuota.release(tx, { tenantId: grant.tenantId, sourceRef: productSaleRef(grantId) });
     const configs = await tx.config.findMany({ where: { grantId, status: { not: ConfigStatus.retired } }, select: { id: true } });
     for (const { id } of configs) await this.actions.retire(tx, { configId: id, actor: GRANT_DELIVERY_ACTOR });
 

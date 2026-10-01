@@ -110,6 +110,8 @@ traffic). **One request, one Grant**: a repeat of `requestId` answers that Grant
 (`issued: false`); the same id for another user or variant is `request_reused`.
 Also refused: `variant_not_found`, `variant_not_assignable` (switched off; or, by a
 reseller's own people, a platform product its package does not list — F-019-v5),
+**409** `reseller_quota_exhausted` with facts (theirs: one of the reseller's sales of
+the product, consumed after the issue — F-019-v6; the platform's staff are not counted),
 `metered_rate_missing` / `metered_rate_not_positive`, `already_issued` (a concurrent
 repeat: retry). Route: billing `contract.reseller-grants.md`.
 

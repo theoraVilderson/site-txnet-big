@@ -1,5 +1,5 @@
 import { Body, ConflictException, Controller, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
-import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, TenantCapability } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ResellerQuotaExhausted, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
@@ -76,7 +76,7 @@ export class GiftController {
       // A free-service code past the reseller's room on the platform's panels
       // (F-019-o): the use rolled back with the issue; the user is told it is
       // not available now, as a buyer is.
-      if (e instanceof ResellerLimitReached) {
+      if (e instanceof ResellerLimitReached || e instanceof ResellerQuotaExhausted) {
         throw new ConflictException({ i18nKey: E.invoice.notAvailableNow, reason: e.reason, message: `${e.name}: ${e.message}` });
       }
       if (e instanceof GiftCodeRefused) {

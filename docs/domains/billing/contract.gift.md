@@ -50,7 +50,7 @@ Migration `20260915000200_gift_redeems_free_grant`; `GiftRedemptionService` with
 | No wallet is opened or credited | a free service gives no money |
 | The answer is `{kind: "free_grant", code, grant: {id, variantId, startsAt, endsAt, featureKeys}}` — **no token**: the link is `GET .../subscription-link`'s, as often as asked. A credit answers `{kind: "wallet_credit", code, credited, balance}` | the user's call, 2026-09-14; the token left the answer with F-114-e-c (ADR-0085) — one place hands out the link |
 | A variant switched off after the coupon was made refuses the issue and rolls the use back (500) | an admin's broken coupon, never a user's mistake |
-| A free-service code past the reseller's room on the platform's panels (F-019-o) rolls the use back: **409** `errors.billing.invoice.notAvailableNow`, `reason` `reseller_limit_reached`, no facts | a reseller could mint gift codes faster than any limit on sales; the user is told what a buyer is told |
+| A free-service code past the reseller's room on the platform's panels (F-019-o), or past its package quota for a platform product (F-019-v6 — a redemption is one of its sales), rolls the use back: **409** `errors.billing.invoice.notAvailableNow`, `reason` `reseller_limit_reached` / `reseller_quota_exhausted`, no facts | a reseller could mint gift codes faster than any limit on sales; the user is told what a buyer is told |
 
 ## A Grant's subscription link, and resetting it (built — F-502-p, F-114-e-b, F-114-e-d)
 

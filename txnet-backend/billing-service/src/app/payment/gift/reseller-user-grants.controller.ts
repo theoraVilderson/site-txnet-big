@@ -16,7 +16,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ResellerQuotaExhausted } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
@@ -507,6 +507,8 @@ export class ResellerUserGrantsController {
       if (e instanceof ResellerLimitReached) {
         throw new ConflictException({ i18nKey: E.resellerLimitReached, reason: e.reason, message: e.message, facts: e.facts });
       }
+      // Past its package quota for the product (F-019-v6): the engine's one refusal shape, figures included — the admin is the reseller.
+      if (e instanceof ResellerQuotaExhausted) throw new ConflictException({ ...e.refusal, message: e.message });
       if (!(e instanceof ResellerUserGrantsRefused)) throw e;
       throw resellerRefusal(e);
     }
