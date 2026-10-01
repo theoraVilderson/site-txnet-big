@@ -6,7 +6,19 @@ import {
   TenantDomainPurpose,
   TenantDomainType,
 } from '@prisma/client';
-import { TenantCapabilityName, UnscopedRedisKeys, cnameTargetHost, normalizeHost, ResellerAccess, ResellerAccessRefused, ResellerAccessRejection, ResellerActor } from '@txnet-backend/shared-core';
+import {
+  AdmittedReseller,
+  assertUnderLimit,
+  cnameTargetHost,
+  normalizeHost,
+  ResellerAccess,
+  ResellerAccessRefused,
+  ResellerAccessRejection,
+  ResellerActor,
+  resellerLimitOf,
+  TenantCapabilityName,
+  UnscopedRedisKeys,
+} from '@txnet-backend/shared-core';
 import { randomBytes } from 'node:crypto';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -139,6 +151,16 @@ export class TenantDomainService {
 
     try {
       const row = await this.all.$transaction(async (tx) => {
+        // Each custom domain is a certificate (F-019-q, ADR-0106): the reseller's
+        // own people are bounded by its limit; the platform's staff are not.
+        if (reseller.as !== 'staff') {
+          const inEffect = await resellerLimitOf(tx, reseller.id, 'custom_domains_max');
+          if (inEffect.limit !== null) {
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_limit:custom_domains_max:${reseller.id}`}))`;
+            const used = await tx.tenantDomain.count({ where: { tenantId: reseller.id, domainType: TenantDomainType.custom_domain } });
+            assertUnderLimit('custom_domains_max', inEffect, used);
+          }
+        }
         if (existing) await tx.tenantDomain.delete({ where: { id: existing.id } });
         const created = await tx.tenantDomain.create({
           data: {
@@ -318,7 +340,7 @@ export class TenantDomainService {
   }
 
   /** The one access check (F-061-h); nothing on the cross-tenant pool is read before it. */
-  private async access(actor: DomainActor, tenantId: string, capability: TenantCapabilityName): Promise<{ id: string; slug: string }> {
+  private async access(actor: DomainActor, tenantId: string, capability: TenantCapabilityName): Promise<AdmittedReseller> {
     try {
       return await this.resellerAccess.admit(actor, tenantId, capability);
     } catch (e) {

@@ -66,5 +66,6 @@ Proved by `shared-core/.../reseller-limits.spec.ts` and
 
 ## Not yet
 
-The page (F-019-r), a reseller seeing its own (F-019-s), and the four
-refusals (F-019-n … q). Removing the unused `tenant_restriction` is F-019-u.
+The page (F-019-r) and a reseller seeing its own (F-019-s). Removing the
+unused `tenant_restriction` is F-019-u. The four refusals are built: F-019-n,
+o, p in `entitlement/contract.limits.md`, F-019-q in [contract.domains.md](contract.domains.md).

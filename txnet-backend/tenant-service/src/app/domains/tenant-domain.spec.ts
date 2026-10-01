@@ -1,4 +1,4 @@
-import { UnscopedRedisKeys, ResellerAccess } from '@txnet-backend/shared-core';
+import { ResellerLimitReached, ResellerAccess, UnscopedRedisKeys } from '@txnet-backend/shared-core';
 
 import { verifyRecordName } from './domain-check';
 import type { DomainLookup, ProbeAnswer } from './domain-lookup';
@@ -36,7 +36,7 @@ describe('TenantDomainService', () => {
 
   type Row = Record<string, unknown> & { id: string; tenantId: string; domainValue: string };
 
-  const build = (opts: { rows?: Row[]; redisFails?: boolean } = {}) => {
+  const build = (opts: { rows?: Row[]; redisFails?: boolean; domainLimit?: number | null } = {}) => {
     const rows: Row[] = [...(opts.rows ?? [])];
     const tenants: Record<string, Record<string, unknown>> = {
       [PLATFORM]: { id: PLATFORM, tenantType: 'platform_owner', slug: 'platform_owner', ownerUserId: STAFF, status: 'active', deletedAt: null },
@@ -97,7 +97,16 @@ describe('TenantDomainService', () => {
     };
     // Rolls back on a throw, as Postgres does: the cache delete runs inside the transaction.
     const all = {
-      tenantDomain: domains,
+      tenantDomain: { ...domains, count: vi.fn(async ({ where }: { where: Record<string, unknown> }) => rows.filter((r) => matches(r, where)).length) },
+      // ADR-0106's levels, the platform's alone here (F-019-q).
+      tenant: { findUnique: async ({ where }: { where: { id: string } }) => tenants[where.id] ?? null },
+      tenantSubscription: { findUnique: async () => null },
+      resellerLimit: { findMany: async () => [] },
+      packageLimit: { findMany: async () => [] },
+      resellerLimitSetting: {
+        findMany: async () => (opts.domainLimit === undefined ? [] : [{ key: 'custom_domains_max', value: opts.domainLimit }]),
+      },
+      $executeRaw: vi.fn(async () => 1),
       $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => {
         const snapshot = rows.map((r) => ({ ...r }));
         try {
@@ -215,6 +224,30 @@ describe('TenantDomainService', () => {
       await expect(service.list(stranger, '99999999-9999-9999-9999-999999999999')).rejects.toMatchObject({ reason: 'not_allowed' });
       await expect(service.list(owner, OTHER)).rejects.toMatchObject({ reason: 'not_allowed' });
       expect(all.tenantDomain.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the reseller\'s limit on custom domains (F-019-q, ADR-0106)', () => {
+    const two = () => [pendingRow({ id: 'd1', domainValue: 'a.ir' }), pendingRow({ id: 'd2', domainValue: 'b.ir', verificationStatus: 'verified' })];
+
+    it('refuses the reseller\'s own people one more at the limit, writing nothing', async () => {
+      const { service, rows, writes } = build({ rows: two(), domainLimit: 2 });
+      const err = await service.add(owner, RESELLER, { domainValue: 'c.ir', purpose: 'panel' }, T0).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ResellerLimitReached);
+      expect(err).toMatchObject({ key: 'custom_domains_max', limit: 2, used: 2 });
+      expect(rows).toHaveLength(2);
+      expect(writes).toEqual([]);
+    });
+
+    it('lets the platform\'s staff through, counts only this reseller\'s domains, and uses the default 5 when nothing is set', async () => {
+      await expect(build({ rows: two(), domainLimit: 2 }).service.add(staff, RESELLER, { domainValue: 'c.ir', purpose: 'panel' }, T0)).resolves.toMatchObject({ status: 'pending' });
+      const others = [1, 2, 3, 4, 5].map((i) => pendingRow({ id: `o${i}`, tenantId: OTHER, domainValue: `o${i}.ir` }));
+      await expect(build({ rows: others }).service.add(owner, RESELLER, { domainValue: 'c.ir', purpose: 'panel' }, T0)).resolves.toMatchObject({ status: 'pending' });
+    });
+
+    it('never refuses adding again a domain the reseller already has', async () => {
+      const { service } = build({ rows: two(), domainLimit: 2 });
+      await expect(service.add(owner, RESELLER, { domainValue: 'a.ir', purpose: 'panel' }, T0)).resolves.toMatchObject({ domainValue: 'a.ir' });
     });
   });
 

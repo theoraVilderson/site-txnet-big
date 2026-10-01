@@ -41,7 +41,11 @@ reseller does not exist, which only staff learn: `reseller_not_found` 404),
 `reseller_suspended` 403 (the owner, a write),
 `domain_not_found` 404, `reseller_terminated` / `domain_taken` /
 `domain_reserved` (a host inside `$DOMAIN_NAME`) 409. A host with a port, an IP
-or one label is a 400 at the schema.
+or one label is a 400 at the schema. Past the reseller's limit on custom
+domains (F-019-q, ADR-0106 `custom_domains_max`, default 5 — each one is a
+certificate): `reseller_limit_reached` 409, `facts {key, limit, used}`, for its
+own people only; the platform's staff pass. Counted under a per-reseller lock
+in the add's transaction; adding again a domain it already has is answered, never refused.
 
 ## The states
 

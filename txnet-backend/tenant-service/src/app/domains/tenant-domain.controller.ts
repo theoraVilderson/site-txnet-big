@@ -12,6 +12,7 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
+import { ResellerLimitReached } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
@@ -70,6 +71,8 @@ export class TenantDomainController {
     try {
       return await work();
     } catch (e) {
+      // Past the reseller's limit on custom domains (F-019-q): its figures, so it knows what to ask to raise.
+      if (e instanceof ResellerLimitReached) throw new ConflictException({ reason: e.reason, message: e.message, facts: e.facts });
       if (!(e instanceof DomainRefused)) throw e;
       const payload = { reason: e.reason, message: e.message };
       switch (STATUS[e.reason]) {
