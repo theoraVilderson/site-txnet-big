@@ -51,19 +51,39 @@ together or not at all. On the app pool, call it in the reseller's own scope
 | 13. Several meters in one transaction are consumed in meter order | the advisory locks are then always taken in one order |
 
 `ResellerQuotaExhausted`: `reason` `reseller_quota_exhausted`, `facts {meter,
-stoppedBy, included, used}`. What the buyer hears is "not available now",
-never the figures (point 11, F-019-v11). The reseller is told by F-019-v8.
+stoppedBy, included, used}`. Its `refusal` is what a route answers the
+reseller with (409), the same for every quota: a `stop` on a registry key is
+`reseller_limit_reached` `{key, limit, used}`, the refusal every limit gives and
+the panel names; anything else keeps its reason and says why. What a buyer
+hears is "not available now", never the figures (point 11, F-019-v11). The
+reseller is alerted by F-019-v8.
 
-## Adding a quota
+## Adding a quota — the how-to (tickets, AI requests)
 
-A `kind: 'quota'` line in `RESELLER_LIMITS` with its `period`, then one
-`ResellerQuota.consume(tx, {tenantId, meter: '<key>', qty, sourceRef: '<the act's id>'})`
-where the act commits, and `release` where it is cancelled. No table, no
-migration, no new route: the platform owner's `/overage` routes and the
-reseller's statement already list every quota key.
+`campaign_sends_daily_max` is the worked example (F-019-v4,
+`notification-service/.../campaign-admin.service.ts` `send`). For a new key:
+
+1. **Registry** (`shared-core/src/lib/tenant/reseller-limits.ts`): a line
+   `{ kind: 'quota', period: 'day' | 'week' | 'month', default, max }`. A sub-cent
+   unit (one AI request) is priced as a bundle: the key counts bundles (rule 8).
+2. **Usage** (`reseller-limit-usage.ts`): the key's entry is `null` — the
+   engine counts it, and `GET …/limits` shows the statement.
+3. **Consume** where the act commits, in its transaction, before the write
+   that makes it real:
+   `ResellerQuota.consume(tx, {tenantId, meter: '<key>', qty, sourceRef: '<kind>:<the act's id>'})`.
+   The `sourceRef` names the act, so a retry is a replay. Skip it for the
+   platform's own people acting on a reseller (ADR-0106 point 4).
+4. **Refuse** with `e.refusal` on `ResellerQuotaExhausted` (409); never
+   invent a reason.
+5. **Give back** with `release(tx, {tenantId, sourceRef})` where the act is
+   cancelled or refunded, if it can be.
+6. **Panel**: the key's name in `site-pwa/src/lib/reseller-limits.ts` and its
+   locale entry, as every limit key has.
+
+No table, no migration, no new route: the `/overage` routes, the period lock
+(F-019-v3) and the reseller's statement already cover every quota key.
 
 ## Not yet
 
-The first consumer is F-019-v4 (`campaign_sends_daily_max`, still counted
-by F-019-t4's rolling 24 hours until then). Product sales quotas are
+Product sales quotas are
 F-019-v6 (a `consumeMeter` caller brings its own terms, so it locks them itself); alerts F-019-v8.

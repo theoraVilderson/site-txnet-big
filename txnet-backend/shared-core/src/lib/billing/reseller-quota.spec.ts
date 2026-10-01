@@ -288,3 +288,21 @@ describe('ResellerQuota.statementOf', () => {
     expect(s).toMatchObject({ included: 10, includedUsed: 4, overageQty: 0, overageAmount: '0.00', overage: { mode: 'stop' }, spend: { cap: '20.00', spent: '0.00', currencyCode: 'USD' } });
   });
 });
+
+describe('ResellerQuotaExhausted.refusal (F-019-v4: one shape for every quota\'s caller)', () => {
+  it('a stop on a registry key is the limit refusal the panel already says, with its figures', () => {
+    expect(new ResellerQuotaExhausted('campaign_sends_daily_max', 'stop', 10, 10).refusal).toEqual({
+      reason: 'reseller_limit_reached',
+      facts: { key: 'campaign_sends_daily_max', limit: 10, used: 10 },
+    });
+  });
+
+  it('an overage that could not be paid says why, so the reseller knows to top up or raise its cap', () => {
+    expect(new ResellerQuotaExhausted('campaign_sends_daily_max', 'wallet_empty', 10, 10).refusal).toEqual({
+      reason: 'reseller_quota_exhausted',
+      facts: { meter: 'campaign_sends_daily_max', stoppedBy: 'wallet_empty', included: 10, used: 10 },
+    });
+    // A product meter (F-019-v6) is not a registry key: never the limit shape.
+    expect(new ResellerQuotaExhausted('product:abc', 'stop', 5, 5).refusal.reason).toBe('reseller_quota_exhausted');
+  });
+});

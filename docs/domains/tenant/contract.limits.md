@@ -24,7 +24,7 @@ level that has a row wins.
 | `end_users_max` | its users, any status, not deleted — a new registration is refused, to the stranger without figures | 50 000 | 10 000 000 | F-019-t2, `auth-api/contract.md` register |
 | `platform_traffic_gib_monthly_max` | whole GiB its users moved on platform panels this UTC month — past it no new service or renewal there until the month ends | **none** | 10 000 000 | F-019-t6, `entitlement/contract.limits.md` |
 | `user_purchases_daily_max`, `user_purchases_weekly_max`, `user_purchases_monthly_max` | services **one user** buys in any 24 hours / 7 days / 30 days — per buyer, so `used` is null here | **none** | 100 000 | F-019-t7, `entitlement/contract.limits.md` |
-| `campaign_sends_daily_max` | campaigns it starts sending in any 24 hours | 10 | 1000 | F-019-t4, `notification/contract.reseller.md` |
+| `campaign_sends_daily_max` | campaigns it starts sending per fixed day — a quota, counted by the engine | 10 | 1000 | F-019-v4, `notification/contract.reseller.md` |
 | `bulk_job_grants_max` | services one bulk job of its people acts on — a ceiling, refused past it, `used` = the job's size | 10 000 | 100 000 | F-019-t5, `billing/contract.reseller-grants-bulk.md` |
 
 `resellerLimitOf(tx, tenantId, key)` → `{limit, source}`; `resellerLimitsOf`
@@ -63,8 +63,7 @@ What consumes this — counting, fixed periods, the wallet debit, the
 reseller's spend cap — is billing's quota engine (F-019-v2,
 [billing/contract.reseller-quota.md](../billing/contract.reseller-quota.md)).
 A quota key's registry line also names its `period` (`day`, `week`, `month`).
-`campaign_sends_daily_max` is still refused by F-019-t4's own count until
-F-019-v4 moves it onto the engine.
+`campaign_sends_daily_max` is consumed there, one unit per send (F-019-v4).
 
 ## Terms held for the paid period (F-019-v3, ADR-0107 point 8)
 
@@ -88,7 +87,7 @@ An upgrade that applies at once and clears the lock is F-019-v7.
 | Rule | Why |
 |---|---|
 | `RESELLER_LIMIT_USAGE[key](tx, tenantId, now)` is **the** count of a key: every refusal compares it with the limit, and `resellerUsagesOf` shows it to the reseller | the figure on the workspace is the figure that refuses; two counts drift |
-| `null` for a key that bounds a number typed or a size asked, not a count: `user_metered_cap_max`, `bulk_job_grants_max` | "0 used" there would be a lie |
+| `null` for a key that bounds a number typed or a size asked, not a count: `user_metered_cap_max`, `bulk_job_grants_max` — and for a `quota`, which the engine counts: `GET …/limits` shows its `used` as the period's units, included plus sold past (F-019-v4) | "0 used" there would be a lie; a second count of a quota would drift from the engine's |
 | `platform_open_grants_max`: open Grants (`OPEN_GRANT_STATUSES`) of variants whose group holds a platform panel; `admin_issues_30d_max`: `admin_grant`s created in the last 30 days; `custom_domains_max`: its custom domains, proved or not | each is the refusing row's own definition (F-019-o, p, q) |
 | The record is typed over `ResellerLimitKey` | a new key does not compile without its count |
 

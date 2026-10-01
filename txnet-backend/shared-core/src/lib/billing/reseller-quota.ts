@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Prisma, TenantBillingReasonType, type ResellerQuotaUsage } from '@prisma/client';
 
-import { RESELLER_LIMITS, type QuotaOverageTerms, type ResellerQuotaKey } from '../tenant/reseller-limits';
+import { isResellerLimitKey, isResellerQuotaKey, RESELLER_LIMITS, type QuotaOverageTerms, type ResellerQuotaKey } from '../tenant/reseller-limits';
 import { TenantBillingInsufficientBalance, TenantBillingLedger } from '../tenant/billing/tenant-billing-ledger';
 import { platformCurrencyOf } from './operating-currency';
 import { quotaTermsInEffectOf } from './quota-terms-lock';
@@ -90,6 +90,23 @@ export class ResellerQuotaExhausted extends Error {
 
   get facts(): { meter: string; stoppedBy: QuotaStopReason; included: number; used: number } {
     return { meter: this.meter, stoppedBy: this.stoppedBy, included: this.included, used: this.used };
+  }
+
+  /**
+   * What a caller answers the reseller with (409), the same for every quota
+   * (F-019-v4). A plain `stop` on a registry key is `reseller_limit_reached`
+   * with `{key, limit, used}` — the refusal every limit already gives, which
+   * the panel names. An overage that could not be paid (empty wallet, the
+   * reseller's cap, a stale price) or a non-registry meter keeps its own
+   * reason and says why. A buyer is never shown either (point 11).
+   */
+  get refusal():
+    | { reason: 'reseller_limit_reached'; facts: { key: ResellerQuotaKey; limit: number; used: number } }
+    | { reason: 'reseller_quota_exhausted'; facts: ResellerQuotaExhausted['facts'] } {
+    if (this.stoppedBy === 'stop' && isResellerLimitKey(this.meter) && isResellerQuotaKey(this.meter)) {
+      return { reason: 'reseller_limit_reached', facts: { key: this.meter, limit: this.included, used: this.used } };
+    }
+    return { reason: this.reason, facts: this.facts };
   }
 }
 

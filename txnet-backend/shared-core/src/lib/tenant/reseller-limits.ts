@@ -33,7 +33,7 @@ export const RESELLER_LIMITS = {
   staff_members_max: { kind: 'guard', default: 20, max: 1000 },
   /** Services one bulk job of the reseller's own people may act on, under billing's fixed 100 000 (F-019-t5). A ceiling: `used` is the job's size. */
   bulk_job_grants_max: { kind: 'guard', default: 10_000, max: 100_000 },
-  /** Campaigns the reseller starts sending — counted per day once F-019-v4 moves it onto the quota engine; until then in any 24 hours (F-019-t4). */
+  /** Campaigns the reseller starts sending, per fixed day: one unit of the quota engine per send (F-019-t4, F-019-v4). */
   campaign_sends_daily_max: { kind: 'quota', period: 'day', default: 10, max: 1000 },
   /** The reseller's end users, any status, not deleted; a new registration is refused at it (F-019-t2). */
   end_users_max: { kind: 'guard', default: 50_000, max: 10_000_000 },

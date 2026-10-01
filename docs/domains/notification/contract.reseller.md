@@ -2,7 +2,7 @@
 id: notification
 layer: domain
 status: active
-version: 6
+version: 7
 updated: 2026-09-20
 ---
 
@@ -101,12 +101,14 @@ counted by the send and not by the count.
 A new audience key therefore lands in three places — the schema, the fan-out
 and nothing else, because this route reuses both.
 
-## Sends per day (F-019-t4, ADR-0106)
+## Sends per day (F-019-t4, F-019-v4, ADR-0107)
 
 | Rule | Why |
 |---|---|
-| A reseller's `send` past its `campaign_sends_daily_max` is **409** `reseller_limit_reached`, `facts {key, limit, used}`; nothing is flipped. Counted: its campaigns whose `sendStartedAt` is in the last 24 hours, under a per-reseller lock, in the write's transaction | the platform's bots and lines carry every send; the key is in `tenant/contract.limits.md` |
-| The platform owner's pool is never checked; a tenant that is not a reseller is exempt; `resume` is not a new send | ADR-0106 point 4; a stopped send was already counted |
+| A reseller's `send` is one unit of its `campaign_sends_daily_max` quota: `ResellerQuota.consume(tx, {tenantId, meter: 'campaign_sends_daily_max', qty: 1, sourceRef: 'campaign_send:<id>'})` in the flip's transaction, before the flip (`billing/contract.reseller-quota.md`) | the platform's bots and lines carry every send; one engine counts every quota (ADR-0107 point 4) |
+| Counted per **fixed day** from 00:00 on the platform's clock, not the last 24 hours. Past what is included, `overage` charges the reseller's billing wallet and the send goes; `stop` refuses it | ADR-0107 point 7 and Consequences |
+| A refusal is **409** with `ResellerQuotaExhausted.refusal`: a `stop` is `reseller_limit_reached`, `facts {key, limit, used}` (what the panel already names); an overage not paid is `reseller_quota_exhausted`, `facts {meter, stoppedBy, included, used}`. Nothing is flipped, nothing charged | the reseller learns whether to wait, top up, or raise its cap |
+| The platform owner's pool consumes nothing; a tenant that is not a reseller is exempt; `resume` is not a new send and a stop gives nothing back | ADR-0106 point 4; a stopped send was already counted |
 
 ## Not here
 

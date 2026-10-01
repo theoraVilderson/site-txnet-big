@@ -193,7 +193,8 @@ export class ResellerLimitsService {
         ...row,
         ...(t ? { limit: t.included, source: t.includedSource } : {}),
         kind: RESELLER_LIMITS[row.key].kind,
-        used: used[row.key],
+        // A quota's count is the engine's: every unit consumed this period, included or sold past it (F-019-v4).
+        used: st ? st.includedUsed + st.overageQty : used[row.key],
         overage: t ? { ...overageView(t.overage), source: t.overageSource } : null,
         statement: st ? { period: st.period, includedUsed: st.includedUsed, overageQty: st.overageQty, overageAmount: st.overageAmount } : null,
         lockedUntil: t?.lockedUntil ?? null,

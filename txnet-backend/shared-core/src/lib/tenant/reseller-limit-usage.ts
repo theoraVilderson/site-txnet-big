@@ -9,7 +9,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const GIB = BigInt(1024 ** 3);
 
 /** The reads the counts need. Pass the reseller's own scope, or a cross-tenant pool. */
-export type ResellerUsageReader = Pick<Prisma.TransactionClient, 'grant' | 'tenantDomain' | 'tenantStaffMember' | 'notificationCampaign' | 'user' | 'trafficDailyAggregate'>;
+export type ResellerUsageReader = Pick<Prisma.TransactionClient, 'grant' | 'tenantDomain' | 'tenantStaffMember' | 'user' | 'trafficDailyAggregate'>;
 
 type Count = (tx: ResellerUsageReader, tenantId: string, now: Date) => Promise<number>;
 
@@ -19,7 +19,8 @@ type Count = (tx: ResellerUsageReader, tenantId: string, now: Date) => Promise<n
  * that refuses. `null`: the key bounds a number set elsewhere, not a count —
  * `user_metered_cap_max` is checked against the value typed (F-019-n),
  * `bulk_job_grants_max` against one job's size (F-019-t5), the purchase
- * windows against one buyer's own buys (F-019-t7).
+ * windows against one buyer's own buys (F-019-t7). A `quota` key is `null`
+ * too: the quota engine counts it, and its statement is the figure (F-019-v4).
  * A new key is a line here too; the record does not compile without it.
  */
 export const RESELLER_LIMIT_USAGE: Record<ResellerLimitKey, Count | null> = {
@@ -47,7 +48,6 @@ export const RESELLER_LIMIT_USAGE: Record<ResellerLimitKey, Count | null> = {
   user_purchases_daily_max: null,
   user_purchases_weekly_max: null,
   user_purchases_monthly_max: null,
-  /** Its campaigns whose send started in the last 24 hours, stopped or done since (F-019-t4). */
   /** Its users, blocked ones too, not deleted — a blocked account still holds its phone and username (F-019-t2). */
   end_users_max: (tx, tenantId) => tx.user.count({ where: { tenantId, deletedAt: null } }),
   /**
@@ -62,7 +62,8 @@ export const RESELLER_LIMIT_USAGE: Record<ResellerLimitKey, Count | null> = {
     });
     return Number(((_sum.totalUploadBytes ?? BigInt(0)) + (_sum.totalDownloadBytes ?? BigInt(0))) / GIB);
   },
-  campaign_sends_daily_max: (tx, tenantId, now) => tx.notificationCampaign.count({ where: { tenantId, sendStartedAt: { gt: new Date(now.getTime() - DAY_MS) } } }),
+  /** A quota: the engine counts it per fixed day (`ResellerQuota.statementOf`, F-019-v4). */
+  campaign_sends_daily_max: null,
 };
 
 /** One key's count, or `null` for a key that counts nothing. */
