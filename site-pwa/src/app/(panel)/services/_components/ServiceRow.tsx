@@ -111,7 +111,7 @@ export const ServiceRow = memo(function ServiceRow({
   const [confirmReset, setConfirmReset] = useState(false);
   const configs = useGrantConfigs(row.id, configsOpen || manageOpen, configsAsked);
   const sub = useSubscriptionLink(row.id);
-  // Refused for the day: the page offers no reset until it is reloaded after the time it names.
+  // Refused for the day: no reset until the time it names (the hook lifts it then).
   const resetWaits = sub.resetLimited !== null;
   // A pay-as-you-go service counts its billing period, not a bag (F-118-aj).
   const period = useGrantPeriod(row.id, row.billingMode === "metered" && !row.trafficUnlimited, row.consumedBytes);

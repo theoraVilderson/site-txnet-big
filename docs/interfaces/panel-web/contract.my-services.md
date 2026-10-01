@@ -61,7 +61,7 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
    sentence is added, `role="alert"`, with its `ref`
    ([contract.errors.md](contract.errors.md)). Disabled in flight, never retried.
    `link_reset_limit` (3 per Grant a day, F-114-e-d) gets the panel's own
-   sentence — the limit and `nextAtMs` as local time — and reset stays off.
+   sentence — the limit and `nextAtMs` as local time; reset is off until then.
 5. **A refusal to read is billing's sentence, and reset stays offered.**
    `link_not_kept` (a Grant from before the token was kept) tells the user to
    reset once; `no_subscription_domain` to contact support. The panel branches

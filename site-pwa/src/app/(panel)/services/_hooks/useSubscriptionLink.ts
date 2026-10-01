@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { ApiError } from "@/lib/api-error";
 import { billingApi } from "@/lib/billing-api";
@@ -50,6 +50,15 @@ export function useSubscriptionLink(grantId: string): SubscriptionLinkState {
   const [resetDone, setResetDone] = useState(false);
   const [error, setError] = useState<{ message: string; ref?: string } | null>(null);
   const [resetLimited, setResetLimited] = useState<{ limit: number; nextAt: string } | null>(null);
+
+  // The refusal holds until the time it named, then reset is offered again —
+  // no reload. Billing still decides: a reset too early is refused the same way.
+  useEffect(() => {
+    if (!resetLimited) return;
+    const wait = Date.parse(resetLimited.nextAt) - Date.now();
+    const timer = setTimeout(() => setResetLimited(null), Math.max(0, Math.min(wait, 2 ** 31 - 1)));
+    return () => clearTimeout(timer);
+  }, [resetLimited]);
 
   function refused(e: unknown) {
     // Billing's own sentence, laid out (`contract.errors.md`) — `link_not_kept`

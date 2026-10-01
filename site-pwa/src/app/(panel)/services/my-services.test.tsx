@@ -549,6 +549,22 @@ describe("resetting a link", () => {
     expect(screen.queryByText(`${L}.resetDone`)).not.toBeInTheDocument();
   });
 
+  it("offers reset again by itself once the time it named has come, with no reload", async () => {
+    resetSubscriptionLink.mockRejectedValueOnce(
+      new ApiError("reset 3 times in 24 hours", { status: 429, reason: "link_reset_limit", facts: { limit: 3, nextAtMs: Date.now() + 1500 } }),
+    );
+    const user = userEvent.setup();
+    show();
+    details();
+    await user.click(button(`${L}.reset`));
+    await user.click(button(`${L}.resetYes`));
+    await screen.findByRole("alert");
+    expect(button(`${L}.reset`)).toBeDisabled();
+
+    await waitFor(() => expect(button(`${L}.reset`)).toBeEnabled(), { timeout: 5000 });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("never asks twice while a reset is in flight — each call destroys a working link", async () => {
     const user = userEvent.setup();
     let answer: (v: { grantId: string; subscriptionUrl: string }) => void = () => {};
