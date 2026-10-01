@@ -103,7 +103,8 @@ describe("who may buy", () => {
   it("asks the sidebar's holder question of `/purchase/mine`", () => {
     const sidebar = readFileSync(join(__dirname, "../_components/PanelSidebar.tsx"), "utf8");
     expect(sidebar).toMatch(/resellerPurchaseApi\s*\.mine\(\)/);
-    expect(sidebar).toMatch(/visibleMenu\(PANEL_MENU, [^)]*ownsReseller\)/);
+    // `ownsReseller` is passed to the menu rule; arguments after it (the tenant, F-311-ab) do not change that.
+    expect(sidebar).toMatch(/visibleMenu\(PANEL_MENU, [^)]*ownsReseller[,)]/);
   });
 
   it("is highlighted over the administration entry, which is its path's prefix", () => {
