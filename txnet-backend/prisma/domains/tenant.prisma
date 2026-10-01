@@ -169,7 +169,6 @@ model Tenant {
   usageMeters         TenantUsageMeter[]
   gatewayConfigs      TenantGatewayConfig[]
   smsConfigs          TenantSmsConfig[]
-  restrictions        TenantRestriction[]
   limits              ResellerLimit[]
   deks                TenantDek[]
   credentials         TenantCredential[]
@@ -610,25 +609,6 @@ model ResellerLimit {
 
   @@id([tenantId, key])
   @@map("reseller_limit")
-  @@schema("tenant")
-}
-
-/// Superseded by ADR-0106's three tables and read by no code; removal is F-019-u.
-/// TenantRestriction — سقف مصرف در سطح یک برند کامل (همان الگوی
-/// governance.UserRestriction، این‌بار سطح Tenant).
-model TenantRestriction {
-  id             String           @id @default(uuid()) @db.Uuid
-  tenantId       String           @db.Uuid
-  restrictionKey String // max_end_users, max_active_configs, max_monthly_traffic_gb,
-  // max_staff_members, max_custom_domains
-  limitValueJson Json
-  scope          RestrictionScope
-  isActive       Boolean          @default(true)
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId, restrictionKey])
-  @@map("tenant_restriction")
   @@schema("tenant")
 }
 

@@ -11,6 +11,7 @@ source:
   - txnet-backend/shared-core/src/lib/tenant/**
   - txnet-backend/prisma/domains/migrations/20260909000000_credential_vault/**
   - txnet-backend/prisma/domains/migrations/20261001000100_a_reseller_is_bounded_at_three_levels/**
+  - txnet-backend/prisma/domains/migrations/20261001000200_tenant_restriction_is_removed/**
   - txnet-backend/prisma/domains/migrations/20260909000100_credential_access_audit/**
   - txnet-backend/prisma/domains/migrations/20260909002000_tenant_domain_purpose/**
   - txnet-backend/prisma/domains/migrations/20260917000800_tenant_sms_config_vault/**
@@ -33,7 +34,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260926000900_a_reseller_names_its_lines/**
   - txnet-backend/prisma/domains/migrations/20260928002400_every_tenant_has_an_operating_currency/**
   - txnet-backend/prisma/domains/migrations/20260929001100_a_reseller_package_prices_platform_meters/**
-owns_tables: [tenant, tenant_branding, tenant_domain, tenant_feature_package, tenant_subscription, tenant_subscription_setting, tenant_feature_entitlement, tenant_staff_member, tenant_billing_wallet, tenant_billing_transaction, tenant_usage_meter, tenant_gateway_config, tenant_sms_config, tenant_restriction, tenant_credential, tenant_dek, tenant_credential_access, reseller_limit_setting, package_limit, reseller_limit]
+owns_tables: [tenant, tenant_branding, tenant_domain, tenant_feature_package, tenant_subscription, tenant_subscription_setting, tenant_feature_entitlement, tenant_staff_member, tenant_billing_wallet, tenant_billing_transaction, tenant_usage_meter, tenant_gateway_config, tenant_sms_config, tenant_credential, tenant_dek, tenant_credential_access, reseller_limit_setting, package_limit, reseller_limit]
 depends_on: [identity, billing, catalog, redis-keyspace]
 updated: 2026-09-28
 ---
