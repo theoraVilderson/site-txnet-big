@@ -80,6 +80,7 @@ Why each of those is the answer — and what a Redis that cannot be reached does
 | `retention_held_notice` | the end of quiet hours: takes the bot messages of retention notices held for their owner's quiet hours and now due (a 10 min lease), tells them on the bot only — one message per user and template, naming the services (F-601-p) — marked per ledger row, then `told` (F-601-m, `domains/notification/contract.retention.md`); a platform tick, seeded `*/5 * * * *`; a failed tell is an error, taken again after the lease | `NOTIFICATION_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `network_traffic_rollup` | rolls raw traffic into `traffic_daily_aggregate` and drops a raw month only once its aggregate matches it (F-027-o, `domains/network/contract.rollup.md`); a platform tick, seeded `15 3 * * *`; a refused drop fails the run | — (it calls `network.*` functions through its own pool) |
 | `tenant_domain_verification` | proves `verifying` custom domains and re-validates `verified` ones' TXT records; a platform tick, seeded `*/5`; a domain whose check threw is an error (F-018-i, `domains/tenant/contract.domains.md`) | `TENANT_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
+| `reseller_quota_digest` | asks notification-service for each reseller's daily quota digest — yesterday's refused units and overage, from 09:00 on the quota clock, once a day; a platform tick, seeded hourly (`5 * * * *`) (F-019-v8, `domains/notification/contract.reseller-quota.md`) | `NOTIFICATION_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 
 The retention job is the first job that does real work, and what it settled is
 how a job reaches code it cannot import.
@@ -93,9 +94,8 @@ boundary to serve one caller. `worker-service` therefore holds
 `SERVICE_AUTH_TOKEN`, and holds no tenant credential of its own: it asks the
 process that owns one to act, and never handles the value.
 
-**Both variables are optional in `worker-service` and read per run.** A job
-whose seam is unconfigured fails its own run into `bot_execution_log` and every
-other job keeps running; requiring them at boot would stop the consumer
+**Both variables are optional in `worker-service` and read per run.** A job whose seam is unconfigured fails its own
+run into `bot_execution_log` and every other job keeps running; requiring them at boot would stop the consumer
 draining the queue because one job's dependency is missing.
 
 **Two jobs over one seam are still two jobs.** Expiry reads a clock and calls

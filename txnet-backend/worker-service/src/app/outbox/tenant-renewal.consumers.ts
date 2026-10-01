@@ -67,11 +67,41 @@ export class TenantBillingCreditedConsumer implements OnApplicationBootstrap {
   }
 }
 
+/** The params a quota notice carries through: how to name the quota, and its figures. */
+const QUOTA_PARAMS = ['quotaKey', 'productNameKey', 'included', 'unitPrice', 'currencyCode', 'day', 'refused', 'overageUnits', 'overageCost'] as const;
+
+/**
+ * A reseller's quota notice (F-019-v8): 80% is `resellerQuotaNearing`; 100%
+ * is overage started or stopped, by its mode; `stopped` names why — the
+ * reseller's own spend cap, or a wallet that could not pay; the daily digest
+ * is `resellerQuotaDigest`. Null: a level this consumer does not know.
+ */
+export function quotaNotice(type: string, p: Record<string, unknown>): { template: string; params: Record<string, string> } | null {
+  const params: Record<string, string> = {};
+  for (const k of QUOTA_PARAMS) if (str(p, k)) params[k] = str(p, k)!;
+  if (type === OutboxEventType.TENANT_QUOTA_DIGEST) return { template: 'resellerQuotaDigest', params };
+  const level = str(p, 'level');
+  const template =
+    level === '80'
+      ? 'resellerQuotaNearing'
+      : level === '100'
+        ? str(p, 'mode') === 'overage'
+          ? 'resellerQuotaOverageStarted'
+          : 'resellerQuotaStopped'
+        : level === 'stopped'
+          ? str(p, 'stoppedBy') === 'spend_cap'
+            ? 'resellerQuotaCapReached'
+            : 'resellerQuotaUnpaid'
+          : null;
+  return template ? { template, params } : null;
+}
+
 /**
  * Tell a reseller's owner its renewal is unpaid, or that the panel was
  * suspended for it (F-019-c), or that its billing wallet no longer funds its
  * users on platform panels (F-118-w, once per refusal spell) — through `EventNoticeSender` (F-067-o): the
- * owner's inbox and bot, each once under its own marker. No live push of its
+ * owner's inbox and bot, each once under its own marker. Its quotas too
+ * (F-019-v8): 80%, 100%, stopped, and the daily digest ({@link quotaNotice}). No live push of its
  * own: the inbox row's `notification.created` already reaches every open
  * device (F-035-b), and no page reads a subscription event.
  */
@@ -99,6 +129,12 @@ export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap 
     const tenantId = str(p, 'tenantId');
     const ownerUserId = str(p, 'ownerUserId');
     if (!tenantId || !ownerUserId) throw new Error(`outbox event ${event.id} has a payload without its tenant or owner`);
+    if (event.type === OutboxEventType.TENANT_QUOTA_ALERT || event.type === OutboxEventType.TENANT_QUOTA_DIGEST) {
+      const quota = quotaNotice(event.type, p);
+      if (!quota) throw new Error(`outbox event ${event.id} is a quota notice auth-service has no words for`);
+      await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId: ownerUserId, ...quota } });
+      return;
+    }
     if (event.type === OutboxEventType.TENANT_WHOLESALE_UNFUNDED) {
       await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId: ownerUserId, template: 'resellerWholesaleUnfunded', params: {} } });
       return;

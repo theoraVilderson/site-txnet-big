@@ -10,6 +10,8 @@ import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { QuotaModule } from './quota/quota.module';
+import { QuotaRefusalSink } from './quota/quota-refusal.sink';
 import { RedisModule } from './redis/redis.module';
 import { IdentityMiddleware } from './request/identity.middleware';
 
@@ -24,6 +26,7 @@ const INTERNAL_ROUTES = 'internal/*path';
     LocaleModule,
     NotificationsModule,
     CampaignsModule,
+    QuotaModule,
   ],
   controllers: [HealthController],
   // Per-user limits, opted into per route with `@RateLimit` (F-092-r).
@@ -33,6 +36,8 @@ const INTERNAL_ROUTES = 'internal/*path';
     // staff write, closed for a suspended reseller. The tenant is the scope
     // IdentityMiddleware opened; `internal/*` has none and is not judged.
     { provide: APP_GUARD, useClass: TenantStatusGuard },
+    // A refused quota act is recorded on its own connection (F-019-v8).
+    QuotaRefusalSink,
   ],
 })
 export class AppModule implements NestModule {

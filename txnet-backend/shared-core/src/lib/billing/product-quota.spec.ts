@@ -72,6 +72,9 @@ function world(opts: { row?: ProductQuotaRow | null; locks?: Array<Record<string
       findMany: async () => opts.locks ?? [],
       createMany: async ({ data }: { data: typeof locksWritten }) => (locksWritten.push(...data), { count: data.length }),
     },
+    // F-019-v8: the act tells its 80% / 100% crossings; quota-alerts.spec.ts holds what they say.
+    resellerQuotaAlert: { createMany: async () => ({ count: 1 }) },
+    product: { findFirst: async () => null },
     resellerQuotaUsage: {
       findUnique: async ({ where }: { where: { tenantId_meter_sourceRef: { meter: string; sourceRef: string } } }) =>
         usage.find((u) => u.meter === where.tenantId_meter_sourceRef.meter && u.sourceRef === where.tenantId_meter_sourceRef.sourceRef) ?? null,

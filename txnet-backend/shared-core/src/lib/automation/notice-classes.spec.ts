@@ -41,10 +41,23 @@ describe('notice classes (F-601-s)', () => {
       'purchaseStuckPanelUnavailable',
       'purchaseStuckStrategyNotBuilt',
       'purchaseStuckWriteUnconfirmed',
+      'resellerQuotaCapReached',
+      'resellerQuotaStopped',
+      'resellerQuotaUnpaid',
       'resellerWholesaleUnfunded',
       'subscriptionSuspended',
     ]);
-    expect(by('important')).toEqual(['panelRefused', 'paymentCredited', 'purchaseDelayed', 'purchaseDelivered', 'subscriptionPaymentDue']);
+    expect(by('important')).toEqual([
+      'panelRefused',
+      'paymentCredited',
+      'purchaseDelayed',
+      'purchaseDelivered',
+      // F-019-v8: a reseller's quota at 80%, its overage started, and its daily digest.
+      'resellerQuotaDigest',
+      'resellerQuotaNearing',
+      'resellerQuotaOverageStarted',
+      'subscriptionPaymentDue',
+    ]);
     expect(by('info')).toEqual(['panelAccepted']);
   });
 

@@ -252,5 +252,35 @@
     "serviceLabelsSeparator": ", ",
     "serviceUnnamed": "A service",
     "servicesMore": "…and {{more}} more"
+  },
+  "resellerQuota": {
+    "nearing": "📊 {{quota}}: 80% of the {{included}} included in your package this period is used.",
+    "nearingTitle": "{{quota}} at 80%",
+    "overageStarted": "📈 {{quota}}: all {{included}} included this period are used. Each further unit is charged {{unitPrice}} {{currencyCode}} from your billing balance.",
+    "overageStartedTitle": "{{quota}}: overage started",
+    "stopped": "⛔ {{quota}}: all {{included}} included this period are used, so new ones are refused until the period ends. Upgrade your package to raise it now.",
+    "stoppedTitle": "{{quota}}: limit reached",
+    "unpaid": "⛔ {{quota}}: units past what your package includes cannot be paid from your billing balance, so they are refused. Top up your billing balance to resume.",
+    "unpaidTitle": "{{quota}}: stopped, billing balance",
+    "capReached": "⛔ {{quota}}: your overage spending cap for this month is reached, so units past what your package includes are refused. Raise or remove the cap to resume.",
+    "capReachedTitle": "{{quota}}: overage cap reached",
+    "digest": "🧾 Yesterday on your package quotas: {{refused}} unit(s) refused, {{overageUnits}} sold past what is included, for {{overageCost}}.",
+    "digestTitle": "Yesterday's quota summary",
+    "unnamed": "A quota",
+    "nearingMany": "{{count}} notices about your package quotas. Your usage and overage are on the Limits page of your panel.",
+    "nearingManyTitle": "{{count}} quota notices",
+    "overageStartedMany": "{{count}} notices about your package quotas. Your usage and overage are on the Limits page of your panel.",
+    "overageStartedManyTitle": "{{count}} quota notices",
+    "stoppedMany": "{{count}} notices about your package quotas. Your usage and overage are on the Limits page of your panel.",
+    "stoppedManyTitle": "{{count}} quota notices",
+    "unpaidMany": "{{count}} notices about your package quotas. Your usage and overage are on the Limits page of your panel.",
+    "unpaidManyTitle": "{{count}} quota notices",
+    "capReachedMany": "{{count}} notices about your package quotas. Your usage and overage are on the Limits page of your panel.",
+    "capReachedManyTitle": "{{count}} quota notices",
+    "digestMany": "{{count}} notices about your package quotas. Your usage and overage are on the Limits page of your panel.",
+    "digestManyTitle": "{{count}} quota notices"
+  },
+  "resellerQuotaKeys": {
+    "campaign_sends_daily_max": "Campaign sends per day"
   }
 }

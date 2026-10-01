@@ -102,6 +102,9 @@ function world(opts: { balance?: string; cap?: { amount: string; currencyCode?: 
     tenantSubscriptionSetting: { findUnique: async () => ({ quotaTimeZone: TEHRAN }) },
     tenantSubscription: { findUnique: async () => null },
     resellerOverageCap: { findUnique: async () => (opts.cap ? { amount: new Prisma.Decimal(opts.cap.amount), currencyCode: opts.cap.currencyCode ?? 'USD' } : null) },
+    // F-019-v8: the act tells its 80% / 100% crossings; quota-alerts.spec.ts holds what they say.
+    resellerQuotaAlert: { createMany: async () => ({ count: 1 }) },
+    product: { findFirst: async () => null },
     resellerQuotaUsage: {
       findUnique: async ({ where }: { where: { tenantId_meter_sourceRef: { tenantId: string; meter: string; sourceRef: string } } }) => {
         const k = where.tenantId_meter_sourceRef;

@@ -58,8 +58,14 @@ stoppedBy, included, used}`. Its `refusal` is what a route answers the
 reseller with (409), the same for every quota: a `stop` on a registry key is
 `reseller_limit_reached` `{key, limit, used}`, the refusal every limit gives and
 the panel names; anything else keeps its reason and says why. What a buyer
-hears is "not available now", never the figures (point 11, F-019-v11). The
-reseller is alerted by F-019-v8.
+hears is "not available now", never the figures (point 11, F-019-v11).
+
+**The reseller is told** (F-019-v8, notification
+[contract.reseller-quota.md](../notification/contract.reseller-quota.md)):
+`consumeMeter` writes the 80% / 100% alerts in the act's transaction after its
+usage row; every refusal, at `consume` or `admit`, is reported to the sink a
+service registers with `setQuotaRefusalSink` and recorded on its own
+connection. A new quota key needs no code for either.
 
 ## Adding a quota — the how-to (tickets, AI requests)
 
@@ -104,4 +110,4 @@ counted; its own products and the platform's tenant never are.
 
 ## Not yet
 
-Alerts F-019-v8. A reseller's statement of its product quotas (and the panel) is F-019-v9 / v10.
+A reseller's statement of its product quotas (and the panel) is F-019-v9 / v10.

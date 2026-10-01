@@ -20,7 +20,10 @@ import { PrismaService } from './prisma.service';
  * audience is every tenant's users, which no tenant binding can read, and
  * `SmsLineSource` (F-035-i-a), which reads `tenant_sms_config` beside the vault
  * that already runs here — a delivery run's tenants, or a draft's own tenant,
- * never a value. Widen the list only with a reason in a doc comment.
+ * never a value; and `QuotaRefusalSink` (F-019-v8), which records a refused
+ * quota act after its transaction rolled back, and `QuotaDigestService`, the
+ * platform's daily digest over every reseller. Widen the list only with a
+ * reason in a doc comment.
  */
 @Injectable()
 export class CrossTenantPrismaService extends PrismaService {}

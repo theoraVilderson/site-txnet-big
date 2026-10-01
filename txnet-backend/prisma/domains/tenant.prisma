@@ -178,6 +178,8 @@ model Tenant {
   limits              ResellerLimit[]
   quotaOverages       ResellerQuotaOverage[]
   quotaUsages         ResellerQuotaUsage[]
+  resellerQuotaAlerts   ResellerQuotaAlert[]
+  resellerQuotaRefusals ResellerQuotaRefusal[]
   quotaTermsLocks     ResellerQuotaTermsLock[]
   overageCap          ResellerOverageCap?
   deks                TenantDek[]
@@ -747,6 +749,47 @@ model ResellerQuotaTermsLock {
 
   @@id([tenantId, key, periodEnd])
   @@map("reseller_quota_terms_lock")
+  @@schema("tenant")
+}
+
+/// F-019-v8 (ADR-0107 point 11): one alert told to a reseller — 80%, 100%,
+/// stopped, or the day's digest — for one meter, window and period. The row is
+/// the "told once": written with its outbox event, insert only, a duplicate
+/// skipped. `meter` = '*' and `level` = 'digest' for the daily digest.
+model ResellerQuotaAlert {
+  tenantId    String   @db.Uuid
+  meter       String
+  /// day | week | month
+  period      String
+  periodStart DateTime
+  /// 80 | 100 | stopped | digest
+  level       String
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, meter, period, periodStart, level])
+  @@map("reseller_quota_alert")
+  @@schema("tenant")
+}
+
+/// F-019-v8: the acts a quota refused, and their units, per reseller, meter
+/// and day on the quota clock. Written after the refused act rolled back, on
+/// a connection of its own; read by the daily digest.
+model ResellerQuotaRefusal {
+  tenantId      String   @db.Uuid
+  meter         String
+  dayStart      DateTime
+  acts          Int
+  units         Int
+  lastStoppedBy String
+  updatedAt     DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, meter, dayStart])
+  @@index([dayStart])
+  @@map("reseller_quota_refusal")
   @@schema("tenant")
 }
 

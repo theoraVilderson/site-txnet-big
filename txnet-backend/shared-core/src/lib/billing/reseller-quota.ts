@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
+import { Logger } from '@nestjs/common';
+
 import { Prisma, TenantBillingReasonType, type ResellerQuotaUsage } from '@prisma/client';
 
 import { isResellerLimitKey, isResellerQuotaKey, RESELLER_LIMITS, type QuotaOverageTerms, type ResellerQuotaKey } from '../tenant/reseller-limits';
 import { TenantBillingInsufficientBalance, TenantBillingLedger } from '../tenant/billing/tenant-billing-ledger';
 import { platformCurrencyOf } from './operating-currency';
+import { alertQuotaCrossings, type QuotaRefusal, type QuotaWindowUse } from './quota-alerts';
 import { quotaTermsInEffectOf } from './quota-terms-lock';
 import { DEFAULT_QUOTA_TIME_ZONE, isTimeZone, quotaPeriodAt, type QuotaPeriod, type QuotaPeriodKind } from './quota-period';
 
@@ -96,6 +99,8 @@ export class ResellerQuotaExhausted extends Error {
     readonly stoppedBy: QuotaStopReason,
     readonly included: number,
     readonly used: number,
+    /** The tightest window, which a refusal's alert is told for (F-019-v8). */
+    readonly window?: QuotaPeriod,
   ) {
     super(`reseller quota exhausted: ${meter} (${used} of ${included} included; ${stoppedBy})`);
     this.name = 'ResellerQuotaExhausted';
@@ -135,7 +140,38 @@ export class ResellerQuotaSourceReleased extends Error {
 }
 
 const ledger = new TenantBillingLedger();
+const logger = new Logger('ResellerQuota');
 const SETTINGS_ID = 1;
+
+/**
+ * Where a refused act is reported (F-019-v8, `quota-alerts.ts`). Its
+ * transaction rolls back, so a service that consumes quotas registers a sink
+ * that writes on a connection of its own (`recordQuotaRefusal` on its
+ * cross-tenant pool). None registered — a spec, a service that never
+ * consumes — reports nothing. The sink is never awaited by the act and its
+ * failure never reaches it: a lost record costs a digest line, not a sale.
+ */
+let refusalSink: ((r: QuotaRefusal) => Promise<void>) | null = null;
+
+export function setQuotaRefusalSink(sink: ((r: QuotaRefusal) => Promise<void>) | null): void {
+  refusalSink = sink;
+}
+
+function reportRefusal(e: unknown, input: { tenantId: string; qty: number; overage: QuotaOverageTerms; zone: string; now: Date }): void {
+  if (!refusalSink || !(e instanceof ResellerQuotaExhausted) || !e.window) return;
+  const report: QuotaRefusal = {
+    tenantId: input.tenantId,
+    meter: e.meter,
+    qty: input.qty,
+    stoppedBy: e.stoppedBy,
+    included: e.included,
+    window: e.window,
+    overage: input.overage,
+    zone: input.zone,
+    at: input.now,
+  };
+  void refusalSink(report).catch((err: unknown) => logger.error(`quota refusal of ${e.meter} for ${input.tenantId} not recorded: ${(err as Error).message}`));
+}
 
 /**
  * A registry quota key's terms for one reseller: its number and overage, each
@@ -161,6 +197,8 @@ async function consume(
 /** One act's split, decided under the meter's lock; nothing is written yet. */
 type Plan = {
   period: QuotaPeriod;
+  /** Every window before the act, for its alerts (F-019-v8). */
+  windows: QuotaWindowUse[];
   includedQty: number;
   overageQty: number;
   /** What the overage would cost, with its price; null with none. */
@@ -194,8 +232,9 @@ async function plan(
   const binding = windows.reduce((a, b) => (b.room < a.room ? b : a));
   const includedQty = Math.min(qty, binding.room);
   const overageQty = qty - includedQty;
-  const stop = (why: QuotaStopReason) => new ResellerQuotaExhausted(terms.meter, why, binding.included ?? 0, binding.used);
-  if (overageQty === 0) return { period: windows[0].period, includedQty, overageQty, charge: null, stop };
+  const stop = (why: QuotaStopReason) => new ResellerQuotaExhausted(terms.meter, why, binding.included ?? 0, binding.used, binding.period);
+  const uses = windows.map(({ period, included, used }) => ({ period, included, used }));
+  if (overageQty === 0) return { period: windows[0].period, windows: uses, includedQty, overageQty, charge: null, stop };
 
   if (terms.overage.mode === 'stop') throw stop('stop');
   const { unitPrice, currencyCode } = terms.overage;
@@ -203,7 +242,7 @@ async function plan(
   if (currencyCode !== (await platformCurrencyOf(tx))) throw stop('price_unavailable');
   const amount = unitPrice.mul(overageQty);
   if (!(await underSpendCap(tx, tenantId, amount, currencyCode, now, clock))) throw stop('spend_cap');
-  return { period: windows[0].period, includedQty, overageQty, charge: { unitPrice, amount, currencyCode }, stop };
+  return { period: windows[0].period, windows: uses, includedQty, overageQty, charge: { unitPrice, amount, currencyCode }, stop };
 }
 
 /** Consumes against terms the caller resolved; the registry path above is one caller of it. */
@@ -222,7 +261,15 @@ async function consumeMeter(
   }
 
   const clock = await clockOf(tx, tenantId);
-  const { period, includedQty, overageQty, charge: priced, stop } = await plan(tx, { tenantId, terms, qty, now }, clock);
+  const refused = { tenantId, qty, overage: terms.overage, zone: clock.zone, now };
+  let planned: Plan;
+  try {
+    planned = await plan(tx, { tenantId, terms, qty, now }, clock);
+  } catch (e) {
+    reportRefusal(e, refused);
+    throw e;
+  }
+  const { period, includedQty, overageQty, charge: priced, stop } = planned;
   const id = randomUUID();
   let charge: { unitPrice: Prisma.Decimal; amount: Prisma.Decimal; currencyCode: string; transactionId: string } | null = null;
 
@@ -232,7 +279,11 @@ async function consumeMeter(
       charge = { ...priced, transactionId: moved.id };
     } catch (e) {
       // Thrown before the ledger wrote anything, so the caller's transaction is still whole.
-      if (e instanceof TenantBillingInsufficientBalance) throw stop('wallet_empty');
+      if (e instanceof TenantBillingInsufficientBalance) {
+        const empty = stop('wallet_empty');
+        reportRefusal(empty, refused);
+        throw empty;
+      }
       throw e;
     }
   }
@@ -255,6 +306,8 @@ async function consumeMeter(
       createdAt: now,
     },
   });
+  // 80% and 100%, told once each, committed with the act (F-019-v8).
+  await alertQuotaCrossings(tx, { tenantId, meter: terms.meter, windows: planned.windows, includedQty, overageQty, overage: terms.overage });
   return consumption(row, terms.windows[0].period, false);
 }
 
@@ -268,10 +321,16 @@ async function admit(tx: Prisma.TransactionClient, input: { tenantId: string; te
   const now = input.now ?? new Date();
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_quota:${input.tenantId}:${input.terms.meter}`}))`;
   const clock = await clockOf(tx, input.tenantId);
-  const { charge, stop } = await plan(tx, { ...input, now }, clock);
-  if (!charge) return;
-  const wallet = await tx.tenantBillingWallet.findUnique({ where: { tenantId: input.tenantId }, select: { cachedBalance: true, currencyCode: true } });
-  if (!wallet || wallet.currencyCode !== charge.currencyCode || wallet.cachedBalance.lt(charge.amount)) throw stop('wallet_empty');
+  try {
+    const { charge, stop } = await plan(tx, { ...input, now }, clock);
+    if (!charge) return;
+    const wallet = await tx.tenantBillingWallet.findUnique({ where: { tenantId: input.tenantId }, select: { cachedBalance: true, currencyCode: true } });
+    if (!wallet || wallet.currencyCode !== charge.currencyCode || wallet.cachedBalance.lt(charge.amount)) throw stop('wallet_empty');
+  } catch (e) {
+    // A buyer refused at the invoice is a refused act too (F-019-v8).
+    reportRefusal(e, { tenantId: input.tenantId, qty: input.qty, overage: input.terms.overage, zone: clock.zone, now });
+    throw e;
+  }
 }
 
 /**

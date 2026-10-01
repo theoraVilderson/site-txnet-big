@@ -15,6 +15,7 @@ import { GatewayModule } from './payment/gateway/gateway.module';
 import { GiftModule } from './payment/gift/gift.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { QuotaRefusalSink } from './quota/quota-refusal.sink';
 import { RedisModule } from './redis/redis.module';
 import { RevenueModule } from './revenue/revenue.module';
 import { CallbackTenantMiddleware } from './request/callback-tenant.middleware';
@@ -82,6 +83,8 @@ const INTERNAL_ROUTES = 'internal/*path';
     // What the tenant's status allows (F-018-f); the tenant is the scope the
     // middleware above opened, and a route with none is not judged.
     { provide: APP_GUARD, useClass: TenantStatusGuard },
+    // A refused quota act is recorded on its own connection (F-019-v8).
+    QuotaRefusalSink,
   ],
 })
 export class AppModule implements NestModule {

@@ -46,6 +46,10 @@ export const OutboxEventType = {
   TENANT_SUBSCRIPTION_SUSPENDED: 'tenant.subscription.suspended',
   /** F-118-w: a reseller's billing wallet refused a wholesale leg — once per refusal spell; its users on platform panels are cut (`noticeWholesaleUnfunded`). */
   TENANT_WHOLESALE_UNFUNDED: 'tenant.billing.wholesale_unfunded',
+  /** F-019-v8: a reseller's quota crossed 80%, filled (overage started, or stopped), or stopped for want of money — once per window and period (`quota-alerts.ts`). */
+  TENANT_QUOTA_ALERT: 'tenant.quota.alert',
+  /** F-019-v8: yesterday's refused units and overage, told to a reseller's owner from 09:00 on the quota clock — once a day (`quotaDigests`). */
+  TENANT_QUOTA_DIGEST: 'tenant.quota.digest',
   /** F-027-at: the platform owner released a usage hold; `metering-service` bills it (ADR-0080 decision 3). */
   USAGE_RELEASE: 'network.usage.release',
   /** F-118-f: a reporter's usage of a non-VPN meter; `metering-service` advances the Grant's `grant_meter.consumed` (ADR-0105 decision 5). */
@@ -162,6 +166,8 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED]: 'worker-service',
   [OutboxEventType.TENANT_WHOLESALE_UNFUNDED]: 'worker-service',
+  [OutboxEventType.TENANT_QUOTA_ALERT]: 'worker-service',
+  [OutboxEventType.TENANT_QUOTA_DIGEST]: 'worker-service',
   [OutboxEventType.USAGE_RELEASE]: 'metering-service',
   [OutboxEventType.USAGE_EVENT]: 'metering-service',
   [OutboxEventType.GRANT_CREATED]: 'worker-service',

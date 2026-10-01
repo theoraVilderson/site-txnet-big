@@ -44,6 +44,7 @@ export * from './lib/billing/usage-event';
 export * from './lib/billing/operating-currency';
 export * from './lib/billing/quota-period';
 export * from './lib/billing/reseller-quota';
+export * from './lib/billing/quota-alerts';
 export * from './lib/billing/quota-terms-lock';
 export * from './lib/billing/product-quota';
 export * from './lib/billing/currency-change';

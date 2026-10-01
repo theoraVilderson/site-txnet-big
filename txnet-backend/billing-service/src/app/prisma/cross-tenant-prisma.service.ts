@@ -28,7 +28,8 @@ import { PrismaService } from './prisma.service';
  * whose read finds a gateway's owner and a payment's tenant (ADR-0051) —
  * `WebhookGatewayMiddleware` and `DepositWebhookService`; and the platform
  * owner's admin surfaces (ADR-0053), among them `TenantBillingAdminService`,
- * which writes a reseller's billing wallet (F-019-a). Widen that list only
+ * which writes a reseller's billing wallet (F-019-a); and `QuotaRefusalSink`, which records
+ * a refused quota act after its transaction rolled back (F-019-v8). Widen that list only
  * with a reason in a doc comment saying why the read cannot be scoped.
  */
 @Injectable()

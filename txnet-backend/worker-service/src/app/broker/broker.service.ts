@@ -331,7 +331,14 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
     });
     // F-118-w: a reseller at zero told its platform-panel users are cut — the same owner, the same line.
-    for (const type of [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE, OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED, OutboxEventType.TENANT_WHOLESALE_UNFUNDED]) {
+    // F-019-v8: its quotas — 80%, 100%, stopped, and the daily digest — the same owner again.
+    for (const type of [
+      OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE,
+      OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED,
+      OutboxEventType.TENANT_WHOLESALE_UNFUNDED,
+      OutboxEventType.TENANT_QUOTA_ALERT,
+      OutboxEventType.TENANT_QUOTA_DIGEST,
+    ]) {
       await this.channel.bindQueue(this.tenantSubscriptionNoticeQueue, this.exchange, outboxRoutingKey(type));
     }
     // F-111-d: a paid Grant delivered or refunded, told to its buyer — one

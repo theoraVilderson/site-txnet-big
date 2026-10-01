@@ -13,6 +13,12 @@ export const NOTIFY_TEMPLATES = [
   'subscriptionPaymentDue',
   'subscriptionSuspended',
   'resellerWholesaleUnfunded',
+  'resellerQuotaNearing',
+  'resellerQuotaOverageStarted',
+  'resellerQuotaStopped',
+  'resellerQuotaUnpaid',
+  'resellerQuotaCapReached',
+  'resellerQuotaDigest',
   'panelAccepted',
   'panelRefused',
   'purchaseDelivered',
@@ -96,7 +102,17 @@ export type NotifyRequest = {
 export type NotifyResult = { sent: Array<BotPlatform | 'sms'> };
 
 type Texts = Partial<Record<string, string>>;
-type NotificationsNamespace = { payment?: Texts; subscription?: Texts; resellerBilling?: Texts; panel?: Texts; purchase?: Texts; retention?: Texts };
+/** `resellerQuotaKeys`: a registry quota key's name, by key (F-019-v8); a product's is its catalog name. */
+type NotificationsNamespace = {
+  payment?: Texts;
+  subscription?: Texts;
+  resellerBilling?: Texts;
+  resellerQuota?: Texts;
+  resellerQuotaKeys?: Texts;
+  panel?: Texts;
+  purchase?: Texts;
+  retention?: Texts;
+};
 type Text = { read: (ns: NotificationsNamespace | undefined) => string | undefined; fallback: string };
 type Notice = Text & { inbox: Text };
 
@@ -163,6 +179,72 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.resellerBilling?.wholesaleUnfundedMany,
       fallback: "⛔ Your billing balance has run out ({{count}} times), so your users on the platform's servers stopped as their traffic ran out. Top up your billing balance and they resume by themselves.",
       inbox: { read: (ns) => ns?.resellerBilling?.wholesaleUnfundedManyTitle, fallback: 'Your users on platform servers have stopped ({{count}})' },
+    },
+  },
+  // F-019-v8: 80% of a quota's included units used, once per window and period.
+  resellerQuotaNearing: {
+    read: (ns) => ns?.resellerQuota?.nearing,
+    fallback: '📊 {{quota}}: 80% of the {{included}} included in your package this period is used.',
+    inbox: { read: (ns) => ns?.resellerQuota?.nearingTitle, fallback: '{{quota}} at 80%' },
+    many: {
+      read: (ns) => ns?.resellerQuota?.nearingMany,
+      fallback: '{{count}} notices about your package quotas. Your usage and overage are on the Limits page of your panel.',
+      inbox: { read: (ns) => ns?.resellerQuota?.nearingManyTitle, fallback: '{{count}} quota notices' },
+    },
+  },
+  // What is included is used up on an overage quota: each further unit is paid from the billing balance.
+  resellerQuotaOverageStarted: {
+    read: (ns) => ns?.resellerQuota?.overageStarted,
+    fallback: '📈 {{quota}}: all {{included}} included this period are used. Each further unit is charged {{unitPrice}} {{currencyCode}} from your billing balance.',
+    inbox: { read: (ns) => ns?.resellerQuota?.overageStartedTitle, fallback: '{{quota}}: overage started' },
+    many: {
+      read: (ns) => ns?.resellerQuota?.overageStartedMany,
+      fallback: '{{count}} notices about your package quotas. Your usage and overage are on the Limits page of your panel.',
+      inbox: { read: (ns) => ns?.resellerQuota?.overageStartedManyTitle, fallback: '{{count}} quota notices' },
+    },
+  },
+  // What is included is used up on a stop quota: refused until the period ends, or an upgrade (F-019-v7).
+  resellerQuotaStopped: {
+    read: (ns) => ns?.resellerQuota?.stopped,
+    fallback: '⛔ {{quota}}: all {{included}} included this period are used, so new ones are refused until the period ends. Upgrade your package to raise it now.',
+    inbox: { read: (ns) => ns?.resellerQuota?.stoppedTitle, fallback: '{{quota}}: limit reached' },
+    many: {
+      read: (ns) => ns?.resellerQuota?.stoppedMany,
+      fallback: '{{count}} notices about your package quotas. Your usage and overage are on the Limits page of your panel.',
+      inbox: { read: (ns) => ns?.resellerQuota?.stoppedManyTitle, fallback: '{{count}} quota notices' },
+    },
+  },
+  // An overage unit the billing balance could not pay: refused until a top-up.
+  resellerQuotaUnpaid: {
+    read: (ns) => ns?.resellerQuota?.unpaid,
+    fallback: '⛔ {{quota}}: units past what your package includes cannot be paid from your billing balance, so they are refused. Top up your billing balance to resume.',
+    inbox: { read: (ns) => ns?.resellerQuota?.unpaidTitle, fallback: '{{quota}}: stopped, billing balance' },
+    many: {
+      read: (ns) => ns?.resellerQuota?.unpaidMany,
+      fallback: '{{count}} notices about your package quotas. Your usage and overage are on the Limits page of your panel.',
+      inbox: { read: (ns) => ns?.resellerQuota?.unpaidManyTitle, fallback: '{{count}} quota notices' },
+    },
+  },
+  // The reseller's own monthly overage cap is reached (ADR-0107 point 6).
+  resellerQuotaCapReached: {
+    read: (ns) => ns?.resellerQuota?.capReached,
+    fallback: '⛔ {{quota}}: your overage spending cap for this month is reached, so units past what your package includes are refused. Raise or remove the cap to resume.',
+    inbox: { read: (ns) => ns?.resellerQuota?.capReachedTitle, fallback: '{{quota}}: overage cap reached' },
+    many: {
+      read: (ns) => ns?.resellerQuota?.capReachedMany,
+      fallback: '{{count}} notices about your package quotas. Your usage and overage are on the Limits page of your panel.',
+      inbox: { read: (ns) => ns?.resellerQuota?.capReachedManyTitle, fallback: '{{count}} quota notices' },
+    },
+  },
+  // The daily digest from 09:00 on the quota clock: yesterday's refused units and overage (F-019-v8).
+  resellerQuotaDigest: {
+    read: (ns) => ns?.resellerQuota?.digest,
+    fallback: '🧾 Yesterday on your package quotas: {{refused}} unit(s) refused, {{overageUnits}} sold past what is included, for {{overageCost}}.',
+    inbox: { read: (ns) => ns?.resellerQuota?.digestTitle, fallback: "Yesterday's quota summary" },
+    many: {
+      read: (ns) => ns?.resellerQuota?.digestMany,
+      fallback: '{{count}} notices about your package quotas. Your usage and overage are on the Limits page of your panel.',
+      inbox: { read: (ns) => ns?.resellerQuota?.digestManyTitle, fallback: '{{count}} quota notices' },
     },
   },
   // F-067-o: a connection test's verdict, told to the owner (`accepted_low_trust` is an acceptance).
@@ -746,7 +828,8 @@ export class UserNotifier {
     const ns = this.locale.getNamespace(user.languagePreference, 'notifications') as NotificationsNamespace | undefined;
     const combined = request.count !== undefined && request.count > 1;
     const spec = combined ? TEMPLATE_TEXT[request.template].many : TEMPLATE_TEXT[request.template];
-    const params = combined ? { ...request.params, count: String(request.count) } : request.params;
+    const told = this.withQuotaName(request.template, request.params, user.languagePreference, ns);
+    const params = combined ? { ...told, count: String(request.count) } : told;
     const body = interpolate(spec.read(ns) ?? spec.fallback, params);
     const list = combined && request.services?.length ? this.serviceList(request.services, user.languagePreference, ns) : null;
     const trailing = TRAILING_LINES.filter((l) => params[l.param]).map((l) => interpolate(l.read(ns) ?? l.fallback, params));
@@ -804,14 +887,32 @@ export class UserNotifier {
    * then the buyer's config labels. Either name tells identical purchases
    * apart. Past {@link LISTED_SERVICES}, one "and N more" line.
    */
+  /**
+   * A quota notice names its quota in the user's language (F-019-v8): a
+   * registry key by `resellerQuotaKeys.<key>`, a product's sales by its
+   * catalog name. A name already given is kept.
+   */
+  private withQuotaName(template: NotifyTemplate, params: Record<string, string>, lang: string, ns: NotificationsNamespace | undefined): Record<string, string> {
+    if (!template.startsWith('resellerQuota') || params.quota) return params;
+    const quota =
+      (params.quotaKey ? ns?.resellerQuotaKeys?.[params.quotaKey] : undefined) ??
+      this.catalogName(params.productNameKey ?? null, lang) ??
+      ns?.resellerQuota?.unnamed ??
+      'A quota';
+    return { ...params, quota };
+  }
+
+  /** A `catalog.*` key in the user's language, or the default one; undefined when neither has it. */
+  private catalogName(key: string | null, lang: string): string | undefined {
+    if (!key?.startsWith('catalog.')) return undefined;
+    const entry = key.slice('catalog.'.length);
+    const text = this.locale.getKey(lang, 'catalog', entry) ?? this.locale.getKey(this.locale.getDefaultLanguage(), 'catalog', entry);
+    return typeof text === 'string' && text !== '' ? text : undefined;
+  }
+
   private serviceList(services: NotifyService[], lang: string, ns: NotificationsNamespace | undefined): string {
     const say = (t: Text, vars: Record<string, string> = {}) => interpolate(t.read(ns) ?? t.fallback, vars);
-    const catalogName = (key: string | null) => {
-      if (!key?.startsWith('catalog.')) return undefined;
-      const entry = key.slice('catalog.'.length);
-      const text = this.locale.getKey(lang, 'catalog', entry) ?? this.locale.getKey(this.locale.getDefaultLanguage(), 'catalog', entry);
-      return typeof text === 'string' && text !== '' ? text : undefined;
-    };
+    const catalogName = (key: string | null) => this.catalogName(key, lang);
     const lines = services.slice(0, LISTED_SERVICES).map((s) => {
       const catalog = catalogName(s.nameKey) ?? s.sku ?? say(SERVICE_LIST.unnamed);
       const name = s.label ? say(SERVICE_LIST.named, { label: s.label, name: catalog }) : catalog;
