@@ -13,15 +13,18 @@
  *  - **a metered offer with no rate on it** (F-118-ae). The shop showed 0.00
  *    and "metered" for a 10 USD/GB variant: an offer carries the card in
  *    effect for each meter, the one its sale will lock — never an older one,
- *    never one in another currency.
+ *    never one in another currency;
+ *  - **a reseller selling what its package does not** (F-019-v5). A platform
+ *    product is offered to a reseller only if its package lists it — in the
+ *    shop and at the invoice; its own products are never narrowed.
  *
  * Which rows a tenant can read at all is RLS: `catalog-schema.int.spec.ts`.
  */
-import { Prisma, VariantVisibility } from '@prisma/client';
+import { FulfilmentKind, Prisma, TenantType, VariantBillingMode, VariantVisibility } from '@prisma/client';
 
-import { CATEGORY_MAX_DEPTH, categoryLive, firstLiveCategory, liveCategoryWhere, productCategoriesLive } from '@txnet-backend/shared-core';
+import { CATEGORY_MAX_DEPTH, categoryLive, firstLiveCategory, liveCategoryWhere, productCategoriesLive, runWithTenant } from '@txnet-backend/shared-core';
 
-import { isListed, isSellableBySku, offerRateCards, pickBySku, priceAt, type PriceRow, type RateCardRow } from './catalog-reads';
+import { isListed, isSellableBySku, listOffersIn, offerRateCards, pickBySku, priceAt, sellableOfferById, type PriceRow, type RateCardRow } from './catalog-reads';
 
 const d = (v: string) => new Prisma.Decimal(v);
 const at = (iso: string) => new Date(iso);
@@ -184,5 +187,70 @@ describe('the rate an offer names (F-118-ae)', () => {
     ];
     expect(offerRateCards(cards, now, 'USD').map((c) => c.unitPrice)).toEqual(['8']);
     expect(offerRateCards([], now, 'USD')).toEqual([]);
+  });
+});
+
+describe("a reseller sells the platform's products its package lists (F-019-v5)", () => {
+  const RESELLER = '22222222-2222-4222-8222-222222222222';
+  const now = at('2026-10-01T12:00:00Z');
+
+  const variant = (id: string, productId: string, tenantId: string | null) => ({
+    id,
+    sku: id,
+    tenantId,
+    nameKey: null,
+    visibility: VariantVisibility.public,
+    isActive: true,
+    quotas: {},
+    durationDays: 30,
+    billingMode: VariantBillingMode.prepaid,
+    qualityTier: 'standard',
+    panelGroupId: null,
+    product: {
+      id: productId,
+      tenantId,
+      key: productId,
+      nameKey: `catalog.product.${productId}.name`,
+      descriptionKey: null,
+      fulfilmentKind: FulfilmentKind.network_access,
+      featureKeys: [],
+      isActive: true,
+      categories: [{ position: 0, category: { key: 'vpn', nameKey: 'catalog.category.vpn.name', isActive: true, parentId: null } }],
+    },
+    prices: [price(`${id}-price`, '5.00', '2026-09-01T00:00:00Z')],
+    rateCards: [],
+  });
+
+  const rows = [variant('listed', 'p-listed', null), variant('unlisted', 'p-unlisted', null), variant('own', 'p-own', RESELLER)];
+
+  function txFor(tenantType: TenantType, listed: string[]) {
+    const tx = {
+      tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD', tenantType }) },
+      tenantSubscription: { findUnique: async () => ({ packageId: 'pkg' }) },
+      packageProduct: { findMany: async () => listed.map((productId) => ({ productId })) },
+      productVariant: {
+        findMany: async () => rows,
+        findUnique: async ({ where }: { where: { id: string } }) => rows.find((r) => r.id === where.id) ?? null,
+      },
+    };
+    return tx as unknown as Prisma.TransactionClient;
+  }
+  const inReseller = <R>(fn: () => Promise<R>) => runWithTenant({ id: RESELLER }, fn);
+
+  it('lists the listed platform product and its own, never an unlisted platform one', async () => {
+    const offers = await inReseller(() => listOffersIn(txFor(TenantType.reseller, ['p-listed']), now));
+    expect(offers.map((o) => o.variantId)).toEqual(['listed', 'own']);
+  });
+
+  it('refuses the invoice for an unlisted platform product, as one not for sale', async () => {
+    const tx = txFor(TenantType.reseller, ['p-listed']);
+    expect(await inReseller(() => sellableOfferById(tx, 'unlisted', now))).toBeNull();
+    expect((await inReseller(() => sellableOfferById(tx, 'listed', now)))?.variantId).toBe('listed');
+    expect((await inReseller(() => sellableOfferById(tx, 'own', now)))?.variantId).toBe('own');
+  });
+
+  it("narrows nothing for the platform's own tenant", async () => {
+    const offers = await inReseller(() => listOffersIn(txFor(TenantType.platform_owner, []), now));
+    expect(offers).toHaveLength(3);
   });
 });

@@ -31,7 +31,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 export type ResellerLimitsActor = { adminId: string; tenantId: string; ip: string };
 
-export type ResellerLimitsRejection = 'not_platform_owner' | 'unknown_limit' | 'limit_out_of_range' | 'package_not_found' | 'reseller_not_found' | 'not_a_quota';
+export type ResellerLimitsRejection = 'not_platform_owner' | 'unknown_limit' | 'limit_out_of_range' | 'package_not_found' | 'reseller_not_found' | 'not_a_quota' | 'product_not_found';
 
 export class ResellerLimitsRefused extends Error {
   constructor(

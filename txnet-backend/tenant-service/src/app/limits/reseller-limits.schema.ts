@@ -49,3 +49,8 @@ export const setOverageCapSchema = z
   .strict();
 
 export type SetOverageCapInput = { amount: string | null };
+
+/** Lists a platform product on a package (F-019-v5): nothing to say yet, so an empty body. */
+export const setPackageProductSchema = z.object({}).strict();
+
+export type SetPackageProductInput = Record<string, never>;

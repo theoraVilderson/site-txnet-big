@@ -1,4 +1,5 @@
 import { GrantSource, GrantStatus, Prisma } from '@prisma/client';
+import { TenantContext, tenantSellsProduct } from '@txnet-backend/shared-core';
 
 import { sellsTrafficToday } from '../catalog/traffic-quota';
 import { deliverableGroupIds } from '../traffic/group-fulfilment';
@@ -59,7 +60,7 @@ export async function issueGrantByAdmin(tx: Prisma.TransactionClient, grants: Gr
 
   const variant = await tx.productVariant.findUnique({
     where: { id: input.variantId },
-    select: { panelGroupId: true, billingMode: true, quotas: true, product: { select: { fulfilmentKind: true } } },
+    select: { panelGroupId: true, billingMode: true, quotas: true, product: { select: { id: true, tenantId: true, fulfilmentKind: true } } },
   });
   if (!variant) throw new EntitlementRefused('variant_not_found', input.variantId);
   const route = deliveryRouteOf(variant.product.fulfilmentKind, variant.panelGroupId);
@@ -70,6 +71,10 @@ export async function issueGrantByAdmin(tx: Prisma.TransactionClient, grants: Gr
   if (!deliverable) throw new EntitlementRefused('variant_not_deliverable', input.variantId);
   // After the repeat above, so asking again for the same issue is never refused.
   if (input.bounded) {
+    // A platform product the reseller's package does not list is not handed out by its people either (F-019-v5).
+    if (!(await tenantSellsProduct(tx, TenantContext.current('admin issue').id, variant.product))) {
+      throw new EntitlementRefused('variant_not_assignable', input.variantId);
+    }
     await assertAdminIssueRoom(tx, input.at);
     await assertPlatformGrantRoom(tx, input.variantId);
   }

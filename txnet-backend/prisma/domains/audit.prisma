@@ -145,6 +145,9 @@ enum AdminAction {
   reseller_overage_clear
   // F-019-v2 (ADR-0107 point 6). A reseller's own cap on what overage may cost it per month.
   reseller_overage_cap_set
+  // F-019-v5 (ADR-0107 point 3). A platform product listed on a package, or taken off it.
+  package_product_set
+  package_product_clear
 
   @@schema("audit")
 }

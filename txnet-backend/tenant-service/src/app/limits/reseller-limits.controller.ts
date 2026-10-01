@@ -30,6 +30,8 @@ import {
   setLimitSchema,
   SetOverageCapInput,
   setOverageCapSchema,
+  SetPackageProductInput,
+  setPackageProductSchema,
   SetOverageInput,
   setOverageSchema,
   SetResellersLimitInput,
@@ -37,6 +39,7 @@ import {
   SetResellersOverageInput,
   setResellersOverageSchema,
 } from './reseller-limits.schema';
+import { PackageProductsService, PackageProductView } from './package-products.service';
 import { LimitInEffectRow, LimitRow, OverageCapView, ResellerLimitsActor, ResellerLimitsRefused, ResellerLimitsRejection, ResellerLimitsService } from './reseller-limits.service';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
@@ -47,6 +50,7 @@ const STATUS: Record<ResellerLimitsRejection, 403 | 404 | 422> = {
   reseller_not_found: 404,
   limit_out_of_range: 422,
   not_a_quota: 422,
+  product_not_found: 404,
 };
 
 /**
@@ -196,6 +200,41 @@ export class ResellerLimitsOfController {
   @Put('overage-cap')
   setOverageCap(@Req() req: Request, @Ip() ip: string, @Param('id', new ParseUUIDPipe()) id: string, @Body(new ZodValidationPipe(setOverageCapSchema)) body: SetOverageCapInput) {
     return admitting(() => this.limits.setOverageCap({ ...identityOf(req), ip }, id, body.amount));
+  }
+}
+
+/**
+ * The platform products a package lets its subscribers sell (F-019-v5,
+ * ADR-0107 point 3): `GET` the list, `PUT …/:productId` (empty body) lists one,
+ * `DELETE` takes it off. A product that is not the platform's is
+ * `404 product_not_found`. Writes answer `204`.
+ */
+@Controller('tenants/limits/packages/:packageId/products')
+@UseGuards(TenantPermissionGuard)
+export class PackageProductsController {
+  constructor(private readonly products: PackageProductsService) {}
+
+  @Get()
+  list(@Req() req: Request, @Ip() ip: string, @Param('packageId', new ParseUUIDPipe()) packageId: string): Promise<PackageProductView[]> {
+    return refusing(() => this.products.list(actorOf(req, ip), packageId));
+  }
+
+  @Put(':productId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  set(
+    @Req() req: Request,
+    @Ip() ip: string,
+    @Param('packageId', new ParseUUIDPipe()) packageId: string,
+    @Param('productId', new ParseUUIDPipe()) productId: string,
+    @Body(new ZodValidationPipe(setPackageProductSchema)) _body: SetPackageProductInput,
+  ) {
+    return refusing(() => this.products.set(actorOf(req, ip), packageId, productId));
+  }
+
+  @Delete(':productId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  clear(@Req() req: Request, @Ip() ip: string, @Param('packageId', new ParseUUIDPipe()) packageId: string, @Param('productId', new ParseUUIDPipe()) productId: string) {
+    return refusing(() => this.products.clear(actorOf(req, ip), packageId, productId));
   }
 }
 

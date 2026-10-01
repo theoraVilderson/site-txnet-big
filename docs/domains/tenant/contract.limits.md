@@ -2,11 +2,11 @@
 id: tenant
 layer: domain
 status: active
-version: 47
+version: 48
 updated: 2026-10-01
 ---
 
-# Contract — tenant: what a reseller may spend (F-019-m, ADR-0106; F-019-v1, F-019-v3, ADR-0107)
+# Contract — tenant: what a reseller may spend (F-019-m, ADR-0106; F-019-v1, F-019-v3, F-019-v5, ADR-0107)
 
 A reseller acts on things the platform owns — its panels, its certificates.
 Each such thing has a **limit key**, set at three levels; the most specific
@@ -111,6 +111,9 @@ path has three segments or more, so none is read as `GET /api/tenants/:id`.
 | `PUT /api/tenants/limits/resellers/:key/overage` | the same + `{tenantIds, reason}` | `{key, mode, unitPrice, currencyCode, tenantIds}` |
 | `POST /api/tenants/limits/resellers/:key/overage/clear` | `{tenantIds}` | `{key, cleared}` |
 | `GET /api/tenants/:id/limits` (F-019-r, F-019-s, F-019-v1, F-019-v2) | — | `[{key, kind, limit, source, used, overage, statement, lockedUntil}]` (`overage`: `{mode, unitPrice, currencyCode, source}`; `statement`: `{period: {kind, start, end}, includedUsed, overageQty, overageAmount}` from the engine; both null for a guard; a quota's `limit`, `source` and `overage` are the period's terms, F-019-v3; `lockedUntil` the period end a lock holds them to, else null) — `resellerLimitsOf` and `resellerUsagesOf` for that reseller, on the cross-tenant pool. **Not** behind the guard: `ResellerAccess.admit(…, 'read')` lets in the reseller's owner, its team and the platform's staff; its refusals are `not_allowed` **403**, `reseller_not_found` **404** (staff only learn it), `reseller_suspended` **403**, `reseller_terminated` **409** |
+
+| `GET /api/tenants/limits/packages/:packageId/products` (F-019-v5) | — | `[{productId, key, nameKey, isActive, listedAt}]` by key — the platform products the package lets its subscribers sell; `404 package_not_found` |
+| `PUT` / `DELETE /api/tenants/limits/packages/:packageId/products/:productId` | `{}`, strict | 204 — listed / taken off; again writes nothing. Not a platform product (or none) **404** `product_not_found`; audited `package_product_set` / `package_product_clear` `{productId, listed}` against the package. What reads it: catalog `contract.md` "What a reseller may sell" |
 
 | `GET /api/tenants/:id/limits/overage-cap` (F-019-v2) | — | `{month: {kind, start, end}, cap: "50.00" \| null, spent, currencyCode}` — `ResellerAccess` `read`, the refusals above |
 | `PUT` the same | `{amount: "50.00" \| null}` (≥ 0, ≤ 2 places; `0` = no overage at all; `null` removes it), strict | the same shape — `ResellerAccess` `tenantBilling`: its owner, its team, the platform's staff; audited `reseller_overage_cap_set` `{cap}` before/after in the **reseller's** log. Stamped with the platform's currency, converted by its change |

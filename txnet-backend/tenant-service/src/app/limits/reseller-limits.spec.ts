@@ -13,10 +13,13 @@
  *    limit); clearing deletes it (the next level applies);
  *  - **a guard sold past** (F-019-v1, ADR-0107). Overage is refused on any key
  *    whose kind is not `quota`; a price is stamped with the platform's
- *    currency, and the mode is resolved apart from the number.
+ *    currency, and the mode is resolved apart from the number;
+ *  - **a package listing a reseller's own product** (F-019-v5). Only a
+ *    platform product is listed on a package; each change is audited once.
  */
 import { ResellerAccessRefused, type ResellerAccessRejection } from '@txnet-backend/shared-core';
 
+import { PackageProductsService } from './package-products.service';
 import { ResellerLimitsRefused, ResellerLimitsService } from './reseller-limits.service';
 import { setLimitSchema, setOverageCapSchema, setOverageSchema, setResellersLimitSchema, setResellersOverageSchema, clearResellersLimitSchema } from './reseller-limits.schema';
 
@@ -407,5 +410,55 @@ describe('the bodies', () => {
     expect(setResellersLimitSchema.safeParse({ tenantIds: [RESELLER_A, RESELLER_A], value: 3, reason: 'ok' }).success).toBe(false);
     expect(setResellersLimitSchema.safeParse({ tenantIds: [RESELLER_A], value: 3, reason: '  ' }).success).toBe(false);
     expect(clearResellersLimitSchema.safeParse({ tenantIds: [RESELLER_A] }).success).toBe(true);
+  });
+});
+
+describe('PackageProductsService — the platform products a package sells (F-019-v5)', () => {
+  const PLATFORM_PRODUCT = '66666666-6666-4666-8666-666666666666';
+  const OWN_PRODUCT = '77777777-7777-4777-8777-777777777777';
+
+  function products(callerType = 'platform_owner') {
+    const listed = new Set<string>();
+    const audit: Array<Record<string, unknown>> = [];
+    const tx = {
+      tenantFeaturePackage: { findUnique: async ({ where }: { where: { id: string } }) => (where.id === PKG ? { id: PKG } : null) },
+      product: { findUnique: async ({ where }: { where: { id: string } }) => ({ [PLATFORM_PRODUCT]: { tenantId: null }, [OWN_PRODUCT]: { tenantId: RESELLER_A } })[where.id] ?? null },
+      packageProduct: {
+        findUnique: async ({ where }: { where: { packageId_productId: { productId: string } } }) => (listed.has(where.packageId_productId.productId) ? { productId: where.packageId_productId.productId } : null),
+        create: async ({ data }: { data: { productId: string } }) => listed.add(data.productId),
+        deleteMany: async ({ where }: { where: { productId: string } }) => ({ count: listed.delete(where.productId) ? 1 : 0 }),
+      },
+      adminAuditLog: { create: async ({ data }: { data: Record<string, unknown> }) => audit.push(data) },
+    };
+    const all = { ...tx, $transaction: async <T>(fn: (t: typeof tx) => Promise<T>) => fn(tx) };
+    const prisma = { tenant: { findUnique: async () => ({ tenantType: callerType }) } };
+    return { service: new PackageProductsService(prisma as never, all as never), listed, audit };
+  }
+
+  it('lists a platform product once, audited once against the package', async () => {
+    const { service, listed, audit } = products();
+    await service.set(actor, PKG, PLATFORM_PRODUCT);
+    await service.set(actor, PKG, PLATFORM_PRODUCT);
+    expect([...listed]).toEqual([PLATFORM_PRODUCT]);
+    expect(audit).toEqual([
+      expect.objectContaining({ action: 'package_product_set', targetEntityType: 'tenant_feature_package', targetEntityId: PKG, newValue: { productId: PLATFORM_PRODUCT, listed: true } }),
+    ]);
+  });
+
+  it("refuses a reseller's own product, an unknown package, and anyone but the platform owner", async () => {
+    const { service, listed } = products();
+    await expect(service.set(actor, PKG, OWN_PRODUCT)).rejects.toMatchObject({ reason: 'product_not_found' });
+    await expect(service.set(actor, RESELLER_B, PLATFORM_PRODUCT)).rejects.toMatchObject({ reason: 'package_not_found' });
+    await expect(products('reseller').service.set(actor, PKG, PLATFORM_PRODUCT)).rejects.toMatchObject({ reason: 'not_platform_owner' });
+    expect(listed.size).toBe(0);
+  });
+
+  it('takes a product off, and clearing what is not listed writes nothing', async () => {
+    const { service, listed, audit } = products();
+    await service.set(actor, PKG, PLATFORM_PRODUCT);
+    await service.clear(actor, PKG, PLATFORM_PRODUCT);
+    await service.clear(actor, PKG, PLATFORM_PRODUCT);
+    expect(listed.size).toBe(0);
+    expect(audit.map((a) => a.action)).toEqual(['package_product_set', 'package_product_clear']);
   });
 });

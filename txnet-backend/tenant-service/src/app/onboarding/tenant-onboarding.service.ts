@@ -6,7 +6,7 @@ import {
   TenantDomainType,
   TenantGatewayVerificationStatus,
 } from '@prisma/client';
-import { TenantOnboardingPolicy, TENANT_CAPABILITIES, TenantCapabilityName, offeredToTenant, operatingCurrencyOf, ResellerAccess, ResellerAccessRejection, ResellerActor } from '@txnet-backend/shared-core';
+import { TenantOnboardingPolicy, TENANT_CAPABILITIES, TenantCapabilityName, offeredToTenant, operatingCurrencyOf, platformProductsSoldBy, ResellerAccess, ResellerAccessRejection, ResellerActor } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 
@@ -110,11 +110,12 @@ export class TenantOnboardingService {
   /**
    * Something to sell, by the catalog's own rule (F-018-ah): the platform's
    * offers the reseller inherits count as well as its own prices — only those
-   * priced in the reseller's operating currency (F-116-d).
+   * priced in the reseller's operating currency (F-116-d), and of the
+   * platform's only what its package lists (F-019-v5).
    */
   private async somethingToSell(tenantId: string) {
-    const currencyCode = await operatingCurrencyOf(this.all, tenantId);
-    return this.all.productVariant.findFirst({ where: offeredToTenant(tenantId, new Date(), currencyCode), select: { id: true } });
+    const [currencyCode, listed] = await Promise.all([operatingCurrencyOf(this.all, tenantId), platformProductsSoldBy(this.all, tenantId)]);
+    return this.all.productVariant.findFirst({ where: offeredToTenant(tenantId, new Date(), currencyCode, listed), select: { id: true } });
   }
 
   private async hasDoor(tenantId: string): Promise<boolean> {

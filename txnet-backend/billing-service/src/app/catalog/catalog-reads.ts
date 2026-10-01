@@ -20,6 +20,9 @@ import {
   productCategoriesInclude,
   productCategoriesLive,
   operatingCurrencyOf,
+  platformProductsSoldBy,
+  sellsProduct,
+  tenantSellsProduct,
 } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -131,6 +134,9 @@ const withPrices = (at: Date, currencyCode: string) =>
  */
 const tenantCurrency = (tx: Prisma.TransactionClient) => operatingCurrencyOf(tx, TenantContext.current('catalog offer').id);
 
+/** The platform products the caller's tenant may sell (F-019-v5, ADR-0107 point 3); `null` bounds nothing. */
+const listedForTenant = (tx: Prisma.TransactionClient) => platformProductsSoldBy(tx, TenantContext.current('catalog offer').id);
+
 function toOffer(v: VariantRow, at: Date, currencyCode: string, offered: (f: OfferFacts) => boolean): CatalogOffer | null {
   const facts = {
     visibility: v.visibility,
@@ -181,7 +187,9 @@ function toOffer(v: VariantRow, at: Date, currencyCode: string, offered: (f: Off
 export async function sellableOfferById(tx: Prisma.TransactionClient, variantId: string, at: Date): Promise<CatalogOffer | null> {
   const currencyCode = await tenantCurrency(tx);
   const row = await tx.productVariant.findUnique({ where: { id: variantId }, include: withPrices(at, currencyCode) });
-  return row ? toOffer(row, at, currencyCode, isSellableBySku) : null;
+  // A platform product the reseller's package does not list is not for sale to it (F-019-v5).
+  if (!row || !(await tenantSellsProduct(tx, TenantContext.current('catalog offer').id, row.product))) return null;
+  return toOffer(row, at, currencyCode, isSellableBySku);
 }
 
 /**
@@ -192,12 +200,13 @@ export async function sellableOfferById(tx: Prisma.TransactionClient, variantId:
  */
 export async function listOffersIn(tx: Prisma.TransactionClient, at: Date): Promise<CatalogOffer[]> {
   const currencyCode = await tenantCurrency(tx);
+  const listed = await listedForTenant(tx);
   const rows = await tx.productVariant.findMany({
     where: listedVariantWhere,
     include: withPrices(at, currencyCode),
     orderBy: [{ sku: 'asc' }],
   });
-  return rows.flatMap((v) => toOffer(v, at, currencyCode, isListed) ?? []);
+  return rows.flatMap((v) => (sellsProduct(listed, v.product) ? (toOffer(v, at, currencyCode, isListed) ?? []) : []));
 }
 
 @Injectable()
@@ -216,7 +225,8 @@ export class CatalogReadService {
       const currencyCode = await operatingCurrencyOf(tx, tenant.id);
       const rows = await tx.productVariant.findMany({ where: { sku }, include: withPrices(at, currencyCode) });
       const row = pickBySku(rows, tenant.id);
-      return row ? toOffer(row, at, currencyCode, isSellableBySku) : null;
+      if (!row || !(await tenantSellsProduct(tx, tenant.id, row.product))) return null;
+      return toOffer(row, at, currencyCode, isSellableBySku);
     });
   }
 

@@ -280,6 +280,7 @@ model TenantFeaturePackage {
   meterRates    TenantPackageMeterRate[]
   limits        PackageLimit[]
   quotaOverages PackageQuotaOverage[]
+  products      PackageProduct[]
 
   @@map("tenant_feature_package")
   @@schema("tenant")
@@ -663,6 +664,25 @@ model PackageQuotaOverage {
 
   @@id([packageId, key])
   @@map("package_quota_overage")
+  @@schema("tenant")
+}
+
+/// ADR-0107 point 3 (F-019-v5): a platform product a package lets its
+/// subscribers sell. No row = not sold by them; a reseller's own products are
+/// never listed here. No tenant, no RLS (as `tenant_feature_package`).
+model PackageProduct {
+  packageId       String   @db.Uuid
+  productId       String   @db.Uuid
+  updatedByUserId String   @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  package TenantFeaturePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  product Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([packageId, productId])
+  @@index([productId])
+  @@map("package_product")
   @@schema("tenant")
 }
 

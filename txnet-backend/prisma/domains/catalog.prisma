@@ -172,6 +172,8 @@ model Product {
   variants            ProductVariant[]
   couponServiceScopes CouponServiceScope[]
   discountRules       DiscountRule[]
+  /// F-019-v5: the reseller packages that sell this platform product.
+  packages            PackageProduct[]
 
   @@index([tenantId])
   @@map("product")

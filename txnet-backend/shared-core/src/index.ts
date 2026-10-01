@@ -48,6 +48,7 @@ export * from './lib/billing/quota-terms-lock';
 export * from './lib/billing/currency-change';
 export * from './lib/currency/fx-rate';
 export * from './lib/catalog/offers';
+export * from './lib/catalog/package-products';
 export * from './lib/catalog/category-tree';
 export * from './lib/catalog/metered-rate';
 export * from './lib/catalog/rate-card';

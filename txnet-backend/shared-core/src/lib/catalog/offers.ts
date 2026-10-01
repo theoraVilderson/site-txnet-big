@@ -99,15 +99,22 @@ export const pricesInEffect = (at: Date, currencyCode: string) =>
 /** The rows a tenant reads: its own and the platform's (`tenantId IS NULL`). */
 const ownOrPlatform = (tenantId: string) => [{ tenantId }, { tenantId: null }];
 
+/** Its own rows, and of the platform's only the listed products' (F-019-v5). */
+const ownOrListed = (tenantId: string, listed: ReadonlySet<string>): Prisma.ProductVariantWhereInput[] => [{ tenantId }, { tenantId: null, productId: { in: [...listed] } }];
+
 /**
  * A variant `listOffers` would return to `tenantId` at `at`: listed, with a
  * price in effect in `currencyCode`, the tenant's operating currency (F-116-d). For a reader on the **cross-tenant pool**, where RLS does
  * not narrow the rows — this spells out the shared-read rule RLS applies to
  * `listOffers` (`catalog-schema.int.spec.ts`), and nothing else.
+ *
+ * `listed` is a reseller's platform products (`platformProductsSoldBy`,
+ * F-019-v5): a platform variant counts only under one of them; `null` (the
+ * default) narrows nothing.
  */
-export const offeredToTenant = (tenantId: string, at: Date, currencyCode: string) =>
+export const offeredToTenant = (tenantId: string, at: Date, currencyCode: string, listed: ReadonlySet<string> | null = null) =>
   ({
     ...listedVariantWhere,
-    OR: ownOrPlatform(tenantId),
+    OR: listed === null ? ownOrPlatform(tenantId) : ownOrListed(tenantId, listed),
     prices: { some: { ...pricesInEffect(at, currencyCode), OR: ownOrPlatform(tenantId) } },
   }) satisfies Prisma.ProductVariantWhereInput;

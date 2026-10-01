@@ -9,6 +9,7 @@ import {
   productCategoriesInclude,
   productCategoriesLive,
   rateCardsInEffect,
+  tenantSellsProduct,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
 
@@ -534,6 +535,11 @@ export class GrantService {
       categoryActive: productCategoriesLive(variant.product.categories),
     };
     if (!assignable(input.source, facts)) throw new EntitlementRefused('variant_not_assignable', input.variantId);
+    // A platform product the reseller's package does not list is not sold to its users, nor
+    // redeemed by them (F-019-v5). A reseller admin's issue is bounded by its caller (`issueGrantByAdmin`).
+    if ((input.source === GrantSource.purchase || input.source === GrantSource.coupon) && !(await tenantSellsProduct(tx, tenant.id, variant.product))) {
+      throw new EntitlementRefused('variant_not_assignable', input.variantId);
+    }
 
     const { token, hash } = newSubscriptionToken();
     const shape = grantFromVariant({ source: input.source, startsAt, currencyCode }, variant);

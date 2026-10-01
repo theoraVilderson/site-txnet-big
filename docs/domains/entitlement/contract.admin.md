@@ -108,7 +108,8 @@ create refuses to sell is refused before a Grant exists: `variant_not_deliverabl
 (no handler for the kind, no placeable group, a prepaid network variant stating no
 traffic). **One request, one Grant**: a repeat of `requestId` answers that Grant
 (`issued: false`); the same id for another user or variant is `request_reused`.
-Also refused: `variant_not_found`, `variant_not_assignable` (switched off),
+Also refused: `variant_not_found`, `variant_not_assignable` (switched off; or, by a
+reseller's own people, a platform product its package does not list — F-019-v5),
 `metered_rate_missing` / `metered_rate_not_positive`, `already_issued` (a concurrent
 repeat: retry). Route: billing `contract.reseller-grants.md`.
 

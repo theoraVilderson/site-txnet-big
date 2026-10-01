@@ -2,8 +2,8 @@
 id: catalog
 layer: domain
 status: draft
-version: 7
-updated: 2026-09-30
+version: 9
+updated: 2026-10-01
 ---
 
 # Contract — catalog
@@ -15,7 +15,7 @@ another service asks the same question (F-018-ah); management built
 (F-026-d) at `/api/catalog` — `catalog/catalog-admin.*`, proved by
 `catalog-admin.service.spec.ts`; the same management for a **named** reseller
 (F-066-w7) at `/api/catalog/tenants/:tenantId/...` — `catalog/reseller-catalog.*`,
-proved by `reseller-catalog.service.spec.ts`.** Decisions: ADR-0049, ADR-0064, ADR-0073, ADR-0086, ADR-0098.
+proved by `reseller-catalog.service.spec.ts`.** Decisions: ADR-0049, ADR-0064, ADR-0073, ADR-0086, ADR-0098, ADR-0107.
 
 ## HTTP surface (F-026-d)
 
@@ -173,6 +173,17 @@ is refused (`metered_rate_missing`), never made at the older card.
 | A Grant locks the rate's currency with the rate; a block and a remainder move in it | `grantFromVariant`, entitlement invariant 10 |
 | A currency change writes new rows in the new currency (F-116-f) — a rate card per meter, every column but price and currency kept; the old ones stop matching and stay as history | `repriceRateCards` (F-118-d) |
 
+## What a reseller may sell (F-019-v5, ADR-0107 point 3)
+
+`shared-core/src/lib/catalog/package-products.ts`, proved by its spec and
+`catalog-reads.spec.ts`. The list is tenant's (`package_product`, `contract.limits.md`).
+
+| Rule | Held by |
+|---|---|
+| A **platform** product is sold by a reseller only if its package lists it; its own products never are bounded by it; the platform's tenant is not bounded | `platformProductsSoldBy`, `sellsProduct`, `tenantSellsProduct` |
+| No subscription, no package: none of the platform's (user, 2026-10-01) | `platformProductsSoldBy` → empty set |
+| Asked at every sale: the shop list, `offerBySku`, an invoice (`sellableOfferById`), a Grant bought or redeemed (`variant_not_assignable`), a reseller admin's issue; and by the onboarding checklist (`offeredToTenant`'s `listed`). Not a renewal, not the platform's staff | the readers here; entitlement `issue`, `issueGrantByAdmin` |
+
 ## Provides (intended)
 
 | Operation | Input | Output | Sync/Async | Errors |
@@ -180,7 +191,7 @@ is refused (`metered_rate_missing`), never made at the older card.
 | `listOffers(at?)` — built | tenant (ambient), instant (default now) | every `public` variant under an active product filed in at least one live category (it and every one above it on — `category-tree.ts`, F-026-r), with the price in effect in the tenant's currency; a variant with no such price is not offered | sync | — |
 | `listOffersIn(tx, at)` — built | the caller's `tenantTransaction`, instant | what `listOffers` answers, read in the caller's transaction; each offer carries `panelGroupId` — billing's shop list narrows it to what can be delivered (F-111-e) | sync | — |
 | `offerBySku(sku, at?)` — built | sku | the offer, `public` or `unlisted`; the caller's own SKU over the platform's | sync | `null`: unknown, `admin_only`, switched off, or no price |
-| `offeredToTenant(tenantId, at, currencyCode)` — built | tenant id, instant, its operating currency (F-116-d) | a Prisma `where` for a variant `listOffers` would return to that tenant: `listedVariantWhere`, own or platform row, a price in effect — for a reader on the cross-tenant pool, where RLS does not narrow (F-018-ah) | sync | — |
+| `offeredToTenant(tenantId, at, currencyCode, listed?)` — built | tenant id, instant, its operating currency (F-116-d), a reseller's listed platform products (F-019-v5; `null` narrows nothing) | a Prisma `where` for a variant `listOffers` would return to that tenant: `listedVariantWhere`, own or platform row, a price in effect — for a reader on the cross-tenant pool, where RLS does not narrow (F-018-ah) | sync | — |
 | `sellableOfferById(tx, variantId, at)` — built | the caller's `tenantTransaction`, variant id, instant | the offer as `offerBySku` would sell it (`public` or `unlisted`, live, priced), read in the caller's transaction — billing's invoice (F-111-a) | sync | `null` |
 | `priceAt(variantId, at)` — built | variantId, instant | the newest active price row in the tenant's currency with `effectiveFrom <= at` (F-0602, F-116-d) | sync | `null` |
 | manage category / product / variant, write a new price | admin payload, `catalog.manage` | row (F-026-d) | sync | — |

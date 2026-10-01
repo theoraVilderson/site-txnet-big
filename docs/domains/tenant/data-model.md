@@ -1,7 +1,7 @@
 ---
 id: tenant
 layer: domain
-updated: 2026-09-28
+updated: 2026-10-01
 ---
 
 # Data model — tenant
@@ -35,6 +35,7 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 | reseller_quota_usage | one act's units of one quota meter (ADR-0107 point 4, F-019-v2; billing `contract.reseller-quota.md`), PK `id`, unique `(tenantId, meter, sourceRef)`, the period it fell in, `qty = includedQty + overageQty` (CHECK), `unitPrice`/`currencyCode`/`chargeTransactionId` exactly when `overageQty > 0` and `overageAmount = overageQty × unitPrice` (CHECK), `releasedAt`, `refundTransactionId` (only once released). FK tenant, restrict | yes, strict RLS | permanent (money history) |
 | reseller_overage_cap | the reseller's own ceiling on overage per subscription month, PK `tenantId`, `amount ≥ 0` `Decimal(18,2)`, `currencyCode` (the platform's), `setByUserId`; no row = none | yes, strict RLS | permanent |
 | reseller_quota_terms_lock | one reseller's terms for one quota key, frozen for one subscription period just before the platform first changed them in it (ADR-0107 point 8, F-019-v3; `contract.limits.md`), PK `(tenantId, key, periodEnd)` (`periodEnd` = its `currentPeriodEnd`), `included` (null = no limit), `mode` + `unitPrice`/`currencyCode` (CHECK both or neither, as `quota_overage_setting`), `includedSource`/`overageSource` (CHECK a level), converted by the platform's currency change. Insert only. Strict tenant RLS, FK cascade |
+| package_product | a **platform** product a package lets its subscribers sell (ADR-0107 point 3, F-019-v5; catalog `contract.md`), PK `(packageId, productId)`, `updatedByUserId`; FK package and `catalog.product`, both cascade; trigger `package_product_is_platform` refuses a reseller's own product; no row = not sold by them | no tenant, no RLS | permanent |
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
@@ -43,6 +44,7 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 | tenant_staff_member.userId | -> | identity.user.roleId -> identity.role | a member's powers are a role **of that tenant** (F-018-n); this table holds no role of its own (D-42 (2)) |
 | tenant_gateway_config.providerName / gatewayCategory | -> | billing enums | reuse of the payment-provider taxonomy |
 | tenant_gateway_config.taxRatePercent (null) | -> | billing.deposit_setting.taxRatePercent | no FK: null inherits the tenant's default top-up tax, read by billing's one calculator (ADR-0076, F-104-ae) |
+| package_product.productId | -> | catalog.product.id | FK, cascade: what a package sells goes with the product; a listing never keeps a product from removal (catalog invariant 6) |
 
 ## Access rules
 
