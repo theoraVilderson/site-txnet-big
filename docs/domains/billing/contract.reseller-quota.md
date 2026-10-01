@@ -59,7 +59,10 @@ stoppedBy, included, used}`. Its `refusal` is what a route answers the
 reseller with (409), the same for every quota: a `stop` on a registry key is
 `reseller_limit_reached` `{key, limit, used}`, the refusal every limit gives and
 the panel names; anything else keeps its reason and says why. What a buyer
-hears is "not available now", never the figures (point 11, F-019-v11).
+hears is "not available now", never the figures (point 11, F-019-v11):
+`errors.billing.invoice.notAvailableNow`, fa/en, `error` `{reason}` alone —
+held by `invoice/not-available-now.spec.ts` over the real filter and locales.
+The bot sells nothing yet; when `buy_` lands it shows the server's `msg` as is (F-314).
 
 **The reseller is told** (F-019-v8, notification
 [contract.reseller-quota.md](../notification/contract.reseller-quota.md)):
