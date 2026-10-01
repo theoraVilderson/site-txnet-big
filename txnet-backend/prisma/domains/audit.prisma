@@ -137,6 +137,9 @@ enum AdminAction {
   grant_limit_tenant_set
   grant_limit_user_set
   grant_limit_user_remove
+  // F-019-m (ADR-0106). A reseller limit set or cleared at one level.
+  reseller_limit_set
+  reseller_limit_clear
 
   @@schema("audit")
 }

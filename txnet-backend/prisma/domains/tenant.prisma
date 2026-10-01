@@ -170,6 +170,7 @@ model Tenant {
   gatewayConfigs      TenantGatewayConfig[]
   smsConfigs          TenantSmsConfig[]
   restrictions        TenantRestriction[]
+  limits              ResellerLimit[]
   deks                TenantDek[]
   credentials         TenantCredential[]
   subscription        TenantSubscription?
@@ -270,6 +271,7 @@ model TenantFeaturePackage {
 
   subscriptions TenantSubscription[]
   meterRates    TenantPackageMeterRate[]
+  limits        PackageLimit[]
 
   @@map("tenant_feature_package")
   @@schema("tenant")
@@ -563,6 +565,55 @@ model TenantSmsConfig {
 // token held as a vault reference instead of a `botTokenEncrypted` column
 // (catalog 10.1, ADR-0026). The table was empty and no code ever read it.
 
+/// ADR-0106 (F-019-m): the platform's value for one reseller limit key, for
+/// every reseller. No row = the code default (`RESELLER_LIMITS`); `value` null
+/// = no limit, on purpose. Platform-wide, so no tenant and no RLS.
+model ResellerLimitSetting {
+  key             String   @id
+  /// >= 0 (CHECK); null = no limit.
+  value           Int?
+  updatedByUserId String   @db.Uuid
+  updatedAt       DateTime @updatedAt
+
+  @@map("reseller_limit_setting")
+  @@schema("tenant")
+}
+
+/// ADR-0106: a package's value for one key — what every reseller on that tier
+/// gets, over the platform's. `value` null = no limit.
+model PackageLimit {
+  packageId       String   @db.Uuid
+  key             String
+  value           Int?
+  updatedByUserId String   @db.Uuid
+  updatedAt       DateTime @updatedAt
+
+  package TenantFeaturePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@id([packageId, key])
+  @@map("package_limit")
+  @@schema("tenant")
+}
+
+/// ADR-0106: one reseller's own value for one key, over its package's — set by
+/// the platform's staff with a reason. `value` null = no limit. Strict tenant RLS.
+model ResellerLimit {
+  tenantId    String   @db.Uuid
+  key         String
+  value       Int?
+  reason      String
+  setByUserId String   @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, key])
+  @@map("reseller_limit")
+  @@schema("tenant")
+}
+
+/// Superseded by ADR-0106's three tables and read by no code; removal is F-019-u.
 /// TenantRestriction — سقف مصرف در سطح یک برند کامل (همان الگوی
 /// governance.UserRestriction، این‌بار سطح Tenant).
 model TenantRestriction {

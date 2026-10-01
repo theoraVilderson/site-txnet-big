@@ -18,6 +18,7 @@ import { LocaleModule } from './locale/locale.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { HostSurfaceCache } from './public/host-surface-cache.service';
 import { PublicHostMiddleware } from './public/public-host.middleware';
+import { LimitsModule } from './limits/limits.module';
 import { PackagesModule } from './packages/packages.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PurchaseModule } from './purchase/purchase.module';
@@ -59,6 +60,7 @@ const LEGACY_PUBLIC_ROUTES = [`${LEGACY_FILES_PATH}/*path`, LEGACY_BRANDING_PATH
     RedisModule,
     LocaleModule,
     PackagesModule,
+    LimitsModule,
     SubscriptionModule,
     StatusModule,
     ResellersModule,
