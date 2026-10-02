@@ -17,7 +17,9 @@ import { wholesaleCost, type WholesaleRate } from './margin';
  * The same holds for the wallet (F-038-k): a wallet short of the next two
  * renewals is told to top up (`top_up_wallet`) *instead of* to renew. An
  * account with no active Grant is told its last plan again (`win_back`,
- * F-038-n) on the day a 14 / 30 / 60-day window closes.
+ * F-038-n) on the day a 14 / 30 / 60-day window closes. A renewal predicted
+ * under 0.5 is offered one of the tenant's discounts instead (`retain_offer`,
+ * F-038-f2, ADR-0110).
  *
  * Nothing is suggested earlier than `SUGGEST_LEAD_DAYS` before it matters —
  * the Grant's end, or the day its bag is predicted to run out, whichever is
@@ -41,6 +43,9 @@ export const SUGGEST_LEAD_DAYS = 7;
  */
 export const WIN_BACK_LEAD_DAYS = 1;
 
+/** ADR-0109 point 9: a discount only where the renewal without it is predicted under this. */
+export const RETAIN_OFFER_BELOW = 0.5;
+
 /**
  * F-1514: a smaller plan must hold the most they used in a period plus this
  * much — a plan cut to the byte runs out in the next busy month, and the
@@ -49,7 +54,7 @@ export const WIN_BACK_LEAD_DAYS = 1;
 export const RESIZE_DOWN_HEADROOM = 1.25;
 
 /** The types this file proposes. Each new action row adds its own. */
-export const CANDIDATE_TYPES = ['renew', 'resize_up', 'resize_down', 'top_up_wallet', 'win_back'] as const satisfies readonly AiActionType[];
+export const CANDIDATE_TYPES = ['renew', 'resize_up', 'resize_down', 'top_up_wallet', 'win_back', 'retain_offer'] as const satisfies readonly AiActionType[];
 export type CandidateType = (typeof CANDIDATE_TYPES)[number];
 
 /** C-07: a key chosen at runtime comes from an exhaustive Record. */
@@ -59,6 +64,7 @@ export const SUGGESTION_TEMPLATE_KEY: Record<CandidateType, string> = {
   resize_down: BackendI18nKeys.notifications.suggestion.resize_down,
   top_up_wallet: BackendI18nKeys.notifications.suggestion.top_up_wallet,
   win_back: BackendI18nKeys.notifications.suggestion.win_back,
+  retain_offer: BackendI18nKeys.notifications.suggestion.retain_offer,
 };
 
 export type DecisionPrediction = {
@@ -85,6 +91,20 @@ export type PlanOption = {
   price: { amount: Prisma.Decimal; currencyCode: string } | null;
 };
 
+/**
+ * A `retain_offer` offer the tenant runs (F-038-f2, ADR-0110), with its
+ * template coupon's terms when it targets one. A variant offer discounts that
+ * plan only; a template offer any plan — its service scope is billing's to
+ * hold when it issues the coupon (F-038-f3).
+ */
+export type OfferOption = {
+  id: string;
+  variantId: string | null;
+  template: { discountType: string; discountValue: Prisma.Decimal; maxDiscountCap: Prisma.Decimal | null; currencyCode: string } | null;
+  maxDiscountPercent: Prisma.Decimal;
+  currencyCode: string;
+};
+
 export type CandidateInputs = {
   predictions: DecisionPrediction[];
   grants: ReadonlyMap<string, CandidateGrant>;
@@ -92,6 +112,10 @@ export type CandidateInputs = {
   plans: ReadonlyMap<string, PlanOption>;
   /** A Grant's wholesale leg (F-038-p): the rate it locked. None for the platform's own sales. */
   wholesale?: ReadonlyMap<string, WholesaleRate>;
+  /** The tenant's active `retain_offer` offers (F-038-f2). */
+  offers?: readonly OfferOption[];
+  /** Offers this account was already given (any status but stopped): each once per account. */
+  usedOfferIds?: ReadonlySet<string>;
 };
 
 export type EngineCandidate = ActionCandidate & {
@@ -125,6 +149,46 @@ const grantOf = (p: DecisionPrediction): string | null => {
   const id = p.reasons[0]?.['grantId'];
   return typeof id === 'string' ? id : null;
 };
+
+type Price = NonNullable<PlanOption['price']>;
+type Discount = { offer: OfferOption; amount: Prisma.Decimal; percent: Prisma.Decimal };
+
+/**
+ * What `offer` takes off `plan` (F-038-f2): the lower of the offer's cap and
+ * the template's own discount (its money cap too), in the plan's currency
+ * only — the engine converts nothing. Null when it does not apply.
+ */
+export function offerDiscount(offer: OfferOption, plan: PlanOption): Discount | null {
+  const price = plan.price;
+  if (!price || price.amount.lte(0) || offer.currencyCode !== price.currencyCode) return null;
+  if (offer.variantId !== null && offer.variantId !== plan.variantId) return null;
+  let amount = price.amount.times(offer.maxDiscountPercent).dividedBy(100);
+  const t = offer.template;
+  if (t) {
+    if (t.currencyCode !== price.currencyCode) return null;
+    if (t.discountType === 'percentage') {
+      amount = Prisma.Decimal.min(amount, price.amount.times(t.discountValue).dividedBy(100));
+      if (t.maxDiscountCap !== null) amount = Prisma.Decimal.min(amount, t.maxDiscountCap);
+    } else if (t.discountType === 'fixed_amount') {
+      amount = Prisma.Decimal.min(amount, t.discountValue);
+    } else {
+      return null;
+    }
+  }
+  amount = amount.toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
+  if (amount.lte(0)) return null;
+  return { offer, amount, percent: amount.times(100).dividedBy(price.amount).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN) };
+}
+
+/** The unused offer giving the least away on `plan` — the highest margin; null when none applies. */
+function bestOffer(input: CandidateInputs, plan: PlanOption): Discount | null {
+  const used = input.usedOfferIds ?? new Set<string>();
+  const fits = (input.offers ?? [])
+    .filter((o) => !used.has(o.id))
+    .map((o) => offerDiscount(o, plan))
+    .filter((d): d is Discount => d !== null);
+  return fits.sort((a, b) => a.amount.comparedTo(b.amount))[0] ?? null;
+}
 
 /** Plans of the same product, mode and length as `current` — what a resize may move to. */
 export function siblingPlans(plans: ReadonlyMap<string, PlanOption>, current: PlanOption): PlanOption[] {
@@ -170,7 +234,7 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
     if (winBack) {
       const closes = winBack.predictedAt;
       if (!closes || !current.price || closes.getTime() <= t || closes.getTime() - t > WIN_BACK_LEAD_DAYS * DAY_MS) continue;
-      out.push(candidate('win_back', winBack, grantId, current, current, closes, winBack.confidence, input));
+      out.push(candidate({ type: 'win_back', prediction: winBack, grantId, current, target: current, deadline: closes, probability: winBack.confidence }, input));
       continue;
     }
 
@@ -196,6 +260,17 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
       chosen = { type: 'renew', prediction: renewal, target: current };
     }
     if (!chosen?.target.price) continue;
+    const probability = renewal?.value ?? chosen.prediction.confidence;
+
+    // F-038-f2 (ADR-0110 point 3): a renewal unlikely without a discount is offered one of the tenant's
+    // offers instead — still one suggestion per Grant; ahead of a top-up, never instead of a resize.
+    const discount = chosen.type === 'renew' && renewal?.value != null && renewal.value < RETAIN_OFFER_BELOW ? bestOffer(input, current) : null;
+    if (discount && renewal) {
+      const { offer, amount, percent } = discount;
+      const reason = { code: 'suggest_offer', grantId, offerId: offer.id, discountPercent: percent.toFixed(2), discount: amount.toFixed(2), currencyCode: offer.currencyCode };
+      out.push(candidate({ type: 'retain_offer', prediction: renewal, grantId, current, target: current, deadline, probability, offerId: offer.id, discount: amount, extra: [reason] }, input));
+      continue;
+    }
 
     // F-038-k (user, 2026-10-02): one suggestion per Grant — a wallet short of the next two renewals
     // is told to top up *instead of* to renew, in the plan's own currency only. A resize is never displaced.
@@ -207,30 +282,37 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
     if (topUp && wallet) chosen = { type: 'top_up_wallet', prediction: wallet, target: current };
 
     // A top-up is worth the renewal it funds: the renewal's probability, the plan's margin.
-    const probability = renewal?.value ?? chosen.prediction.confidence;
     const extra = topUp ? [{ code: 'suggest_top_up', grantId, ...topUp }] : [];
-    out.push(candidate(chosen.type, chosen.prediction, grantId, current, chosen.target, deadline, probability, input, extra));
+    out.push(candidate({ type: chosen.type, prediction: chosen.prediction, grantId, current, target: chosen.target, deadline, probability, extra }, input));
   }
   return out;
 }
 
+type CandidateSpec = {
+  type: CandidateType;
+  prediction: DecisionPrediction;
+  grantId: string;
+  current: PlanOption;
+  target: PlanOption;
+  deadline: Date;
+  probability: number;
+  /** F-038-f2: the offer it carries, and what that takes off the seller's margin. */
+  offerId?: string;
+  discount?: Prisma.Decimal;
+  extra?: Reason[];
+};
+
 /** One Grant's candidate naming `target`, its margin at `probability` (C-02), and why. */
-function candidate(
-  type: CandidateType,
-  prediction: DecisionPrediction,
-  grantId: string,
-  current: PlanOption,
-  target: PlanOption,
-  deadline: Date,
-  probability: number,
-  input: CandidateInputs,
-  extra: Reason[] = [],
-): EngineCandidate {
-  const price = target.price as NonNullable<PlanOption['price']>;
+function candidate(spec: CandidateSpec, input: CandidateInputs): EngineCandidate {
+  const { type, prediction, grantId, current, target, deadline, probability, offerId, discount, extra = [] } = spec;
+  const price = target.price as Price;
   const costed = wholesaleCost(target, input.wholesale?.get(grantId) ?? null);
-  const margin = expectedMargin(probability, price, costed.cost);
+  // The seller gives the discount: the margin is on the price after it.
+  const paid: Price = discount ? { amount: price.amount.minus(discount), currencyCode: price.currencyCode } : price;
+  const margin = expectedMargin(probability, paid, costed.cost);
   return {
     actionType: type,
+    ...(offerId ? { offerId } : {}),
     confidence: prediction.confidence,
     predictionId: prediction.id,
     templateKey: SUGGESTION_TEMPLATE_KEY[type],

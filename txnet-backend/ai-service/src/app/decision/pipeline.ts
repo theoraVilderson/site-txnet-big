@@ -106,7 +106,7 @@ export class DecisionPipeline {
     const [best, ...rest] = survivors;
     for (const c of rest) await stop(c, 'margin');
 
-    if (best.offerId && !(await this.offers.active(subject.tenantId, best.offerId, best.actionType))) {
+    if (best.offerId && !(await this.offers.allowed(subject, best.offerId, best.actionType))) {
       await stop(best, 'offer_guardrail');
       return out;
     }

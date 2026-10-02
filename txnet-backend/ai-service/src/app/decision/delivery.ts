@@ -43,12 +43,13 @@ type DueRow = Pick<
 /**
  * The labelled message (F-1509) and what its template needs, read from the row's own `suggest_variant`
  * reason — and, for `top_up_wallet` (F-038-k), the amount to top up from its `suggest_top_up` (C-02: a
- * decimal string with its currency).
+ * decimal string with its currency); for `retain_offer` (F-038-f2), its offer from `suggest_offer`.
  */
 export function deliveryItem(row: DueRow) {
   const reasons = (row.reasons as Reason[] | null) ?? [];
   const target = reasons.find((r) => r.code === 'suggest_variant') ?? null;
   const topUp = reasons.find((r) => r.code === 'suggest_top_up') ?? null;
+  const offer = reasons.find((r) => r.code === 'suggest_offer') ?? null;
   const str = (v: unknown) => (typeof v === 'string' ? v : null);
   return {
     ...labelledMessage(row),
@@ -57,6 +58,11 @@ export function deliveryItem(row: DueRow) {
     fromVariantId: str(target?.['fromVariantId']),
     price: target && str(target['price']) && str(target['currencyCode']) ? { amount: target['price'] as string, currencyCode: target['currencyCode'] as string } : null,
     amount: topUp && str(topUp['amount']) && str(topUp['currencyCode']) ? { amount: topUp['amount'] as string, currencyCode: topUp['currencyCode'] as string } : null,
+    // F-038-f2: the offer billing issues the personal coupon from (F-038-f3), and the discount the engine priced.
+    offer:
+      offer && str(offer['offerId']) && str(offer['discountPercent']) && str(offer['discount']) && str(offer['currencyCode'])
+        ? { offerId: offer['offerId'] as string, discountPercent: offer['discountPercent'] as string, discount: { amount: offer['discount'] as string, currencyCode: offer['currencyCode'] as string } }
+        : null,
     deadline: row.deadline ? row.deadline.toISOString() : null,
   };
 }

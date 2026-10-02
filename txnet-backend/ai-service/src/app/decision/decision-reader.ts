@@ -5,8 +5,9 @@ import { resolveTimeZone, tenantTransaction, type QuietWindow } from '@txnet-bac
 import { HOURS_OF_WEEK } from '../profile/active-hours';
 import type { Reason } from '../profile/predictions';
 import { AiReaderPrisma, PrismaService } from '../prisma/prisma.service';
-import { SUGGEST_LEAD_DAYS, WIN_BACK_LEAD_DAYS, type CandidateGrant, type DecisionPrediction, type PlanOption } from './candidates';
+import { SUGGEST_LEAD_DAYS, WIN_BACK_LEAD_DAYS, type CandidateGrant, type DecisionPrediction, type OfferOption, type PlanOption } from './candidates';
 import type { WholesaleRate } from './margin';
+import { OFFER_GIVEN } from './offer-guardrail';
 import type { SubjectDecisionInputs } from './pipeline';
 
 const DAY_MS = 86_400_000;
@@ -24,6 +25,7 @@ const TIMING_KINDS = ['renewal_probability', 'meter_exhaustion'] as const;
  */
 const BAG_QUOTA_METRIC = 'traffic_bytes';
 
+
 function bagOf(quotas: Prisma.JsonValue): bigint | null {
   const limit = (quotas as Record<string, { limit?: unknown }> | null)?.[BAG_QUOTA_METRIC]?.limit;
   return typeof limit === 'number' && Number.isSafeInteger(limit) && limit > 0 ? BigInt(limit) : null;
@@ -34,7 +36,7 @@ function bagOf(quotas: Prisma.JsonValue): bigint | null {
  * tenant scope (`runWithTenant`). The engine's own tables — predictions,
  * profiles, actions — on the app pool; every other unit's through
  * `txnet_ai_reader` (invariant 7): Grants, their wholesale legs (F-038-p),
- * variants and prices under RLS, the
+ * variants and prices under RLS, an offer's template coupon (F-038-f2), the
  * user's zone by its column grant, the quiet window through
  * `ai.reader_quiet_hours`. `tenant.tenant` (no RLS) on the app pool, as every
  * service reads it.
@@ -97,7 +99,19 @@ export class DecisionReader {
           select: { subjectId: true, status: true, actionType: true, suppressedBy: true, scheduledFor: true },
         });
         const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { timezone: true } });
-        return { predictions, profiles, actions, tenantZone: tenant?.timezone ?? null };
+        // F-038-f2: the tenant's discounts, and which of them each account was already given.
+        const offers = await tx.aiOffer.findMany({
+          where: { tenantId, actionType: 'retain_offer', isActive: true },
+          select: { id: true, variantId: true, couponTemplateId: true, maxDiscountPercent: true, currencyCode: true },
+        });
+        const given = offers.length
+          ? await tx.aiAction.findMany({
+              where: { tenantId, subjectKind: 'user', subjectId: { in: userIds }, offerId: { not: null }, status: { in: [...OFFER_GIVEN] } },
+              select: { subjectId: true, offerId: true },
+              distinct: ['subjectId', 'offerId'],
+            })
+          : [];
+        return { predictions, profiles, actions, offers, given, tenantZone: tenant?.timezone ?? null };
       },
       { timeout: READ_TIMEOUT_MS },
     );
@@ -128,10 +142,17 @@ export class DecisionReader {
           select: { grantId: true, meterKey: true, unitSize: true, unitPrice: true, currencyCode: true },
         });
         const users = await tx.user.findMany({ where: { id: { in: userIds } }, select: { id: true, timezone: true, timezoneSource: true } });
+        const templateIds = own.offers.map((o) => o.couponTemplateId).filter((c): c is string => c !== null);
+        const templates = templateIds.length
+          ? await tx.coupon.findMany({
+              where: { id: { in: templateIds }, tenantId, deletedAt: null },
+              select: { id: true, discountType: true, discountValue: true, maxDiscountCap: true, currencyCode: true },
+            })
+          : [];
         const windows = await tx.$queryRaw<Array<{ userId: string; quietStart: number; quietEnd: number; timezone: string | null }>>`
           SELECT "userId", "quietStart", "quietEnd", "timezone" FROM ai.reader_quiet_hours
           WHERE "userId" = ANY(ARRAY[${Prisma.join(userIds)}]::uuid[])`;
-        return { grants, variants, prices, legs, users, windows };
+        return { grants, variants, prices, legs, users, windows, templates };
       },
       { timeout: READ_TIMEOUT_MS },
     );
@@ -159,6 +180,13 @@ export class DecisionReader {
         ];
       }),
     );
+
+    // A template offer whose coupon is gone is no offer; the target is fixed at creation (F-038-f1).
+    const offers: OfferOption[] = own.offers.flatMap((o) => {
+      const t = o.couponTemplateId ? theirs.templates.find((c) => c.id === o.couponTemplateId) : null;
+      if (o.couponTemplateId && !t) return [];
+      return [{ id: o.id, variantId: o.variantId, maxDiscountPercent: o.maxDiscountPercent, currencyCode: o.currencyCode, template: t ? { discountType: t.discountType, discountValue: t.discountValue, maxDiscountCap: t.maxDiscountCap, currencyCode: t.currencyCode } : null }];
+    });
 
     for (const id of userIds) {
       const predictions: DecisionPrediction[] = own.predictions
@@ -189,7 +217,7 @@ export class DecisionReader {
         : null;
       const mine = own.actions.filter((a) => a.subjectId === id);
       out.set(id, {
-        candidates: { predictions, grants, plans, wholesale },
+        candidates: { predictions, grants, plans, wholesale, offers, usedOfferIds: new Set(own.given.filter((g) => g.subjectId === id).map((g) => g.offerId as string)) },
         activeHours: own.profiles.find((p) => p.subjectId === id)?.activeHours ?? new Array<number>(HOURS_OF_WEEK).fill(0),
         quiet,
         pendingSends: mine.filter((a) => a.status === 'scheduled' && a.scheduledFor).map((a) => a.scheduledFor as Date),

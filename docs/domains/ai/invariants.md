@@ -7,7 +7,7 @@ updated: 2026-10-02
 
 # Invariants — ai
 
-**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–20, 22 and 23, shared-core 21; 4–6 are ADR-0109 rules still to build.
+**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–20, 22–24, shared-core 21; 4–6 are ADR-0109 rules still to build.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -34,6 +34,7 @@ updated: 2026-10-02
 | 21 | An AI message carries one call to action at most and no urgency, scarcity or guilt: a template that breaks it is red, a rendered text that breaks it is told nowhere (F-1507) | `suggestionCopyVerdict`; `suggestion-copy.spec.ts` (every language's templates), `UserNotifier` before any channel | a pushy or misleading pitch under the reseller's brand |
 | 22 | A suggestion converts only on what it named, by its own subject, inside its window, and once; the holdout's rows are measured the same way and are the only control; a queued suggestion whose purchase happened is never told (F-038-i) | `matchOutcome`, `measured`, `outcomeWrite`, `upliftReport`; `OutcomeRun` writes only a row with no `convertedAt`, conditional on its status; CHECKs `action_conversion_has_*`; `outcome.spec.ts` | uplift claimed from sales the engine did not prompt, or a pitch for what was just bought |
 | 23 | A user reads, closes or opts out of only their own suggestion, as the gate proved them; no route through Traefik takes a user, and none reaches `api/internal/ai/*` (F-038-h) | `IdentityMiddleware` on `api/ai/{*path}`, `MySuggestionService` finding the action as the user's; Traefik `PathPrefix(/api/ai)`; `my-suggestion.spec.ts` | one user's pitch shown to, closed or silenced by another |
+| 24 | A discount is suggested only from an active offer the tenant defined, only where the renewal without it is predicted under 0.5, never above the offer's cap or its template's own discount, never across currencies, never to the holdout, and at most once per account per offer (F-038-f2) | `candidatesFor` (`offerDiscount`, `RETAIN_OFFER_BELOW`), `OfferGuardrails.allowed` re-read at the write, the holdout step before it; `retain-offer.spec.ts`. In the database: F-038-q | a discount to someone who would have paid, given twice, or larger than the seller allowed |
 
 ## How to test
 

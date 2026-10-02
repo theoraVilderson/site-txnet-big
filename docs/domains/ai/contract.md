@@ -10,7 +10,7 @@ updated: 2026-10-02
 
 **DRAFT — schema (F-038-a) and `ai-service` (F-038-b): gated on the tenant's
 package (F-1550), it rebuilds profiles and predictions hourly (F-038-c/d),
-decides `renew` / `resize_*` / `top_up_wallet` / `win_back` (F-038-e, F-1514, F-038-k, F-038-n), delivers them (F-038-g) and
+decides `renew` / `resize_*` / `top_up_wallet` / `win_back` / `retain_offer` (F-038-e, F-1514, F-038-k, F-038-n, F-038-f2), delivers them (F-038-g) and
 measures them against the holdout (F-038-i).** The design is ADR-0109; the
 series that builds it is F-038-b … F-038-w and catalog area 24 (F-1501 … F-1550).
 
@@ -128,7 +128,7 @@ the steps below, in this order, each candidate stopping at its first
 **Candidates** (`decision/candidates.ts`, pure) — one per Grant at most, the
 action types, when each is proposed, what it carries and how it is told:
 [contract.candidates.md](contract.candidates.md) (`renew`, `resize_*`,
-`top_up_wallet`, `win_back`).
+`top_up_wallet`, `win_back`, `retain_offer`).
 
 Each step answers `pass`, or the `suppressedBy` it writes on a `suppressed`
 action:
@@ -142,7 +142,7 @@ action:
 | holdout (F-1508, point 10) — `decision/holdout.ts` (`Holdouts.verdict`), `ai.holdout` | the tenant's `holdoutPercent` (10, clamped 5–20, never 0) of subjects by `holdoutBucket` — SHA-256 of the subject id, 0–99 — hears nothing from the engine; recorded the first time drawn, and a recorded member stays one when the share is lowered | `holdout` |
 | attention budget (F-1501) — `AttentionBudget.peek` | would one more engine message fit now, counting the subject's `scheduled` actions as charged; never charges — the floor does at the send (F-1548) | `attention_budget` |
 | margin — `pipeline.ts`, `decision/margin.ts` (F-038-p) | of the candidates left, the highest P(renewal) × (price − cost), as Decimal (C-02); a tie to the higher confidence. Cost: the plan at its Grant's locked wholesale rate (`grant_wholesale`: per `unitSize` bytes, or seconds for an unlimited plan; a partial unit whole). **Unknown**, never guessed — reason `cost_unknown` — with no leg (the platform's own sale, a reseller's own panels) or a rate in another currency. A negative margin is flagged `losingMoney` and never sent | `margin` (the others, and a losing one) |
-| offer guardrail — `decision/offer-guardrail.ts` | a candidate with an offer needs it active and of its type; none carries one yet (F-038-f) | `offer_guardrail` |
+| offer guardrail — `decision/offer-guardrail.ts` | a candidate with an offer (`retain_offer`, F-038-f2) needs it active, of its type, and never given to this subject before (`OFFER_GIVEN`: queued or told) — re-read at the write | `offer_guardrail` |
 | schedule — `decision/schedule.ts` | the first slot (now, then each UTC hour) before the deadline, within 7 days, that is outside the quiet window (shared-core `quietUntil`, the rule notification holds the bot by) and active (share > 1/168); else the first slot outside the window; else none | `schedule` |
 
 The survivor is recorded `scheduled` at that time — one per subject per run.
@@ -163,7 +163,7 @@ Answers `{ actionType }`. Callers: the bot button (F-038-g4, built — bot-app `
 `decision/outcome.ts` (pure) and `OutcomeRun`. **Converted:** what the row
 suggested happened between its decision and 7 days after its send (after the
 decision, if never sent), read through the reader: a `paid` invoice for the
-named plan (`win_back` too); for `renew`, also the user's own plan renewal of the Grant (no
+named plan (`win_back` too); for `renew` and `retain_offer`, also the user's own plan renewal of the Grant (no
 price recorded — the named one counts); for `top_up_wallet`, a
 `payment_gateway` credit. Written to `convertedAt` / `convertedAmount` /
 `convertedCurrency` (C-02) — a holdout row's too; `outcomeAt` keeps its own

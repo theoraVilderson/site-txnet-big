@@ -9,7 +9,7 @@ import type { Reason } from '../profile/predictions';
  * **Outcome.** A suggestion is accepted when what it suggested happens within
  * {@link OUTCOME_WINDOW_DAYS} of it: a paid invoice for the plan it named
  * (`win_back` too, F-038-n), the user's own renewal of its Grant (`renew`
- * only), a gateway top-up
+ * and `retain_offer`, F-038-f2, only), a gateway top-up
  * (`top_up_wallet`). Measured from the decision (`createdAt`) to 7 days after
  * the send — or after the decision, for a row never sent.
  *
@@ -31,7 +31,7 @@ export const HOLDOUT_STEP = 'holdout';
 /** A queued suggestion whose purchase already happened is stopped by this, never told after it. */
 export const OUTCOME_REACHED = 'outcome_reached';
 /** The types whose suggestion keeps a service running — the report's renewals. */
-const RENEWING = new Set(['renew', 'resize_up', 'resize_down']);
+const RENEWING = new Set(['renew', 'retain_offer', 'resize_up', 'resize_down']);
 
 export type OutcomeEvent = {
   kind: 'purchase' | 'renewal' | 'top_up';
@@ -63,6 +63,7 @@ export function matchOutcome(action: Matchable, events: readonly OutcomeEvent[])
   const fits = (e: OutcomeEvent): boolean => {
     switch (action.actionType) {
       case 'renew':
+      case 'retain_offer':
         return (e.kind === 'purchase' && variantId !== null && e.variantId === variantId) || (e.kind === 'renewal' && grantId !== null && e.grantId === grantId);
       case 'resize_up':
       case 'resize_down':
