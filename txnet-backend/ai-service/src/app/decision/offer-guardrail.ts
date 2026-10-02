@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { AiActionType } from '@prisma/client';
+import { Prisma, type AiActionType } from '@prisma/client';
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import type { BudgetSubject } from '../attention/attention-budget.service';
@@ -8,6 +8,10 @@ import { PrismaService } from '../prisma/prisma.service';
 /** An action that gave its offer to the subject: queued or told. A stopped or expired one gave nothing (F-038-f2). */
 export const OFFER_GIVEN = ['scheduled', 'awaiting_approval', 'sent', 'accepted', 'dismissed'] as const;
 
+/** The write lost the race: another run gave this offer to the account first (F-038-q). */
+export const offerTaken = (err: unknown): boolean =>
+  err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
+
 /**
  * F-038-e, the guardrail step (ADR-0109 points 8, 9): a candidate carrying an
  * offer goes out only with an offer the tenant still runs, made for that
@@ -15,8 +19,9 @@ export const OFFER_GIVEN = ['scheduled', 'awaiting_approval', 'sent', 'accepted'
  * the write, as the candidates were built from a read a moment older. A
  * candidate with no offer passes without a read. "Renewal without it under
  * 0.5" is the candidates' (`RETAIN_OFFER_BELOW`); the daily budget is spent
- * when billing issues the coupon (F-038-f3); the database's own once-per-account
- * rule is F-038-q.
+ * when billing issues the coupon (F-038-f3). The database holds the
+ * once-per-account rule too (F-038-q, index `action_offer_once`): a run that
+ * loses the race to another is told by `offerTaken`.
  */
 @Injectable()
 export class OfferGuardrails {

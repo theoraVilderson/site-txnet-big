@@ -10,7 +10,7 @@ import { candidatesFor, type CandidateInputs, type EngineCandidate } from './can
 import { thresholdVerdict } from './confidence-threshold';
 import { CooldownReader } from './cooldown-reader';
 import { Holdouts } from './holdout';
-import { OfferGuardrails } from './offer-guardrail';
+import { OfferGuardrails, offerTaken } from './offer-guardrail';
 import { OptOuts } from './opt-out';
 import { QuietDownReader } from './quiet-down-reader';
 import { quietDownVerdict, type QuietInputs } from './quiet-down';
@@ -115,7 +115,13 @@ export class DecisionPipeline {
       await stop(best, 'schedule');
       return out;
     }
-    out.push(await this.log.record(subject, best, { status: 'scheduled', scheduledFor: at }, now));
+    try {
+      out.push(await this.log.record(subject, best, { status: 'scheduled', scheduledFor: at }, now));
+    } catch (err) {
+      // `action_offer_once`: another run gave this offer first (F-038-q).
+      if (!best.offerId || !offerTaken(err)) throw err;
+      await stop(best, 'offer_guardrail');
+    }
     return out;
   }
 }
