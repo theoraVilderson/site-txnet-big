@@ -47,9 +47,21 @@ one with `reasons[]`.
 | `quota_exhaustion` | days / the instant — of the **soonest** window at risk | every window with a limit (registry key, or a product's day / week / month): a full one is now (`quota_full`, with its overage and mode); else the last 7 days' rate (`QUOTA_RATE_WINDOW_MS`; a younger reseller's own history, at least 24 h) runs the remaining included units out **before the window ends** (`quota_rate`) — a later run-out is none, since the next window starts empty. Every window at risk is a reason, soonest first (≤ 20) | full 0.95; a rate 0.5 + 0.4 × (history ÷ 7 days) |
 | `churn_risk` | 0–1 / the subscription's end | base 0.15 (`churn_base`); +0.30 the wallet holds less than the next renewal, in the price's currency, within 14 days of it (`wallet_short`); +0.20 renewal warned or in grace (`renewal_unpaid`); +0.20 platform-product sales of the last 30 days under half the 30 before, those at least 10 (`sales_fell`), or −0.10 above 1.2× (`sales_grew`); +0.10 a downgrade waits for the renewal (`downgrade_scheduled`); clamped 0.02–0.98. None without a subscription | 0.6 — rules, uncalibrated |
 
+## The platform owner's list (F-038-o2) — implemented
+
+`GET /api/ai/admin/resellers?kind=quota_exhaustion|churn_risk` (contract.admin.md;
+`admin/reseller-forecast.ts`), behind `ai.manage`. Only a caller whose tenant
+is the platform owner — any other is refused 403 `not_platform_owner`, never
+answered with an empty list that would read as "no reseller at risk".
+
+| `kind` | order | each item |
+|---|---|---|
+| `quota_exhaustion` | soonest run-out first (a full window is the run's instant) | `tenantId`, `slug` (null for a reseller deleted since the run), `value` (days), `predictedAt`, `confidence`, `reasons` — every window at risk, the page words the codes |
+| `churn_risk` | highest risk first | as above; `value` 0–1, `predictedAt` the subscription's end |
+
 ## Planned
 
-- F-038-o2: the platform owner's route over these rows; F-038-o3 its panel page.
+- F-038-o3: the platform owner's panel page over that route.
 - F-038-o4: the upgrade, told to the reseller's **owner** only — the quota
   alerts' recipient (F-019-v8), so everything about the reseller's package has
   one recipient (user, 2026-10-02).

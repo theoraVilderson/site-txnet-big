@@ -12,6 +12,7 @@ import { AiManageGuard } from './ai-manage.guard';
 import { AT_RISK_KINDS, AtRisk } from './at-risk';
 import { Margins } from './margins';
 import { PlanLayout } from './plan-layout';
+import { RESELLER_FORECAST_KINDS, ResellerForecasts } from './reseller-forecast';
 
 const DAY_MS = 86_400_000;
 const AT_RISK_PAGE_MAX = 100;
@@ -25,6 +26,12 @@ const reportSchema = z
   .refine((b) => b.to > b.from && b.to.getTime() - b.from.getTime() <= REPORT_MAX_DAYS * DAY_MS, { path: ['to'] });
 const atRiskQuery = z.object({
   kind: z.enum(AT_RISK_KINDS),
+  cursor: z.string().uuid().optional(),
+  take: z.coerce.number().int().min(1).max(AT_RISK_PAGE_MAX).default(50),
+});
+
+const resellersQuery = z.object({
+  kind: z.enum(RESELLER_FORECAST_KINDS),
   cursor: z.string().uuid().optional(),
   take: z.coerce.number().int().min(1).max(AT_RISK_PAGE_MAX).default(50),
 });
@@ -62,6 +69,7 @@ export class AiAdminController {
     private readonly offers: Offers,
     private readonly margins: Margins,
     private readonly layout: PlanLayout,
+    private readonly resellers: ResellerForecasts,
   ) {}
 
   @Get('settings')
@@ -92,6 +100,13 @@ export class AiAdminController {
   @Get('plan-layout')
   async planLayout(@Req() req: Request) {
     return ok(await this.layout.report(identityOf(req).tenantId, new Date()));
+  }
+
+  /** F-038-o2: the platform owner's resellers by quota run-out or churn risk; anyone else 403 `not_platform_owner`. */
+  @Get('resellers')
+  async listResellers(@Req() req: Request, @Query() query: unknown) {
+    const { kind, cursor, take } = parse(resellersQuery, query);
+    return ok(await this.resellers.list(identityOf(req).tenantId, kind, cursor ?? null, take));
   }
 
   @Post('reports/uplift')

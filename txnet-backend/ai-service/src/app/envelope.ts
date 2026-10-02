@@ -1,4 +1,4 @@
-import { BadRequestException, HttpException, NotFoundException, type INestApplication } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpException, NotFoundException, type INestApplication } from '@nestjs/common';
 import { I18nExceptionFilter, ResponseInterceptor, type EnvelopeTranslator } from '@txnet-backend/shared-core';
 
 import type { OfferRefused } from './decision/offers';
@@ -15,8 +15,9 @@ export function installEnvelope(app: Pick<INestApplication, 'useGlobalFilters' |
 }
 
 /** A refusal with its reason as an object — a bare string is never lifted into `error.reason`. */
-export function refusal(status: 400 | 404, reason: string): HttpException {
+export function refusal(status: 400 | 403 | 404, reason: string): HttpException {
   const body = { reason, message: reason };
+  if (status === 403) return new ForbiddenException(body);
   return status === 404 ? new NotFoundException(body) : new BadRequestException(body);
 }
 
