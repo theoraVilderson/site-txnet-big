@@ -120,7 +120,16 @@ Each step is pure and answers `pass`, or the `suppressedBy` it writes on a
 | step | rule | `suppressedBy` |
 |---|---|---|
 | threshold (F-1503) — `decision/confidence-threshold.ts` | confidence below the tenant's `confidenceThreshold` (default 0.6) is dropped; equal passes; compared at 4 places, as stored; a non-number is dropped | `confidence_threshold` |
+| opt-out (F-1505) — `decision/opt-out.ts` (`OptOuts.verdict`), from `ai.opt_out` | a subject × type with a row is dropped, permanently | `opt_out` |
 | cooldown (F-1504, D-12) — `decision/cooldown.ts`, read by `CooldownReader` from `ai.action` | per subject × type: 14 days rolling from `sentAt` of a `sent`/`accepted`/`dismissed` one; a `scheduled`/`awaiting_approval` one holds it with no reopening time; `suppressed`/`expired` start nothing | `cooldown` |
+
+**The tap (F-1505).** `POST /api/internal/ai/actions/:actionId/opt-out`
+(service token only) with `{ tenantId, subjectKind, subjectId }` — the subject
+the caller authenticated, never one the message names. The action is found only
+as that subject's (else 404); then its type is opted out (`ai.opt_out`, a
+second tap a no-op), the action goes `sent` → `dismissed`, and every
+`scheduled`/`awaiting_approval` one of the type is `suppressed` by `opt_out`.
+Answers `{ actionType }`. Callers: the bot button (F-038-g), the panel card (F-038-h).
 
 ## Guarantees (intended)
 

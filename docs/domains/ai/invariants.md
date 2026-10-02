@@ -7,7 +7,7 @@ updated: 2026-10-02
 
 # Invariants — ai
 
-**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–13; 4–6 are ADR-0109 rules still to build.
+**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–14; 4–6 are ADR-0109 rules still to build.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -24,6 +24,7 @@ updated: 2026-10-02
 | 11 | Only an engine-initiated message is charged to the attention budget; a reply to the user's own question is always allowed and charged nothing (F-1502) | `AttentionBudget.spend` returns before any read on `reply`; `attention-budget.spec.ts` | an answer refused because the budget is spent, or a budget drained by answers |
 | 12 | A candidate below the tenant's confidence threshold is never sent; one at it is (F-1503) | `thresholdVerdict`, at `action.confidence` precision; `confidence-threshold.spec.ts` | an irrelevant suggestion sent, or a good one silenced by a float |
 | 13 | A subject hears one action type at most once in 14 days, and never two of it queued at once; a stopped or expired candidate starts no cooldown (F-1504) | `cooldownVerdict` over `ai.action` via `CooldownReader`; `cooldown.spec.ts` | the same pitch repeated, or a type silenced by nothing said |
+| 14 | An action type a subject opted out of is never suggested to it again, and nothing of it already queued goes out; only the subject itself can opt out (F-1505) | `OptOuts.verdict` / `optOutFrom` over `ai.opt_out`, the action read as the subject's own; `opt-out.spec.ts` | a refused pitch repeated, or one user silencing another |
 
 ## How to test
 
