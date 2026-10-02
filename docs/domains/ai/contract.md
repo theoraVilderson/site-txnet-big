@@ -44,7 +44,7 @@ None yet. Delivery is a notice of class `suggestion` through `notification`
 |---|---|---|
 | tenant | status key `tenant:status:<id>` (`policy/tenant-sells.ts`, F-038-x); `ai_recommendation` feature key via `TenantEntitlements`, read per trigger with `ai.setting` and active providers (`policy/ai-tenant-policy.ts`, F-1550) | the trigger fails and is dead-lettered; nothing runs unchecked |
 | identity, billing, entitlement, catalog, tenant | the tables in `ai-service/src/app/reader/reader-tables.ts`, through `txnet_ai_reader` — SELECT only, `identity.user` by named columns, each under its tenant clause (ADR-0109 point 6) | that run is skipped; nothing is guessed |
-| identity, billing, notification | `ai.reader_sign_in`, `ai.reader_wallet`, `ai.reader_notice` — the user-keyed tables, through views scoped by the user's tenant (F-038-c, data-model "Access rules") | as above |
+| identity, billing, notification, support | `ai.reader_sign_in`, `ai.reader_wallet`, `ai.reader_notice`, `ai.reader_open_ticket` (F-1506) — the user-keyed tables, through views scoped by the user's tenant (F-038-c, data-model "Access rules") | as above |
 | automation | `AI_TRIGGER_EVENTS` (`triggers/trigger-events.ts`) on its own queue `txnet.ai.triggers`; a bad envelope or a failed handler is dead-lettered, never requeued | profiles still rebuild hourly |
 
 ## The profile (F-038-c) — implemented
@@ -122,6 +122,7 @@ Each step is pure and answers `pass`, or the `suppressedBy` it writes on a
 | threshold (F-1503) — `decision/confidence-threshold.ts` | confidence below the tenant's `confidenceThreshold` (default 0.6) is dropped; equal passes; compared at 4 places, as stored; a non-number is dropped | `confidence_threshold` |
 | opt-out (F-1505) — `decision/opt-out.ts` (`OptOuts.verdict`), from `ai.opt_out` | a subject × type with a row is dropped, permanently | `opt_out` |
 | cooldown (F-1504, D-12) — `decision/cooldown.ts`, read by `CooldownReader` from `ai.action` | per subject × type: 14 days rolling from `sentAt` of a `sent`/`accepted`/`dismissed` one; a `scheduled`/`awaiting_approval` one holds it with no reopening time; `suppressed`/`expired` start nothing | `cooldown` |
+| quiet-down (F-1506) — `decision/quiet-down.ts`, read by `QuietDownReader` (reader pool) | a user with an open (`open`/`pending`) ticket hears nothing, `checkout_help` included (user, 2026-10-02), no reopening time; for 72 h after a `failed` payment (from its `createdAt`) every type but `checkout_help` is held. Outage and connection drop: not rules — network data (point 6). A reseller subject reads nothing (F-038-o) | `quiet_down` |
 
 **The tap (F-1505).** `POST /api/internal/ai/actions/:actionId/opt-out`
 (service token only) with `{ tenantId, subjectKind, subjectId }` — the subject

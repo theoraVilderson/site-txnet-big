@@ -9,7 +9,7 @@
  *
  * Not here, on purpose: anything under `network` (no network-layer data,
  * ADR-0109 point 6); tables keyed by user with no `tenantId` (`billing.wallet`,
- * `identity.session`, `notification.notification`) — they have no RLS, so
+ * `identity.session`, `notification.notification`, `support.ticket`) — they have no RLS, so
  * they are read through {@link AI_READER_VIEWS} instead.
  */
 export const AI_READER_TABLES = [
@@ -56,5 +56,12 @@ export const AI_READER_VIEWS = [
     over: 'billing.wallet',
     columns: ['id', 'userId', 'cachedBalance', 'heldAmount', 'currencyCode'],
     forbidden: ['version'],
+  },
+  {
+    // F-1506: the quiet-down step's open tickets (`20261002000600_ai_quiet_down_inputs`).
+    view: 'ai.reader_open_ticket',
+    over: 'support.ticket',
+    columns: ['userId', 'createdAt'],
+    forbidden: ['subject', 'assignedAdminId'],
   },
 ] as const;

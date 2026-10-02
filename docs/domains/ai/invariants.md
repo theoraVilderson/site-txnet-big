@@ -7,7 +7,7 @@ updated: 2026-10-02
 
 # Invariants — ai
 
-**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–14; 4–6 are ADR-0109 rules still to build.
+**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–15; 4–6 are ADR-0109 rules still to build.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -17,7 +17,7 @@ updated: 2026-10-02
 | 4 | The engine never sets a price, writes the ledger, changes a meter or touches the payment path | ADR-0109 point 9, §24.5 — service layer (planned) | money moved by a suggestion |
 | 5 | No learning across tenants and no network-layer data as input | ADR-0109 point 6 — service layer (planned) | one tenant's data shapes another's suggestions |
 | 6 | The attention budget is a count of messages, never a ledger account | C-13; `AttentionBudget` stores charge times only (`engagement` invariant 6) | budget mixed with money |
-| 7 | `ai-service` reads other units only through `txnet_ai_reader`: SELECT on named tables and the three `ai.reader_*` views, nothing under `network`, no contact or secret column of `identity.user`, one tenant's rows | `20261002000300_ai_reader_role`, `…0400_ai_profile_inputs`, `db-login-roles.sh`; `reader-role.spec.ts`; the reader URL may not equal the app URL (`env.validation.ts`) | the engine writes another unit's tables, or reads another tenant's |
+| 7 | `ai-service` reads other units only through `txnet_ai_reader`: SELECT on named tables and the `ai.reader_*` views, nothing under `network`, no contact or secret column of `identity.user`, one tenant's rows | `20261002000300_ai_reader_role`, `…0400_ai_profile_inputs`, `…0600_ai_quiet_down_inputs`, `db-login-roles.sh`; `reader-role.spec.ts`; the reader URL may not equal the app URL (`env.validation.ts`) | the engine writes another unit's tables, or reads another tenant's |
 | 8 | The container is capped at one CPU and a memory ceiling | `dev-docker/compose/ai-service.yml` | the live site and bot on this host starve |
 | 9 | No engine run for a tenant that may not sell (suspended, terminated, onboarding — F-038-x) or whose package lacks `ai_recommendation`; with it, every v1 type runs on templates with no configuration, and model text needs a provider and starts as draft-with-approval | `resolveAiMode` + `AiTenantPolicy`, called by `TriggerConsumer`; `ai-defaults.spec.ts` | unpaid feature, or messages nobody configured |
 | 10 | A raw behaviour event (`ai.meter_reading`) lives 180 days; a reading never goes negative and an idle hour writes no row | `ProfileBuilder.rebuildTenant` purges; CHECK `meter_reading_delta_not_negative`; `readingsFor` + `profile-features.spec.ts` | data kept past what point 14 allows; a wrong usage rate |
@@ -25,6 +25,7 @@ updated: 2026-10-02
 | 12 | A candidate below the tenant's confidence threshold is never sent; one at it is (F-1503) | `thresholdVerdict`, at `action.confidence` precision; `confidence-threshold.spec.ts` | an irrelevant suggestion sent, or a good one silenced by a float |
 | 13 | A subject hears one action type at most once in 14 days, and never two of it queued at once; a stopped or expired candidate starts no cooldown (F-1504) | `cooldownVerdict` over `ai.action` via `CooldownReader`; `cooldown.spec.ts` | the same pitch repeated, or a type silenced by nothing said |
 | 14 | An action type a subject opted out of is never suggested to it again, and nothing of it already queued goes out; only the subject itself can opt out (F-1505) | `OptOuts.verdict` / `optOutFrom` over `ai.opt_out`, the action read as the subject's own; `opt-out.spec.ts` | a refused pitch repeated, or one user silencing another |
+| 15 | No proactive suggestion reaches a user with an open ticket, and none but `checkout_help` within 72 h of their failed payment (F-1506) | `quietDownVerdict` over `QuietDownReader`'s inputs; `quiet-down.spec.ts` | a purchase pitched in the middle of a problem, or the help for a failed payment silenced by it |
 
 ## How to test
 
