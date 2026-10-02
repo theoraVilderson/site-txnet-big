@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { TenantStatusGuard } from '@txnet-backend/shared-core';
 
 import { AttentionModule } from './attention/attention.module';
+import { DecisionModule } from './decision/decision.module';
 import { BrokerModule } from './broker/broker.module';
 import { envConfigOptions } from './config/env.validation';
 import { HealthController } from './health.controller';
@@ -19,7 +20,7 @@ import { TriggersModule } from './triggers/triggers.module';
  * first tenant route is judged from day one.
  */
 @Module({
-  imports: [ConfigModule.forRoot(envConfigOptions), PrismaModule, RedisModule, BrokerModule, TriggersModule, ProfileModule, AttentionModule],
+  imports: [ConfigModule.forRoot(envConfigOptions), PrismaModule, RedisModule, BrokerModule, TriggersModule, ProfileModule, AttentionModule, DecisionModule],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: TenantStatusGuard }],
 })

@@ -7,7 +7,7 @@ updated: 2026-10-02
 
 # Invariants — ai
 
-**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–12; 4–6 are ADR-0109 rules still to build.
+**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–13; 4–6 are ADR-0109 rules still to build.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -23,6 +23,7 @@ updated: 2026-10-02
 | 10 | A raw behaviour event (`ai.meter_reading`) lives 180 days; a reading never goes negative and an idle hour writes no row | `ProfileBuilder.rebuildTenant` purges; CHECK `meter_reading_delta_not_negative`; `readingsFor` + `profile-features.spec.ts` | data kept past what point 14 allows; a wrong usage rate |
 | 11 | Only an engine-initiated message is charged to the attention budget; a reply to the user's own question is always allowed and charged nothing (F-1502) | `AttentionBudget.spend` returns before any read on `reply`; `attention-budget.spec.ts` | an answer refused because the budget is spent, or a budget drained by answers |
 | 12 | A candidate below the tenant's confidence threshold is never sent; one at it is (F-1503) | `thresholdVerdict`, at `action.confidence` precision; `confidence-threshold.spec.ts` | an irrelevant suggestion sent, or a good one silenced by a float |
+| 13 | A subject hears one action type at most once in 14 days, and never two of it queued at once; a stopped or expired candidate starts no cooldown (F-1504) | `cooldownVerdict` over `ai.action` via `CooldownReader`; `cooldown.spec.ts` | the same pitch repeated, or a type silenced by nothing said |
 
 ## How to test
 
