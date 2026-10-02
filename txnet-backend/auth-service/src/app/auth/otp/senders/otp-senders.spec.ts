@@ -752,7 +752,7 @@ describe('UserNotifier', () => {
       expect(client.sendMessage).toHaveBeenCalledWith('5501', '💡 پیشنهاد: خانه (یک‌ماهه) → پنجاه گیگ (50 GB) (190000.00 IRR)', {
         inline_keyboard: [[{ text: "🔕 Don't show this again", callback_data: 'aio:77777777-7777-4777-8777-777777777777' }]],
       });
-      expect(NOTIFY_TEMPLATES).toEqual(expect.arrayContaining(['suggestionRenew', 'suggestionResizeUp', 'suggestionResizeDown', 'suggestionTopUpWallet', 'suggestionWinBack', 'suggestionRetainOffer']));
+      expect(NOTIFY_TEMPLATES).toEqual(expect.arrayContaining(['suggestionRenew', 'suggestionResizeUp', 'suggestionResizeDown', 'suggestionTopUpWallet', 'suggestionWinBack', 'suggestionRetainOffer', 'suggestionCheckoutHelp']));
     });
   });
 

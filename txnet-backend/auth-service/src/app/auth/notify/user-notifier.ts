@@ -74,6 +74,7 @@ export const NOTIFY_TEMPLATES = [
   'suggestionTopUpWallet',
   'suggestionWinBack',
   'suggestionRetainOffer',
+  'suggestionCheckoutHelp',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -801,6 +802,13 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
     read: (ns) => ns?.suggestion?.retain_offer,
     fallback: '💡 Suggestion: {{service}} ends in {{days}} days. To keep it, renew with the code {{code}}: {{discount}} off, so the next period is {{price}}. The code is yours alone and works until this period ends.',
     inbox: { read: (ns) => ns?.suggestion?.retain_offerTitle, fallback: 'Suggestion: renew {{service}} for less' },
+    many: SUGGESTION_MANY,
+  },
+  // F-038-m (ADR-0109 point 9): a payment left unfinished — another gateway billing says they can use; help, never a pitch.
+  suggestionCheckoutHelp: {
+    read: (ns) => ns?.suggestion?.checkout_help,
+    fallback: '💡 Suggestion: your payment of {{amount}} did not go through. If that gateway gives you trouble, you can also pay with {{gateway}}.',
+    inbox: { read: (ns) => ns?.suggestion?.checkout_helpTitle, fallback: 'Your payment did not go through' },
     many: SUGGESTION_MANY,
   },
 };

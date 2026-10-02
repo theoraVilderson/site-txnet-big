@@ -21,6 +21,7 @@ import { runWithTenant } from '@txnet-backend/shared-core';
 
 import type { CouponValidation } from '../coupon/coupon-validation';
 import { DepositGatewayNotFound, DepositQuoteService } from './deposit-quote.service';
+import { OtherGatewayService } from './other-gateway';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -353,5 +354,46 @@ describe('a gateway with no merchant id (F-092-u)', () => {
         service.quote({ userId: USER, gatewayId: GATEWAY, source: 'tenant', amount: d('20.00'), couponCodes: ['ALL'] }),
       ),
     ).resolves.toMatchObject({ free: true, payable: '0.00' });
+  });
+});
+
+/**
+ * F-038-m: the gateway an AI `checkout_help` names — another one the user can
+ * pay with now, never the one that just failed, never a test gateway, one
+ * whose limits hold the amount tried. Nothing when the user paid after all.
+ */
+describe('OtherGatewayService (F-038-m)', () => {
+  const PAYMENT = '66666666-6666-4666-8666-666666666666';
+  const TRIED = '77777777-7777-4777-8777-777777777777';
+  const gw = (id: string, over: Record<string, unknown> = {}) => ({
+    id, source: 'tenant', displayName: `Gateway ${id.slice(0, 4)}`, providerName: 'zarinpal', category: 'domestic_rial',
+    minAmount: null, maxAmount: null, presets: [], currencyCode: 'IRR', testing: false, ...over,
+  });
+  function build(opts: { paidSince?: boolean; gateways?: unknown[]; payment?: unknown } = {}) {
+    const payment = opts.payment === undefined ? { gatewayId: null, tenantGatewayConfigId: TRIED, amountRequested: d('500000'), currencyCode: 'IRR', createdAt: new Date('2026-10-05T08:00:00Z') } : opts.payment;
+    const tx = {
+      $executeRaw: async () => 1,
+      paymentTransaction: {
+        findFirst: async ({ where }: { where: { status?: string } }) => (where.status === 'success' ? (opts.paidSince ? { id: 'p2' } : null) : payment),
+      },
+    };
+    const prisma = { $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx) };
+    const quotes = { listGateways: async () => opts.gateways ?? [gw(TRIED), gw('88888888-8888-4888-8888-888888888888')] };
+    return new OtherGatewayService(prisma as never, quotes as never);
+  }
+  const body = { tenantId: TENANT, userId: USER, paymentId: PAYMENT };
+
+  it('names another gateway the user can select, never the one that failed', async () => {
+    await expect(build().find(body)).resolves.toEqual({ gateway: { displayName: 'Gateway 8888', category: 'domestic_rial' } });
+  });
+
+  it('skips a test gateway and one whose limits refuse the amount tried', async () => {
+    const gateways = [gw(TRIED), gw('aaaa0000-0000-4000-8000-000000000000', { testing: true }), gw('bbbb0000-0000-4000-8000-000000000000', { maxAmount: '100000.00' }), gw('cccc0000-0000-4000-8000-000000000000', { minAmount: '1000000.00' })];
+    await expect(build({ gateways }).find(body)).resolves.toEqual({ gateway: null });
+  });
+
+  it('answers paid when the user paid after the attempt, and nothing for an attempt that is not theirs', async () => {
+    await expect(build({ paidSince: true }).find(body)).resolves.toEqual({ paid: true });
+    await expect(build({ payment: null }).find(body)).resolves.toEqual({ gateway: null });
   });
 });

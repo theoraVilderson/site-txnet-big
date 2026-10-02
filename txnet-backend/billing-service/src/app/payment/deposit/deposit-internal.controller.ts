@@ -1,11 +1,13 @@
-import { Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 
+import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { DepositExpiryResult, DepositExpiryService } from './deposit-expiry.service';
 import {
   DepositReconciliationResult,
   DepositReconciliationService,
 } from './deposit-reconciliation.service';
+import { type OtherGatewayAnswer, type OtherGatewayBody, otherGatewaySchema, OtherGatewayService } from './other-gateway';
 
 /**
  * The seam `worker-service` reaches billing through (F-092-k).
@@ -35,6 +37,7 @@ export class DepositInternalController {
   constructor(
     private readonly expiry: DepositExpiryService,
     private readonly reconciliation: DepositReconciliationService,
+    private readonly others: OtherGatewayService,
   ) {}
 
   /**
@@ -75,5 +78,17 @@ export class DepositInternalController {
   @HttpCode(200)
   verifyDue(): Promise<DepositReconciliationResult> {
     return this.reconciliation.verifyDue();
+  }
+
+  /**
+   * F-038-m: another gateway the user can pay with than the one their
+   * unfinished payment tried — what an AI `checkout_help` names, asked by
+   * worker-service when it delivers one. `{ paid: true }` when they paid since;
+   * `{ gateway: null }` when there is no other. The usual envelope.
+   */
+  @Post('other-gateway')
+  @HttpCode(200)
+  otherGateway(@Body(new ZodValidationPipe(otherGatewaySchema)) body: OtherGatewayBody): Promise<OtherGatewayAnswer> {
+    return this.others.find(body);
   }
 }

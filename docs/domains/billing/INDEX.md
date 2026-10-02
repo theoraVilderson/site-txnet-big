@@ -80,7 +80,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 | [contract.md](contract.md) | using or changing billing from outside; what a tenant's currency change converts: [contract.currency-change.md](contract.currency-change.md); money held for a promise: [contract.holds.md](contract.holds.md); a spending cap on one Grant: [contract.spending-cap.md](contract.spending-cap.md) |
 | [contract.gateways.md](contract.gateways.md) | creating, changing or deleting a payment gateway — a tenant's own, or a named reseller's |
 | [contract.purchase.md](contract.purchase.md) | buying a catalog product: the invoice, its coupons and discounts with no code, its 30-minute clock, and paying it from the wallet |
-| [contract.deposit.md](contract.deposit.md) | one whole top-up: gateway list, quote, start — and the bank's callback that settles it |
+| [contract.deposit.md](contract.deposit.md) | one whole top-up: gateway list, quote, start — and the bank's callback that settles it; what an AI suggestion's delivery asks billing — names, an offer's coupon, another gateway: [contract.ai-delivery.md](contract.ai-delivery.md) |
 | [contract.webhook.md](contract.webhook.md) | a provider's signed webhook, and money that arrived for more, for less, or after the row was settled |
 | [contract.history.md](contract.history.md) | the panel's financial page: the wallet ledger and the top-up attempts |
 | [contract.verify.md](contract.verify.md) | a payment the gateway met with silence: the retry clock, the flag, manual confirmation |

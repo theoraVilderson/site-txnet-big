@@ -5,7 +5,7 @@ import { resolveTimeZone, tenantTransaction, type QuietWindow } from '@txnet-bac
 import { HOURS_OF_WEEK } from '../profile/active-hours';
 import type { Reason } from '../profile/predictions';
 import { AiReaderPrisma, PrismaService } from '../prisma/prisma.service';
-import { SUGGEST_LEAD_DAYS, WIN_BACK_LEAD_DAYS, type CandidateGrant, type DecisionPrediction, type OfferOption, type PlanOption } from './candidates';
+import { CHECKOUT_HELP_DEADLINE_MS, CHECKOUT_HELP_WAIT_MS, SUGGEST_LEAD_DAYS, WIN_BACK_LEAD_DAYS, type CandidateGrant, type CheckoutAttempt, type DecisionPrediction, type OfferOption, type PlanOption } from './candidates';
 import type { WholesaleRate } from './margin';
 import { OFFER_GIVEN } from './offer-guardrail';
 import type { SubjectDecisionInputs } from './pipeline';
@@ -48,7 +48,10 @@ export class DecisionReader {
     private readonly reader: AiReaderPrisma,
   ) {}
 
-  /** A page of users with a renewal or a run-out inside the lead time, or a win-back window closing (F-038-n), by id. */
+  /**
+   * A page of users with a renewal or a run-out inside the lead time, a win-back window closing (F-038-n), or a
+   * gateway payment left unfinished long enough to help with (F-038-m, through the reader), by id.
+   */
   async subjectsDue(tenantId: string, now: Date, cursor: string | null, take: number): Promise<string[]> {
     const until = new Date(now.getTime() + SUGGEST_LEAD_DAYS * DAY_MS);
     const winBackUntil = new Date(now.getTime() + WIN_BACK_LEAD_DAYS * DAY_MS);
@@ -69,7 +72,21 @@ export class DecisionReader {
         take,
       }),
     );
-    return rows.map((r) => r.subjectId);
+    const unfinished = await tenantTransaction(this.reader, (tx) =>
+      tx.paymentTransaction.findMany({
+        where: {
+          status: { in: ['failed', 'expired'] },
+          createdAt: { gt: new Date(now.getTime() - CHECKOUT_HELP_DEADLINE_MS), lte: new Date(now.getTime() - CHECKOUT_HELP_WAIT_MS) },
+          ...(cursor ? { userId: { gt: cursor } } : {}),
+        },
+        select: { userId: true },
+        distinct: ['userId'],
+        orderBy: { userId: 'asc' },
+        take,
+      }),
+    );
+    // Two sorted pages merged: the first `take` ids of their union, so the cursor stays one id.
+    return [...new Set([...rows.map((r) => r.subjectId), ...unfinished.map((p) => p.userId)])].sort().slice(0, take);
   }
 
   async inputsFor(tenantId: string, userIds: string[], now: Date): Promise<Map<string, SubjectDecisionInputs>> {
@@ -149,10 +166,15 @@ export class DecisionReader {
               select: { id: true, discountType: true, discountValue: true, maxDiscountCap: true, currencyCode: true },
             })
           : [];
+        // F-038-m: the gateway payments of the last two days — the unfinished ones to help with, and any success after them.
+        const payments = await tx.paymentTransaction.findMany({
+          where: { userId: { in: userIds }, status: { in: ['failed', 'expired', 'success'] }, createdAt: { gt: new Date(now.getTime() - CHECKOUT_HELP_DEADLINE_MS) } },
+          select: { id: true, userId: true, status: true, createdAt: true, amountRequested: true, currencyCode: true },
+        });
         const windows = await tx.$queryRaw<Array<{ userId: string; quietStart: number; quietEnd: number; timezone: string | null }>>`
           SELECT "userId", "quietStart", "quietEnd", "timezone" FROM ai.reader_quiet_hours
           WHERE "userId" = ANY(ARRAY[${Prisma.join(userIds)}]::uuid[])`;
-        return { grants, variants, prices, legs, users, windows, templates };
+        return { grants, variants, prices, legs, users, windows, templates, payments };
       },
       { timeout: READ_TIMEOUT_MS },
     );
@@ -206,6 +228,10 @@ export class DecisionReader {
         theirs.grants.filter((g) => g.userId === id).map((g) => [g.id, { id: g.id, variantId: g.variantId, endsAt: g.endsAt }]),
       );
       const wholesale = new Map<string, WholesaleRate>(theirs.legs.filter((l) => grants.has(l.grantId)).map(({ grantId, ...rate }) => [grantId, rate]));
+      const paid = theirs.payments.filter((p) => p.userId === id && p.status === 'success').map((p) => p.createdAt.getTime());
+      const checkouts: CheckoutAttempt[] = theirs.payments
+        .filter((p) => p.userId === id && (p.status === 'failed' || p.status === 'expired'))
+        .map((p) => ({ paymentId: p.id, status: p.status as CheckoutAttempt['status'], at: p.createdAt, amount: p.amountRequested.toFixed(2), currencyCode: p.currencyCode }));
       const window = theirs.windows.find((w) => w.userId === id);
       const user = theirs.users.find((u) => u.id === id);
       const quiet: QuietWindow | null = window
@@ -217,7 +243,7 @@ export class DecisionReader {
         : null;
       const mine = own.actions.filter((a) => a.subjectId === id);
       out.set(id, {
-        candidates: { predictions, grants, plans, wholesale, offers, usedOfferIds: new Set(own.given.filter((g) => g.subjectId === id).map((g) => g.offerId as string)) },
+        candidates: { predictions, grants, plans, wholesale, checkouts, lastPaidAt: paid.length ? new Date(Math.max(...paid)) : null, offers, usedOfferIds: new Set(own.given.filter((g) => g.subjectId === id).map((g) => g.offerId as string)) },
         activeHours: own.profiles.find((p) => p.subjectId === id)?.activeHours ?? new Array<number>(HOURS_OF_WEEK).fill(0),
         quiet,
         pendingSends: mine.filter((a) => a.status === 'scheduled' && a.scheduledFor).map((a) => a.scheduledFor as Date),

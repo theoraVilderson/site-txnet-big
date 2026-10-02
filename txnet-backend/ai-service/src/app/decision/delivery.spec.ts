@@ -66,6 +66,7 @@ describe('deliveryItem (F-038-g2)', () => {
       price: { amount: '200000.00', currencyCode: 'IRR' },
       amount: null,
       offer: null,
+      payment: null,
       deadline: '2026-10-08T00:00:00.000Z',
     });
   });

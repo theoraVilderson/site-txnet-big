@@ -10,7 +10,7 @@ import type { Reason } from '../profile/predictions';
  * {@link OUTCOME_WINDOW_DAYS} of it: a paid invoice for the plan it named
  * (`win_back` too, F-038-n), the user's own renewal of its Grant (`renew`
  * and `retain_offer`, F-038-f2, only), a gateway top-up
- * (`top_up_wallet`). Measured from the decision (`createdAt`) to 7 days after
+ * (`top_up_wallet`; `checkout_help` too, F-038-m). Measured from the decision (`createdAt`) to 7 days after
  * the send — or after the decision, for a row never sent.
  *
  * **Uplift.** Intent to treat: every row that reached the holdout step is
@@ -70,6 +70,7 @@ export function matchOutcome(action: Matchable, events: readonly OutcomeEvent[])
       case 'win_back':
         return e.kind === 'purchase' && variantId !== null && e.variantId === variantId;
       case 'top_up_wallet':
+      case 'checkout_help':
         return e.kind === 'top_up';
       default:
         return false;

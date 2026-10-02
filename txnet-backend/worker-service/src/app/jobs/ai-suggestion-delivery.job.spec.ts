@@ -39,7 +39,7 @@ const item = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-type Answers = { claim?: unknown; plan?: unknown; floor?: unknown; items?: unknown[]; coupon?: unknown };
+type Answers = { claim?: unknown; plan?: unknown; floor?: unknown; items?: unknown[]; coupon?: unknown; other?: unknown };
 
 function build(answers: Answers = {}) {
   const calls: Array<{ path: string; body: Record<string, unknown> }> = [];
@@ -61,6 +61,7 @@ function build(answers: Answers = {}) {
         };
       }
       if (path.endsWith('/floor')) return answers.floor ?? { pass: true };
+      if (path.endsWith('/deposit/other-gateway')) return answers.other ?? { gateway: { displayName: 'Card to card', category: 'domestic_rial' } };
       if (path.endsWith('/coupons/ai-offer')) return answers.coupon ?? { issued: { code: 'AI-ABCDEFGHJK', discount: { amount: '40000.00', currencyCode: 'IRR' }, priceAfter: { amount: '150000.00', currencyCode: 'IRR' }, expiresAt: '2026-10-08T09:20:00.000Z' } };
       return {};
     })();
@@ -123,6 +124,61 @@ describe('AiSuggestionDeliveryJob (F-038-g3)', () => {
       top_up_wallet: 'suggestionTopUpWallet',
       win_back: 'suggestionWinBack',
       retain_offer: 'suggestionRetainOffer',
+      checkout_help: 'suggestionCheckoutHelp',
+    });
+  });
+
+  describe('checkout_help: about no service, naming another gateway from billing (F-038-m)', () => {
+    const PAYMENT = '66666666-6666-4666-8666-666666666666';
+    const help = item({
+      actionType: 'checkout_help', templateKey: 'suggestion.checkout_help', grantId: null, variantId: null, fromVariantId: null, price: null,
+      payment: { paymentId: PAYMENT, amount: { amount: '500000.00', currencyCode: 'IRR' } },
+    });
+
+    it('claims it with no Grant, asks billing for another gateway, runs the floor, and tells the gateway and the amount', async () => {
+      const { job, calls, sent, paths } = build({ items: [help] });
+      await expect(job.run(NOW)).resolves.toMatchObject({ itemsProcessed: 1, errorsCount: 0 });
+      expect(paths()).toEqual([
+        '/api/internal/ai/actions/due/take',
+        '/api/internal/notifications/suggestion/claim',
+        '/api/internal/billing/deposit/other-gateway',
+        '/api/internal/ai/actions/:id/floor',
+        '/api/internal/ai/actions/:id/sent',
+      ]);
+      expect(calls[1].body).toEqual({ actionId: ACTION, userId: USER });
+      expect(calls[2].body).toEqual({ tenantId: TENANT, userId: USER, paymentId: PAYMENT });
+      expect(sent).toEqual([
+        {
+          consumer: 'ai-suggestion', eventId: ACTION, only: ['inbox', 'bot'], class: 'suggestion',
+          person: { tenantId: TENANT, userId: USER, template: 'suggestionCheckoutHelp', params: { actionId: ACTION, gateway: 'Card to card', amount: '500000.00 IRR' } },
+        },
+      ]);
+    });
+
+    it('stops it when there is no other gateway, or the user paid after all — no floor, nothing told', async () => {
+      const none = build({ items: [help], other: { gateway: null } });
+      await none.job.run(NOW);
+      expect(none.calls.at(-1)?.body).toEqual({ tenantId: TENANT, by: 'no_other_gateway' });
+      expect(none.sent).toEqual([]);
+
+      const paid = build({ items: [help], other: { paid: true } });
+      await paid.job.run(NOW);
+      expect(paid.calls.at(-1)?.body).toEqual({ tenantId: TENANT, by: 'already_paid' });
+      expect(paid.sent).toEqual([]);
+    });
+
+    it('holds it for quiet hours with no Grant', async () => {
+      const held = build({ items: [help], claim: { deliver: 'held', botAt: '2026-10-05T10:30:00.000Z' } });
+      await held.job.run(NOW);
+      const hold = held.calls.find((c) => c.path.endsWith('/retention/hold'));
+      expect(hold?.body).not.toHaveProperty('grantId');
+      expect(hold?.body).toMatchObject({ eventId: ACTION, period: ACTION, template: 'suggestionCheckoutHelp' });
+    });
+
+    it('never tells one without the payment it is about', async () => {
+      const bare = build({ items: [item({ actionType: 'checkout_help', grantId: null, variantId: null, payment: null })] });
+      expect(await bare.job.run(NOW)).toMatchObject({ itemsProcessed: 0, errorsCount: 1 });
+      expect(bare.paths()).toEqual(['/api/internal/ai/actions/due/take']);
     });
   });
 

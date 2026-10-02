@@ -14,6 +14,7 @@ const CLAIM_PATH = '/api/internal/notifications/suggestion/claim';
 const HOLD_PATH = '/api/internal/notifications/retention/hold';
 const NAMES_PATH = '/api/internal/billing/entitlement/grants/names';
 const COUPON_PATH = '/api/internal/billing/coupons/ai-offer';
+const OTHER_GATEWAY_PATH = '/api/internal/billing/deposit/other-gateway';
 const actionPath = (id: string, step: 'floor' | 'sent' | 'stop') => `/api/internal/ai/actions/${id}/${step}`;
 
 /** Suggestions one run delivers; the rest wait five minutes. */
@@ -29,6 +30,7 @@ export const SUGGESTION_TEMPLATE_OF: Record<string, string> = {
   top_up_wallet: 'suggestionTopUpWallet',
   win_back: 'suggestionWinBack',
   retain_offer: 'suggestionRetainOffer',
+  checkout_help: 'suggestionCheckoutHelp',
 };
 
 type Due = {
@@ -50,9 +52,14 @@ type Due = {
     budgetCurrencyCode?: string;
     createdByUserId?: string;
   } | null;
+  /** `checkout_help` only (F-038-m): the unfinished payment it is about. */
+  payment?: { paymentId: string; amount: Money } | null;
   deadline: string | null;
 };
 type Money = { amount: string; currencyCode: string };
+type OtherGateway = { paid: true } | { gateway: { displayName: string; category: string } | null };
+/** What a suggestion says, or the step that stops it before the floor. */
+type Words = { params: Record<string, string> } | { stop: string; retryAt?: string };
 type Coupon =
   | { issued: { code: string; discount: Money; priceAfter: Money; expiresAt: string } }
   | { refused: 'plan_unavailable' | 'offer_unavailable' | 'budget_spent'; retryAt?: string };
@@ -75,7 +82,9 @@ type Names = {
  *    is spent on a pitch that will not go; the price told is today's. A
  *    `retain_offer` then gets its personal coupon from billing (F-038-f3): an
  *    offer that no longer applies stops it, a day's budget spent moves it to
- *    the next day.
+ *    the next day. A `checkout_help` (F-038-m) is about no service: claimed
+ *    with no Grant (F-038-g5), it asks billing for another gateway instead —
+ *    none, or paid since, stops it.
  * 3. **floor** — the last check; a refusal was already handled by ai-service.
  * 4. **tell** — inbox and bot on their own (never joined to a burst: a
  *    suggestion is never a "count" summary); inside quiet hours the inbox
@@ -137,9 +146,12 @@ export class AiSuggestionDeliveryJob implements Job {
 
   private async deliver(due: Due, now: Date): Promise<'sent' | 'held' | 'stopped' | 'refused'> {
     const template = SUGGESTION_TEMPLATE_OF[due.actionType];
-    if (due.subjectKind !== 'user' || !due.grantId || !due.variantId || !template) {
+    // F-038-m: `checkout_help` is about a payment, not a service — the one type told with no Grant (F-038-g5).
+    const aboutPayment = due.actionType === 'checkout_help';
+    if (due.subjectKind !== 'user' || !template || (!aboutPayment && (!due.grantId || !due.variantId))) {
       throw new Error(`a ${due.subjectKind} ${due.actionType} suggestion without a Grant and a plan cannot be told yet`);
     }
+    if (aboutPayment && !due.payment) throw new Error(`checkout_help suggestion ${due.actionId} carries no payment`);
     // F-038-k: a top-up names its amount, or it is not told — "top up {{amount}}" with a blank is no message.
     if (due.actionType === 'top_up_wallet' && !due.amount) throw new Error(`top_up_wallet suggestion ${due.actionId} carries no amount`);
     // F-038-f3: a discount is told only with the coupon that gives it, issued from its offer's terms.
@@ -147,10 +159,12 @@ export class AiSuggestionDeliveryJob implements Job {
     if (due.actionType === 'retain_offer' && (!offer?.dailyBudget || !offer.maxDiscountPercent || !offer.budgetCurrencyCode || !offer.createdByUserId || !due.deadline)) {
       throw new Error(`retain_offer suggestion ${due.actionId} carries no offer terms or deadline`);
     }
-    const { tenantId, actionId, grantId } = due;
+    const { tenantId, actionId } = due;
+    const grantId = due.grantId ?? undefined;
     const userId = due.subjectId;
+    const aGrant = grantId ? { grantId } : {};
 
-    const claim = (await this.post(this.notification, CLAIM_PATH, { actionId, userId, grantId })) as Claim | null;
+    const claim = (await this.post(this.notification, CLAIM_PATH, { actionId, userId, ...aGrant })) as Claim | null;
     if (!claim || !('deliver' in claim)) throw new Error(`notification answered ${CLAIM_PATH} without 'deliver'`);
     if (claim.deliver === 'muted' || claim.deliver === 'later') {
       const retry = claim.deliver === 'later' ? { retryAt: claim.retryAt } : {};
@@ -158,16 +172,43 @@ export class AiSuggestionDeliveryJob implements Job {
       return 'stopped';
     }
 
-    const names = (await this.post(this.billing, NAMES_PATH, { tenantId, userId, grantIds: [grantId], variantIds: [due.variantId] })) as Names | null;
-    const plan = names?.plans?.find((p) => p.variantId === due.variantId);
-    if (!plan) {
-      await this.post(this.ai, actionPath(actionId, 'stop'), { tenantId, by: 'plan_unavailable' });
+    // What the message says, from billing — or why it is not told; all before the floor, which charges the budget.
+    const words = aboutPayment ? await this.helpWords(due) : await this.serviceWords(due, now);
+    if ('stop' in words) {
+      await this.post(this.ai, actionPath(actionId, 'stop'), { tenantId, by: words.stop, ...(words.retryAt ? { retryAt: words.retryAt } : {}) });
       return 'stopped';
     }
+
+    const floor = await this.post(this.ai, actionPath(actionId, 'floor'), { tenantId });
+    if (floor?.['pass'] !== true) return 'refused';
+
+    // F-038-g4: the bot's "don't show this again" button names this action, never the user.
+    const params: Record<string, string> = { actionId, ...words.params };
+    const person: Person = { tenantId, userId, ...aGrant, template, params };
+
+    if (claim.deliver === 'held') {
+      await this.sender.send({ consumer: CONSUMER, eventId: actionId, person, only: ['inbox'], class: 'suggestion' });
+      await this.post(this.notification, HOLD_PATH, { eventId: actionId, ...aGrant, notice: SUGGESTION_NOTICE, period: actionId, tenantId, template, params, botAt: claim.botAt });
+    } else {
+      await this.sender.send({ consumer: CONSUMER, eventId: actionId, person, only: ['inbox', 'bot'], class: 'suggestion' });
+    }
+    await this.post(this.ai, actionPath(actionId, 'sent'), { tenantId });
+    return claim.deliver === 'held' ? 'held' : 'sent';
+  }
+
+  /** A suggestion about a service: its name and the plan's offer now, and a `retain_offer`'s coupon (F-038-f3). */
+  private async serviceWords(due: Due, now: Date): Promise<Words> {
+    const { tenantId, actionId } = due;
+    const userId = due.subjectId;
+    const grantId = due.grantId as string;
+    const names = (await this.post(this.billing, NAMES_PATH, { tenantId, userId, grantIds: [grantId], variantIds: [due.variantId] })) as Names | null;
+    const plan = names?.plans?.find((p) => p.variantId === due.variantId);
+    if (!plan) return { stop: 'plan_unavailable' };
 
     // F-038-f3: billing issues the personal coupon — and spends the offer's budget — before the floor, so a
     // spent budget or an offer gone costs the user's attention nothing; a retry gets the same coupon.
     let coupon: Extract<Coupon, { issued: unknown }>['issued'] | null = null;
+    const offer = due.offer;
     if (due.actionType === 'retain_offer' && offer) {
       const answer = (await this.post(this.billing, COUPON_PATH, {
         tenantId,
@@ -183,43 +224,36 @@ export class AiSuggestionDeliveryJob implements Job {
         expiresAt: due.deadline,
       })) as Coupon | null;
       if (!answer || !('issued' in answer || 'refused' in answer)) throw new Error(`billing answered ${COUPON_PATH} without 'issued' or 'refused'`);
-      if ('refused' in answer) {
-        const by = answer.refused === 'budget_spent' ? 'offer_budget' : answer.refused;
-        await this.post(this.ai, actionPath(actionId, 'stop'), { tenantId, by, ...(answer.retryAt ? { retryAt: answer.retryAt } : {}) });
-        return 'stopped';
-      }
+      if ('refused' in answer) return { stop: answer.refused === 'budget_spent' ? 'offer_budget' : answer.refused, retryAt: answer.retryAt };
       coupon = answer.issued;
     }
 
-    const floor = await this.post(this.ai, actionPath(actionId, 'floor'), { tenantId });
-    if (floor?.['pass'] !== true) return 'refused';
-
     const service = names?.items?.find((g) => g.grantId === grantId);
-    const params: Record<string, string> = {
-      // F-038-g4: the bot's "don't show this again" button names this action, never the user.
-      actionId,
-      ...(service?.label ? { serviceLabel: service.label } : {}),
-      ...(service?.nameKey ? { serviceNameKey: service.nameKey } : {}),
-      ...(service?.sku ? { serviceSku: service.sku } : {}),
-      planNameKey: plan.nameKey,
-      planSku: plan.sku,
-      ...(plan.size ? { planSize: plan.size } : {}),
-      // A discounted renewal is told at the price after its coupon, and the coupon itself.
-      price: coupon ? `${coupon.priceAfter.amount} ${coupon.priceAfter.currencyCode}` : `${plan.price.amount} ${plan.price.currencyCode}`,
-      ...(coupon ? { code: coupon.code, discount: `${coupon.discount.amount} ${coupon.discount.currencyCode}` } : {}),
-      ...(due.amount ? { amount: `${due.amount.amount} ${due.amount.currencyCode}` } : {}),
-      ...(due.deadline ? { days: String(Math.max(1, Math.ceil((new Date(due.deadline).getTime() - now.getTime()) / DAY_MS))) } : {}),
+    return {
+      params: {
+        ...(service?.label ? { serviceLabel: service.label } : {}),
+        ...(service?.nameKey ? { serviceNameKey: service.nameKey } : {}),
+        ...(service?.sku ? { serviceSku: service.sku } : {}),
+        planNameKey: plan.nameKey,
+        planSku: plan.sku,
+        ...(plan.size ? { planSize: plan.size } : {}),
+        // A discounted renewal is told at the price after its coupon, and the coupon itself.
+        price: coupon ? `${coupon.priceAfter.amount} ${coupon.priceAfter.currencyCode}` : `${plan.price.amount} ${plan.price.currencyCode}`,
+        ...(coupon ? { code: coupon.code, discount: `${coupon.discount.amount} ${coupon.discount.currencyCode}` } : {}),
+        ...(due.amount ? { amount: `${due.amount.amount} ${due.amount.currencyCode}` } : {}),
+        ...(due.deadline ? { days: String(Math.max(1, Math.ceil((new Date(due.deadline).getTime() - now.getTime()) / DAY_MS))) } : {}),
+      },
     };
-    const person: Person = { tenantId, userId, grantId, template, params };
+  }
 
-    if (claim.deliver === 'held') {
-      await this.sender.send({ consumer: CONSUMER, eventId: actionId, person, only: ['inbox'], class: 'suggestion' });
-      await this.post(this.notification, HOLD_PATH, { eventId: actionId, grantId, notice: SUGGESTION_NOTICE, period: actionId, tenantId, template, params, botAt: claim.botAt });
-    } else {
-      await this.sender.send({ consumer: CONSUMER, eventId: actionId, person, only: ['inbox', 'bot'], class: 'suggestion' });
-    }
-    await this.post(this.ai, actionPath(actionId, 'sent'), { tenantId });
-    return claim.deliver === 'held' ? 'held' : 'sent';
+  /** F-038-m: `checkout_help` — another gateway the user can pay with, named by billing; none, or paid since, is not told. */
+  private async helpWords(due: Due): Promise<Words> {
+    const payment = due.payment as NonNullable<Due['payment']>;
+    const answer = (await this.post(this.billing, OTHER_GATEWAY_PATH, { tenantId: due.tenantId, userId: due.subjectId, paymentId: payment.paymentId })) as OtherGateway | null;
+    if (!answer || !('paid' in answer || 'gateway' in answer)) throw new Error(`billing answered ${OTHER_GATEWAY_PATH} without 'paid' or 'gateway'`);
+    if ('paid' in answer) return { stop: 'already_paid' };
+    if (!answer.gateway) return { stop: 'no_other_gateway' };
+    return { params: { gateway: answer.gateway.displayName, amount: `${payment.amount.amount} ${payment.amount.currencyCode}` } };
   }
 
   private async post(base: string, path: string, payload: Record<string, unknown>): Promise<Record<string, unknown> | null> {

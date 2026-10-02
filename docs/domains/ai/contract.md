@@ -10,7 +10,7 @@ updated: 2026-10-02
 
 **DRAFT — schema (F-038-a) and `ai-service` (F-038-b): gated on the tenant's
 package (F-1550), it rebuilds profiles and predictions hourly (F-038-c/d),
-decides `renew` / `resize_*` / `top_up_wallet` / `win_back` / `retain_offer` (F-038-e, F-1514, F-038-k, F-038-n, F-038-f2), delivers them (F-038-g) and
+decides `renew` / `resize_*` / `top_up_wallet` / `win_back` / `retain_offer` / `checkout_help` (F-038-e, F-1514, F-038-k, F-038-n, F-038-f2, F-038-m), delivers them (F-038-g) and
 measures them against the holdout (F-038-i).** The design is ADR-0109; the
 series that builds it is F-038-b … F-038-w and catalog area 24 (F-1501 … F-1550).
 
@@ -31,7 +31,7 @@ Every answer is the shared envelope (F-038-j0, `app/envelope.ts`): a refusal's r
 |---|---|---|---|---|
 | rebuild profiles — **implemented (F-038-c)** | `POST /api/internal/ai/profiles/rebuild`, `ServiceOnlyGuard` (else 404); `worker-service`'s `ai_profile_rebuild`, hourly | `meter_reading`, `account_profile` and `prediction` rows; `{tenants, skipped, accounts, readings, predictions, purged}` in the success envelope | sync, service only | a failing tenant is logged and counted in `skipped`, the others still run |
 | decide — **implemented (F-038-e)** | the hourly run, after the rebuild (`{scheduled, stopped}` join its counts); a trigger whose payload names a `userId` | `action` rows: one `scheduled` at most per subject, the rest `suppressed` (+ step) | async | a tenant's failed run is logged; its profiles stay written |
-| deliver — **implemented (F-038-g2)**, caller worker-service (F-038-g3) | `POST /api/internal/ai/actions/due/take` `{limit ≤200}`; `…/:id/floor`, `…/:id/sent` `{tenantId}`; `…/:id/stop` `{tenantId, by: muted \| after_retention \| plan_unavailable \| offer_unavailable \| offer_budget, retryAt?}` — service token only | `{items}`: `labelledMessage` + `grantId`, `variantId`, `fromVariantId`, `price {amount, currencyCode}`, `deadline`, from the row's `suggest_variant`; `amount` from `suggest_top_up` (F-038-k); `offer` from `suggest_offer` + the offer's terms (F-038-f3); leased 10 min (`SKIP LOCKED`), past its deadline `expired` instead. `floor` = `SafetyFloor.check` (engine; charges on pass). A refusal with a time before the deadline (7 days if none) moves `scheduledFor`, else `suppressed` by the step | sync | 404: not `scheduled` in that tenant; 400 a bad body |
+| deliver — **implemented (F-038-g2)**, caller worker-service (F-038-g3) | `POST /api/internal/ai/actions/due/take` `{limit ≤200}`; `…/:id/floor`, `…/:id/sent` `{tenantId}`; `…/:id/stop` `{tenantId, by: muted \| after_retention \| plan_unavailable \| offer_unavailable \| offer_budget \| no_other_gateway \| already_paid, retryAt?}` — service token only | `{items}`: `labelledMessage` + `grantId`, `variantId`, `fromVariantId`, `price {amount, currencyCode}`, `deadline`, from the row's `suggest_variant`; `amount` from `suggest_top_up` (F-038-k); `offer` from `suggest_offer` + the offer's terms (F-038-f3); `payment` from `checkout_attempt` (F-038-m); leased 10 min (`SKIP LOCKED`), past its deadline `expired` instead. `floor` = `SafetyFloor.check` (engine; charges on pass). A refusal with a time before the deadline (7 days if none) moves `scheduledFor`, else `suppressed` by the step | sync | 404: not `scheduled` in that tenant; 400 a bad body |
 | record outcome — **implemented (F-038-i)** | the hourly run, after the decisions (`{converted}` joins its counts) | `convertedAt` + amount; a `sent` row `accepted`, a queued one `suppressed` by `outcome_reached` | async | a tenant's failed run is logged |
 | uplift report — **implemented (F-038-i)**, caller F-038-j | `POST /api/internal/ai/reports/uplift` `{tenantId, from, to}` (≤ 366 days) — service token only | `{types: [{actionType, treated, control, uplift}], renewals}` | sync | 400 a bad body or period |
 | settings (types off — **implemented, F-1509**; the admin page's routes — **implemented, F-038-j1**: [contract.admin.md](contract.admin.md)), offers, providers | tenant admin | `setting`, `offer`, `guardrail`, `provider`, `task_route` | sync (F-038-j, F-038-w) | — |
@@ -121,7 +121,7 @@ never reads the table, so a spent budget cannot silence an answer.
 
 `DecisionRun` (`decision/decision-run.ts`) pages a tenant's users with a
 `renewal_probability` or `meter_exhaustion` dated inside the next 7 days
-(`SUGGEST_LEAD_DAYS`), or a `win_back_window` closing inside 1; `DecisionPipeline.decide` takes one subject through
+(`SUGGEST_LEAD_DAYS`), a `win_back_window` closing inside 1, or a gateway payment left unfinished (F-038-m, through the reader); `DecisionPipeline.decide` takes one subject through
 the steps below, in this order, each candidate stopping at its first
 `suppressedBy`.
 
@@ -164,7 +164,7 @@ Answers `{ actionType }`. Callers: the bot button (F-038-g4, built — bot-app `
 suggested happened between its decision and 7 days after its send (after the
 decision, if never sent), read through the reader: a `paid` invoice for the
 named plan (`win_back` too); for `renew` and `retain_offer`, also the user's own plan renewal of the Grant (no
-price recorded — the named one counts); for `top_up_wallet`, a
+price recorded — the named one counts); for `top_up_wallet` and `checkout_help`, a
 `payment_gateway` credit. Written to `convertedAt` / `convertedAmount` /
 `convertedCurrency` (C-02) — a holdout row's too; `outcomeAt` keeps its own
 meaning. Other types never convert yet.
