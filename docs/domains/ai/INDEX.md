@@ -19,6 +19,7 @@ updated: 2026-10-02
 | File | Read it when |
 |---|---|
 | [contract.md](contract.md) | using or changing ai from outside |
+| [contract.candidates.md](contract.candidates.md) | an action type is added, or the engine proposes the wrong one — when each type is a candidate, what it carries, how it is told (F-038-k) |
 | [contract.my-suggestion.md](contract.my-suggestion.md) | the panel's suggestion card reads, closes or opts out — ai's routes on `/api/ai` (F-038-h) |
 | [invariants.md](invariants.md) | writing any code that touches it |
 | [data-model.md](data-model.md) | changing storage |

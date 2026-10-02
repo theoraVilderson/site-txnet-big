@@ -13,7 +13,7 @@ const DAY_MS = 86_400_000;
 const READ_TIMEOUT_MS = 30_000;
 
 /** The predictions a candidate is built from (`candidates.ts`). */
-const DECISION_KINDS = ['renewal_probability', 'right_size', 'meter_exhaustion'] as const;
+const DECISION_KINDS = ['renewal_probability', 'right_size', 'meter_exhaustion', 'wallet_need'] as const;
 /** The two that say *when* — an account none of them puts inside the lead time has nothing to decide. */
 const TIMING_KINDS = ['renewal_probability', 'meter_exhaustion'] as const;
 
@@ -78,7 +78,7 @@ export class DecisionReader {
         // One after the other: an interactive transaction is one connection.
         const predictions = await tx.aiPrediction.findMany({
           where: { tenantId, subjectKind: 'user', subjectId: { in: userIds }, kind: { in: [...DECISION_KINDS] } },
-          select: { id: true, subjectId: true, kind: true, value: true, predictedAt: true, confidence: true, reasons: true },
+          select: { id: true, subjectId: true, kind: true, value: true, currencyCode: true, predictedAt: true, confidence: true, reasons: true },
         });
         const profiles = await tx.aiAccountProfile.findMany({
           where: { tenantId, subjectKind: 'user', subjectId: { in: userIds } },
@@ -164,6 +164,9 @@ export class DecisionReader {
           id: p.id,
           kind: p.kind,
           value: p.value === null ? null : p.value.toNumber(),
+          // An amount stays a decimal string with its currency (C-02, F-038-k).
+          amount: p.currencyCode && p.value !== null ? p.value.toFixed(2) : null,
+          currencyCode: p.currencyCode,
           predictedAt: p.predictedAt,
           confidence: p.confidence.toNumber(),
           reasons: p.reasons as Reason[],

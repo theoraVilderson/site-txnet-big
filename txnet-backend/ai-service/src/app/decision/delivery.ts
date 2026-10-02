@@ -40,9 +40,15 @@ type DueRow = Pick<
   'id' | 'tenantId' | 'subjectKind' | 'subjectId' | 'actionType' | 'status' | 'templateKey' | 'renderedBy' | 'renderedText' | 'deadline' | 'reasons'
 >;
 
-/** The labelled message (F-1509) and what its template needs, read from the row's own `suggest_variant` reason. */
+/**
+ * The labelled message (F-1509) and what its template needs, read from the row's own `suggest_variant`
+ * reason — and, for `top_up_wallet` (F-038-k), the amount to top up from its `suggest_top_up` (C-02: a
+ * decimal string with its currency).
+ */
 export function deliveryItem(row: DueRow) {
-  const target = ((row.reasons as Reason[] | null) ?? []).find((r) => r.code === 'suggest_variant') ?? null;
+  const reasons = (row.reasons as Reason[] | null) ?? [];
+  const target = reasons.find((r) => r.code === 'suggest_variant') ?? null;
+  const topUp = reasons.find((r) => r.code === 'suggest_top_up') ?? null;
   const str = (v: unknown) => (typeof v === 'string' ? v : null);
   return {
     ...labelledMessage(row),
@@ -50,6 +56,7 @@ export function deliveryItem(row: DueRow) {
     variantId: str(target?.['variantId']),
     fromVariantId: str(target?.['fromVariantId']),
     price: target && str(target['price']) && str(target['currencyCode']) ? { amount: target['price'] as string, currencyCode: target['currencyCode'] as string } : null,
+    amount: topUp && str(topUp['amount']) && str(topUp['currencyCode']) ? { amount: topUp['amount'] as string, currencyCode: topUp['currencyCode'] as string } : null,
     deadline: row.deadline ? row.deadline.toISOString() : null,
   };
 }

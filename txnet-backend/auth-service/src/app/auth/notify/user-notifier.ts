@@ -71,6 +71,7 @@ export const NOTIFY_TEMPLATES = [
   'suggestionRenew',
   'suggestionResizeUp',
   'suggestionResizeDown',
+  'suggestionTopUpWallet',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -776,6 +777,13 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
     read: (ns) => ns?.suggestion?.resize_down,
     fallback: '💡 Suggestion: in your last two periods {{service}} used under half of its plan. {{plan}} would have been enough — {{price}} for the next period, less than you pay now.',
     inbox: { read: (ns) => ns?.suggestion?.resize_downTitle, fallback: 'Suggestion: a smaller plan for {{service}}' },
+    many: SUGGESTION_MANY,
+  },
+  // F-038-k: the wallet short of the next two renewals — told instead of `renew`, one suggestion per Grant.
+  suggestionTopUpWallet: {
+    read: (ns) => ns?.suggestion?.top_up_wallet,
+    fallback: '💡 Suggestion: {{service}} ends in {{days}} days, and your wallet holds less than its next two periods. Topping up {{amount}} covers this renewal and the next — {{price}} each.',
+    inbox: { read: (ns) => ns?.suggestion?.top_up_walletTitle, fallback: 'Suggestion: top up your wallet for {{service}}' },
     many: SUGGESTION_MANY,
   },
 };

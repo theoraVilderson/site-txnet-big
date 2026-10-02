@@ -14,6 +14,8 @@ import { wholesaleCost, type WholesaleRate } from './margin';
  * (`resize_up`) or too big (`resize_down`, F-1514) — is offered the right
  * size *instead of* the same plan again: a renewal and a resize of one
  * Grant are one decision, and sending both would be two messages about it.
+ * The same holds for the wallet (F-038-k): a wallet short of the next two
+ * renewals is told to top up (`top_up_wallet`) *instead of* to renew.
  *
  * Nothing is suggested earlier than `SUGGEST_LEAD_DAYS` before it matters —
  * the Grant's end, or the day its bag is predicted to run out, whichever is
@@ -38,7 +40,7 @@ export const SUGGEST_LEAD_DAYS = 7;
 export const RESIZE_DOWN_HEADROOM = 1.25;
 
 /** The types this file proposes. Each new action row adds its own. */
-export const CANDIDATE_TYPES = ['renew', 'resize_up', 'resize_down'] as const satisfies readonly AiActionType[];
+export const CANDIDATE_TYPES = ['renew', 'resize_up', 'resize_down', 'top_up_wallet'] as const satisfies readonly AiActionType[];
 export type CandidateType = (typeof CANDIDATE_TYPES)[number];
 
 /** C-07: a key chosen at runtime comes from an exhaustive Record. */
@@ -46,6 +48,7 @@ export const SUGGESTION_TEMPLATE_KEY: Record<CandidateType, string> = {
   renew: BackendI18nKeys.notifications.suggestion.renew,
   resize_up: BackendI18nKeys.notifications.suggestion.resize_up,
   resize_down: BackendI18nKeys.notifications.suggestion.resize_down,
+  top_up_wallet: BackendI18nKeys.notifications.suggestion.top_up_wallet,
 };
 
 export type DecisionPrediction = {
@@ -55,6 +58,9 @@ export type DecisionPrediction = {
   predictedAt: Date | null;
   confidence: number;
   reasons: Reason[];
+  /** `value` as stored, when it is an amount (`wallet_need`): a decimal string with its currency — never the float (C-02). */
+  amount?: string | null;
+  currencyCode?: string | null;
 };
 
 export type CandidateGrant = { id: string; variantId: string | null; endsAt: Date | null };
@@ -172,6 +178,16 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
     }
     if (!chosen?.target.price) continue;
 
+    // F-038-k (user, 2026-10-02): one suggestion per Grant — a wallet short of the next two renewals
+    // is told to top up *instead of* to renew, in the plan's own currency only. A resize is never displaced.
+    const wallet = kinds.wallet_need;
+    const topUp =
+      chosen.type === 'renew' && wallet?.amount && wallet.currencyCode === chosen.target.price.currencyCode
+        ? { amount: wallet.amount, currencyCode: wallet.currencyCode }
+        : null;
+    if (topUp && wallet) chosen = { type: 'top_up_wallet', prediction: wallet, target: current };
+
+    // A top-up is worth the renewal it funds: the renewal's probability, the plan's margin.
     const probability = renewal?.value ?? chosen.prediction.confidence;
     const costed = wholesaleCost(chosen.target, input.wholesale?.get(grantId) ?? null);
     const margin = expectedMargin(probability, chosen.target.price, costed.cost);
@@ -195,6 +211,7 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
         },
         costed.reason,
         margin.reason,
+        ...(topUp ? [{ code: 'suggest_top_up', grantId, ...topUp }] : []),
         ...chosen.prediction.reasons,
       ],
     });

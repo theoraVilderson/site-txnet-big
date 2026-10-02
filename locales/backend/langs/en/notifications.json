@@ -287,9 +287,11 @@
     "renew": "💡 Suggestion: {{service}} ends in {{days}} days. Renew it to keep it running without a break — {{price}} for the next period.",
     "resize_up": "💡 Suggestion: {{service}} ran out before its end in your last periods. {{plan}} fits how you use it — {{price}} for the next period.",
     "resize_down": "💡 Suggestion: in your last two periods {{service}} used under half of its plan. {{plan}} would have been enough — {{price}} for the next period, less than you pay now.",
+    "top_up_wallet": "💡 Suggestion: {{service}} ends in {{days}} days, and your wallet holds less than its next two periods. Topping up {{amount}} covers this renewal and the next — {{price}} each.",
     "renewTitle": "Suggestion: renew {{service}}",
     "resize_upTitle": "Suggestion: a bigger plan for {{service}}",
     "resize_downTitle": "Suggestion: a smaller plan for {{service}}",
+    "top_up_walletTitle": "Suggestion: top up your wallet for {{service}}",
     "many": "💡 You have {{count}} suggestions about your services. See them in My services.",
     "manyTitle": "{{count}} suggestions",
     "optOut": "🔕 Don't show this again"

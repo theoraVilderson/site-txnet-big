@@ -10,7 +10,7 @@ updated: 2026-10-02
 
 **DRAFT — schema (F-038-a) and `ai-service` (F-038-b): gated on the tenant's
 package (F-1550), it rebuilds profiles and predictions hourly (F-038-c/d),
-decides `renew` / `resize_*` (F-038-e, F-1514), delivers them (F-038-g) and
+decides `renew` / `resize_*` / `top_up_wallet` (F-038-e, F-1514, F-038-k), delivers them (F-038-g) and
 measures them against the holdout (F-038-i).** The design is ADR-0109; the
 series that builds it is F-038-b … F-038-w and catalog area 24 (F-1501 … F-1550).
 
@@ -29,7 +29,7 @@ guardrail has one home.
 |---|---|---|---|---|
 | rebuild profiles — **implemented (F-038-c)** | `POST /api/internal/ai/profiles/rebuild`, `ServiceOnlyGuard` (else 404); `worker-service`'s `ai_profile_rebuild`, hourly | `meter_reading`, `account_profile` and `prediction` rows; `{tenants, skipped, accounts, readings, predictions, purged}` in the success envelope | sync, service only | a failing tenant is logged and counted in `skipped`, the others still run |
 | decide — **implemented (F-038-e)** | the hourly run, after the rebuild (`{scheduled, stopped}` join its counts); a trigger whose payload names a `userId` | `action` rows: one `scheduled` at most per subject, the rest `suppressed` (+ step) | async | a tenant's failed run is logged; its profiles stay written |
-| deliver — **implemented (F-038-g2)**, caller worker-service (F-038-g3) | `POST /api/internal/ai/actions/due/take` `{limit ≤200}`; `…/:id/floor`, `…/:id/sent` `{tenantId}`; `…/:id/stop` `{tenantId, by: muted \| after_retention \| plan_unavailable, retryAt?}` — service token only | `{items}`: `labelledMessage` + `grantId`, `variantId`, `fromVariantId`, `price {amount, currencyCode}`, `deadline`, from the row's `suggest_variant`; leased 10 min (`SKIP LOCKED`), past its deadline `expired` instead. `floor` = `SafetyFloor.check` (engine; charges on pass). A refusal with a time before the deadline (7 days if none) moves `scheduledFor`, else `suppressed` by the step | sync | 404: not `scheduled` in that tenant; 400 a bad body |
+| deliver — **implemented (F-038-g2)**, caller worker-service (F-038-g3) | `POST /api/internal/ai/actions/due/take` `{limit ≤200}`; `…/:id/floor`, `…/:id/sent` `{tenantId}`; `…/:id/stop` `{tenantId, by: muted \| after_retention \| plan_unavailable, retryAt?}` — service token only | `{items}`: `labelledMessage` + `grantId`, `variantId`, `fromVariantId`, `price {amount, currencyCode}`, `deadline`, from the row's `suggest_variant`; `amount` from `suggest_top_up` (F-038-k); leased 10 min (`SKIP LOCKED`), past its deadline `expired` instead. `floor` = `SafetyFloor.check` (engine; charges on pass). A refusal with a time before the deadline (7 days if none) moves `scheduledFor`, else `suppressed` by the step | sync | 404: not `scheduled` in that tenant; 400 a bad body |
 | record outcome — **implemented (F-038-i)** | the hourly run, after the decisions (`{converted}` joins its counts) | `convertedAt` + amount; a `sent` row `accepted`, a queued one `suppressed` by `outcome_reached` | async | a tenant's failed run is logged |
 | uplift report — **implemented (F-038-i)**, caller F-038-j | `POST /api/internal/ai/reports/uplift` `{tenantId, from, to}` (≤ 366 days) — service token only | `{types: [{actionType, treated, control, uplift}], renewals}` | sync | 400 a bad body or period |
 | settings (types off — **implemented, F-1509**), offers, providers | tenant admin | `setting`, `offer`, `guardrail`, `provider`, `task_route` | sync (F-038-j, F-038-w) | — |
@@ -122,19 +122,10 @@ never reads the table, so a spent budget cannot silence an answer.
 the steps below, in this order, each candidate stopping at its first
 `suppressedBy`.
 
-**Candidates** (`decision/candidates.ts`, pure), one per Grant at most, from
-the stored predictions; the deadline is the Grant's end or its predicted
-run-out, whichever is first, and nothing is proposed more than 7 days before it:
-
-| type | when | plan named |
-|---|---|---|
-| `resize_up` | `right_size` says up | the smallest public plan of the same product, mode and length holding factor × the bag (`quotas.traffic_bytes`), else the largest bigger one |
-| `resize_down` (F-1514) | `right_size` says down (under 40 % in each of two periods) and the Grant ends inside 7 days — at renewal only | the smallest plan of the same product, mode and length, smaller than its own, holding the larger period's use × 1.25 (`RESIZE_DOWN_HEADROOM`) |
-| `renew` | no resize to offer, the Grant ends inside 7 days, its plan has a price | its own plan |
-
-Each carries `reasons` `suggest_variant` (Grant, plan, price) and
-`expected_margin`, then its prediction's; template key
-`notifications.suggestion.<type>`. A type the tenant does not run is no candidate.
+**Candidates** (`decision/candidates.ts`, pure) — one per Grant at most, the
+action types, when each is proposed, what it carries and how it is told:
+[contract.candidates.md](contract.candidates.md) (`renew`, `resize_*`,
+`top_up_wallet`).
 
 Each step answers `pass`, or the `suppressedBy` it writes on a `suppressed`
 action:

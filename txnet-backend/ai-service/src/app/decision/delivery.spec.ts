@@ -64,6 +64,7 @@ describe('deliveryItem (F-038-g2)', () => {
       variantId: 'v50',
       fromVariantId: 'v50',
       price: { amount: '200000.00', currencyCode: 'IRR' },
+      amount: null,
       deadline: '2026-10-08T00:00:00.000Z',
     });
   });

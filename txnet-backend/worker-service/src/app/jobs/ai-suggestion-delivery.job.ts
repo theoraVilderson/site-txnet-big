@@ -25,6 +25,7 @@ export const SUGGESTION_TEMPLATE_OF: Record<string, string> = {
   renew: 'suggestionRenew',
   resize_up: 'suggestionResizeUp',
   resize_down: 'suggestionResizeDown',
+  top_up_wallet: 'suggestionTopUpWallet',
 };
 
 type Due = {
@@ -35,6 +36,8 @@ type Due = {
   actionType: string;
   grantId: string | null;
   variantId: string | null;
+  /** `top_up_wallet` only (F-038-k): the amount to top up, C-02. */
+  amount?: { amount: string; currencyCode: string } | null;
   deadline: string | null;
 };
 type Claim = { deliver: 'now' | 'muted' } | { deliver: 'held'; botAt: string } | { deliver: 'later'; reason: string; retryAt: string };
@@ -118,6 +121,8 @@ export class AiSuggestionDeliveryJob implements Job {
     if (due.subjectKind !== 'user' || !due.grantId || !due.variantId || !template) {
       throw new Error(`a ${due.subjectKind} ${due.actionType} suggestion without a Grant and a plan cannot be told yet`);
     }
+    // F-038-k: a top-up names its amount, or it is not told — "top up {{amount}}" with a blank is no message.
+    if (due.actionType === 'top_up_wallet' && !due.amount) throw new Error(`top_up_wallet suggestion ${due.actionId} carries no amount`);
     const { tenantId, actionId, grantId } = due;
     const userId = due.subjectId;
 
@@ -150,6 +155,7 @@ export class AiSuggestionDeliveryJob implements Job {
       planSku: plan.sku,
       ...(plan.size ? { planSize: plan.size } : {}),
       price: `${plan.price.amount} ${plan.price.currencyCode}`,
+      ...(due.amount ? { amount: `${due.amount.amount} ${due.amount.currencyCode}` } : {}),
       ...(due.deadline ? { days: String(Math.max(1, Math.ceil((new Date(due.deadline).getTime() - now.getTime()) / DAY_MS))) } : {}),
     };
     const person: Person = { tenantId, userId, grantId, template, params };

@@ -115,7 +115,27 @@ describe('AiSuggestionDeliveryJob (F-038-g3)', () => {
   });
 
   it('names every action type it tells with an auth-service template', () => {
-    expect(SUGGESTION_TEMPLATE_OF).toEqual({ renew: 'suggestionRenew', resize_up: 'suggestionResizeUp', resize_down: 'suggestionResizeDown' });
+    expect(SUGGESTION_TEMPLATE_OF).toEqual({
+      renew: 'suggestionRenew',
+      resize_up: 'suggestionResizeUp',
+      resize_down: 'suggestionResizeDown',
+      top_up_wallet: 'suggestionTopUpWallet',
+    });
+  });
+
+  it('tells a top-up its amount (F-038-k), and never one without it', async () => {
+    const topUp = { actionType: 'top_up_wallet', templateKey: 'suggestion.top_up_wallet', amount: { amount: '400000.00', currencyCode: 'IRR' } };
+    const told = build({ items: [item(topUp)] });
+    await told.job.run(NOW);
+    expect(told.sent).toHaveLength(1);
+    expect((told.sent[0] as { person: { template: string; params: Record<string, string> } }).person).toMatchObject({
+      template: 'suggestionTopUpWallet',
+      params: { amount: '400000.00 IRR', price: '190000.00 IRR' },
+    });
+
+    const blank = build({ items: [item({ ...topUp, amount: null })] });
+    expect(await blank.job.run(NOW)).toMatchObject({ itemsProcessed: 0, errorsCount: 1 });
+    expect(blank.paths()).toEqual(['/api/internal/ai/actions/due/take']);
   });
 
   it('stops a muted one, and moves one a retention notice came before — no floor, nothing told', async () => {
