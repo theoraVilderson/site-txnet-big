@@ -173,12 +173,18 @@ model AiAction {
   deadline               DateTime?
   sentAt                 DateTime?
   outcomeAt              DateTime?
+  /// F-038-i: what it suggested was bought or topped up within 7 days — a
+  /// holdout row too, the control's — when, and what was paid (C-02: both or neither).
+  convertedAt            DateTime?
+  convertedAmount        Decimal?       @db.Decimal(18, 2)
+  convertedCurrency      String?
   createdAt              DateTime       @default(now())
 
   offer AiOffer? @relation(fields: [offerId], references: [id])
 
   @@index([tenantId, subjectKind, subjectId, actionType, createdAt])
   @@index([tenantId, status, scheduledFor])
+  @@index([tenantId, createdAt])
   @@map("action")
   @@schema("ai")
 }

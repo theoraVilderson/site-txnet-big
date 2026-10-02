@@ -10,6 +10,8 @@ import { ActionDelivery } from './delivery';
 import { DeliveryInternalController } from './delivery-internal.controller';
 import { Holdouts } from './holdout';
 import { OfferGuardrails } from './offer-guardrail';
+import { OutcomeInternalController } from './outcome-internal.controller';
+import { OutcomeRun } from './outcome-run';
 import { OptOutInternalController } from './opt-out-internal.controller';
 import { OptOuts } from './opt-out';
 import { DecisionPipeline } from './pipeline';
@@ -19,8 +21,8 @@ import { TypeSwitchInternalController } from './type-switch-internal.controller'
 
 @Module({
   imports: [AttentionModule, FloorModule],
-  controllers: [DeliveryInternalController, OptOutInternalController, TypeSwitchInternalController],
-  providers: [ActionDelivery, ActionLog, CooldownReader, DecisionPipeline, DecisionReader, DecisionRun, Holdouts, OfferGuardrails, OptOuts, QuietDownReader, TypeSwitch],
-  exports: [ActionLog, CooldownReader, DecisionRun, Holdouts, OptOuts, QuietDownReader, TypeSwitch],
+  controllers: [DeliveryInternalController, OptOutInternalController, OutcomeInternalController, TypeSwitchInternalController],
+  providers: [ActionDelivery, ActionLog, CooldownReader, DecisionPipeline, DecisionReader, DecisionRun, Holdouts, OfferGuardrails, OptOuts, OutcomeRun, QuietDownReader, TypeSwitch],
+  exports: [ActionLog, CooldownReader, DecisionRun, Holdouts, OutcomeRun, OptOuts, QuietDownReader, TypeSwitch],
 })
 export class DecisionModule {}

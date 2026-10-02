@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { DecisionRun } from '../decision/decision-run';
+import { OutcomeRun } from '../decision/outcome-run';
 import type { AiTenantMode } from '../policy/ai-defaults';
 import { AiTenantPolicy } from '../policy/ai-tenant-policy';
 import { PrismaService } from '../prisma/prisma.service';
@@ -16,7 +17,7 @@ const DAY_MS = 86_400_000;
 const PROFILE_PAGE = 500;
 const WRITE_TIMEOUT_MS = 30_000;
 
-export type RebuildResult = { tenants: number; skipped: number; accounts: number; readings: number; predictions: number; purged: number; scheduled: number; stopped: number };
+export type RebuildResult = { tenants: number; skipped: number; accounts: number; readings: number; predictions: number; purged: number; scheduled: number; stopped: number; converted: number };
 
 /** The kinds this builder owns: each run replaces an account's rows of these and no others. */
 const V1_KINDS = ['meter_exhaustion', 'renewal_probability', 'right_size', 'wallet_need', 'trial_conversion', 'win_back_window'] as const;
@@ -51,12 +52,13 @@ export class ProfileBuilder {
     private readonly reader: ProfileReader,
     private readonly policy: AiTenantPolicy,
     private readonly decisions: DecisionRun,
+    private readonly outcomes: OutcomeRun,
   ) {}
 
   async rebuildAll(now: Date = new Date()): Promise<RebuildResult> {
     // `tenant.tenant` has no RLS; the app pool lists it as every service does.
     const tenants = await this.prisma.tenant.findMany({ select: { id: true }, orderBy: { id: 'asc' } });
-    const result: RebuildResult = { tenants: 0, skipped: 0, accounts: 0, readings: 0, predictions: 0, purged: 0, scheduled: 0, stopped: 0 };
+    const result: RebuildResult = { tenants: 0, skipped: 0, accounts: 0, readings: 0, predictions: 0, purged: 0, scheduled: 0, stopped: 0, converted: 0 };
     for (const { id } of tenants) {
       let mode: AiTenantMode;
       try {
@@ -83,8 +85,14 @@ export class ProfileBuilder {
       } catch (err) {
         this.logger.error(`decision run for tenant ${id} failed: ${err instanceof Error ? err.message : String(err)}`);
       }
+      try {
+        // F-038-i: after the decisions, so a purchase this hour also stops what was just queued.
+        result.converted += (await this.outcomes.recordTenant(id, now)).converted;
+      } catch (err) {
+        this.logger.error(`outcome run for tenant ${id} failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
-    this.logger.log(`profiles: ${result.accounts} account(s) in ${result.tenants} tenant(s), ${result.readings} reading(s), ${result.predictions} prediction(s), ${result.skipped} skipped; ${result.scheduled} suggestion(s) scheduled, ${result.stopped} stopped`);
+    this.logger.log(`profiles: ${result.accounts} account(s) in ${result.tenants} tenant(s), ${result.readings} reading(s), ${result.predictions} prediction(s), ${result.skipped} skipped; ${result.scheduled} suggestion(s) scheduled, ${result.stopped} stopped, ${result.converted} converted`);
     return result;
   }
 

@@ -7,7 +7,7 @@ updated: 2026-10-02
 
 # Invariants — ai
 
-**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–20, shared-core 21; 4–6 are ADR-0109 rules still to build.
+**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–20 and 22, shared-core 21; 4–6 are ADR-0109 rules still to build.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -32,6 +32,7 @@ updated: 2026-10-02
 | 19 | The pipeline runs its steps in ADR-0109 point 8's order and schedules at most one suggestion per subject per run: the highest expected margin (price − the seller's wholesale cost, never revenue alone; never a negative one), at a time before its deadline and outside the user's quiet window; it never charges the budget (F-038-e) | `DecisionPipeline.decide`, `candidatesFor`, `scheduleAt`, `AttentionBudget.peek`, `wholesaleCost`; `pipeline.spec.ts`, `margin.spec.ts` | two pitches about one Grant, the dearer plan picked over the better one, or a message timed into the user's night |
 | 20 | A scheduled suggestion is delivered at most once and never after its deadline: a take leases it, the safety floor runs after the claim and last, and only a `scheduled` row becomes `sent`, moved or `suppressed` (F-038-g2) | `ActionDelivery` (`SKIP LOCKED` lease, `afterRefusal`); `delivery.spec.ts` | a pitch told twice, late, or past the floor |
 | 21 | An AI message carries one call to action at most and no urgency, scarcity or guilt: a template that breaks it is red, a rendered text that breaks it is told nowhere (F-1507) | `suggestionCopyVerdict`; `suggestion-copy.spec.ts` (every language's templates), `UserNotifier` before any channel | a pushy or misleading pitch under the reseller's brand |
+| 22 | A suggestion converts only on what it named, by its own subject, inside its window, and once; the holdout's rows are measured the same way and are the only control; a queued suggestion whose purchase happened is never told (F-038-i) | `matchOutcome`, `measured`, `outcomeWrite`, `upliftReport`; `OutcomeRun` writes only a row with no `convertedAt`, conditional on its status; CHECKs `action_conversion_has_*`; `outcome.spec.ts` | uplift claimed from sales the engine did not prompt, or a pitch for what was just bought |
 
 ## How to test
 

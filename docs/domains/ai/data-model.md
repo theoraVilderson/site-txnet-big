@@ -20,7 +20,7 @@ Every table has a NOT NULL `tenantId` and strict RLS (`tenant_isolation`,
 |---|---|---|---|
 | account_profile | one account's features (`features` JSON) and 168 hour-of-week `activeHours` on UTC; rebuilt hourly | (tenantId, subjectKind, subjectId) | while the account exists |
 | prediction | one `AiPredictionKind` for a subject: `value` / `predictedAt`, `confidence` 0–1, `reasons` (non-empty array, CHECK); `currencyCode` set iff `kind = wallet_need` (C-02, CHECK, `20261002000500`) | id | the builder replaces an account's v1 kinds each hour (one row per kind); erased with the account |
-| action | the audit of every suggestion, sent or stopped (F-1509): type, status, `suppressedBy` (set iff `suppressed`), reasons, template key, `renderedBy`, expected margin + currency | id | erased with the account |
+| action | the audit of every suggestion, sent or stopped (F-1509): type, status, `suppressedBy` (set iff `suppressed`), reasons, template key, `renderedBy`, expected margin + currency; `convertedAt` / amount / currency when what it suggested happened within 7 days (F-038-i, `20261002000900`, CHECK both-or-neither) | id | erased with the account |
 | offer | a tenant-defined offer: exactly one of coupon template / variant (CHECK), max discount 0–100%, daily budget + currency | id | permanent |
 | guardrail | a tenant's cap, one row per key (shape-checked, value ≥ 0; keys checked in code) | (tenantId, key) | permanent |
 | holdout | subjects in the tenant's holdout (F-1508): drawn by a hash of the subject id, recorded on first draw so a report reads the set the pipeline used; a row is never removed by a lower share | (tenantId, subjectKind, subjectId) | permanent |

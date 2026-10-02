@@ -8,13 +8,11 @@ updated: 2026-10-02
 
 # Contract — ai
 
-**DRAFT — schema (F-038-a) and `ai-service` (F-038-b): it boots, holds its
-pools, gates each trigger on the tenant's package (F-1550), rebuilds every
-account's profile and predictions hourly (F-038-c, F-038-d) and decides
-`renew` / `resize_up` / `resize_down` suggestions from them (F-038-e, F-1514); nothing is delivered
-yet (F-038-g).** The design
-is ADR-0109; the series that builds it is F-038-b … F-038-w and catalog
-area 24 (F-1501 … F-1550).
+**DRAFT — schema (F-038-a) and `ai-service` (F-038-b): gated on the tenant's
+package (F-1550), it rebuilds profiles and predictions hourly (F-038-c/d),
+decides `renew` / `resize_*` (F-038-e, F-1514), delivers them (F-038-g) and
+measures them against the holdout (F-038-i).** The design is ADR-0109; the
+series that builds it is F-038-b … F-038-w and catalog area 24 (F-1501 … F-1550).
 
 ## TL;DR
 
@@ -32,7 +30,8 @@ guardrail has one home.
 | rebuild profiles — **implemented (F-038-c)** | `POST /api/internal/ai/profiles/rebuild`, `ServiceOnlyGuard` (else 404); `worker-service`'s `ai_profile_rebuild`, hourly | `meter_reading`, `account_profile` and `prediction` rows; `{tenants, skipped, accounts, readings, predictions, purged}` in the success envelope | sync, service only | a failing tenant is logged and counted in `skipped`, the others still run |
 | decide — **implemented (F-038-e)** | the hourly run, after the rebuild (`{scheduled, stopped}` join its counts); a trigger whose payload names a `userId` | `action` rows: one `scheduled` at most per subject, the rest `suppressed` (+ step) | async | a tenant's failed run is logged; its profiles stay written |
 | deliver — **implemented (F-038-g2)**, caller worker-service (F-038-g3) | `POST /api/internal/ai/actions/due/take` `{limit ≤200}`; `…/:id/floor`, `…/:id/sent` `{tenantId}`; `…/:id/stop` `{tenantId, by: muted \| after_retention \| plan_unavailable, retryAt?}` — service token only | `{items}`: `labelledMessage` + `grantId`, `variantId`, `fromVariantId`, `price {amount, currencyCode}`, `deadline`, from the row's `suggest_variant`; leased 10 min (`SKIP LOCKED`), past its deadline `expired` instead. `floor` = `SafetyFloor.check` (engine; charges on pass). A refusal with a time before the deadline (7 days if none) moves `scheduledFor`, else `suppressed` by the step | sync | 404: not `scheduled` in that tenant; 400 a bad body |
-| record outcome | the purchase or top-up the action suggested, within 7 days | `action.status = accepted` | async | — |
+| record outcome — **implemented (F-038-i)** | the hourly run, after the decisions (`{converted}` joins its counts) | `convertedAt` + amount; a `sent` row `accepted`, a queued one `suppressed` by `outcome_reached` | async | a tenant's failed run is logged |
+| uplift report — **implemented (F-038-i)**, caller F-038-j | `POST /api/internal/ai/reports/uplift` `{tenantId, from, to}` (≤ 366 days) — service token only | `{types: [{actionType, treated, control, uplift}], renewals}` | sync | 400 a bad body or period |
 | settings (types off — **implemented, F-1509**), offers, providers | tenant admin | `setting`, `offer`, `guardrail`, `provider`, `task_route` | sync (F-038-j, F-038-w) | — |
 
 ## Emits (events)
@@ -164,6 +163,27 @@ as that subject's (else 404); then its type is opted out (`ai.opt_out`, a
 second tap a no-op), the action goes `sent` → `dismissed`, and every
 `scheduled`/`awaiting_approval` one of the type is `suppressed` by `opt_out`.
 Answers `{ actionType }`. Callers: the bot button (F-038-g4, built — bot-app `conversation.md`), the panel card (F-038-h).
+
+## Outcomes and uplift (F-038-i, point 13) — implemented
+
+`decision/outcome.ts` (pure) and `OutcomeRun`. **Converted:** what the row
+suggested happened between its decision and 7 days after its send (after the
+decision, if never sent), read through the reader: a `paid` invoice for the
+named plan; for `renew`, also the user's own plan renewal of the Grant (no
+price recorded — the named one counts); for `top_up_wallet`, a
+`payment_gateway` credit. Written to `convertedAt` / `convertedAmount` /
+`convertedCurrency` (C-02) — a holdout row's too; `outcomeAt` keeps its own
+meaning. Other types never convert yet.
+
+**Report**, per type, intent to treat: a unit is one opportunity (subject,
+type, Grant, deadline day), counted in the period of its first row. Control =
+`suppressedBy` `holdout`; treated = every other row that reached the holdout
+step (a later stop by budget, margin or schedule included). A row stopped by
+threshold, opt-out, cooldown, quiet-down or a switched-off type is in neither.
+Each arm: units, converted, rate, revenue and margin per currency (paid −
+the row's `expected_margin` cost; else `marginUnknown`). Uplift: the rate
+difference, and per currency (treated per unit − control per unit) × treated
+units. `renewals`: conversions of `renew` / `resize_*` per arm.
 
 ## The audit, the label and the type switch (F-1509) — implemented
 
