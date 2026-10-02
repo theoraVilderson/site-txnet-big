@@ -121,7 +121,9 @@ export class DecisionPipeline {
       await stop(best, 'offer_guardrail');
       return out;
     }
-    const at = scheduleAt({ activeHours: inputs.activeHours, quiet: inputs.quiet, deadline: best.deadline ?? null, now });
+    const when = { activeHours: inputs.activeHours, quiet: inputs.quiet, deadline: best.deadline ?? null, now };
+    // F-038-r: inside the season's window on the plan when a slot fits there, else the ordinary slot.
+    const at = (best.notBefore ? scheduleAt({ ...when, notBefore: best.notBefore, seasonEnd: best.seasonEnd }) : null) ?? scheduleAt(when);
     if (!at) {
       await stop(best, 'schedule');
       return out;

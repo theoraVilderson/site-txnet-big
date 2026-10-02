@@ -122,6 +122,13 @@ export type OfferOption = {
 /** A gateway payment the user started and did not finish (F-038-m): `billing.payment_transaction`, C-02. */
 export type CheckoutAttempt = { paymentId: string; status: 'failed' | 'expired'; at: Date; amount: string; currencyCode: string };
 
+/**
+ * F-038-r: a season's written campaign on one plan (catalog F-505-a — the
+ * occurrence as a campaign price), read through the reader: what the plan will
+ * cost in that window, in its currency (C-02).
+ */
+export type SeasonWindow = { seasonId: string; name: string; variantId: string; amount: Prisma.Decimal; currencyCode: string; startsAt: Date; endsAt: Date };
+
 export type CandidateInputs = {
   predictions: DecisionPrediction[];
   grants: ReadonlyMap<string, CandidateGrant>;
@@ -136,6 +143,8 @@ export type CandidateInputs = {
   /** F-038-m: the account's unfinished gateway payments of the last two days, and its last successful one. */
   checkouts?: readonly CheckoutAttempt[];
   lastPaidAt?: Date | null;
+  /** F-038-r: the seasons' campaigns on the plans in play, not cancelled, ending ahead. */
+  seasons?: readonly SeasonWindow[];
 };
 
 export type EngineCandidate = ActionCandidate & {
@@ -145,7 +154,30 @@ export type EngineCandidate = ActionCandidate & {
   targetVariantId?: string;
   /** None for help that names nothing to buy (`usage_alert`, F-1516): ranked as zero, recorded with no currency (C-02). */
   expectedMargin?: { amount: string; currencyCode: string };
+  /** F-038-r: a season's window on the plan named — told inside it when a slot fits, else as usual. The deadline is unchanged. */
+  notBefore?: Date;
+  seasonEnd?: Date;
 };
+
+/**
+ * F-038-r: the first season window on `target` that the suggestion can still
+ * use — in the plan's currency, cheaper than today's price (a season that
+ * raises a price is no reason to wait), starting before the deadline and not
+ * over. `null`: no season steers this one.
+ */
+export function seasonOn(input: CandidateInputs, target: PlanOption, deadline: Date, now: Date): SeasonWindow | null {
+  const price = target.price;
+  if (!price) return null;
+  const fits = (input.seasons ?? []).filter(
+    (s) =>
+      s.variantId === target.variantId &&
+      s.currencyCode === price.currencyCode &&
+      s.amount.lt(price.amount) &&
+      s.startsAt.getTime() < deadline.getTime() &&
+      s.endsAt.getTime() > now.getTime(),
+  );
+  return fits.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())[0] ?? null;
+}
 
 export type Margin = { amount: string; currencyCode: string; reason: Reason };
 
@@ -308,7 +340,7 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
     if (winBack) {
       const closes = winBack.predictedAt;
       if (!closes || !current.price || closes.getTime() <= t || closes.getTime() - t > WIN_BACK_LEAD_DAYS * DAY_MS) continue;
-      out.push(candidate({ type: 'win_back', prediction: winBack, grantId, current, target: current, deadline: closes, probability: winBack.confidence }, input));
+      out.push(candidate({ type: 'win_back', prediction: winBack, grantId, current, target: current, deadline: closes, probability: winBack.confidence }, input, now));
       continue;
     }
 
@@ -338,11 +370,14 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
 
     // F-038-f2 (ADR-0110 point 3): a renewal unlikely without a discount is offered one of the tenant's
     // offers instead — still one suggestion per Grant; ahead of a top-up, never instead of a resize.
-    const discount = chosen.type === 'renew' && renewal?.value != null && renewal.value < RETAIN_OFFER_BELOW ? bestOffer(input, current) : null;
+    // F-038-r: a season already lowering this plan's price before the deadline takes the place of a coupon — the
+    // renewal is timed into it, and the tenant's offer budget is not spent on top of it.
+    const seasonal = chosen.type === 'renew' ? seasonOn(input, current, deadline, now) : null;
+    const discount = chosen.type === 'renew' && !seasonal && renewal?.value != null && renewal.value < RETAIN_OFFER_BELOW ? bestOffer(input, current) : null;
     if (discount && renewal) {
       const { offer, amount, percent } = discount;
       const reason = { code: 'suggest_offer', grantId, offerId: offer.id, discountPercent: percent.toFixed(2), discount: amount.toFixed(2), currencyCode: offer.currencyCode };
-      out.push(candidate({ type: 'retain_offer', prediction: renewal, grantId, current, target: current, deadline, probability, offerId: offer.id, discount: amount, extra: [reason] }, input));
+      out.push(candidate({ type: 'retain_offer', prediction: renewal, grantId, current, target: current, deadline, probability, offerId: offer.id, discount: amount, extra: [reason] }, input, now));
       continue;
     }
 
@@ -357,7 +392,7 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
 
     // A top-up is worth the renewal it funds: the renewal's probability, the plan's margin.
     const extra = topUp ? [{ code: 'suggest_top_up', grantId, ...topUp }] : [];
-    out.push(candidate({ type: chosen.type, prediction: chosen.prediction, grantId, current, target: chosen.target, deadline, probability, extra }, input));
+    out.push(candidate({ type: chosen.type, prediction: chosen.prediction, grantId, current, target: chosen.target, deadline, probability, extra }, input, now));
   }
   const help = checkoutHelpFor(input, now);
   if (help) out.push(help);
@@ -380,12 +415,14 @@ type CandidateSpec = {
 };
 
 /** One Grant's candidate naming `target`, its margin at `probability` (C-02), and why. */
-function candidate(spec: CandidateSpec, input: CandidateInputs): EngineCandidate {
+function candidate(spec: CandidateSpec, input: CandidateInputs, now: Date): EngineCandidate {
   const { type, prediction, grantId, current, target, deadline, probability, offerId, discount, extra = [] } = spec;
   const price = target.price as Price;
   const costed = wholesaleCost(target, input.wholesale?.get(grantId) ?? null);
-  // The seller gives the discount: the margin is on the price after it.
-  const paid: Price = discount ? { amount: price.amount.minus(discount), currencyCode: price.currencyCode } : price;
+  // F-038-r: never with a discount — a season takes a coupon's place, never adds to it.
+  const season = discount ? null : seasonOn(input, target, deadline, now);
+  // The seller gives the discount: the margin is on the price after it; in a season, on the season's price.
+  const paid: Price = discount ? { amount: price.amount.minus(discount), currencyCode: price.currencyCode } : season ? { amount: season.amount, currencyCode: season.currencyCode } : price;
   const margin = expectedMargin(probability, paid, costed.cost);
   return {
     actionType: type,
@@ -397,6 +434,7 @@ function candidate(spec: CandidateSpec, input: CandidateInputs): EngineCandidate
     targetVariantId: target.variantId,
     deadline,
     expectedMargin: { amount: margin.amount, currencyCode: margin.currencyCode },
+    ...(season ? { notBefore: season.startsAt, seasonEnd: season.endsAt } : {}),
     reasons: [
       {
         code: 'suggest_variant',
@@ -408,6 +446,9 @@ function candidate(spec: CandidateSpec, input: CandidateInputs): EngineCandidate
       },
       costed.reason,
       margin.reason,
+      ...(season
+        ? [{ code: 'season', seasonId: season.seasonId, name: season.name, price: season.amount.toFixed(2), currencyCode: season.currencyCode, startsAt: season.startsAt.toISOString(), endsAt: season.endsAt.toISOString() }]
+        : []),
       ...extra,
       ...prediction.reasons,
     ],

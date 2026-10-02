@@ -35,6 +35,27 @@ candidate.
 | `top_up_wallet`, subject `tenant` (F-1525-c) | a reseller's `wallet_need` whose run-out is ahead and inside 7 days, with something to top up: [contract.resellers.md](contract.resellers.md) | none | the prediction's. **No margin**: the reseller's own money — ranked as zero, so an upgrade the same run wins |
 | `win_back` (F-038-n) | a `win_back_window` (no active Grant) whose window — 14, 30 or 60 days since the last Grant ended — closes within 1 day (`WIN_BACK_LEAD_DAYS`), never a week early; the close is the deadline, so a window is told once (the 14-day cooldown is shorter than any gap between closes) | the last-ended Grant's own plan, priced — the prediction names the Grant first in its reasons | the prediction's (0.55; 0.65 signed in since). Margin: that × (price − cost), as no renewal is predicted |
 
+## Seasons (F-038-r, ADR-0109 point 15)
+
+A season's **written campaign** (catalog F-505-a: each occurrence is a campaign
+price, F-503-a) on the plan a candidate names steers it — read through the
+reader (`catalog.price_campaign` with its `season`, `20261002002200`), so the
+engine keeps no calendar of its own. It counts only in the plan's currency
+(C-02), cheaper than today's price, starting before the deadline and not over
+(`seasonOn`):
+
+- **Send time.** The candidate carries `notBefore` / `seasonEnd`: the schedule
+  step takes the first slot inside the window (`scheduleAt`), and only when
+  none fits there, the ordinary slot. The deadline never moves.
+- **Offer choice.** A renewal with a season before its deadline is never a
+  `retain_offer`: the season already lowers the price, so the tenant's offer
+  budget is not spent on top of it — it is `renew`, timed into the season.
+- **Margin** is weighed at the season's price; reason `season` (`seasonId`,
+  `name`, `price`, `currencyCode`, `startsAt`, `endsAt`). The price told is
+  today's at delivery — inside the window, the campaign's.
+
+A season with no campaign on the plan changes nothing.
+
 ## What a candidate carries
 
 - `reasons`: `suggest_variant` (Grant, `fromVariantId`, plan, price), the

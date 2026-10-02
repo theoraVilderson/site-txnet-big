@@ -25,10 +25,19 @@ const HOUR_MS = 3_600_000;
 /** How far ahead a slot is looked for: a week holds every hour of week once. */
 const HORIZON_MS = 7 * 24 * HOUR_MS;
 
-export function scheduleAt(input: { activeHours: readonly number[]; quiet: QuietWindow | null; deadline: Date | null; now: Date }): Date | null {
-  const { activeHours, quiet, now } = input;
+export function scheduleAt(input: {
+  activeHours: readonly number[];
+  quiet: QuietWindow | null;
+  deadline: Date | null;
+  now: Date;
+  /** F-038-r: a season's window on the plan — slots from its start, before its end; `null` when none fits there, and the caller asks again without it. */
+  notBefore?: Date;
+  seasonEnd?: Date;
+}): Date | null {
+  const { activeHours, quiet } = input;
+  const now = input.notBefore && input.notBefore.getTime() > input.now.getTime() ? input.notBefore : input.now;
   const t = now.getTime();
-  const end = Math.min(input.deadline?.getTime() ?? Infinity, t + HORIZON_MS);
+  const end = Math.min(input.deadline?.getTime() ?? Infinity, input.now.getTime() + HORIZON_MS, input.seasonEnd?.getTime() ?? Infinity);
   if (end <= t) return null;
 
   const slots: number[] = [t];

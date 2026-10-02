@@ -122,6 +122,12 @@ suggestion is produced, where the code runs, or what it reads.
   one. The upgrade is told to the reseller's **owner** only, the quota
   alerts' recipient (F-019-v8): one recipient for everything about a
   reseller's package, changed for both together if ever.
+- **2026-10-02, F-038-r, point 15.** "Seasons move send-time and offer
+  choice" reads the seasons' written campaigns — what the plan will cost,
+  when — never the season rule: a season with no price on a plan is no reason
+  to time anything. Inside a cheaper season the suggestion is timed into its
+  window, and it replaces a discount coupon rather than stacking on it, so a
+  tenant's offer budget is not spent where its own season already discounts.
 
 ## Consequences
 

@@ -28,6 +28,9 @@ export const AI_READER_TABLES = [
   { table: 'catalog.product', sharedRead: true },
   { table: 'catalog.product_variant', sharedRead: true },
   { table: 'catalog.price', sharedRead: true },
+  // F-038-r: the seasons' written campaigns and their names (`20261002002200_ai_season_inputs`).
+  { table: 'catalog.price_campaign', sharedRead: true },
+  { table: 'catalog.season', sharedRead: true },
   { table: 'tenant.tenant_subscription', sharedRead: false },
   { table: 'tenant.tenant_feature_entitlement', sharedRead: false },
   { table: 'tenant.reseller_limit', sharedRead: false },

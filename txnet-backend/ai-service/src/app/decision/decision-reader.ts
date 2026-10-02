@@ -5,7 +5,7 @@ import { resolveTimeZone, tenantTransaction, type QuietWindow } from '@txnet-bac
 import { HOURS_OF_WEEK } from '../profile/active-hours';
 import type { Reason } from '../profile/predictions';
 import { AiReaderPrisma, PrismaService } from '../prisma/prisma.service';
-import { CHECKOUT_HELP_DEADLINE_MS, CHECKOUT_HELP_WAIT_MS, SUGGEST_LEAD_DAYS, WIN_BACK_LEAD_DAYS, type CandidateGrant, type CheckoutAttempt, type DecisionPrediction, type OfferOption, type PlanOption } from './candidates';
+import { CHECKOUT_HELP_DEADLINE_MS, CHECKOUT_HELP_WAIT_MS, SUGGEST_LEAD_DAYS, WIN_BACK_LEAD_DAYS, type CandidateGrant, type CheckoutAttempt, type DecisionPrediction, type OfferOption, type PlanOption, type SeasonWindow } from './candidates';
 import type { WholesaleRate } from './margin';
 import { OFFER_GIVEN } from './offer-guardrail';
 import type { SubjectDecisionInputs } from './pipeline';
@@ -192,7 +192,18 @@ export class DecisionReader {
         const windows = await tx.$queryRaw<Array<{ userId: string; quietStart: number; quietEnd: number; timezone: string | null }>>`
           SELECT "userId", "quietStart", "quietEnd", "timezone" FROM ai.reader_quiet_hours
           WHERE "userId" = ANY(ARRAY[${Prisma.join(userIds)}]::uuid[])`;
-        return { grants, variants, prices, legs, users, windows, templates, payments };
+        // F-038-r: the seasons' campaigns on these plans that end ahead and start within the lead time (and a day).
+        const seasons = await tx.priceCampaign.findMany({
+          where: {
+            variantId: { in: variants.map((v) => v.id) },
+            seasonId: { not: null },
+            cancelledAt: null,
+            endsAt: { gt: now },
+            startsAt: { lt: new Date(now.getTime() + (SUGGEST_LEAD_DAYS + 1) * DAY_MS) },
+          },
+          select: { variantId: true, amount: true, currencyCode: true, startsAt: true, endsAt: true, season: { select: { id: true, name: true } } },
+        });
+        return { grants, variants, prices, legs, users, windows, templates, payments, seasons };
       },
       { timeout: READ_TIMEOUT_MS },
     );
@@ -221,6 +232,10 @@ export class DecisionReader {
       if (o.couponTemplateId && !t) return [];
       return [{ id: o.id, variantId: o.variantId, maxDiscountPercent: o.maxDiscountPercent, currencyCode: o.currencyCode, template: t ? { discountType: t.discountType, discountValue: t.discountValue, maxDiscountCap: t.maxDiscountCap, currencyCode: t.currencyCode } : null }];
     });
+
+    const seasons: SeasonWindow[] = theirs.seasons.flatMap((s) =>
+      s.season ? [{ seasonId: s.season.id, name: s.season.name, variantId: s.variantId, amount: s.amount, currencyCode: s.currencyCode, startsAt: s.startsAt, endsAt: s.endsAt }] : [],
+    );
 
     for (const id of userIds) {
       const predictions: DecisionPrediction[] = own.predictions
@@ -255,7 +270,7 @@ export class DecisionReader {
         : null;
       const mine = own.actions.filter((a) => a.subjectId === id);
       out.set(id, {
-        candidates: { predictions, grants, plans, wholesale, checkouts, lastPaidAt: paid.length ? new Date(Math.max(...paid)) : null, offers, usedOfferIds: new Set(own.given.filter((g) => g.subjectId === id).map((g) => g.offerId as string)) },
+        candidates: { predictions, grants, plans, wholesale, checkouts, lastPaidAt: paid.length ? new Date(Math.max(...paid)) : null, offers, usedOfferIds: new Set(own.given.filter((g) => g.subjectId === id).map((g) => g.offerId as string)), seasons },
         activeHours: own.profiles.find((p) => p.subjectId === id)?.activeHours ?? new Array<number>(HOURS_OF_WEEK).fill(0),
         quiet,
         pendingSends: mine.filter((a) => a.status === 'scheduled' && a.scheduledFor).map((a) => a.scheduledFor as Date),
