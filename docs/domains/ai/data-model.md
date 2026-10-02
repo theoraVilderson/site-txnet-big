@@ -47,6 +47,7 @@ No foreign keys leave the schema; ids are plain UUIDs.
 
 ## Access rules
 
-Only `ai-service` (F-038-b) writes these tables. Its
-reads of other units go through a read-only role over named tables, under
-tenant RLS (ADR-0109 point 6).
+Only `ai-service` writes these tables, on the app pool with the tenant bound.
+Its reads of other units go through `txnet_ai_reader` (invariant 7); tables
+keyed by user with no `tenantId` (`billing.wallet`, `identity.session`,
+`notification.*`) are outside that role — RLS cannot scope them.

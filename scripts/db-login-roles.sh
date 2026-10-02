@@ -18,9 +18,12 @@
 # Reads `.env` + `.env.dev` (or `.env.prod` with ENV_FILE=.env.prod) for
 # MAIN_DB_* and for the two passwords below.
 #
-# Required in the environment (both are new):
+# Required in the environment:
 #   DB_APP_PASSWORD           -> role `txnet_app_user`,          DATABASE_APP_URL
 #   DB_CROSS_TENANT_PASSWORD  -> role `txnet_cross_tenant_user`, DATABASE_CROSS_TENANT_URL
+#   DB_AI_READER_PASSWORD     -> role `txnet_ai_reader_user`,    DATABASE_AI_READER_URL
+#                                (F-038-b: SELECT on named tables only, under
+#                                tenant RLS — `20261002000300_ai_reader_role`)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -37,6 +40,7 @@ set +a
 : "${MAIN_DB_NAME:?MAIN_DB_NAME is not set}"
 : "${DB_APP_PASSWORD:?DB_APP_PASSWORD is not set — see the header of this file}"
 : "${DB_CROSS_TENANT_PASSWORD:?DB_CROSS_TENANT_PASSWORD is not set — see the header of this file}"
+: "${DB_AI_READER_PASSWORD:?DB_AI_READER_PASSWORD is not set — see the header of this file}"
 
 CONTAINER="${MAIN_DB_CONTAINER:-txnet-dev-postgres}"
 
@@ -48,7 +52,8 @@ docker exec -i \
   psql -v ON_ERROR_STOP=1 \
        -U "$MAIN_DB_USERNAME" -d "$MAIN_DB_NAME" \
        -v app_pw="$DB_APP_PASSWORD" \
-       -v xt_pw="$DB_CROSS_TENANT_PASSWORD" <<'SQL'
+       -v xt_pw="$DB_CROSS_TENANT_PASSWORD" \
+       -v ai_pw="$DB_AI_READER_PASSWORD" <<'SQL'
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'txnet_app_user') THEN
@@ -57,6 +62,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'txnet_cross_tenant_user') THEN
     CREATE ROLE txnet_cross_tenant_user LOGIN;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'txnet_ai_reader_user') THEN
+    CREATE ROLE txnet_ai_reader_user LOGIN;
+  END IF;
 END
 $$;
 
@@ -64,20 +72,28 @@ $$;
 -- the split, and any one of them granted by hand later would undo it silently.
 ALTER ROLE txnet_app_user          NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
 ALTER ROLE txnet_cross_tenant_user NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+ALTER ROLE txnet_ai_reader_user    NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
 
 ALTER ROLE txnet_app_user          PASSWORD :'app_pw';
 ALTER ROLE txnet_cross_tenant_user PASSWORD :'xt_pw';
+ALTER ROLE txnet_ai_reader_user    PASSWORD :'ai_pw';
 
 -- Membership is what makes the policies apply: a policy `TO txnet_app` is
 -- evaluated for anyone who inherits that role.
 GRANT txnet_app          TO txnet_app_user;
 GRANT txnet_cross_tenant TO txnet_cross_tenant_user;
+GRANT txnet_ai_reader    TO txnet_ai_reader_user;
 
 -- And the reverse is what keeps them apart: neither may reach the other's
 -- policy, so the cross-tenant view is not one connection-string typo away.
 REVOKE txnet_cross_tenant FROM txnet_app_user;
 REVOKE txnet_app          FROM txnet_cross_tenant_user;
+-- The ai reader holds SELECT on named tables and nothing else (F-038-b);
+-- either group would hand it write access or every tenant's rows.
+REVOKE txnet_app          FROM txnet_ai_reader_user;
+REVOKE txnet_cross_tenant FROM txnet_ai_reader_user;
+REVOKE txnet_ai_reader    FROM txnet_app_user, txnet_cross_tenant_user;
 SQL
 
-echo "txnet_app_user / txnet_cross_tenant_user ready on ${MAIN_DB_NAME}."
-echo "Set DATABASE_APP_URL and DATABASE_CROSS_TENANT_URL to match (.env.example)."
+echo "txnet_app_user / txnet_cross_tenant_user / txnet_ai_reader_user ready on ${MAIN_DB_NAME}."
+echo "Set DATABASE_APP_URL, DATABASE_CROSS_TENANT_URL and DATABASE_AI_READER_URL to match (.env.example)."

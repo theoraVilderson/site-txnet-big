@@ -8,7 +8,8 @@ updated: 2026-10-02
 
 # Contract — ai
 
-**DRAFT — schema only (F-038-a); no service implements this yet.** The design
+**DRAFT — schema (F-038-a) and an empty `ai-service` (F-038-b): it boots,
+holds its pools and consumes its trigger queue; nothing is decided yet.** The design
 is ADR-0109; the series that builds it is F-038-b … F-038-w and catalog
 area 24 (F-1501 … F-1550).
 
@@ -40,8 +41,8 @@ None yet. Delivery is a notice of class `suggestion` through `notification`
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
 | tenant | `ai_recommendation` feature key — no key, no engine run (F-1550) | no run |
-| identity, billing, entitlement, catalog | Grants, meters, renewals, wallet, payments, coupons, prices, sign-ins — read-only, under tenant RLS (ADR-0109 point 6) | that run is skipped; nothing is guessed |
-| automation | outbox events as real-time triggers (ADR-0021) | profiles still rebuild hourly |
+| identity, billing, entitlement, catalog, tenant | the tables in `ai-service/src/app/reader/reader-tables.ts`, through `txnet_ai_reader` — SELECT only, `identity.user` by named columns, each under its tenant clause (ADR-0109 point 6) | that run is skipped; nothing is guessed |
+| automation | `AI_TRIGGER_EVENTS` (`triggers/trigger-events.ts`) on its own queue `txnet.ai.triggers`; a bad envelope or a failed handler is dead-lettered, never requeued | profiles still rebuild hourly |
 
 ## Guarantees (intended)
 

@@ -1,0 +1,59 @@
+# NestJS ai-service.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # ===========================================================================
+  # NestJS AI Service (Nx Monorepo) — the revenue engine (ADR-0109)
+  # ---------------------------------------------------------------------------
+  # F-038-b. Every model call and every proactive suggestion is decided here.
+  # **Capped**: one CPU and a memory ceiling (point 2) — this host also serves
+  # the live site and bot, and an engine run over every account must never
+  # take a core from them. No Traefik labels yet: its first routes are the
+  # tenant's AI settings (F-038-j, F-1534).
+  # ===========================================================================
+  ai-service:
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - APP_NAME=ai-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-ai-service
+    restart: unless-stopped
+    cpus: ${AI_SERVICE_CPUS:-1.0}
+    mem_limit: ${AI_SERVICE_MEM_LIMIT:-512m}
+    memswap_limit: ${AI_SERVICE_MEM_LIMIT:-512m}
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+    environment:
+      - PORT=3000
+      - NODE_ENV=${NODE_ENV:-development}
+      - APP_NAME=ai-service
+      # The writer: `ai.*` and `engagement.attention_budget`, app role, NOBYPASSRLS.
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # The reader (ADR-0109 point 6): SELECT on named tables only, under
+      # tenant RLS (`20261002000300_ai_reader_role`, scripts/db-login-roles.sh).
+      - DATABASE_AI_READER_URL=postgresql://txnet_ai_reader_user:${DB_AI_READER_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}
+      - AUTOMATION_DLX=${AUTOMATION_DLX:-txnet.automation.dlx}
+      # Its own queue: a slow engine never sits in front of a notice.
+      - AI_QUEUE=${AI_QUEUE:-txnet.ai.triggers}
+      - AI_PREFETCH=${AI_PREFETCH:-4}
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+    networks:
+      - private_backend_network
+    labels:
+      - "txnet.logging=true"
+    depends_on:
+      main-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy

@@ -110,7 +110,7 @@ two kinds in one history. A generated migration must never be edited after it
 has been applied anywhere; add a new one instead.
 
 
-## The two RLS login roles — a manual step per database
+## The RLS login roles — a manual step per database
 
 `20260909000500_row_level_security` creates the *group* roles and the policies.
 It cannot create the roles the services log in as, because those carry
@@ -141,6 +141,13 @@ shown nothing on them. Pointing it at `DATABASE_APP_URL` makes domain
 resolution and the vault answer no rows; pointing it at `DATABASE_URL` un-does
 the layer. Its role's `USING (true)` is a **policy**, not `BYPASSRLS`: neither
 login role can turn the rules off, only be granted different ones.
+
+A third, since F-038-b: `DATABASE_AI_READER_URL` (`txnet_ai_reader_user`,
+`DB_AI_READER_PASSWORD`), held by `ai-service` only. Its group
+`txnet_ai_reader` (`20261002000300_ai_reader_role`) has SELECT on the tables
+`ai-service/src/app/reader/reader-tables.ts` names — nothing under `network`,
+and on `identity.user` named columns only — each under an `ai_reader` policy
+with the table's own tenant clause. It is a member of neither other group.
 
 **A migration role that is not a superuser needs `txnet_cross_tenant`.**
 `FORCE ROW LEVEL SECURITY` binds a table's owner; only superuser status exempts

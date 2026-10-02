@@ -30,6 +30,8 @@ include:
     project_directory: .
   - path: compose/metering-service.yml
     project_directory: .
+  - path: compose/ai-service.yml
+    project_directory: .
   - path: compose/gateway-service.yml
     project_directory: .
   - path: compose/billing-service.yml
