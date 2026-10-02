@@ -88,13 +88,20 @@ export type AtRiskKind = "renewal" | "run_out";
 export interface ResellerForecastItem {
   tenantId: string;
   slug: string | null;
-  /** Days to run-out (`quota_exhaustion`) or a probability (`churn_risk`), as stored. */
+  /** Days to run-out (`quota_exhaustion`), a probability (`churn_risk`), or the top-up (`wallet_need`), as stored. */
   value: string | null;
+  /** `wallet_need` only: the top-up's currency. */
+  currencyCode: string | null;
   predictedAt: string | null;
   confidence: string;
   reasons: AiReason[];
 }
-export type ResellerForecastKind = "quota_exhaustion" | "churn_risk";
+export type ResellerForecastKind = "quota_exhaustion" | "churn_risk" | "wallet_need";
+
+/** One meter's forecast (F-1525-a): units in the meter's own unit, as decimal strings. */
+export interface MeterForecast { meterKey: string; last7d: string; perDay: string; next30d: string; observedHours: number }
+/** A billing wallet at its wholesale rate (F-1525-a); money as decimal strings with the currency. */
+export interface WalletForecast { balance: string; perDay: string; runsOutAt: string; topUp: string; currencyCode: string; observedDays: number }
 
 export interface AiMoney { amount: string; currencyCode: string }
 
@@ -193,6 +200,13 @@ export const aiAdminApi = {
   resellers(kind: ResellerForecastKind, cursor?: string | null): Promise<{ items: ResellerForecastItem[]; nextCursor: string | null }> {
     const q = new URLSearchParams({ kind, ...(cursor ? { cursor } : {}) });
     return call<{ items: ResellerForecastItem[]; nextCursor: string | null }>(`/admin/resellers?${q}`, { method: "GET" });
+  },
+  usageForecast(): Promise<{ meters: MeterForecast[]; wallet: WalletForecast | null }> {
+    return call<{ meters: MeterForecast[]; wallet: WalletForecast | null }>("/admin/usage-forecast", { method: "GET" });
+  },
+  /** The platform owner only; any other tenant is refused `not_platform_owner` (F-1525-a). */
+  capacity(): Promise<{ meters: MeterForecast[]; tenantsMeasured: number; tenants: number }> {
+    return call<{ meters: MeterForecast[]; tenantsMeasured: number; tenants: number }>("/admin/capacity", { method: "GET" });
   },
   margins(): Promise<{ items: PlanMargin[] }> {
     return call<{ items: PlanMargin[] }>("/admin/margins", { method: "GET" });

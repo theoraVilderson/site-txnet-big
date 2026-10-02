@@ -28,7 +28,7 @@ vi.mock("../_context/PanelSessionContext", () => ({ usePanelSession: vi.fn() }))
 vi.mock("@/hooks/useApiError", () => ({ useApiErrorMessage: () => () => "generic" }));
 vi.mock("@/lib/ai-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/ai-api")>()),
-  aiAdminApi: { settings: vi.fn(), saveSettings: vi.fn(), atRisk: vi.fn(), resellers: vi.fn(), margins: vi.fn(), planLayout: vi.fn(), uplift: vi.fn(), offers: vi.fn(), createOffer: vi.fn(), updateOffer: vi.fn() },
+  aiAdminApi: { settings: vi.fn(), saveSettings: vi.fn(), atRisk: vi.fn(), resellers: vi.fn(), usageForecast: vi.fn(), capacity: vi.fn(), margins: vi.fn(), planLayout: vi.fn(), uplift: vi.fn(), offers: vi.fn(), createOffer: vi.fn(), updateOffer: vi.fn() },
 }));
 vi.mock("@/lib/catalog-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/catalog-api")>()),
@@ -268,7 +268,7 @@ describe("resellers at risk, platform owner only (F-038-o3)", () => {
     vi.mocked(aiAdminApi.resellers)
       .mockResolvedValueOnce({
         items: [{
-          tenantId: "r-1", slug: "alpha", value: "2.5000", predictedAt: "2026-10-05T00:00:00.000Z", confidence: "0.9000",
+          tenantId: "r-1", slug: "alpha", value: "2.5000", currencyCode: null, predictedAt: "2026-10-05T00:00:00.000Z", confidence: "0.9000",
           reasons: [
             { code: "quota_rate", meter: "campaign_sends_daily_max", period: "month", included: 1000, used: 600, perDay: 100 },
             { code: "quota_full", meter: "product:p-1", period: "day", included: 10, used: 10 },
@@ -296,7 +296,7 @@ describe("resellers at risk, platform owner only (F-038-o3)", () => {
     vi.mocked(aiAdminApi.resellers)
       .mockResolvedValueOnce({ items: [], nextCursor: null })
       .mockResolvedValueOnce({
-        items: [{ tenantId: "r-gone", slug: null, value: "0.9500", predictedAt: "2026-10-12T00:00:00.000Z", confidence: "0.6000", reasons: [{ code: "churn_base" }, { code: "wallet_short", balance: "10.00", price: "50.00", currencyCode: "USD" }] }],
+        items: [{ tenantId: "r-gone", slug: null, value: "0.9500", currencyCode: null, predictedAt: "2026-10-12T00:00:00.000Z", confidence: "0.6000", reasons: [{ code: "churn_base" }, { code: "wallet_short", balance: "10.00", price: "50.00", currencyCode: "USD" }] }],
         nextCursor: null,
       });
     render(<AiView />);
@@ -308,5 +308,57 @@ describe("resellers at risk, platform owner only (F-038-o3)", () => {
     expect(screen.queryByRole("link", { name: "r-gone" })).toBeNull();
     expect(screen.getByText(/^ai\.resellers\.churnChance:95 · ai\.resellers\.renewsOn:/)).toBeInTheDocument();
     expect(screen.getByText("ai.reasons.wallet_short:10.00,50.00,USD")).toBeInTheDocument();
+  });
+});
+
+describe("usage forecast (F-1525-b)", () => {
+  const meters = [{ meterKey: "vpn.traffic", last7d: String(7 * 1024 ** 3), perDay: String(1024 ** 3), next30d: String(30 * 1024 ** 3), observedHours: 168 }];
+  const wallet = { balance: "90.00", perDay: "20.00", runsOutAt: "2026-10-06T00:00:00.000Z", topUp: "510.00", currencyCode: "USD", observedDays: 7 };
+
+  it("names each meter, shows its next 30 days, and the billing wallet's run-out with the top-up that holds 30 days; no capacity for a reseller", async () => {
+    vi.mocked(catalogApi.texts).mockResolvedValue({ meter: { "vpn.traffic": { name: "Traffic" } } } as unknown as Awaited<ReturnType<typeof catalogApi.texts>>);
+    vi.mocked(aiAdminApi.usageForecast).mockResolvedValue({ meters, wallet });
+    render(<AiView />);
+    fireEvent.click(screen.getByRole("tab", { name: "ai.tabs.usage" }));
+    expect(await screen.findByText("Traffic")).toBeInTheDocument();
+    expect(screen.getByText(/^ai\.usage\.next30d:30(\.0)? GB/)).toBeInTheDocument();
+    expect(screen.getByText(/^ai\.usage\.walletRunsOut:/)).toBeInTheDocument();
+    expect(screen.getByText(/^ai\.usage\.topUp:/)).toHaveTextContent("510");
+    expect(aiAdminApi.capacity).not.toHaveBeenCalled();
+  });
+
+  it("says when nothing is measured yet, and shows no wallet block without one", async () => {
+    vi.mocked(aiAdminApi.usageForecast).mockResolvedValue({ meters: [], wallet: null });
+    render(<AiView />);
+    fireEvent.click(screen.getByRole("tab", { name: "ai.tabs.usage" }));
+    expect(await screen.findByText("ai.usage.empty")).toBeInTheDocument();
+    expect(screen.queryByText(/ai\.usage\.walletRunsOut/)).toBeNull();
+  });
+
+  it("the platform owner also sees the capacity of every tenant, and how many it covers", async () => {
+    vi.mocked(usePanelSession).mockReturnValue({ me: { tenant: { id: TENANT, type: "platform_owner" } }, isLoading: false } as unknown as ReturnType<typeof usePanelSession>);
+    vi.mocked(aiAdminApi.usageForecast).mockResolvedValue({ meters: [], wallet: null });
+    vi.mocked(aiAdminApi.capacity).mockResolvedValue({ meters, tenantsMeasured: 3, tenants: 5 });
+    render(<AiView />);
+    fireEvent.click(screen.getByRole("tab", { name: "ai.tabs.usage" }));
+    expect(await screen.findByText("ai.usage.covers:3,5")).toBeInTheDocument();
+  });
+
+  it("the resellers tab lists billing wallets running out, with the top-up as money", async () => {
+    vi.mocked(usePanelSession).mockReturnValue({ me: { tenant: { id: TENANT, type: "platform_owner" } }, isLoading: false } as unknown as ReturnType<typeof usePanelSession>);
+    vi.mocked(aiAdminApi.resellers)
+      .mockResolvedValueOnce({ items: [], nextCursor: null })
+      .mockResolvedValueOnce({
+        items: [{ tenantId: "r-1", slug: "alpha", value: "510.00", currencyCode: "USD", predictedAt: "2026-10-06T00:00:00.000Z", confidence: "0.9000", reasons: [{ code: "wholesale_rate", perDay: "20.00", currencyCode: "USD" }] }],
+        nextCursor: null,
+      });
+    render(<AiView />);
+    fireEvent.click(screen.getByRole("tab", { name: "ai.tabs.resellers" }));
+    await waitFor(() => expect(aiAdminApi.resellers).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "ai.resellers.wallet" }));
+    await screen.findByRole("link", { name: "alpha" });
+    expect(aiAdminApi.resellers).toHaveBeenLastCalledWith("wallet_need");
+    expect(screen.getByText(/^ai\.resellers\.walletRunsOut:.* · ai\.resellers\.topUp:/)).toBeInTheDocument();
+    expect(screen.getByText(/^ai\.reasons\.wholesale_rate:/)).toBeInTheDocument();
   });
 });

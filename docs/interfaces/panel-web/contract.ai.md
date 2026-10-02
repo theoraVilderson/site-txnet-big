@@ -51,13 +51,23 @@ Per-type model mode and caps are F-038-w's page (user, 2026-10-02).
     unlinked); run-out as a date, "full now" at 0 days; churn as a percent with
     the renewal date. A quota named as the limits page names it, a product's
     sales generically; reasons from an exhaustive set, `churn_base` and any
-    unworded code left out (`ResellersAtRisk.tsx`).
+    unworded code left out (`ResellersAtRisk.tsx`). A third list, billing
+    wallets (F-1525-b): the run-out date and the top-up as money with its
+    currency, never summed across two (C-02).
+11. **Usage forecast: a forecast, said as one** (F-1525-b,
+    `UsageForecastView.tsx`). Per meter, named from the catalog texts
+    (`meterName`), never summed across two: the next 30 days, the last 7 and
+    a day's mean — bytes for `vpn.traffic` (`formatBytes`), a count otherwise.
+    "Not measured yet" when ai has no readings. The billing wallet's run-out
+    and the top-up that holds 30 days, or that it already does. The platform
+    owner also sees every tenant summed, with how many of how many tenants
+    that covers.
 
 ## Consumes
 
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
-| ai | `/api/ai/admin/settings`, `…/at-risk`, `…/margins`, `…/plan-layout`, `…/reports/uplift`, `…/offers`, `…/resellers` (platform owner) | the tab shows the error line; the others work |
+| ai | `/api/ai/admin/settings`, `…/at-risk`, `…/margins`, `…/plan-layout`, `…/reports/uplift`, `…/offers`, `…/usage-forecast`, `…/resellers` and `…/capacity` (platform owner) | the tab shows the error line; the others work |
 | billing | `GET /api/billing/coupons?kind=discount` (templates, `coupon.manage`) | the form says there is no template to use |
 | catalog | `GET /api/i18n/:lang/catalog` (plan names, as the shop reads them) | a plan is named by its sku |
 
@@ -68,4 +78,6 @@ not running said; templates filtered and the currency taken from one; a
 refusal worded; an offer off; at-risk link, worded reasons, paging; the
 report's period and arms; a losing plan flagged and counted, an unknown cost
 worded; the resellers tab hidden from a reseller, a reseller linked, its
-windows worded, churn as a percent, a deleted one unlinked.
+windows worded, churn as a percent, a deleted one unlinked, a wallet's
+run-out and top-up; the usage tab's meters by name, not-measured said, the
+wallet block only with a wallet, capacity for the platform owner alone.

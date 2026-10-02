@@ -11,9 +11,10 @@ import { K } from "./ai-ui";
 import { MarginsList } from "./MarginsList";
 import { PlanLayoutView } from "./PlanLayoutView";
 import { ResellersAtRisk } from "./ResellersAtRisk";
+import { UsageForecastView } from "./UsageForecastView";
 import { UpliftReportView } from "./UpliftReportView";
 
-const TABS = ["settings", "offers", "atRisk", "margins", "layout", "report", "resellers"] as const;
+const TABS = ["settings", "offers", "atRisk", "margins", "layout", "usage", "report", "resellers"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
@@ -22,7 +23,8 @@ type Tab = (typeof TABS)[number];
  * settings, the discount offers the engine may give, the customers at risk
  * with the engine's reasons, each plan's margin with the losing ones flagged
  * (F-1528), the plan layout its users' use suggests (F-1527), and the uplift
- * report against the holdout. The platform owner has a seventh: its resellers
+ * report against the holdout, and the usage forecast with the billing wallet's
+ * run-out (F-1525-b). The platform owner has one more: its resellers
  * by quota run-out and churn risk (F-038-o3) — hidden from anyone else, whom
  * ai would refuse.
  *
@@ -59,7 +61,7 @@ export function AiView() {
         ))}
       </div>
 
-      {tab === "settings" ? <AiSettingsPanel /> : tab === "offers" ? <AiOffers /> : tab === "atRisk" ? <AtRiskList /> : tab === "margins" ? <MarginsList /> : tab === "layout" ? <PlanLayoutView /> : tab === "resellers" ? <ResellersAtRisk /> : <UpliftReportView />}
+      {tab === "settings" ? <AiSettingsPanel /> : tab === "offers" ? <AiOffers /> : tab === "atRisk" ? <AtRiskList /> : tab === "margins" ? <MarginsList /> : tab === "layout" ? <PlanLayoutView /> : tab === "usage" ? <UsageForecastView /> : tab === "resellers" ? <ResellersAtRisk /> : <UpliftReportView />}
     </div>
   );
 }

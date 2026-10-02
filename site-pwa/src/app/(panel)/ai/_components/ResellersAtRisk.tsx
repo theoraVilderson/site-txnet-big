@@ -9,13 +9,14 @@ import { aiAdminApi, type AiReason, type ResellerForecastItem, type ResellerFore
 import { RESELLER_LIMIT_KEYS } from "@/lib/reseller-limits";
 import { panelResellerPath } from "@/lib/routes";
 import { formatInstant } from "../../_lib/datetime";
+import { formatMoney } from "../../_lib/money";
 import { K, card } from "./ai-ui";
 
 const LIMIT_NAMES = FrontendI18nKeys.common.resellers.limits.keys;
 const PERIODS = ["day", "week", "month"] as const;
 
 /** The reseller codes this tab words; `churn_base` is the arithmetic's start and says nothing. */
-const WORDED = ["quota_rate", "quota_full", "wallet_short", "renewal_unpaid", "sales_fell", "sales_grew", "downgrade_scheduled"] as const;
+const WORDED = ["quota_rate", "quota_full", "wallet_short", "renewal_unpaid", "sales_fell", "sales_grew", "downgrade_scheduled", "wholesale_rate"] as const;
 type Worded = (typeof WORDED)[number];
 const isWorded = (code: string): code is Worded => (WORDED as readonly string[]).includes(code);
 
@@ -72,6 +73,8 @@ export function ResellersAtRisk() {
         return t("common", K.reasons.quota_rate, { quota: quotaName(r["meter"]), used: Number(r["used"] ?? 0), included: Number(r["included"] ?? 0), period: periodName(r["period"]), perDay: Number(r["perDay"] ?? 0) });
       case "quota_full":
         return t("common", K.reasons.quota_full, { quota: quotaName(r["meter"]), included: Number(r["included"] ?? 0), used: Number(r["used"] ?? 0), period: periodName(r["period"]) });
+      case "wholesale_rate":
+        return t("common", K.reasons.wholesale_rate, { amount: formatMoney(String(r["perDay"] ?? "0"), String(r["currencyCode"] ?? ""), { lang, t }) });
       case "wallet_short":
         return t("common", K.reasons.wallet_short, { balance: String(r["balance"] ?? ""), price: String(r["price"] ?? ""), currency: String(r["currencyCode"] ?? "") });
       default:
@@ -79,7 +82,9 @@ export function ResellersAtRisk() {
     }
   };
   const when = (item: ResellerForecastItem) =>
-    kind === "quota_exhaustion"
+    kind === "wallet_need"
+      ? `${t("common", K.resellers.walletRunsOut, { date: date(item.predictedAt) })} · ${t("common", K.resellers.topUp, { amount: formatMoney(item.value ?? "0", item.currencyCode ?? "", { lang, t }) })}`
+      : kind === "quota_exhaustion"
       ? Number(item.value ?? 0) === 0
         ? t("common", K.resellers.fullNow)
         : t("common", K.resellers.runsOutOn, { date: date(item.predictedAt) })
@@ -88,7 +93,7 @@ export function ResellersAtRisk() {
   return (
     <section className="flex flex-col gap-4">
       <div className="flex gap-2">
-        {(["quota_exhaustion", "churn_risk"] as const).map((k) => (
+        {(["quota_exhaustion", "churn_risk", "wallet_need"] as const).map((k) => (
           <button
             key={k}
             type="button"
@@ -101,7 +106,7 @@ export function ResellersAtRisk() {
             }}
             className={`rounded-xl px-3 py-1.5 text-xs font-bold ${kind === k ? "bg-primary text-white" : "border border-card-border text-text-secondary"}`}
           >
-            {t("common", k === "quota_exhaustion" ? K.resellers.runOut : K.resellers.churn)}
+            {t("common", k === "quota_exhaustion" ? K.resellers.runOut : k === "churn_risk" ? K.resellers.churn : K.resellers.wallet)}
           </button>
         ))}
       </div>

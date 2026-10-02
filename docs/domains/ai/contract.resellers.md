@@ -64,7 +64,7 @@ meter changed or money moved. `profile/usage-forecast.ts`, pure.
 `admin/reseller-forecast.ts`), behind `ai.manage`. Only a caller whose tenant
 is the platform owner — any other is refused 403 `not_platform_owner`, never
 answered with an empty list that would read as "no reseller at risk". The
-panel shows it as the `/ai` page's resellers tab (F-038-o3, panel-web contract.ai.md rule 10).
+panel shows it as the `/ai` page's resellers tab (F-038-o3, panel-web contract.ai.md rule 10), and the usage forecast and capacity as its usage tab (F-1525-b, rule 11).
 
 | `kind` | order | each item |
 |---|---|---|

@@ -4051,7 +4051,8 @@
       "report": "Report",
       "margins": "Margins",
       "layout": "Plan layout",
-      "resellers": "Resellers"
+      "resellers": "Resellers",
+      "usage": "Usage forecast"
     },
     "settings": {
       "engine": "Suggestion engine",
@@ -4158,7 +4159,8 @@
       "renewal_unpaid": "Renewal unpaid or in grace",
       "sales_fell": "Sales fell by more than half in 30 days",
       "sales_grew": "Sales are growing",
-      "downgrade_scheduled": "A downgrade is scheduled"
+      "downgrade_scheduled": "A downgrade is scheduled",
+      "wholesale_rate": "Wholesale spend about {{amount}} a day"
     },
     "report": {
       "period": "Last {{days}} days",
@@ -4185,7 +4187,24 @@
         "day": "day",
         "week": "week",
         "month": "month"
-      }
+      },
+      "wallet": "Billing wallet",
+      "walletRunsOut": "Wallet runs out {{date}}",
+      "topUp": "top up {{amount}}"
+    },
+    "usage": {
+      "intro": "What your users will use in the next 30 days at the last week's pace, and when your billing wallet runs out. A forecast only: nothing is charged or changed.",
+      "empty": "Not measured yet: the forecast needs a day of readings while the AI engine runs.",
+      "last7d": "Last 7 days: {{amount}}",
+      "perDay": "About {{amount}} a day",
+      "next30d": "{{amount}} in the next 30 days",
+      "walletTitle": "Billing wallet",
+      "walletRunsOut": "At this pace it runs out {{date}}",
+      "walletRate": "Wholesale spend about {{amount}} a day",
+      "topUp": "Topping up {{amount}} covers 30 days",
+      "topUpNone": "It already covers 30 days",
+      "capacityTitle": "All tenants — capacity",
+      "covers": "Covers {{measured}} of {{total}} tenants; the others are not measured."
     }
   }
 }
