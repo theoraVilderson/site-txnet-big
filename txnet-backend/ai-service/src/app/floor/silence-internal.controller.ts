@@ -2,6 +2,8 @@ import { BadRequestException, Body, Controller, HttpCode, Put, UseGuards } from 
 import { ok, ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
+import { refusal } from '../envelope';
+
 import { SilenceSwitch } from './silence';
 
 const bodySchema = z.object({
@@ -30,7 +32,7 @@ export class SilenceInternalController {
     try {
       await this.silence.set(tenantId, until === null ? null : new Date(until), new Date());
     } catch (err) {
-      if (err instanceof Error && err.message === 'until_out_of_range') throw new BadRequestException('until_out_of_range');
+      if (err instanceof Error && err.message === 'until_out_of_range') throw refusal(400, 'until_out_of_range');
       throw err;
     }
     return ok({ tenantId, until });

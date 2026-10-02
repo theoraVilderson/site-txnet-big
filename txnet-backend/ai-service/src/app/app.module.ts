@@ -14,6 +14,8 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ProfileModule } from './profile/profile.module';
 import { RedisModule } from './redis/redis.module';
 import { IdentityMiddleware } from './request/identity.middleware';
+import { LanguageMiddleware } from './locale/language.middleware';
+import { LocaleModule } from './locale/locale.module';
 import { TriggersModule } from './triggers/triggers.module';
 
 /**
@@ -26,7 +28,7 @@ import { TriggersModule } from './triggers/triggers.module';
  * reaches them.
  */
 @Module({
-  imports: [ConfigModule.forRoot(envConfigOptions), PrismaModule, RedisModule, BrokerModule, TriggersModule, ProfileModule, AttentionModule, DecisionModule, FloorModule, AdminModule],
+  imports: [ConfigModule.forRoot(envConfigOptions), LocaleModule, PrismaModule, RedisModule, BrokerModule, TriggersModule, ProfileModule, AttentionModule, DecisionModule, FloorModule, AdminModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_GUARD, useClass: RateLimitGuard },
@@ -35,6 +37,8 @@ import { TriggersModule } from './triggers/triggers.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    // F-038-j0: the language first, so every answer — a 401 included — is in the caller's.
+    consumer.apply(LanguageMiddleware).forRoutes('{*path}');
     consumer.apply(IdentityMiddleware).forRoutes('api/ai/{*path}');
   }
 }

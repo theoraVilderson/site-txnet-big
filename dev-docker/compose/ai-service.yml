@@ -55,6 +55,9 @@ services:
       - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-}
       - AI_SUGGESTION_READ_RATE_LIMIT=${AI_SUGGESTION_READ_RATE_LIMIT:-}
       - AI_SUGGESTION_WRITE_RATE_LIMIT=${AI_SUGGESTION_WRITE_RATE_LIMIT:-}
+      # The shared response envelope translates through locale-service (F-038-j0).
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
     networks:
       - private_backend_network
     labels:
@@ -78,6 +81,8 @@ services:
       - "txnet.logging=true"
     depends_on:
       main-db:
+        condition: service_healthy
+      locale-service:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy

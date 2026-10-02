@@ -1,8 +1,9 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ok, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 import { z } from 'zod';
 
+import { offerHttpError } from '../envelope';
 import { OfferRefused, Offers, offerFieldsSchema, offerPatchSchema, oneTarget } from '../decision/offers';
 import { OutcomeRun, REPORT_MAX_DAYS } from '../decision/outcome-run';
 import { identityOf } from '../request/identity.middleware';
@@ -37,7 +38,7 @@ async function refusing<T>(work: () => Promise<T>): Promise<T> {
     return await work();
   } catch (err) {
     if (!(err instanceof OfferRefused)) throw err;
-    throw err.reason === 'offer_not_found' ? new NotFoundException(err.reason) : new BadRequestException(err.reason);
+    throw offerHttpError(err);
   }
 }
 

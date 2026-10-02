@@ -25,6 +25,8 @@ guardrail has one home.
 
 ## Provides (intended)
 
+Every answer is the shared envelope (F-038-j0, `app/envelope.ts`): a refusal's reason in `error.reason`, `msg` in the caller's `Accept-Language` through `locale-service`.
+
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
 | rebuild profiles — **implemented (F-038-c)** | `POST /api/internal/ai/profiles/rebuild`, `ServiceOnlyGuard` (else 404); `worker-service`'s `ai_profile_rebuild`, hourly | `meter_reading`, `account_profile` and `prediction` rows; `{tenants, skipped, accounts, readings, predictions, purged}` in the success envelope | sync, service only | a failing tenant is logged and counted in `skipped`, the others still run |

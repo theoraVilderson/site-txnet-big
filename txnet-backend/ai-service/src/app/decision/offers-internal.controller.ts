@@ -1,6 +1,8 @@
-import { BadRequestException, Body, Controller, HttpCode, NotFoundException, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, HttpCode, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { ok, ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 import { z } from 'zod';
+
+import { offerHttpError } from '../envelope';
 
 import { OfferRefused, Offers, offerBodySchema, offerPatchSchema } from './offers';
 
@@ -18,7 +20,7 @@ async function refusing<T>(work: () => Promise<T>): Promise<T> {
     return await work();
   } catch (err) {
     if (!(err instanceof OfferRefused)) throw err;
-    throw err.reason === 'offer_not_found' ? new NotFoundException(err.reason) : new BadRequestException(err.reason);
+    throw offerHttpError(err);
   }
 }
 
