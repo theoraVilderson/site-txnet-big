@@ -29,6 +29,13 @@ export type NoticeClass = (typeof NOTICE_CLASSES)[number];
  */
 export const SUGGESTION_NOTICE = 'ai.suggestion';
 
+/**
+ * The bot button under a suggestion, "don't show this again" (F-038-g4):
+ * its callback data is this prefix and the action id — what auth-service
+ * sends and bot-service routes. The id names an action, never a person.
+ */
+export const SUGGESTION_OPT_OUT_PREFIX = 'aio:';
+
 const OF_KIND: Record<RetentionKind, NoticeClass> = {
   cutoff: 'critical',
   // "An all-clear follows its alarm": it takes the stopped state's channels; its mute switch stays the kind's.

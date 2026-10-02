@@ -1,3 +1,4 @@
+import { SUGGESTION_OPT_OUT_PREFIX } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -23,6 +24,7 @@ import { ResellerCampaignFlow } from '../flows/reseller-campaign.flow';
 import { ResellerFlow } from '../flows/reseller.flow';
 import { TopUpFlow } from '../flows/top-up.flow';
 import { TimeZoneFlow } from '../flows/time-zone.flow';
+import { SuggestionOptOut } from '../suggestion/suggestion-opt-out';
 import { OtpStep } from '../flows/otp.step';
 import {
   ACTIONS,
@@ -86,6 +88,7 @@ export class ConversationRouter {
     private readonly reseller: ResellerFlow,
     private readonly campaigns: ResellerCampaignFlow,
     private readonly timeZone: TimeZoneFlow,
+    private readonly suggestions: SuggestionOptOut,
   ) {}
 
   /**
@@ -151,6 +154,9 @@ export class ConversationRouter {
     if (actionId?.startsWith(TIME_ZONE_ACTION_PREFIX)) {
       return this.timeZone.handle(ctx, state ?? { flow: 'timeZone', step: 'timeZone.pick', data: {} }, actionId);
     }
+
+    // F-038-g4: "don't show this again" under an AI suggestion — any screen, any state.
+    if (actionId?.startsWith(SUGGESTION_OPT_OUT_PREFIX)) return this.suggestions.tap(ctx, actionId);
 
     if (actionId === ACTIONS.login) return this.login.start(ctx);
     if (actionId === ACTIONS.register) return this.register.start();

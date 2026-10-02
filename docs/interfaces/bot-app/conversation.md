@@ -101,6 +101,19 @@ Never inferred from the messenger: Telegram and Bale send no zone.
   **only when `source` is `user`**. auth-api's clear erases a browser report
   too, so sent over one it would drop the user to the tenant's zone.
 
+## "Don't show this again" under a suggestion (F-038-g4, F-1505)
+
+An AI suggestion on the bot carries one button, `🔕 Don't show this again`,
+whose callback data is shared-core `SUGGESTION_OPT_OUT_PREFIX` (`aio:`) and
+the action id — sent by auth-service's `UserNotifier`, routed here by prefix
+on any screen (`SuggestionOptOut`, `suggestion/`), state untouched.
+
+| Rule | Why |
+|---|---|
+| Who opts out is this chat's signed-in session: `GET /api/auth/me` with its token, and its tenant must be this bot's; never anyone the button names | a forwarded or stale button opts out nobody else |
+| Then ai's `POST /api/internal/ai/actions/:id/opt-out` (service token, `AI_API_BASE_URL`) with that user; ai finds the action only as theirs | ai `contract.md` "The tap" |
+| Signed out: "not signed in". A garbled id, another tenant's session, a 404 or ai unreachable: "no longer available" — never "done" | the user is told only what happened |
+
 ## Commands, and how a user finds them
 
 `/start`, `/menu`, `/help`, `/cancel`, `/logout`, `/lang`. Every one of them is also a

@@ -264,6 +264,9 @@ export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   [BotKeys.timeZone.from.browser]: 'Your panel set it.',
   [BotKeys.timeZone.from.tenant]: 'The service default.',
   [BotKeys.timeZone.from.platform]: 'The service default.',
+  // F-038-g4: the answer to "don't show this again" under an AI suggestion.
+  [BotKeys.suggestion.optedOut]: "🔕 Done. You won't get suggestions like this again.",
+  [BotKeys.suggestion.gone]: 'This suggestion is no longer available.',
   // Help is not a manual. Back and Cancel are buttons on screen, and the two
   // commands below are the only ones worth naming in a message.
   [BotKeys.help.body]:

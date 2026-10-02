@@ -1,5 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { BotClientRegistry, BotPlatform } from '@txnet-backend/messenger';
+import { SUGGESTION_OPT_OUT_PREFIX } from '@txnet-backend/shared-core';
 
 import { LocaleService } from '../../locale/locale.service';
 import { NotificationInboxClient } from './notification-inbox.client';
@@ -892,6 +893,11 @@ export class UserNotifier {
     // The chosen platform first; the rest keep linked-last order for the fallback.
     const ordered = every ? links : [...links.filter((l) => l.platform === choice), ...links.filter((l) => l.platform !== choice)];
 
+    // F-038-g4: an AI suggestion carries its "don't show this again" — the action id only, never the user.
+    const markup =
+      request.template.startsWith('suggestion') && params.actionId
+        ? { inline_keyboard: [[{ text: ns?.suggestion?.optOut ?? "🔕 Don't show this again", callback_data: `${SUGGESTION_OPT_OUT_PREFIX}${params.actionId}` }]] }
+        : undefined;
     let lastError: unknown = null;
     const sent: BotPlatform[] = [];
     for (const link of ordered) {
@@ -899,7 +905,7 @@ export class UserNotifier {
       const client = await this.bots.primaryClient(tenantId, platform, 'identity:UserNotifier');
       if (!client) continue;
       try {
-        await client.sendMessage(link.platformUserId, text);
+        await (markup ? client.sendMessage(link.platformUserId, text, markup) : client.sendMessage(link.platformUserId, text));
         sent.push(platform);
         if (!every) break;
       } catch (err) {

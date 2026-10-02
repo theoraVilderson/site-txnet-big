@@ -291,6 +291,7 @@
     "resize_upTitle": "Suggestion: a bigger plan for {{service}}",
     "resize_downTitle": "Suggestion: a smaller plan for {{service}}",
     "many": "💡 You have {{count}} suggestions about your services. See them in My services.",
-    "manyTitle": "{{count}} suggestions"
+    "manyTitle": "{{count}} suggestions",
+    "optOut": "🔕 Don't show this again"
   }
 }

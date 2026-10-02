@@ -37,6 +37,8 @@ services:
       # In-network, so bot traffic never leaves the private network to reach
       # the API it depends on.
       - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
+      # F-038-g4: the "don't show this again" tap under an AI suggestion.
+      - AI_API_BASE_URL=http://ai-service:3000
       # Billing through the gate, never billing-service directly (F-306-a): its
       # routes trust only what `my-auth` writes. The chat's access token is the
       # Bearer; Traefik's network alias keeps it in-network.

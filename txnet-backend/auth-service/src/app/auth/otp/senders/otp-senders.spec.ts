@@ -718,10 +718,13 @@ describe('UserNotifier', () => {
           userId: 'user-1',
           channel: 'bot',
           template: 'suggestionResizeDown',
-          params: { serviceLabel: 'خانه', serviceNameKey: 'catalog.product.month.name', planNameKey: 'catalog.v50.name', planSku: 'P-50', planSize: '50 GB', price: '190000.00 IRR' },
+          params: { actionId: '77777777-7777-4777-8777-777777777777', serviceLabel: 'خانه', serviceNameKey: 'catalog.product.month.name', planNameKey: 'catalog.v50.name', planSku: 'P-50', planSize: '50 GB', price: '190000.00 IRR' },
         }),
       );
-      expect(client.sendMessage).toHaveBeenCalledWith('5501', '💡 پیشنهاد: خانه (یک‌ماهه) → پنجاه گیگ (50 GB) (190000.00 IRR)');
+      // F-038-g4: the button carries the action id, never the user.
+      expect(client.sendMessage).toHaveBeenCalledWith('5501', '💡 پیشنهاد: خانه (یک‌ماهه) → پنجاه گیگ (50 GB) (190000.00 IRR)', {
+        inline_keyboard: [[{ text: "🔕 Don't show this again", callback_data: 'aio:77777777-7777-4777-8777-777777777777' }]],
+      });
       expect(NOTIFY_TEMPLATES).toEqual(expect.arrayContaining(['suggestionRenew', 'suggestionResizeUp', 'suggestionResizeDown']));
     });
   });

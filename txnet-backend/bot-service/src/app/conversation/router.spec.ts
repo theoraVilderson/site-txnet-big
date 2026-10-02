@@ -119,6 +119,7 @@ function makeRouter(over: {
     } as unknown as ResellerFlow,
     { isConfigured: false, start: vi.fn(), handle: vi.fn() } as unknown as ResellerCampaignFlow,
     { start: vi.fn(), handle: vi.fn() } as unknown as TimeZoneFlow,
+    { tap: vi.fn() } as never,
   );
   return { router, nav, sessions, api, otp, langs, locale };
 }

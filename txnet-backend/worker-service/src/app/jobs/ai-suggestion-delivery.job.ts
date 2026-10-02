@@ -141,6 +141,8 @@ export class AiSuggestionDeliveryJob implements Job {
 
     const service = names?.items?.find((g) => g.grantId === grantId);
     const params: Record<string, string> = {
+      // F-038-g4: the bot's "don't show this again" button names this action, never the user.
+      actionId,
       ...(service?.label ? { serviceLabel: service.label } : {}),
       ...(service?.nameKey ? { serviceNameKey: service.nameKey } : {}),
       ...(service?.sku ? { serviceSku: service.sku } : {}),

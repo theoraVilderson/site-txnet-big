@@ -99,6 +99,7 @@ describe('AiSuggestionDeliveryJob (F-038-g3)', () => {
           template: 'suggestionResizeDown',
           // Today's price from billing, not the one the engine saw.
           params: {
+            actionId: ACTION,
             serviceLabel: 'Home',
             serviceNameKey: 'catalog.p1.name',
             serviceSku: 'P-100',

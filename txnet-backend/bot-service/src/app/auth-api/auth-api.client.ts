@@ -332,6 +332,13 @@ export class AuthApiClient {
     return this.call('DELETE', `/api/auth/tenants/${tenantId}/users/${userId}/block`, undefined, ctx);
   }
 
+  // --- who the caller is (F-038-g4) --------------------------------------
+
+  /** `GET /auth/me` — the signed-in user and their tenant: who a tap under a suggestion is from. */
+  me(ctx: CallContext): Promise<ApiResult<{ userId: string; tenant?: { id: string } }>> {
+    return this.call('GET', '/api/auth/me', undefined, ctx);
+  }
+
   // --- the caller's time zone (TZ-1-h) -----------------------------------
 
   /** `GET /auth/me/timezone` — what is stored, and the zone in force (auth-api `contract.time-zone.md`). */

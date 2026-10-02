@@ -58,6 +58,8 @@ export const envSchema = z.object({
    * `BotIntegration` lookup, and the header stays exactly where it is.
    */
   BOT_TENANT_ID: optional(z.string().uuid()),
+  /** F-038-g4: ai-service, for the "don't show this again" tap under a suggestion. Unset, the tap answers "no longer available". */
+  AI_API_BASE_URL: optional(z.string().url()),
   /**
    * Where the panel's billing routes answer **through the gate** (F-306-a):
    * Traefik, as `api.<domain>` — in-network by its alias, not the internet.
