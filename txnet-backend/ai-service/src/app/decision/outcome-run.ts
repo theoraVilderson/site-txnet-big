@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { AiReaderPrisma, PrismaService } from '../prisma/prisma.service';
-import { matchOutcome, measured, OUTCOME_WINDOW_DAYS, outcomeWrite, UNMEASURED_STEPS, upliftReport, type OutcomeEvent, type UpliftReport } from './outcome';
+import { matchOutcome, matchResellerOutcome, measured, OUTCOME_WINDOW_DAYS, outcomeWrite, UNMEASURED_STEPS, upliftReport, type Outcome, type OutcomeEvent, type ResellerEvent, type UpliftReport } from './outcome';
 
 /** The types an outcome is matched for; another type is never converted. */
 const MATCHED_TYPES = ['renew', 'resize_up', 'resize_down', 'top_up_wallet'] as const;
@@ -81,11 +81,84 @@ export class OutcomeRun {
     return { converted };
   }
 
-  /** The uplift of each type over the holdout for decisions in `[from, to)`. */
-  async report(tenantId: string, from: Date, to: Date): Promise<UpliftReport> {
+  /**
+   * F-038-o5: the platform's suggestions to its resellers (F-038-o4, F-1525-c),
+   * measured as a user's are: each reseller's upgrade charges and top-ups read
+   * in its own scope (`ai.reader_billing_event`), its package now through
+   * `ai.reader_reseller`. Written as `recordTenant` writes — only a row with no
+   * `convertedAt`, conditional on its status.
+   */
+  async recordResellers(platformTenantId: string, now: Date): Promise<{ converted: number }> {
+    const since = new Date(now.getTime() - LOOKBACK_MS);
+    const rows = await this.write(platformTenantId, (tx) =>
+      tx.aiAction.findMany({
+        where: {
+          tenantId: platformTenantId,
+          subjectKind: 'tenant',
+          actionType: { in: ['resize_up', 'top_up_wallet'] },
+          convertedAt: null,
+          createdAt: { gte: since },
+          OR: [{ status: { not: 'suppressed' } }, { suppressedBy: { notIn: [...UNMEASURED_STEPS] } }],
+        },
+        select: { id: true, subjectId: true, actionType: true, status: true, suppressedBy: true, createdAt: true, sentAt: true, reasons: true },
+      }),
+    );
+    if (rows.length === 0) return { converted: 0 };
+    const packages = new Map(
+      (
+        await runWithTenant({ id: platformTenantId }, () =>
+          tenantTransaction(this.reader, (tx) => tx.$queryRaw<Array<{ tenantId: string; packageId: string | null }>>`SELECT "tenantId", "packageId" FROM ai.reader_reseller`),
+        )
+      ).map((r) => [r.tenantId, r.packageId]),
+    );
+    let converted = 0;
+    for (const subjectId of new Set(rows.map((r) => r.subjectId))) {
+      const events = await this.resellerEvents(subjectId);
+      for (const row of rows.filter((r) => r.subjectId === subjectId)) {
+        if (!measured(row)) continue;
+        const hit = matchResellerOutcome(row, events, packages.get(subjectId) ?? null);
+        if (hit) converted += await this.convert(platformTenantId, row, hit);
+      }
+    }
+    return { converted };
+  }
+
+  private resellerEvents(resellerId: string): Promise<ResellerEvent[]> {
+    return runWithTenant({ id: resellerId }, () =>
+      tenantTransaction(this.reader, async (tx) => {
+        const rows = await tx.$queryRaw<Array<{ id: string; kind: 'upgrade' | 'top_up'; amount: Prisma.Decimal; currencyCode: string; createdAt: Date }>>`
+          SELECT "id", "kind", "amount", "currencyCode", "createdAt" FROM ai.reader_billing_event`;
+        return rows.map((r) => ({ kind: r.kind, ref: r.id, tenantId: resellerId, at: r.createdAt, amount: new Prisma.Decimal(r.amount).toFixed(2), currencyCode: r.currencyCode }));
+      }),
+    );
+  }
+
+  private async convert(tenantId: string, row: { id: string; status: string }, hit: Outcome): Promise<number> {
+    const priced = hit.amount !== null && hit.currencyCode !== null;
+    const change = outcomeWrite(row.status);
+    const { count } = await this.write(tenantId, (tx) =>
+      tx.aiAction.updateMany({
+        where: { id: row.id, tenantId, status: row.status as never, convertedAt: null },
+        data: {
+          ...change,
+          ...(change.status === 'accepted' ? { outcomeAt: hit.at } : {}),
+          convertedAt: hit.at,
+          convertedAmount: priced ? new Prisma.Decimal(hit.amount!) : null,
+          convertedCurrency: priced ? hit.currencyCode : null,
+        },
+      }),
+    );
+    return count;
+  }
+
+  /**
+   * The uplift of each type over the holdout for decisions in `[from, to)` —
+   * the tenant's users, or (F-038-o5, the platform owner's) its resellers.
+   */
+  async report(tenantId: string, from: Date, to: Date, subjectKind: 'user' | 'tenant' = 'user'): Promise<UpliftReport> {
     const rows = await this.write(tenantId, (tx) =>
       tx.aiAction.findMany({
-        where: { tenantId, subjectKind: 'user', createdAt: { gte: from, lt: to } },
+        where: { tenantId, subjectKind, createdAt: { gte: from, lt: to } },
         select: {
           subjectId: true, actionType: true, status: true, suppressedBy: true, createdAt: true, deadline: true, reasons: true,
           convertedAt: true, convertedAmount: true, convertedCurrency: true,

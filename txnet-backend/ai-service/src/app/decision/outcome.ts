@@ -92,6 +92,31 @@ export function matchOutcome(action: Matchable, events: readonly OutcomeEvent[])
   };
 }
 
+/** F-038-o5: what a reseller did, from its own billing ledger (`ai.reader_billing_event`). */
+export type ResellerEvent = { kind: 'upgrade' | 'top_up'; ref: string; tenantId: string; at: Date; amount: string; currencyCode: string };
+
+/**
+ * A reseller's suggestion (F-038-o4, F-1525-c) converts on what it named, by
+ * that reseller, between its decision and 7 days after its send: an upgrade on
+ * an upgrade charge **while the reseller is now on the package named** (the
+ * charge does not name it); a top-up on a billing-wallet top-up. The charge's
+ * own amount is what it was worth (C-02).
+ */
+export function matchResellerOutcome(action: Matchable, events: readonly ResellerEvent[], currentPackageId: string | null): Outcome | null {
+  const named = str(reason(action.reasons, 'suggest_package')?.['packageId']);
+  const fits = (e: ResellerEvent): boolean => {
+    if (action.actionType === 'resize_up') return e.kind === 'upgrade' && named !== null && currentPackageId === named;
+    if (action.actionType === 'top_up_wallet') return e.kind === 'top_up';
+    return false;
+  };
+  const from = action.createdAt.getTime();
+  const to = (action.sentAt ?? action.createdAt).getTime() + WINDOW_MS;
+  const hit = events
+    .filter((e) => e.tenantId === action.subjectId && e.at.getTime() >= from && e.at.getTime() <= to && fits(e))
+    .sort((a, b) => a.at.getTime() - b.at.getTime())[0];
+  return hit ? { at: hit.at, ref: hit.ref, amount: hit.amount, currencyCode: hit.currencyCode } : null;
+}
+
 export function measured(row: { status: string; suppressedBy: string | null }): boolean {
   return row.status !== 'suppressed' || !UNMEASURED_STEPS.includes(row.suppressedBy ?? '');
 }

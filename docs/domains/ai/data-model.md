@@ -61,7 +61,8 @@ the bound tenant's own package rates, through its subscription), and `reader_res
 F-038-o1: the platform's resellers, their subscription, package price and
 billing wallet — empty unless the bound tenant is the platform owner), and `reader_wholesale_spend`
 (`20261002001800`, F-1525-a: the bound tenant's wholesale charges and refunds
-per UTC day, 35 days — no reference, no other reason): the row's user must be in the bound
+per UTC day, 35 days — no reference, no other reason), `reader_billing_event`
+(`20261002002300`, F-038-o5: its upgrade charges and billing-wallet top-ups): the row's user must be in the bound
 tenant, only named columns (no IP, user agent, token hash, notice text), and
 only the reader may SELECT them. They run as their owner, the migration's
 superuser; owned by a role under `FORCE` RLS on `identity.user`, they would

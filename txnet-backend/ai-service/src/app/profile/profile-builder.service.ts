@@ -100,6 +100,8 @@ export class ProfileBuilder {
           const decided = await this.resellerDecisions.runPlatform(id, mode, now);
           result.scheduled += decided.scheduled;
           result.stopped += decided.stopped;
+          // F-038-o5: and what the resellers did about the earlier ones.
+          result.converted += (await this.outcomes.recordResellers(id, now)).converted;
         } catch (err) {
           this.logger.error(`reseller predictions or decisions failed: ${err instanceof Error ? err.message : String(err)}`);
         }

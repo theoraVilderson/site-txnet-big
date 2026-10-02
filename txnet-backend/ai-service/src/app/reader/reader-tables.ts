@@ -121,4 +121,11 @@ export const AI_READER_VIEWS = [
     columns: ['day', 'charged', 'refunded', 'firstAt', 'currencyCode'],
     forbidden: ['referenceId', 'balanceAfter'],
   },
+  {
+    // F-038-o5: the bound tenant's upgrade charges and billing-wallet top-ups, 60 days (`20261002002300_ai_reseller_outcome_inputs`).
+    view: 'ai.reader_billing_event',
+    over: 'tenant.tenant_billing_transaction',
+    columns: ['id', 'kind', 'amount', 'currencyCode', 'createdAt'],
+    forbidden: ['referenceId', 'balanceAfter', 'walletId'],
+  },
 ] as const;

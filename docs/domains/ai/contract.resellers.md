@@ -97,5 +97,13 @@ worker stops it `already_paid` when the balance grew since the decision,
 else tells `suggestionResellerTopUp` ({{amount}}, {{days}}) to the owner. A
 suggestion only: nothing is charged (§24.3).
 
-Not measured yet (F-038-o5): a reseller's row never converts and is in no
-uplift report — the outcome run and the report read `user` subjects only.
+**Measured (F-038-o5, point 13).** The platform's hourly run, after its
+reseller decisions, records conversions as a user's are (`OutcomeRun.recordResellers`,
+`matchResellerOutcome`): between the decision and 7 days after the send, an
+upgrade converts on the reseller's **upgrade charge** while it is **now on the
+package named** (the charge does not name one), a top-up on a **billing-wallet
+top-up** — read in the reseller's own scope through `ai.reader_billing_event`
+(`20261002002300`: those two reasons, 60 days, no reference), worth the
+charge's own amount. `POST /api/ai/admin/reports/uplift` with
+`subjects: "resellers"` is the platform owner's report over them, against its
+holdout of resellers (anyone else 403).

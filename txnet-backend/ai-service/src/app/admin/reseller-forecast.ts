@@ -40,10 +40,15 @@ const ORDER = {
 export class ResellerForecasts {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(tenantId: string, kind: ResellerForecastKind, cursor: string | null, take: number): Promise<{ items: ResellerForecastItem[]; nextCursor: string | null }> {
+  /** 403 `not_platform_owner` unless the caller's tenant is the platform owner. */
+  async assertPlatformOwner(tenantId: string): Promise<void> {
     // `tenant.tenant` has no RLS; the app pool reads it as every service does.
     const caller = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
     if (caller?.tenantType !== TenantType.platform_owner) throw refusal(403, 'not_platform_owner');
+  }
+
+  async list(tenantId: string, kind: ResellerForecastKind, cursor: string | null, take: number): Promise<{ items: ResellerForecastItem[]; nextCursor: string | null }> {
+    await this.assertPlatformOwner(tenantId);
 
     const rows = await runWithTenant({ id: tenantId }, () =>
       tenantTransaction(this.prisma, (tx) =>

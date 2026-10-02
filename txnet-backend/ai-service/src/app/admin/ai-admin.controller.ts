@@ -21,8 +21,10 @@ const AT_RISK_PAGE_MAX = 100;
 /** An offer as the page sends it: no tenant, no author — both are the gate's. */
 export const adminOfferSchema = offerFieldsSchema.strict().refine(oneTarget, 'exactly one of couponTemplateId, variantId');
 const adminOfferPatchSchema = offerPatchSchema.omit({ tenantId: true }).strict();
+/** F-038-o5: whose suggestions the uplift report measures — the tenant's users, or the platform's resellers. */
+export const UPLIFT_SUBJECTS = ['users', 'resellers'] as const;
 const reportSchema = z
-  .object({ from: z.coerce.date(), to: z.coerce.date() })
+  .object({ from: z.coerce.date(), to: z.coerce.date(), subjects: z.enum(UPLIFT_SUBJECTS).default('users') })
   .strict()
   .refine((b) => b.to > b.from && b.to.getTime() - b.from.getTime() <= REPORT_MAX_DAYS * DAY_MS, { path: ['to'] });
 const atRiskQuery = z.object({
@@ -127,8 +129,11 @@ export class AiAdminController {
   @HttpCode(200)
   @TenantCapability('read')
   async uplift(@Req() req: Request, @Body() body: unknown) {
-    const { from, to } = parse(reportSchema, body);
-    return ok(await this.outcomes.report(identityOf(req).tenantId, from, to));
+    const { from, to, subjects } = parse(reportSchema, body);
+    const { tenantId } = identityOf(req);
+    // F-038-o5: the platform's suggestions to its resellers — the platform owner's alone.
+    if (subjects === 'resellers') await this.resellers.assertPlatformOwner(tenantId);
+    return ok(await this.outcomes.report(tenantId, from, to, subjects === 'resellers' ? 'tenant' : 'user'));
   }
 
   @Get('offers')
