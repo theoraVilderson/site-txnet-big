@@ -407,6 +407,13 @@ model Coupon {
   /// Soft delete (D-33): a used coupon is hidden, kept for its receipts.
   deletedAt           DateTime?
   deletedByAdminId    String?           @db.Uuid
+  /// F-038-f3 (ADR-0110): a personal coupon issued for an AI suggestion — the
+  /// action it was issued for (one coupon per action, so a retried delivery
+  /// gets the same code), the offer, and what it took from the offer's daily
+  /// budget, in `currencyCode`. All three or none (CHECK `coupon_ai_offer_whole`).
+  aiActionId          String?           @unique @db.Uuid
+  aiOfferId           String?           @db.Uuid
+  aiBudgetCharge      Decimal?          @db.Decimal(18, 2)
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @default(now()) @updatedAt
 
@@ -419,6 +426,7 @@ model Coupon {
 
   @@index([tenantId, code])
   @@index([batchId])
+  @@index([aiOfferId, createdAt])
   @@map("coupon")
   @@schema("billing")
 }

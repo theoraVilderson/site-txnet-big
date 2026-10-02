@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type AiAction } from '@prisma/client';
+import { Prisma, type AiAction, type AiOffer } from '@prisma/client';
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { SafetyFloor } from '../floor/safety-floor';
@@ -38,14 +38,17 @@ export function afterRefusal(deadline: Date | null, retryAt: Date | null, now: D
 type DueRow = Pick<
   AiAction,
   'id' | 'tenantId' | 'subjectKind' | 'subjectId' | 'actionType' | 'status' | 'templateKey' | 'renderedBy' | 'renderedText' | 'deadline' | 'reasons'
->;
+> & { offerId?: string | null };
+
+/** What billing issues a `retain_offer`'s personal coupon from (F-038-f3): the offer as the tenant set it. */
+type OfferTerms = Pick<AiOffer, 'id' | 'couponTemplateId' | 'maxDiscountPercent' | 'dailyBudget' | 'currencyCode' | 'createdByUserId'>;
 
 /**
  * The labelled message (F-1509) and what its template needs, read from the row's own `suggest_variant`
  * reason — and, for `top_up_wallet` (F-038-k), the amount to top up from its `suggest_top_up` (C-02: a
  * decimal string with its currency); for `retain_offer` (F-038-f2), its offer from `suggest_offer`.
  */
-export function deliveryItem(row: DueRow) {
+export function deliveryItem(row: DueRow, terms?: OfferTerms) {
   const reasons = (row.reasons as Reason[] | null) ?? [];
   const target = reasons.find((r) => r.code === 'suggest_variant') ?? null;
   const topUp = reasons.find((r) => r.code === 'suggest_top_up') ?? null;
@@ -61,7 +64,20 @@ export function deliveryItem(row: DueRow) {
     // F-038-f2: the offer billing issues the personal coupon from (F-038-f3), and the discount the engine priced.
     offer:
       offer && str(offer['offerId']) && str(offer['discountPercent']) && str(offer['discount']) && str(offer['currencyCode'])
-        ? { offerId: offer['offerId'] as string, discountPercent: offer['discountPercent'] as string, discount: { amount: offer['discount'] as string, currencyCode: offer['currencyCode'] as string } }
+        ? {
+            offerId: offer['offerId'] as string,
+            discountPercent: offer['discountPercent'] as string,
+            discount: { amount: offer['discount'] as string, currencyCode: offer['currencyCode'] as string },
+            ...(terms && terms.id === offer['offerId']
+              ? {
+                  couponTemplateId: terms.couponTemplateId,
+                  maxDiscountPercent: terms.maxDiscountPercent.toFixed(2),
+                  dailyBudget: terms.dailyBudget.toFixed(2),
+                  budgetCurrencyCode: terms.currencyCode,
+                  createdByUserId: terms.createdByUserId,
+                }
+              : {}),
+          }
         : null,
     deadline: row.deadline ? row.deadline.toISOString() : null,
   };
@@ -92,7 +108,7 @@ export class ActionDelivery {
             where: { tenantId: id, status: SCHEDULED, deadline: { lt: now } },
             data: { status: 'expired', outcomeAt: now },
           });
-          return tx.$queryRaw<DueRow[]>(Prisma.sql`
+          const due = await tx.$queryRaw<DueRow[]>(Prisma.sql`
             UPDATE ai.action AS t SET "scheduledFor" = ${leaseTo}
             WHERE t."id" IN (
               SELECT a."id" FROM ai.action a
@@ -102,10 +118,19 @@ export class ActionDelivery {
               FOR UPDATE SKIP LOCKED
             )
             RETURNING t."id", t."tenantId", t."subjectKind", t."subjectId", t."actionType", t."status", t."templateKey",
-                      t."renderedBy", t."renderedText", t."deadline", t."reasons"`);
+                      t."renderedBy", t."renderedText", t."deadline", t."reasons", t."offerId"`);
+          // F-038-f3: billing issues a `retain_offer`'s coupon from its offer's terms, as the tenant set them.
+          const offerIds = [...new Set(due.map((r) => r.offerId).filter((o): o is string => !!o))];
+          const offers = offerIds.length
+            ? await tx.aiOffer.findMany({
+                where: { id: { in: offerIds }, tenantId: id },
+                select: { id: true, couponTemplateId: true, maxDiscountPercent: true, dailyBudget: true, currencyCode: true, createdByUserId: true },
+              })
+            : [];
+          return due.map((r) => deliveryItem(r, offers.find((o) => o.id === r.offerId)));
         }),
       );
-      out.push(...rows.map(deliveryItem));
+      out.push(...rows);
     }
     return out;
   }

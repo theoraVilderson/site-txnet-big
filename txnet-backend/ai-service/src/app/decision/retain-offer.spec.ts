@@ -143,6 +143,10 @@ describe('retain_offer delivery and outcome (F-038-f2)', () => {
       variantId: 'v50',
       offer: { offerId: 'of-variant', discountPercent: '20.00', discount: { amount: '40000.00', currencyCode: 'IRR' } },
     });
+    // F-038-f3: the offer's own terms ride along, as the tenant set them, for billing to issue from.
+    const terms = { id: 'of-variant', couponTemplateId: null, maxDiscountPercent: D('20'), dailyBudget: D('500000'), currencyCode: 'IRR', createdByUserId: 'admin-1' };
+    expect(deliveryItem(row, terms).offer).toMatchObject({ couponTemplateId: null, maxDiscountPercent: '20.00', dailyBudget: '500000.00', budgetCurrencyCode: 'IRR', createdByUserId: 'admin-1' });
+    expect(deliveryItem(row, { ...terms, id: 'of-other' }).offer).not.toHaveProperty('dailyBudget');
   });
 
   it('converts as a renewal does: a paid invoice for the plan, or the user renewing the Grant', () => {

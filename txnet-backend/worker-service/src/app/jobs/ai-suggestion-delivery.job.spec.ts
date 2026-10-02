@@ -39,7 +39,7 @@ const item = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-type Answers = { claim?: unknown; plan?: unknown; floor?: unknown; items?: unknown[] };
+type Answers = { claim?: unknown; plan?: unknown; floor?: unknown; items?: unknown[]; coupon?: unknown };
 
 function build(answers: Answers = {}) {
   const calls: Array<{ path: string; body: Record<string, unknown> }> = [];
@@ -61,6 +61,7 @@ function build(answers: Answers = {}) {
         };
       }
       if (path.endsWith('/floor')) return answers.floor ?? { pass: true };
+      if (path.endsWith('/coupons/ai-offer')) return answers.coupon ?? { issued: { code: 'AI-ABCDEFGHJK', discount: { amount: '40000.00', currencyCode: 'IRR' }, priceAfter: { amount: '150000.00', currencyCode: 'IRR' }, expiresAt: '2026-10-08T09:20:00.000Z' } };
       return {};
     })();
     return { ok: true, status: 200, json: async () => ({ ok: true, data }) } as Response;
@@ -121,6 +122,61 @@ describe('AiSuggestionDeliveryJob (F-038-g3)', () => {
       resize_down: 'suggestionResizeDown',
       top_up_wallet: 'suggestionTopUpWallet',
       win_back: 'suggestionWinBack',
+      retain_offer: 'suggestionRetainOffer',
+    });
+  });
+
+  describe('retain_offer: billing issues the personal coupon before the floor (F-038-f3)', () => {
+    const OFFER = '88888888-8888-4888-8888-888888888888';
+    const ADMIN = '55555555-5555-4555-8555-555555555555';
+    const offered = item({
+      actionType: 'retain_offer',
+      templateKey: 'suggestion.retain_offer',
+      fromVariantId: 'v50',
+      offer: {
+        offerId: OFFER, discountPercent: '20.00', discount: { amount: '40000.00', currencyCode: 'IRR' },
+        couponTemplateId: null, maxDiscountPercent: '20.00', dailyBudget: '500000.00', budgetCurrencyCode: 'IRR', createdByUserId: ADMIN,
+      },
+    });
+
+    it('issues it for the plan named, until the deadline, and tells the code, the discount and the price after it', async () => {
+      const { job, calls, sent, paths } = build({ items: [offered] });
+      await expect(job.run(NOW)).resolves.toMatchObject({ itemsProcessed: 1, errorsCount: 0 });
+      expect(paths()).toEqual([
+        '/api/internal/ai/actions/due/take',
+        '/api/internal/notifications/suggestion/claim',
+        '/api/internal/billing/entitlement/grants/names',
+        '/api/internal/billing/coupons/ai-offer',
+        '/api/internal/ai/actions/:id/floor',
+        '/api/internal/ai/actions/:id/sent',
+      ]);
+      expect(calls[3].body).toEqual({
+        tenantId: TENANT, userId: USER, actionId: ACTION, offerId: OFFER, createdByUserId: ADMIN, variantId: 'v50',
+        couponTemplateId: null, maxDiscountPercent: '20.00', dailyBudget: '500000.00', currencyCode: 'IRR', expiresAt: '2026-10-08T09:20:00.000Z',
+      });
+      expect((sent[0] as { person: { template: string; params: Record<string, string> } }).person).toMatchObject({
+        template: 'suggestionRetainOffer',
+        params: { code: 'AI-ABCDEFGHJK', discount: '40000.00 IRR', price: '150000.00 IRR' },
+      });
+    });
+
+    it('moves it to the next day when the day\'s budget is spent, and stops it when the offer no longer applies — no floor, nothing told', async () => {
+      const spent = build({ items: [offered], coupon: { refused: 'budget_spent', retryAt: '2026-10-05T20:30:00.000Z' } });
+      await spent.job.run(NOW);
+      expect(spent.paths().slice(-1)).toEqual(['/api/internal/ai/actions/:id/stop']);
+      expect(spent.calls.at(-1)?.body).toEqual({ tenantId: TENANT, by: 'offer_budget', retryAt: '2026-10-05T20:30:00.000Z' });
+      expect(spent.sent).toEqual([]);
+
+      const gone = build({ items: [offered], coupon: { refused: 'offer_unavailable' } });
+      await gone.job.run(NOW);
+      expect(gone.calls.at(-1)?.body).toEqual({ tenantId: TENANT, by: 'offer_unavailable' });
+      expect(gone.sent).toEqual([]);
+    });
+
+    it('never tells one without its offer\'s terms', async () => {
+      const bare = build({ items: [item({ actionType: 'retain_offer', offer: null })] });
+      expect(await bare.job.run(NOW)).toMatchObject({ itemsProcessed: 0, errorsCount: 1 });
+      expect(bare.paths()).toEqual(['/api/internal/ai/actions/due/take']);
     });
   });
 

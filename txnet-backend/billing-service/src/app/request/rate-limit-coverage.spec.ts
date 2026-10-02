@@ -63,8 +63,11 @@ const APP = join(__dirname, '..');
  * throttling it would leave measured usage held and uncharged.
  * `VpnReserveController` is the reserve sweep (F-118-b), a minute tick:
  * throttling it would leave a short reserve short and a stale one locked.
+ * `AiOfferCouponController` is the AI suggestion delivery's seam (F-038-f3), a
+ * five-minute tick: its limit is the offer's own daily budget, and throttling it
+ * would only move a discount past the deadline it was meant for.
  */
-const EXEMPT = new Set(['HealthController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'UsageInternalController', 'VpnReserveController', 'ChargeCurrenciesController']);
+const EXEMPT = new Set(['HealthController', 'AiOfferCouponController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'UsageInternalController', 'VpnReserveController', 'ChargeCurrenciesController']);
 
 /**
  * Controllers with no identity to bucket on, and what they count instead.

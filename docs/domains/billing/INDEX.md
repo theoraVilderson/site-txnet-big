@@ -60,6 +60,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260930000400_a_platform_gift_is_never_the_resellers/**
   - txnet-backend/prisma/domains/migrations/20260930000600_a_final_usage_charge_says_it_was_rounded/**
   - txnet-backend/prisma/domains/migrations/20261001000400_reseller_quota_engine/**
+  - txnet-backend/prisma/domains/migrations/20261002001100_ai_offer_coupon/**
   - txnet-backend/billing-service/src/app/usage/**
 owns_tables: [wallet, wallet_hold, wallet_transaction, spending_cap, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]

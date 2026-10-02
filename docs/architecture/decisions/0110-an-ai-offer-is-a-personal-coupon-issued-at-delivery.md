@@ -6,7 +6,7 @@ updated: 2026-10-02
 
 # ADR 0110 — an AI offer is a personal coupon, issued at delivery
 
-- **Status:** accepted, not built (F-038-f1 … f3)
+- **Status:** accepted, built (F-038-f1 … f3, 2026-10-02)
 - **Date:** 2026-10-02. The user chose every point below in conversation,
   each the recommended option.
 - **Affects units:** ai, billing, automation, panel-web

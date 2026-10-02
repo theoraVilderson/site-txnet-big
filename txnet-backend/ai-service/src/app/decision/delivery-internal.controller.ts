@@ -6,9 +6,11 @@ import { ActionDelivery } from './delivery';
 
 /**
  * Why delivery stops a suggestion: the claim (F-038-g1) — the user muted it, or a
- * retention notice came first — or billing no longer sells its plan (F-038-g3).
+ * retention notice came first — or billing no longer sells its plan (F-038-g3),
+ * or cannot issue a `retain_offer`'s coupon: the offer no longer applies, or its
+ * day's budget is spent — that one with a `retryAt`, the next day (F-038-f3).
  */
-export const CLAIM_STOPS = ['muted', 'after_retention', 'plan_unavailable'] as const;
+export const CLAIM_STOPS = ['muted', 'after_retention', 'plan_unavailable', 'offer_unavailable', 'offer_budget'] as const;
 
 const takeSchema = z.object({ limit: z.number().int().min(1).max(200) }).strict();
 const actionSchema = z.object({ tenantId: z.string().uuid() }).strict();

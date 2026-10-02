@@ -52,7 +52,7 @@ candidate.
 | `renew` | `grantId`, `variantId`, `price` | `{{service}}`, `{{days}}`, `{{price}}` | a paid invoice for the plan, or the user's renewal of the Grant | yes |
 | `resize_up` / `resize_down` | as `renew`, + `fromVariantId` | + `{{plan}}` | a paid invoice for the plan named | yes |
 | `top_up_wallet` | as `renew`, + `amount {amount, currencyCode}`; the worker refuses one without it | + `{{amount}}` | a `payment_gateway` wallet credit | not yet: F-038-k1 |
-| `retain_offer` | as `renew`, + `offer {offerId, discountPercent, discount {amount, currencyCode}}` from `suggest_offer` — billing issues the personal coupon from it (F-038-f3) | + `{{code}}`, `{{discount}}` (F-038-f3) | as `renew` | no |
+| `retain_offer` | as `renew`, + `offer {offerId, discountPercent, discount {amount, currencyCode}}` from `suggest_offer` — `take` adds the offer's terms (template, cap, budget, author); the worker has billing issue the coupon before the floor, and refuses one without them | + `{{code}}`, `{{discount}}`; `{{price}}` after it — billing's coupon (F-038-f3, billing contract.coupon.md) | as `renew` | no |
 | `win_back` | as `renew` — the ended Grant, its plan; a plan no longer sold stops at the worker (`plan_unavailable`) | `{{service}}`, `{{plan}}`, `{{price}}` (no `{{days}}`) | a paid invoice for the plan | no |
 
 ## Planned

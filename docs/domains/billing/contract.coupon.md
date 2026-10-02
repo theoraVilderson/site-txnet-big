@@ -119,6 +119,28 @@ config's owner (`gatewayConfigOwner`, read only).
 | Every write is one `admin_audit_log` row in the same transaction: `coupon_create` (full snapshot), `coupon_update` (only changed fields, old and new), `coupon_delete` (`mode`, `redemptions`); `tenantId` is the coupon's, or the caller's for a platform coupon | D-33 |
 | A view's `status` is the first that holds: `deleted`, `inactive`, `expired`, `scheduled`, `exhausted`, `active` | what the list shows at a glance |
 
+## An AI offer's personal coupon (built — F-038-f3, ADR-0110)
+
+`payment/coupon/ai-offer-coupon.ts`; migration `20261002001100_ai_offer_coupon`.
+Proved by `ai-offer-coupon.spec.ts`. `POST /api/internal/billing/coupons/ai-offer`
+(`ServiceOnlyGuard`, else 404), called by worker-service's `ai_suggestion_delivery`
+for a `retain_offer` suggestion, after the plan check and before ai's floor.
+Body: `{tenantId, userId, actionId, offerId, createdByUserId, variantId,
+couponTemplateId | null, maxDiscountPercent, dailyBudget, currencyCode, expiresAt}`
+(money as decimal strings). Answers `{issued: {code, discount, priceAfter,
+expiresAt}}` or `{refused: plan_unavailable | offer_unavailable}` or
+`{refused: budget_spent, retryAt}` — a refusal is an answer, not an error.
+
+| Rule | Why |
+|---|---|
+| One coupon per suggestion: `aiActionId` is unique, and a second call answers the one already issued, charging nothing | a retried delivery must not spend the budget twice |
+| The plan is priced by `sellableOfferById` now; not sold = `plan_unavailable`. Its currency must be the offer's (`offer_unavailable`) — nothing is converted | the price told is billing's; a budget is in one currency |
+| A template is the tenant's own, not deleted (it may be inactive), in the plan's currency, a `percentage` or `fixed_amount`, and its service scope — if any — holds the plan; else `offer_unavailable` | the engine cannot read scopes; billing holds them at issue |
+| Terms (`personalCouponTerms`): percentage = the lower of the template's and the offer's `maxDiscountPercent`, the template's money cap kept; fixed = the lower of its amount and the cap on this plan; no template (a variant offer) = the offer's percentage. The charge is the discount on today's price, rounded down | ADR-0110 point 1: never more than either allows |
+| Cloned: gateways, channels. Narrowed: `targeted` at the user, scope the one plan, `totalUsageLimit` 1, `perUserUsageLimit` 1, `expiresAt` the suggestion's deadline, `label` `AI offer`, `createdByAdminId` the offer's author. Other limits are not copied | one renewal of one plan by one user |
+| The budget: under a per-offer `pg_advisory_xact_lock`, today's `aiBudgetCharge` sum (the tenant's day, `quotaPeriodAt('day')` in its zone) + this charge may not pass `dailyBudget`; else `budget_spent` with `retryAt` = the next day's start. An unused coupon is not given back | ADR-0110 point 2; two deliveries at once cannot both fit the last slot |
+| No `admin_audit_log` row: the coupon itself names the action and offer that made it (ai's audit is `ai.action`) | not an admin's act |
+
 ## Gift-code batches (built — F-502-d)
 
 `coupon-admin/coupon-batch.service.ts`; audit values in

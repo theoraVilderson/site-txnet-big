@@ -73,6 +73,7 @@ export const NOTIFY_TEMPLATES = [
   'suggestionResizeDown',
   'suggestionTopUpWallet',
   'suggestionWinBack',
+  'suggestionRetainOffer',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -792,6 +793,14 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
     read: (ns) => ns?.suggestion?.win_back,
     fallback: '💡 Suggestion: {{service}} ended a while ago. If you want it back, {{plan}} is {{price}} for a period.',
     inbox: { read: (ns) => ns?.suggestion?.win_backTitle, fallback: 'Suggestion: {{service}} again' },
+    many: SUGGESTION_MANY,
+  },
+  // F-038-f3 (ADR-0110): a renewal unlikely without a discount — the user's own single-use code from billing,
+  // the discount it gives and the price after it.
+  suggestionRetainOffer: {
+    read: (ns) => ns?.suggestion?.retain_offer,
+    fallback: '💡 Suggestion: {{service}} ends in {{days}} days. To keep it, renew with the code {{code}}: {{discount}} off, so the next period is {{price}}. The code is yours alone and works until this period ends.',
+    inbox: { read: (ns) => ns?.suggestion?.retain_offerTitle, fallback: 'Suggestion: renew {{service}} for less' },
     many: SUGGESTION_MANY,
   },
 };
