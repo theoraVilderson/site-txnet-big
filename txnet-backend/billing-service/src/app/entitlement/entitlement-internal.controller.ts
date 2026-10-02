@@ -6,7 +6,7 @@ import { DeliverDueResult, DeliveryOutcome, GrantDeliveryService } from './deliv
 import { EndNoticeResult, GrantEndNoticeService } from './end-notice';
 import { ForecastResult, GrantExhaustionForecastService } from './exhaustion-forecast';
 import { GrantUnfreezeService } from './freeze';
-import { GrantName, GrantNamesBody, grantNamesSchema, GrantNamesService } from './grant-names';
+import { GrantName, GrantNamesBody, grantNamesSchema, GrantNamesService, PlanName } from './grant-names';
 import { GrantIdleNoticeService, IdleNoticeResult } from './idle-notice';
 import { GrantPurgeService, PurgeResult } from './purge';
 import { GrantPurgeNoticeService } from './purge-notice';
@@ -135,13 +135,14 @@ export class EntitlementInternalController {
 
   /**
    * The names a combined retention notice lists (F-601-p): one user's Grants
-   * of one tenant, by id; an id that is not theirs is left out. `{ items }`
-   * in the usual envelope.
+   * of one tenant, by id; an id that is not theirs is left out. With
+   * `variantIds`, also the plans an AI suggestion names, while for sale
+   * (F-038-g3). `{ items, plans }` in the usual envelope.
    */
   @Post('grants/names')
   @HttpCode(200)
-  async names(@Body(new ZodValidationPipe(grantNamesSchema)) body: GrantNamesBody): Promise<{ items: GrantName[] }> {
-    return { items: await this.grantNames.names(body) };
+  async names(@Body(new ZodValidationPipe(grantNamesSchema)) body: GrantNamesBody): Promise<{ items: GrantName[]; plans: PlanName[] }> {
+    return { items: await this.grantNames.names(body), plans: await this.grantNames.plans(body) };
   }
 
   /**

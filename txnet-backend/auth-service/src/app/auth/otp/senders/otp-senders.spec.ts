@@ -699,6 +699,33 @@ describe('UserNotifier', () => {
     }
   });
 
+  describe('an AI suggestion (F-038-g3)', () => {
+    it('names the service and the plan in the user’s language from billing’s keys, labelled as a suggestion', async () => {
+      const client = botClient();
+      const catalog: Record<string, string> = { 'product.month.name': 'یک‌ماهه', 'v50.name': 'پنجاه گیگ' };
+      const locale = {
+        getNamespace: vi.fn(() => ({ suggestion: { resize_down: '💡 پیشنهاد: {{service}} → {{plan}} ({{price}})' } })),
+        getKey: vi.fn((_lang: string, n: string, key: string) => (n === 'catalog' ? catalog[key] : undefined)),
+        getDefaultLanguage: () => 'fa',
+      } as unknown as LocaleService;
+      const notifier = new UserNotifier(
+        notifierPrisma({ user: { languagePreference: 'fa' }, links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+        registry(client),
+        locale,
+      );
+      await inTenant(() =>
+        notifier.notify({
+          userId: 'user-1',
+          channel: 'bot',
+          template: 'suggestionResizeDown',
+          params: { serviceLabel: 'خانه', serviceNameKey: 'catalog.product.month.name', planNameKey: 'catalog.v50.name', planSku: 'P-50', planSize: '50 GB', price: '190000.00 IRR' },
+        }),
+      );
+      expect(client.sendMessage).toHaveBeenCalledWith('5501', '💡 پیشنهاد: خانه (یک‌ماهه) → پنجاه گیگ (50 GB) (190000.00 IRR)');
+      expect(NOTIFY_TEMPLATES).toEqual(expect.arrayContaining(['suggestionRenew', 'suggestionResizeUp', 'suggestionResizeDown']));
+    });
+  });
+
   describe('a combined notice names its services (F-601-p)', () => {
     const catalog: Record<string, Record<string, string>> = { fa: { 'product.month.name': 'یک‌ماهه' }, en: { 'product.year.name': 'Yearly' } };
     const locale = (namespace: unknown) =>

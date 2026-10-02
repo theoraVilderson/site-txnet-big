@@ -66,6 +66,10 @@ export const NOTIFY_TEMPLATES = [
   'configEnabledByAdmin',
   'configRetiredByAdmin',
   'configMovedByAdmin',
+  // F-038-g3: the AI engine's suggestions, labelled in their words (ADR-0109 point 11).
+  'suggestionRenew',
+  'suggestionResizeUp',
+  'suggestionResizeDown',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -112,6 +116,7 @@ type NotificationsNamespace = {
   panel?: Texts;
   purchase?: Texts;
   retention?: Texts;
+  suggestion?: Texts;
 };
 type Text = { read: (ns: NotificationsNamespace | undefined) => string | undefined; fallback: string };
 type Notice = Text & { inbox: Text };
@@ -123,6 +128,13 @@ type Notice = Text & { inbox: Text };
  * `many` is the same notice for a combined burst, read at `<key>Many` and
  * `<key>ManyTitle` (F-067-p).
  */
+/** Two suggestions held for one quiet window and told together (F-038-g3): rare, as the budget allows one a day. */
+const SUGGESTION_MANY: Notice = {
+  read: (ns) => ns?.suggestion?.many,
+  fallback: '💡 You have {{count}} suggestions about your services. See them in My services.',
+  inbox: { read: (ns) => ns?.suggestion?.manyTitle, fallback: '{{count}} suggestions' },
+};
+
 const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
   paymentCredited: {
     read: (ns) => ns?.payment?.credited,
@@ -745,7 +757,26 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       inbox: { read: (ns) => ns?.retention?.adminConfigMovedManyTitle, fallback: '{{count}} configs moved server' },
     },
   },
-
+  // F-038-g3 (ADR-0109 point 11): an AI suggestion, always labelled as one. `service` and `plan` are
+  // named here from billing's keys (`withSuggestionNames`); the price is billing's price in force.
+  suggestionRenew: {
+    read: (ns) => ns?.suggestion?.renew,
+    fallback: '💡 Suggestion: {{service}} ends in {{days}} days. Renew it to keep it running without a break — {{price}} for the next period.',
+    inbox: { read: (ns) => ns?.suggestion?.renewTitle, fallback: 'Suggestion: renew {{service}}' },
+    many: SUGGESTION_MANY,
+  },
+  suggestionResizeUp: {
+    read: (ns) => ns?.suggestion?.resize_up,
+    fallback: '💡 Suggestion: {{service}} ran out before its end in your last periods. {{plan}} fits how you use it — {{price}} for the next period.',
+    inbox: { read: (ns) => ns?.suggestion?.resize_upTitle, fallback: 'Suggestion: a bigger plan for {{service}}' },
+    many: SUGGESTION_MANY,
+  },
+  suggestionResizeDown: {
+    read: (ns) => ns?.suggestion?.resize_down,
+    fallback: '💡 Suggestion: in your last two periods {{service}} used under half of its plan. {{plan}} would have been enough — {{price}} for the next period, less than you pay now.',
+    inbox: { read: (ns) => ns?.suggestion?.resize_downTitle, fallback: 'Suggestion: a smaller plan for {{service}}' },
+    many: SUGGESTION_MANY,
+  },
 };
 
 /**
@@ -828,7 +859,7 @@ export class UserNotifier {
     const ns = this.locale.getNamespace(user.languagePreference, 'notifications') as NotificationsNamespace | undefined;
     const combined = request.count !== undefined && request.count > 1;
     const spec = combined ? TEMPLATE_TEXT[request.template].many : TEMPLATE_TEXT[request.template];
-    const told = this.withQuotaName(request.template, request.params, user.languagePreference, ns);
+    const told = this.withSuggestionNames(request.template, this.withQuotaName(request.template, request.params, user.languagePreference, ns), user.languagePreference, ns);
     const params = combined ? { ...told, count: String(request.count) } : told;
     const body = interpolate(spec.read(ns) ?? spec.fallback, params);
     const list = combined && request.services?.length ? this.serviceList(request.services, user.languagePreference, ns) : null;
@@ -900,6 +931,22 @@ export class UserNotifier {
       ns?.resellerQuota?.unnamed ??
       'A quota';
     return { ...params, quota };
+  }
+
+  /**
+   * An AI suggestion names its service and plan in the user's language
+   * (F-038-g3) from billing's keys: the service as a combined notice lists it
+   * — the buyer's own name first, then the catalog name, else the sku — and
+   * the plan by its catalog name (else sku) with its size beside it.
+   */
+  private withSuggestionNames(template: NotifyTemplate, params: Record<string, string>, lang: string, ns: NotificationsNamespace | undefined): Record<string, string> {
+    if (!template.startsWith('suggestion')) return params;
+    const say = (t: Text, vars: Record<string, string> = {}) => interpolate(t.read(ns) ?? t.fallback, vars);
+    const catalog = this.catalogName(params.serviceNameKey ?? null, lang) ?? params.serviceSku ?? say(SERVICE_LIST.unnamed);
+    const service = params.serviceLabel ? say(SERVICE_LIST.named, { label: params.serviceLabel, name: catalog }) : catalog;
+    const planName = this.catalogName(params.planNameKey ?? null, lang) ?? params.planSku ?? '';
+    const plan = params.planSize ? say(SERVICE_LIST.named, { label: planName, name: params.planSize }) : planName;
+    return { ...params, service, plan };
   }
 
   /** A `catalog.*` key in the user's language, or the default one; undefined when neither has it. */

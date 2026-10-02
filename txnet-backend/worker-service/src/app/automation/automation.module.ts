@@ -21,6 +21,7 @@ import { UsageCaptureJob } from '../jobs/usage-capture.job';
 import { VpnReserveJob } from '../jobs/vpn-reserve.job';
 import { GrantExhaustionForecastJob } from '../jobs/grant-exhaustion-forecast.job';
 import { AiProfileRebuildJob } from '../jobs/ai-profile-rebuild.job';
+import { AiSuggestionDeliveryJob } from '../jobs/ai-suggestion-delivery.job';
 import { RetentionHeldNoticeJob } from '../jobs/retention-held-notice.job';
 import { GrantDeliveryJob } from '../jobs/grant-delivery.job';
 import { GrantGroupFulfilmentJob } from '../jobs/grant-group-fulfilment.job';
@@ -66,6 +67,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     VpnReserveJob,
     GrantExhaustionForecastJob,
     AiProfileRebuildJob,
+    AiSuggestionDeliveryJob,
     RetentionHeldNoticeJob,
     DepositExpiryJob,
     InvoiceExpiryJob,
@@ -91,7 +93,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     ResellerQuotaDigestJob,
     {
       provide: JOBS,
-      inject: [HeartbeatJob, VaultRetentionJob, GrantPurgeJob, GrantBulkJobDrainJob, GrantGroupFulfilmentJob, GrantDeliveryJob, GrantUnusedNoticeJob, GrantEndNoticeJob, GrantIdleNoticeJob, UsageCaptureJob, VpnReserveJob, RetentionHeldNoticeJob, DepositExpiryJob, InvoiceExpiryJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, TrafficRollupJob, CampaignFanOutJob, CampaignDeliveryJob, TenantSubscriptionRenewalJob, TenantDomainVerificationJob, ResellerQuotaDigestJob, AiProfileRebuildJob],
+      inject: [HeartbeatJob, VaultRetentionJob, GrantPurgeJob, GrantBulkJobDrainJob, GrantGroupFulfilmentJob, GrantDeliveryJob, GrantUnusedNoticeJob, GrantEndNoticeJob, GrantIdleNoticeJob, UsageCaptureJob, VpnReserveJob, RetentionHeldNoticeJob, DepositExpiryJob, InvoiceExpiryJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, TrafficRollupJob, CampaignFanOutJob, CampaignDeliveryJob, TenantSubscriptionRenewalJob, TenantDomainVerificationJob, ResellerQuotaDigestJob, AiProfileRebuildJob, AiSuggestionDeliveryJob],
       useFactory: (...jobs: Job[]) => jobs,
     },
     WorkerRegistryService,

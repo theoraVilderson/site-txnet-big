@@ -376,6 +376,21 @@ describe('GrantNamesService — the services a combined notice names (F-601-p)',
     expect(tx.$executeRaw).toHaveBeenCalled();
   });
 
+  it('answers the plans an AI suggestion names only while billing sells them, at today\'s price (F-038-g3)', async () => {
+    const { service } = build();
+    const offers: Record<string, unknown> = {
+      v50: { variantId: 'v50', nameKey: 'catalog.v50.name', sku: 'P-50', quotas: { traffic_bytes: { limit: 50 * 1024 ** 3 } }, price: { amount: '190000.00', currencyCode: 'IRR' } },
+      vu: { variantId: 'vu', nameKey: 'catalog.vu.name', sku: 'P-U', quotas: { traffic_bytes: { limit: 0 } }, price: { amount: '300000.00', currencyCode: 'IRR' } },
+    };
+    const offerOf = vi.fn(async (_tx: unknown, id: string) => offers[id] ?? null);
+    await expect(service.plans({ tenantId: TENANT, variantIds: ['v50', 'gone', 'vu'] }, new Date(), offerOf as never)).resolves.toEqual([
+      { variantId: 'v50', nameKey: 'catalog.v50.name', sku: 'P-50', size: '50 GB', price: { amount: '190000.00', currencyCode: 'IRR' } },
+      { variantId: 'vu', nameKey: 'catalog.vu.name', sku: 'P-U', size: null, price: { amount: '300000.00', currencyCode: 'IRR' } },
+    ]);
+    await expect(service.plans({ tenantId: TENANT }, new Date(), offerOf as never)).resolves.toEqual([]);
+    expect(grantNamesSchema.safeParse({ tenantId: TENANT, userId: USER, grantIds: [PAYMENT], variantIds: Array(21).fill(PAYMENT) }).success).toBe(false);
+  });
+
   it('refuses a body without its tenant, or with no Grant', () => {
     expect(grantNamesSchema.safeParse({ userId: USER, grantIds: [PAYMENT] }).success).toBe(false);
     expect(grantNamesSchema.safeParse({ tenantId: TENANT, userId: USER, grantIds: [] }).success).toBe(false);

@@ -124,6 +124,8 @@ action type, of class `suggestion` — inbox + the user's messenger, like
 | `muted` when the user muted `suggestion` or set the Grant to `essential`; the row is still written | as every mutable kind |
 | Quiet hours hold the bot by `quietUntil` (shared-core, the window the engine scheduled outside); the held message goes through `hold` / `held/take` like a retention one | one rule for every held bot message |
 
+**Who tells it** (F-038-g3, user 2026-10-02): worker's `ai_suggestion_delivery`, every 5 min, per due action from ai's `due/take`: (1) this claim — `muted` / `later` → ai `stop`; (2) billing `grants/names` with the plan's `variantIds` — a plan no longer sold answers nothing → ai `stop` `plan_unavailable`, before (3) ai `floor`, the last check, which charges the budget; (4) `EventNoticeSender` with `only` channels and class `suggestion` — inbox + bot, or inbox now and `hold` for the window end; never joined to a burst; (5) ai `sent`. Templates `suggestionRenew` / `ResizeUp` / `ResizeDown` (auth-service) name the service and plan in the user's language from billing's keys; the price is billing's in force, never the engine's.
+
 ## Several services, one message (F-601-p, user 2026-09-28)
 
 A buyer of five services for friends heard "your service ends in 7 days"

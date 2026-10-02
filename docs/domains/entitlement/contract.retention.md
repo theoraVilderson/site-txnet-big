@@ -194,3 +194,4 @@ services, one message").
 | `label`: the buyer's own name for the service (`grant.userLabel`, F-307-x), `null` when unnamed; a notice lists it before the catalog name | a named service reads as the buyer wrote it, not as its product |
 | `labels`: the buyer's own names on the Grant's live configs (F-307-f), each once, oldest config first | five identical unnamed purchases are told apart only by these |
 | Keys, never text | the words are auth-service's, in the user's language |
+| `variantIds` (≤20, F-038-g3): the plans an AI suggestion names answer in `plans: [{ variantId, nameKey, sku, size, price }]` **only while billing sells them** — `sellableOfferById`, the invoice's rule — with the price in force in the tenant's currency and `size` as `remainingLabel` says it (`null` unlimited) | a withdrawn plan is never pitched, and the price told is today's |

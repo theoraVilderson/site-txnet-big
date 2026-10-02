@@ -4,8 +4,11 @@ import { z } from 'zod';
 
 import { ActionDelivery } from './delivery';
 
-/** Why a claim (F-038-g1) stops a suggestion: the user muted it, or a retention notice came first. */
-export const CLAIM_STOPS = ['muted', 'after_retention'] as const;
+/**
+ * Why delivery stops a suggestion: the claim (F-038-g1) — the user muted it, or a
+ * retention notice came first — or billing no longer sells its plan (F-038-g3).
+ */
+export const CLAIM_STOPS = ['muted', 'after_retention', 'plan_unavailable'] as const;
 
 const takeSchema = z.object({ limit: z.number().int().min(1).max(200) }).strict();
 const actionSchema = z.object({ tenantId: z.string().uuid() }).strict();

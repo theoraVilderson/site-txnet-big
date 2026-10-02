@@ -1,18 +1,23 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigStatus } from '@prisma/client';
-import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { remainingLabel, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
+import { sellableOfferById } from '../catalog/catalog-reads';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** A combined notice lists at most a burst's services; a burst of more is told without names past this. */
 const MAX_GRANTS = 500;
+/** An AI suggestion names one plan (F-038-g3); a few leave room without inviting a catalog dump. */
+const MAX_PLANS = 20;
 
 export const grantNamesSchema = z
   .object({
     tenantId: z.string().uuid(),
     userId: z.string().uuid(),
     grantIds: z.array(z.string().uuid()).min(1).max(MAX_GRANTS),
+    // F-038-g3: plans an AI suggestion names, answered only while for sale.
+    variantIds: z.array(z.string().uuid()).max(MAX_PLANS).optional(),
   })
   .strict();
 export type GrantNamesBody = z.infer<typeof grantNamesSchema>;
@@ -25,6 +30,13 @@ export type GrantNamesBody = z.infer<typeof grantNamesSchema>;
  * identical purchases apart. `null`s: a Grant issued without a catalog item.
  */
 export type GrantName = { grantId: string; label: string | null; nameKey: string | null; sku: string | null; labels: string[] };
+
+/**
+ * A plan an AI suggestion names (F-038-g3), as billing would sell it now: its
+ * name key and sku, its bag as a notice says it (`remainingLabel`), and the
+ * price in force in the tenant's currency. Keys and amounts, never text.
+ */
+export type PlanName = { variantId: string; nameKey: string; sku: string; size: string | null; price: { amount: string; currencyCode: string } };
 
 /**
  * The names a combined retention notice lists (F-601-p, notification
@@ -59,6 +71,36 @@ export class GrantNamesService {
           sku: g.variant?.sku ?? null,
           labels: [...new Set(configs.filter((c) => c.grantId === g.id).map((c) => c.userLabel!))],
         }));
+      }),
+    );
+  }
+
+  /**
+   * The plans an AI suggestion names (F-038-g3, user 2026-10-02: names and
+   * prices are billing's). Only a plan billing **sells now** answers —
+   * `sellableOfferById`, the rule an invoice uses: live, `public` or
+   * `unlisted`, a price in force in the tenant's currency, a product the
+   * tenant may sell. A plan withdrawn since the engine chose it is left out,
+   * so it is never pitched, and the price told is today's, never the one the
+   * engine saw.
+   */
+  plans(
+    { tenantId, variantIds = [] }: Pick<GrantNamesBody, 'tenantId' | 'variantIds'>,
+    at: Date = new Date(),
+    offerOf: typeof sellableOfferById = sellableOfferById,
+  ): Promise<PlanName[]> {
+    if (variantIds.length === 0) return Promise.resolve([]);
+    return runWithTenant({ id: tenantId }, () =>
+      tenantTransaction(this.prisma, async (tx) => {
+        const out: PlanName[] = [];
+        for (const id of variantIds) {
+          const offer = await offerOf(tx, id, at);
+          if (!offer) continue;
+          const limit = (offer.quotas as { traffic_bytes?: { limit?: unknown } } | null)?.traffic_bytes?.limit;
+          const size = typeof limit === 'number' && Number.isSafeInteger(limit) && limit > 0 ? remainingLabel(BigInt(limit)) : null;
+          out.push({ variantId: offer.variantId, nameKey: offer.nameKey, sku: offer.sku, size, price: { amount: offer.price.amount, currencyCode: offer.price.currencyCode } });
+        }
+        return out;
       }),
     );
   }
