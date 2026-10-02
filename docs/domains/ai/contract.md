@@ -31,7 +31,7 @@ guardrail has one home.
 | rebuild profiles — **implemented (F-038-c)** | `POST /api/internal/ai/profiles/rebuild`, `ServiceOnlyGuard` (else 404); `worker-service`'s `ai_profile_rebuild`, hourly | `meter_reading`, `account_profile` and `prediction` rows; `{tenants, skipped, accounts, readings, predictions, purged}` in the success envelope | sync, service only | a failing tenant is logged and counted in `skipped`, the others still run |
 | decide | an outbox trigger or the hourly run | an `action` row: `scheduled`, `awaiting_approval` or `suppressed` (+ step) | async | — |
 | record outcome | the purchase or top-up the action suggested, within 7 days | `action.status = accepted` | async | — |
-| settings, offers, providers | tenant admin | `setting`, `offer`, `guardrail`, `provider`, `task_route` | sync (F-038-j, F-038-w) | — |
+| settings (types off — **implemented, F-1509**), offers, providers | tenant admin | `setting`, `offer`, `guardrail`, `provider`, `task_route` | sync (F-038-j, F-038-w) | — |
 
 ## Emits (events)
 
@@ -132,6 +132,22 @@ as that subject's (else 404); then its type is opted out (`ai.opt_out`, a
 second tap a no-op), the action goes `sent` → `dismissed`, and every
 `scheduled`/`awaiting_approval` one of the type is `suppressed` by `opt_out`.
 Answers `{ actionType }`. Callers: the bot button (F-038-g), the panel card (F-038-h).
+
+## The audit, the label and the type switch (F-1509) — implemented
+
+- **Audit.** `ActionLog.record` (`decision/action-log.ts`) is the only writer
+  of `ai.action`: every candidate the engine weighs gets a row — a stopped one
+  with its `suppressedBy` — with non-empty `reasons`, its template key, and a
+  margin only with its currency (C-02). Model text is `renderedBy = model`.
+- **Label.** Delivery (F-038-g) sends `labelledMessage(action)`: only a
+  `scheduled` action, always `label: 'suggestion'` and its `actionId` — the id
+  the tap (F-1505) and the outcome (F-038-i) come back with.
+- **Type switch.** `PUT /api/internal/ai/settings/disabled-action-types`
+  (service token only; caller F-038-j) with `{ tenantId, disabledActionTypes,
+  updatedByUserId }` replaces the list — any type, later ones included — and
+  `suppressed`s every `scheduled`/`awaiting_approval` one of them by
+  `type_disabled`. A candidate decided while its type was switched off is
+  recorded the same way (`record` re-reads the setting in its transaction).
 
 ## Guarantees (intended)
 
