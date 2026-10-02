@@ -6,6 +6,7 @@ import { ConversationRouter } from './conversation/router';
 import { BotDispatcher } from './conversation/bot.dispatcher';
 import { AccountAddFlow } from './flows/account-add.flow';
 import { AccountsFlow } from './flows/accounts.flow';
+import { TimeZoneFlow } from './flows/time-zone.flow';
 import { ForgotFlow } from './flows/forgot.flow';
 import { LoginFlow } from './flows/login.flow';
 import { OtpStep } from './flows/otp.step';
@@ -63,6 +64,7 @@ import { WebhookController } from './webhook/webhook.controller';
     RegisterFlow,
     ForgotFlow,
     AccountsFlow,
+    TimeZoneFlow,
     AccountAddFlow,
     BillingApiClient,
     TenantApiClient,

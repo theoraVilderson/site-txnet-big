@@ -15,6 +15,7 @@ import {
   BotSessionResult,
   OtpChannelDescriptor,
   OtpRequestResult,
+  MeTimeZone,
   PasswordLoginResult,
   RemoveAccountResult,
   ResellerUser,
@@ -331,10 +332,22 @@ export class AuthApiClient {
     return this.call('DELETE', `/api/auth/tenants/${tenantId}/users/${userId}/block`, undefined, ctx);
   }
 
+  // --- the caller's time zone (TZ-1-h) -----------------------------------
+
+  /** `GET /auth/me/timezone` — what is stored, and the zone in force (auth-api `contract.time-zone.md`). */
+  myTimeZone(ctx: CallContext): Promise<ApiResult<MeTimeZone>> {
+    return this.call('GET', '/api/auth/me/timezone', undefined, ctx);
+  }
+
+  /** `PUT /auth/me/timezone` — a chat only ever sends `user`; `zone: null` clears the choice. */
+  setMyTimeZone(body: { zone: string | null; source: 'user' }, ctx: CallContext): Promise<ApiResult<MeTimeZone>> {
+    return this.call('PUT', '/api/auth/me/timezone', body, ctx);
+  }
+
   // --- transport ----------------------------------------------------------
 
   private async call<T>(
-    method: 'GET' | 'POST' | 'DELETE',
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
     body: unknown,
     ctx: CallContext,

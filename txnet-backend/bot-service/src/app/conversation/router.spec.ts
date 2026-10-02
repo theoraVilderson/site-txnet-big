@@ -9,6 +9,7 @@ import { AccountAddFlow } from '../flows/account-add.flow';
 import { PhoneNumbers } from '../flows/phone-number';
 import { AccountsFlow } from '../flows/accounts.flow';
 import { AccountSwitcher } from '../session/account-switcher';
+import { TimeZoneFlow } from '../flows/time-zone.flow';
 import { TopUpFlow } from '../flows/top-up.flow';
 import { BillingApiClient } from '../billing-api/billing-api.client';
 import { ResellerCampaignFlow } from '../flows/reseller-campaign.flow';
@@ -117,6 +118,7 @@ function makeRouter(over: {
       handle: vi.fn(),
     } as unknown as ResellerFlow,
     { isConfigured: false, start: vi.fn(), handle: vi.fn() } as unknown as ResellerCampaignFlow,
+    { start: vi.fn(), handle: vi.fn() } as unknown as TimeZoneFlow,
   );
   return { router, nav, sessions, api, otp, langs, locale };
 }

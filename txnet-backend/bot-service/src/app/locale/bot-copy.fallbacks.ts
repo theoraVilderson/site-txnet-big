@@ -224,6 +224,8 @@ export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   [BotKeys.action.campaignSegNew]: 'Joined in the last 30 days',
   [BotKeys.action.campaignSend]: 'Yes, send it',
   [BotKeys.action.campaignRefresh]: 'Refresh',
+  [BotKeys.action.timeZone]: '🕒 Time zone',
+  [BotKeys.action.timeZoneFollowPanel]: '🖥 Same as the panel',
   [BotKeys.campaign.pickSegment]: 'Who should get this message?',
   [BotKeys.campaign.ask]: 'About {{count}} people will get it. Now write the message.',
   [BotKeys.campaign.empty]: 'Nobody is in that group right now. Pick another one.',
@@ -255,6 +257,13 @@ export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   [BotKeys.language.pick]: 'Which language should I speak?',
   [BotKeys.language.changed]: '🌐 Language changed.',
   [BotKeys.language.only]: 'This bot speaks one language for now.',
+  [BotKeys.timeZone.pick]: 'Your clock: {{zone}}\n{{from}}\nWhich time zone should your dates and quiet hours use?',
+  [BotKeys.timeZone.chosen]: '🕒 Time zone set: {{zone}}.',
+  [BotKeys.timeZone.followsPanel]: '🕒 I follow the panel now. Your clock: {{zone}}.',
+  [BotKeys.timeZone.from.user]: 'You chose it.',
+  [BotKeys.timeZone.from.browser]: 'Your panel set it.',
+  [BotKeys.timeZone.from.tenant]: 'The service default.',
+  [BotKeys.timeZone.from.platform]: 'The service default.',
   // Help is not a manual. Back and Cancel are buttons on screen, and the two
   // commands below are the only ones worth naming in a message.
   [BotKeys.help.body]:

@@ -168,3 +168,15 @@ export interface ResellerUserPage {
   page: number;
   pageSize: number;
 }
+
+/**
+ * `/auth/me/timezone`'s answer (TZ-1-c). `timezone`/`source`: the user's own
+ * row, null when they have none; `resolved`: the zone in force and where it
+ * came from. `applied` only on a save.
+ */
+export interface MeTimeZone {
+  timezone: string | null;
+  source: 'user' | 'browser' | null;
+  resolved: { zone: string; from: 'user' | 'browser' | 'tenant' | 'platform' };
+  applied?: boolean;
+}

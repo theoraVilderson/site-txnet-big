@@ -44,7 +44,9 @@
     "campaignSegActive": "Active customers only",
     "campaignSegNew": "Joined in the last 30 days",
     "campaignSend": "Yes, send it",
-    "campaignRefresh": "Refresh"
+    "campaignRefresh": "Refresh",
+    "timeZone": "🕒 Time zone",
+    "timeZoneFollowPanel": "🖥 Same as the panel"
   },
   "common": {
     "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
@@ -129,6 +131,17 @@
     "pick": "Which language should I speak?",
     "changed": "🌐 Language changed.",
     "only": "This bot speaks one language for now."
+  },
+  "timeZone": {
+    "pick": "Your clock: {{zone}}\n{{from}}\nWhich time zone should your dates and quiet hours use?",
+    "chosen": "🕒 Time zone set: {{zone}}.",
+    "followsPanel": "🕒 I follow the panel now. Your clock: {{zone}}.",
+    "from": {
+      "user": "You chose it.",
+      "browser": "Your panel set it.",
+      "tenant": "The service default.",
+      "platform": "The service default."
+    }
   },
   "accounts": {
     "pick": "You are signed in as {{name}}. Tap any other account to carry on as that one.",

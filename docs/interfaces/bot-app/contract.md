@@ -76,7 +76,7 @@ contract — **not** a rule written in the bot because it is faster there
 | `flows/{login,register,forgot}.flow.ts` | the three conversations |
 | `flows/phone-number.ts` | the number a person typed or shared, read into the form `auth-api` stores |
 | `flows/steps.ts` | which step of how many, and what has been answered — orientation only, no rules |
-| `locale/chat-language.ts` | which language this chat is spoken to in, and the order that decides it |
+| `locale/chat-language.ts` | which language this chat is spoken to in, and the order that decides it; its neighbour `flows/time-zone.flow.ts`, the user's clock (TZ-1-h): [conversation.md](conversation.md) |
 | `session/bot-session.store.ts` | the chat's `auth-api` refresh token |
 | `session/chat-access.ts` | that refresh token traded for an access token, for the routes behind `AuthGuard` |
 | `session/account-switcher.ts` | becoming another account and keeping the chat's session on it — the one place that pair happens |

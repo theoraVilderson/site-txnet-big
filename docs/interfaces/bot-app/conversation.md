@@ -81,6 +81,26 @@ pending link, `link.lang` outranks all of this anyway.
 Not per-tenant yet: both vars are deployment-level because `tenant` is
 schema-only. `F-317` moves them to a tenant row; the order does not change.
 
+## Which clock a user is on (TZ-1-h, ADR-0108 point 7)
+
+A **member-menu** row, `menu:tz` (`flows/time-zone.flow.ts`); a guest has no
+account and so no zone. Unlike the language, the bot stores nothing: the screen
+reads and writes `/api/auth/me/timezone` — the panel's route, so the two never
+disagree ([auth-api/contract.time-zone.md](../auth-api/contract.time-zone.md)).
+Never inferred from the messenger: Telegram and Bale send no zone.
+
+- The body says the zone in force and why (`resolved.from`, an exhaustive
+  `Record`, C-07). The list is `TIME_ZONE_CHOICES` (seven zones, where this
+  platform's people are; the panel has the full list), each an IANA name with
+  its offset at render time, plus the zone in force when the list lacks it.
+  Ticked only when the user chose it.
+- A pick is `tz:<IANA>`, sent as `{zone, source: 'user'}`; auth-api validates
+  it, and a refusal is shown in its words. Routed by prefix, so a tap still
+  lands after the screen's state expired.
+- **"Same as the panel"** (`tz:panel`) sends `{zone: null, source: 'user'}`
+  **only when `source` is `user`**. auth-api's clear erases a browser report
+  too, so sent over one it would drop the user to the tenant's zone.
+
 ## Commands, and how a user finds them
 
 `/start`, `/menu`, `/help`, `/cancel`, `/logout`, `/lang`. Every one of them is also a

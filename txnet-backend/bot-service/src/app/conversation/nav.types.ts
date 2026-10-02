@@ -16,7 +16,8 @@ export type BotFlow =
   | 'accountAdd'
   | 'topUp'
   | 'reseller'
-  | 'campaign';
+  | 'campaign'
+  | 'timeZone';
 
 /**
  * Navigation state: the screen, the breadcrumb and a half-typed input.

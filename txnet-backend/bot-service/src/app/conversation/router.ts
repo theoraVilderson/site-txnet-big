@@ -22,10 +22,12 @@ import { RegisterFlow } from '../flows/register.flow';
 import { ResellerCampaignFlow } from '../flows/reseller-campaign.flow';
 import { ResellerFlow } from '../flows/reseller.flow';
 import { TopUpFlow } from '../flows/top-up.flow';
+import { TimeZoneFlow } from '../flows/time-zone.flow';
 import { OtpStep } from '../flows/otp.step';
 import {
   ACTIONS,
   LANGUAGE_ACTION_PREFIX,
+  TIME_ZONE_ACTION_PREFIX,
   back,
   guestMenu,
   helpView,
@@ -83,6 +85,7 @@ export class ConversationRouter {
     private readonly billing: BillingApiClient,
     private readonly reseller: ResellerFlow,
     private readonly campaigns: ResellerCampaignFlow,
+    private readonly timeZone: TimeZoneFlow,
   ) {}
 
   /**
@@ -142,6 +145,12 @@ export class ConversationRouter {
 
     if (actionId === ACTIONS.topUp) return this.topUp.start(ctx);
     if (actionId === ACTIONS.reseller) return this.reseller.start(ctx);
+    // TZ-1-h. The picks are routed by prefix, like a language: the IANA name
+    // is the payload, so a tap still lands after the screen's state expired.
+    if (actionId === ACTIONS.timeZone) return this.timeZone.start(ctx);
+    if (actionId?.startsWith(TIME_ZONE_ACTION_PREFIX)) {
+      return this.timeZone.handle(ctx, state ?? { flow: 'timeZone', step: 'timeZone.pick', data: {} }, actionId);
+    }
 
     if (actionId === ACTIONS.login) return this.login.start(ctx);
     if (actionId === ACTIONS.register) return this.register.start();
@@ -177,6 +186,8 @@ export class ConversationRouter {
       // answer a tap each.
       case 'campaign':
         return this.campaigns.handle(ctx, state, actionId);
+      case 'timeZone':
+        return this.timeZone.handle(ctx, state, actionId);
       default:
         return { view: say('unknown', { key: BotKeys.common.unknown }), nextState: null };
     }

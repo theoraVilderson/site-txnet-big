@@ -1,5 +1,5 @@
 import { BotAction, BotText, BotView } from '@txnet-backend/messenger';
-import { BotKeys } from '../locale/bot-keys';
+import { BotKey, BotKeys } from '../locale/bot-keys';
 import { type CurrencyAmount, moneyTotal } from '../locale/money';
 
 /**
@@ -31,6 +31,10 @@ export const ACTIONS = {
   menu: 'nav:menu',
   help: 'nav:help',
   language: 'nav:lang',
+  /** Bot settings: which clock this user's dates and quiet hours use (TZ-1-h, ADR-0108 point 7). */
+  timeZone: 'menu:tz',
+  /** Clear the user's own pick so the panel's browser report decides again. */
+  timeZoneFollowPanel: 'tz:panel',
   resend: 'otp:resend',
   shareContact: 'contact:share',
   linkCheck: 'link:check',
@@ -61,6 +65,25 @@ export const back: BotAction = {
 
 /** `lang:fa`, `lang:en` — the code is the payload, so no table maps them. */
 export const LANGUAGE_ACTION_PREFIX = 'lang:';
+
+/** `tz:Europe/Istanbul` — the IANA name is the payload, so no table maps them. */
+export const TIME_ZONE_ACTION_PREFIX = 'tz:';
+
+/**
+ * The short list the bot offers (TZ-1-h). Where this platform's users and
+ * resellers are, not every zone: a chat has no search box, and a person
+ * elsewhere picks from the panel's full list (`panel-web` TZ-1-e) or lets the
+ * panel's browser report it — which "same as the panel" goes back to.
+ */
+export const TIME_ZONE_CHOICES = [
+  'Asia/Tehran',
+  'Asia/Kabul',
+  'Asia/Dubai',
+  'Europe/Istanbul',
+  'Europe/Berlin',
+  'Europe/London',
+  'America/New_York',
+] as const;
 
 /**
  * `account:<userId>` — which member of the group to become (`F-0210`).
@@ -238,6 +261,8 @@ export function memberMenu(miniAppUrl?: string, topUp = false, reseller = false)
     // serves, who are the majority of the chats that reach this line.
     ...(reseller ? [[{ id: ACTIONS.reseller, label: { key: BotKeys.action.reseller } }]] : []),
     [{ id: ACTIONS.accounts, label: { key: BotKeys.action.accounts } }],
+    // TZ-1-h. Member menu only: a zone is the account's, and a guest has none.
+    [{ id: ACTIONS.timeZone, label: { key: BotKeys.action.timeZone } }],
     [
       { id: ACTIONS.help, label: { key: BotKeys.action.help } },
       { id: ACTIONS.language, label: { key: BotKeys.action.language } },
@@ -439,6 +464,53 @@ export function languageView(
     ]),
     [cancel],
   ]);
+}
+
+/**
+ * Which clock this user is on (TZ-1-h). The labels are IANA names with their
+ * offset now — data, not copy, so `raw` — and the zone in force is ticked
+ * only when the user chose it; a ticked row under "same as the panel" would
+ * claim a choice nobody made. `zones` already carries the zone in force when
+ * the short list lacks it (`TimeZoneFlow`).
+ */
+export function timeZoneView(
+  zones: readonly string[],
+  current: { zone: string; from: TimeZoneFrom; chosen: string | null },
+  now: Date,
+): BotView {
+  return view(
+    'timeZone',
+    { key: BotKeys.timeZone.pick, values: { zone: current.zone, from: { key: TIME_ZONE_FROM_KEY[current.from] } } },
+    [
+      ...zones.map((zone) => [
+        {
+          id: `${TIME_ZONE_ACTION_PREFIX}${zone}`,
+          label: { raw: `${zone} · ${utcOffset(zone, now)}${zone === current.chosen ? ' ✅' : ''}` },
+        },
+      ]),
+      [{ id: ACTIONS.timeZoneFollowPanel, label: { key: BotKeys.action.timeZoneFollowPanel } }],
+      [cancel],
+    ],
+  );
+}
+
+/** Where the zone in force came from — auth-api's `resolved.from`. */
+export type TimeZoneFrom = 'user' | 'browser' | 'tenant' | 'platform';
+
+/** Exhaustive over `TimeZoneFrom` (C-07): a fifth source does not compile without its sentence. */
+const TIME_ZONE_FROM_KEY: Record<TimeZoneFrom, BotKey> = {
+  user: BotKeys.timeZone.from.user,
+  browser: BotKeys.timeZone.from.browser,
+  tenant: BotKeys.timeZone.from.tenant,
+  platform: BotKeys.timeZone.from.platform,
+};
+
+/** `UTC+03:30` at `now` — DST is the IANA database's, so it is asked, never stored. */
+function utcOffset(zone: string, now: Date): string {
+  const name = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
+    .formatToParts(now)
+    .find((p) => p.type === 'timeZoneName')?.value;
+  return !name || name === 'GMT' ? 'UTC' : name.replace('GMT', 'UTC');
 }
 
 export function helpView(): BotView {
