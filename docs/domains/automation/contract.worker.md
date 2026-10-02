@@ -82,6 +82,7 @@ Why each of those is the answer — and what a Redis that cannot be reached does
 | `tenant_domain_verification` | proves `verifying` custom domains and re-validates `verified` ones' TXT records; a platform tick, seeded `*/5`; a domain whose check threw is an error (F-018-i, `domains/tenant/contract.domains.md`) | `TENANT_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `reseller_quota_digest` | asks notification-service for each reseller's daily quota digest — yesterday's refused units and overage, from 09:00 on the quota clock, once a day; a platform tick, seeded hourly (`5 * * * *`) (F-019-v8, `domains/notification/contract.reseller-quota.md`) | `NOTIFICATION_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `ai_profile_rebuild`, `ai_suggestion_delivery` | rebuild: samples every active Grant's meters and rebuilds each account's AI profile, decisions and conversions — `ai-service`'s `profiles/rebuild` (F-038-c, F-038-e, F-038-i), seeded hourly (`5 * * * *`). Delivery: tells due AI suggestions, `*/5` — the order is notification `contract.retention.md` "An AI suggestion" (F-038-g3); a `retain_offer`'s coupon, a `checkout_help`'s other gateway from billing first (F-038-f3, F-038-m; billing contract.ai-delivery.md); a reseller's upgrade or billing-wallet top-up told to its owner, stopped `already_paid` / `plan_unavailable` before the floor (F-038-o4, F-1525-c; ai contract.resellers.md) | `AI_API_BASE_URL` (+ `NOTIFICATION_`, `BILLING_API_BASE_URL` for delivery) + `SERVICE_AUTH_TOKEN` |
+| `catalog_season_write` | writes every tenant's season occurrences due within 14 days as campaign prices — billing `POST /api/internal/catalog/seasons/write-upcoming` (F-505-b; catalog contract.campaigns.md "Seasons"); hourly (`20 * * * *`); a refused one is the run's error | `BILLING_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 
 The retention job is the first job that does real work, and what it settled is how a job reaches code it cannot import.
 
@@ -98,10 +99,8 @@ process that owns one to act, and never handles the value.
 run into `bot_execution_log` and every other job keeps running; requiring them at boot would stop the consumer
 draining the queue because one job's dependency is missing.
 
-**Two jobs over one seam are still two jobs.** Expiry reads a clock and calls
-no gateway; reconciliation makes one call to a bank per payment. They are
-separate keys with separate schedules and separate timeouts, because merging
-them would tie the cheap frequent one to the rate a bank will answer.
+**Two jobs over one seam are still two jobs.** Expiry reads a clock and calls no gateway; reconciliation makes one call to a bank per payment.
+They are separate keys with separate schedules and separate timeouts, because merging them would tie the cheap frequent one to the rate a bank will answer.
 
 **A job registers itself; one that has to run schedules itself** (F-114-a).
 `WorkerRegistryService` upserts a `bot_worker` row on boot; the publisher ticks

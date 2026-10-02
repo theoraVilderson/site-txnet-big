@@ -36,6 +36,7 @@ import { FxRateJob } from '../jobs/fx-rate.job';
 import { TrafficRollupJob } from '../jobs/traffic-rollup.job';
 import { TenantSubscriptionRenewalJob } from '../jobs/tenant-subscription-renewal.job';
 import { ResellerQuotaDigestJob } from '../jobs/reseller-quota-digest.job';
+import { CatalogSeasonWriteJob } from '../jobs/catalog-season-write.job';
 import { TenantDomainVerificationJob } from '../jobs/tenant-domain-verification.job';
 import { FxRatePoller } from '../currency/fx-rate.poller';
 import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
@@ -91,9 +92,10 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     TenantSubscriptionRenewalJob,
     TenantDomainVerificationJob,
     ResellerQuotaDigestJob,
+    CatalogSeasonWriteJob,
     {
       provide: JOBS,
-      inject: [HeartbeatJob, VaultRetentionJob, GrantPurgeJob, GrantBulkJobDrainJob, GrantGroupFulfilmentJob, GrantDeliveryJob, GrantUnusedNoticeJob, GrantEndNoticeJob, GrantIdleNoticeJob, UsageCaptureJob, VpnReserveJob, RetentionHeldNoticeJob, DepositExpiryJob, InvoiceExpiryJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, TrafficRollupJob, CampaignFanOutJob, CampaignDeliveryJob, TenantSubscriptionRenewalJob, TenantDomainVerificationJob, ResellerQuotaDigestJob, AiProfileRebuildJob, AiSuggestionDeliveryJob],
+      inject: [HeartbeatJob, VaultRetentionJob, GrantPurgeJob, GrantBulkJobDrainJob, GrantGroupFulfilmentJob, GrantDeliveryJob, GrantUnusedNoticeJob, GrantEndNoticeJob, GrantIdleNoticeJob, UsageCaptureJob, VpnReserveJob, RetentionHeldNoticeJob, DepositExpiryJob, InvoiceExpiryJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, TrafficRollupJob, CampaignFanOutJob, CampaignDeliveryJob, TenantSubscriptionRenewalJob, TenantDomainVerificationJob, ResellerQuotaDigestJob, AiProfileRebuildJob, AiSuggestionDeliveryJob, CatalogSeasonWriteJob],
       useFactory: (...jobs: Job[]) => jobs,
     },
     WorkerRegistryService,
