@@ -264,6 +264,10 @@ also aimed at.
 
 Failing first is the part that carries the value: a spec that has never been
 red has not been shown to test anything.
+Run it — written first and never run is the same as never red (TZ-1-h,
+2026-10-02). A red that is only "module not found" is not the red either: stub
+the new export so the **assertions** fail. Missed it? Prove the spec after the
+fact by breaking each behaviour in turn and showing its own test goes red.
 
 **Ceiling — a budget, not a target.** One backlog item earns at most **one** new
 `*.spec.ts`, covering the invariant the item turns on: the thing that would
