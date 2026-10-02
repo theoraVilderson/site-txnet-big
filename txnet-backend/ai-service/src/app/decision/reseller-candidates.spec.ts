@@ -114,16 +114,17 @@ describe('telling it (F-038-o4)', () => {
   };
 
   it('a reseller\'s row carries its owner, the package as it is now, and the quota — a user\'s carries none of it', () => {
-    const item = deliveryItem(row, undefined, { recipientUserId: OWNER, currentPackageId: 'silver', packageName: 'Gold', packageActive: true, livePrice: '95.00', productNameKey: null });
+    const item = deliveryItem(row, undefined, { recipientUserId: OWNER, currentPackageId: 'silver', packageName: 'Gold', packageActive: true, livePrice: '95.00', productNameKey: null, walletBalance: null });
     expect(item.reseller).toEqual({
       recipientUserId: OWNER, currentPackageId: 'silver', fromPackageId: 'silver', packageId: 'gold', packageName: 'Gold', packageActive: true,
       price: { amount: '95.00', currencyCode: 'USD' }, meter: KEY, period: 'month', included: 1000, used: 600, newIncluded: 5000, productNameKey: null,
+      balanceThen: null, balanceNow: null,
     });
     expect(deliveryItem({ ...row, subjectKind: 'user' }).reseller).toBeNull();
   });
 
   it('a package no longer priced for the period is told as unavailable (price null), never at the decided price', () => {
-    const item = deliveryItem(row, undefined, { recipientUserId: OWNER, currentPackageId: 'silver', packageName: 'Gold', packageActive: true, livePrice: null, productNameKey: null });
+    const item = deliveryItem(row, undefined, { recipientUserId: OWNER, currentPackageId: 'silver', packageName: 'Gold', packageActive: true, livePrice: null, productNameKey: null, walletBalance: null });
     expect(item.reseller?.price).toBeNull();
   });
 

@@ -9,6 +9,8 @@ const DAY_MS = 86_400_000;
 export const UPGRADE_HEADROOM = 1.25;
 /** The template a reseller's upgrade is told by (worker `suggestionPackageUpgrade`). */
 export const PACKAGE_UPGRADE_TEMPLATE_KEY = 'notifications.suggestion.package_upgrade';
+/** The template a reseller's billing-wallet top-up is told by (worker `suggestionResellerTopUp`). */
+export const RESELLER_TOP_UP_TEMPLATE_KEY = 'notifications.suggestion.reseller_top_up';
 
 /** A package the platform sells resellers, with what it includes of each quota. */
 export type PackageOption = {
@@ -123,5 +125,29 @@ export function packageUpgradeCandidate(input: ResellerUpgradeInputs, now: Date)
       margin.reason,
       ...p.reasons,
     ],
+  };
+}
+
+/**
+ * The top-up (F-1525-c): a reseller's `wallet_need` (F-1525-a) whose run-out
+ * is inside the lead time and still ahead — the deadline — with something to
+ * top up. Help, never a sale: the money is the reseller's own, so it carries
+ * no margin and ranks as zero beside an upgrade (as `usage_alert`). The
+ * amount travels as `suggest_top_up`, a decimal string with its currency
+ * (C-02), as a user's top-up does.
+ */
+export function resellerTopUpCandidate(
+  p: { id: string; predictedAt: Date | null; confidence: number; value: Prisma.Decimal | null; currencyCode: string | null; reasons: Reason[] } | null,
+  now: Date,
+): EngineCandidate | null {
+  if (!p?.predictedAt || !p.value || !p.currencyCode || p.value.lte(0)) return null;
+  if (p.predictedAt.getTime() <= now.getTime() || p.predictedAt.getTime() > now.getTime() + SUGGEST_LEAD_DAYS * DAY_MS) return null;
+  return {
+    actionType: 'top_up_wallet',
+    confidence: p.confidence,
+    predictionId: p.id,
+    templateKey: RESELLER_TOP_UP_TEMPLATE_KEY,
+    deadline: p.predictedAt,
+    reasons: [{ code: 'suggest_top_up', amount: p.value.toFixed(2), currencyCode: p.currencyCode }, ...p.reasons],
   };
 }

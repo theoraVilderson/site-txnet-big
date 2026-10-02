@@ -78,6 +78,8 @@ export const NOTIFY_TEMPLATES = [
   'suggestionUsageAlert',
   // F-038-o4: a reseller's package upgrade, told to its owner.
   'suggestionPackageUpgrade',
+  // F-1525-c: a reseller's billing wallet running out at its wholesale pace, told to its owner.
+  'suggestionResellerTopUp',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -827,6 +829,13 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
     read: (ns) => ns?.suggestion?.package_upgrade,
     fallback: '💡 Suggestion: {{quota}} has used {{used}} of the {{included}} your package includes this period, and at this rate it will not last the period. The {{package}} package includes {{newIncluded}} for {{price}}; an upgrade applies at once, charged for the days left.',
     inbox: { read: (ns) => ns?.suggestion?.package_upgradeTitle, fallback: 'Suggestion: the {{package}} package for {{quota}}' },
+    many: SUGGESTION_MANY,
+  },
+  // F-1525-c (ADR-0109 point 4, §24.3): the reseller's own money — a suggestion, never a charge.
+  suggestionResellerTopUp: {
+    read: (ns) => ns?.suggestion?.reseller_top_up,
+    fallback: "💡 Suggestion: at your users' current pace on the platform's servers, your billing balance runs out in about {{days}} days. Topping up {{amount}} covers the next 30 days.",
+    inbox: { read: (ns) => ns?.suggestion?.reseller_top_upTitle, fallback: 'Suggestion: top up your billing balance' },
     many: SUGGESTION_MANY,
   },
 };

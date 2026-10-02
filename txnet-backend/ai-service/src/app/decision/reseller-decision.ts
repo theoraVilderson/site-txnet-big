@@ -10,7 +10,7 @@ import { ResellerReader } from '../profile/reseller-reader';
 import { SUGGEST_LEAD_DAYS } from './candidates';
 import type { DecisionResult } from './decision-run';
 import { DecisionPipeline } from './pipeline';
-import { packageUpgradeCandidate } from './reseller-candidates';
+import { packageUpgradeCandidate, resellerTopUpCandidate } from './reseller-candidates';
 
 const DAY_MS = 86_400_000;
 
@@ -39,8 +39,8 @@ export class ResellerDecisionRun {
     const predictions = await runWithTenant({ id: platformTenantId }, () =>
       tenantTransaction(this.prisma, (tx) =>
         tx.aiPrediction.findMany({
-          where: { tenantId: platformTenantId, subjectKind: 'tenant', kind: 'quota_exhaustion', predictedAt: { lte: until } },
-          select: { id: true, subjectId: true, predictedAt: true, confidence: true, reasons: true },
+          where: { tenantId: platformTenantId, subjectKind: 'tenant', kind: { in: ['quota_exhaustion', 'wallet_need'] }, predictedAt: { lte: until } },
+          select: { id: true, subjectId: true, kind: true, value: true, currencyCode: true, predictedAt: true, confidence: true, reasons: true },
         }),
       ),
     );
@@ -48,9 +48,9 @@ export class ResellerDecisionRun {
 
     const rows = new Map((await this.resellers.resellers(platformTenantId)).map((r) => [r.tenantId, r]));
     const packages = await this.resellers.packages(platformTenantId);
-    const subjects = predictions.filter((p) => rows.has(p.subjectId));
-    const owners = [...new Set(subjects.map((p) => (rows.get(p.subjectId) as { ownerUserId: string }).ownerUserId))];
-    const ids = subjects.map((p) => p.subjectId);
+    const subjects = [...new Set(predictions.map((p) => p.subjectId))].filter((id) => rows.has(id));
+    const owners = [...new Set(subjects.map((id) => (rows.get(id) as { ownerUserId: string }).ownerUserId))];
+    const ids = subjects;
     if (ids.length === 0) return result;
 
     const dayAgo = new Date(now.getTime() - DAY_MS);
@@ -75,31 +75,40 @@ export class ResellerDecisionRun {
       }),
     );
 
-    for (const p of subjects) {
-      const row = rows.get(p.subjectId) as NonNullable<ReturnType<typeof rows.get>>;
-      const candidate = packageUpgradeCandidate(
-        {
-          prediction: { id: p.id, predictedAt: p.predictedAt, confidence: p.confidence.toNumber(), reasons: p.reasons as Reason[] },
-          packageId: row.packageId,
-          billingModel: row.billingModel,
-          packages,
-          ownLimitKeys: await this.resellers.ownLimitKeys(p.subjectId),
-        },
-        now,
-      );
-      if (!candidate) continue;
+    for (const subjectId of subjects) {
+      const row = rows.get(subjectId) as NonNullable<ReturnType<typeof rows.get>>;
+      const quota = predictions.find((p) => p.subjectId === subjectId && p.kind === 'quota_exhaustion');
+      const wallet = predictions.find((p) => p.subjectId === subjectId && p.kind === 'wallet_need');
+      const upgrade = quota
+        ? packageUpgradeCandidate(
+            {
+              prediction: { id: quota.id, predictedAt: quota.predictedAt, confidence: quota.confidence.toNumber(), reasons: quota.reasons as Reason[] },
+              packageId: row.packageId,
+              billingModel: row.billingModel,
+              packages,
+              ownLimitKeys: await this.resellers.ownLimitKeys(subjectId),
+            },
+            now,
+          )
+        : null;
+      // F-1525-c: the billing wallet running out — help beside the upgrade, never instead of it.
+      const topUp = wallet
+        ? resellerTopUpCandidate({ id: wallet.id, predictedAt: wallet.predictedAt, confidence: wallet.confidence.toNumber(), value: wallet.value, currencyCode: wallet.currencyCode, reasons: wallet.reasons as Reason[] }, now)
+        : null;
+      const proposed = [upgrade, topUp].filter((c): c is NonNullable<typeof c> => c !== null);
+      if (proposed.length === 0) continue;
       const owner = row.ownerUserId;
       const window = theirs.windows.find((w) => w.userId === owner);
       const user = theirs.users.find((u) => u.id === owner);
       const quiet: QuietWindow | null = window
         ? { quietStart: window.quietStart, quietEnd: window.quietEnd, timezone: window.timezone ?? resolveTimeZone({ user, tenant: { timezone: own.zone } }).zone }
         : null;
-      const mine = own.actions.filter((a) => a.subjectId === p.subjectId);
+      const mine = own.actions.filter((a) => a.subjectId === subjectId);
       result.subjects += 1;
       const actions = await this.pipeline.decideAmong(
-        { tenantId: platformTenantId, kind: 'tenant', id: p.subjectId },
+        { tenantId: platformTenantId, kind: 'tenant', id: subjectId },
         mode,
-        [candidate],
+        proposed,
         {
           activeHours: own.profiles.find((x) => x.subjectId === owner)?.activeHours ?? new Array<number>(HOURS_OF_WEEK).fill(0),
           quiet,

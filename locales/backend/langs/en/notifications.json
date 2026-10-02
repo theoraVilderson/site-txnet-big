@@ -305,6 +305,8 @@
     "optOut": "🔕 Don't show this again",
     "package_upgrade": "💡 Suggestion: {{quota}} has used {{used}} of the {{included}} your package includes this period, and at this rate it will not last the period. The {{package}} package includes {{newIncluded}} for {{price}}; an upgrade applies at once, charged for the days left.",
     "package_upgradeTitle": "Suggestion: the {{package}} package for {{quota}}",
-    "unlimited": "no limit"
+    "unlimited": "no limit",
+    "reseller_top_up": "💡 Suggestion: at your users' current pace on the platform's servers, your billing balance runs out in about {{days}} days. Topping up {{amount}} covers the next 30 days.",
+    "reseller_top_upTitle": "Suggestion: top up your billing balance"
   }
 }

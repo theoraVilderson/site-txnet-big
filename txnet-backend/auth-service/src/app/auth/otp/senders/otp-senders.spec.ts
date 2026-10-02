@@ -755,6 +755,23 @@ describe('UserNotifier', () => {
       expect(NOTIFY_TEMPLATES).toEqual(expect.arrayContaining(['suggestionRenew', 'suggestionResizeUp', 'suggestionResizeDown', 'suggestionTopUpWallet', 'suggestionWinBack', 'suggestionRetainOffer', 'suggestionCheckoutHelp']));
     });
 
+    it('a reseller\'s billing-wallet top-up (F-1525-c) is a template of its own', async () => {
+      expect(NOTIFY_TEMPLATES).toContain('suggestionResellerTopUp');
+      const client = botClient();
+      const locale = {
+        getNamespace: vi.fn(() => ({ suggestion: { reseller_top_up: '💡 {{days}} / {{amount}}' } })),
+        getKey: vi.fn(() => undefined),
+        getDefaultLanguage: () => 'fa',
+      } as unknown as LocaleService;
+      const notifier = new UserNotifier(
+        notifierPrisma({ user: { languagePreference: 'fa' }, links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+        registry(client),
+        locale,
+      );
+      await inTenant(() => notifier.notify({ userId: 'owner-1', channel: 'bot', template: 'suggestionResellerTopUp', params: { actionId: '77777777-7777-4777-8777-777777777777', amount: '510.00 USD', days: '4' } }));
+      expect(client.sendMessage).toHaveBeenCalledWith('5501', '💡 4 / 510.00 USD', expect.anything());
+    });
+
     it('a reseller\'s upgrade (F-038-o4) names its quota as a quota alert does, and says "no limit" in words', async () => {
       const client = botClient();
       const locale = {

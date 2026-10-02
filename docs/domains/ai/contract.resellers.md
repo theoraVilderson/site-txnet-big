@@ -88,5 +88,14 @@ Told to the reseller's **owner** only — the quota alerts' recipient
 | the worker | claims it for the owner with no Grant; stops `already_paid` when the reseller moved off the package the engine saw, `plan_unavailable` for a package gone or unpriced — both before the floor; else `suggestionPackageUpgrade` to inbox and bot, the quota named as a quota alert names it | worker `ai-suggestion-delivery.job.ts`, auth-service `user-notifier.ts` |
 | the tap | the owner's "don't show this again" opts the **reseller** out (invariant 14) | `decision/opt-out.ts` |
 
+**The top-up (F-1525-c).** The same run proposes `top_up_wallet` beside the
+upgrade for a reseller whose `wallet_need` run-out is ahead and inside 7 days
+(`resellerTopUpCandidate`): the amount as `suggest_top_up` (C-02), deadline
+the run-out, no margin — help with the reseller's own money, ranked as zero,
+so an upgrade the same run wins. The take adds the wallet's balance now; the
+worker stops it `already_paid` when the balance grew since the decision,
+else tells `suggestionResellerTopUp` ({{amount}}, {{days}}) to the owner. A
+suggestion only: nothing is charged (§24.3).
+
 Not measured yet (F-038-o5): a reseller's row never converts and is in no
 uplift report — the outcome run and the report read `user` subjects only.

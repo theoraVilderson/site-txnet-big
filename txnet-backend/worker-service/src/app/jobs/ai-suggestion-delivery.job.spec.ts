@@ -314,6 +314,20 @@ describe('AiSuggestionDeliveryJob (F-038-g3)', () => {
       }
     });
 
+    it('a billing-wallet top-up (F-1525-c): told to the owner with the amount and the days left, stopped when the wallet grew since', async () => {
+      const topUp = (r: Record<string, unknown>) =>
+        upgrade({ actionType: 'top_up_wallet', templateKey: 'notifications.suggestion.reseller_top_up', amount: { amount: '510.00', currencyCode: 'USD' }, deadline: '2026-10-09T09:20:00.000Z', reseller: reseller({ packageId: null, fromPackageId: null, meter: null, balanceThen: '90.00', balanceNow: '90.00', ...r }) });
+      const told = build({ items: [topUp({})] });
+      await told.job.run(NOW);
+      expect(told.paths()).toEqual(['/api/internal/ai/actions/due/take', '/api/internal/notifications/suggestion/claim', '/api/internal/ai/actions/:id/floor', '/api/internal/ai/actions/:id/sent']);
+      expect(told.sent).toEqual([expect.objectContaining({ person: { tenantId: TENANT, userId: OWNER, template: 'suggestionResellerTopUp', params: { actionId: ACTION, amount: '510.00 USD', days: '4' } } })]);
+
+      const grew = build({ items: [topUp({ balanceNow: '600.00' })] });
+      await grew.job.run(NOW);
+      expect(grew.calls[2]).toEqual({ path: `/api/internal/ai/actions/${ACTION}/stop`, body: { tenantId: TENANT, by: 'already_paid' } });
+      expect(grew.sent).toEqual([]);
+    });
+
     it('never tells one without its reseller block — a reseller gone from the list', async () => {
       const { job, sent } = build({ items: [upgrade({ reseller: null })] });
       await expect(job.run(NOW)).resolves.toMatchObject({ errorsCount: 1 });

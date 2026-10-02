@@ -65,6 +65,8 @@ export type ResellerLive = {
   livePrice: string | null;
   /** A product's sales quota: the product's catalog name key. */
   productNameKey: string | null;
+  /** F-1525-c: the reseller's billing wallet now, a decimal string; null with none. */
+  walletBalance: string | null;
 };
 
 export function deliveryItem(row: DueRow, terms?: OfferTerms, live?: ResellerLive) {
@@ -74,7 +76,8 @@ export function deliveryItem(row: DueRow, terms?: OfferTerms, live?: ResellerLiv
   const offer = reasons.find((r) => r.code === 'suggest_offer') ?? null;
   const attempt = reasons.find((r) => r.code === 'checkout_attempt') ?? null;
   const spike = reasons.find((r) => r.code === 'usage_spike') ?? null;
-  const upgrade = row.subjectKind === 'tenant' ? (reasons.find((r) => r.code === 'suggest_package') ?? null) : null;
+  const upgrade = reasons.find((r) => r.code === 'suggest_package') ?? null;
+  const wholesale = reasons.find((r) => r.code === 'wholesale_rate') ?? null;
   const str = (v: unknown) => (typeof v === 'string' ? v : null);
   const num = (v: unknown) => (typeof v === 'number' ? v : null);
   return {
@@ -112,22 +115,25 @@ export function deliveryItem(row: DueRow, terms?: OfferTerms, live?: ResellerLiv
       spike && str(spike['meterKey']) && str(spike['lastDayBytes']) && str(spike['usualDayBytes']) && typeof spike['factor'] === 'number'
         ? { meterKey: spike['meterKey'] as string, lastDayBytes: spike['lastDayBytes'] as string, usualDayBytes: spike['usualDayBytes'] as string, factor: spike['factor'] }
         : null,
+    // F-038-o4 / F-1525-c: a reseller's suggestion — the upgrade's package and quota, or the top-up's balances.
     reseller:
-      upgrade && live && str(upgrade['packageId']) && str(upgrade['meter'])
+      row.subjectKind === 'tenant' && live
         ? {
             recipientUserId: live.recipientUserId,
             currentPackageId: live.currentPackageId,
-            fromPackageId: str(upgrade['fromPackageId']),
-            packageId: upgrade['packageId'] as string,
-            packageName: live.packageName,
-            packageActive: live.packageActive,
-            price: live.livePrice && str(upgrade['currencyCode']) ? { amount: live.livePrice, currencyCode: upgrade['currencyCode'] as string } : null,
-            meter: upgrade['meter'] as string,
-            period: str(upgrade['period']),
-            included: num(upgrade['included']),
-            used: num(upgrade['used']),
-            newIncluded: num(upgrade['newIncluded']),
+            fromPackageId: str(upgrade?.['fromPackageId']),
+            packageId: str(upgrade?.['packageId']),
+            packageName: upgrade ? live.packageName : null,
+            packageActive: upgrade ? live.packageActive : false,
+            price: upgrade && live.livePrice && str(upgrade['currencyCode']) ? { amount: live.livePrice, currencyCode: upgrade['currencyCode'] as string } : null,
+            meter: str(upgrade?.['meter']),
+            period: str(upgrade?.['period']),
+            included: num(upgrade?.['included']),
+            used: num(upgrade?.['used']),
+            newIncluded: num(upgrade?.['newIncluded']),
             productNameKey: live.productNameKey,
+            balanceThen: str(wholesale?.['balance']),
+            balanceNow: live.walletBalance,
           }
         : null,
     deadline: row.deadline ? row.deadline.toISOString() : null,
@@ -189,7 +195,7 @@ export class ActionDelivery {
   }
 
   /**
-   * F-038-o4: what a reseller's upgrade is told with, read now through the
+   * F-038-o4 / F-1525-c: what a reseller's suggestion is told with, read now through the
    * reader in the platform's scope (`ai.reader_reseller`, the packages).
    * A reseller gone from the list has no entry: the worker refuses the item.
    */
@@ -206,17 +212,18 @@ export class ActionDelivery {
     for (const row of rows) {
       const reseller = byId.get(row.subjectId);
       const reason = named(row);
-      if (row.subjectKind !== 'tenant' || !reseller || !reason) continue;
-      const pkg = packages.find((p) => p.id === reason['packageId']);
+      if (row.subjectKind !== 'tenant' || !reseller) continue;
+      const pkg = reason ? packages.find((p) => p.id === reason['packageId']) : undefined;
       const price = !pkg ? null : reseller.billingModel === 'subscription_yearly' ? pkg.yearlyPrice : reseller.billingModel === 'subscription_monthly' ? pkg.monthlyPrice : null;
-      const meter = typeof reason['meter'] === 'string' ? reason['meter'] : '';
+      const meter = typeof reason?.['meter'] === 'string' ? reason['meter'] : '';
       out.set(row.id, {
         recipientUserId: reseller.ownerUserId,
         currentPackageId: reseller.packageId,
         packageName: pkg?.name ?? null,
         packageActive: pkg?.isActive ?? false,
-        livePrice: price && pkg?.currencyCode === reason['currencyCode'] ? price.toFixed(2) : null,
+        livePrice: price && pkg?.currencyCode === reason?.['currencyCode'] ? price.toFixed(2) : null,
         productNameKey: meter.startsWith('product:') ? (nameKeys.get(meter.slice('product:'.length)) ?? null) : null,
+        walletBalance: reseller.walletBalance?.toFixed(2) ?? null,
       });
     }
     return out;

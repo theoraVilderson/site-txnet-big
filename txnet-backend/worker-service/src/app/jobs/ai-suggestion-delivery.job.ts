@@ -1,7 +1,7 @@
 import { remainingLabel, RequestHeaders, SUGGESTION_NOTICE } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BotWorkerCategory } from '@prisma/client';
+import { BotWorkerCategory, Prisma } from '@prisma/client';
 import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { envelopeData } from '../automation/internal-answer';
 import { BrokerService } from '../broker/broker.service';
@@ -36,6 +36,8 @@ export const SUGGESTION_TEMPLATE_OF: Record<string, string> = {
 
 /** A reseller's upgrade (F-038-o4): `resize_up` about a package, told to the reseller's owner. */
 export const PACKAGE_UPGRADE_TEMPLATE = 'suggestionPackageUpgrade';
+/** A reseller's billing-wallet top-up (F-1525-c), told to its owner. */
+export const RESELLER_TOP_UP_TEMPLATE = 'suggestionResellerTopUp';
 
 type Due = {
   actionId: string;
@@ -60,21 +62,25 @@ type Due = {
   payment?: { paymentId: string; amount: Money } | null;
   /** `usage_alert` only (F-1516): the last 24 h against the usual day, bytes as decimal strings. */
   usage?: { meterKey: string; lastDayBytes: string; usualDayBytes: string; factor: number } | null;
-  /** F-038-o4: a reseller's upgrade — read by ai at the take, never at the decision. */
+  /** F-038-o4 / F-1525-c: a reseller's suggestion — read by ai at the take, never at the decision. */
   reseller?: {
     recipientUserId: string;
     currentPackageId: string | null;
     fromPackageId: string | null;
-    packageId: string;
+    /** The upgrade's; null for a top-up. */
+    packageId: string | null;
     packageName: string | null;
     packageActive: boolean;
     price: Money | null;
-    meter: string;
+    meter: string | null;
     period: string | null;
     included: number | null;
     used: number | null;
     newIncluded: number | null;
     productNameKey: string | null;
+    /** The top-up's: the billing wallet when it was decided, and now (decimal strings). */
+    balanceThen?: string | null;
+    balanceNow?: string | null;
   } | null;
   deadline: string | null;
 };
@@ -171,8 +177,15 @@ export class AiSuggestionDeliveryJob implements Job {
     // F-038-o4: a reseller as the platform's customer, told to its owner — a user of the platform's own tenant.
     if (due.subjectKind === 'tenant') {
       const reseller = due.reseller;
-      if (due.actionType !== 'resize_up' || !reseller) throw new Error(`a reseller's ${due.actionType} suggestion without its reseller cannot be told`);
-      return this.tell(due, { userId: reseller.recipientUserId, template: PACKAGE_UPGRADE_TEMPLATE }, async () => upgradeWords(reseller));
+      if (reseller && due.actionType === 'resize_up' && reseller.packageId && reseller.meter) {
+        return this.tell(due, { userId: reseller.recipientUserId, template: PACKAGE_UPGRADE_TEMPLATE }, async () => upgradeWords(reseller));
+      }
+      // F-1525-c: a top-up names its amount, or it is not told.
+      if (reseller && due.actionType === 'top_up_wallet' && due.amount) {
+        const amount = due.amount;
+        return this.tell(due, { userId: reseller.recipientUserId, template: RESELLER_TOP_UP_TEMPLATE }, async () => resellerTopUpWords(reseller, amount, due.deadline, now));
+      }
+      throw new Error(`a reseller's ${due.actionType} suggestion without its reseller, package or amount cannot be told`);
     }
     const template = SUGGESTION_TEMPLATE_OF[due.actionType];
     // F-038-m: `checkout_help` is about a payment, not a service — the one type told with no Grant (F-038-g5).
@@ -346,12 +359,28 @@ export function upgradeWords(r: NonNullable<Due['reseller']>): Words {
   if (!r.packageActive || !r.price || !r.packageName) return { stop: 'plan_unavailable' };
   return {
     params: {
-      ...(r.meter.startsWith('product:') ? (r.productNameKey ? { productNameKey: r.productNameKey } : {}) : { quotaKey: r.meter }),
+      ...((r.meter ?? '').startsWith('product:') ? (r.productNameKey ? { productNameKey: r.productNameKey } : {}) : { quotaKey: r.meter ?? '' }),
       package: r.packageName,
       price: `${r.price.amount} ${r.price.currencyCode}`,
       used: String(r.used ?? 0),
       included: String(r.included ?? 0),
       newIncluded: r.newIncluded === null ? 'unlimited' : String(r.newIncluded),
+    },
+  };
+}
+
+/**
+ * F-1525-c: a billing-wallet top-up — the amount and the days to the run-out.
+ * A wallet that grew since the decision was topped up (or credited): the
+ * suggestion is moot — `already_paid`, before the floor (C-02: compared as
+ * Decimal).
+ */
+export function resellerTopUpWords(r: NonNullable<Due['reseller']>, amount: Money, deadline: string | null, now: Date): Words {
+  if (r.balanceThen && r.balanceNow && new Prisma.Decimal(r.balanceNow).gt(r.balanceThen)) return { stop: 'already_paid' };
+  return {
+    params: {
+      amount: `${amount.amount} ${amount.currencyCode}`,
+      ...(deadline ? { days: String(Math.max(1, Math.ceil((new Date(deadline).getTime() - now.getTime()) / DAY_MS))) } : {}),
     },
   };
 }
