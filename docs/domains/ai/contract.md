@@ -112,6 +112,15 @@ chose to speak — is charged against the subject's budget (F-1501); `reply` —
 an answer to the user's own question — is always allowed, charged nothing and
 never reads the table, so a spent budget cannot silence an answer.
 
+## Decision steps (point 8) — built ahead of the pipeline (F-038-e)
+
+Each step is pure and answers `pass`, or the `suppressedBy` it writes on a
+`suppressed` action:
+
+| step | rule | `suppressedBy` |
+|---|---|---|
+| threshold (F-1503) — `decision/confidence-threshold.ts` | confidence below the tenant's `confidenceThreshold` (default 0.6) is dropped; equal passes; compared at 4 places, as stored; a non-number is dropped | `confidence_threshold` |
+
 ## Guarantees (intended)
 
 - Every row is one tenant's (invariant 1); no learning across tenants.
