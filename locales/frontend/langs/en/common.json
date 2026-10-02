@@ -1653,7 +1653,8 @@
         "from": "From",
         "to": "To",
         "timezone": "Time zone",
-        "sameTimes": "Start and end must be different times."
+        "sameTimes": "Start and end must be different times.",
+        "sameAsMine": "Same as my time zone"
       },
       "save": "Save",
       "saved": "Your notice settings are saved.",
@@ -3983,6 +3984,36 @@
       "invalid_rate": "That rate is not a positive number.",
       "pin_not_found": "This manual rate no longer exists.",
       "pin_over": "This manual rate has already ended."
+    }
+  },
+  "timeZone": {
+    "title": "Time zone",
+    "hint": "Dates in the panel and your quiet hours follow this zone.",
+    "label": "Time zone",
+    "automatic": "Automatic — this device ({{zone}})",
+    "automaticUnknown": "Automatic",
+    "inUse": "Now in use: {{zone}} ({{from}})",
+    "from": {
+      "user": "your choice",
+      "browser": "this device",
+      "tenant": "your provider's zone",
+      "platform": "the default"
+    },
+    "save": "Save",
+    "saved": "Your time zone is saved.",
+    "loadFailed": "We could not load your time zone.",
+    "reload": "Try again",
+    "tenant": {
+      "title": "Business time zone",
+      "hint": "The days your reports count in, and the zone of every customer who has not set their own.",
+      "hintPlatform": "The platform's clock, and the zone of every platform user who has not set their own.",
+      "saved": "The time zone is saved.",
+      "refusals": {
+        "not_allowed": "You cannot manage this time zone.",
+        "reseller_not_found": "This reseller does not exist.",
+        "reseller_suspended": "This reseller is suspended, so its time zone cannot be changed.",
+        "reseller_terminated": "This reseller has been closed."
+      }
     }
   }
 }

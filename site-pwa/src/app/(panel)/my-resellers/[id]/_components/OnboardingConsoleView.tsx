@@ -11,6 +11,7 @@ import { myResellerBrandingPath, myResellerUsersPath } from "@/lib/routes";
 import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-api";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { OperatingCurrencyCard } from "../../../_components/OperatingCurrencyCard";
+import { TenantTimeZoneCard } from "../../../_components/TenantTimeZoneCard";
 import { ResellerLimitsCard } from "./ResellerLimitsCard";
 import { OverageCapCard, PackageChangeCard, ProductQuotasCard } from "./QuotaCards";
 import { Badge } from "../../../financial/_components/Badge";
@@ -194,6 +195,8 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
         </section>
         {/* F-116-h. By the path's reseller, like every card here (invariant 21). */}
         <OperatingCurrencyCard tenantId={id} scope="reseller" />
+        {/* TZ-1-e: the reseller's own clock, by the same path's reseller. */}
+        <TenantTimeZoneCard tenantId={id} scope="reseller" />
         <ResellerLimitsCard tenantId={id} />
         <ProductQuotasCard tenantId={id} />
         <OverageCapCard tenantId={id} />

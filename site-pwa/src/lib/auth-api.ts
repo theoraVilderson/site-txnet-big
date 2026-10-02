@@ -4,6 +4,7 @@
 import { RequestHeaders } from "@/generated/wire";
 import { API_BASE } from "./api-origin";
 import { createApiClient } from "./api-request";
+import type { ResolvedTimeZone, TimeZoneSource } from "./time-zone";
 
 const API_URL = API_BASE;
 let accessToken: string | null = null;
@@ -274,6 +275,9 @@ export type NoticeMessenger = (typeof NOTICE_MESSENGERS)[number];
 /** `linked`: the platforms with a verified chat, so the panel can say which one is not linked yet. */
 export type MeMessenger = { messenger: NoticeMessenger; chosen: boolean; linked: Array<"telegram" | "bale"> };
 
+/** The caller's own zone and the one their dates are drawn in (TZ-1-c, auth-api `contract.time-zone.md`); `applied` on a save. */
+export type MeTimeZone = { timezone: string | null; source: TimeZoneSource | null; resolved: ResolvedTimeZone; applied?: boolean };
+
 export const authApi = {
   async loginPassword(identifier: string, password: string, captchaToken: string) {
     const result = await request<AuthResult | ({ requiresOtp: true; otpToken: string } & OtpDeliveryHandles)>("/auth/login/password", { method: "POST", body: JSON.stringify({ identifier, password }) }, captchaToken);
@@ -389,6 +393,10 @@ export const authApi = {
   /** Which messenger the caller's notices take (F-601-u); unchosen reads as `both`, with `chosen: false`. */
   async messenger() { return request<MeMessenger>("/auth/me/messenger", { method: "GET" }); },
   async saveMessenger(messenger: NoticeMessenger) { return request<MeMessenger>("/auth/me/messenger", { method: "PUT", body: JSON.stringify({ messenger }) }); },
+  /** The caller's zone, and the resolved one dates are drawn in (TZ-1-c). */
+  async timeZone() { return request<MeTimeZone>("/auth/me/timezone", { method: "GET" }); },
+  /** `user` picks (null clears the pick); `browser` reports, and is not stored over a pick (`applied: false`). */
+  async saveTimeZone(zone: string | null, source: TimeZoneSource) { return request<MeTimeZone>("/auth/me/timezone", { method: "PUT", body: JSON.stringify({ zone, source }) }); },
   /** The one refresh every client and the socket run (see `credentialRefresh`). */
   refreshCredential,
   /** Hold every tokenless call until `releaseSessionHold` — the panel's page load (see `sessionHold`). */

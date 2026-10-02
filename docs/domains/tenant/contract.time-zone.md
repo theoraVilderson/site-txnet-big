@@ -40,5 +40,5 @@ fixed offset like `+03:30`, an unknown name, an extra field — is 400.
 
 | unit | uses |
 |---|---|
-| panel-web | the two routes, on a reseller's workspace and the platform's `/settings` (TZ-1-e, not built) |
+| panel-web | the two routes, on a reseller's workspace and the platform's `/settings` (TZ-1-e, built; `panel-web/contract.kit.md` Z4) |
 | identity | `tenant.timezone` through `resolveTimeZone` (TZ-1-a, built) |

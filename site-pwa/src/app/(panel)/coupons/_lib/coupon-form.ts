@@ -1,5 +1,6 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { Me } from "@/lib/auth-api";
+import { PLATFORM_DEFAULT_TIMEZONE } from "@/lib/time-zone";
 import type {
   AdminCoupon,
   CouponChannel,
@@ -212,7 +213,7 @@ export function validateUsageFilter(f: UsageFilter): string | null {
 export function instantToDay(instant: string | null, edge: "start" | "end"): string {
   if (!instant) return "";
   const at = new Date(instant).getTime() - (edge === "end" ? 1 : 0);
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: PLATFORM_DEFAULT_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
 }
 
 export function formFromCoupon(c: AdminCoupon): CouponForm {

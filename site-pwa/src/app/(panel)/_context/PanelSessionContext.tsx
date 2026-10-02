@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { authApi, type Me, type SwitchGroup } from "@/lib/auth-api";
+import { browserReport, browserZone, setDisplayZone, type ResolvedTimeZone } from "@/lib/time-zone";
 import { miniAppHost } from "@/lib/mini-app";
 import { AUTH_LOGIN } from "@/lib/routes";
 import { currentReturnPath, rememberReturnTo } from "@/lib/return-to";
@@ -26,6 +27,13 @@ type PanelSession = {
    */
   me: Me | null;
   isLoading: boolean;
+  /**
+   * The zone this caller's dates are drawn in (TZ-1-e, ADR-0108) — null until
+   * read, or when the read failed (dates then use the browser's own clock).
+   */
+  timeZone: ResolvedTimeZone | null;
+  /** After the caller changed their zone, or their tenant's: dates follow the new answer. */
+  zoneChanged: (resolved: ResolvedTimeZone) => void;
   /** Re-read the group — after adding an account, or after a switch. */
   reload: () => Promise<void>;
 };
@@ -58,6 +66,12 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
   const [group, setGroup] = useState<SwitchGroup | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [timeZone, setTimeZone] = useState<ResolvedTimeZone | null>(null);
+
+  const zoneChanged = useCallback((resolved: ResolvedTimeZone) => {
+    setDisplayZone(resolved.zone);
+    setTimeZone(resolved);
+  }, []);
 
   // ADR-0043: a call refused because this user's permissions changed has
   // already refreshed the token by the time this runs; `me` was read from the
@@ -75,7 +89,8 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
     const [next, who] = await Promise.all([authApi.listAccounts(), readMe()]);
     setGroup(next);
     setMe(who);
-  }, []);
+    void syncTimeZone().then((resolved) => resolved && zoneChanged(resolved));
+  }, [zoneChanged]);
 
   // Before any child's `useEffect`: a sidebar entry fetching on mount waits for
   // the session below instead of going out tokenless (`authApi.holdUntilSession`).
@@ -102,6 +117,8 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
           setGroup(next);
           setMe(who);
         }
+        // After sign-in, not before: a page's own calls are not held for it.
+        void syncTimeZone().then((resolved) => alive && resolved && zoneChanged(resolved));
       } catch {
         // Expired, revoked, or never signed in — all one answer. `replace`, so
         // the panel is not reachable with Back.
@@ -119,10 +136,10 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [router]);
+  }, [router, zoneChanged]);
 
   return (
-    <PanelSessionContext.Provider value={{ group, me, isLoading, reload }}>
+    <PanelSessionContext.Provider value={{ group, me, isLoading, timeZone, zoneChanged, reload }}>
       {children}
     </PanelSessionContext.Provider>
   );
@@ -147,6 +164,24 @@ async function establishSession() {
     const result = await authApi.webAppSession(host.platform, host.initData);
     if (result.state !== "authenticated") throw cookieFailure;
     return result;
+  }
+}
+
+/**
+ * Read the caller's zone and, when it is not their own choice, report this
+ * browser's (TZ-1-e, ADR-0108 point 4) — the only automatic source. The server
+ * holds the rule too: a report never lands over a choice, even one saved
+ * between this read and the write. Null when either call failed — never a
+ * reason to leave the panel, and dates then use the browser's clock.
+ */
+async function syncTimeZone(): Promise<ResolvedTimeZone | null> {
+  try {
+    const stored = await authApi.timeZone();
+    const report = browserReport(stored, browserZone());
+    if (!report) return stored.resolved;
+    return (await authApi.saveTimeZone(report.zone, report.source)).resolved;
+  } catch {
+    return null;
   }
 }
 

@@ -64,6 +64,8 @@ let client: ReturnType<typeof fakeClient>;
 function signedInAs(userId: string | null) {
   session.mockReturnValue({
     me: null,
+    timeZone: null,
+    zoneChanged: vi.fn(),
     group: userId ? ({ current: { userId } } as never) : null,
     isLoading: false,
     reload: vi.fn(),

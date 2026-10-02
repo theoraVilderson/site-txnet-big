@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 14
-updated: 2026-09-12
+version: 15
+updated: 2026-10-02
 ---
 
 # Contract — panel-web: the shared UI kit (F-093-b)
@@ -62,7 +62,8 @@ page still owns on top of them.
    needs no entry in one. The zone is the viewer's: someone checking when a
    payment expired wants the clock on their own wall. An absent or unreadable
    instant answers `null` rather than a placeholder, so the caller hides the
-   line instead of printing a date nothing vouches for. Added by F-093-d;
+   line instead of printing a date nothing vouches for. "The viewer's" is
+   their **resolved** zone (below). Added by F-093-d;
    `contract.financial.md` rule 2 is the other half, where a *picked day* goes
    back the other way and becomes a range of instants.
 8. **Digits are Latin in every language** (user decision, 2026-09-13). Every
@@ -70,6 +71,25 @@ page still owns on top of them.
    bare `lang`, and `DatePicker` passes `LATIN_DIGITS`. Only the glyphs are
    fixed: `fa` still reads Jalali and its own currency words. A literal Persian
    digit in `locales/` is the same violation. Proof: `_lib/digits.test.ts`.
+
+## The zone a date is drawn in (TZ-1-e, ADR-0108)
+
+Every instant is UTC on the wire; the wall clock is the caller's resolved
+zone — their pick, else this browser's report, else their tenant's, else the
+platform's — as `GET /auth/me/timezone` answers it
+([auth-api/contract.time-zone.md](../auth-api/contract.time-zone.md)). The
+panel never re-derives it. Code: `src/lib/time-zone.ts`.
+
+| # | Rule | Why |
+|---|---|---|
+| Z1 | After sign-in (and after an account switch) `PanelSessionContext` reads the zone and, unless the user picked one, reports this browser's `Intl` zone as `browser` — only when the row does not already hold it. A failed read leaves the browser's clock; it never leaves the panel | the only automatic source (ADR-0108 point 4); a page load costs a read, not a write |
+| Z2 | `formatInstant` draws in `displayZone()`: the resolved zone, remembered in `localStorage` so the next load draws in it from its first frame. An unreadable zone falls back to the browser's clock | one setter, so 40-odd call sites follow without passing a zone |
+| Z3 | `/settings` "Time zone": a pick saves `user`; "Automatic — this device" clears the pick, then reports the browser's zone. "Now in use" is the answer's `resolved`, never the field | a report is never stored over a pick, so automatic is two calls |
+| Z4 | A tenant's zone (`TenantTimeZoneCard`, `tenant/contract.time-zone.md`): a reseller's on its workspace console, the platform's on `/settings` for `platform_owner` + `tenant.manage` — the currency card's rule | the same admission as the operating currency |
+| Z5 | Every zone field is `ZoneSelect`: the browser's `Intl.supportedValuesOf`, a saved zone it lacks kept first; with `nullLabel`, a first option meaning null (quiet hours: "same as my time zone", TZ-1-f) | opening a picker never changes what is stored |
+| Z6 | A day that is a business rule — a price's start day, a coupon's day bounds — stays on `PLATFORM_DEFAULT_TIMEZONE`, the clock billing's gates read; it is not the viewer's | the server judges those days in Tehran, so the form must too |
+
+Proof: `src/lib/time-zone.test.ts`.
 
 ## Proof
 

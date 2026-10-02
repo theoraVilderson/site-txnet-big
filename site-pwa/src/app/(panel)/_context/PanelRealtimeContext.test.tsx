@@ -57,6 +57,8 @@ let options: RealtimeClientOptions;
 function signedInAs(userId: string | null) {
   session.mockReturnValue({
     me: null,
+    timeZone: null,
+    zoneChanged: vi.fn(),
     group: userId
       ? ({ current: { userId } } as never)
       : null,

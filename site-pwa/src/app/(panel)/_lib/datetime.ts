@@ -10,9 +10,13 @@
  * is no calendar table here and a new language needs no entry in one.
  *
  * The zone is the viewer's, deliberately. A user checking when a payment
- * expired wants the clock on their own wall, not the server's.
+ * expired wants the clock on their own wall, not the server's — and "their
+ * own" is their resolved zone (TZ-1-e, ADR-0108 point 7): the one they chose,
+ * else this browser's, else their tenant's. `lib/time-zone`'s `displayZone`
+ * holds it; until the session has read it, the browser's own.
  */
 
+import { displayZone } from "@/lib/time-zone";
 import { numberLocale } from "./digits";
 
 type Parts = Intl.DateTimeFormatOptions;
@@ -36,9 +40,19 @@ export function formatInstant(
   if (!instant) return null;
   const date = new Date(instant);
   if (Number.isNaN(date.getTime())) return null;
+  const parts = withTime ? WITH_TIME : DATE_ONLY;
+  const zone = displayZone();
   try {
-    return new Intl.DateTimeFormat(numberLocale(lang), withTime ? WITH_TIME : DATE_ONLY).format(date);
+    return new Intl.DateTimeFormat(numberLocale(lang), zone ? { ...parts, timeZone: zone } : parts).format(date);
   } catch {
+    // A zone this browser cannot read: its own clock beats no date.
+    if (zone) {
+      try {
+        return new Intl.DateTimeFormat(numberLocale(lang), parts).format(date);
+      } catch {
+        // fall through
+      }
+    }
     // Not a tag Intl can read. The instant as it arrived beats nothing.
     return instant;
   }

@@ -514,6 +514,25 @@ export const operatingCurrencyApi = {
   },
 };
 
+/** A tenant's time zone (TZ-1-d, `tenant/contract.time-zone.md`): an IANA name. */
+export interface TenantTimeZone {
+  timezone: string;
+}
+
+/**
+ * A tenant's time zone. The same two routes serve a reseller — admitted by the
+ * path's reseller (invariant 21) — and the platform's own tenant, for its
+ * staff with `tenant.manage`, like the operating currency.
+ */
+export const tenantTimeZoneApi = {
+  async get(tenantId: string): Promise<TenantTimeZone> {
+    return call<TenantTimeZone>(`/tenants/${encodeURIComponent(tenantId)}/timezone`, { method: "GET" });
+  },
+  async set(tenantId: string, zone: string): Promise<TenantTimeZone> {
+    return call<TenantTimeZone>(`/tenants/${encodeURIComponent(tenantId)}/timezone`, { method: "PUT", body: JSON.stringify({ zone }) });
+  },
+};
+
 /** shared-core's `LineNameTemplateProblem`: why a line-name template would be refused. */
 export type LineNameTemplateProblem = "too_long" | "unknown_placeholder" | "control_character";
 

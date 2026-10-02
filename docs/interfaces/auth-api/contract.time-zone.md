@@ -33,4 +33,4 @@ Prisma enum, C-09; zone through shared-core `isIanaZone`).
 | 2 | A `browser` write is conditional in the UPDATE itself (`timezoneSource` null or `browser`), so a choice saved between the read and the write is never overwritten |
 | 3 | The zone is stored canonical (`Iran` -> `Asia/Tehran`); the answer shows the stored form |
 
-Consumers: panel-web (TZ-1-e), bot-app (TZ-1-h). Neither is built yet.
+Consumers: panel-web (TZ-1-e, built: `panel-web/contract.kit.md` Z1–Z3), bot-app (TZ-1-h, not built).

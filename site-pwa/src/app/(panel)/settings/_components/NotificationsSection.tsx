@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { notificationApi, NOTICE_KINDS, type NoticeKind, type NoticePreferences } from "@/lib/notification-api";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { Toggle } from "../../gateways/_components/gateway-fields";
+import { ZoneSelect } from "../../_components/ZoneSelect";
 
 const N = FrontendI18nKeys.common.settings.notifications;
 
@@ -19,12 +20,6 @@ const KIND_TEXT: Record<NoticeKind, { label: string; hint: string }> = {
 
 /** What a freshly switched-on window reads before the user moves it. */
 const DEFAULT_QUIET = { start: "23:00", end: "08:00" };
-
-/** Every zone this browser knows, with the saved one kept even if it does not. */
-function zones(saved: string): string[] {
-  const all = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
-  return all.includes(saved) ? all : [saved, ...all];
-}
 
 /**
  * The user mutes kinds of retention notice and sets quiet hours (F-601-m,
@@ -56,8 +51,6 @@ export function NotificationsSection() {
       live = false;
     };
   }, []);
-
-  const zoneOptions = useMemo(() => (prefs ? zones(prefs.timezone) : []), [prefs]);
 
   if (loadFailed) {
     return (
@@ -141,19 +134,14 @@ export function NotificationsSection() {
               <label htmlFor="quiet-zone" className="mb-1 block text-sm text-text-secondary">
                 {t("common", N.quiet.timezone)}
               </label>
-              <select
+              {/* TZ-1-f: null follows the user's own zone, whatever it becomes. */}
+              <ZoneSelect
                 id="quiet-zone"
-                dir="ltr"
                 className={input}
                 value={prefs.timezone}
-                onChange={(e) => edit({ ...prefs, timezone: e.target.value })}
-              >
-                {zoneOptions.map((zone) => (
-                  <option key={zone} value={zone}>
-                    {zone}
-                  </option>
-                ))}
-              </select>
+                nullLabel={t("common", N.quiet.sameAsMine)}
+                onChange={(timezone) => edit({ ...prefs, timezone })}
+              />
             </div>
             {sameTimes && (
               <p className="col-span-2 text-sm font-medium text-error" role="alert">

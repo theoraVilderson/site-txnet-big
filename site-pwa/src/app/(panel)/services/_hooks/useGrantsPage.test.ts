@@ -92,7 +92,7 @@ const hear = (payload: unknown) =>
 beforeEach(() => {
   vi.clearAllMocks();
   client = fakeClient();
-  session.mockReturnValue({ me: null, group: { current: { userId: "u-1" } } as never, isLoading: false, reload: vi.fn() });
+  session.mockReturnValue({ me: null, group: { current: { userId: "u-1" } } as never, isLoading: false, reload: vi.fn(), timeZone: null, zoneChanged: vi.fn() });
   realtime.mockReturnValue(client as never);
   vi.mocked(catalogApi.texts).mockResolvedValue({} as never);
   grants.mockResolvedValue(page({ id: "g1" }, { id: "g2", status: "active" }) as never);

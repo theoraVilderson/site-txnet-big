@@ -125,9 +125,9 @@ never sends one.
    from an exhaustive `Record<NoticeKind, …>`. There is no switch for a stopped
    service: the subtitle says it is always told, and the server enforces it.
 2. **Quiet hours are one switch, two `time` fields and a zone.** Switched on,
-   the window reads 23:00–08:00 until moved; the zone list is the browser's
-   `Intl.supportedValuesOf`, keeping the saved zone even if the browser lacks
-   it. Equal ends block the save with a line — the server refuses them too.
+   the window reads 23:00–08:00 until moved; the zone is `ZoneSelect`
+   (`contract.kit.md` Z5), whose first option, "same as my time zone", saves
+   null — the user's resolved zone, whatever it becomes (TZ-1-f). Equal ends block the save with a line — the server refuses them too.
 3. **Saved whole with one button, and the answer is what is shown after**, so
    a value the server normalised (kind order, duplicates) reads as stored. A
    failed load shows one line and no form: an empty form saved would reset

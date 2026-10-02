@@ -79,8 +79,8 @@ export type NoticeKind = (typeof NOTICE_KINDS)[number];
 export interface NoticePreferences {
   muted: NoticeKind[];
   quietHours: { start: string; end: string } | null;
-  /** IANA zone the window is read in. */
-  timezone: string;
+  /** IANA zone the window is read in; null = the user's own zone, whatever it becomes (TZ-1-f). */
+  timezone: string | null;
 }
 
 /**

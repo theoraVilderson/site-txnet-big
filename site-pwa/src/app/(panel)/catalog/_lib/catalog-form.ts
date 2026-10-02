@@ -1,5 +1,6 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { Me } from "@/lib/auth-api";
+import { PLATFORM_DEFAULT_TIMEZONE } from "@/lib/time-zone";
 import type {
   BillingMode,
   CatalogPrice,
@@ -715,7 +716,7 @@ const TEHRAN_OFFSET = "+03:30";
 
 /** Today in Tehran, `YYYY-MM-DD`. */
 export const tehranToday = (now: Date = new Date()) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  new Intl.DateTimeFormat("en-CA", { timeZone: PLATFORM_DEFAULT_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 
 /** A day already past would reprice an invoice issued under the old price: billing refuses it, so this does first. */
 export function validatePriceForm(f: PriceForm, today: string): Errors<PriceForm> {
