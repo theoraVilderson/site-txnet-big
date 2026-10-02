@@ -4049,7 +4049,8 @@
       "offers": "Discount offers",
       "atRisk": "At risk",
       "report": "Report",
-      "margins": "Margins"
+      "margins": "Margins",
+      "layout": "Plan layout"
     },
     "settings": {
       "engine": "Suggestion engine",
@@ -4125,6 +4126,18 @@
       "grants": "{{active}} active services",
       "grantsLosing": "{{losing}} of them losing money at the rate they locked",
       "empty": "No plans for sale yet."
+    },
+    "layout": {
+      "intro": "How much the users of each plan use in a period, from the last 30 days, and what that suggests. Sizes only: the price is yours to set.",
+      "empty": "You sell no plan with a traffic bag yet.",
+      "period": "{{days}}-day plans",
+      "users": "{{active}} active, {{measured}} measured",
+      "usage": "Typical use per period: {{median}} · 3 in 4 use under {{p75}} · 9 in 10 under {{p90}}",
+      "notMeasured": "Not enough history yet to measure.",
+      "addSmaller": "{{users}} of {{measured}} users of {{plan}} use under 40% of it. A {{size}} plan would fit most of them.",
+      "addBigger": "{{users}} of {{measured}} users of {{plan}} run out of it. A plan of at least {{size}} would fit them.",
+      "noTakers": "Nobody holds {{plan}}. Consider dropping it or changing its size or price.",
+      "censored": "How much more they would use is not measured: they stopped at the limit."
     },
     "reasons": {
       "rule_defaults": "Starting estimate",

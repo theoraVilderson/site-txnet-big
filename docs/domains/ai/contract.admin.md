@@ -43,6 +43,18 @@ at its ceiling. Per-type model mode and caps are F-038-w's (user, 2026-10-02).
    leg costs more than the price; `costUnknown`, those with no leg. Losing
    first, then the thinnest margin, unknown last. Read on request, nothing
    stored; the alert to the tenant's staff is F-1528-b.
+7. **Plan layout (F-1527, `admin/plan-layout.ts`): sizes, never a price**
+   (ADR-0109 point 9). Families: the bag plans sold (active, public, prepaid,
+   a traffic size) by product, mode and length. Each active Grant's use per
+   period is its `vpn.traffic` readings (`ai.meter_reading` — meters only,
+   point 6) over the last 30 days scaled to the plan's length; only a Grant
+   whose readings reach back the whole window is measured, and one at 98 % of
+   its bag is at the cap. From 10 measured users of a plan: `add_smaller` —
+   ≥ 40 % use under 40 % of it, sized at their 75th percentile × 1.25 rounded
+   up (5 GiB steps, 1 GiB under 5), when no plan between that and it is sold;
+   `add_bigger` — ≥ 25 % of the family's largest plan at the cap, 1.5 × it,
+   `demandCensored`; `no_takers` — a plan nobody holds, once the family has 10
+   measured. Read on request, nothing stored.
 
 ## Routes
 
@@ -52,6 +64,7 @@ at its ceiling. Per-type model mode and caps are F-038-w's (user, 2026-10-02).
 | `PUT /api/ai/admin/settings` | any of `engineEnabled`, `confidenceThreshold`, `holdoutPercent`, `disabledActionTypes` | the settings, as read after |
 | `GET /api/ai/admin/at-risk` | `kind=renewal\|run_out`, `cursor?`, `take` ≤ 100 (50) | `{items: [{userId, grantId, value, predictedAt, confidence, reasons}], nextCursor}` — `renewal`: `renewal_probability` under 0.5 (`AT_RISK_RENEWAL_BELOW`), Grant end ahead, soonest first; `run_out`: `meter_exhaustion` inside 7 days |
 | `GET /api/ai/admin/margins` | — | `{items: [{variantId, productId, sku, nameKey, billingMode, durationDays, size, unlimited, price, cost, margin, losingMoney, reasons, grants: {active, losing, costUnknown}}]}` — rule 6 (F-1528) |
+| `GET /api/ai/admin/plan-layout` | — | `{families: [{productId, billingMode, durationDays, plans: [{variantId, sku, nameKey, size, active, measured, usage: {p25, p50, p75, p90} \| null, under, atCap}], suggestions: [{code, variantId, users, measured, share?, size?, demandCensored?}]}]}` — bytes as decimal strings; rule 7 (F-1527) |
 | `POST /api/ai/admin/reports/uplift` | `{from, to}`, ≤ 366 days | the F-038-i report ([contract.md](contract.md) "Outcomes and uplift") |
 | `GET /api/ai/admin/offers` | — | `{items}` — `Offers.list` |
 | `POST /api/ai/admin/offers` | the offer's fields (contract.md "offers"), no tenant, no author | `{offer}`; 400 `template_not_found` / `template_not_a_discount` / `variant_not_found` |
@@ -66,4 +79,6 @@ threshold and holdout bounds; defaults and `engineRuns`; a write's tenant and
 author, the type list through `TypeSwitch`; engine off stops the queue; the
 at-risk filters, order and paging. `admin/margins.spec.ts`: the rate in
 force, a losing plan, the order, the time meter for an unlimited plan, every
-unknown cost, the Grants count.
+unknown cost, the Grants count. `admin/plan-layout.spec.ts`: the window and
+the period scaling, the families, the cap, the minimum sample, each
+suggestion and when it is withheld.

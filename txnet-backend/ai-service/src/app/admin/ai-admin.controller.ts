@@ -11,6 +11,7 @@ import { AiAdminSettings, settingsPatchSchema } from './ai-admin-settings';
 import { AiManageGuard } from './ai-manage.guard';
 import { AT_RISK_KINDS, AtRisk } from './at-risk';
 import { Margins } from './margins';
+import { PlanLayout } from './plan-layout';
 
 const DAY_MS = 86_400_000;
 const AT_RISK_PAGE_MAX = 100;
@@ -60,6 +61,7 @@ export class AiAdminController {
     private readonly outcomes: OutcomeRun,
     private readonly offers: Offers,
     private readonly margins: Margins,
+    private readonly layout: PlanLayout,
   ) {}
 
   @Get('settings')
@@ -84,6 +86,12 @@ export class AiAdminController {
   @Get('margins')
   async listMargins(@Req() req: Request) {
     return ok(await this.margins.report(identityOf(req).tenantId, new Date()));
+  }
+
+  /** F-1527: each plan family's use per period, and the plans the distribution says to add or reconsider. */
+  @Get('plan-layout')
+  async planLayout(@Req() req: Request) {
+    return ok(await this.layout.report(identityOf(req).tenantId, new Date()));
   }
 
   @Post('reports/uplift')

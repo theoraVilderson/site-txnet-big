@@ -10,8 +10,8 @@ updated: 2026-10-02
 
 `(panel)/ai/`, menu entry `ai` behind `ai.manage`, over `lib/ai-api.ts`'s
 `aiAdminApi` — ai's `/api/ai/admin/*` ([ai/contract.admin.md](../../domains/ai/contract.admin.md)).
-Five tabs, each reading when opened: settings, discount offers, at risk,
-margins (F-1528), report.
+Six tabs, each reading when opened: settings, discount offers, at risk,
+margins (F-1528), plan layout (F-1527), report.
 Per-type model mode and caps are F-038-w's page (user, 2026-10-02).
 
 ## Rules
@@ -40,12 +40,17 @@ Per-type model mode and caps are F-038-w's page (user, 2026-10-02).
    An unknown cost is said in words with its reason (`common.ai.margins.why.*`),
    never shown as a number; the active Grants losing at their locked rate are
    said beside it (F-1528).
+9. **Plan layout: sizes, never a price** (F-1527). Per family, each plan's
+   active and measured users and its median, 75th and 90th percentile use
+   per period (`formatBytes`); each suggestion worded from its code
+   (`common.ai.layout.addSmaller` / `addBigger` / `noTakers`), the bigger
+   plan always with the note that demand past a cap is not measured.
 
 ## Consumes
 
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
-| ai | `/api/ai/admin/settings`, `…/at-risk`, `…/margins`, `…/reports/uplift`, `…/offers` | the tab shows the error line; the others work |
+| ai | `/api/ai/admin/settings`, `…/at-risk`, `…/margins`, `…/plan-layout`, `…/reports/uplift`, `…/offers` | the tab shows the error line; the others work |
 | billing | `GET /api/billing/coupons?kind=discount` (templates, `coupon.manage`) | the form says there is no template to use |
 | catalog | `GET /api/i18n/:lang/catalog` (plan names, as the shop reads them) | a plan is named by its sku |
 

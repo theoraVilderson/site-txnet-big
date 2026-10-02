@@ -105,6 +105,33 @@ export interface PlanMargin {
   reasons: AiReason[];
   grants: { active: number; losing: number; costUnknown: number };
 }
+/** One plan in a family (F-1527): its users' use per period, bytes as decimal strings. */
+export interface LayoutPlanRow {
+  variantId: string;
+  sku: string;
+  nameKey: string;
+  size: string;
+  active: number;
+  measured: number;
+  usage: { p25: string; p50: string; p75: string; p90: string } | null;
+  under: number;
+  atCap: number;
+}
+
+/** `add_smaller` / `add_bigger` name a size (never a price); `no_takers` a plan nobody holds. */
+export type LayoutSuggestion =
+  | { code: "add_smaller" | "add_bigger"; variantId: string; users: number; measured: number; share: number; size: string; demandCensored?: boolean }
+  | { code: "no_takers"; variantId: string; users: number; measured: number };
+
+/** Plans a user can move between — one product, mode and length — with what their use suggests (F-1527). */
+export interface LayoutFamily {
+  productId: string;
+  billingMode: "prepaid" | "metered";
+  durationDays: number | null;
+  plans: LayoutPlanRow[];
+  suggestions: LayoutSuggestion[];
+}
+
 export interface UpliftArm { units: number; converted: number; rate: number | null; revenue: AiMoney[]; margin: AiMoney[]; marginUnknown: number }
 export interface UpliftReport {
   from: string;
@@ -152,6 +179,9 @@ export const aiAdminApi = {
   },
   margins(): Promise<{ items: PlanMargin[] }> {
     return call<{ items: PlanMargin[] }>("/admin/margins", { method: "GET" });
+  },
+  planLayout(): Promise<{ families: LayoutFamily[] }> {
+    return call<{ families: LayoutFamily[] }>("/admin/plan-layout", { method: "GET" });
   },
   uplift(from: string, to: string): Promise<UpliftReport> {
     return call<UpliftReport>("/admin/reports/uplift", { method: "POST", body: JSON.stringify({ from, to }) });

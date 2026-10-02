@@ -28,7 +28,7 @@ vi.mock("../_context/PanelSessionContext", () => ({ usePanelSession: vi.fn() }))
 vi.mock("@/hooks/useApiError", () => ({ useApiErrorMessage: () => () => "generic" }));
 vi.mock("@/lib/ai-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/ai-api")>()),
-  aiAdminApi: { settings: vi.fn(), saveSettings: vi.fn(), atRisk: vi.fn(), margins: vi.fn(), uplift: vi.fn(), offers: vi.fn(), createOffer: vi.fn(), updateOffer: vi.fn() },
+  aiAdminApi: { settings: vi.fn(), saveSettings: vi.fn(), atRisk: vi.fn(), margins: vi.fn(), planLayout: vi.fn(), uplift: vi.fn(), offers: vi.fn(), createOffer: vi.fn(), updateOffer: vi.fn() },
 }));
 vi.mock("@/lib/catalog-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/catalog-api")>()),
@@ -66,6 +66,7 @@ beforeEach(() => {
   vi.mocked(aiAdminApi.updateOffer).mockResolvedValue({ offer: { ...offer, isActive: false } });
   vi.mocked(aiAdminApi.atRisk).mockResolvedValue({ items: [], nextCursor: null });
   vi.mocked(aiAdminApi.margins).mockResolvedValue({ items: [] });
+  vi.mocked(aiAdminApi.planLayout).mockResolvedValue({ families: [] });
   vi.mocked(catalogApi.texts).mockResolvedValue({} as Awaited<ReturnType<typeof catalogApi.texts>>);
   vi.mocked(aiAdminApi.uplift).mockResolvedValue({ from: "", to: "", types: [], renewals: { treated: 0, control: 0 } });
   vi.mocked(billingApi.adminCoupons).mockResolvedValue({
@@ -220,3 +221,34 @@ describe("margins (F-1528)", () => {
   });
 });
 
+describe("plan layout (F-1527)", () => {
+  const GIB = 1024 ** 3;
+  it("shows each plan's use per period and words every suggestion as a size, never a price", async () => {
+    vi.mocked(aiAdminApi.planLayout).mockResolvedValue({
+      families: [
+        {
+          productId: "p1", billingMode: "prepaid", durationDays: 30,
+          plans: [
+            { variantId: "v20", sku: "VPN-20", nameKey: "plan.v20", size: String(20 * GIB), active: 0, measured: 0, usage: null, under: 0, atCap: 0 },
+            { variantId: "v100", sku: "VPN-100", nameKey: "plan.v100", size: String(100 * GIB), active: 15, measured: 15,
+              usage: { p25: String(12 * GIB), p50: String(12 * GIB), p75: String(20 * GIB), p90: String(80 * GIB) }, under: 12, atCap: 3 },
+          ],
+          suggestions: [
+            { code: "add_smaller", variantId: "v100", users: 12, measured: 15, share: 0.8, size: String(25 * GIB) },
+            { code: "add_bigger", variantId: "v100", users: 4, measured: 15, share: 0.27, size: String(150 * GIB), demandCensored: true },
+            { code: "no_takers", variantId: "v20", users: 0, measured: 15 },
+          ],
+        },
+      ],
+    });
+    render(<AiView />);
+    tab("ai.tabs.layout");
+    const v100 = await screen.findByText("VPN-100");
+    expect(v100).toBeTruthy();
+    expect(screen.getByText("ai.layout.usage:12 GB,20 GB,80 GB")).toBeTruthy();
+    expect(screen.getByText("ai.layout.addSmaller:12,15,VPN-100,25 GB")).toBeTruthy();
+    expect(screen.getByText("ai.layout.addBigger:4,15,VPN-100,150 GB")).toBeTruthy();
+    expect(screen.getByText("ai.layout.noTakers:VPN-20")).toBeTruthy();
+    expect(screen.queryByText(/IRR/)).toBeNull();
+  });
+});

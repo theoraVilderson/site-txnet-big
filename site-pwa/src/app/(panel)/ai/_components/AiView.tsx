@@ -8,17 +8,19 @@ import { AiSettingsPanel } from "./AiSettingsPanel";
 import { AtRiskList } from "./AtRiskList";
 import { K } from "./ai-ui";
 import { MarginsList } from "./MarginsList";
+import { PlanLayoutView } from "./PlanLayoutView";
 import { UpliftReportView } from "./UpliftReportView";
 
-const TABS = ["settings", "offers", "atRisk", "margins", "report"] as const;
+const TABS = ["settings", "offers", "atRisk", "margins", "layout", "report"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
  * The tenant's AI page (F-038-j2, ADR-0109 points 7, 13; ADR-0110) over ai's
- * `/api/ai/admin/*` (F-038-j1). Five tabs, each reading only when opened:
+ * `/api/ai/admin/*` (F-038-j1). Six tabs, each reading only when opened:
  * settings, the discount offers the engine may give, the customers at risk
  * with the engine's reasons, each plan's margin with the losing ones flagged
- * (F-1528), and the uplift report against the holdout.
+ * (F-1528), the plan layout its users' use suggests (F-1527), and the uplift
+ * report against the holdout.
  *
  * Nothing here decides scope: ai answers the gate's tenant, and no call names one.
  */
@@ -51,7 +53,7 @@ export function AiView() {
         ))}
       </div>
 
-      {tab === "settings" ? <AiSettingsPanel /> : tab === "offers" ? <AiOffers /> : tab === "atRisk" ? <AtRiskList /> : tab === "margins" ? <MarginsList /> : <UpliftReportView />}
+      {tab === "settings" ? <AiSettingsPanel /> : tab === "offers" ? <AiOffers /> : tab === "atRisk" ? <AtRiskList /> : tab === "margins" ? <MarginsList /> : tab === "layout" ? <PlanLayoutView /> : <UpliftReportView />}
     </div>
   );
 }
