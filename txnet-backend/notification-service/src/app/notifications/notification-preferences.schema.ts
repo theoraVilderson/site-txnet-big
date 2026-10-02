@@ -1,4 +1,4 @@
-import { BackendI18nKeys, RETENTION_MUTABLE_KINDS } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RETENTION_MUTABLE_KINDS, isIanaZone } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 const invalid = BackendI18nKeys.errors.validation.failed;
@@ -6,22 +6,8 @@ const invalid = BackendI18nKeys.errors.validation.failed;
 /** `HH:MM`, 24 h — what the panel's time field sends. */
 const clock = z.string({ message: invalid }).regex(/^([01]\d|2[0-3]):[0-5]\d$/, { message: invalid });
 
-/** An IANA zone this runtime can compute in: the one it will be read in. */
-const timezone = z
-  .string({ message: invalid })
-  .min(1, { message: invalid })
-  .max(64, { message: invalid })
-  .refine(
-    (zone) => {
-      try {
-        new Intl.DateTimeFormat('en-US', { timeZone: zone });
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    { message: invalid },
-  );
+/** An IANA zone, or null for the user's resolved zone (TZ-1-f). A fixed offset is refused (ADR-0108 point 1). */
+const timezone = z.string({ message: invalid }).refine(isIanaZone, { message: invalid }).nullable();
 
 /**
  * A user's whole retention notice preferences (F-601-m, spec 9.4), replaced

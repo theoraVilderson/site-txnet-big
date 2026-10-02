@@ -2,8 +2,8 @@
 id: notification
 layer: domain
 status: active
-version: 10
-updated: 2026-09-28
+version: 11
+updated: 2026-10-02
 ---
 
 # Contract — notification: retention notices, once per Grant period
@@ -51,8 +51,8 @@ over the same row). The claim reads them, so no producer knows they exist.
 
 | Operation | Route | Input | Output | Errors |
 |---|---|---|---|---|
-| read my settings | `GET notifications/preferences` (gated) | — | `{ muted: kind[], quietHours: { start, end } \| null, timezone }`; no row reads `{ [], null, 'Asia/Tehran' }` | 401; 429 (inbox read bucket) |
-| replace them | `PUT notifications/preferences` (gated, open while suspended) | the same, strict; `start`/`end` `HH:MM` and different, `timezone` an IANA zone | what was stored | 400 `validation.failed`; 401; 429 (inbox write bucket) |
+| read my settings | `GET notifications/preferences` (gated) | — | `{ muted: kind[], quietHours: { start, end } \| null, timezone: IANA \| null }`; null = the user's resolved zone (TZ-1-f); no row reads `{ [], null, null }` | 401; 429 (inbox read bucket) |
+| replace them | `PUT notifications/preferences` (gated, open while suspended) | the same, strict; `start`/`end` `HH:MM` and different, `timezone` an IANA zone (stored canonical) or null; an offset is 400 | what was stored | 400 `validation.failed`; 401; 429 (inbox write bucket) |
 | keep a held bot message | `POST internal/notifications/retention/hold` (token) | `{ eventId, grantId, notice, period, tenantId, template, params, botAt }`, strict | `{ held }` | 400; 500 on a `botAt` over a day away |
 | take due held messages | `POST internal/notifications/retention/held/take` (token) | `{ limit: 1..500 }` | `{ items: [{ id, tenantId, userId, grantId, template, params }] }`, each leased 10 min | 400 |
 | mark them told | `POST internal/notifications/retention/held/told` (token) | `{ ids: uuid[1..500] }` | `{ cleared }` | 400 |
@@ -66,6 +66,7 @@ over the same row). The claim reads them, so no producer knows they exist.
 | The first `hold` for a row stands; a claim by the same event on a row already holding one answers `held` with its `botAt` | a redelivery after the window ends never tells the bot beside the held message |
 | A take leases rows 10 min (`FOR UPDATE SKIP LOCKED`); the worker marks each tell per row id, then `told` clears it | two runs never take one row; a run that died between the tell and `told` repeats nothing |
 | Minutes from the local clock: a DST jump inside the window moves the release by that hour | Asia/Tehran has kept none since 2022 |
+| **The zone** (TZ-1-f, ADR-0108 point 6): the row's own, or — null — shared-core `resolveTimeZone` over the user's zone and its tenant's, read on the cross-tenant pool (the claim binds no tenant; `identity.user` is under RLS) and only for a row with a window. A row saved before TZ-1-f keeps its zone | one resolver; a person who moves zones changes one setting, not two |
 | A claim with `waitSec` is also `held` when the window **opens** inside that wait, until that window's end; `botAt` is then at most a day and an hour away (F-601-p) | a notice claimed at 22:30 and told at 23:30 is a night one |
 
 ## A notice's class (F-601-s, ADR-0097 part 2, user 2026-09-28)

@@ -170,11 +170,11 @@ describe('RetentionLedgerService.claim — how a claimed notice is told', () => 
 describe('NotificationPreferencesService', () => {
   function service(row: unknown) {
     const notificationPreference = { findUnique: vi.fn().mockResolvedValue(row), upsert: vi.fn().mockResolvedValue(row) };
-    return { notificationPreference, service: new NotificationPreferencesService({ notificationPreference } as never) };
+    return { notificationPreference, service: new NotificationPreferencesService({ notificationPreference } as never, {} as never) };
   }
 
-  it('reads no row as nothing muted, no quiet hours, Tehran', async () => {
-    await expect(service(null).service.get(USER)).resolves.toEqual({ muted: [], quietHours: null, timezone: 'Asia/Tehran' });
+  it('reads no row as nothing muted, no quiet hours, the resolved zone (TZ-1-f)', async () => {
+    await expect(service(null).service.get(USER)).resolves.toEqual({ muted: [], quietHours: null, timezone: null });
   });
 
   it("writes the caller's own row, each kind once in the panel's order, the window as minutes", async () => {

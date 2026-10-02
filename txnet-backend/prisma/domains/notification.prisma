@@ -158,13 +158,14 @@ model RetentionNotice {
 
 /// F-601-m: a user's retention notice preferences (spec 9.4). `mutedKinds` are `RETENTION_MUTABLE_KINDS`; the quiet
 /// window is minutes after local midnight in `timezone` (IANA), both set or both null, and may wrap midnight. No row =
-/// nothing muted, no quiet hours. Keyed by user like `notification`: no `tenantId`, no RLS (invariant 15).
+/// nothing muted, no quiet hours. `timezone` null = the user's resolved zone (TZ-1-f, ADR-0108 point 6); a row saved
+/// before keeps its own. Keyed by user like `notification`: no `tenantId`, no RLS (invariant 15).
 model NotificationPreference {
   userId     String   @id @db.Uuid
   mutedKinds String[] @default([])
   quietStart Int?
   quietEnd   Int?
-  timezone   String   @default("Asia/Tehran")
+  timezone   String?
   updatedAt  DateTime @updatedAt
 
   @@map("notification_preference")

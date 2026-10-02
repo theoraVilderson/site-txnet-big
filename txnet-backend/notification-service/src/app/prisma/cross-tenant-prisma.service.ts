@@ -22,8 +22,10 @@ import { PrismaService } from './prisma.service';
  * that already runs here — a delivery run's tenants, or a draft's own tenant,
  * never a value; and `QuotaRefusalSink` (F-019-v8), which records a refused
  * quota act after its transaction rolled back, and `QuotaDigestService`, the
- * platform's daily digest over every reseller. Widen the list only with a
- * reason in a doc comment.
+ * platform's daily digest over every reseller; and `NotificationPreferencesService`
+ * (TZ-1-f), which reads one user's zone and their tenant's for a quiet window
+ * saved with none — the claim's caller binds no tenant, and `identity.user`
+ * is under RLS. Widen the list only with a reason in a doc comment.
  */
 @Injectable()
 export class CrossTenantPrismaService extends PrismaService {}

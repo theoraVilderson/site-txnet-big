@@ -2,14 +2,14 @@
 id: notification
 layer: domain
 status: active
-version: 12
+version: 13
 keywords: [notification, notice settings, quiet hours, mute notices, essential notices only, notices per service, campaign, delivery, push, sms, email, bulk send, reseller campaign, ارسال انبوه, stop a reseller's campaigns, stop sending campaigns, توقف ارسال کمپین‌های نماینده]
 source:
   - txnet-backend/notification-service/**
   - txnet-backend/prisma/domains/notification.prisma
 owns_tables: [notification, notification_campaign, notification_campaign_recipient, notification_campaign_text, retention_notice, notification_preference, notification_grant_preference]
 depends_on: [identity, tenant, automation]
-updated: 2026-10-01
+updated: 2026-10-02
 ---
 
 # Notification
@@ -31,10 +31,10 @@ updated: 2026-10-01
 ## Changelog
 | Date | Change |
 |---|---|
-| 2026-09-27 | v7 -> **v8** (additive, F-601-m): a user's notice settings — `GET`/`PUT notifications/preferences` (muted kinds, quiet hours); the claim answers how a notice is told, and `retention/hold`, `held/take`, `held/told` release a bot message after quiet hours ([contract.retention.md](contract.retention.md)) |
 | 2026-09-28 | v8 -> **v9** (additive, F-601-o): a notice level per service — `GET notifications/preferences/grants`, `PUT …/grants/:grantId`; the claim answers `muted` for any kind but `cutoff` on a Grant set to `essential` ([contract.retention.md](contract.retention.md) "One service, essentials only") |
 | 2026-09-28 | v9 -> **v10** (additive, F-601-p): the claim takes `waitSec` (a patient notice's wait; quiet hours starting inside it hold the bot), and `held/take` answers each row's `grantId`, so several services' notices are told as one message naming them ([contract.retention.md](contract.retention.md) "Several services, one message") |
 | 2026-10-01 | v10 -> **v11** (F-019-v4, ADR-0107): a reseller's campaign `send` consumes one `campaign_sends_daily_max` unit from the quota engine — a fixed day instead of 24 rolling hours, overage sold from the billing wallet, a new refusal `reseller_quota_exhausted` beside `reseller_limit_reached` ([contract.reseller.md](contract.reseller.md)) |
 | 2026-10-01 | v11 -> **v12** (additive, F-019-v8, ADR-0107 point 11): a reseller's owner told at 80%, 100% (overage started or stopped), stopped for want of money, and by a daily digest from 09:00 — `internal/notifications/reseller-quota/digest`, outbox `tenant.quota.alert` / `.digest` ([contract.reseller-quota.md](contract.reseller-quota.md)) |
+| 2026-10-02 | v12 -> **v13** (behaviour change, TZ-1-f, ADR-0108 point 6): `notification_preference.timezone` nullable — null = the user's resolved zone; `GET notifications/preferences` with no row answers `timezone: null`, `PUT` takes null. Existing rows keep their zone. Consumer: panel-web (TZ-1-e) ([contract.retention.md](contract.retention.md)) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->
