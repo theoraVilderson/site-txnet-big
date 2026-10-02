@@ -18,7 +18,8 @@ const TAKE_LIMIT = 200;
 /** The held message's own marker segment: the ledger row's id is its "event". */
 const CONSUMER = 'retention-held';
 
-type Held = { id: string; tenantId: string; userId: string; grantId: string; template: string; params: Record<string, string> };
+/** `grantId` null: a held AI suggestion about no service (F-038-g5) — told without a service name. */
+type Held = { id: string; tenantId: string; userId: string; grantId: string | null; template: string; params: Record<string, string> };
 
 /**
  * The end of a user's quiet hours (F-601-m, spec 9.4). A retention notice
@@ -87,7 +88,7 @@ export class RetentionHeldNoticeJob implements Job {
           CONSUMER,
           'bot',
           { tenantId, userId, template },
-          rows.map((r) => ({ eventId: r.id, params: r.params ?? {}, grantId: r.grantId })),
+          rows.map((r) => ({ eventId: r.id, params: r.params ?? {}, ...(r.grantId ? { grantId: r.grantId } : {}) })),
         );
         told.push(...rows.map((r) => r.id));
       } catch (err) {

@@ -17,7 +17,8 @@ export type RetentionClaim = { eventId: string; userId: string; grantId: string;
  */
 export type ClaimAnswer = { claimed: false } | { claimed: true; deliver: 'now' | 'muted' } | { claimed: true; deliver: 'held'; botAt: string };
 
-export type SuggestionClaim = { actionId: string; userId: string; grantId: string };
+/** `grantId` absent: a suggestion about no service (F-038-g5). */
+export type SuggestionClaim = { actionId: string; userId: string; grantId?: string };
 
 /**
  * How an AI suggestion is told (F-038-g1): as a claim's `now` / `muted` /
@@ -32,9 +33,9 @@ export type SuggestionAnswer =
 /** ADR-0109 point 10: no AI message within 24 h of a retention notice about the same Grant. */
 export const SUGGESTION_AFTER_RETENTION_MS = 24 * 3_600_000;
 
-export type RetentionHold = Omit<RetentionClaim, 'userId'> & { tenantId: string; template: string; params: Record<string, string>; botAt: string };
+export type RetentionHold = Omit<RetentionClaim, 'userId' | 'grantId'> & { grantId?: string; tenantId: string; template: string; params: Record<string, string>; botAt: string };
 
-export type HeldNotice = { id: string; tenantId: string; userId: string; grantId: string; template: string; params: Record<string, string> };
+export type HeldNotice = { id: string; tenantId: string; userId: string; grantId: string | null; template: string; params: Record<string, string> };
 
 /** How long a take holds its rows: a job that died mid-run gives them back after this. */
 export const HELD_LEASE_SEC = 600;
@@ -106,26 +107,34 @@ export class RetentionLedgerService {
    * it `later` (the deterministic notice wins; any claimed row counts, muted
    * or not, as the ledger does not say); the user's `suggestion` mute or the
    * Grant's `essential` level makes it `muted`; quiet hours hold the bot.
+   *
+   * F-038-g5: a suggestion about no service (`checkout_help`, a reseller's own)
+   * has no Grant — its row is found by the action alone (a partial unique index
+   * keeps it once), and the two rules about a Grant, the retention wait and the
+   * `essential` level, are not read. Mute and quiet hours are the user's and hold.
    */
   async claimSuggestion(input: SuggestionClaim, now = new Date()): Promise<SuggestionAnswer> {
-    const row = { eventId: input.actionId, userId: input.userId, grantId: input.grantId, notice: SUGGESTION_NOTICE, period: input.actionId };
+    const grantId = input.grantId ?? null;
+    const row = { eventId: input.actionId, userId: input.userId, grantId, notice: SUGGESTION_NOTICE, period: input.actionId };
     const { count } = await this.prisma.retentionNotice.createMany({ data: [row], skipDuplicates: true });
     if (count !== 1) {
-      const held = await this.prisma.retentionNotice.findUnique({
-        where: { grantId_notice_period: { grantId: input.grantId, notice: SUGGESTION_NOTICE, period: input.actionId } },
-        select: { eventId: true, botAt: true, botTemplate: true },
-      });
+      const select = { eventId: true, botAt: true, botTemplate: true } as const;
+      const held = grantId
+        ? await this.prisma.retentionNotice.findUnique({ where: { grantId_notice_period: { grantId, notice: SUGGESTION_NOTICE, period: input.actionId } }, select })
+        : await this.prisma.retentionNotice.findFirst({ where: { grantId: null, notice: SUGGESTION_NOTICE, period: input.actionId }, select });
       if (held?.botTemplate && held.botAt) return { deliver: 'held', botAt: held.botAt.toISOString() };
     }
-    const retention = await this.prisma.retentionNotice.findFirst({
-      where: { grantId: input.grantId, notice: { not: SUGGESTION_NOTICE }, createdAt: { gt: new Date(now.getTime() - SUGGESTION_AFTER_RETENTION_MS) } },
-      orderBy: { createdAt: 'desc' },
-      select: { createdAt: true },
-    });
-    if (retention) {
-      return { deliver: 'later', reason: 'after_retention', retryAt: new Date(retention.createdAt.getTime() + SUGGESTION_AFTER_RETENTION_MS).toISOString() };
+    if (grantId) {
+      const retention = await this.prisma.retentionNotice.findFirst({
+        where: { grantId, notice: { not: SUGGESTION_NOTICE }, createdAt: { gt: new Date(now.getTime() - SUGGESTION_AFTER_RETENTION_MS) } },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      });
+      if (retention) {
+        return { deliver: 'later', reason: 'after_retention', retryAt: new Date(retention.createdAt.getTime() + SUGGESTION_AFTER_RETENTION_MS).toISOString() };
+      }
     }
-    const [pref, level] = await Promise.all([this.preferences.stored(input.userId), this.levels.level(input.userId, input.grantId)]);
+    const [pref, level] = await Promise.all([this.preferences.stored(input.userId), grantId ? this.levels.level(input.userId, grantId) : null]);
     if (level === 'essential' || pref?.mutedKinds.includes('suggestion')) return { deliver: 'muted' };
     const until = quietUntil(pref, now);
     return until ? { deliver: 'held', botAt: until.toISOString() } : { deliver: 'now' };
@@ -139,7 +148,7 @@ export class RetentionLedgerService {
   async hold(input: RetentionHold, now = new Date()): Promise<{ held: boolean }> {
     const botAt = new Date(input.botAt);
     if (!(botAt.getTime() - now.getTime() <= MAX_HOLD_MS)) throw new Error(`a held notice's botAt ${input.botAt} is more than a day and an hour away`);
-    const key = { grantId: input.grantId, notice: input.notice, period: input.period, eventId: input.eventId };
+    const key = { grantId: input.grantId ?? null, notice: input.notice, period: input.period, eventId: input.eventId };
     const { count } = await this.prisma.retentionNotice.updateMany({
       where: { ...key, botTemplate: null },
       data: { botTenantId: input.tenantId, botAt, botTemplate: input.template, botParams: input.params },

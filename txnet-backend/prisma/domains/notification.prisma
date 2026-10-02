@@ -138,7 +138,10 @@ model NotificationCampaignRecipient {
 model RetentionNotice {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @db.Uuid
-  grantId   String   @db.Uuid
+  /// F-038-g5: null only on an AI suggestion about no service (`ai.suggestion`, CHECK
+  /// `retention_notice_grant_unless_suggestion`); such a row is once per `(notice, period)`
+  /// by a partial unique index Prisma cannot express (`retention_notice_grantless_key`).
+  grantId   String?  @db.Uuid
   notice    String
   period    String
   eventId   String   @db.Uuid

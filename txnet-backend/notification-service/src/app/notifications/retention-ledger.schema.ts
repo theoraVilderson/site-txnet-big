@@ -1,4 +1,4 @@
-import { BackendI18nKeys } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, SUGGESTION_NOTICE } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 const invalid = BackendI18nKeys.errors.validation.failed;
@@ -21,12 +21,15 @@ export const retentionClaimSchema = z
   })
   .strict();
 
-/** F-038-g1: an AI suggestion's claim — worker-service, once per `ai.action`. */
+/**
+ * F-038-g1: an AI suggestion's claim — worker-service, once per `ai.action`.
+ * F-038-g5: `grantId` left out for a suggestion about no service (`checkout_help`).
+ */
 export const suggestionClaimSchema = z
   .object({
     actionId: z.string({ message: invalid }).uuid({ message: invalid }),
     userId: z.string({ message: invalid }).uuid({ message: invalid }),
-    grantId: z.string({ message: invalid }).uuid({ message: invalid }),
+    grantId: z.string({ message: invalid }).uuid({ message: invalid }).optional(),
   })
   .strict();
 
@@ -38,12 +41,15 @@ export const suggestionClaimSchema = z
 export const retentionHoldSchema = retentionClaimSchema
   .omit({ userId: true, waitSec: true })
   .extend({
+    // F-038-g5: only a suggestion's row may have no Grant — a retention notice is always about one.
+    grantId: z.string({ message: invalid }).uuid({ message: invalid }).optional(),
     tenantId: z.string({ message: invalid }).uuid({ message: invalid }),
     template: z.string({ message: invalid }).regex(/^[A-Za-z0-9]+$/, { message: invalid }).max(100, { message: invalid }),
     params: z.record(z.string({ message: invalid }), z.string({ message: invalid }).max(2000, { message: invalid }), { message: invalid }),
     botAt: z.string({ message: invalid }).datetime({ message: invalid }),
   })
-  .strict();
+  .strict()
+  .refine((h) => h.grantId !== undefined || h.notice === SUGGESTION_NOTICE, { message: invalid, path: ['grantId'] });
 
 /** A take of held bot messages now due (F-601-m). */
 export const heldTakeSchema = z.object({ limit: z.number({ message: invalid }).int({ message: invalid }).min(1, { message: invalid }).max(500, { message: invalid }) }).strict();
