@@ -14,6 +14,7 @@ import { accountFeatures, PROFILE_HISTORY_DAYS, type AccountInputs } from './pro
 import { ProfileReader, type ReaderInputs } from './profile-reader';
 import { resellerPredictions } from './reseller-predictions';
 import { ResellerReader } from './reseller-reader';
+import { walletNeedPrediction, walletRunOut } from './usage-forecast';
 
 const DAY_MS = 86_400_000;
 /** Accounts per page: one reader transaction and one writer transaction each, bounded memory on a 512 MB container. */
@@ -26,7 +27,7 @@ export type RebuildResult = { tenants: number; skipped: number; accounts: number
 const V1_KINDS = ['meter_exhaustion', 'renewal_probability', 'right_size', 'wallet_need', 'trial_conversion', 'win_back_window'] as const;
 
 /** A reseller's kinds (F-038-o1): subject `tenant`, written in the platform's tenant only. */
-const RESELLER_KINDS = ['quota_exhaustion', 'churn_risk'] as const;
+const RESELLER_KINDS = ['quota_exhaustion', 'churn_risk', 'wallet_need'] as const;
 
 /**
  * The hourly profile rebuild (F-038-c, ADR-0109 points 6, 7, 14). For every
@@ -213,6 +214,11 @@ export class ProfileBuilder {
     for (const r of resellers) {
       try {
         for (const p of resellerPredictions(await this.resellerReader.inputs(r, now), now)) rows.push({ subjectId: r.tenantId, p });
+        // F-1525-a: the billing wallet at its wholesale rate.
+        const wallet = await this.resellerReader.wholesale(r.tenantId);
+        const runOut = wallet && walletRunOut(wallet, now);
+        const need = runOut && walletNeedPrediction(runOut, now);
+        if (need) rows.push({ subjectId: r.tenantId, p: need });
       } catch (err) {
         this.logger.error(`reseller ${r.tenantId} not predicted: ${err instanceof Error ? err.message : String(err)}`);
       }

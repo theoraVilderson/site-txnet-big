@@ -13,6 +13,7 @@ import { AT_RISK_KINDS, AtRisk } from './at-risk';
 import { Margins } from './margins';
 import { PlanLayout } from './plan-layout';
 import { RESELLER_FORECAST_KINDS, ResellerForecasts } from './reseller-forecast';
+import { UsageReport } from './usage-report';
 
 const DAY_MS = 86_400_000;
 const AT_RISK_PAGE_MAX = 100;
@@ -70,6 +71,7 @@ export class AiAdminController {
     private readonly margins: Margins,
     private readonly layout: PlanLayout,
     private readonly resellers: ResellerForecasts,
+    private readonly usage: UsageReport,
   ) {}
 
   @Get('settings')
@@ -107,6 +109,18 @@ export class AiAdminController {
   async listResellers(@Req() req: Request, @Query() query: unknown) {
     const { kind, cursor, take } = parse(resellersQuery, query);
     return ok(await this.resellers.list(identityOf(req).tenantId, kind, cursor ?? null, take));
+  }
+
+  /** F-1525-a: the tenant's own use per meter over the next 30 days, and its billing wallet at its wholesale rate. */
+  @Get('usage-forecast')
+  async usageForecast(@Req() req: Request) {
+    return ok(await this.usage.forecast(identityOf(req).tenantId, new Date()));
+  }
+
+  /** F-1525-a: every tenant's meters summed, for capacity — the platform owner only; anyone else 403 `not_platform_owner`. */
+  @Get('capacity')
+  async capacity(@Req() req: Request) {
+    return ok(await this.usage.capacity(identityOf(req).tenantId, new Date()));
   }
 
   @Post('reports/uplift')

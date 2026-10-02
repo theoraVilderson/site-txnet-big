@@ -6,15 +6,17 @@ import { refusal } from '../envelope';
 import type { Reason } from '../profile/predictions';
 import { PrismaService } from '../prisma/prisma.service';
 
-export const RESELLER_FORECAST_KINDS = ['quota_exhaustion', 'churn_risk'] as const;
+export const RESELLER_FORECAST_KINDS = ['quota_exhaustion', 'churn_risk', 'wallet_need'] as const;
 export type ResellerForecastKind = (typeof RESELLER_FORECAST_KINDS)[number];
 
 export type ResellerForecastItem = {
   tenantId: string;
   /** The reseller's slug, or null for one deleted since the run. */
   slug: string | null;
-  /** As stored: days to run-out, or a probability. */
+  /** As stored: days to run-out, a probability, or (`wallet_need`) the top-up amount. */
   value: string | null;
+  /** `wallet_need` only (C-02): the top-up's currency. */
+  currencyCode: string | null;
   predictedAt: string | null;
   confidence: string;
   reasons: Reason[];
@@ -24,6 +26,7 @@ export type ResellerForecastItem = {
 const ORDER = {
   quota_exhaustion: [{ predictedAt: 'asc' as const }, { id: 'asc' as const }],
   churn_risk: [{ value: 'desc' as const }, { id: 'asc' as const }],
+  wallet_need: [{ predictedAt: 'asc' as const }, { id: 'asc' as const }],
 };
 
 /**
@@ -49,7 +52,7 @@ export class ResellerForecasts {
           orderBy: ORDER[kind],
           take: take + 1,
           ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-          select: { id: true, subjectId: true, value: true, predictedAt: true, confidence: true, reasons: true },
+          select: { id: true, subjectId: true, value: true, currencyCode: true, predictedAt: true, confidence: true, reasons: true },
         }),
       ),
     );
@@ -61,7 +64,9 @@ export class ResellerForecasts {
       items: shown.map((r) => ({
         tenantId: r.subjectId,
         slug: slugs.get(r.subjectId) ?? null,
-        value: r.value === null ? null : r.value.toFixed(4),
+        // An amount is money: two places with its currency (C-02); anything else as stored.
+        value: r.value === null ? null : r.currencyCode ? r.value.toFixed(2) : r.value.toFixed(4),
+        currencyCode: r.currencyCode,
         predictedAt: r.predictedAt ? r.predictedAt.toISOString() : null,
         confidence: r.confidence.toFixed(4),
         reasons: (r.reasons as Reason[] | null) ?? [],

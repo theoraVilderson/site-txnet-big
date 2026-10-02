@@ -47,6 +47,17 @@ one with `reasons[]`.
 | `quota_exhaustion` | days / the instant — of the **soonest** window at risk | every window with a limit (registry key, or a product's day / week / month): a full one is now (`quota_full`, with its overage and mode); else the last 7 days' rate (`QUOTA_RATE_WINDOW_MS`; a younger reseller's own history, at least 24 h) runs the remaining included units out **before the window ends** (`quota_rate`) — a later run-out is none, since the next window starts empty. Every window at risk is a reason, soonest first (≤ 20) | full 0.95; a rate 0.5 + 0.4 × (history ÷ 7 days) |
 | `churn_risk` | 0–1 / the subscription's end | base 0.15 (`churn_base`); +0.30 the wallet holds less than the next renewal, in the price's currency, within 14 days of it (`wallet_short`); +0.20 renewal warned or in grace (`renewal_unpaid`); +0.20 platform-product sales of the last 30 days under half the 30 before, those at least 10 (`sales_fell`), or −0.10 above 1.2× (`sales_grew`); +0.10 a downgrade waits for the renewal (`downgrade_scheduled`); clamped 0.02–0.98. None without a subscription | 0.6 — rules, uncalibrated |
 
+## Usage and the billing wallet (F-1525-a) — implemented
+
+§24.3's hard rule holds: a forecast and a suggestion to a person, never a
+meter changed or money moved. `profile/usage-forecast.ts`, pure.
+
+| what | rule | where |
+|---|---|---|
+| a reseller's `wallet_need` | the billing wallet at its **wholesale** spend — `metered_usage_charge` debits less `metered_usage_refund` credits, the wallet's currency only (C-02), the last 7 days (a younger wallet over its own history, a day at least) per day; dated at the instant the balance reaches zero, kept only inside 30 days. `value` = the top-up that holds 30 days of that spend, rounded **up** to a whole unit (0 when it already does), with `currencyCode`; reason `wholesale_rate`. Confidence 0.5 + 0.4 × (history ÷ 7 days) | the platform's run, beside o1's kinds; read through `ai.reader_wholesale_spend` and `tenant_billing_wallet` in the reseller's own scope (`20261002001800`) |
+| a tenant's own forecast | per meter, never summed across two: the last 7 days of `ai.meter_reading`, a day's mean over the history it has (24 h at least; dated from the tenant's first reading, since an idle hour writes no row) and 30 days of it — whole units, down, as decimal strings; and its own wallet as above | `GET …/usage-forecast` (contract.admin.md), `admin/usage-report.ts` |
+| the platform's capacity | every tenant's hourly readings, each read in its own scope, summed per meter and hour, forecast as one; `tenantsMeasured` of `tenants` — readings exist only while a tenant's engine runs (F-1550), and the answer says how many it covers | `GET …/capacity`, platform owner only |
+
 ## The platform owner's list (F-038-o2) — implemented
 
 `GET /api/ai/admin/resellers?kind=quota_exhaustion|churn_risk` (contract.admin.md;
@@ -59,6 +70,7 @@ panel shows it as the `/ai` page's resellers tab (F-038-o3, panel-web contract.a
 |---|---|---|
 | `quota_exhaustion` | soonest run-out first (a full window is the run's instant) | `tenantId`, `slug` (null for a reseller deleted since the run), `value` (days), `predictedAt`, `confidence`, `reasons` — every window at risk, the page words the codes |
 | `churn_risk` | highest risk first | as above; `value` 0–1, `predictedAt` the subscription's end |
+| `wallet_need` (F-1525-a) | soonest run-out first | as above; `value` the top-up with `currencyCode`, `predictedAt` the run-out |
 
 ## The upgrade (F-038-o4) — implemented
 

@@ -35,6 +35,8 @@ export const AI_READER_TABLES = [
   // F-038-o1: a reseller's own quota terms, read in that reseller's scope.
   { table: 'tenant.reseller_quota_overage', sharedRead: false },
   { table: 'tenant.reseller_quota_terms_lock', sharedRead: false },
+  // F-1525-a: the bound tenant's own billing wallet — its balance for the run-out.
+  { table: 'tenant.tenant_billing_wallet', sharedRead: false },
 ] as const;
 
 /**
@@ -108,5 +110,12 @@ export const AI_READER_VIEWS = [
     over: 'tenant.tenant',
     columns: ['tenantId', 'ownerUserId', 'packageId', 'currentPeriodEnd', 'renewalWarnedAt', 'graceUntil', 'nextPackageId', 'monthlyPrice', 'yearlyPrice', 'walletBalance', 'walletCurrency'],
     forbidden: ['slug', 'suspendedReason'],
+  },
+  {
+    // F-1525-a: the bound tenant's wholesale spend per UTC day, 35 days (`20261002001800_ai_usage_forecast_inputs`).
+    view: 'ai.reader_wholesale_spend',
+    over: 'tenant.tenant_billing_transaction',
+    columns: ['day', 'charged', 'refunded', 'firstAt', 'currencyCode'],
+    forbidden: ['referenceId', 'balanceAfter'],
   },
 ] as const;

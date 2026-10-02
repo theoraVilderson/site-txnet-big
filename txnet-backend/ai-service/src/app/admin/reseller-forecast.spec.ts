@@ -35,7 +35,7 @@ function fake(rows: unknown[], tenantType: 'platform_owner' | 'reseller' = 'plat
 
 const row = (over: Record<string, unknown>) => ({
   id: 'p1', subjectId: RESELLER_A, value: new Prisma.Decimal('2.5'), predictedAt: new Date(NOW.getTime() + 2.5 * DAY),
-  confidence: new Prisma.Decimal('0.9'), reasons: [{ code: 'quota_rate', meter: 'campaign_sends_daily_max' }], ...over,
+  confidence: new Prisma.Decimal('0.9'), reasons: [{ code: 'quota_rate', meter: 'campaign_sends_daily_max' }], currencyCode: null, ...over,
 });
 
 describe('ResellerForecasts (F-038-o2)', () => {
@@ -55,7 +55,7 @@ describe('ResellerForecasts (F-038-o2)', () => {
     }));
     expect(page).toEqual({
       items: [{
-        tenantId: RESELLER_A, slug: 'alpha', value: '2.5000', predictedAt: new Date(NOW.getTime() + 2.5 * DAY).toISOString(),
+        tenantId: RESELLER_A, slug: 'alpha', value: '2.5000', currencyCode: null, predictedAt: new Date(NOW.getTime() + 2.5 * DAY).toISOString(),
         confidence: '0.9000', reasons: [{ code: 'quota_rate', meter: 'campaign_sends_daily_max' }],
       }],
       nextCursor: null,
@@ -69,6 +69,13 @@ describe('ResellerForecasts (F-038-o2)', () => {
       where: { tenantId: PLATFORM, subjectKind: 'tenant', kind: 'churn_risk' },
       orderBy: [{ value: 'desc' }, { id: 'asc' }],
     }));
+  });
+
+  it('billing wallet (F-1525-a): soonest run-out first, the top-up as money with its currency', async () => {
+    const { forecasts, tx } = fake([row({ value: new Prisma.Decimal('510'), currencyCode: 'USD', reasons: [{ code: 'wholesale_rate', perDay: '20.00' }] })]);
+    const page = await forecasts.list(PLATFORM, 'wallet_need', null, 50);
+    expect(tx.aiPrediction.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { tenantId: PLATFORM, subjectKind: 'tenant', kind: 'wallet_need' }, orderBy: [{ predictedAt: 'asc' }, { id: 'asc' }] }));
+    expect(page.items[0]).toMatchObject({ value: '510.00', currencyCode: 'USD' });
   });
 
   it('pages with a cursor; a reseller deleted since the run is shown by id, slug null', async () => {

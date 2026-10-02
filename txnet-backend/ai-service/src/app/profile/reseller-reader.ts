@@ -11,6 +11,7 @@ import {
 
 import { AiReaderPrisma } from '../prisma/prisma.service';
 import type { PackageOption } from '../decision/reseller-candidates';
+import type { SpendDay } from './usage-forecast';
 import type { QuotaWindowInput, ResellerInputs } from './reseller-predictions';
 
 const DAY_MS = 86_400_000;
@@ -77,6 +78,29 @@ export class ResellerReader {
           limits: new Map(limits.filter((l) => l.packageId === p.id).map((l) => [l.key, l.value])),
           products: new Map(products.filter((r) => r.packageId === p.id).map((r) => [r.productId, { day: r.dayIncluded, week: r.weekIncluded, month: r.monthIncluded }])),
         }));
+      }),
+    );
+  }
+
+  /**
+   * A tenant's billing wallet and its wholesale spend per UTC day (F-1525-a),
+   * in **that tenant's** scope: `tenant_billing_wallet` and
+   * `ai.reader_wholesale_spend`. `null` for a tenant with no billing wallet.
+   */
+  async wholesale(tenantId: string): Promise<{ balance: Prisma.Decimal; currencyCode: string; spend: SpendDay[]; firstChargeAt: Date | null } | null> {
+    return runWithTenant({ id: tenantId }, () =>
+      tenantTransaction(this.reader, async (tx) => {
+        const wallet = await tx.tenantBillingWallet.findUnique({ where: { tenantId }, select: { cachedBalance: true, currencyCode: true } });
+        if (!wallet) return null;
+        const rows = await tx.$queryRaw<Array<{ day: Date; charged: Prisma.Decimal; refunded: Prisma.Decimal; firstAt: Date | null; currencyCode: string }>>`
+          SELECT "day", "charged", "refunded", "firstAt", "currencyCode" FROM ai.reader_wholesale_spend`;
+        const firsts = rows.map((r) => r.firstAt?.getTime()).filter((t): t is number => t !== undefined);
+        return {
+          balance: wallet.cachedBalance,
+          currencyCode: wallet.currencyCode,
+          spend: rows.map(({ day, charged, refunded, currencyCode }) => ({ day, charged: new Prisma.Decimal(charged), refunded: new Prisma.Decimal(refunded), currencyCode })),
+          firstChargeAt: firsts.length ? new Date(Math.min(...firsts)) : null,
+        };
       }),
     );
   }
