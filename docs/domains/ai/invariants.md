@@ -7,7 +7,7 @@ updated: 2026-10-02
 
 # Invariants — ai
 
-**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–19; 4–6 are ADR-0109 rules still to build.
+**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–20; 4–6 are ADR-0109 rules still to build.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -30,6 +30,7 @@ updated: 2026-10-02
 | 17 | Every candidate the engine weighs is a row in `ai.action`, a stopped one with its step; nothing goes out without the `suggestion` label and its action id; a type the tenant switched off sends nothing, queued or in flight (F-1509) | `ActionLog.record`, `labelledMessage`, `TypeSwitch.set`; `action-log.spec.ts` | an unauditable or unlabelled message under the reseller's brand, or a type they turned off still sent |
 | 18 | Every AI message passes a floor no tenant setting reaches: never to another tenant's subject; no engine message while the platform's silence is set (or unreadable); the attention budget; the bot send ceiling (F-1548) | `SafetyFloor.check` + `SilenceSwitch`, built from no `ai.setting`/`ai.guardrail`; the messenger driver (ADR-0066); `safety-floor.spec.ts` | a pitch sent into an outage, past the budget, or under another tenant's brand |
 | 19 | The pipeline runs its steps in ADR-0109 point 8's order and schedules at most one suggestion per subject per run: the highest expected margin (price − the seller's wholesale cost, never revenue alone; never a negative one), at a time before its deadline and outside the user's quiet window; it never charges the budget (F-038-e) | `DecisionPipeline.decide`, `candidatesFor`, `scheduleAt`, `AttentionBudget.peek`, `wholesaleCost`; `pipeline.spec.ts`, `margin.spec.ts` | two pitches about one Grant, the dearer plan picked over the better one, or a message timed into the user's night |
+| 20 | A scheduled suggestion is delivered at most once and never after its deadline: a take leases it, the safety floor runs after the claim and last, and only a `scheduled` row becomes `sent`, moved or `suppressed` (F-038-g2) | `ActionDelivery` (`SKIP LOCKED` lease, `afterRefusal`); `delivery.spec.ts` | a pitch told twice, late, or past the floor |
 
 ## How to test
 
