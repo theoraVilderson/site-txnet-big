@@ -41,7 +41,7 @@ None yet. Delivery is a notice of class `suggestion` through `notification`
 
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
-| tenant | `ai_recommendation` feature key via `TenantEntitlements`, read per trigger with `ai.setting` and active providers (`policy/ai-tenant-policy.ts`, F-1550) | the trigger fails and is dead-lettered; nothing runs unchecked |
+| tenant | status key `tenant:status:<id>` (`policy/tenant-sells.ts`, F-038-x); `ai_recommendation` feature key via `TenantEntitlements`, read per trigger with `ai.setting` and active providers (`policy/ai-tenant-policy.ts`, F-1550) | the trigger fails and is dead-lettered; nothing runs unchecked |
 | identity, billing, entitlement, catalog, tenant | the tables in `ai-service/src/app/reader/reader-tables.ts`, through `txnet_ai_reader` — SELECT only, `identity.user` by named columns, each under its tenant clause (ADR-0109 point 6) | that run is skipped; nothing is guessed |
 | automation | `AI_TRIGGER_EVENTS` (`triggers/trigger-events.ts`) on its own queue `txnet.ai.triggers`; a bad envelope or a failed handler is dead-lettered, never requeued | profiles still rebuild hourly |
 
@@ -51,13 +51,15 @@ None yet. Delivery is a notice of class `suggestion` through `notification`
 
 | the tenant | engine | action types | language layer |
 |---|---|---|---|
+| may not sell (F-038-x): `suspended`, `terminated` or onboarding — the `sell` cell of `TenantStatusPolicy`, from `tenant:status:<id>` | **no run**, entitled or not | none | off |
 | package without `ai_recommendation` | **no run**, whatever `ai.setting` says | none | off |
 | with it, no `ai.setting` row, no provider | runs | every v1 type (`AI_V1_ACTION_TYPES`: not `cross_sell`, `wheel_invite`, `referral_invite`) | off — templates |
 | with it, `engineEnabled = false` | no run | none | off |
 | with it and an active provider | runs | v1 minus `disabledActionTypes` | on: per type `draft_with_approval`, or `automatic` if listed in `automaticActionTypes` (F-1543) |
 
 A trigger with no `tenantId` in its payload is acknowledged and skipped,
-never assigned a tenant.
+never assigned a tenant. A missing, unreadable or unreachable status key
+refuses nobody (F-018-f's trade, as `worker-service`'s `TenantStatusGate`).
 
 ## Guarantees (intended)
 

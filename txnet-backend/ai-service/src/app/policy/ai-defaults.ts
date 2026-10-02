@@ -7,6 +7,8 @@ import { AiActionType } from '@prisma/client';
  * - `ai_recommendation` in the tenant's package -> the engine runs, every v1
  *   action type on, on templates. No setting row is needed.
  * - no `ai_recommendation` -> no engine run at all, whatever `ai.setting` says.
+ * - a tenant that may not sell (F-038-x: suspended, terminated, onboarding)
+ *   -> no run either, entitled or not.
  * - the language layer is off until the tenant adds a provider; then model
  *   text is draft-with-approval per type unless the tenant made it automatic
  *   (F-1543).
@@ -55,9 +57,11 @@ export function resolveAiMode(input: {
   entitled: boolean;
   setting: AiSettingInput | null;
   hasActiveProvider: boolean;
+  /** F-038-x: `TenantStatusPolicy` lets the tenant sell (not suspended, terminated or onboarding). */
+  sells: boolean;
 }): AiTenantMode {
   const setting = input.setting ?? AI_SETTING_DEFAULTS;
-  const engineRuns = input.entitled && setting.engineEnabled;
+  const engineRuns = input.entitled && input.sells && setting.engineEnabled;
   const actionTypes = engineRuns
     ? AI_V1_ACTION_TYPES.filter((type) => !setting.disabledActionTypes.includes(type))
     : [];
