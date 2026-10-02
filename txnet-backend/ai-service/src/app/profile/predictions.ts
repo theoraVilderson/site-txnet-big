@@ -332,13 +332,15 @@ export function trialConversion(input: AccountInputs, now: Date): PredictionRow 
 
 /**
  * Win-back window (point 7): an account with no active Grant that had one —
- * the next of 14 / 30 / 60 days after its last Grant ended. Past 60, none.
+ * the next of 14 / 30 / 60 days after its last Grant ended, that Grant named
+ * (F-038-n). Past 60, none.
  */
 export function winBackWindow(input: AccountInputs, now: Date): PredictionRow | null {
   if (input.grants.some((g) => g.status === 'active' || g.status === 'pending')) return null;
-  const ended = input.grants.filter((g) => g.status !== 'suspended').map(grantEndedAt);
+  const ended = input.grants.filter((g) => g.status !== 'suspended').map((g) => ({ id: g.id, at: grantEndedAt(g).getTime() }));
   if (ended.length === 0) return null;
-  const last = Math.max(...ended.map((d) => d.getTime()));
+  // F-038-n: the Grant that ended last is the one `win_back` names — first in the reasons, as every Grant's prediction.
+  const { id: grantId, at: last } = ended.reduce((a, b) => (b.at > a.at ? b : a));
   const window = WIN_BACK_WINDOWS_DAYS.find((d) => last + d * DAY_MS > now.getTime());
   if (window === undefined) return null;
 
@@ -350,7 +352,7 @@ export function winBackWindow(input: AccountInputs, now: Date): PredictionRow | 
     currencyCode: null,
     confidence: signedInSince ? 0.65 : 0.55,
     reasons: [
-      { code: 'no_active_grant', since: new Date(last).toISOString() },
+      { code: 'no_active_grant', grantId, since: new Date(last).toISOString() },
       { code: 'window', days: window },
       ...(signedInSince ? [{ code: 'signed_in_since' }] : []),
     ],

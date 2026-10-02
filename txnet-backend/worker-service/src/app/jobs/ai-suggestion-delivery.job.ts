@@ -26,6 +26,7 @@ export const SUGGESTION_TEMPLATE_OF: Record<string, string> = {
   resize_up: 'suggestionResizeUp',
   resize_down: 'suggestionResizeDown',
   top_up_wallet: 'suggestionTopUpWallet',
+  win_back: 'suggestionWinBack',
 };
 
 type Due = {

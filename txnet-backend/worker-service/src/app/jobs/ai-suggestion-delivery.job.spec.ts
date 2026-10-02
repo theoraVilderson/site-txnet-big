@@ -120,6 +120,7 @@ describe('AiSuggestionDeliveryJob (F-038-g3)', () => {
       resize_up: 'suggestionResizeUp',
       resize_down: 'suggestionResizeDown',
       top_up_wallet: 'suggestionTopUpWallet',
+      win_back: 'suggestionWinBack',
     });
   });
 

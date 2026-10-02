@@ -15,7 +15,9 @@ import { wholesaleCost, type WholesaleRate } from './margin';
  * size *instead of* the same plan again: a renewal and a resize of one
  * Grant are one decision, and sending both would be two messages about it.
  * The same holds for the wallet (F-038-k): a wallet short of the next two
- * renewals is told to top up (`top_up_wallet`) *instead of* to renew.
+ * renewals is told to top up (`top_up_wallet`) *instead of* to renew. An
+ * account with no active Grant is told its last plan again (`win_back`,
+ * F-038-n) on the day a 14 / 30 / 60-day window closes.
  *
  * Nothing is suggested earlier than `SUGGEST_LEAD_DAYS` before it matters —
  * the Grant's end, or the day its bag is predicted to run out, whichever is
@@ -33,6 +35,13 @@ const DAY_MS = 86_400_000;
 export const SUGGEST_LEAD_DAYS = 7;
 
 /**
+ * F-038-n: `win_back` is told on the day its window closes — "14 / 30 / 60
+ * days without an active Grant" (point 7), not a week before, while the user
+ * may still be deciding. The window's close is the deadline.
+ */
+export const WIN_BACK_LEAD_DAYS = 1;
+
+/**
  * F-1514: a smaller plan must hold the most they used in a period plus this
  * much — a plan cut to the byte runs out in the next busy month, and the
  * buyer blames the seller who suggested it.
@@ -40,7 +49,7 @@ export const SUGGEST_LEAD_DAYS = 7;
 export const RESIZE_DOWN_HEADROOM = 1.25;
 
 /** The types this file proposes. Each new action row adds its own. */
-export const CANDIDATE_TYPES = ['renew', 'resize_up', 'resize_down', 'top_up_wallet'] as const satisfies readonly AiActionType[];
+export const CANDIDATE_TYPES = ['renew', 'resize_up', 'resize_down', 'top_up_wallet', 'win_back'] as const satisfies readonly AiActionType[];
 export type CandidateType = (typeof CANDIDATE_TYPES)[number];
 
 /** C-07: a key chosen at runtime comes from an exhaustive Record. */
@@ -49,6 +58,7 @@ export const SUGGESTION_TEMPLATE_KEY: Record<CandidateType, string> = {
   resize_up: BackendI18nKeys.notifications.suggestion.resize_up,
   resize_down: BackendI18nKeys.notifications.suggestion.resize_down,
   top_up_wallet: BackendI18nKeys.notifications.suggestion.top_up_wallet,
+  win_back: BackendI18nKeys.notifications.suggestion.win_back,
 };
 
 export type DecisionPrediction = {
@@ -155,6 +165,15 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
     const current = grant?.variantId ? input.plans.get(grant.variantId) : undefined;
     if (!grant || !current) continue;
 
+    // F-038-n: an account with no active Grant has only this prediction — its last Grant's plan, once per window.
+    const winBack = kinds.win_back_window;
+    if (winBack) {
+      const closes = winBack.predictedAt;
+      if (!closes || !current.price || closes.getTime() <= t || closes.getTime() - t > WIN_BACK_LEAD_DAYS * DAY_MS) continue;
+      out.push(candidate('win_back', winBack, grantId, current, current, closes, winBack.confidence, input));
+      continue;
+    }
+
     const exhaustion = kinds.meter_exhaustion?.predictedAt ?? null;
     const moments = [grant.endsAt, exhaustion].filter((d): d is Date => d !== null && d.getTime() > t);
     const deadline = moments.sort((a, b) => a.getTime() - b.getTime())[0];
@@ -189,32 +208,49 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
 
     // A top-up is worth the renewal it funds: the renewal's probability, the plan's margin.
     const probability = renewal?.value ?? chosen.prediction.confidence;
-    const costed = wholesaleCost(chosen.target, input.wholesale?.get(grantId) ?? null);
-    const margin = expectedMargin(probability, chosen.target.price, costed.cost);
-    out.push({
-      actionType: chosen.type,
-      confidence: chosen.prediction.confidence,
-      predictionId: chosen.prediction.id,
-      templateKey: SUGGESTION_TEMPLATE_KEY[chosen.type],
-      grantId,
-      targetVariantId: chosen.target.variantId,
-      deadline,
-      expectedMargin: { amount: margin.amount, currencyCode: margin.currencyCode },
-      reasons: [
-        {
-          code: 'suggest_variant',
-          grantId,
-          fromVariantId: current.variantId,
-          variantId: chosen.target.variantId,
-          price: chosen.target.price.amount.toFixed(2),
-          currencyCode: chosen.target.price.currencyCode,
-        },
-        costed.reason,
-        margin.reason,
-        ...(topUp ? [{ code: 'suggest_top_up', grantId, ...topUp }] : []),
-        ...chosen.prediction.reasons,
-      ],
-    });
+    const extra = topUp ? [{ code: 'suggest_top_up', grantId, ...topUp }] : [];
+    out.push(candidate(chosen.type, chosen.prediction, grantId, current, chosen.target, deadline, probability, input, extra));
   }
   return out;
+}
+
+/** One Grant's candidate naming `target`, its margin at `probability` (C-02), and why. */
+function candidate(
+  type: CandidateType,
+  prediction: DecisionPrediction,
+  grantId: string,
+  current: PlanOption,
+  target: PlanOption,
+  deadline: Date,
+  probability: number,
+  input: CandidateInputs,
+  extra: Reason[] = [],
+): EngineCandidate {
+  const price = target.price as NonNullable<PlanOption['price']>;
+  const costed = wholesaleCost(target, input.wholesale?.get(grantId) ?? null);
+  const margin = expectedMargin(probability, price, costed.cost);
+  return {
+    actionType: type,
+    confidence: prediction.confidence,
+    predictionId: prediction.id,
+    templateKey: SUGGESTION_TEMPLATE_KEY[type],
+    grantId,
+    targetVariantId: target.variantId,
+    deadline,
+    expectedMargin: { amount: margin.amount, currencyCode: margin.currencyCode },
+    reasons: [
+      {
+        code: 'suggest_variant',
+        grantId,
+        fromVariantId: current.variantId,
+        variantId: target.variantId,
+        price: price.amount.toFixed(2),
+        currencyCode: price.currencyCode,
+      },
+      costed.reason,
+      margin.reason,
+      ...extra,
+      ...prediction.reasons,
+    ],
+  };
 }

@@ -5,7 +5,7 @@ import { resolveTimeZone, tenantTransaction, type QuietWindow } from '@txnet-bac
 import { HOURS_OF_WEEK } from '../profile/active-hours';
 import type { Reason } from '../profile/predictions';
 import { AiReaderPrisma, PrismaService } from '../prisma/prisma.service';
-import { SUGGEST_LEAD_DAYS, type CandidateGrant, type DecisionPrediction, type PlanOption } from './candidates';
+import { SUGGEST_LEAD_DAYS, WIN_BACK_LEAD_DAYS, type CandidateGrant, type DecisionPrediction, type PlanOption } from './candidates';
 import type { WholesaleRate } from './margin';
 import type { SubjectDecisionInputs } from './pipeline';
 
@@ -13,7 +13,7 @@ const DAY_MS = 86_400_000;
 const READ_TIMEOUT_MS = 30_000;
 
 /** The predictions a candidate is built from (`candidates.ts`). */
-const DECISION_KINDS = ['renewal_probability', 'right_size', 'meter_exhaustion', 'wallet_need'] as const;
+const DECISION_KINDS = ['renewal_probability', 'right_size', 'meter_exhaustion', 'wallet_need', 'win_back_window'] as const;
 /** The two that say *when* — an account none of them puts inside the lead time has nothing to decide. */
 const TIMING_KINDS = ['renewal_probability', 'meter_exhaustion'] as const;
 
@@ -46,16 +46,19 @@ export class DecisionReader {
     private readonly reader: AiReaderPrisma,
   ) {}
 
-  /** A page of users with a renewal or a run-out inside the lead time, by id. */
+  /** A page of users with a renewal or a run-out inside the lead time, or a win-back window closing (F-038-n), by id. */
   async subjectsDue(tenantId: string, now: Date, cursor: string | null, take: number): Promise<string[]> {
     const until = new Date(now.getTime() + SUGGEST_LEAD_DAYS * DAY_MS);
+    const winBackUntil = new Date(now.getTime() + WIN_BACK_LEAD_DAYS * DAY_MS);
     const rows = await tenantTransaction(this.prisma, (tx) =>
       tx.aiPrediction.findMany({
         where: {
           tenantId,
           subjectKind: 'user',
-          kind: { in: [...TIMING_KINDS] },
-          predictedAt: { gt: now, lte: until },
+          OR: [
+            { kind: { in: [...TIMING_KINDS] }, predictedAt: { gt: now, lte: until } },
+            { kind: 'win_back_window', predictedAt: { gt: now, lte: winBackUntil } },
+          ],
           ...(cursor ? { subjectId: { gt: cursor } } : {}),
         },
         select: { subjectId: true },

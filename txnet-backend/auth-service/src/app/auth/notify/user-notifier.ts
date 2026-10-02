@@ -72,6 +72,7 @@ export const NOTIFY_TEMPLATES = [
   'suggestionResizeUp',
   'suggestionResizeDown',
   'suggestionTopUpWallet',
+  'suggestionWinBack',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -784,6 +785,13 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
     read: (ns) => ns?.suggestion?.top_up_wallet,
     fallback: '💡 Suggestion: {{service}} ends in {{days}} days, and your wallet holds less than its next two periods. Topping up {{amount}} covers this renewal and the next — {{price}} each.',
     inbox: { read: (ns) => ns?.suggestion?.top_up_walletTitle, fallback: 'Suggestion: top up your wallet for {{service}}' },
+    many: SUGGESTION_MANY,
+  },
+  // F-038-n: 14 / 30 / 60 days without an active Grant — the last one's plan, at today's price.
+  suggestionWinBack: {
+    read: (ns) => ns?.suggestion?.win_back,
+    fallback: '💡 Suggestion: {{service}} ended a while ago. If you want it back, {{plan}} is {{price}} for a period.',
+    inbox: { read: (ns) => ns?.suggestion?.win_backTitle, fallback: 'Suggestion: {{service}} again' },
     many: SUGGESTION_MANY,
   },
 };

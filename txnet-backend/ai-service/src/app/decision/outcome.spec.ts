@@ -68,7 +68,7 @@ describe('matchOutcome (F-038-i)', () => {
     const top = { ...renew, actionType: 'top_up_wallet', reasons: [{ code: 'wallet_need' }] };
     const topUp: OutcomeEvent = { kind: 'top_up', ref: 'tx-1', userId: 'u-1', at: at(D), variantId: null, grantId: null, amount: '50.00', currencyCode: 'USD' };
     expect(matchOutcome(top, [topUp])?.amount).toBe('50.00');
-    expect(matchOutcome({ ...renew, actionType: 'win_back' }, [purchase(), topUp])).toBeNull();
+    expect(matchOutcome({ ...renew, actionType: 'cross_sell' }, [purchase(), topUp])).toBeNull();
   });
 });
 

@@ -28,6 +28,7 @@ candidate.
 | `resize_down` (F-1514) | `right_size` says down (under 40 % in each of two periods) and the Grant ends inside 7 days — at renewal only | the smallest plan of the same product, mode and length, smaller than its own, holding the larger period's use × 1.25 (`RESIZE_DOWN_HEADROOM`) | `right_size`'s |
 | `renew` | no resize to offer, the Grant ends inside 7 days, its plan has a price | its own plan | `renewal_probability`'s |
 | `top_up_wallet` (F-038-k) | it would be `renew`, and a `wallet_need` names this Grant in the plan's own currency — the wallet holds less than its next two renewals. **Told instead of `renew`**; a resize is never displaced | its own plan — the renewal the top-up funds | `wallet_need`'s |
+| `win_back` (F-038-n) | a `win_back_window` (no active Grant) whose window — 14, 30 or 60 days since the last Grant ended — closes within 1 day (`WIN_BACK_LEAD_DAYS`), never a week early; the close is the deadline, so a window is told once (the 14-day cooldown is shorter than any gap between closes) | the last-ended Grant's own plan, priced — the prediction names the Grant first in its reasons | the prediction's (0.55; 0.65 signed in since). Margin: that × (price − cost), as no renewal is predicted |
 
 ## What a candidate carries
 
@@ -48,9 +49,10 @@ candidate.
 | `renew` | `grantId`, `variantId`, `price` | `{{service}}`, `{{days}}`, `{{price}}` | a paid invoice for the plan, or the user's renewal of the Grant | yes |
 | `resize_up` / `resize_down` | as `renew`, + `fromVariantId` | + `{{plan}}` | a paid invoice for the plan named | yes |
 | `top_up_wallet` | as `renew`, + `amount {amount, currencyCode}`; the worker refuses one without it | + `{{amount}}` | a `payment_gateway` wallet credit | not yet: F-038-k1 |
+| `win_back` | as `renew` — the ended Grant, its plan; a plan no longer sold stops at the worker (`plan_unavailable`) | `{{service}}`, `{{plan}}`, `{{price}}` (no `{{days}}`) | a paid invoice for the plan | no |
 
 ## Planned
 
 `trial_convert` (F-038-l, blocked on F-705): its rules are decided in
-[open-questions.md](open-questions.md). `checkout_help`, `win_back`, a
-reseller subject: F-038-m, -n, -o.
+[open-questions.md](open-questions.md). `checkout_help`, a reseller
+subject: F-038-m, -o.
