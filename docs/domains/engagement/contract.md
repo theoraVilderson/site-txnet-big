@@ -21,6 +21,7 @@ A daily spin wheel. Two protections always apply: a hard daily budget cap (`dail
 |---|---|---|---|---|
 | get wheel state | userId | eligibility result + prizes + remaining daily budget | sync | — |
 | spin | userId, deviceFingerprintId | `spin_wheel_attempt` + prize + wallet tx (if credit) | sync tx | ineligible, cooldown, cap reached |
+| peek — **implemented (F-038-e)** | `AttentionBudget.peek(subject, now, pendingSends)`, the decision pipeline's budget step | the same verdict as `spend`, counting `pendingSends` as charged now; reads only, charges nothing, no lock | sync | — |
 | spend attention — **implemented (F-1501)** | `AttentionBudget.spend({tenantId, kind, id}, origin, now)`, inside `ai-service` only | `{allowed: true, charged}` or `{allowed: false, limit: per_day \| per_week, retryAt}` | sync tx | — |
 
 ## Emits (events)

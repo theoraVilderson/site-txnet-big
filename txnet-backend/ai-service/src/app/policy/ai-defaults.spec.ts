@@ -100,7 +100,7 @@ describe('a trigger is gated on the tenant’s mode', () => {
 
   function consumer(mode: Pick<AiTenantMode, 'engineRuns'>) {
     const policy = { forTenant: vi.fn(async () => ({ ...resolveAiMode({ entitled: true, setting: null, hasActiveProvider: false, sells: true }), ...mode })) };
-    return { policy, consumer: new TriggerConsumer({} as never, policy as never) };
+    return { policy, consumer: new TriggerConsumer({} as never, policy as never, {} as never) };
   }
 
   it('asks the policy for the payload’s tenant and stops when the engine does not run', async () => {

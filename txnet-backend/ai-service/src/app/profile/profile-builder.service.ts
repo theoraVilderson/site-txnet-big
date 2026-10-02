@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
+import { DecisionRun } from '../decision/decision-run';
+import type { AiTenantMode } from '../policy/ai-defaults';
 import { AiTenantPolicy } from '../policy/ai-tenant-policy';
 import { PrismaService } from '../prisma/prisma.service';
 import { meterRef, readingsFor, utcHour, type MeterReadingRow } from './meter-readings';
@@ -14,7 +16,7 @@ const DAY_MS = 86_400_000;
 const PROFILE_PAGE = 500;
 const WRITE_TIMEOUT_MS = 30_000;
 
-export type RebuildResult = { tenants: number; skipped: number; accounts: number; readings: number; predictions: number; purged: number };
+export type RebuildResult = { tenants: number; skipped: number; accounts: number; readings: number; predictions: number; purged: number; scheduled: number; stopped: number };
 
 /** The kinds this builder owns: each run replaces an account's rows of these and no others. */
 const V1_KINDS = ['meter_exhaustion', 'renewal_probability', 'right_size', 'wallet_need', 'trial_conversion', 'win_back_window'] as const;
@@ -29,7 +31,9 @@ const V1_KINDS = ['meter_exhaustion', 'renewal_probability', 'right_size', 'wall
  * 3. write `ai.account_profile` — features and 168 UTC active hours;
  * 4. replace its v1 predictions (F-038-d), each with its reasons.
  *
- * Then drop that tenant's readings older than 180 days (point 14).
+ * Then drop that tenant's readings older than 180 days (point 14), and run
+ * the decision pipeline over the predictions just written (F-038-e). A
+ * decision run that fails is logged; the profiles it read stay written.
  *
  * **Safe to run twice** (ADR-0027): a reading is keyed by its UTC hour, and a
  * second sample in the same hour adds only what grew since the first; a
@@ -46,15 +50,17 @@ export class ProfileBuilder {
     private readonly prisma: PrismaService,
     private readonly reader: ProfileReader,
     private readonly policy: AiTenantPolicy,
+    private readonly decisions: DecisionRun,
   ) {}
 
   async rebuildAll(now: Date = new Date()): Promise<RebuildResult> {
     // `tenant.tenant` has no RLS; the app pool lists it as every service does.
     const tenants = await this.prisma.tenant.findMany({ select: { id: true }, orderBy: { id: 'asc' } });
-    const result: RebuildResult = { tenants: 0, skipped: 0, accounts: 0, readings: 0, predictions: 0, purged: 0 };
+    const result: RebuildResult = { tenants: 0, skipped: 0, accounts: 0, readings: 0, predictions: 0, purged: 0, scheduled: 0, stopped: 0 };
     for (const { id } of tenants) {
+      let mode: AiTenantMode;
       try {
-        const mode = await this.policy.forTenant(id);
+        mode = await this.policy.forTenant(id);
         if (!mode.engineRuns) {
           result.skipped += 1;
           continue;
@@ -68,9 +74,17 @@ export class ProfileBuilder {
       } catch (err) {
         result.skipped += 1;
         this.logger.error(`profile rebuild for tenant ${id} failed: ${err instanceof Error ? err.message : String(err)}`);
+        continue;
+      }
+      try {
+        const decided = await this.decisions.runTenant(id, mode, now);
+        result.scheduled += decided.scheduled;
+        result.stopped += decided.stopped;
+      } catch (err) {
+        this.logger.error(`decision run for tenant ${id} failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
-    this.logger.log(`profiles: ${result.accounts} account(s) in ${result.tenants} tenant(s), ${result.readings} reading(s), ${result.predictions} prediction(s), ${result.skipped} skipped`);
+    this.logger.log(`profiles: ${result.accounts} account(s) in ${result.tenants} tenant(s), ${result.readings} reading(s), ${result.predictions} prediction(s), ${result.skipped} skipped; ${result.scheduled} suggestion(s) scheduled, ${result.stopped} stopped`);
     return result;
   }
 

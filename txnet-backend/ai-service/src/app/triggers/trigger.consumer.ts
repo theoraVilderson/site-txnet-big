@@ -2,19 +2,21 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { z } from 'zod';
 
 import { BrokerService } from '../broker/broker.service';
+import { DecisionRun } from '../decision/decision-run';
 import { AiTenantPolicy } from '../policy/ai-tenant-policy';
 import type { TriggerMessage } from './trigger-events';
 
-/** Every trigger producer writes the tenant into its payload; nothing else is read here yet. */
-const tenantOf = z.object({ tenantId: z.string().uuid() });
+/** Every trigger producer writes the tenant into its payload; most also name the user it is about. */
+const tenantOf = z.object({ tenantId: z.string().uuid(), userId: z.string().uuid().optional() });
 
 export type TriggerOutcome = 'no_tenant' | 'engine_off' | 'accepted';
 
 /**
  * Where a trigger lands. The tenant's mode is read first (F-1550): a tenant
  * whose package lacks `ai_recommendation`, or that turned the engine off, has
- * no run at all. What an accepted trigger leads to is the decision
- * pipeline's (F-038-e).
+ * no run at all. An accepted trigger that names a user runs the decision
+ * pipeline for that user now, on the predictions of the last hourly rebuild
+ * (F-038-e); one that names none waits for the hourly run.
  */
 @Injectable()
 export class TriggerConsumer implements OnApplicationBootstrap {
@@ -23,6 +25,7 @@ export class TriggerConsumer implements OnApplicationBootstrap {
   constructor(
     private readonly broker: BrokerService,
     private readonly policy: AiTenantPolicy,
+    private readonly decisions: DecisionRun,
   ) {}
 
   async onApplicationBootstrap() {
@@ -44,6 +47,7 @@ export class TriggerConsumer implements OnApplicationBootstrap {
       return 'engine_off';
     }
     this.logger.debug(`trigger ${message.type} ${message.aggregate}/${message.aggregateId} for ${scoped.data.tenantId}`);
+    if (scoped.data.userId) await this.decisions.runSubject(scoped.data.tenantId, mode, scoped.data.userId, new Date());
     return 'accepted';
   }
 }

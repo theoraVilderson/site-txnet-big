@@ -9,9 +9,10 @@ updated: 2026-10-02
 # Contract — ai
 
 **DRAFT — schema (F-038-a) and `ai-service` (F-038-b): it boots, holds its
-pools, gates each trigger on the tenant's package (F-1550) and rebuilds every
-account's profile and predictions hourly (F-038-c, F-038-d); nothing is
-decided yet.** The design
+pools, gates each trigger on the tenant's package (F-1550), rebuilds every
+account's profile and predictions hourly (F-038-c, F-038-d) and decides
+`renew` / `resize_up` suggestions from them (F-038-e); nothing is delivered
+yet (F-038-g).** The design
 is ADR-0109; the series that builds it is F-038-b … F-038-w and catalog
 area 24 (F-1501 … F-1550).
 
@@ -29,7 +30,7 @@ guardrail has one home.
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
 | rebuild profiles — **implemented (F-038-c)** | `POST /api/internal/ai/profiles/rebuild`, `ServiceOnlyGuard` (else 404); `worker-service`'s `ai_profile_rebuild`, hourly | `meter_reading`, `account_profile` and `prediction` rows; `{tenants, skipped, accounts, readings, predictions, purged}` in the success envelope | sync, service only | a failing tenant is logged and counted in `skipped`, the others still run |
-| decide | an outbox trigger or the hourly run | an `action` row: `scheduled`, `awaiting_approval` or `suppressed` (+ step) | async | — |
+| decide — **implemented (F-038-e)** | the hourly run, after the rebuild (`{scheduled, stopped}` join its counts); a trigger whose payload names a `userId` | `action` rows: one `scheduled` at most per subject, the rest `suppressed` (+ step) | async | a tenant's failed run is logged; its profiles stay written |
 | record outcome | the purchase or top-up the action suggested, within 7 days | `action.status = accepted` | async | — |
 | settings (types off — **implemented, F-1509**), offers, providers | tenant admin | `setting`, `offer`, `guardrail`, `provider`, `task_route` | sync (F-038-j, F-038-w) | — |
 
@@ -44,7 +45,8 @@ None yet. Delivery is a notice of class `suggestion` through `notification`
 |---|---|---|
 | tenant | status key `tenant:status:<id>` (`policy/tenant-sells.ts`, F-038-x); `ai_recommendation` feature key via `TenantEntitlements`, read per trigger with `ai.setting` and active providers (`policy/ai-tenant-policy.ts`, F-1550) | the trigger fails and is dead-lettered; nothing runs unchecked |
 | identity, billing, entitlement, catalog, tenant | the tables in `ai-service/src/app/reader/reader-tables.ts`, through `txnet_ai_reader` — SELECT only, `identity.user` by named columns, each under its tenant clause (ADR-0109 point 6) | that run is skipped; nothing is guessed |
-| identity, billing, notification, support | `ai.reader_sign_in`, `ai.reader_wallet`, `ai.reader_notice`, `ai.reader_open_ticket` (F-1506) — the user-keyed tables, through views scoped by the user's tenant (F-038-c, data-model "Access rules") | as above |
+| identity, billing, notification, support | `ai.reader_sign_in`, `ai.reader_wallet`, `ai.reader_notice`, `ai.reader_open_ticket` (F-1506), `ai.reader_quiet_hours` (F-038-e) — the user-keyed tables, through views scoped by the user's tenant (F-038-c, data-model "Access rules") | as above |
+| tenant, identity | `tenant.timezone` (app pool) and the user's zone columns: a quiet window with no zone of its own is in the user's resolved zone (`resolveTimeZone`, ADR-0108) | — |
 | automation | `AI_TRIGGER_EVENTS` (`triggers/trigger-events.ts`) on its own queue `txnet.ai.triggers`; a bad envelope or a failed handler is dead-lettered, never requeued | profiles still rebuild hourly |
 
 ## The profile (F-038-c) — implemented
@@ -112,10 +114,29 @@ chose to speak — is charged against the subject's budget (F-1501); `reply` —
 an answer to the user's own question — is always allowed, charged nothing and
 never reads the table, so a spent budget cannot silence an answer.
 
-## Decision steps (point 8) — built ahead of the pipeline (F-038-e)
+## The decision pipeline (point 8, F-038-e) — implemented
 
-Each step is pure and answers `pass`, or the `suppressedBy` it writes on a
-`suppressed` action:
+`DecisionRun` (`decision/decision-run.ts`) pages a tenant's users with a
+`renewal_probability` or `meter_exhaustion` dated inside the next 7 days
+(`SUGGEST_LEAD_DAYS`); `DecisionPipeline.decide` takes one subject through
+the steps below, in this order, each candidate stopping at its first
+`suppressedBy`.
+
+**Candidates** (`decision/candidates.ts`, pure), one per Grant at most, from
+the stored predictions; the deadline is the Grant's end or its predicted
+run-out, whichever is first, and nothing is proposed more than 7 days before it:
+
+| type | when | plan named |
+|---|---|---|
+| `resize_up` | `right_size` says up | the smallest public plan of the same product, mode and length holding factor × the bag (`quotas.traffic_bytes`), else the largest bigger one |
+| `renew` | no resize to offer, the Grant ends inside 7 days, its plan has a price | its own plan |
+
+Each carries `reasons` `suggest_variant` (Grant, plan, price) and
+`expected_margin`, then its prediction's; template key
+`notifications.suggestion.<type>`. A type the tenant does not run is no candidate.
+
+Each step answers `pass`, or the `suppressedBy` it writes on a `suppressed`
+action:
 
 | step | rule | `suppressedBy` |
 |---|---|---|
@@ -124,6 +145,15 @@ Each step is pure and answers `pass`, or the `suppressedBy` it writes on a
 | cooldown (F-1504, D-12) — `decision/cooldown.ts`, read by `CooldownReader` from `ai.action` | per subject × type: 14 days rolling from `sentAt` of a `sent`/`accepted`/`dismissed` one; a `scheduled`/`awaiting_approval` one holds it with no reopening time; `suppressed`/`expired` start nothing | `cooldown` |
 | quiet-down (F-1506) — `decision/quiet-down.ts`, read by `QuietDownReader` (reader pool) | a user with an open (`open`/`pending`) ticket hears nothing, `checkout_help` included (user, 2026-10-02), no reopening time; for 72 h after a `failed` payment (from its `createdAt`) every type but `checkout_help` is held. Outage and connection drop: not rules — network data (point 6). A reseller subject reads nothing (F-038-o) | `quiet_down` |
 | holdout (F-1508, point 10) — `decision/holdout.ts` (`Holdouts.verdict`), `ai.holdout` | the tenant's `holdoutPercent` (10, clamped 5–20, never 0) of subjects by `holdoutBucket` — SHA-256 of the subject id, 0–99 — hears nothing from the engine; recorded the first time drawn, and a recorded member stays one when the share is lowered | `holdout` |
+| attention budget (F-1501) — `AttentionBudget.peek` | would one more engine message fit now, counting the subject's `scheduled` actions as charged; never charges — the floor does at the send (F-1548) | `attention_budget` |
+| margin — `pipeline.ts` | of the candidates left, the highest P(renewal) × (price − cost), as Decimal (C-02); a tie to the higher confidence. The cost is null until F-038-p (`costKnown: false` in the reason) | `margin` (the others) |
+| offer guardrail — `decision/offer-guardrail.ts` | a candidate with an offer needs it active and of its type; none carries one yet (F-038-f) | `offer_guardrail` |
+| schedule — `decision/schedule.ts` | the first slot (now, then each UTC hour) before the deadline, within 7 days, that is outside the quiet window (shared-core `quietUntil`, the rule notification holds the bot by) and active (share > 1/168); else the first slot outside the window; else none | `schedule` |
+
+The survivor is recorded `scheduled` at that time — one per subject per run.
+A stopped row repeating one of the last 24 h (same type and step) is not
+written again, so an hourly run does not record "holdout" 24 times a day.
+Text is the template even with a provider: the language layer is not built.
 
 **The tap (F-1505).** `POST /api/internal/ai/actions/:actionId/opt-out`
 (service token only) with `{ tenantId, subjectKind, subjectId }` — the subject

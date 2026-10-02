@@ -4,7 +4,8 @@ import { RETENTION_MUTABLE_KINDS, type RetentionMutableKind, canonicalTimeZone, 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-const DAY_MIN = 1440;
+// The window rule lives in shared-core (F-038-e), so the AI engine schedules by the same one; re-exported for this unit's callers.
+export { quietUntil, quietWithin } from '@txnet-backend/shared-core';
 
 /** `timezone` null = the user's resolved zone (TZ-1-f, ADR-0108 point 6). */
 export type Preferences = {
@@ -16,50 +17,7 @@ export type Preferences = {
 /** The stored row. As the claim reads it, a row with a window always has a zone — its own, or the resolved one. */
 export type StoredPreference = { mutedKinds: string[]; quietStart: number | null; quietEnd: number | null; timezone: string | null };
 
-/** What `quietUntil` reads: a window and the zone it is in. */
-type QuietWindow = { quietStart: number | null; quietEnd: number | null; timezone: string | null };
-
 const SELECT = { mutedKinds: true, quietStart: true, quietEnd: true, timezone: true } as const;
-
-/**
- * When a bot message due at `now` may be told, under a quiet window of
- * minutes after local midnight in `timezone` (F-601-m): `null` outside the
- * window, else the window's end — the next instant the local clock reads
- * `end`, on the minute. A window may wrap midnight (23:00-08:00).
- *
- * Minutes from the local clock, not a zone table: a DST jump inside the
- * window moves the release by that hour. Asia/Tehran has kept none since 2022.
- */
-export function quietUntil(pref: QuietWindow | null, now: Date): Date | null {
-  if (!pref || pref.quietStart === null || pref.quietEnd === null || pref.quietStart === pref.quietEnd || pref.timezone === null) return null;
-  const minute = localMinute(now, pref.timezone);
-  const { quietStart: start, quietEnd: end } = pref;
-  const inside = start < end ? minute >= start && minute < end : minute >= start || minute < end;
-  if (!inside) return null;
-  const wait = (end - minute + DAY_MIN) % DAY_MIN;
-  const onTheMinute = now.getTime() - (now.getTime() % 60_000);
-  return new Date(onTheMinute + wait * 60_000);
-}
-
-/**
- * `quietUntil` for a notice that may wait up to `waitSec` before it is told
- * (F-601-p): held also when the window opens inside that wait, until the end
- * of that window — a notice claimed at 22:30 and told at 23:30 is a night one.
- */
-export function quietWithin(pref: QuietWindow | null, now: Date, waitSec: number): Date | null {
-  const inside = quietUntil(pref, now);
-  if (inside || !pref || pref.quietStart === null || pref.quietEnd === null || pref.quietStart === pref.quietEnd || pref.timezone === null) return inside;
-  const toStart = (pref.quietStart - localMinute(now, pref.timezone) + DAY_MIN) % DAY_MIN;
-  if (toStart * 60 > waitSec) return null;
-  const onTheMinute = now.getTime() - (now.getTime() % 60_000);
-  return quietUntil(pref, new Date(onTheMinute + toStart * 60_000));
-}
-
-function localMinute(now: Date, timezone: string): number {
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, hourCycle: 'h23', hour: '2-digit', minute: '2-digit' }).formatToParts(now);
-  const part = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
-  return (part('hour') % 24) * 60 + part('minute');
-}
 
 const toMinutes = (clock: string) => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
 const toClock = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;

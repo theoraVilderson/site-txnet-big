@@ -7,7 +7,7 @@ updated: 2026-10-02
 
 # Invariants — ai
 
-**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–18; 4–6 are ADR-0109 rules still to build.
+**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–19; 4–6 are ADR-0109 rules still to build.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -17,7 +17,7 @@ updated: 2026-10-02
 | 4 | The engine never sets a price, writes the ledger, changes a meter or touches the payment path | ADR-0109 point 9, §24.5 — service layer (planned) | money moved by a suggestion |
 | 5 | No learning across tenants and no network-layer data as input | ADR-0109 point 6 — service layer (planned) | one tenant's data shapes another's suggestions |
 | 6 | The attention budget is a count of messages, never a ledger account | C-13; `AttentionBudget` stores charge times only (`engagement` invariant 6) | budget mixed with money |
-| 7 | `ai-service` reads other units only through `txnet_ai_reader`: SELECT on named tables and the `ai.reader_*` views, nothing under `network`, no contact or secret column of `identity.user`, one tenant's rows | `20261002000300_ai_reader_role`, `…0400_ai_profile_inputs`, `…0600_ai_quiet_down_inputs`, `db-login-roles.sh`; `reader-role.spec.ts`; the reader URL may not equal the app URL (`env.validation.ts`) | the engine writes another unit's tables, or reads another tenant's |
+| 7 | `ai-service` reads other units only through `txnet_ai_reader`: SELECT on named tables and the `ai.reader_*` views, nothing under `network`, no contact or secret column of `identity.user`, one tenant's rows | `20261002000300_ai_reader_role`, `…0400_ai_profile_inputs`, `…0600_ai_quiet_down_inputs`, `…0700_ai_decision_inputs`, `db-login-roles.sh`; `reader-role.spec.ts`; the reader URL may not equal the app URL (`env.validation.ts`) | the engine writes another unit's tables, or reads another tenant's |
 | 8 | The container is capped at one CPU and a memory ceiling | `dev-docker/compose/ai-service.yml` | the live site and bot on this host starve |
 | 9 | No engine run for a tenant that may not sell (suspended, terminated, onboarding — F-038-x) or whose package lacks `ai_recommendation`; with it, every v1 type runs on templates with no configuration, and model text needs a provider and starts as draft-with-approval | `resolveAiMode` + `AiTenantPolicy`, called by `TriggerConsumer`; `ai-defaults.spec.ts` | unpaid feature, or messages nobody configured |
 | 10 | A raw behaviour event (`ai.meter_reading`) lives 180 days; a reading never goes negative and an idle hour writes no row | `ProfileBuilder.rebuildTenant` purges; CHECK `meter_reading_delta_not_negative`; `readingsFor` + `profile-features.spec.ts` | data kept past what point 14 allows; a wrong usage rate |
@@ -29,6 +29,7 @@ updated: 2026-10-02
 | 16 | A subject in the tenant's holdout never receives an engine message; membership is stable by the subject-id hash and permanent once recorded, so the report reads the set the pipeline used (F-1508) | `Holdouts.verdict` over `holdoutBucket` + `ai.holdout`; `holdout.spec.ts` | uplift measured against a group that was messaged, or drifts run to run |
 | 17 | Every candidate the engine weighs is a row in `ai.action`, a stopped one with its step; nothing goes out without the `suggestion` label and its action id; a type the tenant switched off sends nothing, queued or in flight (F-1509) | `ActionLog.record`, `labelledMessage`, `TypeSwitch.set`; `action-log.spec.ts` | an unauditable or unlabelled message under the reseller's brand, or a type they turned off still sent |
 | 18 | Every AI message passes a floor no tenant setting reaches: never to another tenant's subject; no engine message while the platform's silence is set (or unreadable); the attention budget; the bot send ceiling (F-1548) | `SafetyFloor.check` + `SilenceSwitch`, built from no `ai.setting`/`ai.guardrail`; the messenger driver (ADR-0066); `safety-floor.spec.ts` | a pitch sent into an outage, past the budget, or under another tenant's brand |
+| 19 | The pipeline runs its steps in ADR-0109 point 8's order and schedules at most one suggestion per subject per run: the highest expected margin (price − cost, never revenue alone), at a time before its deadline and outside the user's quiet window; it never charges the budget (F-038-e) | `DecisionPipeline.decide`, `candidatesFor`, `scheduleAt`, `AttentionBudget.peek`; `pipeline.spec.ts` | two pitches about one Grant, the dearer plan picked over the better one, or a message timed into the user's night |
 
 ## How to test
 

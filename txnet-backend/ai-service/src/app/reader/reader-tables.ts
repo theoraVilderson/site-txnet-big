@@ -9,7 +9,7 @@
  *
  * Not here, on purpose: anything under `network` (no network-layer data,
  * ADR-0109 point 6); tables keyed by user with no `tenantId` (`billing.wallet`,
- * `identity.session`, `notification.notification`, `support.ticket`) — they have no RLS, so
+ * `identity.session`, `notification.notification`, `notification.notification_preference`, `support.ticket`) — they have no RLS, so
  * they are read through {@link AI_READER_VIEWS} instead.
  */
 export const AI_READER_TABLES = [
@@ -63,5 +63,12 @@ export const AI_READER_VIEWS = [
     over: 'support.ticket',
     columns: ['userId', 'createdAt'],
     forbidden: ['subject', 'assignedAdminId'],
+  },
+  {
+    // F-038-e: the quiet window a suggestion is scheduled outside (`20261002000700_ai_decision_inputs`).
+    view: 'ai.reader_quiet_hours',
+    over: 'notification.notification_preference',
+    columns: ['userId', 'quietStart', 'quietEnd', 'timezone'],
+    forbidden: ['mutedKinds'],
   },
 ] as const;
