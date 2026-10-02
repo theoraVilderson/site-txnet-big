@@ -91,6 +91,9 @@ roles:
       # A manual FX rate (F-0608-a, ADR-0101): pin one, end it early. Only the
       # platform owner's Admin gets through today; a tenant's own pin is F-116-j.
       - currency.pin
+      # The tenant's AI (F-038-j1, ADR-0109): settings, offers, at-risk lists
+      # and the uplift report; `ai-service` keeps each tenant to its own.
+      - ai.manage
   Support:
     permissions:
       - user.read

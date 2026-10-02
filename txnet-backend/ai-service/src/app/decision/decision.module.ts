@@ -27,6 +27,6 @@ import { TypeSwitchInternalController } from './type-switch-internal.controller'
   imports: [AttentionModule, FloorModule],
   controllers: [DeliveryInternalController, MySuggestionController, OffersInternalController, OptOutInternalController, OutcomeInternalController, TypeSwitchInternalController],
   providers: [ActionDelivery, ActionLog, CooldownReader, DecisionPipeline, DecisionReader, DecisionRun, Holdouts, MySuggestionService, OfferGuardrails, Offers, OptOuts, OutcomeRun, QuietDownReader, TypeSwitch],
-  exports: [ActionLog, CooldownReader, DecisionRun, Holdouts, OutcomeRun, OptOuts, QuietDownReader, TypeSwitch],
+  exports: [ActionLog, CooldownReader, DecisionRun, Holdouts, Offers, OutcomeRun, OptOuts, QuietDownReader, TypeSwitch],
 })
 export class DecisionModule {}

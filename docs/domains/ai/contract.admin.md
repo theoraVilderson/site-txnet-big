@@ -1,0 +1,54 @@
+---
+id: ai
+layer: domain
+status: draft
+version: 2
+updated: 2026-10-02
+---
+
+# Contract — ai: the reseller's AI admin (F-038-j1)
+
+`ai-service`'s `admin/` — the routes the reseller's AI page (F-038-j2)
+calls, through Traefik's `PathPrefix(/api/ai)` behind `my-auth` and the
+`ai.manage` permission (`AiManageGuard`; Admin, and SuperAdmin as `*`;
+migration `20261002001000_ai_manage_permission`). Its own file: contract.md is
+at its ceiling. Per-type model mode and caps are F-038-w's (user, 2026-10-02).
+
+## Rules
+
+1. **The tenant is the gate's, the author too.** Every route reads and writes
+   only `X-Tenant-Id`; a write records `X-User-Id`. No body or query names
+   either, and a body that tries is a 400 (`.strict()`), never obeyed.
+2. **Reads are `read`, writes `staffWrite`** (C-11): a suspended reseller sees
+   its page and changes nothing. The report is a POST and declares `read`.
+3. **Switching the engine off stops what is queued.** `engineEnabled: false`
+   `suppressed`s every `scheduled`/`awaiting_approval` action by
+   `engine_disabled` in the same transaction; a type list goes through
+   `TypeSwitch` (F-1509, `type_disabled`); an offer off, through `Offers`
+   (`offer_guardrail`).
+4. **A threshold is a decimal string at two places in [0, 1]; the holdout
+   share an integer 5–20** — never 0 (ADR-0109 point 10). Lowering it keeps
+   the recorded members (F-1508).
+5. **A customer is named by id only** — ai reads no contact column
+   (invariant 7); the page links to where the panel already shows the user.
+
+## Routes
+
+| route | body / query | answer |
+|---|---|---|
+| `GET /api/ai/admin/settings` | — | `{settings: {engineEnabled, engineRuns, confidenceThreshold, holdoutPercent, disabledActionTypes, actionTypes}}` — `engineRuns` false when the package lacks `ai_recommendation` or the tenant may not sell (F-1550, F-038-x), whatever the switch says |
+| `PUT /api/ai/admin/settings` | any of `engineEnabled`, `confidenceThreshold`, `holdoutPercent`, `disabledActionTypes` | the settings, as read after |
+| `GET /api/ai/admin/at-risk` | `kind=renewal\|run_out`, `cursor?`, `take` ≤ 100 (50) | `{items: [{userId, grantId, value, predictedAt, confidence, reasons}], nextCursor}` — `renewal`: `renewal_probability` under 0.5 (`AT_RISK_RENEWAL_BELOW`), Grant end ahead, soonest first; `run_out`: `meter_exhaustion` inside 7 days |
+| `POST /api/ai/admin/reports/uplift` | `{from, to}`, ≤ 366 days | the F-038-i report ([contract.md](contract.md) "Outcomes and uplift") |
+| `GET /api/ai/admin/offers` | — | `{items}` — `Offers.list` |
+| `POST /api/ai/admin/offers` | the offer's fields (contract.md "offers"), no tenant, no author | `{offer}`; 400 `template_not_found` / `template_not_a_discount` / `variant_not_found` |
+| `PATCH /api/ai/admin/offers/:offerId` | `name?`, `maxDiscountPercent?`, `dailyBudget?`, `currencyCode?`, `isActive?` | `{offer}`; 404 `offer_not_found` (another tenant's too) |
+
+403 `ai.manage is required` without the permission; 401 with no gate identity.
+
+## Proof
+
+`admin/ai-admin.spec.ts`: the door; no body names a tenant or author;
+threshold and holdout bounds; defaults and `engineRuns`; a write's tenant and
+author, the type list through `TypeSwitch`; engine off stops the queue; the
+at-risk filters, order and paging.

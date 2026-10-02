@@ -46,20 +46,25 @@ const percent = z
 const amount = z.string().regex(/^\d{1,16}(\.\d{1,2})?$/);
 const currency = z.string().regex(/^[A-Z]{3}$/);
 
-export const offerBodySchema = z
-  .object({
-    tenantId: z.string().uuid(),
-    name: z.string().trim().min(1).max(120),
-    actionType: z.enum(OFFER_ACTION_TYPES),
-    couponTemplateId: z.string().uuid().optional(),
-    variantId: z.string().uuid().optional(),
-    maxDiscountPercent: percent,
-    dailyBudget: amount,
-    currencyCode: currency,
-    createdByUserId: z.string().uuid(),
-  })
+/** An offer's own fields — what the AI page sends (F-038-j1); the internal seam adds whose and who. */
+export const offerFieldsSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  actionType: z.enum(OFFER_ACTION_TYPES),
+  couponTemplateId: z.string().uuid().optional(),
+  variantId: z.string().uuid().optional(),
+  maxDiscountPercent: percent,
+  dailyBudget: amount,
+  currencyCode: currency,
+});
+
+/** Exactly one target (the schema's `offer_one_target` CHECK, answered as a 400 first). */
+export const oneTarget = (b: { couponTemplateId?: string; variantId?: string }) => (b.couponTemplateId === undefined) !== (b.variantId === undefined);
+const ONE_TARGET = 'exactly one of couponTemplateId, variantId';
+
+export const offerBodySchema = offerFieldsSchema
+  .extend({ tenantId: z.string().uuid(), createdByUserId: z.string().uuid() })
   .strict()
-  .refine((b) => (b.couponTemplateId === undefined) !== (b.variantId === undefined), 'exactly one of couponTemplateId, variantId');
+  .refine(oneTarget, ONE_TARGET);
 
 export const offerPatchSchema = z
   .object({
