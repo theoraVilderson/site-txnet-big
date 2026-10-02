@@ -73,4 +73,11 @@ export const AI_READER_VIEWS = [
     columns: ['userId', 'quietStart', 'quietEnd', 'timezone'],
     forbidden: ['mutedKinds'],
   },
+  {
+    // F-1528: the tenant's own package rates, for the margin report (`20261002001400_ai_package_rate_view`).
+    view: 'ai.reader_package_rate',
+    over: 'tenant.tenant_package_meter_rate',
+    columns: ['meterKey', 'unitSize', 'unitPrice', 'currencyCode', 'effectiveFrom'],
+    forbidden: ['packageId', 'createdByAdminId'],
+  },
 ] as const;

@@ -32,6 +32,22 @@ function bagOf(quotas: Prisma.JsonValue): bigint | null {
 }
 
 /**
+ * The price in force per variant from rows newest first: the tenant's own
+ * before the platform's (as F-038-d reads it; the margin report too, F-1528).
+ */
+export function pricesInForce(
+  rows: ReadonlyArray<{ variantId: string; tenantId: string | null; amount: Prisma.Decimal; currencyCode: string }>,
+): Map<string, { amount: Prisma.Decimal; currencyCode: string }> {
+  const price = new Map<string, { amount: Prisma.Decimal; currencyCode: string; own: boolean }>();
+  for (const r of rows) {
+    const seen = price.get(r.variantId);
+    const own = r.tenantId !== null;
+    if (!seen || (own && !seen.own)) price.set(r.variantId, { amount: r.amount, currencyCode: r.currencyCode, own });
+  }
+  return new Map([...price].map(([id, { amount, currencyCode }]) => [id, { amount, currencyCode }]));
+}
+
+/**
  * What the decision pipeline reads per subject (F-038-e), in the caller's
  * tenant scope (`runWithTenant`). The engine's own tables — predictions,
  * profiles, actions — on the app pool; every other unit's through
@@ -179,13 +195,7 @@ export class DecisionReader {
       { timeout: READ_TIMEOUT_MS },
     );
 
-    // The price in force: the tenant's own before the platform's (as F-038-d reads it).
-    const price = new Map<string, { amount: Prisma.Decimal; currencyCode: string; own: boolean }>();
-    for (const r of theirs.prices) {
-      const seen = price.get(r.variantId);
-      const own = r.tenantId !== null;
-      if (!seen || (own && !seen.own)) price.set(r.variantId, { amount: r.amount, currencyCode: r.currencyCode, own });
-    }
+    const price = pricesInForce(theirs.prices);
     const plans = new Map<string, PlanOption>(
       theirs.variants.map((v) => {
         const p = price.get(v.id);

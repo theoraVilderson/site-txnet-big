@@ -18,7 +18,7 @@ import { AI_READER_TABLES, AI_READER_VIEWS } from './reader-tables';
 const ROOT = join(__dirname, '../../../../..');
 const MIGRATIONS = join(ROOT, 'txnet-backend/prisma/domains/migrations');
 /** Every migration that grants the reader something, in order. */
-const READER_MIGRATIONS = ['20261002000300_ai_reader_role', '20261002000400_ai_profile_inputs', '20261002000500_ai_predictions_v1', '20261002000600_ai_quiet_down_inputs', '20261002000700_ai_decision_inputs', '20261002000800_ai_margin_inputs'];
+const READER_MIGRATIONS = ['20261002000300_ai_reader_role', '20261002000400_ai_profile_inputs', '20261002000500_ai_predictions_v1', '20261002000600_ai_quiet_down_inputs', '20261002000700_ai_decision_inputs', '20261002000800_ai_margin_inputs', '20261002001400_ai_package_rate_view'];
 
 function read(path: string): string {
   try {
@@ -74,10 +74,11 @@ describe('the ai reader role (F-038-b, ADR-0109 point 6)', () => {
     }
   });
 
-  it.each(AI_READER_VIEWS.map((v) => [v.view, v]))('%s: scoped by its user\'s tenant, named columns only', (_, v) => {
+  it.each(AI_READER_VIEWS.map((v) => [v.view, v]))('%s: scoped by the bound tenant, named columns only', (_, v) => {
     const [schema, name] = v.view.split('.');
     const body = new RegExp(`CREATE VIEW ${schema}\\.${name} WITH \\(security_barrier\\) AS([^;]*);`).exec(sql)?.[1] ?? '';
-    expect(body).toMatch(/u\."tenantId" = public\.current_tenant_id\(\)/);
+    // Through its user (`u`) or, for a package's rates, the tenant's own subscription (`s`).
+    expect(body).toMatch(/\b[us]\."tenantId" = public\.current_tenant_id\(\)/);
     expect(body).not.toMatch(/\bOR\b/);
     const selected = /SELECT([\s\S]*?)FROM/.exec(body)?.[1] ?? '';
     expect(selected).not.toContain('*');

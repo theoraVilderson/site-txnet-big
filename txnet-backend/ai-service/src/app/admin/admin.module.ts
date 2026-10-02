@@ -6,11 +6,12 @@ import { AiAdminController } from './ai-admin.controller';
 import { AiAdminSettings } from './ai-admin-settings';
 import { AiManageGuard } from './ai-manage.guard';
 import { AtRisk } from './at-risk';
+import { Margins } from './margins';
 
 /** The reseller's AI admin (F-038-j1): `/api/ai/admin/*`, behind the gate and `ai.manage`. */
 @Module({
   imports: [DecisionModule, PolicyModule],
   controllers: [AiAdminController],
-  providers: [AiAdminSettings, AiManageGuard, AtRisk],
+  providers: [AiAdminSettings, AiManageGuard, AtRisk, Margins],
 })
 export class AdminModule {}

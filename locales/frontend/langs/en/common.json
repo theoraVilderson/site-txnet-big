@@ -4048,7 +4048,8 @@
       "settings": "Settings",
       "offers": "Discount offers",
       "atRisk": "At risk",
-      "report": "Report"
+      "report": "Report",
+      "margins": "Margins"
     },
     "settings": {
       "engine": "Suggestion engine",
@@ -4106,6 +4107,24 @@
       "endsOn": "Ends {{date}}",
       "runsOutOn": "Runs out {{date}}",
       "more": "Show more"
+    },
+    "margins": {
+      "intro": "Each plan's price against what the platform charges you for it now.",
+      "losingCount": "{{count}} plan(s) lose money on every sale.",
+      "losing": "Losing money",
+      "price": "Price",
+      "cost": "Your cost",
+      "margin": "Margin",
+      "costUnknown": "Cost unknown",
+      "why": {
+        "no_wholesale_leg": "your package has no rate for it",
+        "other_currency": "the rate is in another currency",
+        "not_measured": "the plan states no traffic or period",
+        "metered": "pay-as-you-go plan"
+      },
+      "grants": "{{active}} active services",
+      "grantsLosing": "{{losing}} of them losing money at the rate they locked",
+      "empty": "No plans for sale yet."
     },
     "reasons": {
       "rule_defaults": "Starting estimate",

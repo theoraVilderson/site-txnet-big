@@ -10,7 +10,8 @@ updated: 2026-10-02
 
 `(panel)/ai/`, menu entry `ai` behind `ai.manage`, over `lib/ai-api.ts`'s
 `aiAdminApi` — ai's `/api/ai/admin/*` ([ai/contract.admin.md](../../domains/ai/contract.admin.md)).
-Four tabs, each reading when opened: settings, discount offers, at risk, report.
+Five tabs, each reading when opened: settings, discount offers, at risk,
+margins (F-1528), report.
 Per-type model mode and caps are F-038-w's page (user, 2026-10-02).
 
 ## Rules
@@ -34,17 +35,24 @@ Per-type model mode and caps are F-038-w's page (user, 2026-10-02).
 7. **The report is the last 30 days**, per type: converted of units in each
    arm, the rate difference, extra revenue per currency — never summed across
    two (C-02).
+8. **Margins: a losing plan is flagged and counted at the top**, losing first
+   as ai orders them; a plan named from the catalog texts, its sku otherwise.
+   An unknown cost is said in words with its reason (`common.ai.margins.why.*`),
+   never shown as a number; the active Grants losing at their locked rate are
+   said beside it (F-1528).
 
 ## Consumes
 
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
-| ai | `/api/ai/admin/settings`, `…/at-risk`, `…/reports/uplift`, `…/offers` | the tab shows the error line; the others work |
+| ai | `/api/ai/admin/settings`, `…/at-risk`, `…/margins`, `…/reports/uplift`, `…/offers` | the tab shows the error line; the others work |
 | billing | `GET /api/billing/coupons?kind=discount` (templates, `coupon.manage`) | the form says there is no template to use |
+| catalog | `GET /api/i18n/:lang/catalog` (plan names, as the shop reads them) | a plan is named by its sku |
 
 ## Proof
 
 `ai/ai-page.test.tsx`: only the change saved; bad bounds never sent;
 not running said; templates filtered and the currency taken from one; a
 refusal worded; an offer off; at-risk link, worded reasons, paging; the
-report's period and arms.
+report's period and arms; a losing plan flagged and counted, an unknown cost
+worded.

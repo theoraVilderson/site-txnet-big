@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useLocale } from "@/context/LocaleContext";
 import { ApiError } from "@/lib/api-error";
-import { aiAdminApi, type AiOffer, type AiSettings } from "@/lib/ai-api";
+import { aiAdminApi, type AiOffer, type AiSettings, type PlanMargin } from "@/lib/ai-api";
 import { billingApi, type AdminCoupon } from "@/lib/billing-api";
+import { catalogApi } from "@/lib/catalog-api";
 import { myResellerUserPath } from "@/lib/routes";
 import { usePanelSession } from "../_context/PanelSessionContext";
 import { AiView } from "./_components/AiView";
@@ -17,7 +18,9 @@ import { AiView } from "./_components/AiView";
  * refuses, sent anyway; an engine that is "on" but does not run, shown as
  * running; a template list with a platform coupon or a gift code in it; a
  * refusal shown as "something went wrong" instead of its reason; an at-risk
- * customer with no way to open them, or a reason shown as a raw code.
+ * customer with no way to open them, or a reason shown as a raw code; a plan
+ * that loses money on every sale not flagged, or an unknown cost shown as a
+ * number (F-1528).
  */
 
 vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
@@ -25,7 +28,11 @@ vi.mock("../_context/PanelSessionContext", () => ({ usePanelSession: vi.fn() }))
 vi.mock("@/hooks/useApiError", () => ({ useApiErrorMessage: () => () => "generic" }));
 vi.mock("@/lib/ai-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/ai-api")>()),
-  aiAdminApi: { settings: vi.fn(), saveSettings: vi.fn(), atRisk: vi.fn(), uplift: vi.fn(), offers: vi.fn(), createOffer: vi.fn(), updateOffer: vi.fn() },
+  aiAdminApi: { settings: vi.fn(), saveSettings: vi.fn(), atRisk: vi.fn(), margins: vi.fn(), uplift: vi.fn(), offers: vi.fn(), createOffer: vi.fn(), updateOffer: vi.fn() },
+}));
+vi.mock("@/lib/catalog-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/catalog-api")>()),
+  catalogApi: { texts: vi.fn() },
 }));
 vi.mock("@/lib/billing-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/billing-api")>()),
@@ -58,6 +65,8 @@ beforeEach(() => {
   vi.mocked(aiAdminApi.offers).mockResolvedValue({ items: [offer] });
   vi.mocked(aiAdminApi.updateOffer).mockResolvedValue({ offer: { ...offer, isActive: false } });
   vi.mocked(aiAdminApi.atRisk).mockResolvedValue({ items: [], nextCursor: null });
+  vi.mocked(aiAdminApi.margins).mockResolvedValue({ items: [] });
+  vi.mocked(catalogApi.texts).mockResolvedValue({} as Awaited<ReturnType<typeof catalogApi.texts>>);
   vi.mocked(aiAdminApi.uplift).mockResolvedValue({ from: "", to: "", types: [], renewals: { treated: 0, control: 0 } });
   vi.mocked(billingApi.adminCoupons).mockResolvedValue({
     items: [
@@ -184,3 +193,30 @@ describe("at risk and the report (F-038-j2)", () => {
     expect(screen.getByText("+20%")).toBeTruthy();
   });
 });
+
+describe("margins (F-1528)", () => {
+  const plan = (over: Partial<PlanMargin>): PlanMargin => ({
+    variantId: "v50", productId: "p1", sku: "VPN-50", nameKey: "plan.v50", billingMode: "prepaid", durationDays: 30, size: "53687091200", unlimited: false,
+    price: { amount: "200000.00", currencyCode: "IRR" }, cost: { amount: "220000.00", currencyCode: "IRR" }, margin: { amount: "-20000.00", currencyCode: "IRR" },
+    losingMoney: true, reasons: [{ code: "wholesale_cost" }], grants: { active: 9, losing: 2, costUnknown: 0 }, ...over,
+  });
+
+  it("flags a plan that loses money, counts them, and says why a cost is unknown instead of showing a number", async () => {
+    vi.mocked(aiAdminApi.margins).mockResolvedValue({
+      items: [
+        plan({}),
+        plan({ variantId: "vm", sku: "PAYG", nameKey: "plan.vm", billingMode: "metered", cost: null, margin: null, losingMoney: false, reasons: [{ code: "cost_unknown", why: "metered" }], grants: { active: 0, losing: 0, costUnknown: 0 } }),
+      ],
+    });
+    render(<AiView />);
+    tab("ai.tabs.margins");
+    expect(await screen.findByText("ai.margins.losingCount:1")).toBeTruthy();
+    const [losing, metered] = screen.getAllByRole("listitem").filter((li) => li.dataset.variant);
+    expect(within(losing).getByText("VPN-50")).toBeTruthy();
+    expect(within(losing).getByText("ai.margins.losing")).toBeTruthy();
+    expect(within(losing).getByText("ai.margins.grantsLosing:2")).toBeTruthy();
+    expect(within(metered).queryByText("ai.margins.losing")).toBeNull();
+    expect(within(metered).getByText(/ai\.margins\.why\.metered/)).toBeTruthy();
+  });
+});
+

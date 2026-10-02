@@ -10,6 +10,7 @@ import { identityOf } from '../request/identity.middleware';
 import { AiAdminSettings, settingsPatchSchema } from './ai-admin-settings';
 import { AiManageGuard } from './ai-manage.guard';
 import { AT_RISK_KINDS, AtRisk } from './at-risk';
+import { Margins } from './margins';
 
 const DAY_MS = 86_400_000;
 const AT_RISK_PAGE_MAX = 100;
@@ -58,6 +59,7 @@ export class AiAdminController {
     private readonly atRisk: AtRisk,
     private readonly outcomes: OutcomeRun,
     private readonly offers: Offers,
+    private readonly margins: Margins,
   ) {}
 
   @Get('settings')
@@ -76,6 +78,12 @@ export class AiAdminController {
   async listAtRisk(@Req() req: Request, @Query() query: unknown) {
     const { kind, cursor, take } = parse(atRiskQuery, query);
     return ok(await this.atRisk.list(identityOf(req).tenantId, kind, cursor ?? null, take, new Date()));
+  }
+
+  /** F-1528: each plan's price against its cost at the package's rate now; a losing plan flagged. */
+  @Get('margins')
+  async listMargins(@Req() req: Request) {
+    return ok(await this.margins.report(identityOf(req).tenantId, new Date()));
   }
 
   @Post('reports/uplift')

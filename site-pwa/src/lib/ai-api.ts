@@ -85,6 +85,26 @@ export interface AtRiskItem {
 export type AtRiskKind = "renewal" | "run_out";
 
 export interface AiMoney { amount: string; currencyCode: string }
+
+/** One plan's margin (F-1528): price against its cost at the package's rate now; an unknown cost is null with its reason. */
+export interface PlanMargin {
+  variantId: string;
+  productId: string;
+  sku: string;
+  nameKey: string;
+  billingMode: "prepaid" | "metered";
+  durationDays: number | null;
+  /** Bytes, as a decimal string; null for an unlimited or a metered plan. */
+  size: string | null;
+  unlimited: boolean;
+  price: AiMoney;
+  cost: AiMoney | null;
+  margin: AiMoney | null;
+  losingMoney: boolean;
+  /** `wholesale_cost`, or `cost_unknown` with `why`. */
+  reasons: AiReason[];
+  grants: { active: number; losing: number; costUnknown: number };
+}
 export interface UpliftArm { units: number; converted: number; rate: number | null; revenue: AiMoney[]; margin: AiMoney[]; marginUnknown: number }
 export interface UpliftReport {
   from: string;
@@ -129,6 +149,9 @@ export const aiAdminApi = {
   atRisk(kind: AtRiskKind, cursor?: string | null): Promise<{ items: AtRiskItem[]; nextCursor: string | null }> {
     const q = new URLSearchParams({ kind, ...(cursor ? { cursor } : {}) });
     return call<{ items: AtRiskItem[]; nextCursor: string | null }>(`/admin/at-risk?${q}`, { method: "GET" });
+  },
+  margins(): Promise<{ items: PlanMargin[] }> {
+    return call<{ items: PlanMargin[] }>("/admin/margins", { method: "GET" });
   },
   uplift(from: string, to: string): Promise<UpliftReport> {
     return call<UpliftReport>("/admin/reports/uplift", { method: "POST", body: JSON.stringify({ from, to }) });

@@ -31,6 +31,18 @@ at its ceiling. Per-type model mode and caps are F-038-w's (user, 2026-10-02).
    the recorded members (F-1508).
 5. **A customer is named by id only** — ai reads no contact column
    (invariant 7); the page links to where the panel already shows the user.
+6. **Margins (F-1528, `admin/margins.ts`): the plans the tenant sells** —
+   active, public, priced (its own price before the platform's) — each priced
+   against the package's rate **in force now**, as a sale or renewal would lock
+   it: `vpn.traffic` for a bag, `vpn.unlimited.time` for an unlimited plan,
+   through F-038-p's `wholesaleCost`, read via `ai.reader_package_rate`
+   (`20261002001400`: the bound tenant's package only). `losingMoney`: price
+   under cost. The cost is **null with `cost_unknown`** — no rate, another
+   currency (C-02), a metered plan, no traffic or period stated — and flags
+   nothing. `grants`: active Grants on the plan; `losing`, those whose locked
+   leg costs more than the price; `costUnknown`, those with no leg. Losing
+   first, then the thinnest margin, unknown last. Read on request, nothing
+   stored; the alert to the tenant's staff is F-1528-b.
 
 ## Routes
 
@@ -39,6 +51,7 @@ at its ceiling. Per-type model mode and caps are F-038-w's (user, 2026-10-02).
 | `GET /api/ai/admin/settings` | — | `{settings: {engineEnabled, engineRuns, confidenceThreshold, holdoutPercent, disabledActionTypes, actionTypes}}` — `engineRuns` false when the package lacks `ai_recommendation` or the tenant may not sell (F-1550, F-038-x), whatever the switch says |
 | `PUT /api/ai/admin/settings` | any of `engineEnabled`, `confidenceThreshold`, `holdoutPercent`, `disabledActionTypes` | the settings, as read after |
 | `GET /api/ai/admin/at-risk` | `kind=renewal\|run_out`, `cursor?`, `take` ≤ 100 (50) | `{items: [{userId, grantId, value, predictedAt, confidence, reasons}], nextCursor}` — `renewal`: `renewal_probability` under 0.5 (`AT_RISK_RENEWAL_BELOW`), Grant end ahead, soonest first; `run_out`: `meter_exhaustion` inside 7 days |
+| `GET /api/ai/admin/margins` | — | `{items: [{variantId, productId, sku, nameKey, billingMode, durationDays, size, unlimited, price, cost, margin, losingMoney, reasons, grants: {active, losing, costUnknown}}]}` — rule 6 (F-1528) |
 | `POST /api/ai/admin/reports/uplift` | `{from, to}`, ≤ 366 days | the F-038-i report ([contract.md](contract.md) "Outcomes and uplift") |
 | `GET /api/ai/admin/offers` | — | `{items}` — `Offers.list` |
 | `POST /api/ai/admin/offers` | the offer's fields (contract.md "offers"), no tenant, no author | `{offer}`; 400 `template_not_found` / `template_not_a_discount` / `variant_not_found` |
@@ -51,4 +64,6 @@ at its ceiling. Per-type model mode and caps are F-038-w's (user, 2026-10-02).
 `admin/ai-admin.spec.ts`: the door; no body names a tenant or author;
 threshold and holdout bounds; defaults and `engineRuns`; a write's tenant and
 author, the type list through `TypeSwitch`; engine off stops the queue; the
-at-risk filters, order and paging.
+at-risk filters, order and paging. `admin/margins.spec.ts`: the rate in
+force, a losing plan, the order, the time meter for an unlimited plan, every
+unknown cost, the Grants count.
