@@ -1,4 +1,4 @@
-import { RequestHeaders, SUGGESTION_NOTICE } from '@txnet-backend/shared-core';
+import { remainingLabel, RequestHeaders, SUGGESTION_NOTICE } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
@@ -31,6 +31,7 @@ export const SUGGESTION_TEMPLATE_OF: Record<string, string> = {
   win_back: 'suggestionWinBack',
   retain_offer: 'suggestionRetainOffer',
   checkout_help: 'suggestionCheckoutHelp',
+  usage_alert: 'suggestionUsageAlert',
 };
 
 type Due = {
@@ -54,6 +55,8 @@ type Due = {
   } | null;
   /** `checkout_help` only (F-038-m): the unfinished payment it is about. */
   payment?: { paymentId: string; amount: Money } | null;
+  /** `usage_alert` only (F-1516): the last 24 h against the usual day, bytes as decimal strings. */
+  usage?: { meterKey: string; lastDayBytes: string; usualDayBytes: string; factor: number } | null;
   deadline: string | null;
 };
 type Money = { amount: string; currencyCode: string };
@@ -84,7 +87,8 @@ type Names = {
  *    offer that no longer applies stops it, a day's budget spent moves it to
  *    the next day. A `checkout_help` (F-038-m) is about no service: claimed
  *    with no Grant (F-038-g5), it asks billing for another gateway instead —
- *    none, or paid since, stops it.
+ *    none, or paid since, stops it. A `usage_alert` (F-1516) names its
+ *    service only: it sells no plan, so none has to be for sale.
  * 3. **floor** — the last check; a refusal was already handled by ai-service.
  * 4. **tell** — inbox and bot on their own (never joined to a burst: a
  *    suggestion is never a "count" summary); inside quiet hours the inbox
@@ -148,10 +152,13 @@ export class AiSuggestionDeliveryJob implements Job {
     const template = SUGGESTION_TEMPLATE_OF[due.actionType];
     // F-038-m: `checkout_help` is about a payment, not a service — the one type told with no Grant (F-038-g5).
     const aboutPayment = due.actionType === 'checkout_help';
-    if (due.subjectKind !== 'user' || !template || (!aboutPayment && (!due.grantId || !due.variantId))) {
+    // F-1516: a usage alert is about a service and names no plan.
+    const aboutUsage = due.actionType === 'usage_alert';
+    if (due.subjectKind !== 'user' || !template || (!aboutPayment && (!due.grantId || (!aboutUsage && !due.variantId)))) {
       throw new Error(`a ${due.subjectKind} ${due.actionType} suggestion without a Grant and a plan cannot be told yet`);
     }
     if (aboutPayment && !due.payment) throw new Error(`checkout_help suggestion ${due.actionId} carries no payment`);
+    if (aboutUsage && !due.usage) throw new Error(`usage_alert suggestion ${due.actionId} carries no usage`);
     // F-038-k: a top-up names its amount, or it is not told — "top up {{amount}}" with a blank is no message.
     if (due.actionType === 'top_up_wallet' && !due.amount) throw new Error(`top_up_wallet suggestion ${due.actionId} carries no amount`);
     // F-038-f3: a discount is told only with the coupon that gives it, issued from its offer's terms.
@@ -173,7 +180,7 @@ export class AiSuggestionDeliveryJob implements Job {
     }
 
     // What the message says, from billing — or why it is not told; all before the floor, which charges the budget.
-    const words = aboutPayment ? await this.helpWords(due) : await this.serviceWords(due, now);
+    const words = aboutPayment ? await this.helpWords(due) : aboutUsage ? await this.usageWords(due) : await this.serviceWords(due, now);
     if ('stop' in words) {
       await this.post(this.ai, actionPath(actionId, 'stop'), { tenantId, by: words.stop, ...(words.retryAt ? { retryAt: words.retryAt } : {}) });
       return 'stopped';
@@ -242,6 +249,24 @@ export class AiSuggestionDeliveryJob implements Job {
         ...(coupon ? { code: coupon.code, discount: `${coupon.discount.amount} ${coupon.discount.currencyCode}` } : {}),
         ...(due.amount ? { amount: `${due.amount.amount} ${due.amount.currencyCode}` } : {}),
         ...(due.deadline ? { days: String(Math.max(1, Math.ceil((new Date(due.deadline).getTime() - now.getTime()) / DAY_MS))) } : {}),
+      },
+    };
+  }
+
+  /** F-1516: `usage_alert` — the service's name, what its last 24 h used, its usual day and how many times that is. */
+  private async usageWords(due: Due): Promise<Words> {
+    const usage = due.usage as NonNullable<Due['usage']>;
+    const grantId = due.grantId as string;
+    const names = (await this.post(this.billing, NAMES_PATH, { tenantId: due.tenantId, userId: due.subjectId, grantIds: [grantId] })) as Names | null;
+    const service = names?.items?.find((g) => g.grantId === grantId);
+    return {
+      params: {
+        ...(service?.label ? { serviceLabel: service.label } : {}),
+        ...(service?.nameKey ? { serviceNameKey: service.nameKey } : {}),
+        ...(service?.sku ? { serviceSku: service.sku } : {}),
+        used: remainingLabel(BigInt(usage.lastDayBytes)),
+        usual: remainingLabel(BigInt(usage.usualDayBytes)),
+        times: String(Math.floor(usage.factor)),
       },
     };
   }

@@ -29,6 +29,9 @@ export type SubjectDecisionInputs = {
   stoppedToday: Array<{ actionType: AiActionType; suppressedBy: string | null }>;
 };
 
+/** A candidate's expected margin; help with none (`usage_alert`, F-1516) ranks as zero. */
+const marginOf = (c: EngineCandidate) => new Prisma.Decimal(c.expectedMargin?.amount ?? 0);
+
 /**
  * F-038-e / ADR-0109 point 8 — one subject, in this order:
  *
@@ -96,13 +99,13 @@ export class DecisionPipeline {
       room ??= await this.budget.peek(subject, now, inputs.pendingSends);
       if (!room.allowed) { await stop(c, 'attention_budget'); continue; }
       // A suggestion that loses the seller money is flagged and never sent (F-038-p).
-      if (new Prisma.Decimal(c.expectedMargin.amount).isNegative()) { await stop(c, 'margin'); continue; }
+      if (marginOf(c).isNegative()) { await stop(c, 'margin'); continue; }
       survivors.push(c);
     }
     if (survivors.length === 0) return out;
 
     // Margin, not revenue (point 8), compared as Decimal (C-02); a tie goes to the surer one.
-    survivors.sort((a, b) => new Prisma.Decimal(b.expectedMargin.amount).comparedTo(a.expectedMargin.amount) || b.confidence - a.confidence);
+    survivors.sort((a, b) => marginOf(b).comparedTo(marginOf(a)) || b.confidence - a.confidence);
     const [best, ...rest] = survivors;
     for (const c of rest) await stop(c, 'margin');
 

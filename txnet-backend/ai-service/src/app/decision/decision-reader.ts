@@ -14,7 +14,7 @@ const DAY_MS = 86_400_000;
 const READ_TIMEOUT_MS = 30_000;
 
 /** The predictions a candidate is built from (`candidates.ts`). */
-const DECISION_KINDS = ['renewal_probability', 'right_size', 'meter_exhaustion', 'wallet_need', 'win_back_window'] as const;
+const DECISION_KINDS = ['renewal_probability', 'right_size', 'meter_exhaustion', 'wallet_need', 'win_back_window', 'usage_spike'] as const;
 /** The two that say *when* — an account none of them puts inside the lead time has nothing to decide. */
 const TIMING_KINDS = ['renewal_probability', 'meter_exhaustion'] as const;
 
@@ -65,7 +65,8 @@ export class DecisionReader {
   ) {}
 
   /**
-   * A page of users with a renewal or a run-out inside the lead time, a win-back window closing (F-038-n), or a
+   * A page of users with a renewal or a run-out inside the lead time, a win-back window closing (F-038-n), a usage
+   * spike not yet a day old (F-1516), or a
    * gateway payment left unfinished long enough to help with (F-038-m, through the reader), by id.
    */
   async subjectsDue(tenantId: string, now: Date, cursor: string | null, take: number): Promise<string[]> {
@@ -79,6 +80,7 @@ export class DecisionReader {
           OR: [
             { kind: { in: [...TIMING_KINDS] }, predictedAt: { gt: now, lte: until } },
             { kind: 'win_back_window', predictedAt: { gt: now, lte: winBackUntil } },
+            { kind: 'usage_spike', predictedAt: { gt: now } },
           ],
           ...(cursor ? { subjectId: { gt: cursor } } : {}),
         },

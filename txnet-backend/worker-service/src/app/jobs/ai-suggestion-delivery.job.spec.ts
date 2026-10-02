@@ -125,6 +125,43 @@ describe('AiSuggestionDeliveryJob (F-038-g3)', () => {
       win_back: 'suggestionWinBack',
       retain_offer: 'suggestionRetainOffer',
       checkout_help: 'suggestionCheckoutHelp',
+      usage_alert: 'suggestionUsageAlert',
+    });
+  });
+
+  describe('usage_alert: a service and its numbers, no plan (F-1516)', () => {
+    const GIB = 1024 ** 3;
+    const alert = item({
+      actionType: 'usage_alert', templateKey: 'suggestion.usage_alert', variantId: null, fromVariantId: null, price: null,
+      usage: { meterKey: 'vpn.traffic', lastDayBytes: String(13 * GIB), usualDayBytes: String(4 * GIB), factor: 3.25 },
+    });
+
+    it('names the service from billing, asks for no plan, and tells what the last 24 hours used against the usual day', async () => {
+      const { job, calls, sent, paths } = build({ items: [alert], plan: [] });
+      await expect(job.run(NOW)).resolves.toMatchObject({ itemsProcessed: 1, errorsCount: 0 });
+      expect(paths()).toEqual([
+        '/api/internal/ai/actions/due/take',
+        '/api/internal/notifications/suggestion/claim',
+        '/api/internal/billing/entitlement/grants/names',
+        '/api/internal/ai/actions/:id/floor',
+        '/api/internal/ai/actions/:id/sent',
+      ]);
+      expect(calls[2].body).toEqual({ tenantId: TENANT, userId: USER, grantIds: [GRANT] });
+      expect(sent).toEqual([
+        {
+          consumer: 'ai-suggestion', eventId: ACTION, only: ['inbox', 'bot'], class: 'suggestion',
+          person: {
+            tenantId: TENANT, userId: USER, grantId: GRANT, template: 'suggestionUsageAlert',
+            params: { actionId: ACTION, serviceLabel: 'Home', serviceNameKey: 'catalog.p1.name', serviceSku: 'P-100', used: '13 GB', usual: '4.0 GB', times: '3' },
+          },
+        },
+      ]);
+    });
+
+    it('never tells one without its numbers', async () => {
+      const bare = build({ items: [item({ actionType: 'usage_alert', variantId: null, usage: null })] });
+      expect(await bare.job.run(NOW)).toMatchObject({ itemsProcessed: 0, errorsCount: 1 });
+      expect(bare.paths()).toEqual(['/api/internal/ai/actions/due/take']);
     });
   });
 

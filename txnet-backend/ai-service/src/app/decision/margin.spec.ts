@@ -81,13 +81,13 @@ describe('candidates priced at the wholesale cost (F-038-p)', () => {
 
   it('flags a plan that loses the reseller money', () => {
     const [c] = candidatesFor(inputs(perGib(5_000)), NOW);
-    expect(c.expectedMargin.amount).toBe('-40000.00');
+    expect(c.expectedMargin?.amount).toBe('-40000.00');
     expect(c.reasons).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'expected_margin', losingMoney: true })]));
   });
 
   it('with no leg, the margin is the price and the reason says the cost is unknown', () => {
     const [c] = candidatesFor(inputs(null), NOW);
-    expect(c.expectedMargin.amount).toBe('160000.00');
+    expect(c.expectedMargin?.amount).toBe('160000.00');
     expect(c.reasons).toEqual(expect.arrayContaining([{ code: 'cost_unknown', why: 'no_wholesale_leg' }]));
   });
 });

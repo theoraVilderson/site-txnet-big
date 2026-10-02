@@ -42,6 +42,8 @@ enum AiPredictionKind {
   active_hours
   trial_conversion
   win_back_window
+  /// F-1516: the last 24 h of a Grant's meter at 3× its usual day or more.
+  usage_spike
   quota_exhaustion
   churn_risk
 

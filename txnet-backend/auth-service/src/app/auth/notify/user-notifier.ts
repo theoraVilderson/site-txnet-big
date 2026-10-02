@@ -75,6 +75,7 @@ export const NOTIFY_TEMPLATES = [
   'suggestionWinBack',
   'suggestionRetainOffer',
   'suggestionCheckoutHelp',
+  'suggestionUsageAlert',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -809,6 +810,13 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
     read: (ns) => ns?.suggestion?.checkout_help,
     fallback: '💡 Suggestion: your payment of {{amount}} did not go through. If that gateway gives you trouble, you can also pay with {{gateway}}.',
     inbox: { read: (ns) => ns?.suggestion?.checkout_helpTitle, fallback: 'Your payment did not go through' },
+    many: SUGGESTION_MANY,
+  },
+  // F-1516: a service's last 24 h at three times its usual day, from its own meter — told as a fact, never a pitch.
+  suggestionUsageAlert: {
+    read: (ns) => ns?.suggestion?.usage_alert,
+    fallback: "💡 Suggestion: {{service}} used {{used}} in the last 24 hours — about {{times}} times its usual day ({{usual}}). If that wasn't you, your link may be in use somewhere else too.",
+    inbox: { read: (ns) => ns?.suggestion?.usage_alertTitle, fallback: 'Suggestion: unusual use on {{service}}' },
     many: SUGGESTION_MANY,
   },
 };

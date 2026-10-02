@@ -44,6 +44,14 @@ const RAN_OUT_SHARE = 0.98;
 export const WIN_BACK_WINDOWS_DAYS = [14, 30, 60] as const;
 /** How long after a trial ends it still converts. */
 const TRIAL_AFTERLIFE_DAYS = 14;
+/** F-1516: the last 24 h at this many times the usual day is worth telling. */
+export const USAGE_SPIKE_FACTOR = 3;
+/** F-1516: and at least this much — three times a few megabytes is nobody's news. */
+export const USAGE_SPIKE_MIN_BYTES = BigInt(1024 ** 3);
+/** F-1516: the usual day is the mean of up to this many days before the last 24 h… */
+const USAGE_BASELINE_DAYS = 14;
+/** …and there is no usual under this many. */
+const USAGE_BASELINE_MIN_DAYS = 7;
 
 const clamp = (v: number, lo = 0.02, hi = 0.98) => Math.min(hi, Math.max(lo, v));
 const prob = (v: number) => new Prisma.Decimal(v.toFixed(4));
@@ -359,6 +367,50 @@ export function winBackWindow(input: AccountInputs, now: Date): PredictionRow | 
   };
 }
 
+/**
+ * Usage spike (F-1516): a Grant's last 24 h of its bag meter — the 24
+ * hour-keys before the current hour, as {@link meterExhaustion} reads them —
+ * at {@link USAGE_SPIKE_FACTOR} × its usual day or more, and at least
+ * {@link USAGE_SPIKE_MIN_BYTES}. The usual day is the mean over the days
+ * before (up to 14) that the readings cover; under 7 of them, or none used,
+ * there is no usual and no spike. Meters only (point 6). Every active Grant,
+ * any billing mode — the steepest is named. `predictedAt` is when the news
+ * stops being news: 24 h after the window it measured.
+ */
+export function usageSpike(input: AccountInputs, now: Date): PredictionRow | null {
+  const anchor = utcHour(now).getTime();
+  const windowStart = anchor - DAY_MS;
+  let best: { factor: number; row: PredictionRow } | null = null;
+  for (const g of input.grants.filter((x) => x.status === 'active')) {
+    const rows = trafficReadings(input, g.id);
+    const first = rows.reduce<number>((a, r) => Math.min(a, r.hour.getTime()), Infinity);
+    const days = Math.min(USAGE_BASELINE_DAYS, Math.floor((windowStart - first) / DAY_MS));
+    if (!(days >= USAGE_BASELINE_MIN_DAYS)) continue;
+    const baselineFrom = windowStart - days * DAY_MS;
+    const sum = (from: number, to: number) => rows.filter((r) => r.hour.getTime() >= from && r.hour.getTime() < to).reduce((a, r) => a + r.delta, BigInt(0));
+    const usual = sum(baselineFrom, windowStart) / BigInt(days);
+    const last = sum(windowStart, anchor);
+    if (usual <= BigInt(0) || last < USAGE_SPIKE_MIN_BYTES || last < usual * BigInt(USAGE_SPIKE_FACTOR)) continue;
+    const factor = Number((Number(last) / Number(usual)).toFixed(2));
+    if (best && best.factor >= factor) continue;
+    best = {
+      factor,
+      row: {
+        kind: 'usage_spike',
+        value: new Prisma.Decimal(factor),
+        predictedAt: new Date(anchor + DAY_MS),
+        currencyCode: null,
+        // A measured fact, not a guess: firmer the more days the usual stands on.
+        confidence: days >= USAGE_BASELINE_DAYS ? 0.75 : 0.65,
+        reasons: [
+          { code: 'usage_spike', grantId: g.id, meterKey: METER_KEYS.vpnTraffic, lastDayBytes: bytes(last), usualDayBytes: bytes(usual), factor, baselineDays: days },
+        ],
+      },
+    };
+  }
+  return best?.row ?? null;
+}
+
 /** Predictions v1 for one account (F-038-d): those that apply, each with its reasons. */
 export function predictions(input: AccountInputs, ctx: PredictionContext, now: Date): PredictionRow[] {
   return [
@@ -368,5 +420,6 @@ export function predictions(input: AccountInputs, ctx: PredictionContext, now: D
     walletNeed(input, ctx, now),
     trialConversion(input, now),
     winBackWindow(input, now),
+    usageSpike(input, now),
   ].filter((p): p is PredictionRow => p !== null);
 }

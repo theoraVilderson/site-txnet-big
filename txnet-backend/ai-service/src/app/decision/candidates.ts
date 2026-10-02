@@ -20,7 +20,9 @@ import { wholesaleCost, type WholesaleRate } from './margin';
  * F-038-n) on the day a 14 / 30 / 60-day window closes. A renewal predicted
  * under 0.5 is offered one of the tenant's discounts instead (`retain_offer`,
  * F-038-f2, ADR-0110). A gateway payment left unfinished gets one help
- * message (`checkout_help`, F-038-m) — about no Grant.
+ * message (`checkout_help`, F-038-m) — about no Grant. A Grant whose last
+ * 24 h used three times its usual day is told so (`usage_alert`, F-1516) —
+ * help beside its sale, never instead of it.
  *
  * Nothing is suggested earlier than `SUGGEST_LEAD_DAYS` before it matters —
  * the Grant's end, or the day its bag is predicted to run out, whichever is
@@ -64,7 +66,7 @@ export const RETAIN_OFFER_BELOW = 0.5;
 export const RESIZE_DOWN_HEADROOM = 1.25;
 
 /** The types this file proposes. Each new action row adds its own. */
-export const CANDIDATE_TYPES = ['renew', 'resize_up', 'resize_down', 'top_up_wallet', 'win_back', 'retain_offer', 'checkout_help'] as const satisfies readonly AiActionType[];
+export const CANDIDATE_TYPES = ['renew', 'resize_up', 'resize_down', 'top_up_wallet', 'win_back', 'retain_offer', 'checkout_help', 'usage_alert'] as const satisfies readonly AiActionType[];
 export type CandidateType = (typeof CANDIDATE_TYPES)[number];
 
 /** C-07: a key chosen at runtime comes from an exhaustive Record. */
@@ -76,6 +78,7 @@ export const SUGGESTION_TEMPLATE_KEY: Record<CandidateType, string> = {
   win_back: BackendI18nKeys.notifications.suggestion.win_back,
   retain_offer: BackendI18nKeys.notifications.suggestion.retain_offer,
   checkout_help: BackendI18nKeys.notifications.suggestion.checkout_help,
+  usage_alert: BackendI18nKeys.notifications.suggestion.usage_alert,
 };
 
 export type DecisionPrediction = {
@@ -140,7 +143,8 @@ export type EngineCandidate = ActionCandidate & {
   /** None for a suggestion about no service (`checkout_help`). */
   grantId?: string;
   targetVariantId?: string;
-  expectedMargin: { amount: string; currencyCode: string };
+  /** None for help that names nothing to buy (`usage_alert`, F-1516): ranked as zero, recorded with no currency (C-02). */
+  expectedMargin?: { amount: string; currencyCode: string };
 };
 
 export type Margin = { amount: string; currencyCode: string; reason: Reason };
@@ -258,6 +262,31 @@ export function checkoutHelpFor(input: CandidateInputs, now: Date): EngineCandid
   };
 }
 
+/**
+ * F-1516: a Grant's last 24 h at three times its usual day (`usage_spike`),
+ * told before the news is a day old — the prediction's `predictedAt`. Help,
+ * like `checkout_help`: it names no plan and has no margin, so a sale about
+ * the same Grant outranks it, and it stands beside that sale, never instead.
+ */
+export function usageAlertsFor(input: CandidateInputs, now: Date): EngineCandidate[] {
+  return input.predictions.flatMap((p) => {
+    const grantId = grantOf(p);
+    if (p.kind !== 'usage_spike' || !grantId || !input.grants.has(grantId)) return [];
+    if (!p.predictedAt || p.predictedAt.getTime() <= now.getTime()) return [];
+    return [
+      {
+        actionType: 'usage_alert' as const,
+        confidence: p.confidence,
+        predictionId: p.id,
+        templateKey: SUGGESTION_TEMPLATE_KEY.usage_alert,
+        grantId,
+        deadline: p.predictedAt,
+        reasons: [...p.reasons, { code: 'help_not_sale' }],
+      },
+    ];
+  });
+}
+
 export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidate[] {
   const t = now.getTime();
   const lead = SUGGEST_LEAD_DAYS * DAY_MS;
@@ -332,6 +361,7 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
   }
   const help = checkoutHelpFor(input, now);
   if (help) out.push(help);
+  out.push(...usageAlertsFor(input, now));
   return out;
 }
 

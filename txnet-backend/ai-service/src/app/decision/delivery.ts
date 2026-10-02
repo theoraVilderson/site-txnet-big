@@ -47,7 +47,8 @@ type OfferTerms = Pick<AiOffer, 'id' | 'couponTemplateId' | 'maxDiscountPercent'
  * The labelled message (F-1509) and what its template needs, read from the row's own `suggest_variant`
  * reason — and, for `top_up_wallet` (F-038-k), the amount to top up from its `suggest_top_up` (C-02: a
  * decimal string with its currency); for `retain_offer` (F-038-f2), its offer from `suggest_offer`; for
- * `checkout_help` (F-038-m), the payment from `checkout_attempt`.
+ * `checkout_help` (F-038-m), the payment from `checkout_attempt`; for `usage_alert` (F-1516), its Grant and
+ * numbers from `usage_spike` — bytes as decimal strings.
  */
 export function deliveryItem(row: DueRow, terms?: OfferTerms) {
   const reasons = (row.reasons as Reason[] | null) ?? [];
@@ -55,10 +56,11 @@ export function deliveryItem(row: DueRow, terms?: OfferTerms) {
   const topUp = reasons.find((r) => r.code === 'suggest_top_up') ?? null;
   const offer = reasons.find((r) => r.code === 'suggest_offer') ?? null;
   const attempt = reasons.find((r) => r.code === 'checkout_attempt') ?? null;
+  const spike = reasons.find((r) => r.code === 'usage_spike') ?? null;
   const str = (v: unknown) => (typeof v === 'string' ? v : null);
   return {
     ...labelledMessage(row),
-    grantId: str(target?.['grantId']),
+    grantId: str(target?.['grantId']) ?? str(spike?.['grantId']),
     variantId: str(target?.['variantId']),
     fromVariantId: str(target?.['fromVariantId']),
     price: target && str(target['price']) && str(target['currencyCode']) ? { amount: target['price'] as string, currencyCode: target['currencyCode'] as string } : null,
@@ -85,6 +87,11 @@ export function deliveryItem(row: DueRow, terms?: OfferTerms) {
     payment:
       attempt && str(attempt['paymentId']) && str(attempt['amount']) && str(attempt['currencyCode'])
         ? { paymentId: attempt['paymentId'] as string, amount: { amount: attempt['amount'] as string, currencyCode: attempt['currencyCode'] as string } }
+        : null,
+    // F-1516: what the last 24 h used against the usual day — the Grant's own meter, nothing else.
+    usage:
+      spike && str(spike['meterKey']) && str(spike['lastDayBytes']) && str(spike['usualDayBytes']) && typeof spike['factor'] === 'number'
+        ? { meterKey: spike['meterKey'] as string, lastDayBytes: spike['lastDayBytes'] as string, usualDayBytes: spike['usualDayBytes'] as string, factor: spike['factor'] }
         : null,
     deadline: row.deadline ? row.deadline.toISOString() : null,
   };

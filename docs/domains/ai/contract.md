@@ -10,7 +10,7 @@ updated: 2026-10-02
 
 **DRAFT — schema (F-038-a) and `ai-service` (F-038-b): gated on the tenant's
 package (F-1550), it rebuilds profiles and predictions hourly (F-038-c/d),
-decides `renew` / `resize_*` / `top_up_wallet` / `win_back` / `retain_offer` / `checkout_help` (F-038-e, F-1514, F-038-k, F-038-n, F-038-f2, F-038-m), delivers them (F-038-g) and
+decides `renew` / `resize_*` / `top_up_wallet` / `win_back` / `retain_offer` / `checkout_help` / `usage_alert` (F-038-e, F-1514, F-038-k, F-038-n, F-038-f2, F-038-m, F-1516), delivers them (F-038-g) and
 measures them against the holdout (F-038-i).** The design is ADR-0109; the
 series that builds it is F-038-b … F-038-w and catalog area 24 (F-1501 … F-1550).
 
@@ -92,6 +92,7 @@ hourly; every one has `reasons[]` — a `code` and its numbers, never prose.
 | `wallet_need` | the paid Grant ending soonest with a price | amount + `currencyCode` / its end | 2 × price − (balance − held), up to the smallest covering preset (past the largest, its multiple); none across two currencies |
 | `trial_conversion` | only trials, one live or ended ≤ 14 days, never paid | 0–1 / trial end | 0.15, use, return days, a read, a top-up |
 | `win_back_window` | no active Grant, had one — the last-ended named first (F-038-n) | days since / next of 14·30·60 | none past 60 days |
+| `usage_spike` (F-1516) | an active Grant whose last 24 h (the hour-keys before this one) used ≥ 3× its usual day and ≥ 1 GiB — the steepest | the factor / 24 h after that window | usual day = mean of the 7–14 days before that the readings cover; under 7, or 0, none |
 
 ## Factory default (F-1550, ADR-0109 point 12) — implemented
 
@@ -121,14 +122,14 @@ never reads the table, so a spent budget cannot silence an answer.
 
 `DecisionRun` (`decision/decision-run.ts`) pages a tenant's users with a
 `renewal_probability` or `meter_exhaustion` dated inside the next 7 days
-(`SUGGEST_LEAD_DAYS`), a `win_back_window` closing inside 1, or a gateway payment left unfinished (F-038-m, through the reader); `DecisionPipeline.decide` takes one subject through
+(`SUGGEST_LEAD_DAYS`), a `win_back_window` closing inside 1, a `usage_spike` not past its `predictedAt` (F-1516), or a gateway payment left unfinished (F-038-m, through the reader); `DecisionPipeline.decide` takes one subject through
 the steps below, in this order, each candidate stopping at its first
 `suppressedBy`.
 
 **Candidates** (`decision/candidates.ts`, pure) — one per Grant at most, the
 action types, when each is proposed, what it carries and how it is told:
 [contract.candidates.md](contract.candidates.md) (`renew`, `resize_*`,
-`top_up_wallet`, `win_back`, `retain_offer`).
+`top_up_wallet`, `win_back`, `retain_offer`, `checkout_help`, `usage_alert`).
 
 Each step answers `pass`, or the `suppressedBy` it writes on a `suppressed`
 action:
