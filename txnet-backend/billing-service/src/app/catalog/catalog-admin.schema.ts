@@ -243,6 +243,11 @@ export const setRateCardSchema = rateCardTerms
 export const updateVariantSchema = z.object({ ...variantFields, isActive: z.boolean().optional() }).strict();
 
 export const setPriceSchema = z.object({ amount: decimal('amount'), effectiveFrom: instant('effectiveFrom').optional() }).strict();
+/** F-503-a: a time-boxed price; the end after the start (the DB CHECK, said as a 400 first). */
+export const createCampaignSchema = z
+  .object({ amount: decimal('amount'), startsAt: instant('startsAt'), endsAt: instant('endsAt') })
+  .strict()
+  .refine((b) => new Date(b.endsAt).getTime() > new Date(b.startsAt).getTime(), { message: 'endsAt must be after startsAt', path: ['endsAt'] });
 
 /** Translation review (F-1533-d). Keys are full catalog text keys; the service checks each is the caller's. */
 export const listTextDraftsSchema = z.object({ lang: lang.optional() });
@@ -281,6 +286,7 @@ export type RemoveCategoriesBody = z.infer<typeof removeCategoriesSchema>;
 export type CreateVariantBody = z.infer<typeof createVariantSchema>;
 export type UpdateVariantBody = z.infer<typeof updateVariantSchema>;
 export type SetPriceBody = z.infer<typeof setPriceSchema>;
+export type CreateCampaignBody = z.infer<typeof createCampaignSchema>;
 export type SetRateCardBody = z.infer<typeof setRateCardSchema>;
 export type ListTextDraftsQuery = z.infer<typeof listTextDraftsSchema>;
 export type PublishTextsBody = z.infer<typeof publishTextsSchema>;

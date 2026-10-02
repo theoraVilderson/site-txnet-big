@@ -26,6 +26,7 @@ import {
 } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { offerCampaignEndsAt } from './price-campaign';
 
 /**
  * What the catalog offers a tenant's users, and at what price (F-026-c).
@@ -73,6 +74,8 @@ export type CatalogOffer = {
   panelGroupId: string | null;
   /** In the tenant's operating currency — a price in any other is no price (F-116-d). */
   price: { id: string; amount: string; currencyCode: string; effectiveFrom: Date };
+  /** F-503-a: the price is a campaign's — when it ends, for the countdown; the server's clock decides. `null` otherwise. */
+  campaignEndsAt: Date | null;
   /** The card in effect for each meter, by meter key (F-118-ae): what a sale now would lock. */
   rateCards: OfferRateCard[];
 };
@@ -173,6 +176,7 @@ function toOffer(v: VariantRow, at: Date, currencyCode: string, offered: (f: Off
     visibility: v.visibility,
     panelGroupId: v.panelGroupId,
     price: { id: price.id, amount: price.amount.toFixed(2), currencyCode: price.currencyCode, effectiveFrom: price.effectiveFrom },
+    campaignEndsAt: offerCampaignEndsAt(price, at),
     rateCards: offerRateCards(v.rateCards ?? [], at, currencyCode),
   };
 }

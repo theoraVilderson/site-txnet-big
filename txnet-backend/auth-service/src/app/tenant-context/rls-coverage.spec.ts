@@ -58,8 +58,9 @@ function migrationSql(): string {
  *
  * The statements are built by `EXECUTE format(...)` inside a `FOREACH … ARRAY`
  * loop, so a table appears as a quoted SQL literal rather than after the word
- * `TABLE`. Both spellings of a name count — `identity."user"` has to be quoted
- * because `user` is reserved, and the rest are bare — because what is asserted
+ * `TABLE`. Every spelling of a name counts — `identity."user"` has to be quoted
+ * because `user` is reserved, a schema may be quoted too (`"catalog"."price_campaign"`),
+ * and the rest are bare — because what is asserted
  * here is coverage, not formatting.
  */
 function tablesNamedByPolicies(sql: string): Set<string> {
@@ -68,7 +69,7 @@ function tablesNamedByPolicies(sql: string): Set<string> {
     named.add(`${m[1]}.${m[3]}`);
   }
   for (const m of sql.matchAll(
-    /ALTER\s+TABLE\s+([a-z_]+)\.("?)([a-z0-9_]+)\2\s+ENABLE\s+ROW\s+LEVEL\s+SECURITY/gi,
+    /ALTER\s+TABLE\s+"?([a-z_]+)"?\.("?)([a-z0-9_]+)\2\s+ENABLE\s+ROW\s+LEVEL\s+SECURITY/gi,
   )) {
     named.add(`${m[1]}.${m[3]}`);
   }

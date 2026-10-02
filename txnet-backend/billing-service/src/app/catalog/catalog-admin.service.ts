@@ -19,6 +19,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { placeableMember } from '../traffic/group-fulfilment';
 import { sellingInbounds } from '../traffic/selling-settings';
 import { CatalogTextKind, CatalogTextService, ReviewItem, Texts, catalogTextKey, parseCatalogTextKey } from './catalog-texts';
+import { campaignPlan, cancelVerdict, priceWriteVerdict, type CampaignRow } from './price-campaign';
 import { mustStateTraffic, trafficQuotaOf } from './traffic-quota';
 
 /**
@@ -105,7 +106,21 @@ export type CatalogAdminRejection =
   | 'meter_not_found'
   | 'rate_card_not_found'
   /** F-118-m: a card no sale would take — see the class comment. */
-  | 'rate_card_not_served';
+  | 'rate_card_not_served'
+  /** F-503-a: no such campaign of the caller's. */
+  | 'campaign_not_found'
+  /** F-503-a: its window meets one not cancelled — they would restore each other's prices. */
+  | 'campaign_overlaps'
+  /** F-503-a: cancelled only before it starts. */
+  | 'campaign_started'
+  /** F-503-a: a plain price from before a campaign's end — its restore row would undo it. */
+  | 'campaign_pending'
+  /** F-503-a: no price in effect at the start, in the variant's currency, to restore at the end. */
+  | 'no_price_to_restore'
+  /** F-503-a: a plain price already scheduled inside the window — the restore row would undo it. */
+  | 'price_scheduled_in_campaign'
+  /** F-503-a: one of a campaign's two rows — cancel the campaign instead. */
+  | 'price_in_campaign';
 
 /** One group a variant may name (F-026-p). */
 export type PanelGroupOption = {
@@ -217,6 +232,44 @@ export type PublishTextsInput = { lang: string; keys: string[] };
 export type EditTextsInput = { lang: string; texts: Record<string, string> };
 
 export type PriceView = { id: string; variantId: string; amount: string; currencyCode: string; effectiveFrom: Date; isActive: boolean };
+
+/** F-503-a: a time-boxed price — instants as ISO strings from the client, the server's clock decides. */
+export type CreateCampaignInput = { amount: string; startsAt: string; endsAt: string };
+/** A campaign and its two rows: `priceId` from its start, `restorePriceId` from its end. */
+export type CampaignView = {
+  id: string;
+  tenantId: string | null;
+  variantId: string;
+  amount: string;
+  currencyCode: string;
+  startsAt: Date;
+  endsAt: Date;
+  cancelledAt: Date | null;
+  priceId: string | null;
+  restorePriceId: string | null;
+  restoreAmount: string | null;
+};
+
+function campaignView(
+  c: { id: string; tenantId: string | null; variantId: string; amount: Prisma.Decimal; currencyCode: string; startsAt: Date; endsAt: Date; cancelledAt: Date | null },
+  prices: ReadonlyArray<{ id: string; amount: Prisma.Decimal; campaignEndsAt: Date | null }>,
+): CampaignView {
+  const own = prices.find((p) => p.campaignEndsAt !== null);
+  const restore = prices.find((p) => p.campaignEndsAt === null);
+  return {
+    id: c.id,
+    tenantId: c.tenantId,
+    variantId: c.variantId,
+    amount: c.amount.toFixed(2),
+    currencyCode: c.currencyCode,
+    startsAt: c.startsAt,
+    endsAt: c.endsAt,
+    cancelledAt: c.cancelledAt,
+    priceId: own?.id ?? null,
+    restorePriceId: restore?.id ?? null,
+    restoreAmount: restore ? restore.amount.toFixed(2) : null,
+  };
+}
 /** A rate card as the routes answer it (F-118-m); quantities as strings — JSON has no BigInt. */
 export type RateCardView = {
   id: string;
@@ -1103,6 +1156,10 @@ export class CatalogAdminService {
     return this.within(owner, async (tx) => {
       const variant = await this.managed(tx, 'productVariant', 'variant_not_found', actor, variantId, owner);
       const tenantId = (variant['tenantId'] as string | null) ?? null;
+      // F-503-a: a campaign's restore row would undo a price written before its end.
+      await this.lockCampaigns(tx, variantId);
+      const verdict = priceWriteVerdict(effectiveFrom, await this.liveCampaigns(tx, variantId));
+      if ('refused' in verdict) throw new CatalogAdminRefused(verdict.refused, variantId);
       const row = (await tx.price.create({
         data: {
           tenantId,
@@ -1124,10 +1181,86 @@ export class CatalogAdminService {
     const { owner } = await this.access(actor);
     return this.within(owner, async (tx) => {
       const before = await this.managed(tx, 'price', 'price_not_found', actor, priceId, owner);
+      // F-503-a: half a campaign switched off would leave its price, or its restore, alone.
+      if (before['campaignId']) throw new CatalogAdminRefused('price_in_campaign', priceId);
       const view = priceView((await tx.price.update({ where: { id: priceId }, data: { isActive: false } })) as unknown as Row);
       await this.audit(tx, actor, (before['tenantId'] as string | null) ?? null, 'catalog_price_deactivate', 'price', priceId, priceView(before), view);
       return view;
     });
+  }
+
+  // ------------------------------------------------------- campaigns (F-503-a)
+
+  /**
+   * A time-boxed price (D-45): the campaign row and two new price rows in one
+   * transaction — its amount from `startsAt`, the price in effect then back
+   * from `endsAt` (`campaignPlan`). Never an edit of a price row.
+   */
+  async createCampaign(actor: CatalogActor, variantId: string, input: CreateCampaignInput): Promise<CampaignView> {
+    const { owner } = await this.access(actor);
+    const startsAt = new Date(input.startsAt);
+    const endsAt = new Date(input.endsAt);
+    return this.within(owner, async (tx) => {
+      const variant = await this.managed(tx, 'productVariant', 'variant_not_found', actor, variantId, owner);
+      const tenantId = (variant['tenantId'] as string | null) ?? null;
+      await this.lockCampaigns(tx, variantId);
+      const currencyCode = await pricingCurrencyOf(tx, tenantId);
+      const plan = campaignPlan({
+        startsAt,
+        endsAt,
+        now: new Date(),
+        currencyCode,
+        prices: await tx.price.findMany({ where: { variantId } }),
+        campaigns: await this.liveCampaigns(tx, variantId),
+      });
+      if ('refused' in plan) throw new CatalogAdminRefused(plan.refused, variantId);
+      const amount = new Prisma.Decimal(input.amount);
+      const campaign = await tx.priceCampaign.create({ data: { tenantId, variantId, amount, currencyCode, startsAt, endsAt, createdByAdminId: actor.adminId } });
+      const common = { tenantId, variantId, currencyCode, createdByAdminId: actor.adminId, campaignId: campaign.id };
+      const price = await tx.price.create({ data: { ...common, amount, effectiveFrom: startsAt, campaignEndsAt: endsAt } });
+      const restore = await tx.price.create({ data: { ...common, amount: plan.restore, effectiveFrom: endsAt } });
+      const view = campaignView(campaign, [price, restore]);
+      await this.audit(tx, actor, tenantId, 'catalog_campaign_create', 'price_campaign', campaign.id, null, view);
+      return view;
+    });
+  }
+
+  /** A variant's campaigns, newest start first, cancelled ones too. */
+  async listCampaigns(actor: CatalogActor, variantId: string): Promise<CampaignView[]> {
+    const { owner } = await this.access(actor);
+    return this.within(owner, async (tx) => {
+      await this.managed(tx, 'productVariant', 'variant_not_found', actor, variantId, owner);
+      const rows = await tx.priceCampaign.findMany({ where: { variantId }, include: { prices: true }, orderBy: [{ startsAt: 'desc' }, { id: 'asc' }] });
+      return rows.map(({ prices, ...c }) => campaignView(c, prices));
+    });
+  }
+
+  /** Before it starts only (`cancelVerdict`): the campaign is marked and both its rows switched off. A second cancel changes nothing. */
+  async cancelCampaign(actor: CatalogActor, campaignId: string): Promise<CampaignView> {
+    const { owner } = await this.access(actor);
+    return this.within(owner, async (tx) => {
+      const row = await this.managed(tx, 'priceCampaign', 'campaign_not_found', actor, campaignId, owner);
+      await this.lockCampaigns(tx, row['variantId'] as string);
+      const before = await tx.priceCampaign.findUniqueOrThrow({ where: { id: campaignId }, include: { prices: true } });
+      const verdict = cancelVerdict(before, new Date());
+      if ('refused' in verdict) throw new CatalogAdminRefused(verdict.refused, campaignId);
+      if ('already' in verdict) return campaignView(before, before.prices);
+      const { prices: oldPrices, ...old } = before;
+      const campaign = await tx.priceCampaign.update({ where: { id: campaignId }, data: { cancelledAt: new Date() } });
+      await tx.price.updateMany({ where: { campaignId }, data: { isActive: false } });
+      const view = campaignView(campaign, await tx.price.findMany({ where: { campaignId } }));
+      await this.audit(tx, actor, (old.tenantId as string | null) ?? null, 'catalog_campaign_cancel', 'price_campaign', campaignId, campaignView(old, oldPrices), view);
+      return view;
+    });
+  }
+
+  /** One campaign or price write per variant at a time: the checks above read what the write will meet. */
+  private async lockCampaigns(tx: Prisma.TransactionClient, variantId: string): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`price_campaign:${variantId}`}))`;
+  }
+
+  private liveCampaigns(tx: Prisma.TransactionClient, variantId: string): Promise<CampaignRow[]> {
+    return tx.priceCampaign.findMany({ where: { variantId, cancelledAt: null }, select: { id: true, startsAt: true, endsAt: true, cancelledAt: true } });
   }
 
   // ---------------------------------------------------------------- rate cards
@@ -1404,7 +1537,7 @@ export class CatalogAdminService {
   /** A row the caller may manage, or the table's own *not found* — another tenant's and the platform's alike. */
   private async managed(
     db: Prisma.TransactionClient,
-    model: 'productCategory' | 'product' | 'productCapability' | 'productVariant' | 'price' | 'rateCard',
+    model: 'productCategory' | 'product' | 'productCapability' | 'productVariant' | 'price' | 'rateCard' | 'priceCampaign',
     missing: CatalogAdminRejection,
     actor: CatalogActor,
     id: string,

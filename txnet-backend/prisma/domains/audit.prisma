@@ -76,6 +76,9 @@ enum AdminAction {
   // F-118-m. A rate card is history, as a price is.
   catalog_rate_card_set
   catalog_rate_card_deactivate
+  // F-503-a. A campaign is two price rows; cancelling it switches both off.
+  catalog_campaign_create
+  catalog_campaign_cancel
   coupon_batch_deactivate
   campaign_send
   // F-018-q. A stopped campaign is sent again by hand.
@@ -177,6 +180,7 @@ enum AuditTargetType {
   product
   product_variant
   price
+  price_campaign
   // F-118-m.
   rate_card
   notification_campaign

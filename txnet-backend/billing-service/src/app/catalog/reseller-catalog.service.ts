@@ -29,6 +29,8 @@ import {
   RemovalOutcome,
   PublishTextsInput,
   SetPriceInput,
+  CreateCampaignInput,
+  CampaignView,
   SetRateCardInput,
   UpdateCapabilityInput,
   UpdateCategoryInput,
@@ -195,6 +197,20 @@ export class ResellerCatalogService {
 
   deactivatePrice(actor: ResellerCatalogActor, tenantId: string, priceId: string): Promise<PriceView> {
     return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.deactivatePrice(as, priceId));
+  }
+
+  // ---------------------------------------------------------- campaigns (F-503-a)
+
+  createCampaign(actor: ResellerCatalogActor, tenantId: string, variantId: string, input: CreateCampaignInput): Promise<CampaignView> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.createCampaign(as, variantId, input));
+  }
+
+  listCampaigns(actor: ResellerCatalogActor, tenantId: string, variantId: string): Promise<CampaignView[]> {
+    return this.run(actor, tenantId, 'read', (as) => this.catalog.listCampaigns(as, variantId));
+  }
+
+  cancelCampaign(actor: ResellerCatalogActor, tenantId: string, campaignId: string): Promise<CampaignView> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.cancelCampaign(as, campaignId));
   }
 
   // ---------------------------------------------------------- rate cards (F-118-m)

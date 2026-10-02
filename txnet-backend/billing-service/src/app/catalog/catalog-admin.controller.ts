@@ -38,6 +38,7 @@ import {
   ListCategoriesQuery,
   RemoveProductsBody,
   SetPriceBody,
+  CreateCampaignBody,
   SetRateCardBody,
   UpdateCapabilityBody,
   UpdateCategoryBody,
@@ -56,6 +57,7 @@ import {
   listCategoriesSchema,
   removeProductsSchema,
   setPriceSchema,
+  createCampaignSchema,
   setRateCardSchema,
   updateCapabilitySchema,
   updateCategorySchema,
@@ -74,6 +76,7 @@ import {
   EditTextsInput,
   PublishTextsInput,
   SetPriceInput,
+  CreateCampaignInput,
   SetRateCardInput,
   UpdateCapabilityInput,
   UpdateCategoryInput,
@@ -106,6 +109,13 @@ export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, 400 | 403 | 4
   meter_not_found: 404,
   rate_card_not_found: 404,
   rate_card_not_served: 400,
+  campaign_not_found: 404,
+  campaign_overlaps: 409,
+  campaign_started: 409,
+  campaign_pending: 409,
+  no_price_to_restore: 409,
+  price_scheduled_in_campaign: 409,
+  price_in_campaign: 409,
 };
 
 
@@ -288,6 +298,33 @@ export class CatalogAdminController {
   @RateLimit(WRITE)
   async deactivatePrice(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
     return this.refusing(() => this.catalog.deactivatePrice(this.actor(req, ip), id));
+  }
+
+  // ------------------------------------------------------- campaigns (F-503-a)
+
+  @Post('variants/:id/campaigns')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit(WRITE)
+  async createCampaign(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(createCampaignSchema)) body: CreateCampaignBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return this.refusing(() => this.catalog.createCampaign(this.actor(req, ip), id, body as CreateCampaignInput));
+  }
+
+  @Get('variants/:id/campaigns')
+  @RateLimit(READ)
+  async listCampaigns(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.listCampaigns(this.actor(req, ip), id));
+  }
+
+  @Post('campaigns/:id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  async cancelCampaign(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.cancelCampaign(this.actor(req, ip), id));
   }
 
   // ------------------------------------------------------ rate cards (F-118-m)
