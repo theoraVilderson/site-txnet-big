@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Coupon, CouponChannel, CouponVisibility, DiscountType, PaymentStatus, Prisma, RedemptionStatus } from '@prisma/client';
-import { TenantContext, TenantScopeConflict } from '@txnet-backend/shared-core';
+import { PLATFORM_DEFAULT_TIMEZONE, TenantContext, TenantScopeConflict } from '@txnet-backend/shared-core';
 
 import { FxRateReader } from '../pricing/fx-rate.reader';
 
@@ -250,8 +250,8 @@ function gate(c: CouponFacts, money: CouponMoney | null, request: CouponRequest,
   return null;
 }
 
-/** Weekdays and hours are the tenant market's clock: Asia/Tehran, from the server's instant. */
-export const COUPON_TIME_ZONE = 'Asia/Tehran';
+/** Weekdays and hours are the tenant market's clock: the platform's, from the server's instant. */
+export const COUPON_TIME_ZONE = PLATFORM_DEFAULT_TIMEZONE;
 const TEHRAN = new Intl.DateTimeFormat('en-US', {
   timeZone: COUPON_TIME_ZONE,
   weekday: 'short',

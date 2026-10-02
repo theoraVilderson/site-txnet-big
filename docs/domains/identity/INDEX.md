@@ -3,7 +3,7 @@ id: identity
 layer: domain
 status: active
 version: 25
-keywords: [notice messenger, messenger for notices, telegram or bale for notices, پیام‌رسان اعلان‌ها, users, roles, manage roles, create a role, edit a role, role permissions, staff role, نقش‌ها, ساختن نقش, ویرایش نقش, دسترسی‌های نقش, find a user, user search, user picker, جستجوی کاربر, reseller owner login, my reseller panel, handoff, پنل نمایندگی من, owner on own domain, owner in reseller bot chat, مالک در ربات نماینده, login, auth, rbac, roles, permissions, sessions, otp, otp channel, otp delivery push, channel token, delivery result, delivery method, telegram, bale, bot account, bot link, share contact, forgot password, password reset, phone number, e164, phone format, country, email, email address, verify email, email verification, smtp, ایمیل, تایید ایمیل, شماره موبایل, فرمت شماره]
+keywords: [time zone, timezone, user time zone, منطقه زمانی, ساعت کاربر, notice messenger, messenger for notices, telegram or bale for notices, پیام‌رسان اعلان‌ها, users, roles, manage roles, create a role, edit a role, role permissions, staff role, نقش‌ها, ساختن نقش, ویرایش نقش, دسترسی‌های نقش, find a user, user search, user picker, جستجوی کاربر, reseller owner login, my reseller panel, handoff, پنل نمایندگی من, owner on own domain, owner in reseller bot chat, مالک در ربات نماینده, login, auth, rbac, roles, permissions, sessions, otp, otp channel, otp delivery push, channel token, delivery result, delivery method, telegram, bale, bot account, bot link, share contact, forgot password, password reset, phone number, e164, phone format, country, email, email address, verify email, email verification, smtp, ایمیل, تایید ایمیل, شماره موبایل, فرمت شماره]
 source:
   - txnet-backend/prisma/domains/identity.prisma
   - txnet-backend/auth-service/src/app/auth/auth.service.ts
@@ -33,14 +33,15 @@ source:
   - txnet-backend/auth-service/src/app/auth/users/reseller-users.service.ts
   - txnet-backend/auth-service/src/app/auth/users/authority.ts
   - txnet-backend/auth-service/src/app/auth/roles/**
+  - txnet-backend/shared-core/src/lib/time/time-zone.ts
 owns_tables: [user, session, role, permission, role_permission, otp_code, linked_bot_account]
 depends_on: [audit, i18n, redis-keyspace]
-updated: 2026-09-28
+updated: 2026-10-02
 ---
 
 # Identity
 **Responsibility:** who a User is, how they authenticate (password / OTP), their RBAC role + permissions, their live sessions, and their linked Telegram/Bale accounts, and their verified email address. **Not:** tenant staff roles (`tenant`), the edge token check (`forward-auth`), admin audit records (`audit`).
-See [contract.md](contract.md), [contract.roles.md](contract.roles.md) (a tenant's own roles), [contract.reseller-users.md](contract.reseller-users.md) (a reseller's own users), [contract.messenger.md](contract.messenger.md) (which messenger a user's notices take), [contract.versions.md](contract.versions.md) (when a shape changed and who it broke), [invariants.md](invariants.md), [rules.md](rules.md), [data-model.md](data-model.md), [open-questions.md](open-questions.md).
+See [contract.md](contract.md), [contract.roles.md](contract.roles.md) (a tenant's own roles), [contract.reseller-users.md](contract.reseller-users.md) (a reseller's own users), [contract.messenger.md](contract.messenger.md) (which messenger a user's notices take), [contract.time-zone.md](contract.time-zone.md) (which wall clock a user is read in), [contract.versions.md](contract.versions.md) (when a shape changed and who it broke), [invariants.md](invariants.md), [rules.md](rules.md), [data-model.md](data-model.md), [open-questions.md](open-questions.md).
 ## Changelog
 | Date | Change |
 |---|---|

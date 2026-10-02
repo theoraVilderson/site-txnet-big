@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { RETENTION_MUTABLE_KINDS, type RetentionMutableKind } from '@txnet-backend/shared-core';
+import { PLATFORM_DEFAULT_TIMEZONE, RETENTION_MUTABLE_KINDS, type RetentionMutableKind } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 
 /** The zone a user without a row, or a panel that sent none, is read in. */
-export const DEFAULT_TIMEZONE = 'Asia/Tehran';
+export const DEFAULT_TIMEZONE = PLATFORM_DEFAULT_TIMEZONE;
 
 const DAY_MIN = 1440;
 

@@ -1,3 +1,5 @@
+import { isIanaZone, PLATFORM_DEFAULT_TIMEZONE } from '../time/time-zone';
+
 /**
  * The fixed periods a sold quota is counted in (ADR-0107 point 7, F-019-v2):
  * never rolling, so a statement can say "1000 included, 43 extra this week".
@@ -12,26 +14,21 @@
  *    platform's clock.
  *
  * The clock is `tenant_subscription_setting.quotaTimeZone` (an IANA zone,
- * default `Asia/Tehran`). Every boundary is an instant; `start` is inside the
+ * default `PLATFORM_DEFAULT_TIMEZONE`). Every boundary is an instant; `start` is inside the
  * period, `end` is not.
  */
 export type QuotaPeriodKind = 'day' | 'week' | 'month';
 
 export type QuotaPeriod = { kind: QuotaPeriodKind; start: Date; end: Date };
 
-export const DEFAULT_QUOTA_TIME_ZONE = 'Asia/Tehran';
+export const DEFAULT_QUOTA_TIME_ZONE = PLATFORM_DEFAULT_TIMEZONE;
 
 /** JS `getDay()` numbering: Saturday is 6. */
 const WEEK_STARTS_ON = 6;
 
-/** Whether `zone` is a time zone this runtime can read; the setting is checked with it before it is stored. */
+/** Whether `zone` is a time zone this runtime can read; the setting is checked with it before it is stored. One validator: ADR-0108's. */
 export function isTimeZone(zone: string): boolean {
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: zone });
-    return true;
-  } catch {
-    return false;
-  }
+  return isIanaZone(zone);
 }
 
 type Wall = { year: number; month: number; day: number; weekday: number; hour: number; minute: number; second: number };
