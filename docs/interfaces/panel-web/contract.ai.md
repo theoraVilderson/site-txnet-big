@@ -45,12 +45,19 @@ Per-type model mode and caps are F-038-w's page (user, 2026-10-02).
    per period (`formatBytes`); each suggestion worded from its code
    (`common.ai.layout.addSmaller` / `addBigger` / `noTakers`), the bigger
    plan always with the note that demand past a cap is not measured.
+10. **Resellers: the platform owner only** (F-038-o3) — the tab is not shown
+    to any other tenant, whom ai refuses `not_platform_owner`. Each reseller
+    by slug, linked to `panelResellerPath` (one deleted since the run by id,
+    unlinked); run-out as a date, "full now" at 0 days; churn as a percent with
+    the renewal date. A quota named as the limits page names it, a product's
+    sales generically; reasons from an exhaustive set, `churn_base` and any
+    unworded code left out (`ResellersAtRisk.tsx`).
 
 ## Consumes
 
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
-| ai | `/api/ai/admin/settings`, `…/at-risk`, `…/margins`, `…/plan-layout`, `…/reports/uplift`, `…/offers` | the tab shows the error line; the others work |
+| ai | `/api/ai/admin/settings`, `…/at-risk`, `…/margins`, `…/plan-layout`, `…/reports/uplift`, `…/offers`, `…/resellers` (platform owner) | the tab shows the error line; the others work |
 | billing | `GET /api/billing/coupons?kind=discount` (templates, `coupon.manage`) | the form says there is no template to use |
 | catalog | `GET /api/i18n/:lang/catalog` (plan names, as the shop reads them) | a plan is named by its sku |
 
@@ -60,4 +67,5 @@ Per-type model mode and caps are F-038-w's page (user, 2026-10-02).
 not running said; templates filtered and the currency taken from one; a
 refusal worded; an offer off; at-risk link, worded reasons, paging; the
 report's period and arms; a losing plan flagged and counted, an unknown cost
-worded.
+worded; the resellers tab hidden from a reseller, a reseller linked, its
+windows worded, churn as a percent, a deleted one unlinked.

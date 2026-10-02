@@ -84,6 +84,18 @@ export interface AtRiskItem {
 }
 export type AtRiskKind = "renewal" | "run_out";
 
+/** One reseller in the platform owner's list (F-038-o2); `slug` null for one deleted since the run. */
+export interface ResellerForecastItem {
+  tenantId: string;
+  slug: string | null;
+  /** Days to run-out (`quota_exhaustion`) or a probability (`churn_risk`), as stored. */
+  value: string | null;
+  predictedAt: string | null;
+  confidence: string;
+  reasons: AiReason[];
+}
+export type ResellerForecastKind = "quota_exhaustion" | "churn_risk";
+
 export interface AiMoney { amount: string; currencyCode: string }
 
 /** One plan's margin (F-1528): price against its cost at the package's rate now; an unknown cost is null with its reason. */
@@ -176,6 +188,11 @@ export const aiAdminApi = {
   atRisk(kind: AtRiskKind, cursor?: string | null): Promise<{ items: AtRiskItem[]; nextCursor: string | null }> {
     const q = new URLSearchParams({ kind, ...(cursor ? { cursor } : {}) });
     return call<{ items: AtRiskItem[]; nextCursor: string | null }>(`/admin/at-risk?${q}`, { method: "GET" });
+  },
+  /** The platform owner only; any other tenant is refused `not_platform_owner` (F-038-o2). */
+  resellers(kind: ResellerForecastKind, cursor?: string | null): Promise<{ items: ResellerForecastItem[]; nextCursor: string | null }> {
+    const q = new URLSearchParams({ kind, ...(cursor ? { cursor } : {}) });
+    return call<{ items: ResellerForecastItem[]; nextCursor: string | null }>(`/admin/resellers?${q}`, { method: "GET" });
   },
   margins(): Promise<{ items: PlanMargin[] }> {
     return call<{ items: PlanMargin[] }>("/admin/margins", { method: "GET" });

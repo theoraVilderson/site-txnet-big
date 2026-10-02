@@ -52,7 +52,8 @@ one with `reasons[]`.
 `GET /api/ai/admin/resellers?kind=quota_exhaustion|churn_risk` (contract.admin.md;
 `admin/reseller-forecast.ts`), behind `ai.manage`. Only a caller whose tenant
 is the platform owner — any other is refused 403 `not_platform_owner`, never
-answered with an empty list that would read as "no reseller at risk".
+answered with an empty list that would read as "no reseller at risk". The
+panel shows it as the `/ai` page's resellers tab (F-038-o3, panel-web contract.ai.md rule 10).
 
 | `kind` | order | each item |
 |---|---|---|
@@ -61,7 +62,6 @@ answered with an empty list that would read as "no reseller at risk".
 
 ## Planned
 
-- F-038-o3: the platform owner's panel page over that route.
 - F-038-o4: the upgrade, told to the reseller's **owner** only — the quota
   alerts' recipient (F-019-v8), so everything about the reseller's package has
   one recipient (user, 2026-10-02).

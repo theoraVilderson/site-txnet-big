@@ -4050,7 +4050,8 @@
       "atRisk": "در خطر",
       "report": "گزارش",
       "margins": "حاشیه‌ی سود",
-      "layout": "چیدمان بسته‌ها"
+      "layout": "چیدمان بسته‌ها",
+      "resellers": "فروشنده‌ها"
     },
     "settings": {
       "engine": "موتور پیشنهاد",
@@ -4150,7 +4151,14 @@
       "recent_rate": "سرعت مصرف فعلی",
       "remaining": "حجم کمی مانده",
       "weighted_by_hour_of_week": "طبق الگوی هفتگی مصرفش",
-      "flat_rate": "مصرف یکنواخت"
+      "flat_rate": "مصرف یکنواخت",
+      "quota_rate": "{{quota}}: {{used}} از {{included}} در این {{period}}، حدود {{perDay}} در روز",
+      "quota_full": "{{quota}}: هر {{included}} واحدِ این {{period}} مصرف شده ({{used}})",
+      "wallet_short": "کیف پول {{balance}} برای تمدید {{price}} {{currency}} کم است",
+      "renewal_unpaid": "تمدید پرداخت نشده یا در مهلت است",
+      "sales_fell": "فروش ۳۰ روز اخیر بیش از نصف کم شده",
+      "sales_grew": "فروش رو به رشد است",
+      "downgrade_scheduled": "تنزل بسته برنامه‌ریزی شده"
     },
     "report": {
       "period": "{{days}} روز اخیر",
@@ -4162,6 +4170,22 @@
       "revenue": "درآمد اضافه",
       "none": "هنوز در این بازه پیشنهادی نبوده است.",
       "renewals": "تمدیدها: {{treated}} با پیشنهاد، {{control}} در گروه شاهد."
+    },
+    "resellers": {
+      "runOut": "سهمیه تمام می‌شود",
+      "churn": "ممکن است بروند",
+      "empty": "فعلاً فروشنده‌ای در این فهرست نیست.",
+      "fullNow": "یک سهمیه همین حالا پر است",
+      "runsOutOn": "تمام شدن {{date}}",
+      "churnChance": "احتمال رفتن {{percent}}٪",
+      "renewsOn": "تمدید {{date}}",
+      "productSales": "فروش محصول",
+      "more": "بیشتر",
+      "period": {
+        "day": "روز",
+        "week": "هفته",
+        "month": "ماه"
+      }
     }
   }
 }

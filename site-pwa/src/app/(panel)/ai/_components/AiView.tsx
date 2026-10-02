@@ -3,15 +3,17 @@
 import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
+import { usePanelSession } from "../../_context/PanelSessionContext";
 import { AiOffers } from "./AiOffers";
 import { AiSettingsPanel } from "./AiSettingsPanel";
 import { AtRiskList } from "./AtRiskList";
 import { K } from "./ai-ui";
 import { MarginsList } from "./MarginsList";
 import { PlanLayoutView } from "./PlanLayoutView";
+import { ResellersAtRisk } from "./ResellersAtRisk";
 import { UpliftReportView } from "./UpliftReportView";
 
-const TABS = ["settings", "offers", "atRisk", "margins", "layout", "report"] as const;
+const TABS = ["settings", "offers", "atRisk", "margins", "layout", "report", "resellers"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
@@ -20,13 +22,17 @@ type Tab = (typeof TABS)[number];
  * settings, the discount offers the engine may give, the customers at risk
  * with the engine's reasons, each plan's margin with the losing ones flagged
  * (F-1528), the plan layout its users' use suggests (F-1527), and the uplift
- * report against the holdout.
+ * report against the holdout. The platform owner has a seventh: its resellers
+ * by quota run-out and churn risk (F-038-o3) — hidden from anyone else, whom
+ * ai would refuse.
  *
  * Nothing here decides scope: ai answers the gate's tenant, and no call names one.
  */
 export function AiView() {
   const { t } = useLocale();
+  const { me } = usePanelSession();
   const [tab, setTab] = useState<Tab>("settings");
+  const tabs = TABS.filter((id) => id !== "resellers" || me?.tenant?.type === "platform_owner");
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
@@ -39,7 +45,7 @@ export function AiView() {
       </header>
 
       <div role="tablist" className="flex gap-2 overflow-x-auto rounded-2xl border border-card-border bg-card-bg p-1 shadow-sm">
-        {TABS.map((id) => (
+        {tabs.map((id) => (
           <button
             key={id}
             type="button"
@@ -53,7 +59,7 @@ export function AiView() {
         ))}
       </div>
 
-      {tab === "settings" ? <AiSettingsPanel /> : tab === "offers" ? <AiOffers /> : tab === "atRisk" ? <AtRiskList /> : tab === "margins" ? <MarginsList /> : tab === "layout" ? <PlanLayoutView /> : <UpliftReportView />}
+      {tab === "settings" ? <AiSettingsPanel /> : tab === "offers" ? <AiOffers /> : tab === "atRisk" ? <AtRiskList /> : tab === "margins" ? <MarginsList /> : tab === "layout" ? <PlanLayoutView /> : tab === "resellers" ? <ResellersAtRisk /> : <UpliftReportView />}
     </div>
   );
 }

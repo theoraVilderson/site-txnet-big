@@ -5,7 +5,7 @@ import { ApiError } from "@/lib/api-error";
 import { aiAdminApi, type AiOffer, type AiSettings, type PlanMargin } from "@/lib/ai-api";
 import { billingApi, type AdminCoupon } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
-import { myResellerUserPath } from "@/lib/routes";
+import { myResellerUserPath, panelResellerPath } from "@/lib/routes";
 import { usePanelSession } from "../_context/PanelSessionContext";
 import { AiView } from "./_components/AiView";
 
@@ -28,7 +28,7 @@ vi.mock("../_context/PanelSessionContext", () => ({ usePanelSession: vi.fn() }))
 vi.mock("@/hooks/useApiError", () => ({ useApiErrorMessage: () => () => "generic" }));
 vi.mock("@/lib/ai-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/ai-api")>()),
-  aiAdminApi: { settings: vi.fn(), saveSettings: vi.fn(), atRisk: vi.fn(), margins: vi.fn(), planLayout: vi.fn(), uplift: vi.fn(), offers: vi.fn(), createOffer: vi.fn(), updateOffer: vi.fn() },
+  aiAdminApi: { settings: vi.fn(), saveSettings: vi.fn(), atRisk: vi.fn(), resellers: vi.fn(), margins: vi.fn(), planLayout: vi.fn(), uplift: vi.fn(), offers: vi.fn(), createOffer: vi.fn(), updateOffer: vi.fn() },
 }));
 vi.mock("@/lib/catalog-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/catalog-api")>()),
@@ -250,5 +250,63 @@ describe("plan layout (F-1527)", () => {
     expect(screen.getByText("ai.layout.addBigger:4,15,VPN-100,150 GB")).toBeTruthy();
     expect(screen.getByText("ai.layout.noTakers:VPN-20")).toBeTruthy();
     expect(screen.queryByText(/IRR/)).toBeNull();
+  });
+});
+
+describe("resellers at risk, platform owner only (F-038-o3)", () => {
+  const owner = () =>
+    vi.mocked(usePanelSession).mockReturnValue({ me: { tenant: { id: TENANT, type: "platform_owner" } }, isLoading: false } as unknown as ReturnType<typeof usePanelSession>);
+
+  it("is not a tab for a reseller — ai would refuse it", () => {
+    render(<AiView />);
+    expect(screen.queryByRole("tab", { name: "ai.tabs.resellers" })).toBeNull();
+    expect(aiAdminApi.resellers).not.toHaveBeenCalled();
+  });
+
+  it("links each reseller to its page, says when its quota runs out, words each window and pages on", async () => {
+    owner();
+    vi.mocked(aiAdminApi.resellers)
+      .mockResolvedValueOnce({
+        items: [{
+          tenantId: "r-1", slug: "alpha", value: "2.5000", predictedAt: "2026-10-05T00:00:00.000Z", confidence: "0.9000",
+          reasons: [
+            { code: "quota_rate", meter: "campaign_sends_daily_max", period: "month", included: 1000, used: 600, perDay: 100 },
+            { code: "quota_full", meter: "product:p-1", period: "day", included: 10, used: 10 },
+            { code: "an_unworded_code" },
+          ],
+        }],
+        nextCursor: "c-1",
+      })
+      .mockResolvedValueOnce({ items: [], nextCursor: null });
+    render(<AiView />);
+    fireEvent.click(screen.getByRole("tab", { name: "ai.tabs.resellers" }));
+    const link = await screen.findByRole("link", { name: "alpha" });
+    expect(link).toHaveAttribute("href", panelResellerPath("r-1"));
+    expect(aiAdminApi.resellers).toHaveBeenCalledWith("quota_exhaustion");
+    expect(screen.getByText(/^ai\.resellers\.runsOutOn:/)).toBeInTheDocument();
+    expect(screen.getByText("ai.reasons.quota_rate:resellers.limits.keys.campaign_sends_daily_max.name,600,1000,ai.resellers.period.month,100")).toBeInTheDocument();
+    expect(screen.getByText("ai.reasons.quota_full:ai.resellers.productSales,10,10,ai.resellers.period.day")).toBeInTheDocument();
+    expect(screen.queryByText(/an_unworded_code/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "ai.resellers.more" }));
+    await waitFor(() => expect(aiAdminApi.resellers).toHaveBeenLastCalledWith("quota_exhaustion", "c-1"));
+  });
+
+  it("churn: the risk as a percent and the subscription's end; a deleted reseller by id, unlinked", async () => {
+    owner();
+    vi.mocked(aiAdminApi.resellers)
+      .mockResolvedValueOnce({ items: [], nextCursor: null })
+      .mockResolvedValueOnce({
+        items: [{ tenantId: "r-gone", slug: null, value: "0.9500", predictedAt: "2026-10-12T00:00:00.000Z", confidence: "0.6000", reasons: [{ code: "churn_base" }, { code: "wallet_short", balance: "10.00", price: "50.00", currencyCode: "USD" }] }],
+        nextCursor: null,
+      });
+    render(<AiView />);
+    fireEvent.click(screen.getByRole("tab", { name: "ai.tabs.resellers" }));
+    await waitFor(() => expect(aiAdminApi.resellers).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "ai.resellers.churn" }));
+    await screen.findByText("r-gone");
+    expect(aiAdminApi.resellers).toHaveBeenLastCalledWith("churn_risk");
+    expect(screen.queryByRole("link", { name: "r-gone" })).toBeNull();
+    expect(screen.getByText(/^ai\.resellers\.churnChance:95 · ai\.resellers\.renewsOn:/)).toBeInTheDocument();
+    expect(screen.getByText("ai.reasons.wallet_short:10.00,50.00,USD")).toBeInTheDocument();
   });
 });

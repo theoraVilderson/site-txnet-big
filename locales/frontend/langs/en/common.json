@@ -4050,7 +4050,8 @@
       "atRisk": "At risk",
       "report": "Report",
       "margins": "Margins",
-      "layout": "Plan layout"
+      "layout": "Plan layout",
+      "resellers": "Resellers"
     },
     "settings": {
       "engine": "Suggestion engine",
@@ -4150,7 +4151,14 @@
       "recent_rate": "Current pace of use",
       "remaining": "Little left",
       "weighted_by_hour_of_week": "Follows their weekly pattern",
-      "flat_rate": "Steady pace"
+      "flat_rate": "Steady pace",
+      "quota_rate": "{{quota}}: {{used}} of {{included}} this {{period}}, about {{perDay}} a day",
+      "quota_full": "{{quota}}: all {{included}} of this {{period}} used ({{used}})",
+      "wallet_short": "Wallet {{balance}} is short of the renewal {{price}} {{currency}}",
+      "renewal_unpaid": "Renewal unpaid or in grace",
+      "sales_fell": "Sales fell by more than half in 30 days",
+      "sales_grew": "Sales are growing",
+      "downgrade_scheduled": "A downgrade is scheduled"
     },
     "report": {
       "period": "Last {{days}} days",
@@ -4162,6 +4170,22 @@
       "revenue": "Extra revenue",
       "none": "No suggestions in this period yet.",
       "renewals": "Renewals: {{treated}} with suggestions, {{control}} in the holdout."
+    },
+    "resellers": {
+      "runOut": "Quota runs out",
+      "churn": "May leave",
+      "empty": "No reseller here right now.",
+      "fullNow": "A quota is full now",
+      "runsOutOn": "Runs out {{date}}",
+      "churnChance": "{{percent}}% risk",
+      "renewsOn": "renews {{date}}",
+      "productSales": "Product sales",
+      "more": "Show more",
+      "period": {
+        "day": "day",
+        "week": "week",
+        "month": "month"
+      }
     }
   }
 }
