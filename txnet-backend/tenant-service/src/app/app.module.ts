@@ -27,6 +27,7 @@ import { ResellersModule } from './resellers/resellers.module';
 import { StaffModule } from './staff/staff.module';
 import { StatusModule } from './status/status.module';
 import { SubscriptionModule } from './subscription/subscription.module';
+import { TenantTimeZoneModule } from './time-zone/tenant-time-zone.module';
 import { IdentityMiddleware } from './request/identity.middleware';
 import { VaultModule } from './vault/vault.module';
 
@@ -72,6 +73,7 @@ const LEGACY_PUBLIC_ROUTES = [`${LEGACY_FILES_PATH}/*path`, LEGACY_BRANDING_PATH
     FilesModule,
     BrandingModule,
     OperatingCurrencyModule,
+    TenantTimeZoneModule,
     VaultModule,
   ],
   controllers: [HealthController],

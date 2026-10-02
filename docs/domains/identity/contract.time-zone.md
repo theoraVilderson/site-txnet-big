@@ -43,8 +43,8 @@ equal to shared-core's constant and `TIME_ZONE_SOURCES`. Migration
 
 ## Not built here
 
-- The tenant setting
-  (TZ-1-d), the panel (TZ-1-e), quiet hours (TZ-1-f), schedules (TZ-1-g), the
+- The tenant's own setting is tenant's: [tenant/contract.time-zone.md](../tenant/contract.time-zone.md) (TZ-1-d).
+- The panel (TZ-1-e), quiet hours (TZ-1-f), schedules (TZ-1-g), the
   bot (TZ-1-h). Prisma `@default("Asia/Tehran")` and the panel's two
   `Intl` calls cannot read the constant; the panel's go with TZ-1-e.
 
