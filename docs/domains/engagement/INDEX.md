@@ -3,16 +3,16 @@ id: engagement
 layer: domain
 status: draft
 version: 1
-keywords: [spin wheel, engagement, daily reward, eligibility]
-source: []
+keywords: [spin wheel, engagement, daily reward, eligibility, attention budget, proactive message cap]
+source: [txnet-backend/ai-service/src/app/attention/**]
 owns_tables: [spin_wheel_config, spin_wheel_prize, spin_wheel_attempt, attention_budget]
 depends_on: [identity, billing, fraud]
-updated: 2026-09-04
+updated: 2026-10-02
 ---
 
 # Engagement
 
-**Responsibility (one sentence):** the daily spin wheel: prize config, strict eligibility checks, and per-attempt records with an eligibility snapshot, under a hard daily financial cap.
+**Responsibility (one sentence):** the daily spin wheel (prize config, strict eligibility, per-attempt records under a hard daily cap) and the attention budget that caps proactive AI messages per subject.
 **Explicitly NOT responsible for:** crediting the wallet itself (`billing`), deciding what counts as fraud (`fraud`).
 
 ## Files

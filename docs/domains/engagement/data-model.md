@@ -2,7 +2,7 @@
 id: engagement
 layer: domain
 status: draft
-updated: 2026-09-04
+updated: 2026-10-02
 ---
 
 # Data model — engagement
@@ -27,8 +27,9 @@ Source of truth: `txnet-backend/prisma/domains/engagement.prisma` (Postgres sche
 
 ## Access rules
 
-Draft. No service yet; when built, no unit outside `engagement` writes these
-tables and reads go through a `engagement` service API.
+Spin wheel: draft, no service yet; when built, no unit outside `engagement`
+writes these tables. `attention_budget` is read and written only by
+`ai-service`'s `AttentionBudget`, on the app pool with the tenant bound (F-1501).
 
 ## Migration notes
 
