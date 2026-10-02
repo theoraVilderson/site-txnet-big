@@ -82,6 +82,16 @@ enum OtpChannel {
 }
 
 /// 1.1 — هسته اصلی سیستم.
+/// Where `User.timezone` came from (TZ-1-b, ADR-0108 point 4): the user's
+/// own choice, or the zone the panel's browser reported. A report never
+/// overwrites a choice — `nextUserZone` in shared-core.
+enum TimeZoneSource {
+  user
+  browser
+
+  @@schema("identity")
+}
+
 model User {
   id                     String     @id @default(uuid()) @db.Uuid
   tenantId               String     @db.Uuid // FK -> tenant.Tenant.id | کلید پارتیشن اصلی چندمستأجری؛ پیش‌فرض اپلیکیشنی = رکورد platform_owner
@@ -112,6 +122,11 @@ model User {
   /// The messenger this user's notices take (F-601-u). Null until they
   /// choose, and read as `both`; a chosen one not linked falls back to the other.
   noticeMessenger        NoticeMessenger?
+  /// An IANA zone, canonical (TZ-1-b, ADR-0108). Null = none; the resolver
+  /// then reads the tenant's. Never inferred from an IP or a messenger.
+  timezone               String?
+  /// Set exactly when `timezone` is (a CHECK holds it).
+  timezoneSource         TimeZoneSource?
   referredByUserId       String?    @db.Uuid
 
   createdAt DateTime  @default(now())

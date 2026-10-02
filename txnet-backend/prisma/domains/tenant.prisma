@@ -161,6 +161,10 @@ model Tenant {
   /// (`^[A-Z]{3}$`); tenant-service admits only a currency with a rate. Changed
   /// only while the tenant has no money until F-116-f converts it.
   operatingCurrencyCode String                 @default("USD")
+  /// TZ-1-b, ADR-0108 point 2. An IANA zone: a reseller's "yesterday" and
+  /// its reports, and the zone of its users with none of their own. Default
+  /// is `PLATFORM_DEFAULT_TIMEZONE` (a spec holds the two equal).
+  timezone              String                 @default("Asia/Tehran")
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

@@ -28,7 +28,7 @@ many users with no username.
 ## Tables owned
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
-| user | core identity, auth secrets, prefs | yes (`tenantId`) | soft-delete (`deletedAt`) |
+| user | core identity, auth secrets, prefs; `timezone` (IANA, nullable) + `timezoneSource` (`user` \| `browser`), set together — a CHECK holds it (TZ-1-b, [contract.time-zone.md](contract.time-zone.md)) | yes (`tenantId`) | soft-delete (`deletedAt`) |
 | session | active logins, refresh-token hash, impersonation link | via user | prune on expiry/revoke |
 | role | dynamic RBAC role | **yes, or not at all** (`tenantId` nullable — null = a system template every tenant reads, F-018-n) | permanent; `isSystemRole` protected |
 | permission | permission key (`wallet.manual_adjust`, ...) | no | permanent |

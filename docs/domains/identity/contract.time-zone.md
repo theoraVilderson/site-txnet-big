@@ -20,6 +20,15 @@ answer a wall-clock question — the ADR's table says which clock answers what.
 | resolve a zone | the user's `{timezone, timezoneSource}` and the tenant's `{timezone}`, either absent | `{zone, from}` — `from` is `user` \| `browser` \| `tenant` \| `platform` | sync, pure | — |
 | next user zone | the stored pair and a report `{zone, source}` | the pair to write, or null for "write nothing" | sync, pure | a zone that is not IANA throws `RangeError` (the caller validates first) |
 
+## Columns (TZ-1-b)
+
+`identity.user.timezone` (nullable) + `timezoneSource` (`user` \| `browser`):
+both null or both set, a CHECK holds it (`user_timezone_has_a_source`). Null
+for every existing user. `tenant.tenant.timezone` is not null, default
+`Asia/Tehran`; `time-zone-columns.spec.ts` holds that default and the enum
+equal to shared-core's constant and `TIME_ZONE_SOURCES`. Migration
+`20261002000000_a_person_has_a_time_zone`, additive.
+
 ## Rules
 
 | # | Rule | Why |
@@ -33,7 +42,7 @@ answer a wall-clock question — the ADR's table says which clock answers what.
 
 ## Not built here
 
-- The columns (TZ-1-b), the `/me` endpoint (TZ-1-c), the tenant setting
+- The `/me` endpoint (TZ-1-c), the tenant setting
   (TZ-1-d), the panel (TZ-1-e), quiet hours (TZ-1-f), schedules (TZ-1-g), the
   bot (TZ-1-h). Prisma `@default("Asia/Tehran")` and the panel's two
   `Intl` calls cannot read the constant; the panel's go with TZ-1-e.
