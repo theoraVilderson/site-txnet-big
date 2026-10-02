@@ -17,6 +17,8 @@ export const AI_READER_TABLES = [
   { table: 'entitlement.grant', sharedRead: false },
   { table: 'entitlement.grant_meter', sharedRead: false },
   { table: 'entitlement.grant_renewal', sharedRead: false },
+  // F-038-p: the wholesale rate a reseller's Grant locked — the cost in the margin.
+  { table: 'entitlement.grant_wholesale', sharedRead: false },
   { table: 'billing.wallet_transaction', sharedRead: false },
   { table: 'billing.payment_transaction', sharedRead: false },
   { table: 'billing.invoice', sharedRead: false },

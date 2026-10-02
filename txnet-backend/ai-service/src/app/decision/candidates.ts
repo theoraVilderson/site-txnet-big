@@ -3,6 +3,7 @@ import { BackendI18nKeys } from '@txnet-backend/shared-core';
 
 import type { Reason } from '../profile/predictions';
 import type { ActionCandidate } from './action-log';
+import { wholesaleCost, type WholesaleRate } from './margin';
 
 /**
  * F-038-e / ADR-0109 point 8, the first step: candidates by rules, from the
@@ -19,8 +20,9 @@ import type { ActionCandidate } from './action-log';
  *
  * The engine never sets a price (point 9): a candidate names a plan the
  * tenant sells, at the price in force, and its expected margin is
- * P(renewal) × (price − cost). A cost not known is counted as nothing and the
- * reason says so (F-038-p supplies it).
+ * P(renewal) × (price − cost): the seller's wholesale cost at its Grant's
+ * locked rate (F-038-p, `margin.ts`). A cost not known is counted as nothing
+ * and the reason says so; a negative margin is flagged `losingMoney`.
  */
 
 const DAY_MS = 86_400_000;
@@ -48,7 +50,7 @@ export type DecisionPrediction = {
 
 export type CandidateGrant = { id: string; variantId: string | null; endsAt: Date | null };
 
-/** A plan the tenant sells: a variant, its bag (`size`, in its meter's unit), its price in force and its cost to the seller. */
+/** A plan the tenant sells: a variant, its bag (`size`, in its meter's unit) and its price in force. */
 export type PlanOption = {
   variantId: string;
   productId: string;
@@ -56,7 +58,6 @@ export type PlanOption = {
   durationDays: number | null;
   size: bigint | null;
   price: { amount: Prisma.Decimal; currencyCode: string } | null;
-  cost: Prisma.Decimal | null;
 };
 
 export type CandidateInputs = {
@@ -64,6 +65,8 @@ export type CandidateInputs = {
   grants: ReadonlyMap<string, CandidateGrant>;
   /** Every Grant's own plan and the other plans of the same products. */
   plans: ReadonlyMap<string, PlanOption>;
+  /** A Grant's wholesale leg (F-038-p): the rate it locked. None for the platform's own sales. */
+  wholesale?: ReadonlyMap<string, WholesaleRate>;
 };
 
 export type EngineCandidate = ActionCandidate & {
@@ -88,6 +91,7 @@ export function expectedMargin(probability: number, price: { amount: Prisma.Deci
       cost: cost ? cost.toFixed(2) : null,
       costKnown: cost !== null,
       currencyCode: price.currencyCode,
+      losingMoney: amount.isNegative(),
     },
   };
 }
@@ -148,7 +152,8 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
     if (!chosen?.target.price) continue;
 
     const probability = renewal?.value ?? chosen.prediction.confidence;
-    const margin = expectedMargin(probability, chosen.target.price, chosen.target.cost);
+    const costed = wholesaleCost(chosen.target, input.wholesale?.get(grantId) ?? null);
+    const margin = expectedMargin(probability, chosen.target.price, costed.cost);
     out.push({
       actionType: chosen.type,
       confidence: chosen.prediction.confidence,
@@ -167,6 +172,7 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
           price: chosen.target.price.amount.toFixed(2),
           currencyCode: chosen.target.price.currencyCode,
         },
+        costed.reason,
         margin.reason,
         ...chosen.prediction.reasons,
       ],

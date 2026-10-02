@@ -18,7 +18,7 @@ import { AI_READER_TABLES, AI_READER_VIEWS } from './reader-tables';
 const ROOT = join(__dirname, '../../../../..');
 const MIGRATIONS = join(ROOT, 'txnet-backend/prisma/domains/migrations');
 /** Every migration that grants the reader something, in order. */
-const READER_MIGRATIONS = ['20261002000300_ai_reader_role', '20261002000400_ai_profile_inputs', '20261002000500_ai_predictions_v1', '20261002000600_ai_quiet_down_inputs', '20261002000700_ai_decision_inputs'];
+const READER_MIGRATIONS = ['20261002000300_ai_reader_role', '20261002000400_ai_profile_inputs', '20261002000500_ai_predictions_v1', '20261002000600_ai_quiet_down_inputs', '20261002000700_ai_decision_inputs', '20261002000800_ai_margin_inputs'];
 
 function read(path: string): string {
   try {

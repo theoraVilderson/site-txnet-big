@@ -34,7 +34,8 @@ export type SubjectDecisionInputs = {
  *
  * candidates (types the tenant runs) → threshold (F-1503) → opt-out (F-1505)
  * → cooldown (F-1504) → quiet-down (F-1506) → holdout (F-1508) → attention
- * budget (F-1501, a peek) → the highest expected **margin** → offer
+ * budget (F-1501, a peek) → the highest expected **margin**, never a
+ * negative one (F-038-p) → offer
  * guardrails → a time: the next active hour outside quiet hours, before the
  * deadline.
  *
@@ -94,6 +95,8 @@ export class DecisionPipeline {
       if ('suppressedBy' in holdout) { await stop(c, holdout.suppressedBy); continue; }
       room ??= await this.budget.peek(subject, now, inputs.pendingSends);
       if (!room.allowed) { await stop(c, 'attention_budget'); continue; }
+      // A suggestion that loses the seller money is flagged and never sent (F-038-p).
+      if (new Prisma.Decimal(c.expectedMargin.amount).isNegative()) { await stop(c, 'margin'); continue; }
       survivors.push(c);
     }
     if (survivors.length === 0) return out;

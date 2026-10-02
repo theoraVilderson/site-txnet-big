@@ -26,14 +26,13 @@ const DAY = 86_400_000;
 const GIB = BigInt(1024 ** 3);
 const IRR = 'IRR';
 
-const plan = (variantId: string, gib: number, price: number | null, cost: number | null = null): PlanOption => ({
+const plan = (variantId: string, gib: number, price: number | null): PlanOption => ({
   variantId,
   productId: 'p1',
   billingMode: 'prepaid',
   durationDays: 30,
   size: BigInt(gib) * GIB,
   price: price === null ? null : { amount: new Prisma.Decimal(price), currencyCode: IRR },
-  cost: cost === null ? null : new Prisma.Decimal(cost),
 });
 
 const renewal = (value: number, confidence = 0.7): DecisionPrediction => ({
@@ -262,8 +261,12 @@ describe('DecisionPipeline (F-038-e)', () => {
       ]),
       // v200 earns 600k but costs 560k (margin 0.8 × 40k = 32k); v50 earns 0.9 × 80k = 72k.
       plans: new Map([
-        ['v50', plan('v50', 50, 200_000, 120_000)],
-        ['v200', plan('v200', 200, 600_000, 560_000)],
+        ['v50', plan('v50', 50, 200_000)],
+        ['v200', plan('v200', 200, 600_000)],
+      ]),
+      wholesale: new Map([
+        [GRANT, { meterKey: 'vpn.traffic', unitSize: GIB, unitPrice: new Prisma.Decimal(2_800), currencyCode: IRR }],
+        [OTHER, { meterKey: 'vpn.traffic', unitSize: GIB, unitPrice: new Prisma.Decimal(2_400), currencyCode: IRR }],
       ]),
     });
     const { pipeline, deps } = harness();
@@ -271,6 +274,14 @@ describe('DecisionPipeline (F-038-e)', () => {
     expect(out.filter((a) => a.status === 'scheduled')).toHaveLength(1);
     const outcomes = deps.log.record.mock.calls.map(([, c, o]) => [(c as unknown as { grantId: string }).grantId, (o as { status: string; suppressedBy?: string }).suppressedBy ?? (o as { status: string }).status]);
     expect(outcomes).toEqual(expect.arrayContaining([[OTHER, 'scheduled'], [GRANT, 'margin']]));
+  });
+
+  it('never schedules a suggestion that loses the seller money (F-038-p)', async () => {
+    const { pipeline, deps } = harness();
+    const wholesale = new Map([[GRANT, { meterKey: 'vpn.traffic', unitSize: GIB, unitPrice: new Prisma.Decimal(5_000), currencyCode: IRR }]]);
+    await pipeline.decide(subject, MODE, decisionInputs({ candidates: inputs({ wholesale }) }), NOW);
+    expect(deps.log.record).toHaveBeenCalledWith(subject, expect.anything(), { status: 'suppressed', suppressedBy: 'margin' }, NOW);
+    expect(deps.log.record).toHaveBeenCalledTimes(1);
   });
 
   it('a candidate with no time left before its deadline outside quiet hours is stopped by schedule', async () => {

@@ -6,6 +6,7 @@ import { HOURS_OF_WEEK } from '../profile/active-hours';
 import type { Reason } from '../profile/predictions';
 import { AiReaderPrisma, PrismaService } from '../prisma/prisma.service';
 import { SUGGEST_LEAD_DAYS, type CandidateGrant, type DecisionPrediction, type PlanOption } from './candidates';
+import type { WholesaleRate } from './margin';
 import type { SubjectDecisionInputs } from './pipeline';
 
 const DAY_MS = 86_400_000;
@@ -32,7 +33,8 @@ function bagOf(quotas: Prisma.JsonValue): bigint | null {
  * What the decision pipeline reads per subject (F-038-e), in the caller's
  * tenant scope (`runWithTenant`). The engine's own tables — predictions,
  * profiles, actions — on the app pool; every other unit's through
- * `txnet_ai_reader` (invariant 7): Grants, variants and prices under RLS, the
+ * `txnet_ai_reader` (invariant 7): Grants, their wholesale legs (F-038-p),
+ * variants and prices under RLS, the
  * user's zone by its column grant, the quiet window through
  * `ai.reader_quiet_hours`. `tenant.tenant` (no RLS) on the app pool, as every
  * service reads it.
@@ -118,11 +120,15 @@ export class DecisionReader {
           select: { variantId: true, tenantId: true, amount: true, currencyCode: true },
           orderBy: { effectiveFrom: 'desc' },
         });
+        const legs = await tx.grantWholesale.findMany({
+          where: { grantId: { in: grants.map((g) => g.id) } },
+          select: { grantId: true, meterKey: true, unitSize: true, unitPrice: true, currencyCode: true },
+        });
         const users = await tx.user.findMany({ where: { id: { in: userIds } }, select: { id: true, timezone: true, timezoneSource: true } });
         const windows = await tx.$queryRaw<Array<{ userId: string; quietStart: number; quietEnd: number; timezone: string | null }>>`
           SELECT "userId", "quietStart", "quietEnd", "timezone" FROM ai.reader_quiet_hours
           WHERE "userId" = ANY(ARRAY[${Prisma.join(userIds)}]::uuid[])`;
-        return { grants, variants, prices, users, windows };
+        return { grants, variants, prices, legs, users, windows };
       },
       { timeout: READ_TIMEOUT_MS },
     );
@@ -146,8 +152,6 @@ export class DecisionReader {
             durationDays: v.durationDays,
             size: bagOf(v.quotas),
             price: p ? { amount: p.amount, currencyCode: p.currencyCode } : null,
-            // F-038-p: the seller's wholesale cost. Unknown until then.
-            cost: null,
           },
         ];
       }),
@@ -167,6 +171,7 @@ export class DecisionReader {
       const grants = new Map<string, CandidateGrant>(
         theirs.grants.filter((g) => g.userId === id).map((g) => [g.id, { id: g.id, variantId: g.variantId, endsAt: g.endsAt }]),
       );
+      const wholesale = new Map<string, WholesaleRate>(theirs.legs.filter((l) => grants.has(l.grantId)).map(({ grantId, ...rate }) => [grantId, rate]));
       const window = theirs.windows.find((w) => w.userId === id);
       const user = theirs.users.find((u) => u.id === id);
       const quiet: QuietWindow | null = window
@@ -178,7 +183,7 @@ export class DecisionReader {
         : null;
       const mine = own.actions.filter((a) => a.subjectId === id);
       out.set(id, {
-        candidates: { predictions, grants, plans },
+        candidates: { predictions, grants, plans, wholesale },
         activeHours: own.profiles.find((p) => p.subjectId === id)?.activeHours ?? new Array<number>(HOURS_OF_WEEK).fill(0),
         quiet,
         pendingSends: mine.filter((a) => a.status === 'scheduled' && a.scheduledFor).map((a) => a.scheduledFor as Date),
