@@ -87,7 +87,7 @@ guards. The rest are not:
 | Row-Level Security — **done**, in `20260909000500_row_level_security` (2 tables) and `20260909001500_row_level_security_all_tables` (the other 23) | all 25 `tenantId` tables carry `ENABLE`/`FORCE ROW LEVEL SECURITY`, a `tenant_isolation` policy and a `cross_tenant` one. Three policy shapes, because `tenantId` does not mean the same thing everywhere — the second migration's header lists which table has which and why. `tenant.tenant` itself is **not** covered: it has no `tenantId` column, so its rule would be `id = current_tenant_id()`, a row of its own. Coverage is asserted by `rls-coverage.spec.ts`, not trusted | structural cross-tenant isolation (ADR-0001) |
 | Partial unique indexes | `currency_policy`, `user_restriction`, active coupons, `tenant` (`platform_owner`), `currency` (`isBaseCurrency`) — **`tenant_credential` is done**, in `20260909000000_credential_vault`, and **`bot_integration` is done**, in `20260909000200_bot_integration` | uniqueness that only applies to active/one row |
 | Multi-column CHECK | `tenant`, `currency`, schedule tables — **`payment_transaction` is done** (exactly one gateway), in `20260911000000_payment_legacy_port` | "exactly one" / mutually-exclusive-fields rules |
-| Native range partitioning | `network.traffic_raw_log`, `support.chat_message`, `ai.user_behavior_event` | high-volume append + `DROP PARTITION` instead of `DELETE` |
+| Native range partitioning | `network.traffic_raw_log`, `support.chat_message` | high-volume append + `DROP PARTITION` instead of `DELETE` |
 | BRIN indexes | `traffic_raw_log(recordedAt)` | cheap time-range scans |
 | `REVOKE UPDATE, DELETE` | `audit.admin_audit_log` | enforce append-only in the DB, not just convention |
 

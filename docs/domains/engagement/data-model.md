@@ -16,6 +16,7 @@ Source of truth: `txnet-backend/prisma/domains/engagement.prisma` (Postgres sche
 | spin_wheel_config | wheel + eligibility thresholds + daily cap; `tenantId` nullable | `tenantId` nullable | permanent |
 | spin_wheel_prize | prize: type, value, probability weight, optional daily stock; `currentDayAwardedCount` reset nightly | via config | permanent |
 | spin_wheel_attempt | one spin: eligibility snapshot JSON, awarded prize, resulting wallet tx, status | via user | permanent (audit) |
+| attention_budget | recent proactive AI-message times per subject (`chargedAt[]`, user or tenant) — 3 per rolling 7 days, 1 per 24 h (F-1501, ADR-0109 point 10); written by `ai-service` only; a count, never a ledger account (C-13); strict tenant RLS | yes | while the subject exists |
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |

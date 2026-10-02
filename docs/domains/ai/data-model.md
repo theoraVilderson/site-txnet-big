@@ -2,35 +2,51 @@
 id: ai
 layer: domain
 status: draft
-updated: 2026-09-04
+updated: 2026-10-02
 ---
 
 # Data model — ai
 
 Source of truth: `txnet-backend/prisma/domains/ai.prisma` (Postgres schema
-`ai`).
+`ai`), rebuilt by F-038-a (`20261002000200_ai_schema_rebuilt`, ADR-0109
+point 5). The onboarding tables (`user_behavior_event`, `ai_recommendation`,
+`ai_guardrail_*`) were empty and are dropped.
 
 ## Tables owned
-| Table | Purpose | Tenant-scoped? | Retention |
+Every table has a NOT NULL `tenantId` and strict RLS (`tenant_isolation`,
+`cross_tenant`) from its first migration.
+
+| Table | Purpose | Key | Retention |
 |---|---|---|---|
-| user_behavior_event | **monthly partitioned**, BigInt PK; event type + payload JSON | via user | drop old partitions |
-| ai_recommendation | type, suggested payload, confidence, est. revenue/cost, status, generating worker | via user | long |
-| ai_guardrail_rule | threshold rule (max discount %, max daily discount budget, max recs/user/day, min confidence) | no | permanent |
-| ai_guardrail_violation_log | which rule a recommendation violated + action taken | via recommendation | permanent |
+| account_profile | one account's features (`features` JSON) and 168 hour-of-week `activeHours` on UTC; rebuilt hourly | (tenantId, subjectKind, subjectId) | while the account exists |
+| prediction | one `AiPredictionKind` for a subject: `value` / `predictedAt`, `confidence` 0–1, `reasons` (non-empty array, CHECK) | id | rebuilt; erased with the account |
+| action | the audit of every suggestion, sent or stopped (F-1509): type, status, `suppressedBy` (set iff `suppressed`), reasons, template key, `renderedBy`, expected margin + currency | id | erased with the account |
+| offer | a tenant-defined offer: exactly one of coupon template / variant (CHECK), max discount 0–100%, daily budget + currency | id | permanent |
+| guardrail | a tenant's cap, one row per key (shape-checked, value ≥ 0; keys checked in code) | (tenantId, key) | permanent |
+| holdout | subjects in the tenant's holdout, recorded so a report reads the set the pipeline used | (tenantId, subjectKind, subjectId) | permanent |
+| opt_out | a subject's permanent opt-out of one action type | (…, actionType) | permanent |
+| provider | a BYO-AI provider: ownership, driver, base URL, key fingerprint (key in the vault), proxy, status | id | until removed |
+| task_route | which provider and model a task (message key) uses | (tenantId, task) | until changed |
+| usage | calls and tokens per provider, task, UTC day | (tenantId, providerId, task, day) | permanent |
+| setting | one row per tenant; no row = defaults: engine on, no type disabled, model text draft-with-approval, threshold 0.60, holdout 10% (CHECK 5–20), PII scrub on, 3000 ms | tenantId | permanent |
+
+Not owned here, but written only by `ai-service`: `engagement.attention_budget`
+(F-1501, created in the same migration, documented in `engagement`).
+
+`subjectKind` is `user` or `tenant`. A reseller as a subject (ADR-0109 point 4)
+is a row in the **platform's** tenant with `subjectId` = the reseller's tenant id.
 
 ## Relationships crossing unit boundaries
-| This table | -> | Other unit's table | Why it is allowed |
+No foreign keys leave the schema; ids are plain UUIDs.
+
+| This column | -> | Other unit's table | Why it is allowed |
 |---|---|---|---|
-| user_behavior_event.userId, ai_recommendation.userId | -> | identity.user.id | recommendations target users |
-| ai_recommendation.generatedByBotWorkerId | -> | automation.bot_worker.id | the generation worker |
-| ai_recommendation.suggestedPayload / est. impact | -> | billing / catalog (coupons, plans, prices) | a recommendation proposes a billing/catalog action |
+| `subjectId` (kind `user`) | -> | identity.user.id | the account a suggestion is about |
+| `subjectId` (kind `tenant`) | -> | tenant.tenant.id | a reseller as the platform's customer |
+| offer.couponTemplateId / variantId | -> | billing coupon template / catalog variant | an offer is redeemed on the existing coupon path |
 
 ## Access rules
 
-Draft. No service yet; when built, no unit outside `ai` writes these
-tables and reads go through a `ai` service API.
-
-## Migration notes
-
-No migration history is committed. Any partitioning / RLS / partial-unique-index
-noted in the schema is "section 99" manual SQL and is **not applied**.
+Only `ai-service` (F-038-b) writes these tables. Its
+reads of other units go through a read-only role over named tables, under
+tenant RLS (ADR-0109 point 6).

@@ -2,21 +2,23 @@
 id: ai
 layer: domain
 status: draft
-updated: 2026-09-04
+updated: 2026-10-02
 ---
 
 # Invariants — ai
 
-**DRAFT** — extracted from schema comments; none are enforced in code yet.
+**DRAFT** — the schema enforces 1–3; the rest are ADR-0109 rules for `ai-service`.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
-| 1 | A recommendation is shown to a user only after every active `ai_guardrail_rule` passes (or the recommendation is `blocked_by_guardrail` / capped) | planned service layer / schema | see contract | 
-| 2 | Every guardrail block or cap writes an `ai_guardrail_violation_log` row | planned service layer / schema | see contract | 
-| 3 | `user_behavior_event` is append-only and partitioned; old partitions are dropped, not row-deleted | planned service layer / schema | see contract | 
-| 4 | Guardrails bound real money exposure: total daily AI-driven discount never exceeds `max_daily_discount_budget_total` | planned service layer / schema | see contract | 
-| 5 | A recommendation never itself moves money — it only proposes an action a user must accept | planned service layer / schema | see contract | 
+| 1 | Every `ai.*` row and `engagement.attention_budget` row belongs to one tenant; the app pool sees only the current tenant's | NOT NULL `tenantId` + strict RLS (`20261002000200`); `ai-schema-rebuilt.spec.ts`, `rls-coverage.spec.ts` | one reseller reads another's customers |
+| 2 | A prediction and an action always say why: `reasons` is a non-empty array; a `suppressed` action names the step | CHECKs `*_reasons_present`, `action_suppressed_says_by_what` | an unexplainable suggestion |
+| 3 | Holdout share is 5–20% (never 0); confidence threshold 0–1; an offer targets exactly one thing with a discount ≤ 100% | CHECKs on `setting`, `offer` | no measurement; a free product |
+| 4 | The engine never sets a price, writes the ledger, changes a meter or touches the payment path | ADR-0109 point 9, §24.5 — service layer (planned) | money moved by a suggestion |
+| 5 | No learning across tenants and no network-layer data as input | ADR-0109 point 6 — service layer (planned) | one tenant's data shapes another's suggestions |
+| 6 | The attention budget is a count of messages, never a ledger account | C-13 | budget mixed with money |
 
 ## How to test
 
-To be written when a service exists.
+Schema rules: `shared-core/src/lib/prisma/ai-schema-rebuilt.spec.ts`. Service
+rules: with `ai-service` (F-038-b onward).

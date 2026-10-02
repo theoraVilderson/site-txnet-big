@@ -1,115 +1,295 @@
-// بخش چهارده: Schema `ai` — زیرساخت هوش مصنوعی توصیه‌گر با Guardrail مالی
+// =============================================================================
+// Schema `ai` — the revenue engine (ADR-0109). Rebuilt by F-038-a: every table
+// is one tenant's, with a NOT NULL `tenantId` and strict RLS from its first
+// migration. The engine speaks accounts, products and meters, never "GB".
 // =============================================================================
 
-enum BehaviorEventType {
-  low_balance
-  config_expiring_soon
-  usage_spike
-  ticket_opened
-  payment_failed
-  spin_wheel_played
-  coupon_viewed_not_redeemed
-  long_inactive
+/// Who an engine row is about. A reseller is a customer of the platform
+/// (ADR-0109 point 4): its rows carry the platform's `tenantId` and the
+/// reseller's tenant id as `subjectId`.
+enum AiSubjectKind {
+  user
+  tenant
 
   @@schema("ai")
 }
 
-enum RecommendationType {
-  renew_plan
-  buy_addon_gb
-  apply_coupon
-  upgrade_package
-  retention_offer
+/// ADR-0109 point 3. Generic on purpose: a new product kind adds meter keys,
+/// never a value here. The last three are "later" rows (F-038-t…v).
+enum AiActionType {
+  renew
+  resize_up
+  resize_down
+  top_up_wallet
+  retain_offer
+  trial_convert
+  checkout_help
+  win_back
+  usage_alert
+  cross_sell
+  wheel_invite
+  referral_invite
 
   @@schema("ai")
 }
 
-enum RecommendationStatus {
-  proposed
-  shown_to_user
+/// ADR-0109 point 7.
+enum AiPredictionKind {
+  meter_exhaustion
+  renewal_probability
+  right_size
+  wallet_need
+  active_hours
+  trial_conversion
+  win_back_window
+  quota_exhaustion
+  churn_risk
+
+  @@schema("ai")
+}
+
+/// `suppressed` is a candidate the decision pipeline (point 8) stopped; the
+/// step that stopped it is `suppressedBy`. `awaiting_approval` is model text
+/// in draft-with-approval mode (F-1543).
+enum AiActionStatus {
+  suppressed
+  awaiting_approval
+  scheduled
+  sent
   accepted
   dismissed
   expired
-  blocked_by_guardrail
 
   @@schema("ai")
 }
 
-enum GuardrailRuleType {
-  max_discount_percent_per_recommendation
-  max_daily_discount_budget_total
-  max_recommendations_per_user_per_day
-  min_confidence_threshold
+enum AiRenderedBy {
+  template
+  model
 
   @@schema("ai")
 }
 
-enum GuardrailAction {
-  recommendation_blocked
-  recommendation_capped
-  escalated_to_admin_review
+/// F-1534. `platform` is the platform owner's own provider, never lent to a
+/// reseller (D-03).
+enum AiProviderOwnership {
+  tenant
+  platform
 
   @@schema("ai")
 }
 
-/// پارتیشن ماهانه، حجم بالا — رفتار کاربر برای موتور پیشنهادگر.
-model UserBehaviorEvent {
-  id           BigInt            @id @default(autoincrement())
-  userId       String            @db.Uuid
-  eventType    BehaviorEventType
-  eventPayload Json
-  occurredAt   DateTime          @default(now())
+enum AiProviderStatus {
+  untested
+  ok
+  failing
 
-  @@index([userId])
-  @@index([occurredAt])
-  @@map("user_behavior_event")
   @@schema("ai")
 }
 
-model AIRecommendation {
-  id                        String                @id @default(uuid()) @db.Uuid
-  userId                    String                @db.Uuid
-  recommendationType        RecommendationType
-  suggestedPayload          Json
-  confidenceScore           Decimal               @db.Decimal(5, 4)
-  estimatedRevenueImpact    Decimal?              @db.Decimal(18, 2)
-  estimatedCostImpact       Decimal?              @db.Decimal(18, 2)
-  status                    RecommendationStatus  @default(proposed)
-  generatedByBotWorkerId    String?               @db.Uuid
-  generatedAt               DateTime              @default(now())
+/// One account's features, rebuilt hourly from the database and Redis only
+/// (point 6). `activeHours` is 168 hour-of-week buckets on UTC (point 7).
+model AiAccountProfile {
+  tenantId    String        @db.Uuid
+  subjectKind AiSubjectKind
+  subjectId   String        @db.Uuid
+  features    Json
+  activeHours Float[]
+  builtAt     DateTime
 
-  guardrailViolations AIGuardrailViolationLog[]
-
-  @@map("ai_recommendation")
+  @@id([tenantId, subjectKind, subjectId])
+  @@map("account_profile")
   @@schema("ai")
 }
 
-model AIGuardrailRule {
-  id             String            @id @default(uuid()) @db.Uuid
-  ruleName       String
-  ruleType       GuardrailRuleType
-  thresholdValue Decimal           @db.Decimal(18, 4)
-  isActive       Boolean           @default(true)
+/// A prediction always says why: `reasons` is a non-empty JSON array.
+model AiPrediction {
+  id          String           @id @default(uuid()) @db.Uuid
+  tenantId    String           @db.Uuid
+  subjectKind AiSubjectKind
+  subjectId   String           @db.Uuid
+  kind        AiPredictionKind
+  /// A probability, a size or an amount — what `kind` says.
+  value       Decimal?         @db.Decimal(18, 4)
+  /// A date the prediction names (exhaustion, win-back window).
+  predictedAt DateTime?
+  confidence  Decimal          @db.Decimal(5, 4)
+  reasons     Json
+  computedAt  DateTime         @default(now())
 
-  violations AIGuardrailViolationLog[]
-
-  @@map("ai_guardrail_rule")
+  @@index([tenantId, subjectKind, subjectId, kind, computedAt])
+  @@map("prediction")
   @@schema("ai")
 }
 
-model AIGuardrailViolationLog {
-  id              String          @id @default(uuid()) @db.Uuid
-  recommendationId String         @db.Uuid
-  ruleId          String          @db.Uuid
-  violatedValue   Decimal         @db.Decimal(18, 4)
-  actionTaken     GuardrailAction
-  occurredAt      DateTime        @default(now())
+/// The audit of every suggestion, sent or stopped (F-1509).
+model AiAction {
+  id                     String         @id @default(uuid()) @db.Uuid
+  tenantId               String         @db.Uuid
+  subjectKind            AiSubjectKind
+  subjectId              String         @db.Uuid
+  actionType             AiActionType
+  status                 AiActionStatus
+  suppressedBy           String?
+  confidence             Decimal        @db.Decimal(5, 4)
+  reasons                Json
+  predictionId           String?        @db.Uuid
+  offerId                String?        @db.Uuid
+  templateKey            String
+  renderedBy             AiRenderedBy   @default(template)
+  renderedText           String?
+  /// C-02: an amount always travels with its currency.
+  expectedMargin         Decimal?       @db.Decimal(18, 2)
+  expectedMarginCurrency String?
+  scheduledFor           DateTime?
+  deadline               DateTime?
+  sentAt                 DateTime?
+  outcomeAt              DateTime?
+  createdAt              DateTime       @default(now())
 
-  recommendation AIRecommendation @relation(fields: [recommendationId], references: [id])
-  rule           AIGuardrailRule  @relation(fields: [ruleId], references: [id])
+  offer AiOffer? @relation(fields: [offerId], references: [id])
 
-  @@map("ai_guardrail_violation_log")
+  @@index([tenantId, subjectKind, subjectId, actionType, createdAt])
+  @@index([tenantId, status, scheduledFor])
+  @@map("action")
   @@schema("ai")
 }
 
-// =============================================================================
+/// A tenant-defined offer (point 9): the engine picks one, never sets a price.
+/// Exactly one of `couponTemplateId` / `variantId`.
+model AiOffer {
+  id                 String       @id @default(uuid()) @db.Uuid
+  tenantId           String       @db.Uuid
+  name               String
+  actionType         AiActionType
+  couponTemplateId   String?      @db.Uuid
+  variantId          String?      @db.Uuid
+  maxDiscountPercent Decimal      @db.Decimal(5, 2)
+  dailyBudget        Decimal      @db.Decimal(18, 2)
+  currencyCode       String
+  isActive           Boolean      @default(true)
+  createdByUserId    String       @db.Uuid
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  actions AiAction[]
+
+  @@index([tenantId, actionType])
+  @@map("offer")
+  @@schema("ai")
+}
+
+/// A tenant's cap, one row per key (keys checked in code, as `reseller_limit`).
+model AiGuardrail {
+  tenantId        String   @db.Uuid
+  key             String
+  value           Decimal  @db.Decimal(18, 4)
+  updatedByUserId String   @db.Uuid
+  updatedAt       DateTime @updatedAt
+
+  @@id([tenantId, key])
+  @@map("guardrail")
+  @@schema("ai")
+}
+
+/// F-1508: membership is stable by a hash of the subject id, recorded here so
+/// a report reads the same set the pipeline used.
+model AiHoldout {
+  tenantId    String        @db.Uuid
+  subjectKind AiSubjectKind
+  subjectId   String        @db.Uuid
+  assignedAt  DateTime      @default(now())
+
+  @@id([tenantId, subjectKind, subjectId])
+  @@map("holdout")
+  @@schema("ai")
+}
+
+/// F-1505: permanent, per action type.
+model AiOptOut {
+  tenantId    String        @db.Uuid
+  subjectKind AiSubjectKind
+  subjectId   String        @db.Uuid
+  actionType  AiActionType
+  createdAt   DateTime      @default(now())
+
+  @@id([tenantId, subjectKind, subjectId, actionType])
+  @@map("opt_out")
+  @@schema("ai")
+}
+
+/// F-1534. The key lives in the vault; only its fingerprint is here (F-1536).
+model AiProvider {
+  id              String              @id @default(uuid()) @db.Uuid
+  tenantId        String              @db.Uuid
+  ownershipType   AiProviderOwnership
+  name            String
+  driver          String
+  baseUrl         String
+  keyFingerprint  String?
+  proxyUrl        String?
+  status          AiProviderStatus    @default(untested)
+  lastErrorAt     DateTime?
+  isActive        Boolean             @default(true)
+  createdByUserId String              @db.Uuid
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  routes AiTaskRoute[]
+  usages AiUsage[]
+
+  @@index([tenantId])
+  @@map("provider")
+  @@schema("ai")
+}
+
+/// F-1539 / F-1549: a model per task (a message key), not one global key.
+model AiTaskRoute {
+  tenantId   String   @db.Uuid
+  task       String
+  providerId String   @db.Uuid
+  model      String
+  updatedAt  DateTime @updatedAt
+
+  provider AiProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, task])
+  @@map("task_route")
+  @@schema("ai")
+}
+
+/// F-1546: tokens per tenant, provider, task and UTC day.
+model AiUsage {
+  tenantId         String   @db.Uuid
+  providerId       String   @db.Uuid
+  task             String
+  day              DateTime @db.Date
+  calls            Int      @default(0)
+  promptTokens     BigInt   @default(0)
+  completionTokens BigInt   @default(0)
+
+  provider AiProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, providerId, task, day])
+  @@map("usage")
+  @@schema("ai")
+}
+
+/// One row per tenant; no row reads as the defaults (F-1550, ADR-0109 point
+/// 12). Whether the engine runs at all is the `ai_recommendation` feature key.
+model AiSetting {
+  tenantId             String         @id @db.Uuid
+  engineEnabled        Boolean        @default(true)
+  disabledActionTypes  AiActionType[] @default([])
+  /// F-1543: model text is draft-with-approval unless its type is listed.
+  automaticActionTypes AiActionType[] @default([])
+  confidenceThreshold  Decimal        @default(0.6) @db.Decimal(3, 2)
+  holdoutPercent       Int            @default(10)
+  piiScrubEnabled      Boolean        @default(true)
+  modelTimeBudgetMs    Int            @default(3000)
+  updatedByUserId      String?        @db.Uuid
+  updatedAt            DateTime       @updatedAt
+
+  @@map("setting")
+  @@schema("ai")
+}

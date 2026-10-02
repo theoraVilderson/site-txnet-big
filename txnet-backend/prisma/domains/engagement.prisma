@@ -78,3 +78,19 @@ model SpinWheelAttempt {
 }
 
 // =============================================================================
+
+/// F-1501 / ADR-0109 point 10: how many proactive AI messages a subject has
+/// had lately — 3 per rolling 7 days, 1 per 24 h. `chargedAt` holds the recent
+/// charges, oldest trimmed. Charged by `ai-service` only; a count of messages,
+/// never a ledger account (C-13).
+model AttentionBudget {
+  tenantId    String        @db.Uuid
+  subjectKind AiSubjectKind
+  subjectId   String        @db.Uuid
+  chargedAt   DateTime[]    @default([])
+  updatedAt   DateTime      @updatedAt
+
+  @@id([tenantId, subjectKind, subjectId])
+  @@map("attention_budget")
+  @@schema("engagement")
+}
