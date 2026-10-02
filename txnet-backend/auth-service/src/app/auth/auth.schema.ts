@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { phoneSchema } from '../common/validation/phone.schema';
 import { strongPasswordSchema } from '../common/validation/strong-password.schema';
-import { NoticeMessenger } from '@prisma/client';
+import { NoticeMessenger, TimeZoneSource } from '@prisma/client';
+import { isIanaZone } from '@txnet-backend/shared-core';
 import { OtpChannel } from './otp/otp.interface';
 
 export const passwordLoginSchema = z.object({
@@ -48,6 +49,17 @@ export const meEmailRequestSchema = z.object({
 export const meMessengerSchema = z.object({
   messenger: z.nativeEnum(NoticeMessenger),
 });
+
+// TZ-1-c (ADR-0108): an IANA zone or null (the user clears their choice), and
+// who sent it — from the Prisma enum (C-09). A browser reports a zone; it never
+// clears one. Strict, so a field the panel thinks is saved is a 400.
+export const meTimeZoneSchema = z
+  .object({
+    zone: z.string().max(64).refine(isIanaZone, { message: 'zone must be an IANA time zone' }).nullable(),
+    source: z.nativeEnum(TimeZoneSource),
+  })
+  .strict()
+  .refine((b) => b.zone !== null || b.source === TimeZoneSource.user, { message: 'a browser reports a zone' });
 
 export const meEmailVerifySchema = z.object({
   email: emailAddressSchema,

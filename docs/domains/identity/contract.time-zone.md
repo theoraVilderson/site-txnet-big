@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-version: 25
+version: 26
 updated: 2026-10-02
 ---
 
@@ -18,6 +18,7 @@ answer a wall-clock question — the ADR's table says which clock answers what.
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
 | resolve a zone | the user's `{timezone, timezoneSource}` and the tenant's `{timezone}`, either absent | `{zone, from}` — `from` is `user` \| `browser` \| `tenant` \| `platform` | sync, pure | — |
+| read / save my zone | the caller's session; on save `{zone, source}` | `{timezone, source, resolved}`, plus `applied` on a save | sync | a non-IANA zone, or `browser` without one (400) |
 | next user zone | the stored pair and a report `{zone, source}` | the pair to write, or null for "write nothing" | sync, pure | a zone that is not IANA throws `RangeError` (the caller validates first) |
 
 ## Columns (TZ-1-b)
@@ -42,9 +43,10 @@ equal to shared-core's constant and `TIME_ZONE_SOURCES`. Migration
 
 ## Not built here
 
-- The `/me` endpoint (TZ-1-c), the tenant setting
+- The tenant setting
   (TZ-1-d), the panel (TZ-1-e), quiet hours (TZ-1-f), schedules (TZ-1-g), the
   bot (TZ-1-h). Prisma `@default("Asia/Tehran")` and the panel's two
   `Intl` calls cannot read the constant; the panel's go with TZ-1-e.
 
-Code: `shared-core/src/lib/time/time-zone.ts`.
+Code: `shared-core/src/lib/time/time-zone.ts`, `auth/me/me-time-zone.service.ts`.
+Wire shapes: [auth-api/contract.time-zone.md](../../interfaces/auth-api/contract.time-zone.md).

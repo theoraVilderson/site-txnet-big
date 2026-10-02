@@ -18,8 +18,9 @@ import { RateLimit } from '../decorators/rate-limit.decorator';
 import { MeService } from './me.service';
 import { MeEmailService } from './me-email.service';
 import { MeMessengerService } from './me-messenger.service';
+import { MeTimeZoneService, type TimeZoneReport } from './me-time-zone.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { meEmailRequestSchema, meEmailVerifySchema, meMessengerSchema } from '../auth.schema';
+import { meEmailRequestSchema, meEmailVerifySchema, meMessengerSchema, meTimeZoneSchema } from '../auth.schema';
 import type { AuthClaims } from '../token.service';
 
 /**
@@ -40,6 +41,7 @@ export class MeController {
     private readonly me: MeService,
     private readonly email: MeEmailService,
     private readonly messenger: MeMessengerService,
+    private readonly timeZone: MeTimeZoneService,
   ) {}
 
   @Get('me')
@@ -119,6 +121,34 @@ export class MeController {
   })
   saveMessenger(@Body(new ZodValidationPipe(meMessengerSchema)) body: { messenger: NoticeMessenger }, @Req() req: Request) {
     return this.messenger.save(claimsOf(req), body.messenger);
+  }
+
+  /** The caller's own zone and the one they are read in (TZ-1-c, ADR-0108): theirs, else the tenant's, else the platform's. */
+  @TenantCapability('account')
+  @Get('me/timezone')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.ME_TIMEZONE, req?.user?.sub ?? req?.ip),
+    configKey: 'ME_TIMEZONE_RATE_LIMIT',
+    windowSec: 900,
+  })
+  readTimeZone(@Req() req: Request) {
+    return this.timeZone.read(claimsOf(req));
+  }
+
+  /** A choice (`user`) or the panel's browser report (`browser`); a report never overwrites a choice. */
+  @TenantCapability('account')
+  @Put('me/timezone')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.ME_TIMEZONE, req?.user?.sub ?? req?.ip),
+    configKey: 'ME_TIMEZONE_RATE_LIMIT',
+    windowSec: 900,
+  })
+  saveTimeZone(@Body(new ZodValidationPipe(meTimeZoneSchema)) body: TimeZoneReport, @Req() req: Request) {
+    return this.timeZone.save(claimsOf(req), body);
   }
 }
 

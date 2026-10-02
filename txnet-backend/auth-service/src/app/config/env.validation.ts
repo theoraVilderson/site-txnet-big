@@ -228,6 +228,7 @@ export const envSchema = z.object({
   ME_EMAIL_REQUEST_RATE_LIMIT: rateLimit(5),
   ME_EMAIL_VERIFY_RATE_LIMIT: rateLimit(20),
   ME_MESSENGER_RATE_LIMIT: rateLimit(30),
+  ME_TIMEZONE_RATE_LIMIT: rateLimit(30),
   // The handoff to a reseller's own panel (F-061-f): a list read on load, a
   // mint per click, and a redeem per landing.
   HANDOFF_LIST_RATE_LIMIT: rateLimit(120),

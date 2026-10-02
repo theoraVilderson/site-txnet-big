@@ -130,6 +130,8 @@ export const RateLimitBucket = {
   ME_EMAIL_VERIFY: 'me:email:verify',
   /** `GET`/`PUT /auth/me/messenger` (F-601-u), per caller: a settings screen, not a loop. */
   ME_MESSENGER: 'me:messenger',
+  /** `GET`/`PUT /auth/me/timezone` (TZ-1-c), per caller: a settings screen and one report per sign-in. */
+  ME_TIMEZONE: 'me:timezone',
 
   /**
    * The handoff to a reseller's own panel (F-061-f): the list and the mint per
