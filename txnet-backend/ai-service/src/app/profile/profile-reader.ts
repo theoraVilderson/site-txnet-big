@@ -4,6 +4,7 @@ import { METER_KEYS, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { AiReaderPrisma } from '../prisma/prisma.service';
 import type { MeterCounter } from './meter-readings';
+import type { PredictionContext } from './predictions';
 import type { AccountInputs } from './profile-features';
 
 /** One interactive transaction reads a whole page; the default 5 s is a busy page on a one-CPU container. */
@@ -64,6 +65,34 @@ export class ProfileReader {
       },
       { timeout: READ_TIMEOUT_MS },
     );
+  }
+
+  /**
+   * The money a prediction needs (F-038-d): each variant's price in force at
+   * `now` — the tenant's own before the platform's, which RLS shows beside it —
+   * and the tenant's deposit presets.
+   */
+  async money(variantIds: string[], now: Date): Promise<PredictionContext> {
+    return tenantTransaction(this.reader, async (tx) => {
+      const prices = new Map<string, { amount: Prisma.Decimal; currencyCode: string; own: boolean }>();
+      if (variantIds.length > 0) {
+        const rows = await tx.price.findMany({
+          where: { variantId: { in: variantIds }, isActive: true, effectiveFrom: { lte: now } },
+          select: { variantId: true, tenantId: true, amount: true, currencyCode: true },
+          orderBy: { effectiveFrom: 'desc' },
+        });
+        for (const r of rows) {
+          const seen = prices.get(r.variantId);
+          const own = r.tenantId !== null;
+          if (!seen || (own && !seen.own)) prices.set(r.variantId, { amount: r.amount, currencyCode: r.currencyCode, own });
+        }
+      }
+      const setting = await tx.depositSetting.findFirst({ select: { presets: true, currencyCode: true } });
+      return {
+        prices: new Map([...prices].map(([id, p]) => [id, { amount: p.amount, currencyCode: p.currencyCode }])),
+        presets: setting && setting.presets.length > 0 ? { amounts: setting.presets, currencyCode: setting.currencyCode } : null,
+      };
+    });
   }
 
   /** The rest of each account's inputs since `since`, keyed by user id. */

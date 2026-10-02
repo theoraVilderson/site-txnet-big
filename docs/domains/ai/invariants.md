@@ -12,7 +12,7 @@ updated: 2026-10-02
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
 | 1 | Every `ai.*` row and `engagement.attention_budget` row belongs to one tenant; the app pool sees only the current tenant's | NOT NULL `tenantId` + strict RLS (`20261002000200`); `ai-schema-rebuilt.spec.ts`, `rls-coverage.spec.ts` | one reseller reads another's customers |
-| 2 | A prediction and an action always say why: `reasons` is a non-empty array; a `suppressed` action names the step | CHECKs `*_reasons_present`, `action_suppressed_says_by_what` | an unexplainable suggestion |
+| 2 | A prediction and an action always say why: `reasons` is a non-empty array; a `suppressed` action names the step | CHECKs `*_reasons_present`, `action_suppressed_says_by_what`; `predictions.spec.ts` | an unexplainable suggestion |
 | 3 | Holdout share is 5–20% (never 0); confidence threshold 0–1; an offer targets exactly one thing with a discount ≤ 100% | CHECKs on `setting`, `offer` | no measurement; a free product |
 | 4 | The engine never sets a price, writes the ledger, changes a meter or touches the payment path | ADR-0109 point 9, §24.5 — service layer (planned) | money moved by a suggestion |
 | 5 | No learning across tenants and no network-layer data as input | ADR-0109 point 6 — service layer (planned) | one tenant's data shapes another's suggestions |

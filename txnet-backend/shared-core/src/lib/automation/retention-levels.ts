@@ -16,6 +16,15 @@ export const RETENTION_HOLD_MS = DAY_MS;
  */
 export const IDLE_CHECK_AFTER_MS = 7 * DAY_MS;
 
+/**
+ * The exhaustion forecast's rate (F-602): "recent usage" is the last 72 h
+ * (user, 2026-09-27), and less than 24 h of it observed says nothing. Here,
+ * not in billing, because `ai-service` predicts exhaustion at the same rate
+ * from its own meter readings (F-038-d, ADR-0109 point 7).
+ */
+export const FORECAST_WINDOW_MS = 3 * DAY_MS;
+export const FORECAST_MIN_OBSERVED_MS = DAY_MS;
+
 /** The check-in a charge at `at` sets — metering writes it, entitlement's sweep reads it. */
 export function idleCheckOf(at: Date): Date {
   return new Date(at.getTime() + IDLE_CHECK_AFTER_MS);

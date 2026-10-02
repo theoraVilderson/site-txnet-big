@@ -21,6 +21,8 @@ export const AI_READER_TABLES = [
   { table: 'billing.payment_transaction', sharedRead: false },
   { table: 'billing.invoice', sharedRead: false },
   { table: 'billing.coupon', sharedRead: true },
+  // F-038-d: the top-up presets a wallet need is rounded up to.
+  { table: 'billing.deposit_setting', sharedRead: false },
   { table: 'catalog.product', sharedRead: true },
   { table: 'catalog.product_variant', sharedRead: true },
   { table: 'catalog.price', sharedRead: true },

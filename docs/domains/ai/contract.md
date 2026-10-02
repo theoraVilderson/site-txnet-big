@@ -10,7 +10,8 @@ updated: 2026-10-02
 
 **DRAFT — schema (F-038-a) and `ai-service` (F-038-b): it boots, holds its
 pools, gates each trigger on the tenant's package (F-1550) and rebuilds every
-account's profile hourly (F-038-c); nothing is decided yet.** The design
+account's profile and predictions hourly (F-038-c, F-038-d); nothing is
+decided yet.** The design
 is ADR-0109; the series that builds it is F-038-b … F-038-w and catalog
 area 24 (F-1501 … F-1550).
 
@@ -27,7 +28,7 @@ guardrail has one home.
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| rebuild profiles — **implemented (F-038-c)** | `POST /api/internal/ai/profiles/rebuild`, `ServiceOnlyGuard` (else 404); `worker-service`'s `ai_profile_rebuild`, hourly | `meter_reading` + `account_profile` rows; `{tenants, skipped, accounts, readings, purged}` in the success envelope | sync, service only | a failing tenant is logged and counted in `skipped`, the others still run |
+| rebuild profiles — **implemented (F-038-c)** | `POST /api/internal/ai/profiles/rebuild`, `ServiceOnlyGuard` (else 404); `worker-service`'s `ai_profile_rebuild`, hourly | `meter_reading`, `account_profile` and `prediction` rows; `{tenants, skipped, accounts, readings, predictions, purged}` in the success envelope | sync, service only | a failing tenant is logged and counted in `skipped`, the others still run |
 | decide | an outbox trigger or the hourly run | an `action` row: `scheduled`, `awaiting_approval` or `suppressed` (+ step) | async | — |
 | record outcome | the purchase or top-up the action suggested, within 7 days | `action.status = accepted` | async | — |
 | settings, offers, providers | tenant admin | `setting`, `offer`, `guardrail`, `provider`, `task_route` | sync (F-038-j, F-038-w) | — |
@@ -70,6 +71,22 @@ trigger), 500 accounts a page, all of it pure past the reads
 - Readings older than 180 days are deleted by the same run (invariant 10).
 
 Tenant subjects (a reseller, point 4) are not profiled yet.
+
+## Predictions v1 (F-038-d, point 7) — implemented
+
+`predictions.ts`, pure, from the same inputs plus each variant's price in
+force (the tenant's own before the platform's) and the tenant's deposit
+presets (`billing.deposit_setting`). One row per kind per account, replaced
+hourly; every one has `reasons[]` — a `code` and its numbers, never prose.
+
+| kind | for | `value` / `predictedAt` | rule |
+|---|---|---|---|
+| `meter_exhaustion` | the prepaid bag running out soonest, before its end, within 90 days | days / the instant | F-602's rate (72 h, ≥ 24 h observed — `FORECAST_*` in shared-core) from readings; spread by hour of week once readings reach back 7 days |
+| `renewal_probability` | the paid Grant ending soonest, within 30 days | 0–1 / its end | 0.5, +0.2 renewed before, ±period use, −0.2 idle 7 days, +0.05 signed in, −0.1 failed payment; clamped 0.02–0.98 until calibration (200 outcomes, later) |
+| `right_size` | a prepaid bag with measured renewal periods | size factor / — | < 40 % in each of the last two → down (the larger share); ran out early in two of the last three → up (planned ÷ actual length) |
+| `wallet_need` | the paid Grant ending soonest with a price | amount + `currencyCode` / its end | 2 × price − (balance − held), up to the smallest covering preset (past the largest, its multiple); none across two currencies |
+| `trial_conversion` | only trials, one live or ended ≤ 14 days, never paid | 0–1 / trial end | 0.15, use, return days, a read, a top-up |
+| `win_back_window` | no active Grant, had one | days since / next of 14·30·60 | none past 60 days |
 
 ## Factory default (F-1550, ADR-0109 point 12) — implemented
 

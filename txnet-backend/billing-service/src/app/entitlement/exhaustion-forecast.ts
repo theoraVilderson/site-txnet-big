@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
-import { IDLE_CHECK_AFTER_MS, OutboxEventType, remainingLabel, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { FORECAST_MIN_OBSERVED_MS, FORECAST_WINDOW_MS, IDLE_CHECK_AFTER_MS, OutboxEventType, remainingLabel, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,10 +9,6 @@ import { runs } from './reactivated';
 
 const DAY_MS = 86_400_000;
 
-/** "Recent usage" (user, 2026-09-27): the last 72 h, which smooths one busy day and still sees a habit change within days. */
-export const FORECAST_WINDOW_MS = 3 * DAY_MS;
-/** Less of the window observed than this says nothing: one busy hour is not a rate. */
-export const FORECAST_MIN_OBSERVED_MS = DAY_MS;
 /** Told when the bytes left last this long or less at the recent rate (user, 2026-09-27). */
 export const FORECAST_HORIZON_DAYS = 5;
 /** Past this share of the period, the 95 % notice (F-601-d) is the urgent one and the forecast is not told. */

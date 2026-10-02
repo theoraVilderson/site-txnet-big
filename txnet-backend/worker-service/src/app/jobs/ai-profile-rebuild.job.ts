@@ -7,7 +7,7 @@ import { envelopeData } from '../automation/internal-answer';
 
 /** The one route this job exists to call. Service callers only; 404 otherwise. */
 const REBUILD_PATH = '/api/internal/ai/profiles/rebuild';
-const REBUILD_COUNTS = ['tenants', 'skipped', 'accounts', 'readings', 'purged'] as const;
+const REBUILD_COUNTS = ['tenants', 'skipped', 'accounts', 'readings', 'predictions', 'purged'] as const;
 
 /**
  * The clock on the revenue engine's profiles (F-038-c, ADR-0109 point 6):
@@ -30,7 +30,7 @@ export class AiProfileRebuildJob implements Job {
   readonly key = 'ai_profile_rebuild';
   readonly name = 'AI profiles';
   readonly description =
-    'Samples every active Grant\'s meters and rebuilds each account\'s AI profile from the last 180 days (F-038-c).';
+    'Samples every active Grant\'s meters and rebuilds each account\'s AI profile and predictions from the last 180 days (F-038-c, F-038-d).';
   readonly category = BotWorkerCategory.other;
   /** Unscheduled, the engine has no usage rate and no active hours. Hourly, five past. */
   readonly defaultSchedule: DefaultSchedule = { scheduleType: 'cron_expression', cronExpression: '5 * * * *' };

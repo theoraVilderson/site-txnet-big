@@ -139,6 +139,8 @@ model AiPrediction {
   value       Decimal?         @db.Decimal(18, 4)
   /// A date the prediction names (exhaustion, win-back window).
   predictedAt DateTime?
+  /// Set iff `value` is an amount (`wallet_need`) — C-02, CHECKed.
+  currencyCode String?
   confidence  Decimal          @db.Decimal(5, 4)
   reasons     Json
   computedAt  DateTime         @default(now())

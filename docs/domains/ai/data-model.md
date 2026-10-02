@@ -19,7 +19,7 @@ Every table has a NOT NULL `tenantId` and strict RLS (`tenant_isolation`,
 | Table | Purpose | Key | Retention |
 |---|---|---|---|
 | account_profile | one account's features (`features` JSON) and 168 hour-of-week `activeHours` on UTC; rebuilt hourly | (tenantId, subjectKind, subjectId) | while the account exists |
-| prediction | one `AiPredictionKind` for a subject: `value` / `predictedAt`, `confidence` 0–1, `reasons` (non-empty array, CHECK) | id | rebuilt; erased with the account |
+| prediction | one `AiPredictionKind` for a subject: `value` / `predictedAt`, `confidence` 0–1, `reasons` (non-empty array, CHECK); `currencyCode` set iff `kind = wallet_need` (C-02, CHECK, `20261002000500`) | id | the builder replaces an account's v1 kinds each hour (one row per kind); erased with the account |
 | action | the audit of every suggestion, sent or stopped (F-1509): type, status, `suppressedBy` (set iff `suppressed`), reasons, template key, `renderedBy`, expected margin + currency | id | erased with the account |
 | offer | a tenant-defined offer: exactly one of coupon template / variant (CHECK), max discount 0–100%, daily budget + currency | id | permanent |
 | guardrail | a tenant's cap, one row per key (shape-checked, value ≥ 0; keys checked in code) | (tenantId, key) | permanent |
