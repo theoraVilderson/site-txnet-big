@@ -11,7 +11,7 @@ updated: 2026-10-02
 **DRAFT — schema (F-038-a) and `ai-service` (F-038-b): it boots, holds its
 pools, gates each trigger on the tenant's package (F-1550), rebuilds every
 account's profile and predictions hourly (F-038-c, F-038-d) and decides
-`renew` / `resize_up` suggestions from them (F-038-e); nothing is delivered
+`renew` / `resize_up` / `resize_down` suggestions from them (F-038-e, F-1514); nothing is delivered
 yet (F-038-g).** The design
 is ADR-0109; the series that builds it is F-038-b … F-038-w and catalog
 area 24 (F-1501 … F-1550).
@@ -129,6 +129,7 @@ run-out, whichever is first, and nothing is proposed more than 7 days before it:
 | type | when | plan named |
 |---|---|---|
 | `resize_up` | `right_size` says up | the smallest public plan of the same product, mode and length holding factor × the bag (`quotas.traffic_bytes`), else the largest bigger one |
+| `resize_down` (F-1514) | `right_size` says down (under 40 % in each of two periods) and the Grant ends inside 7 days — at renewal only | the smallest plan of the same product, mode and length, smaller than its own, holding the larger period's use × 1.25 (`RESIZE_DOWN_HEADROOM`) |
 | `renew` | no resize to offer, the Grant ends inside 7 days, its plan has a price | its own plan |
 
 Each carries `reasons` `suggest_variant` (Grant, plan, price) and

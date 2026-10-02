@@ -10,8 +10,9 @@ import { wholesaleCost, type WholesaleRate } from './margin';
  * predictions the hourly rebuild stored (F-038-d). Pure — the reads are the
  * pipeline's.
  *
- * One candidate per Grant at most. A Grant whose size is wrong is offered the
- * right size *instead of* the same plan again: a renewal and a resize of one
+ * One candidate per Grant at most. A Grant whose size is wrong — too small
+ * (`resize_up`) or too big (`resize_down`, F-1514) — is offered the right
+ * size *instead of* the same plan again: a renewal and a resize of one
  * Grant are one decision, and sending both would be two messages about it.
  *
  * Nothing is suggested earlier than `SUGGEST_LEAD_DAYS` before it matters —
@@ -29,14 +30,22 @@ const DAY_MS = 86_400_000;
 
 export const SUGGEST_LEAD_DAYS = 7;
 
+/**
+ * F-1514: a smaller plan must hold the most they used in a period plus this
+ * much — a plan cut to the byte runs out in the next busy month, and the
+ * buyer blames the seller who suggested it.
+ */
+export const RESIZE_DOWN_HEADROOM = 1.25;
+
 /** The types this file proposes. Each new action row adds its own. */
-export const CANDIDATE_TYPES = ['renew', 'resize_up'] as const satisfies readonly AiActionType[];
+export const CANDIDATE_TYPES = ['renew', 'resize_up', 'resize_down'] as const satisfies readonly AiActionType[];
 export type CandidateType = (typeof CANDIDATE_TYPES)[number];
 
 /** C-07: a key chosen at runtime comes from an exhaustive Record. */
 export const SUGGESTION_TEMPLATE_KEY: Record<CandidateType, string> = {
   renew: BackendI18nKeys.notifications.suggestion.renew,
   resize_up: BackendI18nKeys.notifications.suggestion.resize_up,
+  resize_down: BackendI18nKeys.notifications.suggestion.resize_down,
 };
 
 export type DecisionPrediction = {
@@ -117,6 +126,13 @@ function biggerPlan(plans: ReadonlyMap<string, PlanOption>, current: PlanOption,
   return bigger.find((p) => (p.size as bigint) >= needed) ?? bigger[bigger.length - 1] ?? null;
 }
 
+/** F-1514: the smallest smaller plan holding `share` × the current bag with headroom; null if none fits. */
+function smallerPlan(plans: ReadonlyMap<string, PlanOption>, current: PlanOption, share: number): PlanOption | null {
+  if (current.size === null) return null;
+  const needed = (current.size * BigInt(Math.ceil(share * RESIZE_DOWN_HEADROOM * 10_000))) / BigInt(10_000);
+  return siblingPlans(plans, current).find((p) => (p.size as bigint) >= needed && (p.size as bigint) < (current.size as bigint)) ?? null;
+}
+
 export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidate[] {
   const t = now.getTime();
   const lead = SUGGEST_LEAD_DAYS * DAY_MS;
@@ -144,6 +160,11 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
     if (size?.reasons[0]?.code === 'size_up' && size.value !== null) {
       const target = biggerPlan(input.plans, current, size.value);
       if (target) chosen = { type: 'resize_up', prediction: size, target };
+    }
+    // F-1514: an over-buyer is offered the smaller plan at renewal, never earlier — its deadline is the Grant's end.
+    if (size?.reasons[0]?.code === 'size_down' && size.value !== null && grant.endsAt && grant.endsAt.getTime() - t <= lead) {
+      const target = smallerPlan(input.plans, current, size.value);
+      if (target) chosen = { type: 'resize_down', prediction: size, target };
     }
     // No right size to offer: the same plan again, when the Grant itself is ending.
     if (!chosen && renewal && grant.endsAt && grant.endsAt.getTime() - t <= lead && current.price) {
