@@ -12,7 +12,7 @@ updated: 2026-10-02
 `aiAdminApi` — ai's `/api/ai/admin/*` ([ai/contract.admin.md](../../domains/ai/contract.admin.md)).
 Six tabs, each reading when opened: settings, discount offers, at risk,
 margins (F-1528), plan layout (F-1527), report.
-Per-type model mode and caps are F-038-w's page (user, 2026-10-02).
+Per-type model mode and caps were F-038-w's page, dropped 2026-10-03.
 
 ## Rules
 

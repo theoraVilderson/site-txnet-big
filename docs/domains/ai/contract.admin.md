@@ -12,7 +12,7 @@ updated: 2026-10-02
 calls, through Traefik's `PathPrefix(/api/ai)` behind `my-auth` and the
 `ai.manage` permission (`AiManageGuard`; Admin, and SuperAdmin as `*`;
 migration `20261002001000_ai_manage_permission`). Its own file: contract.md is
-at its ceiling. Per-type model mode and caps are F-038-w's (user, 2026-10-02).
+at its ceiling. Per-type model mode and caps were F-038-w's, dropped 2026-10-03.
 
 ## Rules
 

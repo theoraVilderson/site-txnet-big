@@ -12,16 +12,15 @@ updated: 2026-10-02
 package (F-1550), it rebuilds profiles and predictions hourly (F-038-c/d),
 decides `renew` / `resize_*` / `top_up_wallet` / `win_back` / `retain_offer` / `checkout_help` / `usage_alert` (F-038-e, F-1514, F-038-k, F-038-n, F-038-f2, F-038-m, F-1516), delivers them (F-038-g) and
 measures them against the holdout (F-038-i).** The design is ADR-0109; the
-series that builds it is F-038-b … F-038-w and catalog area 24 (F-1501 … F-1550).
+series that builds it is F-038-b … F-038-v and catalog area 24 (F-1501 … F-1550).
 
 ## TL;DR
 
 Two layers. The **engine** is ours: per-account profiles → predictions with
 reasons → a next best action → its timing → a template. It needs no model and
-no key. The **language layer** is the tenant's own model (BYO-AI): it may
-rephrase a template or re-rank inside the engine's candidates, never invent a
-product, number or price. Both run in one service, `ai-service`, so every
-guardrail has one home.
+no key. The **language layer** (the tenant's own model, BYO-AI) was dropped
+by the user on 2026-10-03: every message is a template. The engine runs in
+one service, `ai-service`, so every guardrail has one home.
 
 ## Provides (intended)
 
@@ -106,9 +105,8 @@ hourly; every one has `reasons[]` — a `code` and its numbers, never prose.
 |---|---|---|---|
 | may not sell (F-038-x): `suspended`, `terminated` or onboarding — the `sell` cell of `TenantStatusPolicy`, from `tenant:status:<id>` | **no run**, entitled or not | none | off |
 | package without `ai_recommendation` | **no run**, whatever `ai.setting` says | none | off |
-| with it, no `ai.setting` row, no provider | runs | every v1 type (`AI_V1_ACTION_TYPES`: not `cross_sell`, `wheel_invite`, `referral_invite`) | off — templates |
+| with it, no `ai.setting` row | runs | every v1 type (`AI_V1_ACTION_TYPES`: not `cross_sell`, `wheel_invite`, `referral_invite`) | off — templates |
 | with it, `engineEnabled = false` | no run | none | off |
-| with it and an active provider | runs | v1 minus `disabledActionTypes` | on: per type `draft_with_approval`, or `automatic` if listed in `automaticActionTypes` (F-1543) |
 
 A trigger with no `tenantId` in its payload is acknowledged and skipped,
 never assigned a tenant. A missing, unreadable or unreachable status key
@@ -238,7 +236,7 @@ expires at its end, so a forgotten switch lifts itself.
 
 - Every row is one tenant's (invariant 1); no learning across tenants.
 - A suggestion never moves money, a meter or a payment (invariant 4).
-- Without a provider, every message is a template (F-1540).
+- Every message is a template; there is no language layer (dropped 2026-10-03).
 - Every message passes the safety floor; no tenant setting reaches it (invariant 18).
 
 ## Deprecations

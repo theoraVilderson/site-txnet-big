@@ -1,7 +1,7 @@
 ---
 id: adr-0109
 status: accepted
-updated: 2026-10-02
+updated: 2026-10-03
 ---
 
 # ADR 0109 — the revenue engine is ours; the language model is the tenant's
@@ -33,7 +33,10 @@ suggestion is produced, where the code runs, or what it reads.
    no key, and is complete on its own (D-04). The *language layer* is the
    tenant's own model (D-03, F-1534…F-1550): it may rephrase a template and
    re-rank inside the engine's candidates, never invent a product, a number
-   or a price (D-12, F-1542).
+   or a price (D-12, F-1542). **Dropped by the user 2026-10-03:** the
+   language layer is not built (F-1526, F-1529, F-1534…F-1537,
+   F-1539…F-1544, F-1546, F-1547, F-1549, F-038-w); every message is a
+   template. Points below that mention a provider or model text are void.
 2. **One service, `ai-service`** (Nest, `txnet-backend/ai-service`). Every
    model call and every proactive AI message decision goes through it, so the
    attention budget, PII scrub, output validation, time budget and token
