@@ -29,7 +29,7 @@ Separately, every bot a tenant owns is a `bot_integration` row — the registry
 |---|---|---|---|---|
 | register worker | key, name, category | `bot_worker` | on boot | two jobs claiming one key — the process refuses to start |
 | list workers | — | worker + schedules + last run, each schedule carrying its `shapeError` | sync | — |
-| set schedule | key, type, window/cron, timezone | `bot_schedule` | sync | a shape that could never run — refused with the rule it broke, nothing written |
+| set schedule | key, type, window/cron, timezone (absent = the caller's tenant zone, TZ-1-g) | `bot_schedule` | sync | a shape that could never run — refused with the rule it broke, nothing written |
 | toggle schedule | key, scheduleId, isActive | updated row | sync | unknown schedule for that worker — a 404 |
 | toggle worker | key, isActive | updated row + `bot_toggle` audit row, one transaction | sync | — |
 | run now | key | `automation.tick.<key>` with `triggeredBy: admin_manual` | async | worker `isActive=false` — refused; broker unreachable — 503 |

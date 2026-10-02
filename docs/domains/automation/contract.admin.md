@@ -30,6 +30,13 @@ declined it into a log nobody reads. `set schedule` calls the same
 broken; `list workers` answers a `shapeError` per schedule, so a row already in
 the table is visible too.
 
+**A schedule with no `timezone` takes the tenant's zone** (TZ-1-g, ADR-0108
+point 6). A worker has no `tenantId`, so the tenant is the calling admin's —
+`resolveTimeZone({ tenant })`, which falls to `PLATFORM_DEFAULT_TIMEZONE`. A
+stated zone is kept as the admin's explicit choice. The admin's personal zone
+is not read: a schedule outlives whoever wrote it. A job's own
+`defaultSchedule`, written on boot with no caller, keeps the column default.
+
 **Nothing is deleted.** A schedule is switched off, not removed:
 `bot_execution_log` explains past runs and `setByAdminId` says who asked for
 them, and deleting the row that explains a run leaves the history unreadable.

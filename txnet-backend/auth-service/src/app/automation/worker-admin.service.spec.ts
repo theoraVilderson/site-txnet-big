@@ -24,7 +24,10 @@ describe('WorkerAdminService', () => {
   };
   const ADMIN = '22222222-2222-2222-2222-222222222222';
 
-  const build = (worker: typeof WORKER | null = WORKER) => {
+  const build = (
+    worker: typeof WORKER | null = WORKER,
+    adminTenantZone: string | null = 'Europe/Berlin',
+  ) => {
     const botWorker = {
       findUnique: vi.fn(async () => worker),
       update: vi.fn(async () => ({ ...(worker as typeof WORKER), isActive: false })),
@@ -36,9 +39,13 @@ describe('WorkerAdminService', () => {
         id: 'audit-1',
       })),
     };
+    const user = {
+      findUnique: vi.fn(async () => ({ tenant: { timezone: adminTenantZone } })),
+    };
     const prisma = {
       botWorker,
       botSchedule,
+      user,
       adminAuditLog,
       $transaction: vi.fn(async (fn: (tx: unknown) => unknown) =>
         fn({ botWorker, adminAuditLog }),
@@ -49,7 +56,7 @@ describe('WorkerAdminService', () => {
       prisma as never,
       publisher as never,
     );
-    return { service, prisma, botWorker, botSchedule, adminAuditLog, publisher };
+    return { service, prisma, botWorker, botSchedule, adminAuditLog, publisher, user };
   };
 
   const window = {
@@ -134,6 +141,37 @@ describe('WorkerAdminService', () => {
       await expect(
         service.setSchedule('not-a-worker', window, ADMIN),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('setSchedule — a schedule with no zone takes the tenant\'s (TZ-1-g, ADR-0108 point 6)', () => {
+    const created = (botSchedule: { create: ReturnType<typeof vi.fn> }) =>
+      (botSchedule.create.mock.calls[0][0] as { data: { timezone: string } }).data.timezone;
+
+    it('writes the calling admin\'s tenant zone, not the platform literal', async () => {
+      const { service, botSchedule, user } = build();
+
+      await service.setSchedule('heartbeat', { ...window, timezone: undefined }, ADMIN);
+
+      expect(user.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: ADMIN } }));
+      expect(created(botSchedule)).toBe('Europe/Berlin');
+    });
+
+    it('falls back to the platform zone when the tenant zone is unreadable', async () => {
+      const { service, botSchedule } = build(WORKER, 'Not/AZone');
+
+      await service.setSchedule('heartbeat', { ...window, timezone: undefined }, ADMIN);
+
+      expect(created(botSchedule)).toBe('Asia/Tehran');
+    });
+
+    it('keeps a zone the admin stated, and reads no tenant for it', async () => {
+      const { service, botSchedule, user } = build();
+
+      await service.setSchedule('heartbeat', { ...window, timezone: 'America/New_York' }, ADMIN);
+
+      expect(created(botSchedule)).toBe('America/New_York');
+      expect(user.findUnique).not.toHaveBeenCalled();
     });
   });
 

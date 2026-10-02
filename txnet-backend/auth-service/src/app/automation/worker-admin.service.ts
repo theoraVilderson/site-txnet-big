@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ScheduleType } from '@prisma/client';
 import {
   ScheduleRow,
+  resolveTimeZone,
   scheduleShapeError,
   workerIsRunnable,
 } from '@txnet-backend/shared-core';
@@ -9,8 +10,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ResponseType, err, ok } from '../common/response/response.util';
 import { ManualTickPublisher } from './manual-tick.publisher';
 
-/** The columns an admin sets on a schedule. `isActive` is not one of them. */
-export type ScheduleInput = Omit<ScheduleRow, 'isActive'>;
+/**
+ * The columns an admin sets on a schedule. `isActive` is not one of them.
+ * `timezone` absent = the calling admin's tenant zone, through the resolver
+ * (TZ-1-g, ADR-0108 point 6) — never a literal.
+ */
+export type ScheduleInput = Omit<ScheduleRow, 'isActive' | 'timezone'> & {
+  timezone?: string | null;
+};
 
 export interface WorkerView {
   key: string;
@@ -175,7 +182,8 @@ export class WorkerAdminService {
   ): Promise<ResponseType<{ scheduleId: string }, { reason: string } | null>> {
     const worker = await this.mustFind(key);
 
-    const shapeError = scheduleShapeError({ ...input, isActive: true });
+    const timezone = input.timezone || (await this.tenantZone(adminId));
+    const shapeError = scheduleShapeError({ ...input, timezone, isActive: true });
     if (shapeError !== null) {
       this.logger.warn(`refused a schedule for ${key}: ${shapeError}`);
       return err('automation.invalidSchedule', { reason: shapeError });
@@ -188,13 +196,27 @@ export class WorkerAdminService {
         windowStartAt: input.windowStartAt,
         windowEndAt: input.windowEndAt,
         cronExpression: input.cronExpression,
-        timezone: input.timezone,
+        timezone,
         setByAdminId: adminId,
       },
       select: { id: true },
     });
 
     return ok({ scheduleId: schedule.id });
+  }
+
+  /**
+   * The zone a schedule the admin gave none is read in. A worker carries no
+   * `tenantId` (it is platform-wide), so "the tenant" is the caller's own —
+   * for the platform owner, the platform tenant's setting (TZ-1-d). The
+   * admin's personal zone is not used: a schedule outlives whoever wrote it.
+   */
+  private async tenantZone(adminId: string): Promise<string> {
+    const admin = await this.prisma.user.findUnique({
+      where: { id: adminId },
+      select: { tenant: { select: { timezone: true } } },
+    });
+    return resolveTimeZone({ tenant: admin?.tenant }).zone;
   }
 
   /**

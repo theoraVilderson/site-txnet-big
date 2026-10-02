@@ -46,7 +46,8 @@ equal to shared-core's constant and `TIME_ZONE_SOURCES`. Migration
 - The tenant's own setting is tenant's: [tenant/contract.time-zone.md](../tenant/contract.time-zone.md) (TZ-1-d).
 - Quiet hours are notification's: [notification/contract.retention.md](../notification/contract.retention.md) (TZ-1-f).
 - The panel is panel-web's: `contract.kit.md` "The zone a date is drawn in" (TZ-1-e).
-- Schedules (TZ-1-g), the bot (TZ-1-h). Prisma `@default("Asia/Tehran")`
+- Schedules are automation's: [automation/contract.admin.md](../automation/contract.admin.md) (TZ-1-g).
+- The bot (TZ-1-h). Prisma `@default("Asia/Tehran")`
   cannot read the constant; the panel spells it once, `src/lib/time-zone.ts`.
 
 Code: `shared-core/src/lib/time/time-zone.ts`, `auth/me/me-time-zone.service.ts`.

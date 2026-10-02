@@ -1,5 +1,4 @@
 import { ScheduleType } from '@prisma/client';
-import { PLATFORM_DEFAULT_TIMEZONE } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 /**
@@ -17,11 +16,9 @@ export const setScheduleSchema = z.object({
   windowStartAt: z.coerce.date().nullish(),
   windowEndAt: z.coerce.date().nullish(),
   cronExpression: z.string().trim().min(1).nullish(),
-  // The column's own default, repeated here rather than left to Prisma: a
-  // schedule whose timezone the caller did not state is read on the platform
-  // clock, and that is a fact worth being visible at the surface that accepts
-  // it. TZ-1-g moves this default to the tenant's zone.
-  timezone: z.string().min(1).default(PLATFORM_DEFAULT_TIMEZONE),
+  // Absent = the caller's tenant zone, resolved by the service (TZ-1-g,
+  // ADR-0108 point 6). No default here: a literal would be the drift the ADR ends.
+  timezone: z.string().min(1).nullish(),
 });
 
 export const toggleWorkerSchema = z.object({ isActive: z.boolean() });
