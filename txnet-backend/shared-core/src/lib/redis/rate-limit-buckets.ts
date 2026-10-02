@@ -436,6 +436,14 @@ export const RateLimitBucket = {
   NOTIFICATION_READ: 'notification:read',
   NOTIFICATION_WRITE: 'notification:write',
 
+  /**
+   * The user's own AI suggestion card in `ai-service` (F-038-h), per user: the
+   * read is once per My services visit; dismiss and "don't show this again"
+   * are their own bucket so a burst of reads never blocks the tap.
+   */
+  AI_SUGGESTION_READ: 'ai:suggestion:read',
+  AI_SUGGESTION_WRITE: 'ai:suggestion:write',
+
   /** Campaign management in `notification-service` (F-035-c), per admin. */
   NOTIFICATION_CAMPAIGN_READ: 'notification:campaign:read',
   NOTIFICATION_CAMPAIGN_WRITE: 'notification:campaign:write',

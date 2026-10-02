@@ -197,6 +197,19 @@ describe("the list", () => {
     await waitFor(() => expect(createInvoice).toHaveBeenCalledWith("v-90", []));
   });
 
+  // F-038-h: a suggestion's call to action opens the plan it names; one the shop does not offer is the list.
+  it("`?variant=` opens that offered plan's checkout, and an unknown one the list", async () => {
+    shopOffers.mockResolvedValue([OFFER, OFFER_90]);
+    const user = userEvent.setup();
+    const { unmount } = render(<ShopView invoiceId={null} variantId="v-90" />);
+    await user.click(await screen.findByRole("button", { name: "shop.invoice.pay" }));
+    await waitFor(() => expect(createInvoice).toHaveBeenCalledWith("v-90", []));
+    unmount();
+    render(<ShopView invoiceId={null} variantId="v-gone" />);
+    expect(await screen.findByRole("button", { name: "shop.buy" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "shop.invoice.pay" })).toBeNull();
+  });
+
   it("reads a metered offer's traffic rate per GB off its vpn.traffic card, and nothing else", () => {
     expect(trafficRateOf(PAYG)).toEqual({ unitPrice: "10", currencyCode: "USD", mode: "prepaid" });
     expect(trafficRateOf(OFFER)).toBeNull();

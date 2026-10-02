@@ -65,15 +65,26 @@ function repoRoot(): string {
   return dir;
 }
 
-describe('template lint: every language’s notifications.suggestion.* (F-1507)', () => {
-  const langs = join(repoRoot(), 'locales', 'backend', 'langs');
-  const templates = readdirSync(langs).flatMap((lang) => {
-    const ns = JSON.parse(readFileSync(join(langs, lang, 'notifications.json'), 'utf8')) as { suggestion?: Record<string, string> };
-    return Object.entries(ns.suggestion ?? {}).map(([key, text]) => [`${lang}:suggestion.${key}`, text] as const);
-  });
+/** Every string leaf under `tree`, by its dotted key. */
+function leaves(tree: unknown, prefix: string): Array<readonly [string, string]> {
+  if (typeof tree === 'string') return [[prefix, tree]];
+  if (!tree || typeof tree !== 'object') return [];
+  return Object.entries(tree).flatMap(([k, v]) => leaves(v, `${prefix}.${k}`));
+}
 
-  it('finds the suggestion templates', () => {
-    expect(templates.length).toBeGreaterThanOrEqual(2 * 6);
+describe('template lint: every language’s suggestion copy (F-1507)', () => {
+  const backend = join(repoRoot(), 'locales', 'backend', 'langs');
+  const frontend = join(repoRoot(), 'locales', 'frontend', 'langs');
+  const read = (file: string) => JSON.parse(readFileSync(file, 'utf8')) as Record<string, Record<string, unknown>>;
+  // The bot and inbox templates, and the panel's card (F-038-h).
+  const templates = [
+    ...readdirSync(backend).flatMap((lang) => leaves(read(join(backend, lang, 'notifications.json'))['suggestion'], `${lang}:suggestion`)),
+    ...readdirSync(frontend).flatMap((lang) => leaves(read(join(frontend, lang, 'common.json'))['myServices']?.['suggestion'], `${lang}:myServices.suggestion`)),
+  ];
+
+  it('finds the suggestion templates, the bot’s and the panel card’s', () => {
+    expect(templates.filter(([k]) => k.includes(':suggestion.')).length).toBeGreaterThanOrEqual(2 * 6);
+    expect(templates.filter(([k]) => k.includes(':myServices.suggestion.')).length).toBeGreaterThanOrEqual(2 * 6);
   });
 
   it.each(templates)('%s holds the copy rule', (_key, text) => {

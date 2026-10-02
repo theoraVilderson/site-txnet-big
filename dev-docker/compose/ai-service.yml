@@ -9,8 +9,9 @@ services:
   # F-038-b. Every model call and every proactive suggestion is decided here.
   # **Capped**: one CPU and a memory ceiling (point 2) — this host also serves
   # the live site and bot, and an engine run over every account must never
-  # take a core from them. No Traefik labels yet: its first routes are the
-  # tenant's AI settings (F-038-j, F-1534).
+  # take a core from them. Traefik reaches `/api/ai` only, behind `my-auth`
+  # (F-038-h, the user's suggestion card); `/api/internal/ai/*` stays
+  # unrouted, for service callers on the private network.
   # ===========================================================================
   ai-service:
     build:
@@ -50,9 +51,30 @@ services:
       - REDIS_URL=${REDIS_URL}
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
       - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      # Per-user limits on the card's routes; empty means the schema default (F-087).
+      - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-}
+      - AI_SUGGESTION_READ_RATE_LIMIT=${AI_SUGGESTION_READ_RATE_LIMIT:-}
+      - AI_SUGGESTION_WRITE_RATE_LIMIT=${AI_SUGGESTION_WRITE_RATE_LIMIT:-}
     networks:
       - private_backend_network
     labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.ai-service.loadbalancer.server.port=3000"
+
+      # The required gate, as for notification-service: every route needs a
+      # signed-in caller. `/api/internal/ai/*` does not match `/api/ai`.
+      - "traefik.http.routers.ai-service-http.rule=PathPrefix(`/api/ai`)"
+      - "traefik.http.routers.ai-service-http.priority=120"
+      - "traefik.http.routers.ai-service-http.entrypoints=web"
+      - "traefik.http.routers.ai-service-http.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.ai-service-http.service=ai-service"
+
+      - "traefik.http.routers.ai-service.rule=PathPrefix(`/api/ai`)"
+      - "traefik.http.routers.ai-service.priority=120"
+      - "traefik.http.routers.ai-service.entrypoints=websecure"
+      - "traefik.http.routers.ai-service.tls.certresolver=myresolver"
+      - "traefik.http.routers.ai-service.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.ai-service.service=ai-service"
       - "txnet.logging=true"
     depends_on:
       main-db:

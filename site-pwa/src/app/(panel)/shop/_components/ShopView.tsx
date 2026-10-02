@@ -51,8 +51,10 @@ type Names = { of: (key: string | null, fallback: string) => string };
  * second press. **A shortfall is a link, not a state** — back to this invoice.
  *
  * `invoiceId` is that return: the page opens on the invoice instead of the list.
+ * `variantId` opens the checkout of one offered plan once the list is read
+ * (F-038-h); one not on the list leaves the list, never a guessed checkout.
  */
-export function ShopView({ invoiceId }: { invoiceId: string | null }) {
+export function ShopView({ invoiceId, variantId = null }: { invoiceId: string | null; variantId?: string | null }) {
   const { lang, t } = useLocale();
   const messageFor = useApiErrorMessage();
   const money = (value: string, currency: string) => formatMoney(value, currency, { lang, t });
@@ -64,6 +66,8 @@ export function ShopView({ invoiceId }: { invoiceId: string | null }) {
   const [asked, setAsked] = useState(0);
   // The return is read once; after it, going back to the list is the list.
   const [returning, setReturning] = useState(invoiceId);
+  // So is the plan asked for: "back" from its checkout is the list.
+  const [wanted, setWanted] = useState(variantId);
 
   useEffect(() => {
     let alive = true;
@@ -94,7 +98,13 @@ export function ShopView({ invoiceId }: { invoiceId: string | null }) {
           });
         } else {
           const list = await billingApi.shopOffers();
-          if (alive) setOffers(list);
+          if (!alive) return;
+          setOffers(list);
+          const offer = wanted ? list.find((o) => o.variantId === wanted) : undefined;
+          setWanted(null);
+          if (offer) {
+            setPhase({ kind: "checkout", buying: { variantId: offer.variantId, nameKey: offer.nameKey, sku: offer.sku, offer }, invoice: null });
+          }
         }
       } catch (e) {
         if (alive) setLoadError(e);
@@ -103,7 +113,7 @@ export function ShopView({ invoiceId }: { invoiceId: string | null }) {
     return () => {
       alive = false;
     };
-  }, [returning, onList, offers, asked]);
+  }, [returning, onList, offers, asked, wanted]);
 
   const names: Names = { of: (key, fallback) => (key && texts[key]) || fallback };
 

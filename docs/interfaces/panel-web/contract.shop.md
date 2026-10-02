@@ -102,6 +102,10 @@ carry one piece of the return (rules 7 and 8).
    the top-up page (with the invoice and the shortfall once there is one).
    The pay stays: the Grant starts on its own once the wallet is topped up.
    `meteredStartShortOf` rounds the shortfall **up** to a cent.
+12. **`/shop?variant=<id>` opens that plan's checkout** (F-038-h): the AI
+   suggestion card's one call to action. Read once the list is: a variant the
+   list does not offer leaves the list, never a guessed checkout; "back" is
+   the list. `?invoice=` wins when both are given.
 
 ## Proof
 

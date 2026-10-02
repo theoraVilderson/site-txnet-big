@@ -5,6 +5,12 @@ import {
 } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
+const rateLimit = (fallback: number) =>
+  z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(fallback),
+  );
+
 /**
  * `ai-service` — the revenue engine and, later, the tenant's own model
  * (ADR-0109 point 2). It holds two pools and a broker, and no secret of any
@@ -49,9 +55,20 @@ export const envSchema = z.object({
   REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
   REDIS_KEY_NAMESPACE: z.string().min(1).default(REDIS_KEY_NAMESPACE_DEFAULT),
   REDIS_KEYSPACE_VERSION: z.string().min(1).default(REDIS_KEYSPACE_VERSION_DEFAULT),
+
+  /** The platform tenant's multiplier on every limit, as in tenant-service. */
+  PLATFORM_RATE_LIMIT_FACTOR: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().nonnegative().default(10),
+  ),
+  /** The suggestion card's read, per user per 15 minutes (F-038-h). */
+  AI_SUGGESTION_READ_RATE_LIMIT: rateLimit(120),
+  /** Dismiss and opt-out from the card, per user per 15 minutes (F-038-h). */
+  AI_SUGGESTION_WRITE_RATE_LIMIT: rateLimit(30),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
+export type RateLimitConfigKey = Extract<keyof EnvConfig, `${string}_RATE_LIMIT`>;
 
 export function validateEnv(raw: Record<string, unknown>): EnvConfig {
   const parsed = envSchema.safeParse(raw);

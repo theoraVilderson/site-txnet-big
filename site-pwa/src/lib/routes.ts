@@ -35,6 +35,8 @@ export const PANEL_MY_SERVICES = "/services";
 export const PANEL_SHOP = "/shop";
 /** The shop opened on one invoice — where a top-up for its shortfall comes back to. */
 export const panelShopInvoicePath = (invoiceId: string) => `${PANEL_SHOP}?invoice=${encodeURIComponent(invoiceId)}`;
+/** The shop opened on one plan's checkout — where a suggestion's call to action goes (F-038-h). */
+export const panelShopVariantPath = (variantId: string) => `${PANEL_SHOP}?variant=${encodeURIComponent(variantId)}`;
 /**
  * The financial history page (F-093-d) — the wallet ledger and the top-up
  * attempts, as two lists. The sidebar's `financial-history` entry and the

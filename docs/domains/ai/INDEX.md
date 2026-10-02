@@ -3,7 +3,7 @@ id: ai
 layer: domain
 status: draft
 version: 2
-keywords: [ai, recommendation, guardrail, suggestion, revenue engine, prediction, holdout, opt-out, provider, byo-ai]
+keywords: [ai, recommendation, guardrail, suggestion, revenue engine, prediction, holdout, opt-out, provider, byo-ai, suggestion card, uplift]
 source: [txnet-backend/prisma/domains/ai.prisma, txnet-backend/ai-service/src/**, txnet-backend/shared-core/src/lib/ai/**]
 owns_tables: [account_profile, prediction, action, offer, guardrail, holdout, opt_out, provider, task_route, usage, setting]
 depends_on: [identity, billing, automation]
@@ -19,6 +19,7 @@ updated: 2026-10-02
 | File | Read it when |
 |---|---|
 | [contract.md](contract.md) | using or changing ai from outside |
+| [contract.my-suggestion.md](contract.my-suggestion.md) | the panel's suggestion card reads, closes or opts out — ai's routes on `/api/ai` (F-038-h) |
 | [invariants.md](invariants.md) | writing any code that touches it |
 | [data-model.md](data-model.md) | changing storage |
 | [open-questions.md](open-questions.md) | something is undecided |

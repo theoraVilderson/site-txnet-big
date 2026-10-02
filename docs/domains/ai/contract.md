@@ -162,7 +162,7 @@ the caller authenticated, never one the message names. The action is found only
 as that subject's (else 404); then its type is opted out (`ai.opt_out`, a
 second tap a no-op), the action goes `sent` → `dismissed`, and every
 `scheduled`/`awaiting_approval` one of the type is `suppressed` by `opt_out`.
-Answers `{ actionType }`. Callers: the bot button (F-038-g4, built — bot-app `conversation.md`), the panel card (F-038-h).
+Answers `{ actionType }`. Callers: the bot button (F-038-g4, built — bot-app `conversation.md`), the panel card (F-038-h, [contract.my-suggestion.md](contract.my-suggestion.md)).
 
 ## Outcomes and uplift (F-038-i, point 13) — implemented
 

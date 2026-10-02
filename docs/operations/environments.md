@@ -63,7 +63,7 @@ Traefik in the main stack can route to the other stacks).
 | `panel.<domain>` | site-pwa (panel-web) |
 | any other host | site-pwa, priority 1, no certresolver — a reseller's CDN holds its certificate (ADR-0060) |
 | *any host*`/api/auth` | auth-service (priority 120, no `Host` — the panel calls it on its own domain, ADR-0060) |
-| *any host*`/api/billing`, `/api/catalog`, `/api/notifications`, `/api/tenants*`, `REALTIME_PATH` | their services, same shape (billing behind `strip-fake-headers` + `my-auth`) |
+| *any host*`/api/billing`, `/api/catalog`, `/api/notifications`, `/api/ai`, `/api/tenants*`, `REALTIME_PATH` | their services, same shape (billing behind `strip-fake-headers` + `my-auth`) |
 | `api.<domain>/api/bot` | bot-service (the Telegram/Bale webhook; router priority 100) |
 | `monitor.<domain>` | Traefik dashboard (basic-auth) |
 | `mq.<domain>` | RabbitMQ management |

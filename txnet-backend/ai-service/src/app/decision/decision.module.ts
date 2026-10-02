@@ -9,6 +9,8 @@ import { DecisionRun } from './decision-run';
 import { ActionDelivery } from './delivery';
 import { DeliveryInternalController } from './delivery-internal.controller';
 import { Holdouts } from './holdout';
+import { MySuggestionController } from './my-suggestion.controller';
+import { MySuggestionService } from './my-suggestion';
 import { OfferGuardrails } from './offer-guardrail';
 import { OutcomeInternalController } from './outcome-internal.controller';
 import { OutcomeRun } from './outcome-run';
@@ -21,8 +23,8 @@ import { TypeSwitchInternalController } from './type-switch-internal.controller'
 
 @Module({
   imports: [AttentionModule, FloorModule],
-  controllers: [DeliveryInternalController, OptOutInternalController, OutcomeInternalController, TypeSwitchInternalController],
-  providers: [ActionDelivery, ActionLog, CooldownReader, DecisionPipeline, DecisionReader, DecisionRun, Holdouts, OfferGuardrails, OptOuts, OutcomeRun, QuietDownReader, TypeSwitch],
+  controllers: [DeliveryInternalController, MySuggestionController, OptOutInternalController, OutcomeInternalController, TypeSwitchInternalController],
+  providers: [ActionDelivery, ActionLog, CooldownReader, DecisionPipeline, DecisionReader, DecisionRun, Holdouts, MySuggestionService, OfferGuardrails, OptOuts, OutcomeRun, QuietDownReader, TypeSwitch],
   exports: [ActionLog, CooldownReader, DecisionRun, Holdouts, OutcomeRun, OptOuts, QuietDownReader, TypeSwitch],
 })
 export class DecisionModule {}

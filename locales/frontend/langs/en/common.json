@@ -1645,6 +1645,10 @@
         "reactivated": {
           "label": "Service running again",
           "hint": "After a renewal or a top-up brings it back"
+        },
+        "suggestion": {
+          "label": "Suggestions",
+          "hint": "A renewal or a plan that fits how you use your service — a few a week at most"
         }
       },
       "quiet": {
@@ -2713,6 +2717,24 @@
       "removeNo": "Keep the cap",
       "removing": "Removing…",
       "retry": "Try again"
+    },
+    "suggestion": {
+      "label": "Suggestion",
+      "renew": {
+        "body": "{{plan}} ends in {{days}} days. Renew it to keep it running without a break — {{price}} for the next period.",
+        "cta": "Renew"
+      },
+      "resize_up": {
+        "body": "{{from}} ran out before its end in your last periods. {{plan}} fits how you use it — {{price}} for the next period.",
+        "cta": "Buy {{plan}}"
+      },
+      "resize_down": {
+        "body": "In your last two periods {{from}} used under half of its plan. {{plan}} would have been enough — {{price}} for the next period.",
+        "cta": "Buy {{plan}}"
+      },
+      "dismiss": "Close",
+      "optOut": "Don't show this again",
+      "failed": "Could not save. Try again."
     }
   },
   "systems": {
