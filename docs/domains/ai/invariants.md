@@ -7,7 +7,7 @@ updated: 2026-10-02
 
 # Invariants — ai
 
-**DRAFT** — the schema enforces 1–3, the role 7, compose 8; 4–6 are ADR-0109 rules for `ai-service`.
+**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9; 4–6 are ADR-0109 rules still to build.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -19,6 +19,7 @@ updated: 2026-10-02
 | 6 | The attention budget is a count of messages, never a ledger account | C-13 | budget mixed with money |
 | 7 | `ai-service` reads other units only through `txnet_ai_reader`: SELECT on named tables, nothing under `network`, no contact or secret column of `identity.user`, one tenant's rows | `20261002000300_ai_reader_role`, `db-login-roles.sh`; `reader-role.spec.ts`; the reader URL may not equal the app URL (`env.validation.ts`) | the engine writes another unit's tables, or reads another tenant's |
 | 8 | The container is capped at one CPU and a memory ceiling | `dev-docker/compose/ai-service.yml` | the live site and bot on this host starve |
+| 9 | No engine run for a tenant whose package lacks `ai_recommendation`; with it, every v1 type runs on templates with no configuration, and model text needs a provider and starts as draft-with-approval | `resolveAiMode` + `AiTenantPolicy`, called by `TriggerConsumer`; `ai-defaults.spec.ts` | unpaid feature, or messages nobody configured |
 
 ## How to test
 

@@ -47,7 +47,10 @@ route cannot declare a key and go unchecked. The guard answers one error:
 
 The app that gates a route provides `TenantEntitlements` and binds
 `TENANT_ENTITLEMENT_READER` to its Prisma client on the cross-tenant pool
-(`tenant` has no `tenantId`). No app binds it yet; the first gated feature does.
+(`tenant` has no `tenantId`). No route is gated yet. One caller asks outside a
+route: `ai-service` (F-1550, `policy/ai-tenant-policy.ts`) passes a
+`tenantTransaction` on the app pool, bound to the tenant it asks about —
+`tenant.tenant` carries no RLS, and the entitlement rows are that tenant's.
 
 ## Admitting a caller to a route that names a reseller (F-066-w1)
 

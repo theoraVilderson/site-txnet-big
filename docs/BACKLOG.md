@@ -988,7 +988,7 @@ ingested rows reuse the catalog id verbatim as their row id.
 | F-1547 | PII scrubbing before egress; turning it off needs explicit confirmation | ai | todo | F-1535 | F-1547 |  | Ingested 2026-10-02 (area 24, ADR-0109). |
 | F-1548 | Safety floor no tenant can turn off: budget, outage silence, bot rate limits, no other tenant's data | ai | todo | F-1501 F-1506 | F-1548 |  | Ingested 2026-10-02 (area 24, ADR-0109). |
 | F-1549 | Provider per message key, not one global key | ai | todo | F-1539 | F-1549 |  | Ingested 2026-10-02 (area 24, ADR-0109). |
-| F-1550 | Factory default by package: `ai_recommendation` in the package → engine and v1 types on with templates; otherwise no run; the model off until a provider is added | ai | todo | F-038-b | F-1550 |  | Ingested 2026-10-02 (area 24, ADR-0109). User 2026-10-02, ADR-0109 point 12. |
+| F-1550 | Factory default by package: `ai_recommendation` in the package → engine and v1 types on with templates; otherwise no run; the model off until a provider is added | ai | done | F-038-b | F-1550 | txnet-backend/ai-service/src/app/policy/ai-defaults.ts, txnet-backend/ai-service/src/app/policy/ai-tenant-policy.ts, txnet-backend/ai-service/src/app/triggers/trigger.consumer.ts, txnet-backend/ai-service/src/app/policy/ai-defaults.spec.ts | Ingested 2026-10-02 (area 24, ADR-0109). User 2026-10-02, ADR-0109 point 12. Done 2026-10-02: resolveAiMode gates every trigger; no key = no run. ai/contract.md "Factory default". |
 
 ## Order of work — the F-027 network metering series
 

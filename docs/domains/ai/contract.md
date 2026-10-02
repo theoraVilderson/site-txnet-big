@@ -9,7 +9,8 @@ updated: 2026-10-02
 # Contract — ai
 
 **DRAFT — schema (F-038-a) and an empty `ai-service` (F-038-b): it boots,
-holds its pools and consumes its trigger queue; nothing is decided yet.** The design
+holds its pools, consumes its trigger queue and gates each trigger on the
+tenant's package (F-1550); nothing is decided yet.** The design
 is ADR-0109; the series that builds it is F-038-b … F-038-w and catalog
 area 24 (F-1501 … F-1550).
 
@@ -40,9 +41,23 @@ None yet. Delivery is a notice of class `suggestion` through `notification`
 
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
-| tenant | `ai_recommendation` feature key — no key, no engine run (F-1550) | no run |
+| tenant | `ai_recommendation` feature key via `TenantEntitlements`, read per trigger with `ai.setting` and active providers (`policy/ai-tenant-policy.ts`, F-1550) | the trigger fails and is dead-lettered; nothing runs unchecked |
 | identity, billing, entitlement, catalog, tenant | the tables in `ai-service/src/app/reader/reader-tables.ts`, through `txnet_ai_reader` — SELECT only, `identity.user` by named columns, each under its tenant clause (ADR-0109 point 6) | that run is skipped; nothing is guessed |
 | automation | `AI_TRIGGER_EVENTS` (`triggers/trigger-events.ts`) on its own queue `txnet.ai.triggers`; a bad envelope or a failed handler is dead-lettered, never requeued | profiles still rebuild hourly |
+
+## Factory default (F-1550, ADR-0109 point 12) — implemented
+
+`resolveAiMode` (`policy/ai-defaults.ts`) is the whole rule:
+
+| the tenant | engine | action types | language layer |
+|---|---|---|---|
+| package without `ai_recommendation` | **no run**, whatever `ai.setting` says | none | off |
+| with it, no `ai.setting` row, no provider | runs | every v1 type (`AI_V1_ACTION_TYPES`: not `cross_sell`, `wheel_invite`, `referral_invite`) | off — templates |
+| with it, `engineEnabled = false` | no run | none | off |
+| with it and an active provider | runs | v1 minus `disabledActionTypes` | on: per type `draft_with_approval`, or `automatic` if listed in `automaticActionTypes` (F-1543) |
+
+A trigger with no `tenantId` in its payload is acknowledged and skipped,
+never assigned a tenant.
 
 ## Guarantees (intended)
 
