@@ -29,7 +29,7 @@ Every answer is the shared envelope (F-038-j0, `app/envelope.ts`): a refusal's r
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| rebuild profiles — **implemented (F-038-c)** | `POST /api/internal/ai/profiles/rebuild`, `ServiceOnlyGuard` (else 404); `worker-service`'s `ai_profile_rebuild`, hourly | `meter_reading`, `account_profile` and `prediction` rows; `{tenants, skipped, accounts, readings, predictions, purged, resellers}` in the success envelope | sync, service only | a failing tenant is logged and counted in `skipped`, the others still run |
+| rebuild profiles — **implemented (F-038-c)** | `POST /api/internal/ai/profiles/rebuild`, `ServiceOnlyGuard` (else 404); `worker-service`'s `ai_profile_rebuild`, hourly | `meter_reading`, `account_profile` and `prediction` rows; `{tenants, skipped, accounts, readings, predictions, purged, erased, resellers}` in the success envelope | sync, service only | a failing tenant is logged and counted in `skipped`, the others still run |
 | decide — **implemented (F-038-e)** | the hourly run, after the rebuild (`{scheduled, stopped}` join its counts); a trigger whose payload names a `userId` | `action` rows: one `scheduled` at most per subject, the rest `suppressed` (+ step) | async | a tenant's failed run is logged; its profiles stay written |
 | deliver — **implemented (F-038-g2)**, caller worker-service (F-038-g3) | `POST /api/internal/ai/actions/due/take` `{limit ≤200}`; `…/:id/floor`, `…/:id/sent` `{tenantId}`; `…/:id/stop` `{tenantId, by: muted \| after_retention \| plan_unavailable \| offer_unavailable \| offer_budget \| no_other_gateway \| already_paid, retryAt?}` — service token only | `{items}`: `labelledMessage` + `grantId`, `variantId`, `fromVariantId`, `price {amount, currencyCode}`, `deadline`, from the row's `suggest_variant`; `amount` from `suggest_top_up` (F-038-k); `offer` from `suggest_offer` + the offer's terms (F-038-f3); `payment` from `checkout_attempt` (F-038-m); `reseller` for a reseller's upgrade (F-038-o4, [contract.resellers.md](contract.resellers.md)); leased 10 min (`SKIP LOCKED`), past its deadline `expired` instead. `floor` = `SafetyFloor.check` (engine; charges on pass). A refusal with a time before the deadline (7 days if none) moves `scheduledFor`, else `suppressed` by the step | sync | 404: not `scheduled` in that tenant; 400 a bad body |
 | record outcome — **implemented (F-038-i)** | the hourly run, after the decisions (`{converted}` joins its counts) | `convertedAt` + amount; a `sent` row `accepted`, a queued one `suppressed` by `outcome_reached` | async | a tenant's failed run is logged |
@@ -73,7 +73,11 @@ trigger), 500 accounts a page, all of it pure past the reads
 - **`activeHours`**: 168 UTC hour-of-week shares (Monday 00:00 = 0) summing
   to 1, each event halved every 28 days; an hour used, a sign-in, a read and a
   paid payment are events. No activity is 168 zeros — unknown, not "never".
-- Readings older than 180 days are deleted by the same run (invariant 10).
+- **Retention (F-038-s, point 14)**, first, for every tenant — engine on or
+  off (`retention.ts`): readings older than 180 days are deleted (`purged`,
+  invariant 10), and an account identity shows deleted, or no longer has, loses
+  every row naming it — readings, profile, predictions, actions, holdout,
+  opt-outs, attention budget (`erased`, invariant 25). Resellers untouched.
 
 Tenant subjects (a reseller, point 4) are predicted, not profiled: [contract.resellers.md](contract.resellers.md).
 

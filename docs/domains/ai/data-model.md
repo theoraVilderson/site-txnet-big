@@ -18,21 +18,25 @@ Every table has a NOT NULL `tenantId` and strict RLS (`tenant_isolation`,
 
 | Table | Purpose | Key | Retention |
 |---|---|---|---|
-| account_profile | one account's features (`features` JSON) and 168 hour-of-week `activeHours` on UTC; rebuilt hourly | (tenantId, subjectKind, subjectId) | while the account exists |
+| account_profile | one account's features (`features` JSON) and 168 hour-of-week `activeHours` on UTC; rebuilt hourly | (tenantId, subjectKind, subjectId) | while the account exists; erased with it (F-038-s) |
 | prediction | one `AiPredictionKind` for a subject: `value` / `predictedAt`, `confidence` 0–1, `reasons` (non-empty array, CHECK); `currencyCode` set iff `kind = wallet_need` (C-02, CHECK, `20261002000500`) | id | the builder replaces an account's v1 kinds each hour (one row per kind); erased with the account |
 | action | the audit of every suggestion, sent or stopped (F-1509): type, status, `suppressedBy` (set iff `suppressed`), reasons, template key, `renderedBy`, expected margin + currency; `convertedAt` / amount / currency when what it suggested happened within 7 days (F-038-i, `20261002000900`, CHECK both-or-neither); one given row (`OFFER_GIVEN`) per account and offer, unique `action_offer_once` (F-038-q, `20261002001300`) | id | erased with the account |
 | offer | a tenant-defined offer: exactly one of coupon template / variant (CHECK), max discount 0–100%, daily budget + currency | id | permanent |
 | guardrail | a tenant's cap, one row per key (shape-checked, value ≥ 0; keys checked in code) | (tenantId, key) | permanent |
-| holdout | subjects in the tenant's holdout (F-1508): drawn by a hash of the subject id, recorded on first draw so a report reads the set the pipeline used; a row is never removed by a lower share | (tenantId, subjectKind, subjectId) | permanent |
-| opt_out | a subject's permanent opt-out of one action type | (…, actionType) | permanent |
+| holdout | subjects in the tenant's holdout (F-1508): drawn by a hash of the subject id, recorded on first draw so a report reads the set the pipeline used; a row is never removed by a lower share | (tenantId, subjectKind, subjectId) | while the account exists; erased with it |
+| opt_out | a subject's permanent opt-out of one action type | (…, actionType) | while the account exists; erased with it |
 | provider | a BYO-AI provider: ownership, driver, base URL, key fingerprint (key in the vault), proxy, status | id | until removed |
 | task_route | which provider and model a task (message key) uses | (tenantId, task) | until changed |
 | usage | calls and tokens per provider, task, UTC day | (tenantId, providerId, task, day) | permanent |
-| meter_reading | one Grant meter's counter in one UTC hour and its growth (`delta` ≥ 0, CHECK); a baseline the first time, then only hours it grew (F-038-c) — the engine's usage rate, since it reads no network table | (tenantId, grantId, meterKey, hour) | **180 days**, purged by each rebuild (point 14) |
+| meter_reading | one Grant meter's counter in one UTC hour and its growth (`delta` ≥ 0, CHECK); a baseline the first time, then only hours it grew (F-038-c) — the engine's usage rate, since it reads no network table | (tenantId, grantId, meterKey, hour) | **180 days**, and erased with the account — `Retention`, every tenant hourly (point 14, F-038-s) |
 | setting | one row per tenant; no row = defaults: engine on, no type disabled, model text draft-with-approval, threshold 0.60, holdout 10% (CHECK 5–20), PII scrub on, 3000 ms | tenantId | permanent |
 
 Not owned here, but written only by `ai-service`: `engagement.attention_budget`
 (F-1501, created in the same migration, documented in `engagement`).
+
+"Erased with the account" is `retention.ts` (invariant 25): a user subject
+identity shows deleted or no longer has. `billing`'s `aiActionId` on a coupon is
+a plain id and may outlive its action.
 
 `subjectKind` is `user` or `tenant`. A reseller as a subject (ADR-0109 point 4)
 is a row in the **platform's** tenant with `subjectId` = the reseller's tenant id.

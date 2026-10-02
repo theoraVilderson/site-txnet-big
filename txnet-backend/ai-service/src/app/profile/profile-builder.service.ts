@@ -14,6 +14,7 @@ import { accountFeatures, PROFILE_HISTORY_DAYS, type AccountInputs } from './pro
 import { ProfileReader, type ReaderInputs } from './profile-reader';
 import { resellerPredictions } from './reseller-predictions';
 import { ResellerReader } from './reseller-reader';
+import { Retention } from './retention';
 import { walletNeedPrediction, walletRunOut } from './usage-forecast';
 
 const DAY_MS = 86_400_000;
@@ -21,7 +22,7 @@ const DAY_MS = 86_400_000;
 const PROFILE_PAGE = 500;
 const WRITE_TIMEOUT_MS = 30_000;
 
-export type RebuildResult = { tenants: number; skipped: number; accounts: number; readings: number; predictions: number; purged: number; scheduled: number; stopped: number; converted: number; resellers: number };
+export type RebuildResult = { tenants: number; skipped: number; accounts: number; readings: number; predictions: number; purged: number; erased: number; scheduled: number; stopped: number; converted: number; resellers: number };
 
 /** The kinds this builder owns: each run replaces an account's rows of these and no others. */
 const V1_KINDS = ['meter_exhaustion', 'renewal_probability', 'right_size', 'wallet_need', 'trial_conversion', 'win_back_window'] as const;
@@ -39,9 +40,13 @@ const RESELLER_KINDS = ['quota_exhaustion', 'churn_risk', 'wallet_need'] as cons
  * 3. write `ai.account_profile` — features and 168 UTC active hours;
  * 4. replace its v1 predictions (F-038-d), each with its reasons.
  *
- * Then drop that tenant's readings older than 180 days (point 14), and run
- * the decision pipeline over the predictions just written (F-038-e). A
- * decision run that fails is logged; the profiles it read stay written.
+ * Then run the decision pipeline over the predictions just written
+ * (F-038-e). A decision run that fails is logged; the profiles it read stay
+ * written.
+ *
+ * Before any of it, for every tenant, its engine on or off: retention
+ * (F-038-s, point 14) — readings past 180 days, and every row of an account
+ * identity deleted.
  *
  * In the platform owner's run, its resellers too (F-038-o1, ADR-0109 point
  * 4): each is the platform's customer, subject `tenant` — its quota run-out
@@ -66,13 +71,22 @@ export class ProfileBuilder {
     private readonly outcomes: OutcomeRun,
     private readonly resellerReader: ResellerReader,
     private readonly resellerDecisions: ResellerDecisionRun,
+    private readonly retention: Retention,
   ) {}
 
   async rebuildAll(now: Date = new Date()): Promise<RebuildResult> {
     // `tenant.tenant` has no RLS; the app pool lists it as every service does.
     const tenants = await this.prisma.tenant.findMany({ select: { id: true, tenantType: true }, orderBy: { id: 'asc' } });
-    const result: RebuildResult = { tenants: 0, skipped: 0, accounts: 0, readings: 0, predictions: 0, purged: 0, scheduled: 0, stopped: 0, converted: 0, resellers: 0 };
+    const result: RebuildResult = { tenants: 0, skipped: 0, accounts: 0, readings: 0, predictions: 0, purged: 0, erased: 0, scheduled: 0, stopped: 0, converted: 0, resellers: 0 };
     for (const { id, tenantType } of tenants) {
+      try {
+        // F-038-s: an engine switched off is no reason to keep what point 14 erases.
+        const kept = await this.retention.runTenant(id, now);
+        result.purged += kept.purged;
+        result.erased += kept.erased;
+      } catch (err) {
+        this.logger.error(`retention for tenant ${id} failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
       let mode: AiTenantMode;
       try {
         mode = await this.policy.forTenant(id);
@@ -85,7 +99,6 @@ export class ProfileBuilder {
         result.accounts += done.accounts;
         result.readings += done.readings;
         result.predictions += done.predictions;
-        result.purged += done.purged;
       } catch (err) {
         result.skipped += 1;
         this.logger.error(`profile rebuild for tenant ${id} failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -120,12 +133,12 @@ export class ProfileBuilder {
         this.logger.error(`outcome run for tenant ${id} failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
-    this.logger.log(`profiles: ${result.accounts} account(s) in ${result.tenants} tenant(s), ${result.readings} reading(s), ${result.predictions} prediction(s) (${result.resellers} reseller(s) read), ${result.skipped} skipped; ${result.scheduled} suggestion(s) scheduled, ${result.stopped} stopped, ${result.converted} converted`);
+    this.logger.log(`profiles: ${result.accounts} account(s) in ${result.tenants} tenant(s), ${result.readings} reading(s), ${result.predictions} prediction(s) (${result.resellers} reseller(s) read), ${result.skipped} skipped, ${result.purged} reading(s) purged, ${result.erased} deleted account(s) erased; ${result.scheduled} suggestion(s) scheduled, ${result.stopped} stopped, ${result.converted} converted`);
     return result;
   }
 
   /** One tenant, in its scope. */
-  async rebuildTenant(tenantId: string, now: Date): Promise<{ accounts: number; readings: number; predictions: number; purged: number }> {
+  async rebuildTenant(tenantId: string, now: Date): Promise<{ accounts: number; readings: number; predictions: number }> {
     const since = new Date(now.getTime() - PROFILE_HISTORY_DAYS * DAY_MS);
     const hour = utcHour(now);
     let accounts = 0;
@@ -198,10 +211,7 @@ export class ProfileBuilder {
       cursor = page[page.length - 1].id;
     }
 
-    const purged = await tenantTransaction(this.prisma, (tx) =>
-      tx.aiMeterReading.deleteMany({ where: { tenantId, hour: { lt: since } } }),
-    );
-    return { accounts, readings, predictions: predicted, purged: purged.count };
+    return { accounts, readings, predictions: predicted };
   }
 
   /**

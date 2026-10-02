@@ -12,6 +12,9 @@ const READ_TIMEOUT_MS = 30_000;
 
 export type Account = { id: string; createdAt: Date };
 
+/** Whether identity still has an account, deleted or not (F-038-s). */
+export type AccountState = { id: string; deletedAt: Date | null };
+
 /** What the reader adds to an account; the readings are `ai`'s own and come from the writer. */
 export type ReaderInputs = Omit<AccountInputs, 'userId' | 'createdAt' | 'readings'>;
 
@@ -36,6 +39,20 @@ export class ProfileReader {
         take,
       }),
     );
+  }
+
+  /** These accounts as identity shows them, deleted ones included; one it no longer has is absent (F-038-s). */
+  accountStates(ids: string[]): Promise<AccountState[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return tenantTransaction(this.reader, (tx) =>
+      tx.user.findMany({ where: { id: { in: ids } }, select: { id: true, deletedAt: true } }),
+    );
+  }
+
+  /** Whether the reader sees any account of the tenant — false is a read that proves nothing (F-038-s). */
+  async seesAnyAccount(): Promise<boolean> {
+    const one = await tenantTransaction(this.reader, (tx) => tx.user.findFirst({ select: { id: true } }));
+    return one !== null;
   }
 
   /**
