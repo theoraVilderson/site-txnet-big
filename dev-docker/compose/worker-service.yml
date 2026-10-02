@@ -104,6 +104,10 @@ services:
       # owns the rows and the audience query (ADR-0052).
       - NOTIFICATION_API_BASE_URL=http://notification-service:3000
       - NOTIFICATION_API_TIMEOUT_MS=${NOTIFICATION_API_TIMEOUT_MS:-60000}
+      # The AI profile rebuild's end of it (F-038-c): ai-service owns the
+      # engine's pools and rule; this job only says when, hourly.
+      - AI_API_BASE_URL=http://ai-service:3000
+      - AI_API_TIMEOUT_MS=${AI_API_TIMEOUT_MS:-300000}
       # The FX worker's sources and its per-source deadline (F-0603, D-22).
       # A list rather than a constant because three of the four exchanges are
       # on the US OFAC list since June 2026 and dropping one must be config.

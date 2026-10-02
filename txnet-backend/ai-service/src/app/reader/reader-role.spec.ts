@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { AI_READER_TABLES } from './reader-tables';
+import { AI_READER_TABLES, AI_READER_VIEWS } from './reader-tables';
 
 /**
  * F-038-b, ADR-0109 point 6: `ai-service` reads other units' tables through a
@@ -16,10 +16,9 @@ import { AI_READER_TABLES } from './reader-tables';
  */
 
 const ROOT = join(__dirname, '../../../../..');
-const MIGRATION = join(
-  ROOT,
-  'txnet-backend/prisma/domains/migrations/20261002000300_ai_reader_role/migration.sql',
-);
+const MIGRATIONS = join(ROOT, 'txnet-backend/prisma/domains/migrations');
+/** Every migration that grants the reader something, in order. */
+const READER_MIGRATIONS = ['20261002000300_ai_reader_role', '20261002000400_ai_profile_inputs'];
 
 function read(path: string): string {
   try {
@@ -29,8 +28,10 @@ function read(path: string): string {
   }
 }
 
-/** The migration with its comments removed: prose about a grant is not a grant. */
-const sql = read(MIGRATION).replace(/--[^\n]*/g, '');
+/** The migrations with their comments removed: prose about a grant is not a grant. */
+const sql = READER_MIGRATIONS.map((m) => read(join(MIGRATIONS, m, 'migration.sql')))
+  .join('\n')
+  .replace(/--[^\n]*/g, '');
 const loginRoles = read(join(ROOT, 'scripts/db-login-roles.sh'));
 
 describe('the ai reader role (F-038-b, ADR-0109 point 6)', () => {
@@ -62,7 +63,7 @@ describe('the ai reader role (F-038-b, ADR-0109 point 6)', () => {
 
   it('grants nothing on a table it does not name', () => {
     const granted = [...sql.matchAll(/GRANT SELECT(?:\s*\([^)]*\))? ON ([a-z_]+\.[a-z_]+) TO txnet_ai_reader/g)].map((m) => m[1]);
-    expect(granted.sort()).toEqual(AI_READER_TABLES.map((t) => t.table).sort());
+    expect(granted.sort()).toEqual([...AI_READER_TABLES.map((t) => t.table), ...AI_READER_VIEWS.map((v) => v.view)].sort());
   });
 
   it('reads a person by id and status, never their name, contact or secrets', () => {
@@ -71,6 +72,19 @@ describe('the ai reader role (F-038-b, ADR-0109 point 6)', () => {
     for (const column of ['passwordHash', 'twoFactorSecret', 'phoneNumber', 'email', 'fullName', 'username']) {
       expect(grant).not.toContain(`"${column}"`);
     }
+  });
+
+  it.each(AI_READER_VIEWS.map((v) => [v.view, v]))('%s: scoped by its user\'s tenant, named columns only', (_, v) => {
+    const [schema, name] = v.view.split('.');
+    const body = new RegExp(`CREATE VIEW ${schema}\\.${name} WITH \\(security_barrier\\) AS([^;]*);`).exec(sql)?.[1] ?? '';
+    expect(body).toMatch(/u\."tenantId" = public\.current_tenant_id\(\)/);
+    expect(body).not.toMatch(/\bOR\b/);
+    const selected = /SELECT([\s\S]*?)FROM/.exec(body)?.[1] ?? '';
+    expect(selected).not.toContain('*');
+    for (const column of v.columns) expect(selected).toContain(`"${column}"`);
+    for (const column of v.forbidden) expect(selected).not.toContain(`"${column}"`);
+    expect(sql).toMatch(new RegExp(`GRANT SELECT ON ${schema}\\.${name} TO txnet_ai_reader;`));
+    expect(sql).toMatch(new RegExp(`REVOKE ALL ON [^;]*${schema}\\.${name}[^;]* FROM PUBLIC, txnet_app, txnet_cross_tenant;`));
   });
 
   it('has a login role that holds the reader and nothing else', () => {

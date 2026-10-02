@@ -20,17 +20,20 @@ import { join } from 'node:path';
 
 const DOMAINS = join(__dirname, '../../../../prisma/domains');
 const MIGRATIONS = join(DOMAINS, 'migrations');
-const MIGRATION = '20261002000200_ai_schema_rebuilt';
+/** The rebuild, then every later migration that adds an `ai` table in its own migration. */
+const AI_MIGRATIONS = ['20261002000200_ai_schema_rebuilt', '20261002000400_ai_profile_inputs'];
 
 const ai = readFileSync(join(DOMAINS, 'ai.prisma'), 'utf8');
 const engagement = readFileSync(join(DOMAINS, 'engagement.prisma'), 'utf8');
 
 function sql(): string {
-  try {
-    return readFileSync(join(MIGRATIONS, MIGRATION, 'migration.sql'), 'utf8');
-  } catch {
-    return '';
-  }
+  return AI_MIGRATIONS.map((m) => {
+    try {
+      return readFileSync(join(MIGRATIONS, m, 'migration.sql'), 'utf8');
+    } catch {
+      return '';
+    }
+  }).join('\n');
 }
 
 /** `@@map` name -> model body, for every model in one schema file. */
@@ -55,6 +58,8 @@ const AI_TABLES = [
   'task_route',
   'usage',
   'setting',
+  // F-038-c: the engine's own hourly meter sample, the raw events of point 14.
+  'meter_reading',
 ];
 
 const TENANT_TABLES = [...AI_TABLES.map((t) => `ai.${t}`), 'engagement.attention_budget'];

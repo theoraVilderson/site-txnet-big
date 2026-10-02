@@ -102,6 +102,32 @@ model AiAccountProfile {
   @@schema("ai")
 }
 
+/// One meter's reading in one UTC hour (F-038-c): a raw behaviour event,
+/// kept 180 days (ADR-0109 point 14). `ai-service` samples the counters
+/// hourly because it reads no network table, so this is where its usage rate
+/// and its hours of use come from. A row is written for an account's first
+/// reading of a meter (`delta` 0, the baseline) and for every hour the
+/// counter grew; an hour with no growth writes nothing.
+model AiMeterReading {
+  tenantId String   @db.Uuid
+  userId   String   @db.Uuid
+  grantId  String   @db.Uuid
+  /// A `Meter.key`; a Grant's bytes are `vpn.traffic` (`consumedBytes`).
+  meterKey String
+  /// The start of the UTC hour sampled.
+  hour     DateTime
+  /// The counter as read. It only grows; a smaller one is a new baseline.
+  counter  BigInt
+  /// Growth since the previous reading, never negative (CHECK).
+  delta    BigInt
+
+  @@id([tenantId, grantId, meterKey, hour])
+  @@index([tenantId, userId, hour])
+  @@index([tenantId, hour])
+  @@map("meter_reading")
+  @@schema("ai")
+}
+
 /// A prediction always says why: `reasons` is a non-empty JSON array.
 model AiPrediction {
   id          String           @id @default(uuid()) @db.Uuid

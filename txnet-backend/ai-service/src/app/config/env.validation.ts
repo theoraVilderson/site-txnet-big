@@ -39,6 +39,13 @@ export const envSchema = z.object({
   /** Low: the container has one CPU, and the host also serves the live site and bot (ADR-0109 point 2). */
   AI_PREFETCH: z.coerce.number().int().positive().max(50).default(4),
 
+  /**
+   * Opens `/api/internal/ai/*` to `worker-service` (the hourly rebuild, F-038-c).
+   * Optional for the reason the worker gives its seams: unset, the route
+   * refuses everyone with a 404, and the job's own run fails loudly.
+   */
+  SERVICE_AUTH_TOKEN: z.string().optional(),
+
   REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
   REDIS_KEY_NAMESPACE: z.string().min(1).default(REDIS_KEY_NAMESPACE_DEFAULT),
   REDIS_KEYSPACE_VERSION: z.string().min(1).default(REDIS_KEYSPACE_VERSION_DEFAULT),

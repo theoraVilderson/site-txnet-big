@@ -8,9 +8,9 @@ updated: 2026-10-02
 
 # Contract — ai
 
-**DRAFT — schema (F-038-a) and an empty `ai-service` (F-038-b): it boots,
-holds its pools, consumes its trigger queue and gates each trigger on the
-tenant's package (F-1550); nothing is decided yet.** The design
+**DRAFT — schema (F-038-a) and `ai-service` (F-038-b): it boots, holds its
+pools, gates each trigger on the tenant's package (F-1550) and rebuilds every
+account's profile hourly (F-038-c); nothing is decided yet.** The design
 is ADR-0109; the series that builds it is F-038-b … F-038-w and catalog
 area 24 (F-1501 … F-1550).
 
@@ -27,7 +27,7 @@ guardrail has one home.
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| rebuild profiles | hourly; a tenant | `account_profile`, `prediction` rows | async (`ai-service`) | — |
+| rebuild profiles — **implemented (F-038-c)** | `POST /api/internal/ai/profiles/rebuild`, `ServiceOnlyGuard` (else 404); `worker-service`'s `ai_profile_rebuild`, hourly | `meter_reading` + `account_profile` rows; `{tenants, skipped, accounts, readings, purged}` in the success envelope | sync, service only | a failing tenant is logged and counted in `skipped`, the others still run |
 | decide | an outbox trigger or the hourly run | an `action` row: `scheduled`, `awaiting_approval` or `suppressed` (+ step) | async | — |
 | record outcome | the purchase or top-up the action suggested, within 7 days | `action.status = accepted` | async | — |
 | settings, offers, providers | tenant admin | `setting`, `offer`, `guardrail`, `provider`, `task_route` | sync (F-038-j, F-038-w) | — |
@@ -43,7 +43,33 @@ None yet. Delivery is a notice of class `suggestion` through `notification`
 |---|---|---|
 | tenant | status key `tenant:status:<id>` (`policy/tenant-sells.ts`, F-038-x); `ai_recommendation` feature key via `TenantEntitlements`, read per trigger with `ai.setting` and active providers (`policy/ai-tenant-policy.ts`, F-1550) | the trigger fails and is dead-lettered; nothing runs unchecked |
 | identity, billing, entitlement, catalog, tenant | the tables in `ai-service/src/app/reader/reader-tables.ts`, through `txnet_ai_reader` — SELECT only, `identity.user` by named columns, each under its tenant clause (ADR-0109 point 6) | that run is skipped; nothing is guessed |
+| identity, billing, notification | `ai.reader_sign_in`, `ai.reader_wallet`, `ai.reader_notice` — the user-keyed tables, through views scoped by the user's tenant (F-038-c, data-model "Access rules") | as above |
 | automation | `AI_TRIGGER_EVENTS` (`triggers/trigger-events.ts`) on its own queue `txnet.ai.triggers`; a bad envelope or a failed handler is dead-lettered, never requeued | profiles still rebuild hourly |
+
+## The profile (F-038-c) — implemented
+
+`ProfileBuilder` (`profile/`), per running tenant (`AiTenantPolicy`, as a
+trigger), 500 accounts a page, all of it pure past the reads
+(`profile-features.ts`):
+
+- **Meter readings.** Each active Grant's counters — `consumedBytes` as
+  `vpn.traffic`, every other `grant_meter.consumed` by its key — sampled on the
+  UTC hour (`meter-readings.ts`): a baseline (`delta` 0) the first time,
+  then a row only for an hour the counter grew; a smaller counter is a new
+  baseline. A second run in the hour adds its growth to that hour's row.
+- **Inputs, 180 days:** Grants (active, or changed in the window), renewals,
+  readings, wallet and its ledger, payments, sign-ins, notices.
+- **`features`** (`AccountFeatures`, `version` 1): Grants by state, next end,
+  last end; renewals; hours used; wallet available = balance − held, as a
+  decimal string with its currency (C-02); top-ups; payments succeeded /
+  failed / with a coupon; sign-ins and notices of the last 30 days; last
+  activity.
+- **`activeHours`**: 168 UTC hour-of-week shares (Monday 00:00 = 0) summing
+  to 1, each event halved every 28 days; an hour used, a sign-in, a read and a
+  paid payment are events. No activity is 168 zeros — unknown, not "never".
+- Readings older than 180 days are deleted by the same run (invariant 10).
+
+Tenant subjects (a reseller, point 4) are not profiled yet.
 
 ## Factory default (F-1550, ADR-0109 point 12) — implemented
 

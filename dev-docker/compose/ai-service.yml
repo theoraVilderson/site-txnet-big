@@ -45,6 +45,8 @@ services:
       # Its own queue: a slow engine never sits in front of a notice.
       - AI_QUEUE=${AI_QUEUE:-txnet.ai.triggers}
       - AI_PREFETCH=${AI_PREFETCH:-4}
+      # Opens /api/internal/ai/* to worker-service's hourly rebuild (F-038-c).
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
       - REDIS_URL=${REDIS_URL}
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
       - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}

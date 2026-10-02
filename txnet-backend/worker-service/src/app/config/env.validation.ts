@@ -345,6 +345,13 @@ export const envSchema = z.object({
   NOTIFICATION_API_BASE_URL: optional(z.string()),
   /** One bounded pass: at most `FAN_OUT_BUDGET` rows, in batches. */
   NOTIFICATION_API_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  /**
+   * The hourly AI profile rebuild's end of the seam (F-038-c): `ai-service`
+   * owns the engine's pools and rule. Optional for the same reason as billing's.
+   */
+  AI_API_BASE_URL: optional(z.string()),
+  /** One pass over every running tenant's accounts, on a one-CPU container. */
+  AI_API_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
 
   /**
    * How many days back the nightly traffic rollup re-rolls, today included

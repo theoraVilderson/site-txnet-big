@@ -20,6 +20,7 @@ import { GrantIdleNoticeJob } from '../jobs/grant-idle-notice.job';
 import { UsageCaptureJob } from '../jobs/usage-capture.job';
 import { VpnReserveJob } from '../jobs/vpn-reserve.job';
 import { GrantExhaustionForecastJob } from '../jobs/grant-exhaustion-forecast.job';
+import { AiProfileRebuildJob } from '../jobs/ai-profile-rebuild.job';
 import { RetentionHeldNoticeJob } from '../jobs/retention-held-notice.job';
 import { GrantDeliveryJob } from '../jobs/grant-delivery.job';
 import { GrantGroupFulfilmentJob } from '../jobs/grant-group-fulfilment.job';
@@ -64,6 +65,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     UsageCaptureJob,
     VpnReserveJob,
     GrantExhaustionForecastJob,
+    AiProfileRebuildJob,
     RetentionHeldNoticeJob,
     DepositExpiryJob,
     InvoiceExpiryJob,
@@ -89,7 +91,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     ResellerQuotaDigestJob,
     {
       provide: JOBS,
-      inject: [HeartbeatJob, VaultRetentionJob, GrantPurgeJob, GrantBulkJobDrainJob, GrantGroupFulfilmentJob, GrantDeliveryJob, GrantUnusedNoticeJob, GrantEndNoticeJob, GrantIdleNoticeJob, UsageCaptureJob, VpnReserveJob, RetentionHeldNoticeJob, DepositExpiryJob, InvoiceExpiryJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, TrafficRollupJob, CampaignFanOutJob, CampaignDeliveryJob, TenantSubscriptionRenewalJob, TenantDomainVerificationJob, ResellerQuotaDigestJob],
+      inject: [HeartbeatJob, VaultRetentionJob, GrantPurgeJob, GrantBulkJobDrainJob, GrantGroupFulfilmentJob, GrantDeliveryJob, GrantUnusedNoticeJob, GrantEndNoticeJob, GrantIdleNoticeJob, UsageCaptureJob, VpnReserveJob, RetentionHeldNoticeJob, DepositExpiryJob, InvoiceExpiryJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, TrafficRollupJob, CampaignFanOutJob, CampaignDeliveryJob, TenantSubscriptionRenewalJob, TenantDomainVerificationJob, ResellerQuotaDigestJob, AiProfileRebuildJob],
       useFactory: (...jobs: Job[]) => jobs,
     },
     WorkerRegistryService,

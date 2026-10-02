@@ -28,6 +28,7 @@ Every table has a NOT NULL `tenantId` and strict RLS (`tenant_isolation`,
 | provider | a BYO-AI provider: ownership, driver, base URL, key fingerprint (key in the vault), proxy, status | id | until removed |
 | task_route | which provider and model a task (message key) uses | (tenantId, task) | until changed |
 | usage | calls and tokens per provider, task, UTC day | (tenantId, providerId, task, day) | permanent |
+| meter_reading | one Grant meter's counter in one UTC hour and its growth (`delta` ≥ 0, CHECK); a baseline the first time, then only hours it grew (F-038-c) — the engine's usage rate, since it reads no network table | (tenantId, grantId, meterKey, hour) | **180 days**, purged by each rebuild (point 14) |
 | setting | one row per tenant; no row = defaults: engine on, no type disabled, model text draft-with-approval, threshold 0.60, holdout 10% (CHECK 5–20), PII scrub on, 3000 ms | tenantId | permanent |
 
 Not owned here, but written only by `ai-service`: `engagement.attention_budget`
@@ -48,6 +49,12 @@ No foreign keys leave the schema; ids are plain UUIDs.
 ## Access rules
 
 Only `ai-service` writes these tables, on the app pool with the tenant bound.
-Its reads of other units go through `txnet_ai_reader` (invariant 7); tables
-keyed by user with no `tenantId` (`billing.wallet`, `identity.session`,
-`notification.*`) are outside that role — RLS cannot scope them.
+Its reads of other units go through `txnet_ai_reader` (invariant 7). Tables
+keyed by user with no `tenantId` and no RLS (`billing.wallet`,
+`identity.session`, `notification.notification`) are read through three
+`security_barrier` views, `ai.reader_wallet` / `reader_sign_in` /
+`reader_notice` (`20261002000400`, F-038-c): the row's user must be in the bound
+tenant, only named columns (no IP, user agent, token hash, notice text), and
+only the reader may SELECT them. They run as their owner, the migration's
+superuser; owned by a role under `FORCE` RLS on `identity.user`, they would
+return nothing — fail closed. No Prisma model: read with raw SQL.
