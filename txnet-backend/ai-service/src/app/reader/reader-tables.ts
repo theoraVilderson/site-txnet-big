@@ -52,6 +52,8 @@ export const AI_READER_PLATFORM_TABLES = [
   { table: 'tenant.quota_overage_setting', columns: null },
   { table: 'tenant.package_quota_overage', columns: null },
   { table: 'tenant.package_product', columns: null },
+  // F-038-o4: the packages an upgrade may name (`20261002001700_ai_reseller_upgrade_inputs`).
+  { table: 'tenant.tenant_feature_package', columns: null },
 ] as const;
 
 /**

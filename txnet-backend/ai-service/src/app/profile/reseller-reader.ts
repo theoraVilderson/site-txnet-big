@@ -10,6 +10,7 @@ import {
 } from '@txnet-backend/shared-core';
 
 import { AiReaderPrisma } from '../prisma/prisma.service';
+import type { PackageOption } from '../decision/reseller-candidates';
 import type { QuotaWindowInput, ResellerInputs } from './reseller-predictions';
 
 const DAY_MS = 86_400_000;
@@ -58,6 +59,43 @@ export class ResellerReader {
           ORDER BY "tenantId"`,
       ),
     );
+  }
+
+  /**
+   * Every package the platform sells, with each quota it includes (F-038-o4):
+   * `tenant_feature_package`, `package_limit`, `package_product` — the
+   * platform's own price list, no tenant and no RLS.
+   */
+  packages(platformTenantId: string): Promise<PackageOption[]> {
+    return runWithTenant({ id: platformTenantId }, () =>
+      tenantTransaction(this.reader, async (tx) => {
+        const rows = await tx.tenantFeaturePackage.findMany({ select: { id: true, name: true, isActive: true, monthlyPrice: true, yearlyPrice: true, currencyCode: true } });
+        const limits = await tx.packageLimit.findMany({ select: { packageId: true, key: true, value: true } });
+        const products = await tx.packageProduct.findMany({ select: { packageId: true, productId: true, dayIncluded: true, weekIncluded: true, monthIncluded: true } });
+        return rows.map((p) => ({
+          ...p,
+          limits: new Map(limits.filter((l) => l.packageId === p.id).map((l) => [l.key, l.value])),
+          products: new Map(products.filter((r) => r.packageId === p.id).map((r) => [r.productId, { day: r.dayIncluded, week: r.weekIncluded, month: r.monthIncluded }])),
+        }));
+      }),
+    );
+  }
+
+  /** The catalog name keys of the platform's products, for a product's sales quota told by name. */
+  async productNameKeys(platformTenantId: string, productIds: string[]): Promise<Map<string, string>> {
+    if (productIds.length === 0) return new Map();
+    const rows = await runWithTenant({ id: platformTenantId }, () =>
+      tenantTransaction(this.reader, (tx) => tx.product.findMany({ where: { id: { in: productIds }, tenantId: null }, select: { id: true, nameKey: true } })),
+    );
+    return new Map(rows.map((r) => [r.id, r.nameKey]));
+  }
+
+  /** The keys the platform's staff set a number for on this reseller alone (`reseller_limit`), in its own scope. */
+  async ownLimitKeys(resellerId: string): Promise<Set<string>> {
+    const rows = await runWithTenant({ id: resellerId }, () =>
+      tenantTransaction(this.reader, (tx) => tx.resellerLimit.findMany({ where: { tenantId: resellerId }, select: { key: true } })),
+    );
+    return new Set(rows.map((r) => r.key));
   }
 
   inputs(row: ResellerRow, now: Date): Promise<ResellerInputs> {

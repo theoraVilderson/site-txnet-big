@@ -19,14 +19,16 @@ import { OutcomeRun } from './outcome-run';
 import { OptOutInternalController } from './opt-out-internal.controller';
 import { OptOuts } from './opt-out';
 import { DecisionPipeline } from './pipeline';
+import { ResellerReader } from '../profile/reseller-reader';
 import { QuietDownReader } from './quiet-down-reader';
+import { ResellerDecisionRun } from './reseller-decision';
 import { TypeSwitch } from './type-switch';
 import { TypeSwitchInternalController } from './type-switch-internal.controller';
 
 @Module({
   imports: [AttentionModule, FloorModule],
   controllers: [DeliveryInternalController, MySuggestionController, OffersInternalController, OptOutInternalController, OutcomeInternalController, TypeSwitchInternalController],
-  providers: [ActionDelivery, ActionLog, CooldownReader, DecisionPipeline, DecisionReader, DecisionRun, Holdouts, MySuggestionService, OfferGuardrails, Offers, OptOuts, OutcomeRun, QuietDownReader, TypeSwitch],
-  exports: [ActionLog, CooldownReader, DecisionRun, Holdouts, Offers, OutcomeRun, OptOuts, QuietDownReader, TypeSwitch],
+  providers: [ActionDelivery, ActionLog, CooldownReader, DecisionPipeline, DecisionReader, DecisionRun, Holdouts, MySuggestionService, OfferGuardrails, Offers, OptOuts, OutcomeRun, QuietDownReader, ResellerDecisionRun, ResellerReader, TypeSwitch],
+  exports: [ActionLog, CooldownReader, DecisionRun, Holdouts, Offers, OutcomeRun, OptOuts, QuietDownReader, ResellerDecisionRun, ResellerReader, TypeSwitch],
 })
 export class DecisionModule {}

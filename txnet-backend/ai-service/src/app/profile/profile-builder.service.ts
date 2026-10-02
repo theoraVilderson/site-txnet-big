@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { DecisionRun } from '../decision/decision-run';
+import { ResellerDecisionRun } from '../decision/reseller-decision';
 import { OutcomeRun } from '../decision/outcome-run';
 import type { AiTenantMode } from '../policy/ai-defaults';
 import { AiTenantPolicy } from '../policy/ai-tenant-policy';
@@ -63,6 +64,7 @@ export class ProfileBuilder {
     private readonly decisions: DecisionRun,
     private readonly outcomes: OutcomeRun,
     private readonly resellerReader: ResellerReader,
+    private readonly resellerDecisions: ResellerDecisionRun,
   ) {}
 
   async rebuildAll(now: Date = new Date()): Promise<RebuildResult> {
@@ -93,8 +95,12 @@ export class ProfileBuilder {
           const resold = await this.rebuildResellers(id, now);
           result.resellers += resold.resellers;
           result.predictions += resold.predictions;
+          // F-038-o4: the upgrades those predictions call for, through the same pipeline.
+          const decided = await this.resellerDecisions.runPlatform(id, mode, now);
+          result.scheduled += decided.scheduled;
+          result.stopped += decided.stopped;
         } catch (err) {
-          this.logger.error(`reseller predictions failed: ${err instanceof Error ? err.message : String(err)}`);
+          this.logger.error(`reseller predictions or decisions failed: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
       try {

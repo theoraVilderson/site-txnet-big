@@ -60,8 +60,21 @@ panel shows it as the `/ai` page's resellers tab (F-038-o3, panel-web contract.a
 | `quota_exhaustion` | soonest run-out first (a full window is the run's instant) | `tenantId`, `slug` (null for a reseller deleted since the run), `value` (days), `predictedAt`, `confidence`, `reasons` — every window at risk, the page words the codes |
 | `churn_risk` | highest risk first | as above; `value` 0–1, `predictedAt` the subscription's end |
 
-## Planned
+## The upgrade (F-038-o4) — implemented
 
-- F-038-o4: the upgrade, told to the reseller's **owner** only — the quota
-  alerts' recipient (F-019-v8), so everything about the reseller's package has
-  one recipient (user, 2026-10-02).
+Told to the reseller's **owner** only — the quota alerts' recipient
+(F-019-v8), so everything about the reseller's package has one recipient
+(user, 2026-10-02). The owner is a user of the platform's own tenant
+(ADR-0062), so nothing crosses a tenant: the action is the platform's.
+
+| step | rule | code |
+|---|---|---|
+| when | the platform's run, after the predictions: a reseller whose `quota_exhaustion` falls inside 7 days (`SUGGEST_LEAD_DAYS`) | `decision/reseller-decision.ts` |
+| the candidate | `resize_up`, subject `tenant`, about the soonest window at risk; deadline its end — a new window starts empty. Need = (used + rate × days left, or for a full window used + sold past it, at least included + 1) × 1.25 (`UPGRADE_HEADROOM`). The package: active, **pricier** for the reseller's period in the same currency (ADR-0107 point 9 — an upgrade applies at once; a cheaper one waits for the renewal and unlocks nothing now), and raising this quota — a registry key by its `package_limit` row (none = the platform's number, the same on every package), a product by its listing's window column (not listed = not sold). The cheapest that holds the need, else the biggest step up. None for a key the platform's staff set for this reseller alone (`reseller_limit`): no package moves it. Margin P × (new − current price): the platform's own sale, no cost | `decision/reseller-candidates.ts` |
+| the steps | ADR-0109 point 8's, unchanged (`DecisionPipeline.decideAmong`): threshold, opt-out, cooldown and holdout of the **reseller**; quiet-down reads nothing; budget per subject; timed by the **owner's** active hours and quiet window | `decision/pipeline.ts` |
+| the take | the item's `reseller` is read **now**, never at the decision: the owner, the reseller's current package, the named package's name, status and price for the period today, a product's name key (contract.candidates.md "Delivery") | `decision/delivery.ts` |
+| the worker | claims it for the owner with no Grant; stops `already_paid` when the reseller moved off the package the engine saw, `plan_unavailable` for a package gone or unpriced — both before the floor; else `suggestionPackageUpgrade` to inbox and bot, the quota named as a quota alert names it | worker `ai-suggestion-delivery.job.ts`, auth-service `user-notifier.ts` |
+| the tap | the owner's "don't show this again" opts the **reseller** out (invariant 14) | `decision/opt-out.ts` |
+
+Not measured yet (F-038-o5): a reseller's row never converts and is in no
+uplift report — the outcome run and the report read `user` subjects only.

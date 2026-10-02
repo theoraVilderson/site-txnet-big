@@ -68,8 +68,16 @@ export class DecisionPipeline {
   ) {}
 
   async decide(subject: BudgetSubject, mode: AiTenantMode, inputs: SubjectDecisionInputs, now: Date): Promise<AiAction[]> {
+    return this.decideAmong(subject, mode, candidatesFor(inputs.candidates, now), inputs, now);
+  }
+
+  /**
+   * The same steps over candidates the caller proposed — a reseller's upgrade
+   * (F-038-o4), whose candidate is not a user's Grant.
+   */
+  async decideAmong(subject: BudgetSubject, mode: AiTenantMode, proposed: EngineCandidate[], inputs: Omit<SubjectDecisionInputs, 'candidates'>, now: Date): Promise<AiAction[]> {
     const runs = new Set(mode.actionTypes);
-    const candidates = candidatesFor(inputs.candidates, now).filter((c) => runs.has(c.actionType));
+    const candidates = proposed.filter((c) => runs.has(c.actionType));
     if (candidates.length === 0) return [];
 
     const written = new Set(inputs.stoppedToday.map((s) => `${s.actionType}:${s.suppressedBy}`));

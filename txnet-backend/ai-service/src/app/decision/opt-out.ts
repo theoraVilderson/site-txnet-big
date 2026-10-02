@@ -35,15 +35,31 @@ export class OptOuts {
     return row ? { pass: false, suppressedBy: 'opt_out' } : { pass: true };
   }
 
-  /** `null`: no such action of this subject's. A second tap answers the same and changes nothing. */
+  /**
+   * `null`: no such action of this subject's. A second tap answers the same and changes nothing.
+   * A reseller's upgrade (F-038-o4) is the reseller's, told to its owner: the owner's tap opts the
+   * reseller out — found as the reseller's whose `ownerUserId` is the tapper, never any other.
+   */
   async optOutFrom(subject: BudgetSubject, actionId: string, now: Date): Promise<{ actionType: AiActionType } | null> {
-    const { tenantId, kind, id } = subject;
+    const { tenantId } = subject;
     return runWithTenant({ id: tenantId }, () =>
       tenantTransaction(this.prisma, async (tx) => {
-        const action = await tx.aiAction.findFirst({
+        let kind = subject.kind;
+        let id = subject.id;
+        let action = await tx.aiAction.findFirst({
           where: { id: actionId, tenantId, subjectKind: kind, subjectId: id },
           select: { actionType: true },
         });
+        if (!action && kind === 'user') {
+          const resellers = await tx.aiAction.findFirst({ where: { id: actionId, tenantId, subjectKind: 'tenant' }, select: { subjectId: true, actionType: true } });
+          // `tenant.tenant` has no RLS; the app pool reads it as every service does.
+          const owned = resellers && (await tx.tenant.findFirst({ where: { id: resellers.subjectId, ownerUserId: id }, select: { id: true } }));
+          if (resellers && owned) {
+            kind = 'tenant';
+            id = resellers.subjectId;
+            action = { actionType: resellers.actionType };
+          }
+        }
         if (!action) return null;
         const { actionType } = action;
         await tx.aiOptOut.createMany({

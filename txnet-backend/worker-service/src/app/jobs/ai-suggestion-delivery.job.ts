@@ -34,6 +34,9 @@ export const SUGGESTION_TEMPLATE_OF: Record<string, string> = {
   usage_alert: 'suggestionUsageAlert',
 };
 
+/** A reseller's upgrade (F-038-o4): `resize_up` about a package, told to the reseller's owner. */
+export const PACKAGE_UPGRADE_TEMPLATE = 'suggestionPackageUpgrade';
+
 type Due = {
   actionId: string;
   tenantId: string;
@@ -57,6 +60,22 @@ type Due = {
   payment?: { paymentId: string; amount: Money } | null;
   /** `usage_alert` only (F-1516): the last 24 h against the usual day, bytes as decimal strings. */
   usage?: { meterKey: string; lastDayBytes: string; usualDayBytes: string; factor: number } | null;
+  /** F-038-o4: a reseller's upgrade — read by ai at the take, never at the decision. */
+  reseller?: {
+    recipientUserId: string;
+    currentPackageId: string | null;
+    fromPackageId: string | null;
+    packageId: string;
+    packageName: string | null;
+    packageActive: boolean;
+    price: Money | null;
+    meter: string;
+    period: string | null;
+    included: number | null;
+    used: number | null;
+    newIncluded: number | null;
+    productNameKey: string | null;
+  } | null;
   deadline: string | null;
 };
 type Money = { amount: string; currencyCode: string };
@@ -149,6 +168,12 @@ export class AiSuggestionDeliveryJob implements Job {
   }
 
   private async deliver(due: Due, now: Date): Promise<'sent' | 'held' | 'stopped' | 'refused'> {
+    // F-038-o4: a reseller as the platform's customer, told to its owner — a user of the platform's own tenant.
+    if (due.subjectKind === 'tenant') {
+      const reseller = due.reseller;
+      if (due.actionType !== 'resize_up' || !reseller) throw new Error(`a reseller's ${due.actionType} suggestion without its reseller cannot be told`);
+      return this.tell(due, { userId: reseller.recipientUserId, template: PACKAGE_UPGRADE_TEMPLATE }, async () => upgradeWords(reseller));
+    }
     const template = SUGGESTION_TEMPLATE_OF[due.actionType];
     // F-038-m: `checkout_help` is about a payment, not a service — the one type told with no Grant (F-038-g5).
     const aboutPayment = due.actionType === 'checkout_help';
@@ -166,9 +191,19 @@ export class AiSuggestionDeliveryJob implements Job {
     if (due.actionType === 'retain_offer' && (!offer?.dailyBudget || !offer.maxDiscountPercent || !offer.budgetCurrencyCode || !offer.createdByUserId || !due.deadline)) {
       throw new Error(`retain_offer suggestion ${due.actionId} carries no offer terms or deadline`);
     }
+    return this.tell(due, { userId: due.subjectId, grantId: due.grantId ?? undefined, template }, () =>
+      aboutPayment ? this.helpWords(due) : aboutUsage ? this.usageWords(due) : this.serviceWords(due, now),
+    );
+  }
+
+  /**
+   * The steps every suggestion goes through once its recipient and template
+   * are known: claim, its words (or the step that stops it), the floor, the
+   * channels, sent.
+   */
+  private async tell(due: Due, to: { userId: string; grantId?: string; template: string }, wordsOf: () => Promise<Words>): Promise<'sent' | 'held' | 'stopped' | 'refused'> {
     const { tenantId, actionId } = due;
-    const grantId = due.grantId ?? undefined;
-    const userId = due.subjectId;
+    const { userId, grantId, template } = to;
     const aGrant = grantId ? { grantId } : {};
 
     const claim = (await this.post(this.notification, CLAIM_PATH, { actionId, userId, ...aGrant })) as Claim | null;
@@ -180,7 +215,7 @@ export class AiSuggestionDeliveryJob implements Job {
     }
 
     // What the message says, from billing — or why it is not told; all before the floor, which charges the budget.
-    const words = aboutPayment ? await this.helpWords(due) : aboutUsage ? await this.usageWords(due) : await this.serviceWords(due, now);
+    const words = await wordsOf();
     if ('stop' in words) {
       await this.post(this.ai, actionPath(actionId, 'stop'), { tenantId, by: words.stop, ...(words.retryAt ? { retryAt: words.retryAt } : {}) });
       return 'stopped';
@@ -297,4 +332,26 @@ export class AiSuggestionDeliveryJob implements Job {
       clearTimeout(timer);
     }
   }
+}
+
+/**
+ * F-038-o4: the package as ai read it at the take. A reseller already moved
+ * off the package the engine saw (it upgraded, or changed) is not told —
+ * `already_paid`; a package no longer sold, or unpriced for its period, is
+ * `plan_unavailable`. The quota is named by auth-service as a quota alert
+ * names it: a registry key, or a product's catalog name.
+ */
+export function upgradeWords(r: NonNullable<Due['reseller']>): Words {
+  if (r.currentPackageId !== r.fromPackageId) return { stop: 'already_paid' };
+  if (!r.packageActive || !r.price || !r.packageName) return { stop: 'plan_unavailable' };
+  return {
+    params: {
+      ...(r.meter.startsWith('product:') ? (r.productNameKey ? { productNameKey: r.productNameKey } : {}) : { quotaKey: r.meter }),
+      package: r.packageName,
+      price: `${r.price.amount} ${r.price.currencyCode}`,
+      used: String(r.used ?? 0),
+      included: String(r.included ?? 0),
+      newIncluded: r.newIncluded === null ? 'unlimited' : String(r.newIncluded),
+    },
+  };
 }

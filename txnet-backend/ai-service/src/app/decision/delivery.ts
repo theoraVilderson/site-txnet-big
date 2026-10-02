@@ -3,6 +3,7 @@ import { Prisma, type AiAction, type AiOffer } from '@prisma/client';
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { SafetyFloor } from '../floor/safety-floor';
+import { ResellerReader } from '../profile/reseller-reader';
 import type { Reason } from '../profile/predictions';
 import { PrismaService } from '../prisma/prisma.service';
 import { labelledMessage } from './action-log';
@@ -50,14 +51,32 @@ type OfferTerms = Pick<AiOffer, 'id' | 'couponTemplateId' | 'maxDiscountPercent'
  * `checkout_help` (F-038-m), the payment from `checkout_attempt`; for `usage_alert` (F-1516), its Grant and
  * numbers from `usage_spike` — bytes as decimal strings.
  */
-export function deliveryItem(row: DueRow, terms?: OfferTerms) {
+/**
+ * What a reseller's upgrade (F-038-o4) is told with, read at the take — never
+ * the decision's: who owns the reseller now, its package now, and the named
+ * package's name, status and price for the reseller's period today.
+ */
+export type ResellerLive = {
+  recipientUserId: string;
+  currentPackageId: string | null;
+  packageName: string | null;
+  packageActive: boolean;
+  /** The package's price for the reseller's period now; null when it has none. */
+  livePrice: string | null;
+  /** A product's sales quota: the product's catalog name key. */
+  productNameKey: string | null;
+};
+
+export function deliveryItem(row: DueRow, terms?: OfferTerms, live?: ResellerLive) {
   const reasons = (row.reasons as Reason[] | null) ?? [];
   const target = reasons.find((r) => r.code === 'suggest_variant') ?? null;
   const topUp = reasons.find((r) => r.code === 'suggest_top_up') ?? null;
   const offer = reasons.find((r) => r.code === 'suggest_offer') ?? null;
   const attempt = reasons.find((r) => r.code === 'checkout_attempt') ?? null;
   const spike = reasons.find((r) => r.code === 'usage_spike') ?? null;
+  const upgrade = row.subjectKind === 'tenant' ? (reasons.find((r) => r.code === 'suggest_package') ?? null) : null;
   const str = (v: unknown) => (typeof v === 'string' ? v : null);
+  const num = (v: unknown) => (typeof v === 'number' ? v : null);
   return {
     ...labelledMessage(row),
     grantId: str(target?.['grantId']) ?? str(spike?.['grantId']),
@@ -93,6 +112,24 @@ export function deliveryItem(row: DueRow, terms?: OfferTerms) {
       spike && str(spike['meterKey']) && str(spike['lastDayBytes']) && str(spike['usualDayBytes']) && typeof spike['factor'] === 'number'
         ? { meterKey: spike['meterKey'] as string, lastDayBytes: spike['lastDayBytes'] as string, usualDayBytes: spike['usualDayBytes'] as string, factor: spike['factor'] }
         : null,
+    reseller:
+      upgrade && live && str(upgrade['packageId']) && str(upgrade['meter'])
+        ? {
+            recipientUserId: live.recipientUserId,
+            currentPackageId: live.currentPackageId,
+            fromPackageId: str(upgrade['fromPackageId']),
+            packageId: upgrade['packageId'] as string,
+            packageName: live.packageName,
+            packageActive: live.packageActive,
+            price: live.livePrice && str(upgrade['currencyCode']) ? { amount: live.livePrice, currencyCode: upgrade['currencyCode'] as string } : null,
+            meter: upgrade['meter'] as string,
+            period: str(upgrade['period']),
+            included: num(upgrade['included']),
+            used: num(upgrade['used']),
+            newIncluded: num(upgrade['newIncluded']),
+            productNameKey: live.productNameKey,
+          }
+        : null,
     deadline: row.deadline ? row.deadline.toISOString() : null,
   };
 }
@@ -106,6 +143,7 @@ export class ActionDelivery {
   constructor(
     private readonly prisma: PrismaService,
     private readonly safety: SafetyFloor,
+    private readonly resellers: ResellerReader,
   ) {}
 
   /** Due suggestions of every tenant, oldest first, up to `limit`; leased. */
@@ -141,10 +179,45 @@ export class ActionDelivery {
                 select: { id: true, couponTemplateId: true, maxDiscountPercent: true, dailyBudget: true, currencyCode: true, createdByUserId: true },
               })
             : [];
-          return due.map((r) => deliveryItem(r, offers.find((o) => o.id === r.offerId)));
+          return due.map((r) => ({ row: r, terms: offers.find((o) => o.id === r.offerId) }));
         }),
       );
-      out.push(...rows);
+      const live = rows.some((r) => r.row.subjectKind === 'tenant') ? await this.resellersLive(id, rows.map((r) => r.row)) : new Map<string, ResellerLive>();
+      out.push(...rows.map(({ row, terms }) => deliveryItem(row, terms, live.get(row.id))));
+    }
+    return out;
+  }
+
+  /**
+   * F-038-o4: what a reseller's upgrade is told with, read now through the
+   * reader in the platform's scope (`ai.reader_reseller`, the packages).
+   * A reseller gone from the list has no entry: the worker refuses the item.
+   */
+  private async resellersLive(platformTenantId: string, rows: DueRow[]): Promise<Map<string, ResellerLive>> {
+    const [resellers, packages] = await Promise.all([this.resellers.resellers(platformTenantId), this.resellers.packages(platformTenantId)]);
+    const byId = new Map(resellers.map((r) => [r.tenantId, r]));
+    const named = (row: DueRow) => ((row.reasons as Reason[] | null) ?? []).find((r) => r.code === 'suggest_package');
+    const products = rows.flatMap((row) => {
+      const meter = named(row)?.['meter'];
+      return typeof meter === 'string' && meter.startsWith('product:') ? [meter.slice('product:'.length)] : [];
+    });
+    const nameKeys = await this.resellers.productNameKeys(platformTenantId, [...new Set(products)]);
+    const out = new Map<string, ResellerLive>();
+    for (const row of rows) {
+      const reseller = byId.get(row.subjectId);
+      const reason = named(row);
+      if (row.subjectKind !== 'tenant' || !reseller || !reason) continue;
+      const pkg = packages.find((p) => p.id === reason['packageId']);
+      const price = !pkg ? null : reseller.billingModel === 'subscription_yearly' ? pkg.yearlyPrice : reseller.billingModel === 'subscription_monthly' ? pkg.monthlyPrice : null;
+      const meter = typeof reason['meter'] === 'string' ? reason['meter'] : '';
+      out.set(row.id, {
+        recipientUserId: reseller.ownerUserId,
+        currentPackageId: reseller.packageId,
+        packageName: pkg?.name ?? null,
+        packageActive: pkg?.isActive ?? false,
+        livePrice: price && pkg?.currencyCode === reason['currencyCode'] ? price.toFixed(2) : null,
+        productNameKey: meter.startsWith('product:') ? (nameKeys.get(meter.slice('product:'.length)) ?? null) : null,
+      });
     }
     return out;
   }

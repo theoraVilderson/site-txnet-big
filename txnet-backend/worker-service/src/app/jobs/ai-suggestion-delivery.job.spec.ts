@@ -273,6 +273,54 @@ describe('AiSuggestionDeliveryJob (F-038-g3)', () => {
     });
   });
 
+  describe('a reseller\'s upgrade, told to its owner (F-038-o4)', () => {
+    const RESELLER = '22222222-2222-4222-8222-222222222222';
+    const OWNER = '55555555-5555-4555-8555-555555555555';
+    const reseller = (over: Record<string, unknown> = {}) => ({
+      recipientUserId: OWNER, currentPackageId: 'silver', fromPackageId: 'silver', packageId: 'gold', packageName: 'Gold', packageActive: true,
+      price: { amount: '95.00', currencyCode: 'USD' }, meter: 'campaign_sends_daily_max', period: 'month', included: 1000, used: 600, newIncluded: 5000, productNameKey: null, ...over,
+    });
+    const upgrade = (over: Record<string, unknown> = {}) =>
+      item({ subjectKind: 'tenant', subjectId: RESELLER, actionType: 'resize_up', templateKey: 'notifications.suggestion.package_upgrade', grantId: null, variantId: null, fromVariantId: null, price: null, reseller: reseller(), ...over });
+
+    it('claims it for the owner with no Grant, asks billing nothing, runs the floor, and tells the package at today\'s price', async () => {
+      const { job, paths, sent, calls } = build({ items: [upgrade()] });
+      await expect(job.run(NOW)).resolves.toMatchObject({ itemsProcessed: 1, errorsCount: 0 });
+      expect(paths()).toEqual(['/api/internal/ai/actions/due/take', '/api/internal/notifications/suggestion/claim', '/api/internal/ai/actions/:id/floor', '/api/internal/ai/actions/:id/sent']);
+      expect(calls[1].body).toEqual({ actionId: ACTION, userId: OWNER });
+      expect(sent).toEqual([{
+        consumer: 'ai-suggestion', eventId: ACTION, only: ['inbox', 'bot'], class: 'suggestion',
+        person: {
+          tenantId: TENANT, userId: OWNER, template: 'suggestionPackageUpgrade',
+          params: { actionId: ACTION, quotaKey: 'campaign_sends_daily_max', package: 'Gold', price: '95.00 USD', used: '600', included: '1000', newIncluded: '5000' },
+        },
+      }]);
+    });
+
+    it('names a product\'s quota by its catalog key, and says no limit as such', async () => {
+      const { job, sent } = build({ items: [upgrade({ reseller: reseller({ meter: 'product:p1', productNameKey: 'catalog.p1.name', newIncluded: null }) })] });
+      await job.run(NOW);
+      expect((sent[0] as { person: { params: Record<string, string> } }).person.params).toMatchObject({ productNameKey: 'catalog.p1.name', newIncluded: 'unlimited' });
+      expect((sent[0] as { person: { params: Record<string, string> } }).person.params).not.toHaveProperty('quotaKey');
+    });
+
+    it('stops it before the floor when the reseller changed package since, or the package is gone or unpriced', async () => {
+      for (const [r, by] of [[reseller({ currentPackageId: 'gold' }), 'already_paid'], [reseller({ packageActive: false }), 'plan_unavailable'], [reseller({ price: null }), 'plan_unavailable']] as const) {
+        const { job, paths, sent, calls } = build({ items: [upgrade({ reseller: r })] });
+        await job.run(NOW);
+        expect(paths()).toEqual(['/api/internal/ai/actions/due/take', '/api/internal/notifications/suggestion/claim', '/api/internal/ai/actions/:id/stop']);
+        expect(calls[2].body).toEqual({ tenantId: TENANT, by });
+        expect(sent).toEqual([]);
+      }
+    });
+
+    it('never tells one without its reseller block — a reseller gone from the list', async () => {
+      const { job, sent } = build({ items: [upgrade({ reseller: null })] });
+      await expect(job.run(NOW)).resolves.toMatchObject({ errorsCount: 1 });
+      expect(sent).toEqual([]);
+    });
+  });
+
   it('tells a top-up its amount (F-038-k), and never one without it', async () => {
     const topUp = { actionType: 'top_up_wallet', templateKey: 'suggestion.top_up_wallet', amount: { amount: '400000.00', currencyCode: 'IRR' } };
     const told = build({ items: [item(topUp)] });

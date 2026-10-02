@@ -754,6 +754,34 @@ describe('UserNotifier', () => {
       });
       expect(NOTIFY_TEMPLATES).toEqual(expect.arrayContaining(['suggestionRenew', 'suggestionResizeUp', 'suggestionResizeDown', 'suggestionTopUpWallet', 'suggestionWinBack', 'suggestionRetainOffer', 'suggestionCheckoutHelp']));
     });
+
+    it('a reseller\'s upgrade (F-038-o4) names its quota as a quota alert does, and says "no limit" in words', async () => {
+      const client = botClient();
+      const locale = {
+        getNamespace: vi.fn(() => ({
+          suggestion: { package_upgrade: '💡 {{quota}}: {{used}}/{{included}} → {{package}}: {{newIncluded}} ({{price}})', unlimited: 'نامحدود' },
+          resellerQuotaKeys: { campaign_sends_daily_max: 'پیام کمپین' },
+        })),
+        getKey: vi.fn(() => undefined),
+        getDefaultLanguage: () => 'fa',
+      } as unknown as LocaleService;
+      const notifier = new UserNotifier(
+        notifierPrisma({ user: { languagePreference: 'fa' }, links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+        registry(client),
+        locale,
+      );
+      await inTenant(() =>
+        notifier.notify({
+          userId: 'owner-1',
+          channel: 'bot',
+          template: 'suggestionPackageUpgrade',
+          params: { actionId: '77777777-7777-4777-8777-777777777777', quotaKey: 'campaign_sends_daily_max', package: 'Gold', price: '95.00 USD', used: '600', included: '1000', newIncluded: 'unlimited' },
+        }),
+      );
+      expect(client.sendMessage).toHaveBeenCalledWith('5501', '💡 پیام کمپین: 600/1000 → Gold: نامحدود (95.00 USD)', {
+        inline_keyboard: [[{ text: "🔕 Don't show this again", callback_data: 'aio:77777777-7777-4777-8777-777777777777' }]],
+      });
+    });
   });
 
   describe('a combined notice names its services (F-601-p)', () => {

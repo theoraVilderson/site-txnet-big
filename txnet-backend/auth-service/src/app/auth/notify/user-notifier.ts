@@ -76,6 +76,8 @@ export const NOTIFY_TEMPLATES = [
   'suggestionRetainOffer',
   'suggestionCheckoutHelp',
   'suggestionUsageAlert',
+  // F-038-o4: a reseller's package upgrade, told to its owner.
+  'suggestionPackageUpgrade',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -819,6 +821,14 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
     inbox: { read: (ns) => ns?.suggestion?.usage_alertTitle, fallback: 'Suggestion: unusual use on {{service}}' },
     many: SUGGESTION_MANY,
   },
+  // F-038-o4 (ADR-0109 point 4): a reseller's quota will not last its window at this rate — the package that
+  // holds it, at today's price. Told to the owner; the quota named as a quota alert names it.
+  suggestionPackageUpgrade: {
+    read: (ns) => ns?.suggestion?.package_upgrade,
+    fallback: '💡 Suggestion: {{quota}} has used {{used}} of the {{included}} your package includes this period, and at this rate it will not last the period. The {{package}} package includes {{newIncluded}} for {{price}}; an upgrade applies at once, charged for the days left.',
+    inbox: { read: (ns) => ns?.suggestion?.package_upgradeTitle, fallback: 'Suggestion: the {{package}} package for {{quota}}' },
+    many: SUGGESTION_MANY,
+  },
 };
 
 /**
@@ -981,7 +991,11 @@ export class UserNotifier {
    * catalog name. A name already given is kept.
    */
   private withQuotaName(template: NotifyTemplate, params: Record<string, string>, lang: string, ns: NotificationsNamespace | undefined): Record<string, string> {
-    if (!template.startsWith('resellerQuota') || params.quota) return params;
+    // F-038-o4: a package upgrade names its quota the same way, and its new number in words when there is none.
+    if (template === 'suggestionPackageUpgrade' && params.newIncluded === 'unlimited') {
+      params = { ...params, newIncluded: ns?.suggestion?.unlimited ?? 'no limit' };
+    }
+    if (!(template.startsWith('resellerQuota') || template === 'suggestionPackageUpgrade') || params.quota) return params;
     const quota =
       (params.quotaKey ? ns?.resellerQuotaKeys?.[params.quotaKey] : undefined) ??
       this.catalogName(params.productNameKey ?? null, lang) ??
