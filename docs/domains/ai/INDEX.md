@@ -4,7 +4,7 @@ layer: domain
 status: draft
 version: 2
 keywords: [ai, recommendation, guardrail, suggestion, revenue engine, prediction, holdout, opt-out, provider, byo-ai]
-source: [txnet-backend/prisma/domains/ai.prisma, txnet-backend/ai-service/src/**]
+source: [txnet-backend/prisma/domains/ai.prisma, txnet-backend/ai-service/src/**, txnet-backend/shared-core/src/lib/ai/**]
 owns_tables: [account_profile, prediction, action, offer, guardrail, holdout, opt_out, provider, task_route, usage, setting]
 depends_on: [identity, billing, automation]
 updated: 2026-10-02

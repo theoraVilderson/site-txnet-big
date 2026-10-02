@@ -1,6 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { BotClientRegistry, BotPlatform } from '@txnet-backend/messenger';
-import { SUGGESTION_OPT_OUT_PREFIX } from '@txnet-backend/shared-core';
+import { SUGGESTION_OPT_OUT_PREFIX, suggestionCopyVerdict } from '@txnet-backend/shared-core';
 
 import { LocaleService } from '../../locale/locale.service';
 import { NotificationInboxClient } from './notification-inbox.client';
@@ -866,6 +866,16 @@ export class UserNotifier {
     const list = combined && request.services?.length ? this.serviceList(request.services, user.languagePreference, ns) : null;
     const trailing = TRAILING_LINES.filter((l) => params[l.param]).map((l) => interpolate(l.read(ns) ?? l.fallback, params));
     const text = [body, ...(list ? [list] : []), ...trailing].join('\n\n');
+
+    // F-1507: an AI suggestion leaves with one call to action at most and no pressure, on every channel.
+    // It has no action button yet (its "don't show this again" is a control), so the text alone is judged.
+    if (request.template.startsWith('suggestion')) {
+      const verdict = suggestionCopyVerdict({ text, ctas: 0 });
+      if ('rule' in verdict) {
+        this.logger.warn(`${request.template} to user ${request.userId} not told: its text breaks the copy rule (${verdict.rule})`);
+        return { sent: [] };
+      }
+    }
 
     if (request.channel === 'sms') {
       if (!user.phoneVerifiedAt || !user.phoneNumber) return { sent: [] };

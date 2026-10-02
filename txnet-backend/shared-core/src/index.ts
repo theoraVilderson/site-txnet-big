@@ -7,6 +7,7 @@ export * from './lib/automation/routing-keys';
 export * from './lib/automation/retention-levels';
 export * from './lib/automation/retention-kinds';
 export * from './lib/automation/notice-classes';
+export * from './lib/ai/suggestion-copy';
 export * from './lib/automation/block-request';
 export * from './lib/automation/usage-delta';
 export * from './lib/automation/usage-release';

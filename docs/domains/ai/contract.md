@@ -181,6 +181,21 @@ Answers `{ actionType }`. Callers: the bot button (F-038-g4, built — bot-app `
   `type_disabled`. A candidate decided while its type was switched off is
   recorded the same way (`record` re-reads the setting in its transaction).
 
+## One call to action, no pressure (F-1507, point 10) — implemented
+
+shared-core `suggestionCopyVerdict({ text, ctas })` (`lib/ai/suggestion-copy.ts`)
+is the one rule: at most `SUGGESTION_MAX_CTAS` (1) action — buttons plus links
+in the text; "don't show this again" is a control, not one — and no urgency
+(`!`, hurry, last chance, today only, …), false scarcity (only N left, limited
+spots, …) or guilt (regret, "don't you want", …), English and Persian. A fact
+— "ends in 3 days", the user's own traffic running out — is not pressure.
+
+| where | how |
+|---|---|
+| template lint | `suggestion-copy.spec.ts` holds every language's `notifications.suggestion.*` to it |
+| output validation | auth-service `UserNotifier` judges the rendered text before any channel; a refusal tells nothing and is logged. The panel card (F-038-h) carries the one action |
+| prompt | `SUGGESTION_COPY_PROMPT`, for the language layer; its output passes the same verdict (F-1542) |
+
 ## The safety floor (F-1548) — implemented, ahead of delivery
 
 `SafetyFloor.check(tenantId, subject, origin, now)` (`floor/`) is the last

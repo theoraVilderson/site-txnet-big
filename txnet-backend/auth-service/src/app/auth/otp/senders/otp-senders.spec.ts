@@ -611,6 +611,33 @@ describe('UserNotifier', () => {
     expect(client.sendMessage).not.toHaveBeenCalled();
   });
 
+  // F-1507: the rendered suggestion is validated before any channel — a copy edit that pressures is told nowhere.
+  it('a suggestion whose text pressures or carries a second call to action reaches no channel', async () => {
+    const params = { actionId: 'a-1', serviceSku: 'VPN-1', planSku: 'VPN-1', price: '5 USD', days: '3' };
+    for (const renew of ['Hurry! {{service}} ends in {{days}} days', '{{service}} ends — renew at https://a.example or https://b.example']) {
+      const client = botClient();
+      const inbox = { put: vi.fn(async () => undefined) };
+      const notifier = new UserNotifier(
+        notifierPrisma({ links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+        registry(client),
+        localeService({ suggestion: { renew, renewTitle: 'Suggestion' } }),
+        inbox as unknown as NotificationInboxClient,
+      );
+      for (const channel of ['bot', 'inbox'] as const) {
+        expect(await inTenant(() => notifier.notify({ userId: 'user-1', channel, template: 'suggestionRenew', params }))).toEqual({ sent: [] });
+      }
+      expect(client.sendMessage).not.toHaveBeenCalled();
+      expect(inbox.put).not.toHaveBeenCalled();
+    }
+    const client = botClient();
+    const plain = new UserNotifier(
+      notifierPrisma({ links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+      registry(client),
+      localeService({ suggestion: { renew: '{{service}} ends in {{days}} days' } }),
+    );
+    expect(await inTenant(() => plain.notify({ userId: 'user-1', channel: 'bot', template: 'suggestionRenew', params }))).toEqual({ sent: ['telegram'] });
+  });
+
   it('the bot channel writes no inbox row', async () => {
     const inbox = { put: vi.fn(async () => undefined) };
     const notifier = new UserNotifier(
