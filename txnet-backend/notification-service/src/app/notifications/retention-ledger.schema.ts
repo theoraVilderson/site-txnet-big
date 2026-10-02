@@ -21,6 +21,15 @@ export const retentionClaimSchema = z
   })
   .strict();
 
+/** F-038-g1: an AI suggestion's claim — worker-service, once per `ai.action`. */
+export const suggestionClaimSchema = z
+  .object({
+    actionId: z.string({ message: invalid }).uuid({ message: invalid }),
+    userId: z.string({ message: invalid }).uuid({ message: invalid }),
+    grantId: z.string({ message: invalid }).uuid({ message: invalid }),
+  })
+  .strict();
+
 /**
  * A claimed notice's bot message, kept for the end of the user's quiet hours
  * (F-601-m): the row's key and the event holding it, the words to tell, and

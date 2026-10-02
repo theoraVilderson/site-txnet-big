@@ -22,7 +22,7 @@ describe('notice classes (F-601-s)', () => {
   });
 
   it('classes every retention kind as ADR-0097 says', () => {
-    const expected = { cutoff: 'critical', ending: 'important', connect: 'important', usage: 'important', reactivated: 'critical' };
+    const expected = { cutoff: 'critical', ending: 'important', connect: 'important', usage: 'important', reactivated: 'critical', suggestion: 'suggestion' };
     for (const [type, kind] of Object.entries(RETENTION_KIND_OF)) {
       const want = type === OutboxEventType.GRANT_USAGE_50 ? 'info' : expected[kind!];
       expect([type, noticeClassOf(type)]).toEqual([type, want]);

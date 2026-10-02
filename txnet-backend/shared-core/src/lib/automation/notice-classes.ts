@@ -13,13 +13,21 @@ import { RETENTION_KIND_OF, type RetentionKind } from './retention-kinds';
  * | security | inbox + every linked chat + SMS | never | ignored |
  * | critical | inbox + one messenger; SMS when no bot reached (F-601-t) | never | ignored |
  * | important | inbox + one messenger | by kind (F-601-m) | bot held |
+ * | suggestion | inbox + one messenger, labelled (ADR-0109 point 11) | its own kind | bot held |
  * | info | inbox only | by kind | — |
  *
  * `response` and `security` have no notice yet: a response is the page's own
  * answer; a security notice's delivery is built (F-601-t) and waits for one.
  */
-export const NOTICE_CLASSES = ['response', 'security', 'critical', 'important', 'info'] as const;
+export const NOTICE_CLASSES = ['response', 'security', 'critical', 'important', 'suggestion', 'info'] as const;
 export type NoticeClass = (typeof NOTICE_CLASSES)[number];
+
+/**
+ * The AI engine's suggestion (F-038-g1): one notice, every action type —
+ * claimed on the retention ledger once per action (`period` = the action id).
+ * Dotted like a type, though no outbox event carries it.
+ */
+export const SUGGESTION_NOTICE = 'ai.suggestion';
 
 const OF_KIND: Record<RetentionKind, NoticeClass> = {
   cutoff: 'critical',
@@ -28,6 +36,7 @@ const OF_KIND: Record<RetentionKind, NoticeClass> = {
   ending: 'important',
   usage: 'important',
   connect: 'important',
+  suggestion: 'suggestion',
 };
 
 /**
@@ -66,6 +75,7 @@ export const NOTICE_CLASS_OF: Readonly<Record<string, NoticeClass>> = {
   subscriptionPaymentDue: 'important',
   panelRefused: 'important',
   panelAccepted: 'info',
+  [SUGGESTION_NOTICE]: 'suggestion',
 };
 
 /** The class of a notice, or of several told as one message — the strongest of them. A name missing from the table is `critical`. */

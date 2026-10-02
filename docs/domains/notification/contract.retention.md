@@ -78,6 +78,7 @@ shared-core `NOTICE_CLASS_OF` (`notice-classes.ts`, beside `RETENTION_KIND_OF`) 
 | security | none yet (sign-in, password, phone or email change) | inbox + every linked chat + SMS | never | ignored |
 | critical | every `cutoff`, and `reactivated` (an all-clear follows its alarm) | inbox + the user's messenger; SMS when no bot reached them (F-601-t) | `cutoff` never; `reactivated` by its kind | ignored: the claim answers `now` |
 | important | `ending`, `connect`, `usage` but 50 % | inbox + the user's messenger | by kind | the bot held (above) |
+| suggestion | none — the AI engine's `ai.suggestion` (below) | inbox + the user's messenger, labelled | its own kind | the bot held |
 | info | 50 % | inbox only | by kind | none: `now`, as there is no bot to hold |
 
 | Rule | Why |
@@ -105,6 +106,23 @@ notices** or **essential only**; the bot's side is F-319, over the same rows.
 | Beside the kinds muted on every Grant, never instead: a notice is muted when its kind is, **or** its Grant is essential | one switch per service, one per kind, and neither undoes the other |
 | Keyed `(userId, grantId)` under the gate's `userId`, and read by the claim with the event's `userId`: no ownership read of billing | a Grant id that is not the caller's names a row nothing reads; a Grant that changes hands starts at `all` for its new owner |
 | `all` deletes the row; a muted claim still writes the ledger row | no row is the default; switching back never tells a period already past |
+
+## An AI suggestion (F-038-g1, ADR-0109 points 10, 11)
+
+shared-core `SUGGESTION_NOTICE` (`ai.suggestion`) is one notice for every AI
+action type, of class `suggestion` — inbox + the user's messenger, like
+`important`, labelled, never SMS — and of its own mutable kind `suggestion`.
+
+| Operation | Route | Input | Output | Errors |
+|---|---|---|---|---|
+| claim a suggestion | `POST internal/notifications/suggestion/claim` (token) | `{ actionId, userId, grantId }`, strict | `{ deliver: now \| muted }`, `{ deliver: held, botAt }`, or `{ deliver: later, reason: after_retention, retryAt }` | 400; 404 on a wrong token |
+
+| Rule | Why |
+|---|---|
+| One ledger row per action: `notice` `ai.suggestion`, `period` and `eventId` the action id; a row whose bot message is held answers `held` again | a redelivered claim never tells the bot twice |
+| A retention notice of the same Grant claimed in the last 24 h answers `later`, until 24 h after it; any claimed row counts — the ledger does not record a mute | the deterministic notice wins (ADR-0109 point 10) |
+| `muted` when the user muted `suggestion` or set the Grant to `essential`; the row is still written | as every mutable kind |
+| Quiet hours hold the bot by `quietUntil` (shared-core, the window the engine scheduled outside); the held message goes through `hold` / `held/take` like a retention one | one rule for every held bot message |
 
 ## Several services, one message (F-601-p, user 2026-09-28)
 

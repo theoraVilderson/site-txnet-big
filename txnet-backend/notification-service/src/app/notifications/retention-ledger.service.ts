@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { noticeClassOf, retentionKindOf } from '@txnet-backend/shared-core';
+import { noticeClassOf, quietUntil, retentionKindOf, SUGGESTION_NOTICE } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { GrantNoticeLevelService } from './grant-notice-level.service';
@@ -16,6 +16,21 @@ export type RetentionClaim = { eventId: string; userId: string; grantId: string;
  * a period already past.
  */
 export type ClaimAnswer = { claimed: false } | { claimed: true; deliver: 'now' | 'muted' } | { claimed: true; deliver: 'held'; botAt: string };
+
+export type SuggestionClaim = { actionId: string; userId: string; grantId: string };
+
+/**
+ * How an AI suggestion is told (F-038-g1): as a claim's `now` / `muted` /
+ * `held`, or `later` — a retention notice on the Grant in the last 24 h wins,
+ * and the suggestion may be told from `retryAt`.
+ */
+export type SuggestionAnswer =
+  | { deliver: 'now' | 'muted' }
+  | { deliver: 'held'; botAt: string }
+  | { deliver: 'later'; reason: 'after_retention'; retryAt: string };
+
+/** ADR-0109 point 10: no AI message within 24 h of a retention notice about the same Grant. */
+export const SUGGESTION_AFTER_RETENTION_MS = 24 * 3_600_000;
 
 export type RetentionHold = Omit<RetentionClaim, 'userId'> & { tenantId: string; template: string; params: Record<string, string>; botAt: string };
 
@@ -81,6 +96,39 @@ export class RetentionLedgerService {
     if (noticeClassOf(input.notice) !== 'important') return { claimed: true, deliver: 'now' };
     const until = quietWithin(pref, now, input.waitSec ?? 0);
     return until ? { claimed: true, deliver: 'held', botAt: until.toISOString() } : { claimed: true, deliver: 'now' };
+  }
+
+  /**
+   * F-038-g1 (ADR-0109 points 10, 11): an AI suggestion's claim, on the same
+   * ledger — one row per action (`period` and `eventId` are the action id), so
+   * a redelivery is the same row and a held bot message is never told twice.
+   * In order: a retention notice on the Grant claimed in the last 24 h makes
+   * it `later` (the deterministic notice wins; any claimed row counts, muted
+   * or not, as the ledger does not say); the user's `suggestion` mute or the
+   * Grant's `essential` level makes it `muted`; quiet hours hold the bot.
+   */
+  async claimSuggestion(input: SuggestionClaim, now = new Date()): Promise<SuggestionAnswer> {
+    const row = { eventId: input.actionId, userId: input.userId, grantId: input.grantId, notice: SUGGESTION_NOTICE, period: input.actionId };
+    const { count } = await this.prisma.retentionNotice.createMany({ data: [row], skipDuplicates: true });
+    if (count !== 1) {
+      const held = await this.prisma.retentionNotice.findUnique({
+        where: { grantId_notice_period: { grantId: input.grantId, notice: SUGGESTION_NOTICE, period: input.actionId } },
+        select: { eventId: true, botAt: true, botTemplate: true },
+      });
+      if (held?.botTemplate && held.botAt) return { deliver: 'held', botAt: held.botAt.toISOString() };
+    }
+    const retention = await this.prisma.retentionNotice.findFirst({
+      where: { grantId: input.grantId, notice: { not: SUGGESTION_NOTICE }, createdAt: { gt: new Date(now.getTime() - SUGGESTION_AFTER_RETENTION_MS) } },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+    if (retention) {
+      return { deliver: 'later', reason: 'after_retention', retryAt: new Date(retention.createdAt.getTime() + SUGGESTION_AFTER_RETENTION_MS).toISOString() };
+    }
+    const [pref, level] = await Promise.all([this.preferences.stored(input.userId), this.levels.level(input.userId, input.grantId)]);
+    if (level === 'essential' || pref?.mutedKinds.includes('suggestion')) return { deliver: 'muted' };
+    const until = quietUntil(pref, now);
+    return until ? { deliver: 'held', botAt: until.toISOString() } : { deliver: 'now' };
   }
 
   /**

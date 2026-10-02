@@ -3,9 +3,10 @@ import { OutboxEventType } from './routing-keys';
 /**
  * The retention notice kinds a user may mute (F-601-m, spec 9.4), in the
  * panel's order: usage and wallet levels, the time levels before an end,
- * "trouble connecting?", and "your service runs again".
+ * "trouble connecting?", "your service runs again", and the AI engine's
+ * suggestions (F-038-g1, ADR-0109 point 11 — their only kind).
  */
-export const RETENTION_MUTABLE_KINDS = ['usage', 'ending', 'connect', 'reactivated'] as const;
+export const RETENTION_MUTABLE_KINDS = ['usage', 'ending', 'connect', 'reactivated', 'suggestion'] as const;
 export type RetentionMutableKind = (typeof RETENTION_MUTABLE_KINDS)[number];
 
 /** Every kind. `cutoff` — the service stopped, or its configs are about to go — is never muted nor held for quiet hours. */

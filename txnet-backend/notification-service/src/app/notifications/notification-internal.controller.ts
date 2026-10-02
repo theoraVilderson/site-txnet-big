@@ -4,8 +4,8 @@ import { ServiceOnlyGuard } from '@txnet-backend/shared-core';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { CreateNotification, NotificationInboxService } from './notification-inbox.service';
 import { createNotificationSchema } from './notification-inbox.schema';
-import { RetentionClaim, RetentionHold, RetentionLedgerService } from './retention-ledger.service';
-import { heldTakeSchema, heldToldSchema, retentionClaimSchema, retentionHoldSchema } from './retention-ledger.schema';
+import { RetentionClaim, RetentionHold, RetentionLedgerService, SuggestionClaim } from './retention-ledger.service';
+import { heldTakeSchema, heldToldSchema, retentionClaimSchema, retentionHoldSchema, suggestionClaimSchema } from './retention-ledger.schema';
 
 /**
  * How another unit puts a row in a user's inbox (F-035-a): an Nx app cannot
@@ -42,6 +42,13 @@ export class NotificationInternalController {
   @HttpCode(200)
   claimRetention(@Body(new ZodValidationPipe(retentionClaimSchema)) body: RetentionClaim) {
     return this.retention.claim(body);
+  }
+
+  /** F-038-g1: an AI suggestion's claim — same ledger, one row per action. */
+  @Post('suggestion/claim')
+  @HttpCode(200)
+  claimSuggestion(@Body(new ZodValidationPipe(suggestionClaimSchema)) body: SuggestionClaim) {
+    return this.retention.claimSuggestion(body);
   }
 
   @Post('retention/hold')
