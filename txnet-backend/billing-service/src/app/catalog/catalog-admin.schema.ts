@@ -243,6 +243,28 @@ export const setRateCardSchema = rateCardTerms
 export const updateVariantSchema = z.object({ ...variantFields, isActive: z.boolean().optional() }).strict();
 
 export const setPriceSchema = z.object({ amount: decimal('amount'), effectiveFrom: instant('effectiveFrom').optional() }).strict();
+/** F-505-a: a season — a Jalali month and day (`dated`) or a weekday (`weekly`), its start minute and length; the DB CHECKs, said as 400s first. */
+const seasonWhen = {
+  startMinute: z.number().int().min(0).max(1439),
+  durationMinutes: z.number().int().min(1).max(44640),
+};
+export const createSeasonSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('dated'), name: z.string().trim().min(1).max(80), month: z.number().int().min(1).max(12), day: z.number().int().min(1).max(31), ...seasonWhen, tenantId: z.string().uuid().nullable().optional() }).strict(),
+  z.object({ kind: z.literal('weekly'), name: z.string().trim().min(1).max(80), weekday: z.number().int().min(0).max(6), ...seasonWhen, tenantId: z.string().uuid().nullable().optional() }).strict(),
+]);
+export const updateSeasonSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80).optional(),
+    month: z.number().int().min(1).max(12).optional(),
+    day: z.number().int().min(1).max(31).optional(),
+    weekday: z.number().int().min(0).max(6).optional(),
+    startMinute: seasonWhen.startMinute.optional(),
+    durationMinutes: seasonWhen.durationMinutes.optional(),
+    isActive: z.boolean().optional(),
+  })
+  .strict();
+export const seasonPriceSchema = z.object({ amount: decimal('amount') }).strict();
+
 /** F-503-a: a time-boxed price; the end after the start (the DB CHECK, said as a 400 first). */
 export const createCampaignSchema = z
   .object({ amount: decimal('amount'), startsAt: instant('startsAt'), endsAt: instant('endsAt') })
@@ -287,6 +309,9 @@ export type CreateVariantBody = z.infer<typeof createVariantSchema>;
 export type UpdateVariantBody = z.infer<typeof updateVariantSchema>;
 export type SetPriceBody = z.infer<typeof setPriceSchema>;
 export type CreateCampaignBody = z.infer<typeof createCampaignSchema>;
+export type CreateSeasonBody = z.infer<typeof createSeasonSchema>;
+export type UpdateSeasonBody = z.infer<typeof updateSeasonSchema>;
+export type SeasonPriceBody = z.infer<typeof seasonPriceSchema>;
 export type SetRateCardBody = z.infer<typeof setRateCardSchema>;
 export type ListTextDraftsQuery = z.infer<typeof listTextDraftsSchema>;
 export type PublishTextsBody = z.infer<typeof publishTextsSchema>;

@@ -7,6 +7,7 @@ keywords: [quota engine, consume a quota, release a quota, overage charge, resel
 source:
   - txnet-backend/billing-service/src/app/wallet/**
   - txnet-backend/shared-core/src/lib/billing/**
+  - txnet-backend/shared-core/src/lib/time/zoned.ts
   - txnet-backend/billing-service/src/app/payment/**
   - txnet-backend/billing-service/src/app/request/**
   - txnet-backend/billing-service/src/app/prisma/**

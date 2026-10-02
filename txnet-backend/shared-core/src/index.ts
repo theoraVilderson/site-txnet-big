@@ -58,6 +58,8 @@ export * from './lib/catalog/category-tree';
 export * from './lib/catalog/metered-rate';
 export * from './lib/catalog/rate-card';
 export * from './lib/catalog/meter';
+export * from './lib/catalog/seasons';
+export * from './lib/time/zoned';
 export * from './lib/tenant/billing/tenant-billing-ledger';
 export * from './lib/tenant/feature-keys';
 export * from './lib/tenant/entitlements';

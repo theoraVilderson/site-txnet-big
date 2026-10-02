@@ -9,6 +9,7 @@ import { CatalogReadService } from './catalog-reads';
 import { CATALOG_TEXT_STORE, CatalogTextService } from './catalog-texts';
 import { ResellerCatalogController } from './reseller-catalog.controller';
 import { ResellerCatalogService } from './reseller-catalog.service';
+import { SeasonInternalController } from './season-internal.controller';
 
 /**
  * The catalog, as a module inside billing-service (ADR-0049): the reads a
@@ -23,7 +24,7 @@ import { ResellerCatalogService } from './reseller-catalog.service';
  */
 @Module({
   imports: [LocaleModule],
-  controllers: [CatalogAdminController, ResellerCatalogController],
+  controllers: [CatalogAdminController, ResellerCatalogController, SeasonInternalController],
   providers: [
     CatalogReadService,
     CatalogAdminService,

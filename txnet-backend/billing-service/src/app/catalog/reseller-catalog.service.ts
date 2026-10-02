@@ -31,6 +31,9 @@ import {
   SetPriceInput,
   CreateCampaignInput,
   CampaignView,
+  SeasonInput,
+  SeasonPatch,
+  SeasonView,
   SetRateCardInput,
   UpdateCapabilityInput,
   UpdateCategoryInput,
@@ -211,6 +214,29 @@ export class ResellerCatalogService {
 
   cancelCampaign(actor: ResellerCatalogActor, tenantId: string, campaignId: string): Promise<CampaignView> {
     return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.cancelCampaign(as, campaignId));
+  }
+
+  // ------------------------------------------------------------ seasons (F-505-a)
+
+  listSeasons(actor: ResellerCatalogActor, tenantId: string): Promise<SeasonView[]> {
+    return this.run(actor, tenantId, 'read', (as) => this.catalog.listSeasons(as));
+  }
+
+  createSeason(actor: ResellerCatalogActor, tenantId: string, input: SeasonInput): Promise<SeasonView> {
+    // Under the reseller prefix a season is the path's reseller's; a body names no tenant.
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.createSeason(as, { ...input, tenantId: undefined }));
+  }
+
+  updateSeason(actor: ResellerCatalogActor, tenantId: string, seasonId: string, patch: SeasonPatch): Promise<SeasonView> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.updateSeason(as, seasonId, patch));
+  }
+
+  setSeasonPrice(actor: ResellerCatalogActor, tenantId: string, seasonId: string, variantId: string, amount: string): Promise<SeasonView> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.setSeasonPrice(as, seasonId, variantId, amount));
+  }
+
+  removeSeasonPrice(actor: ResellerCatalogActor, tenantId: string, seasonId: string, variantId: string): Promise<SeasonView> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.removeSeasonPrice(as, seasonId, variantId));
   }
 
   // ---------------------------------------------------------- rate cards (F-118-m)

@@ -79,6 +79,11 @@ enum AdminAction {
   // F-503-a. A campaign is two price rows; cancelling it switches both off.
   catalog_campaign_create
   catalog_campaign_cancel
+  // F-505-a. A season and its prices; its occurrences are campaigns.
+  catalog_season_create
+  catalog_season_update
+  catalog_season_price_set
+  catalog_season_price_remove
   coupon_batch_deactivate
   campaign_send
   // F-018-q. A stopped campaign is sent again by hand.
@@ -181,6 +186,7 @@ enum AuditTargetType {
   product_variant
   price
   price_campaign
+  season
   // F-118-m.
   rate_card
   notification_campaign

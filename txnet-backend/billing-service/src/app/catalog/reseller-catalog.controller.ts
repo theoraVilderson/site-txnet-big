@@ -12,6 +12,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Put,
   Post,
   Query,
   Req,
@@ -36,6 +37,9 @@ import {
   ListCategoriesQuery,
   RemoveProductsBody,
   SetPriceBody,
+  CreateSeasonBody,
+  UpdateSeasonBody,
+  SeasonPriceBody,
   CreateCampaignBody,
   SetRateCardBody,
   UpdateCapabilityBody,
@@ -54,6 +58,9 @@ import {
   listCategoriesSchema,
   removeProductsSchema,
   setPriceSchema,
+  createSeasonSchema,
+  updateSeasonSchema,
+  seasonPriceSchema,
   createCampaignSchema,
   setRateCardSchema,
   updateCapabilitySchema,
@@ -66,6 +73,7 @@ import {
   EditTextsInput,
   PublishTextsInput,
   SetPriceInput,
+  SeasonInput,
   CreateCampaignInput,
   SetRateCardInput,
   UpdateCapabilityInput,
@@ -121,6 +129,8 @@ const STATUS: Record<ResellerCatalogRejection, 400 | 403 | 404 | 409 | 503> = {
   no_price_to_restore: 409,
   price_scheduled_in_campaign: 409,
   price_in_campaign: 409,
+  season_not_found: 404,
+  season_date_invalid: 400,
 };
 
 /**
@@ -387,6 +397,47 @@ export class ResellerCatalogController {
   @RateLimit(WRITE)
   async cancelCampaign(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
     return this.refusing(() => this.catalog.cancelCampaign(this.actor(req, ip), tenantId, id));
+  }
+
+  // ---------------------------------------------------------- seasons (F-505-a)
+
+  @Get('seasons')
+  @RateLimit(READ)
+  async listSeasons(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.listSeasons(this.actor(req, ip), tenantId));
+  }
+
+  @Post('seasons')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit(WRITE)
+  async createSeason(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(createSeasonSchema)) body: CreateSeasonBody, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.createSeason(this.actor(req, ip), tenantId, body as SeasonInput));
+  }
+
+  @Patch('seasons/:id')
+  @RateLimit(WRITE)
+  async updateSeason(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Param('id', new ParseUUIDPipe()) id: string, @Body(new ZodValidationPipe(updateSeasonSchema)) body: UpdateSeasonBody, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.updateSeason(this.actor(req, ip), tenantId, id, body));
+  }
+
+  @Put('seasons/:id/prices/:variantId')
+  @RateLimit(WRITE)
+  async setSeasonPrice(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('variantId', new ParseUUIDPipe()) variantId: string,
+    @Body(new ZodValidationPipe(seasonPriceSchema)) body: SeasonPriceBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return this.refusing(() => this.catalog.setSeasonPrice(this.actor(req, ip), tenantId, id, variantId, body.amount));
+  }
+
+  @Post('seasons/:id/prices/:variantId/remove')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  async removeSeasonPrice(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Param('id', new ParseUUIDPipe()) id: string, @Param('variantId', new ParseUUIDPipe()) variantId: string, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.removeSeasonPrice(this.actor(req, ip), tenantId, id, variantId));
   }
 
   @Post('variants/:id/rate-cards')

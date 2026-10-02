@@ -7,12 +7,13 @@ import {
   QualityTier,
   RateCardAfterIncluded,
   RateCardMode,
+  SeasonKind,
   TenantType,
   VariantBillingMode,
   VariantVisibility,
 } from '@prisma/client';
 
-import { CATEGORY_MAX_DEPTH, DOOR_METERS, METER_KEYS, operatingCurrencyOf, platformCurrencyOf, servedByBytes, tenantTransaction } from '@txnet-backend/shared-core';
+import { CATEGORY_MAX_DEPTH, DOOR_METERS, METER_KEYS, operatingCurrencyOf, PLATFORM_DEFAULT_TIMEZONE, platformCurrencyOf, seasonOccurrences, servedByBytes, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -20,6 +21,7 @@ import { placeableMember } from '../traffic/group-fulfilment';
 import { sellingInbounds } from '../traffic/selling-settings';
 import { CatalogTextKind, CatalogTextService, ReviewItem, Texts, catalogTextKey, parseCatalogTextKey } from './catalog-texts';
 import { campaignPlan, cancelVerdict, priceWriteVerdict, type CampaignRow } from './price-campaign';
+import { SEASON_HORIZON_DAYS, seasonCampaignKey, seasonDateRefusal, seasonRuleOf, upcomingSeasonCampaigns } from './season-plan';
 import { mustStateTraffic, trafficQuotaOf } from './traffic-quota';
 
 /**
@@ -120,7 +122,11 @@ export type CatalogAdminRejection =
   /** F-503-a: a plain price already scheduled inside the window — the restore row would undo it. */
   | 'price_scheduled_in_campaign'
   /** F-503-a: one of a campaign's two rows — cancel the campaign instead. */
-  | 'price_in_campaign';
+  | 'price_in_campaign'
+  /** F-505-a: no such season of the caller's. */
+  | 'season_not_found'
+  /** F-505-a: a Jalali day the month never has (31 Mehr). */
+  | 'season_date_invalid';
 
 /** One group a variant may name (F-026-p). */
 export type PanelGroupOption = {
@@ -249,6 +255,54 @@ export type CampaignView = {
   restorePriceId: string | null;
   restoreAmount: string | null;
 };
+
+/** F-505-a: a season — its own fields, its prices, and its next occurrence on its tenant's clock. */
+export type SeasonInput = {
+  name: string;
+  kind: SeasonKind;
+  month?: number;
+  day?: number;
+  weekday?: number;
+  startMinute: number;
+  durationMinutes: number;
+  /** Whose: absent = the caller's; `null` = the platform's (`ownerOfNew`). */
+  tenantId?: string | null;
+};
+export type SeasonPatch = Partial<Pick<SeasonInput, 'name' | 'month' | 'day' | 'weekday' | 'startMinute' | 'durationMinutes'>> & { isActive?: boolean };
+export type SeasonView = {
+  id: string;
+  tenantId: string | null;
+  name: string;
+  kind: SeasonKind;
+  month: number | null;
+  day: number | null;
+  weekday: number | null;
+  startMinute: number;
+  durationMinutes: number;
+  isActive: boolean;
+  prices: Array<{ variantId: string; amount: string }>;
+  next: { startsAt: Date; endsAt: Date } | null;
+};
+
+type SeasonRowWithPrices = Prisma.SeasonGetPayload<{ include: { prices: true } }>;
+
+function seasonView(s: SeasonRowWithPrices, zone: string, now: Date): SeasonView {
+  const [next] = s.isActive ? seasonOccurrences(seasonRuleOf(s), zone, now, new Date(now.getTime() + 400 * 86_400_000)) : [];
+  return {
+    id: s.id,
+    tenantId: s.tenantId,
+    name: s.name,
+    kind: s.kind,
+    month: s.month,
+    day: s.day,
+    weekday: s.weekday,
+    startMinute: s.startMinute,
+    durationMinutes: s.durationMinutes,
+    isActive: s.isActive,
+    prices: s.prices.map((p) => ({ variantId: p.variantId, amount: p.amount.toFixed(2) })).sort((a, b) => a.variantId.localeCompare(b.variantId)),
+    next: next ?? null,
+  };
+}
 
 function campaignView(
   c: { id: string; tenantId: string | null; variantId: string; amount: Prisma.Decimal; currencyCode: string; startsAt: Date; endsAt: Date; cancelledAt: Date | null },
@@ -1203,26 +1257,39 @@ export class CatalogAdminService {
     return this.within(owner, async (tx) => {
       const variant = await this.managed(tx, 'productVariant', 'variant_not_found', actor, variantId, owner);
       const tenantId = (variant['tenantId'] as string | null) ?? null;
-      await this.lockCampaigns(tx, variantId);
-      const currencyCode = await pricingCurrencyOf(tx, tenantId);
-      const plan = campaignPlan({
-        startsAt,
-        endsAt,
-        now: new Date(),
-        currencyCode,
-        prices: await tx.price.findMany({ where: { variantId } }),
-        campaigns: await this.liveCampaigns(tx, variantId),
-      });
-      if ('refused' in plan) throw new CatalogAdminRefused(plan.refused, variantId);
-      const amount = new Prisma.Decimal(input.amount);
-      const campaign = await tx.priceCampaign.create({ data: { tenantId, variantId, amount, currencyCode, startsAt, endsAt, createdByAdminId: actor.adminId } });
-      const common = { tenantId, variantId, currencyCode, createdByAdminId: actor.adminId, campaignId: campaign.id };
-      const price = await tx.price.create({ data: { ...common, amount, effectiveFrom: startsAt, campaignEndsAt: endsAt } });
-      const restore = await tx.price.create({ data: { ...common, amount: plan.restore, effectiveFrom: endsAt } });
-      const view = campaignView(campaign, [price, restore]);
-      await this.audit(tx, actor, tenantId, 'catalog_campaign_create', 'price_campaign', campaign.id, null, view);
-      return view;
+      return this.writeCampaign(tx, actor, { tenantId, variantId, amount: new Prisma.Decimal(input.amount), startsAt, endsAt, seasonId: null });
     });
+  }
+
+  /**
+   * The one write of a campaign — by hand, or a season's occurrence (F-505-a):
+   * under the variant's lock, `campaignPlan`'s rules, then the campaign and its
+   * two price rows, audited. The caller has already found the variant its own.
+   */
+  private async writeCampaign(
+    tx: Prisma.TransactionClient,
+    actor: CatalogActor,
+    c: { tenantId: string | null; variantId: string; amount: Prisma.Decimal; startsAt: Date; endsAt: Date; seasonId: string | null },
+  ): Promise<CampaignView> {
+    const { tenantId, variantId, amount, startsAt, endsAt, seasonId } = c;
+    await this.lockCampaigns(tx, variantId);
+    const currencyCode = await pricingCurrencyOf(tx, tenantId);
+    const plan = campaignPlan({
+      startsAt,
+      endsAt,
+      now: new Date(),
+      currencyCode,
+      prices: await tx.price.findMany({ where: { variantId } }),
+      campaigns: await this.liveCampaigns(tx, variantId),
+    });
+    if ('refused' in plan) throw new CatalogAdminRefused(plan.refused, variantId);
+    const campaign = await tx.priceCampaign.create({ data: { tenantId, variantId, amount, currencyCode, startsAt, endsAt, createdByAdminId: actor.adminId, seasonId } });
+    const common = { tenantId, variantId, currencyCode, createdByAdminId: actor.adminId, campaignId: campaign.id };
+    const price = await tx.price.create({ data: { ...common, amount, effectiveFrom: startsAt, campaignEndsAt: endsAt } });
+    const restore = await tx.price.create({ data: { ...common, amount: plan.restore, effectiveFrom: endsAt } });
+    const view = campaignView(campaign, [price, restore]);
+    await this.audit(tx, actor, tenantId, 'catalog_campaign_create', 'price_campaign', campaign.id, null, view);
+    return view;
   }
 
   /** A variant's campaigns, newest start first, cancelled ones too. */
@@ -1252,6 +1319,155 @@ export class CatalogAdminService {
       await this.audit(tx, actor, (old.tenantId as string | null) ?? null, 'catalog_campaign_cancel', 'price_campaign', campaignId, campaignView(old, oldPrices), view);
       return view;
     });
+  }
+
+  // ---------------------------------------------------------- seasons (F-505-a)
+
+  /** The caller's seasons, each with its prices and its next occurrence on its tenant's clock. */
+  async listSeasons(actor: CatalogActor): Promise<SeasonView[]> {
+    const { owner } = await this.access(actor);
+    return this.within(owner, async (tx) => {
+      const rows = await tx.season.findMany({ where: { tenantId: actor.tenantId }, include: { prices: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+      const zone = await this.seasonZone(tx, actor.tenantId);
+      const now = new Date();
+      return rows.map((s) => seasonView(s, zone, now));
+    });
+  }
+
+  async createSeason(actor: CatalogActor, input: SeasonInput): Promise<SeasonView> {
+    const tenantId = await this.ownerOfNew(actor, input.tenantId);
+    const { owner } = await this.access(actor);
+    const refusal = seasonDateRefusal(input);
+    if (refusal) throw new CatalogAdminRefused(refusal, `${input.month}/${input.day}`);
+    return this.within(owner, async (tx) => {
+      const dated = input.kind === 'dated';
+      const row = await tx.season.create({
+        data: {
+          tenantId,
+          name: input.name.trim(),
+          kind: input.kind,
+          month: dated ? (input.month ?? null) : null,
+          day: dated ? (input.day ?? null) : null,
+          weekday: dated ? null : (input.weekday ?? null),
+          startMinute: input.startMinute,
+          durationMinutes: input.durationMinutes,
+          createdByAdminId: actor.adminId,
+        },
+        include: { prices: true },
+      });
+      const view = seasonView(row, await this.seasonZone(tx, tenantId), new Date());
+      await this.audit(tx, actor, tenantId, 'catalog_season_create', 'season', row.id, null, view);
+      return view;
+    });
+  }
+
+  /** Its kind is fixed; anything else may change. Switched off (`isActive: false`), it writes no more occurrences; written ones stay, cancellable as any campaign. */
+  async updateSeason(actor: CatalogActor, seasonId: string, patch: SeasonPatch): Promise<SeasonView> {
+    const { owner } = await this.access(actor);
+    return this.within(owner, async (tx) => {
+      const before = await this.managed(tx, 'season', 'season_not_found', actor, seasonId, owner);
+      const kind = before['kind'] as SeasonKind;
+      const dated = kind === 'dated';
+      const next = { kind, month: patch.month ?? (before['month'] as number | null), day: patch.day ?? (before['day'] as number | null) };
+      const refusal = seasonDateRefusal(next);
+      if (refusal) throw new CatalogAdminRefused(refusal, `${next.month}/${next.day}`);
+      const row = await tx.season.update({
+        where: { id: seasonId },
+        data: {
+          ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+          ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+          ...(patch.startMinute !== undefined ? { startMinute: patch.startMinute } : {}),
+          ...(patch.durationMinutes !== undefined ? { durationMinutes: patch.durationMinutes } : {}),
+          ...(dated && patch.month !== undefined ? { month: patch.month } : {}),
+          ...(dated && patch.day !== undefined ? { day: patch.day } : {}),
+          ...(!dated && patch.weekday !== undefined ? { weekday: patch.weekday } : {}),
+        },
+        include: { prices: true },
+      });
+      const tenantId = (before['tenantId'] as string | null) ?? null;
+      const view = seasonView(row, await this.seasonZone(tx, tenantId), new Date());
+      await this.audit(tx, actor, tenantId, 'catalog_season_update', 'season', seasonId, before, view);
+      return view;
+    });
+  }
+
+  /** A season's price for one of its own tenant's variants; what each later occurrence charges. Written occurrences keep theirs. */
+  async setSeasonPrice(actor: CatalogActor, seasonId: string, variantId: string, amount: string): Promise<SeasonView> {
+    const { owner } = await this.access(actor);
+    return this.within(owner, async (tx) => {
+      const season = await this.managed(tx, 'season', 'season_not_found', actor, seasonId, owner);
+      const variant = await this.managed(tx, 'productVariant', 'variant_not_found', actor, variantId, owner);
+      const tenantId = (season['tenantId'] as string | null) ?? null;
+      // One tenant's season prices its own variants only.
+      if (((variant['tenantId'] as string | null) ?? null) !== tenantId) throw new CatalogAdminRefused('variant_not_found', variantId);
+      const value = new Prisma.Decimal(amount);
+      await tx.seasonPrice.upsert({
+        where: { seasonId_variantId: { seasonId, variantId } },
+        create: { seasonId, variantId, tenantId, amount: value, updatedByAdminId: actor.adminId },
+        update: { amount: value, updatedByAdminId: actor.adminId },
+      });
+      const row = await tx.season.findUniqueOrThrow({ where: { id: seasonId }, include: { prices: true } });
+      const view = seasonView(row, await this.seasonZone(tx, tenantId), new Date());
+      await this.audit(tx, actor, tenantId, 'catalog_season_price_set', 'season', seasonId, null, { variantId, amount: value.toFixed(2) });
+      return view;
+    });
+  }
+
+  async removeSeasonPrice(actor: CatalogActor, seasonId: string, variantId: string): Promise<SeasonView> {
+    const { owner } = await this.access(actor);
+    return this.within(owner, async (tx) => {
+      const season = await this.managed(tx, 'season', 'season_not_found', actor, seasonId, owner);
+      const tenantId = (season['tenantId'] as string | null) ?? null;
+      await tx.seasonPrice.deleteMany({ where: { seasonId, variantId } });
+      const row = await tx.season.findUniqueOrThrow({ where: { id: seasonId }, include: { prices: true } });
+      const view = seasonView(row, await this.seasonZone(tx, tenantId), new Date());
+      await this.audit(tx, actor, tenantId, 'catalog_season_price_remove', 'season', seasonId, { variantId }, null);
+      return view;
+    });
+  }
+
+  /**
+   * Writes every occurrence due in the next {@link SEASON_HORIZON_DAYS} days as
+   * a campaign (F-505-b's job calls it through the internal route). Every
+   * tenant's, on the cross-tenant pool; each campaign in its own transaction
+   * under the campaign's rules, authored by the season's creator. One refused
+   * (a plain price scheduled inside it, an overlap, nothing to restore) is
+   * counted and logged — never stops the rest. Safe to run twice: what is
+   * written is skipped, and a race loses on `price_campaign_season_once`.
+   */
+  async writeUpcomingSeasons(now: Date = new Date()): Promise<{ due: number; written: number; refused: number }> {
+    const seasons = await this.all.season.findMany({ where: { isActive: true }, include: { prices: { select: { variantId: true, amount: true } } } });
+    const written = await this.all.priceCampaign.findMany({
+      where: { seasonId: { in: seasons.map((s) => s.id) }, startsAt: { gt: now } },
+      select: { seasonId: true, variantId: true, startsAt: true },
+    });
+    const zones = new Map<string | null, string>();
+    for (const tenantId of new Set(seasons.map((s) => s.tenantId))) zones.set(tenantId, await this.seasonZone(this.all, tenantId));
+    const platform = await this.all.tenant.findFirst({ where: { tenantType: TenantType.platform_owner }, select: { id: true } });
+    const due = upcomingSeasonCampaigns(seasons, (t) => zones.get(t) ?? PLATFORM_DEFAULT_TIMEZONE, now, SEASON_HORIZON_DAYS, new Set(written.map((w) => seasonCampaignKey(w.seasonId as string, w.variantId, w.startsAt))));
+    let done = 0;
+    let refused = 0;
+    for (const c of due) {
+      const season = seasons.find((s) => s.id === c.seasonId);
+      const actor: CatalogActor = { adminId: season?.createdByAdminId ?? '00000000-0000-0000-0000-000000000000', tenantId: c.tenantId ?? platform?.id ?? '', ip: '127.0.0.1' };
+      try {
+        await this.all.$transaction((tx) => this.writeCampaign(tx, actor, c));
+        done += 1;
+      } catch (err) {
+        if (isUniqueViolation(err)) continue;
+        refused += 1;
+        this.logger.warn(`season ${c.seasonId} not written for ${c.variantId} at ${c.startsAt.toISOString()}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    return { due: due.length, written: done, refused };
+  }
+
+  /** A season's clock: its tenant's zone (ADR-0108), the platform owner's for a platform season. */
+  private async seasonZone(db: Prisma.TransactionClient | CrossTenantPrismaService, tenantId: string | null): Promise<string> {
+    const row = tenantId
+      ? await db.tenant.findUnique({ where: { id: tenantId }, select: { timezone: true } })
+      : await db.tenant.findFirst({ where: { tenantType: TenantType.platform_owner }, select: { timezone: true } });
+    return row?.timezone ?? PLATFORM_DEFAULT_TIMEZONE;
   }
 
   /** One campaign or price write per variant at a time: the checks above read what the write will meet. */
@@ -1537,7 +1753,7 @@ export class CatalogAdminService {
   /** A row the caller may manage, or the table's own *not found* — another tenant's and the platform's alike. */
   private async managed(
     db: Prisma.TransactionClient,
-    model: 'productCategory' | 'product' | 'productCapability' | 'productVariant' | 'price' | 'rateCard' | 'priceCampaign',
+    model: 'productCategory' | 'product' | 'productCapability' | 'productVariant' | 'price' | 'rateCard' | 'priceCampaign' | 'season',
     missing: CatalogAdminRejection,
     actor: CatalogActor,
     id: string,

@@ -230,6 +230,7 @@ model ProductVariant {
   prices              Price[]
   rateCards           RateCard[]
   campaigns           PriceCampaign[]
+  seasonPrices        SeasonPrice[]
   couponServiceScopes CouponServiceScope[]
   grants              Grant[]
   grantingCoupons     Coupon[]
@@ -289,13 +290,74 @@ model PriceCampaign {
   cancelledAt      DateTime?
   createdByAdminId String?   @db.Uuid
   createdAt        DateTime  @default(now())
+  /// F-505-a: the season whose occurrence wrote it; once per (season, variant, start) — a partial unique index.
+  seasonId         String?   @db.Uuid
 
   variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  season  Season?        @relation(fields: [seasonId], references: [id], onDelete: Restrict)
   prices  Price[]
 
   @@index([variantId, endsAt])
   @@index([tenantId])
   @@map("price_campaign")
+  @@schema("catalog")
+}
+
+/// F-505-a: how a season recurs on the tenant's clock — a Jalali date, or a weekday.
+enum SeasonKind {
+  dated
+  weekly
+
+  @@schema("catalog")
+}
+
+/// F-505-a (D-45): a tenant's named, recurring window — Nowruz on 1 Farvardin,
+/// Yalda on 30 Azar (`dated`, Jalali month and day), Thursday night (`weekly`)
+/// — from `startMinute` past midnight on the tenant's clock, for
+/// `durationMinutes`. Each coming occurrence is written as a campaign price
+/// (F-503-a) for every variant it prices; never an overwrite. Switched off,
+/// never deleted: its campaigns name it. Shared-read RLS as the catalog.
+model Season {
+  id               String     @id @default(uuid()) @db.Uuid
+  tenantId         String?    @db.Uuid
+  name             String
+  kind             SeasonKind
+  /// `dated`: the Jalali month (1-12) and day; null for `weekly` (CHECK).
+  month            Int?
+  day              Int?
+  /// `weekly`: Sunday 0 … Saturday 6; null for `dated` (CHECK).
+  weekday          Int?
+  startMinute      Int
+  durationMinutes  Int
+  isActive         Boolean    @default(true)
+  createdByAdminId String?    @db.Uuid
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  prices    SeasonPrice[]
+  campaigns PriceCampaign[]
+
+  @@index([tenantId])
+  @@map("season")
+  @@schema("catalog")
+}
+
+/// F-505-a: a season's price for one of its tenant's variants — what each
+/// occurrence's campaign charges. The variant's tenant (`same_tenant_as_parent`).
+model SeasonPrice {
+  seasonId         String   @db.Uuid
+  variantId        String   @db.Uuid
+  tenantId         String?  @db.Uuid
+  amount           Decimal  @db.Decimal(18, 2)
+  updatedByAdminId String?  @db.Uuid
+  updatedAt        DateTime @updatedAt
+
+  season  Season         @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@id([seasonId, variantId])
+  @@index([variantId])
+  @@map("season_price")
   @@schema("catalog")
 }
 
