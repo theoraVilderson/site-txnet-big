@@ -66,20 +66,41 @@ const subject = { tenantId: '00000000-0000-4000-8000-000000000001', kind: 'user'
 describe('AttentionBudget.spend (F-1501)', () => {
   it('charges the subject when the budget allows, and says so', async () => {
     const { budget, writes } = fakeWriter([at(-30)]);
-    await expect(budget.spend(subject, T0)).resolves.toEqual({ allowed: true, charged: true });
+    await expect(budget.spend(subject, 'engine', T0)).resolves.toEqual({ allowed: true, charged: true });
     expect(writes).toEqual([[at(-30), T0]]);
   });
 
   it('writes nothing when it refuses — a refused message costs nothing', async () => {
     const { budget, writes } = fakeWriter([at(-2)]);
-    await expect(budget.spend(subject, T0)).resolves.toMatchObject({ allowed: false, charged: false, limit: 'per_day' });
+    await expect(budget.spend(subject, 'engine', T0)).resolves.toMatchObject({ allowed: false, charged: false, limit: 'per_day' });
     expect(writes).toEqual([]);
   });
 
   it('locks the subject row before reading it, so two decisions cannot spend the same slot', async () => {
     const { budget, tx } = fakeWriter(null);
-    await budget.spend(subject, T0);
+    await budget.spend(subject, 'engine', T0);
     const read = (tx.$queryRaw.mock.calls[0][0] as TemplateStringsArray).join('?');
     expect(read).toMatch(/FOR UPDATE/);
+  });
+});
+
+/**
+ * F-1502: answering is not nagging. A reply to the user's own question costs
+ * nothing and is allowed even when the engine's budget is spent — a user who
+ * asks must get an answer. Only what the engine starts is charged.
+ */
+describe('a reply to the user costs no budget (F-1502)', () => {
+  it('allows a reply with the budget exhausted, and touches nothing', async () => {
+    const { budget, writes, tx } = fakeWriter([at(-2), at(-50), at(-100)]);
+    await expect(budget.spend(subject, 'reply', T0)).resolves.toEqual({ allowed: true, charged: false });
+    expect(writes).toEqual([]);
+    expect(tx.$queryRaw).not.toHaveBeenCalled();
+    expect(tx.$executeRaw).not.toHaveBeenCalled();
+  });
+
+  it('still charges what the engine starts', async () => {
+    const { budget, writes } = fakeWriter([]);
+    await expect(budget.spend(subject, 'engine', T0)).resolves.toEqual({ allowed: true, charged: true });
+    expect(writes).toEqual([[T0]]);
   });
 });

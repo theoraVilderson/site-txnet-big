@@ -7,7 +7,7 @@ updated: 2026-10-02
 
 # Invariants — ai
 
-**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9 and 10; 4–6 are ADR-0109 rules still to build.
+**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9, 10 and 11; 4–6 are ADR-0109 rules still to build.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -21,6 +21,7 @@ updated: 2026-10-02
 | 8 | The container is capped at one CPU and a memory ceiling | `dev-docker/compose/ai-service.yml` | the live site and bot on this host starve |
 | 9 | No engine run for a tenant that may not sell (suspended, terminated, onboarding — F-038-x) or whose package lacks `ai_recommendation`; with it, every v1 type runs on templates with no configuration, and model text needs a provider and starts as draft-with-approval | `resolveAiMode` + `AiTenantPolicy`, called by `TriggerConsumer`; `ai-defaults.spec.ts` | unpaid feature, or messages nobody configured |
 | 10 | A raw behaviour event (`ai.meter_reading`) lives 180 days; a reading never goes negative and an idle hour writes no row | `ProfileBuilder.rebuildTenant` purges; CHECK `meter_reading_delta_not_negative`; `readingsFor` + `profile-features.spec.ts` | data kept past what point 14 allows; a wrong usage rate |
+| 11 | Only an engine-initiated message is charged to the attention budget; a reply to the user's own question is always allowed and charged nothing (F-1502) | `AttentionBudget.spend` returns before any read on `reply`; `attention-budget.spec.ts` | an answer refused because the budget is spent, or a budget drained by answers |
 
 ## How to test
 

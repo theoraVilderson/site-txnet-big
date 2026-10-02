@@ -3,11 +3,11 @@ import type { AiSubjectKind } from '@prisma/client';
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { budgetVerdict, chargedTimes, type AttentionLimit } from './attention-budget';
+import { budgetVerdict, chargedTimes, type AttentionLimit, type MessageOrigin } from './attention-budget';
 
 export type BudgetSubject = { tenantId: string; kind: AiSubjectKind; id: string };
 
-export type SpendResult = { allowed: true; charged: true } | { allowed: false; charged: false; limit: AttentionLimit; retryAt: Date };
+export type SpendResult = { allowed: true; charged: boolean } | { allowed: false; charged: false; limit: AttentionLimit; retryAt: Date };
 
 /**
  * The only writer of `engagement.attention_budget` (F-1501, ADR-0109 point 10).
@@ -15,12 +15,17 @@ export type SpendResult = { allowed: true; charged: true } | { allowed: false; c
  * `spend` checks and charges in one transaction, holding the subject's row
  * lock between the two, so two decisions racing for the same subject cannot
  * both take its last slot. A refusal writes nothing.
+ *
+ * A `reply` to the user's own question is always allowed and never charged
+ * (F-1502): it reads and writes nothing, so a spent budget can never stop an
+ * answer.
  */
 @Injectable()
 export class AttentionBudget {
   constructor(private readonly prisma: PrismaService) {}
 
-  spend(subject: BudgetSubject, now: Date): Promise<SpendResult> {
+  async spend(subject: BudgetSubject, origin: MessageOrigin, now: Date): Promise<SpendResult> {
+    if (origin === 'reply') return { allowed: true, charged: false };
     const { tenantId, kind, id } = subject;
     return runWithTenant({ id: tenantId }, () =>
       tenantTransaction(this.prisma, async (tx): Promise<SpendResult> => {

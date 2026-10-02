@@ -104,6 +104,14 @@ A trigger with no `tenantId` in its payload is acknowledged and skipped,
 never assigned a tenant. A missing, unreadable or unreachable status key
 refuses nobody (F-018-f's trade, as `worker-service`'s `TenantStatusGate`).
 
+## Who pays attention (F-1502, point 10) — implemented
+
+Every message `ai-service` sends passes `AttentionBudget.spend` (`attention/`,
+documented in `engagement`) with its `MessageOrigin`: `engine` — the engine
+chose to speak — is charged against the subject's budget (F-1501); `reply` —
+an answer to the user's own question — is always allowed, charged nothing and
+never reads the table, so a spent budget cannot silence an answer.
+
 ## Guarantees (intended)
 
 - Every row is one tenant's (invariant 1); no learning across tenants.

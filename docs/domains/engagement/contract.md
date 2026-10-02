@@ -21,7 +21,7 @@ A daily spin wheel. Two protections always apply: a hard daily budget cap (`dail
 |---|---|---|---|---|
 | get wheel state | userId | eligibility result + prizes + remaining daily budget | sync | — |
 | spin | userId, deviceFingerprintId | `spin_wheel_attempt` + prize + wallet tx (if credit) | sync tx | ineligible, cooldown, cap reached |
-| spend attention — **implemented (F-1501)** | `AttentionBudget.spend({tenantId, kind, id}, now)`, inside `ai-service` only | `{allowed: true, charged: true}` or `{allowed: false, limit: per_day \| per_week, retryAt}` | sync tx | — |
+| spend attention — **implemented (F-1501)** | `AttentionBudget.spend({tenantId, kind, id}, origin, now)`, inside `ai-service` only | `{allowed: true, charged}` or `{allowed: false, limit: per_day \| per_week, retryAt}` | sync tx | — |
 
 ## Emits (events)
 
@@ -44,7 +44,8 @@ inserts the row if missing, locks it `FOR UPDATE`, checks, and charges in one
 tenant-bound transaction: two decisions racing for one subject cannot both
 take the last slot. A refusal writes nothing; `retryAt` is when both windows
 have room. Charges older than 7 days are dropped on the next charge. A count,
-never money (C-13). No other service reads or writes the table.
+never money (C-13). No other service reads or writes the table. Only an
+`engine` origin is charged; a `reply` is allowed and touches nothing (F-1502).
 
 ## Guarantees (intended)
 

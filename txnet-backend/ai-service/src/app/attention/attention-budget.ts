@@ -8,6 +8,13 @@
 
 const HOUR_MS = 3_600_000;
 
+/**
+ * F-1502: who started the message. `engine` — the engine chose to speak — is
+ * charged; `reply` — an answer to the user's own question — never is.
+ */
+export const MESSAGE_ORIGINS = ['engine', 'reply'] as const;
+export type MessageOrigin = (typeof MESSAGE_ORIGINS)[number];
+
 export const ATTENTION_WINDOWS = [
   { limit: 'per_day', max: 1, ms: 24 * HOUR_MS },
   { limit: 'per_week', max: 3, ms: 7 * 24 * HOUR_MS },
