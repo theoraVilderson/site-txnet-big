@@ -24,6 +24,8 @@ exports[`the key catalogue > builds every scoped family 1`] = `
 
 exports[`the key catalogue > builds every unscoped family 1`] = `
 {
+  "aiSilence": "ai:silence:tenant:tenant-1",
+  "aiSilenceAll": "ai:silence:all",
   "botLinkToken": "botlink:token:tok-1",
   "captchaChallenge": "captcha:challenge:chal-1",
   "captchaVerified": "captcha:verified:pass-1",
@@ -52,6 +54,8 @@ exports[`the key catalogue > builds every unscoped family 1`] = `
 
 exports[`the key catalogue > leaves nothing in the catalogue unexercised 1`] = `
 [
+  "aiSilence",
+  "aiSilenceAll",
   "botLang",
   "botLinkChat",
   "botLinkPhone",

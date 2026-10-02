@@ -23,6 +23,8 @@ exports[`RedisKeys — key catalogue > builds every key from fixed arguments 1`]
 
 exports[`RedisKeys — key catalogue > exposes a builder for every key family, and nothing unbuilt 1`] = `
 [
+  "aiSilence",
+  "aiSilenceAll",
   "botLinkChat",
   "botLinkPhone",
   "botLinkProvenChat",

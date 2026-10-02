@@ -7,7 +7,7 @@ updated: 2026-10-02
 
 # Invariants — ai
 
-**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–17; 4–6 are ADR-0109 rules still to build.
+**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–18; 4–6 are ADR-0109 rules still to build.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -28,6 +28,7 @@ updated: 2026-10-02
 | 15 | No proactive suggestion reaches a user with an open ticket, and none but `checkout_help` within 72 h of their failed payment (F-1506) | `quietDownVerdict` over `QuietDownReader`'s inputs; `quiet-down.spec.ts` | a purchase pitched in the middle of a problem, or the help for a failed payment silenced by it |
 | 16 | A subject in the tenant's holdout never receives an engine message; membership is stable by the subject-id hash and permanent once recorded, so the report reads the set the pipeline used (F-1508) | `Holdouts.verdict` over `holdoutBucket` + `ai.holdout`; `holdout.spec.ts` | uplift measured against a group that was messaged, or drifts run to run |
 | 17 | Every candidate the engine weighs is a row in `ai.action`, a stopped one with its step; nothing goes out without the `suggestion` label and its action id; a type the tenant switched off sends nothing, queued or in flight (F-1509) | `ActionLog.record`, `labelledMessage`, `TypeSwitch.set`; `action-log.spec.ts` | an unauditable or unlabelled message under the reseller's brand, or a type they turned off still sent |
+| 18 | Every AI message passes a floor no tenant setting reaches: never to another tenant's subject; no engine message while the platform's silence is set (or unreadable); the attention budget; the bot send ceiling (F-1548) | `SafetyFloor.check` + `SilenceSwitch`, built from no `ai.setting`/`ai.guardrail`; the messenger driver (ADR-0066); `safety-floor.spec.ts` | a pitch sent into an outage, past the budget, or under another tenant's brand |
 
 ## How to test
 

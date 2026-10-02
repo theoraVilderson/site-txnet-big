@@ -203,6 +203,16 @@ export const UnscopedRedisKeys = {
   tenantStatusChanged: () => 'tenant:status-changed',
 
   /**
+   * The platform's silence switch for the AI engine (F-1548): while set, no
+   * proactive AI message goes out — everyone's (`aiSilenceAll`) or one
+   * tenant's (`aiSilence`). The value is the end as an ISO instant and the key
+   * expires then, so a forgotten switch lifts itself. Written only by
+   * `ai-service`'s service-only seam; no tenant can see or clear it.
+   */
+  aiSilenceAll: () => 'ai:silence:all',
+  aiSilence: (tenantId: string) => `ai:silence:tenant:${tenantId}`,
+
+  /**
    * The leases one tenant's background runs currently hold, across every
    * `worker-service` replica (F-067-e, catalog 20.2 layer 4).
    *

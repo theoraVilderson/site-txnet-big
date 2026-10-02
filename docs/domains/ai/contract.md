@@ -149,11 +149,31 @@ Answers `{ actionType }`. Callers: the bot button (F-038-g), the panel card (F-0
   `type_disabled`. A candidate decided while its type was switched off is
   recorded the same way (`record` re-reads the setting in its transaction).
 
+## The safety floor (F-1548) — implemented, ahead of delivery
+
+`SafetyFloor.check(tenantId, subject, origin, now)` (`floor/`) is the last
+check before any AI message leaves, and the one no tenant can turn off: it
+reads no `ai.setting` or `ai.guardrail`. In order, each a `suppressedBy`:
+
+| part | rule | `suppressedBy` |
+|---|---|---|
+| no other tenant's data | the subject's tenant must be the action's — every origin, a reply included; underneath, RLS and the reader role (invariants 1, 7) | `cross_tenant` |
+| outage silence (user, 2026-10-02) | the platform's switch, `ai:silence:all` or `ai:silence:tenant:<id>`, holds every engine message until its end; a reply still goes. **Fails closed**: an unreadable Redis holds the engine. Set by whatever sees the outage — a person today — so `ai-service` reads no network data (point 6) | `platform_silence` |
+| attention budget | `AttentionBudget.spend` with the message's origin (F-1501, F-1502); a passing engine message is charged here | `attention_budget` |
+| bot send ceiling | not in `check`: the messenger driver spends it on every send (ADR-0066), so delivery (F-038-g) must send through the driver | — |
+
+**The switch.** `PUT /api/internal/ai/silence` (service token only; the
+platform admin page is a later row) with `{ tenantId: uuid | null, until:
+ISO | null }` — `tenantId` null is everyone, `until` null lifts it, an end
+in the past or more than 7 days away is 400 `until_out_of_range`. The key
+expires at its end, so a forgotten switch lifts itself.
+
 ## Guarantees (intended)
 
 - Every row is one tenant's (invariant 1); no learning across tenants.
 - A suggestion never moves money, a meter or a payment (invariant 4).
 - Without a provider, every message is a template (F-1540).
+- Every message passes the safety floor; no tenant setting reaches it (invariant 18).
 
 ## Deprecations
 

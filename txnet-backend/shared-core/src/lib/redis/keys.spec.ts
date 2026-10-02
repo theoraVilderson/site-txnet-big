@@ -67,6 +67,8 @@ describe('the key catalogue', () => {
       tenantById: UnscopedRedisKeys.tenantById('tenant-1'),
       tenantStatus: UnscopedRedisKeys.tenantStatus('tenant-1'),
       tenantStatusChanged: UnscopedRedisKeys.tenantStatusChanged(),
+      aiSilenceAll: UnscopedRedisKeys.aiSilenceAll(),
+      aiSilence: UnscopedRedisKeys.aiSilence('tenant-1'),
       tenantRuns: UnscopedRedisKeys.tenantRuns('tenant-1'),
       fxRate: UnscopedRedisKeys.fxRate('IRR'),
       fxReading: UnscopedRedisKeys.fxReading('IRR'),

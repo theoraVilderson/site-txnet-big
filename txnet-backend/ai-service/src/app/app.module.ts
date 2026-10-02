@@ -7,6 +7,7 @@ import { AttentionModule } from './attention/attention.module';
 import { DecisionModule } from './decision/decision.module';
 import { BrokerModule } from './broker/broker.module';
 import { envConfigOptions } from './config/env.validation';
+import { FloorModule } from './floor/floor.module';
 import { HealthController } from './health.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProfileModule } from './profile/profile.module';
@@ -20,7 +21,7 @@ import { TriggersModule } from './triggers/triggers.module';
  * first tenant route is judged from day one.
  */
 @Module({
-  imports: [ConfigModule.forRoot(envConfigOptions), PrismaModule, RedisModule, BrokerModule, TriggersModule, ProfileModule, AttentionModule, DecisionModule],
+  imports: [ConfigModule.forRoot(envConfigOptions), PrismaModule, RedisModule, BrokerModule, TriggersModule, ProfileModule, AttentionModule, DecisionModule, FloorModule],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: TenantStatusGuard }],
 })
