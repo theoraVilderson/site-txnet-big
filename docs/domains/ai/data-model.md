@@ -57,7 +57,9 @@ through `security_barrier` views, `ai.reader_wallet` / `reader_sign_in` /
 (`20261002000600`, F-1506: user and since when, open or pending only) and
 `reader_quiet_hours` (`20261002000700`, F-038-e: the window and its zone,
 not the muted kinds), and `reader_package_rate` (`20261002001400`, F-1528:
-the bound tenant's own package rates, through its subscription): the row's user must be in the bound
+the bound tenant's own package rates, through its subscription), and `reader_reseller` (`20261002001600`,
+F-038-o1: the platform's resellers, their subscription, package price and
+billing wallet — empty unless the bound tenant is the platform owner): the row's user must be in the bound
 tenant, only named columns (no IP, user agent, token hash, notice text), and
 only the reader may SELECT them. They run as their owner, the migration's
 superuser; owned by a role under `FORCE` RLS on `identity.user`, they would

@@ -11,16 +11,21 @@ import { meterRef, readingsFor, utcHour, type MeterReadingRow } from './meter-re
 import { predictions, type PredictionRow } from './predictions';
 import { accountFeatures, PROFILE_HISTORY_DAYS, type AccountInputs } from './profile-features';
 import { ProfileReader, type ReaderInputs } from './profile-reader';
+import { resellerPredictions } from './reseller-predictions';
+import { ResellerReader } from './reseller-reader';
 
 const DAY_MS = 86_400_000;
 /** Accounts per page: one reader transaction and one writer transaction each, bounded memory on a 512 MB container. */
 const PROFILE_PAGE = 500;
 const WRITE_TIMEOUT_MS = 30_000;
 
-export type RebuildResult = { tenants: number; skipped: number; accounts: number; readings: number; predictions: number; purged: number; scheduled: number; stopped: number; converted: number };
+export type RebuildResult = { tenants: number; skipped: number; accounts: number; readings: number; predictions: number; purged: number; scheduled: number; stopped: number; converted: number; resellers: number };
 
 /** The kinds this builder owns: each run replaces an account's rows of these and no others. */
 const V1_KINDS = ['meter_exhaustion', 'renewal_probability', 'right_size', 'wallet_need', 'trial_conversion', 'win_back_window'] as const;
+
+/** A reseller's kinds (F-038-o1): subject `tenant`, written in the platform's tenant only. */
+const RESELLER_KINDS = ['quota_exhaustion', 'churn_risk'] as const;
 
 /**
  * The hourly profile rebuild (F-038-c, ADR-0109 points 6, 7, 14). For every
@@ -35,6 +40,10 @@ const V1_KINDS = ['meter_exhaustion', 'renewal_probability', 'right_size', 'wall
  * Then drop that tenant's readings older than 180 days (point 14), and run
  * the decision pipeline over the predictions just written (F-038-e). A
  * decision run that fails is logged; the profiles it read stay written.
+ *
+ * In the platform owner's run, its resellers too (F-038-o1, ADR-0109 point
+ * 4): each is the platform's customer, subject `tenant` — its quota run-out
+ * and churn risk, written in the platform's tenant.
  *
  * **Safe to run twice** (ADR-0027): a reading is keyed by its UTC hour, and a
  * second sample in the same hour adds only what grew since the first; a
@@ -53,13 +62,14 @@ export class ProfileBuilder {
     private readonly policy: AiTenantPolicy,
     private readonly decisions: DecisionRun,
     private readonly outcomes: OutcomeRun,
+    private readonly resellerReader: ResellerReader,
   ) {}
 
   async rebuildAll(now: Date = new Date()): Promise<RebuildResult> {
     // `tenant.tenant` has no RLS; the app pool lists it as every service does.
-    const tenants = await this.prisma.tenant.findMany({ select: { id: true }, orderBy: { id: 'asc' } });
-    const result: RebuildResult = { tenants: 0, skipped: 0, accounts: 0, readings: 0, predictions: 0, purged: 0, scheduled: 0, stopped: 0, converted: 0 };
-    for (const { id } of tenants) {
+    const tenants = await this.prisma.tenant.findMany({ select: { id: true, tenantType: true }, orderBy: { id: 'asc' } });
+    const result: RebuildResult = { tenants: 0, skipped: 0, accounts: 0, readings: 0, predictions: 0, purged: 0, scheduled: 0, stopped: 0, converted: 0, resellers: 0 };
+    for (const { id, tenantType } of tenants) {
       let mode: AiTenantMode;
       try {
         mode = await this.policy.forTenant(id);
@@ -78,6 +88,15 @@ export class ProfileBuilder {
         this.logger.error(`profile rebuild for tenant ${id} failed: ${err instanceof Error ? err.message : String(err)}`);
         continue;
       }
+      if (tenantType === 'platform_owner') {
+        try {
+          const resold = await this.rebuildResellers(id, now);
+          result.resellers += resold.resellers;
+          result.predictions += resold.predictions;
+        } catch (err) {
+          this.logger.error(`reseller predictions failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
       try {
         const decided = await this.decisions.runTenant(id, mode, now);
         result.scheduled += decided.scheduled;
@@ -92,7 +111,7 @@ export class ProfileBuilder {
         this.logger.error(`outcome run for tenant ${id} failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
-    this.logger.log(`profiles: ${result.accounts} account(s) in ${result.tenants} tenant(s), ${result.readings} reading(s), ${result.predictions} prediction(s), ${result.skipped} skipped; ${result.scheduled} suggestion(s) scheduled, ${result.stopped} stopped, ${result.converted} converted`);
+    this.logger.log(`profiles: ${result.accounts} account(s) in ${result.tenants} tenant(s), ${result.readings} reading(s), ${result.predictions} prediction(s) (${result.resellers} reseller(s) read), ${result.skipped} skipped; ${result.scheduled} suggestion(s) scheduled, ${result.stopped} stopped, ${result.converted} converted`);
     return result;
   }
 
@@ -174,6 +193,49 @@ export class ProfileBuilder {
       tx.aiMeterReading.deleteMany({ where: { tenantId, hour: { lt: since } } }),
     );
     return { accounts, readings, predictions: predicted, purged: purged.count };
+  }
+
+  /**
+   * The platform's resellers (F-038-o1). Read one by one, each in its own
+   * scope; one whose read fails is logged and left without a prediction this
+   * hour — never guessed. Then every reseller row of the two kinds is
+   * replaced at once, so a reseller gone or no longer at risk keeps none.
+   */
+  async rebuildResellers(platformTenantId: string, now: Date): Promise<{ resellers: number; predictions: number }> {
+    const rows: Array<{ subjectId: string; p: PredictionRow }> = [];
+    const resellers = await this.resellerReader.resellers(platformTenantId);
+    for (const r of resellers) {
+      try {
+        for (const p of resellerPredictions(await this.resellerReader.inputs(r, now), now)) rows.push({ subjectId: r.tenantId, p });
+      } catch (err) {
+        this.logger.error(`reseller ${r.tenantId} not predicted: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    await runWithTenant({ id: platformTenantId }, () =>
+      tenantTransaction(
+        this.prisma,
+        async (tx) => {
+          await tx.aiPrediction.deleteMany({ where: { tenantId: platformTenantId, subjectKind: 'tenant', kind: { in: [...RESELLER_KINDS] } } });
+          if (rows.length === 0) return;
+          await tx.aiPrediction.createMany({
+            data: rows.map(({ subjectId, p }) => ({
+              tenantId: platformTenantId,
+              subjectKind: 'tenant' as const,
+              subjectId,
+              kind: p.kind,
+              value: p.value,
+              predictedAt: p.predictedAt,
+              currencyCode: p.currencyCode,
+              confidence: new Prisma.Decimal(p.confidence.toFixed(4)),
+              reasons: p.reasons,
+              computedAt: now,
+            })),
+          });
+        },
+        { timeout: WRITE_TIMEOUT_MS },
+      ),
+    );
+    return { resellers: resellers.length, predictions: rows.length };
   }
 
   /**

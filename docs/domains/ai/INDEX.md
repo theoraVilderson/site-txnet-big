@@ -3,7 +3,7 @@ id: ai
 layer: domain
 status: draft
 version: 2
-keywords: [ai, ai admin, ai.manage, at-risk, recommendation, guardrail, suggestion, revenue engine, prediction, holdout, opt-out, provider, byo-ai, suggestion card, uplift]
+keywords: [ai, ai admin, ai.manage, at-risk, recommendation, guardrail, suggestion, revenue engine, prediction, holdout, opt-out, provider, byo-ai, suggestion card, uplift, reseller forecast, quota run-out, churn risk]
 source: [txnet-backend/prisma/domains/ai.prisma, txnet-backend/ai-service/src/**, txnet-backend/shared-core/src/lib/ai/**]
 owns_tables: [account_profile, prediction, action, offer, guardrail, holdout, opt_out, provider, task_route, usage, setting]
 depends_on: [identity, billing, automation]
@@ -21,6 +21,7 @@ updated: 2026-10-02
 | [contract.md](contract.md) | using or changing ai from outside |
 | [contract.candidates.md](contract.candidates.md) | an action type is added, or the engine proposes the wrong one — when each type is a candidate, what it carries, how it is told (F-038-k) |
 | [contract.admin.md](contract.admin.md) | the reseller's AI page reads or changes settings, offers, at-risk lists or the report — `/api/ai/admin/*`, `ai.manage` (F-038-j1) |
+| [contract.resellers.md](contract.resellers.md) | a reseller as the platform's customer — its quota run-out and churn predictions, how the platform reads them, its upgrade (F-038-o) |
 | [contract.my-suggestion.md](contract.my-suggestion.md) | the panel's suggestion card reads, closes or opts out — ai's routes on `/api/ai` (F-038-h) |
 | [invariants.md](invariants.md) | writing any code that touches it |
 | [data-model.md](data-model.md) | changing storage |

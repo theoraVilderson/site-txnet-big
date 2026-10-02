@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { AI_READER_TABLES, AI_READER_VIEWS } from './reader-tables';
+import { AI_READER_PLATFORM_TABLES, AI_READER_TABLES, AI_READER_VIEWS } from './reader-tables';
 
 /**
  * F-038-b, ADR-0109 point 6: `ai-service` reads other units' tables through a
@@ -18,7 +18,7 @@ import { AI_READER_TABLES, AI_READER_VIEWS } from './reader-tables';
 const ROOT = join(__dirname, '../../../../..');
 const MIGRATIONS = join(ROOT, 'txnet-backend/prisma/domains/migrations');
 /** Every migration that grants the reader something, in order. */
-const READER_MIGRATIONS = ['20261002000300_ai_reader_role', '20261002000400_ai_profile_inputs', '20261002000500_ai_predictions_v1', '20261002000600_ai_quiet_down_inputs', '20261002000700_ai_decision_inputs', '20261002000800_ai_margin_inputs', '20261002001400_ai_package_rate_view'];
+const READER_MIGRATIONS = ['20261002000300_ai_reader_role', '20261002000400_ai_profile_inputs', '20261002000500_ai_predictions_v1', '20261002000600_ai_quiet_down_inputs', '20261002000700_ai_decision_inputs', '20261002000800_ai_margin_inputs', '20261002001400_ai_package_rate_view', '20261002001600_ai_reseller_inputs'];
 
 function read(path: string): string {
   try {
@@ -63,7 +63,15 @@ describe('the ai reader role (F-038-b, ADR-0109 point 6)', () => {
 
   it('grants nothing on a table it does not name', () => {
     const granted = [...sql.matchAll(/GRANT SELECT(?:\s*\([^)]*\))? ON ([a-z_]+\.[a-z_]+) TO txnet_ai_reader/g)].map((m) => m[1]);
-    expect(granted.sort()).toEqual([...AI_READER_TABLES.map((t) => t.table), ...AI_READER_VIEWS.map((v) => v.view)].sort());
+    expect(granted.sort()).toEqual([...AI_READER_TABLES.map((t) => t.table), ...AI_READER_PLATFORM_TABLES.map((t) => t.table), ...AI_READER_VIEWS.map((v) => v.view)].sort());
+  });
+
+  it.each(AI_READER_PLATFORM_TABLES.map((t) => [t.table, t]))('%s: the platform\'s own terms, SELECT by the columns it names', (_, t) => {
+    const [schema, name] = t.table.split('.');
+    const grant = new RegExp(`GRANT SELECT(?:\\s*\\(([^)]*)\\))? ON ${schema}\\.${name} TO txnet_ai_reader;`).exec(sql);
+    expect(grant).not.toBeNull();
+    if (t.columns) expect((grant?.[1] ?? '').split(',').map((c) => c.trim().replace(/"/g, '')).sort()).toEqual([...t.columns].sort());
+    else expect(grant?.[1]).toBeUndefined();
   });
 
   it('reads a person by id and status, never their name, contact or secrets', () => {
@@ -77,8 +85,8 @@ describe('the ai reader role (F-038-b, ADR-0109 point 6)', () => {
   it.each(AI_READER_VIEWS.map((v) => [v.view, v]))('%s: scoped by the bound tenant, named columns only', (_, v) => {
     const [schema, name] = v.view.split('.');
     const body = new RegExp(`CREATE VIEW ${schema}\\.${name} WITH \\(security_barrier\\) AS([^;]*);`).exec(sql)?.[1] ?? '';
-    // Through its user (`u`) or, for a package's rates, the tenant's own subscription (`s`).
-    expect(body).toMatch(/\b[us]\."tenantId" = public\.current_tenant_id\(\)/);
+    // Through its user (`u`), the tenant's own subscription (`s`), or — the resellers — only the platform owner bound (`me`).
+    expect(body).toMatch(/\b[us]\."tenantId" = public\.current_tenant_id\(\)|\bme\."id" = public\.current_tenant_id\(\) AND me\."tenantType" = 'platform_owner'/);
     expect(body).not.toMatch(/\bOR\b/);
     const selected = /SELECT([\s\S]*?)FROM/.exec(body)?.[1] ?? '';
     expect(selected).not.toContain('*');

@@ -62,4 +62,4 @@ candidate.
 ## Planned
 
 `trial_convert` (F-038-l, blocked on F-705): its rules are decided in
-[open-questions.md](open-questions.md). A reseller subject: F-038-o.
+[open-questions.md](open-questions.md). A reseller subject: F-038-o4 ([contract.resellers.md](contract.resellers.md)).

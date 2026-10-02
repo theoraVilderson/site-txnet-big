@@ -112,6 +112,17 @@ suggestion is produced, where the code runs, or what it reads.
     the same for everyone, never per user. Seasons come from F-505-a, not a
     second calendar.
 
+## Amendments
+
+- **2026-10-02, F-038-o (user), point 4.** The platform reads its resellers
+  through a view that answers only when the bound tenant is the platform
+  owner, and each reseller's quota in that reseller's own scope — never a
+  cross-tenant pool for `ai-service`, so invariant 7 holds as written and a
+  reseller with resellers of its own later needs the same rule, not a new
+  one. The upgrade is told to the reseller's **owner** only, the quota
+  alerts' recipient (F-019-v8): one recipient for everything about a
+  reseller's package, changed for both together if ever.
+
 ## Consequences
 
 - The first value ships without any model: renewal timing, right-sizing and
