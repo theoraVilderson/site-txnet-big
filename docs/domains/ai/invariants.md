@@ -7,7 +7,7 @@ updated: 2026-10-02
 
 # Invariants — ai
 
-**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–15; 4–6 are ADR-0109 rules still to build.
+**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–16; 4–6 are ADR-0109 rules still to build.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -26,6 +26,7 @@ updated: 2026-10-02
 | 13 | A subject hears one action type at most once in 14 days, and never two of it queued at once; a stopped or expired candidate starts no cooldown (F-1504) | `cooldownVerdict` over `ai.action` via `CooldownReader`; `cooldown.spec.ts` | the same pitch repeated, or a type silenced by nothing said |
 | 14 | An action type a subject opted out of is never suggested to it again, and nothing of it already queued goes out; only the subject itself can opt out (F-1505) | `OptOuts.verdict` / `optOutFrom` over `ai.opt_out`, the action read as the subject's own; `opt-out.spec.ts` | a refused pitch repeated, or one user silencing another |
 | 15 | No proactive suggestion reaches a user with an open ticket, and none but `checkout_help` within 72 h of their failed payment (F-1506) | `quietDownVerdict` over `QuietDownReader`'s inputs; `quiet-down.spec.ts` | a purchase pitched in the middle of a problem, or the help for a failed payment silenced by it |
+| 16 | A subject in the tenant's holdout never receives an engine message; membership is stable by the subject-id hash and permanent once recorded, so the report reads the set the pipeline used (F-1508) | `Holdouts.verdict` over `holdoutBucket` + `ai.holdout`; `holdout.spec.ts` | uplift measured against a group that was messaged, or drifts run to run |
 
 ## How to test
 

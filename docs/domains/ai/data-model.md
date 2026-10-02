@@ -23,7 +23,7 @@ Every table has a NOT NULL `tenantId` and strict RLS (`tenant_isolation`,
 | action | the audit of every suggestion, sent or stopped (F-1509): type, status, `suppressedBy` (set iff `suppressed`), reasons, template key, `renderedBy`, expected margin + currency | id | erased with the account |
 | offer | a tenant-defined offer: exactly one of coupon template / variant (CHECK), max discount 0–100%, daily budget + currency | id | permanent |
 | guardrail | a tenant's cap, one row per key (shape-checked, value ≥ 0; keys checked in code) | (tenantId, key) | permanent |
-| holdout | subjects in the tenant's holdout, recorded so a report reads the set the pipeline used | (tenantId, subjectKind, subjectId) | permanent |
+| holdout | subjects in the tenant's holdout (F-1508): drawn by a hash of the subject id, recorded on first draw so a report reads the set the pipeline used; a row is never removed by a lower share | (tenantId, subjectKind, subjectId) | permanent |
 | opt_out | a subject's permanent opt-out of one action type | (…, actionType) | permanent |
 | provider | a BYO-AI provider: ownership, driver, base URL, key fingerprint (key in the vault), proxy, status | id | until removed |
 | task_route | which provider and model a task (message key) uses | (tenantId, task) | until changed |

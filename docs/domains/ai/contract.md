@@ -123,6 +123,7 @@ Each step is pure and answers `pass`, or the `suppressedBy` it writes on a
 | opt-out (F-1505) — `decision/opt-out.ts` (`OptOuts.verdict`), from `ai.opt_out` | a subject × type with a row is dropped, permanently | `opt_out` |
 | cooldown (F-1504, D-12) — `decision/cooldown.ts`, read by `CooldownReader` from `ai.action` | per subject × type: 14 days rolling from `sentAt` of a `sent`/`accepted`/`dismissed` one; a `scheduled`/`awaiting_approval` one holds it with no reopening time; `suppressed`/`expired` start nothing | `cooldown` |
 | quiet-down (F-1506) — `decision/quiet-down.ts`, read by `QuietDownReader` (reader pool) | a user with an open (`open`/`pending`) ticket hears nothing, `checkout_help` included (user, 2026-10-02), no reopening time; for 72 h after a `failed` payment (from its `createdAt`) every type but `checkout_help` is held. Outage and connection drop: not rules — network data (point 6). A reseller subject reads nothing (F-038-o) | `quiet_down` |
+| holdout (F-1508, point 10) — `decision/holdout.ts` (`Holdouts.verdict`), `ai.holdout` | the tenant's `holdoutPercent` (10, clamped 5–20, never 0) of subjects by `holdoutBucket` — SHA-256 of the subject id, 0–99 — hears nothing from the engine; recorded the first time drawn, and a recorded member stays one when the share is lowered | `holdout` |
 
 **The tap (F-1505).** `POST /api/internal/ai/actions/:actionId/opt-out`
 (service token only) with `{ tenantId, subjectKind, subjectId }` — the subject
