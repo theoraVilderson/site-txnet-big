@@ -75,6 +75,11 @@ export const PANEL_GATEWAYS = "/gateways";
  */
 export const PANEL_COUPONS = "/coupons";
 /**
+ * The tenant's AI page (F-038-j2): settings, discount offers, at-risk
+ * customers, the uplift report. ai answers each tenant its own (`ai.manage`).
+ */
+export const PANEL_AI = "/ai";
+/**
  * Catalog management (F-026-f). One route for every audience: billing answers
  * the platform owner every item, a tenant its own (D-34).
  */

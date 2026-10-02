@@ -48,3 +48,98 @@ export const aiApi = {
     return call<{ actionType: string }>(`/me/suggestion/${encodeURIComponent(actionId)}/opt-out`, { method: "POST" });
   },
 };
+
+// ─── The reseller's AI admin (F-038-j2, over ai's `/api/ai/admin/*`, F-038-j1) ───
+// Behind `ai.manage`. No call names a tenant or an author: both are the gate's.
+
+/** ai-service's action types (ADR-0109 point 3, v1) — the settings answer them in this order. */
+export const AI_ACTION_TYPES = ["renew", "resize_up", "resize_down", "top_up_wallet", "retain_offer", "trial_convert", "checkout_help", "win_back", "usage_alert"] as const;
+export type AiActionType = (typeof AI_ACTION_TYPES)[number];
+
+export interface AiSettings {
+  engineEnabled: boolean;
+  /** False when the package lacks AI or the tenant may not sell — whatever `engineEnabled` says. */
+  engineRuns: boolean;
+  /** A decimal string, two places, 0–1. */
+  confidenceThreshold: string;
+  /** 5–20. */
+  holdoutPercent: number;
+  disabledActionTypes: AiActionType[];
+  actionTypes: AiActionType[];
+}
+
+export type AiSettingsPatch = Partial<Pick<AiSettings, "engineEnabled" | "confidenceThreshold" | "holdoutPercent" | "disabledActionTypes">>;
+
+/** A reason is a code and its numbers; the page words it (`common.ai.reasons.*`). */
+export type AiReason = { code: string } & Record<string, string | number | boolean | null>;
+
+export interface AtRiskItem {
+  userId: string;
+  grantId: string | null;
+  /** A probability (`renewal`) as stored, or days to run-out. */
+  value: string | null;
+  predictedAt: string | null;
+  confidence: string;
+  reasons: AiReason[];
+}
+export type AtRiskKind = "renewal" | "run_out";
+
+export interface AiMoney { amount: string; currencyCode: string }
+export interface UpliftArm { units: number; converted: number; rate: number | null; revenue: AiMoney[]; margin: AiMoney[]; marginUnknown: number }
+export interface UpliftReport {
+  from: string;
+  to: string;
+  types: Array<{ actionType: string; treated: UpliftArm; control: UpliftArm; uplift: { rate: number | null; revenue: AiMoney[]; margin: AiMoney[] } }>;
+  renewals: { treated: number; control: number };
+}
+
+export interface AiOffer {
+  id: string;
+  name: string;
+  actionType: "retain_offer";
+  target: { couponTemplateId: string | null; variantId: string | null };
+  maxDiscountPercent: string;
+  dailyBudget: string;
+  currencyCode: string;
+  isActive: boolean;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface AiOfferBody {
+  name: string;
+  actionType: "retain_offer";
+  couponTemplateId: string;
+  maxDiscountPercent: string;
+  dailyBudget: string;
+  currencyCode: string;
+}
+export type AiOfferPatch = Partial<Pick<AiOffer, "name" | "maxDiscountPercent" | "dailyBudget" | "currencyCode" | "isActive">>;
+
+/** ai's offer refusals (`error.reason`), each worded under `common.ai.refused`. */
+export const AI_OFFER_REFUSALS = ["template_not_found", "template_not_a_discount", "variant_not_found", "offer_not_found"] as const;
+
+export const aiAdminApi = {
+  settings(): Promise<{ settings: AiSettings }> {
+    return call<{ settings: AiSettings }>("/admin/settings", { method: "GET" });
+  },
+  saveSettings(patch: AiSettingsPatch): Promise<{ settings: AiSettings }> {
+    return call<{ settings: AiSettings }>("/admin/settings", { method: "PUT", body: JSON.stringify(patch) });
+  },
+  atRisk(kind: AtRiskKind, cursor?: string | null): Promise<{ items: AtRiskItem[]; nextCursor: string | null }> {
+    const q = new URLSearchParams({ kind, ...(cursor ? { cursor } : {}) });
+    return call<{ items: AtRiskItem[]; nextCursor: string | null }>(`/admin/at-risk?${q}`, { method: "GET" });
+  },
+  uplift(from: string, to: string): Promise<UpliftReport> {
+    return call<UpliftReport>("/admin/reports/uplift", { method: "POST", body: JSON.stringify({ from, to }) });
+  },
+  offers(): Promise<{ items: AiOffer[] }> {
+    return call<{ items: AiOffer[] }>("/admin/offers", { method: "GET" });
+  },
+  createOffer(body: AiOfferBody): Promise<{ offer: AiOffer }> {
+    return call<{ offer: AiOffer }>("/admin/offers", { method: "POST", body: JSON.stringify(body) });
+  },
+  updateOffer(offerId: string, patch: AiOfferPatch): Promise<{ offer: AiOffer }> {
+    return call<{ offer: AiOffer }>(`/admin/offers/${encodeURIComponent(offerId)}`, { method: "PATCH", body: JSON.stringify(patch) });
+  },
+};

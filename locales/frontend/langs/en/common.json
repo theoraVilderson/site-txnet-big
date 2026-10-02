@@ -27,7 +27,8 @@
       "buyReseller": "Become a reseller",
       "systems": "Systems",
       "userGroups": "User groups",
-      "users": "Users"
+      "users": "Users",
+      "ai": "AI"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -4036,6 +4037,99 @@
         "reseller_suspended": "This reseller is suspended, so its time zone cannot be changed.",
         "reseller_terminated": "This reseller has been closed."
       }
+    }
+  },
+  "ai": {
+    "title": "AI",
+    "subtitle": "Who may not renew, what the engine suggests, and whether it earns more than staying quiet.",
+    "loading": "Loading…",
+    "saved": "Saved.",
+    "tabs": {
+      "settings": "Settings",
+      "offers": "Discount offers",
+      "atRisk": "At risk",
+      "report": "Report"
+    },
+    "settings": {
+      "engine": "Suggestion engine",
+      "engineHint": "When off, nothing is suggested and everything already queued is cancelled.",
+      "notRunning": "The engine is not running for you: your package does not include AI suggestions, or your account cannot sell right now.",
+      "threshold": "Confidence threshold",
+      "thresholdHint": "Between 0 and 1. A suggestion the engine is less sure of than this is not sent.",
+      "holdout": "Holdout share (%)",
+      "holdoutHint": "5 to 20. These customers never get a suggestion, so the report can show what the others gained.",
+      "types": "Suggestion types",
+      "typesHint": "A type switched off is never suggested; any already queued is cancelled.",
+      "save": "Save settings"
+    },
+    "types": {
+      "renew": "Renewal",
+      "resize_up": "A bigger plan",
+      "resize_down": "A smaller plan",
+      "top_up_wallet": "Wallet top-up",
+      "retain_offer": "Renewal with a discount",
+      "trial_convert": "Trial to paid",
+      "checkout_help": "Help with a failed payment",
+      "win_back": "Win back",
+      "usage_alert": "Usage alert"
+    },
+    "offers": {
+      "empty": "No discount offers yet. The engine gives a discount only from an offer you define here.",
+      "add": "New offer",
+      "name": "Name",
+      "template": "Coupon used as the template",
+      "templateHint": "One of your own discount coupons. Each customer gets a personal copy of it.",
+      "templateNone": "You have no discount coupon to use as a template. Create one on the Coupons page first.",
+      "maxDiscount": "Maximum discount (%)",
+      "dailyBudget": "Daily budget",
+      "currency": "Currency",
+      "create": "Create offer",
+      "cancel": "Cancel",
+      "active": "Active",
+      "inactive": "Off",
+      "turnOn": "Turn on",
+      "turnOff": "Turn off",
+      "summary": "Up to {{percent}}% off, at most {{budget}} a day"
+    },
+    "refused": {
+      "template_not_found": "That coupon is not one of yours, or it was deleted.",
+      "template_not_a_discount": "A gift code or a free service cannot be a discount template.",
+      "variant_not_found": "That plan is no longer on sale.",
+      "offer_not_found": "That offer no longer exists."
+    },
+    "atRisk": {
+      "renewal": "May not renew",
+      "runOut": "Will run out within 7 days",
+      "empty": "Nobody here right now.",
+      "customer": "Customer",
+      "renewChance": "{{percent}}% chance to renew",
+      "endsOn": "Ends {{date}}",
+      "runsOutOn": "Runs out {{date}}",
+      "more": "Show more"
+    },
+    "reasons": {
+      "rule_defaults": "Starting estimate",
+      "renewed_before": "Renewed {{count}} times before",
+      "used_most_of_period": "Used most of this period",
+      "barely_used": "Barely used this period",
+      "idle_7d": "Not used in the last 7 days",
+      "signed_in_7d": "Signed in this week",
+      "payment_failed_30d": "A payment failed recently",
+      "recent_rate": "Current pace of use",
+      "remaining": "Little left",
+      "weighted_by_hour_of_week": "Follows their weekly pattern",
+      "flat_rate": "Steady pace"
+    },
+    "report": {
+      "period": "Last {{days}} days",
+      "type": "Type",
+      "suggested": "Got suggestions",
+      "holdout": "Holdout",
+      "uplift": "Difference",
+      "converted": "{{converted}} of {{units}}",
+      "revenue": "Extra revenue",
+      "none": "No suggestions in this period yet.",
+      "renewals": "Renewals: {{treated}} with suggestions, {{control}} in the holdout."
     }
   }
 }

@@ -1,0 +1,186 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useLocale } from "@/context/LocaleContext";
+import { ApiError } from "@/lib/api-error";
+import { aiAdminApi, type AiOffer, type AiSettings } from "@/lib/ai-api";
+import { billingApi, type AdminCoupon } from "@/lib/billing-api";
+import { myResellerUserPath } from "@/lib/routes";
+import { usePanelSession } from "../_context/PanelSessionContext";
+import { AiView } from "./_components/AiView";
+
+/**
+ * F-038-j2 (ADR-0109 points 7, 13; ADR-0110): the tenant's AI page over ai's
+ * `/api/ai/admin/*` (F-038-j1).
+ *
+ * The failures worth a spec: a save that sends what was not changed (and so
+ * overwrites another admin's edit); a threshold or holdout share the server
+ * refuses, sent anyway; an engine that is "on" but does not run, shown as
+ * running; a template list with a platform coupon or a gift code in it; a
+ * refusal shown as "something went wrong" instead of its reason; an at-risk
+ * customer with no way to open them, or a reason shown as a raw code.
+ */
+
+vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
+vi.mock("../_context/PanelSessionContext", () => ({ usePanelSession: vi.fn() }));
+vi.mock("@/hooks/useApiError", () => ({ useApiErrorMessage: () => () => "generic" }));
+vi.mock("@/lib/ai-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/ai-api")>()),
+  aiAdminApi: { settings: vi.fn(), saveSettings: vi.fn(), atRisk: vi.fn(), uplift: vi.fn(), offers: vi.fn(), createOffer: vi.fn(), updateOffer: vi.fn() },
+}));
+vi.mock("@/lib/billing-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/billing-api")>()),
+  billingApi: { adminCoupons: vi.fn() },
+}));
+
+const TENANT = "t-1";
+const t = (_ns: string, key: string, vars?: Record<string, string | number>) => (vars ? `${key}:${Object.values(vars).join(",")}` : key);
+
+const settings: AiSettings = {
+  engineEnabled: true,
+  engineRuns: true,
+  confidenceThreshold: "0.60",
+  holdoutPercent: 10,
+  disabledActionTypes: [],
+  actionTypes: ["renew", "resize_up", "retain_offer"],
+};
+const coupon = (over: Partial<AdminCoupon>) => ({ id: "c-1", tenantId: TENANT, code: "STAY20", discountType: "percentage", currencyCode: "IRR", status: "active", ...over }) as AdminCoupon;
+const offer: AiOffer = {
+  id: "o-1", name: "Stay with us", actionType: "retain_offer", target: { couponTemplateId: "c-1", variantId: null },
+  maxDiscountPercent: "20.00", dailyBudget: "1000000.00", currencyCode: "IRR", isActive: true, createdByUserId: "u", createdAt: "", updatedAt: "",
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(useLocale).mockReturnValue({ lang: "en", t } as ReturnType<typeof useLocale>);
+  vi.mocked(usePanelSession).mockReturnValue({ me: { tenant: { id: TENANT } }, isLoading: false } as unknown as ReturnType<typeof usePanelSession>);
+  vi.mocked(aiAdminApi.settings).mockResolvedValue({ settings });
+  vi.mocked(aiAdminApi.saveSettings).mockImplementation(async (p) => ({ settings: { ...settings, ...p } }));
+  vi.mocked(aiAdminApi.offers).mockResolvedValue({ items: [offer] });
+  vi.mocked(aiAdminApi.updateOffer).mockResolvedValue({ offer: { ...offer, isActive: false } });
+  vi.mocked(aiAdminApi.atRisk).mockResolvedValue({ items: [], nextCursor: null });
+  vi.mocked(aiAdminApi.uplift).mockResolvedValue({ from: "", to: "", types: [], renewals: { treated: 0, control: 0 } });
+  vi.mocked(billingApi.adminCoupons).mockResolvedValue({
+    items: [
+      coupon({}),
+      coupon({ id: "c-platform", tenantId: null, code: "PLAT" }),
+      coupon({ id: "c-gift", code: "GIFT", discountType: "wallet_credit" }),
+      coupon({ id: "c-del", code: "OLD", status: "deleted" }),
+    ],
+    total: 4, page: 1, pageSize: 100,
+  });
+});
+
+const tab = (name: string) => fireEvent.click(screen.getByRole("tab", { name }));
+
+describe("settings (F-038-j2)", () => {
+  it("sends only what changed: switching one type off", async () => {
+    render(<AiView />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "ai.types.resize_up" }));
+    fireEvent.click(screen.getByRole("button", { name: "ai.settings.save" }));
+    await waitFor(() => expect(aiAdminApi.saveSettings).toHaveBeenCalledWith({ disabledActionTypes: ["resize_up"] }));
+    expect(await screen.findByText("ai.saved")).toBeTruthy();
+  });
+
+  it("never sends a threshold or holdout share the server refuses", async () => {
+    render(<AiView />);
+    const threshold = await screen.findByLabelText("ai.settings.threshold");
+    fireEvent.change(threshold, { target: { value: "1.5" } });
+    expect(screen.getByRole("button", { name: "ai.settings.save" })).toHaveProperty("disabled", true);
+    fireEvent.change(threshold, { target: { value: "0.7" } });
+    fireEvent.change(screen.getByLabelText("ai.settings.holdout"), { target: { value: "0" } });
+    expect(screen.getByRole("button", { name: "ai.settings.save" })).toHaveProperty("disabled", true);
+    fireEvent.change(screen.getByLabelText("ai.settings.holdout"), { target: { value: "15" } });
+    fireEvent.click(screen.getByRole("button", { name: "ai.settings.save" }));
+    await waitFor(() => expect(aiAdminApi.saveSettings).toHaveBeenCalledWith({ confidenceThreshold: "0.7", holdoutPercent: 15 }));
+  });
+
+  it("says so when the switch is on but the engine does not run", async () => {
+    vi.mocked(aiAdminApi.settings).mockResolvedValue({ settings: { ...settings, engineRuns: false } });
+    render(<AiView />);
+    expect(await screen.findByText("ai.settings.notRunning")).toBeTruthy();
+  });
+});
+
+describe("discount offers (F-038-j2)", () => {
+  it("offers only the tenant's own live discount coupons as templates, and creates with the template's currency", async () => {
+    vi.mocked(aiAdminApi.createOffer).mockResolvedValue({ offer });
+    render(<AiView />);
+    tab("ai.tabs.offers");
+    fireEvent.click(await screen.findByRole("button", { name: "ai.offers.add" }));
+    const select = (await screen.findByLabelText("ai.offers.template")) as HTMLSelectElement;
+    const codes = within(select).getAllByRole("option").map((o) => o.textContent);
+    expect(codes).toContain("STAY20");
+    expect(codes).not.toContain("PLAT");
+    expect(codes).not.toContain("GIFT");
+    expect(codes).not.toContain("OLD");
+    fireEvent.change(screen.getByLabelText("ai.offers.name"), { target: { value: "Stay" } });
+    fireEvent.change(select, { target: { value: "c-1" } });
+    fireEvent.change(screen.getByLabelText("ai.offers.maxDiscount"), { target: { value: "20" } });
+    fireEvent.change(screen.getByLabelText("ai.offers.dailyBudget"), { target: { value: "1000000" } });
+    fireEvent.click(screen.getByRole("button", { name: "ai.offers.create" }));
+    await waitFor(() =>
+      expect(aiAdminApi.createOffer).toHaveBeenCalledWith({ name: "Stay", actionType: "retain_offer", couponTemplateId: "c-1", maxDiscountPercent: "20", dailyBudget: "1000000", currencyCode: "IRR" }),
+    );
+  });
+
+  it("words ai's refusal by its reason", async () => {
+    vi.mocked(aiAdminApi.createOffer).mockRejectedValue(new ApiError("x", { status: 400, reason: "template_not_found" }));
+    render(<AiView />);
+    tab("ai.tabs.offers");
+    fireEvent.click(await screen.findByRole("button", { name: "ai.offers.add" }));
+    fireEvent.change(await screen.findByLabelText("ai.offers.name"), { target: { value: "Stay" } });
+    fireEvent.change(screen.getByLabelText("ai.offers.template"), { target: { value: "c-1" } });
+    fireEvent.change(screen.getByLabelText("ai.offers.maxDiscount"), { target: { value: "20" } });
+    fireEvent.change(screen.getByLabelText("ai.offers.dailyBudget"), { target: { value: "1000" } });
+    fireEvent.click(screen.getByRole("button", { name: "ai.offers.create" }));
+    expect(await screen.findByText("ai.refused.template_not_found")).toBeTruthy();
+  });
+
+  it("turns an offer off", async () => {
+    render(<AiView />);
+    tab("ai.tabs.offers");
+    fireEvent.click(await screen.findByRole("button", { name: "ai.offers.turnOff" }));
+    await waitFor(() => expect(aiAdminApi.updateOffer).toHaveBeenCalledWith("o-1", { isActive: false }));
+  });
+});
+
+describe("at risk and the report (F-038-j2)", () => {
+  it("links each customer to their page, words the reasons, and pages on", async () => {
+    vi.mocked(aiAdminApi.atRisk)
+      .mockResolvedValueOnce({
+        items: [{ userId: "u-1", grantId: "g-1", value: "0.3000", predictedAt: "2026-10-07T00:00:00.000Z", confidence: "0.6000", reasons: [{ code: "rule_defaults", base: 0.5 }, { code: "idle_7d", weight: -0.2 }, { code: "something_new" }] }],
+        nextCursor: "p1",
+      })
+      .mockResolvedValueOnce({ items: [{ userId: "u-2", grantId: null, value: "0.4000", predictedAt: null, confidence: "0.6000", reasons: [] }], nextCursor: null });
+    render(<AiView />);
+    tab("ai.tabs.atRisk");
+    const link = await screen.findByRole("link", { name: /u-1/ });
+    expect(link.getAttribute("href")).toBe(myResellerUserPath(TENANT, "u-1"));
+    expect(screen.getByText("ai.reasons.idle_7d")).toBeTruthy();
+    expect(screen.getByText(/ai\.atRisk\.renewChance:30/)).toBeTruthy();
+    expect(screen.queryByText("something_new")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "ai.atRisk.more" }));
+    expect(await screen.findByRole("link", { name: /u-2/ })).toBeTruthy();
+    expect(aiAdminApi.atRisk).toHaveBeenLastCalledWith("renewal", "p1");
+  });
+
+  it("asks the report for the last 30 days and shows each type's two arms", async () => {
+    vi.mocked(aiAdminApi.uplift).mockResolvedValue({
+      from: "", to: "", renewals: { treated: 7, control: 1 },
+      types: [{
+        actionType: "renew",
+        treated: { units: 20, converted: 8, rate: 0.4, revenue: [], margin: [], marginUnknown: 0 },
+        control: { units: 5, converted: 1, rate: 0.2, revenue: [], margin: [], marginUnknown: 0 },
+        uplift: { rate: 0.2, revenue: [{ amount: "1200000.00", currencyCode: "IRR" }], margin: [] },
+      }],
+    });
+    render(<AiView />);
+    tab("ai.tabs.report");
+    expect(await screen.findByText("ai.types.renew")).toBeTruthy();
+    const [from, to] = vi.mocked(aiAdminApi.uplift).mock.calls[0];
+    expect(new Date(to).getTime() - new Date(from).getTime()).toBe(30 * 86_400_000);
+    expect(screen.getByText("ai.report.converted:8,20")).toBeTruthy();
+    expect(screen.getByText("ai.report.converted:1,5")).toBeTruthy();
+    expect(screen.getByText("+20%")).toBeTruthy();
+  });
+});
