@@ -28,7 +28,8 @@
       "systems": "Systems",
       "userGroups": "User groups",
       "users": "Users",
-      "ai": "AI"
+      "ai": "AI",
+      "wheel": "Lucky wheel"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -4205,6 +4206,61 @@
       "topUpNone": "It already covers 30 days",
       "capacityTitle": "All tenants — capacity",
       "covers": "Covers {{measured}} of {{total}} tenants; the others are not measured."
+    }
+  },
+  "wheel": {
+    "title": "Lucky wheel",
+    "subtitle": "Spin once a day for bonus traffic, extra days or a discount. The result is decided by our server, never by your device.",
+    "loading": "Loading the wheel…",
+    "retry": "Try again",
+    "noWheel": "There is no wheel running today. Check back later.",
+    "spin": "Spin",
+    "spinning": "Spinning…",
+    "spinsLeft": "Spins left today: {{n}}",
+    "nextSpinAt": "Your next spin: {{time}}",
+    "odds": {
+      "title": "The odds",
+      "note": "These are the real odds of every slot. The server picks the result with them; the wheel only shows it.",
+      "chance": "{{percent}}%"
+    },
+    "notEligible": "You cannot spin right now",
+    "refusals": {
+      "account_inactive": "Your account is not active.",
+      "account_too_new": "Your account is too new. Try again in a little while.",
+      "phone_not_verified": "Verify your phone number first.",
+      "no_active_service": "You need an active service to spin.",
+      "paid_too_little": "The wheel is for customers who have bought a little more.",
+      "too_few_orders": "The wheel is for customers with a few more paid orders.",
+      "not_in_group": "This wheel is for a group of users you are not in.",
+      "flagged": "Your account is under review, so it cannot spin.",
+      "shared_device": "Too many accounts have used this device, so it cannot spin.",
+      "daily_limit": "You have used today's spins. Come back tomorrow.",
+      "cooldown": "Wait a little before your next spin.",
+      "no_wheel": "There is no wheel running today.",
+      "no_fingerprint": "We could not recognise this device. Reload the page and try again.",
+      "spin_in_progress": "Your spin is already being processed."
+    },
+    "result": {
+      "bonus_traffic_gb": "You won {{value}} GB on your service.",
+      "extra_days": "You won {{value}} extra days on your service.",
+      "discount_coupon": "You won a {{value}}% discount coupon.",
+      "free_grant": "You won a free service: {{label}}.",
+      "empty": "No prize this time. Better luck next spin!",
+      "refused": "No spin: {{reason}}"
+    },
+    "coupon": {
+      "code": "Your code: {{code}}",
+      "expires": "Use it by {{date}}",
+      "copy": "Copy code",
+      "copied": "Copied"
+    },
+    "history": {
+      "title": "Your spins",
+      "empty": "You have not spun yet.",
+      "when": "When",
+      "result": "Result",
+      "nothing": "No prize",
+      "refused": "Not spun — {{reason}}"
     }
   }
 }

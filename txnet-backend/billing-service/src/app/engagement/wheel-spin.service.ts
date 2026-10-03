@@ -187,6 +187,21 @@ export type WheelView = {
   nextSpinAt: string | null;
 };
 
+/** One of the caller's own attempts, as their history lists it (F-707-g). The checks stay server-side. */
+export type WheelHistoryRow = {
+  attemptId: string;
+  at: string;
+  tenantDay: string;
+  status: SpinAttemptStatus;
+  refusalReason: SpinRefusalReason | null;
+  prize: { label: string; prizeType: SpinPrizeType; prizeValue: string } | null;
+  /** A won coupon, named again so it can still be used. */
+  coupon: { code: string; expiresAt: string | null } | null;
+};
+
+/** How far back the history goes: the newest attempts, never a page through every day. */
+export const WHEEL_HISTORY_LIMIT = 30;
+
 export const WHEEL_SPIN_CLOCK = Symbol('WHEEL_SPIN_CLOCK');
 export const WHEEL_SPIN_RANDOM = Symbol('WHEEL_SPIN_RANDOM');
 
@@ -244,6 +259,35 @@ export class WheelSpinService {
         spinsLeftToday: Math.max(0, cfg.maxSpinsPerAccountPerDay - facts.awardedToday),
         nextSpinAt: nextAt && nextAt.getTime() > at.getTime() ? nextAt.toISOString() : null,
       };
+    });
+  }
+
+  /** The caller's own attempts, newest first, at most {@link WHEEL_HISTORY_LIMIT}. Writes nothing. */
+  history(actor: SpinActor): Promise<WheelHistoryRow[]> {
+    return tenantTransaction(this.prisma, async (tx) => {
+      const rows = await tx.spinWheelAttempt.findMany({
+        where: { tenantId: actor.tenantId, userId: actor.userId },
+        orderBy: { attemptedAt: 'desc' },
+        take: WHEEL_HISTORY_LIMIT,
+        select: { id: true, attemptedAt: true, tenantDay: true, status: true, refusalReason: true, prizeAwarded: { select: { label: true, prizeType: true, prizeValue: true } } },
+      });
+      const won = rows.filter((r) => r.prizeAwarded?.prizeType === SpinPrizeType.discount_coupon).map((r) => r.id);
+      const issued = won.length ? await tx.rewardIssue.findMany({ where: { source: RewardSource.spin, referenceId: { in: won } }, select: { referenceId: true, couponId: true } }) : [];
+      const couponIds = issued.map((i) => i.couponId).filter((id): id is string => id !== null);
+      const coupons = couponIds.length ? await tx.coupon.findMany({ where: { id: { in: couponIds } }, select: { id: true, code: true, expiresAt: true } }) : [];
+      const couponOf = (attemptId: string) => {
+        const c = coupons.find((x) => x.id === issued.find((i) => i.referenceId === attemptId)?.couponId);
+        return c ? { code: c.code, expiresAt: c.expiresAt?.toISOString() ?? null } : null;
+      };
+      return rows.map((r) => ({
+        attemptId: r.id,
+        at: r.attemptedAt.toISOString(),
+        tenantDay: isoDay(r.tenantDay),
+        status: r.status,
+        refusalReason: r.refusalReason as SpinRefusalReason | null,
+        prize: r.prizeAwarded ? { label: r.prizeAwarded.label, prizeType: r.prizeAwarded.prizeType, prizeValue: D(r.prizeAwarded.prizeValue).toFixed(2) } : null,
+        coupon: couponOf(r.id),
+      }));
     });
   }
 

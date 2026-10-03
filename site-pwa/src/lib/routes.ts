@@ -173,6 +173,8 @@ export const PANEL_SYSTEMS = "/systems";
  * audience: auth-service answers each tenant its own groups (F-114-j).
  */
 export const PANEL_USER_GROUPS = "/user-groups";
+/** The user's lucky wheel: public odds, a spin the server decides, their own history (F-707-g). */
+export const PANEL_WHEEL = "/wheel";
 /**
  * Where a bank returns a payer (F-093-f). These two are `billing`'s to name:
  * `deposit-callback.controller.ts` redirects to them by path, so they are the

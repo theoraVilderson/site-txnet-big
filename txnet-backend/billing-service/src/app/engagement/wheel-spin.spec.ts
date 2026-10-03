@@ -186,3 +186,37 @@ describe('WheelSpinService.spin', () => {
     expect(attempts).toEqual([]);
   });
 });
+
+describe('WheelSpinService.history', () => {
+  const COUPON_PRIZE = { label: '20% off', prizeType: SpinPrizeType.discount_coupon, prizeValue: D(20) };
+  function withHistory(rows: Record<string, unknown>[]) {
+    const where: Record<string, unknown>[] = [];
+    const { service } = build();
+    const tx = {
+      $executeRaw: async () => 0,
+      spinWheelAttempt: {
+        findMany: async (a: { where: Record<string, unknown> }) => {
+          where.push(a.where);
+          return rows;
+        },
+      },
+      rewardIssue: { findMany: async () => [{ referenceId: 'a-1', couponId: 'c-1' }] },
+      coupon: { findMany: async () => [{ id: 'c-1', code: 'WHEEL-7Q2', expiresAt: new Date('2026-10-10T00:00:00Z') }] },
+    };
+    (service as unknown as { prisma: unknown }).prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
+    return { service, where };
+  }
+
+  it("is the caller's own attempts, newest first, a won coupon named by its code", async () => {
+    const { service, where } = withHistory([
+      { id: 'a-1', attemptedAt: AT, tenantDay: AT, status: SpinAttemptStatus.awarded, refusalReason: null, prizeAwarded: COUPON_PRIZE, eligibilityCheckSnapshotJson: { checks: {} } },
+      { id: 'a-0', attemptedAt: new Date(AT.getTime() - HOUR), tenantDay: AT, status: SpinAttemptStatus.rejected_ineligible, refusalReason: 'cooldown', prizeAwarded: null, eligibilityCheckSnapshotJson: { checks: {} } },
+    ]);
+    const rows = await asTenant(() => service.history({ userId: USER, tenantId: TENANT }));
+    expect(where[0]).toMatchObject({ tenantId: TENANT, userId: USER });
+    expect(rows).toEqual([
+      { attemptId: 'a-1', at: AT.toISOString(), tenantDay: '2026-10-03', status: 'awarded', refusalReason: null, prize: { label: '20% off', prizeType: 'discount_coupon', prizeValue: '20.00' }, coupon: { code: 'WHEEL-7Q2', expiresAt: '2026-10-10T00:00:00.000Z' } },
+      { attemptId: 'a-0', at: new Date(AT.getTime() - HOUR).toISOString(), tenantDay: '2026-10-03', status: 'rejected_ineligible', refusalReason: 'cooldown', prize: null, coupon: null },
+    ]);
+  });
+});

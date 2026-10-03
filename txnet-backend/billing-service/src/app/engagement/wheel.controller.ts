@@ -55,6 +55,14 @@ export class WheelController {
     return this.refusing(() => this.wheel.view({ userId, tenantId }, fingerprintSourceOf(req)));
   }
 
+  /** The caller's own attempts, newest first (F-707-g); a won coupon named by its code. */
+  @Get('history')
+  @RateLimit(READ)
+  async history(@Req() req: Request) {
+    const { userId, tenantId } = identityOf(req);
+    return this.wheel.history({ userId, tenantId });
+  }
+
   @Post('spin')
   @HttpCode(HttpStatus.OK)
   @RateLimit(SPIN)
