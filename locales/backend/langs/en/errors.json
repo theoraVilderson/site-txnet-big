@@ -259,6 +259,7 @@
     "fileRejected": "Only PNG, JPEG, WebP images and PDF files can be attached.",
     "fileInfected": "This file did not pass the security check and was not sent.",
     "scanUnavailable": "Files cannot be checked right now. Please try again in a few minutes.",
-    "quotaExceeded": "You have used all the space for your attachments."
+    "quotaExceeded": "You have used all the space for your attachments.",
+    "assigneeUnknown": "This person cannot be assigned support conversations."
   }
 }

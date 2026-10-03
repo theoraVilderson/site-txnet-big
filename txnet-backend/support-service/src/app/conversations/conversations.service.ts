@@ -37,7 +37,9 @@ export type ConversationRejection =
   | 'file_rejected'
   | 'file_infected'
   | 'scan_unavailable'
-  | 'quota_exceeded';
+  | 'quota_exceeded'
+  // The agent side (F-033-d).
+  | 'assignee_unknown';
 
 export class ConversationRefused extends Error {
   constructor(readonly reason: ConversationRejection) {
@@ -120,14 +122,14 @@ export interface CategoryView {
 }
 
 /** Statuses a conversation is unfinished in — what the cap counts. */
-const UNFINISHED: ConversationStatus[] = [
+export const UNFINISHED: ConversationStatus[] = [
   ConversationStatus.open,
   ConversationStatus.pending_user,
   ConversationStatus.pending_agent,
 ];
 
 export const PAGE_MAX = 100;
-const PAGE_DEFAULT = 50;
+export const PAGE_DEFAULT = 50;
 const LIST_DEFAULT = 20;
 const SUBJECT_MAX = 80;
 /** ADR-0112 point 7: an attachment's URL lives five minutes. */
@@ -378,7 +380,7 @@ export async function appendUserMessage(
   return { message, status: row.status };
 }
 
-type ConversationRow = Prisma.SupportConversationGetPayload<object>;
+export type ConversationRow = Prisma.SupportConversationGetPayload<object>;
 export type MessageRow = Prisma.SupportMessageGetPayload<object>;
 export type AttachmentRow = Prisma.SupportMessageAttachmentGetPayload<object>;
 
@@ -434,7 +436,7 @@ function nameIn(texts: { lang: Language; name: string }[], lang: string): string
 }
 
 /** Ups the cursor to `seq` unless it is already past it; returns where it stands. */
-async function moveCursor(tx: Prisma.TransactionClient, caller: SupportCaller, conversationId: string, seq: number): Promise<number> {
+export async function moveCursor(tx: Prisma.TransactionClient, caller: SupportCaller, conversationId: string, seq: number): Promise<number> {
   const [row] = await tx.$queryRaw<{ lastReadSeq: number }[]>`
     INSERT INTO support.conversation_read ("conversationId", "userId", "tenantId", "lastReadSeq", "readAt")
     VALUES (${conversationId}::uuid, ${caller.userId}::uuid, ${caller.tenantId}::uuid, ${seq}, now())
@@ -445,8 +447,16 @@ async function moveCursor(tx: Prisma.TransactionClient, caller: SupportCaller, c
   return row.lastReadSeq;
 }
 
-/** Messages not the caller's, not internal, past the caller's cursor — per conversation. */
-async function unreadCounts(tx: Prisma.TransactionClient, caller: SupportCaller, ids: string[]): Promise<Map<string, number>> {
+/**
+ * Messages not the caller's, past the caller's cursor — per conversation.
+ * Internal notes count only for an agent (`notes`); a user never has one.
+ */
+export async function unreadCounts(
+  tx: Prisma.TransactionClient,
+  caller: SupportCaller,
+  ids: string[],
+  notes = false,
+): Promise<Map<string, number>> {
   if (ids.length === 0) return new Map();
   const rows = await tx.$queryRaw<{ conversationId: string; unread: bigint }[]>`
     SELECT m."conversationId"::text AS "conversationId", count(*) AS unread
@@ -454,7 +464,7 @@ async function unreadCounts(tx: Prisma.TransactionClient, caller: SupportCaller,
       LEFT JOIN support.conversation_read r
         ON r."conversationId" = m."conversationId" AND r."userId" = ${caller.userId}::uuid
      WHERE m."conversationId" IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))})
-       AND m.internal = false
+       AND (m.internal = false OR ${notes})
        AND m."senderUserId" IS DISTINCT FROM ${caller.userId}::uuid
        AND m.seq > COALESCE(r."lastReadSeq", 0)
      GROUP BY m."conversationId"`;
@@ -467,7 +477,7 @@ function subjectFrom(body: string): string {
   return line.length > SUBJECT_MAX ? `${line.slice(0, SUBJECT_MAX - 1)}…` : line;
 }
 
-function summaryOf(c: ConversationRow, unread: number): ConversationSummary {
+export function summaryOf(c: ConversationRow, unread: number): ConversationSummary {
   return {
     id: c.id,
     subject: c.subject,

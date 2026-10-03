@@ -83,6 +83,7 @@ const REFUSAL: Record<ConversationRejection, { status: 400 | 404 | 409 | 413 | 4
   file_infected: { status: 422, i18nKey: E.fileInfected },
   scan_unavailable: { status: 503, i18nKey: E.scanUnavailable },
   quota_exceeded: { status: 409, i18nKey: E.quotaExceeded },
+  assignee_unknown: { status: 404, i18nKey: E.assigneeUnknown },
 };
 
 /** A multipart file as multer holds it in memory. */
@@ -183,7 +184,7 @@ export class SupportConversationsController {
   }
 }
 
-function callerOf(req: Request): SupportCaller {
+export function callerOf(req: Request): SupportCaller {
   const identity = identityOf(req);
   return { tenantId: identity.tenantId, userId: identity.userId };
 }
@@ -193,7 +194,7 @@ function languageOf(req: Request): string {
   return (req as Request & { language?: string }).language ?? 'fa';
 }
 
-async function refusing<T>(work: () => Promise<T>): Promise<T> {
+export async function refusing<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (e) {

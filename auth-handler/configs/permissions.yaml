@@ -97,9 +97,14 @@ roles:
       # The tenant's wheel (F-707-c, ADR-0111): prizes, odds, the daily cap and
       # eligibility; `billing-service` keeps each tenant to its own (RLS).
       - engagement.manage
+      # Support (F-033-d): the agent's day — inbox, assign, reply, notes,
+      # resolve, close — and the settings (hours, SLA, categories).
+      - support.agent
+      - support.manage
   Support:
     permissions:
       - user.read
+      - support.agent
   user:
     permissions:
       - self.read

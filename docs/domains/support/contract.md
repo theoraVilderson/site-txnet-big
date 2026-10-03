@@ -9,7 +9,8 @@ updated: 2026-10-03
 # Contract — support
 
 Storage F-033-a, the user's routes F-033-b, attachments F-033-c (reading) and
-F-033-f (upload); the agent side F-033-d, category admin F-033-e. Shape: [ADR-0112](../../architecture/decisions/0112-support-is-one-conversation-served-by-support-service.md).
+F-033-f (upload); the agent side F-033-d, category admin F-033-e, presence and
+hours F-033-g, SLA F-033-h. Shape: [ADR-0112](../../architecture/decisions/0112-support-is-one-conversation-served-by-support-service.md).
 
 ## TL;DR
 
@@ -55,17 +56,52 @@ later). A user's files across all their conversations stay under
 `support/<conversationId>/<attachmentId>.<ext>`; the client's file name is
 only shown and offered as the download's name.
 
+## Provides — the agent side (F-033-d)
+
+`/api/support/agent/*`, behind ForwardAuth and `support.agent` (403 without).
+An agent reaches **every** conversation of the caller's tenant and none of
+another's (RLS, catalog §11.6) — another tenant's thread answers as a missing
+one. `support.agent` and `support.manage` (settings: hours, SLA, categories)
+are granted to `Admin`, `support.agent` alone to the `Support` template
+(migration `20261003001300`, `auth-handler/configs/permissions.yaml`). Same rate-limit buckets as the user side,
+keyed by the agent's id.
+
+| Route | Input | Output | Errors |
+|---|---|---|---|
+| `GET …/agent/conversations` | `?view=pending\|live\|mine\|unassigned` (default `pending`), `after=<nextAfter>`, `limit≤100` | `{items: [summary + userId, assignedToUserId, firstResponseAt, resolvedAt, closedAt, unread], nextAfter}` — `urgent` first, then the longest waiting | — |
+| `GET …/agent/conversations/:id/messages` | as the user's read | as the user's page, the conversation as above, each message with `internal` and `senderUserId`; notes included; `seenUpToSeq` is the user's cursor | 404 `not_found` |
+| `POST …/agent/conversations/:id/messages` | `{body ≤4000, internal?}` | the message, with `internal`, `senderUserId` | 404, 409 `closed` |
+| `POST …/agent/conversations/:id/assign` | `{assigneeUserId: uuid \| null}` | the conversation | 404 `not_found`, 404 `assignee_unknown` |
+| `POST …/agent/conversations/:id/resolve` | — | the conversation (`resolved`) | 404, 409 `closed` |
+| `POST …/agent/conversations/:id/close` | — | the conversation (`closed`) | 404 |
+| `POST …/agent/conversations/:id/read` · `…/typing` | as the user's | as the user's, `readerKind`/`senderKind` `agent` | 404, 409 `closed` (typing) |
+
+Views: `pending` = `open` + `pending_agent` (waiting on us); the other three
+are the unfinished threads (`open`, `pending_user`, `pending_agent`) that are
+`live`, assigned to the caller, or assigned to no one.
+
+A **reply** takes the next `seq`, stamps `firstResponseAt` once, sets
+`pending_user` (a `resolved` thread stays resolved — only the user reopens it)
+and **claims an unassigned thread for the replier** (user, 2026-10-03); an
+assigned one keeps its assignee. A **note** (`internal: true`) takes the next
+`seq` and changes nothing else — no status, no `lastMessageAt`, no event.
+`resolve` stamps `resolvedAt`; `close` stamps `closedAt` and is final. An
+assignee is an active account of the caller's tenant whose role holds
+`support.agent` (or `*`); anyone else is `assignee_unknown`.
+
 ## Emits (events)
 
 Realtime, on `support:<conversationId>` (F-034, ADR-0114) — at-most-once
 notices; the stored thread is the record (`?afterSeq=` after a gap). Subscribe
-with the `realtime` proof from a read of the thread; a signed-in socket only.
+with the `realtime` proof from a read of the thread — the owner's, or an
+agent's of the tenant; a signed-in socket only.
 
 | `payload.kind` | When | Fields |
 |---|---|---|
 | `support.message` | a message is stored (text or files) | `conversationId`, `status`, `message` (a message view without `mine`) |
 | `support.read` | a reader moved their cursor | `conversationId`, `readerKind`, `lastReadSeq` |
 | `support.typing` | `POST …/typing` | `conversationId`, `senderKind`, `expiresInMs` |
+| `support.status` | an agent resolved or closed it (F-033-d) | `conversationId`, `status` |
 
 The actor is a kind, never an account. An internal note is never published here
 (invariant 5).
@@ -74,7 +110,7 @@ The actor is a kind, never an account. An internal note is never published here
 
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
-| identity | `userId`, tenant, permissions (forward-auth headers) | support blocked |
+| identity | `userId`, tenant, permissions (forward-auth headers); an assignee's role grants (`identity.user` → `role_permission`, read under RLS) | support blocked |
 | object-storage | private files, `signedObjectUrl`, the scan port (F-033-c, ADR-0113) | attachments refused, text still works |
 | locale-service | error messages, `Accept-Language` | envelope falls back to the key |
 | realtime | the `support:` family, Redis fan-out (F-034) | `realtime` is `null` / events dropped; the thread still reads |

@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { PublicRouteGuard, RateLimitGuard, TenantStatusGuard } from '@txnet-backend/shared-core';
 
+import { SupportAgentModule } from './agent/agent.module';
 import { envConfigOptions } from './config/env.validation';
 import { SupportConversationsModule } from './conversations/conversations.module';
 import { HealthController } from './health.controller';
@@ -17,7 +18,7 @@ import { IdentityMiddleware } from './request/identity.middleware';
  * registers (C-11): a suspended tenant's routes are refused here as anywhere.
  */
 @Module({
-  imports: [ConfigModule.forRoot(envConfigOptions), PrismaModule, RedisModule, LocaleModule, SupportConversationsModule],
+  imports: [ConfigModule.forRoot(envConfigOptions), PrismaModule, RedisModule, LocaleModule, SupportConversationsModule, SupportAgentModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_GUARD, useClass: PublicRouteGuard },

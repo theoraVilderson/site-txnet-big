@@ -198,4 +198,6 @@ export type SupportRealtimeEvent =
       };
     }
   | { kind: 'support.read'; conversationId: string; readerKind: string; lastReadSeq: number }
-  | { kind: 'support.typing'; conversationId: string; senderKind: string; expiresInMs: number };
+  | { kind: 'support.typing'; conversationId: string; senderKind: string; expiresInMs: number }
+  /** An agent resolved or closed the thread (F-033-d). */
+  | { kind: 'support.status'; conversationId: string; status: string };

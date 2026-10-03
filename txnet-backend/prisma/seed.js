@@ -121,10 +121,10 @@ async function grantAllPermissionsToSuperAdmin() {
 // F-502-a (D-33): the same Admin manages its own tenant's coupons — migration
 // 20260914000900's grant, for a fresh database. `campaign.manage` (F-035-c) and
 // `tenant_billing.adjust` (F-019-a), `tenant_billing.topup` (F-019-b) and
-// `tenant_billing.read` (F-019-j) likewise, `user_group.manage` (F-114-j), `currency.pin` (F-0608-a), `ai.manage` (F-038-j1) and `engagement.manage` (F-707-c).
+// `tenant_billing.read` (F-019-j) likewise, `user_group.manage` (F-114-j), `currency.pin` (F-0608-a), `ai.manage` (F-038-j1), `engagement.manage` (F-707-c) and `support.agent` + `support.manage` (F-033-d).
 async function grantGatewayManageToAdmin() {
   const role = await systemRoleOrThrow('Admin');
-  for (const key of ['gateway.manage', 'payment.confirm_manual', 'coupon.manage', 'catalog.manage', 'campaign.manage', 'tenant_billing.adjust', 'tenant_billing.topup', 'tenant_billing.read', 'user_group.manage', 'currency.pin', 'ai.manage', 'engagement.manage']) {
+  for (const key of ['gateway.manage', 'payment.confirm_manual', 'coupon.manage', 'catalog.manage', 'campaign.manage', 'tenant_billing.adjust', 'tenant_billing.topup', 'tenant_billing.read', 'user_group.manage', 'currency.pin', 'ai.manage', 'engagement.manage', 'support.agent', 'support.manage']) {
     const permission = await prisma.permission.upsert({ where: { key }, update: {}, create: { key } });
     await prisma.rolePermission.upsert({
       where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
@@ -132,6 +132,14 @@ async function grantGatewayManageToAdmin() {
       create: { roleId: role.id, permissionId: permission.id },
     });
   }
+  // The support staff's template holds the agent's day alone (F-033-d, 20261003001300).
+  const support = await systemRoleOrThrow('Support');
+  const agent = await prisma.permission.findUniqueOrThrow({ where: { key: 'support.agent' } });
+  await prisma.rolePermission.upsert({
+    where: { roleId_permissionId: { roleId: support.id, permissionId: agent.id } },
+    update: {},
+    create: { roleId: support.id, permissionId: agent.id },
+  });
 }
 
 // ADR-0019: USD is the one base currency, two decimal places, and every money

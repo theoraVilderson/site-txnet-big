@@ -93,6 +93,11 @@ export class SupportRealtime {
     return this.publish(conversationId, { kind: 'support.typing', conversationId, senderKind, expiresInMs: TYPING_TTL_MS });
   }
 
+  /** An agent resolved or closed the thread (F-033-d): the user's panel shows it without a re-read. */
+  status(conversationId: string, status: string): Promise<void> {
+    return this.publish(conversationId, { kind: 'support.status', conversationId, status });
+  }
+
   /** Logged and swallowed: the write it announces already happened. */
   private async publish(conversationId: string, event: SupportRealtimeEvent): Promise<void> {
     const wire = `${this.redis.keyPrefix}${RedisKeys.realtimeFanout(supportRealtimeChannel(conversationId))}`;
