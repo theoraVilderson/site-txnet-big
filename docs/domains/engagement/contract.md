@@ -27,6 +27,7 @@ draw made once and checkable from what is published.
 |---|---|---|---|---|
 | get wheel state | userId | eligibility result + prizes + remaining daily budget | sync | — |
 | spin | userId, deviceFingerprintId | `spin_wheel_attempt` + prize, delivered in the same tx (F-707-b) | sync tx | ineligible, cooldown; over cap or out of stock is an `empty` result |
+| issue a reward — **implemented (F-707-b)** | `issueReward(tx, grants, {tenantId, userId, source: spin\|lottery, referenceId, prize, actorUserId, at, grantId?})`, `billing-service/src/app/engagement/reward-issuer.ts` | `{rewardId, prizeType, replay, grantId, coupon}` | caller's tx | `RewardRefused`: `no_cash`, `no_active_grant`, `grant_not_eligible`, `coupon_template_unavailable`, `reference_reused`; the acts' own `EntitlementRefused` (`wholesale_unfunded`, `variant_not_deliverable`, …) |
 | peek — **implemented (F-038-e)** | `AttentionBudget.peek(subject, now, pendingSends)`, the decision pipeline's budget step | the same verdict as `spend`, counting `pendingSends` as charged now; reads only, charges nothing, no lock | sync | — |
 | spend attention — **implemented (F-1501)** | `AttentionBudget.spend({tenantId, kind, id}, origin, now)`, inside `ai-service` only | `{allowed: true, charged}` or `{allowed: false, limit: per_day \| per_week, retryAt}` | sync tx | — |
 
@@ -69,6 +70,18 @@ strict tenant RLS. What a writer may rely on, and may not get round:
 | A row's user, fingerprint, group and prizes are its own tenant's and its own version's or lottery's | `engagement_tenant_mismatch` |
 | A lottery moves `draft → published → frozen → drawn`, or to `cancelled` from draft or published with a reason; after publish only its status changes, prizes are fixed, entrants change until the freeze | `lottery_status_one_way`, `lottery_frozen`, `lottery_cancel_reason` |
 | One draw per lottery (its key), made from a published lottery; never changed but for `publishedAt`, once. A winner keeps its place | `lottery_draw_is_history` |
+
+## The reward issuer (F-707-b) — built
+
+| Rule | Why |
+|---|---|
+| 1. Bonus GB: a prepaid bag via `adjustGrantTraffic`, a metered bag via `giftGrantBytes` as the reseller's own gift; source `engagement_reward` | a reseller's Grant buys it wholesale, as its staff's raise or gift (F-118-p, F-311-l) |
+| 2. Extra days via `changeGrantDuration` on a Grant with an end; the change row names the prize's admin | days are `endsAt`, not a quota (§4.5) |
+| 3. GB and days need an `active` Grant that can take them; none → `no_active_grant`, never queued. The caller's `grantId`, else the one running longest (no end first) | a prize waiting for a purchase is a prize for buying |
+| 4. Coupon: cloned from the tenant's own template (ADR-0110), percent = lower of template and prize, a fixed template's amount as cap; single use, this user only, `validDays` | never more than the tenant offers |
+| 5. Free Grant via `issueGrantByAdmin`, `requestId` = reference, source `engagement_reward`, inside a reseller's own limits (`bounded`) | the wheel is the reseller's own hand-out |
+| 6. Once per (source, referenceId): `reward_issue` unique; a retry answers `replay: true`, another user or prize `reference_reused` | a retried spin never pays twice |
+| 7. `wallet_credit` → `no_cash`; `empty` is not an issue | ADR-0111 point 2 |
 
 ## Guarantees (intended)
 

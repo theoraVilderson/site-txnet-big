@@ -328,6 +328,38 @@ model LotteryWinner {
   @@schema("engagement")
 }
 
+/// What a reward was given for: a spin attempt, or a lottery winner row.
+enum RewardSource {
+  spin
+  lottery
+
+  @@schema("engagement")
+}
+
+/// One prize delivered (F-707-b): unique per (source, referenceId), so a
+/// retried spin or delivery answers what was already given and never gives it
+/// twice. Written once, in the caller's transaction, beside what it gave: the
+/// Grant the GB or days went to and its change row, the coupon, or the free
+/// Grant.
+model RewardIssue {
+  id                String        @id @default(uuid()) @db.Uuid
+  tenantId          String        @db.Uuid
+  source            RewardSource
+  referenceId       String        @db.Uuid
+  userId            String        @db.Uuid
+  prizeType         SpinPrizeType
+  grantId           String?       @db.Uuid
+  quotaAdjustmentId String?       @db.Uuid
+  durationChangeId  String?       @db.Uuid
+  couponId          String?       @db.Uuid
+  createdAt         DateTime      @default(now())
+
+  @@unique([source, referenceId])
+  @@index([tenantId, userId])
+  @@map("reward_issue")
+  @@schema("engagement")
+}
+
 // =============================================================================
 
 /// F-1501 / ADR-0109 point 10: how many proactive AI messages a subject has

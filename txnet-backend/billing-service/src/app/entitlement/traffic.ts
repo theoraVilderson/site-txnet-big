@@ -64,15 +64,15 @@ type Adjustable = Awaited<ReturnType<typeof adjustable>>;
 /** What `settle` reads of a Grant — also a metered one's, for a gift (F-311-l, `traffic/gift-bytes.ts`). */
 export type Settled = Pick<Adjustable, 'id' | 'tenantId' | 'userId' | 'status' | 'statusReason' | 'suspendedAt' | 'endsAt'>;
 
-/** The row beside the column (invariant 3): source `admin_grant`, the admin, the reason. */
-async function adjustmentRow(tx: Prisma.TransactionClient, grant: Adjustable, delta: bigint, input: { actorUserId: string; reason: string }) {
+/** The row beside the column (invariant 3): source `admin_grant` unless the caller names one (a prize, F-707-b), the admin, the reason. */
+async function adjustmentRow(tx: Prisma.TransactionClient, grant: Adjustable, delta: bigint, input: { actorUserId: string; reason: string; source?: GrantSource }) {
   const row = await tx.quotaAdjustment.create({
     data: {
       tenantId: grant.tenantId,
       grantId: grant.id,
       metric: QuotaMetric.traffic_bytes,
       delta,
-      source: GrantSource.admin_grant,
+      source: input.source ?? GrantSource.admin_grant,
       reason: input.reason,
       createdByAdminId: input.actorUserId,
     },
@@ -128,7 +128,7 @@ export async function settle(tx: Prisma.TransactionClient, grant: Settled, at: D
 export async function adjustGrantTraffic(
   tx: Prisma.TransactionClient,
   grantId: string,
-  input: { at: Date; actorUserId: string; deltaBytes: bigint; reason: string },
+  input: { at: Date; actorUserId: string; deltaBytes: bigint; reason: string; source?: GrantSource },
 ): Promise<TrafficChange> {
   if (input.deltaBytes === BigInt(0)) throw new RangeError('a traffic change moves Quota: delta 0');
 

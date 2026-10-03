@@ -20,6 +20,8 @@ export type AdminIssue = {
    * platform's staff, who are never bounded.
    */
   bounded?: boolean;
+  /** `admin_grant` unless the caller names one — a prize's free Grant is `engagement_reward` (F-707-b). */
+  source?: GrantSource;
 };
 
 /** `issued` is false for a repeat of a request that already issued this Grant. */
@@ -47,12 +49,13 @@ const issuedOf = (g: { id: string; variantId: string | null; status: GrantStatus
  * no group or none that could ever place one (F-111-i), a prepaid network
  * variant stating no traffic (F-111-p). `admin_only` is assignable (F-506).
  *
- * **One request, one Grant.** `(admin_grant, requestId)` is unique, so a
+ * **One request, one Grant.** `(source, requestId)` is unique, so a
  * repeat answers the Grant it issued with `issued: false`; the same id for
  * another user or variant is `request_reused`, never that Grant.
  */
 export async function issueGrantByAdmin(tx: Prisma.TransactionClient, grants: GrantService, input: AdminIssue): Promise<AdminIssued> {
-  const prior = await tx.grant.findFirst({ where: { source: GrantSource.admin_grant, sourceReferenceId: input.requestId } });
+  const source = input.source ?? GrantSource.admin_grant;
+  const prior = await tx.grant.findFirst({ where: { source, sourceReferenceId: input.requestId } });
   if (prior) {
     if (prior.userId !== input.userId || prior.variantId !== input.variantId) throw new EntitlementRefused('request_reused', input.requestId);
     return issuedOf(prior, false);
@@ -82,7 +85,7 @@ export async function issueGrantByAdmin(tx: Prisma.TransactionClient, grants: Gr
   const { grant, token } = await grants.issue(tx, {
     userId: input.userId,
     variantId: input.variantId,
-    source: GrantSource.admin_grant,
+    source,
     sourceReferenceId: input.requestId,
     startsAt: input.at,
     issuedByAdminId: input.actorUserId,

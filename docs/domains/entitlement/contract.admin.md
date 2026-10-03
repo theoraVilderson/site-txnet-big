@@ -65,6 +65,8 @@ Refused: `grant_closed`, `grant_not_active` (pending), `traffic_not_adjustable`
 (Quota changed since the read: retry). `adjustQuota` stays the bare row writer.
 A metered Grant's bag takes an admin's **gift** instead (billing F-311-l,
 `contract.traffic-block.md`): source `admin_gift`, never on a Grant's own `source`.
+Both take an optional `source`, and so does `issueGrantByAdmin`: a wheel or lottery
+prize names `engagement_reward` (F-707-b, engagement `contract.md` "The reward issuer").
 
 **Reset (F-311-k)** — `resetGrantTraffic(tx, id, {at, actorUserId, reason})` in
 `entitlement/traffic.ts`, proved by `traffic-reset.spec.ts`. The full bag is left

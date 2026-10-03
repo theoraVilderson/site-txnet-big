@@ -46,7 +46,7 @@ const WHOLESALE = new VpnWholesale(new TenantBillingLedger());
 export async function giftGrantBytes(
   tx: Prisma.TransactionClient,
   grantId: string,
-  input: { at: Date; actorUserId: string; bytes: bigint; reason: string; giver: GiftGiver },
+  input: { at: Date; actorUserId: string; bytes: bigint; reason: string; giver: GiftGiver; source?: GrantSource },
 ): Promise<TrafficChange> {
   if (input.bytes <= BigInt(0)) throw new RangeError(`a gift adds bytes: ${input.bytes}`);
 
@@ -91,7 +91,8 @@ export async function giftGrantBytes(
       grantId,
       metric: QuotaMetric.traffic_bytes,
       delta: input.bytes,
-      source: GrantSource.admin_gift,
+      // A prize names its own (F-707-b); the admin's gift is `admin_gift`.
+      source: input.source ?? GrantSource.admin_gift,
       reason: input.reason,
       createdByAdminId: input.actorUserId,
     },

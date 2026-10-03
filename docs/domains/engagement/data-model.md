@@ -23,6 +23,7 @@ Source of truth: `txnet-backend/prisma/domains/engagement.prisma` (Postgres sche
 | lottery_entrant | one user once; `ticketNumber` at the freeze or `excludedReason` | yes | permanent |
 | lottery_draw | once per lottery: list hash, sealed seed (ADR-0022), algorithm, times, `publishedAt` | yes | permanent |
 | lottery_winner | a place in the permutation: winner (`prizeId`) or reserve, delivery outcome | yes | permanent |
+| reward_issue | one prize given: (source spin\|lottery, referenceId) unique, user, kind, and what it became (Grant + adjustment or duration change, coupon, free Grant); written once (F-707-b) | yes | permanent |
 | attention_budget | recent proactive AI-message times per subject (`chargedAt[]`, user or tenant) — 3 per rolling 7 days, 1 per 24 h (F-1501, ADR-0109 point 10); written by `ai-service` only; a count, never a ledger account (C-13); strict tenant RLS | yes | while the subject exists |
 
 ## Relationships crossing unit boundaries
@@ -46,3 +47,5 @@ unit outside `engagement` will write these tables. `attention_budget` is read an
 the wheel versioned, day counters, the five lottery tables, every guard in
 contract.md "The storage rules", RLS. `currentDayAwardedCount` dropped (the
 tables were empty; the migration refuses to run otherwise).
+`20261003000300_a_prize_is_given_once` (F-707-b): `reward_issue`, its shape
+CHECK, write-once trigger, RLS; `GrantSource.engagement_reward`.
