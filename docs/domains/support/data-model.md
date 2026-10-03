@@ -23,6 +23,7 @@ original ticket/chat tables empty.
 | sla_policy | targets per `priority` in working minutes (F-033-h). `tenantId` NULL = the platform's defaults (seeded by `20261003001500`); a tenant's row replaces one | shared-read RLS | replaced whole |
 | support_category | `key`, order, `isActive`. `tenantId` NULL = platform default | shared-read RLS | long |
 | support_category_text | a category's name per `Language` | shared-read RLS | with the category |
+| lifecycle_policy | a tenant's own `autoCloseAfterDays` (1–90) and `reopenWithinDays` (0–90); no row = 7 and 7 (F-033-k) | tenant RLS | long |
 | canned_reply | `key` (unique per tenant; the platform's unique among NULLs), order, `isActive`. `tenantId` NULL = platform default (F-033-j) | shared-read RLS | long |
 | canned_reply_text | a reply's text per `Language`, `{variable}`s unfilled, 1–4000 chars | shared-read RLS | with the reply |
 

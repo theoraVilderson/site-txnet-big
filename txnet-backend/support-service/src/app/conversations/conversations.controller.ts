@@ -90,6 +90,11 @@ const REFUSAL: Record<ConversationRejection, { status: 400 | 404 | 409 | 413 | 4
   canned_unknown: { status: 404, i18nKey: E.cannedUnknown },
   canned_key_taken: { status: 409, i18nKey: E.cannedKeyTaken },
   canned_invalid: { status: 400, i18nKey: E.cannedInvalid },
+  not_finished: { status: 409, i18nKey: E.notFinished },
+  already_rated: { status: 409, i18nKey: E.alreadyRated },
+  not_closed: { status: 409, i18nKey: E.notClosed },
+  reopen_expired: { status: 409, i18nKey: E.reopenExpired },
+  lifecycle_invalid: { status: 400, i18nKey: E.lifecycleInvalid },
 };
 
 /** A multipart file as multer holds it in memory. */

@@ -19,6 +19,8 @@ export const envSchema = z.object({
 
   /** The app role, `NOBYPASSRLS`: every `support` table is under RLS. */
   DATABASE_APP_URL: z.string().min(1, 'DATABASE_APP_URL is required'),
+  /** Every tenant's rows, by policy — the idle sweep's alone (F-033-k, `CrossTenantPrismaService`). */
+  DATABASE_CROSS_TENANT_URL: z.string().min(1, 'DATABASE_CROSS_TENANT_URL is required'),
 
   FRONTEND_ORIGIN: z.string().default(''),
 

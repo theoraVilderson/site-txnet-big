@@ -49,6 +49,8 @@ export interface ConversationSummary {
   lastMessageAt: Date;
   createdAt: Date;
   unread: number;
+  /** The user's rating, once given (F-033-k). */
+  rating: { score: number; comment: string | null; ratedAt: Date } | null;
 }
 
 export interface MessageView {
@@ -499,6 +501,7 @@ export function summaryOf(c: ConversationRow, unread: number): ConversationSumma
     lastMessageAt: c.lastMessageAt,
     createdAt: c.createdAt,
     unread,
+    rating: c.ratedAt && c.ratingScore !== null ? { score: c.ratingScore, comment: c.ratingComment, ratedAt: c.ratedAt } : null,
   };
 }
 

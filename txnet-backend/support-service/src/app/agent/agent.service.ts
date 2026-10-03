@@ -52,6 +52,8 @@ export interface AgentConversationView extends ConversationSummary {
   firstResponseAt: Date | null;
   resolvedAt: Date | null;
   closedAt: Date | null;
+  /** Closed by the idle sweep, not by an agent (F-033-k). */
+  closedAutomatically: boolean;
   /** The SLA clocks (F-033-h). */
   sla: SlaView;
 }
@@ -357,6 +359,7 @@ function agentViewOf(c: ConversationRow, unread: number, now = new Date()): Agen
     firstResponseAt: c.firstResponseAt,
     resolvedAt: c.resolvedAt,
     closedAt: c.closedAt,
+    closedAutomatically: c.closedAutomatically,
     sla: slaViewOf(c, now),
   };
 }

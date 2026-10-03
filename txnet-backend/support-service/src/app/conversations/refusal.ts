@@ -26,7 +26,13 @@ export type ConversationRejection =
   // Canned replies (F-033-j).
   | 'canned_unknown'
   | 'canned_key_taken'
-  | 'canned_invalid';
+  | 'canned_invalid'
+  // Auto-close, rating, reopen (F-033-k).
+  | 'not_finished'
+  | 'already_rated'
+  | 'not_closed'
+  | 'reopen_expired'
+  | 'lifecycle_invalid';
 
 export class ConversationRefused extends Error {
   constructor(readonly reason: ConversationRejection) {

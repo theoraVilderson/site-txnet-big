@@ -33,7 +33,7 @@ F-067-c the outbox ADR-0021 decided exists too — the table and its relay job.
 | File | Read it when |
 |---|---|
 | [contract.md](contract.md) | using or changing automation from outside |
-| [contract.worker.md](contract.worker.md) | the worker runtime, the queues, the jobs |
+| [contract.worker.md](contract.worker.md) · [contract.jobs.md](contract.jobs.md) | the worker runtime, the queues · every job: what it calls, its schedule, what it needs |
 | [contract.tenant-cap.md](contract.tenant-cap.md) | one tenant is taking every run slot (catalog 20.2 layer 4) |
 | [contract.outbox.md](contract.outbox.md) | announcing a cross-domain event, or consuming one (ADR-0021) |
 | [contract.notices.md](contract.notices.md) | how an event tells a person — live, inbox, bot, and a burst combined (ADR-0084) |

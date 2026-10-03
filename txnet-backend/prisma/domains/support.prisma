@@ -158,6 +158,19 @@ model SupportCannedReplyText {
   @@schema("support")
 }
 
+/// A tenant's own lifecycle days (F-033-k); no row = the platform's 7 and 7.
+model SupportLifecyclePolicy {
+  tenantId           String   @id @db.Uuid
+  /// A thread waiting on the user, or resolved, closes after this many days without a word from them.
+  autoCloseAfterDays Int      @db.SmallInt
+  /// A closed thread may be reopened by its user for this many days. 0 = closed is final.
+  reopenWithinDays   Int      @db.SmallInt
+  updatedAt          DateTime @updatedAt
+
+  @@map("lifecycle_policy")
+  @@schema("support")
+}
+
 /// The one support entity (catalog §11.1).
 model SupportConversation {
   id               String               @id @default(uuid()) @db.Uuid
@@ -187,7 +200,12 @@ model SupportConversation {
   slaPausedSeconds Int                  @default(0)
   /// The clock running now (first response, then resolution); null while stopped.
   slaDueAt         DateTime?
+  /// The user's rating (F-033-k): once, 1–5, on a resolved or closed thread.
   ratingScore      Int?                 @db.SmallInt
+  ratingComment    String?
+  ratedAt          DateTime?
+  /// Closed by the idle sweep rather than by an agent (F-033-k).
+  closedAutomatically Boolean           @default(false)
   aiTriageLabel    String?
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt

@@ -10,7 +10,7 @@ updated: 2026-10-03
 
 Storage F-033-a, the user's routes F-033-b, attachments F-033-c (reading) and
 F-033-f (upload); the agent side F-033-d, category admin F-033-e, presence and
-hours F-033-g, SLA F-033-h, notices F-033-i, canned replies F-033-j. Shape: [ADR-0112](../../architecture/decisions/0112-support-is-one-conversation-served-by-support-service.md).
+hours F-033-g, SLA F-033-h, notices F-033-i, canned replies F-033-j, auto-close/rating/reopen F-033-k. Shape: [ADR-0112](../../architecture/decisions/0112-support-is-one-conversation-served-by-support-service.md).
 
 ## TL;DR
 
@@ -75,7 +75,7 @@ keyed by the agent's id.
 | `POST …/agent/conversations/:id/assign` | `{assigneeUserId: uuid \| null}` | the conversation | 404 `not_found`, 404 `assignee_unknown` |
 | `POST …/agent/conversations/:id/priority` | `{priority: low\|normal\|high\|urgent}` | the conversation, its SLA recomputed (F-033-h) | 404 |
 | `POST …/agent/conversations/:id/resolve` | — | the conversation (`resolved`) | 404, 409 `closed` |
-| `POST …/agent/conversations/:id/close` | — | the conversation (`closed`) | 404 |
+| `POST …/agent/conversations/:id/close` | — | the conversation (`closed`; `closedAutomatically` false — the sweep's are true, F-033-k) | 404 |
 | `POST …/agent/conversations/:id/read` · `…/typing` | as the user's | as the user's, `readerKind`/`senderKind` `agent` | 404, 409 `closed` (typing) |
 
 Views: `pending` = `open` + `pending_agent` (waiting on us); the other three
@@ -133,6 +133,32 @@ queue position and these targets, nothing the user sees (§11.5).
   [{priority, firstResponseMinutes, resolutionMinutes}]}` replaces the tenant's
   own whole (left out = platform's) — `support.manage`; 400 `sla_invalid` unless
   `0 < first ≤ resolution ≤ 43200` and each priority once.
+
+## Auto-close, rating, reopen (F-033-k)
+
+Days are the platform's **7 and 7** unless the tenant set its own (user,
+2026-10-03): `GET /api/support/settings/lifecycle` → `{autoCloseAfterDays,
+reopenWithinDays, source: tenant|platform}`; `PUT` `{autoCloseAfterDays: 1–90
+| null, reopenWithinDays: 0–90 | null}` (`support.manage`; both `null` = the
+platform's again; else 400 `lifecycle_invalid`).
+
+- **Auto-close.** `pending_user` or `resolved`, and nothing from the user for
+  the tenant's days — counted from the later of the last message and the
+  resolve — is closed with `closedAutomatically: true` and a `support.status`
+  event. A thread waiting on an agent never closes by itself. The sweep is
+  worker-service's `support_auto_close` (every 15 min) on `POST
+  /api/internal/support/close-idle` (`SERVICE_AUTH_TOKEN`; 404 otherwise) →
+  `{scanned, closed}`, at most 500 a run, across every tenant on the
+  cross-tenant pool (its only reader).
+- **Rating.** `POST /api/support/conversations/:id/rating` `{score 1–5,
+  comment? ≤1000}` → `{score, comment, ratedAt}` — once, on the caller's own
+  `resolved` or `closed` thread; 409 `not_finished`, 409 `already_rated`, 404.
+  A summary carries `rating` (`null` until given); a reopen keeps it.
+- **Reopen.** `POST …/conversations/:id/reopen` → `{id, status}` on the
+  caller's own `closed` thread within `reopenWithinDays` of `closedAt`: back
+  to `open` if no agent ever answered, else `pending_agent`; its SLA clock
+  runs again. 409 `not_closed`, 409 `reopen_expired` (then a new thread), 409
+  `too_many_unfinished`. A `resolved` one needs none — a message reopens it.
 
 ## Canned replies (F-033-j, catalog §11.3)
 

@@ -335,6 +335,14 @@ export const envSchema = z.object({
   /** How long the expiry sweep may take. One bounded batch of small writes. */
   BILLING_API_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
   /**
+   * support-service's internal seam: the idle sweep (`SupportAutoCloseJob`,
+   * F-033-k), with `SERVICE_AUTH_TOKEN`. Optional for the reason the two above
+   * give; unset, the job's runs fail loudly and no thread closes by itself.
+   */
+  SUPPORT_API_BASE_URL: optional(z.string()),
+  /** One bounded batch of closes (500 at most). */
+  SUPPORT_API_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  /**
    * And how long reconciliation may take, which is a different number for a
    * different reason: a batch there is one call to a **bank** per payment, and
    * the bank is the slow part (F-092-l).

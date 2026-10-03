@@ -265,6 +265,11 @@
     "slaInvalid": "These SLA targets are not valid: each must be at least one minute, resolution no shorter than first response, and at most 30 days.",
     "cannedUnknown": "That canned reply does not exist.",
     "cannedKeyTaken": "You already have a canned reply with this key.",
-    "cannedInvalid": "This canned reply is not valid: give it at least one language, each once, and use only {user.name}, {agent.name}, {tenant.name} and {conversation.subject} as variables."
+    "cannedInvalid": "This canned reply is not valid: give it at least one language, each once, and use only {user.name}, {agent.name}, {tenant.name} and {conversation.subject} as variables.",
+    "notFinished": "Only a resolved or closed conversation can be rated.",
+    "alreadyRated": "You have already rated this conversation.",
+    "notClosed": "This conversation is not closed.",
+    "reopenExpired": "This conversation can no longer be reopened. Please start a new one.",
+    "lifecycleInvalid": "These settings are not valid: auto-close takes 1 to 90 days, reopening 0 to 90."
   }
 }
