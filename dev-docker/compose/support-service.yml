@@ -44,6 +44,8 @@ services:
       - SUPPORT_OPEN_RATE_LIMIT=${SUPPORT_OPEN_RATE_LIMIT:-}
       - SUPPORT_SEND_RATE_LIMIT=${SUPPORT_SEND_RATE_LIMIT:-}
       - SUPPORT_UNFINISHED_MAX=${SUPPORT_UNFINISHED_MAX:-}
+      # Signs attachments' 5-minute URLs (F-033-c); tenant-service verifies them.
+      - OBJECT_STORAGE_SIGNING_SECRET=${OBJECT_STORAGE_SIGNING_SECRET}
       - TRUST_PROXY=${TRUST_PROXY}
     networks:
       - private_backend_network

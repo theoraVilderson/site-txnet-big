@@ -22,13 +22,14 @@ import { isLogicalPath, objectKey, parseObjectKey } from './object-key';
  * checked here. A type is added by adding its signature — SVG has none, so no
  * policy can let one in (catalog 13.8: branding is PNG/WebP, never SVG).
  */
-export const SNIFFABLE_TYPES = ['image/png', 'image/webp', 'image/jpeg'] as const;
+export const SNIFFABLE_TYPES = ['image/png', 'image/webp', 'image/jpeg', 'application/pdf'] as const;
 export type SniffableType = (typeof SNIFFABLE_TYPES)[number];
 
 const SIGNATURES: Record<SniffableType, (b: Buffer) => boolean> = {
   'image/png': (b) => b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
   'image/webp': (b) => b.subarray(0, 4).toString('latin1') === 'RIFF' && b.subarray(8, 12).toString('latin1') === 'WEBP',
   'image/jpeg': (b) => b.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff])),
+  'application/pdf': (b) => b.subarray(0, 5).toString('latin1') === '%PDF-',
 };
 
 /**
@@ -38,6 +39,11 @@ const SIGNATURES: Record<SniffableType, (b: Buffer) => boolean> = {
 export interface UploadPolicy {
   types: readonly SniffableType[];
   maxBytes: number;
+  /**
+   * `public` is served by Host to anyone (branding); `private` never is — only
+   * through a short-lived signed URL its owner mints (F-033-c, ADR-0113).
+   */
+  visibility: 'public' | 'private';
 }
 
 export type RejectReason = 'bad_path' | 'type_not_allowed' | 'type_mismatch' | 'too_large';
@@ -137,6 +143,8 @@ export interface StoredObjectRow {
   contentType: string;
   size: number;
   sha256: string;
+  /** Served only through a signed URL, never by the public route (ADR-0113). */
+  private: boolean;
 }
 
 type RowKey = { key: string; tenantId: string };
@@ -192,7 +200,7 @@ export class ObjectStorage {
 
     const key = objectKey(tenantId, path);
     const sha256 = createHash('sha256').update(bytes).digest('hex');
-    const facts = { contentType: type, size: bytes.length, sha256 };
+    const facts = { contentType: type, size: bytes.length, sha256, private: policy.visibility === 'private' };
     // Bytes first: a row with no bytes is a broken file on every page that
     // shows it; bytes with no row are an orphan the next put overwrites.
     await this.driver.write(key, bytes);

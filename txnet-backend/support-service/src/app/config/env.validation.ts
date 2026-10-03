@@ -44,6 +44,12 @@ export const envSchema = z.object({
   /** Conversations a user may have unfinished (not resolved or closed) at once. */
   SUPPORT_UNFINISHED_MAX: rateLimit(5),
 
+  /**
+   * Signs attachments' 5-minute URLs (F-033-c, ADR-0113); tenant-service's
+   * `private-files` route verifies with the same value. At least 32 characters.
+   */
+  OBJECT_STORAGE_SIGNING_SECRET: z.string().min(32, 'OBJECT_STORAGE_SIGNING_SECRET must be at least 32 characters'),
+
   TRUST_PROXY: z.string().default(''),
 });
 

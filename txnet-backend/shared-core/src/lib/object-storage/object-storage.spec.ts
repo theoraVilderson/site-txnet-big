@@ -27,7 +27,7 @@ const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3
 const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.from([0, 0, 0, 0]), Buffer.from('WEBPVP8 ')]);
 const HTML = Buffer.from('<html><script>alert(1)</script></html>');
 
-const LOGO: UploadPolicy = { types: ['image/png', 'image/webp'], maxBytes: 64 };
+const LOGO: UploadPolicy = { types: ['image/png', 'image/webp'], maxBytes: 64, visibility: 'public' };
 
 /** `stored_object` as the scoped client answers it: rows by key. */
 function memoryStore(): StoredObjectStore & { rows: Map<string, StoredObjectRow> } {
@@ -118,7 +118,7 @@ describe('object-storage (F-018-m)', () => {
 
   it('refuses a policy that allows nothing, rather than defaulting one', async () => {
     await expect(
-      asA(() => storage.put({ types: [], maxBytes: 64 }, 'x.png', PNG, 'image/png')),
+      asA(() => storage.put({ types: [], maxBytes: 64, visibility: 'public' }, 'x.png', PNG, 'image/png')),
     ).rejects.toThrow(/policy/);
   });
 

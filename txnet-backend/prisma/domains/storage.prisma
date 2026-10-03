@@ -13,6 +13,9 @@ model StoredObject {
   contentType String
   size        Int
   sha256      String   @db.Char(64)
+  /// Served only through a short-lived signed URL, never by the public route
+  /// (F-033-c, ADR-0113): a support attachment, never a logo.
+  private     Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

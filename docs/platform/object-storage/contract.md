@@ -2,8 +2,8 @@
 id: object-storage
 layer: platform
 status: active
-version: 3
-updated: 2026-09-19
+version: 4
+updated: 2026-10-03
 ---
 
 # Contract — object-storage
@@ -15,17 +15,21 @@ The shape decided by D-42 (3), built by F-018-m. First consumer: F-018-h.
 One port in `shared-core` (`lib/object-storage/`). A driver is chosen by
 environment: `local` (a mounted volume) now, S3-compatible later. Callers hold a
 **key**, never a path or a URL, so changing the driver moves bytes and changes
-no row. One public route serves a key to the tenant whose Host asked.
+no row. One public route serves a public key to the tenant whose Host asked;
+a private key is served only through a 5-minute signed URL (ADR-0113).
 
 ## Provides
 
 | Operation | Input | Output | Errors |
 |---|---|---|---|
-| `ObjectStorage.put(policy, path, bytes, contentType)` | tenant (from scope), logical path, bytes, declared type | `{ key, sha256, size }`; the file and its `stored_object` row, replacing any at that key | `ObjectRejected` (`bad_path`, `type_not_allowed`, `type_mismatch`, `too_large`); an empty policy throws |
+| `ObjectStorage.put(policy, path, bytes, contentType)` | tenant (from scope), logical path, bytes, declared type; the policy's `visibility` (`public`/`private`) is recorded as `private` | `{ key, sha256, size }`; the file and its `stored_object` row, replacing any at that key | `ObjectRejected` (`bad_path`, `type_not_allowed`, `type_mismatch`, `too_large`); an empty policy throws |
 | `ObjectStorage.stat(key)` | key | the row, or `null` | `TenantScopeConflict` for another tenant's key |
 | `ObjectStorage.get(key)` | key | the row + bytes | `ObjectNotFound`; `TenantScopeConflict` |
 | `ObjectStorage.delete(key)` | key | — | `ObjectNotFound`; `TenantScopeConflict` |
 | `GET /api/public/tenant/files/<key>` (tenant-service; `/api/files/<key>` **@deprecated since 2026-09-19**, remove after the next release) | the Host, the key | the file | a neutral 404 for everything else |
+| `GET /api/public/tenant/private-files/<key>?e=&n=&s=` (tenant-service, F-033-c) | the Host, the key, a signature | a **private** file, saved as `n` | a neutral 404 for a bad/expired signature, a public file and everything else |
+| `signedObjectUrl({key, fileName, ttlSec, secret})` / `verifySignedObject` | key, name, lifetime, `OBJECT_STORAGE_SIGNING_SECRET` | `{url, expiresAt}` — a path on the caller's Host / `true` | a secret under 32 characters throws |
+| `scannerFromEnv(env).scan(bytes)` | `VIRUS_SCAN_DRIVER` (`clamd`/`none`), `CLAMD_ADDR` | `clean`, `infected` + signature, or `failed` + reason | an unknown driver or clamd with no address throws at boot |
 | `objectKey` / `parseObjectKey` | tenant id + path / key | key / `{ tenantId, path }` or `null` | — |
 | `objectDriverFromEnv(env)` | `OBJECT_STORAGE_DRIVER`, `OBJECT_STORAGE_LOCAL_ROOT` | the driver | an unbuilt driver or no root throws at boot |
 
@@ -56,7 +60,14 @@ does not own, which is a bug to surface.
 5. **The `local` driver needs one node or a shared volume.** Replicas on
    separate disks each hold a different subset of the files. Writes are a
    temporary file renamed into place, so a reader never sees half a file.
-6. `storedObject` is in `TENANT_SCOPED_MODELS` and the table has strict RLS: on
+6. **A policy declares `visibility`** — never defaulted. A `private` file is
+   never served by the public route; only `private-files` serves it, to an
+   unexpired URL signed over key, expiry and file name. The owner's service
+   decides who may see it and mints the URL; the port knows no owners
+   (ADR-0113). PDF is served as a download, images inline.
+7. **A scanner that cannot answer is `failed`, never `clean`.** `none` calls
+   everything clean, for a stack with no ClamAV; production sets `clamd`.
+8. `storedObject` is in `TENANT_SCOPED_MODELS` and the table has strict RLS: on
    the app pool every query is filtered to, and bound to, the tenant in scope.
 
 ## The serving route
@@ -84,14 +95,17 @@ does not own, which is a bug to surface.
 |---|---|
 | `OBJECT_STORAGE_DRIVER` | `local` (the only one built) |
 | `OBJECT_STORAGE_LOCAL_ROOT` | the volume; `/data/objects`, mounted from `object_storage` in compose |
+| `OBJECT_STORAGE_SIGNING_SECRET` | HMAC key of signed URLs, ≥32 characters; the same in tenant-service and every service that mints one |
+| `VIRUS_SCAN_DRIVER` / `CLAMD_ADDR` / `CLAMD_TIMEOUT_MS` | in a service that takes uploads (support-service); `none` is the default |
 
 Moving to S3: copy each file by key, check it against `sha256`, switch the
 driver. No row changes.
 
 ## Not done here
 
-- No private files: everything served is public by Host. Ticket attachments
-  (`support`) need an owner check and a column saying so, as their own row.
+- No owner check: who may see a private file is its owner's service's
+  question, answered before it signs (ADR-0113 point 3).
+- No rescan of `failed` files and no quarantine sweep of `infected` ones.
 - No upload route of its own: a consumer receives the bytes and calls `put`
   (tenant's branding, F-018-h).
 - No rate limit on the file route; the ETag keeps repeat views to a 304.
@@ -101,4 +115,4 @@ driver. No row changes.
 | unit | uses |
 |---|---|
 | tenant | branding images, `put` in the reseller's scope at `branding/<slot>` (F-018-h, [contract.branding.md](../../domains/tenant/contract.branding.md)) |
-| support | ticket attachments (not yet in the backlog) |
+| support | attachments, `private`, scanned; URLs minted on each message read (F-033-c), uploads F-033-f ([contract.md](../../domains/support/contract.md)) |

@@ -68,6 +68,12 @@ export const envSchema = z.object({
    */
   OBJECT_STORAGE_DRIVER: z.enum(['local']).default('local'),
   OBJECT_STORAGE_LOCAL_ROOT: z.string().min(1).default('/data/objects'),
+  /**
+   * The HMAC key of private files' signed URLs (F-033-c, ADR-0113) — the same
+   * value in every service that mints one (support-service) and here, where
+   * `private-files` verifies it. At least 32 characters.
+   */
+  OBJECT_STORAGE_SIGNING_SECRET: z.string().min(32, 'OBJECT_STORAGE_SIGNING_SECRET must be at least 32 characters'),
 
   /** The panel's origin, for CORS with credentials; required in production (`main.ts`). */
   FRONTEND_ORIGIN: z.string().default(''),

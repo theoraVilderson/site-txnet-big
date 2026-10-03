@@ -48,6 +48,7 @@ const env = {
   DATABASE_CROSS_TENANT_URL: 'postgresql://cross',
   REDIS_URL: 'redis://redis:6379',
   DOMAIN_NAME: 'txnet.app',
+  OBJECT_STORAGE_SIGNING_SECRET: 'a-secret-long-enough-for-hmac-0123456789',
 };
 
 describe('AppModule', () => {

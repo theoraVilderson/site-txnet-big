@@ -106,10 +106,10 @@ const KB = 1024;
  */
 const IMAGE = ['image/png', 'image/webp'] as const;
 export const BRANDING_POLICY: Record<BrandingSlot, UploadPolicy> = {
-  'logo-light': { types: IMAGE, maxBytes: 512 * KB },
-  'logo-dark': { types: IMAGE, maxBytes: 512 * KB },
-  favicon: { types: IMAGE, maxBytes: 128 * KB },
-  'og-image': { types: IMAGE, maxBytes: 1024 * KB },
+  'logo-light': { types: IMAGE, maxBytes: 512 * KB, visibility: 'public' },
+  'logo-dark': { types: IMAGE, maxBytes: 512 * KB, visibility: 'public' },
+  favicon: { types: IMAGE, maxBytes: 128 * KB, visibility: 'public' },
+  'og-image': { types: IMAGE, maxBytes: 1024 * KB, visibility: 'public' },
 };
 
 /** The largest cap, for the multipart parser's own limit in front of the policy. */

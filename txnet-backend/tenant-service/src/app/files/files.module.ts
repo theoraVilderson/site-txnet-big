@@ -4,7 +4,7 @@ import { ObjectStorage, objectDriverFromEnv, prismaStoredObjects } from '@txnet-
 
 import type { EnvConfig } from '../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
-import { FilesController } from './files.controller';
+import { FilesController, PrivateFilesController } from './files.controller';
 
 /**
  * Object storage's serving route (F-018-m, `platform/object-storage`), and the
@@ -14,7 +14,7 @@ import { FilesController } from './files.controller';
  * `stored_object` query is scoped and RLS-bound to the tenant in scope.
  */
 @Module({
-  controllers: [FilesController],
+  controllers: [FilesController, PrivateFilesController],
   providers: [
     {
       provide: ObjectStorage,

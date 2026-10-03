@@ -2,15 +2,15 @@
 id: object-storage
 layer: platform
 status: active
-version: 3
-keywords: [object storage, file storage, upload, uploaded file, attachment storage, logo upload, asset storage, storage driver, local storage, s3, bucket, stored object, serve a file, آپلود فایل, ذخیره فایل, فضای ذخیره‌سازی, لوگو آپلود, اس۳]
+version: 4
+keywords: [object storage, file storage, upload, uploaded file, attachment storage, logo upload, signed url, private file, virus scan, clamav, pdf, asset storage, storage driver, local storage, s3, bucket, stored object, serve a file, آپلود فایل, ذخیره فایل, فضای ذخیره‌سازی, لوگو آپلود, اس۳]
 source:
   - txnet-backend/shared-core/src/lib/object-storage/**
   - txnet-backend/tenant-service/src/app/files/**
   - txnet-backend/prisma/domains/storage.prisma
 owns_tables: [storage.stored_object]
 depends_on: [tenant-context]
-updated: 2026-09-19
+updated: 2026-10-03
 ---
 
 # object-storage
@@ -39,3 +39,4 @@ cite a key.
 | 2026-09-17 | Unit opened by D-42 — no code yet |
 | 2026-09-18 | draft -> **active**, v1 -> v2 (F-018-m): the port, the `local` driver, `stored_object`, `GET /api/files/<key>` |
 | 2026-09-19 | v2 -> **v3** (**break**, F-018-ak, ADR-0065): the serving route is `GET /api/public/tenant/files/<key>`; `/api/files/<key>` is `@deprecated`, removed after the next release. URLs are built at read time, so nothing stored changes |
+| 2026-10-03 | v3 -> **v4** (**break**, F-033-c, ADR-0113): `UploadPolicy.visibility` is required; private files, signed URLs on `private-files`, the virus-scan port, PDF |

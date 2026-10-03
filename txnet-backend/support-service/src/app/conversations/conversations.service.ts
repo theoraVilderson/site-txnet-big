@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  AttachmentScanStatus,
   ConversationMode,
   ConversationPriority,
   ConversationStatus,
@@ -8,7 +9,7 @@ import {
   MessageSenderKind,
   Prisma,
 } from '@prisma/client';
-import { tenantTransaction } from '@txnet-backend/shared-core';
+import { signedObjectUrl, tenantTransaction } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
@@ -64,6 +65,23 @@ export interface MessageView {
   mine: boolean;
   body: string;
   createdAt: Date;
+  attachments: AttachmentView[];
+}
+
+/**
+ * A file on a message (F-033-c, ADR-0113). `url` is a path on the caller's
+ * panel Host, valid five minutes — minted on every read, never stored — and
+ * only for a file the scanner passed: `pending`, `infected` and `failed` ones
+ * are listed with no way to fetch them.
+ */
+export interface AttachmentView {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  scanStatus: AttachmentScanStatus;
+  url: string | null;
+  urlExpiresAt: Date | null;
 }
 
 export interface MessagePage {
@@ -94,6 +112,8 @@ export const PAGE_MAX = 100;
 const PAGE_DEFAULT = 50;
 const LIST_DEFAULT = 20;
 const SUBJECT_MAX = 80;
+/** ADR-0112 point 7: an attachment's URL lives five minutes. */
+export const ATTACHMENT_URL_TTL_SEC = 300;
 
 /** Postgres' refusal of a row whose month has no partition (no `DEFAULT` partition, ADR-0112 point 3). */
 const NO_PARTITION = /no partition of relation/i;
@@ -194,7 +214,7 @@ export class SupportConversationService {
       });
       // Your own message is read by you.
       await moveCursor(tx, caller, conversationId, row.lastSeq);
-      return viewOf(message, caller);
+      return viewOf(message, caller, []);
     });
   }
 
@@ -251,10 +271,17 @@ export class SupportConversationService {
       const mine = reads.find((r) => r.userId === caller.userId)?.lastReadSeq ?? 0;
       const seen = Math.max(0, ...reads.filter((r) => r.userId !== caller.userId).map((r) => r.lastReadSeq));
       const unread = await unreadCounts(tx, caller, [conversationId]);
+      const files = await tx.supportMessageAttachment.findMany({
+        where: { conversationId, messageId: { in: page.map((m) => m.id) } },
+        orderBy: { createdAt: 'asc' },
+      });
+      const now = new Date();
+      const attachmentsOf = (messageId: string) =>
+        files.filter((f) => f.messageId === messageId).map((f) => this.attachmentView(f, now));
 
       return {
         conversation: summaryOf(conversation, unread.get(conversationId) ?? 0),
-        messages: page.map((m) => viewOf(m, caller)),
+        messages: page.map((m) => viewOf(m, caller, attachmentsOf(m.id))),
         hasEarlier,
         lastReadSeq: mine,
         seenUpToSeq: seen,
@@ -269,6 +296,29 @@ export class SupportConversationService {
       const upTo = Math.min(input.upToSeq ?? conversation.lastSeq, conversation.lastSeq);
       return { lastReadSeq: await moveCursor(tx, caller, conversationId, upTo) };
     });
+  }
+
+  /** The caller owns the conversation (checked by the read); this only decides whether the file may be fetched. */
+  private attachmentView(f: AttachmentRow, now: Date): AttachmentView {
+    const signed =
+      f.scanStatus === AttachmentScanStatus.clean
+        ? signedObjectUrl({
+            key: f.objectKey,
+            fileName: f.fileName,
+            ttlSec: ATTACHMENT_URL_TTL_SEC,
+            secret: this.config.get('OBJECT_STORAGE_SIGNING_SECRET', { infer: true }),
+            now,
+          })
+        : null;
+    return {
+      id: f.id,
+      fileName: f.fileName,
+      contentType: f.contentType,
+      sizeBytes: f.sizeBytes,
+      scanStatus: f.scanStatus,
+      url: signed?.url ?? null,
+      urlExpiresAt: signed?.expiresAt ?? null,
+    };
   }
 
   /**
@@ -292,6 +342,7 @@ export class SupportConversationService {
 
 type ConversationRow = Prisma.SupportConversationGetPayload<object>;
 type MessageRow = Prisma.SupportMessageGetPayload<object>;
+type AttachmentRow = Prisma.SupportMessageAttachmentGetPayload<object>;
 
 async function ownConversation(tx: Prisma.TransactionClient, caller: SupportCaller, id: string): Promise<ConversationRow> {
   const conversation = await tx.supportConversation.findFirst({ where: { id, userId: caller.userId } });
@@ -372,7 +423,7 @@ function summaryOf(c: ConversationRow, unread: number): ConversationSummary {
   };
 }
 
-function viewOf(m: MessageRow, caller: SupportCaller): MessageView {
+function viewOf(m: MessageRow, caller: SupportCaller, attachments: AttachmentView[]): MessageView {
   return {
     id: m.id,
     seq: m.seq,
@@ -380,5 +431,6 @@ function viewOf(m: MessageRow, caller: SupportCaller): MessageView {
     mine: m.senderUserId === caller.userId,
     body: m.body,
     createdAt: m.createdAt,
+    attachments,
   };
 }

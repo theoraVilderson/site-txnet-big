@@ -16,10 +16,13 @@ updated: 2026-10-03
 | 5 | No user-facing read returns an `internal` message | service | an agent's note reaches the user |
 | 6 | A user reads and writes only conversations whose `userId` is theirs | service | one user reads another's thread inside a tenant |
 | 7 | A `closed` conversation takes no message; a `resolved` one is reopened by the user's message | service | a dead thread silently grows |
-| 8 | No URL is stored for an attachment — only the storage key | schema (`objectKey`) | public, guessable file addresses (§11.4) |
+| 8 | No URL is stored for an attachment — only the storage key; the file is `private` on the port | schema (`objectKey`), the upload policy | public, guessable file addresses (§11.4) |
+| 9 | An attachment's URL is minted only on the owning user's read, only for a `clean` file, and lives five minutes | service (`attachmentView`), `private-files` verifying the signature | an unscanned or another user's file is fetched |
 
 ## How to test
 
 `support-service/src/app/conversations/support-schema.int.spec.ts` (`npm run
 test:int`) holds 4 and the storage half of 8 against the migration history.
 The service rules (3, 5, 6, 7) are covered by the unit spec of the service.
+The signature, expiry, PDF sniffing and the scanner verdicts behind 9 are
+`shared-core/src/lib/object-storage/private-file.spec.ts`.

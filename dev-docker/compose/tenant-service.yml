@@ -59,6 +59,8 @@ services:
       # Object storage (F-018-m): only `local` is built; its root is the volume above.
       - OBJECT_STORAGE_DRIVER=${OBJECT_STORAGE_DRIVER:-local}
       - OBJECT_STORAGE_LOCAL_ROOT=/data/objects
+      # Verifies private files' signed URLs (F-033-c, ADR-0113); support-service signs with it.
+      - OBJECT_STORAGE_SIGNING_SECRET=${OBJECT_STORAGE_SIGNING_SECRET}
       # A PATH, never the key (ADR-0026). Unset = every vault operation refused.
       - VAULT_KEK_FILE=${VAULT_KEK_FILE:-/run/secrets/vault-kek}
     networks:
