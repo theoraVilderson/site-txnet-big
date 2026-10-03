@@ -262,6 +262,9 @@
     "quotaExceeded": "You have used all the space for your attachments.",
     "assigneeUnknown": "This person cannot be assigned support conversations.",
     "hoursInvalid": "These working hours are not valid: each interval must start before it ends, and intervals on one day must not overlap.",
-    "slaInvalid": "These SLA targets are not valid: each must be at least one minute, resolution no shorter than first response, and at most 30 days."
+    "slaInvalid": "These SLA targets are not valid: each must be at least one minute, resolution no shorter than first response, and at most 30 days.",
+    "cannedUnknown": "That canned reply does not exist.",
+    "cannedKeyTaken": "You already have a canned reply with this key.",
+    "cannedInvalid": "This canned reply is not valid: give it at least one language, each once, and use only {user.name}, {agent.name}, {tenant.name} and {conversation.subject} as variables."
   }
 }

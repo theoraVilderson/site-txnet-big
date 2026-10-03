@@ -10,7 +10,7 @@ updated: 2026-10-03
 
 Storage F-033-a, the user's routes F-033-b, attachments F-033-c (reading) and
 F-033-f (upload); the agent side F-033-d, category admin F-033-e, presence and
-hours F-033-g, SLA F-033-h, notices F-033-i. Shape: [ADR-0112](../../architecture/decisions/0112-support-is-one-conversation-served-by-support-service.md).
+hours F-033-g, SLA F-033-h, notices F-033-i, canned replies F-033-j. Shape: [ADR-0112](../../architecture/decisions/0112-support-is-one-conversation-served-by-support-service.md).
 
 ## TL;DR
 
@@ -133,6 +133,27 @@ queue position and these targets, nothing the user sees (§11.5).
   [{priority, firstResponseMinutes, resolutionMinutes}]}` replaces the tenant's
   own whole (left out = platform's) — `support.manage`; 400 `sla_invalid` unless
   `0 < first ≤ resolution ≤ 43200` and each priority once.
+
+## Canned replies (F-033-j, catalog §11.3)
+
+A short `key` and a text per language, owned like a category: `tenantId` NULL
+is the platform's defaults (`greeting`, `more_info`, `reconnect`,
+`resolved_check`), and a tenant's own reply with the same key hides that
+default — retiring its own copy drops it (user, 2026-10-03). Inserting one
+stores nothing: the agent edits the text and sends an ordinary reply.
+
+| Route | Who | Input | Output | Errors |
+|---|---|---|---|---|
+| `GET …/agent/canned-replies` | `support.agent` | `Accept-Language` | `[{id, key, body, source: tenant\|platform}]`, active only, by `sortOrder` then key — the picker | — |
+| `GET …/agent/conversations/:id/canned-replies/:replyId` | `support.agent` | — | `{body, lang}`: the text in the **conversation user's** `languagePreference` (else `fa`, else any), variables filled | 404 `not_found`, 404 `canned_unknown` |
+| `GET /api/support/settings/canned-replies` | `support.manage` | — | the tenant's own, retired included: `[{id, key, sortOrder, isActive, texts: [{lang, body}]}]` | — |
+| `POST` same | `support.manage` | `{key /^[a-z0-9_]{1,40}$/, texts: [{lang, body ≤4000}], sortOrder?, isActive?}` | the reply, 201 | 409 `canned_key_taken`, 400 `canned_invalid` |
+| `PATCH …/canned-replies/:id` · `DELETE` | `support.manage` | any of the four (`texts` replaces every language) · — | the reply · 204 | 404 `canned_unknown`, 409, 400 |
+
+Variables: `{user.name}` (the user's `fullName`), `{agent.name}` (the caller's),
+`{tenant.name}` (the brand name, else the slug), `{conversation.subject}` —
+filled in one pass, so a value is never expanded again. `canned_invalid`: no
+language, one twice, or any other `{word.word}` — a typo never reaches a user.
 
 ## Notices (F-033-i)
 

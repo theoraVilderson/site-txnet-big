@@ -28,6 +28,7 @@ import {
 import { PresenceRedis, SupportAvailability } from '../availability/availability';
 import { ConversationRefused, SupportCaller, SupportConversationService } from '../conversations/conversations.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import { SupportCannedReplies } from '../canned/canned';
 import { SupportAgentService } from './agent.service';
 
 vi.setConfig({ testTimeout: HARNESS_TIMEOUT_MS, hookTimeout: HARNESS_TIMEOUT_MS });
@@ -49,6 +50,7 @@ let app: PrismaService;
 let users: SupportConversationService;
 let agents: SupportAgentService;
 let availability: SupportAvailability;
+let canned: SupportCannedReplies;
 const published: { kind: string; conversationId: string; detail: unknown }[] = [];
 const told: { template: string; userId: string; readUpTo: number; subject: string }[] = [];
 /** Records who would be told (F-033-i); the dedupe and the seam are `support-notifier.spec.ts`'s. */
@@ -132,6 +134,7 @@ beforeAll(async () => {
   availability = new SupportAvailability(app, memoryPresence());
   users = new SupportConversationService(app, config, realtime, availability, notifier);
   agents = new SupportAgentService(app, config, realtime, availability, notifier);
+  canned = new SupportCannedReplies(app);
 });
 
 afterAll(async () => {
@@ -233,6 +236,38 @@ describe('new-message notices (F-033-i)', () => {
       { template: 'supportUserWrote', userId: SARA.userId, readUpTo: 4, subject: 'notice walk' },
       { template: 'supportResolved', userId: ALICE.userId, readUpTo: 5, subject: 'notice walk' },
     ]);
+  });
+});
+
+describe('canned replies (F-033-j, catalog §11.3)', () => {
+  it("lists the platform's defaults until the tenant takes a key, fills one in the user's language, and keeps tenants apart", async () => {
+    await owner.$executeRawUnsafe(`
+      INSERT INTO identity.user (id, "tenantId", "fullName", "passwordHash", "roleId", "languagePreference", "updatedAt")
+      VALUES ('${ALICE.userId}', '${RESELLER_A}', 'Alice', 'x', '55555555-5555-4555-8555-5555555555a2', 'en', now())
+      ON CONFLICT (id) DO NOTHING`);
+    const keys = async (caller: SupportCaller) => (await as(caller, () => canned.picker(caller, 'fa'))).map((p) => `${p.key}:${p.source}`);
+    const platform = ['greeting:platform', 'more_info:platform', 'reconnect:platform', 'resolved_check:platform'];
+    expect(await keys(SARA)).toEqual(platform);
+
+    const own = await as(SARA, () =>
+      canned.create(RESELLER_A, { key: 'greeting', texts: [{ lang: 'en', body: 'Hello {user.name}, {agent.name} at {tenant.name}: {conversation.subject}' }] }),
+    );
+    expect(await keys(SARA)).toEqual(['greeting:tenant', 'more_info:platform', 'reconnect:platform', 'resolved_check:platform']);
+    expect(await keys(BETA_AGENT)).toEqual(platform);
+
+    const opened = await as(ALICE, () => users.open(ALICE, { body: 'canned walk' }));
+    expect(await as(SARA, () => canned.render(SARA, opened.id, own.id))).toEqual({ lang: 'en', body: 'Hello Alice, staff at alpha: canned walk' });
+
+    expect(await refusal(as(SARA, () => canned.create(RESELLER_A, { key: 'greeting', texts: [{ lang: 'fa', body: 'x' }] })))).toBe('canned_key_taken');
+    expect(await refusal(as(SARA, () => canned.create(RESELLER_A, { key: 'typo', texts: [{ lang: 'fa', body: 'Hi {user.nmae}' }] })))).toBe('canned_invalid');
+    expect(await refusal(as(BETA_AGENT, () => canned.render(BETA_AGENT, opened.id, own.id)))).toBe('not_found');
+    expect(await refusal(as(BETA_AGENT, () => canned.update(RESELLER_B, own.id, { isActive: false })))).toBe('canned_unknown');
+
+    // Retiring its own copy drops the reply for the tenant — the default stays hidden behind the key.
+    await as(SARA, () => canned.update(RESELLER_A, own.id, { isActive: false }));
+    expect(await keys(SARA)).toEqual(['more_info:platform', 'reconnect:platform', 'resolved_check:platform']);
+    await as(SARA, () => canned.remove(RESELLER_A, own.id));
+    expect(await keys(SARA)).toEqual(platform);
   });
 });
 

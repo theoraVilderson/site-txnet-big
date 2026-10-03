@@ -122,6 +122,42 @@ model SupportCategoryText {
   @@schema("support")
 }
 
+/// A canned reply (F-033-j, catalog §11.3): a short key and a text per
+/// language that an agent inserts into a reply. Owned like a category:
+/// `tenantId` NULL is the platform's defaults every tenant reads, and a
+/// tenant's own reply with the same key hides that default.
+model SupportCannedReply {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String?  @db.Uuid
+  /// Stable per tenant; what the agent's picker searches by.
+  key       String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  texts SupportCannedReplyText[]
+
+  @@unique([tenantId, key])
+  @@map("canned_reply")
+  @@schema("support")
+}
+
+/// A canned reply's text in one language, `{variable}`s unfilled. `tenantId`
+/// is the reply's, copied so the row is policied on its own.
+model SupportCannedReplyText {
+  cannedReplyId String   @db.Uuid
+  tenantId      String?  @db.Uuid
+  lang          Language
+  body          String
+
+  cannedReply SupportCannedReply @relation(fields: [cannedReplyId], references: [id], onDelete: Cascade)
+
+  @@id([cannedReplyId, lang])
+  @@map("canned_reply_text")
+  @@schema("support")
+}
+
 /// The one support entity (catalog §11.1).
 model SupportConversation {
   id               String               @id @default(uuid()) @db.Uuid

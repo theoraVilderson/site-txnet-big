@@ -87,6 +87,9 @@ const REFUSAL: Record<ConversationRejection, { status: 400 | 404 | 409 | 413 | 4
   assignee_unknown: { status: 404, i18nKey: E.assigneeUnknown },
   hours_invalid: { status: 400, i18nKey: E.hoursInvalid },
   sla_invalid: { status: 400, i18nKey: E.slaInvalid },
+  canned_unknown: { status: 404, i18nKey: E.cannedUnknown },
+  canned_key_taken: { status: 409, i18nKey: E.cannedKeyTaken },
+  canned_invalid: { status: 400, i18nKey: E.cannedInvalid },
 };
 
 /** A multipart file as multer holds it in memory. */
@@ -200,7 +203,7 @@ export function callerOf(req: Request): SupportCaller {
 }
 
 /** What `LanguageMiddleware` resolved from `Accept-Language`. */
-function languageOf(req: Request): string {
+export function languageOf(req: Request): string {
   return (req as Request & { language?: string }).language ?? 'fa';
 }
 

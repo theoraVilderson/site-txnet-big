@@ -22,7 +22,11 @@ export type ConversationRejection =
   // Working hours (F-033-g).
   | 'hours_invalid'
   // SLA targets (F-033-h).
-  | 'sla_invalid';
+  | 'sla_invalid'
+  // Canned replies (F-033-j).
+  | 'canned_unknown'
+  | 'canned_key_taken'
+  | 'canned_invalid';
 
 export class ConversationRefused extends Error {
   constructor(readonly reason: ConversationRejection) {
