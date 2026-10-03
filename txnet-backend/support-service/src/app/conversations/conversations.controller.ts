@@ -19,6 +19,7 @@ import type { Request } from 'express';
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import type { Availability } from '../availability/availability';
 import { SupportAttachmentService } from './attachments.service';
 import {
   AttachBody,
@@ -84,6 +85,7 @@ const REFUSAL: Record<ConversationRejection, { status: 400 | 404 | 409 | 413 | 4
   scan_unavailable: { status: 503, i18nKey: E.scanUnavailable },
   quota_exceeded: { status: 409, i18nKey: E.quotaExceeded },
   assignee_unknown: { status: 404, i18nKey: E.assigneeUnknown },
+  hours_invalid: { status: 400, i18nKey: E.hoursInvalid },
 };
 
 /** A multipart file as multer holds it in memory. */
@@ -109,6 +111,13 @@ export class SupportConversationsController {
   @RateLimit(READ)
   categories(@Req() req: Request): Promise<CategoryView[]> {
     return this.support.categories(callerOf(req), languageOf(req));
+  }
+
+  /** Whether a human answers now, else when support opens (F-033-g) — the wait notice before and after opening. */
+  @Get('availability')
+  @RateLimit(READ)
+  availability(@Req() req: Request): Promise<Availability> {
+    return this.support.whenAnswered(callerOf(req));
   }
 
   @Get('conversations')

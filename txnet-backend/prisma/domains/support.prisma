@@ -53,6 +53,24 @@ enum AttachmentScanStatus {
   @@schema("support")
 }
 
+/// One open interval of a tenant's weekly support hours (F-033-g), on the
+/// tenant's wall clock (`Tenant.timezone`). No row at all = always open.
+/// Replaced whole by `PUT /api/support/settings/hours`.
+model SupportWorkingHours {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  /// 0 = Sunday … 6 = Saturday.
+  weekday     Int      @db.SmallInt
+  /// Minutes past local midnight; `endMinute` exclusive, at most 1440.
+  startMinute Int      @db.SmallInt
+  endMinute   Int      @db.SmallInt
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, weekday])
+  @@map("working_hours")
+  @@schema("support")
+}
+
 /// A support category (ADR-0112 point 6). `tenantId` NULL is the platform's
 /// default set, which a tenant sees only while it has no active category of
 /// its own. Retired with `isActive`, never deleted while a thread names it.

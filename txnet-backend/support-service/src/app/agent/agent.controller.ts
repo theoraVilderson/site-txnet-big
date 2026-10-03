@@ -2,6 +2,8 @@ import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, Req
 import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
+import { SupportAvailability } from '../availability/availability';
+import { PresenceBody, presenceSchema } from '../availability/availability.schema';
 import { MessagesQuery, ReadBody, messagesQuerySchema, readSchema } from '../conversations/conversations.schema';
 import { callerOf, refusing } from '../conversations/conversations.controller';
 import { identityOf } from '../request/identity.middleware';
@@ -34,7 +36,25 @@ const TYPING = {
 @Controller('support/agent')
 @UseGuards(SupportAgentGuard)
 export class SupportAgentController {
-  constructor(private readonly agents: SupportAgentService) {}
+  constructor(
+    private readonly agents: SupportAgentService,
+    private readonly availability: SupportAvailability,
+  ) {}
+
+  /** The agent's heartbeat (F-033-g): `online` every 30s while the panel is open, `away` on leaving. */
+  @Post('presence')
+  @HttpCode(200)
+  @RateLimit(TYPING)
+  presence(@Req() req: Request, @Body(new ZodValidationPipe(presenceSchema)) body: PresenceBody) {
+    return this.availability.beat(callerOf(req), body.status);
+  }
+
+  /** Who of the tenant's agents is online now. */
+  @Get('presence')
+  @RateLimit(READ)
+  async online(@Req() req: Request): Promise<{ online: string[] }> {
+    return { online: await this.availability.online(callerOf(req).tenantId) };
+  }
 
   @Get('conversations')
   @RateLimit(READ)

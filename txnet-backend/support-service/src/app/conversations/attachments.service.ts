@@ -14,6 +14,7 @@ import {
   tenantTransaction,
 } from '@txnet-backend/shared-core';
 
+import { SupportAvailability } from '../availability/availability';
 import type { EnvConfig } from '../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupportRealtime } from '../realtime/support-realtime';
@@ -71,6 +72,7 @@ export class SupportAttachmentService {
     @Inject(SUPPORT_OBJECT_DRIVER) private readonly driver: ObjectDriver,
     @Inject(SUPPORT_VIRUS_SCANNER) private readonly scanner: VirusScanner,
     private readonly realtime: SupportRealtime,
+    private readonly availability: SupportAvailability,
   ) {}
 
   async send(caller: SupportCaller, conversationId: string, input: { body?: string; files: IncomingFile[] }): Promise<MessageView> {
@@ -98,6 +100,7 @@ export class SupportAttachmentService {
     const secret = this.config.get('OBJECT_STORAGE_SIGNING_SECRET', { infer: true });
     const written: string[] = [];
 
+    const mode = await this.availability.mode(caller.tenantId);
     let sent: { view: MessageView; status: string };
     try {
       sent = await writingMessage(this.prisma, this.logger, async (tx, now) => {
@@ -115,7 +118,7 @@ export class SupportAttachmentService {
           }
         }
 
-        const { message, status } = await appendUserMessage(tx, caller, conversationId, now, body);
+        const { message, status } = await appendUserMessage(tx, caller, conversationId, now, body, mode);
         const storage = new ObjectStorage(this.driver, prismaStoredObjects(tx));
         const rows = [];
         for (const p of planned) {

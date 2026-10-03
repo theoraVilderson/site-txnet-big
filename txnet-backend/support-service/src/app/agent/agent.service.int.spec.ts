@@ -25,6 +25,7 @@ import {
   prismaAt,
   startPostgresFixture,
 } from '../../../../test-support/postgres-fixture';
+import { PresenceRedis, SupportAvailability } from '../availability/availability';
 import { ConversationRefused, SupportCaller, SupportConversationService } from '../conversations/conversations.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import { SupportAgentService } from './agent.service';
@@ -47,6 +48,7 @@ let owner: PrismaClient;
 let app: PrismaService;
 let users: SupportConversationService;
 let agents: SupportAgentService;
+let availability: SupportAvailability;
 const published: { kind: string; conversationId: string; detail: unknown }[] = [];
 
 const as = <T>(caller: SupportCaller, work: () => Promise<T>) => runWithTenant({ id: caller.tenantId }, work);
@@ -60,6 +62,19 @@ const refusal = async (work: Promise<unknown>) => {
   }
   return 'accepted';
 };
+
+/** Presence in memory: the sorted set's semantics, no Redis. */
+function memoryPresence(): PresenceRedis {
+  const sets = new Map<string, Map<string, number>>();
+  const set = (key: string) => sets.get(key) ?? sets.set(key, new Map()).get(key)!;
+  return {
+    zadd: async (key, score, member) => void set(key).set(member, score),
+    zrem: async (key, member) => void set(key).delete(member),
+    zremrangebyscore: async (key, max) => [...set(key)].forEach(([m, s]) => s <= max && set(key).delete(m)),
+    zrangebyscore: async (key, min) => [...set(key)].filter(([, s]) => s > min).map(([m]) => m),
+    expire: async () => undefined,
+  };
+}
 
 const conversationRow = (id: string) =>
   owner.supportConversation.findUniqueOrThrow({ where: { id } });
@@ -108,8 +123,9 @@ beforeAll(async () => {
     status: async (conversationId: string, status: string) => void published.push({ kind: 'status', conversationId, detail: status }),
     channelProof: async () => null,
   } as never;
-  users = new SupportConversationService(app, config, realtime);
-  agents = new SupportAgentService(app, config, realtime);
+  availability = new SupportAvailability(app, memoryPresence());
+  users = new SupportConversationService(app, config, realtime, availability);
+  agents = new SupportAgentService(app, config, realtime, availability);
 });
 
 afterAll(async () => {
@@ -220,5 +236,27 @@ describe('resolve and close (invariant 7)', () => {
     expect(await refusal(as(SARA, () => agents.reply(SARA, opened.id, { body: 'late' })))).toBe('closed');
     expect(await refusal(as(SARA, () => agents.resolve(SARA, opened.id)))).toBe('closed');
     expect(published.filter((p) => p.kind === 'status').map((p) => p.detail)).toEqual(['resolved', 'closed']);
+  });
+});
+
+describe('live or async on the stored thread (F-033-g, catalog §11.2)', () => {
+  it("opens live with an agent online inside the tenant's hours, async outside them, and re-decides on each message", async () => {
+    // No schedule: always open, presence alone decides.
+    await as(SARA, () => availability.beat(SARA, 'online'));
+    const live = await as(ALICE, () => users.open(ALICE, { body: 'anyone there?' }));
+    expect(live.mode).toBe('live');
+
+    // A schedule whose only hour is never now (a 1-minute window a week away from it).
+    const now = new Date();
+    const elsewhere = { weekday: (now.getUTCDay() + 3) % 7, start: '03:00', end: '03:01' };
+    await as(SARA, () => availability.setHours(RESELLER_A, [elsewhere]));
+    expect(await as(SARA, () => availability.hours(RESELLER_A))).toMatchObject({ zone: 'Asia/Tehran', intervals: [{ startMinute: 180, endMinute: 181 }] });
+    await as(ALICE, () => users.send(ALICE, live.id, { body: 'hello?' }));
+    expect((await conversationRow(live.id)).mode).toBe('async');
+
+    // Another tenant reads none of it.
+    expect((await as(BETA_AGENT, () => availability.hours(RESELLER_B))).intervals).toEqual([]);
+    await as(SARA, () => availability.setHours(RESELLER_A, []));
+    await as(SARA, () => availability.beat(SARA, 'away'));
   });
 });

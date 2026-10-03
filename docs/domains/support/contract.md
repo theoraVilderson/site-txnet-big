@@ -35,6 +35,7 @@ answers exactly as a missing one.
 | `POST /api/support/conversations/:id/attachments` | multipart: `files` (repeat, ≤`SUPPORT_ATTACHMENTS_PER_MESSAGE`, each ≤`SUPPORT_ATTACHMENT_MAX_BYTES`; PNG, JPEG, WebP, PDF), `body?` ≤4000 | the message, as `POST …/messages`, with its `attachments` | 404 `not_found`, 409 `closed`, 400 `empty_message`/`too_many_files`, 413 `file_too_large`, 415 `file_rejected`, 422 `file_infected`, 503 `scan_unavailable`, 409 `quota_exceeded` |
 | `POST /api/support/conversations/:id/typing` | — | `{expiresInMs}` — published to the thread's readers, stored nowhere; repeat while typing | 404 `not_found`, 409 `closed` |
 | `POST /api/support/conversations/:id/read` | `{upToSeq?}` (body optional) | `{lastReadSeq}` — moves forward only | 404 `not_found` |
+| `GET /api/support/availability` | — | `{live, withinHours, agentsOnline, nextOpenAt}` — the wait notice (F-033-g) | — |
 
 Status on a user's send (invariant 7): `open` while no agent has answered,
 else `pending_agent`; a `resolved` thread reopens. Sending moves the sender's
@@ -88,6 +89,27 @@ assigned one keeps its assignee. A **note** (`internal: true`) takes the next
 `resolve` stamps `resolvedAt`; `close` stamps `closedAt` and is final. An
 assignee is an active account of the caller's tenant whose role holds
 `support.agent` (or `*`); anyone else is `assignee_unknown`.
+
+## Live or async (F-033-g, catalog §11.2)
+
+`live` while **at least one agent is online and the tenant is inside its
+weekly hours**; `async` otherwise (user, 2026-10-03). `mode` is decided again
+on every open, every user message (text or files) and every agent reply — a
+note leaves it. Same thread, same history either way.
+
+- **Presence** is a heartbeat: `POST /api/support/agent/presence {status:
+  online|away}` (`support.agent`, every 30s while the panel is open) → `{status,
+  expiresInSec}`; an agent is forgotten 90s after the last beat, at once on
+  `away`. `GET /api/support/agent/presence` → `{online: [userId]}`. Redis only;
+  Redis unreadable = no one online = `async`, never an error.
+- **Hours**: one weekly schedule per tenant on its own wall clock
+  (`tenant.timezone`, ADR-0108). `GET /api/support/settings/hours` → `{zone,
+  intervals: [{weekday 0=Sun…6, startMinute, endMinute}]}`; `PUT` the same path
+  `{intervals: [{weekday, start "HH:MM", end "HH:MM" (24:00 allowed)}]}` (≤28)
+  replaces it whole — `support.manage`; 400 `hours_invalid` on an empty or
+  overlapping interval. **`[]` = always open**: presence alone decides.
+- `nextOpenAt` is when the schedule next opens; `null` while open or with no
+  schedule (then "we answer as soon as someone is online").
 
 ## Emits (events)
 

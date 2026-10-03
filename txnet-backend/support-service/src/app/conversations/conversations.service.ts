@@ -12,8 +12,10 @@ import {
 import { signedObjectUrl, tenantTransaction } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
+import { Availability, SupportAvailability } from '../availability/availability';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChannelProof, SupportRealtime, TYPING_TTL_MS } from '../realtime/support-realtime';
+import { ConversationRefused, SupportCaller } from './refusal';
 
 /**
  * The user's side of support (F-033-b, ADR-0112): open a conversation, send,
@@ -25,33 +27,8 @@ import { ChannelProof, SupportRealtime, TYPING_TTL_MS } from '../realtime/suppor
  * `not_found` whether the thread is another user's or does not exist.
  */
 
-export type ConversationRejection =
-  | 'not_found'
-  | 'closed'
-  | 'category_unknown'
-  | 'too_many_unfinished'
-  // Attachments (F-033-f).
-  | 'empty_message'
-  | 'too_many_files'
-  | 'file_too_large'
-  | 'file_rejected'
-  | 'file_infected'
-  | 'scan_unavailable'
-  | 'quota_exceeded'
-  // The agent side (F-033-d).
-  | 'assignee_unknown';
-
-export class ConversationRefused extends Error {
-  constructor(readonly reason: ConversationRejection) {
-    super(`support conversation refused: ${reason}`);
-    this.name = 'ConversationRefused';
-  }
-}
-
-export interface SupportCaller {
-  tenantId: string;
-  userId: string;
-}
+export { ConversationRefused } from './refusal';
+export type { ConversationRejection, SupportCaller } from './refusal';
 
 export interface OpenInput {
   body: string;
@@ -146,7 +123,13 @@ export class SupportConversationService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<EnvConfig, true>,
     private readonly realtime: SupportRealtime,
+    private readonly availability: SupportAvailability,
   ) {}
+
+  /** Whether a human answers now, and if not when support opens (F-033-g) — the wait notice. */
+  whenAnswered(caller: SupportCaller): Promise<Availability> {
+    return this.availability.at(caller.tenantId);
+  }
 
   async categories(caller: SupportCaller, lang: string): Promise<CategoryView[]> {
     return tenantTransaction(this.prisma, async (tx) => {
@@ -156,6 +139,7 @@ export class SupportConversationService {
   }
 
   async open(caller: SupportCaller, input: OpenInput): Promise<ConversationSummary> {
+    const mode = await this.availability.mode(caller.tenantId);
     return this.writingMessage(async (tx, now) => {
       const unfinished = await tx.supportConversation.count({
         where: { userId: caller.userId, status: { in: UNFINISHED } },
@@ -174,6 +158,7 @@ export class SupportConversationService {
           userId: caller.userId,
           subject: input.subject?.trim() || subjectFrom(input.body),
           categoryId: input.categoryId ?? null,
+          mode,
           lastSeq: 1,
           lastMessageAt: now,
           createdAt: now,
@@ -196,8 +181,9 @@ export class SupportConversationService {
   }
 
   async send(caller: SupportCaller, conversationId: string, input: { body: string }): Promise<MessageView> {
+    const mode = await this.availability.mode(caller.tenantId);
     const { view, status } = await this.writingMessage(async (tx, now) => {
-      const { message, status } = await appendUserMessage(tx, caller, conversationId, now, input.body);
+      const { message, status } = await appendUserMessage(tx, caller, conversationId, now, input.body, mode);
       return { view: viewOf(message, caller, []), status };
     });
     await this.realtime.message(conversationId, view, status);
@@ -334,7 +320,8 @@ export async function writingMessage<T>(
  * One statement takes the row lock, issues the seq and moves the status, so
  * two sends from two devices are ordered by the database (point 4). Before the
  * first agent reply the thread stays `open`; after it, the user's message hands
- * it to the agent — reopening a `resolved` one.
+ * it to the agent — reopening a `resolved` one. `mode` is whether a human
+ * answers right now (F-033-g), decided by the caller before the transaction.
  */
 export async function appendUserMessage(
   tx: Prisma.TransactionClient,
@@ -342,6 +329,7 @@ export async function appendUserMessage(
   conversationId: string,
   now: Date,
   body: string,
+  mode: ConversationMode,
 ): Promise<{ message: MessageRow; status: ConversationStatus }> {
   const [row] = await tx.$queryRaw<{ lastSeq: number; status: ConversationStatus }[]>`
     UPDATE support.conversation
@@ -349,6 +337,7 @@ export async function appendUserMessage(
            "lastMessageAt" = ${now},
            "updatedAt" = ${now},
            "resolvedAt" = NULL,
+           mode = ${mode}::support."ConversationMode",
            status = CASE WHEN "firstResponseAt" IS NULL
                          THEN 'open'::support."ConversationStatus"
                          ELSE 'pending_agent'::support."ConversationStatus" END

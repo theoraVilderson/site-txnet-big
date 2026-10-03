@@ -87,6 +87,7 @@ exports[`the key catalogue > leaves nothing in the catalogue unexercised 1`] = `
   "session",
   "subUsage",
   "supportChannel",
+  "supportPresence",
   "tenantByHost",
   "tenantById",
   "tenantRuns",

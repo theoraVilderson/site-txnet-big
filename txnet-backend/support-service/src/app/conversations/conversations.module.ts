@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { MulterModule } from '@nestjs/platform-express';
 import { objectDriverFromEnv, scannerFromEnv } from '@txnet-backend/shared-core';
 
+import { SupportAvailabilityModule } from '../availability/availability.module';
 import type { EnvConfig } from '../config/env.validation';
 import { SupportRealtime } from '../realtime/support-realtime';
 import { SUPPORT_OBJECT_DRIVER, SUPPORT_VIRUS_SCANNER, SupportAttachmentService } from './attachments.service';
@@ -13,6 +14,7 @@ type Config = ConfigService<EnvConfig, true>;
 
 @Module({
   imports: [
+    SupportAvailabilityModule,
     // Uploads are held in memory (each file is capped) and scanned before
     // anything is written (F-033-f). Multer refuses past the caps itself, so an
     // oversized body is cut off while it streams, not after it arrived.

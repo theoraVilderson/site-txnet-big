@@ -22,6 +22,7 @@ import {
   viewOf,
   writingMessage,
 } from '../conversations/conversations.service';
+import { SupportAvailability } from '../availability/availability';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChannelProof, SupportRealtime, TYPING_TTL_MS } from '../realtime/support-realtime';
 import { SUPPORT_AGENT_PERMISSION } from './support-agent.guard';
@@ -81,6 +82,7 @@ export class SupportAgentService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<EnvConfig, true>,
     private readonly realtime: SupportRealtime,
+    private readonly availability: SupportAvailability,
   ) {}
 
   /**
@@ -171,11 +173,14 @@ export class SupportAgentService {
    */
   async reply(caller: SupportCaller, conversationId: string, input: { body: string; internal?: boolean }): Promise<AgentMessageView> {
     const internal = input.internal === true;
+    // An agent answering re-decides the mode as a user's message does (F-033-g).
+    const mode = await this.availability.mode(caller.tenantId);
     const { message, status } = await writingMessage(this.prisma, this.logger, async (tx, now) => {
       const [row] = await tx.$queryRaw<{ lastSeq: number; status: ConversationStatus }[]>`
         UPDATE support.conversation
            SET "lastSeq" = "lastSeq" + 1,
                "updatedAt" = ${now},
+               mode = CASE WHEN ${internal} THEN mode ELSE ${mode}::support."ConversationMode" END,
                "lastMessageAt" = CASE WHEN ${internal} THEN "lastMessageAt" ELSE ${now} END,
                "firstResponseAt" = CASE WHEN ${internal} THEN "firstResponseAt" ELSE COALESCE("firstResponseAt", ${now}) END,
                "assignedToUserId" = CASE WHEN ${internal} THEN "assignedToUserId"

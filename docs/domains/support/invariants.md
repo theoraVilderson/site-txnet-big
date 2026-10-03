@@ -19,6 +19,7 @@ updated: 2026-10-03
 | 8 | No URL is stored for an attachment — only the storage key; the file is `private` on the port | schema (`objectKey`), the upload policy | public, guessable file addresses (§11.4) |
 | 9 | An attachment's URL is minted only on the owning user's read (or a `support.agent` of its tenant's), only for a `clean` file, and lives five minutes | service (`attachmentView`), `private-files` verifying the signature | an unscanned or another user's file is fetched |
 | 10 | A user's attachments, across all their conversations, never exceed `SUPPORT_STORAGE_QUOTA_BYTES`; no file is stored before the scanner passed it, and a refused upload leaves no bytes | `SupportAttachmentService` (per-user advisory lock in the insert's transaction) | one user fills the volume; an infected file sits on disk |
+| 11 | `mode` is `live` only when, at the moment of the write, an agent's heartbeat is current **and** the tenant's wall clock is inside its hours (none = always); an unreadable presence is `async` | `SupportAvailability.mode`, called on open, send, attach, reply | a user waits on a live chat no one is in |
 
 ## How to test
 
@@ -28,4 +29,5 @@ The service rules (3, 5, 6, 7) are covered by the unit spec of the service.
 The signature, expiry, PDF sniffing and the scanner verdicts behind 9 are
 `shared-core/src/lib/object-storage/private-file.spec.ts`; 6 and 10 for uploads
 are `attachments.service.int.spec.ts`. The agent side (3, 5, 7, the tenant
-boundary, who may be assigned) is `agent/agent.service.int.spec.ts`.
+boundary, who may be assigned) is `agent/agent.service.int.spec.ts`; 11 is
+`availability/availability.spec.ts` and, on the stored thread, the agent int spec.

@@ -68,6 +68,24 @@ export class RedisService implements RateLimitStore, OnModuleInit, OnModuleDestr
     await this.client.expire(key, ttlSec);
   }
 
+  async zadd(key: string, score: number, member: string): Promise<void> {
+    await this.client.zadd(key, score, member);
+  }
+
+  async zrem(key: string, member: string): Promise<void> {
+    await this.client.zrem(key, member);
+  }
+
+  /** Members scored above `min`. */
+  zrangebyscore(key: string, min: number): Promise<string[]> {
+    return this.client.zrangebyscore(key, `(${min}`, '+inf');
+  }
+
+  /** Drops members scored at or below `max`. */
+  async zremrangebyscore(key: string, max: number): Promise<void> {
+    await this.client.zremrangebyscore(key, '-inf', max);
+  }
+
   /** `channel` is a full wire name — the caller applies `keyPrefix`. */
   publish(channel: string, message: string): Promise<number> {
     return this.client.publish(channel, message);

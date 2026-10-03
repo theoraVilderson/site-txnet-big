@@ -7,7 +7,7 @@ keywords: [ticket, support, chat, attachment, conversation, support category, پ
 source:
   - txnet-backend/prisma/domains/support.prisma
   - txnet-backend/support-service/**
-owns_tables: [conversation, message, conversation_read, message_attachment, support_category, support_category_text]
+owns_tables: [conversation, message, conversation_read, message_attachment, support_category, support_category_text, working_hours]
 depends_on: [identity, audit]
 updated: 2026-10-03
 ---

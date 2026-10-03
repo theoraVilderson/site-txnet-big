@@ -99,6 +99,14 @@ export const UnscopedRedisKeys = {
   supportChannel: (conversationId: string, userId: string) => `support:channel:${conversationId}:${userId}`,
 
   /**
+   * Which of a tenant's agents are online (F-033-g): a sorted set, member the
+   * agent's user id, score the instant their last heartbeat lapses. The tenant
+   * is an argument, not the ambient scope — support-service holds no
+   * `RedisKeyScope`, and an online count must never be read across tenants.
+   */
+  supportPresence: (tenantId: string) => `support:presence:${tenantId}`,
+
+  /**
    * The pub/sub channel one realtime channel's events ride (F-067-i).
    *
    * Not a key — a channel name — which is why the caller applies the keyspace

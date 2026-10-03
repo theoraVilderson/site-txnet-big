@@ -44,6 +44,11 @@ export const RedisTtl = {
    * subscription may *start*; one already made lives with its socket.
    */
   supportChannel: 3600,
+  /**
+   * An agent's heartbeat (F-033-g): online until this long after the last
+   * one. The panel beats every 30s, so two lost beats are not an absence.
+   */
+  supportPresence: 90,
   loginFailureWindow: 900,
   /** >= otpCode so a still-valid OTP never outlives the data it verifies. */
   registerPending: 600,
