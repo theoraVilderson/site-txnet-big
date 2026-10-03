@@ -30,7 +30,8 @@
       "users": "Users",
       "ai": "AI",
       "wheel": "Lucky wheel",
-      "wheelSettings": "Wheel settings"
+      "wheelSettings": "Wheel settings",
+      "lotteries": "Lotteries"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -4402,6 +4403,84 @@
       "version_not_found": "That version was not found.",
       "version_taken": "Someone saved a version at the same moment. Reload and try again.",
       "invalid_range": "Pick a range of at most 31 days."
+    }
+  },
+  "lotteries": {
+    "title": "Lotteries",
+    "subtitle": "Free draws for the groups you are in. The entrant list is frozen before the draw's seed exists, and anyone can check the result.",
+    "loading": "Loading lotteries…",
+    "retry": "Try again",
+    "empty": "There is no lottery for you right now.",
+    "status": {
+      "open": "Open",
+      "closing": "Closing",
+      "frozen": "Closed — drawing",
+      "drawn": "Drawn",
+      "cancelled": "Cancelled"
+    },
+    "closesAt": "Closes {{time}}",
+    "mode": {
+      "automatic": "Every eligible member of the group is entered at the close.",
+      "opt_in": "Join to take part. Entry is free."
+    },
+    "prizesTitle": "Prizes",
+    "prize": "{{rank}}. {{label}}",
+    "winners": "{{n}} winner(s)",
+    "join": "Join",
+    "leave": "Leave",
+    "joined": "You are in. Your ticket number is given when the lottery closes.",
+    "ticket": "Your ticket: #{{n}}",
+    "excludedTitle": "You were not entered",
+    "excluded": {
+      "not_in_group": "You were no longer in the lottery's group at the close.",
+      "inactive": "Your account was not active at the close.",
+      "account_too_new": "Your account was too new at the close.",
+      "phone_unverified": "Your phone number was not verified at the close.",
+      "flagged": "Your account was under review at the close.",
+      "shared_device": "Too many accounts have used your device."
+    },
+    "cancelled": "Cancelled: {{reason}}",
+    "viewResult": "See the result",
+    "refusals": {
+      "lottery_not_found": "This lottery is not available to you.",
+      "not_opt_in": "This lottery enters its members automatically; there is nothing to join.",
+      "closed": "This lottery is closed.",
+      "not_drawn": "This lottery has not been drawn yet."
+    },
+    "result": {
+      "back": "All lotteries",
+      "drawnAt": "Drawn {{time}}",
+      "tickets": "{{n}} ticket(s)",
+      "placesTitle": "Results",
+      "noPlaces": "There were no tickets, so nobody was drawn.",
+      "place": "Place {{n}}",
+      "ticket": "Ticket #{{n}}",
+      "mine": "Your ticket",
+      "reserve": "Reserve",
+      "replaces": "took over from place {{n}}",
+      "delivery": {
+        "pending": "Being given",
+        "delivered": "Given",
+        "passed_on": "Passed on"
+      },
+      "passedOn": {
+        "inactive": "the account was not active",
+        "no_active_grant": "there was no active service to add it to"
+      }
+    },
+    "verify": {
+      "title": "Check the draw yourself",
+      "note": "Your browser redoes the draw from the published seed and ticket list, with the same code the server used. Nothing is sent anywhere.",
+      "run": "Check now",
+      "running": "Checking…",
+      "ok": "The draw checks out: the ticket list matches its hash, and every place is what the seed gives.",
+      "listMismatch": "The ticket list does not match the published hash.",
+      "placesMismatch": "These places are not what the seed gives: {{list}}",
+      "unknownAlgorithm": "This draw used a method this page does not know: {{algorithm}}",
+      "failed": "The check could not run in this browser.",
+      "seed": "Seed",
+      "listHash": "List hash",
+      "algorithm": "Method"
     }
   }
 }

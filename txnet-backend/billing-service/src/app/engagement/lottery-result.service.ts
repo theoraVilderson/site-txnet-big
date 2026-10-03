@@ -29,6 +29,9 @@ export type LotteryResult = {
   seed: string;
   listHash: string;
   entrantCount: number;
+  /** What `lotteryPlaces` takes besides the seed and the list: the prizes by rank and the reserves. */
+  prizes: Array<{ rank: number; label: string; winnersCount: number }>;
+  reservesCount: number;
   frozenAt: Date;
   drawnAt: Date;
   tickets: Array<{ ticketNumber: number; entrantId: string }>;
@@ -54,7 +57,7 @@ export class LotteryResultService {
     return tenantTransaction(this.prisma, async (tx) => {
       const lot = await tx.lottery.findFirst({
         where: { id: lotteryId, tenantId: caller.tenantId, publishedAt: { not: null } },
-        select: { id: true, title: true, status: true, userGroupId: true },
+        select: { id: true, title: true, status: true, userGroupId: true, reservesCount: true, prizes: { select: { rank: true, label: true, winnersCount: true }, orderBy: { rank: 'asc' } } },
       });
       const mine = lot && (await tx.lotteryEntrant.findFirst({ where: { lotteryId, userId: caller.userId }, select: { id: true, ticketNumber: true, excludedReason: true } }));
       const member =
@@ -82,6 +85,8 @@ export class LotteryResultService {
         seed: this.seeds.open(draw.seedSealed as unknown as SealedSeed),
         listHash: draw.listHash,
         entrantCount: draw.entrantCount,
+        prizes: lot.prizes,
+        reservesCount: lot.reservesCount,
         frozenAt: draw.frozenAt,
         drawnAt: draw.drawnAt,
         tickets,

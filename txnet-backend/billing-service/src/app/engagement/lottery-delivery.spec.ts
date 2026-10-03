@@ -188,7 +188,7 @@ describe('LotteryResultService.result', () => {
   function result(o: { status?: LotteryStatus; publishedAt?: Date | null; member?: boolean; entrant?: boolean } = {}) {
     const tx = {
       $executeRaw: async () => 0,
-      lottery: { findFirst: async () => ({ id: LOT, title: 'Autumn draw', status: o.status ?? LotteryStatus.drawn, userGroupId: GROUP }) },
+      lottery: { findFirst: async () => ({ id: LOT, title: 'Autumn draw', status: o.status ?? LotteryStatus.drawn, userGroupId: GROUP, reservesCount: 1, prizes: [{ rank: 1, label: '20 GB', winnersCount: 1 }] }) },
       userGroupMember: { findFirst: async () => (o.member === false ? null : { id: 'm-1' }) },
       lotteryEntrant: {
         findFirst: async () => (o.entrant === false ? null : { id: 'e-2', ticketNumber: 2, excludedReason: null }),
@@ -220,6 +220,8 @@ describe('LotteryResultService.result', () => {
       seed: SEED,
       listHash: 'cd'.repeat(32),
       entrantCount: 2,
+      prizes: [{ rank: 1, label: '20 GB', winnersCount: 1 }],
+      reservesCount: 1,
       frozenAt: AT,
       drawnAt: AT,
       tickets: [

@@ -182,3 +182,74 @@ export const wheelApi = {
     return call<WheelHistoryRow[]>("/wheel/history", { method: "GET" });
   },
 };
+
+// ----------------------------------------------------------------- lotteries
+
+/** A lottery as its user sees it (`UserLotteryView`, F-707-j). */
+export type LotteryStatus = "published" | "frozen" | "drawn" | "cancelled";
+
+export interface UserLottery {
+  id: string;
+  title: string;
+  description: string | null;
+  entryMode: "automatic" | "opt_in";
+  status: LotteryStatus;
+  closesAt: string;
+  publishedAt: string | null;
+  cancelReason: string | null;
+  /** Published and before its close: a join or a leave is accepted now. */
+  open: boolean;
+  prizes: Array<{ rank: number; label: string; prizeType: WheelPrizeType; prizeValue: string; winnersCount: number }>;
+  entry: { optedInAt: string | null; ticketNumber: number | null; excludedReason: string | null } | null;
+}
+
+export interface LotteryEntryResult {
+  lotteryId: string;
+  joined: boolean;
+  optedInAt?: string | null;
+  replay: boolean;
+}
+
+export type LotteryDelivery = "pending" | "delivered" | "passed_on";
+
+/** A drawn lottery's public result (`LotteryResult`, F-707-m): all the verify step needs. */
+export interface LotteryResult {
+  lotteryId: string;
+  title: string;
+  algorithm: string;
+  seed: string;
+  listHash: string;
+  entrantCount: number;
+  prizes: Array<{ rank: number; label: string; winnersCount: number }>;
+  reservesCount: number;
+  frozenAt: string;
+  drawnAt: string;
+  tickets: Array<{ ticketNumber: number; entrantId: string }>;
+  places: Array<{
+    position: number;
+    ticketNumber: number;
+    prize: { rank: number; label: string } | null;
+    delivery: LotteryDelivery;
+    passedOnReason: string | null;
+    replacesPosition: number | null;
+  }>;
+  mine: { entrantId: string; ticketNumber: number | null; excludedReason: string | null } | null;
+}
+
+const lotteryPath = (id: string) => `/lotteries/${encodeURIComponent(id)}`;
+
+export const lotteryApi = {
+  list(): Promise<UserLottery[]> {
+    return call<UserLottery[]>("/lotteries", { method: "GET" });
+  },
+  /** Idempotent: a repeat answers the kept entry with `replay: true`. */
+  join(id: string): Promise<LotteryEntryResult> {
+    return call<LotteryEntryResult>(`${lotteryPath(id)}/entry`, { method: "POST" });
+  },
+  leave(id: string): Promise<LotteryEntryResult> {
+    return call<LotteryEntryResult>(`${lotteryPath(id)}/entry`, { method: "DELETE" });
+  },
+  result(id: string): Promise<LotteryResult> {
+    return call<LotteryResult>(`${lotteryPath(id)}/result`, { method: "GET" });
+  },
+};

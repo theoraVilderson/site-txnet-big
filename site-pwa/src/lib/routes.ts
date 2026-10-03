@@ -177,6 +177,10 @@ export const PANEL_USER_GROUPS = "/user-groups";
 export const PANEL_WHEEL = "/wheel";
 /** A tenant admin's wheel: prizes, odds, the cap, eligibility, versions and the day report (F-707-f). */
 export const PANEL_WHEEL_SETTINGS = "/wheel/settings";
+/** The user's lotteries: entry, ticket, results (F-707-n). */
+export const PANEL_LOTTERIES = "/lotteries";
+/** One drawn lottery's result and its in-browser check (F-707-n). */
+export const panelLotteryPath = (id: string) => `${PANEL_LOTTERIES}/${encodeURIComponent(id)}`;
 /**
  * Where a bank returns a payer (F-093-f). These two are `billing`'s to name:
  * `deposit-callback.controller.ts` redirects to them by path, so they are the
