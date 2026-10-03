@@ -24,6 +24,7 @@ import { ResellerCampaignFlow } from '../flows/reseller-campaign.flow';
 import { ResellerFlow } from '../flows/reseller.flow';
 import { TopUpFlow } from '../flows/top-up.flow';
 import { TimeZoneFlow } from '../flows/time-zone.flow';
+import { WheelFlow } from '../flows/wheel.flow';
 import { SuggestionOptOut } from '../suggestion/suggestion-opt-out';
 import { OtpStep } from '../flows/otp.step';
 import {
@@ -89,6 +90,7 @@ export class ConversationRouter {
     private readonly campaigns: ResellerCampaignFlow,
     private readonly timeZone: TimeZoneFlow,
     private readonly suggestions: SuggestionOptOut,
+    private readonly wheel: WheelFlow,
   ) {}
 
   /**
@@ -155,6 +157,9 @@ export class ConversationRouter {
       return this.timeZone.handle(ctx, state ?? { flow: 'timeZone', step: 'timeZone.pick', data: {} }, actionId);
     }
 
+    // F-707-h. A Spin whose screen expired opens a fresh screen (a new key), never a spin.
+    if (actionId === ACTIONS.wheel || (actionId === ACTIONS.wheelSpin && state?.flow !== 'wheel')) return this.wheel.start(ctx);
+
     // F-038-g4: "don't show this again" under an AI suggestion — any screen, any state.
     if (actionId?.startsWith(SUGGESTION_OPT_OUT_PREFIX)) return this.suggestions.tap(ctx, actionId);
 
@@ -194,6 +199,8 @@ export class ConversationRouter {
         return this.campaigns.handle(ctx, state, actionId);
       case 'timeZone':
         return this.timeZone.handle(ctx, state, actionId);
+      case 'wheel':
+        return this.wheel.handle(ctx, state, actionId);
       default:
         return { view: say('unknown', { key: BotKeys.common.unknown }), nextState: null };
     }

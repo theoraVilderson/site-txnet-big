@@ -7,6 +7,7 @@ import { BotDispatcher } from './conversation/bot.dispatcher';
 import { AccountAddFlow } from './flows/account-add.flow';
 import { AccountsFlow } from './flows/accounts.flow';
 import { TimeZoneFlow } from './flows/time-zone.flow';
+import { WheelFlow } from './flows/wheel.flow';
 import { AiApiClient } from './suggestion/ai-api.client';
 import { SuggestionOptOut } from './suggestion/suggestion-opt-out';
 import { ForgotFlow } from './flows/forgot.flow';
@@ -67,6 +68,7 @@ import { WebhookController } from './webhook/webhook.controller';
     ForgotFlow,
     AccountsFlow,
     TimeZoneFlow,
+    WheelFlow,
     AiApiClient,
     SuggestionOptOut,
     AccountAddFlow,

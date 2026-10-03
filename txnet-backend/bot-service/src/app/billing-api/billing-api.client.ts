@@ -121,6 +121,32 @@ export interface ResellerRevenue {
 }
 
 /** Whose call this is: the chat's access token, in the chat's language. */
+/** A prize's kind, as billing names it (`SpinPrizeType`, never `wallet_credit`). */
+export type WheelPrizeType = 'bonus_traffic_gb' | 'extra_days' | 'discount_coupon' | 'free_grant' | 'empty';
+
+/** `GET /api/billing/wheel` (`engagement/contract.md`, F-707-d): the public odds and whether this user may spin. */
+export interface UserWheel {
+  tenantDay: string;
+  version: number;
+  currencyCode: string;
+  prizes: Array<{ position: number; label: string; prizeType: WheelPrizeType; prizeValue: string; oddsPercent: string }>;
+  eligible: boolean;
+  refusalReason: string | null;
+  spinsLeftToday: number;
+  nextSpinAt: string | null;
+}
+
+/** `POST /api/billing/wheel/spin`, narrowed to what the chat tells. A refused spin is a recorded `ok`. */
+export interface SpinAnswer {
+  attemptId: string;
+  status: 'awarded' | 'voided_fraud' | 'rejected_ineligible';
+  refusalReason: string | null;
+  position: number | null;
+  prize: { position: number; label: string; prizeType: WheelPrizeType; prizeValue: string } | null;
+  reward: { grantId: string | null; coupon: { id: string; code: string; percent: string; expiresAt: string } | null } | null;
+  replay: boolean;
+}
+
 export interface BillingCallContext {
   lang: string;
   accessToken: string;
@@ -203,6 +229,20 @@ export class BillingApiClient {
    */
   resellerRevenue(tenantId: string, ctx: BillingCallContext): Promise<ApiResult<ResellerRevenue>> {
     return this.call('GET', `/api/billing/tenants/${tenantId}/revenue`, undefined, ctx);
+  }
+
+  /** The user's wheel (F-707-h): the panel's own route, so the chat and the panel show the same odds. */
+  wheel(ctx: BillingCallContext): Promise<ApiResult<UserWheel>> {
+    return this.call('GET', '/api/billing/wheel', undefined, ctx);
+  }
+
+  /**
+   * One tap. `requestId` is the tap's key: sent again after a lost answer,
+   * billing answers the same spin (F-707-d rule 1). The device is this chat,
+   * which the gate names from the session (`X-Chat-Platform`, `X-Chat-User-Id`).
+   */
+  spinWheel(requestId: string, ctx: BillingCallContext): Promise<ApiResult<SpinAnswer>> {
+    return this.call('POST', '/api/billing/wheel/spin', { requestId }, ctx);
   }
 
   /** Relay a `pre_checkout_query` (F-104-m, F-104-ab). */

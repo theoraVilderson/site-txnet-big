@@ -46,7 +46,9 @@
     "campaignSend": "Yes, send it",
     "campaignRefresh": "Refresh",
     "timeZone": "🕒 Time zone",
-    "timeZoneFollowPanel": "🖥 Same as the panel"
+    "timeZoneFollowPanel": "🖥 Same as the panel",
+    "wheel": "🎡 Lucky wheel",
+    "wheelSpin": "🎡 Spin"
   },
   "common": {
     "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
@@ -224,5 +226,36 @@
   "suggestion": {
     "optedOut": "🔕 Done. You won't get suggestions like this again.",
     "gone": "This suggestion is no longer available."
+  },
+  "wheel": {
+    "screen": "🎡 Lucky wheel\nThese are the real odds; our server picks the result.\n\n{{odds}}\n\n{{status}}",
+    "canSpin": "Spins left today: {{n}}. Tap Spin!",
+    "cannotSpin": "You cannot spin right now. {{reason}}",
+    "none": "There is no wheel running today. Check back later.",
+    "failed": "The wheel could not be reached. Tap Spin again — the same spin will not be counted twice.",
+    "won": {
+      "bonus_traffic_gb": "🎉 You won {{value}} GB on your service.",
+      "extra_days": "🎉 You won {{value}} extra days on your service.",
+      "discount_coupon": "🎉 You won a {{value}}% discount coupon.\nYour code: {{code}}",
+      "free_grant": "🎉 You won a free service: {{label}}.",
+      "empty": "No prize this time. Better luck next spin!"
+    },
+    "refused": "No spin. {{reason}}",
+    "refusals": {
+      "account_inactive": "Your account is not active.",
+      "account_too_new": "Your account is too new. Try again in a little while.",
+      "phone_not_verified": "Verify your phone number first.",
+      "no_active_service": "You need an active service to spin.",
+      "paid_too_little": "The wheel is for customers who have bought a little more.",
+      "too_few_orders": "The wheel is for customers with a few more paid orders.",
+      "not_in_group": "This wheel is for a group of users you are not in.",
+      "flagged": "Your account is under review, so it cannot spin.",
+      "shared_device": "Too many accounts have used this chat, so it cannot spin.",
+      "daily_limit": "You have used today's spins. Come back tomorrow.",
+      "cooldown": "Wait a little before your next spin.",
+      "no_wheel": "There is no wheel running today.",
+      "no_fingerprint": "This chat could not be recognised. Open the menu and try again.",
+      "spin_in_progress": "Your spin is already being processed. Tap Spin again in a moment."
+    }
   }
 }

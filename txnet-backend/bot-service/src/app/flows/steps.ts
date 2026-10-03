@@ -69,6 +69,8 @@ const FLOW_STEPS: Record<Exclude<BotFlow, 'login' | 'accountAdd'>, string[]> = {
   campaign: ['campaign.segment', 'campaign.text', 'campaign.confirm'],
   // One screen, one tap — nothing to count (TZ-1-h).
   timeZone: [],
+  // One screen, one tap — nothing to count (F-707-h).
+  wheel: [],
 };
 
 /**
@@ -92,6 +94,7 @@ export const PROGRESS_KEY: Record<BotFlow, BotKey | null> = {
   topUp: BotKeys.progress.topUp,
   campaign: BotKeys.progress.campaign,
   timeZone: null,
+  wheel: null,
 };
 
 export function progressOf(state: NavState): BotText | undefined {

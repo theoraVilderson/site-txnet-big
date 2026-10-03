@@ -8,7 +8,7 @@ source:
   - txnet-backend/bot-service/src/**
 owns_tables: []
 depends_on: [messenger, auth-api, i18n, tenant, billing, notification]
-updated: 2026-10-02
+updated: 2026-10-03
 ---
 
 # bot-app
@@ -27,6 +27,7 @@ differences (`messenger`), linking and OTP (`identity`/`auth-api`), copy (`i18n`
 | [contract.accounts.md](contract.accounts.md) | the switch group: moving between accounts, whose set it is, how one joins |
 | [contract.mini-app.md](contract.mini-app.md) | the `web_app` menu row, and the `?ma=` marker that says which SDK the panel loads |
 | [contract.reseller.md](contract.reseller.md) | the reseller panel in the chat: its menu row, the customers, block, the revenue figure, the bulk message |
+| [contract.wheel.md](contract.wheel.md) | the lucky wheel in the chat: its menu row, the odds, a spin, the prize told (F-707-h) |
 | [conversation.md](conversation.md) | the shell every screen gets: orientation, Back, language, commands |
 | [open-questions.md](open-questions.md) | something is undecided |
 

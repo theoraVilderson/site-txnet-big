@@ -10,7 +10,7 @@ updated: 2026-10-03
 
 **DRAFT — the wheel and the lottery have their tables and database guards
 (F-707-a); `billing-service`'s `engagement/` module (ADR-0111 point 1) writes
-the wheel's versions (F-707-c), its spins (F-707-d), its day report (F-707-e) and a user's history (F-707-g), nothing of the lottery yet. The attention budget is implemented (F-1501), in
+the wheel's versions (F-707-c), its spins (F-707-d), its day report (F-707-e) and a user's history (F-707-g), nothing of the lottery yet; the panel (F-707-f/g) and the bot (F-707-h) are its surfaces. The attention budget is implemented (F-1501), in
 `ai-service`, its only writer (ADR-0109 point 10).**
 
 ## TL;DR
