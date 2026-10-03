@@ -83,3 +83,14 @@ by editing the group before it closes.
 - **2026-10-03 (user), point 5.** The first version drew from a future
   Bitcoin block hash fetched from two public explorers. The user ruled out
   any outside server; point 5 now draws from a seed made after the freeze.
+- **2026-10-03 (user), point 5, found building F-707-k.** The seed is sealed
+  into the draw row at the freeze, in the freeze's transaction, not made at
+  the draw: once the list is frozen the outcome is fixed, and a crash or an
+  aborted run cannot make a second seed. `lottery_draw.drawnAt` became
+  nullable; the draw (F-707-l) sets it once. Not chosen: making the seed in
+  the draw's transaction (no migration, but a rerun after an abort makes a
+  new seed).
+- **2026-10-03 (user), point 3, for the close.** A member with no device
+  recorded enters; only a device behind 5 accounts in 30 days excludes.
+  Not chosen: excluding them as the wheel does — recording began 2026-10-03,
+  so an `automatic` lottery would lose most of its members.

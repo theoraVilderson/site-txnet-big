@@ -284,8 +284,9 @@ model LotteryEntrant {
 
 /// The draw, once per lottery (its key). The seed is made only after the list
 /// is frozen and stored sealed, `{kekId, iv, authTag, ciphertext}` (ADR-0022);
-/// winners are a permutation from HMAC-SHA256(seed, listHash). Written once;
-/// only `publishedAt` is set later, once.
+/// winners are a permutation from HMAC-SHA256(seed, listHash). Written once,
+/// at the freeze, seed included; `drawnAt` and then `publishedAt` are each set
+/// later, once (20261003000700).
 model LotteryDraw {
   lotteryId            String    @id @db.Uuid
   tenantId             String    @db.Uuid
@@ -295,7 +296,8 @@ model LotteryDraw {
   seedSealed           Json
   algorithm            String
   frozenAt             DateTime
-  drawnAt              DateTime
+  /// Null from the freeze (F-707-k) until the draw (F-707-l) sets it, once.
+  drawnAt              DateTime?
   publishedAt          DateTime?
 
   lottery Lottery @relation(fields: [lotteryId, tenantId], references: [id, tenantId])

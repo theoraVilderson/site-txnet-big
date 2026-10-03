@@ -21,7 +21,7 @@ Source of truth: `txnet-backend/prisma/domains/engagement.prisma` (Postgres sche
 | lottery | a draw among a user group: entry mode, close time, eligibility, reserves, status, cancel reason | yes | permanent |
 | lottery_prize | rank, kind + value, `winnersCount` | yes | permanent |
 | lottery_entrant | one user once; `ticketNumber` at the freeze or `excludedReason` | yes | permanent |
-| lottery_draw | once per lottery: list hash, sealed seed (ADR-0022), algorithm, times, `publishedAt` | yes | permanent |
+| lottery_draw | once per lottery, written at the freeze: list hash, sealed seed (ADR-0022), algorithm, `frozenAt`; `drawnAt` and `publishedAt` set later, once each | yes | permanent |
 | lottery_winner | a place in the permutation: winner (`prizeId`) or reserve, delivery outcome | yes | permanent |
 | reward_issue | one prize given: (source spin\|lottery, referenceId) unique, user, kind, and what it became (Grant + adjustment or duration change, coupon, free Grant); written once (F-707-b) | yes | permanent |
 | attention_budget | recent proactive AI-message times per subject (`chargedAt[]`, user or tenant) — 3 per rolling 7 days, 1 per 24 h (F-1501, ADR-0109 point 10); written by `ai-service` only; a count, never a ledger account (C-13); strict tenant RLS | yes | while the subject exists |
@@ -39,7 +39,7 @@ Source of truth: `txnet-backend/prisma/domains/engagement.prisma` (Postgres sche
 
 Wheel and lottery: written only by `billing-service`'s `engagement/` module,
 in the caller's tenant transaction — `spin_wheel_config` and `spin_wheel_prize`
-by `WheelAdminService` (F-707-c); `spin_wheel_day`, `spin_wheel_prize_day`, `spin_wheel_attempt` by `WheelSpinService` (F-707-d); `lottery` and `lottery_prize` by `LotteryAdminService` (F-707-i); `lottery_entrant` opt-ins by `LotteryEntryService` (F-707-j). No unit outside `engagement` writes them. `attention_budget` is read and written only by
+by `WheelAdminService` (F-707-c); `spin_wheel_day`, `spin_wheel_prize_day`, `spin_wheel_attempt` by `WheelSpinService` (F-707-d); `lottery` and `lottery_prize` by `LotteryAdminService` (F-707-i); `lottery_entrant` opt-ins by `LotteryEntryService` (F-707-j); tickets and exclusions, `lottery_draw`, and `lottery.status = frozen` by `LotteryCloseService` (F-707-k). No unit outside `engagement` writes them. `attention_budget` is read and written only by
 `ai-service`'s `AttentionBudget`, on the app pool with the tenant bound (F-1501).
 
 ## Migration notes
@@ -55,3 +55,6 @@ to `Admin`, the audit values. `20261003000500_the_wheel_warns_at_80_percent`
 (F-707-e): `spin_wheel_day.capAlertedAt`. Both additive.
 `20261003000600_a_tenant_admin_runs_its_lotteries` (F-707-i): the `lottery_*`
 audit actions and the `lottery` target. Additive.
+`20261003000700_the_seed_is_sealed_at_the_freeze` (F-707-k): `lottery_draw.drawnAt`
+nullable, the guard allowing `drawnAt` then `publishedAt` once each, and
+`lottery_draw_published_after_drawn`.

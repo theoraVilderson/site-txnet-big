@@ -69,8 +69,11 @@ const APP = join(__dirname, '..');
  * `SeasonInternalController` is the seasons' writer (F-505-a, called by
  * F-505-b's tick): `SERVICE_ONLY` or a 404, and throttling it would leave a
  * Nowruz price unwritten when Nowruz comes.
+ * `LotteryInternalController` is the lottery close (F-707-k), a minute tick:
+ * `SERVICE_ONLY` or a 404, and throttling it would leave a lottery open past
+ * its close time while users wait on the result.
  */
-const EXEMPT = new Set(['HealthController', 'AiOfferCouponController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'UsageInternalController', 'VpnReserveController', 'ChargeCurrenciesController', 'SeasonInternalController']);
+const EXEMPT = new Set(['HealthController', 'AiOfferCouponController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'UsageInternalController', 'VpnReserveController', 'ChargeCurrenciesController', 'SeasonInternalController', 'LotteryInternalController']);
 
 /**
  * Controllers with no identity to bucket on, and what they count instead.

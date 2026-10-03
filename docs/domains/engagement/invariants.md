@@ -20,9 +20,9 @@ updated: 2026-10-03
 
 | 7 | A wheel version and its prizes never change once written | `spin_wheel_is_history` | a day's odds changed mid-day |
 | 8 | A lottery is frozen once published and moves one way; cancelling needs a reason | `lottery_guard`, `lottery_parts_guard`; `LotteryAdminService` answers each with a reason (`lottery-admin.spec.ts`) | an operator steers the draw |
-| 9 | A draw happens once and is never rewritten | key + `lottery_draw_is_history` | a re-roll until the right winner |
+| 9 | A draw happens once and is never rewritten; its seed is made only after the list is frozen, in the freeze's transaction | key + `lottery_draw_is_history`; `LotteryCloseService` (`lottery-close.spec.ts`) | a re-roll until the right winner |
 | 10 | A prize is given once per (source, reference), in the caller's transaction; GB and days only to an active Grant now, never queued | `reward_issue` unique + `issueReward`; `reward-issuer.spec.ts` | a prize paid twice, or held for a purchase |
 
 ## How to test
 
-Attention budget: `ai-service/src/app/attention/attention-budget.spec.ts`. Wheel and lottery storage: `billing-service/src/app/engagement/engagement-schema.int.spec.ts` (`npm run test:int`). Rewards: `reward-issuer.spec.ts`. Settings: `wheel-admin.spec.ts`, `lottery-admin.spec.ts`. Spin: `wheel-spin.spec.ts`.
+Attention budget: `ai-service/src/app/attention/attention-budget.spec.ts`. Wheel and lottery storage: `billing-service/src/app/engagement/engagement-schema.int.spec.ts` (`npm run test:int`). Rewards: `reward-issuer.spec.ts`. Settings: `wheel-admin.spec.ts`, `lottery-admin.spec.ts`. Lottery entry and close: `lottery-entry.spec.ts`, `lottery-close.spec.ts`. Spin: `wheel-spin.spec.ts`.

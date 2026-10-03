@@ -240,7 +240,7 @@ describe('a lottery (point 5)', () => {
   const draw = () =>
     exec(`
       INSERT INTO engagement.lottery_draw ("lotteryId", "tenantId", "entrantCount", "listHash", "seedSealed", algorithm, "frozenAt", "drawnAt")
-      VALUES ('${LOT}', '${TENANT_A}', 1, '${'a'.repeat(64)}', '{"kekId":"k1"}', 'hmac-sha256-fisher-yates-v1', now(), now())`);
+      VALUES ('${LOT}', '${TENANT_A}', 1, '${'a'.repeat(64)}', '{"kekId":"k1"}', 'hmac-sha256-fisher-yates-v1', now(), NULL)`);
 
   beforeAll(async () => {
     await exec(`
@@ -279,14 +279,20 @@ describe('a lottery (point 5)', () => {
     await expect(setStatus('cancelled', `, "cancelledAt" = now()`)).rejects.toThrow(/lottery_cancel_reason/);
   });
 
-  it('is drawn once, and its seed is never rewritten', async () => {
+  it('is sealed at the freeze, drawn once, published after; its seed is never rewritten', async () => {
+    const setDraw = (col: string, value = 'now()') => exec(`UPDATE engagement.lottery_draw SET "${col}" = ${value} WHERE "lotteryId" = '${LOT}'`);
+    // The freeze writes the draw row, seed and list hash, while still `published` (F-707-k).
+    await expect(draw()).resolves.toBe(1);
     await expect(setStatus('frozen')).resolves.toBe(1);
     await expect(entrant(USER_A3)).rejects.toThrow(/lottery_frozen/);
-    await expect(draw()).resolves.toBe(1);
     await expect(draw()).rejects.toThrow(/Unique constraint|23505/);
-    await expect(exec(`UPDATE engagement.lottery_draw SET "seedSealed" = '{"kekId":"k2"}' WHERE "lotteryId" = '${LOT}'`)).rejects.toThrow(/lottery_draw_is_history/);
-    await expect(exec(`UPDATE engagement.lottery_draw SET "publishedAt" = now() WHERE "lotteryId" = '${LOT}'`)).resolves.toBe(1);
-    await expect(exec(`UPDATE engagement.lottery_draw SET "publishedAt" = now() WHERE "lotteryId" = '${LOT}'`)).rejects.toThrow(/lottery_draw_is_history/);
+    await expect(setDraw('seedSealed', `'{"kekId":"k2"}'`)).rejects.toThrow(/lottery_draw_is_history/);
+    await expect(setDraw('publishedAt')).rejects.toThrow(/lottery_draw_published_after_drawn/);
+    await expect(setDraw('drawnAt')).resolves.toBe(1);
+    await expect(setDraw('drawnAt')).rejects.toThrow(/lottery_draw_is_history/);
+    await expect(setDraw('drawnAt', 'NULL')).rejects.toThrow(/lottery_draw_is_history/);
+    await expect(setDraw('publishedAt')).resolves.toBe(1);
+    await expect(setDraw('publishedAt')).rejects.toThrow(/lottery_draw_is_history/);
   });
 
   it('moves one way', async () => {
