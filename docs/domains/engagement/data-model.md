@@ -39,7 +39,7 @@ Source of truth: `txnet-backend/prisma/domains/engagement.prisma` (Postgres sche
 
 Wheel and lottery: written only by `billing-service`'s `engagement/` module,
 in the caller's tenant transaction — `spin_wheel_config` and `spin_wheel_prize`
-by `WheelAdminService` (F-707-c); `spin_wheel_day`, `spin_wheel_prize_day`, `spin_wheel_attempt` by `WheelSpinService` (F-707-d); `lottery` and `lottery_prize` by `LotteryAdminService` (F-707-i); `lottery_entrant` opt-ins by `LotteryEntryService` (F-707-j); tickets and exclusions, `lottery_draw`, and `lottery.status = frozen` by `LotteryCloseService` (F-707-k); `lottery_winner`, `lottery_draw.drawnAt`/`publishedAt` and `status = drawn` by `LotteryDrawService` (F-707-l). No unit outside `engagement` writes them. `attention_budget` is read and written only by
+by `WheelAdminService` (F-707-c); `spin_wheel_day`, `spin_wheel_prize_day`, `spin_wheel_attempt` by `WheelSpinService` (F-707-d); `lottery` and `lottery_prize` by `LotteryAdminService` (F-707-i); `lottery_entrant` opt-ins by `LotteryEntryService` (F-707-j); tickets and exclusions, `lottery_draw`, and `lottery.status = frozen` by `LotteryCloseService` (F-707-k); `lottery_winner`, `lottery_draw.drawnAt`/`publishedAt` and `status = drawn` by `LotteryDrawService` (F-707-l); a winner's `delivery`, `deliveredAt`, `passedOnReason` and a reserve's `prizeId`/`replacesWinnerId` by `LotteryDeliveryService` (F-707-m). No unit outside `engagement` writes them. `attention_budget` is read and written only by
 `ai-service`'s `AttentionBudget`, on the app pool with the tenant bound (F-1501).
 
 ## Migration notes

@@ -10,7 +10,7 @@ updated: 2026-10-03
 
 **DRAFT — the wheel and the lottery have their tables and database guards
 (F-707-a); `billing-service`'s `engagement/` module (ADR-0111 point 1) writes
-the wheel's versions (F-707-c), its spins (F-707-d), its day report (F-707-e) and a user's history (F-707-g), a lottery's drafts, publish and cancel (F-707-i), a user's entry (F-707-j), the close (F-707-k) and the draw (F-707-l), not yet the delivery; the panel (F-707-f/g) and the bot (F-707-h) are its surfaces. The attention budget is implemented (F-1501), in
+the wheel's versions (F-707-c), its spins (F-707-d), its day report (F-707-e) and a user's history (F-707-g), a lottery's drafts, publish and cancel (F-707-i), a user's entry (F-707-j), the close (F-707-k), the draw (F-707-l) and the delivery and public result (F-707-m); the panel (F-707-f/g) and the bot (F-707-h) are its surfaces. The attention budget is implemented (F-1501), in
 `ai-service`, its only writer (ADR-0109 point 10).**
 
 ## TL;DR
@@ -28,8 +28,9 @@ draw made once and checkable from what is published.
 | manage the wheel — **implemented (F-707-c)** | `engagement.manage`; `GET /api/billing/engagement/wheel`, `POST …/wheel/versions` (config, eligibility, group, prizes in slot order), `GET …/versions/:version` | `{today, inForce, next, history}`; a version with `expectedCostPerSpin` | sync tx | `invalid_prize`, `invalid_amount`, `expected_cost_over_cap`, `prize_cost_over_cap` (400); `coupon_template_not_found`, `variant_not_found`, `group_not_found`, `version_not_found` (404); `version_taken` (409) |
 | the wheel's day report — **implemented (F-707-e)** | `engagement.manage`; `GET /api/billing/engagement/wheel/report?from=&to=` (tenant days, inclusive, default today, at most 31) | per day, newest first: `{day, version, spins, refused, refusals{reason: n}, nothing, prizes[{prizeId, position, label, prizeType, count, cost}], costSpent, cap, currencyCode, capUsedPercent, alertedAt}` | sync | `invalid_range` (400) |
 | manage lotteries — **implemented (F-707-i)** | `engagement.manage`; `/api/billing/engagement/lotteries`: `GET`, `GET :id`, `POST` and `PUT :id` (a whole draft: group, title, description, `entryMode`, `closesAt`, eligibility, `reservesCount`, prizes in rank order), `DELETE :id`, `POST :id/publish`, `POST :id/cancel {reason}` | a lottery with its prizes, `entrantCount`, `winnersTotal`; `204` on delete | sync tx | `invalid_prize`, `invalid_close_time`, `cancel_reason_required` (400); `coupon_template_not_found`, `variant_not_found`, `group_not_found`, `lottery_not_found` (404); `not_a_draft`, `not_cancellable` (409) |
+| a lottery's result — **implemented (F-707-m)** | `GET /api/billing/lotteries/:id/result`; the caller, as the list's rule 4 | `{lotteryId, title, algorithm, seed, listHash, entrantCount, frozenAt, drawnAt, tickets[{ticketNumber, entrantId}], places[{position, ticketNumber, prize{rank, label}, delivery, passedOnReason, replacesPosition}], mine{entrantId, ticketNumber, excludedReason}}` | sync | `lottery_not_found` (404); `not_drawn` (409) |
 | the user's lotteries — **implemented (F-707-j)** | `GET /api/billing/lotteries`; `POST` / `DELETE …/:id/entry`; the caller | list: the published lotteries of its groups and any it has an entrant row in, newest close first, 30: `{id, title, entryMode, status, closesAt, cancelReason, open, prizes, entry{optedInAt, ticketNumber, excludedReason}}`; entry: `{lotteryId, joined, optedInAt, replay}` | sync tx | `lottery_not_found` (404); `not_opt_in`, `closed` (409) |
-| close and draw lotteries — **implemented (F-707-k, F-707-l)** | `POST /api/internal/billing/engagement/lotteries/close-due`, `ServiceOnlyGuard`; worker `lottery_close`, every minute: the freezes, then the draws | `{scanned, frozen, drawn, failed}` | sync, one tx per lottery per step | a 404 to anyone but a service |
+| close, draw and deliver lotteries — **implemented (F-707-k, -l, -m)** | `POST /api/internal/billing/engagement/lotteries/close-due`, `ServiceOnlyGuard`; worker `lottery_close`, every minute: the freezes, the draws, then the deliveries | `{scanned, frozen, drawn, delivered, failed}` | sync, one tx per lottery per step | a 404 to anyone but a service |
 | the user's wheel — **implemented (F-707-d)** | `GET /api/billing/wheel`; the caller and its device | `{tenantDay, version, prizes[] with oddsPercent, eligible, refusalReason, spinsLeftToday, nextSpinAt}`; writes nothing | sync | `no_wheel` (404) |
 | the user's history — **implemented (F-707-g)** | `GET /api/billing/wheel/history`; the caller | the caller's own attempts, newest 30: `{attemptId, at, tenantDay, status, refusalReason, prize{label, prizeType, prizeValue}, coupon{code, expiresAt}}` — never the checks; writes nothing | sync | — |
 | spin — **implemented (F-707-d)** | `POST /api/billing/wheel/spin {requestId, grantId?}`; the device from the request (F-036-a) | `{attemptId, status, refusalReason, seq, position, prize, reward, replay}` — a refused spin is a recorded `200` | sync tx | `no_wheel` (404), `no_fingerprint` (400), `spin_in_progress` (409) |
@@ -41,6 +42,7 @@ draw made once and checkable from what is published.
 
 | Event | When | Payload |
 |---|---|---|
+| `engagement.lottery.won` (F-707-m) | a winner place `delivered`, in the delivery's transaction; once per place | `{tenantId, userId, lotteryId, title, prize, rank}`; worker-service tells `lotteryWon` (automation `contract.outbox.md`) |
 | `tenant.engagement.wheel_cap_nearing` (F-707-e) | the spin whose prize brings the tenant day to 80% of the cap; once a day (`spin_wheel_day.capAlertedAt`, set under the day lock), one event per active user whose role holds `engagement.manage` or `*` | `{tenantId, userId, day, spent, cap, currencyCode}`; worker-service tells `wheelCapNearing` (automation `contract.outbox.md`) |
 
 ## Consumes
@@ -152,6 +154,20 @@ Web Crypto only, so the verify page (F-707-n) runs the same file.
 | 4. Places 1..W to the prizes in rank order, `winnersCount` each; the next `reservesCount` are reserves (`prizeId` null). Fewer tickets: the last prizes and reserves go unfilled | the higher prize is drawn first |
 | 5. Winners written, then `drawnAt` = `publishedAt` = now, then `drawn` — together or not at all | seed, list hash and result public at once (point 5); the seed is read through its seal once `publishedAt` is set |
 | 6. Once: `drawnAt` set once (`lottery_draw_is_history`), `frozen → drawn` one way; no route draws but `close-due` | no re-roll |
+
+## The delivery and the result (F-707-m) — built
+
+`engagement/lottery-delivery.service.ts`, by `close-due` right after the
+draws; `lottery-result.service.ts` behind `GET …/lotteries/:id/result`.
+
+| Rule | Why |
+|---|---|
+| 1. One transaction per `drawn` lottery with a pending prize, locked `FOR UPDATE`; places taken in place order | a reserve's turn is decided by the draw, never by timing |
+| 2. Account deleted or not active → `passed_on`, `inactive`; a GB or days prize with no active Grant to take it → `passed_on`, `no_active_grant`, at once (user, 2026-10-03) | never queued for a purchase (point 2, F-707-b rule 3) |
+| 3. A pass hands the prize to the first unused reserve, which names the place it replaces and is judged the same; none left: unawarded, the pass says so | every pass is on the record |
+| 4. The tenant's refusal (template gone, variant, funds, limits) → stays `pending`, retried next minute | a reserve would be refused the same |
+| 5. Given via `issueReward` (`source: lottery`, reference the place, actor the lottery's creator) in a savepoint; `delivered`, then `engagement.lottery.won` | once per place (F-707-b rule 6); a refusal undoes the issuer's writes |
+| 6. The result is shown to whom the lottery is (F-707-j rule 4), only once `drawn` and `publishedAt` is set; the seed is opened from its seal; tickets carry entrant ids, never user ids | anyone in it can redo the draw (F-707-n) |
 
 ## The spin (F-707-d) — built
 

@@ -5,12 +5,14 @@ import type { Request } from 'express';
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { LotteryEntryRefused, LotteryEntryRejection, LotteryEntryService } from './lottery-entry.service';
+import { LotteryResultService } from './lottery-result.service';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
 export const LOTTERY_ENTRY_REFUSAL_STATUS: Record<LotteryEntryRejection, 404 | 409> = {
   lottery_not_found: 404,
   not_opt_in: 409,
   closed: 409,
+  not_drawn: 409,
 };
 
 const READ = {
@@ -28,17 +30,28 @@ const ENTRY = {
  * A user's lotteries (F-707-j, ADR-0111 point 6): `/api/billing/lotteries`.
  * Any signed-in user; the lottery's group decides who sees it. Joining and
  * leaving are idempotent: a repeat answers `replay: true`. Free — nothing
- * here takes money.
+ * here takes money. A drawn lottery's result, seed included, is public to the
+ * same people (F-707-m).
  */
 @Controller('billing/lotteries')
 export class LotteryController {
-  constructor(private readonly lotteries: LotteryEntryService) {}
+  constructor(
+    private readonly lotteries: LotteryEntryService,
+    private readonly results: LotteryResultService,
+  ) {}
 
   @Get()
   @RateLimit(READ)
   async list(@Req() req: Request) {
     const { userId, tenantId } = identityOf(req);
     return this.lotteries.list({ userId, tenantId });
+  }
+
+  @Get(':id/result')
+  @RateLimit(READ)
+  async result(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
+    const { userId, tenantId } = identityOf(req);
+    return this.refusing(() => this.results.result({ userId, tenantId }, id));
   }
 
   @Post(':id/entry')

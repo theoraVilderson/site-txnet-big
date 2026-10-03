@@ -137,6 +137,15 @@ export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap 
       await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId, template: 'wheelCapNearing', params } });
       return;
     }
+    if (event.type === OutboxEventType.LOTTERY_WON) {
+      // One event per winner place (F-707-m): the person is the winner.
+      const userId = str(p, 'userId');
+      if (!tenantId || !userId) throw new Error(`outbox event ${event.id} has a payload without its tenant or winner`);
+      const params: Record<string, string> = {};
+      for (const k of ['title', 'prize'] as const) if (str(p, k)) params[k] = str(p, k)!;
+      await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId, template: 'lotteryWon', params } });
+      return;
+    }
     const ownerUserId = str(p, 'ownerUserId');
     if (!tenantId || !ownerUserId) throw new Error(`outbox event ${event.id} has a payload without its tenant or owner`);
     if (event.type === OutboxEventType.TENANT_QUOTA_ALERT || event.type === OutboxEventType.TENANT_QUOTA_DIGEST) {

@@ -21,6 +21,7 @@ export const NOTIFY_TEMPLATES = [
   'resellerQuotaCapReached',
   'resellerQuotaDigest',
   'wheelCapNearing',
+  'lotteryWon',
   'panelAccepted',
   'panelRefused',
   'purchaseDelivered',
@@ -214,6 +215,17 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.engagement?.wheelCapNearingMany,
       fallback: '🎡 {{count}} days of the lucky wheel reached 80% of their cap. The day-by-day report is on the wheel settings page.',
       inbox: { read: (ns) => ns?.engagement?.wheelCapNearingManyTitle, fallback: 'Lucky wheel cap notices ({{count}})' },
+    },
+  },
+  // F-707-m: a lottery winner was given its prize — to that winner, once per place.
+  lotteryWon: {
+    read: (ns) => ns?.engagement?.lotteryWon,
+    fallback: '🎉 You won {{prize}} in "{{title}}". It has been added to your account. The full result, and how to check the draw yourself, is on the lottery\'s page.',
+    inbox: { read: (ns) => ns?.engagement?.lotteryWonTitle, fallback: 'You won in "{{title}}"' },
+    many: {
+      read: (ns) => ns?.engagement?.lotteryWonMany,
+      fallback: '🎉 You won {{count}} lottery prizes. They have been added to your account; each lottery\'s page shows its result.',
+      inbox: { read: (ns) => ns?.engagement?.lotteryWonManyTitle, fallback: 'Lottery prizes won ({{count}})' },
     },
   },
   // F-019-v8: 80% of a quota's included units used, once per window and period.

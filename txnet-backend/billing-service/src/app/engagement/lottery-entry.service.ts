@@ -27,7 +27,7 @@ import { PrismaService } from '../prisma/prisma.service';
  * as for a draft.
  */
 
-export type LotteryEntryRejection = 'lottery_not_found' | 'not_opt_in' | 'closed';
+export type LotteryEntryRejection = 'lottery_not_found' | 'not_opt_in' | 'closed' | 'not_drawn';
 
 export class LotteryEntryRefused extends Error {
   constructor(

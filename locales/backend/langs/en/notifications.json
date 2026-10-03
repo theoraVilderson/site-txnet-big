@@ -313,6 +313,10 @@
     "wheelCapNearing": "🎡 The lucky wheel has spent {{spent}} of today's {{cap}} {{currencyCode}} cap ({{day}}). Once the cap is reached, spins give nothing until tomorrow; a higher cap takes effect from the next day.",
     "wheelCapNearingTitle": "Lucky wheel at 80% of today's cap",
     "wheelCapNearingMany": "🎡 {{count}} days of the lucky wheel reached 80% of their cap. The day-by-day report is on the wheel settings page.",
-    "wheelCapNearingManyTitle": "Lucky wheel cap notices ({{count}})"
+    "wheelCapNearingManyTitle": "Lucky wheel cap notices ({{count}})",
+    "lotteryWon": "🎉 You won {{prize}} in \"{{title}}\". It has been added to your account. The full result, and how to check the draw yourself, is on the lottery's page.",
+    "lotteryWonTitle": "You won in \"{{title}}\"",
+    "lotteryWonMany": "🎉 You won {{count}} lottery prizes. They have been added to your account; each lottery's page shows its result.",
+    "lotteryWonManyTitle": "Lottery prizes won ({{count}})"
   }
 }

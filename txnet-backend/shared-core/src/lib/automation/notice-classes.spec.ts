@@ -48,6 +48,8 @@ describe('notice classes (F-601-s)', () => {
       'subscriptionSuspended',
     ]);
     expect(by('important')).toEqual([
+      // F-707-m: a lottery prize given.
+      'lotteryWon',
       'panelRefused',
       'paymentCredited',
       'purchaseDelayed',

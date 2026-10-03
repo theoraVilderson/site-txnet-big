@@ -78,6 +78,8 @@ export const NOTICE_CLASS_OF: Readonly<Record<string, NoticeClass>> = {
   resellerQuotaDigest: 'important',
   // F-707-e: the wheel's day is nearly spent; the admin may raise the cap tomorrow, nothing is lost today.
   wheelCapNearing: 'important',
+  // F-707-m: a prize given — the user got something, nothing to do.
+  lotteryWon: 'important',
   paymentCredited: 'important',
   purchaseDelivered: 'important',
   purchaseDelayed: 'important',
