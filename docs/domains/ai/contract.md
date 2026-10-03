@@ -3,7 +3,7 @@ id: ai
 layer: domain
 status: draft
 version: 2
-updated: 2026-10-02
+updated: 2026-10-03
 ---
 
 # Contract — ai
@@ -138,6 +138,7 @@ action:
 
 | step | rule | `suppressedBy` |
 |---|---|---|
+| prize (F-038-y) — `decision/prize-hold.ts`, read by `PrizeReader` | a wheel or lottery prize holding the candidate's Grant, or an unused prize coupon holding an offer: [contract.candidates.md](contract.candidates.md) "Prizes"; re-checked at the take | `prize` |
 | threshold (F-1503) — `decision/confidence-threshold.ts` | confidence below the tenant's `confidenceThreshold` (default 0.6) is dropped; equal passes; compared at 4 places, as stored; a non-number is dropped | `confidence_threshold` |
 | opt-out (F-1505) — `decision/opt-out.ts` (`OptOuts.verdict`), from `ai.opt_out` | a subject × type with a row is dropped, permanently | `opt_out` |
 | cooldown (F-1504, D-12) — `decision/cooldown.ts`, read by `CooldownReader` from `ai.action` | per subject × type: 14 days rolling from `sentAt` of a `sent`/`accepted`/`dismissed` one; a `scheduled`/`awaiting_approval` one holds it with no reopening time; `suppressed`/`expired` start nothing | `cooldown` |

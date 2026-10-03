@@ -7,6 +7,8 @@ import { ResellerReader } from '../profile/reseller-reader';
 import type { Reason } from '../profile/predictions';
 import { PrismaService } from '../prisma/prisma.service';
 import { labelledMessage } from './action-log';
+import { prizeStops } from './prize-hold';
+import { PrizeReader } from './prize-reader';
 
 /**
  * F-038-g2 (ADR-0109 points 10, 11): what worker-service delivers a scheduled
@@ -15,7 +17,8 @@ import { labelledMessage } from './action-log';
  *
  * 1. `take` — due `scheduled` actions, leased {@link DELIVERY_LEASE_MS} forward
  *    so a second take does not see them (`FOR UPDATE SKIP LOCKED`); one past
- *    its deadline is `expired` instead, never told late.
+ *    its deadline is `expired` instead, never told late; one a prize won since
+ *    its decision now holds is `suppressed` `prize` (F-038-y).
  * 2. notification's claim (F-038-g1), by the worker.
  * 3. `floor` — `SafetyFloor.check` as an engine message, the last check
  *    before it leaves; it charges the budget when it passes.
@@ -150,6 +153,7 @@ export class ActionDelivery {
     private readonly prisma: PrismaService,
     private readonly safety: SafetyFloor,
     private readonly resellers: ResellerReader,
+    private readonly prizes: PrizeReader,
   ) {}
 
   /** Due suggestions of every tenant, oldest first, up to `limit`; leased. */
@@ -188,10 +192,25 @@ export class ActionDelivery {
           return due.map((r) => ({ row: r, terms: offers.find((o) => o.id === r.offerId) }));
         }),
       );
-      const live = rows.some((r) => r.row.subjectKind === 'tenant') ? await this.resellersLive(id, rows.map((r) => r.row)) : new Map<string, ResellerLive>();
-      out.push(...rows.map(({ row, terms }) => deliveryItem(row, terms, live.get(row.id))));
+      const stopped = await this.prizeHeld(id, rows.map((r) => r.row), now);
+      const kept = rows.filter((r) => !stopped.has(r.row.id));
+      const live = kept.some((r) => r.row.subjectKind === 'tenant') ? await this.resellersLive(id, kept.map((r) => r.row)) : new Map<string, ResellerLive>();
+      out.push(...kept.map(({ row, terms }) => deliveryItem(row, terms, live.get(row.id))));
     }
     return out;
+  }
+
+  /** F-038-y: stops, as `prize`, the leased rows a prize won since their decision now holds; answers their ids. */
+  private async prizeHeld(tenantId: string, rows: DueRow[], now: Date): Promise<Set<string>> {
+    const users = [...new Set(rows.filter((r) => r.subjectKind === 'user').map((r) => r.subjectId))];
+    if (users.length === 0) return new Set();
+    const stops = prizeStops(rows, await this.prizes.holds(tenantId, users, now));
+    if (stops.size > 0) {
+      await this.write(tenantId, (tx) =>
+        tx.aiAction.updateMany({ where: { id: { in: [...stops] }, tenantId, status: SCHEDULED }, data: { status: 'suppressed', suppressedBy: 'prize' } }),
+      );
+    }
+    return stops;
   }
 
   /**

@@ -12,6 +12,7 @@ import { CooldownReader } from './cooldown-reader';
 import { Holdouts } from './holdout';
 import { OfferGuardrails, offerTaken } from './offer-guardrail';
 import { OptOuts } from './opt-out';
+import { heldByPrize, type PrizeHold } from './prize-hold';
 import { QuietDownReader } from './quiet-down-reader';
 import { quietDownVerdict, type QuietInputs } from './quiet-down';
 import { scheduleAt } from './schedule';
@@ -27,6 +28,8 @@ export type SubjectDecisionInputs = {
   pendingSends: Date[];
   /** Stopped rows written in the last 24 h: a repeat of one is not written again. */
   stoppedToday: Array<{ actionType: AiActionType; suppressedBy: string | null }>;
+  /** F-038-y: the prizes holding this user's sales (`prize-hold.ts`); none for a reseller. */
+  prizes?: PrizeHold;
 };
 
 /** A candidate's expected margin; help with none (`usage_alert`, F-1516) ranks as zero. */
@@ -35,7 +38,7 @@ const marginOf = (c: EngineCandidate) => new Prisma.Decimal(c.expectedMargin?.am
 /**
  * F-038-e / ADR-0109 point 8 — one subject, in this order:
  *
- * candidates (types the tenant runs) → threshold (F-1503) → opt-out (F-1505)
+ * candidates (types the tenant runs) → a prize won (F-038-y) → threshold (F-1503) → opt-out (F-1505)
  * → cooldown (F-1504) → quiet-down (F-1506) → holdout (F-1508) → attention
  * budget (F-1501, a peek) → the highest expected **margin**, never a
  * negative one (F-038-p) → offer
@@ -93,6 +96,9 @@ export class DecisionPipeline {
     let room: BudgetVerdict | undefined;
     const survivors: EngineCandidate[] = [];
     for (const c of candidates) {
+      // F-038-y: a prize just won on this Grant holds its sale — recorded with the prize that holds it.
+      const prize = heldByPrize(inputs.prizes, c);
+      if (prize) { await stop({ ...c, reasons: [prize, ...c.reasons] }, 'prize'); continue; }
       const threshold = thresholdVerdict(c.confidence, mode.confidenceThreshold);
       if ('suppressedBy' in threshold) { await stop(c, threshold.suppressedBy); continue; }
       const optOut = await this.optOuts.verdict(subject, c.actionType);

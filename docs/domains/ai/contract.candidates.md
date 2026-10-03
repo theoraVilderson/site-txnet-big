@@ -3,7 +3,7 @@ id: ai
 layer: domain
 status: draft
 version: 2
-updated: 2026-10-02
+updated: 2026-10-03
 ---
 
 # Contract — ai: candidates, the action types the engine proposes
@@ -55,6 +55,32 @@ engine keeps no calendar of its own. It counts only in the plan's currency
   today's at delivery — inside the window, the campaign's.
 
 A season with no campaign on the plan changes nothing.
+
+## Prizes (F-038-y, ADR-0111 point 2, ADR-0110)
+
+A prize the user won on the wheel or in a lottery (`engagement.reward_issue`,
+read through the reader, `20261003000900`) holds the engine's sale about it —
+`decision/prize-hold.ts`, pure; `PrizeReader` reads it:
+
+| prize | holds | until |
+|---|---|---|
+| extra days | `renew`, `resize_*`, `retain_offer`, `top_up_wallet` of that Grant (a top-up funds the renewal) | the Grant's end *before* the prize (`grant_duration_change.endsAtBefore`) passes — the user lives on the prize, a renewal is due |
+| bonus GB | the same | no more than the bonus is left (purchased − consumed ≤ the prize), or a new usage period began after it (`usagePeriodStartedAt`: a renewal or a reset) — a hold never silences the next renewal |
+| prize coupon | any `retain_offer`, every Grant: the two coupons never stack | used or reserved, expired, switched off or deleted |
+
+Days or GB on a Grant not `active` or past its end hold nothing; a free Grant
+holds nothing (its renewal is the sale it exists to start); help
+(`usage_alert`, `checkout_help`) is never held.
+
+- **Decided.** A held candidate stops at the pipeline's first step, `prize`,
+  its reason `prize_held` (`rewardId`, `prizeType`, `grantId`) first. With an
+  unused prize coupon, a renewal that would be `retain_offer` is `renew`, with
+  reason `prize_coupon` (`rewardId`, `couponId`) — as a season takes an
+  offer's place.
+- **Queued.** The take (F-038-g2) re-reads the prizes of the users it leased:
+  a row a prize won since its decision now holds is `suppressed` `prize` and
+  never told — the winner of three days gets no nudge that hour.
+- `prize` is in neither arm of the uplift report (F-038-i), as opt-out.
 
 ## What a candidate carries
 

@@ -85,7 +85,7 @@ describe('ActionDelivery (F-038-g2)', () => {
     };
     const prisma = { $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) };
     const safety = { check: vi.fn(async () => floor) };
-    return { tx, safety, delivery: new ActionDelivery(prisma as never, safety as never, {} as never) };
+    return { tx, safety, delivery: new ActionDelivery(prisma as never, safety as never, {} as never, {} as never) };
   }
 
   it('runs the floor as an engine message, for the action subject in its own tenant', async () => {

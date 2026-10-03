@@ -145,6 +145,8 @@ export type CandidateInputs = {
   lastPaidAt?: Date | null;
   /** F-038-r: the seasons' campaigns on the plans in play, not cancelled, ending ahead. */
   seasons?: readonly SeasonWindow[];
+  /** F-038-y: the user's unused prize coupon (`prize-hold.ts`) — no offer coupon is given beside it. */
+  prizeCoupon?: Reason | null;
 };
 
 export type EngineCandidate = ActionCandidate & {
@@ -372,8 +374,10 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
     // offers instead — still one suggestion per Grant; ahead of a top-up, never instead of a resize.
     // F-038-r: a season already lowering this plan's price before the deadline takes the place of a coupon — the
     // renewal is timed into it, and the tenant's offer budget is not spent on top of it.
+    // F-038-y: an unused prize coupon takes an offer's place too — the two coupons never stack.
     const seasonal = chosen.type === 'renew' ? seasonOn(input, current, deadline, now) : null;
-    const discount = chosen.type === 'renew' && !seasonal && renewal?.value != null && renewal.value < RETAIN_OFFER_BELOW ? bestOffer(input, current) : null;
+    const offered = chosen.type === 'renew' && !seasonal && renewal?.value != null && renewal.value < RETAIN_OFFER_BELOW ? bestOffer(input, current) : null;
+    const discount = input.prizeCoupon ? null : offered;
     if (discount && renewal) {
       const { offer, amount, percent } = discount;
       const reason = { code: 'suggest_offer', grantId, offerId: offer.id, discountPercent: percent.toFixed(2), discount: amount.toFixed(2), currencyCode: offer.currencyCode };
@@ -391,7 +395,8 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
     if (topUp && wallet) chosen = { type: 'top_up_wallet', prediction: wallet, target: current };
 
     // A top-up is worth the renewal it funds: the renewal's probability, the plan's margin.
-    const extra = topUp ? [{ code: 'suggest_top_up', grantId, ...topUp }] : [];
+    const extra: Reason[] = topUp ? [{ code: 'suggest_top_up', grantId, ...topUp }] : [];
+    if (offered && input.prizeCoupon) extra.push(input.prizeCoupon);
     out.push(candidate({ type: chosen.type, prediction: chosen.prediction, grantId, current, target: chosen.target, deadline, probability, extra }, input, now));
   }
   const help = checkoutHelpFor(input, now);

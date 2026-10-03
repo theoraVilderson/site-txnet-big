@@ -18,7 +18,7 @@ import { AI_READER_PLATFORM_TABLES, AI_READER_TABLES, AI_READER_VIEWS } from './
 const ROOT = join(__dirname, '../../../../..');
 const MIGRATIONS = join(ROOT, 'txnet-backend/prisma/domains/migrations');
 /** Every migration that grants the reader something, in order. */
-const READER_MIGRATIONS = ['20261002000300_ai_reader_role', '20261002000400_ai_profile_inputs', '20261002000500_ai_predictions_v1', '20261002000600_ai_quiet_down_inputs', '20261002000700_ai_decision_inputs', '20261002000800_ai_margin_inputs', '20261002001400_ai_package_rate_view', '20261002001600_ai_reseller_inputs', '20261002001700_ai_reseller_upgrade_inputs', '20261002001800_ai_usage_forecast_inputs', '20261002002200_ai_season_inputs', '20261002002300_ai_reseller_outcome_inputs'];
+const READER_MIGRATIONS = ['20261002000300_ai_reader_role', '20261002000400_ai_profile_inputs', '20261002000500_ai_predictions_v1', '20261002000600_ai_quiet_down_inputs', '20261002000700_ai_decision_inputs', '20261002000800_ai_margin_inputs', '20261002001400_ai_package_rate_view', '20261002001600_ai_reseller_inputs', '20261002001700_ai_reseller_upgrade_inputs', '20261002001800_ai_usage_forecast_inputs', '20261002002200_ai_season_inputs', '20261002002300_ai_reseller_outcome_inputs', '20261003000900_ai_prize_inputs'];
 
 function read(path: string): string {
   try {

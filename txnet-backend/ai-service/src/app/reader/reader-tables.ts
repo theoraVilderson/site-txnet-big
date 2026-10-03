@@ -40,6 +40,10 @@ export const AI_READER_TABLES = [
   { table: 'tenant.reseller_quota_terms_lock', sharedRead: false },
   // F-1525-a: the bound tenant's own billing wallet — its balance for the run-out.
   { table: 'tenant.tenant_billing_wallet', sharedRead: false },
+  // F-038-y: a prize won and what it became — the days' old end, the bonus bytes (`20261003000900_ai_prize_inputs`).
+  { table: 'engagement.reward_issue', sharedRead: false },
+  { table: 'entitlement.grant_duration_change', sharedRead: false },
+  { table: 'entitlement.quota_adjustment', sharedRead: false },
 ] as const;
 
 /**

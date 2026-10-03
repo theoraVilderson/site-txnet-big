@@ -2,12 +2,12 @@
 id: ai
 layer: domain
 status: draft
-updated: 2026-10-02
+updated: 2026-10-03
 ---
 
 # Invariants — ai
 
-**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–20, 22–25, shared-core 21; 4–6 are ADR-0109 rules still to build.
+**DRAFT** — the schema enforces 1–3, the role 7, compose 8, `ai-service` 9–20, 22–26, shared-core 21; 4–6 are ADR-0109 rules still to build.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -17,7 +17,7 @@ updated: 2026-10-02
 | 4 | The engine never sets a price, writes the ledger, changes a meter or touches the payment path | ADR-0109 point 9, §24.5 — service layer (planned) | money moved by a suggestion |
 | 5 | No learning across tenants and no network-layer data as input | ADR-0109 point 6 — service layer (planned) | one tenant's data shapes another's suggestions |
 | 6 | The attention budget is a count of messages, never a ledger account | C-13; `AttentionBudget` stores charge times only (`engagement` invariant 6) | budget mixed with money |
-| 7 | `ai-service` reads other units only through `txnet_ai_reader`: SELECT on named tables and the `ai.reader_*` views, nothing under `network`, no contact or secret column of `identity.user`, one tenant's rows | `20261002000300_ai_reader_role`, `…0400_ai_profile_inputs`, `…0600_ai_quiet_down_inputs`, `…0700_ai_decision_inputs`, `…0800_ai_margin_inputs`, `…1600_ai_reseller_inputs` (the resellers only to the platform; each reseller's quota terms in its own scope, F-038-o1), `…1700_ai_reseller_upgrade_inputs` (the packages, F-038-o4), `…1800_ai_usage_forecast_inputs` (a tenant's own wholesale spend and wallet, F-1525-a), `…2200_ai_season_inputs` (seasons' campaigns, shared-read, F-038-r), `…2300_ai_reseller_outcome_inputs` (a tenant's own upgrade charges and top-ups, F-038-o5), `db-login-roles.sh`; `reader-role.spec.ts`; the reader URL may not equal the app URL (`env.validation.ts`) | the engine writes another unit's tables, or reads another tenant's |
+| 7 | `ai-service` reads other units only through `txnet_ai_reader`: SELECT on named tables and the `ai.reader_*` views, nothing under `network`, no contact or secret column of `identity.user`, one tenant's rows | `20261002000300_ai_reader_role`, `…0400_ai_profile_inputs`, `…0600_ai_quiet_down_inputs`, `…0700_ai_decision_inputs`, `…0800_ai_margin_inputs`, `…1600_ai_reseller_inputs` (the resellers only to the platform; each reseller's quota terms in its own scope, F-038-o1), `…1700_ai_reseller_upgrade_inputs` (the packages, F-038-o4), `…1800_ai_usage_forecast_inputs` (a tenant's own wholesale spend and wallet, F-1525-a), `…2200_ai_season_inputs` (seasons' campaigns, shared-read, F-038-r), `…2300_ai_reseller_outcome_inputs` (a tenant's own upgrade charges and top-ups, F-038-o5), `20261003000900_ai_prize_inputs` (a prize won and what it became, F-038-y), `db-login-roles.sh`; `reader-role.spec.ts`; the reader URL may not equal the app URL (`env.validation.ts`) | the engine writes another unit's tables, or reads another tenant's |
 | 8 | The container is capped at one CPU and a memory ceiling | `dev-docker/compose/ai-service.yml` | the live site and bot on this host starve |
 | 9 | No engine run for a tenant that may not sell (suspended, terminated, onboarding — F-038-x) or whose package lacks `ai_recommendation`; with it, every v1 type runs on templates with no configuration, and model text needs a provider and starts as draft-with-approval | `resolveAiMode` + `AiTenantPolicy`, called by `TriggerConsumer`; `ai-defaults.spec.ts` | unpaid feature, or messages nobody configured |
 | 10 | A raw behaviour event (`ai.meter_reading`) lives 180 days; a reading never goes negative and an idle hour writes no row | `Retention.runTenant`, every tenant every hour, its engine on or off (F-038-s); CHECK `meter_reading_delta_not_negative`; `readingsFor` + `profile-features.spec.ts` | data kept past what point 14 allows; a wrong usage rate |
@@ -36,6 +36,7 @@ updated: 2026-10-02
 | 23 | A user reads, closes or opts out of only their own suggestion, as the gate proved them; no route through Traefik takes a user, and none reaches `api/internal/ai/*` (F-038-h) | `IdentityMiddleware` on `api/ai/{*path}`, `MySuggestionService` finding the action as the user's; Traefik `PathPrefix(/api/ai)`; `my-suggestion.spec.ts` | one user's pitch shown to, closed or silenced by another |
 | 24 | A discount is suggested only from an active offer the tenant defined, only where the renewal without it is predicted under 0.5, never above the offer's cap or its template's own discount, never across currencies, never to the holdout, and at most once per account per offer (F-038-f2) | `candidatesFor` (`offerDiscount`, `RETAIN_OFFER_BELOW`), `OfferGuardrails.allowed` re-read at the write, the holdout step before it; `retain-offer.spec.ts`. In the database: unique `action_offer_once` over the given statuses, a lost race recorded as `offer_guardrail` (F-038-q); `offer-once.spec.ts` | a discount to someone who would have paid, given twice, or larger than the seller allowed |
 | 25 | An account identity shows deleted, or no longer has, keeps no `ai` row and no attention budget: readings, profile, predictions, actions, holdout, opt-outs go within the hour, in every tenant; a reader that sees no account of the tenant erases nothing (ADR-0109 point 14, F-038-s) | `Retention.runTenant` + `erasable`, from `ProfileBuilder.rebuildAll`; `retention.spec.ts` | a deleted person's behaviour kept and acted on; or, failing open, a whole tenant's history erased |
+| 26 | A sale about a Grant a wheel or lottery prize just went to is never told while the prize is unspent, decided or already queued; an offer coupon is never given beside an unused prize coupon; and every hold lets go — the days begun, the bonus reached, a new usage period, the Grant closed, the coupon used or expired (F-038-y) | `prizeHold`, `heldByPrize` in `DecisionPipeline` and `candidatesFor`, `prizeStops` at `ActionDelivery.take`, over `PrizeReader`; `prize-hold.spec.ts` | a winner nudged to pay the hour they won; two coupons stacked; or a renewal silenced for good |
 
 ## How to test
 

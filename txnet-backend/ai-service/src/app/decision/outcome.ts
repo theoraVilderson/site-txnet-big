@@ -17,7 +17,7 @@ import type { Reason } from '../profile/predictions';
  * measured, the holdout's (`suppressedBy` `holdout`) as the control and every
  * other as treated — a row the budget, the margin or the schedule stopped
  * later is still a subject the engine would have spoken to. A row stopped
- * before the holdout (threshold, opt-out, cooldown, quiet-down, a switched-off
+ * before the holdout (a prize, threshold, opt-out, cooldown, quiet-down, a switched-off
  * type) is in neither arm. One opportunity — subject, type, Grant and deadline
  * day — is one unit, however many daily rows it wrote.
  */
@@ -26,7 +26,7 @@ export const OUTCOME_WINDOW_DAYS = 7;
 const WINDOW_MS = OUTCOME_WINDOW_DAYS * 86_400_000;
 
 /** Steps that run before the holdout's, plus the two a subject or tenant sets later: such a row is in neither arm. */
-export const UNMEASURED_STEPS: readonly string[] = ['confidence_threshold', 'opt_out', 'cooldown', 'quiet_down', 'type_disabled'];
+export const UNMEASURED_STEPS: readonly string[] = ['prize', 'confidence_threshold', 'opt_out', 'cooldown', 'quiet_down', 'type_disabled'];
 export const HOLDOUT_STEP = 'holdout';
 /** A queued suggestion whose purchase already happened is stopped by this, never told after it. */
 export const OUTCOME_REACHED = 'outcome_reached';

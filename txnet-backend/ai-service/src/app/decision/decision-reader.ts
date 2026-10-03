@@ -9,6 +9,8 @@ import { CHECKOUT_HELP_DEADLINE_MS, CHECKOUT_HELP_WAIT_MS, SUGGEST_LEAD_DAYS, WI
 import type { WholesaleRate } from './margin';
 import { OFFER_GIVEN } from './offer-guardrail';
 import type { SubjectDecisionInputs } from './pipeline';
+import { NO_PRIZE_HOLD } from './prize-hold';
+import { PrizeReader } from './prize-reader';
 
 const DAY_MS = 86_400_000;
 const READ_TIMEOUT_MS = 30_000;
@@ -54,7 +56,7 @@ export function pricesInForce(
  * `txnet_ai_reader` (invariant 7): Grants, their wholesale legs (F-038-p),
  * variants and prices under RLS, an offer's template coupon (F-038-f2), the
  * user's zone by its column grant, the quiet window through
- * `ai.reader_quiet_hours`. `tenant.tenant` (no RLS) on the app pool, as every
+ * `ai.reader_quiet_hours`, the prizes holding a sale (`PrizeReader`, F-038-y). `tenant.tenant` (no RLS) on the app pool, as every
  * service reads it.
  */
 @Injectable()
@@ -62,6 +64,7 @@ export class DecisionReader {
   constructor(
     private readonly prisma: PrismaService,
     private readonly reader: AiReaderPrisma,
+    private readonly prizes: PrizeReader,
   ) {}
 
   /**
@@ -208,6 +211,9 @@ export class DecisionReader {
       { timeout: READ_TIMEOUT_MS },
     );
 
+    // F-038-y: a prize just won holds the sale about its Grant; an unused prize coupon, any offer coupon.
+    const prizes = await this.prizes.holds(tenantId, userIds, now);
+
     const price = pricesInForce(theirs.prices);
     const plans = new Map<string, PlanOption>(
       theirs.variants.map((v) => {
@@ -269,8 +275,10 @@ export class DecisionReader {
           }
         : null;
       const mine = own.actions.filter((a) => a.subjectId === id);
+      const prize = prizes.get(id) ?? NO_PRIZE_HOLD;
       out.set(id, {
-        candidates: { predictions, grants, plans, wholesale, checkouts, lastPaidAt: paid.length ? new Date(Math.max(...paid)) : null, offers, usedOfferIds: new Set(own.given.filter((g) => g.subjectId === id).map((g) => g.offerId as string)), seasons },
+        candidates: { predictions, grants, plans, wholesale, checkouts, lastPaidAt: paid.length ? new Date(Math.max(...paid)) : null, offers, usedOfferIds: new Set(own.given.filter((g) => g.subjectId === id).map((g) => g.offerId as string)), seasons, prizeCoupon: prize.coupon },
+        prizes: prize,
         activeHours: own.profiles.find((p) => p.subjectId === id)?.activeHours ?? new Array<number>(HOURS_OF_WEEK).fill(0),
         quiet,
         pendingSends: mine.filter((a) => a.status === 'scheduled' && a.scheduledFor).map((a) => a.scheduledFor as Date),
