@@ -50,6 +50,12 @@ let users: SupportConversationService;
 let agents: SupportAgentService;
 let availability: SupportAvailability;
 const published: { kind: string; conversationId: string; detail: unknown }[] = [];
+const told: { template: string; userId: string; readUpTo: number; subject: string }[] = [];
+/** Records who would be told (F-033-i); the dedupe and the seam are `support-notifier.spec.ts`'s. */
+const notifier = {
+  tell: async (_tenantId: string, template: string, t: { userId: string; readUpTo: number; subject: string }) =>
+    told.push({ template, userId: t.userId, readUpTo: t.readUpTo, subject: t.subject }) > 0,
+} as never;
 
 const as = <T>(caller: SupportCaller, work: () => Promise<T>) => runWithTenant({ id: caller.tenantId }, work);
 
@@ -124,8 +130,8 @@ beforeAll(async () => {
     channelProof: async () => null,
   } as never;
   availability = new SupportAvailability(app, memoryPresence());
-  users = new SupportConversationService(app, config, realtime, availability);
-  agents = new SupportAgentService(app, config, realtime, availability);
+  users = new SupportConversationService(app, config, realtime, availability, notifier);
+  agents = new SupportAgentService(app, config, realtime, availability, notifier);
 });
 
 afterAll(async () => {
@@ -205,6 +211,28 @@ describe('replying and notes (invariants 3, 5)', () => {
       [2, 'her ISP blocks UDP', true],
     ]);
     expect(agentPage.conversation.userId).toBe(ALICE.userId);
+  });
+});
+
+describe('new-message notices (F-033-i)', () => {
+  it("tells the user of a reply and a resolve, the assignee of the user's message, and no one of a note or an unassigned thread", async () => {
+    const opened = await as(ALICE, () => users.open(ALICE, { body: 'notice walk' }));
+    told.length = 0;
+    await as(ALICE, () => users.send(ALICE, opened.id, { body: 'anyone?' }));
+    expect(told).toEqual([]);
+
+    await as(SARA, () => agents.reply(SARA, opened.id, { body: 'here', internal: true }));
+    expect(told).toEqual([]);
+
+    await as(SARA, () => agents.reply(SARA, opened.id, { body: 'Restart the app' }));
+    await as(ALICE, () => users.send(ALICE, opened.id, { body: 'did not help' }));
+    await as(SARA, () => agents.resolve(SARA, opened.id));
+    // Each with how far its reader had read, which is what the dedupe compares.
+    expect(told).toEqual([
+      { template: 'supportReplied', userId: ALICE.userId, readUpTo: 2, subject: 'notice walk' },
+      { template: 'supportUserWrote', userId: SARA.userId, readUpTo: 4, subject: 'notice walk' },
+      { template: 'supportResolved', userId: ALICE.userId, readUpTo: 5, subject: 'notice walk' },
+    ]);
   });
 });
 

@@ -107,6 +107,14 @@ export const UnscopedRedisKeys = {
   supportPresence: (tenantId: string) => `support:presence:${tenantId}`,
 
   /**
+   * How far one reader had read when they were last told of a new support
+   * message (F-033-i). A notice goes out only once they have read past it, so
+   * a busy thread puts one notice in their inbox, not one per message.
+   * Unscoped like `supportChannel`; the reader's id is in the key.
+   */
+  supportNotified: (conversationId: string, userId: string) => `support:notified:${conversationId}:${userId}`,
+
+  /**
    * The pub/sub channel one realtime channel's events ride (F-067-i).
    *
    * Not a key — a channel name — which is why the caller applies the keyspace

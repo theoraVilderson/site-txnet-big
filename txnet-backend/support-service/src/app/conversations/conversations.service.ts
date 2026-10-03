@@ -13,6 +13,7 @@ import { signedObjectUrl, tenantTransaction } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
 import { Availability, SupportAvailability } from '../availability/availability';
+import { NoticeTarget, SupportNotifier } from '../notify/support-notifier';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChannelProof, SupportRealtime, TYPING_TTL_MS } from '../realtime/support-realtime';
 import { applySla } from '../sla/sla';
@@ -125,6 +126,7 @@ export class SupportConversationService {
     private readonly config: ConfigService<EnvConfig, true>,
     private readonly realtime: SupportRealtime,
     private readonly availability: SupportAvailability,
+    private readonly notifier: SupportNotifier,
   ) {}
 
   /** Whether a human answers now, and if not when support opens (F-033-g) — the wait notice. */
@@ -184,11 +186,13 @@ export class SupportConversationService {
 
   async send(caller: SupportCaller, conversationId: string, input: { body: string }): Promise<MessageView> {
     const mode = await this.availability.mode(caller.tenantId);
-    const { view, status } = await this.writingMessage(async (tx, now) => {
-      const { message, status } = await appendUserMessage(tx, caller, conversationId, now, input.body, mode);
-      return { view: viewOf(message, caller, []), status };
+    const { view, status, assignee } = await this.writingMessage(async (tx, now) => {
+      const { message, status, assignee } = await appendUserMessage(tx, caller, conversationId, now, input.body, mode);
+      return { view: viewOf(message, caller, []), status, assignee };
     });
     await this.realtime.message(conversationId, view, status);
+    // After the commit and off the request: a notice never fails or slows the message (F-033-i).
+    if (assignee) void this.notifier.tell(caller.tenantId, 'supportUserWrote', assignee);
     return view;
   }
 
@@ -332,8 +336,8 @@ export async function appendUserMessage(
   now: Date,
   body: string,
   mode: ConversationMode,
-): Promise<{ message: MessageRow; status: ConversationStatus }> {
-  const [row] = await tx.$queryRaw<{ lastSeq: number; status: ConversationStatus }[]>`
+): Promise<{ message: MessageRow; status: ConversationStatus; assignee: NoticeTarget | null }> {
+  const [row] = await tx.$queryRaw<{ lastSeq: number; status: ConversationStatus; assignedToUserId: string | null; subject: string }[]>`
     UPDATE support.conversation
        SET "lastSeq" = "lastSeq" + 1,
            "lastMessageAt" = ${now},
@@ -346,7 +350,7 @@ export async function appendUserMessage(
      WHERE id = ${conversationId}::uuid
        AND "userId" = ${caller.userId}::uuid
        AND status <> 'closed'::support."ConversationStatus"
-    RETURNING "lastSeq", status`;
+    RETURNING "lastSeq", status, "assignedToUserId", subject`;
   if (!row) {
     const exists = await tx.supportConversation.findFirst({
       where: { id: conversationId, userId: caller.userId },
@@ -370,7 +374,20 @@ export async function appendUserMessage(
   await moveCursor(tx, caller, conversationId, row.lastSeq);
   // The user answered: a stopped resolution clock runs again (F-033-h).
   await applySla(tx, conversationId, now, 'user_wrote');
-  return { message, status: row.status };
+  // The assignee hears of it (F-033-i); an unassigned thread waits in the queue.
+  const assignee = row.assignedToUserId ? await noticeTarget(tx, conversationId, row.assignedToUserId, row.subject) : null;
+  return { message, status: row.status, assignee };
+}
+
+/** Who to tell about a thread and how far they have read it — read in the write's transaction (F-033-i). */
+export async function noticeTarget(
+  tx: Prisma.TransactionClient,
+  conversationId: string,
+  userId: string,
+  subject: string,
+): Promise<NoticeTarget> {
+  const read = await tx.supportConversationRead.findFirst({ where: { conversationId, userId }, select: { lastReadSeq: true } });
+  return { conversationId, userId, readUpTo: read?.lastReadSeq ?? 0, subject };
 }
 
 export type ConversationRow = Prisma.SupportConversationGetPayload<object>;

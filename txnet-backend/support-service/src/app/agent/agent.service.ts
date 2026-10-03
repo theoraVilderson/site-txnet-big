@@ -17,12 +17,14 @@ import {
   UNFINISHED,
   attachmentViewOf,
   moveCursor,
+  noticeTarget,
   summaryOf,
   unreadCounts,
   viewOf,
   writingMessage,
 } from '../conversations/conversations.service';
 import { SupportAvailability } from '../availability/availability';
+import { NoticeTarget, SupportNotice, SupportNotifier } from '../notify/support-notifier';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChannelProof, SupportRealtime, TYPING_TTL_MS } from '../realtime/support-realtime';
 import { SlaView, applySla, slaViewOf } from '../sla/sla';
@@ -86,6 +88,7 @@ export class SupportAgentService {
     private readonly config: ConfigService<EnvConfig, true>,
     private readonly realtime: SupportRealtime,
     private readonly availability: SupportAvailability,
+    private readonly notifier: SupportNotifier,
   ) {}
 
   /**
@@ -179,8 +182,8 @@ export class SupportAgentService {
     const internal = input.internal === true;
     // An agent answering re-decides the mode as a user's message does (F-033-g).
     const mode = await this.availability.mode(caller.tenantId);
-    const { message, status } = await writingMessage(this.prisma, this.logger, async (tx, now) => {
-      const [row] = await tx.$queryRaw<{ lastSeq: number; status: ConversationStatus }[]>`
+    const { message, status, user } = await writingMessage(this.prisma, this.logger, async (tx, now) => {
+      const [row] = await tx.$queryRaw<{ lastSeq: number; status: ConversationStatus; userId: string; subject: string }[]>`
         UPDATE support.conversation
            SET "lastSeq" = "lastSeq" + 1,
                "updatedAt" = ${now},
@@ -193,7 +196,7 @@ export class SupportAgentService {
                              ELSE 'pending_user'::support."ConversationStatus" END
          WHERE id = ${conversationId}::uuid
            AND status <> 'closed'::support."ConversationStatus"
-        RETURNING "lastSeq", status`;
+        RETURNING "lastSeq", status, "userId", subject`;
       if (!row) throw await missingOrClosed(tx, conversationId);
 
       const message = await tx.supportMessage.create({
@@ -212,11 +215,14 @@ export class SupportAgentService {
       await moveCursor(tx, caller, conversationId, row.lastSeq);
       // Answered: now waiting on the user, so the resolution clock stops (F-033-h).
       if (!internal) await applySla(tx, conversationId, now, 'agent_replied');
-      return { message, status: row.status };
+      // A note tells no one (invariant 5); a reply tells the user (F-033-i).
+      const user = internal ? null : await noticeTarget(tx, conversationId, row.userId, row.subject);
+      return { message, status: row.status, user };
     });
     // Invariant 5: the user reads this channel, so a note is never on it —
     // and it carries the user-side view, which names no agent.
     if (!internal) await this.realtime.message(conversationId, viewOf(message, caller, []), status);
+    if (user) void this.notifier.tell(caller.tenantId, 'supportReplied', user);
     return agentMessageOf(message, caller, []);
   }
 
@@ -237,20 +243,22 @@ export class SupportAgentService {
 
   /** Done for now; the user's next message reopens it (invariant 7). A closed thread stays closed. */
   async resolve(caller: SupportCaller, conversationId: string): Promise<AgentConversationView> {
-    return this.settle(conversationId, ConversationStatus.resolved, async (tx, now) => {
-      const [row] = await tx.$queryRaw<{ id: string }[]>`
+    return this.settle(caller, conversationId, ConversationStatus.resolved, async (tx, now) => {
+      const [row] = await tx.$queryRaw<{ userId: string; subject: string }[]>`
         UPDATE support.conversation
            SET status = 'resolved'::support."ConversationStatus",
                "resolvedAt" = COALESCE("resolvedAt", ${now}), "updatedAt" = ${now}
          WHERE id = ${conversationId}::uuid AND status <> 'closed'::support."ConversationStatus"
-        RETURNING id`;
+        RETURNING "userId", subject`;
       if (!row) throw await missingOrClosed(tx, conversationId);
+      // The user hears it was resolved (F-033-i) — unless a reply's notice is still unread.
+      return { template: 'supportResolved', target: await noticeTarget(tx, conversationId, row.userId, row.subject) };
     });
   }
 
   /** For good: no one writes to it again; the user opens a new one (invariant 7). */
   async close(caller: SupportCaller, conversationId: string): Promise<AgentConversationView> {
-    return this.settle(conversationId, ConversationStatus.closed, async (tx, now) => {
+    return this.settle(caller, conversationId, ConversationStatus.closed, async (tx, now) => {
       const [row] = await tx.$queryRaw<{ id: string }[]>`
         UPDATE support.conversation
            SET status = 'closed'::support."ConversationStatus",
@@ -258,6 +266,7 @@ export class SupportAgentService {
          WHERE id = ${conversationId}::uuid
         RETURNING id`;
       if (!row) throw new ConversationRefused('not_found');
+      return null;
     });
   }
 
@@ -291,17 +300,19 @@ export class SupportAgentService {
   }
 
   private async settle(
+    caller: SupportCaller,
     conversationId: string,
     status: ConversationStatus,
-    write: (tx: Prisma.TransactionClient, now: Date) => Promise<void>,
+    write: (tx: Prisma.TransactionClient, now: Date) => Promise<{ template: SupportNotice; target: NoticeTarget } | null>,
   ): Promise<AgentConversationView> {
-    const view = await tenantTransaction(this.prisma, async (tx) => {
+    const { view, notice } = await tenantTransaction(this.prisma, async (tx) => {
       const now = new Date();
-      await write(tx, now);
+      const notice = await write(tx, now);
       await applySla(tx, conversationId, now, 'settled');
-      return agentViewOf(await tenantConversation(tx, conversationId), 0);
+      return { view: agentViewOf(await tenantConversation(tx, conversationId), 0), notice };
     });
     await this.realtime.status(conversationId, status);
+    if (notice) void this.notifier.tell(caller.tenantId, notice.template, notice.target);
     return view;
   }
 }

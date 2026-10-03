@@ -86,6 +86,10 @@ export const NOTIFY_TEMPLATES = [
   'suggestionPackageUpgrade',
   // F-1525-c: a reseller's billing wallet running out at its wholesale pace, told to its owner.
   'suggestionResellerTopUp',
+  // F-033-i: a support thread has something for a reader who is not looking — inbox only, one per thread until read.
+  'supportReplied',
+  'supportResolved',
+  'supportUserWrote',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -134,6 +138,7 @@ type NotificationsNamespace = {
   retention?: Texts;
   suggestion?: Texts;
   engagement?: Texts;
+  support?: Texts;
 };
 type Text = { read: (ns: NotificationsNamespace | undefined) => string | undefined; fallback: string };
 type Notice = Text & { inbox: Text };
@@ -895,6 +900,37 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
     fallback: "💡 Suggestion: at your users' current pace on the platform's servers, your billing balance runs out in about {{days}} days. Topping up {{amount}} covers the next 30 days.",
     inbox: { read: (ns) => ns?.suggestion?.reseller_top_upTitle, fallback: 'Suggestion: top up your billing balance' },
     many: SUGGESTION_MANY,
+  },
+  // F-033-i: support-service tells one per conversation until it is read, so `many` is never asked for.
+  supportReplied: {
+    read: (ns) => ns?.support?.replied,
+    fallback: '💬 Support answered in "{{subject}}". Open Support to read it and reply.',
+    inbox: { read: (ns) => ns?.support?.repliedTitle, fallback: 'Support answered you' },
+    many: {
+      read: (ns) => ns?.support?.repliedMany,
+      fallback: '💬 Support answered in {{count}} of your conversations. Open Support to read them.',
+      inbox: { read: (ns) => ns?.support?.repliedManyTitle, fallback: 'Support answers ({{count}})' },
+    },
+  },
+  supportResolved: {
+    read: (ns) => ns?.support?.resolved,
+    fallback: '✅ "{{subject}}" was marked resolved. If it is not, just reply and it opens again.',
+    inbox: { read: (ns) => ns?.support?.resolvedTitle, fallback: 'Your support request was resolved' },
+    many: {
+      read: (ns) => ns?.support?.resolvedMany,
+      fallback: '✅ {{count}} of your support conversations were marked resolved.',
+      inbox: { read: (ns) => ns?.support?.resolvedManyTitle, fallback: 'Support requests resolved ({{count}})' },
+    },
+  },
+  supportUserWrote: {
+    read: (ns) => ns?.support?.userWrote,
+    fallback: '💬 New message in "{{subject}}", assigned to you.',
+    inbox: { read: (ns) => ns?.support?.userWroteTitle, fallback: 'New message from a user' },
+    many: {
+      read: (ns) => ns?.support?.userWroteMany,
+      fallback: '💬 New messages in {{count}} conversations assigned to you.',
+      inbox: { read: (ns) => ns?.support?.userWroteManyTitle, fallback: 'New user messages ({{count}})' },
+    },
   },
 };
 

@@ -85,7 +85,7 @@ beforeAll(async () => {
   const realtime = { message: async () => undefined, read: async () => undefined, typing: async () => undefined, channelProof: async () => null } as never;
   // Live/async is the availability spec's (F-033-g); here every thread is async.
   const availability = { mode: async () => 'async' } as never;
-  support = new SupportConversationService(app, { get: (key: string) => limits[key] } as never, realtime, availability);
+  support = new SupportConversationService(app, { get: (key: string) => limits[key] } as never, realtime, availability, { tell: async () => false } as never);
 });
 
 afterAll(async () => {

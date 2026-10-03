@@ -10,7 +10,7 @@ updated: 2026-10-03
 
 Storage F-033-a, the user's routes F-033-b, attachments F-033-c (reading) and
 F-033-f (upload); the agent side F-033-d, category admin F-033-e, presence and
-hours F-033-g, SLA F-033-h. Shape: [ADR-0112](../../architecture/decisions/0112-support-is-one-conversation-served-by-support-service.md).
+hours F-033-g, SLA F-033-h, notices F-033-i. Shape: [ADR-0112](../../architecture/decisions/0112-support-is-one-conversation-served-by-support-service.md).
 
 ## TL;DR
 
@@ -134,6 +134,25 @@ queue position and these targets, nothing the user sees (§11.5).
   own whole (left out = platform's) — `support.manage`; 400 `sla_invalid` unless
   `0 < first ≤ resolution ≤ 43200` and each priority once.
 
+## Notices (F-033-i)
+
+A thread with something for a reader who is not looking puts one row in their
+panel inbox, which reaches an open panel over the socket — inbox only;
+Telegram/Bale with F-309 (user, 2026-10-03):
+
+| When | Who | Template (auth-api `POST /internal/notify/user`) |
+|---|---|---|
+| an agent's reply (not a note) | the conversation's user | `supportReplied` |
+| an agent resolves it | the conversation's user | `supportResolved` |
+| the user writes (text or files) | the assignee; no one while unassigned — the queue is how a free agent finds it | `supportUserWrote` |
+
+**One per conversation until read** (invariant 13): the reader's cursor when
+told is kept (`support:notified:…`, 30 days); the next notice goes out only
+once they have read past it. The words are auth-service's, in the reader's
+language, with the subject as `{{subject}}`. Sent after the commit, off the
+request: a refused or unset seam (`AUTH_API_BASE_URL`, `SERVICE_AUTH_TOKEN`)
+is logged and not remembered — the message never fails for it.
+
 ## Emits (events)
 
 Realtime, on `support:<conversationId>` (F-034, ADR-0114) — at-most-once
@@ -159,6 +178,7 @@ The actor is a kind, never an account. An internal note is never published here
 | object-storage | private files, `signedObjectUrl`, the scan port (F-033-c, ADR-0113) | attachments refused, text still works |
 | locale-service | error messages, `Accept-Language` | envelope falls back to the key |
 | realtime | the `support:` family, Redis fan-out (F-034) | `realtime` is `null` / events dropped; the thread still reads |
+| auth-api | `POST /internal/notify/user`, channel `inbox` (F-033-i) | no notice; the message is stored and published as ever |
 
 ## Guarantees
 

@@ -67,6 +67,15 @@ export const envSchema = z.object({
    */
   OBJECT_STORAGE_SIGNING_SECRET: z.string().min(32, 'OBJECT_STORAGE_SIGNING_SECRET must be at least 32 characters'),
 
+  /**
+   * auth-service's `internal/notify/user` seam, which renders a notice in the
+   * reader's language and puts it in their inbox (F-033-i). Empty boots and
+   * tells no one — a thread works without notices.
+   */
+  AUTH_API_BASE_URL: z.string().default(''),
+  AUTH_API_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
+  SERVICE_AUTH_TOKEN: z.string().default(''),
+
   TRUST_PROXY: z.string().default(''),
 });
 

@@ -59,6 +59,11 @@ export class RedisService implements RateLimitStore, OnModuleInit, OnModuleDestr
     return this.client.get(key);
   }
 
+  /** `SET key value EX ttl`. */
+  async set(key: string, value: string, ttlSec: number): Promise<void> {
+    await this.client.set(key, value, 'EX', ttlSec);
+  }
+
   /** `SET key value NX EX ttl` — true when this call wrote it. */
   async setNx(key: string, value: string, ttlSec: number): Promise<boolean> {
     return (await this.client.set(key, value, 'EX', ttlSec, 'NX')) === 'OK';

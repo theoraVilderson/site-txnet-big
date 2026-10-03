@@ -37,6 +37,7 @@ it when an insert reports no partition for the row.
 |---|---|---|---|
 | `support:channel:<conversationId>:<userId>` | string | 1h | a reader's realtime proof (F-034, ADR-0114) |
 | `support:presence:<tenantId>` | sorted set: agent id → lapse instant (ms) | 90s, per beat | who is online (F-033-g); lapsed members dropped on read |
+| `support:notified:<conversationId>:<userId>` | string: the reader's `lastReadSeq` when last told | 30d | one notice per thread until read (F-033-i) |
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |

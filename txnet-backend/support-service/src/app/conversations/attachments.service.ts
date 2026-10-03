@@ -17,6 +17,7 @@ import {
 import { SupportAvailability } from '../availability/availability';
 import type { EnvConfig } from '../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
+import { NoticeTarget, SupportNotifier } from '../notify/support-notifier';
 import { SupportRealtime } from '../realtime/support-realtime';
 import {
   ConversationRefused,
@@ -73,6 +74,7 @@ export class SupportAttachmentService {
     @Inject(SUPPORT_VIRUS_SCANNER) private readonly scanner: VirusScanner,
     private readonly realtime: SupportRealtime,
     private readonly availability: SupportAvailability,
+    private readonly notifier: SupportNotifier,
   ) {}
 
   async send(caller: SupportCaller, conversationId: string, input: { body?: string; files: IncomingFile[] }): Promise<MessageView> {
@@ -101,7 +103,7 @@ export class SupportAttachmentService {
     const written: string[] = [];
 
     const mode = await this.availability.mode(caller.tenantId);
-    let sent: { view: MessageView; status: string };
+    let sent: { view: MessageView; status: string; assignee: NoticeTarget | null };
     try {
       sent = await writingMessage(this.prisma, this.logger, async (tx, now) => {
         if (incoming > 0) {
@@ -118,7 +120,7 @@ export class SupportAttachmentService {
           }
         }
 
-        const { message, status } = await appendUserMessage(tx, caller, conversationId, now, body, mode);
+        const { message, status, assignee } = await appendUserMessage(tx, caller, conversationId, now, body, mode);
         const storage = new ObjectStorage(this.driver, prismaStoredObjects(tx));
         const rows = [];
         for (const p of planned) {
@@ -146,7 +148,7 @@ export class SupportAttachmentService {
             }),
           );
         }
-        return { view: viewOf(message, caller, rows.map((r) => attachmentViewOf(r, now, secret))), status };
+        return { view: viewOf(message, caller, rows.map((r) => attachmentViewOf(r, now, secret))), status, assignee };
       });
     } catch (e) {
       // The rows went with the transaction; the bytes are this code's to take back.
@@ -154,6 +156,7 @@ export class SupportAttachmentService {
       throw e;
     }
     await this.realtime.message(conversationId, sent.view, sent.status);
+    if (sent.assignee) void this.notifier.tell(caller.tenantId, 'supportUserWrote', sent.assignee);
     return sent.view;
   }
 

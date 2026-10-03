@@ -68,8 +68,8 @@ beforeAll(async () => {
   // Nobody online: every thread async. The hours still drive the SLA clock.
   const presence = { zadd: async () => undefined, zrem: async () => undefined, zrangebyscore: async () => [], zremrangebyscore: async () => undefined, expire: async () => undefined };
   availability = new SupportAvailability(app, presence);
-  users = new SupportConversationService(app, config, realtime, availability);
-  agents = new SupportAgentService(app, config, realtime, availability);
+  users = new SupportConversationService(app, config, realtime, availability, { tell: async () => false } as never);
+  agents = new SupportAgentService(app, config, realtime, availability, { tell: async () => false } as never);
   sla = new SupportSla(app);
 });
 

@@ -15,7 +15,7 @@ updated: 2026-10-03
 # Support
 
 **Responsibility (one sentence):** one support conversation per thread — ticket and live chat are its modes (ADR-0112) — with its messages, read cursors, attachments and per-tenant categories.
-**Explicitly NOT responsible for:** impersonation (`audit`/`identity`), notifications about tickets (`notification`).
+**Explicitly NOT responsible for:** impersonation (`audit`/`identity`), delivering notices (`notification`, via auth-api — support only decides who is told, F-033-i).
 
 ## Files
 | File | Read it when |

@@ -329,5 +329,19 @@
     "lotteryOpenedAutomaticMany": "🎟 You are in {{count}} new lotteries; nothing to do. Their prizes are on the panel's Lotteries page.",
     "lotteryOpenedAutomaticManyTitle": "New lotteries you are in ({{count}})",
     "lotteryJoin": "✅ Join"
+  },
+  "support": {
+    "replied": "💬 Support answered in \"{{subject}}\". Open Support to read it and reply.",
+    "repliedTitle": "Support answered you",
+    "repliedMany": "💬 Support answered in {{count}} of your conversations. Open Support to read them.",
+    "repliedManyTitle": "Support answers ({{count}})",
+    "resolved": "✅ \"{{subject}}\" was marked resolved. If it is not, just reply and it opens again.",
+    "resolvedTitle": "Your support request was resolved",
+    "resolvedMany": "✅ {{count}} of your support conversations were marked resolved.",
+    "resolvedManyTitle": "Support requests resolved ({{count}})",
+    "userWrote": "💬 New message in \"{{subject}}\", assigned to you.",
+    "userWroteTitle": "New message from a user",
+    "userWroteMany": "💬 New messages in {{count}} conversations assigned to you.",
+    "userWroteManyTitle": "New user messages ({{count}})"
   }
 }

@@ -21,6 +21,7 @@ exports[`RedisTtl > records the whole catalogue in one place 1`] = `
   "refreshToken": 2592000,
   "registerPending": 600,
   "supportChannel": 3600,
+  "supportNotified": 2592000,
   "supportPresence": 90,
   "tenantResolution": 600,
   "tenantResolutionMiss": 60,

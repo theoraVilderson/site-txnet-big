@@ -57,6 +57,8 @@ services:
       - OBJECT_STORAGE_LOCAL_ROOT=/data/objects
       - VIRUS_SCAN_DRIVER=${VIRUS_SCAN_DRIVER:-}
       - CLAMD_ADDR=${CLAMD_ADDR:-}
+      - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
       # Signs attachments' 5-minute URLs (F-033-c); tenant-service verifies them.
       - OBJECT_STORAGE_SIGNING_SECRET=${OBJECT_STORAGE_SIGNING_SECRET}
       - TRUST_PROXY=${TRUST_PROXY}

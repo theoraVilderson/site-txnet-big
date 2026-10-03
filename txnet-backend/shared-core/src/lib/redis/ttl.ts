@@ -49,6 +49,11 @@ export const RedisTtl = {
    * one. The panel beats every 30s, so two lost beats are not an absence.
    */
   supportPresence: 90,
+  /**
+   * A support notice remembered (F-033-i): a reader who never opens the thread
+   * is told again on the first message after this many seconds — 30 days.
+   */
+  supportNotified: 2_592_000,
   loginFailureWindow: 900,
   /** >= otpCode so a still-valid OTP never outlives the data it verifies. */
   registerPending: 600,
