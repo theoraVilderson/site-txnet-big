@@ -15,7 +15,7 @@
     "test": "nx run-many -t test",
     "test:affected": "VITEST_ISOLATE=0 VITEST_MAX_WORKERS=${VITEST_MAX_WORKERS:-2} nx affected -t test --parallel=${TEST_JOBS:-2} --base=${BASE:-HEAD}",
     "typecheck:affected": "bash scripts/typecheck.sh --affected",
-    "test:int": "vitest run -c auth-service/vitest.int.config.mts && vitest run -c billing-service/vitest.int.config.mts",
+    "test:int": "vitest run -c auth-service/vitest.int.config.mts && vitest run -c billing-service/vitest.int.config.mts && vitest run -c support-service/vitest.int.config.mts",
     "test:e2e": "vitest run -c auth-service-e2e/vitest.config.mts"
   },
   "dependencies": {

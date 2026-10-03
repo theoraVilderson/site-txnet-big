@@ -55,10 +55,10 @@ No foreign keys leave the schema; ids are plain UUIDs.
 Only `ai-service` writes these tables, on the app pool with the tenant bound.
 Its reads of other units go through `txnet_ai_reader` (invariant 7). Tables
 keyed by user with no `tenantId` and no RLS (`billing.wallet`,
-`identity.session`, `notification.notification`, `notification.notification_preference`, `support.ticket`) are read
+`identity.session`, `notification.notification`, `notification.notification_preference`) are read
 through `security_barrier` views, `ai.reader_wallet` / `reader_sign_in` /
 `reader_notice` (`20261002000400`, F-038-c) and `reader_open_ticket`
-(`20261002000600`, F-1506: user and since when, open or pending only) and
+(`20261002000600`, F-1506: user and since when, unfinished only; over `support.conversation` since ADR-0112) and
 `reader_quiet_hours` (`20261002000700`, F-038-e: the window and its zone,
 not the muted kinds), and `reader_package_rate` (`20261002001400`, F-1528:
 the bound tenant's own package rates, through its subscription), and `reader_reseller` (`20261002001600`,

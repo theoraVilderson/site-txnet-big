@@ -23,7 +23,7 @@ Source of truth: `txnet-backend/prisma/domains/audit.prisma` (Postgres schema
 | admin_audit_log.adminId, impersonation_session.adminId/targetUserId, linked_account_member.userId | -> | identity.user.id | actors and subjects are identities |
 | admin_audit_log.targetEntityId (type `grant` / `config`), no FK | -> | entitlement.grant.id / network.config.id | a Grant's history (F-311-r); no FK, so an audit row is kept whatever becomes of its target |
 | impersonation_session (referenced) | -> | identity.session.impersonationSessionId | the login session created for the impersonation |
-| impersonation_session.linkedTicketId | -> | support.ticket.id | the support ticket that justified access |
+| impersonation_session.linkedConversationId | -> | support.conversation.id | the support conversation that justified access (ADR-0112) |
 
 ## Access rules
 

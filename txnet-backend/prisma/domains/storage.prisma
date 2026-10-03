@@ -17,6 +17,7 @@ model StoredObject {
   updatedAt   DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supportAttachments SupportMessageAttachment[]
 
   @@index([tenantId])
   @@map("stored_object")

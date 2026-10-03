@@ -1,108 +1,194 @@
-// بخش یازده: Schema `support` — تیکت، چت زنده
+// Schema `support` — one Conversation (ADR-0112, catalog §11)
 // =============================================================================
+// Tickets and live chat are not two products: they are one thread whose `mode`
+// says whether a human is answering right now. The ticket/chat tables the
+// schema was born with were dropped empty (20261003001100).
 
-enum TicketStatus {
+/// Who the thread is waiting on (ADR-0112 point 9): `open` until the first
+/// agent reply, then `pending_user` / `pending_agent` by who wrote last.
+enum ConversationStatus {
   open
-  pending
+  pending_user
+  pending_agent
+  resolved
   closed
 
   @@schema("support")
 }
 
-enum TicketPriority {
+/// A moment-in-time attribute, never a record type (catalog §11.1).
+enum ConversationMode {
+  live
+  async
+
+  @@schema("support")
+}
+
+/// Queue position only (catalog §11.5) — never what a user may say or see.
+enum ConversationPriority {
   low
-  medium
+  normal
   high
   urgent
 
   @@schema("support")
 }
 
-enum SenderType {
+enum MessageSenderKind {
   user
-  admin
+  agent
+  system
+  bot
+  ai
 
   @@schema("support")
 }
 
-enum ChatSessionStatus {
-  active
-  closed
+enum AttachmentScanStatus {
+  pending
+  clean
+  infected
+  failed
 
   @@schema("support")
 }
 
-model Ticket {
-  id              String         @id @default(uuid()) @db.Uuid
-  userId          String         @db.Uuid
-  subject         String
-  status          TicketStatus   @default(open)
-  priority        TicketPriority @default(medium)
-  assignedAdminId String?        @db.Uuid
-  createdAt       DateTime       @default(now())
+/// A support category (ADR-0112 point 6). `tenantId` NULL is the platform's
+/// default set, which a tenant sees only while it has no active category of
+/// its own. Retired with `isActive`, never deleted while a thread names it.
+model SupportCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String?  @db.Uuid
+  /// Stable per tenant; what a bot button or an analytics row names.
+  key       String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  messages              TicketMessage[]
+  texts         SupportCategoryText[]
+  conversations SupportConversation[]
+
+  @@unique([tenantId, key])
+  @@map("support_category")
+  @@schema("support")
+}
+
+/// A category's name in one language. `tenantId` is the category's, copied so
+/// the row is policied on its own (NULL for the platform's defaults).
+model SupportCategoryText {
+  categoryId String   @db.Uuid
+  tenantId   String?  @db.Uuid
+  lang       Language
+  name       String
+
+  category SupportCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([categoryId, lang])
+  @@map("support_category_text")
+  @@schema("support")
+}
+
+/// The one support entity (catalog §11.1).
+model SupportConversation {
+  id               String               @id @default(uuid()) @db.Uuid
+  tenantId         String               @db.Uuid
+  /// The owning reseller node (C-15). Always null until reseller nodes exist (F-901).
+  resellerPath     String?
+  userId           String               @db.Uuid
+  subject          String
+  categoryId       String?              @db.Uuid
+  status           ConversationStatus   @default(open)
+  mode             ConversationMode     @default(async)
+  priority         ConversationPriority @default(normal)
+  assignedToUserId String?              @db.Uuid
+  /// The last message's `seq`. Incremented in the insert's transaction, so the
+  /// row lock orders two senders (ADR-0112 point 4).
+  lastSeq          Int                  @default(0)
+  firstResponseAt  DateTime?
+  lastMessageAt    DateTime             @default(now())
+  resolvedAt       DateTime?
+  closedAt         DateTime?
+  ratingScore      Int?                 @db.SmallInt
+  aiTriageLabel    String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  category              SupportCategory?          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  messages              SupportMessage[]
+  reads                 SupportConversationRead[]
   impersonationSessions ImpersonationSession[]
 
-  @@map("ticket")
+  /// "My conversations", newest activity first.
+  @@index([tenantId, userId, lastMessageAt(sort: Desc)])
+  /// The agent queue (F-033-d): by status, then priority, then age.
+  @@index([tenantId, status, priority, lastMessageAt])
+  @@map("conversation")
   @@schema("support")
 }
 
-model TicketMessage {
-  id         String     @id @default(uuid()) @db.Uuid
-  ticketId   String     @db.Uuid
-  senderType SenderType
-  senderId   String     @db.Uuid
-  body       String
-  createdAt  DateTime   @default(now())
+/// One message — append-only, monthly range-partitioned on `createdAt`
+/// (ADR-0112 point 3, migration 20261003001100). Postgres requires the
+/// partition key in every unique constraint, so the key is the pair.
+model SupportMessage {
+  id             String            @default(uuid()) @db.Uuid
+  createdAt      DateTime          @default(now())
+  tenantId       String            @db.Uuid
+  conversationId String            @db.Uuid
+  /// 1, 2, 3 … within the conversation; gap-free (ADR-0112 point 4).
+  seq            Int
+  senderKind     MessageSenderKind
+  /// Null for `system` / `bot` / `ai`.
+  senderUserId   String?           @db.Uuid
+  body           String
+  /// An agent's internal note (catalog §11.3). Never returned to a user.
+  internal       Boolean           @default(false)
 
-  ticket      Ticket             @relation(fields: [ticketId], references: [id])
-  attachments TicketAttachment[]
+  conversation SupportConversation        @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  attachments  SupportMessageAttachment[]
 
-  @@map("ticket_message")
+  @@id([id, createdAt], map: "message_pkey")
+  @@index([conversationId, seq])
+  @@map("message")
   @@schema("support")
 }
 
-model TicketAttachment {
-  id              String @id @default(uuid()) @db.Uuid
-  ticketMessageId String @db.Uuid
-  fileUrl         String // Object Storage
-  mimeType        String
+/// How far one reader has read one conversation (ADR-0112 point 5).
+model SupportConversationRead {
+  conversationId String   @db.Uuid
+  userId         String   @db.Uuid
+  tenantId       String   @db.Uuid
+  lastReadSeq    Int      @default(0)
+  readAt         DateTime @default(now())
 
-  ticketMessage TicketMessage @relation(fields: [ticketMessageId], references: [id])
+  conversation SupportConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
-  @@map("ticket_attachment")
+  @@id([conversationId, userId])
+  @@map("conversation_read")
   @@schema("support")
 }
 
-/// چت زنده — پارتیشن ماهانه (PARTITION BY RANGE(sentAt)) روی ChatMessage،
-/// آرشیو در Object Storage قبل از DROP PARTITION (بخش ۹۹).
-model ChatSession {
-  id              String            @id @default(uuid()) @db.Uuid
-  userId          String            @db.Uuid
-  assignedAdminId String?           @db.Uuid
-  status          ChatSessionStatus @default(active)
-  startedAt       DateTime          @default(now())
-  closedAt        DateTime?
+/// A file on a message, held by the storage port (D-8, ADR-0112 point 7).
+/// Never a URL: a 5-minute signed one is minted on read.
+model SupportMessageAttachment {
+  id               String               @id @default(uuid()) @db.Uuid
+  tenantId         String               @db.Uuid
+  conversationId   String               @db.Uuid
+  messageId        String               @db.Uuid
+  messageCreatedAt DateTime
+  objectKey        String               @unique
+  fileName         String
+  contentType      String
+  sizeBytes        Int
+  scanStatus       AttachmentScanStatus @default(pending)
+  createdAt        DateTime             @default(now())
 
-  messages ChatMessage[]
+  message SupportMessage @relation(fields: [messageId, messageCreatedAt], references: [id, createdAt], onDelete: Restrict)
+  object  StoredObject   @relation(fields: [objectKey], references: [key], onDelete: Restrict)
 
-  @@map("chat_session")
-  @@schema("support")
-}
-
-model ChatMessage {
-  id            String     @id @default(uuid()) @db.Uuid
-  chatSessionId String     @db.Uuid
-  senderType    SenderType
-  senderId      String     @db.Uuid
-  body          String
-  sentAt        DateTime   @default(now())
-
-  chatSession ChatSession @relation(fields: [chatSessionId], references: [id])
-
-  @@index([chatSessionId, sentAt])
-  @@map("chat_message")
+  @@index([conversationId])
+  @@index([messageId, messageCreatedAt])
+  @@map("message_attachment")
   @@schema("support")
 }
 

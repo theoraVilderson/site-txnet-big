@@ -253,12 +253,13 @@ model ImpersonationSession {
   adminId        String    @db.Uuid
   targetUserId   String    @db.Uuid
   reasonNote     String
-  linkedTicketId String?   @db.Uuid
+  /// The support conversation that justified access (ADR-0112 point 2).
+  linkedConversationId String? @db.Uuid
   startedAt      DateTime  @default(now())
   endedAt        DateTime?
   adminIpAddress String
 
-  linkedTicket Ticket?   @relation(fields: [linkedTicketId], references: [id])
+  linkedConversation SupportConversation? @relation(fields: [linkedConversationId], references: [id])
   sessions     Session[]
 
   @@map("impersonation_session")

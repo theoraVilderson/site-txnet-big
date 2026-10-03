@@ -1,36 +1,44 @@
 ---
 id: support
 layer: domain
-status: draft
-updated: 2026-09-04
+status: active
+updated: 2026-10-03
 ---
 
 # Data model — support
 
 Source of truth: `txnet-backend/prisma/domains/support.prisma` (Postgres schema
-`support`).
+`support`). Shape decided in [ADR-0112](../../architecture/decisions/0112-support-is-one-conversation-served-by-support-service.md);
+built by `20261003001100_support_is_one_conversation`, which dropped the
+original ticket/chat tables empty.
 
 ## Tables owned
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
-| ticket | subject, status, priority, assigned admin | via user | long |
-| ticket_message | threaded body, `senderType` user/admin | via ticket | long |
-| ticket_attachment | file URL (object storage) + mime | via message | object-storage lifecycle |
-| chat_session | live chat, `active` / `closed`, assigned admin | via user | long |
-| chat_message | **monthly partitioned** (`sentAt`); archived to object storage before DROP | via session | archive then drop partition |
+| conversation | the one support thread: subject, category, `status`, `mode` (`live`/`async`), `priority`, assignee, `lastSeq`, first-response / last-message / resolved / closed times, rating, AI triage label, `resellerPath` (NULL until F-901) | `tenantId`, RLS | long |
+| message | append-only; `seq` per conversation, `senderKind` `user`/`agent`/`system`/`bot`/`ai`, `internal` (agent note). **Monthly range-partitioned on `createdAt`**, key `(id, createdAt)`, no `DEFAULT` partition | `tenantId`, RLS on parent and every partition | partition archived, then dropped (row of its own) |
+| conversation_read | one reader's cursor: `lastReadSeq`, `readAt` | `tenantId`, RLS | with the conversation |
+| message_attachment | a file on a message: `objectKey` (storage port), name, type, size, `scanStatus` | `tenantId`, RLS | with the message |
+| support_category | `key`, order, `isActive`. `tenantId` NULL = platform default | shared-read RLS | long |
+| support_category_text | a category's name per `Language` | shared-read RLS | with the category |
+
+## Partitions
+
+`support.ensure_message_partition(month)` — `SECURITY DEFINER`, granted to
+`txnet_app`, idempotent, and policies the partition it makes or finds
+(F-027-ak). The migration made 2026-10 … 2027-03; after that the service calls
+it when an insert reports no partition for the row.
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
 |---|---|---|---|
-| ticket.userId, chat_session.userId | -> | identity.user.id | support is per user |
-| ticket (referenced) | -> | audit.impersonation_session.linkedTicketId | an impersonation may cite the ticket that justified it |
+| conversation.userId, assignedToUserId | -> | identity.user.id (no FK) | support is per user |
+| message_attachment.objectKey | -> | storage.stored_object.key (FK, restrict) | the bytes live behind the storage port (D-8) |
+| conversation (referenced) | -> | audit.impersonation_session.linkedConversationId | an impersonation may cite the conversation that justified it |
+| conversation (read) | -> | ai.reader_open_ticket view | F-1506 quiet-down: user and since when, unfinished only |
 
 ## Access rules
 
-Draft. No service yet; when built, no unit outside `support` writes these
-tables and reads go through a `support` service API.
-
-## Migration notes
-
-No migration history is committed. Any partitioning / RLS / partial-unique-index
-noted in the schema is "section 99" manual SQL and is **not applied**.
+Only `support-service` writes these tables, on the RLS app pool with the
+caller's tenant bound. A user's routes additionally filter by their own
+`userId`; no user-facing read returns an `internal` message.

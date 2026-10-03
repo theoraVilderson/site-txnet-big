@@ -9,8 +9,9 @@
  *
  * Not here, on purpose: anything under `network` (no network-layer data,
  * ADR-0109 point 6); tables keyed by user with no `tenantId` (`billing.wallet`,
- * `identity.session`, `notification.notification`, `notification.notification_preference`, `support.ticket`) — they have no RLS, so
- * they are read through {@link AI_READER_VIEWS} instead.
+ * `identity.session`, `notification.notification`, `notification.notification_preference`) — they have no RLS, so
+ * they are read through {@link AI_READER_VIEWS} instead. `support.conversation` has RLS but carries subjects
+ * and assignees the reader must not see, so it too is a view.
  */
 export const AI_READER_TABLES = [
   { table: 'identity.user', sharedRead: false },
@@ -94,11 +95,12 @@ export const AI_READER_VIEWS = [
     forbidden: ['version'],
   },
   {
-    // F-1506: the quiet-down step's open tickets (`20261002000600_ai_quiet_down_inputs`).
+    // F-1506: the quiet-down step's unfinished conversations (`20261002000600_ai_quiet_down_inputs`,
+    // re-pointed from `support.ticket` by `20261003001100_support_is_one_conversation`, ADR-0112).
     view: 'ai.reader_open_ticket',
-    over: 'support.ticket',
+    over: 'support.conversation',
     columns: ['userId', 'createdAt'],
-    forbidden: ['subject', 'assignedAdminId'],
+    forbidden: ['subject', 'assignedToUserId'],
   },
   {
     // F-038-e: the quiet window a suggestion is scheduled outside (`20261002000700_ai_decision_inputs`).
