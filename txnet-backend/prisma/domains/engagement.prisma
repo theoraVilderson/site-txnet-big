@@ -3,11 +3,16 @@
 // اصل: همیشه سقف Hard-cap مالی روزانه مستقل از شانس/احتمال + Eligibility
 // سخت‌گیرانه (کاربر باید واقعاً از محصولات استفاده کرده باشد).
 
+/// What a wheel slot or a lottery prize gives (ADR-0111 point 2). Never cash:
+/// `wallet_credit` stays only so the enum is additive, and a CHECK refuses it
+/// on every row. `empty` is a wheel slot only.
 enum SpinPrizeType {
   wallet_credit
   discount_coupon
   bonus_traffic_gb
   empty
+  extra_days
+  free_grant
 
   @@schema("engagement")
 }
@@ -20,60 +25,306 @@ enum SpinAttemptStatus {
   @@schema("engagement")
 }
 
-/// 11.1 — پیکربندی گردونه + شروط Eligibility.
+/// 11.1 — one **version** of a tenant's wheel (ADR-0111 point 4): config,
+/// eligibility and its prizes are fixed once written (trigger
+/// `spin_wheel_is_history`). An edit is a new version from the next tenant day
+/// (TZ-1); the version in force on a day is the highest one whose
+/// `effectiveFromDay` is not after it. `isActive = false` is a version too.
 model SpinWheelConfig {
-  id                                String   @id @default(uuid()) @db.Uuid
-  tenantId                          String?  @db.Uuid
-  isActive                          Boolean  @default(true)
-  dailyBudgetCapAmount              Decimal  @db.Decimal(18, 2)
-  perUserCooldownHours              Int      @default(24)
-  requiresMinAccountAgeHours        Int      @default(24)
-  requiresMinTotalPurchaseAmount    Decimal? @db.Decimal(18, 2)
-  requiresMinCompletedOrdersCount   Int?
-  requiresActiveServiceAtSpinTime   Boolean  @default(true)
-  maxSpinsPerAccountPerDay          Int      @default(1)
+  id                              String   @id @default(uuid()) @db.Uuid
+  tenantId                        String   @db.Uuid
+  version                         Int
+  effectiveFromDay                DateTime @db.Date
+  isActive                        Boolean  @default(true)
+  /// The day's cost ceiling, in `currencyCode`, whatever the odds.
+  dailyBudgetCapAmount            Decimal  @db.Decimal(18, 2)
+  currencyCode                    String
+  perUserCooldownHours            Int      @default(24)
+  requiresMinAccountAgeHours      Int      @default(24)
+  requiresMinTotalPurchaseAmount  Decimal? @db.Decimal(18, 2)
+  requiresMinCompletedOrdersCount Int?
+  requiresActiveServiceAtSpinTime Boolean  @default(true)
+  requiresPhoneVerified           Boolean  @default(true)
+  maxSpinsPerAccountPerDay        Int      @default(1)
+  /// Only this governance user group may spin (F-114-j); null = every user.
+  userGroupId                     String?  @db.Uuid
+  createdByAdminId                String   @db.Uuid
+  createdAt                       DateTime @default(now())
 
-  prizes SpinWheelPrize[]
+  prizes   SpinWheelPrize[]
+  days     SpinWheelDay[]
+  attempts SpinWheelAttempt[]
 
-  @@index([tenantId])
+  @@unique([tenantId, version])
+  @@unique([id, tenantId])
+  @@index([tenantId, effectiveFromDay])
   @@map("spin_wheel_config")
   @@schema("engagement")
 }
 
-/// 11.2 — جوایز گردونه.
+/// 11.2 — one slot of a wheel version, fixed with it. `position` is the slot
+/// the client animates to. `prizeValue` is GB or days; a coupon names its
+/// template (ADR-0110 clone) and `prizeValue` is its percent; a free Grant
+/// names its variant. `costAmount` is what an award spends of the day's cap,
+/// in the version's currency. The day's stock is `spin_wheel_prize_day`.
 model SpinWheelPrize {
-  id                     String        @id @default(uuid()) @db.Uuid
-  wheelConfigId          String        @db.Uuid
-  label                  String
-  prizeType              SpinPrizeType
-  prizeValue             Decimal       @db.Decimal(18, 2)
-  probabilityWeight      Int
-  dailyStockLimit        Int?
-  currentDayAwardedCount Int           @default(0) // هر نیمه‌شب توسط Cron صفر می‌شود
+  id                String        @id @default(uuid()) @db.Uuid
+  tenantId          String        @db.Uuid
+  wheelConfigId     String        @db.Uuid
+  position          Int
+  label             String
+  prizeType         SpinPrizeType
+  prizeValue        Decimal       @db.Decimal(18, 2)
+  couponTemplateId  String?       @db.Uuid
+  couponValidDays   Int?
+  variantId         String?       @db.Uuid
+  probabilityWeight Int
+  costAmount        Decimal       @default(0) @db.Decimal(18, 2)
+  dailyStockLimit   Int?
 
-  wheelConfig SpinWheelConfig    @relation(fields: [wheelConfigId], references: [id])
-  attempts    SpinWheelAttempt[]
+  wheelConfig SpinWheelConfig     @relation(fields: [wheelConfigId, tenantId], references: [id, tenantId])
+  attempts    SpinWheelAttempt[]  @relation("awarded")
+  picks       SpinWheelAttempt[]  @relation("picked")
+  days        SpinWheelPrizeDay[]
 
+  @@unique([wheelConfigId, position])
+  @@unique([id, tenantId])
   @@map("spin_wheel_prize")
   @@schema("engagement")
 }
 
-/// 11.3 — هر تلاش چرخش، همراه Snapshot نتیجه هر ۷ چک Eligibility.
-model SpinWheelAttempt {
-  id                            String            @id @default(uuid()) @db.Uuid
-  userId                        String            @db.Uuid
-  deviceFingerprintId           String            @db.Uuid
-  attemptedAt                   DateTime          @default(now())
-  eligibilityCheckSnapshotJson  Json
-  prizeAwardedId                String?           @db.Uuid
-  resultWalletTransactionId     String?           @unique @db.Uuid
-  status                        SpinAttemptStatus
+/// One tenant day of the wheel: the cost spent against the version's cap and
+/// the spins awarded. Locked `FOR UPDATE` by a spin; never reset — a new day
+/// is a new row (ADR-0111 point 4). A trigger refuses a cost over the cap.
+model SpinWheelDay {
+  tenantId      String   @db.Uuid
+  tenantDay     DateTime @db.Date
+  wheelConfigId String   @db.Uuid
+  costSpent     Decimal  @default(0) @db.Decimal(18, 2)
+  currencyCode  String
+  spins         Int      @default(0)
 
-  deviceFingerprint      DeviceFingerprint   @relation(fields: [deviceFingerprintId], references: [id])
-  prizeAwarded           SpinWheelPrize?     @relation(fields: [prizeAwardedId], references: [id])
+  wheelConfig SpinWheelConfig @relation(fields: [wheelConfigId, tenantId], references: [id, tenantId])
+
+  @@id([tenantId, tenantDay])
+  @@map("spin_wheel_day")
+  @@schema("engagement")
+}
+
+/// One prize's awards on one tenant day; a trigger refuses past its stock.
+model SpinWheelPrizeDay {
+  prizeId      String   @db.Uuid
+  tenantDay    DateTime @db.Date
+  tenantId     String   @db.Uuid
+  awardedCount Int      @default(0)
+
+  prize SpinWheelPrize @relation(fields: [prizeId, tenantId], references: [id, tenantId])
+
+  @@id([prizeId, tenantDay])
+  @@map("spin_wheel_prize_day")
+  @@schema("engagement")
+}
+
+/// 11.3 — one spin, refused ones too (invariant 2), written once and never
+/// changed (`spin_wheel_attempt_is_history`). An awarded spin holds a `seq`,
+/// 1..the version's spins per day, unique per (tenant, user, tenant day): the
+/// database, not a read-then-write, keeps the count. `pickedPrizeId` is what
+/// the draw chose; `prizeAwardedId` what was given — null when the cap or the
+/// stock turned it into nothing.
+model SpinWheelAttempt {
+  id                           String            @id @default(uuid()) @db.Uuid
+  tenantId                     String            @db.Uuid
+  wheelConfigId                String            @db.Uuid
+  userId                       String            @db.Uuid
+  deviceFingerprintId          String            @db.Uuid
+  tenantDay                    DateTime          @db.Date
+  seq                          Int?
+  idempotencyKey               String
+  attemptedAt                  DateTime          @default(now())
+  eligibilityCheckSnapshotJson Json
+  pickedPrizeId                String?           @db.Uuid
+  prizeAwardedId               String?           @db.Uuid
+  costAmount                   Decimal           @default(0) @db.Decimal(18, 2)
+  currencyCode                 String
+  /// Never set (ADR-0111 point 2: no cash). Kept so the change stays additive.
+  resultWalletTransactionId    String?           @unique @db.Uuid
+  status                       SpinAttemptStatus
+  refusalReason                String?
+
+  wheelConfig             SpinWheelConfig    @relation(fields: [wheelConfigId, tenantId], references: [id, tenantId])
+  deviceFingerprint       DeviceFingerprint  @relation(fields: [deviceFingerprintId], references: [id])
+  pickedPrize             SpinWheelPrize?    @relation("picked", fields: [pickedPrizeId], references: [id])
+  prizeAwarded            SpinWheelPrize?    @relation("awarded", fields: [prizeAwardedId], references: [id])
   resultWalletTransaction WalletTransaction? @relation(fields: [resultWalletTransactionId], references: [id])
 
+  @@unique([tenantId, userId, tenantDay, seq])
+  @@unique([tenantId, userId, idempotencyKey])
+  @@index([tenantId, tenantDay])
   @@map("spin_wheel_attempt")
+  @@schema("engagement")
+}
+
+// -----------------------------------------------------------------------------
+// The group lottery (ADR-0111 points 5, 6): free draws among one governance
+// user group, checkable from the published seed and entrant list.
+// -----------------------------------------------------------------------------
+
+enum LotteryEntryMode {
+  /// Every eligible user member of the group at close.
+  automatic
+  /// Members who joined while it was open.
+  opt_in
+
+  @@schema("engagement")
+}
+
+/// `draft -> published -> frozen -> drawn`; `draft | published -> cancelled`.
+/// One way (trigger `lottery_status_one_way`).
+enum LotteryStatus {
+  draft
+  published
+  frozen
+  drawn
+  cancelled
+
+  @@schema("engagement")
+}
+
+enum LotteryWinnerDelivery {
+  pending
+  delivered
+  /// No longer eligible at delivery; the prize went to the next reserve.
+  passed_on
+
+  @@schema("engagement")
+}
+
+/// One draw among a tenant's user group. After publish its group, entry mode,
+/// eligibility, close time and prizes are frozen; cancelling needs a public
+/// reason. Entry is free; a ticket is never sold.
+model Lottery {
+  id                         String           @id @default(uuid()) @db.Uuid
+  tenantId                   String           @db.Uuid
+  userGroupId                String           @db.Uuid
+  title                      String           @db.VarChar(120)
+  description                String?
+  entryMode                  LotteryEntryMode
+  status                     LotteryStatus    @default(draft)
+  closesAt                   DateTime
+  requiresPhoneVerified      Boolean          @default(true)
+  requiresMinAccountAgeHours Int              @default(24)
+  reservesCount              Int              @default(0)
+  publishedAt                DateTime?
+  cancelledAt                DateTime?
+  cancelReason               String?
+  createdByAdminId           String           @db.Uuid
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @default(now()) @updatedAt
+
+  prizes   LotteryPrize[]
+  entrants LotteryEntrant[]
+  draw     LotteryDraw?
+  winners  LotteryWinner[]
+
+  @@unique([id, tenantId])
+  @@index([tenantId, status])
+  @@index([status, closesAt])
+  @@map("lottery")
+  @@schema("engagement")
+}
+
+/// One prize line: `winnersCount` winners get it, rank 1 first. The kinds and
+/// value columns are the wheel's; `empty` and `wallet_credit` are refused.
+model LotteryPrize {
+  id               String        @id @default(uuid()) @db.Uuid
+  tenantId         String        @db.Uuid
+  lotteryId        String        @db.Uuid
+  rank             Int
+  label            String
+  prizeType        SpinPrizeType
+  prizeValue       Decimal       @db.Decimal(18, 2)
+  couponTemplateId String?       @db.Uuid
+  couponValidDays  Int?
+  variantId        String?       @db.Uuid
+  winnersCount     Int
+
+  lottery Lottery         @relation(fields: [lotteryId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  winners LotteryWinner[]
+
+  @@unique([lotteryId, rank])
+  @@unique([id, tenantId])
+  @@map("lottery_prize")
+  @@schema("engagement")
+}
+
+/// One user in one lottery, once. `ticketNumber` is given at the freeze, 1..n
+/// in the frozen list, to the eligible only; `excludedReason` says why not.
+/// The list changes only before the freeze (trigger).
+model LotteryEntrant {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @db.Uuid
+  lotteryId      String    @db.Uuid
+  userId         String    @db.Uuid
+  optedInAt      DateTime?
+  ticketNumber   Int?
+  excludedReason String?
+  createdAt      DateTime  @default(now())
+
+  lottery Lottery         @relation(fields: [lotteryId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  winners LotteryWinner[]
+
+  @@unique([lotteryId, userId])
+  @@unique([lotteryId, ticketNumber])
+  @@unique([id, tenantId])
+  @@map("lottery_entrant")
+  @@schema("engagement")
+}
+
+/// The draw, once per lottery (its key). The seed is made only after the list
+/// is frozen and stored sealed, `{kekId, iv, authTag, ciphertext}` (ADR-0022);
+/// winners are a permutation from HMAC-SHA256(seed, listHash). Written once;
+/// only `publishedAt` is set later, once.
+model LotteryDraw {
+  lotteryId            String    @id @db.Uuid
+  tenantId             String    @db.Uuid
+  entrantCount         Int
+  skippedResellerCount Int       @default(0)
+  listHash             String
+  seedSealed           Json
+  algorithm            String
+  frozenAt             DateTime
+  drawnAt              DateTime
+  publishedAt          DateTime?
+
+  lottery Lottery @relation(fields: [lotteryId, tenantId], references: [id, tenantId])
+
+  @@unique([lotteryId, tenantId])
+  @@map("lottery_draw")
+  @@schema("engagement")
+}
+
+/// One place of the drawn permutation: a winner (`prizeId` set) or a reserve
+/// (null), in `position` order. A reserve that takes a prize over names the
+/// winner it replaces.
+model LotteryWinner {
+  id               String                @id @default(uuid()) @db.Uuid
+  tenantId         String                @db.Uuid
+  lotteryId        String                @db.Uuid
+  entrantId        String                @db.Uuid
+  position         Int
+  prizeId          String?               @db.Uuid
+  delivery         LotteryWinnerDelivery @default(pending)
+  deliveredAt      DateTime?
+  passedOnReason   String?
+  replacesWinnerId String?               @db.Uuid
+
+  lottery Lottery        @relation(fields: [lotteryId, tenantId], references: [id, tenantId])
+  entrant LotteryEntrant @relation(fields: [entrantId, tenantId], references: [id, tenantId])
+  prize   LotteryPrize?  @relation(fields: [prizeId], references: [id])
+
+  @@unique([lotteryId, position])
+  @@unique([lotteryId, entrantId])
+  @@map("lottery_winner")
   @@schema("engagement")
 }
 

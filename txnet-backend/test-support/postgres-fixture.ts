@@ -48,13 +48,15 @@ const DB = 'txnet';
 const OWNER = 'postgres';
 const OWNER_PASSWORD = 'harness_owner';
 /**
- * The two passwords the role script takes from the environment. Fixed and
+ * The passwords the role script takes from the environment. Fixed and
  * unremarkable on purpose: they are the credentials of a container that is
  * destroyed at the end of the file, and a generated one would only make the
  * connection strings harder to read in a failure.
  */
 const APP_PASSWORD = 'harness_app';
 const CROSS_TENANT_PASSWORD = 'harness_cross_tenant';
+/** The ai reader's (F-038-b): the script refuses to run without it. */
+const AI_READER_PASSWORD = 'harness_ai_reader';
 
 export interface PostgresFixture {
   /** `txnet_app_user` — what `DATABASE_APP_URL` names in a real deployment. */
@@ -118,6 +120,8 @@ export async function startPostgresFixture(): Promise<PostgresFixture> {
       `app_pw=${APP_PASSWORD}`,
       '-v',
       `xt_pw=${CROSS_TENANT_PASSWORD}`,
+      '-v',
+      `ai_pw=${AI_READER_PASSWORD}`,
       '-f',
       '/login-roles.sql',
     ],

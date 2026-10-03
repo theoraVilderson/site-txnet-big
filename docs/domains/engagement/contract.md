@@ -3,24 +3,30 @@ id: engagement
 layer: domain
 status: draft
 version: 1
-updated: 2026-10-02
+updated: 2026-10-03
 ---
 
 # Contract — engagement
 
-**DRAFT — the spin wheel is schema only. The attention budget is implemented
-(F-1501), in `ai-service`, its only writer (ADR-0109 point 10).**
+**DRAFT — the wheel and the lottery have their tables and database guards
+(F-707-a) but no writer yet; they will be a module of `billing-service`
+(ADR-0111 point 1). The attention budget is implemented (F-1501), in
+`ai-service`, its only writer (ADR-0109 point 10).**
 
 ## TL;DR
 
-A daily spin wheel. Two protections always apply: a hard daily budget cap (`dailyBudgetCapAmount`, independent of probabilities) and strict eligibility (min account age, min total purchase, min completed orders, active service now, per-user cooldown, max spins/day). Every attempt snapshots the result of all checks.
+A daily wheel per tenant and free draws among a user group (ADR-0111), both
+server-decided, neither ever paying cash. The wheel: a hard daily cost cap
+(independent of the odds) and strict eligibility, every attempt snapshotting
+its checks. The lottery: the entrant list frozen before the seed exists, the
+draw made once and checkable from what is published.
 
 ## Provides (intended)
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
 | get wheel state | userId | eligibility result + prizes + remaining daily budget | sync | — |
-| spin | userId, deviceFingerprintId | `spin_wheel_attempt` + prize + wallet tx (if credit) | sync tx | ineligible, cooldown, cap reached |
+| spin | userId, deviceFingerprintId | `spin_wheel_attempt` + prize, delivered in the same tx (F-707-b) | sync tx | ineligible, cooldown; over cap or out of stock is an `empty` result |
 | peek — **implemented (F-038-e)** | `AttentionBudget.peek(subject, now, pendingSends)`, the decision pipeline's budget step | the same verdict as `spend`, counting `pendingSends` as charged now; reads only, charges nothing, no lock | sync | — |
 | spend attention — **implemented (F-1501)** | `AttentionBudget.spend({tenantId, kind, id}, origin, now)`, inside `ai-service` only | `{allowed: true, charged}` or `{allowed: false, limit: per_day \| per_week, retryAt}` | sync tx | — |
 
@@ -34,7 +40,8 @@ None planned yet — no message bus is wired up.
 |---|---|---|
 | identity | `userId` | spin blocked |
 | fraud | device fingerprint for the attempt | spin blocked (fingerprint required) |
-| billing | credit the wallet for a `wallet_credit` prize | prize voided / not awarded |
+| billing / entitlement | a prize: GB or days on the active Grant, a personal coupon, a free Grant (F-707-b) — never wallet credit | the spin's transaction fails; nothing is awarded |
+| governance | a user group (F-114-j), read only: who may spin, who enters a lottery | the group's users are not offered it |
 
 ## The attention budget (F-1501) — implemented
 
@@ -48,10 +55,25 @@ have room. Charges older than 7 days are dropped on the next charge. A count,
 never money (C-13). No other service reads or writes the table. Only an
 `engine` origin is charged; a `reply` is allowed and touches nothing (F-1502).
 
+## The storage rules (F-707-a) — built, held by the database
+
+`20261003000200_the_wheel_is_versioned_and_a_draw_happens_once`; every table
+strict tenant RLS. What a writer may rely on, and may not get round:
+
+| Rule | Refusal |
+|---|---|
+| A wheel version and its prizes are never changed or deleted; prizes are written in the version's own transaction. An edit is a new `version` from the next tenant day (TZ-1) | `spin_wheel_is_history` |
+| The day's `costSpent` never passes the version's cap; a prize's day count never passes its stock. Rows per tenant day, locked `FOR UPDATE`; no reset job | `spin_wheel_over_cap`, `spin_wheel_out_of_stock` |
+| An awarded spin holds `seq` 1..n, unique per (tenant, user, tenant day); a refused one holds no seq, no prize, and a reason. `idempotencyKey` unique per user. Written once | `spin_wheel_attempt_shape`, unique, `spin_wheel_attempt_is_history` |
+| No cash: `wallet_credit` is refused on every prize row; `resultWalletTransactionId` stays null. Each kind has its shape (GB > 0, whole days, a coupon's template + percent + days, a free Grant's variant, an empty slot free) | `engagement_prize_shape` |
+| A row's user, fingerprint, group and prizes are its own tenant's and its own version's or lottery's | `engagement_tenant_mismatch` |
+| A lottery moves `draft → published → frozen → drawn`, or to `cancelled` from draft or published with a reason; after publish only its status changes, prizes are fixed, entrants change until the freeze | `lottery_status_one_way`, `lottery_frozen`, `lottery_cancel_reason` |
+| One draw per lottery (its key), made from a published lottery; never changed but for `publishedAt`, once. A winner keeps its place | `lottery_draw_is_history` |
+
 ## Guarantees (intended)
 
 - Eligibility is evaluated fresh on every spin from live data, then frozen into the attempt.
-- Prize selection respects `probabilityWeight` and `dailyStockLimit`.
+- The pick is `crypto.randomInt` over the version's weights; the client only animates (ADR-0111 point 4).
 
 ## Deprecations
 

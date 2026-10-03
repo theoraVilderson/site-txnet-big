@@ -2,22 +2,26 @@
 id: engagement
 layer: domain
 status: draft
-updated: 2026-10-02
+updated: 2026-10-03
 ---
 
 # Invariants — engagement
 
-**DRAFT** — 1–5 are extracted from schema comments and not enforced yet; 6 is enforced in `ai-service`.
+**DRAFT** — 1, 2, 4, 7–9 are held by the database (F-707-a); 3 and 5 wait for the spin (F-707-d); 6 is enforced in `ai-service`.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
-| 1 | Total awarded value in a day never exceeds `spin_wheel_config.dailyBudgetCapAmount`, regardless of RNG | planned service layer / schema | see contract | 
-| 2 | An attempt is recorded even when it is `rejected_ineligible` or `voided_fraud` — never dropped | planned service layer / schema | see contract | 
+| 1 | Total awarded cost in a tenant day never exceeds the version's `dailyBudgetCapAmount`, nor a prize its daily stock, regardless of RNG | triggers `spin_wheel_over_cap` / `spin_wheel_out_of_stock` | over-spend |
+| 2 | An attempt is recorded even when it is `rejected_ineligible` or `voided_fraud` — never dropped, never changed | `spin_wheel_attempt_is_history`; the write is F-707-d's | disputes unsettleable |
 | 3 | `eligibilityCheckSnapshotJson` captures every check's result at spin time (disputes are settled from it, not re-evaluated) | planned service layer / schema | see contract | 
-| 4 | A `wallet_credit` prize links to exactly one `billing.wallet_transaction` (`resultWalletTransactionId` unique) | planned service layer / schema | see contract | 
-| 5 | `maxSpinsPerAccountPerDay` and `perUserCooldownHours` are both enforced | planned service layer / schema | see contract | 
+| 4 | No cash, ever: no `wallet_credit` prize, no wallet transaction on an attempt (ADR-0111 point 2) | `engagement_prize_shape`, `spin_wheel_attempt_shape` | winnings pooled by fake accounts |
+| 5 | `maxSpinsPerAccountPerDay` and `perUserCooldownHours` are both enforced; an awarded spin's `seq` is unique per (tenant, user, tenant day) | the unique now; the bound and the cooldown F-707-d | extra spins |
 | 6 | A subject is charged for at most 1 proactive AI message in any rolling 24 h and 3 in any rolling 7 days; a refused message is not charged; concurrent decisions cannot overspend | `AttentionBudget.spend` (row lock + `budgetVerdict`); `attention-budget.spec.ts` | users nagged; the budget drains with nothing sent |
+
+| 7 | A wheel version and its prizes never change once written | `spin_wheel_is_history` | a day's odds changed mid-day |
+| 8 | A lottery is frozen once published and moves one way; cancelling needs a reason | `lottery_guard`, `lottery_parts_guard` | an operator steers the draw |
+| 9 | A draw happens once and is never rewritten | key + `lottery_draw_is_history` | a re-roll until the right winner |
 
 ## How to test
 
-Attention budget: `ai-service/src/app/attention/attention-budget.spec.ts`. Spin wheel: when a service exists.
+Attention budget: `ai-service/src/app/attention/attention-budget.spec.ts`. Wheel and lottery storage: `billing-service/src/app/engagement/engagement-schema.int.spec.ts` (`npm run test:int`).
