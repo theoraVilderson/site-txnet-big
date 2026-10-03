@@ -433,6 +433,13 @@ export const envSchema = z.object({
   CATALOG_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
   /** Manual billing-wallet adjustment (`tenant-billing/tenant-billing-admin.controller.ts`, F-019-a), per user. */
   TENANT_BILLING_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
+  /**
+   * How many proxy hops to trust for `req.ip` (`trustProxySetting`). Behind
+   * Traefik the socket's address is Traefik's: untrusted, every browser's
+   * device fingerprint (F-036-a, D-11) and every audited admin IP would carry
+   * that one address. One hop is this platform's deployment.
+   */
+  TRUST_PROXY: z.string().default(''),
 }).refine((env) => !(env.NODE_ENV === 'production' && env.PAYMENT_GATEWAY_SANDBOX), {
   message: 'PAYMENT_GATEWAY_SANDBOX=true is refused when NODE_ENV=production',
   path: ['PAYMENT_GATEWAY_SANDBOX'],

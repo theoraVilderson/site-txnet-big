@@ -2,7 +2,7 @@
 id: fraud
 layer: domain
 status: draft
-updated: 2026-09-04
+updated: 2026-10-03
 ---
 
 # Data model — fraud
@@ -13,7 +13,7 @@ Source of truth: `txnet-backend/prisma/domains/fraud.prisma` (Postgres schema
 ## Tables owned
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
-| device_fingerprint | user <-> device hash, first/last seen | via user | long |
+| device_fingerprint | (tenant, account, D-11 hash) unique; `channel` web/bot; first/last seen | **yes** — `tenantId` + RLS (`tenant_isolation`, `cross_tenant`) | long |
 | fraud_flag | polymorphic subject + flag type + severity + `autoActionTaken` + resolution | no (polymorphic `subjectId`) | permanent |
 
 ## Relationships crossing unit boundaries
@@ -25,10 +25,11 @@ Source of truth: `txnet-backend/prisma/domains/fraud.prisma` (Postgres schema
 
 ## Access rules
 
-Draft. No service yet; when built, no unit outside `fraud` writes these
-tables and reads go through a `fraud` service API.
+`device_fingerprint` is written and read only by `billing-service/src/app/fraud/`,
+on the app pool inside the request's tenant. `fraud_flag` has no writer yet.
 
 ## Migration notes
 
-No migration history is committed. Any partitioning / RLS / partial-unique-index
-noted in the schema is "section 99" manual SQL and is **not applied**.
+`20261003000100_a_device_fingerprint_is_per_tenant`: `tenantId`, `channel`,
+the unique and the (tenantId, fingerprintHash, lastSeenAt) index, RLS.
+`fraud_flag` still has no `tenantId` or RLS (F-036).

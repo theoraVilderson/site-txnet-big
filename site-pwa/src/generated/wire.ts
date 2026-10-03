@@ -43,6 +43,7 @@ export const CookieLifetimesSec = {
 /** `contracts/http/wire.json` -> `cookies`. */
 export const Cookies = {
   "refreshToken": "refresh_token",
+  "deviceId": "device_id",
 } as const;
 
 /** `contracts/realtime/events.json` -> `realtimeEvents`. */

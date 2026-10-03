@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import {
   I18nExceptionFilter,
   ResponseInterceptor,
+  trustProxySetting,
 } from '@txnet-backend/shared-core';
 
 import { AppModule } from './app/app.module';
@@ -43,6 +44,13 @@ async function bootstrap() {
   const globalPrefix = config.get('GLOBAL_PREFIX', { infer: true });
   const port = config.get('PORT', { infer: true });
   const host = config.get('PUBLIC_HOST', { infer: true });
+
+  // `req.ip` is the browser's only through Traefik's `X-Forwarded-For`: the
+  // web device fingerprint (F-036-a) and the admin audit IPs read it.
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .set('trust proxy', trustProxySetting(config.get('TRUST_PROXY', { infer: true })));
 
   // The panel's origin, with credentials — `auth-service`'s rule, including its
   // refusal to boot without one in production. A wallet route that answered any

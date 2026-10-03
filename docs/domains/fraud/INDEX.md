@@ -1,13 +1,13 @@
 ---
 id: fraud
 layer: domain
-status: draft
-version: 1
+status: active
+version: 2
 keywords: [fraud, device fingerprint, flag]
-source: []
+source: [txnet-backend/billing-service/src/app/fraud/**]
 owns_tables: [device_fingerprint, fraud_flag]
 depends_on: [identity]
-updated: 2026-09-04
+updated: 2026-10-03
 ---
 
 # Fraud
@@ -27,5 +27,6 @@ updated: 2026-09-04
 | Date | Change |
 |---|---|
 | 2026-09-04 | Documented from schema during onboarding — no service yet |
+| 2026-10-03 | v2, active: device fingerprint built in `billing-service` (F-036-a, D-11) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

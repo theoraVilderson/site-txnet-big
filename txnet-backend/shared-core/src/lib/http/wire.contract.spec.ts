@@ -12,6 +12,7 @@ import {
   headerValue,
 } from './headers';
 import {
+  DEVICE_ID_COOKIE,
   REFRESH_TOKEN_COOKIE,
   REFRESH_TOKEN_LIFETIME_SEC,
 } from './cookies';
@@ -93,6 +94,7 @@ describe('contracts/http/wire.json', () => {
   it('declares the refresh cookie name and its one lifetime', () => {
     const fixture = load();
     expect(fixture.cookies['refreshToken']).toBe(REFRESH_TOKEN_COOKIE);
+    expect(fixture.cookies['deviceId']).toBe(DEVICE_ID_COOKIE);
     expect(fixture.cookieLifetimesSec['refreshToken']).toBe(
       REFRESH_TOKEN_LIFETIME_SEC,
     );

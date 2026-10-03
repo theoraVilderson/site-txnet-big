@@ -43,18 +43,32 @@ enum FraudAutoAction {
   @@schema("fraud")
 }
 
+/// Where a fingerprint was taken (D-11): a browser, or a messenger account.
+enum FingerprintChannel {
+  web
+  bot
+
+  @@schema("fraud")
+}
+
 /// 2.1 — اثرانگشت دستگاه؛ برای تشخیص چند userId روی یک دستگاه فیزیکی.
+/// D-11's recipe (F-036-a): web = sha256(IP, User-Agent, `device_id` cookie),
+/// bot = sha256(platform, platform user id). One row per (tenant, account,
+/// fingerprint); `lastSeenAt` is the sighting the 30-day count reads.
 model DeviceFingerprint {
-  id              String   @id @default(uuid()) @db.Uuid
-  userId          String   @db.Uuid
-  fingerprintHash String // هش ترکیبی User-Agent + Canvas Fingerprint + IP Subnet
-  firstSeenAt     DateTime @default(now())
-  lastSeenAt      DateTime @updatedAt
+  id              String             @id @default(uuid()) @db.Uuid
+  tenantId        String             @db.Uuid
+  userId          String             @db.Uuid
+  channel         FingerprintChannel
+  fingerprintHash String
+  firstSeenAt     DateTime           @default(now())
+  lastSeenAt      DateTime           @default(now())
 
   user             User               @relation(fields: [userId], references: [id])
   spinWheelAttempts SpinWheelAttempt[]
 
-  @@index([fingerprintHash])
+  @@unique([tenantId, userId, fingerprintHash])
+  @@index([tenantId, fingerprintHash, lastSeenAt])
   @@map("device_fingerprint")
   @@schema("fraud")
 }

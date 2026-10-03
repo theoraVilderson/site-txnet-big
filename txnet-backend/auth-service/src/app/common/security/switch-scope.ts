@@ -1,4 +1,4 @@
-import { RequestHeaders } from '@txnet-backend/shared-core';
+import { DEVICE_ID_COOKIE, RequestHeaders } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 import { isBotPlatform } from '@txnet-backend/messenger';
 import { refreshCookieOptions } from '../http/refresh-cookie';
@@ -10,8 +10,9 @@ import { resolveTenant } from '../../tenant/tenant';
  * contract, not a second spelling of it (C-04). */
 export const BOT_PLATFORM_HEADER = RequestHeaders.botPlatform;
 
-/** The browser's partition key. Server-minted, httpOnly, never read by script. */
-export const DEVICE_COOKIE = 'device_id';
+/** The browser's partition key. Server-minted, httpOnly, never read by script.
+ * Name from the wire contract: billing reads it too (F-036-a, C-04). */
+export const DEVICE_COOKIE = DEVICE_ID_COOKIE;
 
 /**
  * A **switch scope**: the surface instance an account-switch group belongs to

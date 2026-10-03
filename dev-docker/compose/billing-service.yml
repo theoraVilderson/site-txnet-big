@@ -40,6 +40,8 @@ services:
       # calls auth-service (F-093-c) — so the same origin, and the service
       # refuses to boot without one when NODE_ENV=production.
       - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
+      # `req.ip` through Traefik: the web device fingerprint (F-036-a) reads it.
+      - TRUST_PROXY=${TRUST_PROXY}
       # The platform's own processes on the internal seam (F-092-k): the
       # worker's expiry tick proves itself with this and nothing else reaches
       # `/api/internal/*`, which Traefik does not route at all. Empty closes

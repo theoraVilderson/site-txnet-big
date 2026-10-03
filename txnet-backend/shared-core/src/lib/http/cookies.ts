@@ -34,3 +34,13 @@ export const REFRESH_TOKEN_COOKIE = 'refresh_token';
  * in. The one place that needs milliseconds says so at the call site.
  */
 export const REFRESH_TOKEN_LIFETIME_SEC = 30 * 24 * 60 * 60;
+
+/**
+ * The browser's own id: server-minted by `auth-service`, httpOnly, host-only,
+ * path `/` (`auth-service/src/app/common/security/switch-scope.ts`).
+ *
+ * Two processes read it. `auth-service` keys an account-switch group on it
+ * (ADR-0015); `billing-service` puts it in the web device fingerprint (F-036-a,
+ * D-11). It is a partition key in both, never a credential.
+ */
+export const DEVICE_ID_COOKIE = 'device_id';

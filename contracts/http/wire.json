@@ -46,6 +46,7 @@
   },
   "cookies": {
     "note": "One name per cookie that crosses the browser boundary, and the one lifetime its Max-Age and its token TTL share. The options builder stays with the code that sets the cookie.",
-    "refreshToken": "refresh_token"
+    "refreshToken": "refresh_token",
+    "deviceId": "device_id"
   }
 }
