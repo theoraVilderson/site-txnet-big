@@ -9,11 +9,14 @@
  *  - a prize that pays cash, or names another tenant's group, template or
  *    variant;
  *  - a close time already past, or too close for anyone to opt in;
- *  - an unaudited act.
+ *  - an unaudited act;
+ *  - a preview that counts otherwise than the freeze will, or a winners list
+ *    shown before the draw (F-707-o).
  */
 import { LotteryEntryMode, LotteryStatus, Prisma, SpinPrizeType } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 
+import { LotteryAdminReportService } from './lottery-admin-report.service';
 import { LotteryAdminRefused, LotteryAdminService, LotteryDraftInput } from './lottery-admin.service';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
@@ -245,5 +248,121 @@ describe('LotteryAdminService.list', () => {
       [2, '7.00'],
     ]);
     expect(view.winnersTotal).toBe(4);
+  });
+});
+
+// ------------------------------------------------- the admin's reads (F-707-o)
+
+const OLD = new Date('2026-01-01T00:00:00Z');
+const fineUser = { status: 'active', deletedAt: null, createdAt: OLD, phoneVerifiedAt: OLD, fullName: 'A User', username: null as string | null };
+
+function buildReport(o: {
+  lottery?: Row | null;
+  members?: Array<{ memberType: 'user' | 'tenant'; userId: string | null }>;
+  entrants?: Array<{ id: string; userId: string; optedInAt?: Date | null; ticketNumber?: number | null; excludedReason?: string | null }>;
+  users?: Record<string, Partial<typeof fineUser>>;
+  draw?: Record<string, unknown> | null;
+  winners?: Array<Record<string, unknown>>;
+} = {}) {
+  const lot = o.lottery === undefined ? stored(LotteryStatus.draft) : o.lottery;
+  const users = o.users ?? {};
+  const entrants = (o.entrants ?? []).map((e) => ({ optedInAt: null, ticketNumber: null, excludedReason: null, ...e }));
+  const tx = {
+    $executeRaw: async () => 0,
+    // No device behind several accounts in these cases.
+    $queryRaw: async () => [],
+    lottery: { findFirst: async ({ where }: { where: { id: string; tenantId: string } }) => (lot && lot.id === where.id && where.tenantId === TENANT ? lot : null) },
+    userGroupMember: { findMany: async () => o.members ?? [] },
+    lotteryEntrant: { findMany: async () => entrants },
+    user: {
+      findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.filter((id) => id in users).map((id) => ({ id, ...fineUser, ...users[id] })),
+    },
+    fraudFlag: { findMany: async () => [] },
+    lotteryDraw: { findUnique: async () => o.draw ?? null },
+    lotteryWinner: { findMany: async () => o.winners ?? [] },
+  };
+  const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
+  return new LotteryAdminReportService(prisma as never, () => AT);
+}
+
+describe('LotteryAdminReportService.eligibility', () => {
+  const members = [
+    { memberType: 'user' as const, userId: 'u1' },
+    { memberType: 'user' as const, userId: 'u2' },
+    { memberType: 'user' as const, userId: 'u3' },
+    { memberType: 'tenant' as const, userId: null },
+  ];
+  const users = { u1: {}, u2: { phoneVerifiedAt: null }, u3: { createdAt: new Date(AT.getTime() - 3_600_000) }, u4: {} };
+
+  it('judges an automatic draft’s members as the freeze would, now; a reseller member is counted, not judged', async () => {
+    const report = buildReport({ members, users });
+    const e = await asTenant(() => report.eligibility(actor, 'lot-x'));
+    expect(e).toMatchObject({ final: false, members: 3, eligibleMembers: 1, candidates: 3, eligible: 1, skippedResellerCount: 1 });
+    expect(e.excluded).toEqual({ phone_unverified: 1, account_too_new: 1 });
+  });
+
+  it('judges an open opt-in lottery’s entrants so far, and still says how many members could enter', async () => {
+    const report = buildReport({
+      lottery: stored(LotteryStatus.published, { entryMode: LotteryEntryMode.opt_in }),
+      members,
+      users,
+      entrants: [
+        { id: 'e1', userId: 'u1', optedInAt: AT },
+        { id: 'e4', userId: 'u4', optedInAt: AT },
+      ],
+    });
+    const e = await asTenant(() => report.eligibility(actor, 'lot-x'));
+    expect(e).toMatchObject({ final: false, members: 3, eligibleMembers: 1, candidates: 2, eligible: 1 });
+    expect(e.excluded).toEqual({ not_in_group: 1 });
+  });
+
+  it('after the freeze reads the frozen list, never judges again', async () => {
+    const report = buildReport({
+      lottery: stored(LotteryStatus.drawn),
+      members,
+      users: {},
+      entrants: [
+        { id: 'e1', userId: 'u1', ticketNumber: 1 },
+        { id: 'e2', userId: 'u2', ticketNumber: 2 },
+        { id: 'e3', userId: 'u3', excludedReason: 'flagged' },
+      ],
+      draw: { skippedResellerCount: 4, frozenAt: AT },
+    });
+    const e = await asTenant(() => report.eligibility(actor, 'lot-x'));
+    expect(e).toMatchObject({ final: true, members: null, eligibleMembers: null, candidates: 3, eligible: 2, skippedResellerCount: 4, excluded: { flagged: 1 } });
+  });
+
+  it('is lottery_not_found for another tenant’s lottery', async () => {
+    const report = buildReport({ lottery: null });
+    await expect(asTenant(() => report.eligibility(actor, 'lot-x'))).rejects.toMatchObject({ reason: 'lottery_not_found' });
+  });
+});
+
+describe('LotteryAdminReportService.winners', () => {
+  it('is not_drawn before the draw: the admin sees no place the users cannot', async () => {
+    const report = buildReport({ lottery: stored(LotteryStatus.frozen), draw: { frozenAt: AT, drawnAt: null } });
+    await expect(asTenant(() => report.winners(actor, 'lot-x'))).rejects.toMatchObject({ reason: 'not_drawn' });
+  });
+
+  it('names each place’s user, its ticket, prize and delivery, and which place a reserve took over', async () => {
+    const report = buildReport({
+      lottery: stored(LotteryStatus.drawn),
+      entrants: [
+        { id: 'e1', userId: 'u1', ticketNumber: 3 },
+        { id: 'e2', userId: 'u2', ticketNumber: 1 },
+      ],
+      users: { u1: { fullName: 'Winner One', username: 'w1' }, u2: { fullName: 'Reserve Two' } },
+      draw: { entrantCount: 2, frozenAt: AT, drawnAt: AT, publishedAt: AT },
+      winners: [
+        { id: 'w-1', position: 1, entrantId: 'e1', delivery: 'passed_on', deliveredAt: null, passedOnReason: 'inactive', replacesWinnerId: null, prize: { rank: 1, label: '50 GB' } },
+        { id: 'w-2', position: 2, entrantId: 'e2', delivery: 'delivered', deliveredAt: AT, passedOnReason: null, replacesWinnerId: 'w-1', prize: { rank: 1, label: '50 GB' } },
+      ],
+    });
+    const w = await asTenant(() => report.winners(actor, 'lot-x'));
+    expect(w).toMatchObject({ lotteryId: 'lot-x', entrantCount: 2, drawnAt: AT, publishedAt: AT });
+    expect(w.places).toEqual([
+      { position: 1, ticketNumber: 3, user: { id: 'u1', fullName: 'Winner One', username: 'w1' }, prize: { rank: 1, label: '50 GB' }, delivery: 'passed_on', deliveredAt: null, passedOnReason: 'inactive', replacesPosition: null },
+      { position: 2, ticketNumber: 1, user: { id: 'u2', fullName: 'Reserve Two', username: null }, prize: { rank: 1, label: '50 GB' }, delivery: 'delivered', deliveredAt: AT, passedOnReason: null, replacesPosition: 1 },
+    ]);
   });
 });

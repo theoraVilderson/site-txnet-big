@@ -181,6 +181,9 @@ export const PANEL_WHEEL_SETTINGS = "/wheel/settings";
 export const PANEL_LOTTERIES = "/lotteries";
 /** One drawn lottery's result and its in-browser check (F-707-n). */
 export const panelLotteryPath = (id: string) => `${PANEL_LOTTERIES}/${encodeURIComponent(id)}`;
+/** A tenant admin's lotteries: create, publish, cancel, the preview and the winners (F-707-o). */
+export const PANEL_LOTTERIES_MANAGE = "/lotteries/manage";
+export const panelLotteryManagePath = (id: string) => `${PANEL_LOTTERIES_MANAGE}/${encodeURIComponent(id)}`;
 /**
  * Where a bank returns a payer (F-093-f). These two are `billing`'s to name:
  * `deposit-callback.controller.ts` redirects to them by path, so they are the

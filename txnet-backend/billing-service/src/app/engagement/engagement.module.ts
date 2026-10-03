@@ -3,6 +3,7 @@ import { KekService } from '@txnet-backend/shared-core';
 
 import { EntitlementModule } from '../entitlement/entitlement.module';
 import { LotteryAdminController } from './lottery-admin.controller';
+import { LotteryAdminReportService } from './lottery-admin-report.service';
 import { LotteryAdminService } from './lottery-admin.service';
 import { LotteryCloseService } from './lottery-close.service';
 import { LotteryDeliveryService } from './lottery-delivery.service';
@@ -29,6 +30,6 @@ import { WheelController } from './wheel.controller';
 @Module({
   imports: [EntitlementModule],
   controllers: [WheelAdminController, WheelController, LotteryAdminController, LotteryController, LotteryInternalController],
-  providers: [WheelAdminService, LotteryAdminService, LotteryEntryService, LotteryCloseService, LotteryDrawService, LotteryDeliveryService, LotteryResultService, LotterySeedSeal, KekService, WheelSpinService, WheelReportService],
+  providers: [WheelAdminService, LotteryAdminService, LotteryAdminReportService, LotteryEntryService, LotteryCloseService, LotteryDrawService, LotteryDeliveryService, LotteryResultService, LotterySeedSeal, KekService, WheelSpinService, WheelReportService],
 })
 export class EngagementModule {}

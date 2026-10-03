@@ -31,7 +31,8 @@
       "ai": "AI",
       "wheel": "Lucky wheel",
       "wheelSettings": "Wheel settings",
-      "lotteries": "Lotteries"
+      "lotteries": "Lotteries",
+      "lotterySettings": "Lottery settings"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -4481,6 +4482,185 @@
       "seed": "Seed",
       "listHash": "List hash",
       "algorithm": "Method"
+    }
+  },
+  "lotteryAdmin": {
+    "title": "Lottery settings",
+    "subtitle": "Free draws among one of your user groups. Once published, the prizes, rules and close time are fixed; the list is frozen before the draw's seed exists.",
+    "notAllowed": "You do not have access to lottery settings.",
+    "retry": "Try again",
+    "empty": "No lottery yet.",
+    "newLottery": "New lottery",
+    "open": "Open",
+    "back": "All lotteries",
+    "notFound": "This lottery was not found.",
+    "list": {
+      "closesAt": "Closes {{time}}",
+      "entrants": "{{n}} in the list",
+      "winnersTotal": "{{n}} winner(s)"
+    },
+    "status": {
+      "draft": "Draft",
+      "open": "Open",
+      "closing": "Closing",
+      "frozen": "Closed — drawing",
+      "drawn": "Drawn",
+      "cancelled": "Cancelled"
+    },
+    "mode": {
+      "automatic": "Automatic: every eligible member",
+      "opt_in": "Opt-in: members who join"
+    },
+    "fields": {
+      "group": "User group",
+      "groupId": "Group id",
+      "groupsLoading": "Loading groups…",
+      "pickGroup": "Choose a group",
+      "title": "Title",
+      "description": "Description",
+      "optional": "Optional",
+      "entryMode": "Who enters",
+      "closesAt": "Closes at",
+      "closesAtHint": "Your time zone: {{zone}}. At least 1 hour and at most 180 days ahead.",
+      "rules": "Who may get a ticket",
+      "phoneVerified": "Phone number verified",
+      "minAgeHours": "Account age at least (hours)",
+      "reservesCount": "Reserves",
+      "reservesHint": "Drawn after the winners; a reserve takes a prize a winner can no longer receive."
+    },
+    "prizes": {
+      "title": "Prizes, in rank order",
+      "rank": "Prize {{n}}",
+      "label": "Name",
+      "type": "Kind",
+      "valueGb": "Traffic (GB)",
+      "valueDays": "Days",
+      "valuePercent": "Discount (%)",
+      "template": "Coupon to copy",
+      "templateId": "Coupon id",
+      "templatesLoading": "Loading coupons…",
+      "noTemplates": "You have no active discount coupon to copy.",
+      "validDays": "Coupon valid for (days)",
+      "variant": "Service",
+      "winnersCount": "Winners",
+      "add": "Add a prize",
+      "remove": "Remove",
+      "moveUp": "Move up",
+      "moveDown": "Move down"
+    },
+    "prizeTypes": {
+      "bonus_traffic_gb": "Extra traffic",
+      "extra_days": "Extra days",
+      "discount_coupon": "Discount coupon",
+      "free_grant": "Free service"
+    },
+    "errors": {
+      "groupRequired": "Choose the group the lottery is for.",
+      "titleRequired": "Give it a title.",
+      "titleTooLong": "At most 120 characters.",
+      "descriptionTooLong": "At most 2000 characters.",
+      "closeRequired": "Pick the close date and time.",
+      "closeTooSoon": "The close must be at least an hour from now.",
+      "closeTooFar": "The close can be at most 180 days from now.",
+      "wholeNumber": "A whole number.",
+      "reserves": "A whole number from 0 to 100.",
+      "labelRequired": "Name the prize.",
+      "labelTooLong": "At most 80 characters.",
+      "positive": "More than zero.",
+      "wholeDays": "Whole days, at least 1.",
+      "percent": "A percent above 0, at most 100.",
+      "templateRequired": "Pick the coupon to copy.",
+      "validDays": "From 1 to 365 days.",
+      "variantRequired": "Pick the service.",
+      "winners": "From 1 to 1000 winners.",
+      "noPrizes": "Add at least one prize.",
+      "tooManyPrizes": "At most 20 prizes."
+    },
+    "refusals": {
+      "invalid_prize": "A prize is not one a lottery can give: no cash and no empty prize.",
+      "invalid_close_time": "The close time must be between 1 hour and 180 days from now.",
+      "cancel_reason_required": "Write the reason; users are shown it.",
+      "coupon_template_not_found": "That coupon is not one of yours.",
+      "variant_not_found": "That service is not one of yours.",
+      "group_not_found": "That group no longer exists.",
+      "lottery_not_found": "This lottery was not found.",
+      "not_a_draft": "It is no longer a draft: only cancelling is possible now.",
+      "not_cancellable": "It is already closed: a closed lottery cannot be cancelled.",
+      "not_drawn": "It has not been drawn yet."
+    },
+    "editor": {
+      "create": "New lottery",
+      "edit": "Edit the draft",
+      "draftNote": "It is saved as a draft. Nobody sees it until you publish it.",
+      "save": "Save draft",
+      "saving": "Saving…",
+      "cancel": "Discard"
+    },
+    "detail": {
+      "group": "Group: {{name}}",
+      "closesAt": "Closes {{time}}",
+      "publishedAt": "Published {{time}}",
+      "cancelled": "Cancelled {{time}}. Reason shown to users: {{reason}}",
+      "phoneRequired": "Phone number must be verified",
+      "minAge": "Account at least {{n}} hour(s) old",
+      "reserves": "{{n}} reserve(s)",
+      "prize": "{{rank}}. {{label}} — {{n}} winner(s)"
+    },
+    "acts": {
+      "edit": "Edit",
+      "delete": "Delete draft",
+      "deleteConfirm": "Delete this draft? This cannot be undone.",
+      "publish": "Publish",
+      "publishConfirm": "Publish now? From then on the prizes, rules and close time cannot change; only cancelling remains.",
+      "cancel": "Cancel the lottery",
+      "cancelReason": "Reason, shown to users",
+      "cancelConfirm": "Cancel it",
+      "keep": "Keep it",
+      "confirm": "Yes",
+      "working": "Working…",
+      "published": "Published. Members can see it now.",
+      "cancelledDone": "Cancelled. Users see your reason."
+    },
+    "eligibility": {
+      "title": "Who enters",
+      "refresh": "Count again",
+      "loading": "Counting…",
+      "estimate": "An estimate as of {{time}}: accounts can change until the close, and the close judges them again.",
+      "final": "The frozen list, {{time}}.",
+      "members": "{{n}} user member(s) in the group",
+      "eligibleMembers": "{{n}} of them pass the rules now",
+      "joined": "{{n}} joined so far",
+      "wouldGet": "{{n}} would get a ticket if it closed now",
+      "tickets": "{{n}} ticket(s) of {{total}} judged",
+      "skipped": "{{n}} reseller member(s) skipped: resellers never enter",
+      "excludedTitle": "Left out, and why",
+      "excluded": {
+        "not_in_group": "No longer in the group: {{n}}",
+        "inactive": "Account not active: {{n}}",
+        "account_too_new": "Account too new: {{n}}",
+        "phone_unverified": "Phone not verified: {{n}}",
+        "flagged": "Under fraud review: {{n}}",
+        "shared_device": "Device shared by too many accounts: {{n}}"
+      }
+    },
+    "winners": {
+      "title": "Winners and delivery",
+      "notYet": "The winners appear here once the draw has run.",
+      "drawnAt": "Drawn {{time}}",
+      "publishedAt": "Result public since {{time}}",
+      "notPublished": "Prizes are being given; the result goes public when they are.",
+      "noPlaces": "There were no tickets, so nobody was drawn.",
+      "place": "Place {{n}}",
+      "ticket": "Ticket #{{n}}",
+      "reserve": "Reserve",
+      "replaces": "took over from place {{n}}",
+      "accountGone": "(account removed)",
+      "delivery": {
+        "pending": "Being given",
+        "delivered": "Given",
+        "passed_on": "Passed on"
+      },
+      "deliveredAt": "Given {{time}}"
     }
   }
 }

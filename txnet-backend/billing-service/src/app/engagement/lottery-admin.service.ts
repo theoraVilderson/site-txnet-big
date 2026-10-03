@@ -34,7 +34,9 @@ export type LotteryAdminRejection =
   | 'group_not_found'
   | 'lottery_not_found'
   | 'not_a_draft'
-  | 'not_cancellable';
+  | 'not_cancellable'
+  /** The winners are asked for before the draw (F-707-o). */
+  | 'not_drawn';
 
 export class LotteryAdminRefused extends Error {
   constructor(

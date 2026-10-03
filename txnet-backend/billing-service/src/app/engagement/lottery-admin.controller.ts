@@ -5,6 +5,7 @@ import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { EngagementPermissionGuard } from './engagement-permission.guard';
+import { LotteryAdminReportService } from './lottery-admin-report.service';
 import { LotteryCancelBody, LotteryDraftBody, lotteryCancelSchema, lotteryDraftSchema } from './lottery-admin.schema';
 import { LotteryActor, LotteryAdminRefused, LotteryAdminRejection, LotteryAdminService, LotteryDraftInput } from './lottery-admin.service';
 import { ENGAGEMENT_ADMIN_READ, ENGAGEMENT_ADMIN_WRITE } from './wheel-admin.controller';
@@ -20,6 +21,7 @@ export const LOTTERY_ADMIN_REFUSAL_STATUS: Record<LotteryAdminRejection, 400 | 4
   lottery_not_found: 404,
   not_a_draft: 409,
   not_cancellable: 409,
+  not_drawn: 409,
 };
 
 /**
@@ -28,12 +30,16 @@ export const LOTTERY_ADMIN_REFUSAL_STATUS: Record<LotteryAdminRejection, 400 | 4
  * the caller's own tenant by RLS (`LotteryAdminService`). A draft is edited
  * and deleted; a published one only cancelled, with a public reason. No route
  * closes, freezes, seeds or draws a lottery: that is the close job's alone
- * (F-707-k, F-707-l).
+ * (F-707-k, F-707-l). Two reads beside the settings (F-707-o): who would
+ * enter if it closed now, and once drawn, who holds each place.
  */
 @Controller('billing/engagement/lotteries')
 @UseGuards(EngagementPermissionGuard)
 export class LotteryAdminController {
-  constructor(private readonly lotteries: LotteryAdminService) {}
+  constructor(
+    private readonly lotteries: LotteryAdminService,
+    private readonly reports: LotteryAdminReportService,
+  ) {}
 
   private actor(req: Request, ip: string): LotteryActor {
     const { userId, tenantId } = identityOf(req);
@@ -50,6 +56,18 @@ export class LotteryAdminController {
   @RateLimit(ENGAGEMENT_ADMIN_READ)
   async get(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
     return this.refusing(() => this.lotteries.get(this.actor(req, ip), id));
+  }
+
+  @Get(':id/eligibility')
+  @RateLimit(ENGAGEMENT_ADMIN_READ)
+  async eligibility(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.reports.eligibility(this.actor(req, ip), id));
+  }
+
+  @Get(':id/winners')
+  @RateLimit(ENGAGEMENT_ADMIN_READ)
+  async winners(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.reports.winners(this.actor(req, ip), id));
   }
 
   @Post()

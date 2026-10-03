@@ -80,7 +80,7 @@ type LockedLottery = {
   requiresMinAccountAgeHours: number;
 };
 
-type Candidate = { userId: string; entrantId: string; existing: boolean; optedInAt: Date | null; inGroup: boolean };
+export type Candidate = { userId: string; entrantId: string; existing: boolean; optedInAt: Date | null; inGroup: boolean };
 
 @Injectable()
 export class LotteryCloseService {
@@ -118,19 +118,9 @@ export class LotteryCloseService {
       FROM engagement.lottery WHERE id = ${lotteryId}::uuid AND status = 'published' AND "closesAt" <= ${now} FOR UPDATE`;
     if (!lot) return false;
 
-    const members = await tx.userGroupMember.findMany({ where: { groupId: lot.userGroupId }, select: { memberType: true, userId: true } });
-    const userMembers = new Set(members.filter((m) => m.memberType === UserGroupMemberType.user && m.userId).map((m) => m.userId as string));
-    const skippedResellerCount = members.filter((m) => m.memberType === UserGroupMemberType.tenant).length;
+    const { candidates, skippedResellerCount } = await lotteryCandidates(tx, lot);
 
-    const rows = await tx.lotteryEntrant.findMany({ where: { lotteryId }, select: { id: true, userId: true, optedInAt: true } });
-    const candidates = new Map<string, Candidate>(rows.map((r) => [r.userId, { userId: r.userId, entrantId: r.id, existing: true, optedInAt: r.optedInAt, inGroup: userMembers.has(r.userId) }]));
-    if (lot.entryMode === LotteryEntryMode.automatic) {
-      for (const userId of userMembers) {
-        if (!candidates.has(userId)) candidates.set(userId, { userId, entrantId: randomUUID(), existing: false, optedInAt: null, inGroup: true });
-      }
-    }
-
-    const facts = await this.facts(tx, lot.tenantId, [...candidates.keys()], now);
+    const facts = await candidateFacts(tx, lot.tenantId, [...candidates.keys()], now);
     const judged = [...candidates.values()].map((c) => ({ c, reason: judgeCandidate(c, facts.get(c.userId), lot, now) }));
     const eligible = judged
       .filter((j) => j.reason === null)
@@ -175,29 +165,54 @@ export class LotteryCloseService {
     this.logger.log(`lottery ${lotteryId} frozen: ${eligible.length} ticket(s), ${judged.length - eligible.length} excluded, ${skippedResellerCount} reseller(s) skipped`);
     return true;
   }
+}
 
-  private async facts(tx: Prisma.TransactionClient, tenantId: string, userIds: string[], now: Date): Promise<Map<string, CandidateFacts>> {
-    if (userIds.length === 0) return new Map();
-    const since = new Date(now.getTime() - FINGERPRINT_WINDOW_DAYS * 86_400_000);
-    const [users, flags, devices] = await Promise.all([
-      tx.user.findMany({ where: { id: { in: userIds } }, select: { id: true, status: true, deletedAt: true, createdAt: true, phoneVerifiedAt: true } }),
-      tx.fraudFlag.findMany({ where: { subjectType: FraudSubjectType.user, subjectId: { in: userIds }, resolvedAt: null }, select: { subjectId: true } }),
-      // Per user, the most accounts on any one of its devices in the window (D-11).
-      tx.$queryRaw<Array<{ userId: string; accounts: number }>>`SELECT f."userId"::text AS "userId", max(c.n)::int AS accounts
-        FROM fraud.device_fingerprint f
-        CROSS JOIN LATERAL (SELECT count(DISTINCT g."userId") AS n FROM fraud.device_fingerprint g
-          WHERE g."tenantId" = f."tenantId" AND g."fingerprintHash" = f."fingerprintHash" AND g."lastSeenAt" >= ${since}) c
-        WHERE f."tenantId" = ${tenantId}::uuid AND f."userId" = ANY(${userIds}::uuid[]) AND f."lastSeenAt" >= ${since}
-        GROUP BY f."userId"`,
-    ]);
-    const flagged = new Map<string, number>();
-    for (const f of flags) flagged.set(f.subjectId, (flagged.get(f.subjectId) ?? 0) + 1);
-    const shared = new Map(devices.map((d) => [d.userId, Number(d.accounts)]));
-    return new Map(
-      users.map((u) => [
-        u.id,
-        { status: u.status, deletedAt: u.deletedAt, createdAt: u.createdAt, phoneVerifiedAt: u.phoneVerifiedAt, openFlags: flagged.get(u.id) ?? 0, accountsOnFingerprint: shared.get(u.id) ?? 0 },
-      ]),
-    );
+/**
+ * Who the close judges (the "Who enters" rule above): `automatic`, every user
+ * member of the group; `opt_in`, who joined. A reseller member is counted,
+ * never judged. Also the admin's preview (F-707-o), so it counts as the
+ * freeze will.
+ */
+export async function lotteryCandidates(
+  tx: Prisma.TransactionClient,
+  lot: { id: string; userGroupId: string; entryMode: LotteryEntryMode },
+): Promise<{ candidates: Map<string, Candidate>; userMembers: Set<string>; skippedResellerCount: number }> {
+  const members = await tx.userGroupMember.findMany({ where: { groupId: lot.userGroupId }, select: { memberType: true, userId: true } });
+  const userMembers = new Set(members.filter((m) => m.memberType === UserGroupMemberType.user && m.userId).map((m) => m.userId as string));
+  const skippedResellerCount = members.filter((m) => m.memberType === UserGroupMemberType.tenant).length;
+
+  const rows = await tx.lotteryEntrant.findMany({ where: { lotteryId: lot.id }, select: { id: true, userId: true, optedInAt: true } });
+  const candidates = new Map<string, Candidate>(rows.map((r) => [r.userId, { userId: r.userId, entrantId: r.id, existing: true, optedInAt: r.optedInAt, inGroup: userMembers.has(r.userId) }]));
+  if (lot.entryMode === LotteryEntryMode.automatic) {
+    for (const userId of userMembers) {
+      if (!candidates.has(userId)) candidates.set(userId, { userId, entrantId: randomUUID(), existing: false, optedInAt: null, inGroup: true });
+    }
   }
+  return { candidates, userMembers, skippedResellerCount };
+}
+
+/** Each user's facts the rules judge, as of `now`; a user gone from the table has none. */
+export async function candidateFacts(tx: Prisma.TransactionClient, tenantId: string, userIds: string[], now: Date): Promise<Map<string, CandidateFacts>> {
+  if (userIds.length === 0) return new Map();
+  const since = new Date(now.getTime() - FINGERPRINT_WINDOW_DAYS * 86_400_000);
+  const [users, flags, devices] = await Promise.all([
+    tx.user.findMany({ where: { id: { in: userIds } }, select: { id: true, status: true, deletedAt: true, createdAt: true, phoneVerifiedAt: true } }),
+    tx.fraudFlag.findMany({ where: { subjectType: FraudSubjectType.user, subjectId: { in: userIds }, resolvedAt: null }, select: { subjectId: true } }),
+    // Per user, the most accounts on any one of its devices in the window (D-11).
+    tx.$queryRaw<Array<{ userId: string; accounts: number }>>`SELECT f."userId"::text AS "userId", max(c.n)::int AS accounts
+      FROM fraud.device_fingerprint f
+      CROSS JOIN LATERAL (SELECT count(DISTINCT g."userId") AS n FROM fraud.device_fingerprint g
+        WHERE g."tenantId" = f."tenantId" AND g."fingerprintHash" = f."fingerprintHash" AND g."lastSeenAt" >= ${since}) c
+      WHERE f."tenantId" = ${tenantId}::uuid AND f."userId" = ANY(${userIds}::uuid[]) AND f."lastSeenAt" >= ${since}
+      GROUP BY f."userId"`,
+  ]);
+  const flagged = new Map<string, number>();
+  for (const f of flags) flagged.set(f.subjectId, (flagged.get(f.subjectId) ?? 0) + 1);
+  const shared = new Map(devices.map((d) => [d.userId, Number(d.accounts)]));
+  return new Map(
+    users.map((u) => [
+      u.id,
+      { status: u.status, deletedAt: u.deletedAt, createdAt: u.createdAt, phoneVerifiedAt: u.phoneVerifiedAt, openFlags: flagged.get(u.id) ?? 0, accountsOnFingerprint: shared.get(u.id) ?? 0 },
+    ]),
+  );
 }

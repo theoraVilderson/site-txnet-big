@@ -253,3 +253,130 @@ export const lotteryApi = {
     return call<LotteryResult>(`${lotteryPath(id)}/result`, { method: "GET" });
   },
 };
+
+// ------------------------------------------------------- lotteries, the admin
+
+export type AdminLotteryStatus = "draft" | LotteryStatus;
+/** A lottery prize: billing refuses `wallet_credit` and `empty` (F-707-i rule 5). */
+export type LotteryPrizeType = Exclude<WheelPrizeType, "empty">;
+
+/** One lottery as its admin sees it (`LotteryView`, F-707-i). Decimals are strings (C-02). */
+export interface AdminLottery {
+  id: string;
+  status: AdminLotteryStatus;
+  userGroupId: string;
+  title: string;
+  description: string | null;
+  entryMode: "automatic" | "opt_in";
+  closesAt: string;
+  requiresPhoneVerified: boolean;
+  requiresMinAccountAgeHours: number;
+  reservesCount: number;
+  publishedAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  createdByAdminId: string;
+  createdAt: string;
+  /** Opt-ins while open; every judged member after the freeze. */
+  entrantCount: number;
+  winnersTotal: number;
+  prizes: Array<{
+    id: string;
+    rank: number;
+    label: string;
+    prizeType: LotteryPrizeType;
+    prizeValue: string;
+    couponTemplateId: string | null;
+    couponValidDays: number | null;
+    variantId: string | null;
+    winnersCount: number;
+  }>;
+}
+
+/** `POST` / `PUT …/engagement/lotteries` — the `.strict()` `lotteryDraftSchema`, prizes in rank order. */
+export interface LotteryDraftBody {
+  userGroupId: string;
+  title: string;
+  description: string | null;
+  entryMode: "automatic" | "opt_in";
+  /** An instant. */
+  closesAt: string;
+  requiresPhoneVerified: boolean;
+  requiresMinAccountAgeHours: number;
+  reservesCount: number;
+  prizes: Array<{
+    label: string;
+    prizeType: LotteryPrizeType;
+    prizeValue: string;
+    couponTemplateId: string | null;
+    couponValidDays: number | null;
+    variantId: string | null;
+    winnersCount: number;
+  }>;
+}
+
+/** `GET …/:id/eligibility` (`LotteryEligibility`, F-707-o): who enters if it closed now, or who did. */
+export interface LotteryEligibility {
+  lotteryId: string;
+  asOf: string;
+  final: boolean;
+  members: number | null;
+  eligibleMembers: number | null;
+  candidates: number;
+  eligible: number;
+  excluded: Record<string, number>;
+  skippedResellerCount: number;
+}
+
+/** `GET …/:id/winners` (`LotteryWinners`, F-707-o): each place and who holds it, once drawn. */
+export interface LotteryWinners {
+  lotteryId: string;
+  entrantCount: number;
+  frozenAt: string;
+  drawnAt: string;
+  publishedAt: string | null;
+  places: Array<{
+    position: number;
+    ticketNumber: number;
+    user: { id: string; fullName: string; username: string | null } | null;
+    prize: { rank: number; label: string } | null;
+    delivery: LotteryDelivery;
+    deliveredAt: string | null;
+    passedOnReason: string | null;
+    replacesPosition: number | null;
+  }>;
+}
+
+const adminLotteryPath = (id: string) => `/engagement/lotteries/${encodeURIComponent(id)}`;
+
+export const lotteryAdminApi = {
+  list(): Promise<AdminLottery[]> {
+    return call<AdminLottery[]>("/engagement/lotteries", { method: "GET" });
+  },
+  get(id: string): Promise<AdminLottery> {
+    return call<AdminLottery>(adminLotteryPath(id), { method: "GET" });
+  },
+  create(body: LotteryDraftBody): Promise<AdminLottery> {
+    return call<AdminLottery>("/engagement/lotteries", json(body));
+  },
+  /** A draft rewritten whole, prizes too. */
+  replace(id: string, body: LotteryDraftBody): Promise<AdminLottery> {
+    return call<AdminLottery>(adminLotteryPath(id), { method: "PUT", body: JSON.stringify(body) });
+  },
+  remove(id: string): Promise<void> {
+    return call<void>(adminLotteryPath(id), { method: "DELETE" });
+  },
+  publish(id: string): Promise<AdminLottery> {
+    return call<AdminLottery>(`${adminLotteryPath(id)}/publish`, { method: "POST" });
+  },
+  /** The reason is shown to users. */
+  cancel(id: string, reason: string): Promise<AdminLottery> {
+    return call<AdminLottery>(`${adminLotteryPath(id)}/cancel`, json({ reason }));
+  },
+  eligibility(id: string): Promise<LotteryEligibility> {
+    return call<LotteryEligibility>(`${adminLotteryPath(id)}/eligibility`, { method: "GET" });
+  },
+  winners(id: string): Promise<LotteryWinners> {
+    return call<LotteryWinners>(`${adminLotteryPath(id)}/winners`, { method: "GET" });
+  },
+};
