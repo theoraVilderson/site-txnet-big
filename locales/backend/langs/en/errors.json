@@ -261,6 +261,7 @@
     "scanUnavailable": "Files cannot be checked right now. Please try again in a few minutes.",
     "quotaExceeded": "You have used all the space for your attachments.",
     "assigneeUnknown": "This person cannot be assigned support conversations.",
-    "hoursInvalid": "These working hours are not valid: each interval must start before it ends, and intervals on one day must not overlap."
+    "hoursInvalid": "These working hours are not valid: each interval must start before it ends, and intervals on one day must not overlap.",
+    "slaInvalid": "These SLA targets are not valid: each must be at least one minute, resolution no shorter than first response, and at most 30 days."
   }
 }

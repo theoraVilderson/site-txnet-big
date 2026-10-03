@@ -86,6 +86,7 @@ const REFUSAL: Record<ConversationRejection, { status: 400 | 404 | 409 | 413 | 4
   quota_exceeded: { status: 409, i18nKey: E.quotaExceeded },
   assignee_unknown: { status: 404, i18nKey: E.assigneeUnknown },
   hours_invalid: { status: 400, i18nKey: E.hoursInvalid },
+  sla_invalid: { status: 400, i18nKey: E.slaInvalid },
 };
 
 /** A multipart file as multer holds it in memory. */

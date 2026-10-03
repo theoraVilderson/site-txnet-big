@@ -20,6 +20,7 @@ updated: 2026-10-03
 | 9 | An attachment's URL is minted only on the owning user's read (or a `support.agent` of its tenant's), only for a `clean` file, and lives five minutes | service (`attachmentView`), `private-files` verifying the signature | an unscanned or another user's file is fetched |
 | 10 | A user's attachments, across all their conversations, never exceed `SUPPORT_STORAGE_QUOTA_BYTES`; no file is stored before the scanner passed it, and a refused upload leaves no bytes | `SupportAttachmentService` (per-user advisory lock in the insert's transaction) | one user fills the volume; an infected file sits on disk |
 | 11 | `mode` is `live` only when, at the moment of the write, an agent's heartbeat is current **and** the tenant's wall clock is inside its hours (none = always); an unreadable presence is `async` | `SupportAvailability.mode`, called on open, send, attach, reply | a user waits on a live chat no one is in |
+| 12 | A conversation's SLA due times are `createdAt` + its priority's target in the tenant's working minutes (resolution + the working time stopped), recomputed in the transaction of every write that can move them; `slaDueAt` is null exactly while the clock is stopped or the thread finished | `applySla` (open, user message, agent reply, settle, priority) | the queue orders by a stale clock; a breach is reported that was not one |
 
 ## How to test
 
@@ -30,4 +31,5 @@ The signature, expiry, PDF sniffing and the scanner verdicts behind 9 are
 `shared-core/src/lib/object-storage/private-file.spec.ts`; 6 and 10 for uploads
 are `attachments.service.int.spec.ts`. The agent side (3, 5, 7, the tenant
 boundary, who may be assigned) is `agent/agent.service.int.spec.ts`; 11 is
-`availability/availability.spec.ts` and, on the stored thread, the agent int spec.
+`availability/availability.spec.ts` and, on the stored thread, the agent int spec;
+12 is `sla/sla.int.spec.ts`.

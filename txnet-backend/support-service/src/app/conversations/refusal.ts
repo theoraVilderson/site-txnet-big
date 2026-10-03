@@ -20,7 +20,9 @@ export type ConversationRejection =
   // The agent side (F-033-d).
   | 'assignee_unknown'
   // Working hours (F-033-g).
-  | 'hours_invalid';
+  | 'hours_invalid'
+  // SLA targets (F-033-h).
+  | 'sla_invalid';
 
 export class ConversationRefused extends Error {
   constructor(readonly reason: ConversationRejection) {

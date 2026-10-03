@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ConversationStatus, MessageSenderKind, Prisma } from '@prisma/client';
+import { ConversationPriority, ConversationStatus, MessageSenderKind, Prisma } from '@prisma/client';
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
@@ -25,6 +25,7 @@ import {
 import { SupportAvailability } from '../availability/availability';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChannelProof, SupportRealtime, TYPING_TTL_MS } from '../realtime/support-realtime';
+import { SlaView, applySla, slaViewOf } from '../sla/sla';
 import { SUPPORT_AGENT_PERMISSION } from './support-agent.guard';
 
 /**
@@ -49,6 +50,8 @@ export interface AgentConversationView extends ConversationSummary {
   firstResponseAt: Date | null;
   resolvedAt: Date | null;
   closedAt: Date | null;
+  /** The SLA clocks (F-033-h). */
+  sla: SlaView;
 }
 
 export interface AgentMessageView extends MessageView {
@@ -86,9 +89,10 @@ export class SupportAgentService {
   ) {}
 
   /**
-   * One page of the queue: `urgent` first, then whoever has waited longest
-   * (catalog §11.5 — priority is position, nothing else). `after` is the last
-   * id of the previous page.
+   * One page of the queue: `urgent` first, then the nearest SLA due — a
+   * stopped clock last — then whoever has waited longest (catalog §11.5:
+   * priority is position, nothing else). `after` is the last id of the
+   * previous page.
    */
   async inbox(
     caller: SupportCaller,
@@ -105,7 +109,7 @@ export class SupportAgentService {
     return tenantTransaction(this.prisma, async (tx) => {
       const rows = await tx.supportConversation.findMany({
         where,
-        orderBy: [{ priority: 'desc' }, { lastMessageAt: 'asc' }, { id: 'asc' }],
+        orderBy: [{ priority: 'desc' }, { slaDueAt: { sort: 'asc', nulls: 'last' } }, { lastMessageAt: 'asc' }, { id: 'asc' }],
         take: limit + 1,
         ...(query.after ? { cursor: { id: query.after }, skip: 1 } : {}),
       });
@@ -206,6 +210,8 @@ export class SupportAgentService {
       });
       // Replying is reading.
       await moveCursor(tx, caller, conversationId, row.lastSeq);
+      // Answered: now waiting on the user, so the resolution clock stops (F-033-h).
+      if (!internal) await applySla(tx, conversationId, now, 'agent_replied');
       return { message, status: row.status };
     });
     // Invariant 5: the user reads this channel, so a note is never on it —
@@ -255,6 +261,16 @@ export class SupportAgentService {
     });
   }
 
+  /** Queue position only (catalog §11.5); the SLA targets follow the new priority (F-033-h). */
+  async prioritize(caller: SupportCaller, conversationId: string, input: { priority: ConversationPriority }): Promise<AgentConversationView> {
+    return tenantTransaction(this.prisma, async (tx) => {
+      await tenantConversation(tx, conversationId);
+      await tx.supportConversation.update({ where: { id: conversationId }, data: { priority: input.priority } });
+      await applySla(tx, conversationId, new Date(), 'reprioritized');
+      return agentViewOf(await tenantConversation(tx, conversationId), 0);
+    });
+  }
+
   /** Moves the agent's own cursor forward; the user sees "seen" (F-034). */
   async markRead(caller: SupportCaller, conversationId: string, input: { upToSeq?: number }): Promise<{ lastReadSeq: number }> {
     const result = await tenantTransaction(this.prisma, async (tx) => {
@@ -280,7 +296,9 @@ export class SupportAgentService {
     write: (tx: Prisma.TransactionClient, now: Date) => Promise<void>,
   ): Promise<AgentConversationView> {
     const view = await tenantTransaction(this.prisma, async (tx) => {
-      await write(tx, new Date());
+      const now = new Date();
+      await write(tx, now);
+      await applySla(tx, conversationId, now, 'settled');
       return agentViewOf(await tenantConversation(tx, conversationId), 0);
     });
     await this.realtime.status(conversationId, status);
@@ -320,7 +338,7 @@ async function isAgent(tx: Prisma.TransactionClient, tenantId: string, userId: s
   return rows.length > 0;
 }
 
-function agentViewOf(c: ConversationRow, unread: number): AgentConversationView {
+function agentViewOf(c: ConversationRow, unread: number, now = new Date()): AgentConversationView {
   return {
     ...summaryOf(c, unread),
     userId: c.userId,
@@ -328,6 +346,7 @@ function agentViewOf(c: ConversationRow, unread: number): AgentConversationView 
     firstResponseAt: c.firstResponseAt,
     resolvedAt: c.resolvedAt,
     closedAt: c.closedAt,
+    sla: slaViewOf(c, now),
   };
 }
 

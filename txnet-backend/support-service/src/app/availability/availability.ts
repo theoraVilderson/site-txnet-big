@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ConversationMode } from '@prisma/client';
+import { ConversationMode, Prisma } from '@prisma/client';
 import { PLATFORM_DEFAULT_TIMEZONE, RedisTtl, canonicalTimeZone, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { ConversationRefused, SupportCaller } from '../conversations/refusal';
@@ -90,17 +90,7 @@ export class SupportAvailability {
 
   /** The tenant's schedule on its own wall clock. */
   async hours(tenantId: string): Promise<WorkingHours> {
-    return tenantTransaction(this.prisma, async (tx) => {
-      const [tenant, rows] = await Promise.all([
-        tx.tenant.findUnique({ where: { id: tenantId }, select: { timezone: true } }),
-        tx.supportWorkingHours.findMany({ where: { tenantId }, orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }] }),
-      ]);
-      return {
-        // ADR-0108 rule 2: a zone the runtime cannot read is skipped, never thrown.
-        zone: canonicalTimeZone(tenant?.timezone) ?? PLATFORM_DEFAULT_TIMEZONE,
-        intervals: rows.map((r) => ({ weekday: r.weekday, startMinute: r.startMinute, endMinute: r.endMinute })),
-      };
-    });
+    return tenantTransaction(this.prisma, (tx) => readHours(tx, tenantId));
   }
 
   /** Replaces the whole schedule; an empty list means always open. */
@@ -128,6 +118,19 @@ export class SupportAvailability {
   async mode(tenantId: string, now = new Date()): Promise<ConversationMode> {
     return (await this.at(tenantId, now)).live ? ConversationMode.live : ConversationMode.async;
   }
+}
+
+/** A tenant's schedule inside a caller's transaction — the SLA clock reads it with the write it times (F-033-h). */
+export async function readHours(tx: Prisma.TransactionClient, tenantId: string): Promise<WorkingHours> {
+  const [tenant, rows] = await Promise.all([
+    tx.tenant.findUnique({ where: { id: tenantId }, select: { timezone: true } }),
+    tx.supportWorkingHours.findMany({ where: { tenantId }, orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }] }),
+  ]);
+  return {
+    // ADR-0108 rule 2: a zone the runtime cannot read is skipped, never thrown.
+    zone: canonicalTimeZone(tenant?.timezone) ?? PLATFORM_DEFAULT_TIMEZONE,
+    intervals: rows.map((r) => ({ weekday: r.weekday, startMinute: r.startMinute, endMinute: r.endMinute })),
+  };
 }
 
 /**

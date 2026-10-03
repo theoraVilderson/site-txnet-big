@@ -6,8 +6,9 @@ import { callerOf, refusing } from '../conversations/conversations.controller';
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import { SlaTargetView, SupportSla } from '../sla/sla';
 import { SupportAvailability } from './availability';
-import { HoursBody, hoursSchema } from './availability.schema';
+import { HoursBody, SlaBody, hoursSchema, slaSchema } from './availability.schema';
 import { SupportManageGuard } from './support-manage.guard';
 import type { WorkingHours } from './working-hours';
 
@@ -23,11 +24,14 @@ const WRITE = {
   windowSec: 60,
 };
 
-/** A tenant's support settings (F-033-g): its weekly hours. `support.manage`, the caller's tenant only. */
+/** A tenant's support settings: weekly hours (F-033-g), SLA targets (F-033-h). `support.manage`, the caller's tenant only. */
 @Controller('support/settings')
 @UseGuards(SupportManageGuard)
 export class SupportSettingsController {
-  constructor(private readonly availability: SupportAvailability) {}
+  constructor(
+    private readonly availability: SupportAvailability,
+    private readonly sla: SupportSla,
+  ) {}
 
   /** `{zone, intervals: [{weekday, startMinute, endMinute}]}` — `zone` is the tenant's, set elsewhere (ADR-0108). */
   @Get('hours')
@@ -40,5 +44,18 @@ export class SupportSettingsController {
   @RateLimit(WRITE)
   setHours(@Req() req: Request, @Body(new ZodValidationPipe(hoursSchema)) body: HoursBody): Promise<WorkingHours> {
     return refusing(() => this.availability.setHours(callerOf(req).tenantId, body.intervals));
+  }
+
+  /** One row per priority, `urgent` first, each the tenant's own or the platform's (`source`). In working minutes. */
+  @Get('sla')
+  @RateLimit(READ)
+  slaTargets(@Req() req: Request): Promise<SlaTargetView[]> {
+    return this.sla.targets(callerOf(req).tenantId);
+  }
+
+  @Put('sla')
+  @RateLimit(WRITE)
+  setSlaTargets(@Req() req: Request, @Body(new ZodValidationPipe(slaSchema)) body: SlaBody): Promise<SlaTargetView[]> {
+    return refusing(() => this.sla.setTargets(callerOf(req).tenantId, body.targets));
   }
 }

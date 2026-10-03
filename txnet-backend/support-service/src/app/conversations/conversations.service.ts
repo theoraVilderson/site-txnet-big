@@ -15,6 +15,7 @@ import type { EnvConfig } from '../config/env.validation';
 import { Availability, SupportAvailability } from '../availability/availability';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChannelProof, SupportRealtime, TYPING_TTL_MS } from '../realtime/support-realtime';
+import { applySla } from '../sla/sla';
 import { ConversationRefused, SupportCaller } from './refusal';
 
 /**
@@ -176,6 +177,7 @@ export class SupportConversationService {
         },
       });
       await moveCursor(tx, caller, conversation.id, 1);
+      await applySla(tx, conversation.id, now, 'opened');
       return summaryOf(conversation, 0);
     });
   }
@@ -366,6 +368,8 @@ export async function appendUserMessage(
   });
   // Your own message is read by you.
   await moveCursor(tx, caller, conversationId, row.lastSeq);
+  // The user answered: a stopped resolution clock runs again (F-033-h).
+  await applySla(tx, conversationId, now, 'user_wrote');
   return { message, status: row.status };
 }
 

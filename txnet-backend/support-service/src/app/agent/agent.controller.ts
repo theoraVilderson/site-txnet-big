@@ -9,7 +9,7 @@ import { callerOf, refusing } from '../conversations/conversations.controller';
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
-import { AssignBody, InboxQuery, ReplyBody, assignSchema, inboxQuerySchema, replySchema } from './agent.schema';
+import { AssignBody, InboxQuery, PriorityBody, ReplyBody, assignSchema, inboxQuerySchema, prioritySchema, replySchema } from './agent.schema';
 import { AgentConversationView, AgentMessagePage, AgentMessageView, SupportAgentService } from './agent.service';
 import { SupportAgentGuard } from './support-agent.guard';
 
@@ -92,6 +92,18 @@ export class SupportAgentController {
     @Body(new ZodValidationPipe(assignSchema)) body: AssignBody,
   ): Promise<AgentConversationView> {
     return refusing(() => this.agents.assign(callerOf(req), id, body));
+  }
+
+  /** Queue position, and with it the SLA targets (F-033-h). */
+  @Post('conversations/:id/priority')
+  @HttpCode(200)
+  @RateLimit(SEND)
+  prioritize(
+    @Req() req: Request,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(prioritySchema)) body: PriorityBody,
+  ): Promise<AgentConversationView> {
+    return refusing(() => this.agents.prioritize(callerOf(req), id, body));
   }
 
   @Post('conversations/:id/resolve')

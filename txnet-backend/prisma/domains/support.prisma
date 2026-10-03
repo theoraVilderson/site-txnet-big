@@ -71,6 +71,21 @@ model SupportWorkingHours {
   @@schema("support")
 }
 
+/// SLA targets for one priority (F-033-h), in working minutes. `tenantId` NULL
+/// is the platform's default; a tenant's own row replaces it for that priority.
+model SupportSlaPolicy {
+  id                   String               @id @default(uuid()) @db.Uuid
+  tenantId             String?              @db.Uuid
+  priority             ConversationPriority
+  firstResponseMinutes Int
+  resolutionMinutes    Int
+  updatedAt            DateTime             @default(now()) @updatedAt
+
+  @@unique([tenantId, priority])
+  @@map("sla_policy")
+  @@schema("support")
+}
+
 /// A support category (ADR-0112 point 6). `tenantId` NULL is the platform's
 /// default set, which a tenant sees only while it has no active category of
 /// its own. Retired with `isActive`, never deleted while a thread names it.
@@ -127,6 +142,15 @@ model SupportConversation {
   lastMessageAt    DateTime             @default(now())
   resolvedAt       DateTime?
   closedAt         DateTime?
+  /// SLA (F-033-h), in the tenant's working minutes from `createdAt`.
+  firstResponseDueAt DateTime?
+  /// Pushed later by the working time the clock spent stopped.
+  resolutionDueAt  DateTime?
+  /// Set while the resolution clock is stopped: waiting on the user, or resolved.
+  slaPausedAt      DateTime?
+  slaPausedSeconds Int                  @default(0)
+  /// The clock running now (first response, then resolution); null while stopped.
+  slaDueAt         DateTime?
   ratingScore      Int?                 @db.SmallInt
   aiTriageLabel    String?
   createdAt        DateTime             @default(now())
@@ -141,6 +165,8 @@ model SupportConversation {
   @@index([tenantId, userId, lastMessageAt(sort: Desc)])
   /// The agent queue (F-033-d): by status, then priority, then age.
   @@index([tenantId, status, priority, lastMessageAt])
+  /// The queue once SLA exists (F-033-h): priority, then the nearest due.
+  @@index([tenantId, status, priority, slaDueAt])
   @@map("conversation")
   @@schema("support")
 }

@@ -69,10 +69,11 @@ keyed by the agent's id.
 
 | Route | Input | Output | Errors |
 |---|---|---|---|
-| `GET …/agent/conversations` | `?view=pending\|live\|mine\|unassigned` (default `pending`), `after=<nextAfter>`, `limit≤100` | `{items: [summary + userId, assignedToUserId, firstResponseAt, resolvedAt, closedAt, unread], nextAfter}` — `urgent` first, then the longest waiting | — |
+| `GET …/agent/conversations` | `?view=pending\|live\|mine\|unassigned` (default `pending`), `after=<nextAfter>`, `limit≤100` | `{items: [summary + userId, assignedToUserId, firstResponseAt, resolvedAt, closedAt, unread, sla], nextAfter}` — `urgent` first, then the nearest `sla.dueAt` (stopped last), then the longest waiting | — |
 | `GET …/agent/conversations/:id/messages` | as the user's read | as the user's page, the conversation as above, each message with `internal` and `senderUserId`; notes included; `seenUpToSeq` is the user's cursor | 404 `not_found` |
 | `POST …/agent/conversations/:id/messages` | `{body ≤4000, internal?}` | the message, with `internal`, `senderUserId` | 404, 409 `closed` |
 | `POST …/agent/conversations/:id/assign` | `{assigneeUserId: uuid \| null}` | the conversation | 404 `not_found`, 404 `assignee_unknown` |
+| `POST …/agent/conversations/:id/priority` | `{priority: low\|normal\|high\|urgent}` | the conversation, its SLA recomputed (F-033-h) | 404 |
 | `POST …/agent/conversations/:id/resolve` | — | the conversation (`resolved`) | 404, 409 `closed` |
 | `POST …/agent/conversations/:id/close` | — | the conversation (`closed`) | 404 |
 | `POST …/agent/conversations/:id/read` · `…/typing` | as the user's | as the user's, `readerKind`/`senderKind` `agent` | 404, 409 `closed` (typing) |
@@ -110,6 +111,28 @@ note leaves it. Same thread, same history either way.
   overlapping interval. **`[]` = always open**: presence alone decides.
 - `nextOpenAt` is when the schedule next opens; `null` while open or with no
   schedule (then "we answer as soon as someone is online").
+
+## SLA (F-033-h, catalog §11.3, §11.5)
+
+Two targets per priority — first response and resolution, in **working
+minutes** of the tenant's schedule (none = the wall clock) — the platform's
+defaults (urgent 30/240, high 60/480, normal 240/1440, low 480/2880) unless
+the tenant set its own (user, 2026-10-03). Priority is set by an agent; it is
+queue position and these targets, nothing the user sees (§11.5).
+
+- Due times count from `createdAt`; resolution is pushed later by the working
+  time its clock spent **stopped** — from an agent's reply until the user
+  writes again, and while resolved. A note stops nothing.
+- Recomputed on open, a user's message, an agent's reply, resolve/close and a
+  priority change; a new target or schedule reaches a thread on its next write.
+- `sla` on an agent's view: `{firstResponseDueAt, resolutionDueAt, dueAt (the
+  clock running now, null while stopped), firstResponseBreached,
+  resolutionBreached}` — breached = answered/stopped/settled (or now) past due.
+- `GET /api/support/settings/sla` → `[{priority, firstResponseMinutes,
+  resolutionMinutes, source: tenant|platform}]`, urgent first; `PUT` `{targets:
+  [{priority, firstResponseMinutes, resolutionMinutes}]}` replaces the tenant's
+  own whole (left out = platform's) — `support.manage`; 400 `sla_invalid` unless
+  `0 < first ≤ resolution ≤ 43200` and each priority once.
 
 ## Emits (events)
 

@@ -1,3 +1,4 @@
+import { ConversationPriority } from '@prisma/client';
 import { BackendI18nKeys } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
@@ -27,6 +28,10 @@ export const replySchema = z
 /** `POST /api/support/agent/conversations/:id/assign` — `null` puts it back in the queue. */
 export const assignSchema = z.object({ assigneeUserId: z.string().uuid(invalid).nullable() }).strict();
 
+/** `POST /api/support/agent/conversations/:id/priority` — queue position only (§11.5). */
+export const prioritySchema = z.object({ priority: z.nativeEnum(ConversationPriority, { message: invalid }) }).strict();
+
+export type PriorityBody = { priority: ConversationPriority };
 export type InboxQuery = z.infer<typeof inboxQuerySchema>;
 export type ReplyBody = z.infer<typeof replySchema> & { body: string };
 export type AssignBody = { assigneeUserId: string | null };

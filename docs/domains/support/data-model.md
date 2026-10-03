@@ -15,11 +15,12 @@ original ticket/chat tables empty.
 ## Tables owned
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
-| conversation | the one support thread: subject, category, `status`, `mode` (`live`/`async`), `priority`, assignee, `lastSeq`, first-response / last-message / resolved / closed times, rating, AI triage label, `resellerPath` (NULL until F-901) | `tenantId`, RLS | long |
+| conversation | the one support thread: subject, category, `status`, `mode` (`live`/`async`), `priority`, assignee, `lastSeq`, first-response / last-message / resolved / closed times, SLA clocks (`firstResponseDueAt`, `resolutionDueAt`, `slaPausedAt`, `slaPausedSeconds`, `slaDueAt`, F-033-h), rating, AI triage label, `resellerPath` (NULL until F-901) | `tenantId`, RLS | long |
 | message | append-only; `seq` per conversation, `senderKind` `user`/`agent`/`system`/`bot`/`ai`, `internal` (agent note). **Monthly range-partitioned on `createdAt`**, key `(id, createdAt)`, no `DEFAULT` partition | `tenantId`, RLS on parent and every partition | partition archived, then dropped (row of its own) |
 | conversation_read | one reader's cursor: `lastReadSeq`, `readAt` | `tenantId`, RLS | with the conversation |
 | message_attachment | a file on a message: `objectKey` (storage port), name, type, size, `scanStatus` | `tenantId`, RLS | with the message |
 | working_hours | one open interval of the tenant's week (F-033-g): `weekday` 0–6, `startMinute`/`endMinute` on the tenant's wall clock (CHECKs). No row = always open | `tenantId`, RLS | replaced whole |
+| sla_policy | targets per `priority` in working minutes (F-033-h). `tenantId` NULL = the platform's defaults (seeded by `20261003001500`); a tenant's row replaces one | shared-read RLS | replaced whole |
 | support_category | `key`, order, `isActive`. `tenantId` NULL = platform default | shared-read RLS | long |
 | support_category_text | a category's name per `Language` | shared-read RLS | with the category |
 
