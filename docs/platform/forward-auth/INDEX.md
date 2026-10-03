@@ -2,7 +2,7 @@
 id: forward-auth
 layer: platform
 status: active
-version: 3
+version: 4
 keywords: [forward auth, traefik, gateway, identity headers, wire contract, header fixture, x-user-id, x-session-id, jwt, rbac, permissions, permissions file, policy engine, role, engine.go, policy.go, gateway error message, session_revoked, untranslated key, optional gate, anonymous, validate-optional, my-auth-optional, not signed in, socket without login]
 source:
   - auth-handler/**
@@ -11,7 +11,7 @@ source:
   - txnet-backend/shared-core/src/lib/http/**
 owns_tables: []
 depends_on: [identity, i18n, redis-keyspace]
-updated: 2026-09-11
+updated: 2026-10-03
 ---
 
 # forward-auth
@@ -33,6 +33,7 @@ for upstream services.
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-03 | v3 -> **v4** (additive): a token with `roleScope: tenant` is checked against the tenant ceiling (every role without `*`), never by name — a reseller's own roles pass the gate, and one named `SuperAdmin` cannot borrow `*`. contract.md "A role a tenant made". spec: F-018-n2 |
 | 2026-09-11 | `tools/contracts.py` is the sixth gate: the Traefik strip list is asserted as a **superset** of the declared names (a security boundary) and `authResponseHeaders` as **equal** to them (a data contract). Its first run found `X-Impersonated`/`X-Impersonated-By` forwarded and never stripped; both are now in the strip list. spec: F-072 |
 | 2026-09-11 | The header table becomes **normative**: `contracts/http/wire.json` is the declared home of every name this gateway writes, and Go, TypeScript and the Traefik lists are each held to it by a test (ADR-0036, C-04). No wire change. spec: F-071 |
 | 2026-09-10 | v2 -> **v3** (additive, ADR-0031): `/validate-optional` — the same decision, but a caller presenting no credential is answered 200 with `X-Auth-Anonymous: true` and no identity headers. A presented credential that fails is still 401. One consumer, `realtime`, whose router moves to `my-auth-optional`; `/validate` and every other router are untouched. spec: F-067-j |

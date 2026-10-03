@@ -11,6 +11,10 @@ import (
 // Engine holds the loaded role -> permissions mapping.
 type Engine struct {
 	roles map[string]RolePolicy
+	// tenantCeiling is every permission some role without `*` may hold: the
+	// most a role a tenant made may claim (F-018-n2). Computed once at load,
+	// so a permission added to a system role widens it with no second list.
+	tenantCeiling RolePolicy
 }
 
 // LoadFile parses a permissions file with the following simple format:
@@ -70,7 +74,23 @@ func LoadFile(path string) (*Engine, error) {
 		return nil, fmt.Errorf("policy: no roles defined in %s", path)
 	}
 
-	return &Engine{roles: roles}, nil
+	return &Engine{roles: roles, tenantCeiling: ceilingOf(roles)}, nil
+}
+
+// ceilingOf is the union of every role that does not hold `*`. The wildcard
+// role is left out on purpose: no tenant may hold what only the platform
+// owner holds, and `*` itself is never in the union.
+func ceilingOf(roles map[string]RolePolicy) RolePolicy {
+	ceiling := RolePolicy{Permissions: make(map[string]struct{})}
+	for _, role := range roles {
+		if _, all := role.Permissions[AllPermissions]; all {
+			continue
+		}
+		for p := range role.Permissions {
+			ceiling.Permissions[p] = struct{}{}
+		}
+	}
+	return ceiling
 }
 
 // Check verifies that roleName exists and that every permission in
@@ -86,6 +106,19 @@ func (e *Engine) Check(roleName string, claimedPermissions []string) (unauthoriz
 	}
 	for _, p := range claimedPermissions {
 		if !role.Allows(p) {
+			unauthorized = append(unauthorized, p)
+		}
+	}
+	return unauthorized, len(unauthorized) == 0
+}
+
+// CheckTenantRole holds a role a tenant made to the ceiling (F-018-n2). Such a
+// role is in no file — tenants create them at runtime — and its name is the
+// tenant's choice, so it is never looked up: a tenant role called
+// "SuperAdmin" gets the ceiling, not `*`.
+func (e *Engine) CheckTenantRole(claimedPermissions []string) (unauthorized []string, ok bool) {
+	for _, p := range claimedPermissions {
+		if !e.tenantCeiling.Allows(p) {
 			unauthorized = append(unauthorized, p)
 		}
 	}

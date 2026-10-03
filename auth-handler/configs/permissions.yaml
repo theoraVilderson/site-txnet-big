@@ -17,6 +17,11 @@
 # missing here is refused every gated request, and `tools/contracts.py` fails
 # when a seeded role has no entry.
 #
+# A role a **tenant** made (token `roleScope: tenant`) is never looked up here
+# by name: it may claim anything some role below without `*` lists — the union
+# of `Admin`, `Support` and `user` (F-018-n2). A line added to one of those
+# widens what a tenant may grant its own roles.
+#
 # `*` allows every permission, including one no line here names yet (F-101-d,
 # ADR-0043 as amended). Only `SuperAdmin` may carry it — `tools/contracts.py`
 # fails otherwise — and only the bare `*`: `user.*` is an ordinary name.

@@ -112,7 +112,13 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 		}
 
 		if h.engine != nil {
-			if unauthorized, ok := h.engine.Check(claims.RoleName, claims.Permissions); !ok {
+			// A role a tenant made is checked by its grants, never its name
+			// (F-018-n2); a system role by the file's entry for it.
+			unauthorized, ok := h.engine.Check(claims.RoleName, claims.Permissions)
+			if claims.RoleScope == jwt.RoleScopeTenant {
+				unauthorized, ok = h.engine.CheckTenantRole(claims.Permissions)
+			}
+			if !ok {
 				h.logger.Warn("token claims unauthorized permissions",
 					"role", claims.RoleName, "role_id", claims.RoleID, "user_id", claims.Sub, "unauthorized", unauthorized)
 				return response.Err(keyForbidden, nil), nil

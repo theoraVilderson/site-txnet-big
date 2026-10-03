@@ -363,3 +363,36 @@ func TestCheckDoesNotMutateClaims(t *testing.T) {
 		t.Errorf("Check() mutated its argument: %v, want %s", claimed, before)
 	}
 }
+
+// A role a tenant made is not in the file and never will be (F-018-n2). It is
+// held to the ceiling of every role that does not hold `*`, whatever its name.
+func TestCheckTenantRoleUsesTheCeilingOfEveryNonWildcardRole(t *testing.T) {
+	engine, err := LoadFile(writePolicy(t, `roles:
+  SuperAdmin:
+    permissions:
+      - *
+      - tenant.manage
+  Admin:
+    permissions:
+      - support.agent
+      - user.read
+  user:
+    permissions:
+      - self.read
+`))
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	if _, ok := engine.CheckTenantRole([]string{"support.agent", "self.read"}); !ok {
+		t.Fatal("a tenant role inside the union of Admin and user was refused")
+	}
+	unauthorized, ok := engine.CheckTenantRole([]string{"support.agent", "tenant.manage", "*"})
+	if ok {
+		t.Fatal("a tenant role claiming SuperAdmin-only permissions was admitted")
+	}
+	sort.Strings(unauthorized)
+	if strings.Join(unauthorized, ",") != "*,tenant.manage" {
+		t.Fatalf("unauthorized = %v, want [* tenant.manage]", unauthorized)
+	}
+}

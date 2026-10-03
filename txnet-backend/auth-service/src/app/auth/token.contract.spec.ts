@@ -79,6 +79,9 @@ describe('TokenService — auth-handler wire contract', () => {
         roleId: 'role-contract-2',
         role: {
           name: 'Support',
+          // A role a tenant made: the gate reads `roleScope` to check it by
+          // its grants rather than its name (F-018-n2).
+          tenantId: 'tenant-contract-1',
           rolePermissions: [{ permission: { key: 'user.read' } }],
         },
       },

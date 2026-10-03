@@ -15,6 +15,12 @@ type TokenTtlKey =
   | 'RESET_TOKEN_TTL_SEC'
   | 'IMPERSONATION_TOKEN_TTL_SEC';
 
+export type RoleScope = 'system' | 'tenant';
+
+/** `role.tenantId` null is a system template every tenant reads (F-018-n). */
+const roleScopeOf = (role: { tenantId?: string | null } | undefined): RoleScope =>
+  role?.tenantId ? 'tenant' : 'system';
+
 export type AuthClaims = {
   sub: string;
   tenantId: string;
@@ -25,6 +31,12 @@ export type AuthClaims = {
    * (ADR-0037).
    */
   roleName: string;
+  /**
+   * `tenant` for a role a tenant made, `system` for a template. The gate checks
+   * a tenant's role by its grants against a ceiling, never by its name, which
+   * the tenant chose (F-018-n2). Absent on single-purpose tokens.
+   */
+  roleScope?: RoleScope;
   permissions: string[];
   /**
    * `permissionFingerprint(permissions)` at mint time. The gate and `AuthGuard`
@@ -75,6 +87,7 @@ export class TokenService {
       tenantId: user.tenantId,
       roleId: user.roleId,
       roleName: user.role?.name ?? '',
+      roleScope: roleScopeOf(user.role),
       permissions,
       permHash: permissionFingerprint(permissions),
       sessionId,
@@ -125,6 +138,7 @@ export class TokenService {
         tenantId: targetUser.tenantId,
         roleId: targetUser.roleId,
         roleName: targetUser.role?.name ?? '',
+        roleScope: roleScopeOf(targetUser.role),
         permissions,
         permHash: permissionFingerprint(permissions),
         sessionId,

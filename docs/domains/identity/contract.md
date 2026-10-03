@@ -55,8 +55,8 @@ Surfaced over HTTP by the `auth-api` interface — see
 | end impersonation | (from session) | — | sync | not an impersonation session |
 
 Access-token claims (consumed by `forward-auth` and upstream services):
-`sub`, `tenantId`, `roleId`, `roleName`, `permissions[]`, `permHash`, `sessionId`,
-`isImpersonated?`, `impersonatedBy?`, `iat`, `exp`. Signing: HMAC-SHA256 (ADR-0004).
+`sub`, `tenantId`, `roleId`, `roleName`, `roleScope` (`system`|`tenant`, F-018-n2), `permissions[]`,
+`permHash`, `sessionId`, `isImpersonated?`, `impersonatedBy?`, `iat`, `exp`. HMAC-SHA256 (ADR-0004).
 `permHash` is `permissionFingerprint(permissions)` at mint (ADR-0043): a token is
 refused with `auth.permissionsChanged` once Redis holds a different fingerprint for
 `roleId`, or a different role for `sub`. A missing key refuses nothing.

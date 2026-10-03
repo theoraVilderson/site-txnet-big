@@ -28,7 +28,11 @@ type Claims struct {
 	// RoleName is what the policy file is keyed by. RoleID is a database
 	// UUID that differs on every seed, so it can never address a role in a
 	// file checked into the repo (ADR-0037).
-	RoleName    string   `json:"roleName"`
+	RoleName string `json:"roleName"`
+	// RoleScope is "tenant" for a role a tenant made, which the policy checks
+	// by its grants against the ceiling and never by name (F-018-n2). Anything
+	// else — "system", or absent on an older token — is looked up by name.
+	RoleScope   string   `json:"roleScope"`
 	SessionID   string   `json:"sessionId"`
 	Permissions []string `json:"permissions"`
 	// PermHash fingerprints Permissions as they were when the token was minted.
@@ -75,3 +79,7 @@ func Validate(token, secret string) (Claims, error) {
 
 	return claims, nil
 }
+
+// RoleScopeTenant marks a role a tenant made (F-018-n2). The TypeScript twin
+// is `TokenService`'s `roleScope`.
+const RoleScopeTenant = "tenant"

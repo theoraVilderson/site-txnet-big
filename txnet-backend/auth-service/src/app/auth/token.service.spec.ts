@@ -342,6 +342,18 @@ describe('TokenService', () => {
       expect(claims.roleName).toBe('Admin');
     });
 
+    // F-018-n2: the gate checks a tenant's own role by its grants, a system
+    // template by its name — so the token says which one it is.
+    it.each([
+      ['a system template', null, 'system'],
+      ['a role a tenant made', 'tenant-1', 'tenant'],
+    ])('says the role is %s', (_label, roleTenantId, scope) => {
+      const claims = tokens.verify(
+        tokens.signAccessToken({ ...user, role: { ...user.role, tenantId: roleTenantId } }, 's'),
+      );
+      expect(claims.roleScope).toBe(scope);
+    });
+
     it('signs an empty role name when the role is not loaded', () => {
       // Empty, not absent: the gateway reads it as a role no policy grants and
       // refuses, which is the same answer a missing claim must get.

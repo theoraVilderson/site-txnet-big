@@ -94,6 +94,9 @@ func TestContractImpersonatedTokenFromTypeScript(t *testing.T) {
 	if claims.RoleName != "Support" {
 		t.Errorf("RoleName = %q, want %q", claims.RoleName, "Support")
 	}
+	if claims.RoleScope != RoleScopeTenant {
+		t.Errorf("RoleScope = %q, want %q (F-018-n2)", claims.RoleScope, RoleScopeTenant)
+	}
 }
 
 func TestContractRejectedTokensFromTypeScript(t *testing.T) {

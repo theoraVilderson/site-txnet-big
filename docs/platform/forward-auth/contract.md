@@ -2,8 +2,8 @@
 id: forward-auth
 layer: platform
 status: active
-version: 3
-updated: 2026-09-13
+version: 4
+updated: 2026-10-03
 ---
 
 # Contract — forward-auth
@@ -21,7 +21,7 @@ Traefik middleware (`strip-fake-headers`).
 
 | Method + path | Behaviour |
 |---|---|
-| `GET /validate` | the access JWT (`Authorization: Bearer <jwt>`, or a WebSocket upgrade's subprotocol — see below) -> validate signature (HMAC-SHA256, always HS256) + `exp` + required claims -> check Redis key `<prefix>session:<sessionId>` exists -> if a policy file is loaded, check every claimed permission is granted to the token's `roleName`, matched exactly against the file's role keys (ADR-0037) -> set identity headers, return 200 |
+| `GET /validate` | the access JWT (`Authorization: Bearer <jwt>`, or a WebSocket upgrade's subprotocol — see below) -> validate signature (HMAC-SHA256, always HS256) + `exp` + required claims -> check Redis key `<prefix>session:<sessionId>` exists -> if a policy file is loaded, check every claimed permission is granted to the token's `roleName`, matched exactly against the file's role keys (ADR-0037) — or, for `roleScope: tenant`, against the tenant ceiling (below) -> set identity headers, return 200 |
 | `GET /validate-optional` | the **same decision**, except that a request carrying no credential at all is answered 200 with `X-Auth-Anonymous: true` and no identity headers (ADR-0031). A credential that *is* presented and fails is refused exactly as above — absent is anonymous, invalid is still 401 |
 | `GET /health` | 200 `healthy` |
 
@@ -156,6 +156,22 @@ catalogue `auth-api` translates against.
 `auth-service`'s; `PERMISSIONS_FILE_PATH` (`configs/permissions.yaml`, optional —
 absent disables the RBAC step); `LOCALE_SERVICE_ADDR` / `LOCALE_SCOPE=backend`;
 `CORS_ALLOWED_ORIGINS` (comma-separated, the panel origin; empty adds no CORS); HTTP timeouts. Policy file format: `roles: <role>: permissions: - <key>`, where `<role>` is `identity.role.name` spelled as `prisma/seed.js` spells it (ADR-0037).
+
+## A role a tenant made (F-018-n2)
+
+A reseller creates its own roles at runtime (F-018-n), so no file can name
+them, and the name is the reseller's choice. A token with `roleScope: tenant`
+is therefore **never looked up by name**: each claimed permission must be in
+the **tenant ceiling** — the union of every file role that does not hold `*`
+(today `Admin` ∪ `Support` ∪ `user`), computed at load. A tenant role named
+`SuperAdmin` gets the ceiling, not `*`; nothing a tenant holds can exceed what
+some system role below the platform owner may. `system`, or a token minted
+before the claim, is looked up by name as above.
+
+The ceiling is the outer door. The inner one is `auth-service`'s rule that a
+role is granted only what its writer holds (identity `contract.roles.md`), and
+an edit reaches the next request through the role's fingerprint (ADR-0043),
+by id — so a tenant role's changes are as immediate as a template's.
 
 ## Guarantees
 

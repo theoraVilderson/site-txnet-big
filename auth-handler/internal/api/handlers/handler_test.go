@@ -221,7 +221,7 @@ func newHandler(t *testing.T, redisReply func(string) string, engine *auth.Engin
 func testEngine(t *testing.T) *auth.Engine {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "permissions.yaml")
-	policy := "roles:\n  admin:\n    permissions:\n      - user.read\n      - user.write\n  user:\n    permissions:\n      - self.read\n"
+	policy := "roles:\n  root:\n    permissions:\n      - *\n  admin:\n    permissions:\n      - user.read\n      - user.write\n  user:\n    permissions:\n      - self.read\n"
 	if err := os.WriteFile(path, []byte(policy), 0o600); err != nil {
 		t.Fatalf("write policy: %v", err)
 	}
@@ -345,6 +345,26 @@ func TestValidateRefusalStatuses(t *testing.T) {
 			// policy: no name is a role nobody is granted.
 			name:       "token without roleName is refused by the policy",
 			token:      sign(t, validClaims(map[string]any{"roleName": nil}), testSecret),
+			redis:      sessionActive,
+			engine:     true,
+			wantStatus: http.StatusForbidden,
+			wantMsg:    keyForbidden,
+		},
+		{
+			// F-018-n2: a reseller's own role is checked by its grants against
+			// the ceiling, never looked up by name.
+			name:       "a tenant role beyond the ceiling is refused",
+			token:      sign(t, validClaims(map[string]any{"roleName": "پشتیبان", "roleScope": "tenant", "permissions": []string{"user.read", "tenant.manage"}}), testSecret),
+			redis:      sessionActive,
+			engine:     true,
+			wantStatus: http.StatusForbidden,
+			wantMsg:    keyForbidden,
+		},
+		{
+			// The name a tenant chose never reaches the file: a tenant role
+			// called "root" is held to the ceiling, not to root's `*`.
+			name:       "a tenant role named like a system role gets the ceiling, not that role",
+			token:      sign(t, validClaims(map[string]any{"roleName": "root", "roleScope": "tenant", "permissions": []string{"tenant.manage"}}), testSecret),
 			redis:      sessionActive,
 			engine:     true,
 			wantStatus: http.StatusForbidden,
@@ -527,6 +547,19 @@ func TestValidateWithoutEngineSkipsPolicyOnly(t *testing.T) {
 
 // A token with no permissions is a valid token; the engine has nothing to
 // refuse and the header is present but empty.
+// F-018-n2: a role a reseller made is in no file. It is admitted when every
+// permission it claims is one some non-wildcard role in the file may hold —
+// here admin's user.read and user's self.read together.
+func TestValidateAdmitsATenantRoleInsideTheCeiling(t *testing.T) {
+	h, _ := newHandler(t, sessionActive, testEngine(t))
+	token := sign(t, validClaims(map[string]any{
+		"roleName": "پشتیبان", "roleScope": "tenant", "permissions": []string{"user.read", "self.read"},
+	}), testSecret)
+	if w := call(t, h, token); w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", w.Code, w.Body.String())
+	}
+}
+
 func TestValidateAllowsEmptyPermissions(t *testing.T) {
 	h, _ := newHandler(t, sessionActive, testEngine(t))
 	token := sign(t, validClaims(map[string]any{"permissions": []string{}}), testSecret)
