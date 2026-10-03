@@ -444,6 +444,16 @@ export const RateLimitBucket = {
   CURRENCY_PIN_WRITE: 'currency:pin:write',
 
   /**
+   * The user's support (F-033-b, ADR-0112 point 10), per user. Reads cover the
+   * list, a thread's page, categories and mark-read — a chat screen polls.
+   * Opening is the expensive act and the one a spammer repeats, so it has its
+   * own, much smaller budget; sending is per minute, like a chat.
+   */
+  SUPPORT_READ: 'support:read',
+  SUPPORT_OPEN: 'support:open',
+  SUPPORT_SEND: 'support:send',
+
+  /**
    * One of the caller's own payments (F-093-l), per user. Its own bucket, not
    * `WALLET_PAYMENTS`: the pending page polls it, and a payer watching a
    * verifying payment must not use up the financial page's list budget.

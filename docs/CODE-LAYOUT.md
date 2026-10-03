@@ -56,6 +56,7 @@ no code exists yet, so there is nothing to mirror until a service is built.
 | `txnet-backend/worker-service/src/app/`                                       | background work: the tick publisher, the tick consumer, the job registry, and `jobs/*.job.ts` — one shell per scheduled job. Serves no HTTP (ADR-0027)                                        | `docs/domains/automation/`                                |
 | `txnet-backend/worker-service/src/app/currency/`                              | the FX worker's own logic — the D-22 source registry and the concurrent poller (F-0603). Its *shell* (`jobs/fx-rate.job.ts`) stays automation's, the same split billing-service's edge takes | `docs/domains/currency/`                                  |
 | `txnet-backend/currency-service/src/app/`                                     | currency service: the `currency` unit's HTTP home (ADR-0100, F-116-k) — tenant-service's request edge, copied; `rates/` the current-rate read. Fetches no rate (that is the worker's FX loop) | `docs/domains/currency/`                                  |
+| `txnet-backend/support-service/src/app/`                                      | support service: the `support` unit's HTTP home (ADR-0112, F-033-b) — currency-service's request edge, copied; `conversations/` the user's conversations, messages, read cursors, categories | `docs/domains/support/`                                   |
 | `txnet-backend/metering-service/src/app/`                                     | metering service: the delta consumer (F-027-n) — `network.usage.#` becomes `traffic_raw_log`, `grant.consumedBytes`, holds, quarantines and unattributed usage. Serves no HTTP and holds the cross-tenant pool (ADR-0077)                                        | `docs/domains/billing/contract.metering.md`               |
 | `txnet-backend/ai-service/src/app/`                                           | ai service: the revenue engine (ADR-0109) — two pools (app writer; `txnet_ai_reader` reader over `reader/reader-tables.ts`), its own trigger queue on the outbox, gated per tenant by `policy/` (F-1550), `/health`; capped at one CPU                                                                   | `docs/domains/ai/`                                        |
 | `txnet-backend/gateway-service/src/app/`                                      | the WebSocket gateway: the upgrade, the connection registry, the channel rules. Holds sockets and nothing else (ADR-0030)                    | `docs/platform/realtime/`                                 |
@@ -166,9 +167,9 @@ capped**, median load 7; one service 25s -> 26s. A spec that times out only
 in this pair, and passes alone, is contention: re-check the caps before
 raising its timeout.
 
-**`npm test` is `nx run-many -t test`** — all **twelve** unit projects
+**`npm test` is `nx run-many -t test`** — all **thirteen** unit projects
 (ai-service, auth-service, billing-service, bot-service, currency-service, gateway-service,
-messenger, metering-service, notification-service, shared-core, tenant-service,
+messenger, metering-service, notification-service, shared-core, support-service, tenant-service,
 worker-service). The figure measured on 2026-09-12, over the seven that existed
 then, was 93 files / ~1713 tests / ~80s; it has only grown. The project list is
 Nx's, inferred from each `vitest.config.mts` by the `@nx/vitest` plugin in

@@ -247,5 +247,11 @@
     "permissionUnknown": "That permission does not exist",
     "permissionNotHeld": "You cannot grant a permission you do not hold yourself",
     "inUse": "This role is still held by a user"
+  },
+  "support": {
+    "conversationNotFound": "This conversation was not found.",
+    "conversationClosed": "This conversation is closed. Start a new one to continue.",
+    "categoryUnknown": "This category is not available. Choose one from the list.",
+    "tooManyUnfinished": "You already have several open conversations. Please continue in one of them, or wait until one is closed."
   }
 }

@@ -42,6 +42,8 @@ include:
     project_directory: .
   - path: compose/currency-service.yml
     project_directory: .
+  - path: compose/support-service.yml
+    project_directory: .
   - path: compose/network-service.yml
     project_directory: .
   - path: compose/sub-service.yml

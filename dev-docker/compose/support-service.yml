@@ -1,0 +1,86 @@
+# NestJS support-service.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # ===========================================================================
+  # NestJS Support Service (Nx Monorepo) — the support unit's HTTP home
+  # ---------------------------------------------------------------------------
+  # ADR-0112, F-033-b. Serves `/api/support/*` behind ForwardAuth: one
+  # conversation per support thread (ticket and live chat are its modes),
+  # its messages, read cursors and categories.
+  # ===========================================================================
+  support-service:
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - APP_NAME=support-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-support-service
+    restart: unless-stopped
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+    environment:
+      - PORT=3000
+      - NODE_ENV=${NODE_ENV:-development}
+      - GLOBAL_PREFIX=${SUPPORT_GLOBAL_PREFIX:-api}
+      - PUBLIC_HOST=support-service
+      - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
+      # The app role, NOBYPASSRLS; every `support` table is under RLS.
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
+      # The rate limiter and the tenant status key.
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-}
+      - SUPPORT_READ_RATE_LIMIT=${SUPPORT_READ_RATE_LIMIT:-}
+      - SUPPORT_OPEN_RATE_LIMIT=${SUPPORT_OPEN_RATE_LIMIT:-}
+      - SUPPORT_SEND_RATE_LIMIT=${SUPPORT_SEND_RATE_LIMIT:-}
+      - SUPPORT_UNFINISHED_MAX=${SUPPORT_UNFINISHED_MAX:-}
+      - TRUST_PROXY=${TRUST_PROXY}
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.support-service.loadbalancer.server.port=3000"
+
+      # Every /api/support route is behind the gate (`my-auth`).
+      - "traefik.http.routers.support-service-http.rule=PathPrefix(`/api/support`)"
+      - "traefik.http.routers.support-service-http.priority=120"
+      - "traefik.http.routers.support-service-http.entrypoints=web"
+      - "traefik.http.routers.support-service-http.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.support-service-http.service=support-service"
+
+      - "traefik.http.routers.support-service.rule=PathPrefix(`/api/support`)"
+      - "traefik.http.routers.support-service.priority=120"
+      - "traefik.http.routers.support-service.entrypoints=websecure"
+      - "traefik.http.routers.support-service.tls.certresolver=myresolver"
+      - "traefik.http.routers.support-service.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.support-service.service=support-service"
+
+      # A CORS preflight carries no credentials; the gate would refuse it.
+      - "traefik.http.routers.support-preflight-http.rule=PathPrefix(`/api/support`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.support-preflight-http.entrypoints=web"
+      - "traefik.http.routers.support-preflight-http.priority=150"
+      - "traefik.http.routers.support-preflight-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.support-preflight-http.service=support-service"
+
+      - "traefik.http.routers.support-preflight.rule=PathPrefix(`/api/support`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.support-preflight.entrypoints=websecure"
+      - "traefik.http.routers.support-preflight.priority=150"
+      - "traefik.http.routers.support-preflight.tls.certresolver=myresolver"
+      - "traefik.http.routers.support-preflight.middlewares=strip-fake-headers"
+      - "traefik.http.routers.support-preflight.service=support-service"
+      - "txnet.logging=true"
+    depends_on:
+      main-db:
+        condition: service_healthy
+      locale-service:
+        condition: service_healthy

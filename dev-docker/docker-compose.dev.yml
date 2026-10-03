@@ -115,6 +115,14 @@ services:
     volumes: !override
       - ../txnet-backend:/app:delegated
 
+  support-service:
+    <<: *host-node
+    build: !reset null
+    environment:
+      - APP_NAME=support-service
+    volumes: !override
+      - ../txnet-backend:/app:delegated
+
   billing-service:
     <<: *host-node
     build: !reset null
