@@ -1,8 +1,9 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { LotteryEntryMode, LotteryStatus, Prisma, SpinPrizeType } from '@prisma/client';
-import { tenantTransaction } from '@txnet-backend/shared-core';
+import { OutboxEventType, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { LOTTERY_AGGREGATE } from './lottery-delivery.service';
 import { missingPrizeRelation, prizeShapeOk } from './prize-shape';
 
 /**
@@ -264,6 +265,16 @@ export class LotteryAdminService {
       });
       if (count === 0) throw await this.why(tx, actor.tenantId, id, 'not_a_draft');
       const view = await this.read(tx, actor.tenantId, id);
+      // F-707-q: the group is told, by worker-service, once the publish commits — never for a publish that rolled back.
+      await tx.outboxEvent.create({
+        data: {
+          aggregate: LOTTERY_AGGREGATE,
+          aggregateId: id,
+          type: OutboxEventType.LOTTERY_PUBLISHED,
+          payload: { tenantId: actor.tenantId, lotteryId: id, title: view.title, entryMode: view.entryMode },
+        },
+        select: { id: true },
+      });
       await this.audit(tx, actor, 'lottery_publish', id, { status: before.status }, auditValue(view));
       this.logger.log(`lottery ${id} published by ${actor.adminId}, closes ${view.closesAt.toISOString()}`);
       return view;

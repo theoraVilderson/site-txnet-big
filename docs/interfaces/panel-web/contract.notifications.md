@@ -123,7 +123,7 @@ never sends one.
 
 1. **A switch that is on means "tell me"**, one per `NOTICE_KINDS` entry —
    shared-core's `RETENTION_MUTABLE_KINDS` in order, `suggestion` included
-   (F-038-h), since a save replaces the list — words from an exhaustive `Record<NoticeKind, …>`. There is no switch for a stopped
+   (F-038-h) and `lottery` (F-707-q, a new lottery for the user's group), since a save replaces the list — words from an exhaustive `Record<NoticeKind, …>`. There is no switch for a stopped
    service: the subtitle says it is always told, and the server enforces it.
 2. **Quiet hours are one switch, two `time` fields and a zone.** Switched on,
    the window reads 23:00–08:00 until moved; the zone is `ZoneSelect`

@@ -22,7 +22,7 @@ describe('notice classes (F-601-s)', () => {
   });
 
   it('classes every retention kind as ADR-0097 says', () => {
-    const expected = { cutoff: 'critical', ending: 'important', connect: 'important', usage: 'important', reactivated: 'critical', suggestion: 'suggestion' };
+    const expected = { cutoff: 'critical', ending: 'important', connect: 'important', usage: 'important', reactivated: 'critical', suggestion: 'suggestion', lottery: 'important' };
     for (const [type, kind] of Object.entries(RETENTION_KIND_OF)) {
       const want = type === OutboxEventType.GRANT_USAGE_50 ? 'info' : expected[kind!];
       expect([type, noticeClassOf(type)]).toEqual([type, want]);
@@ -48,6 +48,8 @@ describe('notice classes (F-601-s)', () => {
       'subscriptionSuspended',
     ]);
     expect(by('important')).toEqual([
+      // F-707-q: an opt-in lottery opened — join before it closes.
+      'lotteryOpened',
       // F-707-m: a lottery prize given.
       'lotteryWon',
       'panelRefused',
@@ -62,7 +64,8 @@ describe('notice classes (F-601-s)', () => {
       // F-707-e: the wheel's day at 80% of its cap.
       'wheelCapNearing',
     ]);
-    expect(by('info')).toEqual(['panelAccepted']);
+    // F-707-q: an automatic lottery asks nothing — the inbox's alone.
+    expect(by('info')).toEqual(['lotteryOpenedAutomatic', 'panelAccepted']);
   });
 
   it('gives a combined notice the stronger class', () => {

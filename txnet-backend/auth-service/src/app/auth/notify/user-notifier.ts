@@ -1,6 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { BotClientRegistry, BotPlatform } from '@txnet-backend/messenger';
-import { SUGGESTION_OPT_OUT_PREFIX, suggestionCopyVerdict } from '@txnet-backend/shared-core';
+import { lotteryJoinCallback, SUGGESTION_OPT_OUT_PREFIX, suggestionCopyVerdict } from '@txnet-backend/shared-core';
 
 import { LocaleService } from '../../locale/locale.service';
 import { NotificationInboxClient } from './notification-inbox.client';
@@ -22,6 +22,8 @@ export const NOTIFY_TEMPLATES = [
   'resellerQuotaDigest',
   'wheelCapNearing',
   'lotteryWon',
+  'lotteryOpened',
+  'lotteryOpenedAutomatic',
   'panelAccepted',
   'panelRefused',
   'purchaseDelivered',
@@ -226,6 +228,28 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.engagement?.lotteryWonMany,
       fallback: '🎉 You won {{count}} lottery prizes. They have been added to your account; each lottery\'s page shows its result.',
       inbox: { read: (ns) => ns?.engagement?.lotteryWonManyTitle, fallback: 'Lottery prizes won ({{count}})' },
+    },
+  },
+  // F-707-q: an opt-in lottery opened to the user's group — the bot message carries Join (`lotteryJoinCallback`).
+  lotteryOpened: {
+    read: (ns) => ns?.engagement?.lotteryOpened,
+    fallback: '🎟 A new lottery is open for you: "{{title}}". Entry is free — tap Join to take part before it closes. Its prizes and close time are in the bot\'s Lotteries and on the panel\'s Lotteries page.',
+    inbox: { read: (ns) => ns?.engagement?.lotteryOpenedTitle, fallback: 'New lottery: "{{title}}"' },
+    many: {
+      read: (ns) => ns?.engagement?.lotteryOpenedMany,
+      fallback: '🎟 {{count}} new lotteries are open for you. Join them in the bot\'s Lotteries or on the panel\'s Lotteries page.',
+      inbox: { read: (ns) => ns?.engagement?.lotteryOpenedManyTitle, fallback: 'New lotteries ({{count}})' },
+    },
+  },
+  // F-707-q: an automatic lottery — the inbox alone, nothing to do.
+  lotteryOpenedAutomatic: {
+    read: (ns) => ns?.engagement?.lotteryOpenedAutomatic,
+    fallback: '🎟 You are in a new lottery: "{{title}}". Every eligible member is entered when it closes — there is nothing to do. Its prizes are on the panel\'s Lotteries page.',
+    inbox: { read: (ns) => ns?.engagement?.lotteryOpenedAutomaticTitle, fallback: 'You are in "{{title}}"' },
+    many: {
+      read: (ns) => ns?.engagement?.lotteryOpenedAutomaticMany,
+      fallback: '🎟 You are in {{count}} new lotteries; nothing to do. Their prizes are on the panel\'s Lotteries page.',
+      inbox: { read: (ns) => ns?.engagement?.lotteryOpenedAutomaticManyTitle, fallback: 'New lotteries you are in ({{count}})' },
     },
   },
   // F-019-v8: 80% of a quota's included units used, once per window and period.
@@ -989,10 +1013,13 @@ export class UserNotifier {
     const ordered = every ? links : [...links.filter((l) => l.platform === choice), ...links.filter((l) => l.platform !== choice)];
 
     // F-038-g4: an AI suggestion carries its "don't show this again" — the action id only, never the user.
+    // F-707-q: an opt-in lottery's announcement carries Join — the lottery id only; bot-service routes it from any state.
     const markup =
       request.template.startsWith('suggestion') && params.actionId
         ? { inline_keyboard: [[{ text: ns?.suggestion?.optOut ?? "🔕 Don't show this again", callback_data: `${SUGGESTION_OPT_OUT_PREFIX}${params.actionId}` }]] }
-        : undefined;
+        : request.template === 'lotteryOpened' && params.lotteryId
+          ? { inline_keyboard: [[{ text: ns?.engagement?.lotteryJoin ?? '✅ Join', callback_data: lotteryJoinCallback(params.lotteryId) }]] }
+          : undefined;
     let lastError: unknown = null;
     const sent: BotPlatform[] = [];
     for (const link of ordered) {

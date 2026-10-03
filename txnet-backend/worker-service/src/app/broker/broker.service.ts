@@ -201,6 +201,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly panelTestedQueue: string;
   private readonly tenantBillingCreditedQueue: string;
   private readonly tenantSubscriptionNoticeQueue: string;
+  private readonly lotteryAnnouncementQueue: string;
   private readonly grantDeliveryNoticeQueue: string;
   private readonly grantCreatedQueue: string;
   private readonly livePushQueue: string;
@@ -233,6 +234,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     this.panelTestedQueue = config.getOrThrow<string>('AUTOMATION_PANEL_TESTED_QUEUE');
     this.tenantBillingCreditedQueue = config.getOrThrow<string>('AUTOMATION_TENANT_BILLING_CREDITED_QUEUE');
     this.tenantSubscriptionNoticeQueue = config.getOrThrow<string>('AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE');
+    this.lotteryAnnouncementQueue = config.getOrThrow<string>('AUTOMATION_LOTTERY_ANNOUNCEMENT_QUEUE');
     this.grantDeliveryNoticeQueue = config.getOrThrow<string>('AUTOMATION_GRANT_DELIVERY_NOTICE_QUEUE');
     this.grantCreatedQueue = config.getOrThrow<string>('AUTOMATION_GRANT_CREATED_QUEUE');
     this.livePushQueue = config.getOrThrow<string>('AUTOMATION_LIVE_PUSH_QUEUE');
@@ -345,6 +347,13 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     ]) {
       await this.channel.bindQueue(this.tenantSubscriptionNoticeQueue, this.exchange, outboxRoutingKey(type));
     }
+    // F-707-q: a published lottery told to its whole group — its own queue, so a fan-out of
+    // thousands never holds up the person notices above.
+    await this.channel.assertQueue(this.lotteryAnnouncementQueue, {
+      durable: true,
+      arguments: { 'x-dead-letter-exchange': this.deadExchange },
+    });
+    await this.channel.bindQueue(this.lotteryAnnouncementQueue, this.exchange, outboxRoutingKey(OutboxEventType.LOTTERY_PUBLISHED));
     // F-111-d: a paid Grant delivered or refunded, told to its buyer — one
     // queue, because both are the end of the same purchase. F-601-i: one still
     // waiting 5 minutes on is the same purchase's news, in the same line.
@@ -640,6 +649,11 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   /** Start consuming a reseller's renewal notices (F-019-c), by the same rules. */
   async consumeTenantSubscriptionNotices(handle: OutboxHandler): Promise<void> {
     await this.consumeOutbox(this.tenantSubscriptionNoticeQueue, handle);
+  }
+
+  /** Start consuming `engagement.lottery.published` (F-707-q), by the same rules. */
+  async consumeLotteryAnnouncements(handle: OutboxHandler): Promise<void> {
+    await this.consumeOutbox(this.lotteryAnnouncementQueue, handle);
   }
 
   /** Start consuming a paid Grant's delivered / refunded events (F-111-d), by the same rules. */

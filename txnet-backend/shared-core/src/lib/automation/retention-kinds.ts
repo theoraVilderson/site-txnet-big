@@ -3,10 +3,11 @@ import { OutboxEventType } from './routing-keys';
 /**
  * The retention notice kinds a user may mute (F-601-m, spec 9.4), in the
  * panel's order: usage and wallet levels, the time levels before an end,
- * "trouble connecting?", "your service runs again", and the AI engine's
- * suggestions (F-038-g1, ADR-0109 point 11 — their only kind).
+ * "trouble connecting?", "your service runs again", the AI engine's
+ * suggestions (F-038-g1, ADR-0109 point 11 — their only kind), and a new
+ * lottery open to the user's group (F-707-q).
  */
-export const RETENTION_MUTABLE_KINDS = ['usage', 'ending', 'connect', 'reactivated', 'suggestion'] as const;
+export const RETENTION_MUTABLE_KINDS = ['usage', 'ending', 'connect', 'reactivated', 'suggestion', 'lottery'] as const;
 export type RetentionMutableKind = (typeof RETENTION_MUTABLE_KINDS)[number];
 
 /** Every kind. `cutoff` — the service stopped, or its configs are about to go — is never muted nor held for quiet hours. */
@@ -32,6 +33,8 @@ export const RETENTION_KIND_OF: Readonly<Partial<Record<OutboxEventType, Retenti
   [OutboxEventType.GRANT_STILL_NOT_CONNECTED]: 'connect',
   [OutboxEventType.GRANT_IDLE]: 'connect',
   [OutboxEventType.GRANT_REACTIVATED]: 'reactivated',
+  // F-707-q: about no service; claimed per lottery and member, muted by its own kind.
+  [OutboxEventType.LOTTERY_PUBLISHED]: 'lottery',
   [OutboxEventType.GRANT_ENDED]: 'cutoff',
   [OutboxEventType.GRANT_VOLUME_SPENT]: 'cutoff',
   [OutboxEventType.GRANT_WALLET_SPENT]: 'cutoff',

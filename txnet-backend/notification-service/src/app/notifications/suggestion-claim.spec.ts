@@ -14,11 +14,11 @@
  *  - **once per action**: a second claim by another action id names another
  *    row; the same id is the same row.
  */
-import { NOTICE_CLASS_OF, noticeClassOf, RETENTION_MUTABLE_KINDS, SUGGESTION_NOTICE } from '@txnet-backend/shared-core';
+import { NOTICE_CLASS_OF, noticeClassOf, OutboxEventType, RETENTION_MUTABLE_KINDS, SUGGESTION_NOTICE } from '@txnet-backend/shared-core';
 
 import { preferencesSchema } from './notification-preferences.schema';
-import { RetentionLedgerService } from './retention-ledger.service';
-import { suggestionClaimSchema } from './retention-ledger.schema';
+import { lotteryPeriod, RetentionLedgerService } from './retention-ledger.service';
+import { lotteryClaimSchema, retentionHoldSchema, suggestionClaimSchema } from './retention-ledger.schema';
 
 const USER = '44444444-4444-4444-8444-444444444444';
 const GRANT = '99999999-9999-4999-8999-999999999991';
@@ -90,5 +90,47 @@ describe('RetentionLedgerService.claimSuggestion (F-038-g1)', () => {
     expect(suggestionClaimSchema.safeParse(claim).success).toBe(true);
     expect(suggestionClaimSchema.safeParse({ ...claim, extra: 1 }).success).toBe(false);
     expect(suggestionClaimSchema.safeParse({ ...claim, grantId: 'x' }).success).toBe(false);
+  });
+});
+
+// ------------------------------------------------------------- F-707-q
+
+describe('RetentionLedgerService.claimLottery (F-707-q)', () => {
+  const LOTTERY = '0f0e0d0c-0b0a-4908-8706-050403020100';
+  const EVENT = '55555555-5555-4555-8555-555555555555';
+  const input = { eventId: EVENT, lotteryId: LOTTERY, userId: USER };
+
+  it('is a mutable kind of its own, important, and may be held with no Grant', () => {
+    expect(RETENTION_MUTABLE_KINDS).toContain('lottery');
+    expect(noticeClassOf(OutboxEventType.LOTTERY_PUBLISHED)).toBe('important');
+    expect(lotteryClaimSchema.safeParse(input).success).toBe(true);
+    const hold = { eventId: EVENT, notice: OutboxEventType.LOTTERY_PUBLISHED, period: lotteryPeriod(LOTTERY, USER), tenantId: USER, template: 'lotteryOpened', params: {}, botAt: NOW.toISOString() };
+    expect(retentionHoldSchema.safeParse(hold).success).toBe(true);
+    expect(retentionHoldSchema.safeParse({ ...hold, notice: 'grant.usage.80' }).success).toBe(false);
+  });
+
+  it('writes one grantless row per lottery and member and tells it now', async () => {
+    const { service, retentionNotice } = ledger();
+    await expect(service.claimLottery(input, NOW)).resolves.toEqual({ deliver: 'now' });
+    expect(retentionNotice.createMany).toHaveBeenCalledWith({
+      data: [{ eventId: EVENT, userId: USER, grantId: null, notice: OutboxEventType.LOTTERY_PUBLISHED, period: `${LOTTERY}:${USER}` }],
+      skipDuplicates: true,
+    });
+  });
+
+  it('is muted by the user’s lottery mute, and held by quiet hours', async () => {
+    await expect(ledger({ pref: { mutedKinds: ['lottery'], quietStart: null, quietEnd: null, timezone: null } }).service.claimLottery(input, NOW)).resolves.toEqual({ deliver: 'muted' });
+    await expect(ledger({ pref: { mutedKinds: ['suggestion'], quietStart: null, quietEnd: null, timezone: null } }).service.claimLottery(input, NOW)).resolves.toEqual({ deliver: 'now' });
+    // 12:50 in Tehran, inside a 12:00–14:00 window: the bot waits for 14:00.
+    const lunch = { mutedKinds: [], quietStart: 12 * 60, quietEnd: 14 * 60, timezone: 'Asia/Tehran' };
+    await expect(ledger({ pref: lunch }).service.claimLottery(input, NOW)).resolves.toEqual({ deliver: 'held', botAt: '2026-10-05T10:30:00.000Z' });
+  });
+
+  it('answers a redelivery of a held one with the same hold, so the bot is told once', async () => {
+    const botAt = new Date(NOW.getTime() + HOUR);
+    const { service, retentionNotice } = ledger();
+    retentionNotice.createMany.mockResolvedValue({ count: 0 });
+    retentionNotice.findFirst.mockResolvedValue({ botAt, botTemplate: 'lotteryOpened' });
+    await expect(service.claimLottery(input, NOW)).resolves.toEqual({ deliver: 'held', botAt: botAt.toISOString() });
   });
 });

@@ -54,6 +54,8 @@ export const OutboxEventType = {
   TENANT_WHEEL_CAP_NEARING: 'tenant.engagement.wheel_cap_nearing',
   /** F-707-m: a lottery winner was given its prize — once per winner row (`LotteryDeliveryService`). */
   LOTTERY_WON: 'engagement.lottery.won',
+  /** F-707-q: a lottery was published — once per lottery, in the publish (`LotteryAdminService.publish`); worker-service tells its group's members. */
+  LOTTERY_PUBLISHED: 'engagement.lottery.published',
   /** F-027-at: the platform owner released a usage hold; `metering-service` bills it (ADR-0080 decision 3). */
   USAGE_RELEASE: 'network.usage.release',
   /** F-118-f: a reporter's usage of a non-VPN meter; `metering-service` advances the Grant's `grant_meter.consumed` (ADR-0105 decision 5). */
@@ -174,6 +176,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.TENANT_QUOTA_DIGEST]: 'worker-service',
   [OutboxEventType.TENANT_WHEEL_CAP_NEARING]: 'worker-service',
   [OutboxEventType.LOTTERY_WON]: 'worker-service',
+  [OutboxEventType.LOTTERY_PUBLISHED]: 'worker-service',
   [OutboxEventType.USAGE_RELEASE]: 'metering-service',
   [OutboxEventType.USAGE_EVENT]: 'metering-service',
   [OutboxEventType.GRANT_CREATED]: 'worker-service',

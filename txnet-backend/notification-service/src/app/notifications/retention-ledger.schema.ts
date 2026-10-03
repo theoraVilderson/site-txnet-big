@@ -1,4 +1,4 @@
-import { BackendI18nKeys, SUGGESTION_NOTICE } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, OutboxEventType, SUGGESTION_NOTICE } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 const invalid = BackendI18nKeys.errors.validation.failed;
@@ -33,6 +33,15 @@ export const suggestionClaimSchema = z
   })
   .strict();
 
+/** F-707-q: a lottery announcement's claim — worker-service, once per lottery and member. */
+export const lotteryClaimSchema = z
+  .object({
+    eventId: z.string({ message: invalid }).uuid({ message: invalid }),
+    lotteryId: z.string({ message: invalid }).uuid({ message: invalid }),
+    userId: z.string({ message: invalid }).uuid({ message: invalid }),
+  })
+  .strict();
+
 /**
  * A claimed notice's bot message, kept for the end of the user's quiet hours
  * (F-601-m): the row's key and the event holding it, the words to tell, and
@@ -41,7 +50,7 @@ export const suggestionClaimSchema = z
 export const retentionHoldSchema = retentionClaimSchema
   .omit({ userId: true, waitSec: true })
   .extend({
-    // F-038-g5: only a suggestion's row may have no Grant — a retention notice is always about one.
+    // F-038-g5, F-707-q: only a suggestion's or a lottery announcement's row may have no Grant — a retention notice is always about one.
     grantId: z.string({ message: invalid }).uuid({ message: invalid }).optional(),
     tenantId: z.string({ message: invalid }).uuid({ message: invalid }),
     template: z.string({ message: invalid }).regex(/^[A-Za-z0-9]+$/, { message: invalid }).max(100, { message: invalid }),
@@ -49,7 +58,7 @@ export const retentionHoldSchema = retentionClaimSchema
     botAt: z.string({ message: invalid }).datetime({ message: invalid }),
   })
   .strict()
-  .refine((h) => h.grantId !== undefined || h.notice === SUGGESTION_NOTICE, { message: invalid, path: ['grantId'] });
+  .refine((h) => h.grantId !== undefined || h.notice === SUGGESTION_NOTICE || h.notice === OutboxEventType.LOTTERY_PUBLISHED, { message: invalid, path: ['grantId'] });
 
 /** A take of held bot messages now due (F-601-m). */
 export const heldTakeSchema = z.object({ limit: z.number({ message: invalid }).int({ message: invalid }).min(1, { message: invalid }).max(500, { message: invalid }) }).strict();

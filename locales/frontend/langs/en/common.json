@@ -1654,6 +1654,10 @@
         "suggestion": {
           "label": "Suggestions",
           "hint": "A renewal or a plan that fits how you use your service — a few a week at most"
+        },
+        "lottery": {
+          "label": "New lotteries",
+          "hint": "When a lottery opens for a group you are in: on the bot for one you must join, in the inbox for the rest."
         }
       },
       "quiet": {

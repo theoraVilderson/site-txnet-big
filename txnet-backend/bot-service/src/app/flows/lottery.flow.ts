@@ -1,5 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { BotAction, BotText } from '@txnet-backend/messenger';
+import { LOTTERY_CALLBACK_PREFIX } from '@txnet-backend/shared-core';
 import { BillingApiClient, BillingCallContext, ChatLottery, ChatLotteryResult } from '../billing-api/billing-api.client';
 import { ChatContext, FlowResult } from '../conversation/nav.types';
 import { BotKey, BotKeys } from '../locale/bot-keys';
@@ -11,8 +12,8 @@ export const LOTTERY_EXCLUDED_KEYS: Record<string, BotKey> = BotKeys.lotteries.e
 /** Billing's `LotteryEntryRejection` (the entry and result routes). */
 export const LOTTERY_REFUSAL_KEYS: Record<string, BotKey> = BotKeys.lotteries.refusals;
 
-/** A lottery's own buttons carry its id, so they need no conversation state: `lot:<o|j|l|r>:<id>`, 42 bytes. */
-export const LOTTERY_ACTION_PREFIX = 'lot:';
+/** A lottery's own buttons carry its id, so they need no conversation state: `lot:<o|j|l|r>:<id>`, 42 bytes (shared-core: the announcement sends the join one). */
+export const LOTTERY_ACTION_PREFIX = LOTTERY_CALLBACK_PREFIX;
 const KIND = { open: 'o', join: 'j', leave: 'l', result: 'r' } as const;
 type Kind = keyof typeof KIND;
 const KIND_OF: Record<string, Kind> = Object.fromEntries(Object.entries(KIND).map(([k, v]) => [v, k as Kind]));

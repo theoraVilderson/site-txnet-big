@@ -29,7 +29,7 @@ delivery and the result"; ADR-0111 points 5, 6).
 4. **Join only where billing takes it** — an open `opt_in` lottery with no
    entry; Leave only to one who joined; Result only once `drawn`. After a
    join or leave the card is read again, so it shows billing's answer.
-5. **Every button names its lottery** (`lot:<o|j|l|r>:<id>`, 42 bytes, under
+5. **Every button names its lottery** (`LOTTERY_CALLBACK_PREFIX`, shared-core: `lot:<o|j|l|r>:<id>`, 42 bytes, under
    the 64-byte callback cap) and needs no state: a tap on an old screen still
    means what it says. The router sends the prefix to the flow from any state.
 6. **Every reason has a sentence**: the close's `ExclusionReason` and the
@@ -41,8 +41,9 @@ delivery and the result"; ADR-0111 points 5, 6).
 8. **The winner's message is F-707-m's `lotteryWon` notice** (class
    `important`: the inbox and one messenger), not this flow.
 
-The announcement of a newly published lottery to its group is not built:
-it is a send to a whole group, F-707-q.
+The announcement of a published lottery (F-707-q) is sent by auth-service, not
+this flow; its Join button is `lotteryJoinCallback` (shared-core), the same
+`lot:j:<id>` this router takes from any state.
 
 ## Proof
 

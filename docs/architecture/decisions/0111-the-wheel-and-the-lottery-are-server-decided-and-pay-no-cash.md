@@ -94,3 +94,12 @@ by editing the group before it closes.
   recorded enters; only a device behind 5 accounts in 30 days excludes.
   Not chosen: excluding them as the wheel does — recording began 2026-10-03,
   so an `automatic` lottery would lose most of its members.
+- **2026-10-03 (user), the announcement (F-707-q).** A published lottery is
+  told to its group's user members: an `opt_in` one on the inbox and the bot
+  (class `important`, held by quiet hours, with a Join button), since the user
+  must act before the close; an `automatic` one in the inbox only, since it
+  asks nothing. Its own mutable kind `lottery`, so a user can turn it off;
+  sent page by page on its own queue. Not chosen: every lottery on the bot
+  with no off switch — cheaper now, but with many resellers and large groups
+  users mute or block the bot, and then notices that matter (a service
+  ending) stop reaching them too.

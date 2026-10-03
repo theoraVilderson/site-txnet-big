@@ -34,6 +34,7 @@ function build(o: { lotteries?: Row[] } = {}) {
   const lotteries: Row[] = [...(o.lotteries ?? [])];
   const prizes: Record<string, unknown>[] = [];
   const audits: Record<string, unknown>[] = [];
+  const outbox: Record<string, unknown>[] = [];
   const match = (row: Row, where: Record<string, unknown>) =>
     Object.entries(where).every(([k, v]) => {
       if (v && typeof v === 'object' && 'in' in v) return (v.in as unknown[]).includes(row[k]);
@@ -80,9 +81,10 @@ function build(o: { lotteries?: Row[] } = {}) {
       },
     },
     adminAuditLog: { create: async ({ data }: { data: Record<string, unknown> }) => audits.push(data) },
+    outboxEvent: { create: async ({ data }: { data: Record<string, unknown> }) => (outbox.push(data), { id: `ev-${outbox.length}` }) },
   };
   const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
-  return { service: new LotteryAdminService(prisma as never, () => AT), lotteries, prizes, audits };
+  return { service: new LotteryAdminService(prisma as never, () => AT), lotteries, prizes, audits, outbox };
 }
 
 const asTenant = <T>(fn: () => Promise<T>) => runWithTenant({ id: TENANT }, fn);
@@ -182,6 +184,16 @@ describe('LotteryAdminService.publish', () => {
     expect(view).toMatchObject({ status: LotteryStatus.published, publishedAt: AT });
     expect(lotteries[0].status).toBe(LotteryStatus.published);
     expect(audits).toEqual([expect.objectContaining({ action: 'lottery_publish', targetEntityId: 'lot-x' })]);
+  });
+
+  it('writes the announcement event in the publish, once; a refused publish writes none (F-707-q)', async () => {
+    const { service, outbox } = build({ lotteries: [stored(LotteryStatus.draft)] });
+    await asTenant(() => service.publish(actor, 'lot-x'));
+    expect(outbox).toEqual([
+      { aggregate: 'engagement.lottery', aggregateId: 'lot-x', type: 'engagement.lottery.published', payload: { tenantId: TENANT, lotteryId: 'lot-x', title: 'Stored', entryMode: LotteryEntryMode.automatic } },
+    ]);
+    await expect(asTenant(() => service.publish(actor, 'lot-x'))).rejects.toMatchObject({ reason: 'not_a_draft' });
+    expect(outbox).toHaveLength(1);
   });
 
   it('refuses a draft whose close time has come too near since it was saved', async () => {

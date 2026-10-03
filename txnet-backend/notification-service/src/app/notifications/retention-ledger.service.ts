@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { noticeClassOf, quietUntil, retentionKindOf, SUGGESTION_NOTICE } from '@txnet-backend/shared-core';
+import { noticeClassOf, OutboxEventType, quietUntil, retentionKindOf, SUGGESTION_NOTICE } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { GrantNoticeLevelService } from './grant-notice-level.service';
@@ -32,6 +32,10 @@ export type SuggestionAnswer =
 
 /** ADR-0109 point 10: no AI message within 24 h of a retention notice about the same Grant. */
 export const SUGGESTION_AFTER_RETENTION_MS = 24 * 3_600_000;
+
+/** F-707-q: a new lottery's announcement to one member — about no service; `eventId` is the worker's, one per lottery and member. */
+export type LotteryClaim = { eventId: string; lotteryId: string; userId: string };
+export type LotteryAnswer = { deliver: 'now' | 'muted' } | { deliver: 'held'; botAt: string };
 
 export type RetentionHold = Omit<RetentionClaim, 'userId' | 'grantId'> & { grantId?: string; tenantId: string; template: string; params: Record<string, string>; botAt: string };
 
@@ -141,6 +145,27 @@ export class RetentionLedgerService {
   }
 
   /**
+   * F-707-q: a lottery's announcement to one member, on the same ledger with no
+   * Grant — one row per lottery and member (`period`), so a redelivered fan-out
+   * is the same row and a held bot message is never told twice. The user's
+   * `lottery` mute makes it `muted`; quiet hours hold the bot. No Grant, so
+   * no `essential` level and no retention wait.
+   */
+  async claimLottery(input: LotteryClaim, now = new Date()): Promise<LotteryAnswer> {
+    const notice = OutboxEventType.LOTTERY_PUBLISHED;
+    const period = lotteryPeriod(input.lotteryId, input.userId);
+    const { count } = await this.prisma.retentionNotice.createMany({ data: [{ eventId: input.eventId, userId: input.userId, grantId: null, notice, period }], skipDuplicates: true });
+    if (count !== 1) {
+      const held = await this.prisma.retentionNotice.findFirst({ where: { grantId: null, notice, period }, select: { botAt: true, botTemplate: true } });
+      if (held?.botTemplate && held.botAt) return { deliver: 'held', botAt: held.botAt.toISOString() };
+    }
+    const pref = await this.preferences.stored(input.userId);
+    if (pref?.mutedKinds.includes(retentionKindOf(notice))) return { deliver: 'muted' };
+    const until = quietUntil(pref, now);
+    return until ? { deliver: 'held', botAt: until.toISOString() } : { deliver: 'now' };
+  }
+
+  /**
    * Keep a claimed notice's bot message for `botAt`: only on the row this
    * event holds, and never over one already kept — the first hold's words and
    * time stand. `false` is a row this event does not hold.
@@ -183,3 +208,6 @@ export class RetentionLedgerService {
     return { cleared: count };
   }
 }
+
+/** A lottery announcement's ledger period: one row per lottery and member (the grantless key is `(notice, period)`). */
+export const lotteryPeriod = (lotteryId: string, userId: string) => `${lotteryId}:${userId}`;

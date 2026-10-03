@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { GrantCreatedConsumer } from './grant-created.consumer';
 import { GrantDeliveryConsumer } from './grant-delivery.consumer';
 import { LivePushConsumer } from './live-push.consumer';
+import { LotteryAnnouncementConsumer } from './lottery-announcement.consumer';
 import { NoticeFlushConsumer } from './notice-flush.consumer';
 import { NotificationCreatedConsumer } from './notification-created.consumer';
 import { PanelTestedConsumer } from './panel-tested.consumer';
@@ -19,10 +20,10 @@ import { TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer } from 
  * the systems page (F-027-bs), a purchase delivered at once (F-114-i), a Grant's configs ready pushed to an open My services (F-111-l), and a reseller's renewal on a credit
  * and its owner's renewal notices (F-019-c),
  * a reseller's campaigns stopped with its suspension (F-018-q), and the
- * retention notices, once per Grant period (F-601-a). Inbox and
+ * retention notices, once per Grant period (F-601-a), and a published lottery told to its group (F-707-q). Inbox and
  * bot notices are combined per recipient and template, told by
  * `NoticeFlushConsumer` after the window (F-067-p). `BrokerService`, `RedisService` and `RealtimePublisher` are
  * global modules.
  */
-@Module({ providers: [PaymentConfirmedConsumer, PaymentReversedConsumer, NotificationCreatedConsumer, PanelTestedConsumer, TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer, GrantCreatedConsumer, GrantDeliveryConsumer, LivePushConsumer, RetentionNoticeConsumer, NoticeFlushConsumer] })
+@Module({ providers: [PaymentConfirmedConsumer, PaymentReversedConsumer, NotificationCreatedConsumer, PanelTestedConsumer, TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer, GrantCreatedConsumer, GrantDeliveryConsumer, LivePushConsumer, RetentionNoticeConsumer, NoticeFlushConsumer, LotteryAnnouncementConsumer] })
 export class OutboxModule {}

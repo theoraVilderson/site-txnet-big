@@ -1,6 +1,7 @@
-import { Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 
+import { AUDIENCE_PAGE_MAX, LotteryAudiencePage, LotteryAudienceService } from './lottery-audience.service';
 import { LotteryCloseService } from './lottery-close.service';
 import { LotteryDeliveryService } from './lottery-delivery.service';
 import { LotteryDrawService } from './lottery-draw.service';
@@ -28,6 +29,7 @@ export class LotteryInternalController {
     private readonly close: LotteryCloseService,
     private readonly draw: LotteryDrawService,
     private readonly delivery: LotteryDeliveryService,
+    private readonly audience: LotteryAudienceService,
   ) {}
 
   /**
@@ -43,5 +45,16 @@ export class LotteryInternalController {
     const drawn = await this.draw.drawDue();
     const given = await this.delivery.deliverDue();
     return { scanned: closed.scanned, frozen: closed.frozen, drawn: drawn.drawn, delivered: given.delivered, failed: closed.failed + drawn.failed + given.failed };
+  }
+
+  /**
+   * F-707-q: a page of who a published lottery's announcement goes to —
+   * worker-service's fan-out of `engagement.lottery.published`. Empty and
+   * `open: false` once it is cancelled, closed or gone.
+   */
+  @Get(':id/audience')
+  async audienceOf(@Param('id', new ParseUUIDPipe()) id: string, @Query('after') after?: string, @Query('limit') limit?: string): Promise<LotteryAudiencePage> {
+    const cursor = after && /^[0-9a-f-]{36}$/i.test(after) ? after : null;
+    return this.audience.page(id, cursor, Number(limit) || AUDIENCE_PAGE_MAX);
   }
 }

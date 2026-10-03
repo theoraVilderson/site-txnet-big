@@ -36,6 +36,15 @@ export const SUGGESTION_NOTICE = 'ai.suggestion';
  */
 export const SUGGESTION_OPT_OUT_PREFIX = 'aio:';
 
+/**
+ * A lottery's bot buttons (F-707-p): `lot:<o|j|l|r>:<lottery id>` — open,
+ * join, leave, result. The announcement (F-707-q) carries the join one, which
+ * auth-service sends and bot-service routes from any state. 42 bytes, under
+ * the 64-byte callback cap.
+ */
+export const LOTTERY_CALLBACK_PREFIX = 'lot:';
+export const lotteryJoinCallback = (lotteryId: string) => `${LOTTERY_CALLBACK_PREFIX}j:${lotteryId}`;
+
 const OF_KIND: Record<RetentionKind, NoticeClass> = {
   cutoff: 'critical',
   // "An all-clear follows its alarm": it takes the stopped state's channels; its mute switch stays the kind's.
@@ -44,6 +53,8 @@ const OF_KIND: Record<RetentionKind, NoticeClass> = {
   usage: 'important',
   connect: 'important',
   suggestion: 'suggestion',
+  // F-707-q: an opt-in lottery asks the user to join before it closes.
+  lottery: 'important',
 };
 
 /**
@@ -80,6 +91,9 @@ export const NOTICE_CLASS_OF: Readonly<Record<string, NoticeClass>> = {
   wheelCapNearing: 'important',
   // F-707-m: a prize given — the user got something, nothing to do.
   lotteryWon: 'important',
+  // F-707-q: an opt-in lottery opened to the user's group — join before it closes; an automatic one asks nothing, so the inbox's alone.
+  lotteryOpened: 'important',
+  lotteryOpenedAutomatic: 'info',
   paymentCredited: 'important',
   purchaseDelivered: 'important',
   purchaseDelayed: 'important',

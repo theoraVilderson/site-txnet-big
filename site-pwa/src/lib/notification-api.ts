@@ -73,7 +73,7 @@ export interface InboxQuery {
  * `suggestion-card.test.tsx`): the list is saved whole, so a kind missing here
  * would be unmuted by every save. A stopped service is not one: it is always told.
  */
-export const NOTICE_KINDS = ["usage", "ending", "connect", "reactivated", "suggestion"] as const;
+export const NOTICE_KINDS = ["usage", "ending", "connect", "reactivated", "suggestion", "lottery"] as const;
 export type NoticeKind = (typeof NOTICE_KINDS)[number];
 
 /** The caller's notice settings, read and replaced whole. Times are `HH:MM`; the window may wrap midnight. */

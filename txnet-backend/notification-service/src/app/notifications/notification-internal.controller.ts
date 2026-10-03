@@ -4,8 +4,8 @@ import { ServiceOnlyGuard } from '@txnet-backend/shared-core';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { CreateNotification, NotificationInboxService } from './notification-inbox.service';
 import { createNotificationSchema } from './notification-inbox.schema';
-import { RetentionClaim, RetentionHold, RetentionLedgerService, SuggestionClaim } from './retention-ledger.service';
-import { heldTakeSchema, heldToldSchema, retentionClaimSchema, retentionHoldSchema, suggestionClaimSchema } from './retention-ledger.schema';
+import { LotteryClaim, RetentionClaim, RetentionHold, RetentionLedgerService, SuggestionClaim } from './retention-ledger.service';
+import { heldTakeSchema, heldToldSchema, lotteryClaimSchema, retentionClaimSchema, retentionHoldSchema, suggestionClaimSchema } from './retention-ledger.schema';
 
 /**
  * How another unit puts a row in a user's inbox (F-035-a): an Nx app cannot
@@ -49,6 +49,13 @@ export class NotificationInternalController {
   @HttpCode(200)
   claimSuggestion(@Body(new ZodValidationPipe(suggestionClaimSchema)) body: SuggestionClaim) {
     return this.retention.claimSuggestion(body);
+  }
+
+  /** F-707-q: a new lottery's announcement to one member — same ledger, no Grant. */
+  @Post('lottery/claim')
+  @HttpCode(200)
+  claimLottery(@Body(new ZodValidationPipe(lotteryClaimSchema)) body: LotteryClaim) {
+    return this.retention.claimLottery(body);
   }
 
   @Post('retention/hold')

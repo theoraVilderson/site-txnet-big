@@ -755,6 +755,27 @@ describe('UserNotifier', () => {
       expect(NOTIFY_TEMPLATES).toEqual(expect.arrayContaining(['suggestionRenew', 'suggestionResizeUp', 'suggestionResizeDown', 'suggestionTopUpWallet', 'suggestionWinBack', 'suggestionRetainOffer', 'suggestionCheckoutHelp']));
     });
 
+    it('an opt-in lottery\'s announcement (F-707-q) carries Join for that lottery; the automatic one carries nothing', async () => {
+      const client = botClient();
+      const locale = {
+        getNamespace: vi.fn(() => ({ engagement: { lotteryOpened: '🎟 «{{title}}»', lotteryOpenedAutomatic: '🎟 auto «{{title}}»', lotteryJoin: '✅ شرکت می‌کنم' } })),
+        getKey: vi.fn(() => undefined),
+        getDefaultLanguage: () => 'fa',
+      } as unknown as LocaleService;
+      const notifier = new UserNotifier(
+        notifierPrisma({ user: { languagePreference: 'fa' }, links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+        registry(client),
+        locale,
+      );
+      const params = { title: 'مهر', lotteryId: '0f0e0d0c-0b0a-4908-8706-050403020100' };
+      await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'lotteryOpened', params }));
+      expect(client.sendMessage).toHaveBeenCalledWith('5501', '🎟 «مهر»', {
+        inline_keyboard: [[{ text: '✅ شرکت می‌کنم', callback_data: 'lot:j:0f0e0d0c-0b0a-4908-8706-050403020100' }]],
+      });
+      await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'lotteryOpenedAutomatic', params }));
+      expect(client.sendMessage).toHaveBeenLastCalledWith('5501', '🎟 auto «مهر»');
+    });
+
     it('a reseller\'s billing-wallet top-up (F-1525-c) is a template of its own', async () => {
       expect(NOTIFY_TEMPLATES).toContain('suggestionResellerTopUp');
       const client = botClient();

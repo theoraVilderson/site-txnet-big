@@ -81,3 +81,18 @@ every type in `RETENTION_NOTICES` (`outbox/retention-notices.ts`), consumer
 | A usage level muted while its carried time level (F-601-f) is not: the time level is told alone, in its own row's words | a muted kind never swallows one that is not |
 | `only: [...]` on `EventNoticeSender.send` tells just those person channels, each on its own marker, never joined to a burst — except `only: ['inbox']` with `window: 'hour'` (a held patient notice, F-601-q), which joins the inbox-only hour lane under its `inbox` marker | a burst's flush would tell the bot at once, inside the quiet hours; an inbox-only one tells no bot |
 
+## A new lottery told to its group (F-707-q)
+
+`LotteryAnnouncementConsumer` (`worker-service/src/app/outbox/lottery-announcement.consumer.ts`),
+its own queue `AUTOMATION_LOTTERY_ANNOUNCEMENT_QUEUE` on `outbox.engagement.lottery.published`
+(one event per publish, in its transaction). User 2026-10-03.
+
+| Rule | Why |
+|---|---|
+| Members come from billing's `GET internal/billing/engagement/lotteries/:id/audience?after&limit`, 500 a page in user-id order, every page asked while the lottery is open; `open: false` ends the fan-out | a cancel or the close stops it; nobody is told of a lottery they cannot enter |
+| Each member: one id per lottery and member (`announcementEventId`, name-based UUID), the ledger's `lottery/claim`, then the sender | a redelivered or half-done fan-out tells nobody twice |
+| `opt_in`: `lotteryOpened`, inbox + bot, class `important`, the bot message with Join (`lotteryJoinCallback`); `held` sends the inbox and `hold`s the bot | the user must join before the close |
+| `automatic`: `lotteryOpenedAutomatic`, the inbox alone (`info`), never held | it asks nothing of the user |
+| `muted` (kind `lottery`) skips; one member failing is counted, the rest told, then the event throws and is delivered again | one bad member never silences a group |
+| Its own queue | a group of thousands never holds up a person notice |
+

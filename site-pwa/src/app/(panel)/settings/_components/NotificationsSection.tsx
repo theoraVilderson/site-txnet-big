@@ -17,6 +17,7 @@ const KIND_TEXT: Record<NoticeKind, { label: string; hint: string }> = {
   connect: N.kinds.connect,
   reactivated: N.kinds.reactivated,
   suggestion: N.kinds.suggestion,
+  lottery: N.kinds.lottery,
 };
 
 /** What a freshly switched-on window reads before the user moves it. */
