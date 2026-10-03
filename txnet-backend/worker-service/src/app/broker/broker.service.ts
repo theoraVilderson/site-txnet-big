@@ -338,6 +338,8 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       OutboxEventType.TENANT_WHOLESALE_UNFUNDED,
       OutboxEventType.TENANT_QUOTA_ALERT,
       OutboxEventType.TENANT_QUOTA_DIGEST,
+      // F-707-e: the wheel's day at 80% of its cap — to each of the tenant's wheel admins, not the owner.
+      OutboxEventType.TENANT_WHEEL_CAP_NEARING,
     ]) {
       await this.channel.bindQueue(this.tenantSubscriptionNoticeQueue, this.exchange, outboxRoutingKey(type));
     }

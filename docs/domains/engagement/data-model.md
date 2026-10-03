@@ -15,7 +15,7 @@ Source of truth: `txnet-backend/prisma/domains/engagement.prisma` (Postgres sche
 |---|---|---|---|
 | spin_wheel_config | one **version** of a tenant's wheel: `version`, `effectiveFromDay`, cap + `currencyCode`, eligibility, optional `userGroupId`; immutable | yes | permanent |
 | spin_wheel_prize | a slot of a version: `position`, kind + value (+ coupon template / variant), weight, `costAmount`, optional daily stock; immutable | yes | permanent |
-| spin_wheel_day | (tenant, tenant day): `costSpent`, `spins`, the version in force | yes | permanent |
+| spin_wheel_day | (tenant, tenant day): `costSpent`, `spins`, the version in force, `capAlertedAt` (the 80% alert, F-707-e) | yes | permanent |
 | spin_wheel_prize_day | (prize, tenant day): `awardedCount` | yes | permanent |
 | spin_wheel_attempt | one spin, refused too: version, tenant day, `seq`, `idempotencyKey`, snapshot, picked vs awarded prize, cost, reason; written once | yes | permanent (audit) |
 | lottery | a draw among a user group: entry mode, close time, eligibility, reserves, status, cancel reason | yes | permanent |
@@ -50,3 +50,6 @@ contract.md "The storage rules", RLS. `currentDayAwardedCount` dropped (the
 tables were empty; the migration refuses to run otherwise).
 `20261003000300_a_prize_is_given_once` (F-707-b): `reward_issue`, its shape
 CHECK, write-once trigger, RLS; `GrantSource.engagement_reward`.
+`20261003000400_a_tenant_admin_runs_its_wheel` (F-707-c): `engagement.manage`
+to `Admin`, the audit values. `20261003000500_the_wheel_warns_at_80_percent`
+(F-707-e): `spin_wheel_day.capAlertedAt`. Both additive.

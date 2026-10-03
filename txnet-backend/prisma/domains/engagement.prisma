@@ -103,6 +103,8 @@ model SpinWheelDay {
   costSpent     Decimal  @default(0) @db.Decimal(18, 2)
   currencyCode  String
   spins         Int      @default(0)
+  /// When the tenant's admins were told the day passed 80% of the cap (F-707-e); once a day.
+  capAlertedAt  DateTime?
 
   wheelConfig SpinWheelConfig @relation(fields: [wheelConfigId, tenantId], references: [id, tenantId])
 

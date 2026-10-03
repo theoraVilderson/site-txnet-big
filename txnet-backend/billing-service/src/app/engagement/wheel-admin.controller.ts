@@ -1,6 +1,7 @@
-import { BadRequestException, Body, ConflictException, Controller, Get, HttpCode, HttpStatus, Ip, NotFoundException, Param, ParseIntPipe, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Get, HttpCode, HttpStatus, Ip, NotFoundException, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
+import { z } from 'zod';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
@@ -8,6 +9,12 @@ import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { EngagementPermissionGuard } from './engagement-permission.guard';
 import { WheelVersionBody, wheelVersionSchema } from './wheel-admin.schema';
 import { WheelActor, WheelAdminRefused, WheelAdminRejection, WheelAdminService, WheelVersionInput } from './wheel-admin.service';
+import { WheelReportRefused, WheelReportService } from './wheel-report';
+
+const DAY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'a day is YYYY-MM-DD' });
+/** Tenant days, inclusive; both default to today (F-707-e). */
+export const wheelReportSchema = z.object({ from: DAY.optional(), to: DAY.optional() }).strict();
+type WheelReportQuery = z.infer<typeof wheelReportSchema>;
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
 export const WHEEL_ADMIN_REFUSAL_STATUS: Record<WheelAdminRejection, 400 | 404 | 409> = {
@@ -42,7 +49,10 @@ const WRITE = {
 @Controller('billing/engagement/wheel')
 @UseGuards(EngagementPermissionGuard)
 export class WheelAdminController {
-  constructor(private readonly wheel: WheelAdminService) {}
+  constructor(
+    private readonly wheel: WheelAdminService,
+    private readonly reports: WheelReportService,
+  ) {}
 
   private actor(req: Request, ip: string): WheelActor {
     const { userId, tenantId } = identityOf(req);
@@ -61,6 +71,18 @@ export class WheelAdminController {
   async save(@Body(new ZodValidationPipe(wheelVersionSchema)) body: WheelVersionBody, @Req() req: Request, @Ip() ip: string) {
     // The cast is for this project's non-strict tsconfig, under which zod infers every key as optional.
     return this.refusing(() => this.wheel.save(this.actor(req, ip), body as WheelVersionInput));
+  }
+
+  /** Per tenant day: spins, refusals by reason, prizes given, cost against the cap, when the 80% alert went (F-707-e). */
+  @Get('report')
+  @RateLimit(ENGAGEMENT_ADMIN_READ)
+  async report(@Query(new ZodValidationPipe(wheelReportSchema)) query: WheelReportQuery, @Req() req: Request, @Ip() ip: string) {
+    try {
+      return await this.reports.report(this.actor(req, ip), query);
+    } catch (e) {
+      if (e instanceof WheelReportRefused) throw new BadRequestException({ reason: e.reason, message: e.message });
+      throw e;
+    }
   }
 
   @Get('versions/:version')

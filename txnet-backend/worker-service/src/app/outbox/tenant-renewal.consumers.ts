@@ -101,7 +101,8 @@ export function quotaNotice(type: string, p: Record<string, unknown>): { templat
  * suspended for it (F-019-c), or that its billing wallet no longer funds its
  * users on platform panels (F-118-w, once per refusal spell) — through `EventNoticeSender` (F-067-o): the
  * owner's inbox and bot, each once under its own marker. Its quotas too
- * (F-019-v8): 80%, 100%, stopped, and the daily digest ({@link quotaNotice}). No live push of its
+ * (F-019-v8): 80%, 100%, stopped, and the daily digest ({@link quotaNotice}). The wheel's
+ * day at 80% of its cap (F-707-e) goes to each wheel admin the payload names. No live push of its
  * own: the inbox row's `notification.created` already reaches every open
  * device (F-035-b), and no page reads a subscription event.
  */
@@ -127,6 +128,15 @@ export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap 
   async handle(event: OutboxMessage): Promise<void> {
     const p = (event.payload ?? {}) as Record<string, unknown>;
     const tenantId = str(p, 'tenantId');
+    if (event.type === OutboxEventType.TENANT_WHEEL_CAP_NEARING) {
+      // One event per admin (F-707-e): the person is the payload's, never the owner.
+      const userId = str(p, 'userId');
+      if (!tenantId || !userId) throw new Error(`outbox event ${event.id} has a payload without its tenant or admin`);
+      const params: Record<string, string> = {};
+      for (const k of ['day', 'spent', 'cap', 'currencyCode'] as const) if (str(p, k)) params[k] = str(p, k)!;
+      await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId, template: 'wheelCapNearing', params } });
+      return;
+    }
     const ownerUserId = str(p, 'ownerUserId');
     if (!tenantId || !ownerUserId) throw new Error(`outbox event ${event.id} has a payload without its tenant or owner`);
     if (event.type === OutboxEventType.TENANT_QUOTA_ALERT || event.type === OutboxEventType.TENANT_QUOTA_DIGEST) {

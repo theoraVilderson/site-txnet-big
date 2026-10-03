@@ -20,6 +20,7 @@ export const NOTIFY_TEMPLATES = [
   'resellerQuotaUnpaid',
   'resellerQuotaCapReached',
   'resellerQuotaDigest',
+  'wheelCapNearing',
   'panelAccepted',
   'panelRefused',
   'purchaseDelivered',
@@ -127,6 +128,7 @@ type NotificationsNamespace = {
   purchase?: Texts;
   retention?: Texts;
   suggestion?: Texts;
+  engagement?: Texts;
 };
 type Text = { read: (ns: NotificationsNamespace | undefined) => string | undefined; fallback: string };
 type Notice = Text & { inbox: Text };
@@ -201,6 +203,17 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.resellerBilling?.wholesaleUnfundedMany,
       fallback: "⛔ Your billing balance has run out ({{count}} times), so your users on the platform's servers stopped as their traffic ran out. Top up your billing balance and they resume by themselves.",
       inbox: { read: (ns) => ns?.resellerBilling?.wholesaleUnfundedManyTitle, fallback: 'Your users on platform servers have stopped ({{count}})' },
+    },
+  },
+  // F-707-e: the wheel's day has spent 80% of its cap — to each admin who can change the wheel, once a day.
+  wheelCapNearing: {
+    read: (ns) => ns?.engagement?.wheelCapNearing,
+    fallback: '🎡 The lucky wheel has spent {{spent}} of today\'s {{cap}} {{currencyCode}} cap ({{day}}). Once the cap is reached, spins give nothing until tomorrow; a higher cap takes effect from the next day.',
+    inbox: { read: (ns) => ns?.engagement?.wheelCapNearingTitle, fallback: 'Lucky wheel at 80% of today\'s cap' },
+    many: {
+      read: (ns) => ns?.engagement?.wheelCapNearingMany,
+      fallback: '🎡 {{count}} days of the lucky wheel reached 80% of their cap. The day-by-day report is on the wheel settings page.',
+      inbox: { read: (ns) => ns?.engagement?.wheelCapNearingManyTitle, fallback: 'Lucky wheel cap notices ({{count}})' },
     },
   },
   // F-019-v8: 80% of a quota's included units used, once per window and period.

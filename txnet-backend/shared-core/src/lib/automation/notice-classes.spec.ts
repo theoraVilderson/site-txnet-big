@@ -57,6 +57,8 @@ describe('notice classes (F-601-s)', () => {
       'resellerQuotaNearing',
       'resellerQuotaOverageStarted',
       'subscriptionPaymentDue',
+      // F-707-e: the wheel's day at 80% of its cap.
+      'wheelCapNearing',
     ]);
     expect(by('info')).toEqual(['panelAccepted']);
   });

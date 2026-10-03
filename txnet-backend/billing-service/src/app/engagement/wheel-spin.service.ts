@@ -9,6 +9,7 @@ import { accountsOnFingerprint, FINGERPRINT_FREE_GRANTS_REFUSED_AT, fingerprintH
 import { PrismaService } from '../prisma/prisma.service';
 import { issueReward, RewardIssued, RewardRefused } from './reward-issuer';
 import { isoDay, tenantDayOf, tenantZoneOf } from './tenant-day';
+import { alertCapCrossing } from './wheel-report';
 
 /**
  * The spin (F-707-d, ADR-0111 points 3, 4): `POST /api/billing/wheel/spin`.
@@ -32,6 +33,8 @@ import { isoDay, tenantDayOf, tenantZoneOf } from './tenant-day';
  *    refuses (no active service for GB or days) becomes nothing: the issuer
  *    runs inside a savepoint, rolled back on refusal, and the counters are
  *    charged only for a prize actually given. Never cash (point 2).
+ * 7. The spin whose prize brings the day to 80% of the cap tells the
+ *    tenant's admins, once a day (F-707-e, `alertCapCrossing`).
  */
 
 export type SpinRefusalReason =
@@ -273,7 +276,7 @@ export class WheelSpinService {
     const dayKey = isoDay(day);
     await tx.$executeRaw`INSERT INTO engagement.spin_wheel_day ("tenantId", "tenantDay", "wheelConfigId", "currencyCode")
       VALUES (${actor.tenantId}::uuid, ${dayKey}::date, ${cfg.id}::uuid, ${cfg.currencyCode}) ON CONFLICT ("tenantId", "tenantDay") DO NOTHING`;
-    const [dayRow] = await tx.$queryRaw<Array<{ costSpent: Prisma.Decimal; spins: number }>>`SELECT "costSpent", spins FROM engagement.spin_wheel_day
+    const [dayRow] = await tx.$queryRaw<Array<{ costSpent: Prisma.Decimal; spins: number; capAlertedAt: Date | null }>>`SELECT "costSpent", spins, "capAlertedAt" FROM engagement.spin_wheel_day
       WHERE "tenantId" = ${actor.tenantId}::uuid AND "tenantDay" = ${dayKey}::date FOR UPDATE`;
 
     const facts = await this.facts(tx, actor, cfg, day, accounts);
@@ -314,6 +317,10 @@ export class WheelSpinService {
     });
     if (given && given.dailyStockLimit !== null) {
       await tx.spinWheelPrizeDay.update({ where: { prizeId_tenantDay: { prizeId: given.id, tenantDay: day } }, data: { awardedCount: { increment: 1 } } });
+    }
+    if (given) {
+      const spent = D(dayRow.costSpent).add(cost);
+      await alertCapCrossing(tx, { tenantId: actor.tenantId, tenantDay: day, spent, cap: D(cfg.dailyBudgetCapAmount), currencyCode: cfg.currencyCode, alertedAt: dayRow.capAlertedAt ?? null, at });
     }
     await tx.spinWheelAttempt.create({
       data: { ...base, status: SpinAttemptStatus.awarded, seq, pickedPrizeId: picked.id, prizeAwardedId: given?.id ?? null, costAmount: cost.toFixed(2) },
