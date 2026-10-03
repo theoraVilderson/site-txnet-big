@@ -431,6 +431,9 @@ export const envSchema = z.object({
   RESELLER_USER_CONFIG_ACTION_RATE_LIMIT: rateLimit(60),
   CATALOG_ADMIN_READ_RATE_LIMIT: rateLimit(120),
   CATALOG_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
+  /** The wheel's settings and report (`engagement/wheel-admin.controller.ts`, F-707-c), per user. */
+  ENGAGEMENT_ADMIN_READ_RATE_LIMIT: rateLimit(120),
+  ENGAGEMENT_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
   /** Manual billing-wallet adjustment (`tenant-billing/tenant-billing-admin.controller.ts`, F-019-a), per user. */
   TENANT_BILLING_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
   /**

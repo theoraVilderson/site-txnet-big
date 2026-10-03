@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { RateLimitGuard, TenantStatusGuard } from '@txnet-backend/shared-core';
 
 import { CatalogModule } from './catalog/catalog.module';
+import { EngagementModule } from './engagement/engagement.module';
 import { EntitlementModule } from './entitlement/entitlement.module';
 import { envConfigOptions } from './config/env.validation';
 import { HealthController } from './health.controller';
@@ -72,6 +73,7 @@ const INTERNAL_ROUTES = 'internal/*path';
     TrafficModule,
     UsageModule,
     SystemsModule,
+    EngagementModule,
   ],
   controllers: [HealthController],
   providers: [

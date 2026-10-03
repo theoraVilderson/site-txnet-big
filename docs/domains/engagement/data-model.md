@@ -37,8 +37,9 @@ Source of truth: `txnet-backend/prisma/domains/engagement.prisma` (Postgres sche
 
 ## Access rules
 
-Wheel and lottery: no writer yet (F-707-c onwards, in `billing-service`); no
-unit outside `engagement` will write these tables. `attention_budget` is read and written only by
+Wheel and lottery: written only by `billing-service`'s `engagement/` module,
+in the caller's tenant transaction — `spin_wheel_config` and `spin_wheel_prize`
+by `WheelAdminService` (F-707-c). No unit outside `engagement` writes them. `attention_budget` is read and written only by
 `ai-service`'s `AttentionBudget`, on the app pool with the tenant bound (F-1501).
 
 ## Migration notes

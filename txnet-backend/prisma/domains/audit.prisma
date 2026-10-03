@@ -156,6 +156,8 @@ enum AdminAction {
   // F-019-v5 (ADR-0107 point 3). A platform product listed on a package, or taken off it.
   package_product_set
   package_product_clear
+  // F-707-c (ADR-0111 point 4). A wheel version saved; a version is never edited.
+  spin_wheel_version_create
 
   @@schema("audit")
 }
@@ -208,6 +210,8 @@ enum AuditTargetType {
   grant
   // F-0608-a. One `currency.currency_exchange_rate` row — a pinned rate.
   currency_exchange_rate
+  // F-707-c. One version of a tenant's wheel.
+  spin_wheel_config
 
   @@schema("audit")
 }

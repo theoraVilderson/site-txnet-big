@@ -399,6 +399,13 @@ export const RateLimitBucket = {
   CATALOG_ADMIN_WRITE: 'catalog:admin:write',
 
   /**
+   * The wheel's settings and report in `billing-service` (F-707-c, F-707-e),
+   * per user. The page reads on every visit; a save is a new wheel version.
+   */
+  ENGAGEMENT_ADMIN_READ: 'engagement:admin:read',
+  ENGAGEMENT_ADMIN_WRITE: 'engagement:admin:write',
+
+  /**
    * The platform owner adjusting a reseller's billing wallet by hand in
    * `billing-service` (F-019-a), per user. Moving money by hand is rare.
    */

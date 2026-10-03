@@ -94,6 +94,9 @@ roles:
       # The tenant's AI (F-038-j1, ADR-0109): settings, offers, at-risk lists
       # and the uplift report; `ai-service` keeps each tenant to its own.
       - ai.manage
+      # The tenant's wheel (F-707-c, ADR-0111): prizes, odds, the daily cap and
+      # eligibility; `billing-service` keeps each tenant to its own (RLS).
+      - engagement.manage
   Support:
     permissions:
       - user.read

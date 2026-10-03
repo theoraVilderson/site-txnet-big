@@ -9,8 +9,8 @@ updated: 2026-10-03
 # Contract — engagement
 
 **DRAFT — the wheel and the lottery have their tables and database guards
-(F-707-a) but no writer yet; they will be a module of `billing-service`
-(ADR-0111 point 1). The attention budget is implemented (F-1501), in
+(F-707-a); `billing-service`'s `engagement/` module (ADR-0111 point 1) writes
+the wheel's versions (F-707-c), nothing of the lottery yet. The attention budget is implemented (F-1501), in
 `ai-service`, its only writer (ADR-0109 point 10).**
 
 ## TL;DR
@@ -25,6 +25,7 @@ draw made once and checkable from what is published.
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
+| manage the wheel — **implemented (F-707-c)** | `engagement.manage`; `GET /api/billing/engagement/wheel`, `POST …/wheel/versions` (config, eligibility, group, prizes in slot order), `GET …/versions/:version` | `{today, inForce, next, history}`; a version with `expectedCostPerSpin` | sync tx | `invalid_prize`, `invalid_amount`, `expected_cost_over_cap`, `prize_cost_over_cap` (400); `coupon_template_not_found`, `variant_not_found`, `group_not_found`, `version_not_found` (404); `version_taken` (409) |
 | get wheel state | userId | eligibility result + prizes + remaining daily budget | sync | — |
 | spin | userId, deviceFingerprintId | `spin_wheel_attempt` + prize, delivered in the same tx (F-707-b) | sync tx | ineligible, cooldown; over cap or out of stock is an `empty` result |
 | issue a reward — **implemented (F-707-b)** | `issueReward(tx, grants, {tenantId, userId, source: spin\|lottery, referenceId, prize, actorUserId, at, grantId?})`, `billing-service/src/app/engagement/reward-issuer.ts` | `{rewardId, prizeType, replay, grantId, coupon}` | caller's tx | `RewardRefused`: `no_cash`, `no_active_grant`, `grant_not_eligible`, `coupon_template_unavailable`, `reference_reused`; the acts' own `EntitlementRefused` (`wholesale_unfunded`, `variant_not_deliverable`, …) |
@@ -70,6 +71,21 @@ strict tenant RLS. What a writer may rely on, and may not get round:
 | A row's user, fingerprint, group and prizes are its own tenant's and its own version's or lottery's | `engagement_tenant_mismatch` |
 | A lottery moves `draft → published → frozen → drawn`, or to `cancelled` from draft or published with a reason; after publish only its status changes, prizes are fixed, entrants change until the freeze | `lottery_status_one_way`, `lottery_frozen`, `lottery_cancel_reason` |
 | One draw per lottery (its key), made from a published lottery; never changed but for `publishedAt`, once. A winner keeps its place | `lottery_draw_is_history` |
+
+## The wheel's settings (F-707-c) — built
+
+`engagement/wheel-admin.service.ts`, behind `EngagementPermissionGuard`
+(`engagement.manage`, granted to `Admin`); RLS is the boundary.
+
+| Rule | Why |
+|---|---|
+| 1. A save is a new `version`, effective from the tenant's next calendar day (`tenant-day.ts`: the tenant's zone through `resolveTimeZone`, never the user's). In force on a day: the highest version whose first day is not after it | a day half spun keeps its odds and cap (point 4) |
+| 2. Refused when Σ weight × cost / Σ weight is over the cap, or one prize costs more than the whole cap | the odds shown must be the odds given, not `empty` by noon |
+| 3. Each prize has its kind's shape (the database's `prize_shape_ok`, answered as `invalid_prize`); `wallet_credit` is refused; an `empty` slot costs 0 | no cash (point 2) |
+| 4. A coupon template is the tenant's own, not deleted, not a gift-code batch's; a variant is active and visible; a group is the tenant's | a prize the reward issuer could not give |
+| 5. Prizes are written in the version's transaction, positions 1..n in the order sent; the currency is the tenant's operating one (ADR-0098) | `spin_wheel_is_history` refuses a later prize |
+| 6. Every save is audited: `spin_wheel_version_create` on `spin_wheel_config`, the whole version as `newValue` | who changed the odds, and to what |
+| 7. Budgets per admin: `ENGAGEMENT_ADMIN_READ` 120 / `_WRITE` 30 per 15 min | as every admin surface |
 
 ## The reward issuer (F-707-b) — built
 
