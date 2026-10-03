@@ -10,7 +10,7 @@ updated: 2026-10-03
 
 **DRAFT — the wheel and the lottery have their tables and database guards
 (F-707-a); `billing-service`'s `engagement/` module (ADR-0111 point 1) writes
-the wheel's versions (F-707-c), its spins (F-707-d), its day report (F-707-e) and a user's history (F-707-g), a lottery's drafts, publish and cancel (F-707-i), a user's entry (F-707-j) and the close (F-707-k), not yet the draw; the panel (F-707-f/g) and the bot (F-707-h) are its surfaces. The attention budget is implemented (F-1501), in
+the wheel's versions (F-707-c), its spins (F-707-d), its day report (F-707-e) and a user's history (F-707-g), a lottery's drafts, publish and cancel (F-707-i), a user's entry (F-707-j), the close (F-707-k) and the draw (F-707-l), not yet the delivery; the panel (F-707-f/g) and the bot (F-707-h) are its surfaces. The attention budget is implemented (F-1501), in
 `ai-service`, its only writer (ADR-0109 point 10).**
 
 ## TL;DR
@@ -29,7 +29,7 @@ draw made once and checkable from what is published.
 | the wheel's day report — **implemented (F-707-e)** | `engagement.manage`; `GET /api/billing/engagement/wheel/report?from=&to=` (tenant days, inclusive, default today, at most 31) | per day, newest first: `{day, version, spins, refused, refusals{reason: n}, nothing, prizes[{prizeId, position, label, prizeType, count, cost}], costSpent, cap, currencyCode, capUsedPercent, alertedAt}` | sync | `invalid_range` (400) |
 | manage lotteries — **implemented (F-707-i)** | `engagement.manage`; `/api/billing/engagement/lotteries`: `GET`, `GET :id`, `POST` and `PUT :id` (a whole draft: group, title, description, `entryMode`, `closesAt`, eligibility, `reservesCount`, prizes in rank order), `DELETE :id`, `POST :id/publish`, `POST :id/cancel {reason}` | a lottery with its prizes, `entrantCount`, `winnersTotal`; `204` on delete | sync tx | `invalid_prize`, `invalid_close_time`, `cancel_reason_required` (400); `coupon_template_not_found`, `variant_not_found`, `group_not_found`, `lottery_not_found` (404); `not_a_draft`, `not_cancellable` (409) |
 | the user's lotteries — **implemented (F-707-j)** | `GET /api/billing/lotteries`; `POST` / `DELETE …/:id/entry`; the caller | list: the published lotteries of its groups and any it has an entrant row in, newest close first, 30: `{id, title, entryMode, status, closesAt, cancelReason, open, prizes, entry{optedInAt, ticketNumber, excludedReason}}`; entry: `{lotteryId, joined, optedInAt, replay}` | sync tx | `lottery_not_found` (404); `not_opt_in`, `closed` (409) |
-| close lotteries — **implemented (F-707-k)** | `POST /api/internal/billing/engagement/lotteries/close-due`, `ServiceOnlyGuard`; worker `lottery_close`, every minute | `{scanned, frozen, failed}` | sync, one tx per lottery | a 404 to anyone but a service |
+| close and draw lotteries — **implemented (F-707-k, F-707-l)** | `POST /api/internal/billing/engagement/lotteries/close-due`, `ServiceOnlyGuard`; worker `lottery_close`, every minute: the freezes, then the draws | `{scanned, frozen, drawn, failed}` | sync, one tx per lottery per step | a 404 to anyone but a service |
 | the user's wheel — **implemented (F-707-d)** | `GET /api/billing/wheel`; the caller and its device | `{tenantDay, version, prizes[] with oddsPercent, eligible, refusalReason, spinsLeftToday, nextSpinAt}`; writes nothing | sync | `no_wheel` (404) |
 | the user's history — **implemented (F-707-g)** | `GET /api/billing/wheel/history`; the caller | the caller's own attempts, newest 30: `{attemptId, at, tenantDay, status, refusalReason, prize{label, prizeType, prizeValue}, coupon{code, expiresAt}}` — never the checks; writes nothing | sync | — |
 | spin — **implemented (F-707-d)** | `POST /api/billing/wheel/spin {requestId, grantId?}`; the device from the request (F-036-a) | `{attemptId, status, refusalReason, seq, position, prize, reward, replay}` — a refused spin is a recorded `200` | sync tx | `no_wheel` (404), `no_fingerprint` (400), `spin_in_progress` (409) |
@@ -135,8 +135,23 @@ the worker's `lottery_close` tick is the only caller (ADR-0111 point 5).
 | 2. Candidates: `automatic`, every user member of the group; `opt_in`, who joined. A reseller member never enters and is counted (`skippedResellerCount`) | point 6 |
 | 3. First failed rule is kept as `excludedReason`: `not_in_group`, `inactive`, `account_too_new`, `phone_unverified`, `flagged`, `shared_device` (a device behind 5 accounts in 30 days, D-11). No device recorded is no bar (user, 2026-10-03) | each member can see why |
 | 4. Tickets 1..n to the eligible by entry time, then user id | fair in any order: no seed exists yet |
-| 5. `listHash` = SHA-256 hex of `txnet-lottery-list-v1\n<lotteryId>\n` + `<ticket>:<entrantId>\n` in ticket order (`lotteryListHash`); `algorithm` `hmac-sha256-fisher-yates-v1` (F-707-l) | the verify page recomputes it from what is published |
+| 5. `listHash` = SHA-256 hex of `txnet-lottery-list-v1\n<lotteryId>\n` + `<ticket>:<entrantId>\n` in ticket order (`lotteryListHash`, shared-core); `algorithm` `hmac-sha256-fisher-yates-v1` (F-707-l) | the verify page recomputes it from what is published |
 | 6. No KEK loaded, or any write refused: the whole lottery rolls back, stays open, counts `failed`, is tried next minute | never a frozen list with no seed |
+
+## The draw (F-707-l) — built
+
+`engagement/lottery-draw.service.ts`, by the same `close-due` call right after
+the freezes; the algorithm is `shared-core/src/lib/engagement/lottery-draw.ts`,
+Web Crypto only, so the verify page (F-707-n) runs the same file.
+
+| Rule | Why |
+|---|---|
+| 1. One transaction per `frozen` lottery, locked `FOR UPDATE`; a failed one stays `frozen` and is drawn next minute | a crash between freeze and draw loses nothing: the seed is already sealed |
+| 2. The tickets are read back and must hash to `listHash` with `entrantCount` tickets; else refused, never drawn | a list changed after the seed existed is not drawn over |
+| 3. `hmac-sha256-fisher-yates-v1`: words from HMAC-SHA256(seed, `<listHash>:<i>`), i = 0, 1, …; `below(m)` by rejection sampling; Fisher–Yates over tickets 1..n, stopped after k places | uniform, and redone from what is published |
+| 4. Places 1..W to the prizes in rank order, `winnersCount` each; the next `reservesCount` are reserves (`prizeId` null). Fewer tickets: the last prizes and reserves go unfilled | the higher prize is drawn first |
+| 5. Winners written, then `drawnAt` = `publishedAt` = now, then `drawn` — together or not at all | seed, list hash and result public at once (point 5); the seed is read through its seal once `publishedAt` is set |
+| 6. Once: `drawnAt` set once (`lottery_draw_is_history`), `frozen → drawn` one way; no route draws but `close-due` | no re-roll |
 
 ## The spin (F-707-d) — built
 

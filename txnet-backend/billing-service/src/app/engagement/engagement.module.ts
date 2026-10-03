@@ -5,6 +5,7 @@ import { EntitlementModule } from '../entitlement/entitlement.module';
 import { LotteryAdminController } from './lottery-admin.controller';
 import { LotteryAdminService } from './lottery-admin.service';
 import { LotteryCloseService } from './lottery-close.service';
+import { LotteryDrawService } from './lottery-draw.service';
 import { LotteryEntryService } from './lottery-entry.service';
 import { LotteryInternalController } from './lottery-internal.controller';
 import { LotterySeedSeal } from './lottery-seed-seal';
@@ -26,6 +27,6 @@ import { WheelController } from './wheel.controller';
 @Module({
   imports: [EntitlementModule],
   controllers: [WheelAdminController, WheelController, LotteryAdminController, LotteryController, LotteryInternalController],
-  providers: [WheelAdminService, LotteryAdminService, LotteryEntryService, LotteryCloseService, LotterySeedSeal, KekService, WheelSpinService, WheelReportService],
+  providers: [WheelAdminService, LotteryAdminService, LotteryEntryService, LotteryCloseService, LotteryDrawService, LotterySeedSeal, KekService, WheelSpinService, WheelReportService],
 })
 export class EngagementModule {}

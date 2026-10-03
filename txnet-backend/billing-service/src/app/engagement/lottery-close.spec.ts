@@ -16,8 +16,9 @@
 import { createHash } from 'node:crypto';
 
 import { LotteryEntryMode, LotteryStatus, UserStatus } from '@prisma/client';
+import { LOTTERY_ALGORITHM, lotteryListHash } from '@txnet-backend/shared-core';
 
-import { LOTTERY_ALGORITHM, LotteryCloseService, judgeCandidate, lotteryListHash } from './lottery-close.service';
+import { LotteryCloseService, judgeCandidate } from './lottery-close.service';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const GROUP = '66666666-6666-4666-8666-666666666666';
@@ -50,15 +51,15 @@ describe('judgeCandidate', () => {
 });
 
 describe('lotteryListHash', () => {
-  it('is the SHA-256 of the lottery and its tickets in ticket order, whatever order they come in', () => {
-    const a = lotteryListHash(LOT, [
+  it('is the SHA-256 of the lottery and its tickets in ticket order, whatever order they come in', async () => {
+    const a = await lotteryListHash(LOT, [
       { ticketNumber: 2, entrantId: 'e-2' },
       { ticketNumber: 1, entrantId: 'e-1' },
     ]);
     const expected = createHash('sha256').update(`txnet-lottery-list-v1\n${LOT}\n1:e-1\n2:e-2\n`).digest('hex');
     expect(a).toBe(expected);
-    expect(lotteryListHash(LOT, [{ ticketNumber: 1, entrantId: 'e-1' }, { ticketNumber: 2, entrantId: 'e-2' }])).toBe(expected);
-    expect(lotteryListHash(LOT, [{ ticketNumber: 1, entrantId: 'e-2' }, { ticketNumber: 2, entrantId: 'e-1' }])).not.toBe(expected);
+    expect(await lotteryListHash(LOT, [{ ticketNumber: 1, entrantId: 'e-1' }, { ticketNumber: 2, entrantId: 'e-2' }])).toBe(expected);
+    expect(await lotteryListHash(LOT, [{ ticketNumber: 1, entrantId: 'e-2' }, { ticketNumber: 2, entrantId: 'e-1' }])).not.toBe(expected);
   });
 });
 
@@ -164,7 +165,7 @@ describe('LotteryCloseService.closeDue', () => {
         tenantId: TENANT,
         entrantCount: 2,
         skippedResellerCount: 2,
-        listHash: lotteryListHash(LOT, tickets),
+        listHash: await lotteryListHash(LOT, tickets),
         seedSealed: { kekId: 'kek-1', iv: 'iv', authTag: 'tag', ciphertext: 'sealed(64)' },
         algorithm: LOTTERY_ALGORITHM,
         frozenAt: AT,
@@ -198,7 +199,7 @@ describe('LotteryCloseService.closeDue', () => {
     const { service, lot, draws } = build({ members: [] });
     await service.closeDue(AT);
     expect(lot.status).toBe(LotteryStatus.frozen);
-    expect(draws[0]).toMatchObject({ entrantCount: 0, listHash: lotteryListHash(LOT, []) });
+    expect(draws[0]).toMatchObject({ entrantCount: 0, listHash: await lotteryListHash(LOT, []) });
   });
 
   it('leaves the lottery open, and counts a failure, when no key can seal the seed', async () => {

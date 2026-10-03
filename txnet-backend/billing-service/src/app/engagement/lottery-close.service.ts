@@ -1,8 +1,8 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 import { Injectable, Logger } from '@nestjs/common';
 import { FraudSubjectType, LotteryEntryMode, LotteryStatus, Prisma, UserGroupMemberType, UserStatus } from '@prisma/client';
-import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { LOTTERY_ALGORITHM, lotteryListHash, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { FINGERPRINT_FREE_GRANTS_REFUSED_AT, FINGERPRINT_WINDOW_DAYS } from '../fraud/device-fingerprint';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -40,9 +40,6 @@ import { LotterySeedSeal } from './lottery-seed-seal';
 
 export type ExclusionReason = 'not_in_group' | 'inactive' | 'account_too_new' | 'phone_unverified' | 'flagged' | 'shared_device';
 
-/** Recorded in the draw row; the permutation it names is F-707-l's, in `shared-core`. */
-export const LOTTERY_ALGORITHM = 'hmac-sha256-fisher-yates-v1';
-
 /** Lotteries frozen per run; the rest wait a minute. */
 const CLOSE_BATCH = 50;
 
@@ -70,16 +67,6 @@ export function judgeCandidate(
   if (facts.openFlags > 0) return 'flagged';
   if (facts.accountsOnFingerprint >= FINGERPRINT_FREE_GRANTS_REFUSED_AT) return 'shared_device';
   return null;
-}
-
-/**
- * SHA-256, hex, of `txnet-lottery-list-v1\n<lotteryId>\n` then one
- * `<ticket>:<entrantId>\n` per ticket in ticket order. Only what is published
- * goes in, so the verify page (F-707-n) recomputes it.
- */
-export function lotteryListHash(lotteryId: string, tickets: Array<{ ticketNumber: number; entrantId: string }>): string {
-  const lines = [...tickets].sort((a, b) => a.ticketNumber - b.ticketNumber).map((t) => `${t.ticketNumber}:${t.entrantId}\n`);
-  return createHash('sha256').update(`txnet-lottery-list-v1\n${lotteryId}\n${lines.join('')}`).digest('hex');
 }
 
 export type CloseDueResult = { scanned: number; frozen: number; failed: number };
@@ -161,7 +148,7 @@ export class LotteryCloseService {
     for (const { c, reason } of judged.filter((j) => j.c.existing)) {
       await tx.lotteryEntrant.update({ where: { id: c.entrantId }, data: { ticketNumber: ticketOf.get(c.userId) ?? null, excludedReason: reason } });
     }
-    const listHash = lotteryListHash(
+    const listHash = await lotteryListHash(
       lotteryId,
       eligible.map((c) => ({ ticketNumber: ticketOf.get(c.userId) as number, entrantId: c.entrantId })),
     );

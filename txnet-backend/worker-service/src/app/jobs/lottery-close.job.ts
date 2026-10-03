@@ -7,14 +7,15 @@ import { envelopeData } from '../automation/internal-answer';
 
 /** The one route this job exists to call. Service callers only; 404 otherwise. */
 const CLOSE_DUE_PATH = '/api/internal/billing/engagement/lotteries/close-due';
-const CLOSE_COUNTS = ['scanned', 'frozen', 'failed'] as const;
+const CLOSE_COUNTS = ['scanned', 'frozen', 'drawn', 'failed'] as const;
 
 /**
  * The clock on closing a lottery (F-707-k, ADR-0111 point 5).
  *
  * A published lottery past its `closesAt` is frozen by billing — the entrant
  * list judged and numbered, its hash taken, and only then the seed made and
- * sealed, in one transaction (`engagement/lottery-close.service.ts`). The rule
+ * sealed, in one transaction (`engagement/lottery-close.service.ts`); right
+ * after, every frozen lottery is drawn (`lottery-draw.service.ts`, F-707-l). The rule
  * is billing's and the clock is this service's, over the internal seam, as
  * `grant-delivery.job.ts` does. No admin route does this: it is the only way a
  * lottery closes.
@@ -33,7 +34,7 @@ export class LotteryCloseJob implements Job {
   readonly key = 'lottery_close';
   readonly name = 'Lottery close';
   readonly description =
-    'Freezes every published lottery past its close time: entrants judged and numbered, the list hashed, then the seed made and sealed (F-707-k).';
+    'Freezes every published lottery past its close time: entrants judged and numbered, the list hashed, then the seed made and sealed (F-707-k); then draws every frozen one (F-707-l).';
   readonly category = BotWorkerCategory.other;
   /** Unscheduled, no lottery ever closes. Every minute: a close is a moment users watch for. */
   readonly defaultSchedule: DefaultSchedule = { scheduleType: 'cron_expression', cronExpression: '* * * * *' };
@@ -55,8 +56,8 @@ export class LotteryCloseJob implements Job {
     if (!this.serviceToken) throw new Error('SERVICE_AUTH_TOKEN is not set');
 
     const result = await this.closeDue();
-    if (result.frozen > 0) this.logger.log(`froze ${result.frozen} of ${result.scanned} lotteries due`);
-    return { itemsProcessed: result.frozen, errorsCount: result.failed, metrics: { ...result } };
+    if (result.frozen + result.drawn > 0) this.logger.log(`froze ${result.frozen} of ${result.scanned} lotteries due, drew ${result.drawn}`);
+    return { itemsProcessed: result.frozen + result.drawn, errorsCount: result.failed, metrics: { ...result } };
   }
 
   private async closeDue(): Promise<Record<(typeof CLOSE_COUNTS)[number], number>> {
