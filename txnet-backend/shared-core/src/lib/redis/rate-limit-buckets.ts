@@ -406,6 +406,14 @@ export const RateLimitBucket = {
   ENGAGEMENT_ADMIN_WRITE: 'engagement:admin:write',
 
   /**
+   * A user's wheel in `billing-service` (F-707-d), per user, never shared
+   * (ADR-0070). The page reads the odds on every visit; a spin is bounded by
+   * the version's spins a day already, so this budget only covers retries.
+   */
+  WHEEL_READ: 'wheel:read',
+  WHEEL_SPIN: 'wheel:spin',
+
+  /**
    * The platform owner adjusting a reseller's billing wallet by hand in
    * `billing-service` (F-019-a), per user. Moving money by hand is rare.
    */

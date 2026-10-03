@@ -10,7 +10,7 @@ updated: 2026-10-03
 
 **DRAFT — the wheel and the lottery have their tables and database guards
 (F-707-a); `billing-service`'s `engagement/` module (ADR-0111 point 1) writes
-the wheel's versions (F-707-c), nothing of the lottery yet. The attention budget is implemented (F-1501), in
+the wheel's versions (F-707-c) and its spins (F-707-d), nothing of the lottery yet. The attention budget is implemented (F-1501), in
 `ai-service`, its only writer (ADR-0109 point 10).**
 
 ## TL;DR
@@ -26,8 +26,8 @@ draw made once and checkable from what is published.
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
 | manage the wheel — **implemented (F-707-c)** | `engagement.manage`; `GET /api/billing/engagement/wheel`, `POST …/wheel/versions` (config, eligibility, group, prizes in slot order), `GET …/versions/:version` | `{today, inForce, next, history}`; a version with `expectedCostPerSpin` | sync tx | `invalid_prize`, `invalid_amount`, `expected_cost_over_cap`, `prize_cost_over_cap` (400); `coupon_template_not_found`, `variant_not_found`, `group_not_found`, `version_not_found` (404); `version_taken` (409) |
-| get wheel state | userId | eligibility result + prizes + remaining daily budget | sync | — |
-| spin | userId, deviceFingerprintId | `spin_wheel_attempt` + prize, delivered in the same tx (F-707-b) | sync tx | ineligible, cooldown; over cap or out of stock is an `empty` result |
+| the user's wheel — **implemented (F-707-d)** | `GET /api/billing/wheel`; the caller and its device | `{tenantDay, version, prizes[] with oddsPercent, eligible, refusalReason, spinsLeftToday, nextSpinAt}`; writes nothing | sync | `no_wheel` (404) |
+| spin — **implemented (F-707-d)** | `POST /api/billing/wheel/spin {requestId, grantId?}`; the device from the request (F-036-a) | `{attemptId, status, refusalReason, seq, position, prize, reward, replay}` — a refused spin is a recorded `200` | sync tx | `no_wheel` (404), `no_fingerprint` (400), `spin_in_progress` (409) |
 | issue a reward — **implemented (F-707-b)** | `issueReward(tx, grants, {tenantId, userId, source: spin\|lottery, referenceId, prize, actorUserId, at, grantId?})`, `billing-service/src/app/engagement/reward-issuer.ts` | `{rewardId, prizeType, replay, grantId, coupon}` | caller's tx | `RewardRefused`: `no_cash`, `no_active_grant`, `grant_not_eligible`, `coupon_template_unavailable`, `reference_reused`; the acts' own `EntitlementRefused` (`wholesale_unfunded`, `variant_not_deliverable`, …) |
 | peek — **implemented (F-038-e)** | `AttentionBudget.peek(subject, now, pendingSends)`, the decision pipeline's budget step | the same verdict as `spend`, counting `pendingSends` as charged now; reads only, charges nothing, no lock | sync | — |
 | spend attention — **implemented (F-1501)** | `AttentionBudget.spend({tenantId, kind, id}, origin, now)`, inside `ai-service` only | `{allowed: true, charged}` or `{allowed: false, limit: per_day \| per_week, retryAt}` | sync tx | — |
@@ -86,6 +86,22 @@ strict tenant RLS. What a writer may rely on, and may not get round:
 | 5. Prizes are written in the version's transaction, positions 1..n in the order sent; the currency is the tenant's operating one (ADR-0098) | `spin_wheel_is_history` refuses a later prize |
 | 6. Every save is audited: `spin_wheel_version_create` on `spin_wheel_config`, the whole version as `newValue` | who changed the odds, and to what |
 | 7. Budgets per admin: `ENGAGEMENT_ADMIN_READ` 120 / `_WRITE` 30 per 15 min | as every admin surface |
+
+## The spin (F-707-d) — built
+
+`engagement/wheel-spin.service.ts`, `wheel.controller.ts`; any signed-in user.
+
+| Rule | Why |
+|---|---|
+| 1. A `requestId` already recorded answers that attempt (`replay: true`; the issuer's replay names the coupon again) and spins nothing | a retried tap never spins twice |
+| 2. No version in force today, or one switched off: `no_wheel`; a device that cannot be told: `no_fingerprint` — both record nothing | an attempt names a version and a fingerprint |
+| 3. The tenant's day row is created if missing and locked `FOR UPDATE` before the user's spins today and the cooldown are counted | two taps cannot both take the last spin |
+| 4. Every check is gathered fresh and frozen into `eligibilityCheckSnapshotJson.checks`, required or not: active account, age, phone, active Grant, paid invoices in the version's currency (sum and count), group, open fraud flag, device under 5 accounts, spins today, cooldown since the last awarded spin | disputes read what was true (invariant 3) |
+| 5. The first failed check refuses: recorded with no seq and its reason, `voided_fraud` for `flagged`/`shared_device`, else `rejected_ineligible` | invariant 2 |
+| 6. `crypto.randomInt(Σ weight)` walked over the slots in position order | server-decided, the shown odds |
+| 7. Over the cap, past the prize's stock (its day row locked too), or refused by the issuer (`RewardRefused`, `EntitlementRefused`, rolled back to a savepoint) → nothing: `prizeAwardedId` null, cost 0, `position` the first `empty` slot. Counters move only for a prize given | the cap holds whatever the RNG (invariant 1) |
+| 8. The prize is issued as `source: spin`, `referenceId` the attempt, by the version's creator, in the spin's transaction | F-707-b rule 6 |
+| 9. Budgets per user, never shared: `WHEEL_READ` 120 / `WHEEL_SPIN` 20 per 15 min | ADR-0070 |
 
 ## The reward issuer (F-707-b) — built
 
