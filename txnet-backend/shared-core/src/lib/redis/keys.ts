@@ -91,6 +91,14 @@ export const UnscopedRedisKeys = {
   otpChannel: (channelId: string) => `otp:channel:${channelId}`,
 
   /**
+   * The proof one reader subscribes to one support conversation with (F-034).
+   * Unscoped like `otpChannel`, for the same reason: the gateway reads it and
+   * holds no tenant. The reader's id is in the key, so a proof copied to
+   * another account names a key that does not exist.
+   */
+  supportChannel: (conversationId: string, userId: string) => `support:channel:${conversationId}:${userId}`,
+
+  /**
    * The pub/sub channel one realtime channel's events ride (F-067-i).
    *
    * Not a key — a channel name — which is why the caller applies the keyspace

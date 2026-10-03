@@ -134,6 +134,11 @@ export const RealtimeChannelFamily = {
   tenant: 'tenant',
   /** One OTP send's delivery result, authorized by a minted token. */
   otp: 'otp',
+  /**
+   * One support conversation (F-034), authorized by a proof support-service
+   * minted for one signed-in reader after checking they may see the thread.
+   */
+  support: 'support',
 } as const;
 
 export type RealtimeChannelFamily =
@@ -165,3 +170,32 @@ export interface OtpDeliveryEvent {
   /** An i18n key, on `failed` only. */
   failureKey?: string;
 }
+
+/** The channel one support conversation's live events ride (F-034). */
+export function supportRealtimeChannel(conversationId: string): string {
+  return `${RealtimeChannelFamily.support}:${conversationId}`;
+}
+
+/**
+ * What arrives on `support:<conversationId>` (F-034). Who acted is a kind
+ * (`user`, `agent`, …), never an account: the user sees "support", not which
+ * agent. **No internal note is ever published here** — the user is a reader
+ * of this channel (support invariant 5).
+ */
+export type SupportRealtimeEvent =
+  | {
+      kind: 'support.message';
+      conversationId: string;
+      /** The conversation's status after this message. */
+      status: string;
+      message: {
+        id: string;
+        seq: number;
+        senderKind: string;
+        body: string;
+        createdAt: string;
+        attachments: unknown[];
+      };
+    }
+  | { kind: 'support.read'; conversationId: string; readerKind: string; lastReadSeq: number }
+  | { kind: 'support.typing'; conversationId: string; senderKind: string; expiresInMs: number };

@@ -107,8 +107,9 @@ beforeAll(async () => {
   const base = prismaAt(pg.appUrl);
   app = base.$extends(withTenant(base)) as unknown as PrismaService;
   root = await mkdtemp(join(tmpdir(), 'support-objects-'));
-  conversations = new SupportConversationService(app, configService);
-  attachments = new SupportAttachmentService(app, configService, new LocalObjectDriver(root), scanner);
+  const realtime = { message: async () => undefined, read: async () => undefined, typing: async () => undefined, channelProof: async () => null } as never;
+  conversations = new SupportConversationService(app, configService, realtime);
+  attachments = new SupportAttachmentService(app, configService, new LocalObjectDriver(root), scanner, realtime);
 });
 
 beforeEach(() => {

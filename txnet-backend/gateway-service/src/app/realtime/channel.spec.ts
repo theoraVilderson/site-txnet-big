@@ -35,10 +35,18 @@ const identity = (over: Partial<ConnectionIdentity> = {}): ConnectionIdentity =>
 const CHANNEL_ID = 'a'.repeat(32);
 const TOKEN = 'b'.repeat(32);
 
-/** A proof store holding exactly one live OTP channel. */
+const CONVERSATION = '3d8c81e4-9f15-4456-ac90-aba4ae55b517';
+const SUPPORT_TOKEN = 'c'.repeat(64);
+
+/**
+ * A proof store holding exactly one live OTP channel, and one support
+ * conversation's proof minted for `user-1` (F-034).
+ */
 const proofs = (token: string | null = TOKEN): ChannelProofs => ({
   otpChannelToken: (channelId) =>
     Promise.resolve(channelId === CHANNEL_ID ? token : null),
+  supportChannelToken: (conversationId, userId) =>
+    Promise.resolve(conversationId === CONVERSATION && userId === 'user-1' ? SUPPORT_TOKEN : null),
 });
 
 const refuse = (
@@ -188,6 +196,7 @@ describe('channelRefusal', () => {
     it('refuses a malformed id without reading the store', async () => {
       const store: ChannelProofs = {
         otpChannelToken: vi.fn().mockResolvedValue(TOKEN),
+        supportChannelToken: vi.fn(),
       };
       await expect(refuse(null, 'otp:not-hex', TOKEN, store)).resolves.toBe(
         'realtime.channelForbidden',
@@ -196,6 +205,50 @@ describe('channelRefusal', () => {
         refuse(null, `otp:${CHANNEL_ID}extra`, TOKEN, store),
       ).resolves.toBe('realtime.channelForbidden');
       expect(store.otpChannelToken).not.toHaveBeenCalled();
+    });
+  });
+
+  // F-034: support-service minted the proof for one reader of one
+  // conversation after checking the reader may see it; the gateway holds no
+  // database, so the proof — bound to the reader's own id — is the whole claim.
+  describe('support channels', () => {
+    const channel = `support:${CONVERSATION}`;
+
+    it('allows the reader the proof was minted for', async () => {
+      await expect(refuse(identity(), channel, SUPPORT_TOKEN)).resolves.toBeNull();
+    });
+
+    it('refuses the same proof presented by another user', async () => {
+      await expect(refuse(identity({ userId: 'user-2' }), channel, SUPPORT_TOKEN)).resolves.toBe(
+        'realtime.channelForbidden',
+      );
+    });
+
+    it('refuses an anonymous connection even holding the proof', async () => {
+      await expect(refuse(null, channel, SUPPORT_TOKEN)).resolves.toBe('realtime.channelForbidden');
+    });
+
+    it('refuses no proof, a wrong one, and one of the wrong length', async () => {
+      await expect(refuse(identity(), channel)).resolves.toBe('realtime.channelForbidden');
+      await expect(refuse(identity(), channel, 'd'.repeat(64))).resolves.toBe('realtime.channelForbidden');
+      await expect(refuse(identity(), channel, 'c')).resolves.toBe('realtime.channelForbidden');
+    });
+
+    it('refuses an expired proof, and a conversation nobody minted one for', async () => {
+      await expect(
+        refuse(identity(), `support:${'1'.repeat(8)}-1111-4111-8111-111111111111`, SUPPORT_TOKEN),
+      ).resolves.toBe('realtime.channelForbidden');
+    });
+
+    it('refuses a malformed id without reading the store', async () => {
+      const store: ChannelProofs = {
+        otpChannelToken: vi.fn(),
+        supportChannelToken: vi.fn().mockResolvedValue(SUPPORT_TOKEN),
+      };
+      await expect(refuse(identity(), 'support:not-a-uuid', SUPPORT_TOKEN, store)).resolves.toBe(
+        'realtime.channelForbidden',
+      );
+      expect(store.supportChannelToken).not.toHaveBeenCalled();
     });
   });
 
@@ -210,6 +263,7 @@ describe('channelRefusal', () => {
       ['unknown family', 'presence:user-1'],
       ['family that only looks familiar', 'users:user-1'],
       ['otp family that only looks familiar', 'otps:' + CHANNEL_ID],
+      ['support family that only looks familiar', 'supports:' + CONVERSATION],
     ])('refuses %s', async (_label, channel) => {
       await expect(refuse(identity(), channel)).resolves.toBe(
         'realtime.channelUnknown',

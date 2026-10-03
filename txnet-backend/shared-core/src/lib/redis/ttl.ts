@@ -38,6 +38,12 @@ export const RedisTtl = {
    * socket held open for an event that can never come.
    */
   otpChannel: 300,
+  /**
+   * A support channel proof (F-034): refreshed on every read of the thread,
+   * so it lapses an hour after the reader last opened it. It bounds when a
+   * subscription may *start*; one already made lives with its socket.
+   */
+  supportChannel: 3600,
   loginFailureWindow: 900,
   /** >= otpCode so a still-valid OTP never outlives the data it verifies. */
   registerPending: 600,

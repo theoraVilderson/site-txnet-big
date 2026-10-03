@@ -57,6 +57,7 @@ describe('the key catalogue', () => {
       rolePermissions: UnscopedRedisKeys.rolePermissions('role-1'),
       userRole: UnscopedRedisKeys.userRole('user-1'),
       otpChannel: UnscopedRedisKeys.otpChannel('chan-1'),
+      supportChannel: UnscopedRedisKeys.supportChannel('conv-1', 'user-1'),
       realtimeFanout: UnscopedRedisKeys.realtimeFanout('user:user-1'),
       rateLimitPlatform: UnscopedRedisKeys.rateLimitPlatform('login:1.2.3.4'),
       botLinkToken: UnscopedRedisKeys.botLinkToken('tok-1'),

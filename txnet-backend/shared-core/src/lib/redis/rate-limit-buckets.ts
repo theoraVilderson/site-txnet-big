@@ -452,6 +452,7 @@ export const RateLimitBucket = {
   SUPPORT_READ: 'support:read',
   SUPPORT_OPEN: 'support:open',
   SUPPORT_SEND: 'support:send',
+  SUPPORT_TYPING: 'support:typing',
 
   /**
    * One of the caller's own payments (F-093-l), per user. Its own bucket, not

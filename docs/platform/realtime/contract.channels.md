@@ -21,7 +21,7 @@ events to a stranger, with no error anywhere. `channel.spec.ts` is the spec
 that pins it.
 
 A channel name is `<family>:<id>`. The id is everything after the **first**
-colon, so extra colons cannot widen a match. Three families exist; anything
+colon, so extra colons cannot widen a match. Four families exist; anything
 else is `realtime.channelUnknown`, because an unknown prefix is not a channel
 with no rule yet.
 
@@ -30,6 +30,7 @@ with no rule yet.
 | `user:<userId>` | that user, and only that user |
 | `tenant:<tenantId>` | a connection in that tenant holding `realtime.tenant.read` |
 | `otp:<channelId>` | anyone presenting the `proof` minted with that delivery — signed in or not |
+| `support:<conversationId>` | a signed-in connection presenting the `proof` support-service minted **for that user** (F-034, ADR-0114) |
 
 **The first two refuse an anonymous connection by construction.** There is no
 id to compare, and "no id" must never compare equal to a channel's.
@@ -53,6 +54,14 @@ weaken later:
   only family whose authorization leaves the process, so a name that could not
   be an id must not become a read — otherwise a client chooses how much work
   this gateway does by sending nonsense.
+
+**`support:` needs an identity *and* a proof** (F-034, ADR-0114).
+support-service mints the proof on a read of the thread, after its own check
+of who may see it, at `support:channel:<conversationId>:<userId>`. The gateway
+reads that key for the connection's own `userId` — a proof copied to another
+account names a key that does not exist — and checks the id is a UUID before
+asking Redis, as for `otp:`. Not resumable: the client re-subscribes with the
+proof from its next read of the thread.
 
 **No permission grants another person's `user:` channel.** An admin with every
 permission on the platform still cannot listen in here — acting as someone else

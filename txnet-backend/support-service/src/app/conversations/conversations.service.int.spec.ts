@@ -81,7 +81,9 @@ beforeAll(async () => {
   const base = prismaAt(pg.appUrl);
   app = base.$extends(withTenant(base)) as unknown as PrismaService;
   const limits: Record<string, number> = { SUPPORT_UNFINISHED_MAX: 3 };
-  support = new SupportConversationService(app, { get: (key: string) => limits[key] } as never);
+  // Live events are SupportRealtime's own spec (F-034); here they go nowhere.
+  const realtime = { message: async () => undefined, read: async () => undefined, typing: async () => undefined, channelProof: async () => null } as never;
+  support = new SupportConversationService(app, { get: (key: string) => limits[key] } as never, realtime);
 });
 
 afterAll(async () => {

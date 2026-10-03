@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   HttpException,
   Param,
   ParseUUIDPipe,
@@ -59,6 +60,12 @@ const OPEN = {
 const SEND = {
   key: (req: Request) => rateLimitBucketKey(RateLimitBucket.SUPPORT_SEND, identityOf(req).userId),
   configKey: 'SUPPORT_SEND_RATE_LIMIT' as const,
+  windowSec: 60,
+};
+
+const TYPING = {
+  key: (req: Request) => rateLimitBucketKey(RateLimitBucket.SUPPORT_TYPING, identityOf(req).userId),
+  configKey: 'SUPPORT_TYPING_RATE_LIMIT' as const,
   windowSec: 60,
 };
 
@@ -155,6 +162,14 @@ export class SupportConversationsController {
       bytes: f.buffer,
     }));
     return refusing(() => this.attachments.send(callerOf(req), id, { body: body?.body, files: incoming }));
+  }
+
+  /** "I am typing" (F-034): published to the thread's readers, stored nowhere. Repeat every few seconds while typing. */
+  @Post('conversations/:id/typing')
+  @HttpCode(200)
+  @RateLimit(TYPING)
+  typing(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string): Promise<{ expiresInMs: number }> {
+    return refusing(() => this.support.typing(callerOf(req), id));
   }
 
   @Post('conversations/:id/read')

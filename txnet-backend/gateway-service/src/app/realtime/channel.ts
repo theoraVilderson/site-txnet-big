@@ -49,6 +49,11 @@ export interface ChannelProofs {
    * answer — see the `otp:` case below.
    */
   otpChannelToken(channelId: string): Promise<string | null>;
+  /**
+   * The proof support-service minted for `userId` to hear one conversation
+   * (F-034), or `null` when it never did or the proof lapsed.
+   */
+  supportChannelToken(conversationId: string, userId: string): Promise<string | null>;
 }
 
 /** One subscription request, as it arrives off the wire. */
@@ -78,6 +83,9 @@ export const TENANT_CHANNEL_PERMISSION = 'realtime.tenant.read';
  * this process does by sending nonsense.
  */
 const OTP_CHANNEL_ID = /^[0-9a-f]{32}$/;
+
+/** A conversation id: a lower-case UUID, checked before Redis is asked, as for `otp:`. */
+const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export type ChannelRefusal =
   /** The name matches no family this gateway serves. */
@@ -162,6 +170,20 @@ export async function channelRefusal(
       // routes mint an id whether or not a code was really issued, so any
       // answer that distinguished them would restate the account existence
       // those routes exist to refuse.
+      if (!expected) return 'realtime.channelForbidden';
+      return equalSecrets(proof, expected) ? null : 'realtime.channelForbidden';
+    }
+
+    case RealtimeChannelFamily.support: {
+      // F-034: an identity **and** a proof. support-service checked that this
+      // reader may see the conversation when it minted the proof, under a key
+      // that names the reader — so the proof is worthless to anyone else, and
+      // an anonymous connection has no id to look one up by. The gateway still
+      // holds no database: who may read a thread stays support's question.
+      if (!identity || !proof || !CONVERSATION_ID.test(id)) {
+        return 'realtime.channelForbidden';
+      }
+      const expected = await proofs.supportChannelToken(id, identity.userId);
       if (!expected) return 'realtime.channelForbidden';
       return equalSecrets(proof, expected) ? null : 'realtime.channelForbidden';
     }

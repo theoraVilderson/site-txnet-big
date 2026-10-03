@@ -72,7 +72,7 @@ unvalidated input for its whole lifetime rather than for one request.
 
 | Frame | Effect |
 |---|---|
-| `{type:"subscribe", channel, proof?}` | answered `subscribed` or `error`. `proof` is required by, and only by, a channel no identity covers — today `otp:` |
+| `{type:"subscribe", channel, proof?}` | answered `subscribed` or `error`. `proof` is required by `otp:` (no identity covers it) and by `support:` (identity *and* proof) |
 | `{type:"unsubscribe", channel}` | answered `unsubscribed`. Always succeeds |
 | `{type:"resume", channels[]}` | re-subscribe a set in one round trip after a reconnect; answered `resumed` with what was restored and what was refused. Max 64 |
 | `{type:"ping"}` | answered `pong`, for a client that cannot observe WebSocket-level pongs |
@@ -104,9 +104,10 @@ need.
 ## Channels
 
 Who may subscribe to what, and why each family is shaped the way it is, is in
-[contract.channels.md](contract.channels.md). Three families exist —
-`user:<userId>`, `tenant:<tenantId>` and `otp:<channelId>` — and anything else
-is `realtime.channelUnknown`.
+[contract.channels.md](contract.channels.md). Four families exist —
+`user:<userId>`, `tenant:<tenantId>`, `otp:<channelId>` and
+`support:<conversationId>` (F-034) — and anything else is
+`realtime.channelUnknown`.
 
 ## Close codes
 
@@ -242,4 +243,4 @@ anonymous upgrade is a 401 and the pre-login half of the platform goes dark.
 | Deciding what is worth sending, and sending it | the producing domain. The seam is `RealtimePublisher`; the first caller is F-067-j |
 | Replaying what a disconnected client missed | nowhere, on purpose ([contract.fanout.md](contract.fanout.md)) |
 | Deciding when a client should hold a socket at all, and reconnecting it after sign-in | `panel-web` |
-| Per-conversation channels for live chat | F-034 |
+| Who may read a support conversation | `support`, which mints the `support:` proof (F-034, ADR-0114) |

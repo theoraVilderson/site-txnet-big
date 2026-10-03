@@ -41,6 +41,8 @@ export const envSchema = z.object({
   SUPPORT_OPEN_RATE_LIMIT: rateLimit(10),
   /** Messages sent, per user per minute. */
   SUPPORT_SEND_RATE_LIMIT: rateLimit(30),
+  /** "Typing" notices, per user per minute (F-034); a client sends one every few seconds while typing. */
+  SUPPORT_TYPING_RATE_LIMIT: rateLimit(30),
   /** Conversations a user may have unfinished (not resolved or closed) at once. */
   SUPPORT_UNFINISHED_MAX: rateLimit(5),
 

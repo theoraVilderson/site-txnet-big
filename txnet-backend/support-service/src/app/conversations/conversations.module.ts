@@ -4,6 +4,7 @@ import { MulterModule } from '@nestjs/platform-express';
 import { objectDriverFromEnv, scannerFromEnv } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
+import { SupportRealtime } from '../realtime/support-realtime';
 import { SUPPORT_OBJECT_DRIVER, SUPPORT_VIRUS_SCANNER, SupportAttachmentService } from './attachments.service';
 import { SupportConversationsController } from './conversations.controller';
 import { SupportConversationService } from './conversations.service';
@@ -30,6 +31,7 @@ type Config = ConfigService<EnvConfig, true>;
   providers: [
     SupportConversationService,
     SupportAttachmentService,
+    SupportRealtime,
     {
       provide: SUPPORT_OBJECT_DRIVER,
       inject: [ConfigService],

@@ -92,6 +92,8 @@ export class RealtimeGateway implements OnApplicationShutdown {
     this.proofs = {
       otpChannelToken: (channelId) =>
         this.redis.get(RedisKeys.otpChannel(channelId)),
+      supportChannelToken: (conversationId, userId) =>
+        this.redis.get(RedisKeys.supportChannel(conversationId, userId)),
     };
 
     this.wss = new WebSocketServer({

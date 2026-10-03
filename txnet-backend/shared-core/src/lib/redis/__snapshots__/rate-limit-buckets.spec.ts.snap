@@ -87,6 +87,7 @@ exports[`RateLimitBucket > records the whole rate-limited surface in one place 1
   "SUPPORT_READ = support:read",
   "SUPPORT_OPEN = support:open",
   "SUPPORT_SEND = support:send",
+  "SUPPORT_TYPING = support:typing",
   "WALLET_PAYMENT = wallet:payment",
   "NOTIFICATION_READ = notification:read",
   "NOTIFICATION_WRITE = notification:write",

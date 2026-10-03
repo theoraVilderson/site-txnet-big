@@ -51,6 +51,7 @@ exports[`RedisKeys — key catalogue > exposes a builder for every key family, a
   "rolePermissions",
   "session",
   "subUsage",
+  "supportChannel",
   "tenantByHost",
   "tenantById",
   "tenantRuns",
@@ -81,6 +82,7 @@ exports[`RedisKeys — key catalogue > keeps the canonical TTLs stable 1`] = `
   "outboxProcessed": 604800,
   "refreshToken": 2592000,
   "registerPending": 600,
+  "supportChannel": 3600,
   "tenantResolution": 600,
   "tenantResolutionMiss": 60,
 }

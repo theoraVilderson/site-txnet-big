@@ -13,6 +13,7 @@ import { signedObjectUrl, tenantTransaction } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
+import { ChannelProof, SupportRealtime, TYPING_TTL_MS } from '../realtime/support-realtime';
 
 /**
  * The user's side of support (F-033-b, ADR-0112): open a conversation, send,
@@ -105,6 +106,11 @@ export interface MessagePage {
   lastReadSeq: number;
   /** The furthest any other reader (an agent) has read — "seen". */
   seenUpToSeq: number;
+  /**
+   * Subscribe to `channel` with `proof` on the realtime socket for live
+   * messages, reads and typing (F-034); `null` when that is unavailable.
+   */
+  realtime: ChannelProof | null;
 }
 
 export interface CategoryView {
@@ -137,6 +143,7 @@ export class SupportConversationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<EnvConfig, true>,
+    private readonly realtime: SupportRealtime,
   ) {}
 
   async categories(caller: SupportCaller, lang: string): Promise<CategoryView[]> {
@@ -187,10 +194,20 @@ export class SupportConversationService {
   }
 
   async send(caller: SupportCaller, conversationId: string, input: { body: string }): Promise<MessageView> {
-    return this.writingMessage(async (tx, now) => {
-      const message = await appendUserMessage(tx, caller, conversationId, now, input.body);
-      return viewOf(message, caller, []);
+    const { view, status } = await this.writingMessage(async (tx, now) => {
+      const { message, status } = await appendUserMessage(tx, caller, conversationId, now, input.body);
+      return { view: viewOf(message, caller, []), status };
     });
+    await this.realtime.message(conversationId, view, status);
+    return view;
+  }
+
+  /** "The user is typing" to the thread's other readers (F-034). Not stored. */
+  async typing(caller: SupportCaller, conversationId: string): Promise<{ expiresInMs: number }> {
+    const conversation = await tenantTransaction(this.prisma, (tx) => ownConversation(tx, caller, conversationId));
+    if (conversation.status === ConversationStatus.closed) throw new ConversationRefused('closed');
+    await this.realtime.typing(conversationId, MessageSenderKind.user);
+    return { expiresInMs: TYPING_TTL_MS };
   }
 
   async list(
@@ -223,7 +240,7 @@ export class SupportConversationService {
     query: { afterSeq?: number; beforeSeq?: number; limit?: number },
   ): Promise<MessagePage> {
     const limit = Math.min(query.limit ?? PAGE_DEFAULT, PAGE_MAX);
-    return tenantTransaction(this.prisma, async (tx) => {
+    const page = await tenantTransaction(this.prisma, async (tx) => {
       const conversation = await ownConversation(tx, caller, conversationId);
       const forward = query.afterSeq !== undefined;
       const seq: Prisma.IntFilter = {};
@@ -262,15 +279,20 @@ export class SupportConversationService {
         seenUpToSeq: seen,
       };
     });
+    // Only past the ownership check above: the proof is the permission (F-034).
+    return { ...page, realtime: await this.realtime.channelProof(caller, conversationId) };
   }
 
   /** Moves the caller's cursor forward — to `upToSeq`, or to the end. Never back. */
   async markRead(caller: SupportCaller, conversationId: string, input: { upToSeq?: number }): Promise<{ lastReadSeq: number }> {
-    return tenantTransaction(this.prisma, async (tx) => {
+    const result = await tenantTransaction(this.prisma, async (tx) => {
       const conversation = await ownConversation(tx, caller, conversationId);
       const upTo = Math.min(input.upToSeq ?? conversation.lastSeq, conversation.lastSeq);
       return { lastReadSeq: await moveCursor(tx, caller, conversationId, upTo) };
     });
+    // The agent's "seen" (F-034).
+    await this.realtime.read(conversationId, MessageSenderKind.user, result.lastReadSeq);
+    return result;
   }
 
   private attachmentView(f: AttachmentRow, now: Date): AttachmentView {
@@ -318,8 +340,8 @@ export async function appendUserMessage(
   conversationId: string,
   now: Date,
   body: string,
-): Promise<MessageRow> {
-  const [row] = await tx.$queryRaw<{ lastSeq: number }[]>`
+): Promise<{ message: MessageRow; status: ConversationStatus }> {
+  const [row] = await tx.$queryRaw<{ lastSeq: number; status: ConversationStatus }[]>`
     UPDATE support.conversation
        SET "lastSeq" = "lastSeq" + 1,
            "lastMessageAt" = ${now},
@@ -331,7 +353,7 @@ export async function appendUserMessage(
      WHERE id = ${conversationId}::uuid
        AND "userId" = ${caller.userId}::uuid
        AND status <> 'closed'::support."ConversationStatus"
-    RETURNING "lastSeq"`;
+    RETURNING "lastSeq", status`;
   if (!row) {
     const exists = await tx.supportConversation.findFirst({
       where: { id: conversationId, userId: caller.userId },
@@ -353,7 +375,7 @@ export async function appendUserMessage(
   });
   // Your own message is read by you.
   await moveCursor(tx, caller, conversationId, row.lastSeq);
-  return message;
+  return { message, status: row.status };
 }
 
 type ConversationRow = Prisma.SupportConversationGetPayload<object>;

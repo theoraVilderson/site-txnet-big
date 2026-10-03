@@ -16,6 +16,7 @@ import {
 
 import type { EnvConfig } from '../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
+import { SupportRealtime } from '../realtime/support-realtime';
 import {
   ConversationRefused,
   MessageView,
@@ -69,6 +70,7 @@ export class SupportAttachmentService {
     private readonly config: ConfigService<EnvConfig, true>,
     @Inject(SUPPORT_OBJECT_DRIVER) private readonly driver: ObjectDriver,
     @Inject(SUPPORT_VIRUS_SCANNER) private readonly scanner: VirusScanner,
+    private readonly realtime: SupportRealtime,
   ) {}
 
   async send(caller: SupportCaller, conversationId: string, input: { body?: string; files: IncomingFile[] }): Promise<MessageView> {
@@ -96,8 +98,9 @@ export class SupportAttachmentService {
     const secret = this.config.get('OBJECT_STORAGE_SIGNING_SECRET', { infer: true });
     const written: string[] = [];
 
+    let sent: { view: MessageView; status: string };
     try {
-      return await writingMessage(this.prisma, this.logger, async (tx, now) => {
+      sent = await writingMessage(this.prisma, this.logger, async (tx, now) => {
         if (incoming > 0) {
           // One upload of this user at a time past this point, so two cannot
           // both read the same total and both fit under the quota.
@@ -112,7 +115,7 @@ export class SupportAttachmentService {
           }
         }
 
-        const message = await appendUserMessage(tx, caller, conversationId, now, body);
+        const { message, status } = await appendUserMessage(tx, caller, conversationId, now, body);
         const storage = new ObjectStorage(this.driver, prismaStoredObjects(tx));
         const rows = [];
         for (const p of planned) {
@@ -140,13 +143,15 @@ export class SupportAttachmentService {
             }),
           );
         }
-        return viewOf(message, caller, rows.map((r) => attachmentViewOf(r, now, secret)));
+        return { view: viewOf(message, caller, rows.map((r) => attachmentViewOf(r, now, secret))), status };
       });
     } catch (e) {
       // The rows went with the transaction; the bytes are this code's to take back.
       await Promise.allSettled(written.map((key) => this.driver.remove(key)));
       throw e;
     }
+    await this.realtime.message(conversationId, sent.view, sent.status);
+    return sent.view;
   }
 
   private async assertOwn(caller: SupportCaller, conversationId: string): Promise<void> {

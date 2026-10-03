@@ -14,15 +14,16 @@ return current
 `;
 
 /**
- * `support-service`'s Redis: the rate limiter's counters and the tenant status
- * key `TenantStatusGuard` reads. Keys are built by callers
+ * `support-service`'s Redis: the rate limiter's counters, the tenant status
+ * key `TenantStatusGuard` reads, and live conversations' proofs and events (F-034). Keys are built by callers
  * through `RedisKeys` (C-03); the prefix is the platform's keyspace.
  */
 @Injectable()
 export class RedisService implements RateLimitStore, OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private readonly client: Redis;
-  private readonly keyPrefix: string;
+  /** Applied by ioredis to keys only; a pub/sub channel takes it by hand (F-067-i). */
+  readonly keyPrefix: string;
 
   constructor(config: ConfigService<EnvConfig, true>) {
     this.keyPrefix = buildRedisKeyPrefix(
@@ -56,5 +57,19 @@ export class RedisService implements RateLimitStore, OnModuleInit, OnModuleDestr
 
   get(key: string): Promise<string | null> {
     return this.client.get(key);
+  }
+
+  /** `SET key value NX EX ttl` — true when this call wrote it. */
+  async setNx(key: string, value: string, ttlSec: number): Promise<boolean> {
+    return (await this.client.set(key, value, 'EX', ttlSec, 'NX')) === 'OK';
+  }
+
+  async expire(key: string, ttlSec: number): Promise<void> {
+    await this.client.expire(key, ttlSec);
+  }
+
+  /** `channel` is a full wire name — the caller applies `keyPrefix`. */
+  publish(channel: string, message: string): Promise<number> {
+    return this.client.publish(channel, message);
   }
 }
