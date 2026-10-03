@@ -10,7 +10,7 @@ updated: 2026-10-03
 
 **DRAFT — the wheel and the lottery have their tables and database guards
 (F-707-a); `billing-service`'s `engagement/` module (ADR-0111 point 1) writes
-the wheel's versions (F-707-c), its spins (F-707-d), its day report (F-707-e) and a user's history (F-707-g), nothing of the lottery yet; the panel (F-707-f/g) and the bot (F-707-h) are its surfaces. The attention budget is implemented (F-1501), in
+the wheel's versions (F-707-c), its spins (F-707-d), its day report (F-707-e) and a user's history (F-707-g), and a lottery's drafts, publish and cancel (F-707-i); the panel (F-707-f/g) and the bot (F-707-h) are its surfaces. The attention budget is implemented (F-1501), in
 `ai-service`, its only writer (ADR-0109 point 10).**
 
 ## TL;DR
@@ -27,6 +27,7 @@ draw made once and checkable from what is published.
 |---|---|---|---|---|
 | manage the wheel — **implemented (F-707-c)** | `engagement.manage`; `GET /api/billing/engagement/wheel`, `POST …/wheel/versions` (config, eligibility, group, prizes in slot order), `GET …/versions/:version` | `{today, inForce, next, history}`; a version with `expectedCostPerSpin` | sync tx | `invalid_prize`, `invalid_amount`, `expected_cost_over_cap`, `prize_cost_over_cap` (400); `coupon_template_not_found`, `variant_not_found`, `group_not_found`, `version_not_found` (404); `version_taken` (409) |
 | the wheel's day report — **implemented (F-707-e)** | `engagement.manage`; `GET /api/billing/engagement/wheel/report?from=&to=` (tenant days, inclusive, default today, at most 31) | per day, newest first: `{day, version, spins, refused, refusals{reason: n}, nothing, prizes[{prizeId, position, label, prizeType, count, cost}], costSpent, cap, currencyCode, capUsedPercent, alertedAt}` | sync | `invalid_range` (400) |
+| manage lotteries — **implemented (F-707-i)** | `engagement.manage`; `/api/billing/engagement/lotteries`: `GET`, `GET :id`, `POST` and `PUT :id` (a whole draft: group, title, description, `entryMode`, `closesAt`, eligibility, `reservesCount`, prizes in rank order), `DELETE :id`, `POST :id/publish`, `POST :id/cancel {reason}` | a lottery with its prizes, `entrantCount`, `winnersTotal`; `204` on delete | sync tx | `invalid_prize`, `invalid_close_time`, `cancel_reason_required` (400); `coupon_template_not_found`, `variant_not_found`, `group_not_found`, `lottery_not_found` (404); `not_a_draft`, `not_cancellable` (409) |
 | the user's wheel — **implemented (F-707-d)** | `GET /api/billing/wheel`; the caller and its device | `{tenantDay, version, prizes[] with oddsPercent, eligible, refusalReason, spinsLeftToday, nextSpinAt}`; writes nothing | sync | `no_wheel` (404) |
 | the user's history — **implemented (F-707-g)** | `GET /api/billing/wheel/history`; the caller | the caller's own attempts, newest 30: `{attemptId, at, tenantDay, status, refusalReason, prize{label, prizeType, prizeValue}, coupon{code, expiresAt}}` — never the checks; writes nothing | sync | — |
 | spin — **implemented (F-707-d)** | `POST /api/billing/wheel/spin {requestId, grantId?}`; the device from the request (F-036-a) | `{attemptId, status, refusalReason, seq, position, prize, reward, replay}` — a refused spin is a recorded `200` | sync tx | `no_wheel` (404), `no_fingerprint` (400), `spin_in_progress` (409) |
@@ -90,6 +91,23 @@ strict tenant RLS. What a writer may rely on, and may not get round:
 | 5. Prizes are written in the version's transaction, positions 1..n in the order sent; the currency is the tenant's operating one (ADR-0098) | `spin_wheel_is_history` refuses a later prize |
 | 6. Every save is audited: `spin_wheel_version_create` on `spin_wheel_config`, the whole version as `newValue` | who changed the odds, and to what |
 | 7. Budgets per admin: `ENGAGEMENT_ADMIN_READ` 120 / `_WRITE` 30 per 15 min | as every admin surface |
+
+## The lotteries' settings (F-707-i) — built
+
+`engagement/lottery-admin.service.ts`, behind `EngagementPermissionGuard`
+(`engagement.manage`); RLS is the boundary. No route closes, freezes, seeds or
+draws a lottery: that is the close job's alone (F-707-k, F-707-l).
+
+| Rule | Why |
+|---|---|
+| 1. A draft is rewritten whole (`PUT`, prizes too) or deleted; anything else is `not_a_draft` | users enter knowing what for (point 5) |
+| 2. Publish fixes group, prizes, close time and rules; from then the only admin act is cancel | the admin cannot steer the list it sees forming |
+| 3. Cancel from `draft` or `published` with a trimmed, non-empty reason users are shown; after the freeze `not_cancellable` | the seed exists only after the freeze |
+| 4. `closesAt` at least 1 h and at most 180 days ahead, at save and again at publish (the bound rides in the publish write) | time to opt in; a prize that outlives its offer |
+| 5. A prize has its kind's shape (`prize-shape.ts`, shared with the wheel); never `empty`, never `wallet_credit`; `winnersCount` ≥ 1; ranks 1..n in the order sent | every place drawn is a prize; no cash (point 2) |
+| 6. Group, coupon template and variant must be the tenant's (as the wheel's rule 4); the group checked again at publish | a deleted group never opens |
+| 7. Every state change is a write conditional on the status; a lost race answers its reason | two admins, or an admin and the close job |
+| 8. Audited on `lottery`: `lottery_create`, `_update`, `_delete`, `_publish`, `_cancel`; budgets `ENGAGEMENT_ADMIN_READ` / `_WRITE` | as the wheel's rules 6, 7 |
 
 ## The spin (F-707-d) — built
 

@@ -34,7 +34,7 @@ export const ENGAGEMENT_ADMIN_READ = {
   configKey: 'ENGAGEMENT_ADMIN_READ_RATE_LIMIT' as const,
   windowSec: 900,
 };
-const WRITE = {
+export const ENGAGEMENT_ADMIN_WRITE = {
   key: (req: Request) => rateLimitBucketKey(RateLimitBucket.ENGAGEMENT_ADMIN_WRITE, identityOf(req).userId),
   configKey: 'ENGAGEMENT_ADMIN_WRITE_RATE_LIMIT' as const,
   windowSec: 900,
@@ -67,7 +67,7 @@ export class WheelAdminController {
 
   @Post('versions')
   @HttpCode(HttpStatus.CREATED)
-  @RateLimit(WRITE)
+  @RateLimit(ENGAGEMENT_ADMIN_WRITE)
   async save(@Body(new ZodValidationPipe(wheelVersionSchema)) body: WheelVersionBody, @Req() req: Request, @Ip() ip: string) {
     // The cast is for this project's non-strict tsconfig, under which zod infers every key as optional.
     return this.refusing(() => this.wheel.save(this.actor(req, ip), body as WheelVersionInput));

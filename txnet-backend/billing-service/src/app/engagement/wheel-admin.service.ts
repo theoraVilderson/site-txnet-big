@@ -3,6 +3,7 @@ import { Prisma, SpinPrizeType } from '@prisma/client';
 import { TenantContext, operatingCurrencyOf, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { missingPrizeRelation, prizeShapeOk } from './prize-shape';
 import { addDays, isoDay, tenantDayOf, tenantZoneOf } from './tenant-day';
 
 /**
@@ -181,30 +182,7 @@ function decimal(v: string, reason: WheelAdminRejection = 'invalid_prize'): Pris
 
 /** The shape the database's `engagement.prize_shape_ok` holds, answered with a reason instead of a 500. */
 function checkPrize(p: WheelPrizeInput, value: Prisma.Decimal, cost: Prisma.Decimal): void {
-  const template = p.couponTemplateId ?? null;
-  const days = p.couponValidDays ?? null;
-  const variant = p.variantId ?? null;
-  const bare = template === null && days === null && variant === null;
-  let ok: boolean;
-  switch (p.prizeType) {
-    case SpinPrizeType.bonus_traffic_gb:
-      ok = value.gt(0) && bare;
-      break;
-    case SpinPrizeType.extra_days:
-      ok = value.gte(1) && value.isInteger() && bare;
-      break;
-    case SpinPrizeType.discount_coupon:
-      ok = value.gt(0) && value.lte(100) && template !== null && days !== null && days >= 1 && variant === null;
-      break;
-    case SpinPrizeType.free_grant:
-      ok = template === null && days === null && variant !== null;
-      break;
-    case SpinPrizeType.empty:
-      ok = value.isZero() && bare && cost.isZero();
-      break;
-    default:
-      ok = false; // wallet_credit: never cash (ADR-0111 point 2)
-  }
+  const ok = prizeShapeOk({ ...p, prizeValue: value }) && (p.prizeType !== SpinPrizeType.empty || cost.isZero());
   if (!ok || !Number.isInteger(p.weight) || p.weight < 1) throw new WheelAdminRefused('invalid_prize', `${p.prizeType} "${p.label}"`);
 }
 
@@ -370,16 +348,8 @@ export class WheelAdminService {
 
   /** A template, a variant and a group must be ones this tenant can see (RLS: another's is not found). */
   private async checkRelations(tx: Tx, tenantId: string, input: WheelVersionInput): Promise<void> {
-    for (const p of input.prizes) {
-      if (p.couponTemplateId) {
-        const t = await tx.coupon.findFirst({ where: { id: p.couponTemplateId, tenantId, deletedAt: null, batchId: null }, select: { id: true } });
-        if (!t) throw new WheelAdminRefused('coupon_template_not_found', p.couponTemplateId);
-      }
-      if (p.variantId) {
-        const v = await tx.productVariant.findFirst({ where: { id: p.variantId, isActive: true }, select: { id: true } });
-        if (!v) throw new WheelAdminRefused('variant_not_found', p.variantId);
-      }
-    }
+    const missing = await missingPrizeRelation(tx, tenantId, input.prizes);
+    if (missing) throw new WheelAdminRefused(missing.reason, missing.id);
     if (input.userGroupId) {
       const g = await tx.userGroup.findUnique({ where: { id: input.userGroupId }, select: { id: true } });
       if (!g) throw new WheelAdminRefused('group_not_found', input.userGroupId);

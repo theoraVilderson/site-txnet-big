@@ -39,7 +39,7 @@ Source of truth: `txnet-backend/prisma/domains/engagement.prisma` (Postgres sche
 
 Wheel and lottery: written only by `billing-service`'s `engagement/` module,
 in the caller's tenant transaction — `spin_wheel_config` and `spin_wheel_prize`
-by `WheelAdminService` (F-707-c); `spin_wheel_day`, `spin_wheel_prize_day`, `spin_wheel_attempt` by `WheelSpinService` (F-707-d). No unit outside `engagement` writes them. `attention_budget` is read and written only by
+by `WheelAdminService` (F-707-c); `spin_wheel_day`, `spin_wheel_prize_day`, `spin_wheel_attempt` by `WheelSpinService` (F-707-d); `lottery` and `lottery_prize` by `LotteryAdminService` (F-707-i). No unit outside `engagement` writes them. `attention_budget` is read and written only by
 `ai-service`'s `AttentionBudget`, on the app pool with the tenant bound (F-1501).
 
 ## Migration notes
@@ -53,3 +53,5 @@ CHECK, write-once trigger, RLS; `GrantSource.engagement_reward`.
 `20261003000400_a_tenant_admin_runs_its_wheel` (F-707-c): `engagement.manage`
 to `Admin`, the audit values. `20261003000500_the_wheel_warns_at_80_percent`
 (F-707-e): `spin_wheel_day.capAlertedAt`. Both additive.
+`20261003000600_a_tenant_admin_runs_its_lotteries` (F-707-i): the `lottery_*`
+audit actions and the `lottery` target. Additive.

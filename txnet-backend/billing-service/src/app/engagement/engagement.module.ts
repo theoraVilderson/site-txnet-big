@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 
 import { EntitlementModule } from '../entitlement/entitlement.module';
+import { LotteryAdminController } from './lottery-admin.controller';
+import { LotteryAdminService } from './lottery-admin.service';
 import { WheelAdminController } from './wheel-admin.controller';
 import { WheelAdminService } from './wheel-admin.service';
 import { WheelReportService } from './wheel-report';
@@ -17,7 +19,7 @@ import { WheelController } from './wheel.controller';
  */
 @Module({
   imports: [EntitlementModule],
-  controllers: [WheelAdminController, WheelController],
-  providers: [WheelAdminService, WheelSpinService, WheelReportService],
+  controllers: [WheelAdminController, WheelController, LotteryAdminController],
+  providers: [WheelAdminService, LotteryAdminService, WheelSpinService, WheelReportService],
 })
 export class EngagementModule {}
