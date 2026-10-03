@@ -54,6 +54,8 @@ export const ACTIONS = {
   /** The lucky wheel (`F-707-h`): the screen, and the one tap that spins. */
   wheel: 'menu:wheel',
   wheelSpin: 'wheel:spin',
+  /** The lotteries (`F-707-p`): the list. A lottery's own buttons carry its id (`lotteryAction`). */
+  lotteries: 'menu:lotteries',
 } as const;
 
 export const cancel: BotAction = {
@@ -260,6 +262,8 @@ export function memberMenu(miniAppUrl?: string, topUp = false, reseller = false)
     ...(topUp ? [[{ id: ACTIONS.topUp, label: { key: BotKeys.action.topUp } }]] : []),
     // F-707-h. Behind the same reachability: billing says whether a wheel runs today.
     ...(topUp ? [[{ id: ACTIONS.wheel, label: { key: BotKeys.action.wheel } }]] : []),
+    // F-707-p. Behind the same reachability: billing says which lotteries this user sees.
+    ...(topUp ? [[{ id: ACTIONS.lotteries, label: { key: BotKeys.action.lotteries } }]] : []),
     // F-311-c. The row exists only for a chat the **door** says may administer
     // this bot's reseller (`GET /api/tenants/:id/access`, F-311-e) — never on
     // a rule of the bot's own, and never for the customers this same bot

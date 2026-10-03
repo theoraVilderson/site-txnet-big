@@ -24,6 +24,7 @@ import { ResellerCampaignFlow } from '../flows/reseller-campaign.flow';
 import { ResellerFlow } from '../flows/reseller.flow';
 import { TopUpFlow } from '../flows/top-up.flow';
 import { TimeZoneFlow } from '../flows/time-zone.flow';
+import { LOTTERY_ACTION_PREFIX, LotteryFlow } from '../flows/lottery.flow';
 import { WheelFlow } from '../flows/wheel.flow';
 import { SuggestionOptOut } from '../suggestion/suggestion-opt-out';
 import { OtpStep } from '../flows/otp.step';
@@ -91,6 +92,7 @@ export class ConversationRouter {
     private readonly timeZone: TimeZoneFlow,
     private readonly suggestions: SuggestionOptOut,
     private readonly wheel: WheelFlow,
+    private readonly lotteries: LotteryFlow,
   ) {}
 
   /**
@@ -159,6 +161,10 @@ export class ConversationRouter {
 
     // F-707-h. A Spin whose screen expired opens a fresh screen (a new key), never a spin.
     if (actionId === ACTIONS.wheel || (actionId === ACTIONS.wheelSpin && state?.flow !== 'wheel')) return this.wheel.start(ctx);
+
+    // F-707-p. Every lottery button names its lottery, so it needs no state and an old screen's tap still means what it says.
+    if (actionId === ACTIONS.lotteries) return this.lotteries.start(ctx);
+    if (actionId?.startsWith(LOTTERY_ACTION_PREFIX)) return this.lotteries.tap(ctx, actionId);
 
     // F-038-g4: "don't show this again" under an AI suggestion — any screen, any state.
     if (actionId?.startsWith(SUGGESTION_OPT_OUT_PREFIX)) return this.suggestions.tap(ctx, actionId);

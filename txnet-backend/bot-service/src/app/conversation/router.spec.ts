@@ -121,6 +121,7 @@ function makeRouter(over: {
     { start: vi.fn(), handle: vi.fn() } as unknown as TimeZoneFlow,
     { tap: vi.fn() } as never,
     { start: vi.fn(), handle: vi.fn() } as never,
+    { start: vi.fn(), tap: vi.fn() } as never,
   );
   return { router, nav, sessions, api, otp, langs, locale };
 }

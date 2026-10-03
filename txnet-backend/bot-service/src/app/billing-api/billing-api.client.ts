@@ -136,6 +136,43 @@ export interface UserWheel {
   nextSpinAt: string | null;
 }
 
+/** `GET /api/billing/lotteries` (`engagement/contract.md`, F-707-j): the lotteries this user sees, narrowed to what the chat tells. */
+export interface ChatLottery {
+  id: string;
+  title: string;
+  description: string | null;
+  entryMode: 'automatic' | 'opt_in';
+  status: 'published' | 'frozen' | 'drawn' | 'cancelled';
+  closesAt: string;
+  cancelReason: string | null;
+  /** Published and before its close: a join or a leave is accepted now. */
+  open: boolean;
+  prizes: Array<{ rank: number; label: string; prizeType: WheelPrizeType; prizeValue: string; winnersCount: number }>;
+  entry: { optedInAt: string | null; ticketNumber: number | null; excludedReason: string | null } | null;
+}
+
+export interface LotteryEntryAnswer {
+  lotteryId: string;
+  joined: boolean;
+  replay: boolean;
+}
+
+/** `GET /api/billing/lotteries/:id/result` (F-707-m), narrowed to what the chat tells; the check itself is the panel's. */
+export interface ChatLotteryResult {
+  lotteryId: string;
+  title: string;
+  entrantCount: number;
+  places: Array<{
+    position: number;
+    ticketNumber: number;
+    prize: { rank: number; label: string } | null;
+    delivery: 'pending' | 'delivered' | 'passed_on';
+    passedOnReason: string | null;
+    replacesPosition: number | null;
+  }>;
+  mine: { entrantId: string; ticketNumber: number | null; excludedReason: string | null } | null;
+}
+
 /** `POST /api/billing/wheel/spin`, narrowed to what the chat tells. A refused spin is a recorded `ok`. */
 export interface SpinAnswer {
   attemptId: string;
@@ -245,6 +282,24 @@ export class BillingApiClient {
     return this.call('POST', '/api/billing/wheel/spin', { requestId }, ctx);
   }
 
+  /** The user's lotteries (F-707-p): the panel's own routes, so the chat and the panel show the same entry. */
+  lotteries(ctx: BillingCallContext): Promise<ApiResult<ChatLottery[]>> {
+    return this.call('GET', '/api/billing/lotteries', undefined, ctx);
+  }
+
+  /** Idempotent (F-707-j rule 2): a repeat answers the kept entry with `replay: true`. */
+  joinLottery(id: string, ctx: BillingCallContext): Promise<ApiResult<LotteryEntryAnswer>> {
+    return this.call('POST', `/api/billing/lotteries/${encodeURIComponent(id)}/entry`, undefined, ctx);
+  }
+
+  leaveLottery(id: string, ctx: BillingCallContext): Promise<ApiResult<LotteryEntryAnswer>> {
+    return this.call('DELETE', `/api/billing/lotteries/${encodeURIComponent(id)}/entry`, undefined, ctx);
+  }
+
+  lotteryResult(id: string, ctx: BillingCallContext): Promise<ApiResult<ChatLotteryResult>> {
+    return this.call('GET', `/api/billing/lotteries/${encodeURIComponent(id)}/result`, undefined, ctx);
+  }
+
   /** Relay a `pre_checkout_query` (F-104-m, F-104-ab). */
   preCheckout(body: InChatPaymentBody, lang: string): Promise<ApiResult<PreCheckoutVerdict>> {
     return this.relay('/api/internal/billing/deposit/in-chat/pre-checkout', body, lang);
@@ -255,7 +310,7 @@ export class BillingApiClient {
     return this.relay('/api/internal/billing/deposit/in-chat/paid', body, lang);
   }
 
-  private call<T>(method: 'GET' | 'POST', path: string, body: unknown, ctx: BillingCallContext): Promise<ApiResult<T>> {
+  private call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body: unknown, ctx: BillingCallContext): Promise<ApiResult<T>> {
     if (!this.isConfigured) return Promise.resolve(this.unreachable(ctx.lang));
     return this.send(method, `${this.baseUrl}${path}`, body, ctx.lang, {
       authorization: `Bearer ${ctx.accessToken}`,
@@ -274,7 +329,7 @@ export class BillingApiClient {
   }
 
   private async send<T>(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'DELETE',
     url: string,
     body: unknown,
     lang: string,

@@ -48,7 +48,12 @@
     "timeZone": "🕒 Time zone",
     "timeZoneFollowPanel": "🖥 Same as the panel",
     "wheel": "🎡 Lucky wheel",
-    "wheelSpin": "🎡 Spin"
+    "wheelSpin": "🎡 Spin",
+    "lotteries": "🎟 Lotteries",
+    "lotteryJoin": "✅ Join",
+    "lotteryLeave": "↩️ Leave",
+    "lotteryResult": "🏆 Result",
+    "lotteriesBack": "🎟 All lotteries"
   },
   "common": {
     "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
@@ -256,6 +261,52 @@
       "no_wheel": "There is no wheel running today.",
       "no_fingerprint": "This chat could not be recognised. Open the menu and try again.",
       "spin_in_progress": "Your spin is already being processed. Tap Spin again in a moment."
+    }
+  },
+  "lotteries": {
+    "list": "🎟 Your lotteries ({{n}}). Choose one to see its prizes and your entry.",
+    "none": "There is no lottery for you right now.",
+    "item": "{{title}} · {{status}}",
+    "card": "🎟 {{title}}\n{{description}}\n{{status}}{{closes}}\n\n🎁 Prizes:\n{{prizes}}\n\n{{entry}}",
+    "status": {
+      "open": "Open",
+      "closing": "Closing",
+      "frozen": "Closed — drawing",
+      "drawn": "Drawn",
+      "cancelled": "Cancelled: {{reason}}"
+    },
+    "closesIn": " — closes in {{left}}",
+    "left": {
+      "days": "{{d}} day(s) {{h}} hour(s)",
+      "hours": "{{h}} hour(s) {{m}} min",
+      "minutes": "{{m}} min"
+    },
+    "entry": {
+      "automatic": "Every eligible member of the group is entered at the close — nothing to do.",
+      "canJoin": "Entry is free. Tap Join to take part.",
+      "joined": "You are in. Your ticket number is given when the lottery closes.",
+      "ticket": "Your ticket: #{{n}}",
+      "excluded": "You were not entered. {{reason}}"
+    },
+    "excluded": {
+      "not_in_group": "You were no longer in the lottery's group at the close.",
+      "inactive": "Your account was not active at the close.",
+      "account_too_new": "Your account was too new at the close.",
+      "phone_unverified": "Your phone number was not verified at the close.",
+      "flagged": "Your account was under review at the close.",
+      "shared_device": "Too many accounts have used your device."
+    },
+    "refusals": {
+      "lottery_not_found": "This lottery is not available to you.",
+      "not_opt_in": "This lottery enters its members automatically; there is nothing to join.",
+      "closed": "This lottery is closed.",
+      "not_drawn": "This lottery has not been drawn yet."
+    },
+    "result": "🏆 {{title}} — the result\n{{n}} ticket(s) in the draw.\n\n{{places}}\n\n✅ given · ↪️ passed on to a reserve · (n) took over place n\n\n{{mine}}\n\nAnyone can check this draw: the lottery's page in the panel redoes it from the published seed.",
+    "noPlaces": "There were no tickets, so nobody was drawn.",
+    "mine": {
+      "won": "🎉 You won: {{prize}}",
+      "lost": "Your ticket #{{n}} did not win this time."
     }
   }
 }
