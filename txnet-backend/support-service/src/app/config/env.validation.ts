@@ -44,6 +44,21 @@ export const envSchema = z.object({
   /** Conversations a user may have unfinished (not resolved or closed) at once. */
   SUPPORT_UNFINISHED_MAX: rateLimit(5),
 
+  /** One attached file's cap, bytes (F-033-f). 10 MB: a phone screenshot or an invoice PDF. */
+  SUPPORT_ATTACHMENT_MAX_BYTES: rateLimit(10 * 1024 * 1024),
+  /** Files on one message. */
+  SUPPORT_ATTACHMENTS_PER_MESSAGE: rateLimit(5),
+  /** What one user's attachments may hold in total, across all their conversations. 100 MB. */
+  SUPPORT_STORAGE_QUOTA_BYTES: rateLimit(100 * 1024 * 1024),
+
+  /** Where attachments' bytes live (`platform/object-storage`): the volume tenant-service serves from. */
+  OBJECT_STORAGE_DRIVER: z.enum(['local']).default('local'),
+  OBJECT_STORAGE_LOCAL_ROOT: z.string().min(1).default('/data/objects'),
+  /** `clamd` in production; `none` calls every file clean (ADR-0113 point 4). */
+  VIRUS_SCAN_DRIVER: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['clamd', 'none']).default('none')),
+  /** `host:port` of clamd, when the driver is `clamd`. */
+  CLAMD_ADDR: z.string().default(''),
+
   /**
    * Signs attachments' 5-minute URLs (F-033-c, ADR-0113); tenant-service's
    * `private-files` route verifies with the same value. At least 32 characters.

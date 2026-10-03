@@ -23,6 +23,12 @@ export const openSchema = z
 /** `POST /api/support/conversations/:id/messages`. */
 export const sendSchema = z.object({ body }).strict();
 
+/** `POST /api/support/conversations/:id/attachments` — the multipart text field; files arrive beside it. */
+export const attachSchema = z
+  .object({ body: z.string().trim().max(MESSAGE_BODY_MAX, invalid).optional() })
+  .strict()
+  .optional();
+
 /** `POST /api/support/conversations/:id/read` — no `upToSeq` (or no body at all) reads to the end. */
 export const readSchema = z.object({ upToSeq: seq.optional() }).strict().optional();
 
@@ -48,5 +54,6 @@ export const messagesQuerySchema = z
 export type OpenBody = z.infer<typeof openSchema> & { body: string };
 export type SendBody = Required<z.infer<typeof sendSchema>>;
 export type ReadBody = z.infer<typeof readSchema>;
+export type AttachBody = z.infer<typeof attachSchema>;
 export type ListQuery = z.infer<typeof listQuerySchema>;
 export type MessagesQuery = z.infer<typeof messagesQuerySchema>;

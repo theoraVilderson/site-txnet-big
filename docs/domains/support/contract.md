@@ -8,8 +8,8 @@ updated: 2026-10-03
 
 # Contract — support
 
-Storage F-033-a, the user's routes F-033-b, attachments' reading side F-033-c;
-the upload F-033-f, the agent side F-033-d, category admin F-033-e. Shape: [ADR-0112](../../architecture/decisions/0112-support-is-one-conversation-served-by-support-service.md).
+Storage F-033-a, the user's routes F-033-b, attachments F-033-c (reading) and
+F-033-f (upload); the agent side F-033-d, category admin F-033-e. Shape: [ADR-0112](../../architecture/decisions/0112-support-is-one-conversation-served-by-support-service.md).
 
 ## TL;DR
 
@@ -31,6 +31,7 @@ answers exactly as a missing one.
 | `POST /api/support/conversations` | `{body ≤4000, subject?, categoryId?}` | summary (`open`, `async`, `lastSeq` 1); subject = body's first line when absent | 404 `category_unknown`, 409 `too_many_unfinished` |
 | `GET /api/support/conversations/:id/messages` | `?afterSeq=` or `?beforeSeq=`, `limit≤100`; neither = latest page | `{conversation, messages (oldest first, never internal, each with `attachments`), hasEarlier, lastReadSeq, seenUpToSeq}` | 404 `not_found` |
 | `POST /api/support/conversations/:id/messages` | `{body ≤4000}` | `{id, seq, senderKind, mine, body, createdAt}` | 404 `not_found`, 409 `closed` |
+| `POST /api/support/conversations/:id/attachments` | multipart: `files` (repeat, ≤`SUPPORT_ATTACHMENTS_PER_MESSAGE`, each ≤`SUPPORT_ATTACHMENT_MAX_BYTES`; PNG, JPEG, WebP, PDF), `body?` ≤4000 | the message, as `POST …/messages`, with its `attachments` | 404 `not_found`, 409 `closed`, 400 `empty_message`/`too_many_files`, 413 `file_too_large`, 415 `file_rejected`, 422 `file_infected`, 503 `scan_unavailable`, 409 `quota_exceeded` |
 | `POST /api/support/conversations/:id/read` | `{upToSeq?}` (body optional) | `{lastReadSeq}` — moves forward only | 404 `not_found` |
 
 Status on a user's send (invariant 7): `open` while no agent has answered,
@@ -42,7 +43,15 @@ urlExpiresAt}`. `url` is a path on the panel's own Host
 (`/api/public/tenant/private-files/…`), minted on every read and valid five
 minutes; it is `null` unless `scanStatus` is `clean` (invariant 9, ADR-0113). Rate limits per user:
 `SUPPORT_READ_RATE_LIMIT`/min, `SUPPORT_OPEN_RATE_LIMIT`/hour,
-`SUPPORT_SEND_RATE_LIMIT`/min; `SUPPORT_UNFINISHED_MAX` unfinished threads.
+`SUPPORT_SEND_RATE_LIMIT`/min (attachments count as sends);
+`SUPPORT_UNFINISHED_MAX` unfinished threads.
+
+Attachments (F-033-f, ADR-0113): every file is scanned before anything is
+written — infected is refused, an unanswering scanner refuses too (retry
+later). A user's files across all their conversations stay under
+`SUPPORT_STORAGE_QUOTA_BYTES` (invariant 10). Files land private at
+`support/<conversationId>/<attachmentId>.<ext>`; the client's file name is
+only shown and offered as the download's name.
 
 ## Emits (events)
 

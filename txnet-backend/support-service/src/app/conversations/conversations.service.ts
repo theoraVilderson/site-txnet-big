@@ -24,7 +24,19 @@ import { PrismaService } from '../prisma/prisma.service';
  * `not_found` whether the thread is another user's or does not exist.
  */
 
-export type ConversationRejection = 'not_found' | 'closed' | 'category_unknown' | 'too_many_unfinished';
+export type ConversationRejection =
+  | 'not_found'
+  | 'closed'
+  | 'category_unknown'
+  | 'too_many_unfinished'
+  // Attachments (F-033-f).
+  | 'empty_message'
+  | 'too_many_files'
+  | 'file_too_large'
+  | 'file_rejected'
+  | 'file_infected'
+  | 'scan_unavailable'
+  | 'quota_exceeded';
 
 export class ConversationRefused extends Error {
   constructor(readonly reason: ConversationRejection) {
@@ -176,44 +188,7 @@ export class SupportConversationService {
 
   async send(caller: SupportCaller, conversationId: string, input: { body: string }): Promise<MessageView> {
     return this.writingMessage(async (tx, now) => {
-      // One statement takes the row lock, issues the seq and moves the status,
-      // so two sends from two devices are ordered by the database (point 4).
-      // Before the first agent reply the thread stays `open`; after it, the
-      // user's message hands it to the agent — reopening a `resolved` one.
-      const [row] = await tx.$queryRaw<{ lastSeq: number }[]>`
-        UPDATE support.conversation
-           SET "lastSeq" = "lastSeq" + 1,
-               "lastMessageAt" = ${now},
-               "updatedAt" = ${now},
-               "resolvedAt" = NULL,
-               status = CASE WHEN "firstResponseAt" IS NULL
-                             THEN 'open'::support."ConversationStatus"
-                             ELSE 'pending_agent'::support."ConversationStatus" END
-         WHERE id = ${conversationId}::uuid
-           AND "userId" = ${caller.userId}::uuid
-           AND status <> 'closed'::support."ConversationStatus"
-        RETURNING "lastSeq"`;
-      if (!row) {
-        const exists = await tx.supportConversation.findFirst({
-          where: { id: conversationId, userId: caller.userId },
-          select: { id: true },
-        });
-        throw new ConversationRefused(exists ? 'closed' : 'not_found');
-      }
-
-      const message = await tx.supportMessage.create({
-        data: {
-          createdAt: now,
-          tenantId: caller.tenantId,
-          conversationId,
-          seq: row.lastSeq,
-          senderKind: MessageSenderKind.user,
-          senderUserId: caller.userId,
-          body: input.body,
-        },
-      });
-      // Your own message is read by you.
-      await moveCursor(tx, caller, conversationId, row.lastSeq);
+      const message = await appendUserMessage(tx, caller, conversationId, now, input.body);
       return viewOf(message, caller, []);
     });
   }
@@ -298,51 +273,113 @@ export class SupportConversationService {
     });
   }
 
-  /** The caller owns the conversation (checked by the read); this only decides whether the file may be fetched. */
   private attachmentView(f: AttachmentRow, now: Date): AttachmentView {
-    const signed =
-      f.scanStatus === AttachmentScanStatus.clean
-        ? signedObjectUrl({
-            key: f.objectKey,
-            fileName: f.fileName,
-            ttlSec: ATTACHMENT_URL_TTL_SEC,
-            secret: this.config.get('OBJECT_STORAGE_SIGNING_SECRET', { infer: true }),
-            now,
-          })
-        : null;
-    return {
-      id: f.id,
-      fileName: f.fileName,
-      contentType: f.contentType,
-      sizeBytes: f.sizeBytes,
-      scanStatus: f.scanStatus,
-      url: signed?.url ?? null,
-      urlExpiresAt: signed?.expiresAt ?? null,
-    };
+    return attachmentViewOf(f, now, this.config.get('OBJECT_STORAGE_SIGNING_SECRET', { infer: true }));
   }
 
-  /**
-   * Runs a write that inserts a message. A month with no partition is an
-   * insert error that aborts the transaction (ADR-0112 point 3): make the
-   * month, then run the whole write again — once, and only for that error.
-   */
-  private async writingMessage<T>(work: (tx: Prisma.TransactionClient, now: Date) => Promise<T>): Promise<T> {
-    const now = new Date();
-    try {
-      return await tenantTransaction(this.prisma, (tx) => work(tx, now));
-    } catch (e) {
-      if (!(e instanceof Error) || !NO_PARTITION.test(e.message)) throw e;
-      const month = `${now.toISOString().slice(0, 7)}-01`;
-      await this.prisma.$queryRaw`SELECT support.ensure_message_partition(${month}::date)`;
-      this.logger.warn(`support.message had no partition for ${month}; made it`);
-      return tenantTransaction(this.prisma, (tx) => work(tx, now));
-    }
+  private writingMessage<T>(work: (tx: Prisma.TransactionClient, now: Date) => Promise<T>): Promise<T> {
+    return writingMessage(this.prisma, this.logger, work);
   }
 }
 
+/**
+ * Runs a write that inserts a message. A month with no partition is an
+ * insert error that aborts the transaction (ADR-0112 point 3): make the
+ * month, then run the whole write again — once, and only for that error.
+ */
+export async function writingMessage<T>(
+  prisma: PrismaService,
+  logger: Logger,
+  work: (tx: Prisma.TransactionClient, now: Date) => Promise<T>,
+): Promise<T> {
+  const now = new Date();
+  try {
+    return await tenantTransaction(prisma, (tx) => work(tx, now));
+  } catch (e) {
+    if (!(e instanceof Error) || !NO_PARTITION.test(e.message)) throw e;
+    const month = `${now.toISOString().slice(0, 7)}-01`;
+    await prisma.$queryRaw`SELECT support.ensure_message_partition(${month}::date)`;
+    logger.warn(`support.message had no partition for ${month}; made it`);
+    return tenantTransaction(prisma, (tx) => work(tx, now));
+  }
+}
+
+/**
+ * Appends the caller's message to their own conversation and returns it.
+ *
+ * One statement takes the row lock, issues the seq and moves the status, so
+ * two sends from two devices are ordered by the database (point 4). Before the
+ * first agent reply the thread stays `open`; after it, the user's message hands
+ * it to the agent — reopening a `resolved` one.
+ */
+export async function appendUserMessage(
+  tx: Prisma.TransactionClient,
+  caller: SupportCaller,
+  conversationId: string,
+  now: Date,
+  body: string,
+): Promise<MessageRow> {
+  const [row] = await tx.$queryRaw<{ lastSeq: number }[]>`
+    UPDATE support.conversation
+       SET "lastSeq" = "lastSeq" + 1,
+           "lastMessageAt" = ${now},
+           "updatedAt" = ${now},
+           "resolvedAt" = NULL,
+           status = CASE WHEN "firstResponseAt" IS NULL
+                         THEN 'open'::support."ConversationStatus"
+                         ELSE 'pending_agent'::support."ConversationStatus" END
+     WHERE id = ${conversationId}::uuid
+       AND "userId" = ${caller.userId}::uuid
+       AND status <> 'closed'::support."ConversationStatus"
+    RETURNING "lastSeq"`;
+  if (!row) {
+    const exists = await tx.supportConversation.findFirst({
+      where: { id: conversationId, userId: caller.userId },
+      select: { id: true },
+    });
+    throw new ConversationRefused(exists ? 'closed' : 'not_found');
+  }
+
+  const message = await tx.supportMessage.create({
+    data: {
+      createdAt: now,
+      tenantId: caller.tenantId,
+      conversationId,
+      seq: row.lastSeq,
+      senderKind: MessageSenderKind.user,
+      senderUserId: caller.userId,
+      body,
+    },
+  });
+  // Your own message is read by you.
+  await moveCursor(tx, caller, conversationId, row.lastSeq);
+  return message;
+}
+
 type ConversationRow = Prisma.SupportConversationGetPayload<object>;
-type MessageRow = Prisma.SupportMessageGetPayload<object>;
-type AttachmentRow = Prisma.SupportMessageAttachmentGetPayload<object>;
+export type MessageRow = Prisma.SupportMessageGetPayload<object>;
+export type AttachmentRow = Prisma.SupportMessageAttachmentGetPayload<object>;
+
+/**
+ * What a reader sees of a file. The caller's ownership of the conversation was
+ * checked by the read; this only decides whether the file may be fetched —
+ * a URL only for a `clean` one (invariant 9).
+ */
+export function attachmentViewOf(f: AttachmentRow, now: Date, secret: string): AttachmentView {
+  const signed =
+    f.scanStatus === AttachmentScanStatus.clean
+      ? signedObjectUrl({ key: f.objectKey, fileName: f.fileName, ttlSec: ATTACHMENT_URL_TTL_SEC, secret, now })
+      : null;
+  return {
+    id: f.id,
+    fileName: f.fileName,
+    contentType: f.contentType,
+    sizeBytes: f.sizeBytes,
+    scanStatus: f.scanStatus,
+    url: signed?.url ?? null,
+    urlExpiresAt: signed?.expiresAt ?? null,
+  };
+}
 
 async function ownConversation(tx: Prisma.TransactionClient, caller: SupportCaller, id: string): Promise<ConversationRow> {
   const conversation = await tx.supportConversation.findFirst({ where: { id, userId: caller.userId } });
@@ -423,7 +460,7 @@ function summaryOf(c: ConversationRow, unread: number): ConversationSummary {
   };
 }
 
-function viewOf(m: MessageRow, caller: SupportCaller, attachments: AttachmentView[]): MessageView {
+export function viewOf(m: MessageRow, caller: SupportCaller, attachments: AttachmentView[]): MessageView {
   return {
     id: m.id,
     seq: m.seq,

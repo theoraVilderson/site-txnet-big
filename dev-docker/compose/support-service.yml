@@ -25,6 +25,9 @@ services:
     volumes:
       - ../txnet-backend:/app:delegated
       - /app/node_modules
+      # Attachments' bytes (F-033-f): the volume tenant-service serves them
+      # from. The `local` driver needs this to be one shared volume.
+      - object_storage:/data/objects
     environment:
       - PORT=3000
       - NODE_ENV=${NODE_ENV:-development}
@@ -44,6 +47,14 @@ services:
       - SUPPORT_OPEN_RATE_LIMIT=${SUPPORT_OPEN_RATE_LIMIT:-}
       - SUPPORT_SEND_RATE_LIMIT=${SUPPORT_SEND_RATE_LIMIT:-}
       - SUPPORT_UNFINISHED_MAX=${SUPPORT_UNFINISHED_MAX:-}
+      # Attachments (F-033-f, ADR-0113): caps, the per-user quota, the scanner.
+      - SUPPORT_ATTACHMENT_MAX_BYTES=${SUPPORT_ATTACHMENT_MAX_BYTES:-}
+      - SUPPORT_ATTACHMENTS_PER_MESSAGE=${SUPPORT_ATTACHMENTS_PER_MESSAGE:-}
+      - SUPPORT_STORAGE_QUOTA_BYTES=${SUPPORT_STORAGE_QUOTA_BYTES:-}
+      - OBJECT_STORAGE_DRIVER=${OBJECT_STORAGE_DRIVER:-local}
+      - OBJECT_STORAGE_LOCAL_ROOT=/data/objects
+      - VIRUS_SCAN_DRIVER=${VIRUS_SCAN_DRIVER:-}
+      - CLAMD_ADDR=${CLAMD_ADDR:-}
       # Signs attachments' 5-minute URLs (F-033-c); tenant-service verifies them.
       - OBJECT_STORAGE_SIGNING_SECRET=${OBJECT_STORAGE_SIGNING_SECRET}
       - TRUST_PROXY=${TRUST_PROXY}

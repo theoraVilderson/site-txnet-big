@@ -252,6 +252,13 @@
     "conversationNotFound": "This conversation was not found.",
     "conversationClosed": "This conversation is closed. Start a new one to continue.",
     "categoryUnknown": "This category is not available. Choose one from the list.",
-    "tooManyUnfinished": "You already have several open conversations. Please continue in one of them, or wait until one is closed."
+    "tooManyUnfinished": "You already have several open conversations. Please continue in one of them, or wait until one is closed.",
+    "emptyMessage": "Write a message or attach a file.",
+    "tooManyFiles": "Too many files on one message. Send the rest in another message.",
+    "fileTooLarge": "This file is too large.",
+    "fileRejected": "Only PNG, JPEG, WebP images and PDF files can be attached.",
+    "fileInfected": "This file did not pass the security check and was not sent.",
+    "scanUnavailable": "Files cannot be checked right now. Please try again in a few minutes.",
+    "quotaExceeded": "You have used all the space for your attachments."
   }
 }

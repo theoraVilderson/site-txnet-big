@@ -122,6 +122,8 @@ services:
       - APP_NAME=support-service
     volumes: !override
       - ../txnet-backend:/app:delegated
+      # `!override` drops main.yml's list: attachments' volume, repeated (F-033-f).
+      - object_storage:/data/objects
 
   billing-service:
     <<: *host-node

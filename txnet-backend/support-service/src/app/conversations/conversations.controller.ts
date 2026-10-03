@@ -8,19 +8,25 @@ import {
   Post,
   Query,
   Req,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import { SupportAttachmentService } from './attachments.service';
 import {
+  AttachBody,
   ListQuery,
   MessagesQuery,
   OpenBody,
   ReadBody,
   SendBody,
+  attachSchema,
   listQuerySchema,
   messagesQuerySchema,
   openSchema,
@@ -58,12 +64,26 @@ const SEND = {
 
 const E = BackendI18nKeys.errors.support;
 
-const REFUSAL: Record<ConversationRejection, { status: 404 | 409; i18nKey: string }> = {
+const REFUSAL: Record<ConversationRejection, { status: 400 | 404 | 409 | 413 | 415 | 422 | 503; i18nKey: string }> = {
   not_found: { status: 404, i18nKey: E.conversationNotFound },
   closed: { status: 409, i18nKey: E.conversationClosed },
   category_unknown: { status: 404, i18nKey: E.categoryUnknown },
   too_many_unfinished: { status: 409, i18nKey: E.tooManyUnfinished },
+  empty_message: { status: 400, i18nKey: E.emptyMessage },
+  too_many_files: { status: 400, i18nKey: E.tooManyFiles },
+  file_too_large: { status: 413, i18nKey: E.fileTooLarge },
+  file_rejected: { status: 415, i18nKey: E.fileRejected },
+  file_infected: { status: 422, i18nKey: E.fileInfected },
+  scan_unavailable: { status: 503, i18nKey: E.scanUnavailable },
+  quota_exceeded: { status: 409, i18nKey: E.quotaExceeded },
 };
+
+/** A multipart file as multer holds it in memory. */
+interface UploadedPart {
+  originalname: string;
+  mimetype: string;
+  buffer: Buffer;
+}
 
 /**
  * The user's support (F-033-b, ADR-0112). Any signed-in user of the tenant;
@@ -72,7 +92,10 @@ const REFUSAL: Record<ConversationRejection, { status: 404 | 409; i18nKey: strin
  */
 @Controller('support')
 export class SupportConversationsController {
-  constructor(private readonly support: SupportConversationService) {}
+  constructor(
+    private readonly support: SupportConversationService,
+    private readonly attachments: SupportAttachmentService,
+  ) {}
 
   @Get('categories')
   @RateLimit(READ)
@@ -110,6 +133,28 @@ export class SupportConversationsController {
     @Body(new ZodValidationPipe(sendSchema)) body: SendBody,
   ): Promise<MessageView> {
     return refusing(() => this.support.send(callerOf(req), id, body));
+  }
+
+  /**
+   * A message with files (F-033-f): multipart, the files as `files` (repeat
+   * the field), an optional text as `body`. Counts against the send limit.
+   */
+  @Post('conversations/:id/attachments')
+  @RateLimit(SEND)
+  @UseInterceptors(FilesInterceptor('files'))
+  attach(
+    @Req() req: Request,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @UploadedFiles() files: UploadedPart[] | undefined,
+    @Body(new ZodValidationPipe(attachSchema)) body: AttachBody,
+  ): Promise<MessageView> {
+    const incoming = (files ?? []).map((f) => ({
+      // Multer reads the part's name as latin1; the browser sent UTF-8.
+      originalName: Buffer.from(f.originalname, 'latin1').toString('utf8'),
+      contentType: f.mimetype,
+      bytes: f.buffer,
+    }));
+    return refusing(() => this.attachments.send(callerOf(req), id, { body: body?.body, files: incoming }));
   }
 
   @Post('conversations/:id/read')
