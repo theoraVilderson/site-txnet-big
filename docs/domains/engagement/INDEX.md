@@ -3,7 +3,7 @@ id: engagement
 layer: domain
 status: draft
 version: 1
-keywords: [spin wheel, engagement, daily reward, eligibility, attention budget, proactive message cap]
+keywords: [spin wheel, lucky wheel, lottery, raffle, draw, گردونه شانس, قرعه کشی, engagement, daily reward, eligibility, attention budget, proactive message cap]
 source: [txnet-backend/ai-service/src/app/attention/**]
 owns_tables: [spin_wheel_config, spin_wheel_prize, spin_wheel_attempt, attention_budget]
 depends_on: [identity, billing, fraud]
