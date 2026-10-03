@@ -72,8 +72,11 @@ const APP = join(__dirname, '..');
  * `LotteryInternalController` is the lottery close (F-707-k), a minute tick:
  * `SERVICE_ONLY` or a 404, and throttling it would leave a lottery open past
  * its close time while users wait on the result.
+ * `WheelInternalController` is the AI wheel invite's check (F-038-u), on the
+ * same five-minute delivery tick as `AiOfferCouponController`: it writes
+ * nothing, and throttling it would only stop invites the engine already rationed.
  */
-const EXEMPT = new Set(['HealthController', 'AiOfferCouponController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'UsageInternalController', 'VpnReserveController', 'ChargeCurrenciesController', 'SeasonInternalController', 'LotteryInternalController']);
+const EXEMPT = new Set(['HealthController', 'AiOfferCouponController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'UsageInternalController', 'VpnReserveController', 'ChargeCurrenciesController', 'SeasonInternalController', 'LotteryInternalController', 'WheelInternalController']);
 
 /**
  * Controllers with no identity to bucket on, and what they count instead.

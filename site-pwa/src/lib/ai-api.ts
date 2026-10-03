@@ -53,7 +53,7 @@ export const aiApi = {
 // Behind `ai.manage`. No call names a tenant or an author: both are the gate's.
 
 /** ai-service's action types (ADR-0109 point 3, v1) — the settings answer them in this order. */
-export const AI_ACTION_TYPES = ["renew", "resize_up", "resize_down", "top_up_wallet", "retain_offer", "trial_convert", "checkout_help", "win_back", "usage_alert"] as const;
+export const AI_ACTION_TYPES = ["renew", "resize_up", "resize_down", "top_up_wallet", "retain_offer", "trial_convert", "checkout_help", "win_back", "usage_alert", "wheel_invite"] as const;
 export type AiActionType = (typeof AI_ACTION_TYPES)[number];
 
 export interface AiSettings {

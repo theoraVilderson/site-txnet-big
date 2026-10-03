@@ -10,7 +10,7 @@ updated: 2026-10-03
 
 **DRAFT — schema (F-038-a) and `ai-service` (F-038-b): gated on the tenant's
 package (F-1550), it rebuilds profiles and predictions hourly (F-038-c/d),
-decides `renew` / `resize_*` / `top_up_wallet` / `win_back` / `retain_offer` / `checkout_help` / `usage_alert` (F-038-e, F-1514, F-038-k, F-038-n, F-038-f2, F-038-m, F-1516), delivers them (F-038-g) and
+decides `renew` / `resize_*` / `top_up_wallet` / `win_back` / `retain_offer` / `checkout_help` / `usage_alert` / `wheel_invite` (F-038-e, F-1514, F-038-k, F-038-n, F-038-f2, F-038-m, F-1516, F-038-u), delivers them (F-038-g) and
 measures them against the holdout (F-038-i).** The design is ADR-0109; the
 series that builds it is F-038-b … F-038-v and catalog area 24 (F-1501 … F-1550).
 
@@ -105,7 +105,7 @@ hourly; every one has `reasons[]` — a `code` and its numbers, never prose.
 |---|---|---|---|
 | may not sell (F-038-x): `suspended`, `terminated` or onboarding — the `sell` cell of `TenantStatusPolicy`, from `tenant:status:<id>` | **no run**, entitled or not | none | off |
 | package without `ai_recommendation` | **no run**, whatever `ai.setting` says | none | off |
-| with it, no `ai.setting` row | runs | every v1 type (`AI_V1_ACTION_TYPES`: not `cross_sell`, `wheel_invite`, `referral_invite`) | off — templates |
+| with it, no `ai.setting` row | runs | every v1 type (`AI_V1_ACTION_TYPES`: not `cross_sell`, `referral_invite`; `wheel_invite` only where a wheel is on, F-038-u) | off — templates |
 | with it, `engineEnabled = false` | no run | none | off |
 
 A trigger with no `tenantId` in its payload is acknowledged and skipped,
@@ -124,14 +124,14 @@ never reads the table, so a spent budget cannot silence an answer.
 
 `DecisionRun` (`decision/decision-run.ts`) pages a tenant's users with a
 `renewal_probability` or `meter_exhaustion` dated inside the next 7 days
-(`SUGGEST_LEAD_DAYS`), a `win_back_window` closing inside 1, a `usage_spike` not past its `predictedAt` (F-1516), or a gateway payment left unfinished (F-038-m, through the reader); `DecisionPipeline.decide` takes one subject through
+(`SUGGEST_LEAD_DAYS`), a `win_back_window` closing inside 1, a `usage_spike` not past its `predictedAt` (F-1516), where the tenant's wheel is on a `renewal_probability` under 0.5 inside 14 days (F-038-u), or a gateway payment left unfinished (F-038-m, through the reader); `DecisionPipeline.decide` takes one subject through
 the steps below, in this order, each candidate stopping at its first
 `suppressedBy`.
 
 **Candidates** (`decision/candidates.ts`, pure) — one per Grant at most, the
 action types, when each is proposed, what it carries and how it is told:
 [contract.candidates.md](contract.candidates.md) (`renew`, `resize_*`,
-`top_up_wallet`, `win_back`, `retain_offer`, `checkout_help`, `usage_alert`).
+`top_up_wallet`, `win_back`, `retain_offer`, `checkout_help`, `usage_alert`, `wheel_invite`).
 
 Each step answers `pass`, or the `suppressedBy` it writes on a `suppressed`
 action:

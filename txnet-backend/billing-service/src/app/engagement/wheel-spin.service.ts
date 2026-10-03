@@ -2,7 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { FraudSubjectType, GrantStatus, InvoiceStatus, Prisma, RewardSource, SpinAttemptStatus, SpinPrizeType, UserStatus } from '@prisma/client';
-import { tenantTransaction } from '@txnet-backend/shared-core';
+import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { GrantService } from '../entitlement/grant';
 import { accountsOnFingerprint, FINGERPRINT_FREE_GRANTS_REFUSED_AT, fingerprintHash, FingerprintSource, recordFingerprint } from '../fraud/device-fingerprint';
@@ -202,6 +202,8 @@ export type WheelHistoryRow = {
 /** How far back the history goes: the newest attempts, never a page through every day. */
 export const WHEEL_HISTORY_LIMIT = 30;
 
+export type WheelInviteCheck = { wheel: false } | { wheel: true; eligible: boolean; refusalReason: SpinRefusalReason | null; spinsLeftToday: number };
+
 export const WHEEL_SPIN_CLOCK = Symbol('WHEEL_SPIN_CLOCK');
 export const WHEEL_SPIN_RANDOM = Symbol('WHEEL_SPIN_RANDOM');
 
@@ -260,6 +262,22 @@ export class WheelSpinService {
         nextSpinAt: nextAt && nextAt.getTime() > at.getTime() ? nextAt.toISOString() : null,
       };
     });
+  }
+
+  /**
+   * F-038-u: may this user spin now — what an AI `wheel_invite` asks when
+   * worker-service delivers it, in the tenant it names. The user's own view
+   * with no device: the device is checked at the spin (ADR-0111 point 3).
+   * `{ wheel: false }` when none is in force today. Writes nothing.
+   */
+  async inviteCheck(actor: SpinActor): Promise<WheelInviteCheck> {
+    try {
+      const view = await runWithTenant({ id: actor.tenantId }, () => this.view(actor, null));
+      return { wheel: true, eligible: view.eligible, refusalReason: view.refusalReason, spinsLeftToday: view.spinsLeftToday };
+    } catch (e) {
+      if (e instanceof WheelSpinRefused && e.reason === 'no_wheel') return { wheel: false };
+      throw e;
+    }
   }
 
   /** The caller's own attempts, newest first, at most {@link WHEEL_HISTORY_LIMIT}. Writes nothing. */

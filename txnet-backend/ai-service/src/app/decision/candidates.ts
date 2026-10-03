@@ -22,7 +22,9 @@ import { wholesaleCost, type WholesaleRate } from './margin';
  * F-038-f2, ADR-0110). A gateway payment left unfinished gets one help
  * message (`checkout_help`, F-038-m) — about no Grant. A Grant whose last
  * 24 h used three times its usual day is told so (`usage_alert`, F-1516) —
- * help beside its sale, never instead of it.
+ * help beside its sale, never instead of it. A user at risk of leaving who
+ * has not spun for a week is invited to the tenant's wheel (`wheel_invite`,
+ * F-038-u) — beside the sales, ranked below any.
  *
  * Nothing is suggested earlier than `SUGGEST_LEAD_DAYS` before it matters —
  * the Grant's end, or the day its bag is predicted to run out, whichever is
@@ -59,6 +61,16 @@ const CHECKOUT_HELP_CONFIDENCE = 0.7;
 export const RETAIN_OFFER_BELOW = 0.5;
 
 /**
+ * F-038-u (ADR-0109 point 15, user 2026-10-03): the wheel is offered to a
+ * user at risk of leaving — a renewal predicted under this, as a discount is —
+ * whose Grant ends within {@link WHEEL_INVITE_LEAD_DAYS}, and who has not spun
+ * for {@link WHEEL_UNSPUN_DAYS}. An invite stands for a day.
+ */
+export const WHEEL_INVITE_BELOW = RETAIN_OFFER_BELOW;
+export const WHEEL_INVITE_LEAD_DAYS = 14;
+export const WHEEL_UNSPUN_DAYS = 7;
+
+/**
  * F-1514: a smaller plan must hold the most they used in a period plus this
  * much — a plan cut to the byte runs out in the next busy month, and the
  * buyer blames the seller who suggested it.
@@ -66,7 +78,7 @@ export const RETAIN_OFFER_BELOW = 0.5;
 export const RESIZE_DOWN_HEADROOM = 1.25;
 
 /** The types this file proposes. Each new action row adds its own. */
-export const CANDIDATE_TYPES = ['renew', 'resize_up', 'resize_down', 'top_up_wallet', 'win_back', 'retain_offer', 'checkout_help', 'usage_alert'] as const satisfies readonly AiActionType[];
+export const CANDIDATE_TYPES = ['renew', 'resize_up', 'resize_down', 'top_up_wallet', 'win_back', 'retain_offer', 'checkout_help', 'usage_alert', 'wheel_invite'] as const satisfies readonly AiActionType[];
 export type CandidateType = (typeof CANDIDATE_TYPES)[number];
 
 /** C-07: a key chosen at runtime comes from an exhaustive Record. */
@@ -79,6 +91,7 @@ export const SUGGESTION_TEMPLATE_KEY: Record<CandidateType, string> = {
   retain_offer: BackendI18nKeys.notifications.suggestion.retain_offer,
   checkout_help: BackendI18nKeys.notifications.suggestion.checkout_help,
   usage_alert: BackendI18nKeys.notifications.suggestion.usage_alert,
+  wheel_invite: BackendI18nKeys.notifications.suggestion.wheel_invite,
 };
 
 export type DecisionPrediction = {
@@ -147,6 +160,8 @@ export type CandidateInputs = {
   seasons?: readonly SeasonWindow[];
   /** F-038-y: the user's unused prize coupon (`prize-hold.ts`) — no offer coupon is given beside it. */
   prizeCoupon?: Reason | null;
+  /** F-038-u: the tenant's wheel in force today and the user's last awarded spin; none when it runs no wheel. */
+  wheel?: { lastSpunAt: Date | null } | null;
 };
 
 export type EngineCandidate = ActionCandidate & {
@@ -321,6 +336,40 @@ export function usageAlertsFor(input: CandidateInputs, now: Date): EngineCandida
   });
 }
 
+/**
+ * F-038-u (ADR-0109 point 15): one invite to the tenant's wheel, about the
+ * Grant least likely to renew. It sells nothing and has no margin — ranked as
+ * zero, so a sale the same run wins — and it never touches the odds: the
+ * engine picks who and when, the wheel what. Whether the user may spin is
+ * billing's, asked again at delivery.
+ */
+export function wheelInviteFor(input: CandidateInputs, now: Date): EngineCandidate | null {
+  const t = now.getTime();
+  const last = input.wheel?.lastSpunAt ?? null;
+  if (!input.wheel || (last && t - last.getTime() < WHEEL_UNSPUN_DAYS * DAY_MS)) return null;
+  const atRisk = input.predictions.flatMap((p) => {
+    const grantId = grantOf(p);
+    const ends = grantId ? input.grants.get(grantId)?.endsAt : null;
+    if (p.kind !== 'renewal_probability' || p.value === null || p.value >= WHEEL_INVITE_BELOW || !grantId || !ends) return [];
+    if (ends.getTime() <= t || ends.getTime() - t > WHEEL_INVITE_LEAD_DAYS * DAY_MS) return [];
+    return [{ p, grantId, value: p.value, ends }];
+  });
+  const most = atRisk.sort((a, b) => a.value - b.value || a.ends.getTime() - b.ends.getTime())[0];
+  if (!most) return null;
+  return {
+    actionType: 'wheel_invite',
+    confidence: most.p.confidence,
+    predictionId: most.p.id,
+    templateKey: SUGGESTION_TEMPLATE_KEY.wheel_invite,
+    deadline: new Date(Math.min(t + DAY_MS, most.ends.getTime())),
+    reasons: [
+      { code: 'wheel_invite', grantId: most.grantId, renewalProbability: most.value, lastSpunAt: last ? last.toISOString() : null },
+      { code: 'invite_not_sale' },
+      ...most.p.reasons,
+    ],
+  };
+}
+
 export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidate[] {
   const t = now.getTime();
   const lead = SUGGEST_LEAD_DAYS * DAY_MS;
@@ -402,6 +451,8 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
   const help = checkoutHelpFor(input, now);
   if (help) out.push(help);
   out.push(...usageAlertsFor(input, now));
+  const invite = wheelInviteFor(input, now);
+  if (invite) out.push(invite);
   return out;
 }
 

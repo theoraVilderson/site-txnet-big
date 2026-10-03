@@ -48,7 +48,7 @@ describe('the factory default, by package (F-1550, ADR-0109 point 12)', () => {
     expect(mode.modelText).toEqual({});
   });
 
-  it('keeps the later types out of v1 (cross_sell, wheel_invite, referral_invite)', () => {
+  it('keeps the later types out of v1 (cross_sell, referral_invite); the wheel invite is in (F-038-u)', () => {
     expect(AI_V1_ACTION_TYPES).toEqual([
       AiActionType.renew,
       AiActionType.resize_up,
@@ -59,6 +59,7 @@ describe('the factory default, by package (F-1550, ADR-0109 point 12)', () => {
       AiActionType.checkout_help,
       AiActionType.win_back,
       AiActionType.usage_alert,
+      AiActionType.wheel_invite,
     ]);
   });
 

@@ -44,6 +44,9 @@ export const AI_READER_TABLES = [
   { table: 'engagement.reward_issue', sharedRead: false },
   { table: 'entitlement.grant_duration_change', sharedRead: false },
   { table: 'entitlement.quota_adjustment', sharedRead: false },
+  // F-038-u: whether a wheel is in force and the user's last spin — never its prizes (`20261003001000_ai_wheel_inputs`).
+  { table: 'engagement.spin_wheel_config', sharedRead: false },
+  { table: 'engagement.spin_wheel_attempt', sharedRead: false },
 ] as const;
 
 /**

@@ -4083,7 +4083,8 @@
       "trial_convert": "Trial to paid",
       "checkout_help": "Help with a failed payment",
       "win_back": "Win back",
-      "usage_alert": "Usage alert"
+      "usage_alert": "Usage alert",
+      "wheel_invite": "Wheel invitation"
     },
     "offers": {
       "empty": "No discount offers yet. The engine gives a discount only from an offer you define here.",

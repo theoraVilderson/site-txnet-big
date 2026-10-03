@@ -80,6 +80,8 @@ export const NOTIFY_TEMPLATES = [
   'suggestionRetainOffer',
   'suggestionCheckoutHelp',
   'suggestionUsageAlert',
+  // F-038-u: an invite to the tenant's wheel — its odds are the wheel's, the same for everyone.
+  'suggestionWheelInvite',
   // F-038-o4: a reseller's package upgrade, told to its owner.
   'suggestionPackageUpgrade',
   // F-1525-c: a reseller's billing wallet running out at its wholesale pace, told to its owner.
@@ -870,6 +872,13 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
     read: (ns) => ns?.suggestion?.usage_alert,
     fallback: "💡 Suggestion: {{service}} used {{used}} in the last 24 hours — about {{times}} times its usual day ({{usual}}). If that wasn't you, your link may be in use somewhere else too.",
     inbox: { read: (ns) => ns?.suggestion?.usage_alertTitle, fallback: 'Suggestion: unusual use on {{service}}' },
+    many: SUGGESTION_MANY,
+  },
+  // F-038-u (ADR-0109 point 15): a free spin on the tenant's wheel — billing said they may spin; never a pitch to pay.
+  suggestionWheelInvite: {
+    read: (ns) => ns?.suggestion?.wheel_invite,
+    fallback: "💡 Suggestion: you have a free spin on the lucky wheel. Spinning costs nothing, and each prize's odds are shown on the wheel — the same for everyone. You'll find it in the panel and in the bot.",
+    inbox: { read: (ns) => ns?.suggestion?.wheel_inviteTitle, fallback: 'Suggestion: a free spin on the wheel' },
     many: SUGGESTION_MANY,
   },
   // F-038-o4 (ADR-0109 point 4): a reseller's quota will not last its window at this rate — the package that

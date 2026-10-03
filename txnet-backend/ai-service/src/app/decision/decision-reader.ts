@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type AiActionType } from '@prisma/client';
-import { resolveTimeZone, tenantTransaction, type QuietWindow } from '@txnet-backend/shared-core';
+import { resolveTimeZone, runWithTenant, tenantTransaction, wallClock, type QuietWindow } from '@txnet-backend/shared-core';
 
 import { HOURS_OF_WEEK } from '../profile/active-hours';
 import type { Reason } from '../profile/predictions';
 import { AiReaderPrisma, PrismaService } from '../prisma/prisma.service';
-import { CHECKOUT_HELP_DEADLINE_MS, CHECKOUT_HELP_WAIT_MS, SUGGEST_LEAD_DAYS, WIN_BACK_LEAD_DAYS, type CandidateGrant, type CheckoutAttempt, type DecisionPrediction, type OfferOption, type PlanOption, type SeasonWindow } from './candidates';
+import { CHECKOUT_HELP_DEADLINE_MS, CHECKOUT_HELP_WAIT_MS, SUGGEST_LEAD_DAYS, WHEEL_INVITE_BELOW, WHEEL_INVITE_LEAD_DAYS, WIN_BACK_LEAD_DAYS, type CandidateGrant, type CheckoutAttempt, type DecisionPrediction, type OfferOption, type PlanOption, type SeasonWindow } from './candidates';
 import type { WholesaleRate } from './margin';
 import { OFFER_GIVEN } from './offer-guardrail';
 import type { SubjectDecisionInputs } from './pipeline';
@@ -69,12 +69,16 @@ export class DecisionReader {
 
   /**
    * A page of users with a renewal or a run-out inside the lead time, a win-back window closing (F-038-n), a usage
-   * spike not yet a day old (F-1516), or a
+   * spike not yet a day old (F-1516), a renewal under 0.5 within two weeks where a wheel is on (F-038-u), or a
    * gateway payment left unfinished long enough to help with (F-038-m, through the reader), by id.
    */
   async subjectsDue(tenantId: string, now: Date, cursor: string | null, take: number): Promise<string[]> {
     const until = new Date(now.getTime() + SUGGEST_LEAD_DAYS * DAY_MS);
     const winBackUntil = new Date(now.getTime() + WIN_BACK_LEAD_DAYS * DAY_MS);
+    // F-038-u: where a wheel is in force, a renewal predicted under 0.5 within two weeks is an invite to weigh.
+    const atRisk = (await this.wheelInForce(tenantId, now))
+      ? [{ kind: 'renewal_probability' as const, value: { lt: WHEEL_INVITE_BELOW }, predictedAt: { gt: now, lte: new Date(now.getTime() + WHEEL_INVITE_LEAD_DAYS * DAY_MS) } }]
+      : [];
     const rows = await tenantTransaction(this.prisma, (tx) =>
       tx.aiPrediction.findMany({
         where: {
@@ -84,6 +88,7 @@ export class DecisionReader {
             { kind: { in: [...TIMING_KINDS] }, predictedAt: { gt: now, lte: until } },
             { kind: 'win_back_window', predictedAt: { gt: now, lte: winBackUntil } },
             { kind: 'usage_spike', predictedAt: { gt: now } },
+            ...atRisk,
           ],
           ...(cursor ? { subjectId: { gt: cursor } } : {}),
         },
@@ -108,6 +113,23 @@ export class DecisionReader {
     );
     // Two sorted pages merged: the first `take` ids of their union, so the cursor stays one id.
     return [...new Set([...rows.map((r) => r.subjectId), ...unfinished.map((p) => p.userId)])].sort().slice(0, take);
+  }
+
+  /**
+   * F-038-u: whether the tenant's wheel is on today — its latest version from
+   * the tenant's calendar day (TZ-1, as the spin reads it) switched on. The
+   * prizes and odds are never read.
+   */
+  async wheelInForce(tenantId: string, now: Date): Promise<boolean> {
+    const tenant = await tenantTransaction(this.prisma, (tx) => tx.tenant.findUnique({ where: { id: tenantId }, select: { timezone: true } }));
+    const w = wallClock(now, resolveTimeZone({ tenant }).zone);
+    const today = new Date(Date.UTC(w.year, w.month - 1, w.day));
+    const version = await runWithTenant({ id: tenantId }, () =>
+      tenantTransaction(this.reader, (tx) =>
+        tx.spinWheelConfig.findFirst({ where: { tenantId, effectiveFromDay: { lte: today } }, orderBy: { version: 'desc' }, select: { isActive: true } }),
+      ),
+    );
+    return version?.isActive === true;
   }
 
   async inputsFor(tenantId: string, userIds: string[], now: Date): Promise<Map<string, SubjectDecisionInputs>> {
@@ -213,6 +235,13 @@ export class DecisionReader {
 
     // F-038-y: a prize just won holds the sale about its Grant; an unused prize coupon, any offer coupon.
     const prizes = await this.prizes.holds(tenantId, userIds, now);
+    // F-038-u: the wheel in force, and each user's last spin that won (a refused one is no spin).
+    const wheel = await this.wheelInForce(tenantId, now);
+    const spins = wheel
+      ? await tenantTransaction(this.reader, (tx) =>
+          tx.spinWheelAttempt.groupBy({ by: ['userId'], where: { tenantId, userId: { in: userIds }, status: 'awarded' }, _max: { attemptedAt: true } }),
+        )
+      : [];
 
     const price = pricesInForce(theirs.prices);
     const plans = new Map<string, PlanOption>(
@@ -277,7 +306,7 @@ export class DecisionReader {
       const mine = own.actions.filter((a) => a.subjectId === id);
       const prize = prizes.get(id) ?? NO_PRIZE_HOLD;
       out.set(id, {
-        candidates: { predictions, grants, plans, wholesale, checkouts, lastPaidAt: paid.length ? new Date(Math.max(...paid)) : null, offers, usedOfferIds: new Set(own.given.filter((g) => g.subjectId === id).map((g) => g.offerId as string)), seasons, prizeCoupon: prize.coupon },
+        candidates: { predictions, grants, plans, wholesale, checkouts, lastPaidAt: paid.length ? new Date(Math.max(...paid)) : null, offers, usedOfferIds: new Set(own.given.filter((g) => g.subjectId === id).map((g) => g.offerId as string)), seasons, prizeCoupon: prize.coupon, wheel: wheel ? { lastSpunAt: spins.find((x) => x.userId === id)?._max.attemptedAt ?? null } : null },
         prizes: prize,
         activeHours: own.profiles.find((p) => p.subjectId === id)?.activeHours ?? new Array<number>(HOURS_OF_WEEK).fill(0),
         quiet,

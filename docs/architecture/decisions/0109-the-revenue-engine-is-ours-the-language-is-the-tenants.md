@@ -131,6 +131,15 @@ suggestion is produced, where the code runs, or what it reads.
   to time anything. Inside a cheaper season the suggestion is timed into its
   window, and it replaces a discount coupon rather than stacking on it, so a
   tenant's offer budget is not spent where its own season already discounts.
+- **2026-10-03, F-038-u (user), point 15.** Built in two rows. F-038-u: the
+  engine invites to the wheel a user who may spin, has not for 7 days, and
+  whose renewal is predicted under 0.5 — the same rule as a discount, so a
+  prize is not spent on someone who renews anyway; ranked below any sale, and
+  told only while billing says they may spin. F-038-u2: the day's prize pool,
+  its own decision — how the engine's pick reaches the spin while a wheel
+  version stays fixed (engagement invariant 7) and the engine writes only
+  `ai.*`. Not chosen: every user unspun for a week (more messages, the day's
+  cap spent faster), or inactive users (retention aims at those who leave).
 
 ## Consequences
 

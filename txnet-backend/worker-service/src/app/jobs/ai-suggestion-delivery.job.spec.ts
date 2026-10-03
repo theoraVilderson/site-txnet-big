@@ -39,7 +39,7 @@ const item = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-type Answers = { claim?: unknown; plan?: unknown; floor?: unknown; items?: unknown[]; coupon?: unknown; other?: unknown };
+type Answers = { claim?: unknown; plan?: unknown; floor?: unknown; items?: unknown[]; coupon?: unknown; other?: unknown; wheel?: unknown };
 
 function build(answers: Answers = {}) {
   const calls: Array<{ path: string; body: Record<string, unknown> }> = [];
@@ -61,6 +61,7 @@ function build(answers: Answers = {}) {
         };
       }
       if (path.endsWith('/floor')) return answers.floor ?? { pass: true };
+      if (path.endsWith('/wheel/invite-check')) return answers.wheel ?? { wheel: true, eligible: true, refusalReason: null, spinsLeftToday: 1 };
       if (path.endsWith('/deposit/other-gateway')) return answers.other ?? { gateway: { displayName: 'Card to card', category: 'domestic_rial' } };
       if (path.endsWith('/coupons/ai-offer')) return answers.coupon ?? { issued: { code: 'AI-ABCDEFGHJK', discount: { amount: '40000.00', currencyCode: 'IRR' }, priceAfter: { amount: '150000.00', currencyCode: 'IRR' }, expiresAt: '2026-10-08T09:20:00.000Z' } };
       return {};
@@ -126,6 +127,43 @@ describe('AiSuggestionDeliveryJob (F-038-g3)', () => {
       retain_offer: 'suggestionRetainOffer',
       checkout_help: 'suggestionCheckoutHelp',
       usage_alert: 'suggestionUsageAlert',
+      wheel_invite: 'suggestionWheelInvite',
+    });
+  });
+
+  describe('wheel_invite: about no service, told while billing says the user may spin (F-038-u)', () => {
+    const invite = item({ actionType: 'wheel_invite', templateKey: 'suggestion.wheel_invite', grantId: null, variantId: null, fromVariantId: null, price: null });
+
+    it('claims it with no Grant, asks billing whether they may spin, runs the floor, and tells it', async () => {
+      const { job, calls, sent, paths } = build({ items: [invite] });
+      await expect(job.run(NOW)).resolves.toMatchObject({ itemsProcessed: 1, errorsCount: 0 });
+      expect(paths()).toEqual([
+        '/api/internal/ai/actions/due/take',
+        '/api/internal/notifications/suggestion/claim',
+        '/api/internal/billing/engagement/wheel/invite-check',
+        '/api/internal/ai/actions/:id/floor',
+        '/api/internal/ai/actions/:id/sent',
+      ]);
+      expect(calls[1].body).toEqual({ actionId: ACTION, userId: USER });
+      expect(calls[2].body).toEqual({ tenantId: TENANT, userId: USER });
+      expect(sent).toEqual([
+        {
+          consumer: 'ai-suggestion', eventId: ACTION, only: ['inbox', 'bot'], class: 'suggestion',
+          person: { tenantId: TENANT, userId: USER, template: 'suggestionWheelInvite', params: { actionId: ACTION } },
+        },
+      ]);
+    });
+
+    it('stops it when the wheel is off, or the user may not spin now — no floor, nothing told', async () => {
+      const off = build({ items: [invite], wheel: { wheel: false } });
+      await off.job.run(NOW);
+      expect(off.calls.at(-1)?.body).toEqual({ tenantId: TENANT, by: 'no_wheel' });
+      expect(off.sent).toEqual([]);
+
+      const spun = build({ items: [invite], wheel: { wheel: true, eligible: false, refusalReason: 'daily_limit', spinsLeftToday: 0 } });
+      await spun.job.run(NOW);
+      expect(spun.calls.at(-1)?.body).toEqual({ tenantId: TENANT, by: 'not_eligible' });
+      expect(spun.sent).toEqual([]);
     });
   });
 

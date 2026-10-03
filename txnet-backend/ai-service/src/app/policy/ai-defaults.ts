@@ -16,7 +16,7 @@ import { AiActionType } from '@prisma/client';
  * Pure, so the rule is the thing under test (`ai-defaults.spec.ts`).
  */
 
-/** ADR-0109 point 3, without the "later" rows (F-038-t, F-038-u, F-038-v). */
+/** ADR-0109 point 3, without the "later" rows still to build (F-038-t, F-038-v); `wheel_invite` is F-038-u's — it runs only where a wheel does. */
 export const AI_V1_ACTION_TYPES: readonly AiActionType[] = [
   AiActionType.renew,
   AiActionType.resize_up,
@@ -27,6 +27,7 @@ export const AI_V1_ACTION_TYPES: readonly AiActionType[] = [
   AiActionType.checkout_help,
   AiActionType.win_back,
   AiActionType.usage_alert,
+  AiActionType.wheel_invite,
 ];
 
 /** The schema's defaults (`ai.setting`), for a tenant with no row. */

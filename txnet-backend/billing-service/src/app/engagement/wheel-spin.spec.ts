@@ -187,6 +187,18 @@ describe('WheelSpinService.spin', () => {
   });
 });
 
+describe('WheelSpinService.inviteCheck (F-038-u)', () => {
+  it('answers whether the user may spin now, read with no device — the spin checks the device itself', async () => {
+    await expect(build().service.inviteCheck({ userId: USER, tenantId: TENANT })).resolves.toEqual({ wheel: true, eligible: true, refusalReason: null, spinsLeftToday: 1 });
+    const spun = build({ attempts: [{ status: SpinAttemptStatus.awarded, attemptedAt: AT }] });
+    await expect(spun.service.inviteCheck({ userId: USER, tenantId: TENANT })).resolves.toMatchObject({ wheel: true, eligible: false, refusalReason: 'daily_limit' });
+  });
+
+  it('answers wheel: false where none is in force, in the tenant it names', async () => {
+    await expect(build({ cfg: null }).service.inviteCheck({ userId: USER, tenantId: TENANT })).resolves.toEqual({ wheel: false });
+  });
+});
+
 describe('WheelSpinService.history', () => {
   const COUPON_PRIZE = { label: '20% off', prizeType: SpinPrizeType.discount_coupon, prizeValue: D(20) };
   function withHistory(rows: Record<string, unknown>[]) {

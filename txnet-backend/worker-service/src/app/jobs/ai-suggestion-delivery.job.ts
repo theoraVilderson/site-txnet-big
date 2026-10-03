@@ -15,6 +15,7 @@ const HOLD_PATH = '/api/internal/notifications/retention/hold';
 const NAMES_PATH = '/api/internal/billing/entitlement/grants/names';
 const COUPON_PATH = '/api/internal/billing/coupons/ai-offer';
 const OTHER_GATEWAY_PATH = '/api/internal/billing/deposit/other-gateway';
+const WHEEL_CHECK_PATH = '/api/internal/billing/engagement/wheel/invite-check';
 const actionPath = (id: string, step: 'floor' | 'sent' | 'stop') => `/api/internal/ai/actions/${id}/${step}`;
 
 /** Suggestions one run delivers; the rest wait five minutes. */
@@ -32,6 +33,7 @@ export const SUGGESTION_TEMPLATE_OF: Record<string, string> = {
   retain_offer: 'suggestionRetainOffer',
   checkout_help: 'suggestionCheckoutHelp',
   usage_alert: 'suggestionUsageAlert',
+  wheel_invite: 'suggestionWheelInvite',
 };
 
 /** A reseller's upgrade (F-038-o4): `resize_up` about a package, told to the reseller's owner. */
@@ -86,6 +88,7 @@ type Due = {
 };
 type Money = { amount: string; currencyCode: string };
 type OtherGateway = { paid: true } | { gateway: { displayName: string; category: string } | null };
+type WheelCheck = { wheel: false } | { wheel: true; eligible: boolean; refusalReason: string | null; spinsLeftToday: number };
 /** What a suggestion says, or the step that stops it before the floor. */
 type Words = { params: Record<string, string> } | { stop: string; retryAt?: string };
 type Coupon =
@@ -113,7 +116,9 @@ type Names = {
  *    the next day. A `checkout_help` (F-038-m) is about no service: claimed
  *    with no Grant (F-038-g5), it asks billing for another gateway instead —
  *    none, or paid since, stops it. A `usage_alert` (F-1516) names its
- *    service only: it sells no plan, so none has to be for sale.
+ *    service only: it sells no plan, so none has to be for sale. A
+ *    `wheel_invite` (F-038-u) is about no service either: billing says
+ *    whether the user may still spin — no wheel, or not now, stops it.
  * 3. **floor** — the last check; a refusal was already handled by ai-service.
  * 4. **tell** — inbox and bot on their own (never joined to a burst: a
  *    suggestion is never a "count" summary); inside quiet hours the inbox
@@ -192,7 +197,9 @@ export class AiSuggestionDeliveryJob implements Job {
     const aboutPayment = due.actionType === 'checkout_help';
     // F-1516: a usage alert is about a service and names no plan.
     const aboutUsage = due.actionType === 'usage_alert';
-    if (due.subjectKind !== 'user' || !template || (!aboutPayment && (!due.grantId || (!aboutUsage && !due.variantId)))) {
+    // F-038-u: an invite to the wheel is about no service, claimed with no Grant (F-038-g5).
+    const aboutWheel = due.actionType === 'wheel_invite';
+    if (due.subjectKind !== 'user' || !template || (!aboutPayment && !aboutWheel && (!due.grantId || (!aboutUsage && !due.variantId)))) {
       throw new Error(`a ${due.subjectKind} ${due.actionType} suggestion without a Grant and a plan cannot be told yet`);
     }
     if (aboutPayment && !due.payment) throw new Error(`checkout_help suggestion ${due.actionId} carries no payment`);
@@ -205,7 +212,7 @@ export class AiSuggestionDeliveryJob implements Job {
       throw new Error(`retain_offer suggestion ${due.actionId} carries no offer terms or deadline`);
     }
     return this.tell(due, { userId: due.subjectId, grantId: due.grantId ?? undefined, template }, () =>
-      aboutPayment ? this.helpWords(due) : aboutUsage ? this.usageWords(due) : this.serviceWords(due, now),
+      aboutPayment ? this.helpWords(due) : aboutUsage ? this.usageWords(due) : aboutWheel ? this.wheelWords(due) : this.serviceWords(due, now),
     );
   }
 
@@ -327,6 +334,15 @@ export class AiSuggestionDeliveryJob implements Job {
     if ('paid' in answer) return { stop: 'already_paid' };
     if (!answer.gateway) return { stop: 'no_other_gateway' };
     return { params: { gateway: answer.gateway.displayName, amount: `${payment.amount.amount} ${payment.amount.currencyCode}` } };
+  }
+
+  /** F-038-u: `wheel_invite` — told only while billing says the user may spin; the wheel's odds are its own. */
+  private async wheelWords(due: Due): Promise<Words> {
+    const answer = (await this.post(this.billing, WHEEL_CHECK_PATH, { tenantId: due.tenantId, userId: due.subjectId })) as WheelCheck | null;
+    if (!answer || !('wheel' in answer)) throw new Error(`billing answered ${WHEEL_CHECK_PATH} without 'wheel'`);
+    if (!answer.wheel) return { stop: 'no_wheel' };
+    if (!answer.eligible) return { stop: 'not_eligible' };
+    return { params: {} };
   }
 
   private async post(base: string, path: string, payload: Record<string, unknown>): Promise<Record<string, unknown> | null> {
