@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Dices,
   Gift,
   CreditCard,
   Globe,
@@ -22,7 +23,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_AI, PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS, PANEL_WHEEL, myResellerUsersPath } from "@/lib/routes";
+import { PANEL_AI, PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS, PANEL_WHEEL, PANEL_WHEEL_SETTINGS, myResellerUsersPath } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { holdsEveryPermission } from "@/lib/permissions";
 
@@ -185,6 +186,9 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
   // F-707-g. Every signed-in user: billing's `GET /wheel` says whether a wheel
   // runs today and why this user may not spin it.
   { id: "wheel", label: M.wheel, icon: Gift, href: PANEL_WHEEL },
+  // F-707-f. Every tenant runs its own wheel: the permission hides it, RLS
+  // answers each tenant its own (F-707-c).
+  { id: "wheel-settings", label: M.wheelSettings, icon: Dices, href: PANEL_WHEEL_SETTINGS, requires: ["engagement.manage"] },
   // F-311-ab. One users page for every tenant (D-55), opened on the tenant the
   // session is in: platform staff reach the platform's own users (F-311-aa), a
   // reseller's staff on its domain the reseller's. `tenant.manage` hides it;

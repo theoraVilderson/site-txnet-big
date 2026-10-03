@@ -175,6 +175,8 @@ export const PANEL_SYSTEMS = "/systems";
 export const PANEL_USER_GROUPS = "/user-groups";
 /** The user's lucky wheel: public odds, a spin the server decides, their own history (F-707-g). */
 export const PANEL_WHEEL = "/wheel";
+/** A tenant admin's wheel: prizes, odds, the cap, eligibility, versions and the day report (F-707-f). */
+export const PANEL_WHEEL_SETTINGS = "/wheel/settings";
 /**
  * Where a bank returns a payer (F-093-f). These two are `billing`'s to name:
  * `deposit-callback.controller.ts` redirects to them by path, so they are the

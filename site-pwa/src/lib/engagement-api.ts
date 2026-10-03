@@ -21,6 +21,99 @@ export type WheelPrizeType = (typeof WHEEL_PRIZE_TYPES)[number];
 
 export type SpinStatus = "awarded" | "voided_fraud" | "rejected_ineligible";
 
+// ------------------------------------------------------------------- the admin
+
+/** One slot as saved, in a version (`WheelPrizeView`). Decimals are strings (C-02). */
+export interface WheelPrize {
+  id: string;
+  position: number;
+  label: string;
+  prizeType: WheelPrizeType;
+  prizeValue: string;
+  couponTemplateId: string | null;
+  couponValidDays: number | null;
+  variantId: string | null;
+  weight: number;
+  costAmount: string;
+  dailyStockLimit: number | null;
+}
+
+/** One version of the wheel (`WheelVersionView`); never changed once written. */
+export interface WheelVersion {
+  id: string;
+  version: number;
+  /** The tenant day it starts on, `YYYY-MM-DD`. */
+  effectiveFromDay: string;
+  isActive: boolean;
+  dailyBudgetCapAmount: string;
+  currencyCode: string;
+  perUserCooldownHours: number;
+  maxSpinsPerAccountPerDay: number;
+  requiresMinAccountAgeHours: number;
+  requiresMinTotalPurchaseAmount: string | null;
+  requiresMinCompletedOrdersCount: number | null;
+  requiresActiveServiceAtSpinTime: boolean;
+  requiresPhoneVerified: boolean;
+  userGroupId: string | null;
+  createdByAdminId: string;
+  createdAt: string;
+  /** Σ weight × cost / Σ weight, billing's figure. */
+  expectedCostPerSpin: string;
+  prizes: WheelPrize[];
+}
+
+export interface WheelState {
+  today: string;
+  inForce: WheelVersion | null;
+  /** Saved for a later day: what tomorrow brings. */
+  next: WheelVersion | null;
+  /** Newest first. */
+  history: WheelVersion[];
+}
+
+/** `POST …/wheel/versions` — the `.strict()` `wheelVersionSchema`, prizes in slot order. */
+export interface WheelPrizeBody {
+  label: string;
+  prizeType: WheelPrizeType;
+  prizeValue: string;
+  couponTemplateId?: string | null;
+  couponValidDays?: number | null;
+  variantId?: string | null;
+  weight: number;
+  costAmount: string;
+  dailyStockLimit?: number | null;
+}
+
+export interface WheelVersionBody {
+  isActive: boolean;
+  dailyBudgetCapAmount: string;
+  perUserCooldownHours: number;
+  maxSpinsPerAccountPerDay: number;
+  requiresMinAccountAgeHours: number;
+  requiresMinTotalPurchaseAmount: string | null;
+  requiresMinCompletedOrdersCount: number | null;
+  requiresActiveServiceAtSpinTime: boolean;
+  requiresPhoneVerified: boolean;
+  userGroupId: string | null;
+  prizes: WheelPrizeBody[];
+}
+
+/** One tenant day of the report (F-707-e). */
+export interface WheelDayReport {
+  day: string;
+  version: number;
+  spins: number;
+  refused: number;
+  refusals: Record<string, number>;
+  nothing: number;
+  prizes: Array<{ prizeId: string; position: number; label: string; prizeType: WheelPrizeType; count: number; cost: string }>;
+  costSpent: string;
+  cap: string;
+  currencyCode: string;
+  capUsedPercent: string;
+  alertedAt: string | null;
+}
+
 // -------------------------------------------------------------------- the user
 
 /** The wheel as the user sees it (`WheelView`): the public odds and whether they may spin. */
@@ -61,6 +154,21 @@ export interface WheelHistoryRow {
 }
 
 const json = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
+
+export const wheelAdminApi = {
+  state(): Promise<WheelState> {
+    return call<WheelState>("/engagement/wheel", { method: "GET" });
+  },
+  /** A new version from the tenant's next day; nothing in force changes today. */
+  save(body: WheelVersionBody): Promise<WheelVersion> {
+    return call<WheelVersion>("/engagement/wheel/versions", json(body));
+  },
+  /** Tenant days, inclusive; both default to today, at most 31. */
+  report(query: { from?: string; to?: string } = {}): Promise<WheelDayReport[]> {
+    const q = new URLSearchParams(Object.entries(query).filter(([, v]) => v) as [string, string][]).toString();
+    return call<WheelDayReport[]>(`/engagement/wheel/report${q ? `?${q}` : ""}`, { method: "GET" });
+  },
+};
 
 export const wheelApi = {
   view(): Promise<UserWheel> {
