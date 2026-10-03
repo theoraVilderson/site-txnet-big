@@ -10,7 +10,7 @@ updated: 2026-10-03
 
 **DRAFT — the wheel and the lottery have their tables and database guards
 (F-707-a); `billing-service`'s `engagement/` module (ADR-0111 point 1) writes
-the wheel's versions (F-707-c), its spins (F-707-d), its day report (F-707-e) and a user's history (F-707-g), and a lottery's drafts, publish and cancel (F-707-i); the panel (F-707-f/g) and the bot (F-707-h) are its surfaces. The attention budget is implemented (F-1501), in
+the wheel's versions (F-707-c), its spins (F-707-d), its day report (F-707-e) and a user's history (F-707-g), a lottery's drafts, publish and cancel (F-707-i) and a user's entry (F-707-j); the panel (F-707-f/g) and the bot (F-707-h) are its surfaces. The attention budget is implemented (F-1501), in
 `ai-service`, its only writer (ADR-0109 point 10).**
 
 ## TL;DR
@@ -28,6 +28,7 @@ draw made once and checkable from what is published.
 | manage the wheel — **implemented (F-707-c)** | `engagement.manage`; `GET /api/billing/engagement/wheel`, `POST …/wheel/versions` (config, eligibility, group, prizes in slot order), `GET …/versions/:version` | `{today, inForce, next, history}`; a version with `expectedCostPerSpin` | sync tx | `invalid_prize`, `invalid_amount`, `expected_cost_over_cap`, `prize_cost_over_cap` (400); `coupon_template_not_found`, `variant_not_found`, `group_not_found`, `version_not_found` (404); `version_taken` (409) |
 | the wheel's day report — **implemented (F-707-e)** | `engagement.manage`; `GET /api/billing/engagement/wheel/report?from=&to=` (tenant days, inclusive, default today, at most 31) | per day, newest first: `{day, version, spins, refused, refusals{reason: n}, nothing, prizes[{prizeId, position, label, prizeType, count, cost}], costSpent, cap, currencyCode, capUsedPercent, alertedAt}` | sync | `invalid_range` (400) |
 | manage lotteries — **implemented (F-707-i)** | `engagement.manage`; `/api/billing/engagement/lotteries`: `GET`, `GET :id`, `POST` and `PUT :id` (a whole draft: group, title, description, `entryMode`, `closesAt`, eligibility, `reservesCount`, prizes in rank order), `DELETE :id`, `POST :id/publish`, `POST :id/cancel {reason}` | a lottery with its prizes, `entrantCount`, `winnersTotal`; `204` on delete | sync tx | `invalid_prize`, `invalid_close_time`, `cancel_reason_required` (400); `coupon_template_not_found`, `variant_not_found`, `group_not_found`, `lottery_not_found` (404); `not_a_draft`, `not_cancellable` (409) |
+| the user's lotteries — **implemented (F-707-j)** | `GET /api/billing/lotteries`; `POST` / `DELETE …/:id/entry`; the caller | list: the published lotteries of its groups and any it has an entrant row in, newest close first, 30: `{id, title, entryMode, status, closesAt, cancelReason, open, prizes, entry{optedInAt, ticketNumber, excludedReason}}`; entry: `{lotteryId, joined, optedInAt, replay}` | sync tx | `lottery_not_found` (404); `not_opt_in`, `closed` (409) |
 | the user's wheel — **implemented (F-707-d)** | `GET /api/billing/wheel`; the caller and its device | `{tenantDay, version, prizes[] with oddsPercent, eligible, refusalReason, spinsLeftToday, nextSpinAt}`; writes nothing | sync | `no_wheel` (404) |
 | the user's history — **implemented (F-707-g)** | `GET /api/billing/wheel/history`; the caller | the caller's own attempts, newest 30: `{attemptId, at, tenantDay, status, refusalReason, prize{label, prizeType, prizeValue}, coupon{code, expiresAt}}` — never the checks; writes nothing | sync | — |
 | spin — **implemented (F-707-d)** | `POST /api/billing/wheel/spin {requestId, grantId?}`; the device from the request (F-036-a) | `{attemptId, status, refusalReason, seq, position, prize, reward, replay}` — a refused spin is a recorded `200` | sync tx | `no_wheel` (404), `no_fingerprint` (400), `spin_in_progress` (409) |
@@ -108,6 +109,19 @@ draws a lottery: that is the close job's alone (F-707-k, F-707-l).
 | 6. Group, coupon template and variant must be the tenant's (as the wheel's rule 4); the group checked again at publish | a deleted group never opens |
 | 7. Every state change is a write conditional on the status; a lost race answers its reason | two admins, or an admin and the close job |
 | 8. Audited on `lottery`: `lottery_create`, `_update`, `_delete`, `_publish`, `_cancel`; budgets `ENGAGEMENT_ADMIN_READ` / `_WRITE` | as the wheel's rules 6, 7 |
+
+## A user's entry (F-707-j) — built
+
+`engagement/lottery-entry.service.ts`, `lottery.controller.ts`; any signed-in user.
+
+| Rule | Why |
+|---|---|
+| 1. Join or leave only an `opt_in` lottery, while `published` and before `closesAt`; else `not_opt_in` / `closed` | an `automatic` one takes every eligible member at the close |
+| 2. One entry per user: the database unique; a repeat join, or one that lost the race to its own retry, answers the kept entry with `replay: true`; a repeat leave too | twice in the list is twice the chance |
+| 3. The lottery row is read `FOR SHARE`; the close job takes it `FOR UPDATE` | an entry is in the frozen list or refused, never written after the tickets |
+| 4. A user member of the group may join; an entrant taken out of the group may still leave; anyone else, and any draft, is `lottery_not_found` | a lottery is shown only to its group |
+| 5. Eligibility is not judged here, but at the close (F-707-k) | what counts is what is true when the list is frozen |
+| 6. Free; budgets per user, never shared: `LOTTERY_READ` 120 / `LOTTERY_ENTRY` 30 per 15 min | ADR-0111 point 6, ADR-0070 |
 
 ## The spin (F-707-d) — built
 

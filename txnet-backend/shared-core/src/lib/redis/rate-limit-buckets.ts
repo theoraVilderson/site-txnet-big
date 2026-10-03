@@ -414,6 +414,14 @@ export const RateLimitBucket = {
   WHEEL_SPIN: 'wheel:spin',
 
   /**
+   * A user's lotteries in `billing-service` (F-707-j), per user, never shared
+   * (ADR-0070). A join or a leave is idempotent; this budget only stops a
+   * client toggling its entry in a loop.
+   */
+  LOTTERY_READ: 'lottery:read',
+  LOTTERY_ENTRY: 'lottery:entry',
+
+  /**
    * The platform owner adjusting a reseller's billing wallet by hand in
    * `billing-service` (F-019-a), per user. Moving money by hand is rare.
    */

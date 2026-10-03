@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common';
 import { EntitlementModule } from '../entitlement/entitlement.module';
 import { LotteryAdminController } from './lottery-admin.controller';
 import { LotteryAdminService } from './lottery-admin.service';
+import { LotteryEntryService } from './lottery-entry.service';
+import { LotteryController } from './lottery.controller';
 import { WheelAdminController } from './wheel-admin.controller';
 import { WheelAdminService } from './wheel-admin.service';
 import { WheelReportService } from './wheel-report';
@@ -19,7 +21,7 @@ import { WheelController } from './wheel.controller';
  */
 @Module({
   imports: [EntitlementModule],
-  controllers: [WheelAdminController, WheelController, LotteryAdminController],
-  providers: [WheelAdminService, LotteryAdminService, WheelSpinService, WheelReportService],
+  controllers: [WheelAdminController, WheelController, LotteryAdminController, LotteryController],
+  providers: [WheelAdminService, LotteryAdminService, LotteryEntryService, WheelSpinService, WheelReportService],
 })
 export class EngagementModule {}
