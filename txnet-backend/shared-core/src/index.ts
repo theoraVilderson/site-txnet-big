@@ -73,6 +73,7 @@ export * from './lib/object-storage/object-key';
 export * from './lib/object-storage/object-storage';
 export * from './lib/object-storage/signed-url';
 export * from './lib/guide/guide-blocks';
+export * from './lib/guide/guide-slots';
 export * from './lib/object-storage/virus-scan';
 export * from './lib/prisma/pg-notification-listener';
 export * from './lib/sms/sms-provider.service';

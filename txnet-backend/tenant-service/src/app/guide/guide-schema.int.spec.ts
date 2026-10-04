@@ -156,6 +156,15 @@ describe('keys (invariant 2)', () => {
       await refusal(owner.guidePlacement.create({ data: { guideId: PLATFORM_GUIDE, tenantId: null, surface: 'any', targetKind: 'os', targetRef: 'android' } })),
     ).toBe('unique');
   });
+
+  it('holds a ref to a slug and a panel route to the panel, a bot screen to the bot (F-414-h)', async () => {
+    const place = (surface: 'panel' | 'bot' | 'any', targetKind: 'route' | 'bot_screen' | 'os', targetRef: string) =>
+      refusal(owner.guidePlacement.create({ data: { guideId: PLATFORM_GUIDE, tenantId: null, surface, targetKind, targetRef } }));
+    expect(await place('panel', 'route', '/services')).toBe('check');
+    expect(await place('bot', 'route', 'services')).toBe('check');
+    expect(await place('any', 'bot_screen', 'main_menu')).toBe('check');
+    expect(await place('panel', 'route', 'services')).toBe('accepted');
+  });
 });
 
 describe('a hide (ADR-0115 point 2)', () => {

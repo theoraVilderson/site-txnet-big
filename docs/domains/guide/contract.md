@@ -13,7 +13,7 @@ Storage built (F-414-a, [data-model.md](data-model.md)); the routes below are in
 ## TL;DR
 
 A guide has a stable `key`, a kind (`product`, `os`, `app`, `section`), a text
-per language (typed blocks, ADR-0116 — [data-model.md](data-model.md)) and one or more placements. The platform's (`tenantId` NULL) are
+per language (typed blocks, ADR-0116 — [data-model.md](data-model.md)) and one or more placements, each in a registered slot (data-model.md "Slots"). The platform's (`tenantId` NULL) are
 every reseller's; a reseller's own guide with the same key replaces it, a hide
 row removes it. Resolution is "nearest owner wins" over the tenant's ancestry.
 
