@@ -5,6 +5,7 @@ import { ObjectStorage, objectDriverFromEnv, prismaStoredObjects } from '@txnet-
 import type { EnvConfig } from '../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { FilesController, PrivateFilesController } from './files.controller';
+import { PlatformTenant } from './platform-tenant';
 
 /**
  * Object storage's serving route (F-018-m, `platform/object-storage`), and the
@@ -16,6 +17,7 @@ import { FilesController, PrivateFilesController } from './files.controller';
 @Module({
   controllers: [FilesController, PrivateFilesController],
   providers: [
+    PlatformTenant,
     {
       provide: ObjectStorage,
       inject: [ConfigService, PrismaService],
@@ -29,6 +31,6 @@ import { FilesController, PrivateFilesController } from './files.controller';
         ),
     },
   ],
-  exports: [ObjectStorage],
+  exports: [ObjectStorage, PlatformTenant],
 })
 export class FilesModule {}

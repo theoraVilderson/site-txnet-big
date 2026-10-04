@@ -71,13 +71,13 @@ services:
 
       # The required gate, as for billing: every route needs a signed-in caller.
       # No business route answers yet (F-018-t); the routes move in from F-018-u.
-      - "traefik.http.routers.tenant-service-http.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`))"
+      - "traefik.http.routers.tenant-service-http.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`) || PathPrefix(`/api/guides`))"
       - "traefik.http.routers.tenant-service-http.priority=120"
       - "traefik.http.routers.tenant-service-http.entrypoints=web"
       - "traefik.http.routers.tenant-service-http.middlewares=strip-fake-headers,my-auth"
       - "traefik.http.routers.tenant-service-http.service=tenant-service"
 
-      - "traefik.http.routers.tenant-service.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`))"
+      - "traefik.http.routers.tenant-service.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`) || PathPrefix(`/api/guides`))"
       - "traefik.http.routers.tenant-service.priority=120"
       - "traefik.http.routers.tenant-service.entrypoints=websecure"
       - "traefik.http.routers.tenant-service.tls.certresolver=myresolver"
@@ -86,13 +86,13 @@ services:
 
       # The CORS preflight carries no Authorization header by specification;
       # billing's labels say why it must skip `my-auth` and why nothing weakens.
-      - "traefik.http.routers.tenant-preflight-http.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`)) && Method(`OPTIONS`)"
+      - "traefik.http.routers.tenant-preflight-http.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`) || PathPrefix(`/api/guides`)) && Method(`OPTIONS`)"
       - "traefik.http.routers.tenant-preflight-http.entrypoints=web"
       - "traefik.http.routers.tenant-preflight-http.priority=150"
       - "traefik.http.routers.tenant-preflight-http.middlewares=strip-fake-headers"
       - "traefik.http.routers.tenant-preflight-http.service=tenant-service"
 
-      - "traefik.http.routers.tenant-preflight.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`)) && Method(`OPTIONS`)"
+      - "traefik.http.routers.tenant-preflight.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`) || PathPrefix(`/api/guides`)) && Method(`OPTIONS`)"
       - "traefik.http.routers.tenant-preflight.entrypoints=websecure"
       - "traefik.http.routers.tenant-preflight.priority=150"
       - "traefik.http.routers.tenant-preflight.tls.certresolver=myresolver"

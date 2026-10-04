@@ -9,11 +9,13 @@ import {
   TenantContext,
   parseObjectKey,
   publicPath,
+  runWithTenant,
   verifySignedObject,
 } from '@txnet-backend/shared-core';
 import type { Request, Response } from 'express';
 
 import type { EnvConfig } from '../config/env.validation';
+import { PlatformTenant } from './platform-tenant';
 
 /** The one serving route (F-018-m): `GET /api/public/tenant/files/<key>` (F-018-ak). */
 export const FILES_PATH = publicPath('tenant', 'files');
@@ -28,6 +30,14 @@ export const LEGACY_FILES_PATH = 'files';
 const CACHE_CONTROL = 'public, max-age=300';
 
 /**
+ * The platform's public files every Host serves, besides its own (ADR-0117
+ * point 2): its guides' images, which every reseller inherits with the guides.
+ * Nothing else of the platform's — its branding stays its own — and never a
+ * private file, which only `private-files` serves.
+ */
+export const PLATFORM_SHARED_PREFIXES = ['guides/'] as const;
+
+/**
  * Serves a stored file by its key, to the tenant whose Host asked
  * (`PublicHostMiddleware`), on its panel or its assets domain. Never a path, never a bucket URL: the key is the
  * whole address, and the driver behind it can change without this route
@@ -37,12 +47,15 @@ const CACHE_CONTROL = 'public, max-age=300';
  */
 @Controller([FILES_PATH, LEGACY_FILES_PATH])
 export class FilesController {
-  constructor(private readonly storage: ObjectStorage) {}
+  constructor(
+    private readonly storage: ObjectStorage,
+    private readonly platform: PlatformTenant,
+  ) {}
 
   @Get('*key')
   @PublicRoute({ doors: ['panel', 'assets'] })
   async serve(@Req() req: Request, @Res() res: Response): Promise<void> {
-    const file = await ownFile(this.storage, keyOf(req));
+    const file = await this.served(keyOf(req));
     // A private file has no public address (ADR-0113): it answers here exactly
     // as a missing one, and only `private-files` with a signature serves it.
     if (file.private) throw new NotFoundException();
@@ -54,6 +67,20 @@ export class FilesController {
       return;
     }
     res.status(200).send(file.bytes);
+  }
+
+  /** The Host's own file, or the platform's under a shared prefix — read in the platform's scope, as the port requires. */
+  private async served(key: string): Promise<StoredObjectRow & { bytes: Buffer }> {
+    const parsed = parseObjectKey(key);
+    if (
+      parsed &&
+      parsed.tenantId !== TenantContext.current('file route').id &&
+      PLATFORM_SHARED_PREFIXES.some((p) => parsed.path.startsWith(p)) &&
+      parsed.tenantId === (await this.platform.id())
+    ) {
+      return runWithTenant({ id: parsed.tenantId }, () => ownFile(this.storage, key));
+    }
+    return ownFile(this.storage, key);
   }
 }
 

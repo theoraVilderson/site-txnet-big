@@ -106,6 +106,9 @@ roles:
       # resolve, close — and the settings (hours, SLA, categories).
       - support.agent
       - support.manage
+      # Guides (F-414-c): the tenant's own help content, or the platform's
+      # for the platform owner's Admin — drafts, publish, override, hide.
+      - guide.manage
   Support:
     permissions:
       - user.read

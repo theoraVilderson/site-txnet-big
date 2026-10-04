@@ -4,8 +4,8 @@ layer: domain
 status: active
 version: 2
 keywords: [guide, guides, help, help content, help page, install guide, installation guide, how to install the app, guide per os, guide per app, guide per product, panel help, bot help, inherited guide, override a guide, hide a guide, راهنما, راهنماها, راهنمای نصب, آموزش نصب, راهنمای سیستم عامل, راهنمای اپ, راهنمای محصول, راهنمای پنل, راهنمای ربات, راهنمای ارث برده, شخصی سازی راهنما, پنهان کردن راهنما]
-source: [txnet-backend/prisma/domains/guide.prisma, txnet-backend/prisma/domains/migrations/20261004000300_guide_storage/**, txnet-backend/tenant-service/src/app/guide/**, txnet-backend/prisma/domains/migrations/20261004000400_guide_blocks/**, txnet-backend/prisma/domains/migrations/20261004000500_guide_slots/**, txnet-backend/shared-core/src/lib/guide/**]
-owns_tables: [guide, guide_translation, guide_placement, guide_hidden]
+source: [txnet-backend/prisma/domains/guide.prisma, txnet-backend/prisma/domains/migrations/20261004000300_guide_storage/**, txnet-backend/tenant-service/src/app/guide/**, txnet-backend/prisma/domains/migrations/20261004000400_guide_blocks/**, txnet-backend/prisma/domains/migrations/20261004000500_guide_slots/**, txnet-backend/prisma/domains/migrations/20261004000600_guide_draft/**, txnet-backend/shared-core/src/lib/guide/**]
+owns_tables: [guide, guide_translation, guide_draft, guide_placement, guide_hidden]
 depends_on: [tenant, i18n]
 updated: 2026-10-04
 ---
@@ -21,7 +21,7 @@ platform's inherited by every reseller, who may replace or hide one (ADR-0115).
 
 Planned as a module of `tenant-service` with its own `guide` schema
 (ADR-0115, ADR-0116, ADR-0117). Spec: `python3 tools/spec.py F-414`. Storage is built (F-414-a, blocks F-414-g, slots F-414-h);
-reading by Host is built (F-414-b); admin F-414-c, panel F-414-d/e, bot F-414-f.
+reading by Host (F-414-b) and the settings (F-414-c) are built; panel F-414-d/e, bot F-414-f.
 
 ## Files
 | File | Read it when |

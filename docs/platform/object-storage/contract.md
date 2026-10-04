@@ -67,7 +67,8 @@ does not own, which is a bug to surface.
    (ADR-0113). PDF is served as a download, images inline.
 7. **A scanner that cannot answer is `failed`, never `clean`.** `none` calls
    everything clean, for a stack with no ClamAV; production sets `clamd`.
-8. `storedObject` is in `TENANT_SCOPED_MODELS` and the table has strict RLS: on
+8. **A Host serves its own keys and the platform's shared prefixes** — `PLATFORM_SHARED_PREFIXES` in `files.controller.ts`, today only `guides/` (ADR-0117 point 2): a reseller's inherited guide shows its images on the reseller's own domain. Read in the platform's scope; never a private file, never anything else of the platform's.
+9. `storedObject` is in `TENANT_SCOPED_MODELS` and the table has strict RLS: on
    the app pool every query is filtered to, and bound to, the tenant in scope.
 
 ## The serving route
@@ -79,7 +80,7 @@ does not own, which is a bug to surface.
   and `@PublicRoute({ doors: ['panel', 'assets'] })` holds the route to `panel`
   and `assets` rows: a subdomain, or a **verified** custom domain, never a
   closed door (ADR-0063). That tenant is the scope.
-- A key outside that tenant's prefix, a key with no row, a row with no bytes,
+- A key outside that tenant's prefix (save rule 8's shared prefixes), a key with no row, a row with no bytes,
   an unknown Host and an unproven domain are **one neutral 404** — a reseller's
   domain never says that another reseller's file exists.
 - `TenantStatusGuard` judges it as a `read`: a terminated tenant's files stop
@@ -115,4 +116,5 @@ driver. No row changes.
 | unit | uses |
 |---|---|
 | tenant | branding images, `put` in the reseller's scope at `branding/<slot>` (F-018-h, [contract.branding.md](../../domains/tenant/contract.branding.md)) |
+| guide | guide images, public, `guides/<guideId>/<uuid>.<ext>` of the owner; the platform's served on every Host (F-414-c, [contract.md](../../domains/guide/contract.md)) |
 | support | attachments, `private`, scanned; URLs minted on each message read (F-033-c), uploads F-033-f ([contract.md](../../domains/support/contract.md)) |

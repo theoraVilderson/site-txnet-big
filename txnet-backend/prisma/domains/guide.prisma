@@ -39,17 +39,20 @@ enum GuideTargetKind {
 }
 
 model Guide {
-  id        String    @id @default(uuid()) @db.Uuid
-  tenantId  String?   @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String?   @db.Uuid
   /// Stable per owner; the same key under a reseller replaces the platform's.
-  key       String
-  kind      GuideKind
-  sortOrder Int       @default(0)
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  key         String
+  kind        GuideKind
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  /// When the draft was last published (F-414-c, ADR-0117); NULL = never.
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   translations GuideTranslation[]
+  drafts       GuideDraft[]
   placements   GuidePlacement[]
 
   @@unique([tenantId, key])
@@ -71,6 +74,24 @@ model GuideTranslation {
 
   @@id([guideId, lang])
   @@map("guide_translation")
+  @@schema("guide")
+}
+
+/// A guide's text in progress, per language (F-414-c, ADR-0117 point 1). Never
+/// served to a reader; publish replaces every `GuideTranslation` with these.
+model GuideDraft {
+  guideId   String   @db.Uuid
+  tenantId  String?  @db.Uuid
+  lang      Language
+  title     String
+  /// Typed blocks — shared-core `guideBlocksSchema`, as a published text.
+  blocks    Json
+  updatedAt DateTime @default(now()) @updatedAt
+
+  guide Guide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+
+  @@id([guideId, lang])
+  @@map("guide_draft")
   @@schema("guide")
 }
 
