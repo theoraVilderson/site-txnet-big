@@ -3,11 +3,15 @@ import { PublicRoute, TenantContext, publicPath } from '@txnet-backend/shared-co
 import type { Request, Response } from 'express';
 
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
-import { guideKeySchema, guideListQuerySchema } from './guide-public.schema';
+import { guideKeySchema, guideListQuerySchema, guideSearchQuerySchema } from './guide-public.schema';
 import { GuidePlacementQuery, GuideRead, GuideReader, ResolvedGuide } from './guide-reader';
+import type { GuideHit } from './guide-search';
 
 /** `GET /api/public/tenant/guides` (F-414-b). */
 export const GUIDES_PATH = publicPath('tenant', 'guides');
+
+/** `GET /api/public/tenant/guide-search` (F-414-j) — its own path, so no guide key can shadow it. */
+export const GUIDE_SEARCH_PATH = publicPath('tenant', 'guide-search');
 
 /**
  * Revalidate every time: the ETag makes that a 304 with no query, and a guide
@@ -56,6 +60,29 @@ export class GuidePublicController {
     const read = await this.reader.one(tenantId, key, lang);
     if (!read.body.guide) throw new NotFoundException();
     return answer(res, read) as { guide: ResolvedGuide };
+  }
+}
+
+/**
+ * Searching a tenant's guides (F-414-j), to anyone on its panel Host, as the
+ * read above: the same resolved set, so a search finds only what that tenant
+ * may read. The public prefix's per-IP limit bounds it.
+ */
+@Controller(GUIDE_SEARCH_PATH)
+export class GuideSearchController {
+  constructor(private readonly reader: GuideReader) {}
+
+  @Get()
+  @PublicRoute({ doors: ['panel'] })
+  async search(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Query(new ZodValidationPipe(guideSearchQuerySchema)) q: { q: string; surface: 'panel' | 'bot' },
+  ): Promise<{ hits: GuideHit[] } | undefined> {
+    const tenantId = TenantContext.current('guide search by host').id;
+    const read = await this.reader.search(tenantId, q.q, q.surface, languageOf(req));
+    if (notModified(req, res, read.etag)) return undefined;
+    return answer(res, read);
   }
 }
 

@@ -6,6 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { GuideHit, normalizeForSearch, searchGuides } from './guide-search';
 
 /**
  * F-414-b — **what one tenant's users see** (ADR-0115 point 3, ADR-0117).
@@ -131,6 +132,19 @@ export class GuideReader {
     return this.cached(tenantId, ['one', key, lang], async () => ({
       guide: (await this.resolve(tenantId, lang, { key }))[0] ?? null,
     }));
+  }
+
+  /**
+   * The guides matching `q` among every guide this tenant sees on `surface`
+   * (F-414-j). The whole resolved set is cached by generation like any read;
+   * the match runs on it per request, so a query string never becomes a key.
+   */
+  async search(tenantId: string, q: string, surface: Exclude<GuideSurface, 'any'>, lang: string): Promise<GuideRead<{ hits: GuideHit[] }>> {
+    const all = await this.cached(tenantId, ['all', surface, lang], async () => ({
+      guides: await this.resolve(tenantId, lang, { placements: { some: { surface: { in: [surface, 'any'] } } } }),
+    }));
+    const etag = all.etag ? await this.etag(tenantId, ['search', surface, lang, normalizeForSearch(q)]) : null;
+    return { etag, body: { hits: searchGuides(all.body.guides, q) } };
   }
 
   /** The ETag a read of `parts` would carry now, from the generations alone; `null` without Redis. */

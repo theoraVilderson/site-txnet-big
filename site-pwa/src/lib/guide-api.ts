@@ -177,4 +177,19 @@ export const guideReadApi = {
     ),
   /** One guide by key; a 404 when this tenant sees none. */
   one: (key: string) => read<{ guide: ResolvedGuide }>(`/${encodeURIComponent(key)}`, { method: "GET" }).then((r) => r.guide),
+  /** Every guide this tenant shows on the panel holding all of `q`'s words (F-414-j), at most a page. */
+  search: (q: string) =>
+    search<{ hits: GuideHit[] }>(`?${new URLSearchParams({ q, surface: "panel" })}`, { method: "GET" }).then((r) => r.hits),
 };
+
+/** `GET /api/public/tenant/guide-search` (F-414-j) — its own path, so no guide key shadows it. */
+const search = createApiClient({ baseUrl: `${API_BASE}/public/tenant/guide-search`, service: "tenant-service" });
+
+/** tenant-service's `GuideHit`: enough to list a result; the guide is read by key. */
+export interface GuideHit {
+  key: string;
+  kind: GuideKind;
+  lang: GuideLang;
+  title: string;
+  snippet: string;
+}

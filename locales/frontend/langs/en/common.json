@@ -5046,6 +5046,13 @@
         "macos": "macOS",
         "linux": "Linux"
       }
+    },
+    "search": {
+      "label": "Search the guides",
+      "placeholder": "Search all guides…",
+      "clear": "Clear the search",
+      "none": "No guide matches “{{q}}”.",
+      "tooShort": "Type at least 2 letters."
     }
   }
 }

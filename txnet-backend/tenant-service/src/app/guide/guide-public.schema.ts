@@ -41,3 +41,17 @@ export const guideInternalListQuerySchema = listQuery
   .transform((q, ctx) => ({ tenantId: q.tenantId, ...toPlacement(q, ctx) }));
 
 export const guideInternalOneQuerySchema = z.object({ tenantId: z.string().uuid(invalid) }).strict();
+
+const readerSurface = z.nativeEnum(GuideSurface).refine((v) => v !== GuideSurface.any, invalid).default(GuideSurface.panel);
+
+/** `?q=&surface=` (F-414-j): 2–100 characters, on the surface the reader is on. */
+export const guideSearchQuerySchema = z
+  .object({ q: z.string().trim().min(2, invalid).max(100, invalid), surface: readerSurface })
+  .strict()
+  .transform((v) => ({ q: v.q, surface: v.surface as Exclude<GuideSurface, 'any'> }));
+
+/** The bot's search (F-414-k): the same, for a tenant named by id. */
+export const guideInternalSearchQuerySchema = z
+  .object({ tenantId: z.string().uuid(invalid), q: z.string().trim().min(2, invalid).max(100, invalid), surface: readerSurface })
+  .strict()
+  .transform((v) => ({ tenantId: v.tenantId, q: v.q, surface: v.surface as Exclude<GuideSurface, 'any'> }));

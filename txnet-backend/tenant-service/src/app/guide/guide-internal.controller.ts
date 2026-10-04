@@ -3,8 +3,9 @@ import { ServiceOnlyGuard, runWithTenant } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
-import { guideInternalListQuerySchema, guideInternalOneQuerySchema, guideKeySchema } from './guide-public.schema';
+import { guideInternalListQuerySchema, guideInternalOneQuerySchema, guideInternalSearchQuerySchema, guideKeySchema } from './guide-public.schema';
 import { GuidePlacementQuery, GuideReader, ResolvedGuide } from './guide-reader';
+import type { GuideHit } from './guide-search';
 
 /**
  * A tenant's guides for the bot (F-414-f): the same resolver, cache and
@@ -36,6 +37,21 @@ export class GuideInternalController {
     @Query(new ZodValidationPipe(guideInternalOneQuerySchema)) q: { tenantId: string },
   ): Promise<{ guide: ResolvedGuide | null }> {
     return (await runWithTenant({ id: q.tenantId }, () => this.reader.one(q.tenantId, key, languageOf(req)))).body;
+  }
+}
+
+/** The bot's search (F-414-k): `GET /api/internal/guide-search` — its own path, so no key shadows it. */
+@Controller('internal/guide-search')
+@UseGuards(ServiceOnlyGuard)
+export class GuideInternalSearchController {
+  constructor(private readonly reader: GuideReader) {}
+
+  @Get()
+  async search(
+    @Req() req: Request,
+    @Query(new ZodValidationPipe(guideInternalSearchQuerySchema)) q: { tenantId: string; q: string; surface: 'panel' | 'bot' },
+  ): Promise<{ hits: GuideHit[] }> {
+    return (await runWithTenant({ id: q.tenantId }, () => this.reader.search(q.tenantId, q.q, q.surface, languageOf(req)))).body;
   }
 }
 

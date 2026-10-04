@@ -3,8 +3,8 @@ import { Module } from '@nestjs/common';
 import { FilesModule } from '../files/files.module';
 import { GuideAdmin } from './guide-admin';
 import { GuideAdminController } from './guide-admin.controller';
-import { GuideInternalController } from './guide-internal.controller';
-import { GuidePublicController } from './guide-public.controller';
+import { GuideInternalController, GuideInternalSearchController } from './guide-internal.controller';
+import { GuidePublicController, GuideSearchController } from './guide-public.controller';
 import { GuideGenerations, GuideReader } from './guide-reader';
 
 /**
@@ -16,7 +16,7 @@ import { GuideGenerations, GuideReader } from './guide-reader';
  */
 @Module({
   imports: [FilesModule],
-  controllers: [GuidePublicController, GuideAdminController, GuideInternalController],
+  controllers: [GuidePublicController, GuideSearchController, GuideAdminController, GuideInternalController, GuideInternalSearchController],
   providers: [GuideReader, GuideGenerations, GuideAdmin],
   exports: [GuideReader, GuideGenerations],
 })

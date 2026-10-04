@@ -32,7 +32,7 @@ Over `GET /api/public/tenant/guides?placement=…&surface=panel` (`guideReadApi`
 
 | Surface | Slot | Shows |
 |---|---|---|
-| top bar **Help** (`HelpButton`, before the switcher, shell rule 5) | `route:<section>` of the current path | the section's guides in a sheet: one whole, several as titles opening each |
+| top bar **Help** (`HelpButton`, before the switcher, shell rule 5) | `route:<section>` of the current path | the section's guides in a sheet: one whole, several as titles opening each; above them a search box (F-414-j, `GuideSearch.tsx`) over `guide-search` — 2+ characters, sent once typing rests 300 ms, hits with a snippet, each opening its guide by key |
 | My services, **How to connect** under the subscription link (`ConnectGuide`) | `os:<os>` | a system picker opening on the browser's own (`osFromUserAgent`, else Android); the system's guides are its app choice |
 
 7. **The path names the section, the registry the name.** `GUIDE_SECTION_ROUTES` maps every shared-core section to its route constant (C-10); `sectionOfPath` takes the longest whole-segment match, `home` else. `guide-help.test.ts` reads `guide-slots.ts` and fails on a section with no route.

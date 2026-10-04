@@ -106,4 +106,15 @@ describe("the reader", () => {
     expect(seen[0].url).toMatch(/\/public\/tenant\/guides\?placement=route%3Asupport_inbox&surface=panel$/);
     expect(seen[0].auth).toBeNull();
   });
+
+  it("searches on its own path, so no guide key can shadow it (F-414-j)", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      seen.push(url);
+      return new Response(JSON.stringify({ ok: true, data: { hits: [] } }), { status: 200 });
+    });
+    await guideReadApi.search("نصب اندروید");
+    expect(seen[0]).toMatch(/\/public\/tenant\/guide-search\?q=%D9%86%D8%B5%D8%A8\+/);
+    expect(seen[0]).toMatch(/&surface=panel$/);
+  });
 });

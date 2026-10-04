@@ -8,6 +8,7 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { guideReadApi } from "@/lib/guide-api";
 import { sectionOfPath } from "../../_lib/guide-help";
 import { GuideList, GuideSheet, useSlotGuides } from "./GuideList";
+import { GuideSearchBox, GuideSearchResults } from "./GuideSearch";
 
 const H = FrontendI18nKeys.common.guideHelp;
 
@@ -15,7 +16,8 @@ const H = FrontendI18nKeys.common.guideHelp;
  * The top bar's help (F-414-e): the guides placed on this page's section
  * (`route:<section>`, `guide/data-model.md` "Slots"), in a sheet. Nothing is
  * read until it opens — a page view costs no guide request — and the section
- * is the one the path is in when it opens. 40px, before the switcher
+ * is the one the path is in when it opens; a search box above it finds any
+ * guide the tenant shows (F-414-j). 40px, before the switcher
  * (`contract.shell.md` rule 5; the phone row had room for one more control).
  */
 export function HelpButton() {
@@ -43,9 +45,18 @@ function HelpSheet({ onClose }: { onClose: () => void }) {
   const section = sectionOfPath(usePathname() ?? "/");
   const slot = useSlotGuides(`route:${section}`, () => guideReadApi.forSlot("route", section));
   const [openKey, setOpenKey] = useState<string | null>(null);
+  // F-414-j: typing searches every guide this tenant shows; an empty box is this page's help again.
+  const [query, setQuery] = useState("");
   return (
     <GuideSheet title={t("common", H.title)} onClose={onClose}>
-      <GuideList {...slot} empty={t("common", H.empty)} open={openKey} onOpen={setOpenKey} />
+      <div className="flex flex-col gap-4">
+        <GuideSearchBox value={query} onChange={setQuery} />
+        {query.trim() !== "" ? (
+          <GuideSearchResults query={query} />
+        ) : (
+          <GuideList {...slot} empty={t("common", H.empty)} open={openKey} onOpen={setOpenKey} />
+        )}
+      </div>
     </GuideSheet>
   );
 }
