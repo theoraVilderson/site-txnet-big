@@ -103,7 +103,7 @@ beforeAll(async () => {
     },
   };
   const platformTenant = { id: async () => PLATFORM };
-  guides = new GuideAdmin(app as never, cross as never, storage as never, platformTenant as never, generations);
+  guides = new GuideAdmin(app as never, cross as never, storage as never, platformTenant as never, generations, { assertRoom: async () => undefined } as never);
   reader = new GuideReader(app as never, noRedis as never, new GuideGenerations(noRedis as never));
 });
 

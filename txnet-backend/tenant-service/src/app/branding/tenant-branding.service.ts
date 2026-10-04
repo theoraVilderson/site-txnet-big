@@ -22,6 +22,7 @@ import {
 
 import type { EnvConfig } from '../config/env.validation';
 import { FILES_PATH } from '../files/files.controller';
+import { StorageQuota } from '../files/storage-quota';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import type { BrandingSlot, LineNamePreviewInput, UpdateBrandingInput } from './tenant-branding.schema';
 
@@ -129,6 +130,7 @@ export class TenantBrandingService {
     private readonly all: CrossTenantPrismaService,
     private readonly storage: ObjectStorage,
     private readonly config: ConfigService<EnvConfig, true>,
+    private readonly quota: StorageQuota,
   ) {}
 
   async read(actor: BrandingActor, tenantId: string): Promise<BrandingView> {
@@ -182,9 +184,11 @@ export class TenantBrandingService {
     const reseller = await this.access(actor, tenantId, 'staffWrite');
     let key: string;
     try {
-      ({ key } = await runWithTenant({ id: reseller.id }, () =>
-        this.storage.put(BRANDING_POLICY[slot], `branding/${slot}`, file.buffer, file.mimetype),
-      ));
+      ({ key } = await runWithTenant({ id: reseller.id }, async () => {
+        // F-414-m: held to `storage_mib_max`, the replaced image not counted twice.
+        await this.quota.assertRoom(`branding/${slot}`, file.buffer.length);
+        return this.storage.put(BRANDING_POLICY[slot], `branding/${slot}`, file.buffer, file.mimetype);
+      }));
     } catch (e) {
       if (e instanceof ObjectRejected && e.reason !== 'bad_path') throw new BrandingRefused(e.reason, slot);
       throw e;

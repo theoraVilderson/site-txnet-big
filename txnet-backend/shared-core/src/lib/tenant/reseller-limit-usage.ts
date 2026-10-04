@@ -7,9 +7,30 @@ export const OPEN_GRANT_STATUSES: readonly GrantStatus[] = [GrantStatus.pending,
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const GIB = BigInt(1024 ** 3);
+const MIB = 1024 * 1024;
 
 /** The reads the counts need. Pass the reseller's own scope, or a cross-tenant pool. */
-export type ResellerUsageReader = Pick<Prisma.TransactionClient, 'grant' | 'tenantDomain' | 'tenantStaffMember' | 'user' | 'trafficDailyAggregate'>;
+export type ResellerUsageReader = Pick<Prisma.TransactionClient, 'grant' | 'tenantDomain' | 'tenantStaffMember' | 'user' | 'trafficDailyAggregate' | 'storedObject'>;
+
+/**
+ * Where a reseller's admins' files live, under its own storage prefix — what
+ * `storage_mib_max` counts (F-414-m, ADR-0120 point 1). Support attachments
+ * are its users', and a full quota must never stop a user reaching support.
+ */
+export const STORAGE_QUOTA_PREFIXES = ['branding/', 'guides/'] as const;
+
+/** Bytes the reseller's admins' files hold, leaving out `exceptKey` — the file an upload is about to replace. */
+export async function storageQuotaBytes(tx: Pick<Prisma.TransactionClient, 'storedObject'>, tenantId: string, exceptKey?: string): Promise<number> {
+  const { _sum } = await tx.storedObject.aggregate({
+    where: {
+      tenantId,
+      OR: STORAGE_QUOTA_PREFIXES.map((prefix) => ({ key: { startsWith: `tenants/${tenantId}/${prefix}` } })),
+      ...(exceptKey ? { NOT: { key: exceptKey } } : {}),
+    },
+    _sum: { size: true },
+  });
+  return _sum.size ?? 0;
+}
 
 type Count = (tx: ResellerUsageReader, tenantId: string, now: Date) => Promise<number>;
 
@@ -64,6 +85,8 @@ export const RESELLER_LIMIT_USAGE: Record<ResellerLimitKey, Count | null> = {
   },
   /** A quota: the engine counts it per fixed day (`ResellerQuota.statementOf`, F-019-v4). */
   campaign_sends_daily_max: null,
+  /** Its admins' branding and guide files, in MiB rounded up (F-414-m). */
+  storage_mib_max: async (tx, tenantId) => Math.ceil((await storageQuotaBytes(tx, tenantId)) / MIB),
 };
 
 /** One key's count, or `null` for a key that counts nothing. */

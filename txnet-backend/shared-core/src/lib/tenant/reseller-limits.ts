@@ -48,6 +48,11 @@ export const RESELLER_LIMITS = {
   user_purchases_daily_max: { kind: 'guard', default: null as number | null, max: 100_000 },
   user_purchases_weekly_max: { kind: 'guard', default: null as number | null, max: 100_000 },
   user_purchases_monthly_max: { kind: 'guard', default: null as number | null, max: 100_000 },
+  /**
+   * MiB of files the reseller's admins upload — branding and guides, never its
+   * users' support attachments (`STORAGE_QUOTA_PREFIXES`, F-414-m, ADR-0120).
+   */
+  storage_mib_max: { kind: 'guard', default: 1024, max: 1_048_576 },
 } as const satisfies Record<string, { kind: ResellerLimitKind; period?: QuotaPeriodKind; default: number | null; max: number }>;
 
 export type ResellerLimitKey = keyof typeof RESELLER_LIMITS;

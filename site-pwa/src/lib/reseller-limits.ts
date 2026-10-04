@@ -15,6 +15,7 @@ export const RESELLER_LIMIT_KEYS = [
   "user_purchases_daily_max",
   "user_purchases_weekly_max",
   "user_purchases_monthly_max",
+  "storage_mib_max",
 ] as const satisfies readonly ResellerLimitKey[];
 
 /**

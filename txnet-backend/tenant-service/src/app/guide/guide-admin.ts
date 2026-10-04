@@ -18,6 +18,7 @@ import { randomUUID } from 'node:crypto';
 
 import { PLATFORM_SHARED_PREFIXES } from '../files/files.controller';
 import { PlatformTenant } from '../files/platform-tenant';
+import { StorageQuota } from '../files/storage-quota';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GuideGenerations, ResolvedGuide, pickTranslation } from './guide-reader';
@@ -203,6 +204,7 @@ export class GuideAdmin {
     private readonly storage: ObjectStorage,
     private readonly platform: PlatformTenant,
     private readonly generations: GuideGenerations,
+    private readonly quota: StorageQuota,
   ) {}
 
   async list(actor: GuideActor, lang: string): Promise<GuideList> {
@@ -436,10 +438,13 @@ export class GuideAdmin {
     const ext = EXTENSION[file.mimetype];
     if (!ext || !policy.types.includes(file.mimetype as never)) throw new GuideRefused('type_not_allowed', file.mimetype);
     const storageTenant = owner ?? (await this.platform.id());
+    const path = `guides/${id}/${randomUUID()}.${ext}`;
     try {
-      const { key } = await runWithTenant({ id: storageTenant }, () =>
-        this.storage.put(policy, `guides/${id}/${randomUUID()}.${ext}`, file.buffer, file.mimetype),
-      );
+      // F-414-m: a reseller's files are held to `storage_mib_max`; the platform's tenant is exempt.
+      const { key } = await runWithTenant({ id: storageTenant }, async () => {
+        await this.quota.assertRoom(path, file.buffer.length);
+        return this.storage.put(policy, path, file.buffer, file.mimetype);
+      });
       return { key };
     } catch (e) {
       if (e instanceof ObjectRejected && e.reason !== 'bad_path') throw new GuideRefused(e.reason);

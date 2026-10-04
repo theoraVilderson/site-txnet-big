@@ -6,10 +6,12 @@ import type { EnvConfig } from '../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { FilesController, PrivateFilesController } from './files.controller';
 import { PlatformTenant } from './platform-tenant';
+import { StorageQuota } from './storage-quota';
 
 /**
  * Object storage's serving route (F-018-m, `platform/object-storage`), and the
- * port itself for this service's own uploads (F-018-h).
+ * port itself for this service's own uploads (F-018-h), and the reseller's
+ * storage quota every upload checks first (`StorageQuota`, F-414-m).
  *
  * On `PrismaService` — the app pool, extended with `withTenant` — so every
  * `stored_object` query is scoped and RLS-bound to the tenant in scope.
@@ -18,6 +20,7 @@ import { PlatformTenant } from './platform-tenant';
   controllers: [FilesController, PrivateFilesController],
   providers: [
     PlatformTenant,
+    StorageQuota,
     {
       provide: ObjectStorage,
       inject: [ConfigService, PrismaService],
@@ -31,6 +34,6 @@ import { PlatformTenant } from './platform-tenant';
         ),
     },
   ],
-  exports: [ObjectStorage, PlatformTenant],
+  exports: [ObjectStorage, PlatformTenant, StorageQuota],
 })
 export class FilesModule {}

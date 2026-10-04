@@ -95,6 +95,7 @@ describe('TenantBrandingService', () => {
       all as never,
       storage,
       config as never,
+      { assertRoom: async () => undefined } as never,
     );
     return { service, branding, bytes, objects, scopes };
   };

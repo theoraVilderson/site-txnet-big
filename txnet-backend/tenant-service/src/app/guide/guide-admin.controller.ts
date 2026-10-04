@@ -21,6 +21,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { GuideKind } from '@prisma/client';
+import { ResellerLimitReached } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
@@ -219,6 +220,8 @@ async function refusing<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (e) {
+    // F-414-m: an upload past `storage_mib_max`, with the figures the panel says it with.
+    if (e instanceof ResellerLimitReached) throw new HttpException({ reason: e.reason, message: e.message, facts: e.facts }, HttpStatus.CONFLICT);
     if (!(e instanceof GuideRefused)) throw e;
     const payload = { reason: e.reason, message: e.message };
     switch (STATUS[e.reason]) {

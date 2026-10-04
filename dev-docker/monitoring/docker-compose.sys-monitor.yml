@@ -31,6 +31,9 @@ configs:
   # answering while network-service is the thing that is down.
   network_rules:
     file: ./config-dev/network.rules.yml
+  # Disk space and the object-storage backup (F-414-m, ADR-0120).
+  storage_rules:
+    file: ./config-dev/storage.rules.yml
   # The one Postgres-side number the automation alerts need (F-067-c): the age
   # of the oldest unpublished outbox row. A query file rather than an HTTP
   # surface on worker-service, which ADR-0027 says serves no requests.
@@ -75,6 +78,8 @@ services:
         target: /etc/prometheus/billing.rules.yml
       - source: network_rules
         target: /etc/prometheus/network.rules.yml
+      - source: storage_rules
+        target: /etc/prometheus/storage.rules.yml
     volumes:
       - prometheus_data:/prometheus
     networks:
@@ -146,11 +151,16 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/rootfs:ro
+      # Metrics other containers write as files (F-414-m): `object-backup`
+      # leaves `txnet_object_backup_*` here after each run. A host path, so a
+      # container of another compose project can write to it.
+      - ${NODE_TEXTFILE_DIR:-/var/lib/txnet/node-textfile}:/textfile:ro
     command:
       - "--path.procfs=/host/proc"
       - "--path.rootfs=/rootfs"
       - "--path.sysfs=/host/sys"
       - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+      - "--collector.textfile.directory=/textfile"
     networks:
       - private_backend_network
 

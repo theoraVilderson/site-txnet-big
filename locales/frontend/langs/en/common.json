@@ -1973,6 +1973,10 @@
         "user_purchases_monthly_max": {
           "name": "Purchases per user, 30 days",
           "hint": "How many services one user may buy in any 30 days. No limit unless set."
+        },
+        "storage_mib_max": {
+          "name": "File storage (MiB)",
+          "hint": "The files the reseller's admins upload: logos and brand images, guide pictures and videos. Its users' support attachments are not counted. Past it, a new upload is refused until a file is removed or the limit is raised. A guide file no text uses 7 days after upload is removed on its own."
         }
       },
       "codeDefault": "Default: {{count}}",

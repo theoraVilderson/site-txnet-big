@@ -15,6 +15,7 @@ rule_files:
   - "/etc/prometheus/currency.rules.yml"
   - "/etc/prometheus/billing.rules.yml"
   - "/etc/prometheus/network.rules.yml"
+  - "/etc/prometheus/storage.rules.yml"
 
 scrape_configs:
   - job_name: "prometheus"

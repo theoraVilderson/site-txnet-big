@@ -14,6 +14,7 @@ openssl rand -base64 32 > dev-docker/secrets/vault-kek
 | file | used by | what it is |
 |---|---|---|
 | `vault-kek` | `auth-service` (`VAULT_KEK_FILE`) | the Credential Vault's key-encryption key — 32 bytes, base64 or hex |
+| `object-backup-password` | `object-backup` (`RESTIC_PASSWORD_FILE`, F-414-m) | the restic repository's password: `openssl rand -base64 32 > dev-docker/secrets/object-backup-password` |
 
 In production these are real `secrets:` entries in `swarm/docker-stack.yml`,
 mounted at the same `/run/secrets/<name>` path, so the application code does
@@ -22,3 +23,6 @@ not change between the two.
 **Losing `vault-kek` makes every stored tenant credential unrecoverable.**
 ADR-0026 accepted that; backing it up is an operational requirement, not a
 nice-to-have.
+
+**Losing `object-backup-password` makes every object-storage snapshot
+unreadable** (ADR-0120): keep it wherever `vault-kek` is kept.

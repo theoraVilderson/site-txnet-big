@@ -2,7 +2,7 @@
 id: object-storage
 layer: platform
 status: active
-version: 4
+version: 5
 updated: 2026-10-04
 ---
 
@@ -71,6 +71,13 @@ does not own, which is a bug to surface.
 9. `storedObject` is in `TENANT_SCOPED_MODELS` and the table has strict RLS: on
    the app pool every query is filtered to, and bound to, the tenant in scope.
 10. **`guide-media` (nginx, `dev-docker/compose/guide-media.yml`) serves guide video keys from the volume, read-only**, at `GET /api/public/media/<key>`: only `tenants/<uuid>/guides/<uuid>/<uuid>.(mp4|webm)` (its one `location`, held by `guide-video.spec.ts`), Range native, `immutable`, `nosniff`, sandbox CSP, no Host check (ADR-0118). It shares the node of the `local` volume (rule 5); an S3 driver replaces it. Its port 8081, not routed, serves every guide file (images too) by the same key shape to the bot (F-414-f).
+11. **A reseller's admins' files are held to `storage_mib_max`** (F-414-m, ADR-0120): `StorageQuota.assertRoom(path, bytes)` (tenant-service `files/storage-quota.ts`) before every branding and guide `put` — the bytes under `branding/` and `guides/` (`STORAGE_QUOTA_PREFIXES`), minus the file at `path`, plus the new one. Past it: `reseller_limit_reached` (409, `facts`). Support attachments are never counted; the platform's tenant is exempt. Unused guide files are swept 7 days after upload (guide contract "Upkeep").
+
+## Backup and disk (F-414-m, ADR-0120)
+
+- **`object-backup`** (`dev-docker/compose/object-backup.yml`, `dev-docker/backup/`): restic over the volume, read-only, nightly at `OBJECT_BACKUP_AT` (UTC, 23:00), to `OBJECT_BACKUP_REPOSITORY` (dev: a host directory; production: off the server — `s3:`, `sftp:`, `rest:`), password `secrets/object-backup-password`. Keeps 7 daily, 4 weekly, 6 monthly; `*.tmp` skipped. Writes `txnet_object_backup_last_run_success` / `_last_success_timestamp_seconds` to node-exporter's textfile directory (`NODE_TEXTFILE_DIR`). A manual run: `docker exec txnet-object-backup sh /usr/local/bin/object-backup.sh --now`.
+- **Restore:** `restic restore latest --target /restore` into a spare directory, copy the `tenants/` tree into the volume, and check files against `stored_object.sha256` — the same check a move to S3 makes.
+- **Alerts** (`monitoring/config-dev/storage.rules.yml`): `DiskSpaceLow` (< 15% free), `DiskSpaceCritical` (< 5%), `DiskWillFillIn24h`, `ObjectBackupStale` (no success in 36 h, or none on record), `ObjectBackupFailed`.
 
 ## The serving route
 
@@ -108,6 +115,7 @@ driver. No row changes.
 - No owner check: who may see a private file is its owner's service's
   question, answered before it signs (ADR-0113 point 3).
 - No rescan of `failed` files and no quarantine sweep of `infected` ones.
+- No sweep of bytes with no row (a failed `put`'s orphan): the next `put` at that key overwrites it, and a guide key is never reused.
 - No upload route of its own: a consumer receives the bytes and calls `put`
   (tenant's branding, F-018-h).
 - No rate limit on the file route; the ETag keeps repeat views to a 304.

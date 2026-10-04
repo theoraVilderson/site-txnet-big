@@ -60,6 +60,15 @@ read — since F-116-i once per currency, under `metricsJson.currencies.<code>`,
 and `currency_fx` turns the code into a `currency` label; renaming either key
 disarms them and breaks nothing visible.
 
+`config-dev/storage.rules.yml` (F-414-m, ADR-0120) — disk space over
+node-exporter's filesystems (< 15% free, < 5%, full within 24 h at the 6-hour
+trend) and the object-storage backup: `object-backup` writes
+`txnet_object_backup_*` to node-exporter's **textfile collector**
+(`--collector.textfile.directory`, host path `NODE_TEXTFILE_DIR`), the way a
+container with no port reports a fact. "Never recorded" fires too
+(`absent()`): a backup that is not running says so. Rules and restore:
+`platform/object-storage/contract.md` "Backup and disk".
+
 **RabbitMQ is scraped by two jobs, not one.** The `rabbitmq_prometheus` plugin
 is enabled in the `4.2-management-alpine` image already, and it serves two
 different things on 15692. `/metrics` is aggregated — `rabbitmq_queue_messages_ready`

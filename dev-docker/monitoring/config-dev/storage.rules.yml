@@ -1,0 +1,103 @@
+# =============================================================================
+# TXNet — alert rules for disk and the object-storage backup (F-414-m, ADR-0120)
+# =============================================================================
+# On the `local` object-storage driver the files live in a Docker volume on the
+# host's disk, next to Postgres, the logs and — on this server — the user's
+# live site and bot. Nothing refused an upload for lack of space before the
+# disk was full, and a full disk stops every service on it at once, so the
+# warning has to come from outside them: node-exporter's filesystems.
+#
+# The backup rules read what `object-backup` writes to node-exporter's
+# textfile directory after each run (`dev-docker/backup/object-backup.sh`).
+# A backup that is not running writes nothing, and "never recorded" is the
+# loudest case, not a silent one.
+# =============================================================================
+
+groups:
+  - name: storage.disk
+    rules:
+      - alert: DiskSpaceLow
+        expr: |
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs",mountpoint!~"/boot.*"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs",mountpoint!~"/boot.*"} < 0.15
+        for: 15m
+        labels:
+          severity: warning
+          unit: object-storage
+        annotations:
+          summary: "Under 15% free on {{ $labels.mountpoint }}"
+          description: >-
+            {{ $labels.mountpoint }} has {{ $value | humanizePercentage }} free.
+            The object volume, Postgres and the logs share this disk. Look at
+            `docker system df -v` for the largest volumes; a reseller's files are
+            bounded by `storage_mib_max`, and unused guide files go after 7 days
+            (`guide_file_sweep`).
+
+      - alert: DiskSpaceCritical
+        expr: |
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs",mountpoint!~"/boot.*"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs",mountpoint!~"/boot.*"} < 0.05
+        for: 5m
+        labels:
+          severity: critical
+          unit: object-storage
+        annotations:
+          summary: "Under 5% free on {{ $labels.mountpoint }}"
+          description: >-
+            {{ $labels.mountpoint }} has {{ $value | humanizePercentage }} free.
+            Postgres stops writing when the disk is full, and every service on
+            this host stops with it. Free space now.
+
+      # The trend over the last 6 hours, projected a day ahead. Only when under
+      # 25% free, so a disk with room to spare and a busy afternoon stays quiet.
+      - alert: DiskWillFillIn24h
+        expr: |
+          (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs",mountpoint!~"/boot.*"}
+              / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs",mountpoint!~"/boot.*"} < 0.25
+          )
+          and
+          predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs",mountpoint!~"/boot.*"}[6h], 24 * 3600) < 0
+        for: 30m
+        labels:
+          severity: warning
+          unit: object-storage
+        annotations:
+          summary: "{{ $labels.mountpoint }} will be full within a day at this rate"
+          description: >-
+            At the last 6 hours' rate {{ $labels.mountpoint }} fills within 24
+            hours. Find what is growing before DiskSpaceCritical fires.
+
+  - name: storage.backup
+    rules:
+      # 36h: one missed night plus the time a run takes, so a single slow or
+      # failed run warns the next morning, not the same night.
+      - alert: ObjectBackupStale
+        expr: |
+          (time() - txnet_object_backup_last_success_timestamp_seconds) > 36 * 3600
+            or absent(txnet_object_backup_last_success_timestamp_seconds)
+        for: 1h
+        labels:
+          severity: warning
+          unit: object-storage
+        annotations:
+          summary: "No object-storage backup has succeeded in 36 hours"
+          description: >-
+            `object-backup` has not recorded a successful restic run since
+            {{ with query "txnet_object_backup_last_success_timestamp_seconds" }}{{ . | first | value | humanizeTimestamp }}{{ else }}ever{{ end }}.
+            Look at `docker logs txnet-object-backup`. A repository that refuses
+            the password is lost snapshots; one that is unreachable is a network
+            or credential problem. In production `RESTIC_REPOSITORY` must be off
+            this server (ADR-0120).
+
+      - alert: ObjectBackupFailed
+        expr: txnet_object_backup_last_run_success == 0
+        for: 5m
+        labels:
+          severity: warning
+          unit: object-storage
+        annotations:
+          summary: "The last object-storage backup run failed"
+          description: >-
+            `object-backup`'s last run did not finish. Snapshots taken before it
+            are still there; see `docker logs txnet-object-backup`.

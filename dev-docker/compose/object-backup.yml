@@ -1,0 +1,33 @@
+# The object-storage backup (F-414-m, ADR-0120): restic over the volume, read
+# only, nightly. Included by ../docker-compose.main.yml with
+# `project_directory: .`, so relative paths resolve from dev-docker/.
+#
+# Dev keeps the repository on this host (OBJECT_BACKUP_LOCAL_DIR), which guards
+# against a deleted file and not against a lost disk. Production sets
+# OBJECT_BACKUP_REPOSITORY to a target off the server — `s3:https://…/bucket`
+# with AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY, `sftp:user@host:/path`, or a
+# `rest:` server — and `storage.rules.yml`'s ObjectBackupStale says when no run
+# has succeeded. The password is a secret file: see secrets/README.md.
+
+services:
+  object-backup:
+    build:
+      context: ./backup
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+    image: txnet/object-backup:dev
+    container_name: ${STACK_NAME:-txnet}-object-backup
+    restart: unless-stopped
+    volumes:
+      - object_storage:/data/objects:ro
+      - ${OBJECT_BACKUP_LOCAL_DIR:-/var/backups/txnet/objects}:/repo
+      - ${NODE_TEXTFILE_DIR:-/var/lib/txnet/node-textfile}:/textfile
+      - ./secrets/object-backup-password:/run/secrets/object-backup-password:ro
+    environment:
+      - RESTIC_REPOSITORY=${OBJECT_BACKUP_REPOSITORY:-/repo}
+      - RESTIC_PASSWORD_FILE=/run/secrets/object-backup-password
+      - OBJECT_BACKUP_AT=${OBJECT_BACKUP_AT:-23:00}
+      - AWS_ACCESS_KEY_ID=${OBJECT_BACKUP_AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${OBJECT_BACKUP_AWS_SECRET_ACCESS_KEY:-}
+    networks:
+      - private_backend_network

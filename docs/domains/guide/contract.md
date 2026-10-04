@@ -27,6 +27,7 @@ row removes it. Resolution is "nearest owner wins" over the tenant's ancestry.
 | `GET /api/internal/guides?tenantId=&placement=&surface=bot` · `GET /api/internal/guides/:key?tenantId=` · `GET /api/internal/guide-search?tenantId=&q=&surface=` | a service with `SERVICE_AUTH_TOKEN` (the bot, F-414-f); in-network, not routed by Traefik | the same answers, for the tenant named by id — the same reader and cache (`GuideInternalController`) |
 | `/api/guides/settings/*` | `guide.manage` (gate; tenant-service, Traefik `PathPrefix(/api/guides)`) | the settings below (F-414-c) |
 | `POST /api/public/tenant/guides/:key/view` · `POST /api/internal/guides/:key/view?tenantId=` `{ viewer }` | as the reads above · the bot | 204, always — a view of the guide that tenant shows under `key` (F-414-l, "Views and votes") |
+| `POST /api/internal/guides/file-sweep` | worker-service's `guide_file_sweep` (service token) | `{ scanned, deleted, bytes, kept }` — "Upkeep" (F-414-m) |
 | `GET` · `PUT /api/guides/feedback/:key` `{ helpful }` | any signed-in user (gate, no permission) — the panel's or the bot's token | `{ helpful: boolean \| null }` — the user's own vote; a guide the tenant does not show is a 404 |
 
 `ResolvedGuide` is `{ id, key, kind, owner: 'platform'|'own', lang, title, blocks, sortOrder, updatedAt }`; `lang` is the language served. A block's files are object keys — the caller builds `/api/public/tenant/files/<key>` on the Host it is on, and a video's `file` `/api/public/media/<key>`, served by the media server and never by a Nest route (ADR-0116 point 3, ADR-0118). A slot outside the registry, or a bad key, is a 400; an unknown Host the neutral 404.
@@ -76,6 +77,11 @@ Rules:
 3. **A vote is one per user per guide**, changeable; only a guide the user's tenant shows now (`guide_unknown`, 404).
 4. **`GET /api/guides/settings/stats?days=7|30|90`** (default 30, `guide.manage`) → `{ days, since, stats: [{ guideId, views, panelViews, botViews, helpful, notHelpful }] }`: views since `since` (UTC, today included), votes over all time. A reseller: its own tenant's rows; the platform owner: every tenant's, platform guides only (cross-tenant pool). A guide with neither is absent.
 5. Deleting a guide deletes its numbers (cascade).
+
+## Upkeep (F-414-m, ADR-0120)
+
+1. **A guide upload is held to the reseller's `storage_mib_max`** before it is stored (`StorageQuota`, object-storage rule 11); past it the upload is `reseller_limit_reached` (409). The platform's uploads are exempt.
+2. **An unused guide file is swept nightly** (`GuideFileSweep`, `guide-file-sweep.ts`): a stored object under any owner's `guides/`, older than `GUIDE_FILE_GRACE_DAYS` (7), named by no published text and no draft of **any** tenant — an override's draft names the platform's files — is deleted, row then bytes, in its own tenant's scope; ≤ 500 a run. A text that does not parse sweeps nothing (the run fails). So settings rule 4 holds per request: no route deletes a file; only the sweep does.
 
 ## Consumes
 

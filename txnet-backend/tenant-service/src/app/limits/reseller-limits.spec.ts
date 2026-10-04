@@ -138,6 +138,8 @@ function build(
     notificationCampaign: { count: async () => usage.sends },
     user: { count: async () => usage.users },
     trafficDailyAggregate: { aggregate: async () => ({ _sum: { totalUploadBytes: BigInt(usage.gib) * BigInt(1024 ** 3), totalDownloadBytes: BigInt(0) } }) },
+    // F-414-m: 2.5 MiB of admins' files, shown as 3 — whole MiB, rounded up.
+    storedObject: { aggregate: async () => ({ _sum: { size: 2.5 * 1024 * 1024 } }) },
   };
   const prisma = { tenant: { findUnique: async () => ({ tenantType: opts.callerType ?? 'platform_owner' }) } };
   const all = { ...tx, $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx) };
@@ -347,6 +349,7 @@ describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
       { key: 'user_purchases_daily_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null, statement: null , lockedUntil: null },
       { key: 'user_purchases_weekly_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null, statement: null , lockedUntil: null },
       { key: 'user_purchases_monthly_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null, statement: null , lockedUntil: null },
+      { key: 'storage_mib_max', kind: 'guard', limit: 1024, source: 'default', used: 3, overage: null, statement: null , lockedUntil: null },
     ]);
   });
 

@@ -2,7 +2,7 @@
 id: object-storage
 layer: platform
 status: active
-version: 4
+version: 5
 keywords: [object storage, file storage, upload, uploaded file, attachment storage, logo upload, signed url, private file, virus scan, clamav, pdf, asset storage, storage driver, local storage, s3, bucket, stored object, serve a file, آپلود فایل, ذخیره فایل, فضای ذخیره‌سازی, لوگو آپلود, اس۳]
 source:
   - txnet-backend/shared-core/src/lib/object-storage/**
@@ -10,6 +10,9 @@ source:
   - txnet-backend/prisma/domains/storage.prisma
   - dev-docker/media/**
   - dev-docker/compose/guide-media.yml
+  - dev-docker/compose/object-backup.yml
+  - dev-docker/backup/**
+  - dev-docker/monitoring/config-dev/storage.rules.yml
 owns_tables: [storage.stored_object]
 depends_on: [tenant-context]
 updated: 2026-10-04
@@ -42,3 +45,4 @@ cite a key.
 | 2026-09-18 | draft -> **active**, v1 -> v2 (F-018-m): the port, the `local` driver, `stored_object`, `GET /api/files/<key>` |
 | 2026-09-19 | v2 -> **v3** (**break**, F-018-ak, ADR-0065): the serving route is `GET /api/public/tenant/files/<key>`; `/api/files/<key>` is `@deprecated`, removed after the next release. URLs are built at read time, so nothing stored changes |
 | 2026-10-03 | v3 -> **v4** (**break**, F-033-c, ADR-0113): `UploadPolicy.visibility` is required; private files, signed URLs on `private-files`, the virus-scan port, PDF |
+| 2026-10-04 | v4 -> v5 (F-414-m, ADR-0120): `storage_mib_max` checked before every admin upload (rule 11); nightly restic backup and disk alerts ("Backup and disk") |

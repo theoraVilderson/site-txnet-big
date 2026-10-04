@@ -13,6 +13,7 @@ import {
 } from './guide-public.schema';
 import { GuidePlacementQuery, GuideReader, ResolvedGuide } from './guide-reader';
 import type { GuideHit, GuideMatch } from './guide-search';
+import { GuideFileSweep, SweepResult } from './guide-file-sweep';
 import { GuideStats, viewerHash } from './guide-stats';
 
 /**
@@ -30,7 +31,19 @@ export class GuideInternalController {
   constructor(
     private readonly reader: GuideReader,
     private readonly stats: GuideStats,
+    private readonly files: GuideFileSweep,
   ) {}
+
+  /**
+   * The nightly sweep of unused guide files (F-414-m, ADR-0120 point 3), run
+   * by worker-service's `guide_file_sweep`. Declared before `:key` so no key
+   * can shadow it; a key is GET-only there anyway.
+   */
+  @Post('file-sweep')
+  @HttpCode(200)
+  sweep(): Promise<SweepResult> {
+    return this.files.sweep();
+  }
 
   @Get()
   async list(
