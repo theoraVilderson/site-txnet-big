@@ -231,3 +231,68 @@ describe('ResellerRevenueService.breakdown — complementary suppression (F-117-
     expect(b.byProduct.map((c) => c.people)).toEqual([12, 2]);
   });
 });
+
+/**
+ * F-117-j: the complement is chosen per currency. `/revenue` answers each
+ * currency's total on its own, so a hidden cell that is the only hidden one
+ * holding a currency is that currency's total minus the shown cells — even
+ * when another cell, in another currency, is hidden beside it.
+ */
+describe('ResellerRevenueService.breakdown — complement per currency (F-117-j)', () => {
+  const C = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const D = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const E = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const cell = (productId: string, people: number, count: number, money: Record<string, string>) => [
+    row({ dim: 'product', productId, people, count }),
+    ...Object.entries(money).map(([currencyCode, net]) => row({ dim: 'product', productId, perCurrency: true, currencyCode, net: d(net), count: 1 })),
+  ];
+  const changes = [{ fromCode: 'IRR', toCode: 'USD', rate: '0.00002' }];
+  const hiddenOf = (b: { byProduct: { productId: string | null; people: number | string }[] }) =>
+    b.byProduct.filter((c) => c.people === 'fewer_than_5').map((c) => c.productId).sort();
+
+  it('two hidden cells in two currencies each take a shown cell of their own currency', async () => {
+    const { service } = build(
+      [
+        row({ dim: 'all', people: 40, count: 60 }),
+        ...cell(PRODUCT_A, 2, 3, { USD: '30.00' }),
+        ...cell(PRODUCT_B, 3, 4, { IRR: '400000.00' }),
+        ...cell(C, 20, 30, { USD: '300.00' }),
+        ...cell(D, 9, 12, { IRR: '1200000.00' }),
+        ...cell(E, 6, 11, { USD: '110.00' }),
+      ],
+      { changes },
+    );
+    const b = await service.breakdown(staff, RESELLER, { from: FROM, to: TO });
+    // E is the smallest shown USD cell, D the only shown IRR one; C stays.
+    expect(hiddenOf(b)).toEqual([PRODUCT_A, PRODUCT_B, D, E].sort());
+  });
+
+  it('a complement that brings a new currency in is paired in that currency too', async () => {
+    const { service } = build(
+      [
+        row({ dim: 'all', people: 40, count: 60 }),
+        ...cell(PRODUCT_A, 2, 3, { USD: '30.00' }),
+        ...cell(C, 6, 8, { USD: '80.00', IRR: '100000.00' }),
+        ...cell(D, 9, 12, { IRR: '1200000.00' }),
+        ...cell(E, 20, 30, { USD: '300.00' }),
+      ],
+      { changes },
+    );
+    const b = await service.breakdown(staff, RESELLER, { from: FROM, to: TO });
+    // A takes C (smallest shown USD); C is then the only hidden IRR cell, so D goes too.
+    expect(hiddenOf(b)).toEqual([PRODUCT_A, C, D].sort());
+  });
+
+  it('leaves alone a currency already hidden in two cells', async () => {
+    const { service } = build(
+      [
+        row({ dim: 'all', people: 40, count: 60 }),
+        ...cell(PRODUCT_A, 2, 3, { USD: '30.00' }),
+        ...cell(PRODUCT_B, 3, 4, { USD: '40.00' }),
+        ...cell(C, 20, 30, { USD: '300.00' }),
+      ],
+    );
+    const b = await service.breakdown(staff, RESELLER, { from: FROM, to: TO });
+    expect(hiddenOf(b)).toEqual([PRODUCT_A, PRODUCT_B].sort());
+  });
+});

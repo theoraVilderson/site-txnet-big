@@ -129,20 +129,31 @@ export function readBreakdown(tx: Prisma.TransactionClient, period: { from: Date
 
 /**
  * Which cells of one split the platform does not see: every cell under
- * {@link SMALL_GROUP} people, and — when that is exactly one — the smallest
- * shown cell with it (F-117-i). The whole reseller's figures are answered
- * (`/revenue`, and `people`/`count` here), so one hidden cell is the total minus
- * the shown ones; two hidden cells give only their sum, which names no single
- * small group. Smallest by people, then count, then position, so the choice is
- * fixed for the same rows.
+ * {@link SMALL_GROUP} people, and their complements. `/revenue` answers the
+ * whole reseller per currency (`byCurrency`), so a hidden cell that is the
+ * **only** hidden one holding money in a currency is that currency's total
+ * minus the shown cells (F-117-i, F-117-j). For each such currency the
+ * smallest shown cell holding it is hidden too — fewest people, then fewest
+ * sales, then position — and the check runs again, since that cell may bring a
+ * currency of its own. Two hidden cells per currency give only their sum.
+ * A currency no shown cell holds cannot be paired; the ADR keeps totals whole.
  */
-export function hiddenCells(heads: readonly BreakdownRow[]): Set<BreakdownRow> {
+export function hiddenCells(heads: readonly BreakdownRow[], currenciesOf: (head: BreakdownRow) => ReadonlySet<string>): Set<BreakdownRow> {
   const hidden = new Set(heads.filter((h) => h.people < SMALL_GROUP));
-  if (hidden.size !== 1) return hidden;
-  const next = heads
-    .filter((h) => !hidden.has(h))
-    .reduce<BreakdownRow | null>((min, h) => (!min || h.people < min.people || (h.people === min.people && h.count < min.count) ? h : min), null);
-  if (next) hidden.add(next);
+  const currencies = [...new Set(heads.flatMap((h) => [...currenciesOf(h)]))].sort();
+  for (let changed = hidden.size > 0; changed; ) {
+    changed = false;
+    for (const code of currencies) {
+      if ([...hidden].filter((h) => currenciesOf(h).has(code)).length !== 1) continue;
+      const next = heads
+        .filter((h) => !hidden.has(h) && currenciesOf(h).has(code))
+        .reduce<BreakdownRow | null>((min, h) => (!min || h.people < min.people || (h.people === min.people && h.count < min.count) ? h : min), null);
+      if (next) {
+        hidden.add(next);
+        changed = true;
+      }
+    }
+  }
   return hidden;
 }
 
@@ -164,7 +175,9 @@ export async function breakdownOf(
 
   const cells = async (dim: 'product' | 'day', keyOf: (r: BreakdownRow) => string | null) => {
     const heads = rows.filter((r) => r.dim === dim && !r.perCurrency);
-    const hidden = ctx.staff ? hiddenCells(heads) : new Set<BreakdownRow>();
+    const currenciesOf = (head: BreakdownRow) =>
+      new Set(rows.filter((r) => r.dim === dim && r.perCurrency && r.currencyCode && keyOf(r) === keyOf(head)).map((r) => r.currencyCode as string));
+    const hidden = ctx.staff ? hiddenCells(heads, currenciesOf) : new Set<BreakdownRow>();
     const out: { key: string | null; cell: BreakdownCell }[] = [];
     for (const head of heads) {
       const key = keyOf(head);
