@@ -20,8 +20,8 @@ platform's inherited by every reseller, who may replace or hide one (ADR-0115).
 `bot-app`).
 
 Planned as a module of `tenant-service` with its own `guide` schema
-(ADR-0115, ADR-0116, ADR-0117). Spec: `python3 tools/spec.py F-414`. Storage is built (F-414-a, blocks F-414-g, slots F-414-h);
-reading by Host (F-414-b) and the settings (F-414-c) are built; panel F-414-d/e, bot F-414-f.
+(ADR-0115–0118). Spec: `python3 tools/spec.py F-414`. All built: storage (F-414-a, blocks -g, slots -h), reading by Host and
+by tenant (-b, -f), settings (-c, -d), shown in the panel (-e) and the bot (-f), video (-i, ADR-0118), search (-j), offered before support (-k).
 
 ## Files
 | File | Read it when |
