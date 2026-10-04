@@ -29,9 +29,16 @@ describe('PlatformSupportDoor', () => {
           opts.resellerStatus === 'missing' ? null : { id: RESELLER, status: opts.resellerStatus ?? 'active' },
         ),
       },
+    };
+    const bound: unknown[] = [];
+    const tx = {
+      $executeRaw: vi.fn(async (_s: unknown, tenantId: unknown) => {
+        bound.push(tenantId);
+      }),
       supportAccessConsent: { findFirst: consentRead },
     };
-    return { door: new PlatformSupportDoor(prisma as never), consentRead };
+    Object.assign(prisma, { $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) });
+    return { door: new PlatformSupportDoor(prisma as never), consentRead, bound };
   };
 
   const refusal = (reason: string) => new ConversationRefused(reason as never);
@@ -70,9 +77,11 @@ describe('PlatformSupportDoor', () => {
   });
 
   it("an act consent runs the work as the reseller's tenant, with the staff member as the agent", async () => {
-    const { door, consentRead } = build({ consent: { scope: 'act' } });
+    const { door, consentRead, bound } = build({ consent: { scope: 'act' } });
     const seen = await door.run(staff, RESELLER, 'act', async (caller) => ({ caller, scope: TenantContext.current().id }), now);
     expect(seen).toEqual({ caller: { tenantId: RESELLER, userId: 'staff-1' }, scope: RESELLER });
+    // The consent is read in a transaction bound to the reseller (RLS), not a bare query.
+    expect(bound).toEqual([RESELLER]);
     expect(consentRead).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ tenantId: RESELLER, expiresAt: { gt: now } }) }),
     );

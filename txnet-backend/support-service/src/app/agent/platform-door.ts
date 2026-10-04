@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TenantStatus, TenantType } from '@prisma/client';
-import { holdsPermission, liveSupportConsent, runWithTenant } from '@txnet-backend/shared-core';
+import { holdsPermission, liveSupportConsent, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { ConversationRefused, SupportCaller } from '../conversations/refusal';
 import { PrismaService } from '../prisma/prisma.service';
@@ -56,7 +56,8 @@ export class PlatformSupportDoor {
     if (!reseller || reseller.status === TenantStatus.terminated) throw new ConversationRefused('reseller_not_found');
 
     return runWithTenant({ id: reseller.id }, async () => {
-      const consent = await liveSupportConsent(this.prisma, reseller.id, now);
+      // In a tenant transaction: the consent table is under RLS and outside `withTenant`'s registry.
+      const consent = await tenantTransaction(this.prisma, (tx) => liveSupportConsent(tx, reseller.id, now));
       if (!consent) throw new ConversationRefused('consent_required');
       if (need === 'act' && consent.scope !== 'act') throw new ConversationRefused('consent_read_only');
       return await work({ tenantId: reseller.id, userId: caller.userId });

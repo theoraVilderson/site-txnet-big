@@ -1,4 +1,4 @@
-import { liveSupportConsent } from '@txnet-backend/shared-core';
+import { liveSupportConsent, runWithTenant } from '@txnet-backend/shared-core';
 import { SupportConsentRefused, SupportConsentService } from './support-consent.service';
 
 /**
@@ -32,7 +32,12 @@ describe('SupportConsentService', () => {
         }
         return (r[k] ?? null) === v;
       });
+    const bound: unknown[] = [];
     const tx = {
+      // tenantTransaction's first statement: the tenant RLS will see.
+      $executeRaw: vi.fn(async (_s: unknown, tenantId: unknown) => {
+        bound.push(tenantId);
+      }),
       supportAccessConsent: {
         findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => rows.find((r) => matches(r, where)) ?? null),
         create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
@@ -72,11 +77,11 @@ describe('SupportConsentService', () => {
     const prisma = { ...tx, $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) };
     const access = {
       run: vi.fn(async (_a: unknown, _t: unknown, _c: string, work: (r: unknown) => Promise<unknown>) =>
-        work({ id: reseller, slug: 'shop', as: opts.as ?? 'owner' }),
+        runWithTenant({ id: reseller }, () => work({ id: reseller, slug: 'shop', as: opts.as ?? 'owner' })),
       ),
     };
     const service = new SupportConsentService(prisma as never, access as never);
-    return { service, rows, audits, order };
+    return { service, rows, audits, order, bound };
   };
 
   it('refuses platform staff a grant, and writes nothing', async () => {
@@ -109,8 +114,10 @@ describe('SupportConsentService', () => {
 
   it('a grant lasts the tenant default (4 h with none set) and supersedes a live one, audited after the act', async () => {
     const live = { id: 'old', tenantId: reseller, grantedAt: new Date(now.getTime() - hour), revokedAt: null, expiresAt: new Date(now.getTime() + hour) };
-    const { service, rows, order, audits } = build({ rows: [live] });
+    const { service, rows, order, audits, bound } = build({ rows: [live] });
     const out = await service.grant(owner, reseller, { scope: 'act' }, '1.1.1.1', now);
+    // Bound to the reseller: the consent tables are under RLS and outside withTenant's registry.
+    expect(bound).toEqual([reseller]);
     expect(out.expiresAt).toBe(new Date(now.getTime() + 4 * hour).toISOString());
     expect(rows.find((r) => r.id === 'old')!.revokedAt).toEqual(now);
     expect(order).toEqual(['supersede', 'create', 'audit']);

@@ -79,6 +79,9 @@ door uses it, never its own query.
   (F-117-b users-admin, F-033-l support).
 - Writes take capability `account`: a suspended reseller still grants and revokes.
 - **A revoke takes effect on the next request**: nothing caches a consent.
+- **Every query on these tables runs in a `tenantTransaction`**: they are under
+  RLS and not in `withTenant`'s registry, so a bare query binds no tenant and
+  sees nothing (an insert is refused by the policy).
 - Each request, grant and revoke writes one `admin_audit_log` row in the
   reseller's trail (`support_consent_*`, target `support_consent`, before/after
   `{scope, grantedAt, expiresAt, revokedAt}`); the default writes

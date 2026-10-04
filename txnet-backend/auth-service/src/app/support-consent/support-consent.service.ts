@@ -6,6 +6,7 @@ import {
   ResellerAccessRefused,
   ResellerAccessRejection,
   TenantCapabilityName,
+  tenantTransaction,
   SUPPORT_CONSENT_DEFAULT_HOURS,
   SUPPORT_CONSENT_MAX_HOURS,
 } from '@txnet-backend/shared-core';
@@ -89,7 +90,9 @@ function view(row: Row, now: Date): ConsentView {
  * Every boundary is one `admin_audit_log` row in the reseller's trail, in the
  * act's transaction and after it (audit invariant 13). A consent's state is
  * derived on read (`liveSupportConsent` is the door's reader), so an expiry
- * needs no job and no write.
+ * needs no job and no write. Every read and write is in a `tenantTransaction`:
+ * these tables are under RLS and not in `withTenant`'s registry, so a bare
+ * query binds no tenant — it would see nothing and insert nothing.
  *
  * Capability `account` on the writes: a suspended reseller still grants and
  * revokes — support is when suspension most needs it.
@@ -103,14 +106,16 @@ export class SupportConsentService {
 
   list(actor: SupportConsentActor, tenantId: string, now = new Date()) {
     return this.run(actor, tenantId, 'read', async (reseller) => {
-      const [policy, rows] = await Promise.all([
-        this.prisma.supportConsentPolicy.findUnique({ where: { tenantId: reseller.id } }),
-        this.prisma.supportAccessConsent.findMany({
-          where: { tenantId: reseller.id },
-          orderBy: { createdAt: 'desc' },
-          take: HISTORY,
-        }),
-      ]);
+      const [policy, rows] = await tenantTransaction(this.prisma, (tx) =>
+        Promise.all([
+          tx.supportConsentPolicy.findUnique({ where: { tenantId: reseller.id } }),
+          tx.supportAccessConsent.findMany({
+            where: { tenantId: reseller.id },
+            orderBy: { createdAt: 'desc' },
+            take: HISTORY,
+          }),
+        ]),
+      );
       return {
         defaultHours: policy?.defaultHours ?? SUPPORT_CONSENT_DEFAULT_HOURS,
         items: rows.map((r) => view(r, now)),
@@ -127,7 +132,7 @@ export class SupportConsentService {
   ): Promise<ConsentView> {
     return this.run(actor, tenantId, 'read', async (reseller) => {
       if (reseller.as !== 'staff') throw new SupportConsentRefused('only_platform_requests');
-      return this.prisma.$transaction(async (tx) => {
+      return tenantTransaction(this.prisma, async (tx) => {
         const pending = await tx.supportAccessConsent.findFirst({
           where: { tenantId: reseller.id, grantedAt: null, revokedAt: null },
         });
@@ -159,7 +164,7 @@ export class SupportConsentService {
       if (input.hours !== undefined && (input.hours < 1 || input.hours > SUPPORT_CONSENT_MAX_HOURS)) {
         throw new SupportConsentRefused('hours_out_of_range');
       }
-      return this.prisma.$transaction(async (tx) => {
+      return tenantTransaction(this.prisma, async (tx) => {
         const hours =
           input.hours ??
           (await tx.supportConsentPolicy.findUnique({ where: { tenantId: reseller.id } }))?.defaultHours ??
@@ -194,7 +199,7 @@ export class SupportConsentService {
 
   revoke(actor: SupportConsentActor, tenantId: string, consentId: string, ip: string, now = new Date()): Promise<ConsentView> {
     return this.run(actor, tenantId, 'account', async (reseller) => {
-      return this.prisma.$transaction(async (tx) => {
+      return tenantTransaction(this.prisma, async (tx) => {
         // A request still open, or a grant still running: nothing else ends.
         const open = await tx.supportAccessConsent.findFirst({
           where: { id: consentId, tenantId: reseller.id, revokedAt: null },
@@ -214,7 +219,7 @@ export class SupportConsentService {
   setPolicy(actor: SupportConsentActor, tenantId: string, defaultHours: number, ip: string) {
     return this.run(actor, tenantId, 'account', async (reseller) => {
       if (reseller.as === 'staff') throw new SupportConsentRefused('platform_cannot_grant');
-      return this.prisma.$transaction(async (tx) => {
+      return tenantTransaction(this.prisma, async (tx) => {
         const before = await tx.supportConsentPolicy.findUnique({ where: { tenantId: reseller.id } });
         await tx.supportConsentPolicy.upsert({
           where: { tenantId: reseller.id },
