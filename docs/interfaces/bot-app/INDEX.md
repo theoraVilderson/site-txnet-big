@@ -3,12 +3,12 @@ id: bot-app
 layer: interface
 status: active
 version: 1
-keywords: [bot, telegram bot, bale bot, bot as a panel, bot menu, bot flow, mini app, webapp, deep link, switch account in the bot, my accounts in the bot, add an account in the bot, ربات, ربات تلگرام, ربات بله, منوی ربات, ربات پنل کامل, همه قابلیت ها در ربات, سوییچ اکانت در ربات, تعویض حساب در ربات, حساب های من در ربات, افزودن حساب در ربات, اضافه کردن حساب تو ربات, سوییچ خودکار بعد از افزودن حساب, بعد از اضافه کردن حساب سوییچ نمیشه, حساب اضافه شد ولی وارد نشدم, reseller panel in the bot, manage my reseller from the bot, block a customer in the bot, sales report in the bot, پنل نمایندگی در ربات, مدیریت نمایندگی از ربات, مسدود کردن کاربر در ربات, گزارش فروش در ربات, لیست کاربران نمایندگی در ربات, bulk message in the bot, broadcast to my customers, پیام گروهی در ربات, ارسال انبوه از ربات, time zone in the bot, change my time zone in the bot, منطقه زمانی در ربات, تغییر منطقه زمانی در ربات, ساعت ربات اشتباهه]
+keywords: [bot, support in the bot, ticket in the bot, پشتیبانی در ربات, تیکت در ربات, ارسال فایل به پشتیبانی در ربات, telegram bot, bale bot, bot as a panel, bot menu, bot flow, mini app, webapp, deep link, switch account in the bot, my accounts in the bot, add an account in the bot, ربات, ربات تلگرام, ربات بله, منوی ربات, ربات پنل کامل, همه قابلیت ها در ربات, سوییچ اکانت در ربات, تعویض حساب در ربات, حساب های من در ربات, افزودن حساب در ربات, اضافه کردن حساب تو ربات, سوییچ خودکار بعد از افزودن حساب, بعد از اضافه کردن حساب سوییچ نمیشه, حساب اضافه شد ولی وارد نشدم, reseller panel in the bot, manage my reseller from the bot, block a customer in the bot, sales report in the bot, پنل نمایندگی در ربات, مدیریت نمایندگی از ربات, مسدود کردن کاربر در ربات, گزارش فروش در ربات, لیست کاربران نمایندگی در ربات, bulk message in the bot, broadcast to my customers, پیام گروهی در ربات, ارسال انبوه از ربات, time zone in the bot, change my time zone in the bot, منطقه زمانی در ربات, تغییر منطقه زمانی در ربات, ساعت ربات اشتباهه]
 source:
   - txnet-backend/bot-service/src/**
 owns_tables: []
-depends_on: [messenger, auth-api, i18n, tenant, billing, notification]
-updated: 2026-10-03
+depends_on: [messenger, auth-api, i18n, tenant, billing, notification, support]
+updated: 2026-10-04
 ---
 
 # bot-app
@@ -28,14 +28,14 @@ differences (`messenger`), linking and OTP (`identity`/`auth-api`), copy (`i18n`
 | [contract.mini-app.md](contract.mini-app.md) | the `web_app` menu row, and the `?ma=` marker that says which SDK the panel loads |
 | [contract.reseller.md](contract.reseller.md) | the reseller panel in the chat: its menu row, the customers, block, the revenue figure, the bulk message |
 | [contract.wheel.md](contract.wheel.md) | the lucky wheel in the chat: its menu row, the odds, a spin, the prize told (F-707-h) — **or the lotteries in the chat: the list, join or leave, a ticket, the result:** [contract.lotteries.md](contract.lotteries.md) (F-707-p) |
+| [contract.support.md](contract.support.md) | support in the chat: the list, a thread, a reply or a file either way, rate, reopen, the notice's Open button (F-309) |
 | [conversation.md](conversation.md) | the shell every screen gets: orientation, Back, language, commands |
 | [open-questions.md](open-questions.md) | something is undecided |
 
 ## Status
 
-`active` — the Nx app `bot-service`. Built: `F-303` (webhook, state, a session
-per chat, register/login/forgot/logout), the switch group (`F-0205`/`F-0208`/
-`F-0210`), `F-310`, `F-306-a`, `F-311-c`, `F-313-b`. The rest of §10.4 is `todo`.
+`active` — the Nx app `bot-service`. Built: `F-303` (webhook, state, sessions, register/login/forgot/logout),
+`F-0205`/`F-0208`/`F-0210`, `F-310`, `F-306-a`, `F-311-c`, `F-313-b`, `F-309`; the rest of §10.4 is `todo`.
 
 ## Read first
 
@@ -45,7 +45,7 @@ per chat, register/login/forgot/logout), the switch group (`F-0205`/`F-0208`/
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-04 | Contract v13 -> **v14** (additive, F-309): support in the chat — list, thread, reply and files both ways, rate, reopen, and the reply notice's Open button. Rules in [contract.support.md](contract.support.md); new dependency on `support` through `SUPPORT_API_BASE_URL` |
 | 2026-09-20 | Contract v12 -> **v13** (additive, F-313-b): the reseller's bulk message as a chat flow — segment, count, draft, confirm, watch. Rules in [contract.reseller.md](contract.reseller.md); new dependency on `notification` through `NOTIFICATION_API_BASE_URL` |
-| 2026-09-20 | Contract v11 -> **v12** (additive, F-311-c): the reseller panel in the chat — a member-menu row drawn only on the door's `canRead` (F-311-e), the customer list with search and paging, block / unblock on `canWrite`, and billing's two revenue figures. New file [contract.reseller.md](contract.reseller.md); new dependency on `tenant` through `TENANT_API_BASE_URL` |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

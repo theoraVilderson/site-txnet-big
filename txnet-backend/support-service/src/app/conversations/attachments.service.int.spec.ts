@@ -215,3 +215,27 @@ describe('the per-user storage quota', () => {
     );
   });
 });
+
+describe('the file itself, for a surface with no panel Host (F-309)', () => {
+  const BAHAR: SupportCaller = { tenantId: RESELLER, userId: '33333333-3333-4333-8333-3333333333a4' };
+
+  it("hands the bytes to the conversation's own user, and to no one else", async () => {
+    const c = await openFor(BAHAR, 'for the bot');
+    const sent = await as(BAHAR, () => attachments.send(BAHAR, c.id, { files: [file('رسید.pdf', 'application/pdf', PDF)] }));
+    const id = sent.attachments[0].id;
+
+    const got = await as(BAHAR, () => attachments.download(BAHAR, c.id, id));
+    expect(got).toEqual({ fileName: 'رسید.pdf', contentType: 'application/pdf', bytes: PDF });
+    expect(await refusal(as(AMIR, () => attachments.download(AMIR, c.id, id)))).toBe('not_found');
+    // The right file under another of the user's conversations is still missing.
+    const other = await openFor(BAHAR, 'another one');
+    expect(await refusal(as(BAHAR, () => attachments.download(BAHAR, other.id, id)))).toBe('not_found');
+  });
+
+  it('serves only what the signed URL would: never an expired file', async () => {
+    const c = await openFor(BAHAR, 'retention');
+    const sent = await as(BAHAR, () => attachments.send(BAHAR, c.id, { files: [file('old.png', 'image/png', PNG)] }));
+    await owner.supportMessageAttachment.update({ where: { id: sent.attachments[0].id }, data: { expiredAt: new Date(), objectKey: null } });
+    expect(await refusal(as(BAHAR, () => attachments.download(BAHAR, c.id, sent.attachments[0].id)))).toBe('not_found');
+  });
+});

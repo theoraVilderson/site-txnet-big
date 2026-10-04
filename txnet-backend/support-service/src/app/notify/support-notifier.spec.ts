@@ -49,7 +49,7 @@ const target = (readUpTo: number): NoticeTarget => ({
 });
 
 describe('SupportNotifier (F-033-i)', () => {
-  it('tells the reader once, in the inbox, by template, naming the conversation', async () => {
+  it('tells the reader once, in the inbox and their chats (F-309), by template, naming the conversation', async () => {
     const redis = fakeRedis();
     const seam = fakeSeam();
     const notifier = new SupportNotifier(redis, seam);
@@ -60,6 +60,11 @@ describe('SupportNotifier (F-033-i)', () => {
       {
         tenantId: TENANT,
         body: { userId: ALICE, channel: 'inbox', template: 'supportReplied', params: { subject: 'My VPN stopped connecting' } },
+      },
+      {
+        tenantId: TENANT,
+        // The chat's notice carries the thread, so its button opens it (F-309).
+        body: { userId: ALICE, channel: 'bot', template: 'supportReplied', params: { subject: 'My VPN stopped connecting', conversationId: CONVERSATION } },
       },
     ]);
     // Remembered against how far the reader had read, for as long as the key lives.
@@ -78,7 +83,7 @@ describe('SupportNotifier (F-033-i)', () => {
     expect(await notifier.tell(TENANT, 'supportReplied', target(3))).toBe(false);
     expect(await notifier.tell(TENANT, 'supportResolved', target(3))).toBe(false);
 
-    expect(seam.told).toHaveLength(1);
+    expect(seam.told).toHaveLength(2);
   });
 
   it('tells again once the reader has read past the last notice', async () => {
@@ -88,7 +93,7 @@ describe('SupportNotifier (F-033-i)', () => {
     await notifier.tell(TENANT, 'supportReplied', target(3));
     expect(await notifier.tell(TENANT, 'supportReplied', target(5))).toBe(true);
 
-    expect(seam.told).toHaveLength(2);
+    expect(seam.told).toHaveLength(4);
   });
 
   it('never fails the message, and a refused notice is not remembered as told', async () => {
@@ -102,6 +107,24 @@ describe('SupportNotifier (F-033-i)', () => {
 
     seam.failing = false;
     expect(await notifier.tell(TENANT, 'supportUserWrote', target(2))).toBe(true);
+  });
+
+  it("tells an agent in the inbox only — they answer from the panel, not the chat", async () => {
+    const seam = fakeSeam();
+    await new SupportNotifier(fakeRedis(), seam).tell(TENANT, 'supportUserWrote', target(2));
+    expect(seam.told.map((t) => t.body.channel)).toEqual(['inbox']);
+  });
+
+  it('a chat that cannot be told does not undo the inbox notice', async () => {
+    const redis = fakeRedis();
+    const seam = fakeSeam();
+    const inboxOnly = { async notify(tenantId: string, body: Parameters<NoticeSeam['notify']>[1]) {
+      if (body.channel === 'bot') throw new Error('auth-api answered 502');
+      return seam.notify(tenantId, body);
+    } };
+    expect(await new SupportNotifier(redis, inboxOnly).tell(TENANT, 'supportReplied', target(4))).toBe(true);
+    expect(seam.told).toHaveLength(1);
+    expect(redis.store.size).toBe(1);
   });
 
   it('cuts a long subject to what the seam takes', async () => {

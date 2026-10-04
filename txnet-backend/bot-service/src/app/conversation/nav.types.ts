@@ -1,5 +1,6 @@
 import {
   BotContact,
+  BotIncomingFile,
   BotIntegration,
   BotPlatform,
   BotText,
@@ -18,7 +19,8 @@ export type BotFlow =
   | 'reseller'
   | 'campaign'
   | 'timeZone'
-  | 'wheel';
+  | 'wheel'
+  | 'support';
 
 /**
  * Navigation state: the screen, the breadcrumb and a half-typed input.
@@ -76,6 +78,8 @@ export interface ChatContext {
   lang: string;
   text?: string;
   contact?: BotContact;
+  /** A photo or a document the user sent (F-309) — fetched from the platform only by the flow that wants it. */
+  file?: BotIncomingFile;
   /** An inline button's payload, when the user tapped instead of typing. */
   callbackData?: string;
   callbackQueryId?: string;
@@ -122,6 +126,8 @@ export interface FlowResult {
   deleteIncoming?: boolean;
   /** Send this invoice right after the screen (F-104-m). */
   invoice?: FlowInvoice;
+  /** Send this file right after the screen (F-309): a support attachment the user asked for. */
+  document?: { fileName: string; contentType: string; bytes: Buffer };
   /**
    * Render this reply in a language other than the one the update arrived in.
    * Set only by the language chooser: a confirmation written in the language

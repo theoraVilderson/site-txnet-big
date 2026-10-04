@@ -161,6 +161,31 @@ export class SupportAttachmentService {
     return sent.view;
   }
 
+  /**
+   * One file's bytes, to the conversation's own user (F-309) — for a surface
+   * with no panel Host to spend a signed URL on (the bot). The same file the
+   * signed URL would serve and no other: clean, not expired, on a message the
+   * user sees (never an internal note). Anything else answers as missing.
+   */
+  async download(caller: SupportCaller, conversationId: string, attachmentId: string): Promise<{ fileName: string; contentType: string; bytes: Buffer }> {
+    const file = await tenantTransaction(this.prisma, (tx) =>
+      tx.supportMessageAttachment.findFirst({
+        where: {
+          id: attachmentId,
+          conversationId,
+          scanStatus: AttachmentScanStatus.clean,
+          expiredAt: null,
+          objectKey: { not: null },
+          message: { internal: false, conversation: { userId: caller.userId } },
+        },
+        select: { fileName: true, contentType: true, objectKey: true },
+      }),
+    );
+    const bytes = file?.objectKey ? await this.driver.read(file.objectKey) : null;
+    if (!file || !bytes) throw new ConversationRefused('not_found');
+    return { fileName: file.fileName, contentType: file.contentType, bytes };
+  }
+
   private async assertOwn(caller: SupportCaller, conversationId: string): Promise<void> {
     const found = await tenantTransaction(this.prisma, (tx) =>
       tx.supportConversation.findFirst({ where: { id: conversationId, userId: caller.userId }, select: { status: true } }),

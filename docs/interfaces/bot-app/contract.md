@@ -2,13 +2,13 @@
 id: bot-app
 layer: interface
 status: active
-version: 13
-updated: 2026-09-20
+version: 14
+updated: 2026-10-04
 ---
 
 # bot-app — contract
 
-`F-303`, `F-311-c` and `F-313-b` are implemented; the rest of §10.4 is intent
+`F-303`, `F-309`, `F-311-c`, `F-313-b` are implemented; the rest of §10.4 is intent
 (§0 level 4), from ADR-0009. Resolve an id with `python3 tools/spec.py <F-id>`.
 
 ## TL;DR
@@ -54,7 +54,7 @@ reached from another surface:
 | `F-304` catalog, invoice, payment | catalog + billing |
 | `F-305` one-click renewal/top-up | network + billing |
 | `F-306` wallet, history, invoices | billing |
-| `F-309` two-way tickets | support |
+| `F-309` two-way tickets | support — which threads, what may be sent, every status. The flow is built: [contract.support.md](contract.support.md) |
 | `F-311`/`F-312` reseller + sub-reseller management | tenant — the users and the two writes `auth-api` (F-311-a), the figures billing (F-311-b), **and whether the chat may see any of it at all** the door (F-311-e). The flow is built: [contract.reseller.md](contract.reseller.md) |
 | `F-313-b` bulk sending | notification — the audience, the count, the draft and the send (F-313-d over F-035-d/e) + messenger (the ceiling, F-313-a/ADR-0066). The flow is built: [contract.reseller.md](contract.reseller.md) |
 | `F-318` channel-membership trial gate | engagement/governance decides eligibility; bot only asks the platform for membership |

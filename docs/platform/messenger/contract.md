@@ -172,6 +172,15 @@ Two hard rules, both from ADR-0009:
   capability and the view, so "it works on Telegram and not on Bale" is a query,
   not an investigation.
 
+## Files, both ways (F-309)
+
+`incomingFileOf(message)` reads a photo (its largest size) or a document, with
+its caption, into `BotIncomingFile` — the platform's file id and the sender's
+claims, never trusted. `downloadFile(fileId, maxBytes)` is `getFile` then
+`<apiBase>/file/bot<token>/<path>`, the same on both; `null` over the cap or on
+any failure. `sendDocument` uploads bytes as multipart, never a URL the
+platform would fetch, and throws like `sendMessage`.
+
 ## The command menu
 
 `setMyCommands` publishes a bot's command list per language, so `/menu` and

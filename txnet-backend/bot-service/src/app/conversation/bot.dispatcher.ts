@@ -112,6 +112,15 @@ export class BotDispatcher {
         }
       }
 
+      // A support file the user asked for (F-309), after the thread it belongs to.
+      if (result.document) {
+        try {
+          await client.sendDocument(ctx.chatId, result.document);
+        } catch {
+          await client.sendMessage(ctx.chatId, this.copy.text(lang, { key: BotKeys.common.tryAgain }));
+        }
+      }
+
       if (result.nextState) {
         await this.nav.save(ctx.integration, ctx.chatId, {
           ...result.nextState,

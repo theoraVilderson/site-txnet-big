@@ -437,6 +437,71 @@ export class TelegramLikeBotClient {
   }
 
   /**
+   * A file a user sent (F-309): `getFile`, then the bytes from
+   * `<apiBase>/file/bot<token>/<file_path>` — the same two steps on both
+   * platforms. `null` for anything over `maxBytes` (said before downloading
+   * when the platform says the size, checked after when it does not), and for
+   * every failure: the caller tells the user the file could not be read.
+   */
+  async downloadFile(fileId: string, maxBytes: number): Promise<Buffer | null> {
+    const found = await this.call<{ ok?: boolean; description?: string; result?: { file_path?: string; file_size?: number } }>('getFile', {
+      file_id: fileId,
+    });
+    const path = found.body?.result?.file_path;
+    if (!found.ok || !path) {
+      this.logger.warn(`${this.platformLabel} getFile failed: status=${found.status} ${found.body?.description ?? found.networkError ?? ''}`);
+      return null;
+    }
+    if ((found.body?.result?.file_size ?? 0) > maxBytes) return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const response = await fetch(`${this.apiBase}/file/bot${this.botToken}/${path}`, { signal: controller.signal });
+      if (!response.ok) {
+        this.logger.warn(`${this.platformLabel} file download answered ${response.status}`);
+        return null;
+      }
+      const bytes = Buffer.from(await response.arrayBuffer());
+      return bytes.length > maxBytes ? null : bytes;
+    } catch (e: unknown) {
+      this.logger.warn(`${this.platformLabel} file download failed: ${e instanceof Error ? e.message : String(e)}`);
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Sends a file as a document (F-309), uploaded as multipart — the bytes,
+   * never a URL the platform would have to fetch. Throws like `sendMessage`:
+   * a person is waiting on it.
+   */
+  async sendDocument(chatId: string, file: { fileName: string; contentType: string; bytes: Buffer }, caption?: string): Promise<void> {
+    await this.budget?.spend();
+    const form = new FormData();
+    form.append('chat_id', chatId);
+    form.append('document', new Blob([new Uint8Array(file.bytes)], { type: file.contentType }), file.fileName);
+    if (caption) form.append('caption', caption);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    let status = 0;
+    let description = '';
+    try {
+      const response = await fetch(`${this.apiBase}/bot${this.botToken}/sendDocument`, { method: 'POST', body: form, signal: controller.signal });
+      status = response.status;
+      const body = (await response.json().catch((): undefined => undefined)) as TelegramLikeSendResult | undefined;
+      if (response.ok && body?.ok !== false) return;
+      description = body?.description ?? '';
+    } catch (e: unknown) {
+      description = e instanceof Error ? e.message : String(e);
+    } finally {
+      clearTimeout(timer);
+    }
+    this.logger.error(`${this.platformLabel} sendDocument failed for chatId=${chatId}: status=${status} ${description}`);
+    throw new InternalServerErrorException(`otp.${this.platformLabel}SendFailed`);
+  }
+
+  /**
    * One Bot API call. Never throws: every caller here has its own idea of
    * what a failure means, so the outcome is returned rather than raised.
    */

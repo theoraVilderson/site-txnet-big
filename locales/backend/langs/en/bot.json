@@ -53,7 +53,14 @@
     "lotteryJoin": "✅ Join",
     "lotteryLeave": "↩️ Leave",
     "lotteryResult": "🏆 Result",
-    "lotteriesBack": "🎟 All lotteries"
+    "lotteriesBack": "🎟 All lotteries",
+    "support": "💬 Support",
+    "supportNew": "✍️ New request",
+    "supportRefresh": "🔄 Refresh",
+    "supportReopen": "↩️ Reopen",
+    "supportAll": "💬 All conversations",
+    "supportRate": "{{n}} ⭐",
+    "supportFile": "📎 {{name}}"
   },
   "common": {
     "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
@@ -307,6 +314,58 @@
     "mine": {
       "won": "🎉 You won: {{prize}}",
       "lost": "Your ticket #{{n}} did not win this time."
+    }
+  },
+  "support": {
+    "list": "💬 Your support conversations. Choose one, or start a new one.",
+    "none": "You have no support conversation yet. Start one and we will answer you right here.",
+    "item": "{{subject}} · {{status}}{{unread}}",
+    "unread": " · {{n}} new",
+    "status": {
+      "open": "Waiting for an answer",
+      "pending_agent": "Waiting for an answer",
+      "pending_user": "Answered",
+      "resolved": "Resolved",
+      "closed": "Closed"
+    },
+    "who": {
+      "me": "You",
+      "agent": "Support",
+      "system": "System",
+      "bot": "Bot",
+      "ai": "Assistant"
+    },
+    "line": "{{who}}: {{body}}",
+    "file": "📎 {{name}}",
+    "thread": "💬 {{subject}} · {{status}}\n\n{{earlier}}{{messages}}\n\n{{prompt}}",
+    "earlier": "… earlier messages are in the app.\n",
+    "prompt": {
+      "reply": "Type your reply, or send a photo or a PDF.",
+      "resolved": "Marked resolved. If it is not, just reply and it opens again — or rate the answer.",
+      "closed": "This conversation is closed."
+    },
+    "category": "What is it about?",
+    "compose": "Write your message. Once it is open you can send photos or PDFs too.",
+    "composeFileFirst": "Write your message first — you can send the file right after.",
+    "fileOutside": "To send a file to support, open a conversation first.",
+    "fileUnreadable": "That file could not be read. Send it again, or as a photo or a PDF.",
+    "rated": "Thank you for rating ⭐",
+    "refusals": {
+      "not_found": "This conversation is not available.",
+      "closed": "This conversation is closed. Reopen it, or start a new one.",
+      "category_unknown": "That topic is no longer available. Start again.",
+      "too_many_unfinished": "You already have several open conversations. Finish one of them first.",
+      "empty_message": "The message is empty.",
+      "too_many_files": "Too many files in one message.",
+      "file_too_large": "That file is too large.",
+      "file_rejected": "Only photos (PNG, JPEG, WebP) and PDFs can be sent.",
+      "file_infected": "That file did not pass the virus check and was not sent.",
+      "scan_unavailable": "Files cannot be checked right now. Try again in a few minutes.",
+      "quota_exceeded": "Your space for support files is full.",
+      "not_finished": "You can rate it once it is resolved.",
+      "already_rated": "You have already rated this conversation.",
+      "not_closed": "This conversation is not closed.",
+      "reopen_expired": "It is too late to reopen this one. Start a new conversation."
     }
   }
 }

@@ -776,6 +776,28 @@ describe('UserNotifier', () => {
       expect(client.sendMessage).toHaveBeenLastCalledWith('5501', '🎟 auto «مهر»');
     });
 
+    it('a support reply or resolve (F-309) carries Open for that thread; the agent\'s notice carries nothing', async () => {
+      const client = botClient();
+      const locale = {
+        getNamespace: vi.fn(() => ({ support: { replied: '💬 «{{subject}}»', resolved: '✅ «{{subject}}»', userWrote: '💬 to agent «{{subject}}»', open: '💬 باز کردن گفتگو' } })),
+        getKey: vi.fn(() => undefined),
+        getDefaultLanguage: () => 'fa',
+      } as unknown as LocaleService;
+      const notifier = new UserNotifier(
+        notifierPrisma({ user: { languagePreference: 'fa' }, links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+        registry(client),
+        locale,
+      );
+      const params = { subject: 'VPN', conversationId: '0f0e0d0c-0b0a-4908-8706-050403020100' };
+      const open = { inline_keyboard: [[{ text: '💬 باز کردن گفتگو', callback_data: 'sup:o:0f0e0d0c-0b0a-4908-8706-050403020100' }]] };
+      await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'supportReplied', params }));
+      expect(client.sendMessage).toHaveBeenLastCalledWith('5501', '💬 «VPN»', open);
+      await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'supportResolved', params }));
+      expect(client.sendMessage).toHaveBeenLastCalledWith('5501', '✅ «VPN»', open);
+      await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'supportUserWrote', params }));
+      expect(client.sendMessage).toHaveBeenLastCalledWith('5501', '💬 to agent «VPN»');
+    });
+
     it('a reseller\'s billing-wallet top-up (F-1525-c) is a template of its own', async () => {
       expect(NOTIFY_TEMPLATES).toContain('suggestionResellerTopUp');
       const client = botClient();

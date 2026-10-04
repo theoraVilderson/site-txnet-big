@@ -2,14 +2,13 @@
 id: support
 layer: domain
 status: active
-version: 2
+version: 3
 updated: 2026-10-04
 ---
 
 # Contract — support
 
-Storage F-033-a, the user's routes F-033-b, attachments F-033-c (reading) and
-F-033-f (upload); the agent side F-033-d, category admin F-033-e, presence and
+Storage F-033-a, the user's routes F-033-b, attachments F-033-c (reading), F-033-f (upload), F-309 (bytes); the agent side F-033-d, category admin F-033-e, presence and
 hours F-033-g, SLA F-033-h, notices F-033-i, canned replies F-033-j, auto-close/rating/reopen F-033-k; platform staff under consent F-033-l in [contract.operator.md](contract.operator.md). Shape: [ADR-0112](../../architecture/decisions/0112-support-is-one-conversation-served-by-support-service.md).
 
 ## TL;DR
@@ -33,6 +32,7 @@ answers exactly as a missing one.
 | `GET /api/support/conversations/:id/messages` | `?afterSeq=` or `?beforeSeq=`, `limit≤100`; neither = latest page | `{conversation, messages (oldest first, never internal, each with `attachments`), hasEarlier, lastReadSeq, seenUpToSeq, realtime: {channel, proof, expiresInSec} \| null}` | 404 `not_found` |
 | `POST /api/support/conversations/:id/messages` | `{body ≤4000}` | `{id, seq, senderKind, mine, body, createdAt}` | 404 `not_found`, 409 `closed` |
 | `POST /api/support/conversations/:id/attachments` | multipart: `files` (repeat, ≤`SUPPORT_ATTACHMENTS_PER_MESSAGE`, each ≤`SUPPORT_ATTACHMENT_MAX_BYTES`; PNG, JPEG, WebP, PDF), `body?` ≤4000 | the message, as `POST …/messages`, with its `attachments` | 404 `not_found`, 409 `closed`, 400 `empty_message`/`too_many_files`, 413 `file_too_large`, 415 `file_rejected`, 422 `file_infected`, 503 `scan_unavailable`, 409 `quota_exceeded` |
+| `GET /api/support/conversations/:id/attachments/:attachmentId` (F-309) | — | the file itself, outside the envelope (`Content-Disposition` with its name) — for a surface with no panel Host to spend `url` on (the bot); only a `clean`, unexpired file on a message the user sees | 404 `not_found` (anything else, a stranger's included) |
 | `POST /api/support/conversations/:id/typing` | — | `{expiresInMs}` — published to the thread's readers, stored nowhere; repeat while typing | 404 `not_found`, 409 `closed` |
 | `POST /api/support/conversations/:id/read` | `{upToSeq?}` (body optional) | `{lastReadSeq}` — moves forward only | 404 `not_found` |
 | `GET /api/support/availability` | — | `{live, withinHours, agentsOnline, nextOpenAt}` — the wait notice (F-033-g) | — |
@@ -195,8 +195,8 @@ Any active own category hides the defaults from users; none brings them back.
 ## Notices (F-033-i)
 
 A thread with something for a reader who is not looking puts one row in their
-panel inbox, which reaches an open panel over the socket — inbox only;
-Telegram/Bale with F-309 (user, 2026-10-03):
+panel inbox, which reaches an open panel over the socket; the user's two also go to their chats
+(channel `bot`, with `conversationId` for the Open button, F-309) — a chat that cannot be told is logged, the row stands:
 
 | When | Who | Template (auth-api `POST /internal/notify/user`) |
 |---|---|---|
@@ -236,7 +236,7 @@ The actor is a kind, never an account. An internal note is never published here
 | object-storage | private files, `signedObjectUrl`, the scan port (F-033-c, ADR-0113) | attachments refused, text still works |
 | locale-service | error messages, `Accept-Language` | envelope falls back to the key |
 | realtime | the `support:` family, Redis fan-out (F-034) | `realtime` is `null` / events dropped; the thread still reads |
-| auth-api | `POST /internal/notify/user`, channel `inbox` (F-033-i) | no notice; the message is stored and published as ever |
+| auth-api | `POST /internal/notify/user`, channel `inbox` (F-033-i), `bot` for the user's (F-309) | no notice; the message is stored and published as ever |
 
 ## Guarantees
 

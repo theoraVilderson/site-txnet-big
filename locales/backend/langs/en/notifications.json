@@ -342,6 +342,7 @@
     "userWrote": "💬 New message in \"{{subject}}\", assigned to you.",
     "userWroteTitle": "New message from a user",
     "userWroteMany": "💬 New messages in {{count}} conversations assigned to you.",
-    "userWroteManyTitle": "New user messages ({{count}})"
+    "userWroteManyTitle": "New user messages ({{count}})",
+    "open": "💬 Open the conversation"
   }
 }

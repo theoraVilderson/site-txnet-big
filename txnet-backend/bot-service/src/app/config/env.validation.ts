@@ -93,6 +93,13 @@ export const envSchema = z.object({
    */
   NOTIFICATION_API_BASE_URL: optional(z.string().url()),
   /**
+   * Where `support-service` answers **through the gate** (F-309): the same
+   * Traefik host, for the user's own `/api/support/*` routes — the panel's,
+   * so the chat and the panel hold one conversation. Unset, the member menu
+   * has no support row.
+   */
+  SUPPORT_API_BASE_URL: optional(z.string().url()),
+  /**
    * billing-service **directly**, for the in-chat payment relay only (F-104-ab):
    * `/api/internal/*`, which Traefik does not route, with the service token and
    * no user. Unset, a pre-checkout query is refused with "try again".

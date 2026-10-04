@@ -45,6 +45,14 @@ export const SUGGESTION_OPT_OUT_PREFIX = 'aio:';
 export const LOTTERY_CALLBACK_PREFIX = 'lot:';
 export const lotteryJoinCallback = (lotteryId: string) => `${LOTTERY_CALLBACK_PREFIX}j:${lotteryId}`;
 
+/**
+ * A support thread's bot buttons (F-309): `sup:<kind>:…`. A reply or resolve
+ * notice carries the open one, which auth-service sends and bot-service routes
+ * from any state — the tap lands in that thread, ready for a reply. 42 bytes.
+ */
+export const SUPPORT_CALLBACK_PREFIX = 'sup:';
+export const supportOpenCallback = (conversationId: string) => `${SUPPORT_CALLBACK_PREFIX}o:${conversationId}`;
+
 const OF_KIND: Record<RetentionKind, NoticeClass> = {
   cutoff: 'critical',
   // "An all-clear follows its alarm": it takes the stopped state's channels; its mute switch stays the kind's.

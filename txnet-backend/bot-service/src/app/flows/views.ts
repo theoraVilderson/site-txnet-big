@@ -56,6 +56,9 @@ export const ACTIONS = {
   wheelSpin: 'wheel:spin',
   /** The lotteries (`F-707-p`): the list. A lottery's own buttons carry its id (`lotteryAction`). */
   lotteries: 'menu:lotteries',
+  /** Support (`F-309`): the list, and a new thread. A thread's own buttons carry its id (`supportAction`). */
+  support: 'menu:support',
+  supportNew: 'sup:n',
 } as const;
 
 export const cancel: BotAction = {
@@ -255,7 +258,7 @@ export function miniApp(url: string): BotAction {
  * not published a panel yet shows a menu without the row, rather than a button
  * that opens nothing.
  */
-export function memberMenu(miniAppUrl?: string, topUp = false, reseller = false): BotView {
+export function memberMenu(miniAppUrl?: string, topUp = false, reseller = false, support = false): BotView {
   return view('menu.member', { key: BotKeys.menu.member }, [
     ...(miniAppUrl ? [[miniApp(miniAppUrl)]] : []),
     // F-306-a. Only where billing is reachable (`BillingApiClient.isConfigured`).
@@ -264,6 +267,8 @@ export function memberMenu(miniAppUrl?: string, topUp = false, reseller = false)
     ...(topUp ? [[{ id: ACTIONS.wheel, label: { key: BotKeys.action.wheel } }]] : []),
     // F-707-p. Behind the same reachability: billing says which lotteries this user sees.
     ...(topUp ? [[{ id: ACTIONS.lotteries, label: { key: BotKeys.action.lotteries } }]] : []),
+    // F-309. Only where support is reachable (`SupportApiClient.isConfigured`).
+    ...(support ? [[{ id: ACTIONS.support, label: { key: BotKeys.action.support } }]] : []),
     // F-311-c. The row exists only for a chat the **door** says may administer
     // this bot's reseller (`GET /api/tenants/:id/access`, F-311-e) — never on
     // a rule of the bot's own, and never for the customers this same bot

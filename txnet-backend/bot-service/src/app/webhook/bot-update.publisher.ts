@@ -36,6 +36,8 @@ export interface BotUpdateMessage {
   lang: string;
   text?: string;
   contact?: ChatContext['contact'];
+  /** A file's platform id and what the sender said it is (F-309) — never its bytes. */
+  file?: ChatContext['file'];
   callbackData?: string;
   callbackQueryId?: string;
   messageId?: number;

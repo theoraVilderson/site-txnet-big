@@ -1,6 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { BotClientRegistry, BotPlatform } from '@txnet-backend/messenger';
-import { lotteryJoinCallback, SUGGESTION_OPT_OUT_PREFIX, suggestionCopyVerdict } from '@txnet-backend/shared-core';
+import { lotteryJoinCallback, SUGGESTION_OPT_OUT_PREFIX, suggestionCopyVerdict, supportOpenCallback } from '@txnet-backend/shared-core';
 
 import { LocaleService } from '../../locale/locale.service';
 import { NotificationInboxClient } from './notification-inbox.client';
@@ -86,7 +86,7 @@ export const NOTIFY_TEMPLATES = [
   'suggestionPackageUpgrade',
   // F-1525-c: a reseller's billing wallet running out at its wholesale pace, told to its owner.
   'suggestionResellerTopUp',
-  // F-033-i: a support thread has something for a reader who is not looking — inbox only, one per thread until read.
+  // F-033-i: a support thread has something for a reader who is not looking — one per thread until read; to the user's chats too since F-309.
   'supportReplied',
   'supportResolved',
   'supportUserWrote',
@@ -1059,12 +1059,16 @@ export class UserNotifier {
 
     // F-038-g4: an AI suggestion carries its "don't show this again" — the action id only, never the user.
     // F-707-q: an opt-in lottery's announcement carries Join — the lottery id only; bot-service routes it from any state.
+    // F-309: a support reply or resolve carries Open — bot-service routes it from any state too.
     const markup =
       request.template.startsWith('suggestion') && params.actionId
         ? { inline_keyboard: [[{ text: ns?.suggestion?.optOut ?? "🔕 Don't show this again", callback_data: `${SUGGESTION_OPT_OUT_PREFIX}${params.actionId}` }]] }
         : request.template === 'lotteryOpened' && params.lotteryId
           ? { inline_keyboard: [[{ text: ns?.engagement?.lotteryJoin ?? '✅ Join', callback_data: lotteryJoinCallback(params.lotteryId) }]] }
-          : undefined;
+          : // F-309: a reply or resolve opens its thread in the chat, ready for an answer — the conversation id only.
+            (request.template === 'supportReplied' || request.template === 'supportResolved') && params.conversationId
+            ? { inline_keyboard: [[{ text: ns?.support?.open ?? '💬 Open the conversation', callback_data: supportOpenCallback(params.conversationId) }]] }
+            : undefined;
     let lastError: unknown = null;
     const sent: BotPlatform[] = [];
     for (const link of ordered) {

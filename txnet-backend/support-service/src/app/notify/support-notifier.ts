@@ -21,7 +21,13 @@ import { RedisService } from '../redis/redis.service';
  *
  * **Best effort, after the commit.** The message is the record and the thread
  * reads without any notice; a refused seam is logged, never thrown, and not
- * remembered — the next message tries again. Telegram/Bale are F-309's.
+ * remembered — the next message tries again.
+ *
+ * **The user's chats too (F-309).** A reply or a resolve also goes to the
+ * user's Telegram/Bale chats, carrying the conversation id so its button opens
+ * the thread there. The inbox row is the record: a chat that cannot be told is
+ * logged and does not undo it. An agent's notice stays in the inbox — agents
+ * answer from the panel.
  */
 
 export const SUPPORT_NOTICES = ['supportReplied', 'supportResolved', 'supportUserWrote'] as const;
@@ -38,10 +44,13 @@ export interface NoticeTarget {
 /** What auth-service's seam takes (`user-notify-internal.controller.ts`). */
 export interface NoticeBody {
   userId: string;
-  channel: 'inbox';
+  channel: 'inbox' | 'bot';
   template: SupportNotice;
-  params: { subject: string };
+  params: { subject: string; conversationId?: string };
 }
+
+/** The notices told in the user's chats as well (F-309). */
+const TOLD_IN_CHAT: ReadonlySet<SupportNotice> = new Set(['supportReplied', 'supportResolved']);
 
 /** The Redis calls this needs — the seam the spec fakes. */
 export interface NoticeRedis {
@@ -73,13 +82,14 @@ export class SupportNotifier {
     try {
       const toldAt = await this.redis.get(key);
       if (toldAt !== null && Number(toldAt) >= target.readUpTo) return false;
-      await this.seam.notify(tenantId, {
-        userId: target.userId,
-        channel: 'inbox',
-        template,
-        params: { subject: target.subject.slice(0, PARAM_MAX) },
-      });
+      const subject = target.subject.slice(0, PARAM_MAX);
+      await this.seam.notify(tenantId, { userId: target.userId, channel: 'inbox', template, params: { subject } });
       await this.redis.set(key, String(target.readUpTo), RedisTtl.supportNotified);
+      if (TOLD_IN_CHAT.has(template)) {
+        await this.seam
+          .notify(tenantId, { userId: target.userId, channel: 'bot', template, params: { subject, conversationId: target.conversationId } })
+          .catch((e: unknown) => this.logger.warn(`${template} for conversation ${target.conversationId} not told in chat: ${(e as Error).message}`));
+      }
       return true;
     } catch (e) {
       this.logger.warn(`${template} for conversation ${target.conversationId} not told: ${(e as Error).message}`);

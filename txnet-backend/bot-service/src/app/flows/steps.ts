@@ -71,6 +71,8 @@ const FLOW_STEPS: Record<Exclude<BotFlow, 'login' | 'accountAdd'>, string[]> = {
   timeZone: [],
   // One screen, one tap — nothing to count (F-707-h).
   wheel: [],
+  // A thread is a place to talk in, not a conversation with an end (F-309).
+  support: [],
 };
 
 /**
@@ -95,6 +97,7 @@ export const PROGRESS_KEY: Record<BotFlow, BotKey | null> = {
   campaign: BotKeys.progress.campaign,
   timeZone: null,
   wheel: null,
+  support: null,
 };
 
 export function progressOf(state: NavState): BotText | undefined {

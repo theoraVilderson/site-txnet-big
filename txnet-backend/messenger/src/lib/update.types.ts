@@ -21,6 +21,61 @@ export interface BotMessage {
   text?: string;
   contact?: BotContact;
   successful_payment?: BotSuccessfulPayment;
+  /** Sizes of one picture, smallest first (both platforms). Read through `incomingFileOf`. */
+  photo?: BotPhotoSize[];
+  document?: BotDocument;
+  /** The text sent with a photo or a document. */
+  caption?: string;
+}
+
+export interface BotPhotoSize {
+  file_id: string;
+  file_size?: number;
+}
+
+export interface BotDocument {
+  file_id: string;
+  file_name?: string;
+  mime_type?: string;
+  file_size?: number;
+}
+
+/**
+ * A file a user sent into the chat (F-309), the same on both platforms: what
+ * to ask the platform for (`fileId`, through `getFile`) and what the sender
+ * said it is. Nothing here is trusted — the type and the name are the
+ * sender's claim, and the domain that takes the bytes checks them itself.
+ */
+export const BOT_INCOMING_FILE_KINDS = ['photo', 'document'] as const;
+
+export interface BotIncomingFile {
+  kind: (typeof BOT_INCOMING_FILE_KINDS)[number];
+  fileId: string;
+  fileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  caption?: string;
+}
+
+/** The file on a message, if any: a photo's largest size, or the document. */
+export function incomingFileOf(message: BotMessage | undefined): BotIncomingFile | undefined {
+  const caption = typeof message?.caption === 'string' ? message.caption : undefined;
+  const photo = message?.photo?.length ? message.photo[message.photo.length - 1] : undefined;
+  if (photo?.file_id) {
+    return { kind: 'photo', fileId: photo.file_id, ...(photo.file_size ? { sizeBytes: photo.file_size } : {}), ...(caption ? { caption } : {}) };
+  }
+  const doc = message?.document;
+  if (doc?.file_id) {
+    return {
+      kind: 'document',
+      fileId: doc.file_id,
+      ...(doc.file_name ? { fileName: doc.file_name } : {}),
+      ...(doc.mime_type ? { mimeType: doc.mime_type } : {}),
+      ...(doc.file_size ? { sizeBytes: doc.file_size } : {}),
+      ...(caption ? { caption } : {}),
+    };
+  }
+  return undefined;
 }
 
 /** Same field names on Telegram and Bale (read 2026-09-16). */

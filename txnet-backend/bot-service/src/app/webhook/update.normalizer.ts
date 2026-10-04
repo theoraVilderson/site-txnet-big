@@ -3,6 +3,7 @@ import {
   BotIntegration,
   BotPlatform,
   BotUpdate,
+  incomingFileOf,
   parsePaymentEvent,
 } from '@txnet-backend/messenger';
 import { LocaleService } from '../locale/locale.service';
@@ -61,6 +62,7 @@ export class UpdateNormalizer {
     // addressable — both are dropped rather than answered.
     if (!message?.chat?.id || message.from?.is_bot) return null;
 
+    const file = incomingFileOf(message);
     return {
       platform,
       integration,
@@ -69,6 +71,7 @@ export class UpdateNormalizer {
       lang: this.lang(message.from?.language_code),
       text: typeof message.text === 'string' ? message.text : undefined,
       contact: message.contact,
+      ...(file ? { file } : {}),
       messageId: message.message_id,
       ...(payment ? { payment } : {}),
     };

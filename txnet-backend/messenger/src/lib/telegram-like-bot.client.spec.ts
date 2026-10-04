@@ -5,6 +5,7 @@ import {
   TelegramLikeBotClient,
   WEBHOOK_ALLOWED_UPDATES,
 } from './telegram-like-bot.client';
+import { incomingFileOf } from './update.types';
 
 /**
  * The registration is half of whether the bot works at all, and the half that
@@ -80,5 +81,46 @@ describe('TelegramLikeBotClient webhook registration', () => {
     // Not the same as "no webhook": the caller must not overwrite on it.
     fetchMock.mockRejectedValue(new Error('unreachable'));
     await expect(client().getWebhookInfo()).resolves.toBeNull();
+  });
+});
+
+/**
+ * A file a user sent (F-309). What would break silently: the photo's smallest
+ * size taken instead of its largest, a caption lost, and a file over the cap
+ * downloaded anyway.
+ */
+describe('a file sent into the chat', () => {
+  it('reads the largest photo size, or the document, with its caption', () => {
+    expect(incomingFileOf({ photo: [{ file_id: 'small', file_size: 10 }, { file_id: 'big', file_size: 90 }], caption: 'see' })).toEqual({
+      kind: 'photo',
+      fileId: 'big',
+      sizeBytes: 90,
+      caption: 'see',
+    });
+    expect(incomingFileOf({ document: { file_id: 'd', file_name: 'a.pdf', mime_type: 'application/pdf' } })).toEqual({
+      kind: 'document',
+      fileId: 'd',
+      fileName: 'a.pdf',
+      mimeType: 'application/pdf',
+    });
+    expect(incomingFileOf({ text: 'hi' })).toBeUndefined();
+  });
+
+  it('fetches it by getFile then the file path, and refuses one over the cap', async () => {
+    const client = new TelegramLikeBotClient('bale', 'https://api.test', 'TOKEN', 1000);
+    const fetchMock = vi.spyOn(global, 'fetch').mockImplementation(async (url) =>
+      String(url).endsWith('/getFile')
+        ? ({ ok: true, status: 200, json: async () => ({ ok: true, result: { file_path: 'photos/1.jpg', file_size: 3 } }) } as unknown as Response)
+        : ({ ok: true, status: 200, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer } as unknown as Response),
+    );
+    try {
+      expect(await client.downloadFile('f-1', 10)).toEqual(Buffer.from([1, 2, 3]));
+      expect(String(fetchMock.mock.calls[1][0])).toBe('https://api.test/file/botTOKEN/photos/1.jpg');
+      fetchMock.mockClear();
+      expect(await client.downloadFile('f-1', 2)).toBeNull();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      fetchMock.mockRestore();
+    }
   });
 });

@@ -9,12 +9,13 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
@@ -188,6 +189,29 @@ export class SupportConversationsController {
       bytes: f.buffer,
     }));
     return refusing(() => this.attachments.send(callerOf(req), id, { body: body?.body, files: incoming }));
+  }
+
+  /**
+   * One file's bytes, to the conversation's own user (F-309): for a surface
+   * with no panel Host to spend the signed `url` on — the bot. Outside the
+   * envelope, the body is the file; a refusal is the ordinary envelope.
+   */
+  @Get('conversations/:id/attachments/:attachmentId')
+  @RateLimit(READ)
+  async download(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('attachmentId', new ParseUUIDPipe()) attachmentId: string,
+  ): Promise<void> {
+    const file = await refusing(() => this.attachments.download(callerOf(req), id, attachmentId));
+    res.set({
+      'Content-Type': file.contentType,
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.status(200).send(file.bytes);
   }
 
   /** "I am typing" (F-034): published to the thread's readers, stored nowhere. Repeat every few seconds while typing. */

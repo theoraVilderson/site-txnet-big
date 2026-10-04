@@ -10,8 +10,10 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import {
+  BOT_INCOMING_FILE_KINDS,
   BotClientRegistry,
   BotContact,
+  BotIncomingFile,
   isBotPlatform,
   PaymentEvent,
 } from '@txnet-backend/messenger';
@@ -49,6 +51,16 @@ const dispatchSchema = z.object({
   lang: z.string().min(1),
   text: z.string().optional(),
   contact: z.unknown().optional(),
+  file: z
+    .object({
+      kind: z.enum(BOT_INCOMING_FILE_KINDS),
+      fileId: z.string().min(1),
+      fileName: z.string().optional(),
+      mimeType: z.string().optional(),
+      sizeBytes: z.number().optional(),
+      caption: z.string().optional(),
+    })
+    .optional(),
   callbackData: z.string().optional(),
   callbackQueryId: z.string().optional(),
   messageId: z.number().optional(),
@@ -132,6 +144,7 @@ export class BotDispatchController {
       lang: parsed.data.lang,
       text: parsed.data.text,
       contact: parsed.data.contact as BotContact | undefined,
+      file: parsed.data.file as BotIncomingFile | undefined,
       callbackData: parsed.data.callbackData,
       callbackQueryId: parsed.data.callbackQueryId,
       messageId: parsed.data.messageId,

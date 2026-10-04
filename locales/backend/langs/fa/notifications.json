@@ -342,6 +342,7 @@
     "userWrote": "💬 پیام تازه در گفتگوی «{{subject}}» که به شما سپرده شده است.",
     "userWroteTitle": "پیام تازه از کاربر",
     "userWroteMany": "💬 پیام‌های تازه در {{count}} گفتگوی سپرده‌شده به شما.",
-    "userWroteManyTitle": "پیام‌های تازه‌ی کاربران ({{count}})"
+    "userWroteManyTitle": "پیام‌های تازه‌ی کاربران ({{count}})",
+    "open": "💬 باز کردن گفتگو"
   }
 }
