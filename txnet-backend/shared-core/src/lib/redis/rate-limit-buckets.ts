@@ -510,6 +510,14 @@ export const RateLimitBucket = {
   RESELLER_USER_WRITE: 'reseller-user:write',
 
   /**
+   * A reseller's support consent in `auth-service` (F-117-a), per caller. The
+   * history is read as the card renders; a write opens or closes the
+   * platform's access to the reseller's people.
+   */
+  SUPPORT_CONSENT_READ: 'support-consent:read',
+  SUPPORT_CONSENT_WRITE: 'support-consent:write',
+
+  /**
    * User groups in `auth-service` (F-114-j), per caller. The usual pair: the
    * list and a group's members are read as an admin browses, while a write
    * changes who a discount rule or a campaign reaches.

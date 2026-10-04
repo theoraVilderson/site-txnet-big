@@ -165,6 +165,12 @@ enum AdminAction {
   lottery_delete
   lottery_publish
   lottery_cancel
+  // F-117-a (ADR-0104 (4)). Both boundaries of the platform's access to a
+  // reseller's people, and the reseller's own default length for it.
+  support_consent_request
+  support_consent_grant
+  support_consent_revoke
+  support_consent_policy_set
 
   @@schema("audit")
 }
@@ -221,7 +227,54 @@ enum AuditTargetType {
   spin_wheel_config
   // F-707-i. One lottery of a tenant.
   lottery
+  // F-117-a. One support access consent (or the request for one).
+  support_consent
 
+  @@schema("audit")
+}
+
+/// F-117-a (ADR-0104 (4)) — what the platform may do among a reseller's people.
+enum SupportConsentScope {
+  read
+  act
+
+  @@schema("audit")
+}
+
+/// F-117-a (ADR-0104 (4), catalog §3.7) — the platform's time-bound access to a
+/// reseller's people. A row is a request (`requestedAt`, no `grantedAt`), a live
+/// consent (`grantedAt`, `expiresAt` ahead, no `revokedAt`) or history. Only the
+/// reseller grants; the platform may only ask. `liveSupportConsent` (shared-core)
+/// is the one reader every door uses.
+model SupportAccessConsent {
+  id                String              @id @default(uuid()) @db.Uuid
+  tenantId          String              @db.Uuid
+  scope             SupportConsentScope
+  /// The asker's words on a request, or the reseller's on a grant.
+  reason            String?
+  requestedByUserId String?             @db.Uuid
+  requestedAt       DateTime?
+  grantedByUserId   String?             @db.Uuid
+  grantedAt         DateTime?
+  /// At most 24 h after `grantedAt` (CHECK).
+  expiresAt         DateTime?
+  /// Revoked while live, declined or withdrawn while a request, or superseded by a newer grant.
+  revokedByUserId   String?             @db.Uuid
+  revokedAt         DateTime?
+  createdAt         DateTime            @default(now())
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@map("support_access_consent")
+  @@schema("audit")
+}
+
+/// F-117-a — a reseller's own default length for a grant; no row = 4 h.
+model SupportConsentPolicy {
+  tenantId     String   @id @db.Uuid
+  defaultHours Int      @db.SmallInt
+  updatedAt    DateTime @updatedAt
+
+  @@map("support_consent_policy")
   @@schema("audit")
 }
 

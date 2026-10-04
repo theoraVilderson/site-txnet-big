@@ -244,6 +244,8 @@ export const envSchema = z.object({
   // and each one is a call to the messenger with a caller-supplied value.
   RESELLER_BOT_READ_RATE_LIMIT: rateLimit(60),
   RESELLER_BOT_WRITE_RATE_LIMIT: rateLimit(10),
+  SUPPORT_CONSENT_READ_RATE_LIMIT: rateLimit(60),
+  SUPPORT_CONSENT_WRITE_RATE_LIMIT: rateLimit(20),
   // A named reseller's own users (F-311-a), per caller. The list is paged and
   // searched as the reseller types; a block ends every session of the account
   // it names, so it is budgeted like the bot connect beside it.

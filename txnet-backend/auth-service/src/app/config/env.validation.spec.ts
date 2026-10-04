@@ -36,7 +36,7 @@ describe('validateEnv — an empty var is an unset var', () => {
       // `BOT_UNPROVEN_RATE_LIMIT` by `CaptchaGuard` (F-0201-c, ADR-0070), so
       // no route names either one and nothing else would notice a missing
       // default.
-      expect(found).toHaveLength(39);
+      expect(found).toHaveLength(41);
       for (const [name, value] of found) {
         expect(`${name}=${value}`).toMatch(/=[1-9]\d*$/);
       }

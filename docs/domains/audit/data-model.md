@@ -17,6 +17,9 @@ Source of truth: `txnet-backend/prisma/domains/audit.prisma` (Postgres schema
 | impersonation_session | admin -> target user, reason note, optional linked ticket, start/end | denormalized via admin/target | permanent |
 | linked_account_group / linked_account_member | a set of a user's own accounts they can switch between; `verifiedViaOtp`. The group belongs to one **scope** (`member.scopeKey`, ADR-0015), and `group.actingAsUserId` is that place's answer to "which of us am I signed in as here" (ADR-0034) — written by a switch, read only by an *implicit* sign-in, and inert when it names someone no longer a member here | via member users | permanent |
 
+| support_access_consent | the platform's access to a reseller's people (F-117-a): a request (`requestedAt`/`By`), a grant (`grantedAt`/`By`, `expiresAt` ≤ 24 h later — CHECK), its end (`revokedAt`/`By`); `scope` `read`/`act`. One open request per tenant (partial unique) | `tenantId`, RLS | permanent |
+| support_consent_policy | a reseller's default grant length, `defaultHours` 1–24; no row = 4 | `tenantId`, RLS | replaced |
+
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
 |---|---|---|---|

@@ -37,6 +37,8 @@ see the ADR on why the *member row* carries the scope and not the group.
 | 11 | A payout never exceeds what is outstanding for that tenant, and is never zero or negative (ADR-0041 §5). Two payouts recorded at once cannot together exceed it either (F-096-g) | `SettlementService.recordPayout`, summed from the two ledgers **inside** the transaction that writes, behind `pg_advisory_xact_lock` on the tenant being paid | a negative balance the platform reads as a tenant owing *it* money, recorded through a settlement ledger |
 | 12 | **Every admin write on a user's Grant or config writes exactly one `admin_audit_log` row, inside the act's transaction and after it** (F-311-r); a refused act writes none, a repeat that changed nothing writes none, and no row carries a subscription token or link | `ResellerUserGrantsService` → `auditedGrantAct` / `auditedConfigAct` (`billing-service/src/app/grant-audit/`); asserted over every write method from one list in `grant-audit.spec.ts`; every act's notice follows the row in the same transaction, `admin-notice.spec.ts` (F-311-s) | "who froze this and why" has no answer, or a row names a state the act never left |
 
+| 13 | **Only the reseller grants the platform access to its people, for at most 24 hours; the platform may only ask** (ADR-0104 (4), F-117-a). Every request, grant and revoke writes one `admin_audit_log` row in the reseller's trail, inside the act's transaction and after it; "live" is read only through `liveSupportConsent` | `SupportConsentService` (`as === 'staff'` refused a grant, owner/member refused a request); the 24 h CHECK on `support_access_consent` | the platform grants itself standing access — the leaked-credential case ADR-0104 exists for |
+
 ## How to test
 
 3, 4. `account-switch.service.spec.ts`: a first add creates the group with
@@ -87,6 +89,10 @@ see the ADR on why the *member row* carries the scope and not the group.
    Mutation-checked 2026-09-12: dropping `isActive: true` from the withdrawal's
    `updateMany` filter turns the race case red, and removing `assertOperator`
    from `owed()` alone turns two cases red.
+
+13. `auth-service/src/app/support-consent/support-consent.service.spec.ts`:
+   staff refused a grant and a reseller a request with nothing written; write
+   order `['supersede', 'create', 'audit']`; the default and the 24 h cap.
 
 12. `billing-service/src/app/grant-audit/grant-audit.spec.ts`. **Asserted from
    the service's prototype**, not a list alone: every method not named as a read

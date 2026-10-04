@@ -60,6 +60,30 @@ every write; the route is `GET …/users/:userId/grants/:grantId/history`.
 Not recorded: the system's own acts (the unfreeze sweep, a quota stop) — they
 are not an admin's. Telling the user is the next section's.
 
+## Support consent (built — F-117-a)
+
+`auth-service/src/app/support-consent/`, ADR-0104 (4), catalog §3.7. The
+platform's staff reach a reseller's people only under a live consent the
+reseller grants; the reader is `liveSupportConsent` (shared-core), and every
+door uses it, never its own query.
+
+| Route `/api/auth/tenants/:tenantId/support-consent` | Who | What |
+|---|---|---|
+| `GET` | anyone `ResellerAccess` admits | `{defaultHours, items[]}` — newest 50, each with `state` `requested`/`live`/`expired`/`revoked`/`declined`, derived on read |
+| `POST requests` `{scope, reason≥10}` | platform staff only (`only_platform_requests`) | one open request per reseller (`request_pending`, 409) |
+| `POST` `{scope, hours?, reason?, requestId?}` | the reseller only (`platform_cannot_grant`) | live from now for `hours` (its default, else 4; 1–24, `hours_out_of_range`); a `requestId` turns that request live with the scope chosen here; any earlier live one is revoked |
+| `POST :consentId/revoke` | anyone admitted | ends a request (declined/withdrawn) or a live grant; anything else `consent_not_found` |
+| `PUT policy` `{defaultHours}` | the reseller only | its default length, 1–24 |
+
+- Scope `read` sees; `act` also acts. Which routes honour it is each door's
+  (F-117-b users-admin, F-033-l support).
+- Writes take capability `account`: a suspended reseller still grants and revokes.
+- **A revoke takes effect on the next request**: nothing caches a consent.
+- Each request, grant and revoke writes one `admin_audit_log` row in the
+  reseller's trail (`support_consent_*`, target `support_consent`, before/after
+  `{scope, grantedAt, expiresAt, revokedAt}`); the default writes
+  `support_consent_policy_set` on target `tenant` (invariant 13).
+
 ## Emits (events)
 
 **An admin's act, told to the Grant's owner (F-311-s, built).** `auditedGrantAct`
