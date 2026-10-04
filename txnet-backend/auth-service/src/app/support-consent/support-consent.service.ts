@@ -14,6 +14,7 @@ import {
   SUPPORT_CONSENT_MAX_HOURS,
 } from '@txnet-backend/shared-core';
 
+import { ImpersonationLeash } from '../impersonation/impersonation-leash';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Who is asking, as `AuthGuard` left them on the request. */
@@ -168,6 +169,7 @@ export class SupportConsentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: ResellerAccess,
+    private readonly leash: ImpersonationLeash,
   ) {}
 
   list(actor: SupportConsentActor, tenantId: string, now = new Date()) {
@@ -258,7 +260,8 @@ export class SupportConsentService {
       if (input.hours !== undefined && (input.hours < 1 || input.hours > SUPPORT_CONSENT_MAX_HOURS)) {
         throw new SupportConsentRefused('hours_out_of_range');
       }
-      return tenantTransaction(this.prisma, async (tx) => {
+      let superseded: string[] = [];
+      const out = await tenantTransaction(this.prisma, async (tx) => {
         const hours =
           input.hours ??
           (await tx.supportConsentPolicy.findUnique({ where: { tenantId: reseller.id } }))?.defaultHours ??
@@ -270,7 +273,13 @@ export class SupportConsentService {
           : null;
         if (input.requestId && !pending) throw new SupportConsentRefused('consent_not_found');
 
-        // One live consent at a time: a new grant ends the one before it.
+        // One live consent at a time: a new grant ends the one before it, and what rode on it (F-117-e).
+        superseded = (
+          await tx.supportAccessConsent.findMany({
+            where: { tenantId: reseller.id, grantedAt: { not: null }, revokedAt: null, expiresAt: { gt: now } },
+            select: { id: true },
+          })
+        ).map((r) => r.id);
         await tx.supportAccessConsent.updateMany({
           where: { tenantId: reseller.id, grantedAt: { not: null }, revokedAt: null, expiresAt: { gt: now } },
           data: { revokedAt: now, revokedByUserId: actor.userId },
@@ -288,12 +297,14 @@ export class SupportConsentService {
         await this.audit(tx, reseller, actor, 'support_consent_grant', row, pending, ip, input.reason ?? null);
         return view(row, now);
       });
+      await this.leash.endUnder({ consentIds: superseded }, now);
+      return out;
     });
   }
 
   revoke(actor: SupportConsentActor, tenantId: string, consentId: string, ip: string, now = new Date()): Promise<ConsentView> {
     return this.run(actor, tenantId, 'account', async (reseller) => {
-      return tenantTransaction(this.prisma, async (tx) => {
+      const out = await tenantTransaction(this.prisma, async (tx) => {
         // A request still open, or a grant still running: nothing else ends.
         const open = await tx.supportAccessConsent.findFirst({
           where: { id: consentId, tenantId: reseller.id, revokedAt: null },
@@ -307,6 +318,9 @@ export class SupportConsentService {
         await this.audit(tx, reseller, actor, 'support_consent_revoke', row, before, ip, null);
         return view(row, now);
       });
+      // Committed: an impersonation riding on it ends now, not at its 30 minutes (F-117-e).
+      await this.leash.endUnder({ consentIds: [consentId] }, now);
+      return out;
     });
   }
 
@@ -402,7 +416,7 @@ export class SupportConsentService {
   /** Its entrant leaves early (F-117-d). Anyone else, or an entry already over, is `consent_not_found`. */
   endEmergency(actor: SupportConsentActor, tenantId: string, entryId: string, ip: string, now = new Date()): Promise<EmergencyEntryView> {
     return this.run(actor, tenantId, 'read', async (reseller) => {
-      return tenantTransaction(this.prisma, async (tx) => {
+      const out = await tenantTransaction(this.prisma, async (tx) => {
         const running = await tx.emergencyAccessEntry.findFirst({
           where: { id: entryId, tenantId: reseller.id, userId: actor.userId, endedAt: null, expiresAt: { gt: now } },
         });
@@ -422,6 +436,8 @@ export class SupportConsentService {
         });
         return entryView(row, now);
       });
+      await this.leash.endUnder({ entryId }, now);
+      return out;
     });
   }
 

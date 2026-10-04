@@ -51,7 +51,7 @@ Surfaced over HTTP by the `auth-api` interface — see
 | find a user (F-018-ad, v21) | `q` (a phone in any spelling, part of a number, username or email; 3-64 chars) | up to `limit` (1-20, default 10) of the caller's own tenant, deleted excluded, newest first: `id, fullName, username, phoneMasked, status` — never the number or an email | sync | `user.search` missing (403); `auth.userSearchRefused` (403) unless the caller's tenant is the `platform_owner` — the key alone is not the boundary |
 | hand over a session | outgoing sessionId + userId, the target user, ip, user-agent, **switch scope** | the target's `{accessToken, refreshToken, expiresIn}`, stamped with that scope; the outgoing session revoked `account_switched` | sync tx | (the caller has already decided the switch is allowed) |
 | revoke a user's sessions **in one scope** | userId, scopeKey, reason | the count revoked; only sessions minted in that scope, markers dropped one by one | sync | — |
-| start impersonation | targetUserId, reasonNote (>=10 chars) | impersonated access token (30 min) | sync | target not lower-ranked, target inactive |
+| start impersonation | targetUserId, reasonNote (>=10 chars) | impersonated access token (30 min) | sync | target not lower-ranked, target inactive; a **reseller's** user by platform staff: `contract.reseller-users.md` (F-117-e) |
 | end impersonation | (from session) | — | sync | not an impersonation session |
 
 Access-token claims (consumed by `forward-auth` and upstream services):

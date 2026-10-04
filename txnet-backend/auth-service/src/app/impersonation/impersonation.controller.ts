@@ -3,11 +3,13 @@ import {
   Controller,
   ForbiddenException,
   Ip,
+  Param,
+  ParseUUIDPipe,
   Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { TenantCapability } from '@txnet-backend/shared-core';
+import { accessTraceOf, TenantCapability } from '@txnet-backend/shared-core';
 import { ImpersonationService } from './impersonation.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
@@ -38,6 +40,26 @@ export class ImpersonationController {
       ip,
       userAgent,
     );
+  }
+
+  /**
+   * A reseller's user, by the platform's staff (F-117-e, ADR-0104): only under
+   * the reseller's live `act` consent or the caller's own emergency entry —
+   * `ResellerAccess` decides, in the service. Refusals are 403 `{reason}`
+   * (`consent_required`, `consent_read_only`, `not_allowed`, …).
+   */
+  @Post('tenants/:tenantId/users/:userId/impersonate')
+  @UseGuards(AuthGuard, new PermissionsGuard(['user.impersonate']))
+  async impersonateResellerUser(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Req() req: any,
+    @Body('reasonNote') reasonNote: string,
+    @Ip() ip: string,
+  ) {
+    const user = req.user;
+    const actor = { userId: user.sub, tenantId: user.tenantId, permissions: user.permissions ?? [], trace: accessTraceOf(req) };
+    return this.impersonationService.startForReseller(actor, tenantId, userId, reasonNote, ip, req.get('user-agent') ?? 'unknown');
   }
 
   @TenantCapability('signOut')

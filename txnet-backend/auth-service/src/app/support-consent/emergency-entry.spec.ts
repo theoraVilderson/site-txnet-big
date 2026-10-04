@@ -68,7 +68,8 @@ describe('emergency entry', () => {
         runWithTenant({ id: reseller }, () => work({ id: reseller, slug: 'shop', as })),
       ),
     };
-    return { service: new SupportConsentService(prisma as never, access as never), entries, audits, outbox, order };
+    const leash = { endUnder: vi.fn(async () => 0) };
+    return { service: new SupportConsentService(prisma as never, access as never, leash as never), entries, audits, outbox, order, leash };
   };
 
   it('opens for one hour exactly, recorded and told to the owner in one transaction', async () => {
@@ -111,9 +112,10 @@ describe('emergency entry', () => {
   it('its entrant may end it early; nobody else can', async () => {
     const running = { id: 'e-0', tenantId: reseller, userId: 'staff-1', startedAt: now, expiresAt: new Date(now.getTime() + hour), endedAt: null };
     const other = { ...staff, userId: 'staff-2' };
-    const { service, audits } = build('staff', [running]);
+    const { service, audits, leash } = build('staff', [running]);
     await expect(service.endEmergency(other, reseller, 'e-0', '1.1.1.1', now)).rejects.toEqual(new SupportConsentRefused('consent_not_found'));
     await expect(service.endEmergency(staff, reseller, 'e-0', '1.1.1.1', now)).resolves.toMatchObject({ state: 'ended' });
     expect(audits.map((a) => a['action'])).toEqual(['emergency_entry_end']);
+    expect(leash.endUnder).toHaveBeenCalledWith({ entryId: 'e-0' }, now);
   });
 });

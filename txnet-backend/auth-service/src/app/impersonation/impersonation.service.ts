@@ -1,8 +1,17 @@
-import { RedisTtl } from '@txnet-backend/shared-core';
+import {
+  RedisTtl,
+  ResellerAccess,
+  ResellerAccessRefused,
+  ResellerActor,
+  SupportConsentRefused,
+  tenantTransaction,
+} from '@txnet-backend/shared-core';
+import type { Prisma } from '@prisma/client';
 import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TokenService } from '../auth/token.service';
@@ -24,7 +33,61 @@ export class ImpersonationService {
     private readonly tokens: TokenService,
     private readonly sessionService: SessionService,
     private readonly sessions: SessionStore,
+    private readonly access: ResellerAccess,
   ) {}
+
+  /**
+   * The platform's staff become a reseller's user (F-117-e, ADR-0104 (4)(5),
+   * catalog §3.6 layer 6): `POST /api/auth/tenants/:tenantId/users/:userId/impersonate`.
+   * Admitted only by the consent door with capability `staffWrite` — a live
+   * `act` consent, or the caller's own emergency entry — which also records the
+   * request in the reseller's trail. The session ends no later than what
+   * admitted it (and never later than the 30 minutes), is tied to it, so a
+   * revoke or an early end kills it at once (`ImpersonationLeash`), and its
+   * audit row is in the reseller's own log.
+   */
+  async startForReseller(
+    actor: ResellerActor,
+    tenantId: string,
+    targetUserId: string,
+    reasonNote: string,
+    ip: string,
+    userAgent: string,
+    now = new Date(),
+  ) {
+    if (!reasonNote || reasonNote.trim().length < 10) {
+      throw new BadRequestException('Reason note must be at least 10 characters');
+    }
+    // The admin is a user of the platform's tenant: read before the reseller's scope opens.
+    const admin = await this.prisma.user.findUnique({ where: { id: actor.userId }, include: { role: true } });
+    try {
+      return await this.access.runIncludingPlatform(actor, tenantId, 'staffWrite', async (admitted) => {
+        if (admitted.as !== 'staff') throw new ForbiddenException('Only the platform impersonates here');
+        const target = await this.prisma.user.findUnique({
+          where: { id: targetUserId },
+          include: { role: { include: { rolePermissions: { include: { permission: true } } } } },
+        });
+        const leftSec = admitted.support ? Math.floor((admitted.support.endsAt.getTime() - now.getTime()) / 1000) : IMPERSONATION_TTL_SEC;
+        if (leftSec <= 0) throw new ForbiddenException('The consent has ended');
+        return this.begin(actor.userId, targetUserId, admin, target, reasonNote, ip, userAgent, {
+          expiresInSec: Math.min(IMPERSONATION_TTL_SEC, leftSec),
+          tenantId: admitted.id,
+          ground: {
+            consentId: admitted.support?.consentId ?? null,
+            emergencyEntryId: admitted.support?.entryId ?? null,
+          },
+          // Bound to the reseller: its audit log is under RLS (dual audit, §3.6 layer 5).
+          transact: (fn) => tenantTransaction(this.prisma, fn),
+        });
+      });
+    } catch (err) {
+      if (err instanceof SupportConsentRefused || err instanceof ResellerAccessRefused) {
+        if (err.reason === 'reseller_not_found') throw new NotFoundException({ reason: err.reason });
+        throw new ForbiddenException({ reason: err.reason });
+      }
+      throw err;
+    }
+  }
 
   async startImpersonation(
     adminId: string,
@@ -46,6 +109,28 @@ export class ImpersonationService {
       },
     });
 
+    return this.begin(adminId, targetUserId, admin, target, reasonNote, ip, userAgent, {
+      expiresInSec: IMPERSONATION_TTL_SEC,
+      transact: (fn) => this.prisma.$transaction(fn),
+    });
+  }
+
+  private async begin(
+    adminId: string,
+    targetUserId: string,
+    admin: Prisma.UserGetPayload<{ include: { role: true } }> | null,
+    target: Prisma.UserGetPayload<{ include: { role: { include: { rolePermissions: { include: { permission: true } } } } } }> | null,
+    reasonNote: string,
+    ip: string,
+    userAgent: string,
+    opts: {
+      expiresInSec: number;
+      /** A reseller's user (F-117-e): whose log the start is written to, and what admitted the platform. */
+      tenantId?: string;
+      ground?: { consentId: string | null; emergencyEntryId: string | null };
+      transact: <R>(fn: (tx: Prisma.TransactionClient) => Promise<R>) => Promise<R>;
+    },
+  ) {
     if (!admin || !target) throw new BadRequestException('User not found');
     if (target.status !== 'active')
       throw new BadRequestException('Target user is not active');
@@ -66,13 +151,14 @@ export class ImpersonationService {
     // entry, which only holds if a failed audit write takes the session with
     // it. Committing the session separately would leave an unaudited
     // impersonated session behind whenever the audit insert failed.
-    const result = await this.prisma.$transaction(async (tx) => {
+    const result = await opts.transact(async (tx) => {
       const impersonation = await tx.impersonationSession.create({
         data: {
           adminId,
           targetUserId,
           reasonNote,
           adminIpAddress: ip,
+          ...(opts.ground ?? {}),
         },
       });
 
@@ -84,13 +170,14 @@ export class ImpersonationService {
           isImpersonated: true,
           impersonationSessionId: impersonation.id,
           switchedFromUserId: adminId,
-          expiresInSec: IMPERSONATION_TTL_SEC,
+          expiresInSec: opts.expiresInSec,
           tx,
         },
       );
 
       await tx.adminAuditLog.create({
         data: {
+          ...(opts.tenantId ? { tenantId: opts.tenantId } : {}),
           adminId,
           action: 'user_impersonate_start',
           targetEntityType: 'user',
@@ -114,7 +201,7 @@ export class ImpersonationService {
 
     return {
       accessToken,
-      expiresIn: IMPERSONATION_TTL_SEC,
+      expiresIn: opts.expiresInSec,
     };
   }
 

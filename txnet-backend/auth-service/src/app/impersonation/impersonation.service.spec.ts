@@ -70,6 +70,7 @@ function harness() {
     tokens as never,
     sessionService as never,
     sessions as never,
+    {} as never,
   );
 
   return {

@@ -209,7 +209,13 @@ describe('ResellerAccess', () => {
 
     // `read` sees and refuses every write; `act` does both.
     const reading = build('active', [], [consent()]);
-    await expect(reading.admitIncludingPlatform(staff, RESELLER, 'read', T0)).resolves.toEqual({ id: RESELLER, slug: 'ali', as: 'staff' });
+    await expect(reading.admitIncludingPlatform(staff, RESELLER, 'read', T0)).resolves.toEqual({
+      id: RESELLER,
+      slug: 'ali',
+      as: 'staff',
+      // What admitted them, and when it ends: an impersonation ends no later (F-117-e).
+      support: { tier: 'consent', consentId: 'consent-1', endsAt: new Date('2026-09-18T13:00:00Z') },
+    });
     await expect(reading.admitIncludingPlatform(staff, RESELLER, 'staffWrite', T0)).rejects.toMatchObject({ reason: 'consent_read_only' });
     await expect(reading.admitIncludingPlatform(staff, RESELLER, 'account', T0)).rejects.toMatchObject({ reason: 'consent_read_only' });
     await expect(build('active', [], [consent({ scope: 'act' })]).admitIncludingPlatform(staff, RESELLER, 'staffWrite', T0)).resolves.toMatchObject({

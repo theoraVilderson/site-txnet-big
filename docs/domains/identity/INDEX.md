@@ -3,7 +3,7 @@ id: identity
 layer: domain
 status: active
 version: 26
-keywords: [time zone, timezone, user time zone, منطقه زمانی, ساعت کاربر, notice messenger, messenger for notices, telegram or bale for notices, پیام‌رسان اعلان‌ها, users, roles, manage roles, create a role, edit a role, role permissions, staff role, نقش‌ها, ساختن نقش, ویرایش نقش, دسترسی‌های نقش, find a user, user search, user picker, جستجوی کاربر, reseller owner login, my reseller panel, handoff, پنل نمایندگی من, owner on own domain, owner in reseller bot chat, مالک در ربات نماینده, login, auth, rbac, roles, permissions, sessions, otp, otp channel, otp delivery push, channel token, delivery result, delivery method, telegram, bale, bot account, bot link, share contact, forgot password, password reset, phone number, e164, phone format, country, email, email address, verify email, email verification, smtp, ایمیل, تایید ایمیل, شماره موبایل, فرمت شماره]
+keywords: [impersonate a reseller's user, impersonation under consent, ورود به‌جای کاربر نماینده, time zone, timezone, user time zone, منطقه زمانی, ساعت کاربر, notice messenger, messenger for notices, telegram or bale for notices, پیام‌رسان اعلان‌ها, users, roles, manage roles, create a role, edit a role, role permissions, staff role, نقش‌ها, ساختن نقش, ویرایش نقش, دسترسی‌های نقش, find a user, user search, user picker, جستجوی کاربر, reseller owner login, my reseller panel, handoff, پنل نمایندگی من, owner on own domain, owner in reseller bot chat, مالک در ربات نماینده, login, auth, rbac, roles, permissions, sessions, otp, otp channel, otp delivery push, channel token, delivery result, delivery method, telegram, bale, bot account, bot link, share contact, forgot password, password reset, phone number, e164, phone format, country, email, email address, verify email, email verification, smtp, ایمیل, تایید ایمیل, شماره موبایل, فرمت شماره]
 source:
   - txnet-backend/prisma/domains/identity.prisma
   - txnet-backend/auth-service/src/app/auth/auth.service.ts
@@ -28,6 +28,8 @@ source:
   - txnet-backend/auth-service/src/app/auth/register/register.service.ts
   - txnet-backend/auth-service/src/app/auth/session/session.service.ts
   - txnet-backend/auth-service/src/app/impersonation/impersonation.service.ts
+  - txnet-backend/auth-service/src/app/impersonation/impersonation-leash.ts
+  - txnet-backend/prisma/domains/migrations/20261004000400_impersonation_rides_on_consent/**
   - txnet-backend/auth-service/src/app/auth/surface-owner/surface-owner.service.ts
   - txnet-backend/auth-service/src/app/auth/handoff/handoff.service.ts
   - txnet-backend/auth-service/src/app/auth/users/user-search.service.ts

@@ -81,7 +81,8 @@ door uses it, never its own query.
 - Scope `read` sees; `act` also acts. Which routes honour it is each door's
   (F-117-b users-admin, F-033-l support).
 - Writes take capability `account`: a suspended reseller still grants and revokes.
-- **A revoke takes effect on the next request**: nothing caches a consent.
+- **A revoke takes effect on the next request**: nothing caches a consent. An
+  impersonation riding on it ends at once (identity `contract.reseller-users.md`, F-117-e).
 - **Every query on these tables runs in a `tenantTransaction`**: they are under
   RLS and not in `withTenant`'s registry, so a bare query binds no tenant and
   sees nothing (an insert is refused by the policy).

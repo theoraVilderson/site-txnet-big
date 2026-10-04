@@ -89,3 +89,25 @@ Code: `txnet-backend/auth-service/src/app/auth/users/reseller-users.service.ts`.
 - **No role or permission change.** A reseller administers its roles at
   `/auth/roles` ([contract.roles.md](contract.roles.md)); this surface only
   moves a user's `status`.
+
+## Impersonating a reseller's user (F-117-e)
+
+`POST /api/auth/tenants/:tenantId/users/:userId/impersonate` `{reasonNote≥10}`,
+`user.impersonate` plus the consent door (ADR-0104 (4)(5), catalog §3.6 layer
+6). The same-tenant route (`/api/auth/users/:userId/impersonate`) never reaches
+a reseller's user: RLS hides them from the platform's scope.
+
+- **Admitted by `runIncludingPlatform` with capability `staffWrite`**: a live
+  `act` consent, or the caller's own emergency entry (tier C). A `read`
+  consent is 403 `consent_read_only`; none, 403 `consent_required`. The door
+  records the request in the reseller's trail (audit invariant 14). Platform
+  staff only — an owner or member is 403.
+- **The session ends no later than what admitted it**: its life is the lesser
+  of 30 minutes and the time the consent or entry has left; no refresh token.
+- **It is tied to it** — `impersonation_session.consentId` /
+  `emergencyEntryId` — and `ImpersonationLeash` ends it the moment that ends
+  early: a revoke, a grant superseding the consent, the entry ended. The rows
+  are marked first, then the Redis markers are dropped, so the next request
+  is refused.
+- Rank ceiling and reason are invariant 7's; the start's audit row is in the
+  **reseller's** log (`tenantId`), written in a transaction bound to it.

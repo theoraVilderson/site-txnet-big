@@ -4,7 +4,7 @@ import { TenantStatus, TenantType, type PrismaClient } from '@prisma/client';
 import { holdsPermission } from '../http/permissions';
 import { runWithTenant } from '../tenant-context/tenant-context';
 import { tenantTransaction } from '../tenant-context/with-tenant';
-import { AccessTrace, recordPlatformAccess } from './platform-access-trail';
+import { AccessTrace, PlatformAccessTier, recordPlatformAccess } from './platform-access-trail';
 import { TenantCapabilityName, tenantAllows } from './status-policy';
 import { liveEmergencyEntry, liveSupportConsent } from './support-consent';
 
@@ -30,7 +30,14 @@ export type ResellerActor = { userId: string; tenantId: string; permissions: str
  * tenant (F-311-ab1): a read by tenant then names that tenant's catalog rows as
  * `tenantId` null, not by this id.
  */
-export type AdmittedReseller = { id: string; slug: string; as: 'owner' | 'member' | 'staff'; platform?: true };
+export type AdmittedReseller = { id: string; slug: string; as: 'owner' | 'member' | 'staff'; platform?: true; support?: SupportAdmission };
+
+/**
+ * What let platform staff in to a reseller's people (`…IncludingPlatform` only):
+ * the consent (tier B) or their emergency entry (tier C), and when it ends. A
+ * session minted on it — impersonation (F-117-e) — ends no later than `endsAt`.
+ */
+export type SupportAdmission = { tier: PlatformAccessTier; consentId?: string; entryId?: string; endsAt: Date };
 
 export type ResellerAccessRejection = 'not_allowed' | 'reseller_not_found' | 'reseller_suspended' | 'reseller_terminated';
 
@@ -157,7 +164,8 @@ export class ResellerAccess {
       const state = { status: reseller.status, graceEndsAt: reseller.graceEndsAt?.toISOString() ?? null };
       if (!tenantAllows(state, capability, now)) throw new ResellerAccessRefused('reseller_suspended', tenantId);
     } else if (platform && !owner) {
-      await this.mustHoldConsent(actor, reseller.id, capability, now);
+      const support = await this.mustHoldConsent(actor, reseller.id, capability, now);
+      return { id: reseller.id, slug: reseller.slug, as: 'staff', support };
     }
     return { id: reseller.id, slug: reseller.slug, as: staff ? 'staff' : owner ? 'owner' : 'member' };
   }
@@ -198,16 +206,20 @@ export class ResellerAccess {
    * request is one row in the reseller's trail (F-117-c, ADR-0104 (6)), in the
    * same transaction as the read.
    */
-  private async mustHoldConsent(actor: ResellerActor, resellerId: string, capability: TenantCapabilityName, now: Date): Promise<void> {
-    await runWithTenant({ id: resellerId }, () =>
-      tenantTransaction(this.prisma, async (tx) => {
+  private async mustHoldConsent(actor: ResellerActor, resellerId: string, capability: TenantCapabilityName, now: Date): Promise<SupportAdmission> {
+    return runWithTenant({ id: resellerId }, () =>
+      tenantTransaction(this.prisma, async (tx): Promise<SupportAdmission> => {
         const base = { tenantId: resellerId, actorUserId: actor.userId, capability, trace: actor.trace };
         const consent = await liveSupportConsent(tx, resellerId, now);
         if (consent && (capability === 'read' || consent.scope === 'act')) {
-          return recordPlatformAccess(tx, { ...base, tier: 'consent', consentId: consent.id, scope: consent.scope });
+          await recordPlatformAccess(tx, { ...base, tier: 'consent', consentId: consent.id, scope: consent.scope });
+          return { tier: 'consent', consentId: consent.id, endsAt: consent.expiresAt };
         }
         const entry = await liveEmergencyEntry(tx, resellerId, actor, now);
-        if (entry) return recordPlatformAccess(tx, { ...base, tier: 'emergency', entryId: entry.id, scope: 'act' });
+        if (entry) {
+          await recordPlatformAccess(tx, { ...base, tier: 'emergency', entryId: entry.id, scope: 'act' });
+          return { tier: 'emergency', entryId: entry.id, endsAt: entry.expiresAt };
+        }
         throw new SupportConsentRefused(consent ? 'consent_read_only' : 'consent_required', resellerId);
       }),
     );

@@ -337,12 +337,22 @@ model ImpersonationSession {
   reasonNote     String
   /// The support conversation that justified access (ADR-0112 point 2).
   linkedConversationId String? @db.Uuid
+  /// F-117-e (ADR-0104): a reseller's user impersonated by platform staff —
+  /// the consent (tier B) or emergency entry (tier C) that admitted it, each
+  /// naming the reseller. Revoking or ending it ends this session at once. Null
+  /// on a same-tenant impersonation, which needs neither. No `tenantId`: this
+  /// table is the platform's record, not a tenant's (the start's audit row is).
+  consentId        String? @db.Uuid
+  emergencyEntryId String? @db.Uuid
   startedAt      DateTime  @default(now())
   endedAt        DateTime?
   adminIpAddress String
 
   linkedConversation SupportConversation? @relation(fields: [linkedConversationId], references: [id])
   sessions     Session[]
+
+  @@index([consentId])
+  @@index([emergencyEntryId])
 
   @@map("impersonation_session")
   @@schema("audit")

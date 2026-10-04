@@ -83,8 +83,9 @@ describe('SupportConsentService', () => {
         runWithTenant({ id: reseller }, () => work({ id: reseller, slug: 'shop', as: opts.as ?? 'owner' })),
       ),
     };
-    const service = new SupportConsentService(prisma as never, access as never);
-    return { service, rows, audits, order, bound };
+    const leash = { endUnder: vi.fn(async () => 0) };
+    const service = new SupportConsentService(prisma as never, access as never, leash as never);
+    return { service, rows, audits, order, bound, leash };
   };
 
   it('refuses platform staff a grant, and writes nothing', async () => {
@@ -145,10 +146,12 @@ describe('SupportConsentService', () => {
 
   it('revoke ends a live consent; an ended one is refused and nothing is written', async () => {
     const live = { id: 'c', tenantId: reseller, grantedAt: now, revokedAt: null, expiresAt: new Date(now.getTime() + hour) };
-    const { service, rows, order } = build({ rows: [live] });
+    const { service, rows, order, leash } = build({ rows: [live] });
     await service.revoke(owner, reseller, 'c', '1.1.1.1', now);
     expect(rows[0].revokedAt).toEqual(now);
     expect(order).toEqual(['update', 'audit']);
+    // What rode on it ends with it (F-117-e).
+    expect(leash.endUnder).toHaveBeenCalledWith({ consentIds: ['c'] }, now);
     await expect(service.revoke(owner, reseller, 'c', '1.1.1.1', now)).rejects.toEqual(new SupportConsentRefused('consent_not_found'));
   });
 

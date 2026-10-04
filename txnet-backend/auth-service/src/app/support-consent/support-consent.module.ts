@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ResellerAccess } from '@txnet-backend/shared-core';
 
 import { AuthModule } from '../auth/auth.module';
+import { ImpersonationModule } from '../impersonation/impersonation.module';
 import { SupportConsentController } from './support-consent.controller';
 import { SupportConsentService } from './support-consent.service';
 
@@ -11,7 +12,8 @@ import { SupportConsentService } from './support-consent.service';
  * its reader bound once beside the pools in `PrismaModule` (as `ResellerBotModule`).
  */
 @Module({
-  imports: [AuthModule],
+  // `ImpersonationModule` for its leash: a consent or entry that ends takes its impersonations with it (F-117-e).
+  imports: [AuthModule, ImpersonationModule],
   controllers: [SupportConsentController],
   providers: [SupportConsentService, ResellerAccess],
 })
