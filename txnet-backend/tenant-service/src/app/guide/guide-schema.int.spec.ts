@@ -27,6 +27,7 @@ const RESELLER_A = '11111111-1111-4111-8111-111111111111';
 const RESELLER_B = '22222222-2222-4222-8222-222222222222';
 const PLATFORM_GUIDE = '88888888-8888-4888-8888-888888888801';
 const A_GUIDE = '88888888-8888-4888-8888-8888888888a1';
+const TEXT = [{ type: 'text', text: 'x' }];
 
 let pg: PostgresFixture;
 let owner: PrismaClient;
@@ -68,7 +69,7 @@ beforeAll(async () => {
     INSERT INTO guide.guide (id, "tenantId", key, kind, "updatedAt") VALUES ('${PLATFORM_GUIDE}', NULL, 'install_android_v2rayng', 'app', now())
   `);
   await owner.$executeRawUnsafe(`
-    INSERT INTO guide.guide_translation ("guideId", "tenantId", lang, title, body) VALUES ('${PLATFORM_GUIDE}', NULL, 'fa', 'نصب روی اندروید', '۱. اپ را نصب کنید.')
+    INSERT INTO guide.guide_translation ("guideId", "tenantId", lang, title, blocks) VALUES ('${PLATFORM_GUIDE}', NULL, 'fa', 'نصب روی اندروید', '[{"type":"text","text":"۱. اپ را نصب کنید."}]')
   `);
   await owner.$executeRawUnsafe(`
     INSERT INTO guide.guide_placement (id, "guideId", "tenantId", surface, "targetKind", "targetRef") VALUES (gen_random_uuid(), '${PLATFORM_GUIDE}', NULL, 'any', 'os', 'android')
@@ -101,7 +102,7 @@ describe('who reads and writes a guide (invariant 1)', () => {
           // The platform's key: this is how a reseller replaces one (ADR-0115 point 2).
           key: 'install_android_v2rayng',
           kind: 'app',
-          translations: { create: { tenantId: RESELLER_A, lang: 'fa', title: 'نصب اختصاصی', body: 'به روش ما.' } },
+          translations: { create: { tenantId: RESELLER_A, lang: 'fa', title: 'نصب اختصاصی', blocks: [{ type: 'text', text: 'به روش ما.' }] } },
           placements: { create: { tenantId: RESELLER_A, surface: 'panel', targetKind: 'os', targetRef: 'android' } },
         },
       }),
@@ -115,7 +116,7 @@ describe('who reads and writes a guide (invariant 1)', () => {
   it("a reseller never writes the platform's guide, its text or its placement", async () => {
     expect(await refusal(asTenant(RESELLER_A, (tx) => tx.guide.create({ data: { tenantId: null, key: 'sneaky', kind: 'section' } })))).toBe('rls');
     expect(
-      await refusal(asTenant(RESELLER_A, (tx) => tx.guideTranslation.create({ data: { guideId: PLATFORM_GUIDE, tenantId: null, lang: 'en', title: 'x', body: 'x' } }))),
+      await refusal(asTenant(RESELLER_A, (tx) => tx.guideTranslation.create({ data: { guideId: PLATFORM_GUIDE, tenantId: null, lang: 'en', title: 'x', blocks: TEXT } }))),
     ).toBe('rls');
     // A row it reads but does not own: the update is refused, never applied.
     expect(await refusal(asTenant(RESELLER_A, (tx) => tx.guide.updateMany({ where: { id: PLATFORM_GUIDE }, data: { isActive: false } })))).toBe('rls');
@@ -135,14 +136,19 @@ describe('keys (invariant 2)', () => {
     );
   });
 
-  it('holds the key to a slug, a text to one per language and a title and body to their lengths', async () => {
+  it('holds the key to a slug, a text to one per language and a title to its length, blocks to a non-empty array (F-414-g)', async () => {
     expect(await refusal(owner.guide.create({ data: { tenantId: null, key: 'Has Spaces', kind: 'app' } }))).toBe('check');
     expect(
-      await refusal(owner.guideTranslation.create({ data: { guideId: PLATFORM_GUIDE, tenantId: null, lang: 'fa', title: 'again', body: 'x' } })),
+      await refusal(owner.guideTranslation.create({ data: { guideId: PLATFORM_GUIDE, tenantId: null, lang: 'fa', title: 'again', blocks: TEXT } })),
     ).toBe('unique');
-    expect(await refusal(owner.guideTranslation.create({ data: { guideId: PLATFORM_GUIDE, tenantId: null, lang: 'en', title: '', body: 'x' } }))).toBe(
+    expect(await refusal(owner.guideTranslation.create({ data: { guideId: PLATFORM_GUIDE, tenantId: null, lang: 'en', title: '', blocks: TEXT } }))).toBe(
       'check',
     );
+    for (const blocks of [[], { type: 'text', text: 'x' }]) {
+      expect(await refusal(owner.guideTranslation.create({ data: { guideId: PLATFORM_GUIDE, tenantId: null, lang: 'en', title: 'x', blocks } })), JSON.stringify(blocks)).toBe(
+        'check',
+      );
+    }
   });
 
   it('places a guide once per surface and target', async () => {

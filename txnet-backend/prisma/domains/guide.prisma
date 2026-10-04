@@ -1,8 +1,8 @@
 // ============================================================================
 // Domain: guide — help content (F-414, ADR-0115)
 // ============================================================================
-// One guide per product, OS, app or panel/bot section: a text per language and
-// where it is placed. `tenantId` NULL is the platform's, read by every tenant
+// One guide per product, OS, app or panel/bot section: a text per language
+// (typed blocks, ADR-0116) and where it is placed. `tenantId` NULL is the platform's, read by every tenant
 // and written by none; a reseller's own guide with the same key replaces it for
 // that reseller, and a `guide_hidden` row removes it without replacing it.
 // Runs as a module of tenant-service; the schema is its own so a later
@@ -64,8 +64,8 @@ model GuideTranslation {
   tenantId String?  @db.Uuid
   lang     Language
   title    String
-  /// Markdown.
-  body     String
+  /// Typed blocks, in order — shared-core `guideBlocksSchema` (ADR-0116).
+  blocks   Json
 
   guide Guide @relation(fields: [guideId], references: [id], onDelete: Cascade)
 
