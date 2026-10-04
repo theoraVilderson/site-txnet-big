@@ -124,6 +124,9 @@ function build(batch = 200, bulkLimit?: number | null) {
   const access = new ResellerAccess({
     tenant: { findUnique: async ({ where }: { where: { id: string } }) => tenants[where.id] ?? null, findFirst: async ({ where }: { where: { id: string } }) => tenants[where.id] ?? null },
     tenantStaffMember: { findFirst: async () => null },
+    // The reseller granted the platform `act` (F-117-b): staff reach its people only under a live consent.
+    $transaction: async (fn: (tx: unknown) => unknown) =>
+      fn({ $executeRaw: async () => 1, supportAccessConsent: { findFirst: async () => ({ id: 'consent', scope: 'act', expiresAt: new Date('2100-01-01') }) } }),
   } as never);
   /** Every tenant read is fenced by the ambient scope, as RLS fences it. */
   const inScope = (rows: Row[]) => rows.filter((r) => scope() === undefined || r.tenantId === scope());

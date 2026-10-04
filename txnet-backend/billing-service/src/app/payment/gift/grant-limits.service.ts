@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, VariantBillingMode } from '@prisma/client';
-import { ResellerAccess, ResellerAccessRefused, ResellerActor, ResellerLimitReached, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { ResellerAccess, ResellerAccessRefused, ResellerActor, ResellerLimitReached, SupportConsentRefused, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { meteredCapOf, meteredCeilingOf, OPEN_GRANT_STATUSES, PLATFORM_METERED_CAP, underCeiling } from '../../entitlement/metered-cap';
 import { auditLimit } from '../../grant-audit/grant-audit';
@@ -162,7 +162,7 @@ export class GrantLimitsService {
     try {
       return await this.access.runIncludingPlatform(actor, tenantId, capability, work);
     } catch (e) {
-      if (e instanceof ResellerAccessRefused) throw new ResellerUserGrantsRefused(e.reason, tenantId);
+      if (e instanceof ResellerAccessRefused || e instanceof SupportConsentRefused) throw new ResellerUserGrantsRefused(e.reason, tenantId);
       throw e;
     }
   }

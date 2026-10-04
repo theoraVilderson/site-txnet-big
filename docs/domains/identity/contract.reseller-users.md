@@ -38,6 +38,10 @@ Code: `txnet-backend/auth-service/src/app/auth/users/reseller-users.service.ts`.
   The path may name the platform's tenant; only platform staff are admitted
   to it (`runIncludingPlatform`), and it is scoped, audited and blocked exactly
   as a reseller's users are. Platform staff are in that list themselves.
+- **Platform staff reach a reseller's users only with its consent** (F-117-b,
+  ADR-0104 (4)): a live `read` consent lists, an `act` one also blocks; else
+  **403** `consent_required` / `consent_read_only`, checked on every request
+  by the door ([tenant contract.entitlements.md](../tenant/contract.entitlements.md)).
 - **`read` to list, `staffWrite` to block.** So a suspended reseller still sees
   its customers and changes nothing about them (`tenant/rules.md`).
 - **`banned` outranks a block.** A reseller moves a user between `active` and

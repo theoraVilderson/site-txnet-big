@@ -9,6 +9,7 @@ import {
   ResellerLimitReached,
   resellerLimitOf,
   runWithTenant,
+  SupportConsentRefused,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
 
@@ -226,7 +227,7 @@ export class ResellerGrantBulkJobService {
     try {
       return await this.access.runIncludingPlatform(actor, tenantId, capability, work);
     } catch (e) {
-      if (e instanceof ResellerAccessRefused) throw new ResellerUserGrantsRefused(e.reason, tenantId);
+      if (e instanceof ResellerAccessRefused || e instanceof SupportConsentRefused) throw new ResellerUserGrantsRefused(e.reason, tenantId);
       throw e;
     }
   }

@@ -33,7 +33,7 @@ which asks the four owner reads of [contract.gift.md](contract.gift.md) — `Gra
 
 | Rule | Why |
 |---|---|
-| `ResellerAccess` (F-066-w1) is the door, capability `read`, no permission guard; refusals travel as `reason` — `not_allowed` / `reseller_suspended` **403**, `reseller_not_found` **404**, `reseller_terminated` **409** | every reseller-named surface (`contract.revenue.md`); a suspended reseller still sees its users' services |
+| `ResellerAccess` (F-066-w1) is the door, capability `read`, no permission guard; refusals travel as `reason` — `not_allowed` / `reseller_suspended` **403**, `reseller_not_found` **404**, `reseller_terminated` **409**; platform staff need the reseller's live consent, else `consent_required` / `consent_read_only` **403** (F-117-b) | every reseller-named surface (`contract.revenue.md`); a suspended reseller still sees its users' services |
 | **The reseller is the path's**, and every read runs in its scope — or the platform's own tenant, for platform staff only (F-311-aa, ADR-0102) | the owner's session carries the platform's `X-Tenant-Id` (ADR-0059) |
 | **Only that reseller's users** (C-15): the user is read first, in the reseller's scope (`user` is RLS-strict and in `TENANT_SCOPED_MODELS`); another tenant's user or none is **404** `user_not_found`, and no Grant is read for them | the Grant reads fence only by `userId`, and `traffic_daily_aggregate` has no tenant at all |
 | The owner reads are asked **as the path's user**, so a Grant of another user of the same reseller is their own **404** `grant_not_found` | their ownership check is the only one that knows a Grant's user |
@@ -69,7 +69,7 @@ controller, over `ResellerUserGrantsService.act` -> `UserConfigsService.actAsAdm
 
 | Rule | Why |
 |---|---|
-| The door is `ResellerAccess` with capability **`staffWrite`**: a suspended reseller (`read_only`, §14.6) is **403** `reseller_suspended` and nothing is read or written; platform staff pass, as on every reseller surface | it still reads its users' services (the section above) but changes none |
+| The door is `ResellerAccess` with capability **`staffWrite`**: a suspended reseller (`read_only`, §14.6) is **403** `reseller_suspended` and nothing is read or written; platform staff pass only under the reseller's `act` consent (F-117-b) | it still reads its users' services (the section above) but changes none |
 | The user is the reseller's (C-15) before any config is read, as above: **404** `user_not_found` | the same fence as the reads |
 | **A config must be the path's user's**, read in the action's own transaction; any other — another user of the same reseller included — is the outcome `config_not_found` and is never acted on | an `admin` actor passes `ConfigActionsService`'s ownership check for every config; this is the only fence |
 | One transaction per config, ids deduplicated, in the order named; `reason` is `CONFIG_ACTION_REJECTIONS` or `failed` — the owner route's rules (`contract.gift.md`), unchanged | one refused config must not stop the others |

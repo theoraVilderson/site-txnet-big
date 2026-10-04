@@ -46,7 +46,18 @@ describe('ResellerAccess', () => {
     ...over,
   });
 
-  const build = (status = 'active', seats: Seat[] = []) => {
+  /** A reseller's consent for the platform's staff (F-117-a): only a granted, unrevoked, unexpired one is live. */
+  type Consent = { tenantId: string; scope: 'read' | 'act'; grantedAt: Date | null; expiresAt: Date | null; revokedAt: Date | null };
+  const consent = (over: Partial<Consent> = {}): Consent => ({
+    tenantId: RESELLER,
+    scope: 'read',
+    grantedAt: new Date('2026-09-18T09:00:00Z'),
+    expiresAt: new Date('2026-09-18T13:00:00Z'),
+    revokedAt: null,
+    ...over,
+  });
+
+  const build = (status = 'active', seats: Seat[] = [], consents: Consent[] = []) => {
     const tenants: Record<string, Record<string, unknown>> = {
       [PLATFORM]: { id: PLATFORM, tenantType: 'platform_owner', slug: 'platform_owner', ownerUserId: STAFF, status: 'active' },
       [RESELLER]: { id: RESELLER, tenantType: 'reseller', slug: 'ali', ownerUserId: OWNER, status, graceEndsAt: null },
@@ -61,6 +72,21 @@ describe('ResellerAccess', () => {
         findFirst: vi.fn(async ({ where }: { where: { tenantId: string; userId: string } }) =>
           seats.find((s) => s.tenantId === where.tenantId && s.userId === where.userId && s.revokedAt === null && s.joinedAt !== null) ?? null,
         ),
+      },
+      // The consent table is under RLS: it is read in a tenant transaction bound to the reseller.
+      $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(tx)),
+    };
+    const tx = {
+      $executeRaw: vi.fn(async () => 1),
+      supportAccessConsent: {
+        findFirst: vi.fn(async ({ where }: { where: { tenantId: string; expiresAt: { gt: Date } } }) => {
+          // RLS: only the bound tenant's rows are visible at all.
+          if (TenantContext.current().id !== where.tenantId) return null;
+          const live = consents.filter(
+            (c) => c.tenantId === where.tenantId && c.grantedAt && c.revokedAt === null && c.expiresAt && c.expiresAt > where.expiresAt.gt,
+          );
+          return live[0] ? { id: 'consent-1', scope: live[0].scope, expiresAt: live[0].expiresAt } : null;
+        }),
       },
     };
     return new ResellerAccess(prisma as never);
@@ -140,7 +166,7 @@ describe('ResellerAccess', () => {
       // its catalog rows are `tenantId` null, not this id.
       platform: true,
     });
-    await expect(access.admitIncludingPlatform(staff, RESELLER, 'read', T0)).resolves.not.toHaveProperty('platform');
+    await expect(build('active', [], [consent()]).admitIncludingPlatform(staff, RESELLER, 'read', T0)).resolves.not.toHaveProperty('platform');
     await expect(access.admitIncludingPlatform({ ...staff, permissions: ['*'] }, PLATFORM, 'read', T0)).resolves.toMatchObject({ as: 'staff' });
 
     // Anyone else learns nothing: the platform's `ownerUserId` without the
@@ -165,6 +191,41 @@ describe('ResellerAccess', () => {
     // And the work runs in the platform's scope.
     const seen = await access.runIncludingPlatform(staff, PLATFORM, 'read', async () => TenantContext.current().id, T0);
     expect(seen).toBe(PLATFORM);
+  });
+
+  it("admits platform staff to a reseller's people only under its live consent; `read` refuses writes (F-117-b, ADR-0104 (4))", async () => {
+    // No consent, an expired one, a revoked one, a request never granted, another reseller's: none admit.
+    for (const dead of [
+      [],
+      [consent({ expiresAt: new Date('2026-09-18T09:59:00Z') })],
+      [consent({ revokedAt: new Date('2026-09-18T09:30:00Z') })],
+      [consent({ grantedAt: null, expiresAt: null })],
+      [consent({ tenantId: OTHER })],
+    ]) {
+      await expect(build('active', [], dead).admitIncludingPlatform(staff, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'consent_required' });
+    }
+
+    // `read` sees and refuses every write; `act` does both.
+    const reading = build('active', [], [consent()]);
+    await expect(reading.admitIncludingPlatform(staff, RESELLER, 'read', T0)).resolves.toEqual({ id: RESELLER, slug: 'ali', as: 'staff' });
+    await expect(reading.admitIncludingPlatform(staff, RESELLER, 'staffWrite', T0)).rejects.toMatchObject({ reason: 'consent_read_only' });
+    await expect(reading.admitIncludingPlatform(staff, RESELLER, 'account', T0)).rejects.toMatchObject({ reason: 'consent_read_only' });
+    await expect(build('active', [], [consent({ scope: 'act' })]).admitIncludingPlatform(staff, RESELLER, 'staffWrite', T0)).resolves.toMatchObject({
+      as: 'staff',
+    });
+
+    // The refused work never starts.
+    const work = vi.fn();
+    await expect(build().runIncludingPlatform(staff, RESELLER, 'read', work, T0)).rejects.toMatchObject({ reason: 'consent_required' });
+    expect(work).not.toHaveBeenCalled();
+
+    // Unchanged: the reseller's owner and members need none, nor does the
+    // platform's own tenant, nor any configuration route (`admit`).
+    await expect(build().admitIncludingPlatform(owner, RESELLER, 'staffWrite', T0)).resolves.toMatchObject({ as: 'owner' });
+    const member = { userId: CUSTOMER, tenantId: RESELLER, permissions: ['tenant.manage'] };
+    await expect(build('active', [seat()]).admitIncludingPlatform(member, RESELLER, 'staffWrite', T0)).resolves.toMatchObject({ as: 'member' });
+    await expect(build().admitIncludingPlatform(staff, PLATFORM, 'staffWrite', T0)).resolves.toMatchObject({ platform: true });
+    await expect(build().admit(staff, RESELLER, 'staffWrite', T0)).resolves.toMatchObject({ as: 'staff' });
   });
 
   it("runs admitted work in the reseller's scope, and refused work not at all (ADR-0064 (3))", async () => {

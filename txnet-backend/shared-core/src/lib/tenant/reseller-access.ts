@@ -3,10 +3,15 @@ import { TenantStatus, TenantType, type PrismaClient } from '@prisma/client';
 
 import { holdsPermission } from '../http/permissions';
 import { runWithTenant } from '../tenant-context/tenant-context';
+import { tenantTransaction } from '../tenant-context/with-tenant';
 import { TenantCapabilityName, tenantAllows } from './status-policy';
+import { liveSupportConsent } from './support-consent';
 
-/** The reads the rule needs. An app binds its app pool (`PrismaService`): `tenant.tenant` has no RLS, and a member's seat is their own tenant's row. */
-export type ResellerAccessReader = Pick<PrismaClient, 'tenant' | 'tenantStaffMember'>;
+/**
+ * The reads the rule needs. An app binds its app pool (`PrismaService`): `tenant.tenant` has no RLS, and a member's seat is their own tenant's row.
+ * `$transaction` reads the reseller's support consent (F-117-b): that table is under RLS, so it is read in a tenant transaction bound to the reseller.
+ */
+export type ResellerAccessReader = Pick<PrismaClient, 'tenant' | 'tenantStaffMember' | '$transaction'>;
 
 /** The DI token an app binds its {@link ResellerAccessReader} to, once, beside its Prisma pools. */
 export const RESELLER_ACCESS_READER = Symbol('RESELLER_ACCESS_READER');
@@ -23,6 +28,24 @@ export type ResellerActor = { userId: string; tenantId: string; permissions: str
 export type AdmittedReseller = { id: string; slug: string; as: 'owner' | 'member' | 'staff'; platform?: true };
 
 export type ResellerAccessRejection = 'not_allowed' | 'reseller_not_found' | 'reseller_suspended' | 'reseller_terminated';
+
+/**
+ * Why the platform's staff were refused a reseller's people (F-117-b, ADR-0104
+ * (4)): no live consent, or a `read` one on a route that writes. A type of its
+ * own, apart from {@link ResellerAccessRejection}: only the users-admin routes
+ * (`…IncludingPlatform`) can meet it, so no configuration route maps it.
+ */
+export type SupportConsentRejection = 'consent_required' | 'consent_read_only';
+
+export class SupportConsentRefused extends Error {
+  constructor(
+    readonly reason: SupportConsentRejection,
+    detail = '',
+  ) {
+    super(`support consent refused: ${reason}${detail ? ` (${detail})` : ''}`);
+    this.name = 'SupportConsentRefused';
+  }
+}
 
 export class ResellerAccessRefused extends Error {
   constructor(
@@ -83,9 +106,15 @@ export class ResellerAccess {
    * users, the platform's direct users included. The platform's tenant is
    * admitted to **its staff only** (`tenant.manage` or `*`) and to nobody
    * else, who learns nothing — its `ownerUserId` and a seat on it are no door.
-   * A reseller is answered exactly as {@link admit} answers it. Every other
-   * route keeps {@link admit}: configuring the platform (its domains, its
-   * brand) is not a reseller route's job.
+   * A reseller is answered as {@link admit} answers it, with one more rule
+   * for the platform's staff (F-117-b, ADR-0104 (4)): these routes name a
+   * reseller's **people**, so staff reach them only under that reseller's live
+   * consent, read on every call (a revoke ends access on the next one), and a
+   * `read` consent admits `read` alone — {@link SupportConsentRefused}. The
+   * owner, its members and the platform's own tenant need none. Every other
+   * route keeps {@link admit}: configuring a reseller is tier A, no consent,
+   * and configuring the platform (its domains, its brand) is not a reseller
+   * route's job.
    */
   admitIncludingPlatform(actor: ResellerActor, tenantId: string, capability: TenantCapabilityName, now = new Date()): Promise<AdmittedReseller> {
     return this.admitTarget(actor, tenantId, capability, now, true);
@@ -122,6 +151,8 @@ export class ResellerAccess {
     if (!staff) {
       const state = { status: reseller.status, graceEndsAt: reseller.graceEndsAt?.toISOString() ?? null };
       if (!tenantAllows(state, capability, now)) throw new ResellerAccessRefused('reseller_suspended', tenantId);
+    } else if (platform && !owner) {
+      await this.mustHoldConsent(reseller.id, capability, now);
     }
     return { id: reseller.id, slug: reseller.slug, as: staff ? 'staff' : owner ? 'owner' : 'member' };
   }
@@ -153,6 +184,15 @@ export class ResellerAccess {
   ): Promise<T> {
     const admitted = await this.admitIncludingPlatform(actor, tenantId, capability, now);
     return runWithTenant({ id: admitted.id }, () => work(admitted));
+  }
+
+  /** The reseller's live consent must cover the capability: any scope for `read`, `act` for anything else. */
+  private async mustHoldConsent(resellerId: string, capability: TenantCapabilityName, now: Date): Promise<void> {
+    const consent = await runWithTenant({ id: resellerId }, () =>
+      tenantTransaction(this.prisma, (tx) => liveSupportConsent(tx, resellerId, now)),
+    );
+    if (!consent) throw new SupportConsentRefused('consent_required', resellerId);
+    if (capability !== 'read' && consent.scope !== 'act') throw new SupportConsentRefused('consent_read_only', resellerId);
   }
 
   /**

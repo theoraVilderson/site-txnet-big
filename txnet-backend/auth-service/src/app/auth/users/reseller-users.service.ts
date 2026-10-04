@@ -5,6 +5,8 @@ import {
   ResellerAccess,
   ResellerAccessRefused,
   ResellerAccessRejection,
+  SupportConsentRefused,
+  SupportConsentRejection,
   TenantCapabilityName,
 } from '@txnet-backend/shared-core';
 
@@ -20,6 +22,7 @@ export type ResellerUsersActor = { userId: string; tenantId: string; permissions
 /** Both doors' refusals in one union, so the controller maps one error type (F-066-w5's shape). */
 export type ResellerUsersRejection =
   | ResellerAccessRejection
+  | SupportConsentRejection
   | 'user_not_found'
   | 'user_banned'
   | 'cannot_block_self'
@@ -224,7 +227,7 @@ export class ResellerUsersService {
     try {
       return await this.access.runIncludingPlatform(actor, tenantId, capability, (reseller) => work(reseller));
     } catch (err) {
-      if (err instanceof ResellerAccessRefused) {
+      if (err instanceof ResellerAccessRefused || err instanceof SupportConsentRefused) {
         throw new ResellerUsersRefused(err.reason, tenantId);
       }
       throw err;

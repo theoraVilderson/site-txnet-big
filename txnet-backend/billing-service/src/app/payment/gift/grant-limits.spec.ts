@@ -45,6 +45,9 @@ function build(seed: { tenantCap?: number; userCap?: { meteredOpenCap: number; r
       findFirst: async ({ where }: { where: { id: string } }) => tenants[where.id] ?? null,
     },
     tenantStaffMember: { findFirst: async () => null },
+    // The reseller granted the platform `act` (F-117-b): staff reach its people only under a live consent.
+    $transaction: async (fn: (tx: unknown) => unknown) =>
+      fn({ $executeRaw: async () => 1, supportAccessConsent: { findFirst: async () => ({ id: 'consent', scope: 'act', expiresAt: new Date('2100-01-01') }) } }),
   } as never);
 
   const userTenant: Record<string, string> = { [CUSTOMER]: RESELLER, [LATE_CUSTOMER]: SUSPENDED };

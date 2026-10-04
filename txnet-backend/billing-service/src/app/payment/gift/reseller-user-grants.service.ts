@@ -6,6 +6,8 @@ import {
   ResellerAccessRefused,
   ResellerAccessRejection,
   ResellerActor,
+  SupportConsentRefused,
+  SupportConsentRejection,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
 
@@ -32,7 +34,7 @@ import { SubscriptionLinkService } from './subscription-link.service';
 import { UsersCatalogProduct, usersCatalogOf } from './reseller-users-catalog';
 
 /** The door's refusals, and the one this surface adds: the path's user is not the reseller's. */
-export type ResellerUserGrantsRejection = ResellerAccessRejection | 'user_not_found';
+export type ResellerUserGrantsRejection = ResellerAccessRejection | SupportConsentRejection | 'user_not_found';
 
 /** The door's actor and the address the request came from: every write here is audited (F-311-r). */
 export type AdminActor = ResellerActor & { ip: string };
@@ -373,7 +375,7 @@ export class ResellerUserGrantsService {
     try {
       return await this.access.runIncludingPlatform(actor, tenantId, capability, work);
     } catch (e) {
-      if (e instanceof ResellerAccessRefused) throw new ResellerUserGrantsRefused(e.reason, tenantId);
+      if (e instanceof ResellerAccessRefused || e instanceof SupportConsentRefused) throw new ResellerUserGrantsRefused(e.reason, tenantId);
       throw e;
     }
   }

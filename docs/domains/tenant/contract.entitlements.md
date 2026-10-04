@@ -87,9 +87,21 @@ the host; the ambient routes stay for a tenant configuring itself.
 | `runIncludingPlatform(actor, tenantId, capability, work)` | the same, then `work` in that tenant's scope — `run`'s rule |
 
 Called by the users-admin services only: `reseller-users.service.ts` (auth),
-`reseller-user-grants.service.ts` and `grant-bulk-job.ts` (billing) — one page
-for every tenant's users (D-55). Every other route keeps `admit`/`run`, where
-the platform's id stays `reseller_not_found` to staff.
+`reseller-user-grants.service.ts`, `grant-limits.service.ts` and
+`grant-bulk-job.ts` (billing) — one page for every tenant's users (D-55).
+Every other route keeps `admit`/`run`, where the platform's id stays
+`reseller_not_found` to staff.
+
+**These routes name a reseller's people, so staff need its consent** (F-117-b,
+ADR-0104 (4), audit invariant 13). On a reseller — not the platform's own
+tenant, and not for its owner or members — platform staff are admitted only
+under a live `SupportAccessConsent`, read through `liveSupportConsent` in a
+tenant transaction on **every call** (a revoke ends access on the next
+request; nothing caches it). Capability `read` needs any scope; any other
+needs `act`. A refusal is `SupportConsentRefused` — `consent_required` or
+`consent_read_only`, 403 on every users-admin surface — a type apart from
+`ResellerAccessRejection`, so the configuration routes (tier A, no consent)
+map nothing new. `RESELLER_ACCESS_READER` therefore also needs `$transaction`.
 
 ### Asking the door instead of guessing: `GET /api/tenants/:id/access` (F-311-e)
 

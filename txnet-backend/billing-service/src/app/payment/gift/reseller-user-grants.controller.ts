@@ -59,6 +59,9 @@ const STATUS: Record<ResellerUserGrantsRejection, 403 | 404 | 409> = {
   reseller_not_found: 404,
   reseller_suspended: 403,
   reseller_terminated: 409,
+  // Platform staff without the reseller's consent (F-117-b).
+  consent_required: 403,
+  consent_read_only: 403,
   user_not_found: 404,
 };
 
