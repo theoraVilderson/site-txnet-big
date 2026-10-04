@@ -74,6 +74,7 @@ door uses it, never its own query.
 | `POST` `{scope, hours?, reason?, requestId?}` | the reseller only (`platform_cannot_grant`) | live from now for `hours` (its default, else 4; 1–24, `hours_out_of_range`); a `requestId` turns that request live with the scope chosen here; any earlier live one is revoked |
 | `POST :consentId/revoke` | anyone admitted | ends a request (declined/withdrawn) or a live grant; anything else `consent_not_found` |
 | `PUT policy` `{defaultHours}` | the reseller only | its default length, 1–24 |
+| `GET activity?page=` | the reseller only (`reseller_only`, 403) | the platform's trail below, 50 a page, newest first |
 
 - Scope `read` sees; `act` also acts. Which routes honour it is each door's
   (F-117-b users-admin, F-033-l support).
@@ -86,6 +87,33 @@ door uses it, never its own query.
   reseller's trail (`support_consent_*`, target `support_consent`, before/after
   `{scope, grantedAt, expiresAt, revokedAt}`); the default writes
   `support_consent_policy_set` on target `tenant` (invariant 13).
+
+## The platform's trail in a reseller (built — F-117-c)
+
+ADR-0104 (6). **Every request the platform's staff make among a reseller's
+people is one `admin_audit_log` row in that reseller's trail — reads too** (an
+inbox or a user list viewed is the act). Written by the door that admitted it,
+never by the work, so a route added later is recorded without knowing it is:
+`ResellerAccess` on the users-admin routes and support's `PlatformSupportDoor`,
+both through `recordPlatformAccess` (shared-core `platform-access-trail.ts`).
+
+| Field | Value |
+|---|---|
+| `action` / target | `platform_access`, target `tenant` = the reseller; `tenantId` the reseller |
+| `adminId`, `adminIpAddress` | the staff member, the request's address |
+| `newValue` | `{tier, consentId \| entryId, scope, capability, act, target}` — `tier` `consent` (B) or `emergency` (C); `act` the method and route **template**; `target` the path's ids but the reseller's |
+
+- Written in the consent read's tenant transaction, **before the work**: the
+  row is the admission, so an act refused after the door still leaves it; the
+  act's own row (`grant_freeze`, …) says what changed.
+- A refused caller and the reseller's own people leave none.
+- The act and target come from the caller's `trace` (`accessTraceOf(req)`),
+  set by the controller's `actorOf`; a caller without one is recorded as
+  `act: unknown`, never skipped.
+- The read (`GET …/support-consent/activity`) answers `{page, items[]}`, each
+  `{id, at, actorUserId, tier, consentId, entryId, scope, act, target}`; the
+  staff member's address is not in it. Staff are refused it: the rows name
+  the reseller's users.
 
 ## Emits (events)
 

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, accessTraceOf, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { MessagesQuery, ReadBody, messagesQuerySchema, readSchema } from '../conversations/conversations.schema';
@@ -145,6 +145,6 @@ export class PlatformAgentController {
 
   private enter<T>(req: Request, tenantId: string, need: ConsentNeed, work: (agent: SupportCaller) => Promise<T>): Promise<T> {
     const { userId, tenantId: home, permissions } = identityOf(req);
-    return refusing(() => this.door.run({ userId, tenantId: home, permissions }, tenantId, need, work));
+    return refusing(() => this.door.run({ userId, tenantId: home, permissions, trace: accessTraceOf(req) }, tenantId, need, work));
   }
 }

@@ -78,6 +78,8 @@ describe('ResellerAccess', () => {
     };
     const tx = {
       $executeRaw: vi.fn(async () => 1),
+      // An admission under consent is recorded (F-117-c, platform-access-trail.spec.ts).
+      adminAuditLog: { create: vi.fn(async () => ({})) },
       supportAccessConsent: {
         findFirst: vi.fn(async ({ where }: { where: { tenantId: string; expiresAt: { gt: Date } } }) => {
           // RLS: only the bound tenant's rows are visible at all.

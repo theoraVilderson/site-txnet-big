@@ -4,6 +4,7 @@ import { TenantStatus, TenantType, type PrismaClient } from '@prisma/client';
 import { holdsPermission } from '../http/permissions';
 import { runWithTenant } from '../tenant-context/tenant-context';
 import { tenantTransaction } from '../tenant-context/with-tenant';
+import { AccessTrace, recordPlatformAccess } from './platform-access-trail';
 import { TenantCapabilityName, tenantAllows } from './status-policy';
 import { liveSupportConsent } from './support-consent';
 
@@ -16,8 +17,12 @@ export type ResellerAccessReader = Pick<PrismaClient, 'tenant' | 'tenantStaffMem
 /** The DI token an app binds its {@link ResellerAccessReader} to, once, beside its Prisma pools. */
 export const RESELLER_ACCESS_READER = Symbol('RESELLER_ACCESS_READER');
 
-/** Who is on the other end, as the service read it from `forward-auth`. */
-export type ResellerActor = { userId: string; tenantId: string; permissions: string[] };
+/**
+ * Who is on the other end, as the service read it from `forward-auth`. `trace`
+ * is the request (`accessTraceOf`): a platform staff member's admission under
+ * consent is recorded with it (F-117-c), so a users-admin controller passes it.
+ */
+export type ResellerActor = { userId: string; tenantId: string; permissions: string[]; trace?: AccessTrace };
 
 /** How the caller got in: the reseller's `ownerUserId`, one of its staff, or the platform owner's staff. */
 /**
@@ -152,7 +157,7 @@ export class ResellerAccess {
       const state = { status: reseller.status, graceEndsAt: reseller.graceEndsAt?.toISOString() ?? null };
       if (!tenantAllows(state, capability, now)) throw new ResellerAccessRefused('reseller_suspended', tenantId);
     } else if (platform && !owner) {
-      await this.mustHoldConsent(reseller.id, capability, now);
+      await this.mustHoldConsent(actor, reseller.id, capability, now);
     }
     return { id: reseller.id, slug: reseller.slug, as: staff ? 'staff' : owner ? 'owner' : 'member' };
   }
@@ -186,13 +191,28 @@ export class ResellerAccess {
     return runWithTenant({ id: admitted.id }, () => work(admitted));
   }
 
-  /** The reseller's live consent must cover the capability: any scope for `read`, `act` for anything else. */
-  private async mustHoldConsent(resellerId: string, capability: TenantCapabilityName, now: Date): Promise<void> {
-    const consent = await runWithTenant({ id: resellerId }, () =>
-      tenantTransaction(this.prisma, (tx) => liveSupportConsent(tx, resellerId, now)),
+  /**
+   * The reseller's live consent must cover the capability: any scope for `read`,
+   * `act` for anything else. Admitted, the request is one row in the reseller's
+   * trail (F-117-c, ADR-0104 (6)), in the same transaction as the read.
+   */
+  private async mustHoldConsent(actor: ResellerActor, resellerId: string, capability: TenantCapabilityName, now: Date): Promise<void> {
+    await runWithTenant({ id: resellerId }, () =>
+      tenantTransaction(this.prisma, async (tx) => {
+        const consent = await liveSupportConsent(tx, resellerId, now);
+        if (!consent) throw new SupportConsentRefused('consent_required', resellerId);
+        if (capability !== 'read' && consent.scope !== 'act') throw new SupportConsentRefused('consent_read_only', resellerId);
+        await recordPlatformAccess(tx, {
+          tenantId: resellerId,
+          actorUserId: actor.userId,
+          tier: 'consent',
+          consentId: consent.id,
+          scope: consent.scope,
+          capability,
+          trace: actor.trace,
+        });
+      }),
     );
-    if (!consent) throw new SupportConsentRefused('consent_required', resellerId);
-    if (capability !== 'read' && consent.scope !== 'act') throw new SupportConsentRefused('consent_read_only', resellerId);
   }
 
   /**

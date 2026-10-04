@@ -33,8 +33,9 @@ door `agent/platform-door.ts`.
 | No presence, no typing | platform staff never make a reseller look staffed (`mode` stays the reseller's own, invariant 11) |
 | A thread is not assignable to platform staff (`assignee_unknown`): the assignee is a user of the reseller | the reseller's queue stays the reseller's |
 
-Not yet: each act recorded with tier and consent id in the reseller's history
-(F-117-c, ADR-0104 (6)); a reply already names its sender in the thread.
+Each admitted request — the inbox viewed as much as a reply — is one
+`platform_access` row in the reseller's trail, with the consent id, written by
+the door (F-117-c, audit `contract.md` "The platform's trail").
 
 ## The agent's sidebar (F-033-m)
 

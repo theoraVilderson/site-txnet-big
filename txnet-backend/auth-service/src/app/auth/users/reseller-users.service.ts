@@ -4,6 +4,7 @@ import {
   AdmittedReseller,
   ResellerAccess,
   ResellerAccessRefused,
+  ResellerActor,
   ResellerAccessRejection,
   SupportConsentRefused,
   SupportConsentRejection,
@@ -17,7 +18,7 @@ import { AuthorityTenant, TARGET_PERMISSIONS_SELECT, authorityOver, permissionsO
 import { matchers } from './user-search.service';
 
 /** Who is asking, as `AuthGuard` left them on the request. */
-export type ResellerUsersActor = { userId: string; tenantId: string; permissions: string[] };
+export type ResellerUsersActor = ResellerActor;
 
 /** Both doors' refusals in one union, so the controller maps one error type (F-066-w5's shape). */
 export type ResellerUsersRejection =

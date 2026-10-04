@@ -12,6 +12,7 @@ import {
   ParseUUIDPipe,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -23,8 +24,10 @@ import { RateLimit, RateLimitOptions } from '../auth/decorators/rate-limit.decor
 import type { AuthClaims } from '../auth/token.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import {
+  ActivityQuery,
   ConsentPolicyBody,
   GrantConsentBody,
+  activityQuerySchema,
   RequestConsentBody,
   consentPolicySchema,
   grantConsentSchema,
@@ -48,6 +51,7 @@ const STATUS: Record<SupportConsentRejection, 400 | 403 | 404 | 409> = {
   request_pending: 409,
   hours_out_of_range: 400,
   consent_not_found: 404,
+  reseller_only: 403,
 };
 
 const read: RateLimitOptions = {
@@ -79,6 +83,17 @@ export class SupportConsentController {
   @RateLimit(read)
   list(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request) {
     return this.refusing(() => this.consent.list(this.actor(req), tenantId));
+  }
+
+  /** The platform's trail among the reseller's people (F-117-c): the reseller's to read. */
+  @Get('activity')
+  @RateLimit(read)
+  activity(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Query(new ZodValidationPipe(activityQuerySchema)) query: ActivityQuery,
+    @Req() req: Request,
+  ) {
+    return this.refusing(() => this.consent.activity(this.actor(req), tenantId, query.page as number));
   }
 
   @Post('requests')

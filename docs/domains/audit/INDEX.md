@@ -3,7 +3,7 @@ id: audit
 layer: domain
 status: active
 version: 3
-keywords: [audit log, grant history, who froze this, admin action history, impersonation, settlement, payout, grant a gateway, withdraw a grant, what is owed, operator surface, account switch, account switching, multi account, multiple accounts, switch account, linked accounts, account group, switch scope, per device accounts, per chat accounts, remove an account, leave a group, support consent, support access, consent for support, رضایت پشتیبانی]
+keywords: [audit log, grant history, who froze this, admin action history, impersonation, settlement, payout, grant a gateway, withdraw a grant, what is owed, operator surface, account switch, account switching, multi account, multiple accounts, switch account, linked accounts, account group, switch scope, per device accounts, per chat accounts, remove an account, leave a group, support consent, support access, consent for support, رضایت پشتیبانی, what did the platform do, platform activity, platform access history]
 source:
   - txnet-backend/prisma/domains/audit.prisma
   - txnet-backend/auth-service/src/app/account-switch/**
@@ -16,6 +16,8 @@ source:
   - txnet-backend/auth-service/src/app/support-consent/**
   - txnet-backend/shared-core/src/lib/tenant/support-consent.ts
   - txnet-backend/prisma/domains/migrations/20261004000100_support_access_consent/**
+  - txnet-backend/shared-core/src/lib/tenant/platform-access-trail.ts
+  - txnet-backend/prisma/domains/migrations/20261004000200_platform_access_is_recorded/**
 owns_tables: [admin_audit_log, impersonation_session, linked_account_group, linked_account_member, support_access_consent, support_consent_policy]
 depends_on: [identity]
 updated: 2026-10-04

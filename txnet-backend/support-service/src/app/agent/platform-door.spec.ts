@@ -31,14 +31,16 @@ describe('PlatformSupportDoor', () => {
       },
     };
     const bound: unknown[] = [];
+    const audits: Record<string, unknown>[] = [];
     const tx = {
       $executeRaw: vi.fn(async (_s: unknown, tenantId: unknown) => {
         bound.push(tenantId);
       }),
       supportAccessConsent: { findFirst: consentRead },
+      adminAuditLog: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => void audits.push(data)) },
     };
     Object.assign(prisma, { $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) });
-    return { door: new PlatformSupportDoor(prisma as never), consentRead, bound };
+    return { door: new PlatformSupportDoor(prisma as never), consentRead, bound, audits };
   };
 
   const refusal = (reason: string) => new ConversationRefused(reason as never);
@@ -71,9 +73,11 @@ describe('PlatformSupportDoor', () => {
   });
 
   it('a read consent reads, and refuses a write', async () => {
-    const { door } = build({ consent: { scope: 'read' } });
+    const { door, audits } = build({ consent: { scope: 'read' } });
     await expect(door.run(staff, RESELLER, 'read', async () => 'seen', now)).resolves.toBe('seen');
     await expect(door.run(staff, RESELLER, 'act', async () => 'wrote', now)).rejects.toEqual(refusal('consent_read_only'));
+    // The read is in the reseller's trail (F-117-c); the refused write is not.
+    expect(audits).toEqual([expect.objectContaining({ tenantId: RESELLER, adminId: 'staff-1', action: 'platform_access' })]);
   });
 
   it("an act consent runs the work as the reseller's tenant, with the staff member as the agent", async () => {

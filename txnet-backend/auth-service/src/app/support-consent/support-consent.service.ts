@@ -22,7 +22,8 @@ export type SupportConsentRejection =
   | 'only_platform_requests'
   | 'request_pending'
   | 'hours_out_of_range'
-  | 'consent_not_found';
+  | 'consent_not_found'
+  | 'reseller_only';
 
 export class SupportConsentRefused extends Error {
   constructor(readonly reason: SupportConsentRejection) {
@@ -52,6 +53,38 @@ type Row = Prisma.SupportAccessConsentGetPayload<object>;
 
 const HOUR = 3600_000;
 const HISTORY = 50;
+/** One page of the platform's trail in a reseller (F-117-c). */
+export const ACTIVITY_PAGE = 50;
+/** What the trail lists: the platform's own requests among the reseller's people (ADR-0104 (6)). */
+const TRAIL_ACTIONS: AdminAction[] = ['platform_access'];
+
+/** One request of the platform's staff, as the reseller reads it. The staff member's address is not in it. */
+export type PlatformActivityView = {
+  id: string;
+  at: string;
+  actorUserId: string;
+  tier: string;
+  consentId: string | null;
+  entryId: string | null;
+  scope: string | null;
+  act: string;
+  target: Record<string, string>;
+};
+
+function activityView(row: { id: string; adminId: string; createdAt: Date; newValue: Prisma.JsonValue }): PlatformActivityView {
+  const v = (row.newValue ?? {}) as Record<string, unknown>;
+  return {
+    id: row.id,
+    at: row.createdAt.toISOString(),
+    actorUserId: row.adminId,
+    tier: String(v.tier ?? ''),
+    consentId: (v.consentId as string | undefined) ?? null,
+    entryId: (v.entryId as string | undefined) ?? null,
+    scope: (v.scope as string | undefined) ?? null,
+    act: String(v.act ?? ''),
+    target: (v.target as Record<string, string> | undefined) ?? {},
+  };
+}
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
 
@@ -120,6 +153,28 @@ export class SupportConsentService {
         defaultHours: policy?.defaultHours ?? SUPPORT_CONSENT_DEFAULT_HOURS,
         items: rows.map((r) => view(r, now)),
       };
+    });
+  }
+
+  /**
+   * What the platform's staff did among the reseller's people, newest first
+   * (F-117-c, ADR-0104 (6)): one row per admitted request, reads included. The
+   * reseller's to read — its owner or a `tenant.manage` seat — not the
+   * platform's (`reseller_only`): the rows name its users.
+   */
+  activity(actor: SupportConsentActor, tenantId: string, page: number) {
+    return this.run(actor, tenantId, 'read', async (reseller) => {
+      if (reseller.as === 'staff') throw new SupportConsentRefused('reseller_only');
+      const rows = await tenantTransaction(this.prisma, (tx) =>
+        tx.adminAuditLog.findMany({
+          where: { tenantId: reseller.id, action: { in: TRAIL_ACTIONS } },
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * ACTIVITY_PAGE,
+          take: ACTIVITY_PAGE,
+          select: { id: true, adminId: true, createdAt: true, newValue: true },
+        }),
+      );
+      return { page, items: rows.map(activityView) };
     });
   }
 

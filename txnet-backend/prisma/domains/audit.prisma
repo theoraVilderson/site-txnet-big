@@ -171,6 +171,9 @@ enum AdminAction {
   support_consent_grant
   support_consent_revoke
   support_consent_policy_set
+  // F-117-c (ADR-0104 (6)). One request of the platform's staff among a
+  // reseller's people — a read too — written by the door that admitted it.
+  platform_access
 
   @@schema("audit")
 }

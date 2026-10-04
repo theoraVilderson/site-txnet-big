@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TenantStatus, TenantType } from '@prisma/client';
-import { holdsPermission, liveSupportConsent, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { AccessTrace, holdsPermission, liveSupportConsent, recordPlatformAccess, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { ConversationRefused, SupportCaller } from '../conversations/refusal';
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,8 +11,8 @@ const SUPPORT_AGENT_PERMISSION = 'support.agent';
 /** What the route needs of the consent: `read` sees, `act` also replies, assigns and changes status. */
 export type ConsentNeed = 'read' | 'act';
 
-/** Who the gate proved is calling. */
-export type PlatformCaller = { userId: string; tenantId: string; permissions: string[] };
+/** Who the gate proved is calling, and the request the door records (F-117-c). */
+export type PlatformCaller = { userId: string; tenantId: string; permissions: string[]; trace?: AccessTrace };
 
 /**
  * Platform staff in a reseller's support (F-033-l, catalog §11.6, ADR-0104
@@ -29,6 +29,10 @@ export type PlatformCaller = { userId: string; tenantId: string; permissions: st
  * `caller.tenantId` filter see its rows, not the platform's) with the staff
  * member as the agent — the same `SupportAgentService` a reseller's own agent
  * calls, so nothing about a conversation is decided twice.
+ *
+ * Admitted, the request is one `platform_access` row in the reseller's trail
+ * (F-117-c, ADR-0104 (6)), in the consent read's transaction — an inbox viewed
+ * is recorded as a reply is.
  *
  * `tenant.tenant` has no RLS; it is read on the app pool before any scope opens.
  */
@@ -57,9 +61,20 @@ export class PlatformSupportDoor {
 
     return runWithTenant({ id: reseller.id }, async () => {
       // In a tenant transaction: the consent table is under RLS and outside `withTenant`'s registry.
-      const consent = await tenantTransaction(this.prisma, (tx) => liveSupportConsent(tx, reseller.id, now));
-      if (!consent) throw new ConversationRefused('consent_required');
-      if (need === 'act' && consent.scope !== 'act') throw new ConversationRefused('consent_read_only');
+      await tenantTransaction(this.prisma, async (tx) => {
+        const consent = await liveSupportConsent(tx, reseller.id, now);
+        if (!consent) throw new ConversationRefused('consent_required');
+        if (need === 'act' && consent.scope !== 'act') throw new ConversationRefused('consent_read_only');
+        await recordPlatformAccess(tx, {
+          tenantId: reseller.id,
+          actorUserId: caller.userId,
+          tier: 'consent',
+          consentId: consent.id,
+          scope: consent.scope,
+          capability: need,
+          trace: caller.trace,
+        });
+      });
       return await work({ tenantId: reseller.id, userId: caller.userId });
     });
   }

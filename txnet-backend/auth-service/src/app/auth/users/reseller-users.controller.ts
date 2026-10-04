@@ -15,7 +15,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, accessTraceOf, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
@@ -118,10 +118,10 @@ export class ResellerUsersController {
     return this.refusing(() => this.users.unblock(this.actor(req), tenantId, userId, this.ip(req)));
   }
 
-  /** The caller, as `AuthGuard` left them on the request. */
+  /** The caller, as `AuthGuard` left them on the request, with the request the door records for staff (F-117-c). */
   private actor(req: Request): ResellerUsersActor {
     const user = (req as Request & { user: AuthClaims }).user;
-    return { userId: user.sub, tenantId: user.tenantId, permissions: user.permissions };
+    return { userId: user.sub, tenantId: user.tenantId, permissions: user.permissions, trace: accessTraceOf(req) };
   }
 
   /** `admin_audit_log.adminIpAddress` is `NOT NULL`; an unresolvable peer is recorded as such. */

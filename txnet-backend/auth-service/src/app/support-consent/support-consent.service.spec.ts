@@ -19,7 +19,7 @@ describe('SupportConsentService', () => {
 
   type Row = Record<string, unknown> & { id: string };
 
-  const build = (opts: { as?: 'owner' | 'member' | 'staff'; rows?: Row[]; policyHours?: number } = {}) => {
+  const build = (opts: { as?: 'owner' | 'member' | 'staff'; rows?: Row[]; policyHours?: number; trail?: Record<string, unknown>[] } = {}) => {
     const order: string[] = [];
     const rows: Row[] = [...(opts.rows ?? [])];
     const audits: Record<string, unknown>[] = [];
@@ -72,6 +72,9 @@ describe('SupportConsentService', () => {
           order.push('audit');
           audits.push(data);
         }),
+        findMany: vi.fn(async ({ where, skip, take }: { where: Record<string, unknown>; skip: number; take: number }) =>
+          (opts.trail ?? []).filter((r) => r.tenantId === where.tenantId && (where.action as { in: string[] }).in.includes(r.action as string)).slice(skip, skip + take),
+        ),
       },
     };
     const prisma = { ...tx, $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) };
@@ -157,5 +160,36 @@ describe('SupportConsentService', () => {
         where: { tenantId: reseller, grantedAt: { not: null }, revokedAt: null, expiresAt: { gt: now } },
       }),
     );
+  });
+
+  it("the reseller reads what the platform did among its people, newest first; staff do not read it (F-117-c)", async () => {
+    const entry = (id: string, tenantId: string, action: string) => ({
+      id,
+      tenantId,
+      adminId: 'staff-1',
+      action,
+      createdAt: now,
+      adminIpAddress: '203.0.113.7',
+      newValue: { tier: 'consent', consentId: 'c-1', scope: 'read', capability: 'read', act: 'GET /api/auth/tenants/:tenantId/users', target: {} },
+    });
+    const trail = [entry('a-1', reseller, 'platform_access'), entry('a-2', 'other', 'platform_access'), entry('a-3', reseller, 'grant_freeze')];
+    const { service } = build({ trail });
+    const page = await service.activity(owner, reseller, 1);
+    expect(page.items).toEqual([
+      {
+        id: 'a-1',
+        at: now.toISOString(),
+        actorUserId: 'staff-1',
+        tier: 'consent',
+        consentId: 'c-1',
+        entryId: null,
+        scope: 'read',
+        act: 'GET /api/auth/tenants/:tenantId/users',
+        target: {},
+      },
+    ]);
+    // The staff member's address is not the reseller's to read.
+    expect(JSON.stringify(page)).not.toContain('203.0.113.7');
+    await expect(build({ as: 'staff', trail }).service.activity(staff, reseller, 1)).rejects.toEqual(new SupportConsentRefused('reseller_only'));
   });
 });

@@ -25,6 +25,10 @@ export const grantConsentSchema = z
 
 export const consentPolicySchema = z.object({ defaultHours: hours }).strict();
 
+/** `?page=` of the platform's trail (F-117-c); 50 rows a page. */
+export const activityQuerySchema = z.object({ page: z.coerce.number().int().min(1).max(10_000).default(1) }).strict();
+
+export type ActivityQuery = z.infer<typeof activityQuerySchema>;
 export type RequestConsentBody = z.infer<typeof requestConsentSchema>;
 export type GrantConsentBody = z.infer<typeof grantConsentSchema>;
 export type ConsentPolicyBody = z.infer<typeof consentPolicySchema>;

@@ -16,7 +16,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ResellerQuotaExhausted } from '@txnet-backend/shared-core';
+import { accessTraceOf, BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ResellerQuotaExhausted } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
@@ -531,9 +531,10 @@ export function resellerRefusal(e: ResellerUserGrantsRefused): HttpException {
   }
 }
 
+/** The caller, with the request the door records when it admits the platform's staff (F-117-c). */
 export const actorOf = (req: Request) => {
   const { userId, tenantId, permissions } = identityOf(req);
-  return { userId, tenantId, permissions };
+  return { userId, tenantId, permissions, trace: accessTraceOf(req) };
 };
 
 /** A write's actor also carries the address its audit row keeps (F-311-r). */
