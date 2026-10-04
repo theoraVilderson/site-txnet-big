@@ -89,7 +89,9 @@ export function createApiClient({
     extraHeaders?: Record<string, string | undefined>,
   ): Promise<T> {
     const headers = new Headers(init.headers);
-    headers.set("content-type", "application/json");
+    // A multipart body sets its own type, boundary included (support's
+    // attachments, F-033-o); everything else this app sends is JSON.
+    if (!(init.body instanceof FormData)) headers.set("content-type", "application/json");
     const lang = apiLanguage();
     if (lang) headers.set("accept-language", lang);
     const token = credential?.();

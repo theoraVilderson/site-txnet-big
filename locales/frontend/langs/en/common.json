@@ -4667,5 +4667,77 @@
       },
       "deliveredAt": "Given {{time}}"
     }
+  },
+  "support": {
+    "title": "Support",
+    "subtitle": "A question or a problem? Write to us; every conversation you have with support stays here.",
+    "loading": "Loading…",
+    "retry": "Try again",
+    "empty": "You have no conversations with support yet.",
+    "newConversation": "New conversation",
+    "more": "Older conversations",
+    "unread": "{{n}} new",
+    "lastActivity": "Last message {{time}}",
+    "form": {
+      "title": "A new conversation with support",
+      "category": "Topic",
+      "categoryNone": "Not chosen",
+      "subject": "Subject",
+      "subjectHint": "Left empty, your message's first line becomes the subject.",
+      "body": "Your message",
+      "submit": "Send",
+      "cancel": "Cancel"
+    },
+    "availability": {
+      "live": "Support is online now and will answer shortly.",
+      "offlineNext": "No one is online right now. Your message is kept and answered from {{time}}.",
+      "offline": "No one is online right now. Your message is kept and answered as soon as someone is."
+    },
+    "status": {
+      "open": "Waiting for an answer",
+      "pending_user": "Waiting for you",
+      "pending_agent": "Being looked at",
+      "resolved": "Resolved",
+      "closed": "Closed"
+    },
+    "scan": {
+      "pending": "Checking the file…",
+      "clean": "Ready",
+      "infected": "This file was infected and was not kept.",
+      "failed": "This file could not be checked."
+    },
+    "sender": {
+      "user": "You",
+      "agent": "Support",
+      "system": "System",
+      "bot": "Bot",
+      "ai": "Assistant"
+    },
+    "thread": {
+      "back": "All conversations",
+      "earlier": "Earlier messages",
+      "seen": "Seen",
+      "typing": "Support is typing…",
+      "placeholder": "Write your message…",
+      "send": "Send",
+      "attach": "Attach a file",
+      "attachHint": "An image (PNG, JPEG, WebP) or a PDF",
+      "removeFile": "Remove",
+      "sizeKb": "{{n}} KB",
+      "sizeMb": "{{n}} MB",
+      "closed": "This conversation is closed.",
+      "resolved": "This conversation was marked resolved. If something is still wrong, write and it opens again.",
+      "reopen": "Reopen",
+      "expired": "This file was removed after its retention period.",
+      "open": "Open the file",
+      "liveOff": "Live updates are unavailable; reopen the page to see new answers."
+    },
+    "rating": {
+      "title": "Were you happy with the help?",
+      "star": "{{n}} of 5",
+      "comment": "Comment (optional)",
+      "submit": "Rate",
+      "yours": "Your rating: {{n}} of 5"
+    }
   }
 }

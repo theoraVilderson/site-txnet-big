@@ -24,7 +24,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_AI, PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_LOTTERIES, PANEL_LOTTERIES_MANAGE, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS, PANEL_WHEEL, PANEL_WHEEL_SETTINGS, myResellerUsersPath } from "@/lib/routes";
+import { PANEL_AI, PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_LOTTERIES, PANEL_LOTTERIES_MANAGE, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SUPPORT, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS, PANEL_WHEEL, PANEL_WHEEL_SETTINGS, myResellerUsersPath } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { holdsEveryPermission } from "@/lib/permissions";
 
@@ -202,7 +202,8 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
   // their reseller's users stay behind its console.
   { id: "users", label: M.users, icon: UserCog, href: myResellerUsersPath, requires: ["tenant.manage"] },
   { id: "tutorials", label: M.tutorials, icon: BookOpen, href: null },
-  { id: "support", label: M.support, icon: Headphones, href: null },
+  // F-033-o. Every signed-in user: support answers each with their own threads only.
+  { id: "support", label: M.support, icon: Headphones, href: PANEL_SUPPORT },
   { id: "settings", label: M.settings, icon: Settings, href: PANEL_SETTINGS },
 ];
 
