@@ -42,7 +42,7 @@ else `pending_agent`; a `resolved` thread reopens. Sending moves the sender's
 own cursor to their message (replying is reading).
 
 An attachment is `{id, fileName, contentType, sizeBytes, scanStatus, url,
-urlExpiresAt}`. `url` is a path on the panel's own Host
+urlExpiresAt, expired}` — `expired`: retention deleted the file, `url` always null (F-033-n, `contract.operator.md`). `url` is a path on the panel's own Host
 (`/api/public/tenant/private-files/…`), minted on every read and valid five
 minutes; it is `null` unless `scanStatus` is `clean` (invariant 9, ADR-0113). Rate limits per user:
 `SUPPORT_READ_RATE_LIMIT`/min, `SUPPORT_OPEN_RATE_LIMIT`/hour,

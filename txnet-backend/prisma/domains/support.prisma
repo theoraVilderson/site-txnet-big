@@ -274,15 +274,18 @@ model SupportMessageAttachment {
   conversationId   String               @db.Uuid
   messageId        String               @db.Uuid
   messageCreatedAt DateTime
-  objectKey        String               @unique
+  /// NULL once the file was deleted by retention (F-033-n); `expiredAt` says when.
+  objectKey        String?              @unique
   fileName         String
   contentType      String
   sizeBytes        Int
   scanStatus       AttachmentScanStatus @default(pending)
+  /// When retention deleted the file (F-033-n): 90 days after the conversation closed.
+  expiredAt        DateTime?
   createdAt        DateTime             @default(now())
 
   message SupportMessage @relation(fields: [messageId, messageCreatedAt], references: [id, createdAt], onDelete: Restrict)
-  object  StoredObject   @relation(fields: [objectKey], references: [key], onDelete: Restrict)
+  object  StoredObject?  @relation(fields: [objectKey], references: [key], onDelete: Restrict)
 
   @@index([conversationId])
   @@index([messageId, messageCreatedAt])

@@ -22,7 +22,7 @@ import { isLogicalPath, objectKey, parseObjectKey } from './object-key';
  * checked here. A type is added by adding its signature — SVG has none, so no
  * policy can let one in (catalog 13.8: branding is PNG/WebP, never SVG).
  */
-export const SNIFFABLE_TYPES = ['image/png', 'image/webp', 'image/jpeg', 'application/pdf'] as const;
+export const SNIFFABLE_TYPES = ['image/png', 'image/webp', 'image/jpeg', 'application/pdf', 'application/gzip'] as const;
 export type SniffableType = (typeof SNIFFABLE_TYPES)[number];
 
 const SIGNATURES: Record<SniffableType, (b: Buffer) => boolean> = {
@@ -30,6 +30,8 @@ const SIGNATURES: Record<SniffableType, (b: Buffer) => boolean> = {
   'image/webp': (b) => b.subarray(0, 4).toString('latin1') === 'RIFF' && b.subarray(8, 12).toString('latin1') === 'WEBP',
   'image/jpeg': (b) => b.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff])),
   'application/pdf': (b) => b.subarray(0, 5).toString('latin1') === '%PDF-',
+  // F-033-n: support's monthly archives. Written by the service itself, never uploaded.
+  'application/gzip': (b) => b.subarray(0, 2).equals(Buffer.from([0x1f, 0x8b])),
 };
 
 /**

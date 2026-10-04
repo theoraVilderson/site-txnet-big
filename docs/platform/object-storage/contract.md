@@ -54,7 +54,7 @@ does not own, which is a bug to surface.
    `put` overwrites, never a row pointing at nothing.
 4. A caller's allowed types and size are declared per use, never defaulted.
    A type is allowed only if its bytes can be checked (`SNIFFABLE_TYPES`: PNG,
-   WebP, JPEG) and `put` checks them: an HTML page declared a PNG is
+   WebP, JPEG, PDF, gzip — the last for support's archives, F-033-n) and `put` checks them: an HTML page declared a PNG is
    `type_mismatch`. SVG has no signature, so no policy can name it (catalog
    13.8).
 5. **The `local` driver needs one node or a shared volume.** Replicas on

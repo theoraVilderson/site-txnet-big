@@ -84,6 +84,15 @@ export const envSchema = z.object({
    * boots and the sidebar answers `billing: null`.
    */
   BILLING_API_BASE_URL: z.string().default(''),
+
+  /**
+   * Retention (F-033-n, user 2026-10-04): a message month older than this many
+   * whole months is archived per tenant and its partition dropped; at least 3
+   * (the drop function refuses the last two months anyway).
+   */
+  SUPPORT_MESSAGE_RETENTION_MONTHS: z.coerce.number().int().min(3).max(120).default(12),
+  /** An attachment's file is deleted this many days after its conversation closed. */
+  SUPPORT_ATTACHMENT_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
   BILLING_API_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
 
   TRUST_PROXY: z.string().default(''),

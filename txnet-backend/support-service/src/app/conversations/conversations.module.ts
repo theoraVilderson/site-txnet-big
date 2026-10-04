@@ -32,6 +32,8 @@ type Config = ConfigService<EnvConfig, true>;
     }),
   ],
   controllers: [SupportConversationsController],
+  // Retention (F-033-n) deletes and archives through the same driver.
+  exports: [SUPPORT_OBJECT_DRIVER],
   providers: [
     SupportConversationService,
     SupportAttachmentService,

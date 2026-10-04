@@ -26,6 +26,7 @@ import { RetentionHeldNoticeJob } from '../jobs/retention-held-notice.job';
 import { GrantDeliveryJob } from '../jobs/grant-delivery.job';
 import { LotteryCloseJob } from '../jobs/lottery-close.job';
 import { SupportAutoCloseJob } from '../jobs/support-auto-close.job';
+import { SupportRetentionJob } from '../jobs/support-retention.job';
 import { GrantGroupFulfilmentJob } from '../jobs/grant-group-fulfilment.job';
 import { DepositExpiryJob } from '../jobs/deposit-expiry.job';
 import { InvoiceExpiryJob } from '../jobs/invoice-expiry.job';
@@ -65,6 +66,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     GrantDeliveryJob,
     LotteryCloseJob,
     SupportAutoCloseJob,
+    SupportRetentionJob,
     GrantUnusedNoticeJob,
     GrantEndNoticeJob,
     GrantIdleNoticeJob,
@@ -99,7 +101,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     CatalogSeasonWriteJob,
     {
       provide: JOBS,
-      inject: [HeartbeatJob, VaultRetentionJob, GrantPurgeJob, GrantBulkJobDrainJob, GrantGroupFulfilmentJob, GrantDeliveryJob, LotteryCloseJob, SupportAutoCloseJob, GrantUnusedNoticeJob, GrantEndNoticeJob, GrantIdleNoticeJob, UsageCaptureJob, VpnReserveJob, RetentionHeldNoticeJob, DepositExpiryJob, InvoiceExpiryJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, TrafficRollupJob, CampaignFanOutJob, CampaignDeliveryJob, TenantSubscriptionRenewalJob, TenantDomainVerificationJob, ResellerQuotaDigestJob, AiProfileRebuildJob, AiSuggestionDeliveryJob, CatalogSeasonWriteJob],
+      inject: [HeartbeatJob, VaultRetentionJob, GrantPurgeJob, GrantBulkJobDrainJob, GrantGroupFulfilmentJob, GrantDeliveryJob, LotteryCloseJob, SupportAutoCloseJob, SupportRetentionJob, GrantUnusedNoticeJob, GrantEndNoticeJob, GrantIdleNoticeJob, UsageCaptureJob, VpnReserveJob, RetentionHeldNoticeJob, DepositExpiryJob, InvoiceExpiryJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, TrafficRollupJob, CampaignFanOutJob, CampaignDeliveryJob, TenantSubscriptionRenewalJob, TenantDomainVerificationJob, ResellerQuotaDigestJob, AiProfileRebuildJob, AiSuggestionDeliveryJob, CatalogSeasonWriteJob],
       useFactory: (...jobs: Job[]) => jobs,
     },
     WorkerRegistryService,

@@ -78,6 +78,8 @@ export interface AttachmentView {
   scanStatus: AttachmentScanStatus;
   url: string | null;
   urlExpiresAt: Date | null;
+  /** Retention deleted the file (F-033-n): listed, never fetchable. */
+  expired: boolean;
 }
 
 export interface MessagePage {
@@ -402,8 +404,9 @@ export type AttachmentRow = Prisma.SupportMessageAttachmentGetPayload<object>;
  * a URL only for a `clean` one (invariant 9).
  */
 export function attachmentViewOf(f: AttachmentRow, now: Date, secret: string): AttachmentView {
+  // An expired file (F-033-n) has no key and never a URL.
   const signed =
-    f.scanStatus === AttachmentScanStatus.clean
+    f.scanStatus === AttachmentScanStatus.clean && f.objectKey
       ? signedObjectUrl({ key: f.objectKey, fileName: f.fileName, ttlSec: ATTACHMENT_URL_TTL_SEC, secret, now })
       : null;
   return {
@@ -414,6 +417,7 @@ export function attachmentViewOf(f: AttachmentRow, now: Date, secret: string): A
     scanStatus: f.scanStatus,
     url: signed?.url ?? null,
     urlExpiresAt: signed?.expiresAt ?? null,
+    expired: f.expiredAt !== null,
   };
 }
 

@@ -2,7 +2,7 @@
 id: support
 layer: domain
 status: active
-updated: 2026-10-03
+updated: 2026-10-04
 ---
 
 # Data model — support
@@ -16,9 +16,9 @@ original ticket/chat tables empty.
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
 | conversation | the one support thread: subject, category, `status`, `mode` (`live`/`async`), `priority`, assignee, `lastSeq`, first-response / last-message / resolved / closed times, SLA clocks (`firstResponseDueAt`, `resolutionDueAt`, `slaPausedAt`, `slaPausedSeconds`, `slaDueAt`, F-033-h), rating, AI triage label, `resellerPath` (NULL until F-901) | `tenantId`, RLS | long |
-| message | append-only; `seq` per conversation, `senderKind` `user`/`agent`/`system`/`bot`/`ai`, `internal` (agent note). **Monthly range-partitioned on `createdAt`**, key `(id, createdAt)`, no `DEFAULT` partition | `tenantId`, RLS on parent and every partition | partition archived, then dropped (row of its own) |
+| message | append-only; `seq` per conversation, `senderKind` `user`/`agent`/`system`/`bot`/`ai`, `internal` (agent note). **Monthly range-partitioned on `createdAt`**, key `(id, createdAt)`, no `DEFAULT` partition | `tenantId`, RLS on parent and every partition | a month past `SUPPORT_MESSAGE_RETENTION_MONTHS` (12): archived per tenant, then dropped (F-033-n) |
 | conversation_read | one reader's cursor: `lastReadSeq`, `readAt` | `tenantId`, RLS | with the conversation |
-| message_attachment | a file on a message: `objectKey` (storage port), name, type, size, `scanStatus` | `tenantId`, RLS | with the message |
+| message_attachment | a file on a message: `objectKey` (storage port), name, type, size, `scanStatus`; `objectKey` NULL and `expiredAt` set once retention deleted the file (CHECK keeps the two together) | `tenantId`, RLS | file: 90 days after close (`SUPPORT_ATTACHMENT_RETENTION_DAYS`); row: with the message |
 | working_hours | one open interval of the tenant's week (F-033-g): `weekday` 0–6, `startMinute`/`endMinute` on the tenant's wall clock (CHECKs). No row = always open | `tenantId`, RLS | replaced whole |
 | sla_policy | targets per `priority` in working minutes (F-033-h). `tenantId` NULL = the platform's defaults (seeded by `20261003001500`); a tenant's row replaces one | shared-read RLS | replaced whole |
 | support_category | `key`, order, `isActive`. `tenantId` NULL = platform default | shared-read RLS | long |
@@ -33,6 +33,13 @@ original ticket/chat tables empty.
 `txnet_app`, idempotent, and policies the partition it makes or finds
 (F-027-ak). The migration made 2026-10 … 2027-03; after that the service calls
 it when an insert reports no partition for the row.
+
+`support.drop_message_partition(month)` (F-033-n) — `SECURITY DEFINER`,
+granted to `txnet_cross_tenant` only, refuses the current and previous month,
+detaches then drops. `SupportRetention` calls it after writing each tenant's
+archive (`<tenant>/support/archive/messages-YYYY-MM.jsonl.gz`, private, one
+JSON line per message with its files' names, never their keys) and removing
+the month's attachment rows and objects. The conversation rows stay.
 
 ## Redis
 

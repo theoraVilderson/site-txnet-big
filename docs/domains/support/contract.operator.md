@@ -55,3 +55,18 @@ shaped it (wallet, current Grants, recent invoices, last connection; billing
 | Billing's tables are never read from support (user, 2026-10-04) | billing decides what of its data leaves |
 
 Not shown yet: the catalog's "recent errors" and ISP (§11.3) — nothing records them per user.
+
+## Retention (F-033-n)
+
+worker-service's `support_retention` (daily 03:30) on `POST
+/api/internal/support/retention` (`ServiceOnlyGuard`) → `{expired, months}`.
+`retention/retention.ts`; storage in `data-model.md` "Partitions".
+
+| Rule | Why |
+|---|---|
+| A file goes `SUPPORT_ATTACHMENT_RETENTION_DAYS` (90) after its conversation **closed**; never while open or resolved | user 2026-10-04: files cost the most, and help after the fix rarely |
+| The row stays — `expired: true`, no URL — and no longer counts toward the user's quota | the thread still says a file was there |
+| A message month older than `SUPPORT_MESSAGE_RETENTION_MONTHS` (12, at least 3) whole months is archived per tenant, then its partition dropped | ADR-0112 point 3; one month is shared by every tenant, so the age is the platform's |
+| A month whose archive failed for any tenant is kept and redone whole next run | nothing is dropped without its archive |
+| An archive is gzip JSONL on the storage port, private, never served by a route yet | reading one back is a later row |
+

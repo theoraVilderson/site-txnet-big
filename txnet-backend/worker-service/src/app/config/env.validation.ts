@@ -342,6 +342,8 @@ export const envSchema = z.object({
   SUPPORT_API_BASE_URL: optional(z.string()),
   /** One bounded batch of closes (500 at most). */
   SUPPORT_API_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  /** Support retention (`SupportRetentionJob`, F-033-n): archiving a month may take minutes. */
+  SUPPORT_RETENTION_TIMEOUT_MS: z.coerce.number().int().positive().default(600_000),
   /**
    * And how long reconciliation may take, which is a different number for a
    * different reason: a batch there is one call to a **bank** per payment, and

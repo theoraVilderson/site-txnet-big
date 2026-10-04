@@ -114,7 +114,8 @@ export class SupportAttachmentService {
             SELECT COALESCE(SUM(a."sizeBytes"), 0)::bigint AS used
               FROM support.message_attachment a
               JOIN support.conversation c ON c.id = a."conversationId"
-             WHERE c."userId" = ${caller.userId}::uuid`;
+             WHERE c."userId" = ${caller.userId}::uuid
+               AND a."expiredAt" IS NULL`;
           if (Number(used) + incoming > this.config.get('SUPPORT_STORAGE_QUOTA_BYTES', { infer: true })) {
             throw new ConversationRefused('quota_exceeded');
           }

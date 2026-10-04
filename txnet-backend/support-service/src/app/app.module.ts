@@ -6,6 +6,7 @@ import { PublicRouteGuard, RateLimitGuard, TenantStatusGuard } from '@txnet-back
 import { SupportAgentModule } from './agent/agent.module';
 import { SupportCannedModule } from './canned/canned.module';
 import { SupportLifecycleModule } from './lifecycle/lifecycle.module';
+import { SupportRetentionModule } from './retention/retention.module';
 import { envConfigOptions } from './config/env.validation';
 import { SupportConversationsModule } from './conversations/conversations.module';
 import { HealthController } from './health.controller';
@@ -23,7 +24,7 @@ import { IdentityMiddleware } from './request/identity.middleware';
 const INTERNAL_ROUTES = 'internal/*path';
 
 @Module({
-  imports: [ConfigModule.forRoot(envConfigOptions), PrismaModule, RedisModule, LocaleModule, SupportConversationsModule, SupportAgentModule, SupportCannedModule, SupportLifecycleModule],
+  imports: [ConfigModule.forRoot(envConfigOptions), PrismaModule, RedisModule, LocaleModule, SupportConversationsModule, SupportAgentModule, SupportCannedModule, SupportLifecycleModule, SupportRetentionModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_GUARD, useClass: PublicRouteGuard },

@@ -3,7 +3,7 @@ id: support
 layer: domain
 status: active
 version: 2
-keywords: [ticket, support, chat, attachment, conversation, support category, پشتیبانی, تیکت, گفتگو, platform support access, support for a reseller, پشتیبانی نماینده]
+keywords: [ticket, support, chat, attachment, conversation, support category, پشتیبانی, تیکت, گفتگو, platform support access, support for a reseller, پشتیبانی نماینده, retention, archive old messages, delete old files, پاک کردن فایل‌های قدیمی]
 source:
   - txnet-backend/prisma/domains/support.prisma
   - txnet-backend/support-service/**
@@ -21,7 +21,7 @@ updated: 2026-10-04
 | File | Read it when |
 |---|---|
 | [contract.md](contract.md) | using or changing support from outside |
-| [contract.operator.md](contract.operator.md) | platform staff in a reseller's support (consent), the agent's sidebar |
+| [contract.operator.md](contract.operator.md) | platform staff in a reseller's support (consent), the agent's sidebar, retention |
 | [invariants.md](invariants.md) | writing any code that touches it |
 | [data-model.md](data-model.md) | changing storage |
 | [open-questions.md](open-questions.md) | something is undecided |
