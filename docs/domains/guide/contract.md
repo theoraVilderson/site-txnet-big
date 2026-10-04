@@ -8,7 +8,7 @@ updated: 2026-10-04
 
 # Contract — guide
 
-**Intent, not built** (§0 level 4). Rows F-414-a … F-414-f; shape: ADR-0115.
+Storage built (F-414-a, [data-model.md](data-model.md)); the routes below are intent (§0 level 4), F-414-b … F-414-f. Shape: ADR-0115.
 
 ## TL;DR
 

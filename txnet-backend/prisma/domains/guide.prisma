@@ -1,0 +1,104 @@
+// ============================================================================
+// Domain: guide — help content (F-414, ADR-0115)
+// ============================================================================
+// One guide per product, OS, app or panel/bot section: a text per language and
+// where it is placed. `tenantId` NULL is the platform's, read by every tenant
+// and written by none; a reseller's own guide with the same key replaces it for
+// that reseller, and a `guide_hidden` row removes it without replacing it.
+// Runs as a module of tenant-service; the schema is its own so a later
+// guide-service moves code, never data. RLS shared-read, as support's
+// categories (ADR-0112 point 6).
+
+enum GuideKind {
+  product
+  os
+  app
+  section
+
+  @@schema("guide")
+}
+
+/// Where a placement shows: the panel, the bot, or both.
+enum GuideSurface {
+  panel
+  bot
+  any
+
+  @@schema("guide")
+}
+
+/// What a placement names: a panel route, a bot screen, a product key, an OS or an app.
+enum GuideTargetKind {
+  route
+  bot_screen
+  product
+  os
+  app
+
+  @@schema("guide")
+}
+
+model Guide {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String?   @db.Uuid
+  /// Stable per owner; the same key under a reseller replaces the platform's.
+  key       String
+  kind      GuideKind
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  translations GuideTranslation[]
+  placements   GuidePlacement[]
+
+  @@unique([tenantId, key])
+  @@map("guide")
+  @@schema("guide")
+}
+
+/// A guide's text in one language. `tenantId` is the guide's, copied so the
+/// row is policied on its own (NULL for the platform's).
+model GuideTranslation {
+  guideId  String   @db.Uuid
+  tenantId String?  @db.Uuid
+  lang     Language
+  title    String
+  /// Markdown.
+  body     String
+
+  guide Guide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+
+  @@id([guideId, lang])
+  @@map("guide_translation")
+  @@schema("guide")
+}
+
+/// Where a guide shows. One guide may be placed in several.
+model GuidePlacement {
+  id         String          @id @default(uuid()) @db.Uuid
+  guideId    String          @db.Uuid
+  tenantId   String?         @db.Uuid
+  surface    GuideSurface
+  targetKind GuideTargetKind
+  targetRef  String
+
+  guide Guide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+
+  @@unique([guideId, surface, targetKind, targetRef])
+  @@index([targetKind, targetRef])
+  @@map("guide_placement")
+  @@schema("guide")
+}
+
+/// A tenant hiding an inherited guide without replacing it — by key, so it
+/// holds across the platform's edits of that guide.
+model GuideHidden {
+  tenantId  String   @db.Uuid
+  key       String
+  createdAt DateTime @default(now())
+
+  @@id([tenantId, key])
+  @@map("guide_hidden")
+  @@schema("guide")
+}
