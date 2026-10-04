@@ -5087,5 +5087,93 @@
       "change": "Change your answer",
       "failed": "Your answer was not saved. Try again."
     }
+  },
+  "supportAccess": {
+    "title": "Platform support access",
+    "subtitle": "The platform's support sees or acts on your users only while you allow it, and only for as long as you choose. You can end it at any time.",
+    "none": "The platform has no access to your users right now.",
+    "hoursInvalid": "Enter a whole number of hours from 1 to 24.",
+    "scope": {
+      "read": {
+        "title": "View only",
+        "hint": "Sees your users and their services; changes nothing."
+      },
+      "act": {
+        "title": "View and act",
+        "hint": "Can also change a user's services: freeze, add days or traffic, regenerate a config."
+      }
+    },
+    "pending": {
+      "title": "Platform support is asking for access",
+      "asked": "Asked {date}",
+      "askedFor": "Asked for: {scope}",
+      "approve": "Allow",
+      "decline": "Decline"
+    },
+    "grant": {
+      "title": "Give access",
+      "hours": "For how many hours (1 to 24)",
+      "submit": "Allow access"
+    },
+    "live": {
+      "title": "Access is open: {scope}",
+      "left": "{hours} h {minutes} min left",
+      "revoke": "End access now",
+      "confirmRevoke": "End the platform's access now? Its next request will be refused."
+    },
+    "policy": {
+      "title": "Default length of access",
+      "hours": "Hours",
+      "save": "Save",
+      "saved": "Saved."
+    },
+    "history": {
+      "title": "Past requests and access",
+      "none": "Nothing yet.",
+      "line": "{scope} · {date}",
+      "states": {
+        "requested": "Waiting for you",
+        "live": "Open",
+        "expired": "Ran out",
+        "revoked": "Ended",
+        "declined": "Declined"
+      }
+    },
+    "emergency": {
+      "title": "Emergency entries",
+      "hint": "For abuse, a legal order or a security incident, the platform may enter for one hour without asking. You are told every time, with the reason below.",
+      "line": "{date} · one hour",
+      "states": {
+        "live": "In progress",
+        "ended": "Ended early",
+        "expired": "Hour over"
+      }
+    },
+    "activity": {
+      "title": "What the platform did among your users",
+      "none": "The platform has done nothing among your users.",
+      "older": "Older",
+      "newer": "Newer"
+    },
+    "tiers": {
+      "consent": "With your permission",
+      "emergency": "Emergency"
+    },
+    "refusals": {
+      "not_allowed": "You cannot manage this reseller's support access.",
+      "reseller_not_found": "This reseller was not found.",
+      "reseller_suspended": "This reseller is suspended.",
+      "reseller_terminated": "This reseller has been closed.",
+      "platform_cannot_grant": "Only the reseller can give the platform access.",
+      "only_platform_requests": "Only platform support can ask for access.",
+      "request_pending": "A request is already waiting for the reseller.",
+      "hours_out_of_range": "Access lasts from 1 to 24 hours.",
+      "consent_not_found": "That request or access has already ended. Refresh the card.",
+      "reseller_only": "Only the reseller can read this history.",
+      "emergency_not_permitted": "You do not have permission for emergency entry.",
+      "emergency_live": "You already have an emergency entry running for this reseller.",
+      "consent_required": "The reseller has not given the platform access to its users. Ask the reseller for it.",
+      "consent_read_only": "The reseller's permission is view only. Ask the reseller for permission to act."
+    }
   }
 }

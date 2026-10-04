@@ -13,6 +13,7 @@ import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { OperatingCurrencyCard } from "../../../_components/OperatingCurrencyCard";
 import { TenantTimeZoneCard } from "../../../_components/TenantTimeZoneCard";
 import { ResellerLimitsCard } from "./ResellerLimitsCard";
+import { SupportAccessCard } from "./SupportAccessCard";
 import { OverageCapCard, PackageChangeCard, ProductQuotasCard } from "./QuotaCards";
 import { Badge } from "../../../financial/_components/Badge";
 import { Alert, primaryButton, quietButton } from "../../../catalog/_components/catalog-ui";
@@ -201,6 +202,8 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
         <ProductQuotasCard tenantId={id} />
         <OverageCapCard tenantId={id} />
         <PackageChangeCard tenantId={id} />
+        {/* F-117-f: the platform's access to this reseller's people; nothing to platform staff. */}
+        <SupportAccessCard tenantId={id} />
       </div>
     </>
   );
