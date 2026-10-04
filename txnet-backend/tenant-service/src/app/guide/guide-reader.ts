@@ -25,6 +25,12 @@ import { GuideHit, GuideMatch, normalizeForSearch, searchGuides } from './guide-
  * it. Redis down costs the cache, never the answer.
  */
 
+/**
+ * The cached body's shape. Part of every ETag, so a body cached before a field
+ * was added (`id`, F-414-l) is never served after it.
+ */
+const READ_SHAPE = 'r2';
+
 /** How long a resolved read is kept. A write changes the ETag at once; this only bounds memory. */
 export const GUIDE_CACHE_TTL_SEC = 600;
 
@@ -45,6 +51,8 @@ export interface GuideStoreRow {
 
 /** One guide as a renderer receives it. Files are object keys; the caller builds the URL (ADR-0116 point 3). */
 export interface ResolvedGuide {
+  /** The row shown — the platform's or the tenant's own; what a view or a vote is counted against (F-414-l). */
+  id: string;
   key: string;
   kind: GuideKind;
   owner: GuideOwner;
@@ -151,7 +159,7 @@ export class GuideReader {
   async etag(tenantId: string, parts: string[]): Promise<string | null> {
     try {
       const [platform, own] = await Promise.all([this.generations.of(null), this.generations.of(tenantId)]);
-      const hash = createHash('sha256').update([tenantId, platform, own, ...parts].join('\n')).digest('base64url');
+      const hash = createHash('sha256').update([READ_SHAPE, tenantId, platform, own, ...parts].join('\n')).digest('base64url');
       return `"g-${hash.slice(0, 32)}"`;
     } catch (err) {
       this.logger.warn(`guide generations unreadable, serving uncached: ${(err as Error).message}`);
@@ -203,6 +211,7 @@ export function resolveGuides(candidates: GuideStoreRow[], shadowed: Set<string>
       if (!text) return [];
       return [
         {
+          id: c.id,
           key: c.key,
           kind: c.kind,
           owner: (c.tenantId === null ? 'platform' : 'own') as GuideOwner,

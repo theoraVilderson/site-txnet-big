@@ -15,6 +15,7 @@ import { GUIDE_SEARCH_MAX, normalizeForSearch, searchGuides } from './guide-sear
  *  - **Markdown in a snippet** — `**` and link targets shown as text.
  */
 const g = (key: string, title: string, blocks: GuideBlock[], sortOrder = 0): ResolvedGuide => ({
+  id: `id-${key}`,
   key,
   kind: 'app',
   owner: 'platform',

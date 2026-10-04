@@ -89,6 +89,11 @@ export class RedisService implements RateLimitStore, OnModuleInit, OnModuleDestr
     await this.client.set(key, value, 'NX');
   }
 
+  /** One write only if the key is absent, with an expiry; `true` when this call wrote it — a guide view's once-a-day marker (F-414-l). */
+  async setIfAbsentWithTtl(key: string, value: string, ttlSec: number): Promise<boolean> {
+    return (await this.client.set(key, value, 'EX', ttlSec, 'NX')) === 'OK';
+  }
+
   /**
    * One pub/sub message, never thrown: the key it announces is already written,
    * and `gateway-service`'s re-check tick reads that key anyway (F-018-r). The

@@ -5024,7 +5024,23 @@
     "cancel": "Cancel",
     "surfaceLabel": "Where",
     "videoUpload": "Choose a video (MP4 or WebM, up to 50 MB)",
-    "posterUpload": "Cover image (shown before it plays)"
+    "posterUpload": "Cover image (shown before it plays)",
+    "stats": {
+      "period": "Stats",
+      "days": {
+        "7": "Last 7 days",
+        "30": "Last 30 days",
+        "90": "Last 90 days"
+      },
+      "views": "{{n}} views",
+      "viewsSplit": "panel {{panel}}, bot {{bot}}",
+      "helpful": "{{n}} helpful",
+      "notHelpful": "{{n}} not helpful",
+      "none": "No views yet",
+      "platformHint": "Platform guides, summed over every reseller. Votes are counted over all time.",
+      "tenantHint": "Your own users. Votes are counted over all time.",
+      "failed": "The stats could not be read."
+    }
   },
   "guideHelp": {
     "open": "Help",
@@ -5058,6 +5074,14 @@
       "title": "Before you write: these guides may help",
       "matched": "These guides may already answer it",
       "stillSend": "Not what you need? Send your message — support will answer."
+    },
+    "feedback": {
+      "question": "Was this guide helpful?",
+      "yes": "Yes, it helped",
+      "no": "No, it didn't",
+      "thanks": "Thanks, your answer is saved.",
+      "change": "Change your answer",
+      "failed": "Your answer was not saved. Try again."
     }
   }
 }

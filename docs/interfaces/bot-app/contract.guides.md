@@ -22,7 +22,7 @@ shows what that tenant's panel shows a stranger, through the same resolver.
    A reseller's own guide, its hide and the platform's fallback are therefore
    the panel's exactly, cache and ETag included. Unset, no menu has the row.
 2. **Public, like a panel page.** A guest gets the row too: the install guide
-   is often read before an account exists. Nothing here names a user.
+   is often read before an account exists. Only a vote names a user (rule 7).
 3. **Screens.** `📖 Guides` lists the guides placed on `bot_screen:main_menu`
    under `📲 How to connect`; that asks for a system (`GUIDE_OSES`), then lists
    the guides placed on `os:<os>` — one per app, titled by the admin, so the bot
@@ -40,6 +40,14 @@ shows what that tenant's panel shows a stranger, through the same resolver.
    ≤ 50 MiB. Sent once per bot: the platform's `file_id` is kept at
    `bot:guidefile:…` (90 days) and sent instead next time. A file that cannot
    be had or sent is skipped; the text already said what it showed.
+
+7. **Views and votes** (F-414-l, ADR-0119). A guide sent is reported to
+   `POST /api/internal/guides/:key/view` with the chat (`<platform>:<chatId>`,
+   hashed there; counted once a day), not waited on. A chat with a session gets
+   `👍`/`👎` under it — `gf1:<key>` / `gf0:<key>`, ≤ 64 bytes — and a tap is
+   `PUT /api/guides/feedback/:key` through the gateway (`TENANT_API_BASE_URL`)
+   with the chat's own token (`ChatAccess`): saved, failed, or "sign in" when
+   the session is gone. A guest gets no buttons.
 
 ## Not here
 

@@ -1,11 +1,19 @@
-import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ServiceOnlyGuard, runWithTenant } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
-import { guideInternalListQuerySchema, guideInternalOneQuerySchema, guideInternalSearchQuerySchema, guideKeySchema } from './guide-public.schema';
+import {
+  guideInternalListQuerySchema,
+  guideInternalOneQuerySchema,
+  guideInternalSearchQuerySchema,
+  guideInternalViewBodySchema,
+  guideInternalViewQuerySchema,
+  guideKeySchema,
+} from './guide-public.schema';
 import { GuidePlacementQuery, GuideReader, ResolvedGuide } from './guide-reader';
 import type { GuideHit, GuideMatch } from './guide-search';
+import { GuideStats, viewerHash } from './guide-stats';
 
 /**
  * A tenant's guides for the bot (F-414-f): the same resolver, cache and
@@ -19,7 +27,10 @@ import type { GuideHit, GuideMatch } from './guide-search';
 @Controller('internal/guides')
 @UseGuards(ServiceOnlyGuard)
 export class GuideInternalController {
-  constructor(private readonly reader: GuideReader) {}
+  constructor(
+    private readonly reader: GuideReader,
+    private readonly stats: GuideStats,
+  ) {}
 
   @Get()
   async list(
@@ -37,6 +48,18 @@ export class GuideInternalController {
     @Query(new ZodValidationPipe(guideInternalOneQuerySchema)) q: { tenantId: string },
   ): Promise<{ guide: ResolvedGuide | null }> {
     return (await runWithTenant({ id: q.tenantId }, () => this.reader.one(q.tenantId, key, languageOf(req)))).body;
+  }
+
+  /** A guide the bot sent (F-414-l): counted once a day per chat, as the panel's per viewer. */
+  @Post(':key/view')
+  @HttpCode(204)
+  async view(
+    @Req() req: Request,
+    @Param('key', new ZodValidationPipe(guideKeySchema)) key: string,
+    @Query(new ZodValidationPipe(guideInternalViewQuerySchema)) q: { tenantId: string },
+    @Body(new ZodValidationPipe(guideInternalViewBodySchema)) body: { viewer: string },
+  ): Promise<void> {
+    await runWithTenant({ id: q.tenantId }, () => this.stats.view(q.tenantId, key, 'bot', viewerHash('bot', body.viewer), languageOf(req)));
   }
 }
 

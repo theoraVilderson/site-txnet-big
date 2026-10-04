@@ -227,6 +227,13 @@ export const UnscopedRedisKeys = {
   guideGeneration: (owner: string) => `guide:gen:${owner}`,
   /** A resolved guide read, by the ETag its generations make; expires on its own. */
   guideResolved: (tenantId: string, etag: string) => `guide:resolved:${tenantId}:${etag}`,
+  /**
+   * One viewer already counted for one guide on one UTC day and surface
+   * (F-414-l, ADR-0119 point 2): `SET NX` with `RedisTtl.guideViewSeen`, so a
+   * second report the same day counts nothing. `viewer` is a hash, never an IP.
+   */
+  guideViewSeen: (tenantId: string, guideId: string, day: string, surface: string, viewer: string) =>
+    `guide:seen:${tenantId}:${guideId}:${day}:${surface}:${viewer}`,
 
   /**
    * **A pub/sub channel, not a key** (F-018-r). `TenantStatusListener` publishes

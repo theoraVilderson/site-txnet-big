@@ -54,6 +54,8 @@ model Guide {
   translations GuideTranslation[]
   drafts       GuideDraft[]
   placements   GuidePlacement[]
+  viewDays     GuideViewDaily[]
+  votes        GuideVote[]
 
   @@unique([tenantId, key])
   @@map("guide")
@@ -121,5 +123,49 @@ model GuideHidden {
 
   @@id([tenantId, key])
   @@map("guide_hidden")
+  @@schema("guide")
+}
+
+/// Where a view was counted (F-414-l).
+enum GuideViewSurface {
+  panel
+  bot
+
+  @@schema("guide")
+}
+
+/// Views of one guide shown by one tenant, per UTC day and surface (F-414-l,
+/// ADR-0119): one viewer counts once a day. `tenantId` is the **reading**
+/// tenant; `guideId` may be the platform's guide it showed. Strict RLS.
+model GuideViewDaily {
+  tenantId String           @db.Uuid
+  guideId  String           @db.Uuid
+  day      DateTime         @db.Date
+  surface  GuideViewSurface
+  views    Int              @default(0)
+
+  guide Guide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, guideId, day, surface])
+  @@index([guideId, day])
+  @@map("guide_view_daily")
+  @@schema("guide")
+}
+
+/// A known user's helpful / not-helpful vote on a guide their tenant showed
+/// (F-414-l, ADR-0119): one per user per guide, changeable. Strict RLS.
+model GuideVote {
+  tenantId  String   @db.Uuid
+  guideId   String   @db.Uuid
+  userId    String   @db.Uuid
+  helpful   Boolean
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  guide Guide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, guideId, userId])
+  @@index([guideId])
+  @@map("guide_vote")
   @@schema("guide")
 }

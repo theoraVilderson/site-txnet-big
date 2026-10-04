@@ -100,6 +100,18 @@ export interface CreateGuideBody {
   placements?: GuidePlacement[];
 }
 
+/** tenant-service's `GuideStat` (F-414-l, ADR-0119). */
+export interface GuideStat {
+  guideId: string;
+  views: number;
+  panelViews: number;
+  botViews: number;
+  helpful: number;
+  notHelpful: number;
+}
+export const GUIDE_STATS_DAYS = [7, 30, 90] as const;
+export type GuideStatsDays = (typeof GUIDE_STATS_DAYS)[number];
+
 const json = (method: string, body?: unknown): RequestInit => ({ method, body: body === undefined ? undefined : JSON.stringify(body) });
 const at = (id: string, rest = "") => `/${encodeURIComponent(id)}${rest}`;
 
@@ -128,6 +140,8 @@ export const guideApi = {
     form.append("file", file);
     return call<{ key: string }>(at(id, "/videos"), { method: "POST", body: form });
   },
+  /** Views in the last `days` and current votes, per guide id (F-414-l): a reseller its own users', the platform owner every reseller's. */
+  stats: (days: GuideStatsDays) => call<{ days: number; since: string; stats: GuideStat[] }>(`/stats?days=${days}`, { method: "GET" }),
   override: (key: string) => call<GuideDetail>(`/inherited/${encodeURIComponent(key)}/override`, { method: "POST" }),
   hide: (key: string) => call<void>(`/inherited/${encodeURIComponent(key)}/hidden`, { method: "PUT" }),
   unhide: (key: string) => call<void>(`/inherited/${encodeURIComponent(key)}/hidden`, { method: "DELETE" }),
@@ -159,6 +173,8 @@ const read = createApiClient({ baseUrl: `${API_BASE}/public/tenant/guides`, serv
 
 /** tenant-service's `ResolvedGuide`: the text in the language served (`lang`). */
 export interface ResolvedGuide {
+  /** The row shown; what a view or a vote counts against (F-414-l). */
+  id: string;
   key: string;
   kind: GuideKind;
   owner: "platform" | "own";
@@ -177,6 +193,8 @@ export const guideReadApi = {
     ),
   /** One guide by key; a 404 when this tenant sees none. */
   one: (key: string) => read<{ guide: ResolvedGuide }>(`/${encodeURIComponent(key)}`, { method: "GET" }).then((r) => r.guide),
+  /** A guide shown whole (F-414-l): the server counts one a day per viewer, and always answers 204. */
+  view: (key: string) => read<void>(`/${encodeURIComponent(key)}/view`, { method: "POST" }),
   /** Every guide this tenant shows on the panel holding all of `q`'s words (F-414-j), at most a page. */
   search: (q: string) =>
     search<{ hits: GuideHit[] }>(`?${new URLSearchParams({ q, surface: "panel" })}`, { method: "GET" }).then((r) => r.hits),
@@ -196,3 +214,23 @@ export interface GuideHit {
   title: string;
   snippet: string;
 }
+
+// ----------------------------------------------------------------- feedback
+
+/**
+ * A signed-in user's helpful / not-helpful vote (F-414-l, ADR-0119) —
+ * `/api/guides/feedback/:key`, behind `forward-auth`, no permission. One per
+ * user per guide; voting again changes it.
+ */
+const feedback = createApiClient({
+  baseUrl: `${API_BASE}/guides/feedback`,
+  service: "tenant-service",
+  credential: () => authApi.getAccessToken(),
+  onCredentialRefused: (stale) => authApi.refreshCredential(stale),
+  credentialSettled: () => authApi.credentialSettled(),
+});
+
+export const guideFeedbackApi = {
+  mine: (key: string) => feedback<{ helpful: boolean | null }>(`/${encodeURIComponent(key)}`, { method: "GET" }),
+  vote: (key: string, helpful: boolean) => feedback<{ helpful: boolean }>(`/${encodeURIComponent(key)}`, json("PUT", { helpful })),
+};

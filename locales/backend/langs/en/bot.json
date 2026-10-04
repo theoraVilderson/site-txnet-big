@@ -386,6 +386,12 @@
       "windows": "Windows",
       "macos": "macOS",
       "linux": "Linux"
+    },
+    "feedback": {
+      "yes": "👍 Helpful",
+      "no": "👎 Not helpful",
+      "thanks": "Thanks, your answer is saved.",
+      "failed": "Your answer was not saved. Please try again in a moment."
     }
   }
 }

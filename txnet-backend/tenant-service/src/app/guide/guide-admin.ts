@@ -311,6 +311,7 @@ export class GuideAdmin {
     const text = pickTranslation(source === 'draft' ? guide.draft : guide.published, lang);
     if (!text) throw new GuideRefused('guide_no_draft', id);
     return {
+      id: guide.id,
       key: guide.key,
       kind: guide.kind,
       owner: guide.owner,

@@ -401,6 +401,10 @@ export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   [BotKeys.guides.os.windows]: "Windows",
   [BotKeys.guides.os.macos]: "macOS",
   [BotKeys.guides.os.linux]: "Linux",
+  [BotKeys.guides.feedback.yes]: "👍 Helpful",
+  [BotKeys.guides.feedback.no]: "👎 Not helpful",
+  [BotKeys.guides.feedback.thanks]: "Thanks, your answer is saved.",
+  [BotKeys.guides.feedback.failed]: "Your answer was not saved. Please try again in a moment.",
   [BotKeys.support.suggested]: "These guides may already answer it. Open one — or send your message anyway, and support will answer here.",
   [BotKeys.action.supportSendAnyway]: "📨 Send it anyway",
 } satisfies Record<BotKey, string>;

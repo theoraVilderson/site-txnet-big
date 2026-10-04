@@ -5,12 +5,16 @@ import { ChatContext, FlowResult } from '../conversation/nav.types';
 import { BotGuide, GuideApiClient } from '../guide-api/guide-api.client';
 import type { GuideMediaItem } from '../guide-api/guide-media.sender';
 import { BotKey, BotKeys } from '../locale/bot-keys';
+import { BotSessionStore } from '../session/bot-session.store';
+import { ChatAccess } from '../session/chat-access';
 import { ACTIONS, say, view } from './views';
 
 /** `go:android` — a system's guides. The OS is the payload, so a tap on an old screen still means it. */
 export const GUIDE_OS_PREFIX = 'go:';
 /** `gk:<key>` — one guide. A key is ≤ 60 characters, so this stays within a button's 64 bytes. */
 export const GUIDE_KEY_PREFIX = 'gk:';
+/** `gf1:<key>` / `gf0:<key>` — helpful or not (F-414-l). Four bytes and a 60-character key: a button's 64. */
+export const GUIDE_VOTE_PREFIX = 'gf';
 
 /**
  * A guide's text in one message, under the 4096 characters a platform takes,
@@ -32,7 +36,11 @@ const TONE_MARK: Record<GuideCalloutTone, string> = { info: 'ℹ️', tip: '💡
  */
 @Injectable()
 export class GuideFlow {
-  constructor(private readonly guides: GuideApiClient) {}
+  constructor(
+    private readonly guides: GuideApiClient,
+    private readonly sessions: BotSessionStore,
+    private readonly access: ChatAccess,
+  ) {}
 
   /** The guides placed on the main menu, under the install guide. */
   async start(ctx: ChatContext): Promise<FlowResult> {
@@ -71,13 +79,34 @@ export class GuideFlow {
     if (!read.ok) return failed();
     if (!read.guide) return { view: say('guides.gone', { key: BotKeys.guides.gone }), nextState: null };
     const g = read.guide;
+    // F-414-l: counted once a day per chat by tenant-service; the screen does not wait on it.
+    void this.guides.view(tenantId, g.key, `${ctx.platform}:${ctx.chatId}`, ctx.lang);
+    const body: BotText = { key: BotKeys.guides.screen, values: { title: { raw: g.title }, text: { raw: guidePlainText(g.blocks) } } };
+    // Only a chat with a session is asked: a vote is a known user's (ADR-0119 point 3).
+    const canVote = this.guides.canVote && (await this.sessions.get(ctx.integration, ctx.chatId)) !== null;
     return {
-      view: say('guides.screen', { key: BotKeys.guides.screen, values: { title: { raw: g.title }, text: { raw: guidePlainText(g.blocks) } } }),
+      view: canVote ? view('guides.screen', body, [voteButtons(g.key)]) : say('guides.screen', body),
       nextState: null,
       media: guideMedia(g.blocks),
     };
   }
+
+  /** `gf1:<key>` / `gf0:<key>`: the chat's user's vote, through the gateway with their own token (F-414-l). */
+  async vote(ctx: ChatContext, actionId: string): Promise<FlowResult> {
+    const helpful = actionId.startsWith(`${GUIDE_VOTE_PREFIX}1:`);
+    const key = actionId.slice(GUIDE_VOTE_PREFIX.length + 2);
+    if (!/^[a-z0-9_]{1,60}$/.test(key) || !/^gf[01]:/.test(actionId)) return failed();
+    const token = await this.access.token(ctx);
+    if (!token) return { view: say('guides.signedOut', { key: BotKeys.common.notSignedIn }), nextState: null };
+    const saved = await this.guides.vote(key, helpful, token, ctx.lang);
+    return { view: say('guides.voted', { key: saved ? BotKeys.guides.feedback.thanks : BotKeys.guides.feedback.failed }), nextState: null };
+  }
 }
+
+const voteButtons = (key: string): BotAction[] => [
+  { id: `${GUIDE_VOTE_PREFIX}1:${key}`, label: { key: BotKeys.guides.feedback.yes } },
+  { id: `${GUIDE_VOTE_PREFIX}0:${key}`, label: { key: BotKeys.guides.feedback.no } },
+];
 
 const failed = (): FlowResult => ({ view: say('guides.failed', { key: BotKeys.guides.failed }), nextState: null });
 

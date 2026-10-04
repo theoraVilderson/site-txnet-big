@@ -70,6 +70,7 @@ describe('the key catalogue', () => {
       tenantStatusChanged: UnscopedRedisKeys.tenantStatusChanged(),
       guideGeneration: UnscopedRedisKeys.guideGeneration('platform'),
       guideResolved: UnscopedRedisKeys.guideResolved('tenant-1', 'etag-1'),
+      guideViewSeen: UnscopedRedisKeys.guideViewSeen('tenant-1', 'guide-1', '2026-10-04', 'panel', 'viewer-1'),
       aiSilenceAll: UnscopedRedisKeys.aiSilenceAll(),
       aiSilence: UnscopedRedisKeys.aiSilence('tenant-1'),
       tenantRuns: UnscopedRedisKeys.tenantRuns('tenant-1'),

@@ -110,6 +110,8 @@ export const RedisTtl = {
    * so the id stays good; the lifetime only lets an unused one go.
    */
   botGuideFile: 90 * 24 * 3600,
+  /** A guide view's once-a-day marker (F-414-l): past the UTC day it is for, whatever the clock skew. */
+  guideViewSeen: 48 * 3600,
 
   /**
    * An impersonated session is short-lived by design (`identity/invariants.md`

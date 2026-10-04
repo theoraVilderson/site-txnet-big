@@ -6,7 +6,7 @@ import { BotGuide, GuideApiClient } from '../guide-api/guide-api.client';
 import { GuideMediaSender } from '../guide-api/guide-media.sender';
 import { BotKeys } from '../locale/bot-keys';
 import { RedisKeys } from '../redis/redis.keys';
-import { GUIDE_KEY_PREFIX, GUIDE_OS_PREFIX, GUIDE_TEXT_MAX, GuideFlow, guideMedia, guidePlainText } from './guide.flow';
+import { GUIDE_KEY_PREFIX, GUIDE_OS_PREFIX, GUIDE_TEXT_MAX, GUIDE_VOTE_PREFIX, GuideFlow, guideMedia, guidePlainText } from './guide.flow';
 import { ACTIONS } from './views';
 
 /**
@@ -35,13 +35,18 @@ const guide = (over: Partial<BotGuide> = {}): BotGuide => ({
   ...over,
 });
 
-function harness(o: { slot?: BotGuide[] | null; one?: BotGuide | null | undefined } = {}) {
+function harness(o: { slot?: BotGuide[] | null; one?: BotGuide | null | undefined; session?: boolean; token?: string | null } = {}) {
   const api = {
     isConfigured: true,
+    canVote: true,
+    view: vi.fn().mockResolvedValue(undefined),
+    vote: vi.fn().mockResolvedValue(true),
     forSlot: vi.fn().mockResolvedValue(o.slot === null ? { ok: false } : { ok: true, guides: o.slot ?? [guide()] }),
     one: vi.fn().mockResolvedValue(o.one === undefined ? { ok: true, guide: guide() } : o.one === null ? { ok: true, guide: null } : { ok: true, guide: o.one }),
   } as unknown as Mocked<GuideApiClient>;
-  return { api, flow: new GuideFlow(api) };
+  const sessions = { get: vi.fn().mockResolvedValue(o.session ? { refreshToken: 'r' } : null) };
+  const access = { token: vi.fn().mockResolvedValue(o.token === undefined ? 'access-1' : o.token) };
+  return { api, access, flow: new GuideFlow(api, sessions as never, access as never) };
 }
 
 const ids = (r: { view: { actions?: { id: string }[][] } }) => (r.view.actions ?? []).flat().map((a) => a.id);
@@ -104,6 +109,31 @@ describe('GuideFlow', () => {
     const text = guidePlainText([{ type: 'text', text: 'word '.repeat(2000) }]);
     expect(text.length).toBeLessThanOrEqual(GUIDE_TEXT_MAX);
     expect(text.endsWith('…')).toBe(true);
+  });
+
+  // F-414-l
+  it('reports a guide it sent as a view of this tenant, by chat', async () => {
+    const { flow, api } = harness();
+    await flow.tap(ctx, `${GUIDE_KEY_PREFIX}v2rayng`);
+    expect(api.view).toHaveBeenCalledWith('tenant-1', 'v2rayng', 'telegram:5501', 'fa');
+  });
+
+  it('asks a signed-in chat whether a guide helped, within 64 bytes; a guest is not asked', async () => {
+    const key = 'k'.repeat(60);
+    const signedIn = await harness({ session: true, one: guide({ key }) }).flow.tap(ctx, `${GUIDE_KEY_PREFIX}${key}`);
+    expect(ids(signedIn)).toEqual([`${GUIDE_VOTE_PREFIX}1:${key}`, `${GUIDE_VOTE_PREFIX}0:${key}`]);
+    for (const id of ids(signedIn)) expect(Buffer.byteLength(id)).toBeLessThanOrEqual(64);
+    const guest = await harness({ session: false }).flow.tap(ctx, `${GUIDE_KEY_PREFIX}v2rayng`);
+    expect(ids(guest)).toEqual([]);
+  });
+
+  it('votes with the chat’s own token, and asks a chat whose session is gone to sign in', async () => {
+    const { flow, api } = harness();
+    const r = await flow.vote(ctx, `${GUIDE_VOTE_PREFIX}0:v2rayng`);
+    expect(api.vote).toHaveBeenCalledWith('v2rayng', false, 'access-1', 'fa');
+    expect(r.view.body.key).toBe(BotKeys.guides.feedback.thanks);
+    const out = await harness({ token: null }).flow.vote(ctx, `${GUIDE_VOTE_PREFIX}1:v2rayng`);
+    expect(out.view.body.key).toBe(BotKeys.common.notSignedIn);
   });
 
   it('says a guide is gone when the tenant no longer sees it', async () => {

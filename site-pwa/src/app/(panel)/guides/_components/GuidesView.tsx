@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookMarked, Eye, EyeOff, Pencil, Plus, RotateCw } from "lucide-react";
+import { BookMarked, Eye, EyeOff, Pencil, Plus, RotateCw, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { guideApi, type GuideKind, type GuideLang, type GuideList } from "@/lib/guide-api";
+import { GUIDE_STATS_DAYS, guideApi, type GuideKind, type GuideLang, type GuideList, type GuideStat, type GuideStatsDays } from "@/lib/guide-api";
 import { panelGuidePath } from "@/lib/routes";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { Select } from "../../_components/kit/Select";
@@ -27,6 +27,21 @@ export function GuidesView() {
   const reload = useCallback(() => setAsked((n) => n + 1), []);
   const { busy, note, act } = useAct();
   const router = useRouter();
+  const [days, setDays] = useState<GuideStatsDays>(30);
+  const [stats, setStats] = useState<Map<string, GuideStat> | null>(null);
+  const [statsFailed, setStatsFailed] = useState(false);
+
+  // The numbers are read apart from the list: a failure costs the numbers, never the page (F-414-l).
+  useEffect(() => {
+    let alive = true;
+    guideApi
+      .stats(days)
+      .then((r) => alive && (setStats(new Map(r.stats.map((s) => [s.guideId, s]))), setStatsFailed(false)))
+      .catch(() => alive && (setStats(null), setStatsFailed(true)));
+    return () => {
+      alive = false;
+    };
+  }, [days, asked]);
 
   useEffect(() => {
     let alive = true;
@@ -78,6 +93,20 @@ export function GuidesView() {
           <NewGuide onCreated={(id) => router.push(panelGuidePath(id))} />
           <NoteLine note={note} />
 
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-text-primary">{t("common", K.stats.period)}</span>
+            <Select
+              value={String(days)}
+              onChange={(v) => setDays(Number(v) as GuideStatsDays)}
+              options={GUIDE_STATS_DAYS.map((d) => ({ value: String(d), label: t("common", K.stats.days[d]) }))}
+              ariaLabel={t("common", K.stats.period)}
+              className="w-40"
+            />
+            <p className="text-[11px] text-text-secondary">
+              {statsFailed ? t("common", K.stats.failed) : t("common", data.owner === "platform" ? K.stats.platformHint : K.stats.tenantHint)}
+            </p>
+          </div>
+
           <section className="space-y-3">
             <h2 className="text-sm font-bold text-text-primary">{t("common", data.owner === "platform" ? K.ownPlatform : K.ownTenant)}</h2>
             {data.own.length === 0 ? (
@@ -93,6 +122,7 @@ export function GuidesView() {
                     <StateBadge state={g.state} />
                     {g.hasDraft && g.state !== "draft" && <Badge className="bg-gold-bg text-text-primary">{t("common", K.hasDraft)}</Badge>}
                     <span className="text-[11px] text-text-secondary">{g.publishedLangs.map((l) => t("common", K.language[l])).join("، ")}</span>
+                    {stats && <GuideNumbers stat={stats.get(g.id)} />}
                     <Link href={panelGuidePath(g.id)} className={`${quietButton} ms-auto`}>
                       <Pencil size={12} aria-hidden />
                       {t("common", K.open)}
@@ -117,6 +147,7 @@ export function GuidesView() {
                       <span className="font-mono text-[11px] text-text-secondary">{g.key}</span>
                       {g.hidden && <Badge>{t("common", K.hiddenBadge)}</Badge>}
                       {g.overriddenBy && <Badge className="bg-leaf-bg text-primary">{t("common", K.overriddenBadge)}</Badge>}
+                      {stats && <GuideNumbers stat={stats.get(g.id)} />}
                       <div className="ms-auto flex flex-wrap gap-1">
                         <Link href={panelGuidePath(g.overriddenBy ?? g.id)} className={quietButton}>
                           <Eye size={12} aria-hidden />
@@ -146,6 +177,32 @@ export function GuidesView() {
 }
 
 /** Key, kind, a first language's title and paragraph: tenant-service wants one text to make a draft. */
+/**
+ * One guide's numbers (F-414-l): views in the period, split by panel and bot
+ * in the tooltip, and its current helpful / not-helpful votes.
+ */
+function GuideNumbers({ stat }: { stat: GuideStat | undefined }) {
+  const { t } = useLocale();
+  if (!stat || (stat.views === 0 && stat.helpful === 0 && stat.notHelpful === 0)) {
+    return <span className="text-[11px] text-text-secondary">{t("common", K.stats.none)}</span>;
+  }
+  return (
+    <span className="flex items-center gap-2 text-[11px] text-text-secondary">
+      <span title={t("common", K.stats.viewsSplit, { panel: stat.panelViews, bot: stat.botViews })}>
+        {t("common", K.stats.views, { n: stat.views })}
+      </span>
+      <span className="flex items-center gap-0.5 text-primary">
+        <ThumbsUp size={11} aria-hidden />
+        {t("common", K.stats.helpful, { n: stat.helpful })}
+      </span>
+      <span className="flex items-center gap-0.5">
+        <ThumbsDown size={11} aria-hidden />
+        {t("common", K.stats.notHelpful, { n: stat.notHelpful })}
+      </span>
+    </span>
+  );
+}
+
 function NewGuide({ onCreated }: { onCreated: (id: string) => void }) {
   const { t } = useLocale();
   const [open, setOpen] = useState(false);

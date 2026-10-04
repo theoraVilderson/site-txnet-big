@@ -2,13 +2,13 @@
 id: guide
 layer: domain
 status: active
-version: 2
+version: 3
 updated: 2026-10-04
 ---
 
 # Contract — guide
 
-Storage built (F-414-a, [data-model.md](data-model.md)); reading built (F-414-b); the settings built (F-414-c). Shape: ADR-0115, ADR-0116, ADR-0117; video ADR-0118 (F-414-i).
+Storage built (F-414-a, [data-model.md](data-model.md)); reading built (F-414-b); the settings built (F-414-c). Shape: ADR-0115, ADR-0116, ADR-0117; video ADR-0118 (F-414-i); views and votes ADR-0119 (F-414-l).
 
 ## TL;DR
 
@@ -26,8 +26,10 @@ row removes it. Resolution is "nearest owner wins" over the tenant's ancestry.
 | `GET /api/public/tenant/guide-search?q=&surface=panel\|bot&match=all\|any` | as the reads above | `{ hits: GuideHit[] }` — `{ key, kind, lang, title, snippet }`, ≤ 20 (F-414-j, rule 6) |
 | `GET /api/internal/guides?tenantId=&placement=&surface=bot` · `GET /api/internal/guides/:key?tenantId=` · `GET /api/internal/guide-search?tenantId=&q=&surface=` | a service with `SERVICE_AUTH_TOKEN` (the bot, F-414-f); in-network, not routed by Traefik | the same answers, for the tenant named by id — the same reader and cache (`GuideInternalController`) |
 | `/api/guides/settings/*` | `guide.manage` (gate; tenant-service, Traefik `PathPrefix(/api/guides)`) | the settings below (F-414-c) |
+| `POST /api/public/tenant/guides/:key/view` · `POST /api/internal/guides/:key/view?tenantId=` `{ viewer }` | as the reads above · the bot | 204, always — a view of the guide that tenant shows under `key` (F-414-l, "Views and votes") |
+| `GET` · `PUT /api/guides/feedback/:key` `{ helpful }` | any signed-in user (gate, no permission) — the panel's or the bot's token | `{ helpful: boolean \| null }` — the user's own vote; a guide the tenant does not show is a 404 |
 
-`ResolvedGuide` is `{ key, kind, owner: 'platform'|'own', lang, title, blocks, sortOrder, updatedAt }`; `lang` is the language served. A block's files are object keys — the caller builds `/api/public/tenant/files/<key>` on the Host it is on, and a video's `file` `/api/public/media/<key>`, served by the media server and never by a Nest route (ADR-0116 point 3, ADR-0118). A slot outside the registry, or a bad key, is a 400; an unknown Host the neutral 404.
+`ResolvedGuide` is `{ id, key, kind, owner: 'platform'|'own', lang, title, blocks, sortOrder, updatedAt }`; `lang` is the language served. A block's files are object keys — the caller builds `/api/public/tenant/files/<key>` on the Host it is on, and a video's `file` `/api/public/media/<key>`, served by the media server and never by a Nest route (ADR-0116 point 3, ADR-0118). A slot outside the registry, or a bad key, is a 400; an unknown Host the neutral 404.
 
 ### Rules of the read (F-414-b, ADR-0117)
 
@@ -65,6 +67,16 @@ Rules:
 4. No file is deleted by these routes — an override keeps naming the platform's files.
 5. **A file plays its block's role** (F-414-i): a video block's `file` is a stored `video/*`, its `poster` and every other file an image; one key named as both, or of the other kind, is `guide_file` 400.
 
+## Views and votes (F-414-l, ADR-0119)
+
+`GuideStats` (`guide-stats.ts`); tables `guide_view_daily`, `guide_vote` ([data-model.md](data-model.md)).
+
+1. **Counted per reading tenant, by guide id** — the Host's or the bot's tenant, and the id of the row it showed (`ResolvedGuide.id`, the platform's or its own). An override shares the key, never the numbers.
+2. **A view is one viewer, guide, UTC day and surface.** Viewer: a hash of IP and user agent (panel), of the chat (bot) — never kept raw. `RedisKeys.guideViewSeen` (`SET NX`, 48 h) makes a repeat a no-op; Redis down counts nothing, never twice. The panel reports a guide shown whole (`GuideFeedback.tsx`), the bot one it sent.
+3. **A vote is one per user per guide**, changeable; only a guide the user's tenant shows now (`guide_unknown`, 404).
+4. **`GET /api/guides/settings/stats?days=7|30|90`** (default 30, `guide.manage`) → `{ days, since, stats: [{ guideId, views, panelViews, botViews, helpful, notHelpful }] }`: views since `since` (UTC, today included), votes over all time. A reseller: its own tenant's rows; the platform owner: every tenant's, platform guides only (cross-tenant pool). A guide with neither is absent.
+5. Deleting a guide deletes its numbers (cascade).
+
 ## Consumes
 
 | From unit | What | Failure behaviour if unavailable |
@@ -72,7 +84,7 @@ Rules:
 | tenant | the caller's tenant (Host or token) and its ancestry | guides blocked |
 | i18n | the language list and fallback order | the platform's default language |
 
-Consumers: panel-web (F-414-d/e, public route and settings), bot-app (F-414-f, internal route).
+Consumers: panel-web (F-414-d/e, public route and settings; views, votes, numbers F-414-l), bot-app (F-414-f, internal route; views and votes F-414-l).
 
 ## Guarantees
 

@@ -27,7 +27,7 @@ import { TimeZoneFlow } from '../flows/time-zone.flow';
 import { LOTTERY_ACTION_PREFIX, LotteryFlow } from '../flows/lottery.flow';
 import { WheelFlow } from '../flows/wheel.flow';
 import { SUPPORT_ACTION_PREFIX, SUPPORT_SUGGESTED_STEP, SupportFlow } from '../flows/support.flow';
-import { GUIDE_KEY_PREFIX, GUIDE_OS_PREFIX, GuideFlow } from '../flows/guide.flow';
+import { GUIDE_KEY_PREFIX, GUIDE_OS_PREFIX, GUIDE_VOTE_PREFIX, GuideFlow } from '../flows/guide.flow';
 import { GuideApiClient } from '../guide-api/guide-api.client';
 import { SupportApiClient } from '../support-api/support-api.client';
 import { SuggestionOptOut } from '../suggestion/suggestion-opt-out';
@@ -181,6 +181,8 @@ export class ConversationRouter {
     // F-414-f. Every guide button names what it opens, so none needs state; a guest may tap them.
     if (actionId === ACTIONS.guides) return this.guides.start(ctx);
     if (actionId === ACTIONS.guidesInstall) return this.guides.install();
+    // F-414-l: the vote names its guide, so it needs no state either.
+    if (actionId?.startsWith(GUIDE_VOTE_PREFIX)) return this.guides.vote(ctx, actionId);
     if (actionId?.startsWith(GUIDE_OS_PREFIX) || actionId?.startsWith(GUIDE_KEY_PREFIX)) {
       const shown = await this.guides.tap(ctx, actionId);
       // F-414-k: a guide opened from support's offer keeps the written message and the way on.

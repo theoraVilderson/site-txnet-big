@@ -9,6 +9,7 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import type { ResolvedGuide } from "@/lib/guide-api";
 import { Skeleton } from "../kit/Skeleton";
 import { GuideBlocks } from "./GuideBlocks";
+import { GuideFeedback } from "./GuideFeedback";
 
 const H = FrontendI18nKeys.common.guideHelp;
 
@@ -99,6 +100,7 @@ export function GuideList({
           {shown.title}
         </h3>
         <GuideBlocks blocks={shown.blocks} dir={guideDir(shown.lang)} />
+        <GuideFeedback guideKey={shown.key} />
       </article>
     );
   }

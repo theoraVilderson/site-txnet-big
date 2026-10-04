@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import type { GuidePlacementQuery } from './guide-reader';
 import { GUIDE_MATCHES } from './guide-search';
+import { GUIDE_STATS_DAYS } from './guide-stats';
 
 const invalid = BackendI18nKeys.errors.validation.failed;
 
@@ -58,3 +59,16 @@ export const guideInternalSearchQuerySchema = z
   .object({ tenantId: z.string().uuid(invalid), q: z.string().trim().min(2, invalid).max(100, invalid), surface: readerSurface, match: searchMatch })
   .strict()
   .transform((v) => ({ tenantId: v.tenantId, q: v.q, surface: v.surface as Exclude<GuideSurface, 'any'>, match: v.match }));
+
+/** The bot's view (F-414-l): the chat, as the bot names it; hashed before it is kept. */
+export const guideInternalViewQuerySchema = z.object({ tenantId: z.string().uuid(invalid) }).strict();
+export const guideInternalViewBodySchema = z.object({ viewer: z.string().min(1, invalid).max(200, invalid) }).strict();
+
+/** A known user's vote (F-414-l): helpful or not. */
+export const guideVoteBodySchema = z.object({ helpful: z.boolean({ message: invalid }) }).strict();
+
+/** `?days=7|30|90` on the numbers (F-414-l); 30 when left out. */
+export const guideStatsQuerySchema = z
+  .object({ days: z.enum(GUIDE_STATS_DAYS).default('30') })
+  .strict()
+  .transform((q) => ({ days: Number(q.days) }));

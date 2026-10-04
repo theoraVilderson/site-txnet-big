@@ -1,4 +1,4 @@
-import { Controller, Get, NotFoundException, Param, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, HttpCode, NotFoundException, Param, Post, Query, Req, Res } from '@nestjs/common';
 import { PublicRoute, TenantContext, publicPath } from '@txnet-backend/shared-core';
 import type { Request, Response } from 'express';
 
@@ -6,6 +6,7 @@ import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { guideKeySchema, guideListQuerySchema, guideSearchQuerySchema } from './guide-public.schema';
 import { GuidePlacementQuery, GuideRead, GuideReader, ResolvedGuide } from './guide-reader';
 import type { GuideHit, GuideMatch } from './guide-search';
+import { GuideStats, viewerHash } from './guide-stats';
 
 /** `GET /api/public/tenant/guides` (F-414-b). */
 export const GUIDES_PATH = publicPath('tenant', 'guides');
@@ -29,7 +30,10 @@ const CACHE_HEADERS = { 'Cache-Control': 'public, no-cache', Vary: 'Accept-Langu
  */
 @Controller(GUIDES_PATH)
 export class GuidePublicController {
-  constructor(private readonly reader: GuideReader) {}
+  constructor(
+    private readonly reader: GuideReader,
+    private readonly stats: GuideStats,
+  ) {}
 
   @Get()
   @PublicRoute({ doors: ['panel'] })
@@ -60,6 +64,20 @@ export class GuidePublicController {
     const read = await this.reader.one(tenantId, key, lang);
     if (!read.body.guide) throw new NotFoundException();
     return answer(res, read) as { guide: ResolvedGuide };
+  }
+
+  /**
+   * A guide shown whole on the panel (F-414-l, ADR-0119): counted once a day
+   * per viewer — a hash of IP and user agent, never the IP. Always a 204, so
+   * the answer never says whether a view counted or a key exists.
+   */
+  @Post(':key/view')
+  @HttpCode(204)
+  @PublicRoute({ doors: ['panel'] })
+  async view(@Req() req: Request, @Param('key', new ZodValidationPipe(guideKeySchema)) key: string): Promise<void> {
+    const tenantId = TenantContext.current('guide view by host').id;
+    const viewer = viewerHash(req.ip ?? '', String(req.headers['user-agent'] ?? ''));
+    await this.stats.view(tenantId, key, 'panel', viewer, languageOf(req));
   }
 }
 

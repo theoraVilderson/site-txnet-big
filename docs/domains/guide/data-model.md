@@ -6,7 +6,7 @@ updated: 2026-10-04
 
 # Data model — guide
 
-Built (F-414-a, ADR-0115; migration `20261004000300_guide_storage`; blocks F-414-g, ADR-0116, `20261004000400_guide_blocks`; slots F-414-h, `20261004000500_guide_slots`; drafts F-414-c, ADR-0117, `20261004000600_guide_draft`). Schema `guide`, RLS shared-read as support's categories.
+Built (F-414-a, ADR-0115; migration `20261004000300_guide_storage`; blocks F-414-g, ADR-0116, `20261004000400_guide_blocks`; slots F-414-h, `20261004000500_guide_slots`; drafts F-414-c, ADR-0117, `20261004000600_guide_draft`; stats F-414-l, ADR-0119, `20261004000700_guide_stats`). Schema `guide`, RLS shared-read as support's categories — save the two stats tables, **strict** on the reading tenant (no NULL rows); their `guideId` may name a platform guide, cascade on delete.
 
 | Table | Holds |
 |---|---|
@@ -15,6 +15,8 @@ Built (F-414-a, ADR-0115; migration `20261004000300_guide_storage`; blocks F-414
 | guide_draft | the same shape plus `updatedAt`: the text being edited; publish copies it over `guide_translation` and deletes it (ADR-0117 point 1) |
 | guide_placement | `guideId`, `surface` (`panel`/`bot`/`any`), `targetKind` (`route`/`bot_screen`/`product`/`os`/`app`), `targetRef` |
 | guide_hidden | `tenantId`, `key` — a reseller hiding an inherited guide without replacing it |
+| guide_view_daily | `tenantId` (the **reading** tenant), `guideId`, `day` (UTC date), `surface` (`panel`/`bot`), `views` — PK all but `views` (F-414-l) |
+| guide_vote | `tenantId` (reading), `guideId`, `userId`, `helpful`, timestamps — one per user per guide (F-414-l) |
 
 `key` is `^[a-z0-9_]{1,60}$` and unique per owner (`tenantId`, NULL counted as one owner); a title is 1–120 characters; `blocks` is a JSON array of 1–100 blocks, at most 64 KiB; a placement is unique per (guide, surface, targetKind, targetRef), its `targetRef` a slug or lower-case UUID (`^[a-z0-9][a-z0-9_-]{0,63}$`), and a `route` shows only on `panel`, a `bot_screen` only on `bot`. No database default on ids — the client mints them.
 

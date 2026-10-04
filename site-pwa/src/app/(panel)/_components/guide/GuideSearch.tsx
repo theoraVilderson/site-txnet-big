@@ -8,6 +8,7 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import { guideReadApi, type GuideHit, type ResolvedGuide } from "@/lib/guide-api";
 import { Skeleton } from "../kit/Skeleton";
 import { GuideBlocks } from "./GuideBlocks";
+import { GuideFeedback } from "./GuideFeedback";
 import { guideDir } from "./GuideList";
 
 const H = FrontendI18nKeys.common.guideHelp;
@@ -100,6 +101,7 @@ export function GuideSearchResults({ query }: { query: string }) {
               {open.guide.title}
             </h3>
             <GuideBlocks blocks={open.guide.blocks} dir={guideDir(open.guide.lang)} />
+            <GuideFeedback guideKey={open.guide.key} />
           </>
         )}
       </article>

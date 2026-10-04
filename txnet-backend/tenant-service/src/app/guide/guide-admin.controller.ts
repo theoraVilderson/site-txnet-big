@@ -48,7 +48,8 @@ import {
   updateGuideSchema,
 } from './guide-admin.schema';
 import { GuideManageGuard } from './guide-manage.guard';
-import { guideKeySchema } from './guide-public.schema';
+import { guideKeySchema, guideStatsQuerySchema } from './guide-public.schema';
+import { GuideStat, GuideStats } from './guide-stats';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
 const STATUS: Record<GuideRejection, 400 | 404 | 409 | 413 | 415> = {
@@ -74,7 +75,10 @@ const STATUS: Record<GuideRejection, 400 | 404 | 409 | 413 | 415> = {
 @Controller('guides/settings')
 @UseGuards(GuideManageGuard)
 export class GuideAdminController {
-  constructor(private readonly guides: GuideAdmin) {}
+  constructor(
+    private readonly guides: GuideAdmin,
+    private readonly numbers: GuideStats,
+  ) {}
 
   @Get()
   list(@Req() req: Request): Promise<GuideList> {
@@ -102,6 +106,16 @@ export class GuideAdminController {
   @HttpCode(204)
   async unhide(@Req() req: Request, @Param('key', new ZodValidationPipe(guideKeySchema)) key: string): Promise<void> {
     await refusing(() => this.guides.setHidden(actorOf(req), key, false));
+  }
+
+  /**
+   * Views in the last `days` and current votes per guide id (F-414-l,
+   * ADR-0119 point 4): a reseller its own tenant's; the platform owner every
+   * tenant's for the platform's guides. Before `:id`, which would take it.
+   */
+  @Get('stats')
+  stats(@Req() req: Request, @Query(new ZodValidationPipe(guideStatsQuerySchema)) q: { days: number }): Promise<{ days: number; since: string; stats: GuideStat[] }> {
+    return this.numbers.stats(actorOf(req), q.days);
   }
 
   @Get(':id')

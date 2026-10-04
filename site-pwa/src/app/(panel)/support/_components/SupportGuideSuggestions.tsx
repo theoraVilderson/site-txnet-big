@@ -6,6 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { guideReadApi, type ResolvedGuide } from "@/lib/guide-api";
 import { GuideBlocks } from "../../_components/guide/GuideBlocks";
+import { GuideFeedback } from "../../_components/guide/GuideFeedback";
 import { guideDir, useSlotGuides } from "../../_components/guide/GuideList";
 import { supportGuideQuery } from "../../_lib/guide-help";
 
@@ -87,6 +88,7 @@ function OfferedGuide({ guide, placed }: { guide: Offered; placed?: ResolvedGuid
       {open && loaded && (
         <div className="border-t border-card-border px-3 py-3">
           <GuideBlocks blocks={loaded.blocks} dir={guideDir(loaded.lang)} />
+          <GuideFeedback guideKey={loaded.key} />
         </div>
       )}
     </li>

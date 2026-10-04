@@ -31,17 +31,20 @@ export type GuideRead<T> = { ok: true } & T | { ok: false };
  *
  * `TENANT_INTERNAL_BASE_URL` is optional: unset, no menu offers guides
  * (`isConfigured`), rather than a row that fails. A guide is public, so a
- * guest reads them too; nothing here names a user.
+ * guest reads them too; only a vote names a user, by its token (F-414-l).
  */
 @Injectable()
 export class GuideApiClient {
   private readonly logger = new Logger(GuideApiClient.name);
   private readonly baseUrl: string;
+  /** The gateway, for a vote: it needs the user's token, so `forward-auth` says whose (F-414-l). */
+  private readonly gatewayUrl: string;
   private readonly serviceToken: string;
   private readonly timeoutMs: number;
 
   constructor(config: ConfigService) {
     this.baseUrl = (config.get<string>('TENANT_INTERNAL_BASE_URL') ?? '').replace(/\/+$/, '');
+    this.gatewayUrl = (config.get<string>('TENANT_API_BASE_URL') ?? '').replace(/\/+$/, '');
     this.serviceToken = config.get<string>('SERVICE_AUTH_TOKEN', '');
     this.timeoutMs = config.get<number>('AUTH_API_TIMEOUT_MS', 8000);
   }
@@ -75,6 +78,57 @@ export class GuideApiClient {
     const query = new URLSearchParams({ tenantId, q, surface: 'bot', match: 'any' });
     const data = await this.get<{ hits: GuideHitForBot[] }>(`/api/internal/guide-search?${query}`, lang);
     return data ? { ok: true, hits: data.hits } : { ok: false };
+  }
+
+  /**
+   * A guide this bot sent (F-414-l, ADR-0119): tenant-service counts it once a
+   * day per chat. Never thrown and never waited on by a screen — a lost view
+   * costs a number, not a reply.
+   */
+  async view(tenantId: string, key: string, chat: string, lang: string): Promise<void> {
+    if (!this.isConfigured) return;
+    try {
+      const response = await fetch(`${this.baseUrl}/api/internal/guides/${encodeURIComponent(key)}/view?${new URLSearchParams({ tenantId })}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'accept-language': lang, [RequestHeaders.serviceToken]: this.serviceToken },
+        body: JSON.stringify({ viewer: chat }),
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+      if (!response.ok) this.logger.warn(`guide view answered ${response.status}`);
+    } catch (e: unknown) {
+      this.logger.warn(`guide view failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  get canVote(): boolean {
+    return this.gatewayUrl !== '';
+  }
+
+  /**
+   * A signed-in chat's vote (F-414-l): `PUT /api/guides/feedback/:key` through
+   * the gateway with the user's own token, as the panel's — one vote per user,
+   * the last one kept. `false` for anything the chat can only retry.
+   */
+  async vote(key: string, helpful: boolean, accessToken: string, lang: string): Promise<boolean> {
+    if (!this.canVote) return false;
+    try {
+      const response = await fetch(`${this.gatewayUrl}/api/guides/feedback/${encodeURIComponent(key)}`, {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          'accept-language': lang,
+          authorization: `Bearer ${accessToken}`,
+          [RequestHeaders.serviceToken]: this.serviceToken,
+        },
+        body: JSON.stringify({ helpful }),
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+      if (!response.ok) this.logger.error(`guide vote answered ${response.status}`);
+      return response.ok;
+    } catch (e: unknown) {
+      this.logger.error(`guide vote failed: ${e instanceof Error ? e.message : String(e)}`);
+      return false;
+    }
   }
 
   /** The envelope's data; `null` for anything a screen can only answer with "try again". */
