@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 3
-updated: 2026-09-28
+updated: 2026-10-04
 ---
 
 # Contract — billing / a reseller's own revenue
@@ -42,6 +42,29 @@ page when one is built.
 | Nothing is cached or stored | the ledger says what was earned; a remembered total is a second memory (the reasoning of ADR-0041 §5) |
 | The window defaults to 30 days, is capped at 366 by the schema, and the answer echoes the `from`/`to` actually used. Its own rate-limit bucket, `RESELLER_REVENUE_READ` | two aggregates scan the tenant's whole ledgers over the period with no index narrowing them further — the most expensive read on any reseller-named surface |
 | `.strict()` on the query | the path already said whose revenue this is; a second answer is refused rather than ignored |
+
+## By product and by day — tier A (F-117-h)
+
+`GET /api/billing/tenants/:tenantId/revenue/breakdown?from=&to=`
+(`revenue-breakdown.ts`, ADR-0104 (2)(3)). The same sales as `sales` above —
+the same `SALE_REASONS` net of `REFUND_REASONS` — split by product and by day,
+each cell with how many people it is. The same door, query schema and bucket
+(`RESELLER_REVENUE_READ`) as the totals; a separate route so the totals the bot
+reads keep their shape and cost.
+
+| Rule | Why |
+|---|---|
+| **For the platform's staff (`as: 'staff'`), a cell under `SMALL_GROUP` (5) people answers `people: 'fewer_than_5'` with `count`, `total` and `byCurrency` empty**; suppressed cells come after the shown ones, in a fixed order | ADR-0104 (3): a cell of one buyer is that person's spending, and tier A needs no consent |
+| The reseller's own people (owner, a seat) see every cell, `suppressed: false` | the rule is for the platform; they already see the people |
+| **The whole reseller (`people`, `count`) is never suppressed** | ADR-0104 (3). Known residue: with one small product, the `/revenue` total minus the shown cells is its money. The ADR keeps totals whole; closing this (complementary suppression) is not done here |
+| No cell names anyone: a cell is a `productId` (`null` when the row's invoice or Grant names no variant) or a `day` | the test of tier A: can the figure be tied to one person? |
+| A row is tied to its product through what its `referenceId` names — an invoice for a purchase and its refund, the Grant for a block, a meter's charge and their refunds (`REFERS_TO`, exhaustive) | a new reason is judged before it compiles |
+| People are distinct wallet owners, refunds' owners included | a cell is never smaller than who it touched |
+| One SQL aggregate (`GROUPING SETS`), so every cell and its people come from the same rows. It reads **`public.current_tenant_id()`**, the value RLS reads and `tenantTransaction` binds; no tenant id is passed | raw SQL skips the `TENANT_SCOPED_MODELS` filter, so the condition is written against the scope itself, never by hand |
+| A `day` is the reseller's (`tenant.timezone`, echoed as `timeZone`); days with no sale are absent | a trend in another zone moves sales across midnight |
+| Money per currency as written in `byCurrency`; a cell's `total` converted into the reseller's currency now, `null` when no change leads there — the totals' rules above | ADR-0098 part 3 |
+
+Drilling from a figure into its rows names people: tier B, not this route.
 
 ## What it does not answer yet
 

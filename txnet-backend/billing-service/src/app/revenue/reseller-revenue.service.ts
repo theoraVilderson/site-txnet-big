@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { LedgerDirection, PaymentStatus, Prisma, WalletReasonType } from '@prisma/client';
 import {
+  AdmittedReseller,
   ResellerAccess,
   ResellerAccessRefused,
   ResellerAccessRejection,
@@ -11,6 +12,7 @@ import {
 } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { RevenueBreakdown, breakdownOf, readBreakdown } from './revenue-breakdown';
 
 /** Only one door closes here, so the refusal carries only its reasons. */
 export type ResellerRevenueRejection = ResellerAccessRejection;
@@ -302,6 +304,24 @@ export class ResellerRevenueService {
   }
 
   /**
+   * The same sales split by product and by day, each cell with its number of
+   * people (F-117-h, ADR-0104 (2)(3)). Tier A: no consent — so for the
+   * platform's staff a cell under 5 people is `fewer_than_5`; the reseller's
+   * own people see every cell. Days are the reseller's (`tenant.timezone`).
+   */
+  async breakdown(actor: ResellerActor, tenantId: string, period: RevenuePeriod): Promise<RevenueBreakdown> {
+    return this.run(actor, tenantId, async (reseller) =>
+      tenantTransaction(this.prisma, async (tx) => {
+        const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { timezone: true } });
+        const timeZone = tenant?.timezone ?? 'UTC';
+        const rows = await readBreakdown(tx, period, timeZone, SALE_REASONS, REFUND_REASONS);
+        const convert = await this.converter(tx, tenantId);
+        return breakdownOf(rows, { staff: reseller.as === 'staff', convert, period, timeZone });
+      }),
+    );
+  }
+
+  /**
    * Sums per currency into the reseller's currency now: an earlier one
    * converted through its `currency_change` rows, as the coupon usage report's
    * is (F-116-h5) — `null` when no change leads from it. Shown at the target
@@ -326,9 +346,9 @@ export class ResellerRevenueService {
   }
 
   /** Admit, run in the reseller's scope, and translate the door's refusal into this surface's one type. */
-  private async run<T>(actor: ResellerActor, tenantId: string, work: () => Promise<T>): Promise<T> {
+  private async run<T>(actor: ResellerActor, tenantId: string, work: (reseller: AdmittedReseller) => Promise<T>): Promise<T> {
     try {
-      return await this.access.run(actor, tenantId, 'read', () => work());
+      return await this.access.run(actor, tenantId, 'read', (reseller) => work(reseller));
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new ResellerRevenueRefused(e.reason, tenantId);
       throw e;
