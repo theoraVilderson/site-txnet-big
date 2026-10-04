@@ -12,7 +12,7 @@ import {
 } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { RevenueBreakdown, breakdownOf, readBreakdown } from './revenue-breakdown';
+import { HiddenCurrency, RevenueBreakdown, breakdownOf, currencySplit, readBreakdown, readSalesPeople } from './revenue-breakdown';
 
 /** Only one door closes here, so the refusal carries only its reasons. */
 export type ResellerRevenueRejection = ResellerAccessRejection;
@@ -52,7 +52,8 @@ export type RevenueTotals = {
     total: string | null;
     count: number;
     byReason: { reasonType: WalletReasonType; total: string | null; count: number }[];
-    byCurrency: CurrencyTotal[];
+    /** To the platform's staff a currency under 5 people, and its pair, is hidden (F-117-k). */
+    byCurrency: (CurrencyTotal | HiddenCurrency)[];
   };
   /** What its users **paid in** in the window. Money in, not revenue (ADR-0067). */
   topUps: { total: string | null; count: number; byCurrency: CurrencyTotal[] };
@@ -205,7 +206,7 @@ export class ResellerRevenueService {
   async totals(actor: ResellerActor, tenantId: string, period: RevenuePeriod): Promise<RevenueTotals> {
     const createdAt = { gte: period.from, lte: period.to };
 
-    return this.run(actor, tenantId, async () =>
+    return this.run(actor, tenantId, async (reseller) =>
       tenantTransaction(this.prisma, async (tx) => {
         const [sales, refunds, topUps] = await Promise.all([
           // Grouped by currency as well (F-116-h8): a sum across currencies is
@@ -291,7 +292,11 @@ export class ResellerRevenueService {
             total: convert.show(salesTotal),
             count: byReason.reduce((n, row) => n + row.count, 0),
             byReason,
-            byCurrency: listed(salesByCurrency, salesCounts),
+            // ADR-0104 (3): the currency split is a breakdown; the platform's staff see small ones hidden (F-117-k).
+            byCurrency:
+              reseller.as === 'staff'
+                ? currencySplit(listed(salesByCurrency, salesCounts), await readSalesPeople(tx, period, SALE_REASONS, REFUND_REASONS))
+                : listed(salesByCurrency, salesCounts),
           },
           topUps: {
             total: convert.show(await convert.sum(paidIn)),

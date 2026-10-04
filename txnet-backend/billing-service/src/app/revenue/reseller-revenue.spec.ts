@@ -56,6 +56,8 @@ function build(
     /** The reseller's operating currency now. */
     currencyCode?: string;
     changes?: { fromCode: string; toCode: string; rate: string }[];
+    /** Distinct people per sales currency (F-117-k): what the staff-only query answers. */
+    people?: { currencyCode: string; people: number }[];
   } = {},
 ) {
   const seen: Seen[] = [];
@@ -98,6 +100,10 @@ function build(
   const tx = {
     // `tenantTransaction` binds the scope with this as its first statement.
     $executeRaw: async () => 1,
+    $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      seen.push({ what: 'people', args: { sql: strings.join('?'), values }, scope: TenantContext.currentOrNull()?.id });
+      return rows.people ?? [];
+    },
     walletTransaction: {
       // The two reads of this table are told apart by their direction, as the
       // service asks them: the sale debits, then the credits that undo one.
@@ -300,5 +306,60 @@ describe('ResellerRevenueService.totals', () => {
     ]);
     // A figure whose currencies all convert is still answered.
     expect(total.topUps.total).toBe('500000');
+  });
+});
+
+/**
+ * F-117-k: `sales.byCurrency` is a breakdown of the total (ADR-0104 (3)). For
+ * the platform's staff a currency under 5 people answers `fewer_than_5` with
+ * no money, and a lone hidden currency takes the smallest other with it —
+ * else the converted total minus the shown currencies is its money. The
+ * converted whole is never hidden. The reseller's own people see every currency.
+ */
+describe('ResellerRevenueService.totals — the currency split for the platform (F-117-k)', () => {
+  const staff = { userId: '66666666-6666-4666-8666-666666666666', tenantId: PLATFORM, permissions: ['tenant.manage'] };
+  const sales = [
+    { reasonType: WalletReasonType.product_purchase, sum: '300.00', count: 30, currencyCode: 'USD' },
+    { reasonType: WalletReasonType.product_purchase, sum: '100000', count: 3, currencyCode: 'IRR' },
+    { reasonType: WalletReasonType.product_purchase, sum: '80.00', count: 9, currencyCode: 'EUR' },
+  ];
+  const changes = [
+    { fromCode: 'IRR', toCode: 'USD', rate: '0.00002' },
+    { fromCode: 'EUR', toCode: 'USD', rate: '1' },
+  ];
+  const shown = (t: { sales: { byCurrency: { currencyCode: string; total: string | null }[] } }) =>
+    Object.fromEntries(t.sales.byCurrency.map((c) => [c.currencyCode, c.total]));
+
+  it('hides a small currency and pairs it with the smallest other, keeping the converted whole', async () => {
+    const { service } = build({ sales, changes, people: [{ currencyCode: 'USD', people: 20 }, { currencyCode: 'IRR', people: 3 }, { currencyCode: 'EUR', people: 8 }] });
+    const total = await service.totals(staff, RESELLER, { from: FROM, to: TO });
+    expect(shown(total)).toEqual({ EUR: null, IRR: null, USD: '300.00' });
+    expect(total.sales.byCurrency.find((c) => c.currencyCode === 'IRR')).toEqual({ currencyCode: 'IRR', total: null, count: null, people: 'fewer_than_5' });
+    // The converted whole is the same number the reseller's owner reads: never hidden.
+    const own = await build({ sales, changes }).service.totals(owner, RESELLER, { from: FROM, to: TO });
+    expect(total.sales.total).toBe(own.sales.total);
+    expect(total.sales.count).toBe(42);
+  });
+
+  it('leaves two small currencies as they are, hidden both', async () => {
+    const { service } = build({ sales, changes, people: [{ currencyCode: 'USD', people: 20 }, { currencyCode: 'IRR', people: 2 }, { currencyCode: 'EUR', people: 1 }] });
+    const total = await service.totals(staff, RESELLER, { from: FROM, to: TO });
+    expect(shown(total)).toEqual({ EUR: null, IRR: null, USD: '300.00' });
+  });
+
+  it("asks nothing more for the reseller's own people, and shows them every currency", async () => {
+    const { seen, service } = build({ sales, changes, people: [{ currencyCode: 'IRR', people: 1 }] });
+    const total = await service.totals(owner, RESELLER, { from: FROM, to: TO });
+    expect(seen.map((s) => s.what)).not.toContain('people');
+    expect(shown(total)).toEqual({ EUR: '80.00', IRR: '100000.00', USD: '300.00' });
+  });
+
+  it("counts the platform's people in the reseller's scope, by current_tenant_id(), with no tenant id passed", async () => {
+    const { seen, service } = build({ sales, changes, people: [{ currencyCode: 'USD', people: 20 }, { currencyCode: 'IRR', people: 9 }, { currencyCode: 'EUR', people: 8 }] });
+    await service.totals(staff, RESELLER, { from: FROM, to: TO });
+    const call = seen.find((s) => s.what === 'people')!;
+    expect(call.scope).toBe(RESELLER);
+    expect(call.args.sql).toContain('public.current_tenant_id()');
+    expect(call.args.values).not.toContain(RESELLER);
   });
 });

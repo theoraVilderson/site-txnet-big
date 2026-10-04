@@ -136,9 +136,10 @@ export function readBreakdown(tx: Prisma.TransactionClient, period: { from: Date
  * smallest shown cell holding it is hidden too — fewest people, then fewest
  * sales, then position — and the check runs again, since that cell may bring a
  * currency of its own. Two hidden cells per currency give only their sum.
- * A currency no shown cell holds cannot be paired; the ADR keeps totals whole.
+ * A currency no shown cell holds is closed one level up: `/revenue`'s own
+ * currency split is suppressed the same way (F-117-k, `currencySplit`).
  */
-export function hiddenCells(heads: readonly BreakdownRow[], currenciesOf: (head: BreakdownRow) => ReadonlySet<string>): Set<BreakdownRow> {
+export function hiddenCells<T extends { people: number; count: number }>(heads: readonly T[], currenciesOf: (head: T) => ReadonlySet<string>): Set<T> {
   const hidden = new Set(heads.filter((h) => h.people < SMALL_GROUP));
   const currencies = [...new Set(heads.flatMap((h) => [...currenciesOf(h)]))].sort();
   for (let changed = hidden.size > 0; changed; ) {
@@ -147,7 +148,7 @@ export function hiddenCells(heads: readonly BreakdownRow[], currenciesOf: (head:
       if ([...hidden].filter((h) => currenciesOf(h).has(code)).length !== 1) continue;
       const next = heads
         .filter((h) => !hidden.has(h) && currenciesOf(h).has(code))
-        .reduce<BreakdownRow | null>((min, h) => (!min || h.people < min.people || (h.people === min.people && h.count < min.count) ? h : min), null);
+        .reduce<T | null>((min, h) => (!min || h.people < min.people || (h.people === min.people && h.count < min.count) ? h : min), null);
       if (next) {
         hidden.add(next);
         changed = true;
@@ -155,6 +156,40 @@ export function hiddenCells(heads: readonly BreakdownRow[], currenciesOf: (head:
     }
   }
   return hidden;
+}
+
+/** A currency of `/revenue`'s split the platform does not see (F-117-k). */
+export type HiddenCurrency = { currencyCode: string; total: null; count: null; people: typeof FEWER_THAN };
+
+/**
+ * Distinct people per currency over the same sale and refund rows the totals
+ * read — asked only for the platform's staff (F-117-k). Scoped as
+ * {@link readBreakdown} is: `public.current_tenant_id()`, no tenant id passed.
+ */
+export function readSalesPeople(tx: Prisma.TransactionClient, period: { from: Date; to: Date }, sales: WalletReasonType[], refunds: WalletReasonType[]) {
+  return tx.$queryRaw<{ currencyCode: string; people: number }[]>`
+    SELECT "wt"."currencyCode", COUNT(DISTINCT w."ownerUserId")::int AS "people"
+    FROM billing.wallet_transaction "wt"
+    JOIN billing.wallet w ON w."id" = "wt"."walletId"
+    WHERE "wt"."tenantId" = public.current_tenant_id()
+      AND "wt"."createdAt" >= ${period.from} AND "wt"."createdAt" <= ${period.to}
+      AND (("wt"."direction" = 'debit' AND "wt"."reasonType"::text = ANY(${sales}))
+        OR ("wt"."direction" = 'credit' AND "wt"."reasonType"::text = ANY(${refunds})))
+    GROUP BY "wt"."currencyCode"`;
+}
+
+/**
+ * `/revenue`'s `sales.byCurrency` as the platform's staff see it (F-117-k,
+ * ADR-0104 (3)): a breakdown of the total by currency, so a currency under
+ * {@link SMALL_GROUP} people is hidden, and a lone hidden one takes the
+ * smallest other with it — every currency is part of the one converted
+ * total, so they all pair with each other. The converted whole stays.
+ */
+export function currencySplit(byCurrency: readonly CurrencyTotal[], people: readonly { currencyCode: string; people: number }[]): (CurrencyTotal | HiddenCurrency)[] {
+  const cells = byCurrency.map((c) => ({ ...c, people: people.find((p) => p.currencyCode === c.currencyCode)?.people ?? 0 }));
+  const whole = new Set(['total']);
+  const hidden = hiddenCells(cells, () => whole);
+  return cells.map(({ people: _people, ...c }) => (hidden.has(cells.find((x) => x.currencyCode === c.currencyCode)!) ? { currencyCode: c.currencyCode, total: null, count: null, people: FEWER_THAN } : c));
 }
 
 const ZERO = new Prisma.Decimal(0);
