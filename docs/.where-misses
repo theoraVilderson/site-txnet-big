@@ -1,0 +1,4 @@
+# queries that found nothing. close each one by adding a SURFACES.md row,
+# then: python3 tools/where.py --resolve "<query>"
+# date	status	query
+2026-10-03	closed	گردونه شانس
