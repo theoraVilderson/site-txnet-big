@@ -32,7 +32,9 @@
       "wheel": "Lucky wheel",
       "wheelSettings": "Wheel settings",
       "lotteries": "Lotteries",
-      "lotterySettings": "Lottery settings"
+      "lotterySettings": "Lottery settings",
+      "supportInbox": "Support inbox",
+      "supportSettings": "Support settings"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -4738,6 +4740,146 @@
       "comment": "Comment (optional)",
       "submit": "Rate",
       "yours": "Your rating: {{n}} of 5"
+    }
+  },
+  "supportAgent": {
+    "title": "Support inbox",
+    "subtitle": "This tenant's users' conversations: urgent first, then the nearest due time.",
+    "retry": "Try again",
+    "empty": "No conversations here.",
+    "more": "More conversations",
+    "unread": "{{n}} new",
+    "presence": {
+      "online": "You are online; new conversations open live.",
+      "away": "You are offline.",
+      "goOnline": "Go online",
+      "goAway": "Go offline"
+    },
+    "views": {
+      "pending": "Waiting on us",
+      "live": "Live",
+      "mine": "Mine",
+      "unassigned": "Unassigned"
+    },
+    "priority": {
+      "urgent": "Urgent",
+      "high": "High",
+      "normal": "Normal",
+      "low": "Low"
+    },
+    "sla": {
+      "breached": "Overdue",
+      "soon": "Due soon",
+      "running": "Due {{time}}",
+      "stopped": "Waiting on the user"
+    },
+    "assignedToMe": "Mine",
+    "assignedOther": "A colleague's",
+    "unassigned": "Unassigned",
+    "liveMode": "Live",
+    "thread": {
+      "back": "Support inbox",
+      "earlier": "Earlier messages",
+      "you": "You",
+      "colleague": "Colleague",
+      "user": "User",
+      "noteBadge": "Internal note — the user never sees it",
+      "reply": "Reply",
+      "note": "Internal note",
+      "replyPlaceholder": "Reply to the user…",
+      "notePlaceholder": "A note for colleagues; never shown to the user…",
+      "send": "Send reply",
+      "sendNote": "Save note",
+      "canned": "Canned reply",
+      "cannedNone": "No canned replies yet.",
+      "typing": "The user is typing…",
+      "seen": "Seen by the user",
+      "take": "Take it",
+      "release": "Release",
+      "resolve": "Resolve",
+      "close": "Close",
+      "closeConfirm": "Close this conversation for good? Only the user can reopen it, within the tenant's window.",
+      "priority": "Priority",
+      "closed": "This conversation is closed.",
+      "closedAuto": "Closed automatically: the user did not answer.",
+      "liveOff": "Live updates are unavailable; reopen the page for new messages.",
+      "rating": "User's rating: {{n}} of 5",
+      "replyClaims": "Your reply makes an unassigned conversation yours."
+    },
+    "sidebar": {
+      "title": "User",
+      "userId": "User id",
+      "unavailable": "The user's billing is unavailable right now.",
+      "wallet": "Wallet",
+      "held": "Held: {{amount}}",
+      "noWallet": "No wallet.",
+      "grants": "Services",
+      "noGrants": "No current services.",
+      "hiddenGrants": "and {{n}} more",
+      "ends": "Ends {{time}}",
+      "used": "Used {{used}} of {{total}}",
+      "unlimited": "Unlimited",
+      "frozen": "Frozen",
+      "invoices": "Recent invoices",
+      "noInvoices": "No invoices.",
+      "lastConnection": "Last connection",
+      "never": "No connection seen in the last 90 days."
+    },
+    "settings": {
+      "title": "Support settings",
+      "subtitle": "Working hours, response targets and conversation categories for this tenant's users.",
+      "save": "Save",
+      "saved": "Saved.",
+      "tabs": {
+        "hours": "Working hours",
+        "sla": "Response targets",
+        "categories": "Categories"
+      },
+      "hours": {
+        "zone": "Times are in {{zone}}",
+        "alwaysOpen": "No hours set: conversations are live whenever an agent is online.",
+        "add": "Add a period",
+        "remove": "Remove",
+        "start": "From",
+        "end": "To",
+        "invalid": "Write times as 09:00, and the end after the start.",
+        "weekday": {
+          "sun": "Sunday",
+          "mon": "Monday",
+          "tue": "Tuesday",
+          "wed": "Wednesday",
+          "thu": "Thursday",
+          "fri": "Friday",
+          "sat": "Saturday"
+        }
+      },
+      "sla": {
+        "hint": "In working minutes; time outside working hours does not count.",
+        "priority": "Priority",
+        "firstResponse": "First response (minutes)",
+        "resolution": "Resolution (minutes)",
+        "platform": "Default",
+        "tenant": "Custom",
+        "invalid": "Both above zero, at most 43200, and the first response no later than the resolution."
+      },
+      "categories": {
+        "usingPlatform": "You have no active category yet; your users see these defaults:",
+        "ownHint": "Once you have one active category, your users see only yours.",
+        "add": "New category",
+        "key": "Key",
+        "keyHint": "Lowercase letters, digits and _; for reports and the bot.",
+        "name": "Name ({{lang}})",
+        "order": "Order",
+        "active": "Active",
+        "retired": "Retired",
+        "retire": "Retire",
+        "restore": "Restore",
+        "delete": "Delete",
+        "inUse": "Conversations use this category; it can only be retired.",
+        "empty": "You have no categories.",
+        "edit": "Edit",
+        "cancel": "Cancel"
+      }
     }
   }
 }

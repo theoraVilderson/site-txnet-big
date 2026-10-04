@@ -187,6 +187,11 @@ export const panelLotteryManagePath = (id: string) => `${PANEL_LOTTERIES_MANAGE}
 /** The user's support: their conversations, a new one, and one thread live (F-033-o). */
 export const PANEL_SUPPORT = "/support";
 export const panelSupportThreadPath = (id: string) => `${PANEL_SUPPORT}/${encodeURIComponent(id)}`;
+/** The agent's inbox and one thread from it (F-033-p); `support.agent`. */
+export const PANEL_SUPPORT_INBOX = `${PANEL_SUPPORT}/inbox`;
+export const panelSupportInboxThreadPath = (id: string) => `${PANEL_SUPPORT_INBOX}/${encodeURIComponent(id)}`;
+/** A tenant admin's support settings: working hours, SLA targets, categories (F-033-p); `support.manage`. */
+export const PANEL_SUPPORT_SETTINGS = `${PANEL_SUPPORT}/settings`;
 /**
  * Where a bank returns a payer (F-093-f). These two are `billing`'s to name:
  * `deposit-callback.controller.ts` redirects to them by path, so they are the

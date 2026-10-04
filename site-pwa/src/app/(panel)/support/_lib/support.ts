@@ -17,24 +17,27 @@ export const senderKey = (kind: string, mine: boolean): string => (mine ? K.send
  * answer and the channel's event, or a re-read after a gap overlapping what is
  * held — so the later copy wins: its attachment URLs were minted later.
  */
-export function mergeMessages(held: readonly SupportMessage[], incoming: readonly SupportMessage[]): SupportMessage[] {
-  const bySeq = new Map<number, SupportMessage>();
+export function mergeMessages<M extends SupportMessage>(held: readonly M[], incoming: readonly M[]): M[] {
+  const bySeq = new Map<number, M>();
   for (const m of held) bySeq.set(m.seq, m);
   for (const m of incoming) bySeq.set(m.seq, m);
   return [...bySeq.values()].sort((a, b) => a.seq - b.seq);
 }
 
 /** What the thread screen holds that the channel moves. */
-export interface ThreadState {
+export interface ThreadState<M extends SupportMessage = SupportMessage> {
   conversationId: string;
   status: ConversationStatus;
   /** Oldest first. */
-  messages: SupportMessage[];
-  /** How far the agent has read — "seen". */
+  messages: M[];
+  /** How far the other side has read — "seen". */
   seenUpToSeq: number;
-  /** Epoch ms the agent's typing indicator lasts until; 0 = not typing. */
-  agentTypingUntil: number;
+  /** Epoch ms the other side's typing indicator lasts until; 0 = not typing. */
+  peerTypingUntil: number;
 }
+
+/** Who is watching the thread: the user who owns it, or an agent of its tenant (F-033-p). */
+export type ThreadSide = "user" | "agent";
 
 /** The four events on `support:<id>` (support/contract.md "Emits"). */
 export type SupportEvent =
@@ -80,28 +83,37 @@ export function readSupportEvent(payload: unknown, conversationId: string): Supp
 }
 
 /**
- * Apply one event. `reread` asks for `?afterSeq=` from the last held message:
- * the channel is at-most-once, so a message whose `seq` skips one means one
- * was published to nobody.
+ * Apply one event, as `side` sees it. `reread` asks for `?afterSeq=` from the
+ * last held message: the channel is at-most-once, so a message whose `seq`
+ * skips one means one was published to nobody. An agent always re-reads on a
+ * message — the channel carries the user's view of it, with no `internal`
+ * and no sender account (support invariant 5).
+ *
+ * Typing and "seen" are the other side's: a user watches agents; an agent
+ * watches the user, never a colleague.
  */
-export function applySupportEvent(s: ThreadState, e: SupportEvent, now: number): { next: ThreadState; reread: boolean } {
+export function applySupportEvent<M extends SupportMessage>(
+  s: ThreadState<M>,
+  e: SupportEvent,
+  now: number,
+  side: ThreadSide = "user",
+): { next: ThreadState<M>; reread: boolean } {
+  const peer = (kind: string) => (side === "user" ? kind !== "user" : kind === "user");
   switch (e.kind) {
     case "support.message": {
+      const fromPeer = peer(e.message.senderKind);
+      const typing = fromPeer ? 0 : s.peerTypingUntil;
+      if (side === "agent") return { next: { ...s, status: e.status, peerTypingUntil: typing }, reread: true };
       const last = s.messages.at(-1)?.seq ?? 0;
       return {
-        next: {
-          ...s,
-          status: e.status,
-          messages: mergeMessages(s.messages, [e.message]),
-          agentTypingUntil: e.message.mine ? s.agentTypingUntil : 0,
-        },
+        next: { ...s, status: e.status, messages: mergeMessages(s.messages, [e.message as M]), peerTypingUntil: typing },
         reread: e.message.seq > last + 1,
       };
     }
     case "support.read":
-      return { next: e.readerKind === "user" ? s : { ...s, seenUpToSeq: Math.max(s.seenUpToSeq, e.lastReadSeq) }, reread: false };
+      return { next: peer(e.readerKind) ? { ...s, seenUpToSeq: Math.max(s.seenUpToSeq, e.lastReadSeq) } : s, reread: false };
     case "support.typing":
-      return { next: e.senderKind === "user" ? s : { ...s, agentTypingUntil: now + e.expiresInMs }, reread: false };
+      return { next: peer(e.senderKind) ? { ...s, peerTypingUntil: now + e.expiresInMs } : s, reread: false };
     case "support.status":
       return { next: { ...s, status: e.status }, reread: false };
   }

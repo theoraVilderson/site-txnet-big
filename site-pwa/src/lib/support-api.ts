@@ -153,3 +153,192 @@ export const supportApi = {
     return call(`${thread(id)}/reopen`, post());
   },
 };
+
+// ------------------------------------------------- the agent's side (F-033-p)
+
+/** Prisma's `ConversationPriority`: queue position and SLA targets, never shown to the user. */
+export type SupportPriority = "low" | "normal" | "high" | "urgent";
+/** support-service's `INBOX_VIEWS`. */
+export type InboxView = "pending" | "live" | "mine" | "unassigned";
+
+/** `SlaView` (F-033-h): due times, the clock running now, and whether either target was missed. */
+export interface SupportSla {
+  firstResponseDueAt: string | null;
+  resolutionDueAt: string | null;
+  /** `null` while stopped — waiting on the user, or settled. */
+  dueAt: string | null;
+  firstResponseBreached: boolean;
+  resolutionBreached: boolean;
+}
+
+/** `AgentConversationView`: the agent side names accounts; the user side never does. */
+export interface AgentConversation extends Omit<SupportConversation, "priority"> {
+  priority: SupportPriority;
+  userId: string;
+  assignedToUserId: string | null;
+  firstResponseAt: string | null;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  closedAutomatically: boolean;
+  sla: SupportSla;
+}
+
+/** `AgentMessageView`: notes included, each message naming its sender's account. */
+export interface AgentMessage extends SupportMessage {
+  internal: boolean;
+  senderUserId: string | null;
+}
+
+export interface AgentMessagePage extends Omit<SupportMessagePage, "conversation" | "messages"> {
+  conversation: AgentConversation;
+  messages: AgentMessage[];
+}
+
+/** billing's `SupportUserFacts`, passed through as billing shaped it (F-033-m). Money as decimal strings. */
+export interface SupportUserFacts {
+  wallet: { balance: string; held: string; currencyCode: string } | null;
+  grants: {
+    items: Array<{
+      id: string;
+      label: string | null;
+      nameKey: string | null;
+      status: string;
+      frozen: boolean;
+      endsAt: string | null;
+      consumedBytes: string;
+      purchasedBytes: string;
+      trafficCapBytes: string | null;
+      trafficUnlimited: boolean;
+    }>;
+    hidden: number;
+  };
+  invoices: Array<{ id: string; total: string; currencyCode: string; status: string; createdAt: string }>;
+  lastConnectionAt: string | null;
+}
+
+export interface CannedPick {
+  id: string;
+  key: string;
+  /** In the agent's language: the picker's label. */
+  body: string;
+  source: "tenant" | "platform";
+}
+
+const agentThread = (id: string) => `/agent/conversations/${encodeURIComponent(id)}`;
+
+export const supportAgentApi = {
+  /** Urgent first, then the nearest SLA due, then the longest waiting. */
+  inbox(view: InboxView, after?: string): Promise<{ items: AgentConversation[]; nextAfter: string | null }> {
+    return call(`/agent/conversations${query({ view, after, limit: 50 })}`, { method: "GET" });
+  },
+  messages(id: string, at: { afterSeq?: number; beforeSeq?: number } = {}): Promise<AgentMessagePage> {
+    return call<AgentMessagePage>(`${agentThread(id)}/messages${query({ ...at, limit: 50 })}`, { method: "GET" });
+  },
+  /** The sidebar; `billing` is `null` when billing did not answer — never an error. */
+  context(id: string): Promise<{ userId: string; billing: SupportUserFacts | null }> {
+    return call(`${agentThread(id)}/context`, { method: "GET" });
+  },
+  /** A reply claims an unassigned thread for the replier; a note (`internal`) changes nothing the user sees. */
+  reply(id: string, body: string, internal: boolean): Promise<AgentMessage> {
+    return call<AgentMessage>(`${agentThread(id)}/messages`, post({ body, internal }));
+  },
+  assign(id: string, assigneeUserId: string | null): Promise<AgentConversation> {
+    return call<AgentConversation>(`${agentThread(id)}/assign`, post({ assigneeUserId }));
+  },
+  priority(id: string, priority: SupportPriority): Promise<AgentConversation> {
+    return call<AgentConversation>(`${agentThread(id)}/priority`, post({ priority }));
+  },
+  resolve(id: string): Promise<AgentConversation> {
+    return call<AgentConversation>(`${agentThread(id)}/resolve`, post());
+  },
+  close(id: string): Promise<AgentConversation> {
+    return call<AgentConversation>(`${agentThread(id)}/close`, post());
+  },
+  read(id: string, upToSeq: number): Promise<{ lastReadSeq: number }> {
+    return call(`${agentThread(id)}/read`, post({ upToSeq }));
+  },
+  typing(id: string): Promise<{ expiresInMs: number }> {
+    return call(`${agentThread(id)}/typing`, post());
+  },
+  /** The heartbeat (F-033-g): every 30s while the inbox is open; forgotten 90s after the last. */
+  presence(status: "online" | "away"): Promise<{ status: string; expiresInSec: number }> {
+    return call("/agent/presence", post({ status }));
+  },
+  cannedPicker(): Promise<CannedPick[]> {
+    return call<CannedPick[]>("/agent/canned-replies", { method: "GET" });
+  },
+  /** One canned reply filled for this thread, in its user's language — text for the box, nothing stored. */
+  canned(id: string, replyId: string): Promise<{ body: string; lang: string }> {
+    return call(`${agentThread(id)}/canned-replies/${encodeURIComponent(replyId)}`, { method: "GET" });
+  },
+};
+
+// ------------------------------------------------ the admin's settings (F-033-p)
+
+/** `GET …/settings/hours`: minutes of the tenant's own wall clock, weekday 0 = Sunday. */
+export interface SupportHours {
+  zone: string;
+  intervals: Array<{ weekday: number; startMinute: number; endMinute: number }>;
+}
+
+export interface SlaTarget {
+  priority: SupportPriority;
+  firstResponseMinutes: number;
+  resolutionMinutes: number;
+  source?: "tenant" | "platform";
+}
+
+export interface CategoryText {
+  lang: string;
+  name: string;
+}
+
+export interface AdminCategory {
+  id: string;
+  key: string;
+  sortOrder: number;
+  isActive: boolean;
+  texts: CategoryText[];
+  /** A conversation names it: retire, never delete. */
+  inUse: boolean;
+}
+
+export interface CategoryList {
+  own: AdminCategory[];
+  platform: { id: string; key: string; name: string }[];
+  /** No active category of the tenant's own: its users are offered `platform`. */
+  usingPlatform: boolean;
+}
+
+const put = (body: unknown): RequestInit => ({ method: "PUT", body: JSON.stringify(body) });
+const patch = (body: unknown): RequestInit => ({ method: "PATCH", body: JSON.stringify(body) });
+
+export const supportSettingsApi = {
+  hours(): Promise<SupportHours> {
+    return call<SupportHours>("/settings/hours", { method: "GET" });
+  },
+  /** Replaces the whole week; `[]` = always open (presence alone decides). */
+  saveHours(intervals: Array<{ weekday: number; start: string; end: string }>): Promise<SupportHours> {
+    return call<SupportHours>("/settings/hours", put({ intervals }));
+  },
+  sla(): Promise<SlaTarget[]> {
+    return call<SlaTarget[]>("/settings/sla", { method: "GET" });
+  },
+  /** Replaces the tenant's own whole; a priority left out is the platform's. */
+  saveSla(targets: SlaTarget[]): Promise<SlaTarget[]> {
+    return call<SlaTarget[]>("/settings/sla", put({ targets: targets.map(({ priority, firstResponseMinutes, resolutionMinutes }) => ({ priority, firstResponseMinutes, resolutionMinutes })) }));
+  },
+  categories(): Promise<CategoryList> {
+    return call<CategoryList>("/settings/categories", { method: "GET" });
+  },
+  createCategory(body: { key: string; texts: CategoryText[]; sortOrder?: number; isActive?: boolean }): Promise<AdminCategory> {
+    return call<AdminCategory>("/settings/categories", post(body));
+  },
+  updateCategory(id: string, body: Partial<{ key: string; texts: CategoryText[]; sortOrder: number; isActive: boolean }>): Promise<AdminCategory> {
+    return call<AdminCategory>(`/settings/categories/${encodeURIComponent(id)}`, patch(body));
+  },
+  /** Only one no conversation names; otherwise `category_in_use` — retire it. */
+  removeCategory(id: string): Promise<void> {
+    return call<void>(`/settings/categories/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+};

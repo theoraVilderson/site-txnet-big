@@ -56,7 +56,7 @@ const state = (over: Partial<ThreadState> = {}): ThreadState => ({
   status: "pending_agent",
   messages: [msg(1), msg(2, { senderKind: "agent", mine: false })],
   seenUpToSeq: 0,
-  agentTypingUntil: 0,
+  peerTypingUntil: 0,
   ...over,
 });
 
@@ -107,14 +107,14 @@ describe("the channel's events", () => {
 
   it("clears the agent's typing when their message lands", () => {
     const e = event({ kind: "support.message", status: "pending_user", message: { ...msg(3), senderKind: "agent" } });
-    expect(applySupportEvent(state({ agentTypingUntil: 9_999 }), e!, 1_000).next.agentTypingUntil).toBe(0);
+    expect(applySupportEvent(state({ peerTypingUntil: 9_999 }), e!, 1_000).next.peerTypingUntil).toBe(0);
   });
 
   it("shows the agent typing for the time the event names, never the user's own", () => {
     const agent = event({ kind: "support.typing", senderKind: "agent", expiresInMs: 6000 });
     const own = event({ kind: "support.typing", senderKind: "user", expiresInMs: 6000 });
-    expect(applySupportEvent(state(), agent!, 1_000).next.agentTypingUntil).toBe(7_000);
-    expect(applySupportEvent(state(), own!, 1_000).next.agentTypingUntil).toBe(0);
+    expect(applySupportEvent(state(), agent!, 1_000).next.peerTypingUntil).toBe(7_000);
+    expect(applySupportEvent(state(), own!, 1_000).next.peerTypingUntil).toBe(0);
   });
 
   it("moves 'seen' forward on an agent's read only", () => {

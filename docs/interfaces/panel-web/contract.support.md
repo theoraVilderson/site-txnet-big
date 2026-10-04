@@ -6,12 +6,12 @@ version: 42
 updated: 2026-10-04
 ---
 
-# Contract — panel-web: the user's support (F-033-o)
+# Contract — panel-web: support — the user's (F-033-o), the agent's and admin's (F-033-p)
 
 A topic file of [contract.md](contract.md) (§10). Two pages over
 support-service's user routes and its `support:<id>` channel
 ([support contract](../../domains/support/contract.md), ADR-0112, ADR-0114).
-The agent's side is F-033-p.
+The agent's side and the settings are under "Staff" below.
 
 | Route | Component | What it does |
 |---|---|---|
@@ -62,3 +62,36 @@ Every refusal is support's translated `msg` (`useApiErrorMessage`); the page
 holds sentences only for statuses, scan states, sender kinds and its own
 labels (`common.support.*`, every Prisma value covered — the spec reads
 `support.prisma`).
+
+## Staff (F-033-p)
+
+| Route | Component | Who | What it does |
+|---|---|---|---|
+| `/support/inbox` | `SupportInboxView.tsx` | `support.agent` | the four views (`pending`, `live`, `mine`, `unassigned`) in support's queue order; priority, SLA badge, owner, unread; presence on/off; re-read every minute |
+| `/support/inbox/[id]` | `AgentThreadView.tsx` | `support.agent` | messages and notes, take/release, priority, resolve, close; reply or note, canned insert; the user's sidebar (F-033-m) |
+| `/support/settings` | `SupportSettingsView.tsx` | `support.manage` | tabs: working hours (`HH:MM`, `24:00` allowed, the tenant's zone), SLA targets per priority, categories (F-033-e) |
+
+Menu: `support-inbox` and `support-settings`, each hidden without its
+permission; the routes still answer 403 on their own. Rules:
+`support/_lib/support-agent.ts`, pinned by `support/support-agent.test.ts`.
+
+9. **The agent's thread re-reads on every `support.message`** — the channel
+   carries the user's view (no `internal`, no `senderUserId`). Typing and
+   "seen" are the user's only (`applySupportEvent(…, "agent")`), never a
+   colleague's; "seen" sits on the last published agent message.
+10. **A note never announces itself.** Typing is sent in reply mode only, a
+    note is drawn dashed with "the user never sees it", and canned replies are
+    offered for replies only (filled in the user's language by support).
+11. **Presence is a heartbeat while an inbox page is open** (`usePresence`,
+    30s; support forgets after 90s), so moving between inbox and thread never
+    flaps. "Go offline" sends `away` and is remembered per browser
+    (`localStorage`, a convenience — support's record is the beat).
+12. **Offered is what support accepts** (`agentActions`): take a thread not
+    already the caller's, release only one's own, resolve an unfinished one,
+    close anything not closed (confirmed — final); a closed thread is
+    read-only. Assigning to a named colleague waits on a staff list route.
+13. **SLA badge** (`slaState`): breached is support's verdict or a running
+    clock past due; "soon" within 30 minutes; no `dueAt` is "waiting on the
+    user", never due. Settings refuse locally what support would
+    (`slaFormErrors`, `0 < first ≤ resolution ≤ 43200`), and every category
+    write re-reads the list, since one can flip `usingPlatform`.

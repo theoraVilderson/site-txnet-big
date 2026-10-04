@@ -71,7 +71,7 @@ export function SupportThreadView({ id }: { id: string }) {
           status: page.conversation.status,
           messages: page.messages,
           seenUpToSeq: page.seenUpToSeq,
-          agentTypingUntil: 0,
+          peerTypingUntil: 0,
         });
         setHasEarlier(page.hasEarlier);
         setLastReadSeq(page.lastReadSeq);
@@ -142,8 +142,8 @@ export function SupportThreadView({ id }: { id: string }) {
 
   // The agent's typing fades by itself.
   useEffect(() => {
-    if (!thread || thread.agentTypingUntil <= now) return;
-    const timer = setTimeout(() => setNow(Date.now()), thread.agentTypingUntil - now + 50);
+    if (!thread || thread.peerTypingUntil <= now) return;
+    const timer = setTimeout(() => setNow(Date.now()), thread.peerTypingUntil - now + 50);
     return () => clearTimeout(timer);
   }, [thread, now]);
 
@@ -201,7 +201,7 @@ export function SupportThreadView({ id }: { id: string }) {
 
   const actions = threadActions(thread.status, conversation.rating);
   const lastMine = [...thread.messages].reverse().find((m) => m.mine);
-  const agentTyping = thread.agentTypingUntil > now;
+  const agentTyping = thread.peerTypingUntil > now;
 
   return (
     <Frame>
@@ -263,7 +263,7 @@ export function SupportThreadView({ id }: { id: string }) {
   );
 }
 
-function Frame({ children }: { children: React.ReactNode }) {
+export function Frame({ children }: { children: React.ReactNode }) {
   return <div className="mx-auto w-full max-w-3xl space-y-4 p-4 md:p-8">{children}</div>;
 }
 
@@ -298,7 +298,7 @@ function MessageBubble({ message: m, seen, time }: { message: SupportMessage; se
   );
 }
 
-function AttachmentRow({ attachment: a }: { attachment: SupportAttachment }) {
+export function AttachmentRow({ attachment: a }: { attachment: SupportAttachment }) {
   const { t } = useLocale();
   const size = fileSize(a.sizeBytes);
   const label = (
