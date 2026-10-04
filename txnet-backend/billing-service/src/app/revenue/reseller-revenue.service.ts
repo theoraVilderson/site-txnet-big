@@ -12,7 +12,7 @@ import {
 } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { HiddenCurrency, RevenueBreakdown, breakdownOf, currencySplit, readBreakdown, readSalesPeople } from './revenue-breakdown';
+import { FEWER_THAN, HiddenCurrency, HiddenReason, RevenueBreakdown, SplitPeople, breakdownOf, readBreakdown, readSplitPeople, suppressSplit } from './revenue-breakdown';
 
 /** Only one door closes here, so the refusal carries only its reasons. */
 export type ResellerRevenueRejection = ResellerAccessRejection;
@@ -51,12 +51,13 @@ export type RevenueTotals = {
   sales: {
     total: string | null;
     count: number;
-    byReason: { reasonType: WalletReasonType; total: string | null; count: number }[];
+    /** To the platform's staff a reason under 5 people, and its pair, is hidden (F-117-l). */
+    byReason: ({ reasonType: WalletReasonType; total: string | null; count: number } | HiddenReason)[];
     /** To the platform's staff a currency under 5 people, and its pair, is hidden (F-117-k). */
     byCurrency: (CurrencyTotal | HiddenCurrency)[];
   };
   /** What its users **paid in** in the window. Money in, not revenue (ADR-0067). */
-  topUps: { total: string | null; count: number; byCurrency: CurrencyTotal[] };
+  topUps: { total: string | null; count: number; byCurrency: (CurrencyTotal | HiddenCurrency)[] };
 };
 
 /**
@@ -146,6 +147,9 @@ const UNDOES: Record<WalletReasonType, WalletReasonType | null> = {
 
 /** The credits that come off a sale, derived from the table above. */
 export const REFUND_REASONS = (Object.keys(UNDOES) as WalletReasonType[]).filter((r) => UNDOES[r] !== null);
+
+/** The sale each of `REFUND_REASONS` undoes, position for position. */
+const UNDONE_SALES = REFUND_REASONS.map((r) => UNDOES[r] as WalletReasonType);
 
 const money = (v: Prisma.Decimal | null | undefined) => (v ? v.toFixed(2) : '0.00');
 
@@ -277,6 +281,15 @@ export class ResellerRevenueService {
           byReason.push({ reasonType, total: convert.show(total), count: counts.get(reasonType) ?? 0 });
         }
 
+        // ADR-0104 (3): every split below is a breakdown; the platform's staff
+        // see a cell under 5 people hidden, paired (F-117-k, F-117-l). The
+        // wholes — sales.total/count, topUps.total/count — are never hidden.
+        const people: SplitPeople[] | null =
+          reseller.as === 'staff' ? await readSplitPeople(tx, period, SALE_REASONS, REFUND_REASONS, UNDONE_SALES) : null;
+        const currency = (c: CurrencyTotal): HiddenCurrency => ({ currencyCode: c.currencyCode, total: null, count: null, people: FEWER_THAN });
+        const split = <C extends { count: number }, H>(cells: C[], keyOf: (c: C) => string, of: SplitPeople['split'], hide: (c: C) => H): (C | H)[] =>
+          people ? suppressSplit(cells, keyOf, people, of, hide) : cells;
+
         const paidIn: ByCurrency = new Map();
         const paidInCounts = new Map<string, number>();
         for (const row of topUps) {
@@ -291,17 +304,13 @@ export class ResellerRevenueService {
           sales: {
             total: convert.show(salesTotal),
             count: byReason.reduce((n, row) => n + row.count, 0),
-            byReason,
-            // ADR-0104 (3): the currency split is a breakdown; the platform's staff see small ones hidden (F-117-k).
-            byCurrency:
-              reseller.as === 'staff'
-                ? currencySplit(listed(salesByCurrency, salesCounts), await readSalesPeople(tx, period, SALE_REASONS, REFUND_REASONS))
-                : listed(salesByCurrency, salesCounts),
+            byReason: split(byReason, (r) => r.reasonType, 'salesReason', (r): HiddenReason => ({ reasonType: r.reasonType, total: null, count: null, people: FEWER_THAN })),
+            byCurrency: split(listed(salesByCurrency, salesCounts), (c) => c.currencyCode, 'salesCurrency', currency),
           },
           topUps: {
             total: convert.show(await convert.sum(paidIn)),
             count: [...paidInCounts.values()].reduce((n, c) => n + c, 0),
-            byCurrency: listed(paidIn, paidInCounts),
+            byCurrency: split(listed(paidIn, paidInCounts), (c) => c.currencyCode, 'topUpCurrency', currency),
           },
         };
       }),

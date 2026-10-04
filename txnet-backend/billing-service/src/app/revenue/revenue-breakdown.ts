@@ -137,7 +137,7 @@ export function readBreakdown(tx: Prisma.TransactionClient, period: { from: Date
  * sales, then position — and the check runs again, since that cell may bring a
  * currency of its own. Two hidden cells per currency give only their sum.
  * A currency no shown cell holds is closed one level up: `/revenue`'s own
- * currency split is suppressed the same way (F-117-k, `currencySplit`).
+ * currency split is suppressed the same way (F-117-k, `suppressSplit`).
  */
 export function hiddenCells<T extends { people: number; count: number }>(heads: readonly T[], currenciesOf: (head: T) => ReadonlySet<string>): Set<T> {
   const hidden = new Set(heads.filter((h) => h.people < SMALL_GROUP));
@@ -161,35 +161,70 @@ export function hiddenCells<T extends { people: number; count: number }>(heads: 
 /** A currency of `/revenue`'s split the platform does not see (F-117-k). */
 export type HiddenCurrency = { currencyCode: string; total: null; count: null; people: typeof FEWER_THAN };
 
+/** A reason of `/revenue`'s sales split the platform does not see (F-117-l). */
+export type HiddenReason = { reasonType: WalletReasonType; total: null; count: null; people: typeof FEWER_THAN };
+
+/** One cell's distinct people, by split: what the platform's suppression is judged on. */
+export type SplitPeople = { split: 'salesCurrency' | 'salesReason' | 'topUpCurrency'; key: string; people: number };
+
 /**
- * Distinct people per currency over the same sale and refund rows the totals
- * read — asked only for the platform's staff (F-117-k). Scoped as
- * {@link readBreakdown} is: `public.current_tenant_id()`, no tenant id passed.
+ * Distinct people per cell of each of `/revenue`'s splits, over the same rows
+ * the totals read — asked only for the platform's staff (F-117-k, F-117-l).
+ * A refund counts under the sale it undoes (`undone[i]` for `refunds[i]`), as
+ * `byReason` folds it; a top-up is a settled payment of the reseller's users,
+ * never its own to the platform. Scoped as {@link readBreakdown} is:
+ * `public.current_tenant_id()`, no tenant id passed.
  */
-export function readSalesPeople(tx: Prisma.TransactionClient, period: { from: Date; to: Date }, sales: WalletReasonType[], refunds: WalletReasonType[]) {
-  return tx.$queryRaw<{ currencyCode: string; people: number }[]>`
-    SELECT "wt"."currencyCode", COUNT(DISTINCT w."ownerUserId")::int AS "people"
-    FROM billing.wallet_transaction "wt"
-    JOIN billing.wallet w ON w."id" = "wt"."walletId"
-    WHERE "wt"."tenantId" = public.current_tenant_id()
-      AND "wt"."createdAt" >= ${period.from} AND "wt"."createdAt" <= ${period.to}
-      AND (("wt"."direction" = 'debit' AND "wt"."reasonType"::text = ANY(${sales}))
-        OR ("wt"."direction" = 'credit' AND "wt"."reasonType"::text = ANY(${refunds})))
-    GROUP BY "wt"."currencyCode"`;
+export function readSplitPeople(
+  tx: Prisma.TransactionClient,
+  period: { from: Date; to: Date },
+  sales: WalletReasonType[],
+  refunds: WalletReasonType[],
+  undone: WalletReasonType[],
+) {
+  return tx.$queryRaw<SplitPeople[]>`
+    WITH s AS (
+      SELECT "wt"."currencyCode",
+             COALESCE((${undone}::text[])[array_position(${refunds}::text[], "wt"."reasonType"::text)], "wt"."reasonType"::text) AS "reason",
+             w."ownerUserId" AS "owner"
+      FROM billing.wallet_transaction "wt"
+      JOIN billing.wallet w ON w."id" = "wt"."walletId"
+      WHERE "wt"."tenantId" = public.current_tenant_id()
+        AND "wt"."createdAt" >= ${period.from} AND "wt"."createdAt" <= ${period.to}
+        AND (("wt"."direction" = 'debit' AND "wt"."reasonType"::text = ANY(${sales}))
+          OR ("wt"."direction" = 'credit' AND "wt"."reasonType"::text = ANY(${refunds})))
+    )
+    SELECT CASE WHEN GROUPING("currencyCode") = 0 THEN 'salesCurrency' ELSE 'salesReason' END AS "split",
+           COALESCE("currencyCode", "reason") AS "key",
+           COUNT(DISTINCT "owner")::int AS "people"
+    FROM s
+    GROUP BY GROUPING SETS (("currencyCode"), ("reason"))
+    UNION ALL
+    SELECT 'topUpCurrency', p."currencyCode", COUNT(DISTINCT p."userId")::int
+    FROM billing.payment_transaction p
+    WHERE p."tenantId" = public.current_tenant_id()
+      AND p."status" = 'success' AND p."billingTenantId" IS NULL
+      AND p."createdAt" >= ${period.from} AND p."createdAt" <= ${period.to}
+    GROUP BY p."currencyCode"`;
 }
 
 /**
- * `/revenue`'s `sales.byCurrency` as the platform's staff see it (F-117-k,
- * ADR-0104 (3)): a breakdown of the total by currency, so a currency under
- * {@link SMALL_GROUP} people is hidden, and a lone hidden one takes the
- * smallest other with it — every currency is part of the one converted
- * total, so they all pair with each other. The converted whole stays.
+ * One of `/revenue`'s splits as the platform's staff see it (F-117-k,
+ * F-117-l, ADR-0104 (3)): a cell under {@link SMALL_GROUP} people is hidden,
+ * and a lone hidden one takes the smallest other with it — every cell is a
+ * part of the one whole the answer keeps, so they all pair with each other.
  */
-export function currencySplit(byCurrency: readonly CurrencyTotal[], people: readonly { currencyCode: string; people: number }[]): (CurrencyTotal | HiddenCurrency)[] {
-  const cells = byCurrency.map((c) => ({ ...c, people: people.find((p) => p.currencyCode === c.currencyCode)?.people ?? 0 }));
+export function suppressSplit<C extends { count: number }, H>(
+  cells: readonly C[],
+  keyOf: (c: C) => string,
+  people: readonly SplitPeople[],
+  split: SplitPeople['split'],
+  hide: (c: C) => H,
+): (C | H)[] {
+  const heads = cells.map((c) => ({ c, count: c.count, people: people.find((p) => p.split === split && p.key === keyOf(c))?.people ?? 0 }));
   const whole = new Set(['total']);
-  const hidden = hiddenCells(cells, () => whole);
-  return cells.map(({ people: _people, ...c }) => (hidden.has(cells.find((x) => x.currencyCode === c.currencyCode)!) ? { currencyCode: c.currencyCode, total: null, count: null, people: FEWER_THAN } : c));
+  const hidden = hiddenCells(heads, () => whole);
+  return heads.map((h) => (hidden.has(h) ? hide(h.c) : h.c));
 }
 
 const ZERO = new Prisma.Decimal(0);

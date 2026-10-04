@@ -56,8 +56,8 @@ function build(
     /** The reseller's operating currency now. */
     currencyCode?: string;
     changes?: { fromCode: string; toCode: string; rate: string }[];
-    /** Distinct people per sales currency (F-117-k): what the staff-only query answers. */
-    people?: { currencyCode: string; people: number }[];
+    /** Distinct people per cell of each split (F-117-k, F-117-l): what the staff-only query answers. */
+    people?: { split: 'salesCurrency' | 'salesReason' | 'topUpCurrency'; key: string; people: number }[];
   } = {},
 ) {
   const seen: Seen[] = [];
@@ -331,7 +331,7 @@ describe('ResellerRevenueService.totals — the currency split for the platform 
     Object.fromEntries(t.sales.byCurrency.map((c) => [c.currencyCode, c.total]));
 
   it('hides a small currency and pairs it with the smallest other, keeping the converted whole', async () => {
-    const { service } = build({ sales, changes, people: [{ currencyCode: 'USD', people: 20 }, { currencyCode: 'IRR', people: 3 }, { currencyCode: 'EUR', people: 8 }] });
+    const { service } = build({ sales, changes, people: [{ split: 'salesCurrency', key: 'USD', people: 20 }, { split: 'salesCurrency', key: 'IRR', people: 3 }, { split: 'salesCurrency', key: 'EUR', people: 8 }] });
     const total = await service.totals(staff, RESELLER, { from: FROM, to: TO });
     expect(shown(total)).toEqual({ EUR: null, IRR: null, USD: '300.00' });
     expect(total.sales.byCurrency.find((c) => c.currencyCode === 'IRR')).toEqual({ currencyCode: 'IRR', total: null, count: null, people: 'fewer_than_5' });
@@ -342,24 +342,98 @@ describe('ResellerRevenueService.totals — the currency split for the platform 
   });
 
   it('leaves two small currencies as they are, hidden both', async () => {
-    const { service } = build({ sales, changes, people: [{ currencyCode: 'USD', people: 20 }, { currencyCode: 'IRR', people: 2 }, { currencyCode: 'EUR', people: 1 }] });
+    const { service } = build({ sales, changes, people: [{ split: 'salesCurrency', key: 'USD', people: 20 }, { split: 'salesCurrency', key: 'IRR', people: 2 }, { split: 'salesCurrency', key: 'EUR', people: 1 }] });
     const total = await service.totals(staff, RESELLER, { from: FROM, to: TO });
     expect(shown(total)).toEqual({ EUR: null, IRR: null, USD: '300.00' });
   });
 
   it("asks nothing more for the reseller's own people, and shows them every currency", async () => {
-    const { seen, service } = build({ sales, changes, people: [{ currencyCode: 'IRR', people: 1 }] });
+    const { seen, service } = build({ sales, changes, people: [{ split: 'salesCurrency', key: 'IRR', people: 1 }] });
     const total = await service.totals(owner, RESELLER, { from: FROM, to: TO });
     expect(seen.map((s) => s.what)).not.toContain('people');
     expect(shown(total)).toEqual({ EUR: '80.00', IRR: '100000.00', USD: '300.00' });
   });
 
   it("counts the platform's people in the reseller's scope, by current_tenant_id(), with no tenant id passed", async () => {
-    const { seen, service } = build({ sales, changes, people: [{ currencyCode: 'USD', people: 20 }, { currencyCode: 'IRR', people: 9 }, { currencyCode: 'EUR', people: 8 }] });
+    const { seen, service } = build({ sales, changes, people: [{ split: 'salesCurrency', key: 'USD', people: 20 }, { split: 'salesCurrency', key: 'IRR', people: 9 }, { split: 'salesCurrency', key: 'EUR', people: 8 }] });
     await service.totals(staff, RESELLER, { from: FROM, to: TO });
     const call = seen.find((s) => s.what === 'people')!;
     expect(call.scope).toBe(RESELLER);
     expect(call.args.sql).toContain('public.current_tenant_id()');
     expect(call.args.values).not.toContain(RESELLER);
+  });
+});
+
+/**
+ * F-117-l: the totals' other two splits are breakdowns as well (ADR-0104 (3)).
+ * `sales.byReason` — what was sold by kind — and `topUps.byCurrency` hide a
+ * cell under 5 people from the platform's staff and pair a lone hidden one;
+ * `sales.total` and `topUps.total` stay.
+ */
+describe('ResellerRevenueService.totals — reasons and top-ups for the platform (F-117-l)', () => {
+  const staff = { userId: '66666666-6666-4666-8666-666666666666', tenantId: PLATFORM, permissions: ['tenant.manage'] };
+  const sales = [
+    { reasonType: WalletReasonType.product_purchase, sum: '300.00', count: 30 },
+    { reasonType: WalletReasonType.traffic_consumption, sum: '20.00', count: 4 },
+    { reasonType: WalletReasonType.usage_charge, sum: '90.00', count: 12 },
+  ];
+  const topUps = [
+    { sum: '1000.00', count: 40, currencyCode: 'USD' },
+    { sum: '500000', count: 2, currencyCode: 'IRR' },
+  ];
+  const changes = [{ fromCode: 'IRR', toCode: 'USD', rate: '0.00002' }];
+  const people = [
+    { split: 'salesCurrency' as const, key: 'USD', people: 30 },
+    { split: 'salesReason' as const, key: WalletReasonType.product_purchase, people: 20 },
+    { split: 'salesReason' as const, key: WalletReasonType.traffic_consumption, people: 3 },
+    { split: 'salesReason' as const, key: WalletReasonType.usage_charge, people: 8 },
+    { split: 'topUpCurrency' as const, key: 'USD', people: 30 },
+    { split: 'topUpCurrency' as const, key: 'IRR', people: 2 },
+  ];
+
+  it('hides a small reason and the smallest other with it; the sales total stays', async () => {
+    const { service } = build({ sales, topUps, changes, people });
+    const total = await service.totals(staff, RESELLER, { from: FROM, to: TO });
+    expect(Object.fromEntries(total.sales.byReason.map((r) => [r.reasonType, r.total]))).toEqual({
+      [WalletReasonType.product_purchase]: '300.00',
+      [WalletReasonType.traffic_consumption]: null,
+      [WalletReasonType.usage_charge]: null,
+    });
+    expect(total.sales.byReason.find((r) => r.reasonType === WalletReasonType.traffic_consumption)).toEqual({
+      reasonType: WalletReasonType.traffic_consumption, total: null, count: null, people: 'fewer_than_5',
+    });
+    expect(total.sales.total).toBe('410.00');
+    expect(total.sales.count).toBe(46);
+  });
+
+  it('hides a small top-up currency, paired; the top-up total stays', async () => {
+    const { service } = build({ sales, topUps, changes, people });
+    const total = await service.totals(staff, RESELLER, { from: FROM, to: TO });
+    expect(total.topUps.byCurrency).toEqual([
+      { currencyCode: 'IRR', total: null, count: null, people: 'fewer_than_5' },
+      { currencyCode: 'USD', total: null, count: null, people: 'fewer_than_5' },
+    ]);
+    const own = await build({ sales, topUps, changes }).service.totals(owner, RESELLER, { from: FROM, to: TO });
+    expect(total.topUps.total).toBe(own.topUps.total);
+    expect(total.topUps.count).toBe(42);
+  });
+
+  it("shows the reseller's own people every reason and every top-up currency", async () => {
+    const { service } = build({ sales, topUps, changes, people });
+    const total = await service.totals(owner, RESELLER, { from: FROM, to: TO });
+    expect(total.sales.byReason.every((r) => r.total !== null)).toBe(true);
+    expect(total.topUps.byCurrency.map((c) => c.total)).toEqual(['500000.00', '1000.00']);
+  });
+
+  it('counts people over the same rows: refunds under the sale they undo, settled top-ups only', async () => {
+    const { seen, service } = build({ sales, topUps, changes, people });
+    await service.totals(staff, RESELLER, { from: FROM, to: TO });
+    const call = seen.find((s) => s.what === 'people')!;
+    expect(call.args.sql).toContain('billing.payment_transaction');
+    expect(call.args.sql).toContain("'success'");
+    expect(call.args.sql).toContain('"billingTenantId" IS NULL');
+    // Each refund named beside the sale it undoes, in the same order.
+    expect(call.args.values).toContainEqual([WalletReasonType.traffic_refund, WalletReasonType.product_refund, WalletReasonType.usage_refund]);
+    expect(call.args.values).toContainEqual([WalletReasonType.traffic_consumption, WalletReasonType.product_purchase, WalletReasonType.usage_charge]);
   });
 });
