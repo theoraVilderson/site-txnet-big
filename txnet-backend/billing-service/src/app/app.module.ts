@@ -1,4 +1,5 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { SupportContextModule } from './support-context/support-context.module';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { RateLimitGuard, TenantStatusGuard } from '@txnet-backend/shared-core';
@@ -70,6 +71,7 @@ const INTERNAL_ROUTES = 'internal/*path';
     EntitlementModule,
     TenantBillingModule,
     RevenueModule,
+    SupportContextModule,
     TrafficModule,
     UsageModule,
     SystemsModule,

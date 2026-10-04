@@ -232,6 +232,14 @@ Its delivery's `entitlement.grant.delivered` / `.refunded` are entitlement's (F-
   A live rate handed to it without a snapshot id is a caller bug, not a quiet
   fall back — the state ADR-0019 says the rial path must never be in.
 
+## Support's sidebar (F-033-m)
+
+`GET /api/internal/billing/tenants/:tenantId/users/:userId/support-context`
+(`support-context/`, `ServiceOnlyGuard`, 404 otherwise): `{wallet {balance, held, currencyCode} | null,
+grants {items[≤5] of listForUser's current page: id, label, nameKey, status, frozen, endsAt, bytes}, invoices[≤5],
+lastConnectionAt}` — every read in the path tenant's `tenantTransaction`. No token or link leaves.
+Caller: support-service, after finding the conversation in that tenant (support `contract.operator.md`).
+
 ## Deprecations
 
 | Item | Deprecated since | Removal after | Replacement |

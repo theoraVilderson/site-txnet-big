@@ -15,6 +15,7 @@ source:
   - txnet-backend/billing-service/src/app/traffic/**
   - txnet-backend/billing-service/src/app/systems/**
   - txnet-backend/billing-service/src/app/invoice/**
+  - txnet-backend/billing-service/src/app/support-context/**
   - txnet-backend/metering-service/src/app/**
   - txnet-backend/prisma/domains/billing.prisma
   - txnet-backend/prisma/domains/migrations/20260912000100_payment_rate_snapshot_id/**

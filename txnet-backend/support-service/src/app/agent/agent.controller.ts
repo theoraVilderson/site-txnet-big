@@ -12,6 +12,7 @@ import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { AssignBody, InboxQuery, PriorityBody, ReplyBody, assignSchema, inboxQuerySchema, prioritySchema, replySchema } from './agent.schema';
 import { AgentConversationView, AgentMessagePage, AgentMessageView, SupportAgentService } from './agent.service';
 import { SupportAgentGuard } from './support-agent.guard';
+import { SupportUserContext, UserContext } from './user-context';
 
 // The user side's buckets, keyed by the agent's own id: one person, one budget.
 const READ = {
@@ -39,6 +40,7 @@ export class SupportAgentController {
   constructor(
     private readonly agents: SupportAgentService,
     private readonly availability: SupportAvailability,
+    private readonly userContext: SupportUserContext,
   ) {}
 
   /** The agent's heartbeat (F-033-g): `online` every 30s while the panel is open, `away` on leaving. */
@@ -70,6 +72,13 @@ export class SupportAgentController {
     @Query(new ZodValidationPipe(messagesQuerySchema)) query: MessagesQuery,
   ): Promise<AgentMessagePage> {
     return refusing(() => this.agents.messages(callerOf(req), id, query));
+  }
+
+  /** The sidebar (F-033-m): the conversation's user — wallet, current Grants, recent invoices, last connection. */
+  @Get('conversations/:id/context')
+  @RateLimit(READ)
+  context(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string): Promise<UserContext> {
+    return refusing(() => this.userContext.forConversation(callerOf(req), id));
   }
 
   /** A reply, or with `internal: true` a note only agents see. */

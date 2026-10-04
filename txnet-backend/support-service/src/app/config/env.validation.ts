@@ -78,6 +78,14 @@ export const envSchema = z.object({
   AUTH_API_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
   SERVICE_AUTH_TOKEN: z.string().default(''),
 
+  /**
+   * billing-service's `internal/billing/…/support-context` seam, the agent
+   * sidebar's wallet, Grants, invoices and last connection (F-033-m). Empty
+   * boots and the sidebar answers `billing: null`.
+   */
+  BILLING_API_BASE_URL: z.string().default(''),
+  BILLING_API_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+
   TRUST_PROXY: z.string().default(''),
 });
 

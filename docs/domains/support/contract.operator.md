@@ -8,7 +8,8 @@ updated: 2026-10-04
 # Contract — support, the operator's side beyond the inbox
 
 What an agent sees and reaches beyond its own tenant's inbox (`contract.md`
-"Agent side"): the platform's staff in a reseller's support (F-033-l). Shape:
+"Agent side"): the platform's staff in a reseller's support (F-033-l), and the
+user sidebar (F-033-m). Shape:
 [ADR-0104](../../architecture/decisions/0104-platform-staff-see-a-resellers-people-only-with-its-consent.md) (4), catalog §11.6.
 
 ## Platform staff in a reseller's support (F-033-l)
@@ -34,3 +35,23 @@ door `agent/platform-door.ts`.
 
 Not yet: each act recorded with tier and consent id in the reseller's history
 (F-117-c, ADR-0104 (6)); a reply already names its sender in the thread.
+
+## The agent's sidebar (F-033-m)
+
+`GET /api/support/agent/conversations/:id/context`, and for platform staff
+`GET /api/support/tenants/:tenantId/agent/conversations/:id/context` (`read`
+consent — it names a person). `agent/user-context.ts`.
+
+Answer: `{userId, billing}` — `billing` is billing's `support-context` as it
+shaped it (wallet, current Grants, recent invoices, last connection; billing
+`contract.md` "Support's sidebar"), or **`null`** when billing fails or
+`BILLING_API_BASE_URL` is unset.
+
+| Rule | Why |
+|---|---|
+| The conversation is found **in the caller's tenant** first (tenant transaction); another tenant's is `not_found` and billing is never asked | billing is handed only a tenant and user support has proved |
+| Billing gets the thread's own `userId`, never one from the request | no route here looks up an arbitrary person |
+| A billing failure answers `billing: null`, logged, never an error | the sidebar is help, the conversation is the work |
+| Billing's tables are never read from support (user, 2026-10-04) | billing decides what of its data leaves |
+
+Not shown yet: the catalog's "recent errors" and ISP (§11.3) — nothing records them per user.

@@ -60,6 +60,8 @@ services:
       - CLAMD_ADDR=${CLAMD_ADDR:-}
       - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
       - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      # The agent sidebar's billing facts (F-033-m).
+      - BILLING_API_BASE_URL=http://billing-service:3000
       # Signs attachments' 5-minute URLs (F-033-c); tenant-service verifies them.
       - OBJECT_STORAGE_SIGNING_SECRET=${OBJECT_STORAGE_SIGNING_SECRET}
       - TRUST_PROXY=${TRUST_PROXY}

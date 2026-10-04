@@ -12,6 +12,7 @@ import { AssignBody, InboxQuery, PriorityBody, ReplyBody, assignSchema, inboxQue
 import { AgentConversationView, AgentMessagePage, AgentMessageView, SupportAgentService } from './agent.service';
 import { ConsentNeed, PlatformSupportDoor } from './platform-door';
 import { SupportAgentGuard } from './support-agent.guard';
+import { SupportUserContext, UserContext } from './user-context';
 
 const READ = {
   key: (req: Request) => rateLimitBucketKey(RateLimitBucket.SUPPORT_READ, identityOf(req).userId),
@@ -38,6 +39,7 @@ export class PlatformAgentController {
   constructor(
     private readonly agents: SupportAgentService,
     private readonly door: PlatformSupportDoor,
+    private readonly userContext: SupportUserContext,
   ) {}
 
   @Get('conversations')
@@ -59,6 +61,17 @@ export class PlatformAgentController {
     @Query(new ZodValidationPipe(messagesQuerySchema)) query: MessagesQuery,
   ): Promise<AgentMessagePage> {
     return this.enter(req, tenantId, 'read', (agent) => this.agents.messages(agent, id, query));
+  }
+
+  /** The sidebar (F-033-m) — it names a person, so `read` consent at least. */
+  @Get('conversations/:id/context')
+  @RateLimit(READ)
+  context(
+    @Req() req: Request,
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<UserContext> {
+    return this.enter(req, tenantId, 'read', (agent) => this.userContext.forConversation(agent, id));
   }
 
   @Post('conversations/:id/messages')

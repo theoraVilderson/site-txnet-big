@@ -75,8 +75,11 @@ const APP = join(__dirname, '..');
  * `WheelInternalController` is the AI wheel invite's check (F-038-u), on the
  * same five-minute delivery tick as `AiOfferCouponController`: it writes
  * nothing, and throttling it would only stop invites the engine already rationed.
+ * `SupportContextController` is support's agent sidebar (F-033-m): `SERVICE_ONLY`
+ * or a 404, read-only, and already limited per agent on support-service's
+ * `SUPPORT_READ` bucket before it is asked.
  */
-const EXEMPT = new Set(['HealthController', 'AiOfferCouponController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'UsageInternalController', 'VpnReserveController', 'ChargeCurrenciesController', 'SeasonInternalController', 'LotteryInternalController', 'WheelInternalController']);
+const EXEMPT = new Set(['HealthController', 'AiOfferCouponController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'UsageInternalController', 'VpnReserveController', 'ChargeCurrenciesController', 'SeasonInternalController', 'LotteryInternalController', 'WheelInternalController', 'SupportContextController']);
 
 /**
  * Controllers with no identity to bucket on, and what they count instead.
