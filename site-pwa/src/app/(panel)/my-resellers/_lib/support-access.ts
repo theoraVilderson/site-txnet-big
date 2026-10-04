@@ -51,3 +51,36 @@ export function consentSides(items: readonly ConsentView[]): { pending: ConsentV
     past: items.filter((c) => c.state !== "requested" && c.state !== "live"),
   };
 }
+
+/** The door's two refusals (F-117-b): no consent, or one that only reads. The users pages say "ask the reseller", not "failed". */
+export type ConsentRefusal = "consent_required" | "consent_read_only";
+
+export function consentRefusal(e: unknown): ConsentRefusal | null {
+  const reason = (e as { reason?: unknown } | null)?.reason;
+  return reason === "consent_required" || reason === "consent_read_only" ? reason : null;
+}
+
+/**
+ * Whether the visitor reaches this reseller's people as platform staff, and so
+ * needs its consent (shared-core `ResellerAccess`): signed in to the platform,
+ * on a reseller's page, not its owner. The platform's own users and a reseller
+ * the visitor owns need none. A hint for what to show — the door still decides.
+ */
+export function staffVisitor(
+  id: string,
+  me: { tenant: { id: string; type: "platform_owner" | "reseller" } } | null,
+  owned: readonly string[],
+): boolean {
+  return me?.tenant.type === "platform_owner" && me.tenant.id !== id && !owned.includes(id);
+}
+
+/** `requestConsentSchema` / `emergencyEntrySchema` (`EMERGENCY_REASON_MIN`): a reason's least length after a trim. */
+export const REQUEST_REASON_MIN = 10;
+export const EMERGENCY_REASON_MIN = 20;
+const REASON_MAX = 500;
+
+/** A reason trimmed, or `null` while it is shorter than `min` or past 500 — the button stays off. */
+export function reasonOf(typed: string, min: number): string | null {
+  const v = typed.trim();
+  return v.length >= min && v.length <= REASON_MAX ? v : null;
+}

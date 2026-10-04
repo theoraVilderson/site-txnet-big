@@ -39,3 +39,20 @@ package cards. By the path's reseller, never the session's (invariant 21).
 | 10 | Refusals are `supportRefusalKey`'s sentence — every `SupportConsentRejection` and the door's `consent_required` / `consent_read_only` — else the generic answer | a refusal says what to do next |
 
 Spec: `my-resellers/support-access.test.tsx`.
+
+## The platform's side (F-117-g)
+
+`my-resellers/_components/PlatformAccessBanner.tsx` (`PlatformAccessBanner`,
+`ConsentNeeded`), at the top of both users pages
+([contract.reseller-users.md](contract.reseller-users.md)).
+
+| # | Rule | Why |
+|---|---|---|
+| 11 | **Only platform staff see the banner** (`staffVisitor`): a session on the platform, on a reseller's page, not its owner (`ownedResellers`). The platform's own users and the reseller's people see nothing. A hint only — the door still decides | the door admits those without a consent (tenant `contract.entitlements.md`) |
+| 12 | It shows the live consent's scope and time left (rule 5), an open request as "waiting for the reseller" with **withdraw**, or "no access, ask the reseller" | the platform asks, the reseller grants: no grant here |
+| 13 | **A request needs a reason of 10 characters after a trim** (`reasonOf`), sent trimmed with the scope chosen (default `read`); with a live `read` consent the form stays, so staff can ask for `act` | `requestConsentSchema`; a write under `read` is `consent_read_only` |
+| 14 | **Emergency entry is offered only to a holder of `tenant.emergency_access`** (`holdsPermission`), needs 20 characters, and is **asked first**. The caller's own running entry shows its time left and **end**; no second entry is offered while it runs | the owner is told at once and the hour is never extended (audit "Emergency entry") |
+| 15 | After any act the banner and the page under it are read again (`onChange`) | a consent opens the list without a reload |
+| 16 | **A users page refused for want of consent says what to do, not "failed"**: `consent_required` / `consent_read_only` on the list or a user's services render `ConsentNeeded` (a status, no retry); on an action they are the users pages' own sentences (`USER_REFUSAL_KEYS`, `useUserMessage`) | the row: "the refusal as 'ask the reseller', not an error" |
+
+Spec: `my-resellers/platform-access.test.tsx`.

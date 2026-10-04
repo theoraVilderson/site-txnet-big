@@ -3684,7 +3684,9 @@
       "user_not_found": "this user is not one of this reseller's users.",
       "user_banned": "the platform has banned this account.",
       "cannot_block_self": "you cannot block yourself.",
-      "no_authority": "you cannot act on this person: they are the owner, or hold as much authority as you do."
+      "no_authority": "you cannot act on this person: they are the owner, or hold as much authority as you do.",
+      "consent_required": "The reseller has not given the platform access to its users. Ask the reseller for it.",
+      "consent_read_only": "The reseller's permission is view only. Ask the reseller for permission to act."
     },
     "block": "block",
     "unblock": "unblock",
@@ -5174,6 +5176,26 @@
       "emergency_live": "You already have an emergency entry running for this reseller.",
       "consent_required": "The reseller has not given the platform access to its users. Ask the reseller for it.",
       "consent_read_only": "The reseller's permission is view only. Ask the reseller for permission to act."
+    },
+    "staff": {
+      "title": "Access to this reseller's users",
+      "none": "You have no access to this reseller's users. Ask the reseller for it.",
+      "pending": "Your request was sent. Waiting for the reseller to answer.",
+      "withdraw": "Withdraw request",
+      "request": {
+        "title": "Ask the reseller for access",
+        "reason": "Why you need it (at least 10 characters)",
+        "submit": "Send request"
+      },
+      "emergency": {
+        "title": "Emergency entry",
+        "hint": "Only for abuse, a legal order or a security incident. Exactly one hour, never extended; the reseller's owner is told at once.",
+        "reason": "Reason (at least 20 characters)",
+        "submit": "Enter for one hour",
+        "confirm": "Enter this reseller's users for one hour without its permission? Its owner is told now, and the hour cannot be extended.",
+        "live": "Emergency entry: {hours} h {minutes} min left",
+        "end": "End emergency entry"
+      }
     }
   }
 }

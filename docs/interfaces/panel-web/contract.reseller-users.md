@@ -21,6 +21,8 @@ platform staff (F-311-aa, D-55), the reseller's for its staff on its domain.
 | its users | `/my-resellers/[id]/users` (`myResellerUsersPath`) | `my-resellers/[id]/users/_components/ResellerUsersView.tsx`, `FindByLink.tsx`, `BulkByFilter.tsx` |
 | one user's services | `/my-resellers/[id]/users/[userId]` (`myResellerUserPath`) | `…/users/[userId]/_components/UserServicesView.tsx`, `AdminConfigs.tsx`, `GrantActions.tsx`, `GrantHistory.tsx`, `useUserMessage.ts` |
 
+Platform staff (no consent needed by the reseller's own people) meet the consent banner at the top of both, and a `consent_required` page reads "ask the reseller": [contract.support-access.md](contract.support-access.md) rules 11-16 (F-117-g).
+
 Rules for both: `my-resellers/_lib/users.ts`; a Grant's acts: `my-resellers/_lib/grant-actions.ts`; search, bulk and history: `my-resellers/_lib/grant-bulk.ts`. Calls: `resellerUsersApi`
 (`lib/auth-api.ts`) over auth's
 [contract.reseller-users.md](../auth-api/contract.reseller-users.md) (F-311-a),

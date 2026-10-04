@@ -10,7 +10,8 @@ const K = USER_KEYS;
 /**
  * Every reason either door refuses with: shared-core's `ResellerAccessRejection`
  * (who may administer this reseller, invariant 21), auth's user fence
- * (F-311-a) and billing's (F-311-f). The spec reads the union from both
+ * (F-311-a) and billing's (F-311-f), and the door's consent refusals
+ * (`SupportConsentRefused`, F-117-b). The spec reads the union from both
  * controllers' exhaustive `STATUS` maps, so a reason added there has no
  * sentence here until one is written.
  */
@@ -22,7 +23,9 @@ export type UserRefusal =
   | "user_not_found"
   | "user_banned"
   | "cannot_block_self"
-  | "no_authority";
+  | "no_authority"
+  | "consent_required"
+  | "consent_read_only";
 
 export const USER_REFUSAL_KEYS: Record<UserRefusal, string> = K.refusals;
 

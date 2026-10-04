@@ -21,6 +21,8 @@ import { UsageMeter } from "../../../../../services/_components/UsageMeter";
 import { GRANT_TONES, serviceName } from "../../../../../services/_lib/my-services";
 import { USER_KEYS as K } from "../../../../_lib/users";
 import { UserGrantLimitCard } from "../../../../_components/GrantLimitCards";
+import { ConsentNeeded, PlatformAccessBanner } from "../../../../_components/PlatformAccessBanner";
+import { consentRefusal } from "../../../../_lib/support-access";
 import { AdminConfigs } from "./AdminConfigs";
 import { GrantActions, IssueGrant } from "./GrantActions";
 import { GrantHistory } from "./GrantHistory";
@@ -123,10 +125,15 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
         </div>
       </header>
 
+      {/* F-117-g: platform staff's consent, request and emergency entry; nothing to anyone else. */}
+      <PlatformAccessBanner tenantId={id} onChange={retry} />
+
       {/* Read again with the list: an issue or a refresh changes how many are open. */}
       <UserGrantLimitCard key={asked} tenantId={id} userId={userId} />
 
-      {loadError !== null ? (
+      {consentRefusal(loadError) ? (
+        <ConsentNeeded error={loadError} />
+      ) : loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
           <Alert>{message(loadError)}</Alert>
           <button type="button" className={primaryButton} onClick={retry}>

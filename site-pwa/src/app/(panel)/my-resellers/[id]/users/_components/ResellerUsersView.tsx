@@ -15,6 +15,8 @@ import { usePanelSession } from "../../../../_context/PanelSessionContext";
 import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, blockActionOf, isPlatformTenant, usersQuery } from "../../../_lib/users";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
 import { TenantGrantLimitCard } from "../../../_components/GrantLimitCards";
+import { ConsentNeeded, PlatformAccessBanner } from "../../../_components/PlatformAccessBanner";
+import { consentRefusal } from "../../../_lib/support-access";
 import { BulkByFilter } from "./BulkByFilter";
 import { FindByLink } from "./FindByLink";
 
@@ -150,6 +152,9 @@ export function ResellerUsersView({ id }: { id: string }) {
         </button>
       </header>
 
+      {/* F-117-g: platform staff's consent, request and emergency entry; nothing to anyone else. */}
+      <PlatformAccessBanner tenantId={id} onChange={retry} />
+
       <div>
         <label className="relative block">
           <Search size={14} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-text-secondary" aria-hidden />
@@ -171,7 +176,9 @@ export function ResellerUsersView({ id }: { id: string }) {
 
       {blockError !== null && <Alert>{message(blockError)}</Alert>}
 
-      {loadError !== null ? (
+      {consentRefusal(loadError) ? (
+        <ConsentNeeded error={loadError} />
+      ) : loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
           <Alert>{message(loadError)}</Alert>
           <button type="button" className={primaryButton} onClick={retry}>
