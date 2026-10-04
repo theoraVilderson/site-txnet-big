@@ -181,6 +181,17 @@ Variables: `{user.name}` (the user's `fullName`), `{agent.name}` (the caller's),
 filled in one pass, so a value is never expanded again. `canned_invalid`: no
 language, one twice, or any other `{word.word}` — a typo never reaches a user.
 
+## Categories (F-033-e, ADR-0112 point 6)
+
+`support.manage`, the tenant's own only (a default answers `category_unknown`).
+`GET /api/support/settings/categories` → `{own: [{id, key, sortOrder, isActive,
+texts: [{lang, name ≤80}], inUse}], platform: [{id, key, name}], usingPlatform}`;
+`POST` `{key /^[a-z0-9_]{1,40}$/, texts, sortOrder?, isActive?}` (201);
+`PATCH …/:id` any of the four (`texts` replaces all); `DELETE …/:id` (204) only
+while no conversation names it, else 409 `category_in_use` — retire it. 409
+`category_key_taken`, 400 `category_invalid` (no name, a language twice).
+Any active own category hides the defaults from users; none brings them back.
+
 ## Notices (F-033-i)
 
 A thread with something for a reader who is not looking puts one row in their

@@ -274,6 +274,9 @@
     "notPlatformStaff": "This is for the platform's support staff only.",
     "resellerNotFound": "This reseller was not found.",
     "consentRequired": "The reseller has to grant access before you can see its support. Ask it for access.",
-    "consentReadOnly": "The reseller's consent lets you read only, not reply or change anything."
+    "consentReadOnly": "The reseller's consent lets you read only, not reply or change anything.",
+    "categoryKeyTaken": "You already have a category with this key.",
+    "categoryInvalid": "Give the category at least one name, each language once.",
+    "categoryInUse": "Conversations were filed under this category; retire it instead of deleting it."
   }
 }

@@ -8,6 +8,10 @@ export type ConversationRejection =
   | 'not_found'
   | 'closed'
   | 'category_unknown'
+  // Categories admin (F-033-e).
+  | 'category_key_taken'
+  | 'category_invalid'
+  | 'category_in_use'
   | 'too_many_unfinished'
   // Attachments (F-033-f).
   | 'empty_message'
