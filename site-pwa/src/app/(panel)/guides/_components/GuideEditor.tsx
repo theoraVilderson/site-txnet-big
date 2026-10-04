@@ -38,7 +38,8 @@ import {
   validateTexts,
   type EditableBlockType,
 } from "../_lib/guides";
-import { Badge, GuideBlocks, NoteLine, StateBadge, useAct, useGuideMessage } from "./guide-ui";
+import { GuideBlocks } from "../../_components/guide/GuideBlocks";
+import { Badge, NoteLine, StateBadge, useAct, useGuideMessage } from "./guide-ui";
 
 type Tab = "texts" | "placements" | "preview";
 const TABS: readonly Tab[] = ["texts", "placements", "preview"];

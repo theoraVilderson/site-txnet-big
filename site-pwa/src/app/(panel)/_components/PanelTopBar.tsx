@@ -7,6 +7,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { usePanelUiStore } from "../_stores/panel-ui-store";
 import { AccountSwitcher } from "./AccountSwitcher";
+import { HelpButton } from "./guide/HelpButton";
 import { NotificationsButton } from "./NotificationsButton";
 import { PANEL_SIDEBAR_ID } from "./PanelSidebar";
 import { WalletButton } from "./WalletButton";
@@ -32,6 +33,7 @@ const Divider = ({ className = "" }: { className?: string }) => (
  * 40px with the row's gap. Moving the balance into the wallet's own dropdown
  * gives back ~110px, so the phone row is ~220px — with room for the control
  * after this one, which is the part a shrink of the last control never buys.
+ * That control is `HelpButton` (F-414-e): 40px with the gap, ~260px of 304.
  */
 export function PanelTopBar() {
   const { t } = useLocale();
@@ -55,6 +57,7 @@ export function PanelTopBar() {
       <div className="flex min-w-0 items-center gap-1 sm:gap-3">
         <WalletButton />
         <NotificationsButton />
+        <HelpButton />
         <Divider className="hidden lg:block" />
         <AccountSwitcher />
         {/* Language and theme return at `lg`, not at `sm`. They belong to the

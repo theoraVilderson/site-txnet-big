@@ -5022,5 +5022,27 @@
     "langLabel": "Language",
     "cancel": "Cancel",
     "surfaceLabel": "Where"
+  },
+  "guideHelp": {
+    "open": "Help",
+    "title": "Help for this page",
+    "empty": "There is no help for this page yet.",
+    "close": "Close",
+    "back": "Back",
+    "retry": "Try again",
+    "connect": {
+      "open": "How to connect",
+      "title": "Connect on your device",
+      "system": "Your system",
+      "app": "Choose an app",
+      "none": "There is no guide for this system yet.",
+      "os": {
+        "android": "Android",
+        "ios": "iPhone / iPad",
+        "windows": "Windows",
+        "macos": "macOS",
+        "linux": "Linux"
+      }
+    }
   }
 }

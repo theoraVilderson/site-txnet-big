@@ -1,0 +1,112 @@
+import type { GUIDE_OSES, GUIDE_PANEL_SECTIONS } from "../guides/_lib/guides";
+import {
+  PANEL_ACCOUNTS_ADD,
+  PANEL_AI,
+  PANEL_CATALOG,
+  PANEL_CATALOG_TRANSLATIONS,
+  PANEL_COUPONS,
+  PANEL_DEPOSIT,
+  PANEL_FINANCIAL,
+  PANEL_GATEWAYS,
+  PANEL_GUIDES,
+  PANEL_HOME,
+  PANEL_LOTTERIES,
+  PANEL_MANUAL_PAYMENTS,
+  PANEL_MY_RESELLERS,
+  PANEL_MY_SERVICES,
+  PANEL_RESELLERS,
+  PANEL_SETTINGS,
+  PANEL_SHOP,
+  PANEL_SUPPORT,
+  PANEL_SUPPORT_INBOX,
+  PANEL_SUPPORT_SETTINGS,
+  PANEL_SYSTEMS,
+  PANEL_TENANT_BILLING,
+  PANEL_USER_GROUPS,
+  PANEL_WHEEL,
+  myResellerBotPath,
+  myResellerBrandingPath,
+  myResellerCatalogPath,
+  myResellerConsolePath,
+  myResellerDomainsPath,
+  myResellerGatewaysPath,
+  myResellerUsersPath,
+} from "@/lib/routes";
+
+export type GuidePanelSection = (typeof GUIDE_PANEL_SECTIONS)[number];
+export type GuideOs = (typeof GUIDE_OSES)[number];
+
+/** A path segment that is an id; the route helpers build it, so this never names a URL by hand (C-10). */
+const ID = "__id__";
+
+/**
+ * The page each panel section is the help of (F-414-e, ADR-0116 point 2): the
+ * registry names a section, never a URL, so a moved page moves here and its
+ * guides follow. Exhaustive over shared-core's sections — `guide-help.test.ts`
+ * reads that file — so a section no page asks for fails a test.
+ */
+export const GUIDE_SECTION_ROUTES: Readonly<Record<GuidePanelSection, string>> = {
+  home: PANEL_HOME,
+  services: PANEL_MY_SERVICES,
+  shop: PANEL_SHOP,
+  financial: PANEL_FINANCIAL,
+  deposit: PANEL_DEPOSIT,
+  tenant_billing: PANEL_TENANT_BILLING,
+  settings: PANEL_SETTINGS,
+  accounts_add: PANEL_ACCOUNTS_ADD,
+  support: PANEL_SUPPORT,
+  support_inbox: PANEL_SUPPORT_INBOX,
+  support_settings: PANEL_SUPPORT_SETTINGS,
+  wheel: PANEL_WHEEL,
+  lotteries: PANEL_LOTTERIES,
+  gateways: PANEL_GATEWAYS,
+  coupons: PANEL_COUPONS,
+  ai: PANEL_AI,
+  catalog: PANEL_CATALOG,
+  catalog_translations: PANEL_CATALOG_TRANSLATIONS,
+  resellers: PANEL_RESELLERS,
+  my_resellers: PANEL_MY_RESELLERS,
+  reseller_domains: myResellerDomainsPath(ID),
+  reseller_gateways: myResellerGatewaysPath(ID),
+  reseller_bot: myResellerBotPath(ID),
+  reseller_catalog: myResellerCatalogPath(ID),
+  reseller_branding: myResellerBrandingPath(ID),
+  reseller_users: myResellerUsersPath(ID),
+  manual_payments: PANEL_MANUAL_PAYMENTS,
+  systems: PANEL_SYSTEMS,
+  user_groups: PANEL_USER_GROUPS,
+  guides: PANEL_GUIDES,
+};
+
+// The console itself is `my_resellers`; listed so its id segment is matched like the others'.
+const PATTERNS: { section: GuidePanelSection; segments: string[] }[] = [
+  ...Object.entries(GUIDE_SECTION_ROUTES).map(([section, path]) => ({ section: section as GuidePanelSection, segments: split(path) })),
+  { section: "my_resellers" as const, segments: split(myResellerConsolePath(ID)) },
+].sort((a, b) => b.segments.length - a.segments.length);
+
+function split(path: string): string[] {
+  return path.split(/[?#]/)[0].split("/").filter(Boolean);
+}
+
+/**
+ * The section whose guides a path shows: the longest route that is the path or
+ * a whole-segment prefix of it, as the menu highlights (`contract.shell.md`
+ * rule 3); `home` when none is.
+ */
+export function sectionOfPath(pathname: string): GuidePanelSection {
+  const at = split(pathname);
+  for (const { section, segments } of PATTERNS) {
+    if (segments.length <= at.length && segments.every((s, i) => s === ID || s === at[i])) return section;
+  }
+  return "home";
+}
+
+/** The system an install guide opens on, from the browser's own words; `null` when it says none of them. */
+export function osFromUserAgent(ua: string): GuideOs | null {
+  if (/android/i.test(ua)) return "android";
+  if (/iphone|ipad|ipod/i.test(ua)) return "ios";
+  if (/windows/i.test(ua)) return "windows";
+  if (/macintosh|mac os x/i.test(ua)) return "macos";
+  if (/linux|x11/i.test(ua)) return "linux";
+  return null;
+}

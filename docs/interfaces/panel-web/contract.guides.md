@@ -8,7 +8,7 @@ updated: 2026-10-04
 
 # Contract — panel-web: guide settings (`/guides`)
 
-Built by F-414-d over tenant-service's `/api/guides/settings` ([guide/contract.md](../../domains/guide/contract.md), F-414-c; ADR-0117). Menu entry `guides`, `requires: ["guide.manage"]`. Code: `site-pwa/src/app/(panel)/guides/`, client `src/lib/guide-api.ts`.
+Settings built by F-414-d over tenant-service's `/api/guides/settings`; guides shown to users by F-414-e over the public read ("Where users read them") ([guide/contract.md](../../domains/guide/contract.md), F-414-c; ADR-0117). Menu entry `guides`, `requires: ["guide.manage"]`. Code: `site-pwa/src/app/(panel)/guides/`, client `src/lib/guide-api.ts`.
 
 ## Pages
 
@@ -24,4 +24,18 @@ Built by F-414-d over tenant-service's `/api/guides/settings` ([guide/contract.m
 3. **Slots are shared-core's.** `GUIDE_SLOTS` in `_lib/guides.ts` copies `guide-slots.ts`; `guides.test.ts` reads that file and fails when they differ. A closed kind is a picker; `app` and `product` a free slug/id. Placements save at once (no draft).
 4. **Images are keys.** An upload returns `{ key }`, stored in the block; the page shows it at `/api/public/tenant/files/<key>` on its own Host (`guideFileUrl`). A video block already stored is shown, not edited (upload is F-414-i).
 5. **A platform guide seen by a reseller is read-only** (`readOnly`): its published text and an override button, nothing else.
-6. Every refusal reason the controller maps has a sentence (`REFUSAL_KEYS`, held to the controller's `STATUS` by the test). Text is shown as written in preview (line breaks kept); Markdown rendering for users is F-414-e's.
+6. Every refusal reason the controller maps has a sentence (`REFUSAL_KEYS`, held to the controller's `STATUS` by the test). Preview and the read-only view render through the users' `GuideBlocks`, so an admin sees what users get.
+
+## Where users read them (F-414-e)
+
+Over `GET /api/public/tenant/guides?placement=…&surface=panel` (`guideReadApi`, no credential; the browser revalidates by ETag). Code: `src/app/(panel)/_components/guide/`, `_lib/guide-help.ts`, `_lib/guide-markdown.ts`.
+
+| Surface | Slot | Shows |
+|---|---|---|
+| top bar **Help** (`HelpButton`, before the switcher, shell rule 5) | `route:<section>` of the current path | the section's guides in a sheet: one whole, several as titles opening each |
+| My services, **How to connect** under the subscription link (`ConnectGuide`) | `os:<os>` | a system picker opening on the browser's own (`osFromUserAgent`, else Android); the system's guides are its app choice |
+
+7. **The path names the section, the registry the name.** `GUIDE_SECTION_ROUTES` maps every shared-core section to its route constant (C-10); `sectionOfPath` takes the longest whole-segment match, `home` else. `guide-help.test.ts` reads `guide-slots.ts` and fails on a section with no route.
+8. **Nothing is read until opened**, and an answer is shown only under the slot it was asked for.
+9. **Markdown is data, never HTML.** `parseGuideMarkdown` reads headings, lists, strong/em, code and links into nodes `GuideBlocks` builds as elements; a tag stays text; a link is only `http(s)://` (new tab, `noopener nofollow`) or an own `/path` — anything else stays text.
+10. **The existing state-driven guides stay UI copy** (systems F-027-ck, catalog wizard F-026-g): they tick by the page's own state, which a stored text cannot (`guide/open-questions.md`, closed 2026-10-04).

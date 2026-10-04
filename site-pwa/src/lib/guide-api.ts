@@ -132,3 +132,36 @@ export const guideApi = {
  * own domain, which also serves the platform's `guides/` files (ADR-0117).
  */
 export const guideFileUrl = (key: string) => `${API_BASE}/public/tenant/files/${key.split("/").map(encodeURIComponent).join("/")}`;
+
+// ------------------------------------------------------------------ reading
+
+/**
+ * The guides a visitor reads (F-414-e) — tenant-service's public
+ * `/api/public/tenant/guides` (F-414-b) on the page's own Host, with no
+ * credential: a stranger's first screen may need its help, and the Host says
+ * whose guides they are. The browser's cache revalidates by ETag, so a repeat
+ * read is a 304 with no query behind it.
+ */
+const read = createApiClient({ baseUrl: `${API_BASE}/public/tenant/guides`, service: "tenant-service" });
+
+/** tenant-service's `ResolvedGuide`: the text in the language served (`lang`). */
+export interface ResolvedGuide {
+  key: string;
+  kind: GuideKind;
+  owner: "platform" | "own";
+  lang: GuideLang;
+  title: string;
+  blocks: GuideBlock[];
+  sortOrder: number;
+  updatedAt: string;
+}
+
+export const guideReadApi = {
+  /** The guides placed in one slot, for the panel, by their order. */
+  forSlot: (targetKind: GuideTargetKind, targetRef: string) =>
+    read<{ guides: ResolvedGuide[] }>(`?${new URLSearchParams({ placement: `${targetKind}:${targetRef}`, surface: "panel" })}`, { method: "GET" }).then(
+      (r) => r.guides,
+    ),
+  /** One guide by key; a 404 when this tenant sees none. */
+  one: (key: string) => read<{ guide: ResolvedGuide }>(`/${encodeURIComponent(key)}`, { method: "GET" }).then((r) => r.guide),
+};

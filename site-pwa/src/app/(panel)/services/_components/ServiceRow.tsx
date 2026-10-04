@@ -16,6 +16,7 @@ import { buildStage } from "../_lib/pulse";
 import { matchesConfig, purgeCountdown } from "../_lib/service-configs";
 import { capOffered } from "../_lib/spending-cap";
 import { ConfigLines } from "./ConfigLines";
+import { ConnectGuide } from "./ConnectGuide";
 import { GrantConfigs } from "./GrantConfigs";
 import { NoticeLevel } from "./NoticeLevel";
 import { QrDialog } from "./QrDialog";
@@ -318,6 +319,7 @@ export const ServiceRow = memo(function ServiceRow({
             </button>
           </div>
           <p className="mt-1.5 text-xs leading-5 text-text-secondary">{t("common", L.hint)}</p>
+          <ConnectGuide />
           {sub.link && sub.showLink && (
             <code className="mt-2 block select-all break-all font-mono text-xs text-text-primary" dir="ltr">
               {sub.link}
