@@ -1,8 +1,8 @@
 ---
 id: guide
 layer: domain
-status: draft
-version: 1
+status: active
+version: 2
 keywords: [guide, guides, help, help content, help page, install guide, installation guide, how to install the app, guide per os, guide per app, guide per product, panel help, bot help, inherited guide, override a guide, hide a guide, راهنما, راهنماها, راهنمای نصب, آموزش نصب, راهنمای سیستم عامل, راهنمای اپ, راهنمای محصول, راهنمای پنل, راهنمای ربات, راهنمای ارث برده, شخصی سازی راهنما, پنهان کردن راهنما]
 source: [txnet-backend/prisma/domains/guide.prisma, txnet-backend/prisma/domains/migrations/20261004000300_guide_storage/**, txnet-backend/tenant-service/src/app/guide/**, txnet-backend/prisma/domains/migrations/20261004000400_guide_blocks/**, txnet-backend/prisma/domains/migrations/20261004000500_guide_slots/**, txnet-backend/shared-core/src/lib/guide/**]
 owns_tables: [guide, guide_translation, guide_placement, guide_hidden]
@@ -20,8 +20,8 @@ platform's inherited by every reseller, who may replace or hide one (ADR-0115).
 `bot-app`).
 
 Planned as a module of `tenant-service` with its own `guide` schema
-(ADR-0115, ADR-0116). Spec: `python3 tools/spec.py F-414`. Storage is built (F-414-a, blocks F-414-g, slots F-414-h);
-no route serves it yet — F-414-b … F-414-f.
+(ADR-0115, ADR-0116, ADR-0117). Spec: `python3 tools/spec.py F-414`. Storage is built (F-414-a, blocks F-414-g, slots F-414-h);
+reading by Host is built (F-414-b); admin F-414-c, panel F-414-d/e, bot F-414-f.
 
 ## Files
 | File | Read it when |
@@ -35,5 +35,6 @@ no route serves it yet — F-414-b … F-414-f.
 | Date | Change |
 |---|---|
 | 2026-10-04 | Created (draft, F-414 broadened by the user; ADR-0115) — no code yet |
+| 2026-10-04 | draft -> **active**, v1 -> v2 (F-414-b): `GET /api/public/tenant/guides`, cached by generation (ADR-0117) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

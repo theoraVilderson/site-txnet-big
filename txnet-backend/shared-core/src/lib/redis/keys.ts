@@ -217,6 +217,18 @@ export const UnscopedRedisKeys = {
   tenantStatus: (tenantId: string) => `tenant:status:${tenantId}`,
 
   /**
+   * One owner's guide generation (F-414-b, ADR-0117 point 3): a random token
+   * every write of that owner's guides replaces — `platform` for the
+   * platform's, else a tenant id. A tenant's read is cached under both its own
+   * and the platform's, so a platform edit reaches every reseller at once and
+   * no key is ever scanned or deleted. No TTL: a lost token is re-minted, and a
+   * new token can never equal an old one.
+   */
+  guideGeneration: (owner: string) => `guide:gen:${owner}`,
+  /** A resolved guide read, by the ETag its generations make; expires on its own. */
+  guideResolved: (tenantId: string, etag: string) => `guide:resolved:${tenantId}:${etag}`,
+
+  /**
    * **A pub/sub channel, not a key** (F-018-r). `TenantStatusListener` publishes
    * a tenant id on it after rewriting that tenant's `tenantStatus`, and
    * `gateway-service` closes the tenant's sockets if the new status no longer

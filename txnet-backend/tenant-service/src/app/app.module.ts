@@ -11,6 +11,7 @@ import { envConfigOptions } from './config/env.validation';
 import { DomainsModule } from './domains/domains.module';
 import { LEGACY_FILES_PATH } from './files/files.controller';
 import { FilesModule } from './files/files.module';
+import { GuideModule } from './guide/guide.module';
 import { LEGACY_PROBE_PATH } from './domains/domain-check';
 import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
@@ -75,6 +76,7 @@ const LEGACY_PUBLIC_ROUTES = [`${LEGACY_FILES_PATH}/*path`, LEGACY_BRANDING_PATH
     OperatingCurrencyModule,
     TenantTimeZoneModule,
     VaultModule,
+    GuideModule,
   ],
   controllers: [HealthController],
   providers: [

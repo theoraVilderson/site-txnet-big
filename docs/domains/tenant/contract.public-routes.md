@@ -13,7 +13,8 @@ and what it costs a stranger to ask. The routes themselves are documented where
 they belong — files in [`platform/object-storage`](../../platform/object-storage/INDEX.md),
 branding in [contract.branding.md](contract.branding.md), the domain probe in
 [contract.domains.md](contract.domains.md), the door question in
-[contract.onboarding.md](contract.onboarding.md).
+[contract.onboarding.md](contract.onboarding.md), guides in
+[`domains/guide`](../guide/contract.md).
 
 Scheme and enforcement: ADR-0065 (F-018-ak). Caching and limits: F-018-al.
 

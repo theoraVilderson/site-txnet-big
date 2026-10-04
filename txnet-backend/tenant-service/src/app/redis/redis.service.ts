@@ -15,8 +15,8 @@ return current
 
 /**
  * `tenant-service`'s Redis: the rate limiter's counters, the tenant status key,
- * and deleting a new reseller's `tenant:host:*` entry (F-092-r, D-24, F-018-p,
- * F-018-y) — nothing else. Under the platform's one keyspace prefix, so a
+ * deleting a new reseller's `tenant:host:*` entry (F-092-r, D-24, F-018-p,
+ * F-018-y), and the guides' generations and cached reads (F-414-b) — nothing else. Under the platform's one keyspace prefix, so a
  * `REDIS_KEYSPACE_VERSION` bump abandons these keys with every other
  * (ADR-0005). Keys are built by `shared-core`'s `RateLimiter`, never here
  * (C-03).
@@ -82,6 +82,11 @@ export class RedisService implements RateLimitStore, OnModuleInit, OnModuleDestr
    */
   async setWithTtl(key: string, value: string, ttlSec: number): Promise<void> {
     await this.client.set(key, value, 'EX', ttlSec);
+  }
+
+  /** One write only if the key is absent, no TTL — a guide generation's first token (F-414-b). */
+  async setIfAbsent(key: string, value: string): Promise<void> {
+    await this.client.set(key, value, 'NX');
   }
 
   /**
