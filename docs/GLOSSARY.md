@@ -64,6 +64,7 @@ introduce a synonym, record why.
 | Capability flag | A verified, dated claim about what one messenger platform supports (keyboard kinds, max file size, WebApp, payments — `F-301`). Derived from that platform's documented API, never assumed. | messenger | Entitlement (what a *tenant* may use), OTP channel (how a code is delivered) |
 | Degradation | The `F-302` policy: a missing capability is *substituted* and the flow continues, observably logged — never an error and never a silently dropped affordance. | messenger | Fallback (banned for notifications — see D-03 / §9.7 No-Fallback Rule) |
 | Mini App | Telegram's WebApp surface running `panel-web` itself with a shared session (`F-310`). It is the same panel, not a bot screen and not a third UI. | bot-app / panel-web | BotView, User panel (the same code, reached from a browser) |
+| Guide | One piece of help content (a product, an OS, an app or a panel/bot section), its text per language and where it is placed; inherited from the platform by key (ADR-0115). | guide | the panel's built-in UI hints (`site-pwa` copy), a support canned reply |
 
 ## Banned words
 Terms that were ambiguous and are now forbidden project-wide.

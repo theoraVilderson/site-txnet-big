@@ -245,7 +245,7 @@ Rebuild: `python3 tools/features-scan.py`
 | F-409 | Speed-test and ping page per region before purchase | new | 7.8 Connection Experience |
 | F-410 | User-selected region with a shared quota | partial | 7.8 Connection Experience |
 | F-411 | Public status page per tenant (on its own domain) | new | 7.8 Connection Experience |
-| F-414 | Per-OS app installation guide, localized, in-bot and in-panel | new | 7.8 Connection Experience |
+| F-414 | Guide / help content: one localized guide per product, OS, app and panel/bot section, show | new | 7.8 Connection Experience |
 | F-501 | Product/variant/USD price catalog, three-state visibility | core | 4.8 Pricing and Campaign Engine |
 | F-502 | Full coupon engine (§4.7) | core | 4.8 Pricing and Campaign Engine |
 | F-503 | Time-boxed campaign with countdown in bot and panel | new | 4.8 Pricing and Campaign Engine |

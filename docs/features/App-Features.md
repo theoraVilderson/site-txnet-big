@@ -878,7 +878,7 @@ The most important item here is F-105: client apps cache the link; if that domai
 | F-409 | Speed-test and ping page per region before purchase                           | new     |
 | F-410 | User-selected region with a shared quota                                      | partial |
 | F-411 | Public status page per tenant (on its own domain)                             | new     |
-| F-414 | Per-OS app installation guide, localized, in-bot and in-panel                 | new     |
+| F-414 | Guide / help content: one localized guide per product, OS, app and panel/bot section, shown where it is placed; the platform's are inherited by resellers, who override or hide them | new     |
 | F-307 | Link, QR, **per-app deep link**, token rotation, reset — all in bot and panel | new     |
 
 ### 7.9 Concurrent Device Limits
