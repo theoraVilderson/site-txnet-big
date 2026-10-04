@@ -115,8 +115,9 @@ describe('ResellerRevenueService.breakdown', () => {
       { productId: PRODUCT_B, people: 'fewer_than_5', count: null, total: null, byCurrency: [] },
       { productId: null, people: 'fewer_than_5', count: null, total: null, byCurrency: [] },
     ]);
+    // One day hidden alone would be the total minus the other: both are hidden (F-117-i).
     expect(b.trend).toEqual([
-      { day: '2026-09-01', people: 7, count: 11, total: '110.00', byCurrency: [{ currencyCode: 'USD', total: '110.00', count: 11 }] },
+      { day: '2026-09-01', people: 'fewer_than_5', count: null, total: null, byCurrency: [] },
       { day: '2026-09-02', people: 'fewer_than_5', count: null, total: null, byCurrency: [] },
     ]);
   });
@@ -174,5 +175,59 @@ describe('ResellerRevenueService.breakdown', () => {
         { currencyCode: 'USD', total: '10.00', count: 1 },
       ],
     });
+  });
+});
+
+/**
+ * F-117-i: one hidden cell is not hidden. The `/revenue` total minus the shown
+ * cells is exactly its money, so when a split hides one cell the next smallest
+ * shown cell is hidden with it — two cells' sum names no one group.
+ */
+describe('ResellerRevenueService.breakdown — complementary suppression (F-117-i)', () => {
+  const C = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const product = (productId: string | null, people: number, count: number, net: string) => [
+    row({ dim: 'product', productId, people, count }),
+    row({ dim: 'product', productId, perCurrency: true, currencyCode: 'USD', net: d(net), count }),
+  ];
+  const day = (dayKey: string, people: number, count: number, net: string) => [
+    row({ dim: 'day', day: dayKey, people, count }),
+    row({ dim: 'day', day: dayKey, perCurrency: true, currencyCode: 'USD', net: d(net), count }),
+  ];
+
+  it('hides the smallest shown product too when only one product was hidden', async () => {
+    const { service } = build([
+      row({ dim: 'all', people: 20, count: 30 }),
+      ...product(PRODUCT_A, 12, 15, '150.00'),
+      ...product(PRODUCT_B, 6, 9, '90.00'),
+      ...product(C, 2, 6, '60.00'),
+    ]);
+    const b = await service.breakdown(staff, RESELLER, { from: FROM, to: TO });
+    expect(b.byProduct.map((c) => [c.productId, c.people])).toEqual([
+      [PRODUCT_A, 12],
+      [PRODUCT_B, 'fewer_than_5'],
+      [C, 'fewer_than_5'],
+    ]);
+  });
+
+  it('does the same for days, and leaves a split with two or more hidden cells alone', async () => {
+    const { service } = build([
+      row({ dim: 'all', people: 20, count: 30 }),
+      ...product(PRODUCT_A, 3, 4, '40.00'),
+      ...product(PRODUCT_B, 2, 2, '20.00'),
+      ...product(C, 15, 24, '240.00'),
+      ...day('2026-09-01', 8, 10, '100.00'),
+      ...day('2026-09-02', 9, 12, '120.00'),
+      ...day('2026-09-03', 1, 8, '80.00'),
+    ]);
+    const b = await service.breakdown(staff, RESELLER, { from: FROM, to: TO });
+    expect(b.byProduct.filter((c) => c.people === 'fewer_than_5').map((c) => c.productId).sort()).toEqual([PRODUCT_A, PRODUCT_B].sort());
+    expect(b.byProduct.find((c) => c.productId === C)?.people).toBe(15);
+    expect(b.trend.map((c) => c.people)).toEqual(['fewer_than_5', 9, 'fewer_than_5']);
+  });
+
+  it("never applies to the reseller's own people", async () => {
+    const { service } = build([row({ dim: 'all', people: 14, count: 20 }), ...product(PRODUCT_A, 12, 15, '150.00'), ...product(PRODUCT_B, 2, 5, '50.00')]);
+    const b = await service.breakdown(owner, RESELLER, { from: FROM, to: TO });
+    expect(b.byProduct.map((c) => c.people)).toEqual([12, 2]);
   });
 });

@@ -127,12 +127,32 @@ export function readBreakdown(tx: Prisma.TransactionClient, period: { from: Date
     GROUP BY GROUPING SETS (("productId", "currencyCode"), ("productId"), ("day", "currencyCode"), ("day"), ())`;
 }
 
+/**
+ * Which cells of one split the platform does not see: every cell under
+ * {@link SMALL_GROUP} people, and — when that is exactly one — the smallest
+ * shown cell with it (F-117-i). The whole reseller's figures are answered
+ * (`/revenue`, and `people`/`count` here), so one hidden cell is the total minus
+ * the shown ones; two hidden cells give only their sum, which names no single
+ * small group. Smallest by people, then count, then position, so the choice is
+ * fixed for the same rows.
+ */
+export function hiddenCells(heads: readonly BreakdownRow[]): Set<BreakdownRow> {
+  const hidden = new Set(heads.filter((h) => h.people < SMALL_GROUP));
+  if (hidden.size !== 1) return hidden;
+  const next = heads
+    .filter((h) => !hidden.has(h))
+    .reduce<BreakdownRow | null>((min, h) => (!min || h.people < min.people || (h.people === min.people && h.count < min.count) ? h : min), null);
+  if (next) hidden.add(next);
+  return hidden;
+}
+
 const ZERO = new Prisma.Decimal(0);
 const money = (v: Prisma.Decimal | null) => (v ?? ZERO).toFixed(2);
 
 /**
  * The rows as cells. For the platform's staff (`staff`) a cell under
- * {@link SMALL_GROUP} people keeps only `fewer_than_5`, and the suppressed
+ * {@link SMALL_GROUP} people, and its complement ({@link hiddenCells}), keeps
+ * only `fewer_than_5`, and the suppressed
  * cells come after the shown ones in a fixed order, so where one sits says
  * nothing about its size either. The whole reseller is never suppressed.
  */
@@ -144,10 +164,11 @@ export async function breakdownOf(
 
   const cells = async (dim: 'product' | 'day', keyOf: (r: BreakdownRow) => string | null) => {
     const heads = rows.filter((r) => r.dim === dim && !r.perCurrency);
+    const hidden = ctx.staff ? hiddenCells(heads) : new Set<BreakdownRow>();
     const out: { key: string | null; cell: BreakdownCell }[] = [];
     for (const head of heads) {
       const key = keyOf(head);
-      if (ctx.staff && head.people < SMALL_GROUP) {
+      if (hidden.has(head)) {
         out.push({ key, cell: { people: FEWER_THAN, count: null, total: null, byCurrency: [] } });
         continue;
       }

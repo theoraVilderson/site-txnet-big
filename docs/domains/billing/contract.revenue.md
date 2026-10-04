@@ -56,7 +56,8 @@ reads keep their shape and cost.
 |---|---|
 | **For the platform's staff (`as: 'staff'`), a cell under `SMALL_GROUP` (5) people answers `people: 'fewer_than_5'` with `count`, `total` and `byCurrency` empty**; suppressed cells come after the shown ones, in a fixed order | ADR-0104 (3): a cell of one buyer is that person's spending, and tier A needs no consent |
 | The reseller's own people (owner, a seat) see every cell, `suppressed: false` | the rule is for the platform; they already see the people |
-| **The whole reseller (`people`, `count`) is never suppressed** | ADR-0104 (3). Known residue: with one small product, the `/revenue` total minus the shown cells is its money. The ADR keeps totals whole; closing this (complementary suppression) is not done here |
+| **The whole reseller (`people`, `count`) is never suppressed** | ADR-0104 (3) |
+| **When a split hides exactly one cell, its smallest shown cell is hidden too** (`hiddenCells`, F-117-i): fewest people, then fewest sales, then position — fixed for the same rows. Products and days each on their own | the `/revenue` total minus the shown cells would be the one hidden cell's money; two hidden give only their sum. Residue, not closed: two hidden cells in different currencies are split apart by `/revenue`'s `byCurrency` |
 | No cell names anyone: a cell is a `productId` (`null` when the row's invoice or Grant names no variant) or a `day` | the test of tier A: can the figure be tied to one person? |
 | A row is tied to its product through what its `referenceId` names — an invoice for a purchase and its refund, the Grant for a block, a meter's charge and their refunds (`REFERS_TO`, exhaustive) | a new reason is judged before it compiles |
 | People are distinct wallet owners, refunds' owners included | a cell is never smaller than who it touched |
