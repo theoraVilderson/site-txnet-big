@@ -34,7 +34,8 @@
       "lotteries": "Lotteries",
       "lotterySettings": "Lottery settings",
       "supportInbox": "Support inbox",
-      "supportSettings": "Support settings"
+      "supportSettings": "Support settings",
+      "guides": "Guides"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -4881,5 +4882,145 @@
         "cancel": "Cancel"
       }
     }
+  },
+  "guides": {
+    "title": "Guides",
+    "subtitle": "Install and how-to guides per OS, app, product and panel or bot section. A text reaches users only once it is published.",
+    "ownPlatform": "Platform guides",
+    "ownTenant": "Your guides",
+    "inherited": "Platform guides (inherited)",
+    "inheritedHint": "These come from the platform and your users see them. Make your own version, or hide one.",
+    "empty": "No guides yet.",
+    "inheritedEmpty": "The platform has no published guides.",
+    "newGuide": "New guide",
+    "key": "Key",
+    "keyHint": "Lower-case letters, digits and _; it never changes.",
+    "kindLabel": "Kind",
+    "sortOrder": "Order",
+    "create": "Create draft",
+    "open": "Edit",
+    "view": "View",
+    "override": "Make my own version",
+    "hide": "Hide",
+    "unhide": "Show again",
+    "hiddenBadge": "Hidden",
+    "overriddenBadge": "Replaced by your version",
+    "hasDraft": "Unpublished changes",
+    "readOnly": "This is the platform's guide and is read-only. Make your own version to change it.",
+    "state": {
+      "draft": "Draft",
+      "published": "Published",
+      "archived": "Archived"
+    },
+    "kind": {
+      "os": "Operating system",
+      "app": "App",
+      "product": "Product",
+      "section": "Panel/bot section"
+    },
+    "language": {
+      "fa": "Persian",
+      "en": "English"
+    },
+    "tabs": {
+      "texts": "Text",
+      "placements": "Where it shows",
+      "preview": "Preview"
+    },
+    "titleLabel": "Title",
+    "addBlock": "Add block",
+    "block": {
+      "text": "Text",
+      "image": "Image",
+      "video": "Video",
+      "steps": "Steps",
+      "callout": "Callout"
+    },
+    "moveUp": "Up",
+    "moveDown": "Down",
+    "removeBlock": "Remove block",
+    "textHint": "Markdown is allowed.",
+    "imageUpload": "Choose an image (PNG, WebP or JPEG, up to 2 MB)",
+    "uploading": "Uploading…",
+    "imageAlt": "Image description (accessibility)",
+    "caption": "Caption (optional)",
+    "stepAdd": "Add step",
+    "stepText": "Step {{n}}",
+    "stepImage": "Step image (optional)",
+    "removeStep": "Remove step",
+    "calloutTone": "Tone",
+    "tone": {
+      "info": "Info",
+      "tip": "Tip",
+      "warning": "Warning",
+      "danger": "Danger"
+    },
+    "calloutTitle": "Callout title (optional)",
+    "videoLater": "Video is shown as stored for now; uploading one is coming.",
+    "saveDraft": "Save draft",
+    "discardDraft": "Discard draft",
+    "publish": "Publish",
+    "archive": "Archive",
+    "restore": "Restore",
+    "delete": "Delete guide",
+    "deleteConfirm": "Delete this guide with all its texts and placements?",
+    "discardConfirm": "Discard the unpublished changes?",
+    "saved": "Saved.",
+    "publishedNote": "Published; users now see the new version.",
+    "unsaved": "You have unsaved changes.",
+    "previewSource": {
+      "draft": "Draft preview",
+      "published": "Published version (no draft)"
+    },
+    "previewEmpty": "No text in this language yet.",
+    "placementsHint": "The guide shows only here. A placement change applies at once.",
+    "placementAdd": "Add placement",
+    "placementsEmpty": "This guide shows nowhere.",
+    "savePlacements": "Save placements",
+    "surface": {
+      "any": "Panel and bot",
+      "panel": "Panel",
+      "bot": "Bot"
+    },
+    "targetKind": {
+      "os": "Operating system",
+      "app": "App",
+      "product": "Product",
+      "route": "Panel section",
+      "bot_screen": "Bot screen"
+    },
+    "targetRef": "Target",
+    "targetRefHint": "An app's slug (like v2rayng) or a product id",
+    "back": "Back to guides",
+    "retry": "Try again",
+    "publishedLangs": "Published languages",
+    "errors": {
+      "required": "Required.",
+      "tooLong": "Too long.",
+      "noLanguage": "Write the text in at least one language.",
+      "noBlocks": "At least one block.",
+      "tooManyBlocks": "At most 100 blocks.",
+      "noImage": "No image chosen.",
+      "altRequired": "An image description is required.",
+      "steps": "Between 1 and 30 steps.",
+      "badRef": "Not a valid target.",
+      "badSurface": "Not allowed for this kind of target.",
+      "badKey": "Lower-case letters, digits and _ only (60 at most)."
+    },
+    "refusal": {
+      "guide_unknown": "This guide was not found or is not yours.",
+      "guide_not_inherited": "There is no such platform guide.",
+      "guide_key_taken": "You already have a guide with this key.",
+      "guide_no_draft": "There is no draft to publish.",
+      "guide_invalid": "The guide's text is not valid.",
+      "guide_slot": "One of the placements is not valid.",
+      "guide_product_unknown": "This product was not found.",
+      "guide_file": "One of the images is not available; upload it again.",
+      "too_large": "The file is larger than 2 MB.",
+      "type_not_allowed": "PNG, WebP or JPEG only."
+    },
+    "langLabel": "Language",
+    "cancel": "Cancel",
+    "surfaceLabel": "Where"
   }
 }

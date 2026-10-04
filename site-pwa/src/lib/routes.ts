@@ -192,6 +192,9 @@ export const PANEL_SUPPORT_INBOX = `${PANEL_SUPPORT}/inbox`;
 export const panelSupportInboxThreadPath = (id: string) => `${PANEL_SUPPORT_INBOX}/${encodeURIComponent(id)}`;
 /** A tenant admin's support settings: working hours, SLA targets, categories (F-033-p); `support.manage`. */
 export const PANEL_SUPPORT_SETTINGS = `${PANEL_SUPPORT}/settings`;
+/** A tenant admin's guides: own, inherited, drafts and publish (F-414-d); `guide.manage`. */
+export const PANEL_GUIDES = "/guides";
+export const panelGuidePath = (id: string) => `${PANEL_GUIDES}/${encodeURIComponent(id)}`;
 /**
  * Where a bank returns a payer (F-093-f). These two are `billing`'s to name:
  * `deposit-callback.controller.ts` redirects to them by path, so they are the

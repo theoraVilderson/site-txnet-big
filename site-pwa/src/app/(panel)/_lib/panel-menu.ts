@@ -1,4 +1,5 @@
 import {
+  BookMarked,
   BookOpen,
   Dices,
   Gift,
@@ -26,7 +27,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_AI, PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_LOTTERIES, PANEL_LOTTERIES_MANAGE, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SUPPORT, PANEL_SUPPORT_INBOX, PANEL_SUPPORT_SETTINGS, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS, PANEL_WHEEL, PANEL_WHEEL_SETTINGS, myResellerUsersPath } from "@/lib/routes";
+import { PANEL_AI, PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_GUIDES, PANEL_HOME, PANEL_LOTTERIES, PANEL_LOTTERIES_MANAGE, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SUPPORT, PANEL_SUPPORT_INBOX, PANEL_SUPPORT_SETTINGS, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS, PANEL_WHEEL, PANEL_WHEEL_SETTINGS, myResellerUsersPath } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { holdsEveryPermission } from "@/lib/permissions";
 
@@ -209,6 +210,8 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
   // F-033-p. RLS keeps an agent to its own tenant's threads; the permission hides the page.
   { id: "support-inbox", label: M.supportInbox, icon: Inbox, href: PANEL_SUPPORT_INBOX, requires: ["support.agent"] },
   { id: "support-settings", label: M.supportSettings, icon: SlidersHorizontal, href: PANEL_SUPPORT_SETTINGS, requires: ["support.manage"] },
+  // F-414-d. tenant-service decides whose guides: the platform's for its own admin, else the tenant's.
+  { id: "guides", label: M.guides, icon: BookMarked, href: PANEL_GUIDES, requires: ["guide.manage"] },
   { id: "settings", label: M.settings, icon: Settings, href: PANEL_SETTINGS },
 ];
 
