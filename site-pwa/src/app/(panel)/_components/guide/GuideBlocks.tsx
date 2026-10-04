@@ -5,7 +5,7 @@ import { Fragment } from "react";
 import { AlertTriangle, Info, Lightbulb, OctagonAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { guideFileUrl, type CalloutTone, type GuideBlock } from "@/lib/guide-api";
+import { guideFileUrl, guideVideoUrl, type CalloutTone, type GuideBlock } from "@/lib/guide-api";
 import { parseGuideMarkdown, type GuideInline } from "../../_lib/guide-markdown";
 
 const K = FrontendI18nKeys.common.guides;
@@ -22,7 +22,8 @@ const TONE: Record<CalloutTone, { icon: typeof Info; box: string }> = {
  * install guide, and the settings page's preview and read-only view, so an
  * admin previews exactly what users get. Text is Markdown, read by
  * `parseGuideMarkdown` into data and built here as elements: a reseller's text
- * never becomes HTML. Files are object keys, served on this Host.
+ * never becomes HTML. Files are object keys, served on this Host — a video by
+ * the media server (`guideVideoUrl`), everything else by the file route.
  */
 export function GuideBlocks({ blocks, dir }: { blocks: readonly GuideBlock[]; dir?: string }) {
   const { t } = useLocale();
@@ -43,7 +44,7 @@ export function GuideBlocks({ blocks, dir }: { blocks: readonly GuideBlock[]; di
           case "video":
             return (
               <figure key={i} className="flex flex-col gap-1">
-                <video src={guideFileUrl(b.file)} poster={guideFileUrl(b.poster)} controls playsInline preload="none" className="max-h-96 w-full rounded-xl bg-black" />
+                <video src={guideVideoUrl(b.file)} poster={guideFileUrl(b.poster)} controls playsInline preload="none" className="max-h-96 w-full rounded-xl bg-black" />
                 {b.caption && <figcaption className="text-xs text-text-secondary">{b.caption}</figcaption>}
               </figure>
             );

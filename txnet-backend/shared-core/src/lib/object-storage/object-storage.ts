@@ -22,7 +22,15 @@ import { isLogicalPath, objectKey, parseObjectKey } from './object-key';
  * checked here. A type is added by adding its signature — SVG has none, so no
  * policy can let one in (catalog 13.8: branding is PNG/WebP, never SVG).
  */
-export const SNIFFABLE_TYPES = ['image/png', 'image/webp', 'image/jpeg', 'application/pdf', 'application/gzip'] as const;
+export const SNIFFABLE_TYPES = [
+  'image/png',
+  'image/webp',
+  'image/jpeg',
+  'application/pdf',
+  'application/gzip',
+  'video/mp4',
+  'video/webm',
+] as const;
 export type SniffableType = (typeof SNIFFABLE_TYPES)[number];
 
 const SIGNATURES: Record<SniffableType, (b: Buffer) => boolean> = {
@@ -32,6 +40,10 @@ const SIGNATURES: Record<SniffableType, (b: Buffer) => boolean> = {
   'application/pdf': (b) => b.subarray(0, 5).toString('latin1') === '%PDF-',
   // F-033-n: support's monthly archives. Written by the service itself, never uploaded.
   'application/gzip': (b) => b.subarray(0, 2).equals(Buffer.from([0x1f, 0x8b])),
+  // F-414-i: guide videos. An ISO-BMFF file opens with its `ftyp` box; a WebM
+  // is EBML whose DocType, in the header's first bytes, says `webm`.
+  'video/mp4': (b) => b.subarray(4, 8).toString('latin1') === 'ftyp',
+  'video/webm': (b) => b.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3])) && b.subarray(4, 64).includes('webm', 0, 'latin1'),
 };
 
 /**

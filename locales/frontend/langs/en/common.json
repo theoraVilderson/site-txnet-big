@@ -4956,7 +4956,6 @@
       "danger": "Danger"
     },
     "calloutTitle": "Callout title (optional)",
-    "videoLater": "Video is shown as stored for now; uploading one is coming.",
     "saveDraft": "Save draft",
     "discardDraft": "Discard draft",
     "publish": "Publish",
@@ -5005,7 +5004,9 @@
       "steps": "Between 1 and 30 steps.",
       "badRef": "Not a valid target.",
       "badSurface": "Not allowed for this kind of target.",
-      "badKey": "Lower-case letters, digits and _ only (60 at most)."
+      "badKey": "Lower-case letters, digits and _ only (60 at most).",
+      "noVideo": "Upload the video.",
+      "noPoster": "Upload a cover image for the video."
     },
     "refusal": {
       "guide_unknown": "This guide was not found or is not yours.",
@@ -5021,7 +5022,9 @@
     },
     "langLabel": "Language",
     "cancel": "Cancel",
-    "surfaceLabel": "Where"
+    "surfaceLabel": "Where",
+    "videoUpload": "Choose a video (MP4 or WebM, up to 50 MB)",
+    "posterUpload": "Cover image (shown before it plays)"
   },
   "guideHelp": {
     "open": "Help",

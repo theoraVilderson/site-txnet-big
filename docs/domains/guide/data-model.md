@@ -26,7 +26,7 @@ One schema, `guideBlocksSchema` in `shared-core/src/lib/guide/guide-blocks.ts`; 
 |---|---|
 | `text` | `text` — Markdown, ≤ 20000 |
 | `image` | `file` (object key), `alt` ≤ 200, `caption?` ≤ 300 |
-| `video` | `file`, `poster` (object keys), `caption?` — served by the store with Range (F-414-i) |
+| `video` | `file` (MP4/WebM), `poster` (an image; object keys), `caption?` — the file served by the media server with Range (F-414-i, ADR-0118) |
 | `steps` | `items`: 1–30 of `{ text` (Markdown ≤ 2000)`, image? }` |
 | `callout` | `tone` (`info`/`tip`/`warning`/`danger`), `title?` ≤ 120, `text` ≤ 4000 |
 

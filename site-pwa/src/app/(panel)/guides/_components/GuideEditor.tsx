@@ -8,6 +8,7 @@ import { useLocale } from "@/context/LocaleContext";
 import {
   guideApi,
   guideFileUrl,
+  guideVideoUrl,
   type GuideBlock,
   type GuideDetail,
   type GuideLang,
@@ -363,9 +364,14 @@ function BlockEditor({ guideId, block, dir, onChange }: { guideId: string; block
       );
     case "video":
       return (
-        <div className="space-y-2">
-          <p className="text-xs text-text-secondary">{t("common", K.videoLater)}</p>
-          <GuideBlocks blocks={[block]} dir={dir} />
+        <div className="grid gap-2 sm:grid-cols-2">
+          <VideoPicker guideId={guideId} value={block.file} onChange={(file) => onChange({ ...block, file })} />
+          <div className="flex flex-col gap-2">
+            <ImagePicker guideId={guideId} label={t("common", K.posterUpload)} value={block.poster} onChange={(poster) => onChange({ ...block, poster })} />
+            <Field label={t("common", K.caption)}>
+              <input className={input} dir={dir} maxLength={300} value={block.caption ?? ""} onChange={(e) => onChange({ ...block, caption: e.target.value })} />
+            </Field>
+          </div>
         </div>
       );
     case "steps":
@@ -452,6 +458,35 @@ function ImagePicker({ guideId, value, label, onChange }: { guideId: string; val
             e.target.value = "";
             if (!file) return;
             const up = await act(() => guideApi.upload(guideId, file));
+            if (up) onChange(up.key);
+          }}
+        />
+      </label>
+      <NoteLine note={note} />
+    </div>
+  );
+}
+
+/** A video upload (F-414-i): MP4 or WebM, played from the media server once stored. */
+function VideoPicker({ guideId, value, onChange }: { guideId: string; value: string; onChange: (key: string) => void }) {
+  const { t } = useLocale();
+  const { busy, note, act } = useAct();
+  return (
+    <div className="flex flex-col gap-2">
+      {value && <video src={guideVideoUrl(value)} controls playsInline preload="metadata" className="max-h-48 w-full rounded-xl bg-black" />}
+      <label className={`${quietButton} cursor-pointer border border-card-border`}>
+        <Upload size={12} aria-hidden />
+        {busy ? t("common", K.uploading) : t("common", K.videoUpload)}
+        <input
+          type="file"
+          accept="video/mp4,video/webm"
+          className="sr-only"
+          disabled={busy}
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (!file) return;
+            const up = await act(() => guideApi.uploadVideo(guideId, file));
             if (up) onChange(up.key);
           }}
         />

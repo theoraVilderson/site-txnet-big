@@ -8,7 +8,7 @@ updated: 2026-10-04
 
 # Contract — guide
 
-Storage built (F-414-a, [data-model.md](data-model.md)); reading built (F-414-b); the settings built (F-414-c). Shape: ADR-0115, ADR-0116, ADR-0117.
+Storage built (F-414-a, [data-model.md](data-model.md)); reading built (F-414-b); the settings built (F-414-c). Shape: ADR-0115, ADR-0116, ADR-0117; video ADR-0118 (F-414-i).
 
 ## TL;DR
 
@@ -25,7 +25,7 @@ row removes it. Resolution is "nearest owner wins" over the tenant's ancestry.
 | `GET /api/public/tenant/guides/:key` | as above | `{ guide: ResolvedGuide }`; a 404 when the tenant sees none |
 | `/api/guides/settings/*` | `guide.manage` (gate; tenant-service, Traefik `PathPrefix(/api/guides)`) | the settings below (F-414-c) |
 
-`ResolvedGuide` is `{ key, kind, owner: 'platform'|'own', lang, title, blocks, sortOrder, updatedAt }`; `lang` is the language served. A block's files are object keys — the caller builds `/api/public/tenant/files/<key>` on the Host it is on (ADR-0116 point 3). A slot outside the registry, or a bad key, is a 400; an unknown Host the neutral 404.
+`ResolvedGuide` is `{ key, kind, owner: 'platform'|'own', lang, title, blocks, sortOrder, updatedAt }`; `lang` is the language served. A block's files are object keys — the caller builds `/api/public/tenant/files/<key>` on the Host it is on, and a video's `file` `/api/public/media/<key>`, served by the media server and never by a Nest route (ADR-0116 point 3, ADR-0118). A slot outside the registry, or a bad key, is a 400; an unknown Host the neutral 404.
 
 ### Rules of the read (F-414-b, ADR-0117)
 
@@ -50,6 +50,7 @@ The caller's tenant is the owner: the platform owner's admin edits the platform'
 | `POST /:id/archive` · `POST /:id/restore` | `isActive` false/true |
 | `PUT /:id/placements` | `{ placements }` replaces all; each a registered slot (`guide_slot` 400), a product one the owner sees (`guide_product_unknown` 400) |
 | `POST /:id/files` | multipart `file`, PNG/WebP/JPEG ≤ 2 MiB, public, at `guides/<id>/<uuid>.<ext>` of the owner (the platform's tenant for the platform) → `{ key }` |
+| `POST /:id/videos` | multipart `file`, MP4/WebM ≤ 50 MiB, public, at `guides/<id>/<uuid>.<ext>` like an image → `{ key }` (F-414-i) |
 | `POST /inherited/:key/override` | a reseller's own copy: a draft of the platform's published text and its placements (`guide_key_taken` 409 if it has one) |
 | `PUT` · `DELETE /inherited/:key/hidden` | hide / show again a platform guide for this reseller (204) |
 
@@ -59,6 +60,7 @@ Rules:
 2. A text names only files under its owner's `guides/` or the platform's `guides/` (served on every Host, ADR-0117 point 2), stored and public — else `guide_file` 400.
 3. Publish, archive/restore, placements, kind/order, delete, hide/show bump the owner's generation; a draft write does not, as no reader sees it.
 4. No file is deleted by these routes — an override keeps naming the platform's files.
+5. **A file plays its block's role** (F-414-i): a video block's `file` is a stored `video/*`, its `poster` and every other file an image; one key named as both, or of the other kind, is `guide_file` 400.
 
 ## Consumes
 

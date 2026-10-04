@@ -24,8 +24,8 @@ export const canManageGuides = (me: Me | null) => holdsPermission(me?.permission
 export const GUIDE_LANGS: readonly GuideLang[] = ["fa", "en"];
 export const GUIDE_KINDS: readonly GuideKind[] = ["os", "app", "product", "section"];
 export const CALLOUT_TONES: readonly CalloutTone[] = ["info", "tip", "warning", "danger"];
-/** Block types the editor offers. `video` waits for its upload (F-414-i); one already stored is kept as is. */
-export const EDITABLE_BLOCKS = ["text", "image", "steps", "callout"] as const;
+/** Block types the editor offers — every one shared-core has (video since F-414-i). */
+export const EDITABLE_BLOCKS = ["text", "image", "video", "steps", "callout"] as const;
 export type EditableBlockType = (typeof EDITABLE_BLOCKS)[number];
 
 /**
@@ -87,6 +87,8 @@ export function emptyBlock(type: EditableBlockType): GuideBlock {
       return { type, text: "" };
     case "image":
       return { type, file: "", alt: "" };
+    case "video":
+      return { type, file: "", poster: "" };
     case "steps":
       return { type, items: [{ text: "" }] };
     case "callout":
@@ -168,7 +170,9 @@ function blockError(b: GuideBlock): string | null {
       if (!b.file) return K.errors.noImage;
       return empty(b.alt) ? K.errors.altRequired : tooLong(b.alt, 200) || tooLong(b.caption, 300) ? K.errors.tooLong : null;
     case "video":
-      return null;
+      if (!b.file) return K.errors.noVideo;
+      if (!b.poster) return K.errors.noPoster;
+      return tooLong(b.caption, 300) ? K.errors.tooLong : null;
     case "steps":
       if (b.items.length === 0 || b.items.length > 30) return K.errors.steps;
       return b.items.some((it) => empty(it.text)) ? K.errors.required : b.items.some((it) => tooLong(it.text, 2_000)) ? K.errors.tooLong : null;

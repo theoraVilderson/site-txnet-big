@@ -122,6 +122,12 @@ export const guideApi = {
     form.append("file", file);
     return call<{ key: string }>(at(id, "/files"), { method: "POST", body: form });
   },
+  /** MP4 or WebM, ≤ 50 MiB (F-414-i); the key goes into a video block, beside an uploaded poster image. */
+  uploadVideo(id: string, file: File): Promise<{ key: string }> {
+    const form = new FormData();
+    form.append("file", file);
+    return call<{ key: string }>(at(id, "/videos"), { method: "POST", body: form });
+  },
   override: (key: string) => call<GuideDetail>(`/inherited/${encodeURIComponent(key)}/override`, { method: "POST" }),
   hide: (key: string) => call<void>(`/inherited/${encodeURIComponent(key)}/hidden`, { method: "PUT" }),
   unhide: (key: string) => call<void>(`/inherited/${encodeURIComponent(key)}/hidden`, { method: "DELETE" }),
@@ -132,6 +138,13 @@ export const guideApi = {
  * own domain, which also serves the platform's `guides/` files (ADR-0117).
  */
 export const guideFileUrl = (key: string) => `${API_BASE}/public/tenant/files/${key.split("/").map(encodeURIComponent).join("/")}`;
+
+/**
+ * Where a guide video is served (F-414-i, ADR-0118): the media server over the
+ * object store, on this Host, never a Nest route — Range is the store's. The
+ * one place that changes when the store becomes a bucket or a CDN.
+ */
+export const guideVideoUrl = (key: string) => `${API_BASE}/public/media/${key.split("/").map(encodeURIComponent).join("/")}`;
 
 // ------------------------------------------------------------------ reading
 

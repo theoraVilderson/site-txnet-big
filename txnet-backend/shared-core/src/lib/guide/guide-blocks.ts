@@ -112,3 +112,27 @@ export function guideFileKeys(blocks: readonly GuideBlock[]): string[] {
   }
   return [...new Set(keys)];
 }
+
+/** What a guide file must be: a video block's `file` is played, every other file is shown as a picture. */
+export type GuideFileRole = 'video' | 'image';
+
+/**
+ * Every file the blocks name, with the kind it must be (F-414-i) — a writer
+ * holds each to its stored type, so a `<video>` never names a picture nor a
+ * poster a video. A key named as both is refused here: no one file is both.
+ */
+export function guideFileRoles(blocks: readonly GuideBlock[]): Map<string, GuideFileRole> {
+  const roles = new Map<string, GuideFileRole>();
+  const name = (key: string, role: GuideFileRole) => {
+    if (roles.get(key) && roles.get(key) !== role) throw new Error(`a guide file is named as both a video and an image: ${key}`);
+    roles.set(key, role);
+  };
+  for (const block of blocks) {
+    if (block.type === 'image') name(block.file, 'image');
+    else if (block.type === 'video') {
+      name(block.file, 'video');
+      name(block.poster, 'image');
+    } else if (block.type === 'steps') for (const item of block.items) if (item.image) name(item.image, 'image');
+  }
+  return roles;
+}

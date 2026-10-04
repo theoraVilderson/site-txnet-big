@@ -7,7 +7,8 @@ import {
   type RejectReason,
   type UploadPolicy,
   guideBlocksSchema,
-  guideFileKeys,
+  type GuideFileRole,
+  guideFileRoles,
   guideSlotRefusal,
   parseObjectKey,
   runWithTenant,
@@ -149,13 +150,35 @@ export interface GuidePreview extends ResolvedGuide {
 export type UploadedGuideFile = { buffer: Buffer; mimetype: string };
 
 const KB = 1024;
-/** Screenshots and diagrams; video is F-414-i's. */
+/** Screenshots, diagrams and a video's poster. */
 export const GUIDE_IMAGE_POLICY: UploadPolicy = {
   types: ['image/png', 'image/webp', 'image/jpeg'],
   maxBytes: 2048 * KB,
   visibility: 'public',
 };
-const EXTENSION: Record<string, string> = { 'image/png': 'png', 'image/webp': 'webp', 'image/jpeg': 'jpg' };
+/**
+ * A how-to recording (F-414-i): what every browser and both messengers play.
+ * Held in memory for the upload, as an image is; 50 MiB is Telegram's own
+ * ceiling for a video a bot uploads, so the bot can send any guide video.
+ */
+export const GUIDE_VIDEO_POLICY: UploadPolicy = {
+  types: ['video/mp4', 'video/webm'],
+  maxBytes: 50 * KB * KB,
+  visibility: 'public',
+};
+const EXTENSION: Record<string, string> = {
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/jpeg': 'jpg',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+};
+
+/** Why a stored file cannot play the role a block gives it, or `null` when it can (F-414-i). */
+export function fileRoleRefusal(role: GuideFileRole, contentType: string): 'not a video' | 'not an image' | null {
+  if (role === 'video') return GUIDE_VIDEO_POLICY.types.includes(contentType as never) ? null : 'not a video';
+  return GUIDE_IMAGE_POLICY.types.includes(contentType as never) ? null : 'not an image';
+}
 
 const ORDER = [{ sortOrder: 'asc' as const }, { key: 'asc' as const }];
 const WITH = {
@@ -392,17 +415,29 @@ export class GuideAdmin {
   }
 
   /** An image for an own guide; returns its key for a block to name. */
-  async upload(actor: GuideActor, id: string, file: UploadedGuideFile): Promise<{ key: string }> {
+  upload(actor: GuideActor, id: string, file: UploadedGuideFile): Promise<{ key: string }> {
+    return this.store(actor, id, file, GUIDE_IMAGE_POLICY);
+  }
+
+  /**
+   * A video for an own guide (F-414-i). Stored as an image is; served by the
+   * media server, never by a Nest route (ADR-0116 point 3, ADR-0118).
+   */
+  uploadVideo(actor: GuideActor, id: string, file: UploadedGuideFile): Promise<{ key: string }> {
+    return this.store(actor, id, file, GUIDE_VIDEO_POLICY);
+  }
+
+  private async store(actor: GuideActor, id: string, file: UploadedGuideFile, policy: UploadPolicy): Promise<{ key: string }> {
     const owner = await this.ownerOf(actor);
     await this.run(owner, async (tx) => {
       if (!(await tx.guide.findFirst({ where: { id, tenantId: owner }, select: { id: true } }))) throw new GuideRefused('guide_unknown', id);
     });
     const ext = EXTENSION[file.mimetype];
-    if (!ext) throw new GuideRefused('type_not_allowed', file.mimetype);
+    if (!ext || !policy.types.includes(file.mimetype as never)) throw new GuideRefused('type_not_allowed', file.mimetype);
     const storageTenant = owner ?? (await this.platform.id());
     try {
       const { key } = await runWithTenant({ id: storageTenant }, () =>
-        this.storage.put(GUIDE_IMAGE_POLICY, `guides/${id}/${randomUUID()}.${ext}`, file.buffer, file.mimetype),
+        this.storage.put(policy, `guides/${id}/${randomUUID()}.${ext}`, file.buffer, file.mimetype),
       );
       return { key };
     } catch (e) {
@@ -457,18 +492,37 @@ export class GuideAdmin {
     return [...unique.values()];
   }
 
-  /** Every file a text names is the owner's or the platform's shared `guides/` file, stored and public. */
+  /**
+   * Every file a text names is the owner's or the platform's shared `guides/`
+   * file, stored, public, and of the kind its block plays (F-414-i).
+   */
   private async assertFiles(owner: Owner, texts: GuideText[]): Promise<void> {
     const platformId = await this.platform.id();
     const ownStorage = owner ?? platformId;
-    for (const key of new Set(texts.flatMap((t) => guideFileKeys(t.blocks)))) {
+    const roles = new Map<string, GuideFileRole>();
+    for (const text of texts) {
+      let named: Map<string, GuideFileRole>;
+      try {
+        named = guideFileRoles(text.blocks);
+      } catch (e) {
+        throw new GuideRefused('guide_file', (e as Error).message);
+      }
+      for (const [key, role] of named) {
+        if (roles.get(key) && roles.get(key) !== role) throw new GuideRefused('guide_file', `${key} both a video and an image`);
+        roles.set(key, role);
+      }
+    }
+    for (const [key, role] of roles) {
       const parsed = parseObjectKey(key);
       const shared = parsed?.tenantId === platformId && PLATFORM_SHARED_PREFIXES.some((p) => parsed.path.startsWith(p));
       if (!parsed || (parsed.tenantId !== ownStorage && !shared)) throw new GuideRefused('guide_file', key);
       const row = await runWithTenant({ id: parsed.tenantId }, () => this.storage.stat(key));
       if (!row || row.private) throw new GuideRefused('guide_file', key);
+      const wrong = fileRoleRefusal(role, row.contentType);
+      if (wrong) throw new GuideRefused('guide_file', `${key} ${wrong}`);
     }
   }
+
 }
 
 /** One language each, at least one, each a valid block list (the controller's schema already parsed them). */

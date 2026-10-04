@@ -3,12 +3,13 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { Me } from "@/lib/auth-api";
-import type { GuideText } from "@/lib/guide-api";
-import { guideFileUrl } from "@/lib/guide-api";
+import type { GuideBlock, GuideText } from "@/lib/guide-api";
+import { guideFileUrl, guideVideoUrl } from "@/lib/guide-api";
 import { PANEL_GUIDES } from "@/lib/routes";
 import { PANEL_MENU, menuHrefs, visibleMenu } from "../_lib/panel-menu";
 import {
   GUIDE_BOT_SCREENS,
+  GUIDE_KEYS,
   GUIDE_OSES,
   GUIDE_PANEL_SECTIONS,
   GUIDE_SLOTS,
@@ -123,6 +124,14 @@ describe("the texts form", () => {
     expect(validateTexts([fa()])).toEqual({});
   });
 
+  it("asks a video block for its video and its cover image (F-414-i)", () => {
+    const v = "tenants/t-1/guides/g-1/a.mp4";
+    const errorOf = (block: GuideBlock) => validateTexts([fa({ blocks: [block] })])["fa.blocks.0"];
+    expect(errorOf(emptyBlock("video"))).toBe(GUIDE_KEYS.errors.noVideo);
+    expect(errorOf({ type: "video", file: v, poster: "" })).toBe(GUIDE_KEYS.errors.noPoster);
+    expect(errorOf({ type: "video", file: v, poster: "tenants/t-1/guides/g-1/a.jpg" })).toBeUndefined();
+  });
+
   it("moves a block and ignores a move past either end", () => {
     expect(moveBlock(["a", "b", "c"], 2, -1)).toEqual(["a", "c", "b"]);
     expect(moveBlock(["a", "b"], 0, -1)).toEqual(["a", "b"]);
@@ -137,5 +146,9 @@ describe("the page", () => {
 
   it("builds an image's address on this Host, by key", () => {
     expect(guideFileUrl("tenants/t-1/guides/g-1/a.png")).toBe("/api/public/tenant/files/tenants/t-1/guides/g-1/a.png");
+  });
+
+  it("plays a video from the media server, never the file route (ADR-0118)", () => {
+    expect(guideVideoUrl("tenants/t-1/guides/g-1/a.mp4")).toBe("/api/public/media/tenants/t-1/guides/g-1/a.mp4");
   });
 });

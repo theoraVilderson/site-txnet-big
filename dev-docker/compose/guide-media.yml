@@ -1,0 +1,43 @@
+# Guide videos (F-414-i, ADR-0118): nginx over the object-storage volume, read
+# only. Included by ../docker-compose.main.yml with `project_directory: .`, so
+# relative paths resolve from dev-docker/.
+#
+# Video is served by the store, never through a Nest route (ADR-0116 point 3):
+# Range and long downloads are nginx's, and tenant-service — which answers
+# every tenant's public pages — holds no viewer's connection. The one location
+# in media/guide-media.conf serves only guide video keys; everything else on
+# the volume is a 404 here. On the `local` driver this container must share the
+# node (or the shared volume) tenant-service writes to (object-storage rule 5).
+# An S3 driver replaces it with the bucket or a CDN; the panel's URL builder
+# (`guideVideoUrl`) is the one place that changes.
+
+services:
+  guide-media:
+    image: ${DOCKER_REGISTRY}/nginx:1.27-alpine
+    container_name: ${STACK_NAME:-txnet}-guide-media
+    restart: unless-stopped
+    volumes:
+      - object_storage:/data/objects:ro
+      - ./media/guide-media.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.guide-media.loadbalancer.server.port=8080"
+      # `/api/public/media/<key>` -> `/<key>`; no gate — a <video> carries no
+      # session, and a guide is public on every Host that shows it.
+      - "traefik.http.middlewares.guide-media-strip.stripprefix.prefixes=/api/public/media"
+
+      - "traefik.http.routers.guide-media-http.rule=PathPrefix(`/api/public/media/`)"
+      - "traefik.http.routers.guide-media-http.entrypoints=web"
+      - "traefik.http.routers.guide-media-http.priority=130"
+      - "traefik.http.routers.guide-media-http.middlewares=strip-fake-headers,guide-media-strip"
+      - "traefik.http.routers.guide-media-http.service=guide-media"
+
+      - "traefik.http.routers.guide-media.rule=PathPrefix(`/api/public/media/`)"
+      - "traefik.http.routers.guide-media.entrypoints=websecure"
+      - "traefik.http.routers.guide-media.priority=130"
+      - "traefik.http.routers.guide-media.tls.certresolver=myresolver"
+      - "traefik.http.routers.guide-media.middlewares=strip-fake-headers,guide-media-strip"
+      - "traefik.http.routers.guide-media.service=guide-media"
+      - "txnet.logging=true"

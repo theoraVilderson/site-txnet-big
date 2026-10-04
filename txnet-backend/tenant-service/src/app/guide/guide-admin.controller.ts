@@ -27,6 +27,7 @@ import { identityOf } from '../request/identity.middleware';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import {
   GUIDE_IMAGE_POLICY,
+  GUIDE_VIDEO_POLICY,
   GuideActor,
   GuideAdmin,
   GuideDetail,
@@ -184,6 +185,19 @@ export class GuideAdminController {
   ): Promise<{ key: string }> {
     if (!file) throw new BadRequestException({ reason: 'file_missing', message: 'send the image as multipart field "file"' });
     return refusing(() => this.guides.upload(actorOf(req), id, file));
+  }
+
+  // A video (F-414-i): MP4/WebM ≤ 50 MiB, in memory and capped first like an
+  // image. Served afterwards by the media server, never by this service.
+  @Post(':id/videos')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: GUIDE_VIDEO_POLICY.maxBytes, files: 1, fields: 0 } }))
+  uploadVideo(
+    @Req() req: Request,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @UploadedFile() file: UploadedGuideFile | undefined,
+  ): Promise<{ key: string }> {
+    if (!file) throw new BadRequestException({ reason: 'file_missing', message: 'send the video as multipart field "file"' });
+    return refusing(() => this.guides.uploadVideo(actorOf(req), id, file));
   }
 }
 

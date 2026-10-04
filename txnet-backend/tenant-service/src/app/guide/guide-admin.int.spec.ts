@@ -45,7 +45,9 @@ let guides: GuideAdmin;
 let reader: GuideReader;
 const bumps: (string | null)[] = [];
 /** Stored objects by key, as `ObjectStorage.stat` would find them. */
-const files = new Map<string, { visibility: 'public' | 'private' }>();
+const files = new Map<string, { visibility: 'public' | 'private'; contentType?: string }>();
+/** The type `put` would have checked, from the key's extension, as the real port records it. */
+const typeOf = (key: string) => ({ png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp', mp4: 'video/mp4', webm: 'video/webm' })[key.split('.').pop() ?? ''] ?? 'application/octet-stream';
 
 /** What reseller `tenantId`'s users see on the Android slot, as `key:title`. */
 async function seenBy(tenantId: string): Promise<string[]> {
@@ -92,7 +94,8 @@ beforeAll(async () => {
   };
   const generations = { bump: async (t: string | null) => void bumps.push(t), of: async () => '' } as unknown as GuideGenerations;
   const storage = {
-    stat: async (key: string) => (files.has(key) ? { key, private: files.get(key)?.visibility === 'private' } : null),
+    stat: async (key: string) =>
+      files.has(key) ? { key, private: files.get(key)?.visibility === 'private', contentType: files.get(key)?.contentType ?? typeOf(key) } : null,
     put: async (_policy: unknown, path: string) => {
       const key = objectKey(TenantContext.current('fake put').id, path);
       files.set(key, { visibility: 'public' });
@@ -254,5 +257,19 @@ describe('what a writer refuses', () => {
     expect(await refusal(guides.saveDraft(B_ADMIN, id, image(othersFile)))).toBe('guide_file');
     expect(await refusal(guides.saveDraft(B_ADMIN, id, image(privateFile)))).toBe('guide_file');
     expect(await refusal(guides.saveDraft(B_ADMIN, id, image(objectKey(RESELLER_B, 'guides/x/missing.png'))))).toBe('guide_file');
+  });
+
+  it('a video block plays a stored video with an image poster, never the other way round (F-414-i)', async () => {
+    const { id } = await guides.create(B_ADMIN, { key: 'filmed', kind: 'app', texts: [{ lang: 'fa', title: 't', blocks: text('t') }] });
+    const video = await guides.uploadVideo(B_ADMIN, id, { buffer: Buffer.from('x'), mimetype: 'video/mp4' });
+    const poster = await guides.upload(B_ADMIN, id, { buffer: Buffer.from('x'), mimetype: 'image/jpeg' });
+    expect(video.key).toMatch(new RegExp(`^tenants/${RESELLER_B}/guides/${id}/[0-9a-f-]{36}\\.mp4$`));
+    const block = (file: string, posterKey: string) => [{ lang: 'fa' as const, title: 't', blocks: [{ type: 'video' as const, file, poster: posterKey }] }];
+
+    expect(await refusal(guides.saveDraft(B_ADMIN, id, block(video.key, poster.key)))).toBe('accepted');
+    expect(await refusal(guides.saveDraft(B_ADMIN, id, block(poster.key, video.key)))).toBe('guide_file');
+    expect(await refusal(guides.saveDraft(B_ADMIN, id, block(video.key, video.key)))).toBe('guide_file');
+    expect(await refusal(guides.uploadVideo(B_ADMIN, id, { buffer: Buffer.from('x'), mimetype: 'image/png' }))).toBe('type_not_allowed');
+    expect(await refusal(guides.upload(B_ADMIN, id, { buffer: Buffer.from('x'), mimetype: 'video/mp4' }))).toBe('type_not_allowed');
   });
 });

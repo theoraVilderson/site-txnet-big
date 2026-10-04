@@ -26,6 +26,9 @@ const B = '22222222-2222-4222-8222-222222222222';
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
 const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.from([0, 0, 0, 0]), Buffer.from('WEBPVP8 ')]);
 const HTML = Buffer.from('<html><script>alert(1)</script></html>');
+const MP4 = Buffer.concat([Buffer.from([0, 0, 0, 0x20]), Buffer.from('ftypisom'), Buffer.alloc(8)]);
+const WEBM = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x82, 0x84]), Buffer.from('webm'), Buffer.alloc(4)]);
+const MKV = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x82, 0x88]), Buffer.from('matroska'), Buffer.alloc(4)]);
 
 const LOGO: UploadPolicy = { types: ['image/png', 'image/webp'], maxBytes: 64, visibility: 'public' };
 
@@ -105,6 +108,14 @@ describe('object-storage (F-018-m)', () => {
     });
     expect(store.rows.size).toBe(0);
     await expect(stat(join(root, 'tenants'))).rejects.toThrow();
+  });
+
+  it('takes a guide video by its bytes, and refuses a page or a Matroska file declared one (F-414-i)', async () => {
+    const VIDEO: UploadPolicy = { types: ['video/mp4', 'video/webm'], maxBytes: 64, visibility: 'public' };
+    await expect(asA(() => storage.put(VIDEO, 'guides/v.mp4', MP4, 'video/mp4'))).resolves.toMatchObject({ size: MP4.length });
+    await expect(asA(() => storage.put(VIDEO, 'guides/v.webm', WEBM, 'video/webm'))).resolves.toMatchObject({ size: WEBM.length });
+    await expect(asA(() => storage.put(VIDEO, 'guides/x.mp4', HTML, 'video/mp4'))).rejects.toMatchObject({ reason: 'type_mismatch' });
+    await expect(asA(() => storage.put(VIDEO, 'guides/x.webm', MKV, 'video/webm'))).rejects.toMatchObject({ reason: 'type_mismatch' });
   });
 
   it.each(['../escape.png', '/abs.png', 'a//b.png', 'Upper.png', 'a/./b.png', 'a/../b.png', ''])(

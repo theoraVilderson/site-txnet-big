@@ -3,7 +3,7 @@ id: object-storage
 layer: platform
 status: active
 version: 4
-updated: 2026-10-03
+updated: 2026-10-04
 ---
 
 # Contract — object-storage
@@ -54,7 +54,7 @@ does not own, which is a bug to surface.
    `put` overwrites, never a row pointing at nothing.
 4. A caller's allowed types and size are declared per use, never defaulted.
    A type is allowed only if its bytes can be checked (`SNIFFABLE_TYPES`: PNG,
-   WebP, JPEG, PDF, gzip — the last for support's archives, F-033-n) and `put` checks them: an HTML page declared a PNG is
+   WebP, JPEG, PDF, gzip — the last for support's archives, F-033-n — and MP4/WebM for guide videos, F-414-i) and `put` checks them: an HTML page declared a PNG is
    `type_mismatch`. SVG has no signature, so no policy can name it (catalog
    13.8).
 5. **The `local` driver needs one node or a shared volume.** Replicas on
@@ -70,6 +70,7 @@ does not own, which is a bug to surface.
 8. **A Host serves its own keys and the platform's shared prefixes** — `PLATFORM_SHARED_PREFIXES` in `files.controller.ts`, today only `guides/` (ADR-0117 point 2): a reseller's inherited guide shows its images on the reseller's own domain. Read in the platform's scope; never a private file, never anything else of the platform's.
 9. `storedObject` is in `TENANT_SCOPED_MODELS` and the table has strict RLS: on
    the app pool every query is filtered to, and bound to, the tenant in scope.
+10. **`guide-media` (nginx, `dev-docker/compose/guide-media.yml`) serves guide video keys from the volume, read-only**, at `GET /api/public/media/<key>`: only `tenants/<uuid>/guides/<uuid>/<uuid>.(mp4|webm)` (its one `location`, held by `guide-video.spec.ts`), Range native, `immutable`, `nosniff`, sandbox CSP, no Host check (ADR-0118). It shares the node of the `local` volume (rule 5); an S3 driver replaces it.
 
 ## The serving route
 
@@ -117,4 +118,5 @@ driver. No row changes.
 |---|---|
 | tenant | branding images, `put` in the reseller's scope at `branding/<slot>` (F-018-h, [contract.branding.md](../../domains/tenant/contract.branding.md)) |
 | guide | guide images, public, `guides/<guideId>/<uuid>.<ext>` of the owner; the platform's served on every Host (F-414-c, [contract.md](../../domains/guide/contract.md)) |
+| guide video | MP4/WebM ≤ 50 MiB at the same path, served **only** by `guide-media` (rule 10), never by the file route's Host check (F-414-i, ADR-0118) |
 | support | attachments, `private`, scanned; URLs minted on each message read (F-033-c), uploads F-033-f ([contract.md](../../domains/support/contract.md)) |

@@ -8,9 +8,11 @@ source:
   - txnet-backend/shared-core/src/lib/object-storage/**
   - txnet-backend/tenant-service/src/app/files/**
   - txnet-backend/prisma/domains/storage.prisma
+  - dev-docker/media/**
+  - dev-docker/compose/guide-media.yml
 owns_tables: [storage.stored_object]
 depends_on: [tenant-context]
-updated: 2026-10-03
+updated: 2026-10-04
 ---
 
 # object-storage
