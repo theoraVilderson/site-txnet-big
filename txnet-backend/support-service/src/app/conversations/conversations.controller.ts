@@ -72,7 +72,7 @@ const TYPING = {
 
 const E = BackendI18nKeys.errors.support;
 
-const REFUSAL: Record<ConversationRejection, { status: 400 | 404 | 409 | 413 | 415 | 422 | 503; i18nKey: string }> = {
+const REFUSAL: Record<ConversationRejection, { status: 400 | 403 | 404 | 409 | 413 | 415 | 422 | 503; i18nKey: string }> = {
   not_found: { status: 404, i18nKey: E.conversationNotFound },
   closed: { status: 409, i18nKey: E.conversationClosed },
   category_unknown: { status: 404, i18nKey: E.categoryUnknown },
@@ -95,6 +95,10 @@ const REFUSAL: Record<ConversationRejection, { status: 400 | 404 | 409 | 413 | 4
   not_closed: { status: 409, i18nKey: E.notClosed },
   reopen_expired: { status: 409, i18nKey: E.reopenExpired },
   lifecycle_invalid: { status: 400, i18nKey: E.lifecycleInvalid },
+  not_platform_staff: { status: 403, i18nKey: E.notPlatformStaff },
+  reseller_not_found: { status: 404, i18nKey: E.resellerNotFound },
+  consent_required: { status: 403, i18nKey: E.consentRequired },
+  consent_read_only: { status: 403, i18nKey: E.consentReadOnly },
 };
 
 /** A multipart file as multer holds it in memory. */

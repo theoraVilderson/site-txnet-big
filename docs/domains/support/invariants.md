@@ -23,6 +23,7 @@ updated: 2026-10-03
 | 12 | A conversation's SLA due times are `createdAt` + its priority's target in the tenant's working minutes (resolution + the working time stopped), recomputed in the transaction of every write that can move them; `slaDueAt` is null exactly while the clock is stopped or the thread finished | `applySla` (open, user message, agent reply, settle, priority) | the queue orders by a stale clock; a breach is reported that was not one |
 | 13 | A reader gets at most one new-message notice per conversation until their cursor passes where it stood when told; a note tells no one, an unassigned thread tells no agent; a notice is sent after the commit and never fails or rolls back the message | `SupportNotifier`, called from `send`, `attach`, `reply`, `resolve` | a busy thread floods the inbox, or a refused seam loses a user's message |
 | 14 | Only a thread waiting on its user (`pending_user`/`resolved`) closes by itself, and only past its tenant's days of silence from the user, re-checked under the row lock; a rating is written once (1–5) on a resolved or closed thread; a closed thread reopens only inside its tenant's window | `SupportLifecycle` (`closeIdle`, `rate`, `reopen`), CHECKs in `20261003001700` | a queue that empties itself, a rating rewritten, a final thread reopened |
+| 15 | Platform staff reach a reseller's conversations only under that reseller's live consent, read on every request; `read` never writes; the work runs in the reseller's tenant scope (F-033-l, ADR-0104 (4)) | `PlatformSupportDoor` | the platform reads every reseller's customers' support at will |
 
 ## How to test
 
@@ -34,4 +35,4 @@ The signature, expiry, PDF sniffing and the scanner verdicts behind 9 are
 are `attachments.service.int.spec.ts`. The agent side (3, 5, 7, the tenant
 boundary, who may be assigned) is `agent/agent.service.int.spec.ts`; 11 is
 `availability/availability.spec.ts` and, on the stored thread, the agent int spec;
-12 is `sla/sla.int.spec.ts`; 13 is `notify/support-notifier.spec.ts` (the dedupe) and the agent int spec (who is told). Canned replies: `canned/canned.spec.ts` (variables, language), the agent int spec (visibility, 4). 14 is `lifecycle/lifecycle.int.spec.ts`.
+12 is `sla/sla.int.spec.ts`; 13 is `notify/support-notifier.spec.ts` (the dedupe) and the agent int spec (who is told). Canned replies: `canned/canned.spec.ts` (variables, language), the agent int spec (visibility, 4). 15 is `agent/platform-door.spec.ts`. 14 is `lifecycle/lifecycle.int.spec.ts`.

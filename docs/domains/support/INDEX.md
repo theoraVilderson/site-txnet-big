@@ -3,13 +3,13 @@ id: support
 layer: domain
 status: active
 version: 2
-keywords: [ticket, support, chat, attachment, conversation, support category, پشتیبانی, تیکت, گفتگو]
+keywords: [ticket, support, chat, attachment, conversation, support category, پشتیبانی, تیکت, گفتگو, platform support access, support for a reseller, پشتیبانی نماینده]
 source:
   - txnet-backend/prisma/domains/support.prisma
   - txnet-backend/support-service/**
 owns_tables: [conversation, message, conversation_read, message_attachment, support_category, support_category_text, working_hours, sla_policy, canned_reply, canned_reply_text, lifecycle_policy]
 depends_on: [identity, audit]
-updated: 2026-10-03
+updated: 2026-10-04
 ---
 
 # Support
@@ -21,6 +21,7 @@ updated: 2026-10-03
 | File | Read it when |
 |---|---|
 | [contract.md](contract.md) | using or changing support from outside |
+| [contract.operator.md](contract.operator.md) | platform staff in a reseller's support (consent), the agent's sidebar |
 | [invariants.md](invariants.md) | writing any code that touches it |
 | [data-model.md](data-model.md) | changing storage |
 | [open-questions.md](open-questions.md) | something is undecided |

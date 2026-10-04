@@ -270,6 +270,10 @@
     "alreadyRated": "You have already rated this conversation.",
     "notClosed": "This conversation is not closed.",
     "reopenExpired": "This conversation can no longer be reopened. Please start a new one.",
-    "lifecycleInvalid": "These settings are not valid: auto-close takes 1 to 90 days, reopening 0 to 90."
+    "lifecycleInvalid": "These settings are not valid: auto-close takes 1 to 90 days, reopening 0 to 90.",
+    "notPlatformStaff": "This is for the platform's support staff only.",
+    "resellerNotFound": "This reseller was not found.",
+    "consentRequired": "The reseller has to grant access before you can see its support. Ask it for access.",
+    "consentReadOnly": "The reseller's consent lets you read only, not reply or change anything."
   }
 }

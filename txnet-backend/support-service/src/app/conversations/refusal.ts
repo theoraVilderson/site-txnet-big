@@ -32,7 +32,12 @@ export type ConversationRejection =
   | 'already_rated'
   | 'not_closed'
   | 'reopen_expired'
-  | 'lifecycle_invalid';
+  | 'lifecycle_invalid'
+  // Platform staff in a reseller's support (F-033-l).
+  | 'not_platform_staff'
+  | 'reseller_not_found'
+  | 'consent_required'
+  | 'consent_read_only';
 
 export class ConversationRefused extends Error {
   constructor(readonly reason: ConversationRejection) {

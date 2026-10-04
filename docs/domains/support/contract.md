@@ -3,14 +3,14 @@ id: support
 layer: domain
 status: active
 version: 2
-updated: 2026-10-03
+updated: 2026-10-04
 ---
 
 # Contract — support
 
 Storage F-033-a, the user's routes F-033-b, attachments F-033-c (reading) and
 F-033-f (upload); the agent side F-033-d, category admin F-033-e, presence and
-hours F-033-g, SLA F-033-h, notices F-033-i, canned replies F-033-j, auto-close/rating/reopen F-033-k. Shape: [ADR-0112](../../architecture/decisions/0112-support-is-one-conversation-served-by-support-service.md).
+hours F-033-g, SLA F-033-h, notices F-033-i, canned replies F-033-j, auto-close/rating/reopen F-033-k; platform staff under consent F-033-l in [contract.operator.md](contract.operator.md). Shape: [ADR-0112](../../architecture/decisions/0112-support-is-one-conversation-served-by-support-service.md).
 
 ## TL;DR
 
