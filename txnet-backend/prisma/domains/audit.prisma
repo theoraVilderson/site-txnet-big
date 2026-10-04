@@ -174,6 +174,9 @@ enum AdminAction {
   // F-117-c (ADR-0104 (6)). One request of the platform's staff among a
   // reseller's people — a read too — written by the door that admitted it.
   platform_access
+  // F-117-d (ADR-0104 (5)). Tier C: an emergency entry opened, and ended early.
+  emergency_entry_open
+  emergency_entry_end
 
   @@schema("audit")
 }
@@ -232,6 +235,8 @@ enum AuditTargetType {
   lottery
   // F-117-a. One support access consent (or the request for one).
   support_consent
+  // F-117-d. One emergency entry of a platform staff member into a reseller.
+  emergency_entry
 
   @@schema("audit")
 }
@@ -268,6 +273,27 @@ model SupportAccessConsent {
 
   @@index([tenantId, createdAt(sort: Desc)])
   @@map("support_access_consent")
+  @@schema("audit")
+}
+
+/// F-117-d (ADR-0104 (5)) — tier C: one platform staff member in one reseller
+/// without its consent, for an emergency (abuse, legal order, incident). A
+/// reason always; exactly one hour from `startedAt` (CHECK), never extended — a
+/// new entry once this one has ended; `endedAt` when its entrant left early.
+/// Admits that staff member alone, as `act`. The owner is told at entry.
+model EmergencyAccessEntry {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @db.Uuid
+  userId        String    @db.Uuid
+  reason        String
+  startedAt     DateTime
+  expiresAt     DateTime
+  endedAt       DateTime?
+  endedByUserId String?   @db.Uuid
+  createdAt     DateTime  @default(now())
+
+  @@index([tenantId, startedAt(sort: Desc)])
+  @@map("emergency_access_entry")
   @@schema("audit")
 }
 

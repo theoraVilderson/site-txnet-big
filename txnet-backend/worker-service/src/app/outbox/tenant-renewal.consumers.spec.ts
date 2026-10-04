@@ -52,6 +52,14 @@ describe('TenantSubscriptionNoticeConsumer — a reseller at zero (F-118-w)', ()
   });
 });
 
+describe('TenantSubscriptionNoticeConsumer — an emergency entry (F-117-d)', () => {
+  it("tells the owner the platform entered without its consent, and nothing of the staff member's words", async () => {
+    const { consumer, person } = build();
+    await consumer.handle(event(OutboxEventType.TENANT_EMERGENCY_ENTRY, { entryId: 'e-1', expiresAt: '2026-09-30T11:00:00.000Z' }));
+    expect(person()).toEqual({ tenantId: TENANT, userId: OWNER, template: 'resellerEmergencyEntry', params: {} });
+  });
+});
+
 describe('TenantSubscriptionNoticeConsumer — renewal notices (F-019-c)', () => {
   it('passes a payment due its amount, balance and suspension date', async () => {
     const { consumer, person } = build();

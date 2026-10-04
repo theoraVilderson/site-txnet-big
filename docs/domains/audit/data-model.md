@@ -19,6 +19,7 @@ Source of truth: `txnet-backend/prisma/domains/audit.prisma` (Postgres schema
 
 | support_access_consent | the platform's access to a reseller's people (F-117-a): a request (`requestedAt`/`By`), a grant (`grantedAt`/`By`, `expiresAt` ≤ 24 h later — CHECK), its end (`revokedAt`/`By`); `scope` `read`/`act`. One open request per tenant (partial unique) | `tenantId`, RLS | permanent |
 | support_consent_policy | a reseller's default grant length, `defaultHours` 1–24; no row = 4 | `tenantId`, RLS | replaced |
+| emergency_access_entry | tier C (F-117-d): one platform staff member (`userId`) in one reseller without its consent — `reason` (20–500), `startedAt`, `expiresAt` = start + 1 h (CHECK), `endedAt`/`By` on an early end | `tenantId`, RLS | permanent |
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |

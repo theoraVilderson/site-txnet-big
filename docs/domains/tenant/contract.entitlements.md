@@ -102,7 +102,10 @@ needs `act`. A refusal is `SupportConsentRefused` — `consent_required` or
 `consent_read_only`, 403 on every users-admin surface — a type apart from
 `ResellerAccessRejection`, so the configuration routes (tier A, no consent)
 map nothing new. `RESELLER_ACCESS_READER` therefore also needs `$transaction`.
-Each admission of staff under consent writes one `platform_access` row in the
+Short of a consent that covers the call, the door admits a staff member's own
+running **emergency entry** as `act` (tier C, F-117-d, `liveEmergencyEntry`,
+which also re-checks `tenant.emergency_access`); the refusal stays the
+consent's. Each admission of staff under either writes one `platform_access` row in the
 reseller's trail in that same transaction, from the actor's `trace`
 (`accessTraceOf(req)` in the controller's actor), before the work (F-117-c,
 audit `contract.md` "The platform's trail").

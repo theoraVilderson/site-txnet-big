@@ -26,7 +26,9 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import {
   ActivityQuery,
   ConsentPolicyBody,
+  EmergencyEntryBody,
   GrantConsentBody,
+  emergencyEntrySchema,
   activityQuerySchema,
   RequestConsentBody,
   consentPolicySchema,
@@ -52,6 +54,8 @@ const STATUS: Record<SupportConsentRejection, 400 | 403 | 404 | 409> = {
   hours_out_of_range: 400,
   consent_not_found: 404,
   reseller_only: 403,
+  emergency_not_permitted: 403,
+  emergency_live: 409,
 };
 
 const read: RateLimitOptions = {
@@ -131,6 +135,30 @@ export class SupportConsentController {
     @Req() req: Request,
   ) {
     return this.refusing(() => this.consent.revoke(this.actor(req), tenantId, consentId, req.ip ?? ''));
+  }
+
+  /** Tier C (F-117-d): a platform staff member enters for one hour, with a reason; the owner is told at once. */
+  @Post('emergency')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit(write)
+  enterEmergency(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Body(new ZodValidationPipe(emergencyEntrySchema)) body: EmergencyEntryBody,
+    @Req() req: Request,
+  ) {
+    return this.refusing(() => this.consent.enterEmergency(this.actor(req), tenantId, body as Required<EmergencyEntryBody>, req.ip ?? ''));
+  }
+
+  /** Its entrant leaves before the hour is up. */
+  @Post('emergency/:entryId/end')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(write)
+  endEmergency(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('entryId', new ParseUUIDPipe()) entryId: string,
+    @Req() req: Request,
+  ) {
+    return this.refusing(() => this.consent.endEmergency(this.actor(req), tenantId, entryId, req.ip ?? ''));
   }
 
   @Put('policy')

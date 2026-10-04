@@ -45,6 +45,11 @@ roles:
       # registered, and only the platform owner registers.
       # `PanelRegistrationService` refuses any other tenant regardless.
       - panel.manage
+      # Tier C, emergency entry into a reseller without its consent (F-117-d,
+      # ADR-0104 (5)). Beside `tenant.manage` and for its reason: held by no
+      # named role, and a line under `Admin` would let every tenant grant it
+      # to its own roles. Given by hand, one person at a time.
+      - tenant.emergency_access
   Admin:
     permissions:
       - user.read

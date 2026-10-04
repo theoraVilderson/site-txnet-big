@@ -27,7 +27,7 @@ door `agent/platform-door.ts`.
 |---|---|
 | The caller's own tenant is `platform_owner` and they hold `support.agent`; otherwise **403 `not_platform_staff`**, before any consent is read | a reseller's agent has its own inbox; this door is the platform's only |
 | The path names a reseller, not deleted, not terminated; otherwise **404 `reseller_not_found`** | one answer for both |
-| A live consent of that reseller (`liveSupportConsent`, audit `contract.md` "Support consent"); none is **403 `consent_required`**, a `read` one on a write **403 `consent_read_only`** | ADR-0104 (4): the reseller decides, the platform asks |
+| A live consent of that reseller (`liveSupportConsent`, audit `contract.md` "Support consent"); none is **403 `consent_required`**, a `read` one on a write **403 `consent_read_only`** | ADR-0104 (4): the reseller decides, the platform asks. Short of one, the caller's own running emergency entry admits as `act` (tier C, F-117-d) |
 | **Read on every request**, never cached | a revoke ends access on the next request |
 | The work runs as the **reseller's tenant** (RLS scope and `tenantId` filters), the staff member as the agent: `SupportAgentService` unchanged | one rule set for a conversation, whoever answers |
 | No presence, no typing | platform staff never make a reseller look staffed (`mode` stays the reseller's own, invariant 11) |

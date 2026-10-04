@@ -6,7 +6,7 @@ import { runWithTenant } from '../tenant-context/tenant-context';
 import { tenantTransaction } from '../tenant-context/with-tenant';
 import { AccessTrace, recordPlatformAccess } from './platform-access-trail';
 import { TenantCapabilityName, tenantAllows } from './status-policy';
-import { liveSupportConsent } from './support-consent';
+import { liveEmergencyEntry, liveSupportConsent } from './support-consent';
 
 /**
  * The reads the rule needs. An app binds its app pool (`PrismaService`): `tenant.tenant` has no RLS, and a member's seat is their own tenant's row.
@@ -193,24 +193,22 @@ export class ResellerAccess {
 
   /**
    * The reseller's live consent must cover the capability: any scope for `read`,
-   * `act` for anything else. Admitted, the request is one row in the reseller's
-   * trail (F-117-c, ADR-0104 (6)), in the same transaction as the read.
+   * `act` for anything else (tier B). Short of that, this staff member's own
+   * running emergency entry admits as `act` (tier C, F-117-d). Admitted, the
+   * request is one row in the reseller's trail (F-117-c, ADR-0104 (6)), in the
+   * same transaction as the read.
    */
   private async mustHoldConsent(actor: ResellerActor, resellerId: string, capability: TenantCapabilityName, now: Date): Promise<void> {
     await runWithTenant({ id: resellerId }, () =>
       tenantTransaction(this.prisma, async (tx) => {
+        const base = { tenantId: resellerId, actorUserId: actor.userId, capability, trace: actor.trace };
         const consent = await liveSupportConsent(tx, resellerId, now);
-        if (!consent) throw new SupportConsentRefused('consent_required', resellerId);
-        if (capability !== 'read' && consent.scope !== 'act') throw new SupportConsentRefused('consent_read_only', resellerId);
-        await recordPlatformAccess(tx, {
-          tenantId: resellerId,
-          actorUserId: actor.userId,
-          tier: 'consent',
-          consentId: consent.id,
-          scope: consent.scope,
-          capability,
-          trace: actor.trace,
-        });
+        if (consent && (capability === 'read' || consent.scope === 'act')) {
+          return recordPlatformAccess(tx, { ...base, tier: 'consent', consentId: consent.id, scope: consent.scope });
+        }
+        const entry = await liveEmergencyEntry(tx, resellerId, actor, now);
+        if (entry) return recordPlatformAccess(tx, { ...base, tier: 'emergency', entryId: entry.id, scope: 'act' });
+        throw new SupportConsentRefused(consent ? 'consent_read_only' : 'consent_required', resellerId);
       }),
     );
   }

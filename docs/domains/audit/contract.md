@@ -69,12 +69,14 @@ door uses it, never its own query.
 
 | Route `/api/auth/tenants/:tenantId/support-consent` | Who | What |
 |---|---|---|
-| `GET` | anyone `ResellerAccess` admits | `{defaultHours, items[]}` — newest 50, each with `state` `requested`/`live`/`expired`/`revoked`/`declined`, derived on read |
+| `GET` | anyone `ResellerAccess` admits | `{defaultHours, items[], emergency[]}` — newest 50 of each, each with `state` `requested`/`live`/`expired`/`revoked`/`declined`, derived on read |
 | `POST requests` `{scope, reason≥10}` | platform staff only (`only_platform_requests`) | one open request per reseller (`request_pending`, 409) |
 | `POST` `{scope, hours?, reason?, requestId?}` | the reseller only (`platform_cannot_grant`) | live from now for `hours` (its default, else 4; 1–24, `hours_out_of_range`); a `requestId` turns that request live with the scope chosen here; any earlier live one is revoked |
 | `POST :consentId/revoke` | anyone admitted | ends a request (declined/withdrawn) or a live grant; anything else `consent_not_found` |
 | `PUT policy` `{defaultHours}` | the reseller only | its default length, 1–24 |
 | `GET activity?page=` | the reseller only (`reseller_only`, 403) | the platform's trail below, 50 a page, newest first |
+| `POST emergency` `{reason≥20}` | platform staff holding `tenant.emergency_access` (`emergency_not_permitted`) | tier C below; one running per staff member (`emergency_live`, 409) |
+| `POST emergency/:entryId/end` | its entrant only (else `consent_not_found`) | ends it before the hour |
 
 - Scope `read` sees; `act` also acts. Which routes honour it is each door's
   (F-117-b users-admin, F-033-l support).
@@ -87,6 +89,30 @@ door uses it, never its own query.
   reseller's trail (`support_consent_*`, target `support_consent`, before/after
   `{scope, grantedAt, expiresAt, revokedAt}`); the default writes
   `support_consent_policy_set` on target `tenant` (invariant 13).
+
+## Emergency entry — tier C (built — F-117-d)
+
+ADR-0104 (5). Abuse, a legal order, a security incident: what cannot wait for
+the reseller's grant. `emergency_access_entry`, `SupportConsentService`.
+
+- **A permission of its own**, `tenant.emergency_access` — granted to no role
+  by the migration or the seed; `*` holds it, anyone else is given it by hand.
+  Re-read on every request: taking it away ends the entry on the next one.
+- **A reason, at least 20 characters**; **exactly one hour** from entry (CHECK);
+  **never extended** — while one runs a second is `emergency_live`; once it
+  has ended or expired, a new entry is a new row, a new notice, a new reason.
+- **It admits its entrant alone**, as `act`, on every door a consent opens
+  (users-admin, support's platform inbox): the door tries the reseller's
+  consent first, then the caller's own running entry, and records `tier:
+  emergency` with `entryId` (the trail below).
+- **The owner is told at entry**: the entry, its `emergency_entry_open` audit
+  row (with the reason) and an outbox event `tenant.support.emergency_entry`
+  commit together — the notice may fail to deliver; the entry stays recorded.
+  The notice (`resellerEmergencyEntry`, `critical`) carries no reason; the
+  reseller reads it in `GET` above, under `emergency[]`
+  (`{id, userId, reason, state live|ended|expired, startedAt, expiresAt, endedAt}`).
+- An early end writes `emergency_entry_end`. The reseller cannot end one: tier
+  C is the access that does not ask it.
 
 ## The platform's trail in a reseller (built — F-117-c)
 

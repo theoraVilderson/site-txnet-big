@@ -21,7 +21,8 @@ describe('platform access trail', () => {
   const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['tenant.manage'], trace };
   const owner = { userId: OWNER, tenantId: PLATFORM, permissions: [] as string[], trace };
 
-  const build = (scope: 'read' | 'act' | null) => {
+  type Entry = { id: string; userId: string; expiresAt: Date };
+  const build = (scope: 'read' | 'act' | null, entries: Entry[] = []) => {
     const tenants: Record<string, Record<string, unknown>> = {
       [PLATFORM]: { id: PLATFORM, tenantType: 'platform_owner', slug: 'platform_owner', ownerUserId: STAFF, status: 'active' },
       [RESELLER]: { id: RESELLER, tenantType: 'reseller', slug: 'ali', ownerUserId: OWNER, status: 'active', graceEndsAt: null },
@@ -31,6 +32,11 @@ describe('platform access trail', () => {
       $executeRaw: vi.fn(async () => 1),
       supportAccessConsent: {
         findFirst: vi.fn(async () => (scope ? { id: 'consent-9', scope, expiresAt: new Date('2026-10-04T14:00:00Z') } : null)),
+      },
+      emergencyAccessEntry: {
+        findFirst: vi.fn(async ({ where }: { where: { userId: string; expiresAt: { gt: Date } } }) =>
+          entries.find((e) => e.userId === where.userId && e.expiresAt > where.expiresAt.gt) ?? null,
+        ),
       },
       adminAuditLog: {
         create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
@@ -95,6 +101,22 @@ describe('platform access trail', () => {
       act: 'POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/freeze',
       target: { userId: USER, grantId: 'g-1' },
       ip: '198.51.100.4',
+    });
+  });
+
+  it('admits a running emergency entry as `act` for its entrant alone, recorded as tier C (F-117-d)', async () => {
+    const entry = { id: 'entry-1', userId: STAFF, expiresAt: new Date('2026-10-04T10:30:00Z') };
+    const emergency = { ...staff, permissions: ['tenant.manage', 'tenant.emergency_access'] };
+    const { access, rows } = build('read', [entry]);
+    await access.admitIncludingPlatform(emergency, RESELLER, 'staffWrite', T0);
+    expect(rows[0].data['newValue']).toMatchObject({ tier: 'emergency', entryId: 'entry-1', scope: 'act', capability: 'staffWrite' });
+
+    // Another staff member, the permission taken away, or the hour over: none of them get in.
+    const colleague = { ...emergency, userId: OWNER.replace('4', '7') };
+    await expect(access.admitIncludingPlatform(colleague, RESELLER, 'staffWrite', T0)).rejects.toMatchObject({ reason: 'consent_read_only' });
+    await expect(access.admitIncludingPlatform(staff, RESELLER, 'staffWrite', T0)).rejects.toMatchObject({ reason: 'consent_read_only' });
+    await expect(build(null, [entry]).access.admitIncludingPlatform(emergency, RESELLER, 'read', new Date('2026-10-04T10:31:00Z'))).rejects.toMatchObject({
+      reason: 'consent_required',
     });
   });
 });

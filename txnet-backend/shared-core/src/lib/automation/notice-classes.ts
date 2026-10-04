@@ -88,6 +88,8 @@ export const NOTICE_CLASS_OF: Readonly<Record<string, NoticeClass>> = {
   purchaseStuckStrategyNotBuilt: 'critical',
   subscriptionSuspended: 'critical',
   resellerWholesaleUnfunded: 'critical',
+  // F-117-d: someone of the platform is among the reseller's people without its consent, now.
+  resellerEmergencyEntry: 'critical',
   // F-019-v8: a reseller stopped selling past a quota is losing sales now; its 80%, overage and digest are its to plan on.
   resellerQuotaStopped: 'critical',
   resellerQuotaUnpaid: 'critical',

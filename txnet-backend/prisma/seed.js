@@ -132,6 +132,8 @@ async function grantGatewayManageToAdmin() {
       create: { roleId: role.id, permissionId: permission.id },
     });
   }
+  // F-117-d (20261004000300): tier C's permission exists and is granted to no role — given by hand.
+  await prisma.permission.upsert({ where: { key: 'tenant.emergency_access' }, update: {}, create: { key: 'tenant.emergency_access' } });
   // The support staff's template holds the agent's day alone (F-033-d, 20261003001300).
   const support = await systemRoleOrThrow('Support');
   const agent = await prisma.permission.findUniqueOrThrow({ where: { key: 'support.agent' } });

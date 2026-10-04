@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { AdminAction, Prisma, SupportConsentScope } from '@prisma/client';
 import {
   AdmittedReseller,
+  EMERGENCY_ENTRY_HOURS,
+  mayEnterEmergency,
+  OutboxEventType,
   ResellerAccess,
   ResellerAccessRefused,
   ResellerAccessRejection,
@@ -23,7 +26,9 @@ export type SupportConsentRejection =
   | 'request_pending'
   | 'hours_out_of_range'
   | 'consent_not_found'
-  | 'reseller_only';
+  | 'reseller_only'
+  | 'emergency_not_permitted'
+  | 'emergency_live';
 
 export class SupportConsentRefused extends Error {
   constructor(readonly reason: SupportConsentRejection) {
@@ -86,6 +91,34 @@ function activityView(row: { id: string; adminId: string; createdAt: Date; newVa
   };
 }
 
+/** One emergency entry (F-117-d), as both sides read it: the reseller sees who, why and for how long. */
+export type EmergencyEntryView = {
+  id: string;
+  userId: string;
+  reason: string;
+  state: 'live' | 'ended' | 'expired';
+  startedAt: string;
+  expiresAt: string;
+  endedAt: string | null;
+};
+
+type EntryRow = Prisma.EmergencyAccessEntryGetPayload<object>;
+
+/** The outbox aggregate of a reseller's emergency entries (F-117-d). */
+const EMERGENCY_AGGREGATE = 'tenant.support';
+
+function entryView(row: EntryRow, now: Date): EmergencyEntryView {
+  return {
+    id: row.id,
+    userId: row.userId,
+    reason: row.reason,
+    state: row.endedAt ? 'ended' : row.expiresAt > now ? 'live' : 'expired',
+    startedAt: row.startedAt.toISOString(),
+    expiresAt: row.expiresAt.toISOString(),
+    endedAt: row.endedAt ? row.endedAt.toISOString() : null,
+  };
+}
+
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
 
 function stateOf(row: Row, now: Date): ConsentState {
@@ -139,7 +172,7 @@ export class SupportConsentService {
 
   list(actor: SupportConsentActor, tenantId: string, now = new Date()) {
     return this.run(actor, tenantId, 'read', async (reseller) => {
-      const [policy, rows] = await tenantTransaction(this.prisma, (tx) =>
+      const [policy, rows, entries] = await tenantTransaction(this.prisma, (tx) =>
         Promise.all([
           tx.supportConsentPolicy.findUnique({ where: { tenantId: reseller.id } }),
           tx.supportAccessConsent.findMany({
@@ -147,11 +180,17 @@ export class SupportConsentService {
             orderBy: { createdAt: 'desc' },
             take: HISTORY,
           }),
+          tx.emergencyAccessEntry.findMany({
+            where: { tenantId: reseller.id },
+            orderBy: { startedAt: 'desc' },
+            take: HISTORY,
+          }),
         ]),
       );
       return {
         defaultHours: policy?.defaultHours ?? SUPPORT_CONSENT_DEFAULT_HOURS,
         items: rows.map((r) => view(r, now)),
+        emergency: entries.map((e) => entryView(e, now)),
       };
     });
   }
@@ -294,6 +333,94 @@ export class SupportConsentService {
           },
         });
         return { defaultHours };
+      });
+    });
+  }
+
+  /**
+   * Tier C (F-117-d, ADR-0104 (5)): a platform staff member holding
+   * `tenant.emergency_access` (`mayEnterEmergency`) enters the reseller without its consent,
+   * for exactly {@link EMERGENCY_ENTRY_HOURS} hour from now, with a reason. Never
+   * extended: while their entry runs a second is `emergency_live`. The entry,
+   * its audit row and the owner's notice (an outbox event) commit together, so
+   * the entry stands whatever becomes of delivering the notice. The reason is
+   * recorded and shown in the reseller's history, never put in the notice.
+   */
+  enterEmergency(
+    actor: SupportConsentActor,
+    tenantId: string,
+    input: { reason: string },
+    ip: string,
+    now = new Date(),
+  ): Promise<EmergencyEntryView> {
+    return this.run(actor, tenantId, 'read', async (reseller) => {
+      if (reseller.as !== 'staff') throw new SupportConsentRefused('only_platform_requests');
+      if (!mayEnterEmergency(actor.permissions)) throw new SupportConsentRefused('emergency_not_permitted');
+      return tenantTransaction(this.prisma, async (tx) => {
+        const running = await tx.emergencyAccessEntry.findFirst({
+          where: { tenantId: reseller.id, userId: actor.userId, endedAt: null, expiresAt: { gt: now } },
+        });
+        if (running) throw new SupportConsentRefused('emergency_live');
+        const row = await tx.emergencyAccessEntry.create({
+          data: {
+            tenantId: reseller.id,
+            userId: actor.userId,
+            reason: input.reason,
+            startedAt: now,
+            expiresAt: new Date(now.getTime() + EMERGENCY_ENTRY_HOURS * HOUR),
+          },
+        });
+        await tx.adminAuditLog.create({
+          data: {
+            tenantId: reseller.id,
+            adminId: actor.userId,
+            action: 'emergency_entry_open',
+            targetEntityType: 'emergency_entry',
+            targetEntityId: row.id,
+            newValue: { startedAt: iso(row.startedAt), expiresAt: iso(row.expiresAt) },
+            adminIpAddress: ip,
+            reason: input.reason,
+          },
+        });
+        const tenant = await tx.tenant.findUnique({ where: { id: reseller.id }, select: { ownerUserId: true } });
+        if (tenant) {
+          await tx.outboxEvent.create({
+            data: {
+              aggregate: EMERGENCY_AGGREGATE,
+              aggregateId: reseller.id,
+              type: OutboxEventType.TENANT_EMERGENCY_ENTRY,
+              payload: { tenantId: reseller.id, ownerUserId: tenant.ownerUserId, entryId: row.id, expiresAt: row.expiresAt.toISOString() },
+            },
+            select: { id: true },
+          });
+        }
+        return entryView(row, now);
+      });
+    });
+  }
+
+  /** Its entrant leaves early (F-117-d). Anyone else, or an entry already over, is `consent_not_found`. */
+  endEmergency(actor: SupportConsentActor, tenantId: string, entryId: string, ip: string, now = new Date()): Promise<EmergencyEntryView> {
+    return this.run(actor, tenantId, 'read', async (reseller) => {
+      return tenantTransaction(this.prisma, async (tx) => {
+        const running = await tx.emergencyAccessEntry.findFirst({
+          where: { id: entryId, tenantId: reseller.id, userId: actor.userId, endedAt: null, expiresAt: { gt: now } },
+        });
+        if (!running) throw new SupportConsentRefused('consent_not_found');
+        const row = await tx.emergencyAccessEntry.update({ where: { id: running.id }, data: { endedAt: now, endedByUserId: actor.userId } });
+        await tx.adminAuditLog.create({
+          data: {
+            tenantId: reseller.id,
+            adminId: actor.userId,
+            action: 'emergency_entry_end',
+            targetEntityType: 'emergency_entry',
+            targetEntityId: row.id,
+            oldValue: { endedAt: null },
+            newValue: { endedAt: iso(now) },
+            adminIpAddress: ip,
+          },
+        });
+        return entryView(row, now);
       });
     });
   }

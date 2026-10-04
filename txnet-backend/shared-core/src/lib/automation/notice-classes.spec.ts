@@ -41,6 +41,7 @@ describe('notice classes (F-601-s)', () => {
       'purchaseStuckPanelUnavailable',
       'purchaseStuckStrategyNotBuilt',
       'purchaseStuckWriteUnconfirmed',
+      'resellerEmergencyEntry',
       'resellerQuotaCapReached',
       'resellerQuotaStopped',
       'resellerQuotaUnpaid',

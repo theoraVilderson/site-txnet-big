@@ -14,6 +14,7 @@ export const NOTIFY_TEMPLATES = [
   'subscriptionPaymentDue',
   'subscriptionSuspended',
   'resellerWholesaleUnfunded',
+  'resellerEmergencyEntry',
   'resellerQuotaNearing',
   'resellerQuotaOverageStarted',
   'resellerQuotaStopped',
@@ -131,6 +132,7 @@ type NotificationsNamespace = {
   payment?: Texts;
   subscription?: Texts;
   resellerBilling?: Texts;
+  resellerSupport?: Texts;
   resellerQuota?: Texts;
   resellerQuotaKeys?: Texts;
   panel?: Texts;
@@ -201,6 +203,18 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.subscription?.suspendedMany,
       fallback: '⛔ Your panel was suspended {{count}} times for unpaid renewals. Nothing was deleted: top up your billing balance and it is reactivated at once.',
       inbox: { read: (ns) => ns?.subscription?.suspendedManyTitle, fallback: 'Panel suspended for non-payment ({{count}})' },
+    },
+  },
+  // F-117-d (ADR-0104 (5)): the platform's staff entered without consent, for an emergency — told at entry.
+  resellerEmergencyEntry: {
+    read: (ns) => ns?.resellerSupport?.emergencyEntry,
+    fallback:
+      "🚨 A member of the platform's staff has entered your panel for an emergency, without your consent, for one hour. Their reason and every step they take are listed under support access in your panel.",
+    inbox: { read: (ns) => ns?.resellerSupport?.emergencyEntryTitle, fallback: 'Emergency access to your panel' },
+    many: {
+      read: (ns) => ns?.resellerSupport?.emergencyEntryMany,
+      fallback: "🚨 The platform's staff entered your panel {{count}} times for emergencies, without your consent. Their reasons and every step are listed under support access in your panel.",
+      inbox: { read: (ns) => ns?.resellerSupport?.emergencyEntryManyTitle, fallback: 'Emergency access to your panel ({{count}})' },
     },
   },
   // F-118-w: a reseller's billing wallet no longer funds its users on platform panels — once per refusal spell.

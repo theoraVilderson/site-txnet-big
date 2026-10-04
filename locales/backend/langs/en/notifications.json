@@ -344,5 +344,11 @@
     "userWroteMany": "💬 New messages in {{count}} conversations assigned to you.",
     "userWroteManyTitle": "New user messages ({{count}})",
     "open": "💬 Open the conversation"
+  },
+  "resellerSupport": {
+    "emergencyEntryTitle": "Emergency access to your panel",
+    "emergencyEntry": "🚨 A member of the platform's staff has entered your panel for an emergency, without your consent, for one hour. Their reason and every step they take are listed under support access in your panel.",
+    "emergencyEntryMany": "🚨 The platform's staff entered your panel {{count}} times for emergencies, without your consent. Their reasons and every step are listed under support access in your panel.",
+    "emergencyEntryManyTitle": "Emergency access to your panel ({{count}})"
   }
 }

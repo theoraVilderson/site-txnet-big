@@ -1,5 +1,5 @@
 import { SupportConsentScope } from '@prisma/client';
-import { SUPPORT_CONSENT_MAX_HOURS } from '@txnet-backend/shared-core';
+import { EMERGENCY_REASON_MIN, SUPPORT_CONSENT_MAX_HOURS } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 /**
@@ -24,6 +24,11 @@ export const grantConsentSchema = z
   .strict();
 
 export const consentPolicySchema = z.object({ defaultHours: hours }).strict();
+
+/** Tier C's entry (F-117-d): a reason is the whole body, and it is required. */
+export const emergencyEntrySchema = z.object({ reason: z.string().trim().min(EMERGENCY_REASON_MIN).max(500) }).strict();
+
+export type EmergencyEntryBody = z.infer<typeof emergencyEntrySchema>;
 
 /** `?page=` of the platform's trail (F-117-c); 50 rows a page. */
 export const activityQuerySchema = z.object({ page: z.coerce.number().int().min(1).max(10_000).default(1) }).strict();

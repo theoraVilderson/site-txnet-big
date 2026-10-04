@@ -101,7 +101,8 @@ export function quotaNotice(type: string, p: Record<string, unknown>): { templat
  * suspended for it (F-019-c), or that its billing wallet no longer funds its
  * users on platform panels (F-118-w, once per refusal spell) — through `EventNoticeSender` (F-067-o): the
  * owner's inbox and bot, each once under its own marker. Its quotas too
- * (F-019-v8): 80%, 100%, stopped, and the daily digest ({@link quotaNotice}). The wheel's
+ * (F-019-v8): 80%, 100%, stopped, and the daily digest ({@link quotaNotice}). An emergency
+ * entry by the platform's staff (F-117-d), at entry. The wheel's
  * day at 80% of its cap (F-707-e) goes to each wheel admin the payload names. No live push of its
  * own: the inbox row's `notification.created` already reaches every open
  * device (F-035-b), and no page reads a subscription event.
@@ -152,6 +153,11 @@ export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap 
       const quota = quotaNotice(event.type, p);
       if (!quota) throw new Error(`outbox event ${event.id} is a quota notice auth-service has no words for`);
       await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId: ownerUserId, ...quota } });
+      return;
+    }
+    if (event.type === OutboxEventType.TENANT_EMERGENCY_ENTRY) {
+      // F-117-d (ADR-0104 (5)): told at entry. No params: the reason is the history's, never the message's.
+      await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId: ownerUserId, template: 'resellerEmergencyEntry', params: {} } });
       return;
     }
     if (event.type === OutboxEventType.TENANT_WHOLESALE_UNFUNDED) {

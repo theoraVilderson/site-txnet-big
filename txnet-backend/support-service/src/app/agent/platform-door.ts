@@ -1,6 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { TenantStatus, TenantType } from '@prisma/client';
-import { AccessTrace, holdsPermission, liveSupportConsent, recordPlatformAccess, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import {
+  AccessTrace,
+  holdsPermission,
+  liveEmergencyEntry,
+  liveSupportConsent,
+  recordPlatformAccess,
+  runWithTenant,
+  tenantTransaction,
+} from '@txnet-backend/shared-core';
 
 import { ConversationRefused, SupportCaller } from '../conversations/refusal';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,7 +29,8 @@ export type PlatformCaller = { userId: string; tenantId: string; permissions: st
  * In order: the caller is the platform owner's staff holding `support.agent`
  * (`not_platform_staff`); the path names a reseller that is not terminated
  * (`reseller_not_found`); that reseller has a live consent (`consent_required`)
- * whose scope covers the route (`consent_read_only`). The consent is read on
+ * whose scope covers the route (`consent_read_only`) — or, short of one, the
+ * caller's own running emergency entry (F-117-d, tier C). The consent is read on
  * **every request** through `liveSupportConsent`, so a revoke ends access on
  * the next one; nothing caches it.
  *
@@ -62,18 +71,15 @@ export class PlatformSupportDoor {
     return runWithTenant({ id: reseller.id }, async () => {
       // In a tenant transaction: the consent table is under RLS and outside `withTenant`'s registry.
       await tenantTransaction(this.prisma, async (tx) => {
+        const base = { tenantId: reseller.id, actorUserId: caller.userId, capability: need, trace: caller.trace };
         const consent = await liveSupportConsent(tx, reseller.id, now);
-        if (!consent) throw new ConversationRefused('consent_required');
-        if (need === 'act' && consent.scope !== 'act') throw new ConversationRefused('consent_read_only');
-        await recordPlatformAccess(tx, {
-          tenantId: reseller.id,
-          actorUserId: caller.userId,
-          tier: 'consent',
-          consentId: consent.id,
-          scope: consent.scope,
-          capability: need,
-          trace: caller.trace,
-        });
+        if (consent && (need === 'read' || consent.scope === 'act')) {
+          return recordPlatformAccess(tx, { ...base, tier: 'consent', consentId: consent.id, scope: consent.scope });
+        }
+        // Tier C (F-117-d): this staff member's own running emergency entry, as `act`.
+        const entry = await liveEmergencyEntry(tx, reseller.id, caller, now);
+        if (entry) return recordPlatformAccess(tx, { ...base, tier: 'emergency', entryId: entry.id, scope: 'act' });
+        throw new ConversationRefused(consent ? 'consent_read_only' : 'consent_required');
       });
       return await work({ tenantId: reseller.id, userId: caller.userId });
     });
