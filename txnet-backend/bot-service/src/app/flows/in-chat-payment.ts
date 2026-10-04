@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { BotText, PaymentEvent, TelegramLikeBotClient } from '@txnet-backend/messenger';
+import { BotText, escapeHtml, PaymentEvent, TelegramLikeBotClient } from '@txnet-backend/messenger';
 import { BillingApiClient, InChatPaymentBody, PreCheckoutVerdict } from '../billing-api/billing-api.client';
 import { ChatContext } from '../conversation/nav.types';
 import { BotCopy } from '../locale/bot-copy';
@@ -94,7 +94,8 @@ export class InChatPayment {
     const text: BotText = settled
       ? { key: BotKeys.topUp.paidCredited, values: { credited: money(answer.data.credited as string, answer.data.currencyCode) } }
       : { key: BotKeys.topUp.paidPending };
-    await client.sendMessage(ctx.chatId, this.copy.text(ctx.lang, text));
+    // HTML parse mode: billing's `msg` and amounts are data (`escapeHtml`, messenger).
+    await client.sendMessage(ctx.chatId, escapeHtml(this.copy.text(ctx.lang, text)));
   }
 
 }

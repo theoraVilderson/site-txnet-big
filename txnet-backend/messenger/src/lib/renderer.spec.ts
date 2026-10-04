@@ -203,3 +203,18 @@ describe('BotViewRenderer — a screen that orients the reader', () => {
     });
   });
 });
+
+// Every message is sent in HTML parse mode (`TelegramLikeBotClient.sendMessage`), and the bot's own
+// copy holds no markup. Text a person wrote — a subject, a name, a title — is escaped in the
+// message, or one `<` fails the send; a button label is plain text and stays as written.
+describe('BotViewRenderer — text a person wrote', () => {
+  it('escapes the message for HTML and leaves the buttons as written', () => {
+    const out = new BotViewRenderer().render('telegram', {
+      id: 'x',
+      body: { raw: 'VPN <down> & slow' },
+      actions: [[{ id: 'a', label: { raw: 'Ticket <1>' } }]],
+    }, t);
+    expect(out.text).toBe('VPN &lt;down&gt; &amp; slow');
+    expect(out.replyMarkup).toEqual({ inline_keyboard: [[{ text: 'Ticket <1>', callback_data: 'a' }]] });
+  });
+});

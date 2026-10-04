@@ -611,6 +611,29 @@ describe('UserNotifier', () => {
     expect(client.sendMessage).not.toHaveBeenCalled();
   });
 
+  // Every chat message is sent in HTML parse mode: a value a person wrote (a subject, a title) is
+  // escaped for the chat, or one `<` fails the whole send. The inbox row is plain text and keeps it as written.
+  it('escapes what a person wrote for the chat, and leaves the inbox row as written', async () => {
+    const client = botClient();
+    const inbox = { put: vi.fn(async () => undefined) };
+    const locale = {
+      getNamespace: vi.fn(() => ({ support: { replied: '💬 «{{subject}}»', repliedTitle: 'answered' } })),
+      getKey: vi.fn(() => undefined),
+      getDefaultLanguage: () => 'fa',
+    } as unknown as LocaleService;
+    const notifier = new UserNotifier(
+      notifierPrisma({ user: { languagePreference: 'fa' }, links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+      registry(client),
+      locale,
+      inbox as unknown as NotificationInboxClient,
+    );
+    const params = { subject: 'VPN <down> & slow' };
+    await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'supportReplied', params }));
+    expect(client.sendMessage).toHaveBeenCalledWith('5501', '💬 «VPN &lt;down&gt; &amp; slow»');
+    await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'inbox', template: 'supportReplied', params }));
+    expect(inbox.put).toHaveBeenCalledWith(expect.objectContaining({ body: '💬 «VPN <down> & slow»' }));
+  });
+
   // F-1507: the rendered suggestion is validated before any channel — a copy edit that pressures is told nowhere.
   it('a suggestion whose text pressures or carries a second call to action reaches no channel', async () => {
     const params = { actionId: 'a-1', serviceSku: 'VPN-1', planSku: 'VPN-1', price: '5 USD', days: '3' };

@@ -1,5 +1,5 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
-import { BotClientRegistry, BotPlatform } from '@txnet-backend/messenger';
+import { BotClientRegistry, BotPlatform, escapeHtml } from '@txnet-backend/messenger';
 import { lotteryJoinCallback, SUGGESTION_OPT_OUT_PREFIX, suggestionCopyVerdict, supportOpenCallback } from '@txnet-backend/shared-core';
 
 import { LocaleService } from '../../locale/locale.service';
@@ -1069,6 +1069,9 @@ export class UserNotifier {
             (request.template === 'supportReplied' || request.template === 'supportResolved') && params.conversationId
             ? { inline_keyboard: [[{ text: ns?.support?.open ?? '💬 Open the conversation', callback_data: supportOpenCallback(params.conversationId) }]] }
             : undefined;
+    // A chat message is sent in HTML parse mode; these templates hold no markup, so the whole text is
+    // escaped — a subject or a title a person wrote can never fail the send. The inbox row stays as written.
+    const chatText = escapeHtml(text);
     let lastError: unknown = null;
     const sent: BotPlatform[] = [];
     for (const link of ordered) {
@@ -1076,7 +1079,7 @@ export class UserNotifier {
       const client = await this.bots.primaryClient(tenantId, platform, 'identity:UserNotifier');
       if (!client) continue;
       try {
-        await (markup ? client.sendMessage(link.platformUserId, text, markup) : client.sendMessage(link.platformUserId, text));
+        await (markup ? client.sendMessage(link.platformUserId, chatText, markup) : client.sendMessage(link.platformUserId, chatText));
         sent.push(platform);
         if (!every) break;
       } catch (err) {

@@ -51,8 +51,8 @@ answers (ADR-0009, ADR-0112). The rules are support's
    would not hand over is `support.fileUnreadable`, never sent as nothing. A
    file outside a thread is `support.fileOutside`; one while composing,
    `support.composeFileFirst`.
-9. **Text a person wrote** (subject, message, file name) is data: HTML-escaped
-   for the parse mode and never interpolated.
+9. **Text a person wrote** (subject, message, file name) is data, never
+   interpolated; the renderer escapes every message for HTML (messenger).
 10. **Notices.** An agent's reply or resolve also reaches the user's chats
     (support's `SupportNotifier`, auth-api's `supportReplied`/`supportResolved`
     on `bot`), with an Open button that lands in the thread, ready for the

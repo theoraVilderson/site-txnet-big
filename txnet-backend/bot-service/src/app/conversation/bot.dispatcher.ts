@@ -3,6 +3,7 @@ import {
   BotClientRegistry,
   BotViewRenderer,
   capabilitiesOf,
+  escapeHtml,
 } from '@txnet-backend/messenger';
 import { BotCopy } from '../locale/bot-copy';
 import { ChatLanguage } from '../locale/chat-language';
@@ -89,7 +90,7 @@ export class BotDispatcher {
       const t = this.copy.translator(lang);
       const rendered = this.renderer.render(ctx.platform, result.view, t);
       const text = deletionFailed
-        ? `${this.copy.text(lang, { key: BotKeys.register.passwordKept })}\n\n${rendered.text}`
+        ? `${escapeHtml(this.copy.text(lang, { key: BotKeys.register.passwordKept }))}\n\n${rendered.text}`
         : rendered.text;
 
       await client.sendMessage(ctx.chatId, text, rendered.replyMarkup);
@@ -108,7 +109,7 @@ export class BotDispatcher {
         });
         if ('reason' in sent) {
           this.logger.error(`${ctx.platform}: invoice for payment ${payload} not sent: ${sent.reason}`);
-          await client.sendMessage(ctx.chatId, this.copy.text(lang, { key: BotKeys.common.tryAgain }));
+          await client.sendMessage(ctx.chatId, escapeHtml(this.copy.text(lang, { key: BotKeys.common.tryAgain })));
         }
       }
 
@@ -117,7 +118,7 @@ export class BotDispatcher {
         try {
           await client.sendDocument(ctx.chatId, result.document);
         } catch {
-          await client.sendMessage(ctx.chatId, this.copy.text(lang, { key: BotKeys.common.tryAgain }));
+          await client.sendMessage(ctx.chatId, escapeHtml(this.copy.text(lang, { key: BotKeys.common.tryAgain })));
         }
       }
 

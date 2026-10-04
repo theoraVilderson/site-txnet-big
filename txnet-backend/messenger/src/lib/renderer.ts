@@ -221,10 +221,19 @@ export class BotViewRenderer {
     }
 
     return {
-      text: lines.join('\n'),
+      // Sent in HTML parse mode (`TelegramLikeBotClient.sendMessage`). The bot's
+      // copy holds no markup, so the whole message is escaped once, here: text a
+      // person wrote — a subject, a name, a title — can never break the send.
+      // Button labels are plain text to both platforms and stay as written.
+      text: escapeHtml(lines.join('\n')),
       ...(replyMarkup ? { replyMarkup } : {}),
       degradations,
       numbered,
     };
   }
+}
+
+/** `&`, `<` and `>` as the HTML parse mode reads them — all it needs outside a tag. */
+export function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

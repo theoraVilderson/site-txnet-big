@@ -261,12 +261,12 @@ function refusal(reason: string | null | undefined, msg?: string): BotText {
 }
 
 /**
- * Text a person wrote (a subject, a message, a file name), as data: escaped
- * for the HTML parse mode every screen is sent in, and never interpolated —
- * a `{{x}}` someone typed stays as typed.
+ * Text a person wrote (a subject, a message, a file name), as data: never
+ * interpolated — a `{{x}}` someone typed stays as typed. The renderer escapes
+ * the message for HTML; a button label is plain text and needs nothing.
  */
 function plain(value: string): BotText {
-  return { raw: '{{v}}', values: { v: value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') } };
+  return { raw: '{{v}}', values: { v: value } };
 }
 
 /** A UUID as 22 base64url characters, and back. */

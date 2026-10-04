@@ -181,6 +181,12 @@ claims, never trusted. `downloadFile(fileId, maxBytes)` is `getFile` then
 any failure. `sendDocument` uploads bytes as multipart, never a URL the
 platform would fetch, and throws like `sendMessage`.
 
+**Every message is HTML-escaped** (`escapeHtml`): `sendMessage` sends in HTML parse
+mode, so the renderer escapes the body it builds (button labels are plain text
+and stay as written), and any other sender of copy plus data escapes it first —
+`BotDispatcher`, `InChatPayment`, auth's `UserNotifier` (its inbox row stays as
+written). Before 2026-10-04 one `<` in a name or a title failed the whole send.
+
 ## The command menu
 
 `setMyCommands` publishes a bot's command list per language, so `/menu` and
