@@ -57,6 +57,12 @@ pinned by `support/support.test.ts`.
    support's to refuse, in its own words. A file is a link only with a `url`
    (scanned clean, five minutes from the read); otherwise its scan state, or
    "removed" when retention `expired` it.
+8a. **A guide before the conversation** (F-414-k, `SupportGuideSuggestions.tsx`):
+   the new-conversation form shows up to 3 guides — those placed on
+   `route:support`, then, once typing rests 500 ms, the ones subject + message
+   match (`supportGuideQuery`, ≤ 100 characters; guide's `guide-search` with
+   `match=any`). Each opens in place. An offer, never a gate: it never blocks
+   sending, and a failed read shows nothing.
 
 Every refusal is support's translated `msg` (`useApiErrorMessage`); the page
 holds sentences only for statuses, scan states, sender kinds and its own

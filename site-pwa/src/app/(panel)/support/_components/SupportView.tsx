@@ -18,6 +18,7 @@ import { formatInstant } from "../../_lib/datetime";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { Alert, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { STATUS_KEYS, SUPPORT_KEYS as K } from "../_lib/support";
+import { SupportGuideSuggestions } from "./SupportGuideSuggestions";
 
 /**
  * The user's support (F-033-o): their conversations, newest activity first,
@@ -221,6 +222,8 @@ function NewConversation({ onCancel, onOpened }: { onCancel: () => void; onOpene
         {t("common", K.form.body)}
         <textarea dir="auto" required rows={5} className={`${input} mt-1`} value={body} maxLength={SUPPORT_BODY_MAX} onChange={(e) => setBody(e.target.value)} />
       </label>
+      {/* F-414-k: guides that may already answer it — offered, never in the way of sending. */}
+      <SupportGuideSuggestions subject={subject} body={body} />
       {failure && <Alert>{failure}</Alert>}
       <div className="flex items-center gap-2">
         <button type="submit" className={primaryButton} disabled={busy || !body.trim()}>

@@ -43,5 +43,6 @@ shows what that tenant's panel shows a stranger, through the same resolver.
 
 ## Not here
 
-Help placed on other bot screens (`bot_screen:<screen>` besides the main menu)
-is shown where support is (F-414-k) and nowhere else yet.
+Help placed on other bot screens: `bot_screen:support` is shown under support's
+compose prompt (F-414-k, [contract.support.md](contract.support.md) rule 11);
+the other screens' are not shown yet.

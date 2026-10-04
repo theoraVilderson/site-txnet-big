@@ -26,7 +26,7 @@ import { TopUpFlow } from '../flows/top-up.flow';
 import { TimeZoneFlow } from '../flows/time-zone.flow';
 import { LOTTERY_ACTION_PREFIX, LotteryFlow } from '../flows/lottery.flow';
 import { WheelFlow } from '../flows/wheel.flow';
-import { SUPPORT_ACTION_PREFIX, SupportFlow } from '../flows/support.flow';
+import { SUPPORT_ACTION_PREFIX, SUPPORT_SUGGESTED_STEP, SupportFlow } from '../flows/support.flow';
 import { GUIDE_KEY_PREFIX, GUIDE_OS_PREFIX, GuideFlow } from '../flows/guide.flow';
 import { GuideApiClient } from '../guide-api/guide-api.client';
 import { SupportApiClient } from '../support-api/support-api.client';
@@ -176,12 +176,16 @@ export class ConversationRouter {
 
     // F-309. A thread's buttons name it, so they need no state; the open one is also under a reply notice.
     if (actionId === ACTIONS.support) return this.support.start(ctx);
-    if (actionId?.startsWith(SUPPORT_ACTION_PREFIX)) return this.support.tap(ctx, actionId);
+    if (actionId?.startsWith(SUPPORT_ACTION_PREFIX)) return this.support.tap(ctx, actionId, state);
 
     // F-414-f. Every guide button names what it opens, so none needs state; a guest may tap them.
     if (actionId === ACTIONS.guides) return this.guides.start(ctx);
     if (actionId === ACTIONS.guidesInstall) return this.guides.install();
-    if (actionId?.startsWith(GUIDE_OS_PREFIX) || actionId?.startsWith(GUIDE_KEY_PREFIX)) return this.guides.tap(ctx, actionId);
+    if (actionId?.startsWith(GUIDE_OS_PREFIX) || actionId?.startsWith(GUIDE_KEY_PREFIX)) {
+      const shown = await this.guides.tap(ctx, actionId);
+      // F-414-k: a guide opened from support's offer keeps the written message and the way on.
+      return state?.step === SUPPORT_SUGGESTED_STEP ? this.support.keepDraft(shown, state) : shown;
+    }
     // A file only means something inside a thread; anywhere else it has nowhere to go.
     if (ctx.file && state?.flow !== 'support') return this.support.fileOutside();
 

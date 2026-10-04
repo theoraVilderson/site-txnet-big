@@ -62,7 +62,8 @@
     "supportRate": "{{n}} ⭐",
     "supportFile": "📎 {{name}}",
     "guides": "📖 Guides",
-    "guidesInstall": "📲 How to connect"
+    "guidesInstall": "📲 How to connect",
+    "supportSendAnyway": "📨 Send it anyway"
   },
   "common": {
     "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
@@ -368,7 +369,8 @@
       "already_rated": "You have already rated this conversation.",
       "not_closed": "This conversation is not closed.",
       "reopen_expired": "It is too late to reopen this one. Start a new conversation."
-    }
+    },
+    "suggested": "These guides may already answer it. Open one — or send your message anyway, and support will answer here."
   },
   "guides": {
     "menu": "📖 Guides. Choose one, or see how to connect on your device.",

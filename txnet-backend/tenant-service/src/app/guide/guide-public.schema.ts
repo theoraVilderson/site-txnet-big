@@ -3,6 +3,7 @@ import { BackendI18nKeys, guideSlotRefusal } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 import type { GuidePlacementQuery } from './guide-reader';
+import { GUIDE_MATCHES } from './guide-search';
 
 const invalid = BackendI18nKeys.errors.validation.failed;
 
@@ -44,14 +45,16 @@ export const guideInternalOneQuerySchema = z.object({ tenantId: z.string().uuid(
 
 const readerSurface = z.nativeEnum(GuideSurface).refine((v) => v !== GuideSurface.any, invalid).default(GuideSurface.panel);
 
-/** `?q=&surface=` (F-414-j): 2–100 characters, on the surface the reader is on. */
+const searchMatch = z.enum(GUIDE_MATCHES).default('all');
+
+/** `?q=&surface=&match=` (F-414-j; `match=any` for a support message, F-414-k): 2–100 characters, on the surface the reader is on. */
 export const guideSearchQuerySchema = z
-  .object({ q: z.string().trim().min(2, invalid).max(100, invalid), surface: readerSurface })
+  .object({ q: z.string().trim().min(2, invalid).max(100, invalid), surface: readerSurface, match: searchMatch })
   .strict()
-  .transform((v) => ({ q: v.q, surface: v.surface as Exclude<GuideSurface, 'any'> }));
+  .transform((v) => ({ q: v.q, surface: v.surface as Exclude<GuideSurface, 'any'>, match: v.match }));
 
 /** The bot's search (F-414-k): the same, for a tenant named by id. */
 export const guideInternalSearchQuerySchema = z
-  .object({ tenantId: z.string().uuid(invalid), q: z.string().trim().min(2, invalid).max(100, invalid), surface: readerSurface })
+  .object({ tenantId: z.string().uuid(invalid), q: z.string().trim().min(2, invalid).max(100, invalid), surface: readerSurface, match: searchMatch })
   .strict()
-  .transform((v) => ({ tenantId: v.tenantId, q: v.q, surface: v.surface as Exclude<GuideSurface, 'any'> }));
+  .transform((v) => ({ tenantId: v.tenantId, q: v.q, surface: v.surface as Exclude<GuideSurface, 'any'>, match: v.match }));

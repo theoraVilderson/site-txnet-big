@@ -5053,6 +5053,11 @@
       "clear": "Clear the search",
       "none": "No guide matches “{{q}}”.",
       "tooShort": "Type at least 2 letters."
+    },
+    "beforeSupport": {
+      "title": "Before you write: these guides may help",
+      "matched": "These guides may already answer it",
+      "stillSend": "Not what you need? Send your message — support will answer."
     }
   }
 }

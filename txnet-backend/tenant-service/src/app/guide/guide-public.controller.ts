@@ -5,7 +5,7 @@ import type { Request, Response } from 'express';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { guideKeySchema, guideListQuerySchema, guideSearchQuerySchema } from './guide-public.schema';
 import { GuidePlacementQuery, GuideRead, GuideReader, ResolvedGuide } from './guide-reader';
-import type { GuideHit } from './guide-search';
+import type { GuideHit, GuideMatch } from './guide-search';
 
 /** `GET /api/public/tenant/guides` (F-414-b). */
 export const GUIDES_PATH = publicPath('tenant', 'guides');
@@ -77,10 +77,10 @@ export class GuideSearchController {
   async search(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-    @Query(new ZodValidationPipe(guideSearchQuerySchema)) q: { q: string; surface: 'panel' | 'bot' },
+    @Query(new ZodValidationPipe(guideSearchQuerySchema)) q: { q: string; surface: 'panel' | 'bot'; match: GuideMatch },
   ): Promise<{ hits: GuideHit[] } | undefined> {
     const tenantId = TenantContext.current('guide search by host').id;
-    const read = await this.reader.search(tenantId, q.q, q.surface, languageOf(req));
+    const read = await this.reader.search(tenantId, q.q, q.surface, languageOf(req), q.match);
     if (notModified(req, res, read.etag)) return undefined;
     return answer(res, read);
   }

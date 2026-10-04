@@ -1,3 +1,5 @@
+import { GuideApiClient } from '../guide-api/guide-api.client';
+import { GUIDE_KEY_PREFIX } from './guide.flow';
 import { Injectable } from '@nestjs/common';
 import { BotAction, BotText, BotView } from '@txnet-backend/messenger';
 import { SUPPORT_CALLBACK_PREFIX, supportOpenCallback } from '@txnet-backend/shared-core';
@@ -45,6 +47,12 @@ export const supportAction = {
 
 export const SUPPORT_THREAD_STEP = 'support.thread';
 export const SUPPORT_COMPOSE_STEP = 'support.compose';
+/** F-414-k. The message is written and guides were offered for it; it is kept here until the user goes on. */
+export const SUPPORT_SUGGESTED_STEP = 'support.suggested';
+/** F-414-k. "Send it anyway": open the conversation with the kept message. */
+export const SUPPORT_SEND_ANYWAY = `${SUPPORT_ACTION_PREFIX}s`;
+/** How many guides are offered for a message, or listed under the compose prompt. */
+const SUGGEST_MAX = 3;
 
 /** A long message is cut on the screen; the panel has it whole. Six of these stay under a chat message's 4096. */
 const LINE_MAX = 500;
@@ -52,6 +60,7 @@ const LINE_MAX = 500;
 const FILE_BUTTONS_MAX = 5;
 
 const all: BotAction = { id: ACTIONS.support, label: { key: BotKeys.action.supportAll } };
+const sendAnyway: BotAction = { id: SUPPORT_SEND_ANYWAY, label: { key: BotKeys.action.supportSendAnyway } };
 
 /**
  * Support from the chat (F-309): the panel's own `/api/support/*` routes,
@@ -71,6 +80,7 @@ export class SupportFlow {
     private readonly api: SupportApiClient,
     private readonly access: ChatAccess,
     private readonly files: ChatFiles,
+    private readonly guides: GuideApiClient,
   ) {}
 
   /** The user's threads, newest activity first, and a new one. */
@@ -108,14 +118,15 @@ export class SupportFlow {
   }
 
   /** A `sup:` button. Unknown kinds open the list. */
-  async tap(ctx: ChatContext, actionId: string): Promise<FlowResult> {
+  async tap(ctx: ChatContext, actionId: string, state?: NavState | null): Promise<FlowResult> {
     if (actionId === ACTIONS.supportNew) return this.newThread(ctx);
+    if (actionId === SUPPORT_SEND_ANYWAY) return this.sendAnyway(ctx, state ?? null);
     const [kind, a, b] = actionId.slice(SUPPORT_ACTION_PREFIX.length).split(':');
     const call = await this.callContext(ctx);
     if (!call) return this.signedOut();
 
     if (kind === 'o' && a) return this.thread(call, a);
-    if (kind === 'c' && a) return this.compose(a);
+    if (kind === 'c' && a) return this.compose(ctx, a);
     if (kind === 'f' && a && b) return this.file(call, expand(a), expand(b));
     if (kind === 'r' && a && b) {
       const done = await this.api.rate(a, Number(b), call);
@@ -130,16 +141,17 @@ export class SupportFlow {
 
   /** Typed text or a file, while composing a new thread or looking at one. */
   async handle(ctx: ChatContext, state: NavState, actionId: string | null): Promise<FlowResult> {
-    if (actionId) return this.tap(ctx, actionId);
+    if (actionId) return this.tap(ctx, actionId, state);
     const call = await this.callContext(ctx);
     if (!call) return this.signedOut();
     const text = ctx.text?.trim() ?? '';
 
-    if (state.step === SUPPORT_COMPOSE_STEP) {
+    // A new message while guides are offered replaces the kept one, and is offered for again.
+    if (state.step === SUPPORT_COMPOSE_STEP || state.step === SUPPORT_SUGGESTED_STEP) {
       if (ctx.file || !text) return { view: say('support.compose', { key: BotKeys.support.composeFileFirst }), nextState: state };
-      const opened = await this.api.open({ body: text, ...(state.data.categoryId ? { categoryId: state.data.categoryId } : {}) }, call);
-      if (!opened.ok || !opened.data) return { view: say('support.compose', refusal(opened.error?.reason, opened.msg)), nextState: state };
-      return this.thread(call, opened.data.id);
+      const offer = await this.offerGuides(ctx, text, state.data.categoryId);
+      if (offer) return offer;
+      return this.open(call, text, state.data.categoryId, state);
     }
 
     const id = state.data.conversationId;
@@ -169,7 +181,7 @@ export class SupportFlow {
     const read = await this.api.categories(call);
     // No categories (or none readable) is not a reason to refuse: support files it uncategorised.
     const categories = read.ok && read.data ? read.data : [];
-    if (categories.length === 0) return this.compose(null);
+    if (categories.length === 0) return this.compose(ctx, null);
     return {
       view: view(
         'support.category',
@@ -180,11 +192,67 @@ export class SupportFlow {
     };
   }
 
-  private compose(categoryId: string | null): FlowResult {
+  private async compose(ctx: ChatContext, categoryId: string | null): Promise<FlowResult> {
     return {
-      view: view('support.compose', { key: BotKeys.support.compose }, [[all]]),
+      view: view('support.compose', { key: BotKeys.support.compose }, [...(await this.placedGuides(ctx)), [all]]),
       nextState: { flow: 'support', step: SUPPORT_COMPOSE_STEP, data: categoryId ? { categoryId } : {} },
     };
+  }
+
+  /**
+   * F-414-k. The guides placed on the bot's support screen, as buttons under
+   * the compose prompt: read before writing, if the user likes. Nothing when
+   * guides are not reachable — the prompt stands on its own.
+   */
+  private async placedGuides(ctx: ChatContext): Promise<BotAction[][]> {
+    if (!this.guides.isConfigured) return [];
+    const read = await this.guides.forSlot(ctx.integration.tenantId, 'bot_screen', 'support', ctx.lang);
+    return read.ok ? read.guides.slice(0, SUGGEST_MAX).map((g) => [{ id: `${GUIDE_KEY_PREFIX}${g.key}`, label: plain(g.title) }]) : [];
+  }
+
+  /**
+   * F-414-k. Guides the message matches, offered before anything opens, with
+   * "Send it anyway" beside them; the message is kept in the state. `null` —
+   * open at once — when nothing matches or the guides cannot be read: an offer,
+   * never a gate.
+   */
+  private async offerGuides(ctx: ChatContext, body: string, categoryId?: string): Promise<FlowResult | null> {
+    if (!this.guides.isConfigured) return null;
+    const found = await this.guides.search(ctx.integration.tenantId, body, ctx.lang);
+    if (!found.ok || found.hits.length === 0) return null;
+    return {
+      view: view('support.suggested', { key: BotKeys.support.suggested }, [
+        ...found.hits.slice(0, SUGGEST_MAX).map((h) => [{ id: `${GUIDE_KEY_PREFIX}${h.key}`, label: plain(h.title) }]),
+        [sendAnyway],
+      ]),
+      nextState: { flow: 'support', step: SUPPORT_SUGGESTED_STEP, data: { body, ...(categoryId ? { categoryId } : {}) } },
+    };
+  }
+
+  /**
+   * F-414-k. A guide opened from the offer keeps the message, and "Send it
+   * anyway" under it: the router hands the guide's screen here when the chat
+   * was on the offer.
+   */
+  keepDraft(guide: FlowResult, state: NavState): FlowResult {
+    const { clearKeyboard: _dropped, ...shown } = guide.view;
+    void _dropped;
+    return { ...guide, view: { ...shown, actions: [...(shown.actions ?? []), [sendAnyway]] }, nextState: state };
+  }
+
+  /** F-414-k. "Send it anyway": the kept message opens the conversation. */
+  private async sendAnyway(ctx: ChatContext, state: NavState | null): Promise<FlowResult> {
+    const body = state?.step === SUPPORT_SUGGESTED_STEP ? state.data.body : undefined;
+    if (!body) return this.newThread(ctx);
+    const call = await this.callContext(ctx);
+    if (!call) return this.signedOut();
+    return this.open(call, body, state?.data.categoryId, state as NavState);
+  }
+
+  private async open(call: SupportCallContext, body: string, categoryId: string | undefined, state: NavState): Promise<FlowResult> {
+    const opened = await this.api.open({ body, ...(categoryId ? { categoryId } : {}) }, call);
+    if (!opened.ok || !opened.data) return { view: say('support.compose', refusal(opened.error?.reason, opened.msg)), nextState: state };
+    return this.thread(call, opened.data.id);
   }
 
   /** The latest messages, read up to the last, with what the thread's status allows. */

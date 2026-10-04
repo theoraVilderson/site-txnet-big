@@ -110,3 +110,17 @@ export function osFromUserAgent(ua: string): GuideOs | null {
   if (/linux|x11/i.test(ua)) return "linux";
   return null;
 }
+
+/** The search's own ceiling (`guideSearchQuerySchema`). */
+const SEARCH_MAX = 100;
+
+/**
+ * What a new support conversation is matched against (F-414-k): the subject
+ * and the start of the message, one line, cut to the search's 100 characters —
+ * the start of a message says what it is about. Empty below 3 characters,
+ * where nothing is worth asking.
+ */
+export function supportGuideQuery(subject: string, body: string): string {
+  const q = `${subject} ${body}`.replace(/\s+/g, " ").trim().slice(0, SEARCH_MAX).trimEnd();
+  return q.length < 3 ? "" : q;
+}

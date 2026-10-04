@@ -180,6 +180,9 @@ export const guideReadApi = {
   /** Every guide this tenant shows on the panel holding all of `q`'s words (F-414-j), at most a page. */
   search: (q: string) =>
     search<{ hits: GuideHit[] }>(`?${new URLSearchParams({ q, surface: "panel" })}`, { method: "GET" }).then((r) => r.hits),
+  /** The guides a support message may be answered by (F-414-k): any meaningful word of it, ranked. */
+  suggest: (q: string) =>
+    search<{ hits: GuideHit[] }>(`?${new URLSearchParams({ q, surface: "panel", match: "any" })}`, { method: "GET" }).then((r) => r.hits),
 };
 
 /** `GET /api/public/tenant/guide-search` (F-414-j) — its own path, so no guide key shadows it. */

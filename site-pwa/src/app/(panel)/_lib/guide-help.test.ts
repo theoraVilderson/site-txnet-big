@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { guideReadApi } from "@/lib/guide-api";
-import { GUIDE_SECTION_ROUTES, osFromUserAgent, sectionOfPath } from "./guide-help";
+import { GUIDE_SECTION_ROUTES, osFromUserAgent, sectionOfPath, supportGuideQuery } from "./guide-help";
 import { parseGuideMarkdown } from "./guide-markdown";
 
 /**
@@ -116,5 +116,26 @@ describe("the reader", () => {
     await guideReadApi.search("نصب اندروید");
     expect(seen[0]).toMatch(/\/public\/tenant\/guide-search\?q=%D9%86%D8%B5%D8%A8\+/);
     expect(seen[0]).toMatch(/&surface=panel$/);
+  });
+
+  it("asks for a support message's guides by any of its words (F-414-k)", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      seen.push(url);
+      return new Response(JSON.stringify({ ok: true, data: { hits: [] } }), { status: 200 });
+    });
+    await guideReadApi.suggest("vpn does not connect");
+    expect(seen[0]).toMatch(/\/public\/tenant\/guide-search\?q=vpn\+does\+not\+connect&surface=panel&match=any$/);
+  });
+});
+
+describe("the guides offered before a support conversation (F-414-k)", () => {
+  it("are asked for by the subject and the start of the message, in the search's 100 characters", () => {
+    expect(supportGuideQuery("", "")).toBe("");
+    expect(supportGuideQuery(" ", "ok")).toBe("");
+    expect(supportGuideQuery("Android", "  my app\n does not connect ")).toBe("Android my app does not connect");
+    const long = supportGuideQuery("", "x ".repeat(80));
+    expect(long.length).toBeLessThanOrEqual(100);
+    expect(long.length).toBeGreaterThan(95);
   });
 });

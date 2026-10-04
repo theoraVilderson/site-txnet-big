@@ -57,6 +57,13 @@ answers (ADR-0009, ADR-0112). The rules are support's
     (support's `SupportNotifier`, auth-api's `supportReplied`/`supportResolved`
     on `bot`), with an Open button that lands in the thread, ready for the
     answer.
+11. **A guide before the conversation** (F-414-k): the compose prompt lists up
+    to 3 guides placed on `bot_screen:support`; a typed message is matched
+    (`GuideApiClient.search`, `match=any`) and, when guides match, offered —
+    up to 3 `gk:` buttons and `sup:s` "Send it anyway" — before anything opens,
+    the message kept as `support.suggested` (nav state, 30 min). A guide opened
+    from the offer keeps it and "Send it anyway" (`keepDraft`); a new message
+    replaces it. No match, or guides unreachable: it opens at once, as before.
 
 ## Not here
 

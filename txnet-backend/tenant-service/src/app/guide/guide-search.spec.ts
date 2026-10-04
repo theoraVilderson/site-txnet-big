@@ -69,11 +69,27 @@ describe('searchGuides', () => {
   });
 });
 
+describe("searchGuides, any word (F-414-k: a support message's guides)", () => {
+  it('finds a guide by one meaningful word of a whole sentence, more words first', () => {
+    const message = 'سلام، وی پی ان روی اندرويد وصل نمیشه، لینک subscription هم زدم';
+    expect(searchGuides(GUIDES, message, 'any').map((h) => h.key)).toEqual(['v2rayng', 'screens', 'hiddify']);
+  });
+
+  it('ignores short and common words, so a greeting matches nothing', () => {
+    expect(searchGuides(GUIDES, 'سلام the and on is از به', 'any')).toEqual([]);
+  });
+
+  it('still needs every word by default', () => {
+    expect(searchGuides(GUIDES, 'android nothing')).toEqual([]);
+  });
+});
+
 describe('the query', () => {
   it('takes 2–100 characters, on one surface', () => {
-    expect(guideSearchQuerySchema.parse({ q: ' vpn ' })).toEqual({ q: 'vpn', surface: 'panel' });
+    expect(guideSearchQuerySchema.parse({ q: ' vpn ' })).toEqual({ q: 'vpn', surface: 'panel', match: 'all' });
     expect(guideSearchQuerySchema.safeParse({ q: 'a' }).success).toBe(false);
     expect(guideSearchQuerySchema.safeParse({ q: 'x'.repeat(101) }).success).toBe(false);
     expect(guideSearchQuerySchema.safeParse({ q: 'vpn', surface: 'any' }).success).toBe(false);
+    expect(guideSearchQuerySchema.parse({ q: 'vpn', match: 'any' })).toEqual({ q: 'vpn', surface: 'panel', match: 'any' });
   });
 });

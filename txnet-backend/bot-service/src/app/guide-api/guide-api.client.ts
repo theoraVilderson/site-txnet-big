@@ -11,6 +11,15 @@ export interface BotGuide {
   blocks: GuideBlock[];
 }
 
+/** tenant-service's `GuideHit`: a guide a search found, read by key to show it. */
+export interface GuideHitForBot {
+  key: string;
+  kind: string;
+  lang: string;
+  title: string;
+  snippet: string;
+}
+
 export type GuideRead<T> = { ok: true } & T | { ok: false };
 
 /**
@@ -53,6 +62,19 @@ export class GuideApiClient {
     const query = new URLSearchParams({ tenantId });
     const data = await this.get<{ guide: BotGuide | null }>(`/api/internal/guides/${encodeURIComponent(key)}?${query}`, lang);
     return data ? { ok: true, guide: data.guide } : { ok: false };
+  }
+
+  /**
+   * The guides a support message may be answered by (F-414-k): any meaningful
+   * word of it, ranked (`match=any`), for the bot. The text is cut to the
+   * search's 100 characters — the start of a message says what it is about.
+   */
+  async search(tenantId: string, text: string, lang: string): Promise<GuideRead<{ hits: GuideHitForBot[] }>> {
+    const q = text.replace(/\s+/g, ' ').trim().slice(0, 100);
+    if (q.length < 2) return { ok: true, hits: [] };
+    const query = new URLSearchParams({ tenantId, q, surface: 'bot', match: 'any' });
+    const data = await this.get<{ hits: GuideHitForBot[] }>(`/api/internal/guide-search?${query}`, lang);
+    return data ? { ok: true, hits: data.hits } : { ok: false };
   }
 
   /** The envelope's data; `null` for anything a screen can only answer with "try again". */

@@ -5,7 +5,7 @@ import type { Request } from 'express';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { guideInternalListQuerySchema, guideInternalOneQuerySchema, guideInternalSearchQuerySchema, guideKeySchema } from './guide-public.schema';
 import { GuidePlacementQuery, GuideReader, ResolvedGuide } from './guide-reader';
-import type { GuideHit } from './guide-search';
+import type { GuideHit, GuideMatch } from './guide-search';
 
 /**
  * A tenant's guides for the bot (F-414-f): the same resolver, cache and
@@ -49,9 +49,9 @@ export class GuideInternalSearchController {
   @Get()
   async search(
     @Req() req: Request,
-    @Query(new ZodValidationPipe(guideInternalSearchQuerySchema)) q: { tenantId: string; q: string; surface: 'panel' | 'bot' },
+    @Query(new ZodValidationPipe(guideInternalSearchQuerySchema)) q: { tenantId: string; q: string; surface: 'panel' | 'bot'; match: GuideMatch },
   ): Promise<{ hits: GuideHit[] }> {
-    return (await runWithTenant({ id: q.tenantId }, () => this.reader.search(q.tenantId, q.q, q.surface, languageOf(req)))).body;
+    return (await runWithTenant({ id: q.tenantId }, () => this.reader.search(q.tenantId, q.q, q.surface, languageOf(req), q.match))).body;
   }
 }
 

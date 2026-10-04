@@ -9,8 +9,10 @@ import { BotKeys } from '../locale/bot-keys';
 import { BotSessionStore } from '../session/bot-session.store';
 import { ChatAccess } from '../session/chat-access';
 import { SupportApiClient, SupportConversation, SupportThread } from '../support-api/support-api.client';
+import { BotGuide, GuideApiClient, GuideHitForBot } from '../guide-api/guide-api.client';
+import { GUIDE_KEY_PREFIX } from './guide.flow';
 import { ChatFiles } from './chat-files';
-import { SUPPORT_REFUSAL_KEYS, SupportFlow, supportAction } from './support.flow';
+import { SUPPORT_REFUSAL_KEYS, SUPPORT_SEND_ANYWAY, SUPPORT_SUGGESTED_STEP, SupportFlow, supportAction } from './support.flow';
 import { ACTIONS } from './views';
 
 /**
@@ -61,7 +63,9 @@ const thread = (over: Partial<SupportConversation> = {}): SupportThread => ({
   ],
 });
 
-function harness(o: { list?: unknown; thread?: unknown; categories?: unknown; upload?: unknown; send?: unknown; download?: unknown } = {}) {
+function harness(
+  o: { list?: unknown; thread?: unknown; categories?: unknown; upload?: unknown; send?: unknown; download?: unknown; hits?: GuideHitForBot[] | null; placed?: BotGuide[] } = {},
+) {
   const auth = {
     refresh: vi.fn().mockResolvedValue(ok({ accessToken: 'access-1', expiresIn: 900, refreshToken: 'r-next' })),
   } as unknown as Mocked<AuthApiClient>;
@@ -81,7 +85,12 @@ function harness(o: { list?: unknown; thread?: unknown; categories?: unknown; up
     download: vi.fn().mockResolvedValue('download' in o ? o.download : { fileName: 'photo.jpg', contentType: 'image/jpeg', bytes: Buffer.from([0xff, 0xd8]) }),
   } as unknown as Mocked<ChatFiles>;
   const sessions = { get: vi.fn().mockResolvedValue({ refreshToken: 'r-1', signedInAt: 0 }), save: vi.fn(), clear: vi.fn() } as unknown as BotSessionStore;
-  return { api, files, flow: new SupportFlow(api, new ChatAccess(auth, sessions), files) };
+  const guides = {
+    isConfigured: o.hits !== undefined || o.placed !== undefined,
+    search: vi.fn().mockResolvedValue(o.hits === null ? { ok: false } : { ok: true, hits: o.hits ?? [] }),
+    forSlot: vi.fn().mockResolvedValue({ ok: true, guides: o.placed ?? [] }),
+  } as unknown as Mocked<GuideApiClient>;
+  return { api, files, guides, flow: new SupportFlow(api, new ChatAccess(auth, sessions), files, guides) };
 }
 
 const ids = (r: { view: { actions?: { id: string }[][] } }) => (r.view.actions ?? []).flat().map((a) => a.id);
@@ -223,5 +232,51 @@ describe('a new thread', () => {
   it('with no categories goes straight to the text', async () => {
     const r = await harness().flow.tap(ctx, ACTIONS.supportNew);
     expect(r.nextState).toMatchObject({ step: 'support.compose', data: {} });
+  });
+});
+
+describe('SupportFlow — a guide before the conversation (F-414-k)', () => {
+  const composing: NavState = { flow: 'support', step: 'support.compose', data: {} };
+  const hit = (key: string, title: string): GuideHitForBot => ({ key, kind: 'app', lang: 'fa', title, snippet: '' });
+  const typed = { ...ctx, text: 'my android app does not connect' };
+
+  it('lists the guides placed on support under the compose prompt', async () => {
+    const { flow, guides } = harness({ placed: [{ key: 'refund', kind: 'section', lang: 'fa', title: 'Refunds', blocks: [] }] });
+    const r = await flow.tap(ctx, ACTIONS.supportNew);
+    expect(guides.forSlot).toHaveBeenCalledWith(ctx.integration.tenantId, 'bot_screen', 'support', 'fa');
+    expect(ids(r)).toContain(`${GUIDE_KEY_PREFIX}refund`);
+  });
+
+  it('offers the guides the message matches, keeping the message, before opening anything', async () => {
+    const { flow, api, guides } = harness({ hits: [hit('v2rayng', 'v2rayNG'), hit('hiddify', 'Hiddify'), hit('a', 'A'), hit('b', 'B')] });
+    const r = await flow.handle(typed, composing, null);
+    expect(guides.search).toHaveBeenCalledWith(ctx.integration.tenantId, 'my android app does not connect', 'fa');
+    expect(api.open).not.toHaveBeenCalled();
+    expect(r.view.body.key).toBe(BotKeys.support.suggested);
+    expect(ids(r)).toEqual([`${GUIDE_KEY_PREFIX}v2rayng`, `${GUIDE_KEY_PREFIX}hiddify`, `${GUIDE_KEY_PREFIX}a`, SUPPORT_SEND_ANYWAY]);
+    expect(r.nextState).toEqual({ flow: 'support', step: SUPPORT_SUGGESTED_STEP, data: { body: 'my android app does not connect' } });
+  });
+
+  it('opens it with the kept message when the user goes on anyway', async () => {
+    const { flow, api } = harness({ hits: [hit('v2rayng', 'v2rayNG')] });
+    const suggested: NavState = { flow: 'support', step: SUPPORT_SUGGESTED_STEP, data: { body: 'my android app does not connect', categoryId: 'cat-1' } };
+    await flow.handle(ctx, suggested, SUPPORT_SEND_ANYWAY);
+    expect(api.open).toHaveBeenCalledWith({ body: 'my android app does not connect', categoryId: 'cat-1' }, expect.anything());
+  });
+
+  it('opens at once when nothing matches, or the guides cannot be read — never a gate', async () => {
+    for (const hits of [[], null]) {
+      const { flow, api } = harness({ hits });
+      await flow.handle(typed, composing, null);
+      expect(api.open).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('keeps the message under a guide opened from the offer, with the way on', () => {
+    const { flow } = harness({ hits: [] });
+    const suggested: NavState = { flow: 'support', step: SUPPORT_SUGGESTED_STEP, data: { body: 'x' } };
+    const kept = flow.keepDraft({ view: { id: 'guides.screen', body: { key: BotKeys.guides.screen } }, nextState: null }, suggested);
+    expect(kept.nextState).toBe(suggested);
+    expect(ids(kept)).toEqual([SUPPORT_SEND_ANYWAY]);
   });
 });
