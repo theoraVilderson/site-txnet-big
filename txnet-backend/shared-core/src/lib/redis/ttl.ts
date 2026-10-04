@@ -105,6 +105,11 @@ export const RedisTtl = {
   botSession: 30 * 24 * 3600,
   /** Long: this is a preference, not a session. It is re-armed on every use. */
   botLang: 180 * 24 * 3600,
+  /**
+   * A guide file's id on one bot's platform (F-414-f): a key is never rewritten,
+   * so the id stays good; the lifetime only lets an unused one go.
+   */
+  botGuideFile: 90 * 24 * 3600,
 
   /**
    * An impersonated session is short-lived by design (`identity/invariants.md`

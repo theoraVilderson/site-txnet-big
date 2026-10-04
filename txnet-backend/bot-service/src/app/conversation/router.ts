@@ -27,6 +27,8 @@ import { TimeZoneFlow } from '../flows/time-zone.flow';
 import { LOTTERY_ACTION_PREFIX, LotteryFlow } from '../flows/lottery.flow';
 import { WheelFlow } from '../flows/wheel.flow';
 import { SUPPORT_ACTION_PREFIX, SupportFlow } from '../flows/support.flow';
+import { GUIDE_KEY_PREFIX, GUIDE_OS_PREFIX, GuideFlow } from '../flows/guide.flow';
+import { GuideApiClient } from '../guide-api/guide-api.client';
 import { SupportApiClient } from '../support-api/support-api.client';
 import { SuggestionOptOut } from '../suggestion/suggestion-opt-out';
 import { OtpStep } from '../flows/otp.step';
@@ -97,6 +99,8 @@ export class ConversationRouter {
     private readonly lotteries: LotteryFlow,
     private readonly support: SupportFlow,
     private readonly supportApi: SupportApiClient,
+    private readonly guides: GuideFlow,
+    private readonly guideApi: GuideApiClient,
   ) {}
 
   /**
@@ -173,6 +177,11 @@ export class ConversationRouter {
     // F-309. A thread's buttons name it, so they need no state; the open one is also under a reply notice.
     if (actionId === ACTIONS.support) return this.support.start(ctx);
     if (actionId?.startsWith(SUPPORT_ACTION_PREFIX)) return this.support.tap(ctx, actionId);
+
+    // F-414-f. Every guide button names what it opens, so none needs state; a guest may tap them.
+    if (actionId === ACTIONS.guides) return this.guides.start(ctx);
+    if (actionId === ACTIONS.guidesInstall) return this.guides.install();
+    if (actionId?.startsWith(GUIDE_OS_PREFIX) || actionId?.startsWith(GUIDE_KEY_PREFIX)) return this.guides.tap(ctx, actionId);
     // A file only means something inside a thread; anywhere else it has nowhere to go.
     if (ctx.file && state?.flow !== 'support') return this.support.fileOutside();
 
@@ -535,13 +544,13 @@ export class ConversationRouter {
    */
   private async menu(ctx: ChatContext) {
     const token = await this.access.token(ctx);
-    if (!token) return guestMenu();
+    if (!token) return guestMenu(this.guideApi.isConfigured);
     // F-311-c: the management row exists only for a chat the door admits
     // (F-311-e). Asked here, on the same token the menu was decided with, and
     // remembered nowhere — this bot serves the reseller's customers too, and
     // they are most of the chats that reach this line.
     const reseller = await this.reseller.canAdminister(ctx, token);
-    return memberMenu(ctx.miniAppUrl, this.billing.isConfigured, reseller, this.supportApi.isConfigured);
+    return memberMenu(ctx.miniAppUrl, this.billing.isConfigured, reseller, this.supportApi.isConfigured, this.guideApi.isConfigured);
   }
 
   /**

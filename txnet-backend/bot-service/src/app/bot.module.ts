@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { MessengerModule } from '@txnet-backend/messenger';
 import { AuthApiModule } from './auth-api/auth-api.module';
 import { ConversationStore } from './conversation/conversation.store';
@@ -11,6 +12,10 @@ import { LotteryFlow } from './flows/lottery.flow';
 import { ChatFiles } from './flows/chat-files';
 import { SupportFlow } from './flows/support.flow';
 import { SupportApiClient } from './support-api/support-api.client';
+import { GuideFlow } from './flows/guide.flow';
+import { GuideApiClient } from './guide-api/guide-api.client';
+import { GuideMediaSender, guideFileFetcher } from './guide-api/guide-media.sender';
+import { RedisService } from './redis/redis.service';
 import { WheelFlow } from './flows/wheel.flow';
 import { AiApiClient } from './suggestion/ai-api.client';
 import { SuggestionOptOut } from './suggestion/suggestion-opt-out';
@@ -77,6 +82,13 @@ import { WebhookController } from './webhook/webhook.controller';
     SupportApiClient,
     ChatFiles,
     SupportFlow,
+    GuideApiClient,
+    GuideFlow,
+    {
+      provide: GuideMediaSender,
+      useFactory: (redis: RedisService, config: ConfigService) => new GuideMediaSender(redis, guideFileFetcher(config)),
+      inject: [RedisService, ConfigService],
+    },
     AiApiClient,
     SuggestionOptOut,
     AccountAddFlow,

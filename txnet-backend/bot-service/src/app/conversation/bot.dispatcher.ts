@@ -1,3 +1,4 @@
+import { GuideMediaSender } from '../guide-api/guide-media.sender';
 import { Injectable, Logger } from '@nestjs/common';
 import {
   BotClientRegistry,
@@ -33,6 +34,7 @@ export class BotDispatcher {
     private readonly langs: ChatLanguage,
     private readonly bots: BotClientRegistry,
     private readonly payments: InChatPayment,
+    private readonly guideMedia: GuideMediaSender,
   ) {}
 
   async handle(rawCtx: ChatContext): Promise<void> {
@@ -121,6 +123,9 @@ export class BotDispatcher {
           await client.sendMessage(ctx.chatId, escapeHtml(this.copy.text(lang, { key: BotKeys.common.tryAgain })));
         }
       }
+
+      // A guide's pictures and video (F-414-f), after the text that says what they show.
+      if (result.media?.length) await this.guideMedia.send(client, ctx.integration, ctx.chatId, result.media);
 
       if (result.nextState) {
         await this.nav.save(ctx.integration, ctx.chatId, {

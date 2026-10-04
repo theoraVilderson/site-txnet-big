@@ -23,6 +23,7 @@ row removes it. Resolution is "nearest owner wins" over the tenant's ancestry.
 |---|---|---|
 | `GET /api/public/tenant/guides?placement=<targetKind>:<targetRef>&surface=panel\|bot` | anyone on the tenant's **panel** Host (`@PublicRoute({ doors: ['panel'] })`) | `{ guides: ResolvedGuide[] }` — the guides placed in that slot (a placement on `any` matches both surfaces; `surface` defaults to `panel`), by `sortOrder` then `key` (F-414-b) |
 | `GET /api/public/tenant/guides/:key` | as above | `{ guide: ResolvedGuide }`; a 404 when the tenant sees none |
+| `GET /api/internal/guides?tenantId=&placement=&surface=bot` · `GET /api/internal/guides/:key?tenantId=` | a service with `SERVICE_AUTH_TOKEN` (the bot, F-414-f); in-network, not routed by Traefik | the same answers, for the tenant named by id — the same reader and cache (`GuideInternalController`) |
 | `/api/guides/settings/*` | `guide.manage` (gate; tenant-service, Traefik `PathPrefix(/api/guides)`) | the settings below (F-414-c) |
 
 `ResolvedGuide` is `{ key, kind, owner: 'platform'|'own', lang, title, blocks, sortOrder, updatedAt }`; `lang` is the language served. A block's files are object keys — the caller builds `/api/public/tenant/files/<key>` on the Host it is on, and a video's `file` `/api/public/media/<key>`, served by the media server and never by a Nest route (ADR-0116 point 3, ADR-0118). A slot outside the registry, or a bad key, is a 400; an unknown Host the neutral 404.
@@ -68,6 +69,8 @@ Rules:
 |---|---|---|
 | tenant | the caller's tenant (Host or token) and its ancestry | guides blocked |
 | i18n | the language list and fallback order | the platform's default language |
+
+Consumers: panel-web (F-414-d/e, public route and settings), bot-app (F-414-f, internal route).
 
 ## Guarantees
 

@@ -19,7 +19,8 @@ import { GUIDE_VIDEO_POLICY, fileRoleRefusal } from './guide-admin';
  */
 const REPO = join(__dirname, '../../../../..');
 const CONF = readFileSync(join(REPO, 'dev-docker/media/guide-media.conf'), 'utf8');
-const served = new RegExp(CONF.match(/location ~ "([^"]+)"/)?.[1] ?? '^$');
+const [publicLocation, internalLocation] = [...CONF.matchAll(/location ~ "([^"]+)"/g)].map((m) => new RegExp(m[1]));
+const served = publicLocation ?? /^$/;
 
 const T = '11111111-1111-4111-8111-111111111111';
 const G = '22222222-2222-4222-8222-222222222222';
@@ -48,6 +49,22 @@ describe('the media server serves guide videos and nothing else', () => {
     expect(CONF).toMatch(/X-Content-Type-Options\s+nosniff/);
     expect(CONF).toMatch(/Content-Security-Policy\s+"default-src 'none'; sandbox"/);
     expect(CONF).toMatch(/Cache-Control\s+"public, max-age=31536000, immutable"/);
+  });
+});
+
+describe("the in-network port the bot reads (F-414-f) serves guide files and nothing else", () => {
+  it('reads a guide image or video by key', () => {
+    expect(internalLocation?.test(`/tenants/${T}/guides/${G}/${F}.png`)).toBe(true);
+    expect(internalLocation?.test(`/tenants/${T}/guides/${G}/${F}.mp4`)).toBe(true);
+  });
+
+  it.each([`/tenants/${T}/branding/${F}.png`, `/tenants/${T}/support/${G}/${F}.png`, `/tenants/${T}/guides/${G}/${F}.png.${F}.tmp`])('refuses %s', (path) => {
+    expect(internalLocation?.test(path)).toBe(false);
+  });
+
+  it('is not the port Traefik routes', () => {
+    expect(CONF).toMatch(/listen 8080;[\s\S]*listen 8081;/);
+    expect(readFileSync(join(REPO, 'dev-docker/compose/guide-media.yml'), 'utf8')).toMatch(/loadbalancer\.server\.port=8080/);
   });
 });
 

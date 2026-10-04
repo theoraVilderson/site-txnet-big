@@ -124,6 +124,8 @@ function makeRouter(over: {
     { start: vi.fn(), tap: vi.fn() } as never,
     { start: vi.fn(), tap: vi.fn(), handle: vi.fn(), fileOutside: vi.fn() } as never,
     { isConfigured: false } as never,
+    { start: vi.fn(), install: vi.fn(), tap: vi.fn() } as never,
+    { isConfigured: false } as never,
   );
   return { router, nav, sessions, api, otp, langs, locale };
 }

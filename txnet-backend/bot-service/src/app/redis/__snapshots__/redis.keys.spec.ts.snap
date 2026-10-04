@@ -10,6 +10,7 @@ exports[`RedisKeys — bot key catalogue > builds every key from fixed arguments
 
 exports[`RedisKeys — bot key catalogue > exposes a builder for every key family, and nothing unbuilt 1`] = `
 [
+  "botGuideFile",
   "botLang",
   "botNav",
   "botSession",
@@ -18,6 +19,7 @@ exports[`RedisKeys — bot key catalogue > exposes a builder for every key famil
 
 exports[`RedisKeys — bot key catalogue > keeps the canonical TTLs stable 1`] = `
 {
+  "botGuideFile": 7776000,
   "botLang": 15552000,
   "botLink": 900,
   "botNav": 1800,

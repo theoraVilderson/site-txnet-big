@@ -21,7 +21,7 @@ const CACHE_HEADERS = { 'Cache-Control': 'public, no-cache', Vary: 'Accept-Langu
  * Host's (`PublicHostMiddleware`), so a reseller's domain answers with its own
  * guides and the platform's it has not replaced or hidden — never another
  * reseller's. The language is `Accept-Language`'s, and the guide says which it
- * served. The bot reads the same resolver in-process later (F-414-f).
+ * served. The bot reads the same resolver by tenant (`GuideInternalController`, F-414-f).
  */
 @Controller(GUIDES_PATH)
 export class GuidePublicController {

@@ -105,6 +105,17 @@ export const envSchema = z.object({
    * no user. Unset, a pre-checkout query is refused with "try again".
    */
   BILLING_INTERNAL_BASE_URL: optional(z.string().url()),
+  /**
+   * tenant-service **directly**, for guides (F-414-f): `/api/internal/guides`,
+   * the panel's resolver named by tenant, with the service token. Unset, no
+   * menu offers guides.
+   */
+  TENANT_INTERNAL_BASE_URL: optional(z.string().url()),
+  /**
+   * `guide-media`'s in-network port (ADR-0118): a guide's pictures and video,
+   * by object key, sent into the chat. Unset, a guide's text shows alone.
+   */
+  GUIDE_MEDIA_INTERNAL_URL: optional(z.string().url()),
   AUTH_API_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
 
   /** How long a chat stays signed in without touching the bot. */

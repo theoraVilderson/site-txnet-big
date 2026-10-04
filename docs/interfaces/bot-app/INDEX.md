@@ -7,7 +7,7 @@ keywords: [bot, support in the bot, ticket in the bot, پشتیبانی در ر�
 source:
   - txnet-backend/bot-service/src/**
 owns_tables: []
-depends_on: [messenger, auth-api, i18n, tenant, billing, notification, support]
+depends_on: [messenger, auth-api, i18n, tenant, billing, notification, support, guide]
 updated: 2026-10-04
 ---
 
@@ -28,14 +28,13 @@ differences (`messenger`), linking and OTP (`identity`/`auth-api`), copy (`i18n`
 | [contract.mini-app.md](contract.mini-app.md) | the `web_app` menu row, and the `?ma=` marker that says which SDK the panel loads |
 | [contract.reseller.md](contract.reseller.md) | the reseller panel in the chat: its menu row, the customers, block, the revenue figure, the bulk message |
 | [contract.wheel.md](contract.wheel.md) | the lucky wheel in the chat: its menu row, the odds, a spin, the prize told (F-707-h) — **or the lotteries in the chat: the list, join or leave, a ticket, the result:** [contract.lotteries.md](contract.lotteries.md) (F-707-p) |
-| [contract.support.md](contract.support.md) | support in the chat: the list, a thread, a reply or a file either way, rate, reopen, the notice's Open button (F-309) |
+| [contract.support.md](contract.support.md) | support in the chat: the list, a thread, a reply or a file either way, rate, reopen, the notice's Open button (F-309) — **or guides in the chat: the menu's help, the install guide by system and app, pictures and video:** [contract.guides.md](contract.guides.md) (F-414-f) |
 | [conversation.md](conversation.md) | the shell every screen gets: orientation, Back, language, commands |
 | [open-questions.md](open-questions.md) | something is undecided |
 
 ## Status
 
-`active` — the Nx app `bot-service`. Built: `F-303` (webhook, state, sessions, register/login/forgot/logout),
-`F-0205`/`F-0208`/`F-0210`, `F-310`, `F-306-a`, `F-311-c`, `F-313-b`, `F-309`; the rest of §10.4 is `todo`.
+`active` — Nx app `bot-service`. Built: `F-303`, `F-0205`/`0208`/`0210`, `F-310`, `F-306-a`, `F-311-c`, `F-313-b`, `F-309`, `F-414-f`; the rest of §10.4 `todo`.
 
 ## Read first
 
@@ -45,6 +44,7 @@ differences (`messenger`), linking and OTP (`identity`/`auth-api`), copy (`i18n`
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-04 | Contract v14 -> **v15** (additive, F-414-f): guides in the chat — a `📖 Guides` row for guests and members, the install guide by system and app, pictures and video. Rules in [contract.guides.md](contract.guides.md); new dependency on `guide` through `TENANT_INTERNAL_BASE_URL` |
 | 2026-10-04 | Contract v13 -> **v14** (additive, F-309): support in the chat — list, thread, reply and files both ways, rate, reopen, and the reply notice's Open button. Rules in [contract.support.md](contract.support.md); new dependency on `support` through `SUPPORT_API_BASE_URL` |
 | 2026-09-20 | Contract v12 -> **v13** (additive, F-313-b): the reseller's bulk message as a chat flow — segment, count, draft, confirm, watch. Rules in [contract.reseller.md](contract.reseller.md); new dependency on `notification` through `NOTIFICATION_API_BASE_URL` |
 

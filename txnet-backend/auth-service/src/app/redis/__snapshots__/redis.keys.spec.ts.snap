@@ -68,6 +68,7 @@ exports[`RedisKeys — key catalogue > exposes a builder for every key family, a
 
 exports[`RedisKeys — key catalogue > keeps the canonical TTLs stable 1`] = `
 {
+  "botGuideFile": 7776000,
   "botLang": 15552000,
   "botLink": 900,
   "botNav": 1800,

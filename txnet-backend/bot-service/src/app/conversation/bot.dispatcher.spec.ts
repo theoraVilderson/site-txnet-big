@@ -49,6 +49,7 @@ function harness(result: FlowResult) {
       } as unknown as ChatLanguage,
       bots,
       payments as never,
+      { send: vi.fn().mockResolvedValue(undefined) } as never,
     ),
     payments,
     router,

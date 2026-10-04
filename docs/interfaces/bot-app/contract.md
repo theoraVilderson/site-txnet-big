@@ -2,13 +2,13 @@
 id: bot-app
 layer: interface
 status: active
-version: 14
+version: 15
 updated: 2026-10-04
 ---
 
 # bot-app — contract
 
-`F-303`, `F-309`, `F-311-c`, `F-313-b` are implemented; the rest of §10.4 is intent
+`F-303`, `F-309`, `F-311-c`, `F-313-b`, `F-414-f` ([contract.guides.md](contract.guides.md)) are implemented; the rest of §10.4 is intent
 (§0 level 4), from ADR-0009. Resolve an id with `python3 tools/spec.py <F-id>`.
 
 ## TL;DR

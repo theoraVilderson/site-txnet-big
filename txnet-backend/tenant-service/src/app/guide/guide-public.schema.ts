@@ -16,19 +16,28 @@ export const guideKeySchema = z.string().regex(GUIDE_KEY, invalid);
  * registered slot (ADR-0116 point 2): anything else could never match a row,
  * and refusing it keeps junk out of the cache's keys.
  */
-export const guideListQuerySchema = z
-  .object({
-    placement: z.string().regex(/^[a-z_]+:[a-z0-9][a-z0-9_-]{0,63}$/, invalid),
-    // `any` is a placement's, never a reader's: a reader is on one surface.
-    surface: z.nativeEnum(GuideSurface).refine((v) => v !== GuideSurface.any, invalid).default(GuideSurface.panel),
-  })
+const listQuery = z.object({
+  placement: z.string().regex(/^[a-z_]+:[a-z0-9][a-z0-9_-]{0,63}$/, invalid),
+  // `any` is a placement's, never a reader's: a reader is on one surface.
+  surface: z.nativeEnum(GuideSurface).refine((v) => v !== GuideSurface.any, invalid).default(GuideSurface.panel),
+});
+
+function toPlacement(q: z.infer<typeof listQuery>, ctx: z.RefinementCtx): GuidePlacementQuery {
+  const [targetKind, targetRef] = q.placement.split(':') as [GuideTargetKind, string];
+  const placement = { targetKind, targetRef, surface: q.surface as GuidePlacementQuery['surface'] };
+  if (!Object.values(GuideTargetKind).includes(targetKind) || guideSlotRefusal(placement)) {
+    ctx.addIssue({ code: 'custom', path: ['placement'], message: invalid });
+    return z.NEVER;
+  }
+  return placement;
+}
+
+export const guideListQuerySchema = listQuery.strict().transform(toPlacement);
+
+/** The bot's read (F-414-f): the same slot, for a tenant named by id rather than by Host. */
+export const guideInternalListQuerySchema = listQuery
+  .extend({ tenantId: z.string().uuid(invalid) })
   .strict()
-  .transform((q, ctx): GuidePlacementQuery => {
-    const [targetKind, targetRef] = q.placement.split(':') as [GuideTargetKind, string];
-    const placement = { targetKind, targetRef, surface: q.surface as GuidePlacementQuery['surface'] };
-    if (!Object.values(GuideTargetKind).includes(targetKind) || guideSlotRefusal(placement)) {
-      ctx.addIssue({ code: 'custom', path: ['placement'], message: invalid });
-      return z.NEVER;
-    }
-    return placement;
-  });
+  .transform((q, ctx) => ({ tenantId: q.tenantId, ...toPlacement(q, ctx) }));
+
+export const guideInternalOneQuerySchema = z.object({ tenantId: z.string().uuid(invalid) }).strict();

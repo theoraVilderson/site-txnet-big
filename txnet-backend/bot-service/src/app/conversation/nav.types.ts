@@ -1,3 +1,4 @@
+import type { GuideMediaItem } from '../guide-api/guide-media.sender';
 import {
   BotContact,
   BotIncomingFile,
@@ -128,6 +129,8 @@ export interface FlowResult {
   invoice?: FlowInvoice;
   /** Send this file right after the screen (F-309): a support attachment the user asked for. */
   document?: { fileName: string; contentType: string; bytes: Buffer };
+  /** Send these pictures and videos right after the screen (F-414-f): a guide's, by object key. */
+  media?: GuideMediaItem[];
   /**
    * Render this reply in a language other than the one the update arrived in.
    * Set only by the language chooser: a confirmation written in the language

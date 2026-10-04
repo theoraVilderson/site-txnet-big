@@ -70,7 +70,7 @@ does not own, which is a bug to surface.
 8. **A Host serves its own keys and the platform's shared prefixes** — `PLATFORM_SHARED_PREFIXES` in `files.controller.ts`, today only `guides/` (ADR-0117 point 2): a reseller's inherited guide shows its images on the reseller's own domain. Read in the platform's scope; never a private file, never anything else of the platform's.
 9. `storedObject` is in `TENANT_SCOPED_MODELS` and the table has strict RLS: on
    the app pool every query is filtered to, and bound to, the tenant in scope.
-10. **`guide-media` (nginx, `dev-docker/compose/guide-media.yml`) serves guide video keys from the volume, read-only**, at `GET /api/public/media/<key>`: only `tenants/<uuid>/guides/<uuid>/<uuid>.(mp4|webm)` (its one `location`, held by `guide-video.spec.ts`), Range native, `immutable`, `nosniff`, sandbox CSP, no Host check (ADR-0118). It shares the node of the `local` volume (rule 5); an S3 driver replaces it.
+10. **`guide-media` (nginx, `dev-docker/compose/guide-media.yml`) serves guide video keys from the volume, read-only**, at `GET /api/public/media/<key>`: only `tenants/<uuid>/guides/<uuid>/<uuid>.(mp4|webm)` (its one `location`, held by `guide-video.spec.ts`), Range native, `immutable`, `nosniff`, sandbox CSP, no Host check (ADR-0118). It shares the node of the `local` volume (rule 5); an S3 driver replaces it. Its port 8081, not routed, serves every guide file (images too) by the same key shape to the bot (F-414-f).
 
 ## The serving route
 

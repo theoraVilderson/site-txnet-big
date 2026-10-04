@@ -58,6 +58,9 @@ export const ACTIONS = {
   lotteries: 'menu:lotteries',
   /** Support (`F-309`): the list, and a new thread. A thread's own buttons carry its id (`supportAction`). */
   support: 'menu:support',
+  /** F-414-f. The guides: the main menu's help, and the install guide by system then app. */
+  guides: 'menu:guides',
+  guidesInstall: 'guides:install',
   supportNew: 'sup:n',
 } as const;
 
@@ -199,16 +202,21 @@ export function view(
   return { id, body, actions };
 }
 
+/** F-414-f. Only where tenant-service's guide route is reachable (`GuideApiClient.isConfigured`). */
+const guidesRow: BotAction = { id: ACTIONS.guides, label: { key: BotKeys.action.guides } };
+
 /**
  * The signed-out menu: the two things an anonymous chat can do, plus the way
  * to ask what any of it means. Sign-in leads, because a returning user is the
  * common case and a returning user should not have to read three options.
  */
-export function guestMenu(): BotView {
+export function guestMenu(guides = false): BotView {
   return view('menu.guest', { key: BotKeys.menu.guest }, [
     [{ id: ACTIONS.login, label: { key: BotKeys.action.login } }],
     [{ id: ACTIONS.register, label: { key: BotKeys.action.register } }],
     [{ id: ACTIONS.forgot, label: { key: BotKeys.action.forgot } }],
+    // F-414-f. A guide is public: a stranger may need the install guide before an account.
+    ...(guides ? [[guidesRow]] : []),
     [
       { id: ACTIONS.help, label: { key: BotKeys.action.help } },
       { id: ACTIONS.language, label: { key: BotKeys.action.language } },
@@ -258,7 +266,7 @@ export function miniApp(url: string): BotAction {
  * not published a panel yet shows a menu without the row, rather than a button
  * that opens nothing.
  */
-export function memberMenu(miniAppUrl?: string, topUp = false, reseller = false, support = false): BotView {
+export function memberMenu(miniAppUrl?: string, topUp = false, reseller = false, support = false, guides = false): BotView {
   return view('menu.member', { key: BotKeys.menu.member }, [
     ...(miniAppUrl ? [[miniApp(miniAppUrl)]] : []),
     // F-306-a. Only where billing is reachable (`BillingApiClient.isConfigured`).
@@ -269,6 +277,7 @@ export function memberMenu(miniAppUrl?: string, topUp = false, reseller = false,
     ...(topUp ? [[{ id: ACTIONS.lotteries, label: { key: BotKeys.action.lotteries } }]] : []),
     // F-309. Only where support is reachable (`SupportApiClient.isConfigured`).
     ...(support ? [[{ id: ACTIONS.support, label: { key: BotKeys.action.support } }]] : []),
+    ...(guides ? [[guidesRow]] : []),
     // F-311-c. The row exists only for a chat the **door** says may administer
     // this bot's reseller (`GET /api/tenants/:id/access`, F-311-e) — never on
     // a rule of the bot's own, and never for the customers this same bot

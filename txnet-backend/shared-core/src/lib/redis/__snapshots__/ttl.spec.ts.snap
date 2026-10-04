@@ -2,6 +2,7 @@
 
 exports[`RedisTtl > records the whole catalogue in one place 1`] = `
 {
+  "botGuideFile": 7776000,
   "botLang": 15552000,
   "botLink": 900,
   "botNav": 1800,

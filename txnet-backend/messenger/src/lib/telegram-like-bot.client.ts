@@ -9,6 +9,11 @@ export interface TelegramLikeSendResult {
   result?: { message_id?: number };
 }
 
+/** A `sendPhoto`/`sendVideo` answer: the sizes of a photo, or the video, each with the id to send it again by. */
+interface TelegramLikeMediaResult extends TelegramLikeSendResult {
+  result?: { message_id?: number; photo?: { file_id: string }[]; video?: { file_id: string } };
+}
+
 /**
  * This bot's share of its platform's send allowance, as the driver sees it
  * (F-313-a, ADR-0066). `BotClientRegistry` binds it to the integration's
@@ -498,6 +503,49 @@ export class TelegramLikeBotClient {
       clearTimeout(timer);
     }
     this.logger.error(`${this.platformLabel} sendDocument failed for chatId=${chatId}: status=${status} ${description}`);
+    throw new InternalServerErrorException(`otp.${this.platformLabel}SendFailed`);
+  }
+
+  /**
+   * Sends a picture or a video (F-414-f, a guide's media), as bytes uploaded
+   * multipart or as an id this bot was given before. Answers the platform's
+   * `file_id` for it, so the caller can send it again without the bytes —
+   * `null` when the platform named none. Throws like `sendDocument`.
+   */
+  async sendMedia(
+    chatId: string,
+    kind: 'photo' | 'video',
+    file: { fileId: string } | { fileName: string; contentType: string; bytes: Buffer },
+    caption?: string,
+  ): Promise<string | null> {
+    await this.budget?.spend();
+    const method = kind === 'photo' ? 'sendPhoto' : 'sendVideo';
+    const form = new FormData();
+    form.append('chat_id', chatId);
+    if ('fileId' in file) form.append(kind, file.fileId);
+    else form.append(kind, new Blob([new Uint8Array(file.bytes)], { type: file.contentType }), file.fileName);
+    if (kind === 'video') form.append('supports_streaming', 'true');
+    if (caption) form.append('caption', caption.slice(0, 1024));
+    const controller = new AbortController();
+    // A video upload is up to 50 MiB: the text timeout would cut it off.
+    const timer = setTimeout(() => controller.abort(), 'fileId' in file ? this.timeoutMs : Math.max(this.timeoutMs, 120_000));
+    let status = 0;
+    let description = '';
+    try {
+      const response = await fetch(`${this.apiBase}/bot${this.botToken}/${method}`, { method: 'POST', body: form, signal: controller.signal });
+      status = response.status;
+      const body = (await response.json().catch((): undefined => undefined)) as TelegramLikeMediaResult | undefined;
+      if (response.ok && body?.ok !== false) {
+        const sent = kind === 'photo' ? body?.result?.photo?.at(-1) : body?.result?.video;
+        return sent?.file_id ?? null;
+      }
+      description = body?.description ?? '';
+    } catch (e: unknown) {
+      description = e instanceof Error ? e.message : String(e);
+    } finally {
+      clearTimeout(timer);
+    }
+    this.logger.error(`${this.platformLabel} ${method} failed for chatId=${chatId}: status=${status} ${description}`);
     throw new InternalServerErrorException(`otp.${this.platformLabel}SendFailed`);
   }
 

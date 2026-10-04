@@ -60,7 +60,9 @@
     "supportReopen": "↩️ Reopen",
     "supportAll": "💬 All conversations",
     "supportRate": "{{n}} ⭐",
-    "supportFile": "📎 {{name}}"
+    "supportFile": "📎 {{name}}",
+    "guides": "📖 Guides",
+    "guidesInstall": "📲 How to connect"
   },
   "common": {
     "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
@@ -366,6 +368,22 @@
       "already_rated": "You have already rated this conversation.",
       "not_closed": "This conversation is not closed.",
       "reopen_expired": "It is too late to reopen this one. Start a new conversation."
+    }
+  },
+  "guides": {
+    "menu": "📖 Guides. Choose one, or see how to connect on your device.",
+    "pickOs": "Which device do you want to connect?",
+    "pickApp": "Guides for {{os}}. Choose your app:",
+    "noneForOs": "There is no guide for this system yet.",
+    "failed": "Guides cannot be opened right now. Please try again in a moment.",
+    "gone": "This guide is no longer available.",
+    "screen": "📖 {{title}}\n\n{{text}}",
+    "os": {
+      "android": "Android",
+      "ios": "iPhone / iPad",
+      "windows": "Windows",
+      "macos": "macOS",
+      "linux": "Linux"
     }
   }
 }

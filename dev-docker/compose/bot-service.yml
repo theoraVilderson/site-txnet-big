@@ -61,6 +61,10 @@ services:
       # billing's `/api/internal/*` directly, with the service token and the
       # sender — a payment's events need no chat session.
       - BILLING_INTERNAL_BASE_URL=http://billing-service:3000
+      # Guides (F-414-f): tenant-service's internal resolver, and guide-media's
+      # in-network port for the pictures and video sent into the chat (ADR-0118).
+      - TENANT_INTERNAL_BASE_URL=http://tenant-service:3000
+      - GUIDE_MEDIA_INTERNAL_URL=http://guide-media:8081
       # A bot chat has no host to resolve a tenant from, and there is no
       # fallback tenant (ADR-0025). Since F-066-i an update names its own
       # tenant — the one its webhook path resolved to — so this is only the

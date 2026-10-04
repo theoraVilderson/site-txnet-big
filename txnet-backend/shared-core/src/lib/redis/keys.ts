@@ -388,6 +388,14 @@ export const BotRedisKeys = {
    */
   botLang: (integration: BotKeyIntegration, chatId: string) =>
     `bot:lang:${chatScope(integration, chatId)}`,
+  /**
+   * The platform's own id for a guide file this bot already sent (F-414-f):
+   * sent again by id, a 30 MB video is not uploaded on every tap. Per bot,
+   * because a `file_id` is good only on the bot that received it; the object
+   * key never changes for the same bytes (ADR-0118 point 4).
+   */
+  botGuideFile: (integration: BotKeyIntegration, objectKey: string) =>
+    `bot:guidefile:${integration.platform}:${integration.id}:${objectKey}`,
 } as const;
 
 /**

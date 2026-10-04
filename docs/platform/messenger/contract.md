@@ -179,7 +179,7 @@ its caption, into `BotIncomingFile` — the platform's file id and the sender's
 claims, never trusted. `downloadFile(fileId, maxBytes)` is `getFile` then
 `<apiBase>/file/bot<token>/<path>`, the same on both; `null` over the cap or on
 any failure. `sendDocument` uploads bytes as multipart, never a URL the
-platform would fetch, and throws like `sendMessage`.
+platform would fetch, and throws like `sendMessage`; `sendMedia` (F-414-f) sends a photo or video as bytes or a `file_id` and answers the platform's `file_id`.
 
 **Every message is HTML-escaped** (`escapeHtml`): `sendMessage` sends in HTML parse
 mode, so the renderer escapes the body it builds (button labels are plain text
