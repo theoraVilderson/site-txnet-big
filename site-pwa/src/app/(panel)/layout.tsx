@@ -1,4 +1,5 @@
 import { ConfirmProvider } from "./_components/kit/confirm";
+import { PanelToaster } from "./_components/kit/notify";
 import { PanelMotion } from "./_components/PanelMotion";
 import { PanelShell } from "./_components/PanelShell";
 import { PaymentCreditedToast } from "./_components/PaymentCreditedToast";
@@ -29,6 +30,8 @@ export default function PanelLayout({
             <PanelShell>{children}</PanelShell>
           </ConfirmProvider>
         </PanelMotion>
+        {/* UX-1-e: where every `notify.*` toast is drawn (K10). */}
+        <PanelToaster />
         {/* F-067-l: a late credit is announced on any screen (ADR-0045). */}
         <PaymentCreditedToast />
         {/* F-018-ac: the gateway closed the socket because the tenant is terminated. */}

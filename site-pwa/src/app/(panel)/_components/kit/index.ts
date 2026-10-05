@@ -12,7 +12,9 @@ export { RadioCards, SegmentedControl, type ChoiceOption } from "./choice";
 export { cn } from "./cn";
 export { EmptyState } from "./EmptyState";
 export { Menu, type MenuItem } from "./Menu";
+export { notify, PanelToaster } from "./notify";
 export { Popover } from "./Popover";
+export { SaveBar, type SaveBarProps } from "./SaveBar";
 export { Sheet, type SheetProps } from "./Sheet";
 export { Tabs, type TabItem } from "./Tabs";
 export { Tooltip } from "./Tooltip";
@@ -20,3 +22,4 @@ export { Field, Input, PasswordInput, Textarea, useFieldControl, type FieldProps
 export { Select, type SelectOption, type SelectProps } from "./Select";
 export { Badge, StatusPill, type Tone } from "./StatusPill";
 export { Checkbox, Toggle } from "./Toggle";
+export { useUnsavedGuard } from "./useUnsavedGuard";

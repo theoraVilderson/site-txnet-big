@@ -698,6 +698,17 @@
       "cancel": "Cancel",
       "confirm": "Confirm",
       "typeToConfirm": "Type “{{name}}” to confirm"
+    },
+    "saveBar": {
+      "unsaved": "Unsaved changes",
+      "save": "Save",
+      "discard": "Discard",
+      "saved": "Saved"
+    },
+    "unsaved": {
+      "title": "Leave without saving?",
+      "body": "The changes on this page will be lost.",
+      "leave": "Leave"
     }
   },
   "money": {
