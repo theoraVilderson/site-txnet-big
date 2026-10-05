@@ -52,6 +52,12 @@ vi.mock("@/lib/support-api", () => ({
   supportAgentApi: { inbox: vi.fn(async () => ({ items: [], nextAfter: null })) },
 }));
 vi.mock("@/lib/billing-api", () => ({ billingApi: { manualPayments: vi.fn(async () => []) } }));
+// A fold or a pin is written 600ms later (UX-1-l): answered, so a slow run never sees it rolled back.
+// (The defaults inline: importing the store here would import this module back.)
+vi.mock("@/lib/auth-api", () => {
+  const defaults = { "ui.motion": "system", "ui.dashboard": { order: [], hidden: [] }, "ui.pins": [], "ui.sidebar": { collapsed: false, closedSections: [] } };
+  return { authApi: { uiPreferences: vi.fn(async () => defaults), saveUiPreferences: vi.fn(async (patch: object) => ({ ...defaults, ...patch })) } };
+});
 
 const USER = { permissions: [], tenant: { id: "t-1", type: "platform_owner", isOwner: false } };
 const STAFF = { permissions: ["*"], tenant: { id: "t-1", type: "platform_owner", isOwner: true } };
