@@ -132,6 +132,13 @@ export const RateLimitBucket = {
   ME_MESSENGER: 'me:messenger',
   /** `GET`/`PUT /auth/me/timezone` (TZ-1-c), per caller: a settings screen and one report per sign-in. */
   ME_TIMEZONE: 'me:timezone',
+  /** `PUT /auth/me/name` (UX-1-t), per caller: a settings form. */
+  ME_NAME: 'me:name',
+  /**
+   * `POST /auth/me/password` (UX-1-t), per caller: five tries in fifteen minutes
+   * — the budget a guesser holding a stolen session gets at the current password.
+   */
+  ME_PASSWORD: 'me:password',
   /** `GET`/`PATCH /auth/me/ui-preferences` (UX-1-k), per caller: one read per load, debounced writes. */
   ME_UI_PREFERENCES: 'me:ui-prefs',
   /** `GET /auth/sessions` and its two terminate routes (SES-1-a), per caller: a settings screen, not a loop. */

@@ -229,6 +229,9 @@ export const envSchema = z.object({
   ME_EMAIL_VERIFY_RATE_LIMIT: rateLimit(20),
   ME_MESSENGER_RATE_LIMIT: rateLimit(30),
   ME_TIMEZONE_RATE_LIMIT: rateLimit(30),
+  ME_NAME_RATE_LIMIT: rateLimit(30),
+  // Tries at the current password per user per window (UX-1-t).
+  ME_PASSWORD_RATE_LIMIT: rateLimit(5),
   // Display preferences (UX-1-k): one read per panel load, writes debounced 600ms.
   ME_UI_PREFERENCES_RATE_LIMIT: rateLimit(120),
   ME_SESSIONS_RATE_LIMIT: rateLimit(30),

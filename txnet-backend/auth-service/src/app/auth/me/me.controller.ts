@@ -14,13 +14,22 @@ import { NoticeMessenger } from '@prisma/client';
 import { RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 import { AuthGuard } from '../auth.guard';
+import { SensitiveActionGuard } from '../../impersonation/guards/sensetive-action.guard';
 import { RateLimit } from '../decorators/rate-limit.decorator';
 import { MeService } from './me.service';
 import { MeEmailService } from './me-email.service';
 import { MeMessengerService } from './me-messenger.service';
 import { MeTimeZoneService, type TimeZoneReport } from './me-time-zone.service';
+import { MeAccountService, type PasswordChange } from './me-account.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { meEmailRequestSchema, meEmailVerifySchema, meMessengerSchema, meTimeZoneSchema } from '../auth.schema';
+import {
+  meEmailRequestSchema,
+  meEmailVerifySchema,
+  meMessengerSchema,
+  meNameSchema,
+  mePasswordSchema,
+  meTimeZoneSchema,
+} from '../auth.schema';
 import type { AuthClaims } from '../token.service';
 
 /**
@@ -42,6 +51,7 @@ export class MeController {
     private readonly email: MeEmailService,
     private readonly messenger: MeMessengerService,
     private readonly timeZone: MeTimeZoneService,
+    private readonly account: MeAccountService,
   ) {}
 
   @Get('me')
@@ -149,6 +159,39 @@ export class MeController {
   })
   saveTimeZone(@Body(new ZodValidationPipe(meTimeZoneSchema)) body: TimeZoneReport, @Req() req: Request) {
     return this.timeZone.save(claimsOf(req), body);
+  }
+
+  /** The caller's own name (UX-1-t, panel-web/contract.ux.md S3): the register form's rules. */
+  @TenantCapability('account')
+  @Put('me/name')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.ME_NAME, req?.user?.sub ?? req?.ip),
+    configKey: 'ME_NAME_RATE_LIMIT',
+    windowSec: 900,
+  })
+  rename(@Body(new ZodValidationPipe(meNameSchema)) body: { fullName: string }, @Req() req: Request) {
+    return this.account.rename(claimsOf(req), body.fullName);
+  }
+
+  /**
+   * Change the password signed in (UX-1-t, S4): the current one first — a wrong
+   * one is 400 `wrong_password` — and five tries per fifteen minutes per user.
+   * This place stays signed in; the others end when `endOtherSessions` asks.
+   * Never from an impersonated session: a credential is the account's own.
+   */
+  @TenantCapability('account')
+  @Post('me/password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard, SensitiveActionGuard)
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.ME_PASSWORD, req?.user?.sub ?? req?.ip),
+    configKey: 'ME_PASSWORD_RATE_LIMIT',
+    windowSec: 900,
+  })
+  changePassword(@Body(new ZodValidationPipe(mePasswordSchema)) body: PasswordChange, @Req() req: Request) {
+    return this.account.changePassword(claimsOf(req), body);
   }
 }
 

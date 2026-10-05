@@ -4,6 +4,7 @@ import { strongPasswordSchema } from '../common/validation/strong-password.schem
 import { NoticeMessenger, TimeZoneSource } from '@prisma/client';
 import { isIanaZone } from '@txnet-backend/shared-core';
 import { OtpChannel } from './otp/otp.interface';
+import { registerSchema } from './register/register.schema';
 
 export const passwordLoginSchema = z.object({
   identifier: z.string().trim().min(3),
@@ -60,6 +61,17 @@ export const meTimeZoneSchema = z
   })
   .strict()
   .refine((b) => b.zone !== null || b.source === TimeZoneSource.user, { message: 'a browser reports a zone' });
+
+// UX-1-t (panel-web/contract.ux.md S3–S4): the register form's rules for both.
+export const meNameSchema = z.object({ fullName: registerSchema.shape.fullName }).strict();
+
+export const mePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1).max(200),
+    newPassword: strongPasswordSchema,
+    endOtherSessions: z.boolean().default(true),
+  })
+  .strict();
 
 export const meEmailVerifySchema = z.object({
   email: emailAddressSchema,
