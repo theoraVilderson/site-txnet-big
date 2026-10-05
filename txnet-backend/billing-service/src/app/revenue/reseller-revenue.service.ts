@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { LedgerDirection, PaymentStatus, Prisma, WalletReasonType } from '@prisma/client';
+import { LedgerDirection, PaymentStatus, Prisma, TenantBillingReasonType, TenantLedgerDirection, WalletReasonType } from '@prisma/client';
 import {
   AdmittedReseller,
   ResellerAccess,
@@ -11,6 +11,7 @@ import {
   tenantTransaction,
 } from '@txnet-backend/shared-core';
 
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { FEWER_THAN, HiddenCurrency, HiddenReason, RevenueBreakdown, SplitPeople, breakdownOf, readBreakdown, readSplitPeople, suppressSplit } from './revenue-breakdown';
 
@@ -58,6 +59,13 @@ export type RevenueTotals = {
   };
   /** What its users **paid in** in the window. Money in, not revenue (ADR-0067). */
   topUps: { total: string | null; count: number; byCurrency: (CurrencyTotal | HiddenCurrency)[] };
+  /**
+   * The platform's own tenant only (UX-1-r3): what it **charged** its resellers
+   * in the window — their billing ledgers' charges net of the refunds that undo
+   * them, a package's period included — and what they **paid in**. Absent on a
+   * reseller: its own payments to the platform are money out, not revenue.
+   */
+  fromResellers?: { charged: { total: string | null; count: number }; paidIn: { total: string | null; count: number } };
 };
 
 /**
@@ -155,6 +163,32 @@ const money = (v: Prisma.Decimal | null | undefined) => (v ? v.toFixed(2) : '0.0
 
 const ZERO = new Prisma.Decimal(0);
 
+/**
+ * What each reseller billing reason is to the platform (UX-1-r3), exhaustive so
+ * a new `TenantBillingReasonType` does not compile until somebody says.
+ * `charge`: the platform sold something; `undoes`: a credit giving a charge
+ * back; `paidIn`: money a reseller put in; `none`: neither.
+ *
+ * A package's first period is paid out of a platform user's wallet
+ * (`WalletReasonType.reseller_purchase`, not a user sale above), lands here as a
+ * `reseller_purchase` credit and is then charged as `subscription_charge` — so
+ * the charge is the sale, and counting the wallet debit too would count it twice.
+ */
+const RESELLER_LEDGER: Record<TenantBillingReasonType, { kind: 'charge' } | { kind: 'undoes'; charge: TenantBillingReasonType } | { kind: 'paidIn' } | { kind: 'none' }> = {
+  [TenantBillingReasonType.topup_payment]: { kind: 'paidIn' },
+  [TenantBillingReasonType.reseller_purchase]: { kind: 'paidIn' },
+  [TenantBillingReasonType.subscription_charge]: { kind: 'charge' },
+  [TenantBillingReasonType.subscription_upgrade_charge]: { kind: 'charge' },
+  [TenantBillingReasonType.metered_usage_charge]: { kind: 'charge' },
+  [TenantBillingReasonType.metered_usage_refund]: { kind: 'undoes', charge: TenantBillingReasonType.metered_usage_charge },
+  [TenantBillingReasonType.sms_usage_charge]: { kind: 'charge' },
+  [TenantBillingReasonType.quota_overage_charge]: { kind: 'charge' },
+  [TenantBillingReasonType.quota_overage_refund]: { kind: 'undoes', charge: TenantBillingReasonType.quota_overage_charge },
+  // An operator's correction, and a currency change's closing/opening pair: nothing sold, nothing paid.
+  [TenantBillingReasonType.admin_manual_adjust]: { kind: 'none' },
+  [TenantBillingReasonType.currency_change]: { kind: 'none' },
+};
+
 /** Amounts per currency, as written: the shape every figure below is summed into. */
 type ByCurrency = Map<string, Prisma.Decimal>;
 
@@ -207,6 +241,8 @@ export class ResellerRevenueService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: ResellerAccess,
+    /** Every reseller's billing ledger at once — read only after the door admitted the platform's staff (ADR-0053). */
+    private readonly all: CrossTenantPrismaService,
   ) {}
 
   /**
@@ -319,6 +355,7 @@ export class ResellerRevenueService {
             count: [...paidInCounts.values()].reduce((n, c) => n + c, 0),
             byCurrency: split(listed(paidIn, paidInCounts), (c) => c.currencyCode, 'topUpCurrency', currency),
           },
+          ...(reseller.platform ? { fromResellers: await this.fromResellers(period, convert) } : {}),
         };
       }),
     );
@@ -340,6 +377,41 @@ export class ResellerRevenueService {
         return breakdownOf(rows, { staff: hidesSmallCells(reseller), convert, period, timeZone });
       }),
     );
+  }
+
+  /**
+   * UX-1-r3: every reseller's billing ledger over the window, read across
+   * tenants — their wallets are theirs under RLS. Each currency on its own, then
+   * converted with the platform's own changes, as everything else here is.
+   */
+  private async fromResellers(period: RevenuePeriod, convert: { show: (v: Prisma.Decimal | null) => string | null; sum: (s: ByCurrency) => Promise<Prisma.Decimal | null> }) {
+    const rows = await this.all.tenantBillingTransaction.groupBy({
+      by: ['reasonType', 'direction', 'currencyCode'],
+      where: { createdAt: { gte: period.from, lte: period.to } },
+      _sum: { amount: true },
+      _count: { _all: true },
+    });
+    const charged: ByCurrency = new Map();
+    const paidIn: ByCurrency = new Map();
+    let chargedCount = 0;
+    let paidInCount = 0;
+    for (const row of rows) {
+      const kind = RESELLER_LEDGER[row.reasonType];
+      const amount = new Prisma.Decimal(money(row._sum.amount));
+      if (kind.kind === 'charge' && row.direction === TenantLedgerDirection.debit) {
+        add(charged, row.currencyCode, amount);
+        chargedCount += row._count._all;
+      } else if (kind.kind === 'undoes' && row.direction === TenantLedgerDirection.credit) {
+        add(charged, row.currencyCode, amount.neg());
+      } else if (kind.kind === 'paidIn' && row.direction === TenantLedgerDirection.credit) {
+        add(paidIn, row.currencyCode, amount);
+        paidInCount += row._count._all;
+      }
+    }
+    return {
+      charged: { total: convert.show(await convert.sum(charged)), count: chargedCount },
+      paidIn: { total: convert.show(await convert.sum(paidIn)), count: paidInCount },
+    };
   }
 
   /**

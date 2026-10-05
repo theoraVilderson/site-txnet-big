@@ -5423,7 +5423,9 @@
       "today": "Today",
       "week": "7 days",
       "month": "30 days",
-      "sales": "{{count}} sales"
+      "sales": "{{count}} sales",
+      "fromUsers": "From users",
+      "fromResellers": "From resellers"
     },
     "manualPayments": {
       "waiting": "{{count}} waiting",

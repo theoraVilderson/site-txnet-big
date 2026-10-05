@@ -5423,7 +5423,9 @@
       "today": "امروز",
       "week": "۷ روز",
       "month": "۳۰ روز",
-      "sales": "{{count}} فروش"
+      "sales": "{{count}} فروش",
+      "fromUsers": "از کاربران",
+      "fromResellers": "از ریسلرها"
     },
     "manualPayments": {
       "waiting": "{{count}} در انتظار",

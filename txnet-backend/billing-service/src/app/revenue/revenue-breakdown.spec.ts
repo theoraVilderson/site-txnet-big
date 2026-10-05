@@ -94,7 +94,7 @@ function build(rows: BreakdownRow[] = ROWS, opts: { currencyCode?: string; chang
     currencyChange: { findMany: async () => (opts.changes ?? []).map((c) => ({ ...c, rate: d(c.rate) })) },
   };
   const prisma = { $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx) };
-  return { seen, service: new ResellerRevenueService(prisma as never, access) };
+  return { seen, service: new ResellerRevenueService(prisma as never, access, {} as never) };
 }
 
 describe('ResellerRevenueService.breakdown', () => {

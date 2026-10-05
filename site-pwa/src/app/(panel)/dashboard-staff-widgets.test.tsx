@@ -93,11 +93,24 @@ describe("the widgets (D5)", () => {
     expect(calls[2][1]).toEqual({ from: "2026-09-05T12:00:00.000Z", to: NOW.toISOString() });
   });
 
-  it("revenue: the platform's staff see the platform's own (UX-1-r2)", async () => {
-    vi.mocked(resellerRevenueApi.totals).mockResolvedValue(totals("5.00") as never);
+  it("revenue: the platform's staff see the platform's own, users and resellers apart (UX-1-r2, UX-1-r3)", async () => {
+    vi.mocked(resellerRevenueApi.totals).mockResolvedValue({
+      ...totals("5.00"),
+      fromResellers: { charged: { total: "7.00", count: 1 }, paidIn: { total: "20.00", count: 1 } },
+    } as never);
     widget("revenue");
     await screen.findByText(D.revenue.today);
     expect(vi.mocked(resellerRevenueApi.totals).mock.calls.map(([id]) => id)).toEqual(["t-1", "t-1", "t-1"]);
+    expect(screen.getAllByText(D.revenue.fromUsers)).toHaveLength(3);
+    expect(screen.getAllByText(D.revenue.fromResellers)).toHaveLength(3);
+  });
+
+  it("revenue: a reseller's has no resellers line", async () => {
+    me = RESELLER_STAFF;
+    vi.mocked(resellerRevenueApi.totals).mockResolvedValue(totals("5.00") as never);
+    widget("revenue");
+    await screen.findByText(D.revenue.today);
+    expect(screen.queryByText(D.revenue.fromResellers)).toBeNull();
   });
 
   it("support queue: unassigned, mine and waiting, a full first page as 50+", async () => {

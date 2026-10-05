@@ -58,6 +58,8 @@ function build(
     changes?: { fromCode: string; toCode: string; rate: string }[];
     /** Distinct people per cell of each split (F-117-k, F-117-l): what the staff-only query answers. */
     people?: { split: 'salesCurrency' | 'salesReason' | 'topUpCurrency'; key: string; people: number }[];
+    /** Every reseller's billing ledger, as the cross-tenant pool groups it (UX-1-r3). */
+    resellerLedger?: { reasonType: string; direction: 'credit' | 'debit'; sum: string; count: number; currencyCode?: string }[];
   } = {},
 ) {
   const seen: Seen[] = [];
@@ -125,7 +127,23 @@ function build(
   };
   const prisma = { $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx) };
 
-  return { seen, service: new ResellerRevenueService(prisma as never, access) };
+  // The cross-tenant pool: every reseller's billing ledger at once (UX-1-r3, ADR-0053).
+  const all = {
+    tenantBillingTransaction: {
+      groupBy: record(
+        'resellerLedger',
+        (rows.resellerLedger ?? []).map((r) => ({
+          reasonType: r.reasonType,
+          direction: r.direction,
+          currencyCode: r.currencyCode ?? 'USD',
+          _sum: { amount: new Prisma.Decimal(r.sum) },
+          _count: { _all: r.count },
+        })),
+      ),
+    },
+  };
+
+  return { seen, service: new ResellerRevenueService(prisma as never, access, all as never) };
 }
 
 describe('ResellerRevenueService.totals', () => {
@@ -336,6 +354,41 @@ describe("ResellerRevenueService.totals — the platform's own tenant (UX-1-r2)"
     expect(Object.fromEntries(total.sales.byCurrency.map((c) => [c.currencyCode, c.total]))).toEqual({ EUR: '80.00', USD: '300.00' });
     expect(seen.map((s) => s.what)).not.toContain('people');
     expect(seen.filter((s) => s.what !== 'people').every((s) => s.scope === PLATFORM)).toBe(true);
+  });
+
+  it("answers what it charged its resellers apart from its users' sales, net of refunds, and what they paid in (UX-1-r3)", async () => {
+    const resellerLedger = [
+      // Charges: a package period (the package sale itself, F-019-h), wholesale, SMS, an overage, an upgrade.
+      { reasonType: 'subscription_charge', direction: 'debit' as const, sum: '50.00', count: 2 },
+      { reasonType: 'metered_usage_charge', direction: 'debit' as const, sum: '30.00', count: 3 },
+      { reasonType: 'metered_usage_refund', direction: 'credit' as const, sum: '5.00', count: 1 },
+      { reasonType: 'quota_overage_charge', direction: 'debit' as const, sum: '10.00', count: 1 },
+      { reasonType: 'quota_overage_refund', direction: 'credit' as const, sum: '10.00', count: 1 },
+      // Money in: a top-up and a package's first period paid into the wallet.
+      { reasonType: 'topup_payment', direction: 'credit' as const, sum: '100.00', count: 4 },
+      { reasonType: 'reseller_purchase', direction: 'credit' as const, sum: '50.00', count: 2 },
+      // Neither: a correction, and a currency change's closing and opening rows.
+      { reasonType: 'admin_manual_adjust', direction: 'credit' as const, sum: '999.00', count: 1 },
+      { reasonType: 'currency_change', direction: 'debit' as const, sum: '77.00', count: 1 },
+      { reasonType: 'currency_change', direction: 'credit' as const, sum: '77.00', count: 1 },
+    ];
+    const { seen, service } = build({ sales, changes, resellerLedger });
+    const total = await service.totals(staff, PLATFORM, { from: FROM, to: TO });
+    expect(total.sales.total).toBe('380.00');
+    expect(total.fromResellers?.charged.total).toBe('75.00');
+    expect(total.fromResellers?.charged.count).toBe(6);
+    expect(total.fromResellers?.paidIn).toEqual({ total: '150.00', count: 6 });
+    const read = seen.find((x) => x.what === 'resellerLedger')!;
+    expect(read.args.where).toEqual({ createdAt: { gte: FROM, lte: TO } });
+  });
+
+  it("answers a reseller no `fromResellers`, and never reads the other resellers' ledgers for it", async () => {
+    for (const caller of [owner, staff]) {
+      const { seen, service } = build({ sales, changes, resellerLedger: [{ reasonType: 'subscription_charge', direction: 'debit', sum: '9.00', count: 1 }] });
+      const total = await service.totals(caller, RESELLER, { from: FROM, to: TO });
+      expect(total.fromResellers).toBeUndefined();
+      expect(seen.map((x) => x.what)).not.toContain('resellerLedger');
+    }
   });
 
   it('refuses anyone but its staff, before reading anything', async () => {

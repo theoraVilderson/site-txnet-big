@@ -906,6 +906,8 @@ export interface ResellerRevenueTotals {
   currencyCode: string;
   sales: { total: string | null; count: number };
   topUps: { total: string | null; count: number };
+  /** The platform's own tenant only (UX-1-r3): what it charged its resellers, and what they paid in. */
+  fromResellers?: { charged: { total: string | null; count: number }; paidIn: { total: string | null; count: number } };
 }
 
 export const resellerRevenueApi = {
