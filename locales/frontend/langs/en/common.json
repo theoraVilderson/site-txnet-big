@@ -1827,6 +1827,44 @@
         "full": "Full",
         "reduced": "Reduced"
       }
+    },
+    "profile": {
+      "title": "Profile",
+      "subtitle": "Your name, and the password you sign in with.",
+      "name": {
+        "label": "Full name",
+        "edit": "Edit name",
+        "save": "Save name",
+        "cancel": "Cancel",
+        "saved": "Your name is saved"
+      },
+      "password": {
+        "title": "Password",
+        "subtitle": "Enter your current password, then the new one twice.",
+        "current": "Current password",
+        "new": "New password",
+        "repeat": "Repeat the new password",
+        "mismatch": "The two passwords are not the same",
+        "endOthers": "Sign out every other place",
+        "endOthersHint": "Every other device and messenger chat signed in to this account is signed out. This one stays signed in.",
+        "strength": {
+          "label": "Strength",
+          "0": "Too weak",
+          "1": "Weak",
+          "2": "Fair",
+          "3": "Good",
+          "4": "Strong"
+        },
+        "rules": {
+          "length": "8 characters or more",
+          "lower": "A lowercase letter",
+          "upper": "An uppercase letter",
+          "digit": "A digit",
+          "special": "A symbol, like ! or #"
+        },
+        "saved": "Your password has been changed",
+        "savedEnded": "Your password has been changed and {{count}} other places were signed out"
+      }
     }
   },
   "tenantBilling": {

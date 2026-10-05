@@ -55,6 +55,7 @@ vi.mock("@/context/LocaleContext", () => ({
 vi.mock("@/context/ThemeContext", () => ({ useTheme: () => ({ theme: "light", choice: "system", setTheme: vi.fn() }) }));
 vi.mock("../_context/PanelSessionContext", () => ({ usePanelSession: () => ({ me, zoneChanged: vi.fn(), reload: vi.fn() }) }));
 vi.mock("../_components/kit/notify", () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+vi.mock("./_components/ProfileSection", () => ({ ProfileSection: () => <p>profile-section</p> }));
 vi.mock("./_components/EmailSection", () => ({ EmailSection: () => <p>email-section</p> }));
 vi.mock("./_components/SessionsSection", () => ({ SessionsSection: () => <p>sessions-section</p> }));
 vi.mock("../_components/OperatingCurrencyCard", () => ({ OperatingCurrencyCard: () => <p>currency-card</p> }));

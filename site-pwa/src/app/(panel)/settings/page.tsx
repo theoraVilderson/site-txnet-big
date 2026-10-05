@@ -15,14 +15,15 @@ import { EmailSection } from "./_components/EmailSection";
 import { canPinRates, canSetPlatformCurrency, settingsTabs, type SettingsTab } from "./_lib/settings";
 import { MessengerSection } from "./_components/MessengerSection";
 import { NotificationsSection } from "./_components/NotificationsSection";
+import { ProfileSection } from "./_components/ProfileSection";
 import { SessionsSection } from "./_components/SessionsSection";
 import { TimeZoneSection } from "./_components/TimeZoneSection";
 
 /**
  * The user's settings on tabs (UX-1-s, `contract.ux.md` S1–S2), `?tab=`:
  *
- * - `profile` — the email address (F-035-j) and every place the account is
- *   signed in (SES-1-b);
+ * - `profile` — the name edited in place and the password (UX-1-u), the email
+ *   address (F-035-j) and every place the account is signed in (SES-1-b);
  * - `notifications` — which service notices they are told and quiet hours
  *   (F-601-m), and which messenger tells them (F-601-u);
  * - `appearance` — theme, language, their time zone (TZ-1-e) and the motion
@@ -51,6 +52,7 @@ export default function SettingsPage() {
   const panels: Record<SettingsTab, () => ReactNode> = {
     profile: () => (
       <>
+        <ProfileSection />
         <EmailSection />
         <SessionsSection />
       </>

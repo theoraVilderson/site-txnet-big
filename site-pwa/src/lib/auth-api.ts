@@ -411,6 +411,10 @@ export const authApi = {
   async uiPreferences() { return request<UiPreferences>("/auth/me/ui-preferences", { method: "GET" }); },
   /** Any subset, validated strictly; answers every key after the write. */
   async saveUiPreferences(patch: UiPreferencesPatch) { return request<UiPreferences>("/auth/me/ui-preferences", { method: "PATCH", body: JSON.stringify(patch) }); },
+  /** Renames the caller (UX-1-t, auth-api v41): the register form's rules; `GET auth/me` then answers the new name. */
+  async renameMe(fullName: string) { return request<{ fullName: string }>("/auth/me/name", { method: "PUT", body: JSON.stringify({ fullName }) }); },
+  /** Changes the password signed in (UX-1-t): a wrong `currentPassword` is 400 `wrong_password`; this session stays. */
+  async changePassword(currentPassword: string, newPassword: string, endOtherSessions: boolean) { return request<{ otherSessionsEnded: number }>("/auth/me/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword, endOtherSessions }) }); },
   /** Every place this account is signed in, the current one first (SES-1-a). */
   async activeSessions() { return request<{ sessions: ActiveSession[] }>("/auth/sessions", { method: "GET" }); },
   /** End that place for good: its sessions, its switcher entry, and — on a bot chat — this account's link to it. */
