@@ -36,7 +36,7 @@ export interface CatalogSurface {
   /** This surface's own two pages: the list, and where its drafted names are reviewed. */
   catalogHref: string;
   translationsHref: string;
-  /** Put above the page's header: the way back to the console, and whose catalog this is. */
+  /** Put under the page's header: whose catalog this is, and the workspace's tab bar (contract.ux.md N8). */
   chrome?: ReactNode;
   /** The sentence key for a refusal this surface knows (`ResellerAccess`'s); the generic answer otherwise. */
   refusalKey?: (e: unknown) => string | null;

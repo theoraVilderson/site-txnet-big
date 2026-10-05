@@ -90,7 +90,6 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      {surface.chrome}
       <PageHeader
         icon={Landmark}
         title={t("common", G.title)}
@@ -108,6 +107,7 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
           </>
         }
       />
+      {surface.chrome}
 
       <AnimatePresence initial={false}>
         {notice && (

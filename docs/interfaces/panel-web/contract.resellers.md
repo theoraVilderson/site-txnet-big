@@ -176,8 +176,8 @@ A purchase's last step links here (`BuyResellerView`, "add your domain").
 
 18. **No permission is judged by the page.** tenant-service admits the owner,
     a staff seat with `tenant.manage` or platform support (invariant 21); the
-    page makes its calls and shows the refusal's sentence. The domains screen
-    links back to the console.
+    page makes its calls and shows the refusal's sentence. The domains screen,
+    like every workspace page, carries the workspace tab bar (`contract.ux.md` N8).
 19. **One sentence per refusal** (`DOMAIN_REFUSAL_KEYS`, namespace
     `common.resellerDomains`): shared-core's `ResellerAccessRejection` plus
     tenant-service's `DomainRejection`, both read from source by the spec, as

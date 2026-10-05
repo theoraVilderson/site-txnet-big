@@ -42,10 +42,11 @@ import {
   type Errors,
   type StatusForm,
 } from "../../_lib/resellers";
-import { Alert, Field, StatusBadge, input, primaryButton, useMessage } from "../../_components/resellers-ui";
+import { Alert, Field, StatusBadge, useMessage } from "../../_components/resellers-ui";
 import { LIMIT_KEYS } from "../../_lib/limits";
 import { ResellerLedger } from "./ResellerLedger";
 import { PageHeader } from "../../../_components/kit/PageHeader";
+import { Button, Checkbox, Input, Tabs } from "../../../_components/kit";
 
 type Loaded = { reseller: Reseller; subscription: TenantSubscription | null; packages: TenantPackage[] };
 
@@ -115,8 +116,6 @@ export function ResellerDetailView({ id }: { id: string }) {
   if (!allowed) return shell(<Alert>{t("common", K.refusals.not_platform_owner)}</Alert>);
 
   const r = data?.reseller;
-  const tabClass = (on: boolean) =>
-    `rounded-lg px-3 py-1.5 text-xs font-bold ${on ? "bg-card-bg text-text-primary shadow-sm" : "text-text-secondary"}`;
 
   return shell(
     <>
@@ -144,20 +143,13 @@ export function ResellerDetailView({ id }: { id: string }) {
           />
 
           {tabs.length > 1 && (
-            <div role="tablist" className="inline-flex gap-1 rounded-xl bg-bg-inner p-1">
-              {tabs.map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === name}
-                  className={tabClass(tab === name)}
-                  onClick={() => goTab(name)}
-                >
-                  {t("common", K.detail.tabs[name])}
-                </button>
-              ))}
-            </div>
+            <Tabs
+              ariaLabel={r.slug}
+              variant="pills"
+              value={tab}
+              onChange={goTab}
+              tabs={tabs.map((name) => ({ value: name, label: t("common", K.detail.tabs[name]) }))}
+            />
           )}
 
           {tab === "overview" ? (
@@ -379,10 +371,9 @@ function SubscriptionSection({ loaded, onSaved }: { loaded: Loaded; onSaved: () 
           </div>
           {subscription && <p className="text-[11px] text-text-secondary">{t("common", K.subscription.keepsPeriodEnd)}</p>}
           <div>
-            <button type="button" className={primaryButton} disabled={busy || choices.length === 0} onClick={submit}>
-              {busy && <Loader2 size={14} className="animate-spin" aria-hidden />}
+            <Button variant="primary" size="sm" disabled={choices.length === 0} onClick={submit} loading={busy}>
               {t("common", K.subscription.submit)}
-            </button>
+            </Button>
           </div>
         </>
       )}
@@ -431,24 +422,20 @@ function StatusSection({ reseller, onSaved }: { reseller: Reseller; onSaved: () 
           />
         </Field>
         <Field label={t("common", K.statusChange.reason)} error={errors.reason}>
-          <input className={input} value={form.reason} maxLength={500} onChange={(e) => set({ reason: e.target.value })} />
+          <Input value={form.reason} maxLength={500} onChange={(e) => set({ reason: e.target.value })} />
         </Field>
       </div>
       {form.status === "terminated" && (
         <div className="flex flex-col gap-1">
           <p className="text-xs font-bold text-error">{t("common", K.statusChange.terminateWarning)}</p>
-          <label className="flex items-center gap-2 text-xs text-text-primary">
-            <input type="checkbox" checked={form.confirmed} onChange={(e) => set({ confirmed: e.target.checked })} />
-            {t("common", K.statusChange.confirmTerminate)}
-          </label>
+          <Checkbox checked={form.confirmed} onChange={(on) => set({ confirmed: on })} label={t("common", K.statusChange.confirmTerminate)} />
           {errors.confirm && <p className="text-[11px] text-error">{t("common", errors.confirm)}</p>}
         </div>
       )}
       <div>
-        <button type="button" className={primaryButton} disabled={busy} onClick={submit}>
-          {busy && <Loader2 size={14} className="animate-spin" aria-hidden />}
+        <Button variant="primary" size="sm" onClick={submit} loading={busy}>
           {t("common", K.statusChange.submit)}
-        </button>
+        </Button>
       </div>
       {feedback}
     </Section>
@@ -495,17 +482,16 @@ function AdjustSection({ reseller, onSaved }: { reseller: Reseller; onSaved: () 
           />
         </Field>
         <Field label={`${t("common", K.adjust.amount)} (${reseller.billingCurrencyCode})`} error={errors.amount}>
-          <input className={input} dir="ltr" inputMode="decimal" value={form.amount} onChange={(e) => set({ amount: e.target.value })} />
+          <Input dir="ltr" inputMode="decimal" value={form.amount} onChange={(e) => set({ amount: e.target.value })} />
         </Field>
         <Field label={t("common", K.adjust.note)} error={errors.note}>
-          <input className={input} value={form.note} maxLength={500} onChange={(e) => set({ note: e.target.value })} />
+          <Input value={form.note} maxLength={500} onChange={(e) => set({ note: e.target.value })} />
         </Field>
       </div>
       <div>
-        <button type="button" className={primaryButton} disabled={busy} onClick={submit}>
-          {busy && <Loader2 size={14} className="animate-spin" aria-hidden />}
+        <Button variant="primary" size="sm" onClick={submit} loading={busy}>
           {t("common", K.adjust.submit)}
-        </button>
+        </Button>
       </div>
       {feedback}
     </Section>

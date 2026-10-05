@@ -12,10 +12,11 @@ import { formatInstant } from "../../_lib/datetime";
 import { formatMoney } from "../../_lib/money";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { DataTable } from "../../_components/kit/DataTable";
-import { Alert, StatusBadge, primaryButton, quietButton, useMessage } from "./resellers-ui";
+import { Alert, StatusBadge, useMessage } from "./resellers-ui";
 import { RESELLER_KEYS as K, canAdministerResellers } from "../_lib/resellers";
 import { CreateResellerSheet } from "./CreateResellerSheet";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { Button, buttonClass } from "../../_components/kit";
 
 const PAGE_SIZE = 20;
 
@@ -98,18 +99,17 @@ export function ResellersView() {
         actions={
           <>
             <div className="flex flex-wrap items-center gap-2">
-              <Link href={PANEL_RESELLER_PACKAGES} className={quietButton}>
+              <Link href={PANEL_RESELLER_PACKAGES} className={buttonClass({ variant: "quiet", size: "sm" })}>
                 <Package size={14} aria-hidden />
                 {t("common", K.packages.link)}
               </Link>
-              <Link href={PANEL_RESELLER_LIMITS} className={quietButton}>
+              <Link href={PANEL_RESELLER_LIMITS} className={buttonClass({ variant: "quiet", size: "sm" })}>
                 <Gauge size={14} aria-hidden />
                 {t("common", K.limits.link)}
               </Link>
-              <button type="button" className={primaryButton} onClick={() => setCreating(true)}>
-                <Plus size={14} aria-hidden />
+              <Button variant="primary" size="sm" onClick={() => setCreating(true)} icon={<Plus size={14} aria-hidden />}>
                 {t("common", K.new)}
-              </button>
+              </Button>
             </div>
           </>
         }
@@ -122,10 +122,9 @@ export function ResellersView() {
       ) : error ? (
         <div className="flex flex-wrap items-center gap-3">
           <Alert>{message(error)}</Alert>
-          <button type="button" className={quietButton} onClick={reload}>
-            <RotateCw size={12} aria-hidden />
+          <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
             {t("common", K.retry)}
-          </button>
+          </Button>
         </div>
       ) : !rows || rows.length === 0 ? (
         <p className="text-sm text-text-secondary">{t("common", K.empty)}</p>
@@ -156,12 +155,12 @@ export function ResellersView() {
 
       {!isLoading && !error && (page > 1 || rows?.length === PAGE_SIZE) && (
         <nav className="flex justify-between">
-          <button type="button" className={quietButton} disabled={page <= 1} onClick={() => go(page - 1)}>
+          <Button variant="quiet" size="sm" disabled={page <= 1} onClick={() => go(page - 1)}>
             {t("common", K.prev)}
-          </button>
-          <button type="button" className={quietButton} disabled={rows?.length !== PAGE_SIZE} onClick={() => go(page + 1)}>
+          </Button>
+          <Button variant="quiet" size="sm" disabled={rows?.length !== PAGE_SIZE} onClick={() => go(page + 1)}>
             {t("common", K.next)}
-          </button>
+          </Button>
         </nav>
       )}
 

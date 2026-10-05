@@ -3,10 +3,9 @@
 import { useId, useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { resellerLimitsApi, type OverageView, type QuotaOverageMode, type ResellerLimitRow, type TenantPackage } from "@/lib/tenant-api";
-import { primaryButton, quietButton } from "../../_components/resellers-ui";
 import { LIMIT_KEYS as K, overageBodyOf } from "../../_lib/limits";
+import { Button, Input } from "../../../_components/kit";
 
-const input = "w-28 rounded-xl border border-card-border bg-bg-inner px-3 py-2 text-sm text-text-primary outline-none focus:border-primary";
 
 /** What a level holds past a quota, in words: not set (the next level applies), refuse, or a price per extra unit. */
 export function useOverageHeld() {
@@ -82,9 +81,9 @@ export function QuotaOverage({
               </span>
               <span className="text-text-secondary">{held(r)}</span>
               <span className="text-text-secondary">— {r.reason}</span>
-              <button type="button" className={quietButton} disabled={busy} onClick={() => run(() => resellerLimitsApi.clearResellersOverage(row.key, [r.tenantId]))}>
+              <Button variant="quiet" size="sm" disabled={busy} onClick={() => run(() => resellerLimitsApi.clearResellersOverage(row.key, [r.tenantId]))}>
                 {t("common", K.overage.remove, { slug: r.slug })}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -113,7 +112,8 @@ export function OverageEditor({
   return (
     <div role="group" aria-label={t("common", K.overage.for, { name: label })} className="flex flex-wrap items-center gap-2">
       <ModeRadios name={name} mode={mode} onChange={setMode} />
-      <input
+      <Input
+        className="w-28"
         type="text"
         inputMode="decimal"
         dir="ltr"
@@ -121,15 +121,14 @@ export function OverageEditor({
         value={price}
         disabled={mode === "stop"}
         onChange={(e) => setPrice(e.target.value)}
-        className={input}
       />
-      <button type="button" className={primaryButton} disabled={busy || body === undefined} onClick={() => body && onSave(body)}>
+      <Button variant="primary" size="sm" disabled={busy || body === undefined} onClick={() => body && onSave(body)}>
         {t("common", K.save)}
-      </button>
+      </Button>
       {onClear && (
-        <button type="button" className={quietButton} disabled={busy} onClick={onClear}>
+        <Button variant="quiet" size="sm" disabled={busy} onClick={onClear}>
           {t("common", K.clear)}
-        </button>
+        </Button>
       )}
     </div>
   );

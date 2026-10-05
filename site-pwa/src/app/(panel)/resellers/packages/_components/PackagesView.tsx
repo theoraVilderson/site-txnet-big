@@ -8,12 +8,12 @@ import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatMoney } from "../../../_lib/money";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { DataTable } from "../../../_components/kit/DataTable";
-import { Alert, primaryButton, quietButton, useMessage } from "../../_components/resellers-ui";
+import { Alert, useMessage } from "../../_components/resellers-ui";
 import { RESELLER_KEYS, canAdministerResellers } from "../../_lib/resellers";
 import { PACKAGE_KEYS as K, WHOLESALE_METERS, packageFormOf } from "../../_lib/packages";
 import { PackageSheet } from "./PackageSheet";
 import { PageHeader } from "../../../_components/kit/PageHeader";
-import { useConfirm } from "../../../_components/kit";
+import { Button, useConfirm } from "../../../_components/kit";
 
 /**
  * The packages the platform sells resellers (F-118-n5, `tenant/contract.admin.md`
@@ -123,10 +123,9 @@ export function PackagesView() {
         subtitle={t("common", K.subtitle)}
         actions={
           <>
-            <button type="button" className={primaryButton} disabled={!currency} onClick={() => setEditing("new")}>
-              <Plus size={14} aria-hidden />
+            <Button variant="primary" size="sm" disabled={!currency} onClick={() => setEditing("new")} icon={<Plus size={14} aria-hidden />}>
               {t("common", K.new)}
-            </button>
+            </Button>
           </>
         }
       />
@@ -139,10 +138,9 @@ export function PackagesView() {
       ) : error ? (
         <div className="flex flex-wrap items-center gap-3">
           <Alert>{message(error)}</Alert>
-          <button type="button" className={quietButton} onClick={reload}>
-            <RotateCw size={12} aria-hidden />
+          <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
             {t("common", RESELLER_KEYS.retry)}
-          </button>
+          </Button>
         </div>
       ) : !rows || rows.length === 0 ? (
         <p className="text-sm text-text-secondary">{t("common", K.empty)}</p>

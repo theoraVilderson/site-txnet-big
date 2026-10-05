@@ -6,14 +6,14 @@ import { useLocale } from "@/context/LocaleContext";
 import { resellerLimitsApi, tenantApi, type Reseller, type ResellerLimitKey, type ResellerLimitRow, type TenantPackage } from "@/lib/tenant-api";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
-import { Alert, primaryButton, quietButton, useMessage } from "../../_components/resellers-ui";
+import { Alert, useMessage } from "../../_components/resellers-ui";
 import { RESELLER_KEYS, canAdministerResellers } from "../../_lib/resellers";
 import { LIMIT_KEYS as K, limitValueOf } from "../../_lib/limits";
 import { PackageProducts } from "./PackageProducts";
 import { QuotaOverage } from "./QuotaOverage";
 import { PageHeader } from "../../../_components/kit/PageHeader";
+import { Button, Checkbox, Input } from "../../../_components/kit";
 
-const input = "w-28 rounded-xl border border-card-border bg-bg-inner px-3 py-2 text-sm text-text-primary outline-none focus:border-primary";
 
 /**
  * What a reseller may spend of the platform's (F-019-r, ADR-0106,
@@ -79,10 +79,9 @@ export function LimitsView() {
       {error !== null ? (
         <div className="flex flex-wrap items-center gap-3">
           <Alert>{message(error)}</Alert>
-          <button type="button" className={quietButton} onClick={reload}>
-            <RotateCw size={12} aria-hidden />
+          <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
             {t("common", RESELLER_KEYS.retry)}
-          </button>
+          </Button>
         </div>
       ) : rows === null ? (
         <TableSkeleton rows={4} columns={3} />
@@ -181,9 +180,9 @@ function LimitCard({ row, packages, resellers, onSaved }: { row: ResellerLimitRo
                 </span>
                 <span className="text-text-secondary">{held(r.value)}</span>
                 <span className="text-text-secondary">— {r.reason}</span>
-                <button type="button" className={quietButton} disabled={busy} onClick={() => run(() => resellerLimitsApi.clearResellers(row.key, [r.tenantId]))}>
+                <Button variant="quiet" size="sm" disabled={busy} onClick={() => run(() => resellerLimitsApi.clearResellers(row.key, [r.tenantId]))}>
                   {t("common", K.remove, { slug: r.slug })}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -220,7 +219,8 @@ function ValueEditor({
   const value = limitValueOf(typed, noLimit, max);
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <input
+      <Input
+        className="w-28"
         type="text"
         inputMode="numeric"
         dir="ltr"
@@ -228,19 +228,15 @@ function ValueEditor({
         value={typed}
         disabled={noLimit}
         onChange={(e) => setTyped(e.target.value)}
-        className={input}
       />
-      <label className="flex items-center gap-1 text-xs text-text-secondary">
-        <input type="checkbox" checked={noLimit} onChange={(e) => setNoLimit(e.target.checked)} />
-        {t("common", K.noLimit)}
-      </label>
-      <button type="button" className={primaryButton} disabled={busy || value === undefined} onClick={() => value !== undefined && onSave(value)}>
+      <Checkbox checked={noLimit} onChange={(on) => setNoLimit(on)} label={t("common", K.noLimit)} />
+      <Button variant="primary" size="sm" disabled={busy || value === undefined} onClick={() => value !== undefined && onSave(value)}>
         {t("common", K.save)}
-      </button>
+      </Button>
       {onClear && (
-        <button type="button" className={quietButton} disabled={busy} onClick={onClear}>
+        <Button variant="quiet" size="sm" disabled={busy} onClick={onClear}>
           {t("common", K.clear)}
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -280,7 +276,8 @@ function ForResellers({
         ))}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <input
+        <Input
+          className="w-28"
           type="text"
           inputMode="numeric"
           dir="ltr"
@@ -288,29 +285,25 @@ function ForResellers({
           value={typed}
           disabled={noLimit}
           onChange={(e) => setTyped(e.target.value)}
-          className={input}
         />
-        <label className="flex items-center gap-1 text-xs text-text-secondary">
-          <input type="checkbox" checked={noLimit} onChange={(e) => setNoLimit(e.target.checked)} />
-          {t("common", K.noLimit)}
-        </label>
-        <input
+        <Checkbox checked={noLimit} onChange={(on) => setNoLimit(on)} label={t("common", K.noLimit)} />
+        <Input
           type="text"
           maxLength={500}
           aria-label={t("common", K.reason)}
           placeholder={t("common", K.reason)}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          className={`${input} w-56 flex-1`}
+          className="w-56 flex-1"
         />
-        <button
-          type="button"
-          className={primaryButton}
+        <Button
+          variant="primary"
+          size="sm"
           disabled={!ready}
           onClick={() => value !== undefined && onApply(picked, value, reason.trim())}
         >
           {t("common", K.apply, { count: picked.length })}
-        </button>
+        </Button>
       </div>
     </fieldset>
   );

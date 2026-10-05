@@ -21,7 +21,7 @@ export interface GatewaySurface {
   tenantId: string | null;
   /** Its eight calls — `gatewayAdminApi` for that tenant. */
   api: GatewayAdminApi;
-  /** Put above the page's header: the way back to the console, and whose gateways these are. */
+  /** Put under the page's header: whose gateways these are, and the workspace's tab bar (contract.ux.md N8). */
   chrome?: ReactNode;
   /** The sentence key for a refusal this surface knows (`ResellerAccess`'s); the generic answer otherwise. */
   refusalKey?: (e: unknown) => string | null;

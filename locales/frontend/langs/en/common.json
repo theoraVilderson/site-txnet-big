@@ -2467,6 +2467,16 @@
         "doneNow": "Upgraded. The new package's quotas apply now.",
         "doneRenewal": "Saved. The new package starts at your renewal."
       }
+    },
+    "tabs": {
+      "label": "Reseller sections",
+      "overview": "Overview",
+      "users": "Users",
+      "catalog": "Catalog",
+      "domains": "Domains",
+      "gateways": "Gateways",
+      "bot": "Bot",
+      "branding": "Brand"
     }
   },
   "resellerGateways": {

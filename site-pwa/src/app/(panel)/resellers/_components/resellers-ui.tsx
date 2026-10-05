@@ -7,9 +7,9 @@ import type { TenantStatus } from "@/lib/tenant-api";
 import { Badge } from "../../financial/_components/Badge";
 import { RESELLER_KEYS, refusalKey } from "../_lib/resellers";
 
-// The sheet, field and button styles are the catalog page's; they hold no
+// The sheet and field are the catalog page's; they hold no
 // catalog rule, and a second copy would drift.
-export { Alert, Field, Sheet, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
+export { Alert, Field, Sheet } from "../../catalog/_components/catalog-ui";
 
 /** The refusal's own sentence, else the generic answer for that error. */
 export function useMessage() {

@@ -5,7 +5,8 @@ import { Loader2, Search } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { authApi, type UserSearchHit } from "@/lib/auth-api";
 import { RESELLER_KEYS as K, ownerSelectable, userQuery } from "../_lib/resellers";
-import { input, quietButton, useMessage } from "./resellers-ui";
+import { useMessage } from "./resellers-ui";
+import { Button, Input } from "../../_components/kit";
 
 /** Wait for the typing to settle: the search is rate-limited per caller (F-018-ad). */
 const DEBOUNCE_MS = 300;
@@ -51,9 +52,9 @@ export function OwnerPicker({ picked, onPick }: { picked: UserSearchHit | null; 
     return (
       <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-bg-inner px-3 py-2">
         <HitLine hit={picked} />
-        <button type="button" className={quietButton} onClick={() => onPick(null)}>
+        <Button variant="quiet" size="sm" onClick={() => onPick(null)}>
           {t("common", K.create.ownerChange)}
-        </button>
+        </Button>
       </div>
     );
   }
@@ -62,8 +63,8 @@ export function OwnerPicker({ picked, onPick }: { picked: UserSearchHit | null; 
     <div className="flex flex-col gap-2">
       <div className="relative">
         <Search size={14} className="pointer-events-none absolute top-1/2 -translate-y-1/2 text-text-secondary start-3" aria-hidden />
-        <input
-          className={`${input} ps-8`}
+        <Input
+          className="ps-8"
           value={text}
           placeholder={t("common", K.create.ownerSearch)}
           onChange={(e) => setText(e.target.value)}

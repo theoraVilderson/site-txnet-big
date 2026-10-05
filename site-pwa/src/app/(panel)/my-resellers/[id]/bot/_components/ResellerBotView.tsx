@@ -1,16 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { AlertCircle, ArrowRight, Bot, CheckCircle2, Clock, Loader2, PauseCircle, RefreshCw, Trash2, type LucideIcon } from "lucide-react";
+import { AlertCircle, Bot, CheckCircle2, Clock, Loader2, PauseCircle, RefreshCw, Trash2, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { authApi, resellerBotsApi, type BotPlatformName, type ResellerBot } from "@/lib/auth-api";
-import { myResellerConsolePath } from "@/lib/routes";
 import { Select } from "../../../../_components/kit/Select";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { Badge } from "../../../../financial/_components/Badge";
-import { Alert, Field, input, primaryButton, quietButton } from "../../../../catalog/_components/catalog-ui";
+import { Field } from "../../../../catalog/_components/catalog-ui";
 import {
   BOT_HINT_KEYS,
   BOT_KEYS as K,
@@ -24,7 +22,8 @@ import {
   connectBody,
   isPrimaryTaken,
 } from "../../../_lib/bots";
-import { useConfirm } from "../../../../_components/kit";
+import { Alert, Button, Input, PageHeader, useConfirm } from "../../../../_components/kit";
+import { WorkspaceTabs } from "../../../_components/WorkspaceTabs";
 
 /** The refusal's own sentence, else the generic answer for that error. */
 function useMessage() {
@@ -99,29 +98,25 @@ export function ResellerBotView({ id }: { id: string }) {
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
-      <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <Link href={myResellerConsolePath(id)} className={`${quietButton} mb-2 -ms-2`}>
-            <ArrowRight size={12} className="ltr:rotate-180" aria-hidden />
-            {t("common", K.backToConsole)}
-          </Link>
-          <h1 className="text-2xl font-bold text-text-primary md:text-3xl">
-            {slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-        </div>
-        <button type="button" className={quietButton} onClick={retry}>
-          <RefreshCw size={12} aria-hidden />
-          {t("common", K.refresh)}
-        </button>
-      </header>
+      <PageHeader
+        title={slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}
+        subtitle={t("common", K.subtitle)}
+        actions={
+          <>
+            <Button variant="quiet" size="sm" onClick={retry} icon={<RefreshCw size={12} aria-hidden />}>
+            {t("common", K.refresh)}
+          </Button>
+          </>
+        }
+      />
+      <WorkspaceTabs id={id} />
 
       {loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
-          <Alert>{message(loadError)}</Alert>
-          <button type="button" className={primaryButton} onClick={retry}>
+          <Alert tone="error">{message(loadError)}</Alert>
+          <Button variant="primary" size="sm" onClick={retry}>
             {t("common", K.reload)}
-          </button>
+          </Button>
         </div>
       ) : bots === null ? (
         <TableSkeleton rows={2} columns={2} />
@@ -199,8 +194,7 @@ function ConnectBot({ id, bots, onConnected }: { id: string; bots: ResellerBot[]
           />
         </Field>
         <Field label={t("common", K.add.token)} error={error} hint={t("common", K.add.tokenHint)}>
-          <input
-            className={input}
+          <Input
             dir="ltr"
             autoComplete="off"
             placeholder="123456789:AA..."
@@ -211,15 +205,14 @@ function ConnectBot({ id, bots, onConnected }: { id: string; bots: ResellerBot[]
       </div>
       {/* Where the token comes from: a reseller who has never made a bot needs this before the field. */}
       <p className="text-xs text-text-secondary">{t("common", BOT_HINT_KEYS[platform])}</p>
-      {taken && <Alert>{t("common", K.add.primaryTaken)}</Alert>}
-      {failure !== null && <Alert>{message(failure)}</Alert>}
+      {taken && <Alert tone="error">{t("common", K.add.primaryTaken)}</Alert>}
+      {failure !== null && <Alert tone="error">{message(failure)}</Alert>}
       {pendingWebhook && (
         <p className="rounded-xl border border-gold/20 bg-gold-bg p-3 text-xs text-gold">{t("common", K.notRegistered)}</p>
       )}
-      <button type="submit" className={primaryButton} disabled={busy || taken}>
-        {busy && <Loader2 size={12} className="animate-spin" aria-hidden />}
+      <Button variant="primary" size="sm" type="submit" disabled={taken} loading={busy}>
         {t("common", busy ? K.add.connecting : K.add.submit)}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -262,28 +255,29 @@ function BotCard({ tenantId, bot, onRetired }: { tenantId: string; bot: Reseller
           <Badge {...tone} label={t("common", BOT_STATUS_KEYS[bot.status])} />
           <span className="text-xs text-text-secondary">{t("common", BOT_ROLE_KEYS[bot.role])}</span>
         </div>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-error disabled:opacity-60"
+        <Button
+          variant="quiet"
+          size="sm"
           onClick={() => void retire()}
           disabled={busy}
+          icon={busy ? <Loader2 size={12} className="animate-spin" aria-hidden /> : <Trash2 size={12} aria-hidden />}
+          className="text-error hover:text-error hover:bg-error-bg"
         >
-          {busy ? <Loader2 size={12} className="animate-spin" aria-hidden /> : <Trash2 size={12} aria-hidden />}
           {t("common", busy ? K.removing : K.remove)}
-        </button>
+        </Button>
       </div>
       <p className="text-xs text-text-secondary">{t("common", BOT_STATUS_HINT_KEYS[bot.status])}</p>
       {orphanWebhook && (
         <>
           {/* The token is already revoked; only the messenger was not told, so
               the row is gone from the service and the card says why it stays. */}
-          <Alert>{t("common", K.webhookNotRemoved)}</Alert>
-          <button type="button" className={quietButton} onClick={onRetired}>
+          <Alert tone="error">{t("common", K.webhookNotRemoved)}</Alert>
+          <Button variant="quiet" size="sm" onClick={onRetired}>
             {t("common", K.removed)}
-          </button>
+          </Button>
         </>
       )}
-      {failure !== null && <Alert>{message(failure)}</Alert>}
+      {failure !== null && <Alert tone="error">{message(failure)}</Alert>}
     </section>
   );
 }

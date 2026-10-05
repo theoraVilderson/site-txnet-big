@@ -19,15 +19,11 @@ import {
   type SubscriptionChangePreview,
 } from "@/lib/tenant-api";
 import { flattenTexts } from "../../../catalog/_lib/catalog-form";
-import { Alert } from "../../../catalog/_components/catalog-ui";
 import { formatInstant } from "../../../_lib/datetime";
 import { formatMoney } from "../../../_lib/money";
 import { MY_LIMIT_KEYS as L, MY_QUOTA_KEYS as Q, capAmountOf, changeVerdict, includedReading } from "../../_lib/limits";
-import { useConfirm } from "../../../_components/kit";
+import { Alert, Button, Input, NativeSelect, useConfirm } from "../../../_components/kit";
 
-const box = "w-32 rounded-xl border border-card-border bg-bg-inner px-3 py-2 text-sm text-text-primary outline-none focus:border-primary";
-const primary = "rounded-xl bg-primary px-3 py-2 text-xs font-bold text-on-accent disabled:opacity-50";
-const quiet = "rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-secondary disabled:opacity-50";
 
 /** Money in its currency, or the amount as it came when there is none to name. */
 export function useMoney() {
@@ -91,7 +87,7 @@ export function ProductQuotasCard({ tenantId }: { tenantId: string }) {
         <h2 className="text-sm font-bold text-text-primary">{t("common", Q.products.title)}</h2>
       </div>
       <p className="text-xs text-text-secondary">{t("common", Q.products.subtitle)}</p>
-      {error !== null && <Alert>{message(error)}</Alert>}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
       {rows && rows.length === 0 && <p className="text-xs text-text-secondary">{t("common", Q.products.none)}</p>}
       {rows && rows.length > 0 && (
         <ul className="grid gap-2 sm:grid-cols-2">
@@ -175,7 +171,7 @@ export function OverageCapCard({ tenantId }: { tenantId: string }) {
         <h2 className="text-sm font-bold text-text-primary">{t("common", Q.cap.title)}</h2>
       </div>
       <p className="text-xs text-text-secondary">{t("common", Q.cap.subtitle)}</p>
-      {error !== null && <Alert>{message(error)}</Alert>}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
       {view && (
         <>
           <p className="text-sm font-bold text-text-primary">
@@ -185,28 +181,28 @@ export function OverageCapCard({ tenantId }: { tenantId: string }) {
           </p>
           <p className="text-[11px] text-text-secondary">{t("common", Q.cap.month, { end: formatInstant(view.month.end, lang, { withTime: false }) ?? "" })}</p>
           <div className="flex flex-wrap items-center gap-2">
-            <input
+            <Input
+              className="w-32"
               type="text"
               inputMode="decimal"
               dir="ltr"
               aria-label={t("common", Q.cap.amount)}
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
-              className={box}
             />
-            <button type="button" className={primary} disabled={busy || amount === undefined} onClick={() => amount !== undefined && save(amount)}>
+            <Button variant="primary" size="sm" disabled={busy || amount === undefined} onClick={() => amount !== undefined && save(amount)}>
               {t("common", Q.cap.save)}
-            </button>
+            </Button>
             {view.cap !== null && (
-              <button type="button" className={quiet} disabled={busy} onClick={() => save(null)}>
+              <Button size="sm" disabled={busy} onClick={() => save(null)}>
                 {t("common", Q.cap.remove)}
-              </button>
+              </Button>
             )}
           </div>
           <p className="text-[11px] text-text-secondary">{t("common", Q.cap.hint)}</p>
         </>
       )}
-      {failure && <Alert>{failure}</Alert>}
+      {failure && <Alert tone="error">{failure}</Alert>}
     </section>
   );
 }
@@ -290,18 +286,18 @@ export function PackageChangeCard({ tenantId }: { tenantId: string }) {
       <p className="text-xs text-text-secondary">{t("common", Q.change.subtitle)}</p>
       {offers && (
         <div className="flex flex-wrap items-center gap-2">
-          <select aria-label={t("common", Q.change.package)} value={packageId} onChange={(e) => setPackageId(e.target.value)} className={`${box} w-48`}>
+          <NativeSelect aria-label={t("common", Q.change.package)} value={packageId} onChange={(e) => setPackageId(e.target.value)} className="w-48">
             <option value="">{t("common", Q.change.pick)}</option>
             {offers.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.name}
               </option>
             ))}
-          </select>
-          <select aria-label={t("common", Q.change.period)} value={billingModel} onChange={(e) => setBillingModel(e.target.value as ResellerBillingModel)} className={`${box} w-40`}>
+          </NativeSelect>
+          <NativeSelect aria-label={t("common", Q.change.period)} value={billingModel} onChange={(e) => setBillingModel(e.target.value as ResellerBillingModel)} className="w-40">
             <option value="subscription_monthly">{t("common", Q.change.monthly)}</option>
             <option value="subscription_yearly">{t("common", Q.change.yearly)}</option>
-          </select>
+          </NativeSelect>
         </div>
       )}
       {preview && verdict && (
@@ -314,14 +310,14 @@ export function PackageChangeCard({ tenantId }: { tenantId: string }) {
                 : t("common", verdict === "short" ? Q.change.short : Q.change.now, { charge, balance })}
           </p>
           {verdict === "now" && (
-            <button type="button" className={primary} disabled={busy} onClick={apply}>
+            <Button variant="primary" size="sm" disabled={busy} onClick={apply}>
               {t("common", Q.change.upgrade)}
-            </button>
+            </Button>
           )}
           {verdict === "renewal" && (
-            <button type="button" className={quiet} disabled={busy} onClick={apply}>
+            <Button size="sm" disabled={busy} onClick={apply}>
               {t("common", Q.change.atRenewal)}
-            </button>
+            </Button>
           )}
           {verdict === "short" && (
             <Link href={PANEL_TENANT_BILLING_TOPUP} className="font-bold text-primary hover:underline">
@@ -331,7 +327,7 @@ export function PackageChangeCard({ tenantId }: { tenantId: string }) {
         </div>
       )}
       {done && <p className="text-xs font-bold text-primary">{done}</p>}
-      {error !== null && <Alert>{message(error)}</Alert>}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
     </section>
   );
 }

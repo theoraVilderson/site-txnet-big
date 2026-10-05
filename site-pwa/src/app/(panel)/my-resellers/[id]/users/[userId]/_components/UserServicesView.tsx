@@ -1,18 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowRight, Check, ChevronDown, Copy, Loader2, QrCode, RefreshCw } from "lucide-react";
+import { Check, ChevronDown, Copy, Loader2, QrCode, RefreshCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { resellerUserGrantsApi, type GrantRow, type GrantScope, type ResellerUserGrantsApi, type UserConfigRow } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
-import { myResellerUsersPath } from "@/lib/routes";
 import { Pagination } from "../../../../../_components/kit/Pagination";
 import { TableSkeleton } from "../../../../../_components/kit/TableSkeleton";
 import { copyText } from "../../../../../_lib/clipboard";
 import { formatInstant } from "../../../../../_lib/datetime";
-import { Alert, primaryButton, quietButton } from "../../../../../catalog/_components/catalog-ui";
 import { flattenTexts } from "../../../../../catalog/_lib/catalog-form";
 import { ConfigLines } from "../../../../../services/_components/ConfigLines";
 import { QrDialog } from "../../../../../services/_components/QrDialog";
@@ -27,6 +24,10 @@ import { AdminConfigs } from "./AdminConfigs";
 import { GrantActions, IssueGrant } from "./GrantActions";
 import { GrantHistory } from "./GrantHistory";
 import { useUserMessage } from "./useUserMessage";
+import { Alert, Button, PageHeader } from "../../../../../_components/kit";
+import { usePanelSession } from "../../../../../_context/PanelSessionContext";
+import { isPlatformTenant } from "../../../../_lib/users";
+import { WorkspaceTabs } from "../../../../_components/WorkspaceTabs";
 
 const S = K.services;
 const PAGE_SIZE = 20;
@@ -52,6 +53,9 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
   const { t, lang } = useLocale();
   const message = useUserMessage();
   const name = useSearchParams().get("name");
+  // The platform's own users (F-311-ab) are not a reseller's workspace.
+  const { me } = usePanelSession();
+  const platform = isPlatformTenant(id, me);
   const [texts, setTexts] = useState<Record<string, string>>({});
   const api = useMemo(() => resellerUserGrantsApi(id, userId), [id, userId]);
 
@@ -105,25 +109,20 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
-      <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <Link href={myResellerUsersPath(id)} className={`${quietButton} mb-2 -ms-2`}>
-            <ArrowRight size={12} className="ltr:rotate-180" aria-hidden />
-            {t("common", S.back)}
-          </Link>
-          <h1 className="text-2xl font-bold text-text-primary md:text-3xl">
-            {name ? t("common", S.title, { name }) : t("common", S.titlePlain)}
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", S.subtitle)}</p>
-        </div>
-        <div className="flex flex-col items-start gap-2 md:items-end">
-          <button type="button" className={quietButton} onClick={retry}>
-            <RefreshCw size={12} aria-hidden />
-            {t("common", K.refresh)}
-          </button>
-          <IssueGrant api={api} tenantId={id} texts={texts} onIssued={retry} />
-        </div>
-      </header>
+      <PageHeader
+        title={name ? t("common", S.title, { name }) : t("common", S.titlePlain)}
+        subtitle={t("common", S.subtitle)}
+        tail={name ?? t("common", S.titlePlain)}
+        actions={
+          <>
+            <Button variant="quiet" size="sm" onClick={retry} icon={<RefreshCw size={12} aria-hidden />}>
+              {t("common", K.refresh)}
+            </Button>
+            <IssueGrant api={api} tenantId={id} texts={texts} onIssued={retry} />
+          </>
+        }
+      />
+      {!platform && <WorkspaceTabs id={id} />}
 
       {/* F-117-g: platform staff's consent, request and emergency entry; nothing to anyone else. */}
       <PlatformAccessBanner tenantId={id} onChange={retry} />
@@ -135,10 +134,10 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
         <ConsentNeeded error={loadError} />
       ) : loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
-          <Alert>{message(loadError)}</Alert>
-          <button type="button" className={primaryButton} onClick={retry}>
+          <Alert tone="error">{message(loadError)}</Alert>
+          <Button variant="primary" size="sm" onClick={retry}>
             {t("common", K.reload)}
-          </button>
+          </Button>
         </div>
       ) : answer === null ? (
         <TableSkeleton rows={3} columns={2} />
@@ -156,9 +155,9 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
             </ul>
           )}
           {(answer.hidden > 0 || scope === "all") && (
-            <button type="button" className={quietButton} onClick={toggleScope}>
+            <Button variant="quiet" size="sm" onClick={toggleScope}>
               {scope === "current" ? t("common", S.showEnded, { count: answer.hidden }) : t("common", S.hideEnded)}
-            </button>
+            </Button>
           )}
           <Pagination
             page={page}
@@ -191,10 +190,10 @@ function AdminGrantCard({ api, row, texts, onChanged }: { api: ResellerUserGrant
           <Icon size={12} aria-hidden />
           {t("common", tone.labelKey)}
         </span>
-        <button type="button" aria-expanded={open} className={quietButton} onClick={() => setOpen((o) => !o)}>
+        <Button variant="quiet" size="sm" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
           {t("common", open ? S.close : S.details)}
           <ChevronDown size={12} className={open ? "rotate-180" : ""} aria-hidden />
-        </button>
+        </Button>
       </div>
       <p className="mt-1 text-xs text-text-secondary">
         {row.endsAt ? t("common", S.ends, { date: formatInstant(row.endsAt, lang, { withTime: false }) ?? "" }) : t("common", S.permanent)}
@@ -244,7 +243,7 @@ function GrantSheet({ api, row, onChanged }: { api: ResellerUserGrantsApi; row: 
       <UsageBars grantId={grantId} read={api.grantUsage} />
       {/* Re-mounted by every read, so a link read before a rotate is not kept. */}
       <SubscriptionLink key={asked} api={api} grantId={grantId} />
-      {readError !== null && <Alert>{message(readError)}</Alert>}
+      {readError !== null && <Alert tone="error">{message(readError)}</Alert>}
       {rows === null && readError === null && <TableSkeleton rows={2} columns={2} />}
       {rows !== null && (
         <>
@@ -292,14 +291,12 @@ function SubscriptionLink({ api, grantId }: { api: ResellerUserGrantsApi; grantI
       <div className="flex flex-wrap items-center gap-2">
         <p className="min-w-0 flex-1 text-sm font-bold text-text-primary">{t("common", S.subscription)}</p>
         {busy && <Loader2 size={14} className="animate-spin text-text-secondary" aria-hidden />}
-        <button type="button" className={quietButton} disabled={busy} onClick={() => void copy()}>
-          {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
+        <Button variant="quiet" size="sm" disabled={busy} onClick={() => void copy()} icon={copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}>
           {t("common", copied ? S.subscriptionCopied : S.subscriptionCopy)}
-        </button>
-        <button type="button" className={quietButton} disabled={busy} onClick={() => void read().then((url) => url && setQr(true))}>
-          <QrCode size={12} aria-hidden />
+        </Button>
+        <Button variant="quiet" size="sm" disabled={busy} onClick={() => void read().then((url) => url && setQr(true))} icon={<QrCode size={12} aria-hidden />}>
           {t("common", S.subscriptionQr)}
-        </button>
+        </Button>
       </div>
       {link && (
         <p className="mt-2 break-all font-mono text-[11px] text-text-secondary" dir="ltr">
@@ -308,7 +305,7 @@ function SubscriptionLink({ api, grantId }: { api: ResellerUserGrantsApi; grantI
       )}
       {error !== null && (
         <div className="mt-2">
-          <Alert>{message(error)}</Alert>
+          <Alert tone="error">{message(error)}</Alert>
         </div>
       )}
       {qr && link && (

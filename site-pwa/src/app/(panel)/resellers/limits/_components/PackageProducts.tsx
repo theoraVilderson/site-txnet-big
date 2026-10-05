@@ -5,10 +5,10 @@ import { useLocale } from "@/context/LocaleContext";
 import { catalogApi, type CatalogProduct } from "@/lib/catalog-api";
 import { resellerLimitsApi, type PackageProduct, type TenantPackage } from "@/lib/tenant-api";
 import { flattenTexts } from "../../../catalog/_lib/catalog-form";
-import { Alert, primaryButton, quietButton, useMessage } from "../../_components/resellers-ui";
+import { Alert, useMessage } from "../../_components/resellers-ui";
 import { LIMIT_KEYS as K, productQuotaBodyOf, productQuotaFormOf, type ProductQuotaForm } from "../../_lib/limits";
 import { ModeRadios, useOverageHeld } from "./QuotaOverage";
-import { useConfirm } from "../../../_components/kit";
+import { Button, useConfirm } from "../../../_components/kit";
 
 const P = K.products;
 const WINDOWS = ["day", "week", "month"] as const;
@@ -195,18 +195,18 @@ function ProductTerms({
           onChange={(e) => set({ price: e.target.value })}
           className={box}
         />
-        <button type="button" className={primaryButton} disabled={busy || body === undefined} onClick={() => body && run(() => resellerLimitsApi.setPackageProduct(packageId, productId, body))}>
+        <Button variant="primary" size="sm" disabled={busy || body === undefined} onClick={() => body && run(() => resellerLimitsApi.setPackageProduct(packageId, productId, body))}>
           {t("common", row ? K.save : P.list)}
-        </button>
+        </Button>
         {row && (
-          <button
-            type="button"
-            className={quietButton}
+          <Button
+            variant="quiet"
+            size="sm"
             disabled={busy}
             onClick={async () => (await confirm({ title: t("common", P.unlistConfirm, { name }), confirmLabel: t("common", P.unlist), tone: "danger", typeToConfirm: name })) && run(() => resellerLimitsApi.clearPackageProduct(packageId, productId))}
           >
             {t("common", P.unlist)}
-          </button>
+          </Button>
         )}
       </div>
       {failure && <Alert>{failure}</Alert>}

@@ -20,7 +20,7 @@ import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatInstant } from "../../../_lib/datetime";
 import { formatMoney } from "../../../_lib/money";
-import { Alert, Field, StatusBadge, input, primaryButton } from "../../_components/resellers-ui";
+import { Alert, Field, StatusBadge } from "../../_components/resellers-ui";
 import { BILLING_MODELS, RESELLER_KEYS } from "../../_lib/resellers";
 import {
   PURCHASE_KEYS as K,
@@ -38,6 +38,7 @@ import {
 } from "../../_lib/purchase";
 import type { Errors } from "../../_lib/resellers";
 import { PageHeader } from "../../../_components/kit/PageHeader";
+import { Button, Input, buttonClass } from "../../../_components/kit";
 
 /** The suggestion is asked as the name is typed; the same wait the owner picker uses. */
 const SUGGEST_AFTER_MS = 300;
@@ -205,7 +206,7 @@ export function BuyResellerView() {
               {t("common", K.done.next, { target })}
             </p>
           )}
-          <Link href={myResellerDomainsPath(bought.id)} className={`${primaryButton} mt-4`}>
+          <Link href={myResellerDomainsPath(bought.id)} className={buttonClass({ variant: "primary", size: "sm", className: "mt-4" })}>
             {t("common", K.done.addDomain)}
           </Link>
         </div>
@@ -232,9 +233,9 @@ export function BuyResellerView() {
         loadError ? (
           <div className="space-y-3">
             <Alert>{message(loadError)}</Alert>
-            <button type="button" className={primaryButton} onClick={() => setAsked((n) => n + 1)}>
+            <Button variant="primary" size="sm" onClick={() => setAsked((n) => n + 1)}>
               {t("common", K.reload)}
-            </button>
+            </Button>
           </div>
         ) : (
           <TableSkeleton rows={4} columns={2} />
@@ -269,12 +270,11 @@ export function BuyResellerView() {
           )}
 
           <Field label={t("common", K.name)} hint={t("common", K.nameHint)} error={errors.name}>
-            <input className={input} value={form.name} onChange={(e) => set({ name: e.target.value })} />
+            <Input value={form.name} onChange={(e) => set({ name: e.target.value })} />
           </Field>
 
           <Field label={t("common", K.slug)} hint={t("common", K.slugHint)} error={errors.slug}>
-            <input
-              className={input}
+            <Input
               dir="ltr"
               value={form.slug}
               onChange={(e) => {
@@ -299,10 +299,9 @@ export function BuyResellerView() {
             </div>
           )}
 
-          <button type="button" className={primaryButton} disabled={busy || !picked} onClick={submit}>
-            {busy && <Loader2 size={14} className="animate-spin" aria-hidden />}
+          <Button variant="primary" size="sm" disabled={!picked} onClick={submit} loading={busy}>
             {t("common", K.submit, { price: price && picked ? money(price, picked.currencyCode) : "—" })}
-          </button>
+          </Button>
         </div>
       )}
     </Shell>
@@ -362,10 +361,9 @@ function HeldReseller({ reseller }: { reseller: OwnedReseller }) {
         </div>
       </dl>
 
-      <button type="button" className={primaryButton} disabled={pending !== null} onClick={() => open(reseller.id)}>
-        {pending ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Store size={16} aria-hidden />}
+      <Button variant="primary" size="sm" disabled={pending !== null} onClick={() => open(reseller.id)} icon={pending ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Store size={16} aria-hidden />}>
         {t("common", pending ? H.opening : H.open)}
-      </button>
+      </Button>
     </div>
   );
 }

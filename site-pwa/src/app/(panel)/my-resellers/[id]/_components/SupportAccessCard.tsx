@@ -7,9 +7,8 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import { supportConsentApi, type ConsentScope, type PlatformActivity, type SupportConsentList } from "@/lib/auth-api";
 import { Badge } from "../../../financial/_components/Badge";
 import { formatInstant } from "../../../_lib/datetime";
-import { Alert, input, primaryButton, quietButton } from "../../../catalog/_components/catalog-ui";
 import { SUPPORT_KEYS as K, consentSides, hoursOf, supportRefusalKey, timeLeft } from "../../_lib/support-access";
-import { useConfirm } from "../../../_components/kit";
+import { Alert, Button, Input, useConfirm } from "../../../_components/kit";
 
 /** `ACTIVITY_PAGE` (auth-service): a full page means there may be an older one. */
 const ACTIVITY_PAGE = 50;
@@ -125,7 +124,7 @@ export function SupportAccessCard({ tenantId }: { tenantId: string }) {
         <label htmlFor={`support-hours-${tenantId}`} className="text-xs text-text-secondary">
           {t("common", K.grant.hours)}
         </label>
-        <input id={`support-hours-${tenantId}`} type="text" inputMode="numeric" className={`${input} max-w-[8rem]`} value={hours} onChange={(e) => setHours(e.target.value)} />
+        <Input id={`support-hours-${tenantId}`} type="text" inputMode="numeric" className="max-w-[8rem]" value={hours} onChange={(e) => setHours(e.target.value)} />
         {hours.trim() !== "" && typedHours === undefined && <p className="text-[11px] text-error">{t("common", K.hoursInvalid)}</p>}
       </div>
     </div>
@@ -138,7 +137,7 @@ export function SupportAccessCard({ tenantId }: { tenantId: string }) {
         <h2 className="text-sm font-bold text-text-primary">{t("common", K.title)}</h2>
       </div>
       <p className="text-xs text-text-secondary">{t("common", K.subtitle)}</p>
-      {error !== null && <Alert>{message(error)}</Alert>}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
 
       {sides && view && (
         <>
@@ -152,12 +151,12 @@ export function SupportAccessCard({ tenantId }: { tenantId: string }) {
               </p>
               {grantForm}
               <div className="flex flex-wrap gap-2">
-                <button type="button" className={primaryButton} disabled={busy || typedHours === undefined} onClick={() => grant(sides.pending!.id)}>
+                <Button variant="primary" size="sm" disabled={busy || typedHours === undefined} onClick={() => grant(sides.pending!.id)}>
                   {t("common", K.pending.approve)}
-                </button>
-                <button type="button" className={quietButton} disabled={busy} onClick={() => revoke(sides.pending!.id, false)}>
+                </Button>
+                <Button variant="quiet" size="sm" disabled={busy} onClick={() => revoke(sides.pending!.id, false)}>
                   {t("common", K.pending.decline)}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -175,9 +174,9 @@ export function SupportAccessCard({ tenantId }: { tenantId: string }) {
                 <p className="text-sm text-text-secondary">{t("common", K.none)}</p>
                 <h3 className="text-sm font-bold text-text-primary">{t("common", K.grant.title)}</h3>
                 {grantForm}
-                <button type="button" className={primaryButton} disabled={busy || typedHours === undefined} onClick={() => grant()}>
+                <Button variant="primary" size="sm" disabled={busy || typedHours === undefined} onClick={() => grant()}>
                   {t("common", K.grant.submit)}
-                </button>
+                </Button>
               </div>
             )
           )}
@@ -187,11 +186,11 @@ export function SupportAccessCard({ tenantId }: { tenantId: string }) {
               <label htmlFor={`support-policy-${tenantId}`} className="text-xs text-text-secondary">
                 {t("common", K.policy.title)} ({t("common", K.policy.hours)})
               </label>
-              <input id={`support-policy-${tenantId}`} type="text" inputMode="numeric" className={`${input} max-w-[8rem]`} value={policy} onChange={(e) => setPolicy(e.target.value)} />
+              <Input id={`support-policy-${tenantId}`} type="text" inputMode="numeric" className="max-w-[8rem]" value={policy} onChange={(e) => setPolicy(e.target.value)} />
             </div>
-            <button
-              type="button"
-              className={quietButton}
+            <Button
+              variant="quiet"
+              size="sm"
               disabled={busy || hoursOf(policy) === undefined || hoursOf(policy) === view.defaultHours}
               onClick={() => {
                 const h = hoursOf(policy);
@@ -199,7 +198,7 @@ export function SupportAccessCard({ tenantId }: { tenantId: string }) {
               }}
             >
               {t("common", K.policy.save)}
-            </button>
+            </Button>
             {saved && <span className="text-[11px] text-primary">{t("common", K.policy.saved)}</span>}
           </div>
 
@@ -266,14 +265,14 @@ export function SupportAccessCard({ tenantId }: { tenantId: string }) {
           {(page > 1 || trail.length === ACTIVITY_PAGE) && (
             <div className="flex gap-2">
               {page > 1 && (
-                <button type="button" className={quietButton} onClick={() => setPage((p) => p - 1)}>
+                <Button variant="quiet" size="sm" onClick={() => setPage((p) => p - 1)}>
                   {t("common", K.activity.newer)}
-                </button>
+                </Button>
               )}
               {trail.length === ACTIVITY_PAGE && (
-                <button type="button" className={quietButton} onClick={() => setPage((p) => p + 1)}>
+                <Button variant="quiet" size="sm" onClick={() => setPage((p) => p + 1)}>
                   {t("common", K.activity.older)}
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -296,9 +295,9 @@ function LiveAccess({ title, expiresAt, busy, onRevoke }: { title: string; expir
     <div className="space-y-2 rounded-xl border border-primary/20 bg-leaf-bg p-4">
       <h3 className="text-sm font-bold text-text-primary">{title}</h3>
       <p className="text-xs text-text-primary">{left ? t("common", K.live.left, left) : t("common", K.history.states.expired)}</p>
-      <button type="button" className={primaryButton} disabled={busy} onClick={onRevoke}>
+      <Button variant="primary" size="sm" disabled={busy} onClick={onRevoke}>
         {t("common", K.live.revoke)}
-      </button>
+      </Button>
     </div>
   );
 }

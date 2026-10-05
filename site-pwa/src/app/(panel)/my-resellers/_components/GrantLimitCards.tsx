@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { grantLimitsApi, type TenantGrantLimit, type UserGrantLimit } from "@/lib/billing-api";
-import { Alert, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { USER_KEYS } from "../_lib/users";
 import { useUserMessage } from "../[id]/users/[userId]/_components/useUserMessage";
+import { Alert, Button, Field, Input } from "../../_components/kit";
 
 const L = USER_KEYS.grantLimit;
 /** Billing's bound (`MAX_METERED_CAP`); billing refuses past it, the box only helps. */
@@ -82,9 +81,8 @@ export function TenantGrantLimitCard({ tenantId }: { tenantId: string }) {
       )}
       {typeof view?.ceiling === "number" && <p className="text-xs text-text-secondary">{t("common", L.ceiling, { count: view.ceiling })}</p>}
       <div className="flex flex-wrap items-end gap-2">
-        <label className="block min-w-40 flex-1">
-          <span className="mb-1 block text-xs font-bold text-text-secondary">{t("common", L.tenantInput)}</span>
-          <input
+        <Field label={t("common", L.tenantInput)}>
+          <Input
             type="text"
             inputMode="numeric"
             dir="ltr"
@@ -94,17 +92,15 @@ export function TenantGrantLimitCard({ tenantId }: { tenantId: string }) {
               setTyped(e.target.value);
               setSaved(false);
             }}
-            className={input}
           />
-        </label>
-        <button type="button" className={primaryButton} disabled={view === null || cap === undefined || busy} onClick={() => void save()}>
-          {busy && <Loader2 size={12} className="animate-spin" aria-hidden />}
+        </Field>
+        <Button variant="primary" size="sm" disabled={view === null || cap === undefined} onClick={() => void save()} loading={busy}>
           {t("common", L.save)}
-        </button>
+        </Button>
       </div>
       <p className="text-xs text-text-secondary">{t("common", L.tenantInputHint)}</p>
       {saved && <p className="text-xs font-bold text-primary">{t("common", L.saved)}</p>}
-      {error !== null && <Alert>{message(error)}</Alert>}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
     </section>
   );
 }
@@ -172,30 +168,28 @@ export function UserGrantLimitCard({ tenantId, userId }: { tenantId: string; use
         </div>
       )}
       <div className="grid gap-2 sm:grid-cols-[8rem_1fr_auto] sm:items-end">
-        <label className="block">
-          <span className="mb-1 block text-xs font-bold text-text-secondary">{t("common", L.userInput)}</span>
-          <input type="text" inputMode="numeric" dir="ltr" value={typed} onChange={(e) => setTyped(e.target.value)} className={input} />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-bold text-text-secondary">{t("common", L.userReason)}</span>
-          <input type="text" maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} className={input} />
-        </label>
-        <button
-          type="button"
-          className={primaryButton}
+        <Field label={t("common", L.userInput)}>
+          <Input type="text" inputMode="numeric" dir="ltr" value={typed} onChange={(e) => setTyped(e.target.value)} />
+        </Field>
+        <Field label={t("common", L.userReason)}>
+          <Input type="text" maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />
+        </Field>
+        <Button
+          variant="primary"
+          size="sm"
           disabled={view === null || !canSet}
           onClick={() => void run(() => api.setUser(userId, cap as number, reason.trim()))}
+          loading={busy}
         >
-          {busy && <Loader2 size={12} className="animate-spin" aria-hidden />}
           {t("common", L.userSet)}
-        </button>
+        </Button>
       </div>
       {view?.own && (
-        <button type="button" className={quietButton} disabled={busy} onClick={() => void run(() => api.removeUser(userId))}>
+        <Button variant="quiet" size="sm" disabled={busy} onClick={() => void run(() => api.removeUser(userId))}>
           {t("common", L.userRemove)}
-        </button>
+        </Button>
       )}
-      {error !== null && <Alert>{message(error)}</Alert>}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
     </section>
   );
 }

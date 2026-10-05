@@ -282,7 +282,6 @@ export function CatalogView() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-4 sm:p-6">
-      {surface.chrome}
       <PageHeader
         icon={Package}
         title={t("common", K.title)}
@@ -319,6 +318,7 @@ export function CatalogView() {
           </>
         }
       />
+      {surface.chrome}
 
       {guide && <CatalogGuide onClose={closeGuide} />}
 

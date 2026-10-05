@@ -16,7 +16,6 @@ import { ResellerLimitsCard } from "./ResellerLimitsCard";
 import { SupportAccessCard } from "./SupportAccessCard";
 import { OverageCapCard, PackageChangeCard, ProductQuotasCard } from "./QuotaCards";
 import { Badge } from "../../../financial/_components/Badge";
-import { Alert, primaryButton, quietButton } from "../../../catalog/_components/catalog-ui";
 import {
   CLOSED_CAPABILITY_KEYS,
   ONBOARDING_KEYS as K,
@@ -28,6 +27,8 @@ import {
   type ClosedCapability,
 } from "../../_lib/onboarding";
 import { PageHeader } from "../../../_components/kit/PageHeader";
+import { WorkspaceTabs } from "../../_components/WorkspaceTabs";
+import { Alert, Button, buttonClass } from "../../../_components/kit";
 
 const USERS = FrontendI18nKeys.common.resellerUsers.moreUsers;
 
@@ -94,20 +95,20 @@ export function OnboardingConsoleView({ id }: { id: string }) {
         subtitle={t("common", K.subtitle)}
         actions={
           <>
-            <button type="button" className={quietButton} onClick={retry}>
-              <RefreshCw size={12} aria-hidden />
+            <Button variant="quiet" size="sm" onClick={retry} icon={<RefreshCw size={12} aria-hidden />}>
               {t("common", K.refresh)}
-            </button>
+            </Button>
           </>
         }
       />
+      <WorkspaceTabs id={id} />
 
       {loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
-          <Alert>{message(loadError)}</Alert>
-          <button type="button" className={primaryButton} onClick={retry}>
+          <Alert tone="error">{message(loadError)}</Alert>
+          <Button variant="primary" size="sm" onClick={retry}>
             {t("common", K.reload)}
-          </button>
+          </Button>
         </div>
       ) : view === null ? (
         <TableSkeleton rows={4} columns={2} />
@@ -177,7 +178,7 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
               <p className="text-xs text-text-secondary">{t("common", K.more.branding.hint)}</p>
             </div>
           </div>
-          <Link href={myResellerBrandingPath(id)} className={quietButton}>
+          <Link href={myResellerBrandingPath(id)} className={buttonClass({ variant: "quiet", size: "sm" })}>
             {t("common", K.open)}
             <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
           </Link>
@@ -190,7 +191,7 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
               <p className="text-xs text-text-secondary">{t("common", USERS.hint)}</p>
             </div>
           </div>
-          <Link href={myResellerUsersPath(id)} className={quietButton}>
+          <Link href={myResellerUsersPath(id)} className={buttonClass({ variant: "quiet", size: "sm" })}>
             {t("common", K.open)}
             <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
           </Link>
@@ -237,7 +238,7 @@ function StepCard({ id, step }: { id: string; step: Step }) {
         </div>
       </div>
       {href && (
-        <Link href={href} className={step.done ? quietButton : primaryButton}>
+        <Link href={href} className={buttonClass({ variant: step.done ? "quiet" : "primary", size: "sm" })}>
           {t("common", K.open)}
           <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
         </Link>

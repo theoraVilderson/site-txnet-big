@@ -7,9 +7,9 @@ import type { GrantHistoryRow, ResellerUserGrantsApi } from "@/lib/billing-api";
 import { Pagination } from "../../../../../_components/kit/Pagination";
 import { TableSkeleton } from "../../../../../_components/kit/TableSkeleton";
 import { formatInstant } from "../../../../../_lib/datetime";
-import { Alert, quietButton } from "../../../../../catalog/_components/catalog-ui";
 import { HISTORY_KEYS as H, historyActionKey } from "../../../../_lib/grant-bulk";
 import { useUserMessage } from "./useUserMessage";
+import { Alert, Button } from "../../../../../_components/kit";
 
 const PAGE_SIZE = 20;
 
@@ -49,11 +49,11 @@ export function GrantHistory({ api, grantId, refresh }: { api: ResellerUserGrant
 
   return (
     <section aria-label={t("common", H.title)} className="space-y-2">
-      <button type="button" aria-expanded={open} className={quietButton} onClick={() => setOpen((o) => !o)}>
+      <Button variant="quiet" size="sm" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         {t("common", open ? H.close : H.open)}
         <ChevronDown size={12} className={open ? "rotate-180" : ""} aria-hidden />
-      </button>
-      {open && error !== null && <Alert>{message(error)}</Alert>}
+      </Button>
+      {open && error !== null && <Alert tone="error">{message(error)}</Alert>}
       {open && answer === null && error === null && <TableSkeleton rows={2} columns={2} />}
       {open && answer !== null && (
         <>

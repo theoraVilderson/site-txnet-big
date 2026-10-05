@@ -9,7 +9,6 @@ import { catalogApi } from "@/lib/catalog-api";
 import { myResellerUserPath } from "@/lib/routes";
 import { Pagination } from "../../../../_components/kit/Pagination";
 import { formatInstant } from "../../../../_lib/datetime";
-import { Alert, input, primaryButton, quietButton } from "../../../../catalog/_components/catalog-ui";
 import { flattenTexts } from "../../../../catalog/_lib/catalog-form";
 import { GRANT_TONES, pastedLines, serviceName } from "../../../../services/_lib/my-services";
 import { GRANT_KEYS as G, emptyDraft, type GrantActionDraft } from "../../../_lib/grant-actions";
@@ -17,10 +16,10 @@ import { BULK_ACTIONS, BULK_KEYS as B, BULK_MAX_GRANTS, FIND_KEYS as F, bulkBody
 import { USER_KEYS } from "../../../_lib/users";
 import { ActionFields } from "../[userId]/_components/GrantActions";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
+import { Alert, Button, buttonClass, Field, Input, Textarea } from "../../../../_components/kit";
 
 const PAGE_SIZE = 20;
 const panel = "space-y-2 rounded-2xl border border-card-border bg-bg-inner p-3";
-const button = "inline-flex items-center gap-1 rounded-xl border border-card-border bg-card-bg px-2.5 py-1.5 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:opacity-50";
 
 /**
  * Find a service by a pasted config line or `/sub` link across the reseller's
@@ -122,8 +121,8 @@ export function FindByLink({ id }: { id: string }) {
           find();
         }}
       >
-        <textarea
-          className={`${input} min-h-[72px] font-mono text-xs`}
+        <Textarea
+          className="min-h-[72px] font-mono text-xs"
           dir="ltr"
           value={text}
           placeholder={t("common", F.placeholder)}
@@ -131,22 +130,20 @@ export function FindByLink({ id }: { id: string }) {
           onChange={(e) => setText(e.target.value)}
         />
         <div className="flex gap-2">
-          <button type="submit" className={primaryButton} disabled={busy || text.trim() === ""}>
-            {busy ? <Loader2 size={12} className="animate-spin" aria-hidden /> : <Search size={12} aria-hidden />}
+          <Button variant="primary" size="sm" type="submit" disabled={busy || text.trim() === ""} icon={busy ? <Loader2 size={12} className="animate-spin" aria-hidden /> : <Search size={12} aria-hidden />}>
             {t("common", F.submit)}
-          </button>
+          </Button>
           {search && (
-            <button type="button" className={quietButton} onClick={clear}>
-              <X size={12} aria-hidden />
+            <Button variant="quiet" size="sm" onClick={clear} icon={<X size={12} aria-hidden />}>
               {t("common", F.clear)}
-            </button>
+            </Button>
           )}
         </div>
       </form>
 
       {noLinks && <p className="text-xs text-text-secondary">{t("common", F.noLinks)}</p>}
       {search?.capped && <p className="text-xs text-text-secondary">{t("common", F.capped, { count: search.lines.length })}</p>}
-      {error !== null && <Alert>{message(error)}</Alert>}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
 
       {answer !== null &&
         (answer.rows.length === 0 ? (
@@ -176,7 +173,7 @@ export function FindByLink({ id }: { id: string }) {
                       </p>
                     </div>
                     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone.className}`}>{t("common", tone.labelKey)}</span>
-                    <Link href={myResellerUserPath(id, row.userId)} className={quietButton}>
+                    <Link href={myResellerUserPath(id, row.userId)} className={buttonClass({ variant: "quiet", size: "sm" })}>
                       {t("common", F.openUser)}
                       <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
                     </Link>
@@ -276,16 +273,16 @@ function BulkBar({
         <p className="min-w-0 flex-1 text-sm font-bold text-text-primary">
           {t("common", B.title)} · {t("common", B.ticked, { count })}
         </p>
-        <button type="button" className={quietButton} onClick={onUntick}>
+        <Button variant="quiet" size="sm" onClick={onUntick}>
           {t("common", B.untick)}
-        </button>
+        </Button>
       </div>
       {count >= BULK_MAX_GRANTS && <p className="text-xs text-text-secondary">{t("common", B.max, { count: BULK_MAX_GRANTS })}</p>}
       <div className="flex flex-wrap gap-1">
         {BULK_ACTIONS.map((action) => (
-          <button key={action} type="button" className={button} disabled={busy} aria-pressed={open === action} onClick={() => start(action)}>
+          <Button size="sm" key={action} disabled={busy} aria-pressed={open === action} onClick={() => start(action)}>
             {t("common", G.label[action])}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -300,24 +297,22 @@ function BulkBar({
           <p className="text-xs text-text-secondary">{t("common", G.confirm[open])}</p>
           <p className="text-xs font-bold text-text-secondary">{t("common", B.confirm, { count })}</p>
           <ActionFields action={open} draft={draft} set={set} />
-          <label className="block text-xs font-bold text-text-secondary">
-            {t("common", G.field.reason)}
-            <input
-              className={`${input} mt-1`}
+          <Field label={t("common", G.field.reason)}>
+            <Input
+              className="mt-1"
               value={draft.reason}
               maxLength={500}
               placeholder={t("common", G.field.reasonPlaceholder)}
               onChange={(e) => set({ reason: e.target.value })}
             />
-          </label>
+          </Field>
           <div className="flex gap-2">
-            <button type="submit" className={primaryButton} disabled={busy || body === null}>
-              {busy && <Loader2 size={12} className="animate-spin" aria-hidden />}
+            <Button variant="primary" size="sm" type="submit" disabled={body === null} loading={busy}>
               {t("common", B.submit, { count })}
-            </button>
-            <button type="button" className={quietButton} onClick={() => setOpen(null)}>
+            </Button>
+            <Button variant="quiet" size="sm" onClick={() => setOpen(null)}>
               {t("common", USER_KEYS.actions.cancel)}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -332,7 +327,7 @@ function BulkBar({
           ))}
         </div>
       )}
-      {error !== null && <Alert>{message(error)}</Alert>}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
     </div>
   );
 }

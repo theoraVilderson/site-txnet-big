@@ -4,7 +4,6 @@ import { useState } from "react";
 import { ArrowLeftRight, Ban, KeyRound, Loader2, Play, Trash2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import type { AdminConfigActionOutcome, MoveTarget, ResellerUserGrantsApi, UserConfigRow } from "@/lib/billing-api";
-import { Alert, input, primaryButton, quietButton } from "../../../../../catalog/_components/catalog-ui";
 import {
   CONFIG_STATUS_KEYS,
   DRIFT_VERDICTS,
@@ -13,7 +12,7 @@ import {
 } from "../../../../../services/_lib/service-configs";
 import { ADMIN_REFUSAL_KEYS, USER_KEYS as K, adminActionBody, type OfferedAction } from "../../../../_lib/users";
 import { useUserMessage } from "./useUserMessage";
-import { useConfirm } from "../../../../../_components/kit";
+import { Alert, Button, Field, Input, NativeSelect, useConfirm } from "../../../../../_components/kit";
 
 const A = K.actions;
 
@@ -152,24 +151,23 @@ export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsAp
             void act("disable", disabling, reason);
           }}
         >
-          <label className="block text-xs font-bold text-text-secondary">
-            {t("common", A.reason)}
-            <input
-              className={`${input} mt-1`}
+          <Field label={t("common", A.reason)}>
+            <Input
+              className="mt-1"
               value={reason}
               maxLength={200}
               placeholder={t("common", A.reasonPlaceholder)}
               onChange={(e) => setReason(e.target.value)}
               autoFocus
             />
-          </label>
+          </Field>
           <div className="flex gap-2">
-            <button type="submit" className={primaryButton} disabled={busy || adminActionBody("disable", disabling, reason) === null}>
+            <Button variant="primary" size="sm" type="submit" disabled={busy || adminActionBody("disable", disabling, reason) === null}>
               {t("common", A.confirmDisable)}
-            </button>
-            <button type="button" className={quietButton} onClick={() => setDisabling(null)}>
+            </Button>
+            <Button variant="quiet" size="sm" onClick={() => setDisabling(null)}>
               {t("common", A.cancel)}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -192,23 +190,23 @@ export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsAp
           ) : (
             <label className="block text-xs font-bold text-text-secondary">
               {t("common", A.moveTo)}
-              <select className={`${input} mt-1`} value={toPanelId} onChange={(e) => setToPanelId(e.target.value)}>
+              <NativeSelect className="mt-1" value={toPanelId} onChange={(e) => setToPanelId(e.target.value)}>
                 <option value="">{t("common", A.movePick)}</option>
                 {targets.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name} · {p.region} · {t("common", p.own ? A.moveOwn : A.moveShared)}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           )}
           <div className="flex gap-2">
-            <button type="submit" className={primaryButton} disabled={busy || adminActionBody("move", moving, undefined, toPanelId) === null}>
+            <Button variant="primary" size="sm" type="submit" disabled={busy || adminActionBody("move", moving, undefined, toPanelId) === null}>
               {t("common", A.confirmMove)}
-            </button>
-            <button type="button" className={quietButton} onClick={() => setMoving(null)}>
+            </Button>
+            <Button variant="quiet" size="sm" onClick={() => setMoving(null)}>
               {t("common", A.cancel)}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -278,7 +276,7 @@ export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsAp
           ))}
         </ul>
       )}
-      {actError !== null && <Alert>{message(actError)}</Alert>}
+      {actError !== null && <Alert tone="error">{message(actError)}</Alert>}
     </section>
   );
 }
@@ -291,38 +289,33 @@ export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsAp
 function ActionButtons({ busy, status, onAct }: { busy: boolean; status?: UserConfigRow["status"]; onAct: (action: OfferedAction) => void }) {
   const { t } = useLocale();
   const disabled = status === "disabled_by_admin" || status === "disabled_by_system";
-  const button = "inline-flex items-center gap-1 rounded-xl border border-card-border bg-card-bg px-2.5 py-1.5 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:opacity-50";
   return (
     <>
-      <button type="button" className={button} disabled={busy} onClick={() => onAct("regenerate")}>
-        <KeyRound size={12} aria-hidden />
+      <Button size="sm" disabled={busy} onClick={() => onAct("regenerate")} icon={<KeyRound size={12} aria-hidden />}>
         {t("common", A.regenerate)}
-      </button>
+      </Button>
       {(status === undefined || !disabled) && (
-        <button type="button" className={button} disabled={busy} onClick={() => onAct("disable")}>
-          <Ban size={12} aria-hidden />
+        <Button size="sm" disabled={busy} onClick={() => onAct("disable")} icon={<Ban size={12} aria-hidden />}>
           {t("common", A.disable)}
-        </button>
+        </Button>
       )}
       {(status === undefined || disabled) && (
-        <button type="button" className={button} disabled={busy} onClick={() => onAct("enable")}>
-          <Play size={12} aria-hidden />
+        <Button size="sm" disabled={busy} onClick={() => onAct("enable")} icon={<Play size={12} aria-hidden />}>
           {t("common", A.enable)}
-        </button>
+        </Button>
       )}
-      <button type="button" className={button} disabled={busy} onClick={() => onAct("move")}>
-        <ArrowLeftRight size={12} aria-hidden />
+      <Button size="sm" disabled={busy} onClick={() => onAct("move")} icon={<ArrowLeftRight size={12} aria-hidden />}>
         {t("common", A.move)}
-      </button>
-      <button
-        type="button"
-        className="ms-auto inline-flex items-center gap-1 rounded-xl border border-error-border px-2.5 py-1.5 text-xs font-bold text-error hover:bg-error-bg disabled:opacity-50"
+      </Button>
+      <Button
+        size="sm"
         disabled={busy}
         onClick={() => onAct("retire")}
+        icon={<Trash2 size={12} aria-hidden />}
+        className="ms-auto text-error hover:text-error hover:bg-error-bg"
       >
-        <Trash2 size={12} aria-hidden />
         {t("common", A.retire)}
-      </button>
+      </Button>
     </>
   );
 }

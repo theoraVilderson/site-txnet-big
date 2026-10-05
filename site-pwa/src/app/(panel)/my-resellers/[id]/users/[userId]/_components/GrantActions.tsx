@@ -7,7 +7,6 @@ import { resellerGrantsApi, type GrantActionResult, type GrantRow, type Reseller
 import { DatePicker } from "../../../../../_components/kit/DatePicker";
 import { formatInstant } from "../../../../../_lib/datetime";
 import { formatMoney } from "../../../../../_lib/money";
-import { Alert, input, primaryButton, quietButton } from "../../../../../catalog/_components/catalog-ui";
 import { formatBytes } from "../../../../../services/_lib/service-configs";
 import {
   GRANT_ACTION_ROUTES,
@@ -22,9 +21,8 @@ import {
 } from "../../../../_lib/grant-actions";
 import { USER_KEYS, issuableProducts } from "../../../../_lib/users";
 import { useUserMessage } from "./useUserMessage";
+import { Alert, Button, Field, Input, NativeSelect } from "../../../../../_components/kit";
 
-const button = "inline-flex items-center gap-1 rounded-xl border border-card-border bg-card-bg px-2.5 py-1.5 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:opacity-50";
-const dangerButton = "inline-flex items-center gap-1 rounded-xl border border-error-border px-2.5 py-1.5 text-xs font-bold text-error hover:bg-error-bg disabled:opacity-50";
 const panel = "space-y-2 rounded-2xl border border-card-border bg-bg-inner p-3";
 
 /**
@@ -84,9 +82,16 @@ export function GrantActions({ api, row, onActed }: { api: ResellerUserGrantsApi
       <p className="text-sm font-bold text-text-primary">{t("common", G.title)}</p>
       <div className="flex flex-wrap gap-1">
         {offered.map((action) => (
-          <button key={action} type="button" className={action === "delete" ? dangerButton : button} disabled={busy} aria-pressed={open === action} onClick={() => start(action)}>
+          <Button
+            key={action}
+            size="sm"
+            className={action === "delete" ? "text-error hover:border-error hover:bg-error-bg hover:text-error" : undefined}
+            disabled={busy}
+            aria-pressed={open === action}
+            onClick={() => start(action)}
+          >
             {t("common", G.label[action])}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -100,30 +105,28 @@ export function GrantActions({ api, row, onActed }: { api: ResellerUserGrantsApi
         >
           <p className="text-xs text-text-secondary">{t("common", G.confirm[open])}</p>
           <ActionFields action={open} draft={draft} set={set} />
-          <label className="block text-xs font-bold text-text-secondary">
-            {t("common", (REASON_REQUIRED as readonly string[]).includes(open) ? G.field.reason : G.field.reasonOptional)}
-            <input
-              className={`${input} mt-1`}
+          <Field label={t("common", (REASON_REQUIRED as readonly string[]).includes(open) ? G.field.reason : G.field.reasonOptional)}>
+            <Input
+              className="mt-1"
               value={draft.reason}
               maxLength={500}
               placeholder={t("common", G.field.reasonPlaceholder)}
               onChange={(e) => set({ reason: e.target.value })}
             />
-          </label>
+          </Field>
           <div className="flex gap-2">
-            <button type="submit" className={open === "delete" ? dangerButton : primaryButton} disabled={busy || body === null}>
-              {busy && <Loader2 size={12} className="animate-spin" aria-hidden />}
+            <Button type="submit" size="sm" variant={open === "delete" ? "danger" : "primary"} disabled={body === null} loading={busy}>
               {t("common", G.submit[open])}
-            </button>
-            <button type="button" className={quietButton} onClick={() => setOpen(null)}>
+            </Button>
+            <Button variant="quiet" size="sm" onClick={() => setOpen(null)}>
               {t("common", USER_KEYS.actions.cancel)}
-            </button>
+            </Button>
           </div>
         </form>
       )}
 
       {done && <Outcome action={done.action} result={done.result} />}
-      {error !== null && <Alert>{message(error)}</Alert>}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
       <p className="text-[11px] text-text-secondary">{t("common", G.hint)}</p>
     </section>
   );
@@ -133,10 +136,9 @@ export function GrantActions({ api, row, onActed }: { api: ResellerUserGrantsApi
 export function ActionFields({ action, draft, set }: { action: GrantAction; draft: GrantActionDraft; set: (p: Partial<GrantActionDraft>) => void }) {
   const { t } = useLocale();
   const number = (labelKey: string, value: string, patch: (v: string) => Partial<GrantActionDraft>) => (
-    <label className="block text-xs font-bold text-text-secondary">
-      {t("common", labelKey)}
-      <input className={`${input} mt-1`} dir="ltr" inputMode="decimal" value={value} onChange={(e) => set(patch(e.target.value))} autoFocus />
-    </label>
+    <Field label={t("common", labelKey)}>
+      <Input className="mt-1" dir="ltr" inputMode="decimal" value={value} onChange={(e) => set(patch(e.target.value))} autoFocus />
+    </Field>
   );
 
   switch (action) {
@@ -316,10 +318,9 @@ export function IssueGrant({
 
   return (
     <div className="space-y-2">
-      <button type="button" className={primaryButton} disabled={busy} onClick={start}>
-        <Plus size={12} aria-hidden />
+      <Button variant="primary" size="sm" disabled={busy} onClick={start} icon={<Plus size={12} aria-hidden />}>
         {t("common", G.label.issue)}
-      </button>
+      </Button>
       {open && (
         <form
           className={panel}
@@ -339,28 +340,26 @@ export function IssueGrant({
           ) : (
             <label className="block text-xs font-bold text-text-secondary">
               {t("common", G.field.variant)}
-              <select className={`${input} mt-1`} value={variantId} onChange={(e) => setVariantId(e.target.value)}>
+              <NativeSelect className="mt-1" value={variantId} onChange={(e) => setVariantId(e.target.value)}>
                 <option value="">{t("common", G.field.variantPick)}</option>
                 {variants.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.label}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           )}
-          <label className="block text-xs font-bold text-text-secondary">
-            {t("common", G.field.reasonOptional)}
-            <input className={`${input} mt-1`} value={reason} maxLength={500} placeholder={t("common", G.field.reasonPlaceholder)} onChange={(e) => setReason(e.target.value)} />
-          </label>
+          <Field label={t("common", G.field.reasonOptional)}>
+            <Input className="mt-1" value={reason} maxLength={500} placeholder={t("common", G.field.reasonPlaceholder)} onChange={(e) => setReason(e.target.value)} />
+          </Field>
           <div className="flex gap-2">
-            <button type="submit" className={primaryButton} disabled={busy || body === null}>
-              {busy && <Loader2 size={12} className="animate-spin" aria-hidden />}
+            <Button variant="primary" size="sm" type="submit" disabled={body === null} loading={busy}>
               {t("common", G.submit.issue)}
-            </button>
-            <button type="button" className={quietButton} onClick={() => setOpen(false)}>
+            </Button>
+            <Button variant="quiet" size="sm" onClick={() => setOpen(false)}>
               {t("common", USER_KEYS.actions.cancel)}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -369,7 +368,7 @@ export function IssueGrant({
           {t("common", done ? G.done.issue : G.done.issueRepeat)}
         </p>
       )}
-      {error !== null && <Alert>{message(error)}</Alert>}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
     </div>
   );
 }

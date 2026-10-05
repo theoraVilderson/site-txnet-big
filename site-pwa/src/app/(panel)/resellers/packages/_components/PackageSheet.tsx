@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { tenantApi, type TenantPackage } from "@/lib/tenant-api";
-import { Alert, Field, Sheet, input, primaryButton, useMessage } from "../../_components/resellers-ui";
+import { Alert, Field, Sheet, useMessage } from "../../_components/resellers-ui";
 import type { Errors } from "../../_lib/resellers";
 import {
   PACKAGE_FEATURE_KEYS,
@@ -20,6 +20,7 @@ import {
   type PackageForm,
 } from "../../_lib/packages";
 import { useMeterNames } from "../../../catalog/_lib/meter-names";
+import { Button, Input } from "../../../_components/kit";
 
 /**
  * Creating or editing one package (F-018-d, F-118-n5): name, the two prices,
@@ -79,21 +80,20 @@ export function PackageSheet({
       title={pkg ? t("common", K.form.editTitle, { name: pkg.name }) : t("common", K.form.createTitle)}
       onClose={onClose}
       footer={
-        <button type="button" className={primaryButton} disabled={busy} onClick={submit}>
-          {busy && <Loader2 size={14} className="animate-spin" aria-hidden />}
+        <Button variant="primary" size="sm" onClick={submit} loading={busy}>
           {t("common", pkg ? K.form.save : K.form.submit)}
-        </button>
+        </Button>
       }
     >
       <Field label={t("common", K.form.name)} error={errors.name}>
-        <input className={input} value={form.name} maxLength={80} onChange={(e) => set({ name: e.target.value })} />
+        <Input value={form.name} maxLength={80} onChange={(e) => set({ name: e.target.value })} />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label={t("common", K.form.monthly, { currency: code })} error={errors.monthlyPrice}>
-          <input className={input} dir="ltr" inputMode="decimal" value={form.monthlyPrice} onChange={(e) => set({ monthlyPrice: e.target.value })} />
+          <Input dir="ltr" inputMode="decimal" value={form.monthlyPrice} onChange={(e) => set({ monthlyPrice: e.target.value })} />
         </Field>
         <Field label={t("common", K.form.yearly, { currency: code })} error={errors.yearlyPrice}>
-          <input className={input} dir="ltr" inputMode="decimal" value={form.yearlyPrice} onChange={(e) => set({ yearlyPrice: e.target.value })} />
+          <Input dir="ltr" inputMode="decimal" value={form.yearlyPrice} onChange={(e) => set({ yearlyPrice: e.target.value })} />
         </Field>
       </div>
       <p className="-mt-2 text-[11px] text-text-secondary">{t("common", K.form.priceHint)}</p>
@@ -127,8 +127,7 @@ export function PackageSheet({
           hint={t("common", m.hint)}
           error={errors.rates && badRate(form.rates[m.meterKey]) ? errors.rates : undefined}
         >
-          <input
-            className={input}
+          <Input
             dir="ltr"
             inputMode="decimal"
             value={form.rates[m.meterKey]}

@@ -8,9 +8,9 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { resellerLimitsApi, type ResellerLimitInEffect } from "@/lib/tenant-api";
 import { Badge } from "../../../financial/_components/Badge";
 import { formatInstant } from "../../../_lib/datetime";
-import { Alert } from "../../../catalog/_components/catalog-ui";
 import { MY_LIMIT_KEYS as K, MY_QUOTA_KEYS as Q, limitReading } from "../../_lib/limits";
 import { useMoney, usePastText } from "./QuotaCards";
+import { Alert } from "../../../_components/kit";
 
 /** The limit names the platform owner's page uses, so both sides say the same thing. */
 const NAMES = FrontendI18nKeys.common.resellers.limits.keys;
@@ -51,7 +51,7 @@ export function ResellerLimitsCard({ tenantId }: { tenantId: string }) {
         <h2 className="text-sm font-bold text-text-primary">{t("common", K.title)}</h2>
       </div>
       <p className="text-xs text-text-secondary">{t("common", K.subtitle)}</p>
-      {error !== null && <Alert>{message(error)}</Alert>}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
       {rows && (
         <ul className="grid gap-2 sm:grid-cols-2">
           {rows.map((row) => {

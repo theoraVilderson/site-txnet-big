@@ -1,15 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { ArrowRight, CheckCircle2, Loader2, Plus, Smartphone } from "lucide-react";
+import { CheckCircle2, Loader2, Plus, Smartphone } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { authApi } from "@/lib/auth-api";
-import { myResellerConsolePath } from "@/lib/routes";
 import { resellerBrandingApi, type LineNamePreview, type ResellerBranding } from "@/lib/tenant-api";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
-import { Alert, Field, input, primaryButton, quietButton } from "../../../../catalog/_components/catalog-ui";
+import { Field } from "../../../../catalog/_components/catalog-ui";
 import {
   BRANDING_KEYS as K,
   LINE_NAME_PLACEHOLDERS,
@@ -20,6 +18,8 @@ import {
   insertPlaceholder,
   templateToSend,
 } from "../../../_lib/branding";
+import { Alert, Button, Input, PageHeader } from "../../../../_components/kit";
+import { WorkspaceTabs } from "../../../_components/WorkspaceTabs";
 
 /** How long typing rests before the preview is asked for. */
 const PREVIEW_DELAY_MS = 300;
@@ -83,23 +83,15 @@ export function ResellerBrandingView({ id }: { id: string }) {
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-4 md:p-8">
-      <header>
-        <Link href={myResellerConsolePath(id)} className={`${quietButton} mb-2 -ms-2`}>
-          <ArrowRight size={12} className="ltr:rotate-180" aria-hidden />
-          {t("common", K.backToConsole)}
-        </Link>
-        <h1 className="text-2xl font-bold text-text-primary md:text-3xl">
-          {slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}
-        </h1>
-        <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-      </header>
+      <PageHeader title={slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)} subtitle={t("common", K.subtitle)} />
+      <WorkspaceTabs id={id} />
 
       {loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
-          <Alert>{message(loadError)}</Alert>
-          <button type="button" className={primaryButton} onClick={retry}>
+          <Alert tone="error">{message(loadError)}</Alert>
+          <Button variant="primary" size="sm" onClick={retry}>
             {t("common", K.reload)}
-          </button>
+          </Button>
         </div>
       ) : branding === null ? (
         <TableSkeleton rows={2} columns={1} />
@@ -188,9 +180,8 @@ function LineNameSection({ id, saved, onSaved }: { id: string; saved: string | n
       </div>
 
       <Field label={t("common", L.field)} hint={t("common", L.hint)} error={problem ? LINE_NAME_PROBLEM_KEYS[problem] : undefined}>
-        <input
+        <Input
           ref={field}
-          className={input}
           dir="auto"
           value={typed}
           placeholder="{region}"
@@ -202,11 +193,10 @@ function LineNameSection({ id, saved, onSaved }: { id: string; saved: string | n
       <div className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
         <span>{t("common", L.insert)}</span>
         {LINE_NAME_PLACEHOLDERS.map((p) => (
-          <button key={p} type="button" className={`${quietButton} border border-card-border`} onClick={() => insert(p)}>
-            <Plus size={12} aria-hidden />
+          <Button variant="quiet" size="sm" key={p} className="border border-card-border" onClick={() => insert(p)} icon={<Plus size={12} aria-hidden />}>
             {t("common", LINE_NAME_PLACEHOLDER_KEYS[p])}
             <code className="font-mono text-[11px] text-text-secondary" dir="ltr">{`{${p}}`}</code>
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -228,7 +218,7 @@ function LineNameSection({ id, saved, onSaved }: { id: string; saved: string | n
         )}
       </div>
 
-      {error !== null && <Alert>{message(error)}</Alert>}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
       {justSaved && (
         <p className="flex items-center gap-1.5 text-xs font-bold text-primary">
           <CheckCircle2 size={14} aria-hidden />
@@ -237,19 +227,19 @@ function LineNameSection({ id, saved, onSaved }: { id: string; saved: string | n
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          className={primaryButton}
-          disabled={saving || unchanged || problem !== null || previewing}
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={unchanged || problem !== null || previewing}
           onClick={() => save(template)}
+          loading={saving}
         >
-          {saving && <Loader2 size={12} className="animate-spin" aria-hidden />}
           {t("common", saving ? L.saving : L.save)}
-        </button>
+        </Button>
         {saved !== null && (
-          <button type="button" className={quietButton} disabled={saving} onClick={() => save(null)}>
+          <Button variant="quiet" size="sm" disabled={saving} onClick={() => save(null)}>
             {t("common", L.useDefault)}
-          </button>
+          </Button>
         )}
       </div>
     </section>

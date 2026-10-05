@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Square } from "lucide-react";
+import { Square } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { resellerGrantsApi, type BulkJob, type BulkOutcomeRow, type BulkPanel } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
 import { Pagination } from "../../../../_components/kit/Pagination";
 import { formatInstant } from "../../../../_lib/datetime";
-import { Alert, input, primaryButton, quietButton } from "../../../../catalog/_components/catalog-ui";
 import { flattenTexts } from "../../../../catalog/_lib/catalog-form";
 import { GRANT_KEYS as G, emptyDraft, type GrantActionDraft } from "../../../_lib/grant-actions";
 import {
@@ -25,14 +24,13 @@ import {
 import { USER_KEYS } from "../../../_lib/users";
 import { ActionFields } from "../[userId]/_components/GrantActions";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
-import { useConfirm } from "../../../../_components/kit";
+import { Alert, Button, Field, Input, NativeSelect, useConfirm } from "../../../../_components/kit";
 
 const JOBS_PAGE_SIZE = 10;
 const OUTCOMES_PAGE_SIZE = 20;
 /** billing's `GRANT_BULK_JOB_MAX_GRANTS`: past it the start is refused, so the confirm says so first. */
 const MAX_JOB_GRANTS = 100_000;
 const panel = "space-y-2 rounded-2xl border border-card-border bg-bg-inner p-3";
-const button = "inline-flex items-center gap-1 rounded-xl border border-card-border bg-card-bg px-2.5 py-1.5 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:opacity-50";
 const STATUS_TONE: Record<BulkJob["status"], string> = {
   running: "border-primary/20 bg-leaf-bg text-primary",
   done: "border-card-border bg-bg-inner text-text-secondary",
@@ -214,9 +212,9 @@ export function BulkByFilter({ id }: { id: string }) {
 
       <div className="flex flex-wrap gap-1">
         {BULK_ACTIONS.map((action) => (
-          <button key={action} type="button" className={button} disabled={busy} aria-pressed={open === action} onClick={() => start(action)}>
+          <Button size="sm" key={action} disabled={busy} aria-pressed={open === action} onClick={() => start(action)}>
             {t("common", G.label[action])}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -248,7 +246,7 @@ export function BulkByFilter({ id }: { id: string }) {
             ) : panels.length === 0 ? (
               <p className="text-xs text-text-secondary">{t("common", J.noPanels)}</p>
             ) : (
-              <select className={input} value={panelId} aria-label={t("common", J.panelPick)} onChange={(e) => setPanelId(e.target.value)}>
+              <NativeSelect value={panelId} aria-label={t("common", J.panelPick)} onChange={(e) => setPanelId(e.target.value)}>
                 <option value="">{t("common", J.panelPick)}</option>
                 {panels.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -257,7 +255,7 @@ export function BulkByFilter({ id }: { id: string }) {
                     {p.retired ? ` · ${t("common", J.retired)}` : ""}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             ))}
 
           {kind === "product" &&
@@ -267,8 +265,7 @@ export function BulkByFilter({ id }: { id: string }) {
               <p className="text-xs text-text-secondary">{t("common", J.noProducts)}</p>
             ) : (
               <div className="flex flex-wrap gap-2">
-                <select
-                  className={input}
+                <NativeSelect
                   value={productId}
                   aria-label={t("common", J.productPick)}
                   onChange={(e) => {
@@ -282,16 +279,16 @@ export function BulkByFilter({ id }: { id: string }) {
                       {p.label}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
                 {product && product.variants.length > 1 && (
-                  <select className={input} value={variantId} aria-label={t("common", J.variantAll)} onChange={(e) => setVariantId(e.target.value)}>
+                  <NativeSelect value={variantId} aria-label={t("common", J.variantAll)} onChange={(e) => setVariantId(e.target.value)}>
                     <option value="">{t("common", J.variantAll)}</option>
                     {product.variants.map((v) => (
                       <option key={v.id} value={v.id}>
                         {v.label}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 )}
               </div>
             ))}
@@ -310,33 +307,31 @@ export function BulkByFilter({ id }: { id: string }) {
           )}
 
           <ActionFields action={open} draft={draft} set={set} />
-          <label className="block text-xs font-bold text-text-secondary">
-            {t("common", G.field.reason)}
-            <input
-              className={`${input} mt-1`}
+          <Field label={t("common", G.field.reason)}>
+            <Input
+              className="mt-1"
               value={draft.reason}
               maxLength={500}
               placeholder={t("common", G.field.reasonPlaceholder)}
               onChange={(e) => set({ reason: e.target.value })}
             />
-          </label>
+          </Field>
           {body !== null && <p className="text-xs text-text-secondary">{t("common", J.confirm, { count: count ?? 0 })}</p>}
           <div className="flex gap-2">
-            <button type="submit" className={primaryButton} disabled={busy || body === null}>
-              {busy && <Loader2 size={12} className="animate-spin" aria-hidden />}
+            <Button variant="primary" size="sm" type="submit" disabled={body === null} loading={busy}>
               {t("common", J.submit, { count: count ?? 0 })}
-            </button>
-            <button type="button" className={quietButton} onClick={() => setOpen(null)}>
+            </Button>
+            <Button variant="quiet" size="sm" onClick={() => setOpen(null)}>
               {t("common", USER_KEYS.actions.cancel)}
-            </button>
+            </Button>
           </div>
         </form>
       )}
-      {error !== null && <Alert>{message(error)}</Alert>}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
 
       <div className="space-y-2">
         <p className="text-xs font-bold text-text-secondary">{t("common", J.jobsTitle)}</p>
-        {jobsError !== null && <Alert>{message(jobsError)}</Alert>}
+        {jobsError !== null && <Alert tone="error">{message(jobsError)}</Alert>}
         {jobs !== null &&
           (jobs.rows.length === 0 ? (
             <p className="text-xs text-text-secondary">{t("common", J.jobsEmpty)}</p>
@@ -410,10 +405,9 @@ function JobRow({ job, api, label, onChanged }: { job: BulkJob; api: ReturnType<
         </p>
         <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_TONE[job.status]}`}>{t("common", J.status[job.status])}</span>
         {job.status === "running" && (
-          <button type="button" className={quietButton} disabled={busy} onClick={() => void cancel()}>
-            <Square size={12} aria-hidden />
+          <Button variant="quiet" size="sm" disabled={busy} onClick={() => void cancel()} icon={<Square size={12} aria-hidden />}>
             {t("common", J.cancel)}
-          </button>
+          </Button>
         )}
       </div>
       <div
@@ -432,10 +426,9 @@ function JobRow({ job, api, label, onChanged }: { job: BulkJob; api: ReturnType<
         <span>{formatInstant(job.createdAt, lang)}</span>
       </p>
       {problemCount > 0 && (
-        <button type="button" className={quietButton} disabled={busy} onClick={() => (problems ? setProblems(null) : void readProblems(1))}>
-          {busy && <Loader2 size={12} className="animate-spin" aria-hidden />}
+        <Button variant="quiet" size="sm" onClick={() => (problems ? setProblems(null) : void readProblems(1))} loading={busy}>
           {t("common", problems ? J.hideProblems : J.showProblems)}
-        </button>
+        </Button>
       )}
       {problems && (
         <div className="space-y-1 text-xs">
@@ -463,7 +456,7 @@ function JobRow({ job, api, label, onChanged }: { job: BulkJob; api: ReturnType<
           )}
         </div>
       )}
-      {error !== null && <Alert>{message(error)}</Alert>}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
     </li>
   );
 }

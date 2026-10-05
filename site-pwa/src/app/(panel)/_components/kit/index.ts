@@ -20,6 +20,7 @@ export { Popover } from "./Popover";
 export { SaveBar, type SaveBarProps } from "./SaveBar";
 export { Sheet, type SheetProps } from "./Sheet";
 export { Tabs, type TabItem } from "./Tabs";
+export { TabLinks, isActiveLink, type TabLink } from "./TabLinks";
 export { Tooltip } from "./Tooltip";
 export { Field, Input, NativeSelect, PasswordInput, Textarea, useFieldControl, type FieldProps } from "./Field";
 export { Select, type SelectOption, type SelectProps } from "./Select";

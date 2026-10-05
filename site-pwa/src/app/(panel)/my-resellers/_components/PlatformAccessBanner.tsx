@@ -8,7 +8,6 @@ import { authApi, supportConsentApi, type ConsentScope, type SupportConsentList 
 import { holdsPermission } from "@/lib/permissions";
 import { tenantApi } from "@/lib/tenant-api";
 import { usePanelSession } from "../../_context/PanelSessionContext";
-import { Alert, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import {
   EMERGENCY_REASON_MIN,
   REQUEST_REASON_MIN,
@@ -20,7 +19,7 @@ import {
   supportRefusalKey,
   timeLeft,
 } from "../_lib/support-access";
-import { useConfirm } from "../../_components/kit";
+import { Alert, Button, Textarea, useConfirm } from "../../_components/kit";
 
 const SCOPES: ConsentScope[] = ["read", "act"];
 
@@ -141,7 +140,7 @@ export function PlatformAccessBanner({ tenantId, onChange }: { tenantId: string;
         <LifeBuoy className="h-4 w-4 text-primary" aria-hidden />
         <h2 className="text-sm font-bold text-text-primary">{t("common", K.staff.title)}</h2>
       </div>
-      {error !== null && <Alert>{message(error)}</Alert>}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
 
       {sides && (
         <>
@@ -154,9 +153,9 @@ export function PlatformAccessBanner({ tenantId, onChange }: { tenantId: string;
           {sides.pending ? (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-bg-inner p-3">
               <p className="text-sm text-text-primary">{t("common", K.staff.pending)}</p>
-              <button type="button" className={quietButton} disabled={busy} onClick={() => void act(() => supportConsentApi.revoke(tenantId, sides.pending!.id))}>
+              <Button variant="quiet" size="sm" disabled={busy} onClick={() => void act(() => supportConsentApi.revoke(tenantId, sides.pending!.id))}>
                 {t("common", K.staff.withdraw)}
-              </button>
+              </Button>
             </div>
           ) : (
             // No access, or one that only reads: ask (again) — `act` is the reseller's to give.
@@ -178,10 +177,10 @@ export function PlatformAccessBanner({ tenantId, onChange }: { tenantId: string;
               <label htmlFor={`staff-why-${tenantId}`} className="block text-xs text-text-secondary">
                 {t("common", K.staff.request.reason)}
               </label>
-              <textarea id={`staff-why-${tenantId}`} rows={2} maxLength={500} className={input} value={why} onChange={(e) => setWhy(e.target.value)} />
-              <button type="button" className={primaryButton} disabled={busy || reason === null} onClick={() => reason && void act(() => supportConsentApi.request(tenantId, { scope, reason }))}>
+              <Textarea id={`staff-why-${tenantId}`} rows={2} maxLength={500} value={why} onChange={(e) => setWhy(e.target.value)} />
+              <Button variant="primary" size="sm" disabled={busy || reason === null} onClick={() => reason && void act(() => supportConsentApi.request(tenantId, { scope, reason }))}>
                 {t("common", K.staff.request.submit)}
-              </button>
+              </Button>
             </div>
             )
           )}
@@ -192,9 +191,9 @@ export function PlatformAccessBanner({ tenantId, onChange }: { tenantId: string;
                 <ShieldAlert size={14} className="text-gold" aria-hidden />
                 {mineLeft ? t("common", K.staff.emergency.live, mineLeft) : t("common", K.emergency.states.expired)}
               </p>
-              <button type="button" className={quietButton} disabled={busy} onClick={() => void act(() => supportConsentApi.endEmergency(tenantId, mine.id))}>
+              <Button variant="quiet" size="sm" disabled={busy} onClick={() => void act(() => supportConsentApi.endEmergency(tenantId, mine.id))}>
                 {t("common", K.staff.emergency.end)}
-              </button>
+              </Button>
             </div>
           ) : (
             mayEnter && (
@@ -205,10 +204,10 @@ export function PlatformAccessBanner({ tenantId, onChange }: { tenantId: string;
                   <label htmlFor={`staff-emergency-${tenantId}`} className="block text-xs text-text-secondary">
                     {t("common", K.staff.emergency.reason)}
                   </label>
-                  <textarea id={`staff-emergency-${tenantId}`} rows={2} maxLength={500} className={input} value={emergencyWhy} onChange={(e) => setEmergencyWhy(e.target.value)} />
-                  <button
-                    type="button"
-                    className={primaryButton}
+                  <Textarea id={`staff-emergency-${tenantId}`} rows={2} maxLength={500} value={emergencyWhy} onChange={(e) => setEmergencyWhy(e.target.value)} />
+                  <Button
+                    variant="primary"
+                    size="sm"
                     disabled={busy || emergencyReason === null}
                     onClick={async () => {
                       if (!emergencyReason) return;
@@ -220,7 +219,7 @@ export function PlatformAccessBanner({ tenantId, onChange }: { tenantId: string;
                     }}
                   >
                     {t("common", K.staff.emergency.submit)}
-                  </button>
+                  </Button>
                 </div>
               </details>
             )

@@ -3,15 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, ArrowRight, Ban, RefreshCw, Search, Undo2 } from "lucide-react";
+import { ArrowLeft, Ban, RefreshCw, Search, Undo2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { authApi, resellerUsersApi, type ResellerUser } from "@/lib/auth-api";
-import { myResellerConsolePath, myResellerUserPath } from "@/lib/routes";
+import { myResellerUserPath } from "@/lib/routes";
 import { Pagination } from "../../../../_components/kit/Pagination";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { formatInstant } from "../../../../_lib/datetime";
-import { Alert, input, primaryButton, quietButton } from "../../../../catalog/_components/catalog-ui";
 import { usePanelSession } from "../../../../_context/PanelSessionContext";
 import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, blockActionOf, isPlatformTenant, usersQuery } from "../../../_lib/users";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
@@ -20,7 +19,8 @@ import { ConsentNeeded, PlatformAccessBanner } from "../../../_components/Platfo
 import { consentRefusal } from "../../../_lib/support-access";
 import { BulkByFilter } from "./BulkByFilter";
 import { FindByLink } from "./FindByLink";
-import { useConfirm } from "../../../../_components/kit";
+import { Alert, Button, buttonClass, Input, PageHeader, useConfirm } from "../../../../_components/kit";
+import { WorkspaceTabs } from "../../../_components/WorkspaceTabs";
 
 /** How long typing rests before the list is asked again. */
 const TYPING_MS = 350;
@@ -141,26 +141,19 @@ export function ResellerUsersView({ id }: { id: string }) {
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
-      <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          {!platform && (
-            <Link href={myResellerConsolePath(id)} className={`${quietButton} mb-2 -ms-2`}>
-              <ArrowRight size={12} className="ltr:rotate-180" aria-hidden />
-              {t("common", K.backToConsole)}
-            </Link>
-          )}
-          <h1 className="text-2xl font-bold text-text-primary md:text-3xl">
-            {platform
-              ? t("common", FrontendI18nKeys.common.shell.menu.users)
-              : slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-        </div>
-        <button type="button" className={quietButton} onClick={retry}>
-          <RefreshCw size={12} aria-hidden />
-          {t("common", K.refresh)}
-        </button>
-      </header>
+      <PageHeader
+        title={platform ? t("common", FrontendI18nKeys.common.shell.menu.users) : slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}
+        subtitle={t("common", K.subtitle)}
+        actions={
+          <>
+            <Button variant="quiet" size="sm" onClick={retry} icon={<RefreshCw size={12} aria-hidden />}>
+            {t("common", K.refresh)}
+          </Button>
+          </>
+        }
+      />
+      {/* The platform's own users (F-311-ab) are not a reseller's workspace. */}
+      {!platform && <WorkspaceTabs id={id} />}
 
       {/* F-117-g: platform staff's consent, request and emergency entry; nothing to anyone else. */}
       <PlatformAccessBanner tenantId={id} onChange={retry} />
@@ -168,13 +161,13 @@ export function ResellerUsersView({ id }: { id: string }) {
       <div>
         <label className="relative block">
           <Search size={14} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-text-secondary" aria-hidden />
-          <input
+          <Input
             type="search"
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             placeholder={t("common", K.search)}
             aria-label={t("common", K.search)}
-            className={`${input} ps-9`}
+            className="ps-9"
           />
         </label>
         {short && <p className="mt-1 text-xs text-text-secondary">{t("common", K.searchHint)}</p>}
@@ -184,16 +177,16 @@ export function ResellerUsersView({ id }: { id: string }) {
       <BulkByFilter id={id} />
       <TenantGrantLimitCard tenantId={id} />
 
-      {blockError !== null && <Alert>{message(blockError)}</Alert>}
+      {blockError !== null && <Alert tone="error">{message(blockError)}</Alert>}
 
       {consentRefusal(loadError) ? (
         <ConsentNeeded error={loadError} />
       ) : loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
-          <Alert>{message(loadError)}</Alert>
-          <button type="button" className={primaryButton} onClick={retry}>
+          <Alert tone="error">{message(loadError)}</Alert>
+          <Button variant="primary" size="sm" onClick={retry}>
             {t("common", K.reload)}
-          </button>
+          </Button>
         </div>
       ) : answer === null ? (
         <TableSkeleton rows={5} columns={3} />
@@ -220,14 +213,14 @@ export function ResellerUsersView({ id }: { id: string }) {
                   {t("common", K.userStatus[user.status])}
                 </span>
                 {blockActionOf(user.status) !== null && (
-                  <button type="button" className={quietButton} disabled={blocking !== null} onClick={() => void toggleBlock(user)}>
+                  <Button variant="quiet" size="sm" disabled={blocking !== null} onClick={() => void toggleBlock(user)}>
                     {user.status === "active" ? <Ban size={12} aria-hidden /> : <Undo2 size={12} aria-hidden />}
                     {t("common", user.status === "active" ? K.block : K.unblock)}
-                  </button>
+                  </Button>
                 )}
                 <Link
                   href={`${myResellerUserPath(id, user.id)}?${new URLSearchParams({ name: user.fullName })}`}
-                  className={quietButton}
+                  className={buttonClass({ variant: "quiet", size: "sm" })}
                 >
                   {t("common", K.open)}
                   <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />

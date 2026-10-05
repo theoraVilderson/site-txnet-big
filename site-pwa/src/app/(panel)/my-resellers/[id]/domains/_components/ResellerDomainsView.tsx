@@ -1,19 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { AlertCircle, ArrowRight, Check, CheckCircle2, Clock, Copy, Loader2, RefreshCw, XCircle, type LucideIcon } from "lucide-react";
+import { AlertCircle, Check, CheckCircle2, Clock, Copy, Loader2, RefreshCw, XCircle, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { authApi } from "@/lib/auth-api";
-import { myResellerConsolePath } from "@/lib/routes";
 import { resellerDomainsApi, type DomainPurpose, type DomainStatus, type ResellerDomain } from "@/lib/tenant-api";
 import { Select } from "../../../../_components/kit/Select";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { DataTable } from "../../../../_components/kit/DataTable";
 import { formatInstant } from "../../../../_lib/datetime";
 import { Badge } from "../../../../financial/_components/Badge";
-import { Alert, Field, input, primaryButton, quietButton } from "../../../../catalog/_components/catalog-ui";
+import { Field } from "../../../../catalog/_components/catalog-ui";
 import {
   CHECK_LINE_KEYS,
   DOMAIN_KEYS as K,
@@ -23,6 +21,8 @@ import {
   domainHost,
   domainRefusalKey,
 } from "../../../_lib/domains";
+import { Alert, Button, Input, PageHeader } from "../../../../_components/kit";
+import { WorkspaceTabs } from "../../../_components/WorkspaceTabs";
 
 /** The refusal's own sentence, else the generic answer for that error. */
 function useMessage() {
@@ -99,29 +99,25 @@ export function ResellerDomainsView({ id }: { id: string }) {
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
-      <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <Link href={myResellerConsolePath(id)} className={`${quietButton} mb-2 -ms-2`}>
-            <ArrowRight size={12} className="ltr:rotate-180" aria-hidden />
-            {t("common", K.backToConsole)}
-          </Link>
-          <h1 className="text-2xl font-bold text-text-primary md:text-3xl">
-            {slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-        </div>
-        <button type="button" className={quietButton} onClick={retry}>
-          <RefreshCw size={12} aria-hidden />
-          {t("common", K.refresh)}
-        </button>
-      </header>
+      <PageHeader
+        title={slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}
+        subtitle={t("common", K.subtitle)}
+        actions={
+          <>
+            <Button variant="quiet" size="sm" onClick={retry} icon={<RefreshCw size={12} aria-hidden />}>
+            {t("common", K.refresh)}
+          </Button>
+          </>
+        }
+      />
+      <WorkspaceTabs id={id} />
 
       {loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
-          <Alert>{message(loadError)}</Alert>
-          <button type="button" className={primaryButton} onClick={retry}>
+          <Alert tone="error">{message(loadError)}</Alert>
+          <Button variant="primary" size="sm" onClick={retry}>
             {t("common", K.reload)}
-          </button>
+          </Button>
         </div>
       ) : domains === null ? (
         <TableSkeleton rows={3} columns={2} />
@@ -177,8 +173,7 @@ function AddDomain({ id, onAdded }: { id: string; onAdded: (d: ResellerDomain) =
       <h2 className="text-base font-bold text-text-primary">{t("common", K.add.title)}</h2>
       <div className="grid gap-4 md:grid-cols-[1fr_12rem]">
         <Field label={t("common", K.add.domain)} error={error} hint={t("common", K.add.domainHint)}>
-          <input
-            className={input}
+          <Input
             dir="ltr"
             inputMode="url"
             autoComplete="off"
@@ -195,11 +190,10 @@ function AddDomain({ id, onAdded }: { id: string; onAdded: (d: ResellerDomain) =
           />
         </Field>
       </div>
-      {failure !== null && <Alert>{message(failure)}</Alert>}
-      <button type="submit" className={primaryButton} disabled={busy}>
-        {busy && <Loader2 size={12} className="animate-spin" aria-hidden />}
+      {failure !== null && <Alert tone="error">{message(failure)}</Alert>}
+      <Button variant="primary" size="sm" type="submit" loading={busy}>
         {t("common", busy ? K.add.adding : K.add.submit)}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -243,14 +237,13 @@ function DomainCard({
           <span className="text-xs text-text-secondary">{t("common", K.purposes[domain.purpose])}</span>
         </div>
         {canRequestCheck(domain.status) && (
-          <button type="button" className={primaryButton} onClick={() => void check()} disabled={busy}>
-            {busy && <Loader2 size={12} className="animate-spin" aria-hidden />}
+          <Button variant="primary" size="sm" onClick={() => void check()} loading={busy}>
             {t("common", K.checkNow)}
-          </button>
+          </Button>
         )}
       </div>
       <p className="text-xs text-text-secondary">{t("common", K.statusHint[domain.status])}</p>
-      {failure !== null && <Alert>{message(failure)}</Alert>}
+      {failure !== null && <Alert tone="error">{message(failure)}</Alert>}
 
       <div className="space-y-2">
         <h3 className="text-xs font-bold text-text-secondary">{t("common", K.records.title)}</h3>
@@ -319,18 +312,18 @@ function CopyButton({ text }: { text: string }) {
   const { t } = useLocale();
   const [copied, setCopied] = useState(false);
   return (
-    <button
-      type="button"
-      className={quietButton}
+    <Button
+      variant="quiet"
+      size="sm"
       onClick={() => {
         void navigator.clipboard?.writeText(text).then(() => {
           setCopied(true);
           setTimeout(() => setCopied(false), 1500);
         });
       }}
+      icon={copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
     >
-      {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
       {t("common", copied ? K.copied : K.copy)}
-    </button>
+    </Button>
   );
 }

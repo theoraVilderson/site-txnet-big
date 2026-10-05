@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { authApi } from "@/lib/auth-api";
 import { catalogAdminApi } from "@/lib/catalog-api";
-import { myResellerCatalogPath, myResellerCatalogTranslationsPath, myResellerConsolePath } from "@/lib/routes";
+import { myResellerCatalogPath, myResellerCatalogTranslationsPath } from "@/lib/routes";
 import { CatalogSurfaceProvider, type CatalogSurface } from "../../../../catalog/_lib/surface";
 import { RESELLER_CATALOG_KEYS as K, catalogRefusalKey } from "../../../_lib/catalog";
+import { WorkspaceTabs } from "../../../_components/WorkspaceTabs";
 
 /**
  * A reseller's catalog, as one surface the catalog components read from
@@ -48,16 +47,9 @@ export function ResellerCatalogView({ id, children }: { id: string; children: Re
       translationsHref: myResellerCatalogTranslationsPath(id),
       refusalKey: catalogRefusalKey,
       chrome: (
-        <div>
-          <Link
-            href={myResellerConsolePath(id)}
-            className="mb-2 -ms-2 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-text-secondary transition-colors hover:text-text-primary"
-          >
-            <ArrowRight size={12} className="ltr:rotate-180" aria-hidden />
-            {t("common", K.backToConsole)}
-          </Link>
-          <p className="text-sm font-bold text-text-primary">{slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}</p>
-          <p className="mt-1 text-xs text-text-secondary">{t("common", K.subtitle)}</p>
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-bold text-text-secondary">{slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}</p>
+          <WorkspaceTabs id={id} />
         </div>
       ),
     }),

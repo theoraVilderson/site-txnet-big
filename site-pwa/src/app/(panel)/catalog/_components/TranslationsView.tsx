@@ -27,7 +27,7 @@ const K = CATALOG_KEYS.translations;
 export function TranslationsView() {
   const { t, availableLocales } = useLocale();
   const message = useMessage();
-  const { api, catalogHref } = useCatalogSurface();
+  const { api, catalogHref, chrome } = useCatalogSurface();
   const [lang, setLang] = useState("");
   const [drafts, setDrafts] = useState<TranslationDraft[] | null>(null);
   const [edits, setEdits] = useState<Record<string, string>>({});
@@ -102,6 +102,7 @@ export function TranslationsView() {
           </>
         }
       />
+      {chrome}
 
       <div className="flex flex-wrap items-end justify-between gap-2">
         <Select
