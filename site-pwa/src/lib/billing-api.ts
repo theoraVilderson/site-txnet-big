@@ -892,6 +892,29 @@ export function grantLimitsApi(tenantId: string) {
  * no user in the path — the paste or the ticked ids name them, each fenced by
  * the reseller's tenant (C-15).
  */
+/**
+ * A reseller's own revenue over a window (F-311-b, billing `reseller-revenue.controller.ts`):
+ * what it sold and what its users paid in. `total` is in `currencyCode`, the
+ * reseller's operating currency, and `null` when a currency it was written in
+ * has no way into it. The door is `ResellerAccess`: a reseller's owner, member
+ * or the platform's staff — never the platform's own tenant.
+ */
+export interface ResellerRevenueTotals {
+  from: string;
+  to: string;
+  currencyCode: string;
+  sales: { total: string | null; count: number };
+  topUps: { total: string | null; count: number };
+}
+
+export const resellerRevenueApi = {
+  /** `from`/`to` are instants; billing refuses a window over 366 days. */
+  async totals(tenantId: string, window: { from: string; to: string }): Promise<ResellerRevenueTotals> {
+    const q = new URLSearchParams(window).toString();
+    return call<ResellerRevenueTotals>(`/tenants/${encodeURIComponent(tenantId)}/revenue?${q}`, { method: "GET" });
+  },
+};
+
 export const resellerGrantsPath = (tenantId: string) => `/tenants/${encodeURIComponent(tenantId)}/grants`;
 
 /** The users-admin door's catalog (F-311-ab1): what an admin issues and a bulk filter picks by product. */

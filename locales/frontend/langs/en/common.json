@@ -5383,7 +5383,12 @@
       "support": "Support",
       "notifications": "Notifications",
       "wheel": "Lucky wheel",
-      "accounts": "Accounts in this browser"
+      "accounts": "Accounts in this browser",
+      "revenue": "Revenue",
+      "manualPayments": "Manual payments",
+      "supportQueue": "Support queue",
+      "users": "Users",
+      "systems": "Systems"
     },
     "quick": {
       "topUp": "Top up",
@@ -5413,6 +5418,28 @@
     "wheel": {
       "open": "Today's spin is waiting for you",
       "closed": "No spin is open for you today"
+    },
+    "revenue": {
+      "today": "Today",
+      "week": "7 days",
+      "month": "30 days",
+      "sales": "{{count}} sales"
+    },
+    "manualPayments": {
+      "waiting": "{{count}} waiting",
+      "none": "No payment is waiting for a person.",
+      "open": "Manual payments"
+    },
+    "supportQueue": {
+      "open": "Support inbox"
+    },
+    "users": {
+      "search": "Find a user by phone, username or email",
+      "open": "All users"
+    },
+    "systems": {
+      "none": "No panel is registered yet.",
+      "open": "Systems"
     }
   }
 }

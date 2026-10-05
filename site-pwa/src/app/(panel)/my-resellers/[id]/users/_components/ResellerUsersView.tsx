@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, Ban, RefreshCw, Search, Undo2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -55,8 +56,10 @@ export function ResellerUsersView({ id }: { id: string }) {
   const platform = isPlatformTenant(id, me);
   const message = useUserMessage();
 
-  const [typed, setTyped] = useState("");
-  const [query, setQuery] = useState(() => usersQuery("", 1));
+  // `?q=` opens the list already searched — the dashboard's users widget (UX-1-r).
+  const searched = useSearchParams()?.get("q") ?? "";
+  const [typed, setTyped] = useState(searched);
+  const [query, setQuery] = useState(() => usersQuery(searched, 1));
   const [answer, setAnswer] = useState<{ items: ResellerUser[]; total: number } | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [asked, setAsked] = useState(0);

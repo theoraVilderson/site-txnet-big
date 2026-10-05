@@ -21,8 +21,8 @@ different audience. It is not reused, re-scoped or extended here.
 
 `GET /api/billing/tenants/:tenantId/revenue?from=&to=` (`revenue/`, F-311-b).
 The reseller is the **path's**, never the session's: its owner signs in to the
-platform owner's tenant (ADR-0059). Consumers: bot-app (F-311-c), and a panel
-page when one is built.
+platform owner's tenant (ADR-0059). Consumers: bot-app (F-311-c), and the
+panel dashboard's `revenue` widget for a reseller's own staff (UX-1-r).
 
 | Rule | Why |
 |---|---|

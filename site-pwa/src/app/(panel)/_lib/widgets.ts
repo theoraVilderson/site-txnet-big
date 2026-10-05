@@ -32,6 +32,14 @@ export const WIDGETS: readonly WidgetDef[] = [
   { id: "quick-actions", titleKey: W.quickActions, size: 1, component: lazy(() => import("../_components/dashboard/widgets/QuickActionsWidget")) },
   { id: "wallet", titleKey: W.wallet, size: 1, component: lazy(() => import("../_components/dashboard/widgets/WalletWidget")) },
   { id: "services", titleKey: W.services, size: 2, component: lazy(() => import("../_components/dashboard/widgets/ServicesWidget")) },
+  // D5: staff's, each by the page it links to (`page`), so the menu's own door
+  // decides — the users page's seat check, systems' platform-only gate. Revenue
+  // links to no page: F-311-b's door admits a reseller, never the platform's tenant.
+  { id: "revenue", titleKey: W.revenue, size: 2, requires: ["tenant.manage"], tenantTypes: ["reseller"], component: lazy(() => import("../_components/dashboard/widgets/RevenueWidget")) },
+  { id: "manual-payments", titleKey: W.manualPayments, size: 1, page: "manual-payments", component: lazy(() => import("../_components/dashboard/widgets/ManualPaymentsWidget")) },
+  { id: "support-queue", titleKey: W.supportQueue, size: 1, page: "support-inbox", component: lazy(() => import("../_components/dashboard/widgets/SupportQueueWidget")) },
+  { id: "users", titleKey: W.users, size: 1, page: "users", component: lazy(() => import("../_components/dashboard/widgets/UsersWidget")) },
+  { id: "systems", titleKey: W.systems, size: 1, page: "systems", component: lazy(() => import("../_components/dashboard/widgets/SystemsWidget")) },
   { id: "support", titleKey: W.support, size: 1, component: lazy(() => import("../_components/dashboard/widgets/SupportWidget")) },
   { id: "notifications", titleKey: W.notifications, size: 1, component: lazy(() => import("../_components/dashboard/widgets/NotificationsWidget")) },
   { id: "wheel", titleKey: W.wheel, size: 1, component: lazy(() => import("../_components/dashboard/widgets/WheelWidget")) },
@@ -98,4 +106,29 @@ export function timeOfDay(now: Date, zone: string | null): TimeOfDay {
   if (hour >= 12 && hour < 17) return "afternoon";
   if (hour >= 17 && hour < 22) return "evening";
   return "night";
+}
+
+/**
+ * The instant the calendar day holding `now` began in `zone` (D5's "today").
+ * Read from the zone's wall clock, so a zone this browser is not in still
+ * starts its day at its own midnight.
+ */
+export function startOfDayIn(now: Date, zone: string | null): Date {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+      hourCycle: "h23",
+      ...(zone ? { timeZone: zone } : {}),
+    })
+      .formatToParts(now)
+      .map((p) => [p.type, Number(p.value)]),
+  );
+  const wall = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  const offset = wall - Math.floor(now.getTime() / 1000) * 1000;
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day) - offset);
 }
