@@ -69,7 +69,7 @@ export type MenuPlacement = MenuSectionId | "footer";
  * administers its own roles and can grant itself the key
  * (`docs/domains/audit/contract.settlement.md`, invariant #9).
  */
-type PermissionGated = {
+export type PermissionGated = {
   requires?: readonly string[];
   /**
    * The tenant types the entry exists in, when not all of them (F-019-d). A
@@ -295,14 +295,7 @@ export function visibleMenu(
   ownsReseller: boolean | null = null,
   tenantId: string | null = null,
 ): VisibleMenuEntry[] {
-  const hidden = (e: PermissionGated) =>
-    (e.hiddenFrom?.includes("tenantOwner") === true && isOwner) ||
-    (e.hiddenFrom?.includes("resellerOwner") === true && ownsReseller !== false);
-  const permitted = (e: PermissionGated) =>
-    !hidden(e) &&
-    (!e.tenantTypes || (tenantType !== null && e.tenantTypes.includes(tenantType))) &&
-    ((isOwner && e.ownerSuffices === true) ||
-      holdsEveryPermission(held, e.requires ?? []));
+  const permitted = (e: PermissionGated) => admits(e, held, tenantType, isOwner, ownsReseller);
   const withPage = (l: PanelMenuLink): VisibleMenuLink | null => {
     if (typeof l.href === "function") return tenantId === null ? null : { ...l, href: l.href(tenantId) };
     return l.href === null ? null : { ...l, href: l.href };
@@ -322,6 +315,28 @@ export function visibleMenu(
     }
   }
   return out;
+}
+
+/**
+ * Whether one gated thing is for this caller — `visibleMenu`'s rule for an
+ * entry, and the dashboard's for a widget (UX-1-p, D1), so the two never
+ * disagree about who may see what. The arguments are `visibleMenu`'s.
+ */
+export function admits(
+  e: PermissionGated,
+  held: readonly string[],
+  tenantType: TenantType | null,
+  isOwner = false,
+  ownsReseller: boolean | null = null,
+): boolean {
+  const hidden =
+    (e.hiddenFrom?.includes("tenantOwner") === true && isOwner) ||
+    (e.hiddenFrom?.includes("resellerOwner") === true && ownsReseller !== false);
+  return (
+    !hidden &&
+    (!e.tenantTypes || (tenantType !== null && e.tenantTypes.includes(tenantType))) &&
+    ((isOwner && e.ownerSuffices === true) || holdsEveryPermission(held, e.requires ?? []))
+  );
 }
 
 /**

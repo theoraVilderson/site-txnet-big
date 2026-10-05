@@ -5354,5 +5354,30 @@
         "end": "End emergency entry"
       }
     }
+  },
+  "dashboard": {
+    "greeting": {
+      "morning": "Good morning, {{name}}",
+      "afternoon": "Good afternoon, {{name}}",
+      "evening": "Good evening, {{name}}",
+      "night": "Good night, {{name}}"
+    },
+    "edit": "Edit layout",
+    "editHint": "Show or hide a card, and drag it or use the arrows to change its place.",
+    "done": "Done",
+    "reset": "Back to default",
+    "show": "Show {{label}}",
+    "moveUp": "Move {{label}} up",
+    "moveDown": "Move {{label}} down",
+    "drag": "Drag to reorder",
+    "allHidden": "Every card is hidden",
+    "allHiddenBody": "Edit the layout to bring one back.",
+    "widget": {
+      "error": "This could not be loaded.",
+      "retry": "Try again"
+    },
+    "widgets": {
+      "accounts": "Accounts in this browser"
+    }
   }
 }
