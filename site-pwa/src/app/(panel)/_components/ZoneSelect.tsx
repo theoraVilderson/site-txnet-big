@@ -2,6 +2,11 @@
 
 import { useMemo } from "react";
 import { zoneChoices } from "@/lib/time-zone";
+import { useFieldControl } from "./kit/field-context";
+
+/** The kit Input's box (K4), for a zone list inside a kit `Field`. */
+const FIELD_CONTROL =
+  "h-11 w-full rounded-xl border border-card-border bg-bg-inner px-3 text-sm text-[var(--text-input)] transition-colors hover:border-primary focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60";
 
 /**
  * A native select over every IANA zone this browser knows (TZ-1-e) — a few
@@ -23,14 +28,18 @@ export function ZoneSelect({
   onChange: (zone: string | null) => void;
   nullLabel?: string;
   disabled?: boolean;
-  className: string;
+  /** Absent inside a kit `Field`: it then takes the kit's box and the Field's id and description. */
+  className?: string;
 }) {
   const zones = useMemo(() => zoneChoices(value), [value]);
+  const field = useFieldControl();
   return (
     <select
-      id={id}
+      id={id ?? field?.id}
+      aria-describedby={field?.describedBy}
+      aria-invalid={field?.invalid || undefined}
       dir="ltr"
-      className={className}
+      className={className ?? FIELD_CONTROL}
       value={value ?? ""}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}

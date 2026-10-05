@@ -8,6 +8,10 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { formatInstant } from "../../_lib/datetime";
 import { describeDevice } from "../_lib/sessions";
+import { Alert } from "../../_components/kit/Alert";
+import { Button } from "../../_components/kit/Button";
+import { Card, CardHeader } from "../../_components/kit/Card";
+import { notify } from "../../_components/kit/notify";
 
 const S = FrontendI18nKeys.common.sessions;
 
@@ -35,7 +39,6 @@ export function SessionsSection() {
   const [ending, setEnding] = useState<Ending | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -59,10 +62,10 @@ export function SessionsSection() {
     try {
       if (ending.kind === "one") {
         await authApi.terminateSession(ending.session.id);
-        setDone(t("common", S.ended));
+        notify.success(t("common", S.ended));
       } else {
         const answer = await authApi.terminateOtherSessions();
-        setDone(t("common", S.endedOthers, { count: answer.terminated }));
+        notify.success(t("common", S.endedOthers, { count: answer.terminated }));
       }
       setEnding(null);
     } catch (e) {
@@ -75,8 +78,6 @@ export function SessionsSection() {
   };
 
   const others = sessions?.filter((s) => !s.current) ?? [];
-  const primaryButton = "rounded-2xl bg-error px-4 py-2 text-sm font-bold text-on-error disabled:opacity-50";
-  const quietButton = "rounded-2xl border border-card-border px-4 py-2 text-sm font-bold text-text-primary disabled:opacity-50";
 
   const name = (s: ActiveSession) => {
     if (s.surface !== "web") return t("common", S.surface[s.surface]);
@@ -97,30 +98,31 @@ export function SessionsSection() {
         <p className="text-sm font-bold text-text-primary">{t("common", S.confirm.bot)}</p>
       )}
       <div className="flex gap-2">
-        <button type="button" className={primaryButton} disabled={pending} onClick={end}>
+        <Button variant="danger" size="sm" loading={pending} onClick={end}>
           {t("common", S.confirm.yes)}
-        </button>
-        <button type="button" className={quietButton} disabled={pending} onClick={() => setEnding(null)}>
+        </Button>
+        <Button variant="secondary" size="sm" disabled={pending} onClick={() => setEnding(null)}>
           {t("common", S.confirm.no)}
-        </button>
+        </Button>
       </div>
     </div>
   );
 
   return (
-    <section className="mt-6 rounded-3xl border border-card-border bg-card-bg p-6">
-      <h2 className="mb-1 text-lg font-bold text-text-primary">{t("common", S.title)}</h2>
-      <p className="mb-5 text-sm text-text-secondary">{t("common", S.hint)}</p>
+    <Card padding="lg">
+      <CardHeader title={t("common", S.title)} subtitle={t("common", S.hint)} />
 
       {loadFailed ? (
-        <div className="space-y-3">
-          <p className="text-sm font-medium text-error" role="alert">
-            {t("common", S.loadFailed)}
-          </p>
-          <button type="button" className="text-sm font-bold text-primary" onClick={() => setAsked((n) => n + 1)}>
-            {t("common", S.reload)}
-          </button>
-        </div>
+        <Alert
+          tone="error"
+          action={
+            <Button variant="secondary" size="sm" onClick={() => setAsked((n) => n + 1)}>
+              {t("common", S.reload)}
+            </Button>
+          }
+        >
+          {t("common", S.loadFailed)}
+        </Alert>
       ) : sessions === null ? null : (
         <div className="space-y-3">
           <ul className="divide-y divide-card-border">
@@ -144,18 +146,18 @@ export function SessionsSection() {
                     </p>
                   </div>
                   {!s.current && (
-                    <button
-                      type="button"
-                      className="shrink-0 text-sm font-bold text-error disabled:opacity-50"
+                    <Button
+                      variant="quiet"
+                      size="sm"
+                      className="shrink-0 text-error"
                       disabled={pending || ending !== null}
                       onClick={() => {
-                        setDone(null);
                         setError(null);
                         setEnding({ kind: "one", session: s });
                       }}
                     >
                       {t("common", S.terminate)}
-                    </button>
+                    </Button>
                   )}
                 </div>
                 {ending?.kind === "one" && ending.session.id === s.id && <div className="mt-3">{confirm}</div>}
@@ -164,32 +166,25 @@ export function SessionsSection() {
           </ul>
 
           {others.length === 0 && <p className="text-sm text-text-secondary">{t("common", S.none)}</p>}
-          {error && (
-            <p className="text-sm font-medium text-error" role="alert">
-              {error}
-            </p>
-          )}
-          {done && <p className="text-sm font-medium text-primary">{done}</p>}
+          {error && <Alert tone="error">{error}</Alert>}
 
           {others.length > 1 &&
             (ending?.kind === "others" ? (
               confirm
             ) : (
-              <button
-                type="button"
-                className={quietButton}
+              <Button
+                variant="secondary"
                 disabled={pending || ending !== null}
                 onClick={() => {
-                  setDone(null);
                   setError(null);
                   setEnding({ kind: "others" });
                 }}
               >
                 {t("common", S.terminateOthers)}
-              </button>
+              </Button>
             ))}
         </div>
       )}
-    </section>
+    </Card>
   );
 }

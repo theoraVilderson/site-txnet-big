@@ -8,7 +8,7 @@ updated: 2026-10-05
 
 # panel-web — active sessions on `/settings` (SES-1-b)
 
-The "Active sessions" section of the settings page:
+The "Active sessions" section of the settings page's `profile` tab (UX-1-s):
 `settings/_components/SessionsSection.tsx`, over
 [auth-api/contract.sessions.md](../auth-api/contract.sessions.md). What ending
 a place does is [identity/contract.sessions.md](../../domains/identity/contract.sessions.md).

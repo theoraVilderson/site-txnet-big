@@ -20,7 +20,7 @@ currency; every other screen shows money in the currency its answer names
 | Place | Whose currency | Shown to |
 |---|---|---|
 | `/my-resellers/:id`, under "more" | the path's reseller (`scope="reseller"`) | anyone who opens the workspace; tenant-service admits by the path (invariant 21) and the card shows its refusal otherwise |
-| `/settings`, last section | the platform's own tenant (`scope="platform"`) | a caller signed in to the `platform_owner` tenant **and** holding `tenant.manage` or `*` (SuperAdmin; the service honours it too — `canSetPlatformCurrency`) — a reseller can grant itself either key, so the type gates it too |
+| `/settings?tab=workspace` ("platform settings", UX-1-s) | the platform's own tenant (`scope="platform"`) | a caller signed in to the `platform_owner` tenant **and** holding `tenant.manage` or `*` (SuperAdmin; the service honours it too — `canSetPlatformCurrency`) — a reseller can grant itself either key, so the type gates it too |
 
 A reseller's currency is never on `/settings`: its owner's session carries
 the platform tenant on either domain (invariant 21), so `me.tenant` there is
@@ -59,7 +59,7 @@ through `currencyApi` in `src/lib/currency-api.ts`.
 
 | Place | Whose books | Shown to |
 |---|---|---|
-| `/settings`, after the operating-currency card | the session's tenant: the platform's on its domain (`scope="platform"`), a reseller's on the reseller's own domain (`scope="reseller"`) | a caller holding `currency.pin` or `*` (`canPinRates`); no tenant-type gate — the service scopes the pin |
+| `/settings?tab=workspace`, after the operating-currency card ("platform settings" or "reseller settings", UX-1-s) | the session's tenant: the platform's on its domain (`scope="platform"`), a reseller's on the reseller's own domain (`scope="reseller"`) | a caller holding `currency.pin` or `*` (`canPinRates`); no tenant-type gate — the service scopes the pin |
 
 **Not in the workspace.** The pin routes take no tenant: they pin for the
 session's. A reseller owner's session in `/my-resellers/:id` is the

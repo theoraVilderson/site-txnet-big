@@ -10,6 +10,11 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import { OTP_LENGTH } from "@/lib/otp";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { usePanelSession } from "../../_context/PanelSessionContext";
+import { Alert } from "../../_components/kit/Alert";
+import { Button } from "../../_components/kit/Button";
+import { Card, CardHeader } from "../../_components/kit/Card";
+import { Field, Input } from "../../_components/kit/Field";
+import { notify } from "../../_components/kit/notify";
 
 const E = FrontendI18nKeys.common.settings.email;
 
@@ -23,6 +28,7 @@ const E = FrontendI18nKeys.common.settings.email;
  *
  * The account's address is read from the session (`GET auth/me`) after a
  * reload, never from what was typed: only confirm writes `user.email`.
+ * "Saved" is a toast (UX-1-s, K10); a refusal stays inline.
  */
 export function EmailSection() {
   const { t } = useLocale();
@@ -35,7 +41,6 @@ export function EmailSection() {
   const [otpCode, setOtpCode] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
 
   const run = async (action: () => Promise<void>) => {
     setPending(true);
@@ -54,7 +59,6 @@ export function EmailSection() {
       const result = await authApi.requestEmailCode(to);
       setSentTo(to);
       setOtpCode("");
-      setSaved(false);
       start(result);
     });
 
@@ -65,7 +69,7 @@ export function EmailSection() {
       setSentTo(null);
       setAddress("");
       setOtpCode("");
-      setSaved(true);
+      notify.success(t("common", E.saved));
       await reload();
     });
 
@@ -76,16 +80,11 @@ export function EmailSection() {
     setError(null);
   };
 
-  const button =
-    "w-full rounded-2xl bg-primary px-5 py-3 font-bold text-on-accent shadow-lg shadow-primary-glow transition-opacity disabled:opacity-60";
-  const link = "text-sm font-bold text-primary hover:underline disabled:opacity-60";
-
   return (
-    <section className="rounded-3xl border border-card-border bg-card-bg p-6">
-      <h2 className="mb-1 text-lg font-bold text-text-primary">{t("common", E.title)}</h2>
-      <p className="mb-5 text-sm text-text-secondary">{t("common", E.subtitle)}</p>
+    <Card padding="lg">
+      <CardHeader title={t("common", E.title)} subtitle={t("common", E.subtitle)} />
 
-      <div className="mb-5 rounded-2xl border border-card-border bg-bg-inner px-4 py-3">
+      <div className="mb-5 rounded-xl border border-card-border bg-bg-inner px-4 py-3">
         {me?.email ? (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span dir="ltr" className="font-medium text-text-primary">
@@ -101,47 +100,30 @@ export function EmailSection() {
         )}
       </div>
 
-      {saved && (
-        <p className="mb-4 text-sm font-medium text-primary" role="status">
-          {t("common", E.saved)}
-        </p>
-      )}
-
-      {me?.email && !sentTo && (
-        <p className="mb-3 text-sm text-text-secondary">{t("common", E.replace)}</p>
-      )}
-
       <div className="space-y-4">
-        <div>
-          <label htmlFor="settings-email" className="mb-2 block text-sm text-text-secondary">
-            {t("common", E.address)}
-          </label>
-          <input
-            id="settings-email"
+        <Field
+          id="settings-email"
+          label={t("common", E.address)}
+          hint={me?.email && !sentTo ? t("common", E.replace) : undefined}
+          error={sentTo === null ? (error ?? undefined) : undefined}
+        >
+          <Input
             type="email"
             dir="ltr"
             autoComplete="email"
-            className="w-full rounded-2xl border-[1.5px] border-card-border bg-bg-inner px-5 py-3 text-text-primary outline-none transition-colors focus:border-primary disabled:opacity-60"
             value={sentTo ?? address}
             disabled={sentTo !== null}
             onChange={(e) => setAddress(e.target.value)}
           />
-        </div>
+        </Field>
 
         {sentTo === null ? (
-          <button
-            type="button"
-            className={button}
-            disabled={pending || !address.trim()}
-            onClick={() => sendCode(address.trim())}
-          >
+          <Button variant="primary" fullWidth loading={pending} disabled={!address.trim()} onClick={() => sendCode(address.trim())}>
             {t("common", E.sendCode)}
-          </button>
+          </Button>
         ) : (
           <>
-            <p className="text-sm text-text-secondary">
-              {t("common", E.codeHint).replace("{{email}}", sentTo)}
-            </p>
+            <p className="text-sm text-text-secondary">{t("common", E.codeHint).replace("{{email}}", sentTo)}</p>
             <div dir="ltr">
               <OTPInput length={OTP_LENGTH} value={otpCode} onChange={setOtpCode} />
             </div>
@@ -169,31 +151,21 @@ export function EmailSection() {
               </div>
             )}
 
-            <button
-              type="button"
-              className={button}
-              disabled={pending || otpCode.length < OTP_LENGTH}
-              onClick={() => confirm(sentTo)}
-            >
+            <Button variant="primary" fullWidth loading={pending} disabled={otpCode.length < OTP_LENGTH} onClick={() => confirm(sentTo)}>
               {t("common", E.confirm)}
-            </button>
+            </Button>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <button type="button" className={link} disabled={pending} onClick={() => sendCode(sentTo)}>
+              <Button variant="quiet" size="sm" disabled={pending} onClick={() => sendCode(sentTo)}>
                 {t("common", E.resend)}
-              </button>
-              <button type="button" className={link} disabled={pending} onClick={changeAddress}>
+              </Button>
+              <Button variant="quiet" size="sm" disabled={pending} onClick={changeAddress}>
                 {t("common", E.changeAddress)}
-              </button>
+              </Button>
             </div>
+            {error && <Alert tone="error">{error}</Alert>}
           </>
         )}
-
-        {error && (
-          <p className="text-sm font-medium text-error" role="alert">
-            {error}
-          </p>
-        )}
       </div>
-    </section>
+    </Card>
   );
 }

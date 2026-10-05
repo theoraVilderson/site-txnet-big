@@ -5,6 +5,10 @@ import { notificationApi, NOTICE_KINDS, type NoticeKind, type NoticePreferences 
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { Card, CardHeader } from "../../_components/kit/Card";
+import { Alert } from "../../_components/kit/Alert";
+import { Field, Input } from "../../_components/kit/Field";
+import { SaveBar } from "../../_components/kit/SaveBar";
 import { Toggle } from "../../_components/kit/Toggle";
 import { ZoneSelect } from "../../_components/ZoneSelect";
 
@@ -31,23 +35,27 @@ const DEFAULT_QUIET = { start: "23:00", end: "08:00" };
  * the bot tells it when they end — the server's rule, stated here, not
  * enforced here.
  *
- * Saved whole with one button: the answer, not the form, is what is shown
- * after, so a value the server normalised reads as stored.
+ * Saved whole through the `SaveBar` (UX-1-s, K11): the answer, not the form,
+ * is what is kept after, so a value the server normalised reads as stored, and
+ * Discard goes back to it.
  */
 export function NotificationsSection() {
   const { t } = useLocale();
   const toMessage = useApiErrorMessage();
+  const [stored, setStored] = useState<NoticePreferences | null>(null);
   const [prefs, setPrefs] = useState<NoticePreferences | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     let live = true;
     notificationApi
       .preferences()
-      .then((p) => live && setPrefs(p))
+      .then((p) => {
+        if (!live) return;
+        setStored(p);
+        setPrefs(p);
+      })
       .catch(() => live && setLoadFailed(true));
     return () => {
       live = false;
@@ -56,44 +64,37 @@ export function NotificationsSection() {
 
   if (loadFailed) {
     return (
-      <section className="mt-6 rounded-3xl border border-card-border bg-card-bg p-6">
-        <p className="text-sm font-medium text-error" role="alert">
-          {t("common", N.loadFailed)}
-        </p>
-      </section>
+      <Card padding="lg">
+        <Alert tone="error">{t("common", N.loadFailed)}</Alert>
+      </Card>
     );
   }
-  if (!prefs) return null;
+  if (!prefs || !stored) return null;
 
   const edit = (next: NoticePreferences) => {
     setPrefs(next);
-    setSaved(false);
     setError(null);
   };
   const toggleKind = (kind: NoticeKind, told: boolean) =>
     edit({ ...prefs, muted: told ? prefs.muted.filter((k) => k !== kind) : [...prefs.muted, kind] });
   const sameTimes = prefs.quietHours !== null && prefs.quietHours.start === prefs.quietHours.end;
+  const dirty = JSON.stringify(prefs) !== JSON.stringify(stored);
 
   const save = async () => {
-    setPending(true);
     setError(null);
     try {
-      setPrefs(await notificationApi.savePreferences(prefs));
-      setSaved(true);
+      const answer = await notificationApi.savePreferences(prefs);
+      setStored(answer);
+      setPrefs(answer);
     } catch (e) {
       setError(toMessage(e));
-    } finally {
-      setPending(false);
+      throw e;
     }
   };
 
-  const input =
-    "w-full rounded-2xl border-[1.5px] border-card-border bg-bg-inner px-4 py-2.5 text-text-primary outline-none transition-colors focus:border-primary";
-
   return (
-    <section className="mt-6 rounded-3xl border border-card-border bg-card-bg p-6">
-      <h2 className="mb-1 text-lg font-bold text-text-primary">{t("common", N.title)}</h2>
-      <p className="mb-5 text-sm text-text-secondary">{t("common", N.subtitle)}</p>
+    <Card padding="lg">
+      <CardHeader title={t("common", N.title)} subtitle={t("common", N.subtitle)} />
 
       <div className="space-y-3">
         {NOTICE_KINDS.map((kind) => (
@@ -117,62 +118,42 @@ export function NotificationsSection() {
         {prefs.quietHours && (
           <div className="grid grid-cols-2 gap-3">
             {(["start", "end"] as const).map((end) => (
-              <div key={end}>
-                <label htmlFor={`quiet-${end}`} className="mb-1 block text-sm text-text-secondary">
-                  {t("common", end === "start" ? N.quiet.from : N.quiet.to)}
-                </label>
-                <input
-                  id={`quiet-${end}`}
+              <Field
+                key={end}
+                id={`quiet-${end}`}
+                label={t("common", end === "start" ? N.quiet.from : N.quiet.to)}
+                error={sameTimes && end === "end" ? t("common", N.quiet.sameTimes) : undefined}
+              >
+                <Input
                   type="time"
                   dir="ltr"
                   required
-                  className={input}
                   value={prefs.quietHours![end]}
                   onChange={(e) => e.target.value && edit({ ...prefs, quietHours: { ...prefs.quietHours!, [end]: e.target.value } })}
                 />
-              </div>
+              </Field>
             ))}
-            <div className="col-span-2">
-              <label htmlFor="quiet-zone" className="mb-1 block text-sm text-text-secondary">
-                {t("common", N.quiet.timezone)}
-              </label>
-              {/* TZ-1-f: null follows the user's own zone, whatever it becomes. */}
-              <ZoneSelect
-                id="quiet-zone"
-                className={input}
-                value={prefs.timezone}
-                nullLabel={t("common", N.quiet.sameAsMine)}
-                onChange={(timezone) => edit({ ...prefs, timezone })}
-              />
-            </div>
-            {sameTimes && (
-              <p className="col-span-2 text-sm font-medium text-error" role="alert">
-                {t("common", N.quiet.sameTimes)}
-              </p>
-            )}
+            {/* TZ-1-f: null follows the user's own zone, whatever it becomes. */}
+            <Field id="quiet-zone" label={t("common", N.quiet.timezone)} className="col-span-2">
+              <ZoneSelect value={prefs.timezone} nullLabel={t("common", N.quiet.sameAsMine)} onChange={(timezone) => edit({ ...prefs, timezone })} />
+            </Field>
           </div>
         )}
       </div>
 
-      {saved && (
-        <p className="mt-4 text-sm font-medium text-primary" role="status">
-          {t("common", N.saved)}
-        </p>
-      )}
       {error && (
-        <p className="mt-4 text-sm font-medium text-error" role="alert">
+        <Alert tone="error" className="mt-4">
           {error}
-        </p>
+        </Alert>
       )}
 
-      <button
-        type="button"
-        className="mt-5 w-full rounded-2xl bg-primary px-5 py-3 font-bold text-on-accent shadow-lg shadow-primary-glow transition-opacity disabled:opacity-60"
-        disabled={pending || sameTimes}
-        onClick={save}
-      >
-        {t("common", N.save)}
-      </button>
-    </section>
+      <SaveBar
+        dirty={dirty}
+        disabled={sameTimes}
+        onSave={save}
+        onDiscard={() => edit(stored)}
+        savedMessage={t("common", N.saved)}
+      />
+    </Card>
   );
 }

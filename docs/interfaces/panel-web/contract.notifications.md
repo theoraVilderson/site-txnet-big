@@ -114,9 +114,9 @@ envelope and refresh of `lib/api-request.ts`. Two calls, `inbox` and
 is refused there rather than quietly meaning the same thing, so this client
 never sends one.
 
-## Notice settings on `/settings` (F-601-m)
+## Notice settings on `/settings?tab=notifications` (F-601-m)
 
-`settings/_components/NotificationsSection.tsx`, below the email section, over
+`settings/_components/NotificationsSection.tsx`, on the `notifications` tab (UX-1-s), over
 `notificationApi.preferences` / `savePreferences`
 ([notification/contract.retention.md](../../domains/notification/contract.retention.md)
 "Mute and quiet hours").
@@ -128,13 +128,14 @@ never sends one.
 2. **Quiet hours are one switch, two `time` fields and a zone.** Switched on,
    the window reads 23:00–08:00 until moved; the zone is `ZoneSelect`
    (`contract.kit.md` Z5), whose first option, "same as my time zone", saves
-   null — the user's resolved zone, whatever it becomes (TZ-1-f). Equal ends block the save with a line — the server refuses them too.
-3. **Saved whole with one button, and the answer is what is shown after**, so
-   a value the server normalised (kind order, duplicates) reads as stored. A
+   null — the user's resolved zone, whatever it becomes (TZ-1-f). Equal ends block the save with the field's error — the server refuses them too.
+3. **Saved whole through the kit `SaveBar` (UX-1-s, K11), and the answer is what
+   is kept after**, so a value the server normalised (kind order, duplicates)
+   reads as stored and Discard goes back to it. A
    failed load shows one line and no form: an empty form saved would reset
    everything the user set.
 
-## Which messenger tells them, on `/settings` (F-601-u)
+## Which messenger tells them, on `/settings?tab=notifications` (F-601-u)
 
 `settings/_components/MessengerSection.tsx`, below the notice settings, over
 `authApi.messenger` / `saveMessenger`
@@ -145,8 +146,10 @@ never sends one.
    default, so the form opens on it; `chosen` is not shown.
 2. **A platform with no verified chat can be picked, and says so**: until it
    is linked, the notifier tells the other. Stated here, enforced there.
-3. **Saved with one button; the answer is what is shown after.** A failed
-   load shows one line and no form, as the notice settings do.
+3. **Saved the moment it is picked (UX-1-s), as kit `RadioCards`; the answer is
+   what is shown after.** "Saved" is a toast; a refusal puts the stored choice
+   back with an error toast. A failed load shows one line and no form, as the
+   notice settings do.
 
 ## A service's notice level on `/services` (F-601-o)
 

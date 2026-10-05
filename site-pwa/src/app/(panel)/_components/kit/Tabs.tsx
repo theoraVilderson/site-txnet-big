@@ -22,8 +22,12 @@ export interface TabsProps<V extends string = string> {
   onChange?: (value: V) => void;
   /** Keeps the tab in `?<param>=` (`/settings?tab=`); a value naming no tab reads as the first. */
   urlParam?: string;
-  /** `line`: an underline. `pills`: scrolling pills, for a phone (S2). */
-  variant?: "line" | "pills";
+  /**
+   * `line`: an underline. `pills`: scrolling pills, for a phone (S2). `side`:
+   * pills below `lg`, and from `lg` a 240px column of tabs at the start side
+   * with the panel beside it (settings, S2).
+   */
+  variant?: "line" | "pills" | "side";
   /** The panel for the active tab; without it the bar is only a bar. */
   children?: (active: V) => ReactNode;
   className?: string;
@@ -80,10 +84,13 @@ function TabsView<V extends string>({ ariaLabel, tabs, variant = "line", childre
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>, index: number) => {
     const rtl = e.currentTarget.closest("[dir]")?.getAttribute("dir") === "rtl";
     const last = tabs.length - 1;
+    // A side column is also walked by up and down.
+    const forward = e.key === (rtl ? "ArrowLeft" : "ArrowRight") || (side && e.key === "ArrowDown");
+    const back = e.key === (rtl ? "ArrowRight" : "ArrowLeft") || (side && e.key === "ArrowUp");
     const next =
-      e.key === (rtl ? "ArrowLeft" : "ArrowRight")
+      forward
         ? (index + 1) % tabs.length
-        : e.key === (rtl ? "ArrowRight" : "ArrowLeft")
+        : back
           ? (index - 1 + tabs.length) % tabs.length
           : e.key === "Home"
             ? 0
@@ -96,13 +103,18 @@ function TabsView<V extends string>({ ariaLabel, tabs, variant = "line", childre
     refs.current[next]?.focus();
   };
 
-  const pills = variant === "pills";
+  const side = variant === "side";
+  const pills = variant === "pills" || side;
   return (
-    <div className={className}>
+    <div className={cn(side && "lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:items-start lg:gap-8", className)}>
       <div
         role="tablist"
         aria-label={ariaLabel}
-        className={cn("flex gap-1 overflow-x-auto [scrollbar-width:none]", pills ? "pb-1" : "border-b border-card-border")}
+        className={cn(
+          "flex gap-1 overflow-x-auto [scrollbar-width:none]",
+          pills ? "pb-1" : "border-b border-card-border",
+          side && "lg:sticky lg:top-24 lg:flex-col lg:overflow-visible lg:pb-0",
+        )}
       >
         {tabs.map((tab, i) => {
           const selected = tab.value === active;
@@ -123,6 +135,7 @@ function TabsView<V extends string>({ ariaLabel, tabs, variant = "line", childre
               className={cn(
                 "relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm font-bold transition-colors",
                 pills ? "h-9 rounded-full px-3.5" : "h-10 px-3",
+                side && "lg:h-10 lg:w-full lg:rounded-xl lg:px-3",
                 selected ? (pills ? "text-on-accent" : "text-primary") : "text-text-secondary hover:text-text-primary",
               )}
             >
@@ -130,7 +143,7 @@ function TabsView<V extends string>({ ariaLabel, tabs, variant = "line", childre
                 <motion.span
                   layoutId={`${id}-indicator`}
                   aria-hidden
-                  className={pills ? "absolute inset-0 rounded-full bg-primary" : "absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-primary"}
+                  className={pills ? cn("absolute inset-0 rounded-full bg-primary", side && "lg:rounded-xl") : "absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-primary"}
                   transition={{ duration: DURATION.base, ease: EASE.standard }}
                 />
               )}
@@ -144,7 +157,7 @@ function TabsView<V extends string>({ ariaLabel, tabs, variant = "line", childre
         })}
       </div>
       {children && (
-        <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-tab-${Math.max(0, tabs.findIndex((t) => t.value === active))}`} tabIndex={0} className="mt-4 focus:outline-none">
+        <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-tab-${Math.max(0, tabs.findIndex((t) => t.value === active))}`} tabIndex={0} className={cn("mt-4 min-w-0 focus:outline-none", side && "lg:mt-0")}>
           {children(active)}
         </div>
       )}

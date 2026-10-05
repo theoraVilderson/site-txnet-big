@@ -1764,6 +1764,33 @@
       "save": "Save",
       "saved": "Your messenger is saved.",
       "loadFailed": "We could not load your messenger setting."
+    },
+    "tabs": {
+      "label": "Settings sections",
+      "profile": "Profile",
+      "notifications": "Notifications",
+      "appearance": "Appearance",
+      "platform": "Platform settings",
+      "reseller": "Reseller settings"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "subtitle": "How the panel looks on this account. Theme and language apply on this device at once.",
+      "theme": "Theme",
+      "themes": {
+        "system": "System",
+        "light": "Light",
+        "dark": "Dark",
+        "ocean": "Ocean"
+      },
+      "language": "Language",
+      "motion": {
+        "label": "Motion",
+        "hint": "Reduced keeps fades only — no sliding, counting or confetti. Saved to your account.",
+        "system": "Like the device",
+        "full": "Full",
+        "reduced": "Reduced"
+      }
     }
   },
   "tenantBilling": {

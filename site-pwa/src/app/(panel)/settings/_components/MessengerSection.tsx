@@ -5,6 +5,10 @@ import { authApi, NOTICE_MESSENGERS, type MeMessenger, type NoticeMessenger } fr
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { Alert } from "../../_components/kit/Alert";
+import { Card, CardHeader } from "../../_components/kit/Card";
+import { RadioCards } from "../../_components/kit/choice";
+import { notify } from "../../_components/kit/notify";
 
 const M = FrontendI18nKeys.common.settings.messenger;
 
@@ -21,6 +25,9 @@ const OPTION_TEXT: Record<NoticeMessenger, string> = {
  * the server's default, so the form opens on it. A platform with no verified
  * chat can still be picked, and says so: until it is linked, the notifier
  * tells the other one — the server's rule, stated here, not enforced here.
+ *
+ * One choice, so it is written the moment it is picked (UX-1-s, K10): "saved"
+ * is a toast; a refusal puts the stored choice back and says why in a toast.
  */
 export function MessengerSection() {
   const { t } = useLocale();
@@ -28,8 +35,6 @@ export function MessengerSection() {
   const [state, setState] = useState<MeMessenger | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -44,84 +49,44 @@ export function MessengerSection() {
 
   if (loadFailed) {
     return (
-      <section className="mt-6 rounded-3xl border border-card-border bg-card-bg p-6">
-        <p className="text-sm font-medium text-error" role="alert">
-          {t("common", M.loadFailed)}
-        </p>
-      </section>
+      <Card padding="lg">
+        <Alert tone="error">{t("common", M.loadFailed)}</Alert>
+      </Card>
     );
   }
   if (!state) return null;
 
-  const pick = (messenger: NoticeMessenger) => {
+  const pick = async (messenger: NoticeMessenger) => {
+    if (pending || messenger === state.messenger) return;
+    const before = state;
     setState({ ...state, messenger });
-    setSaved(false);
-    setError(null);
-  };
-
-  const save = async () => {
     setPending(true);
-    setError(null);
     try {
-      setState(await authApi.saveMessenger(state.messenger));
-      setSaved(true);
+      setState(await authApi.saveMessenger(messenger));
+      notify.success(t("common", M.saved));
     } catch (e) {
-      setError(toMessage(e));
+      setState(before);
+      notify.error(toMessage(e));
     } finally {
       setPending(false);
     }
   };
 
   return (
-    <section className="mt-6 rounded-3xl border border-card-border bg-card-bg p-6">
-      <h2 className="mb-1 text-lg font-bold text-text-primary">{t("common", M.title)}</h2>
-      <p className="mb-5 text-sm text-text-secondary">{t("common", M.subtitle)}</p>
-
-      <div role="radiogroup" aria-label={t("common", M.title)} className="space-y-3">
-        {NOTICE_MESSENGERS.map((option) => {
-          const unlinked = option !== "both" && !state.linked.includes(option);
-          return (
-            <label
-              key={option}
-              className={`flex cursor-pointer items-start gap-3 rounded-2xl border-[1.5px] px-4 py-3 transition-colors ${
-                state.messenger === option ? "border-primary bg-bg-inner" : "border-card-border"
-              }`}
-            >
-              <input
-                type="radio"
-                name="notice-messenger"
-                className="mt-1 accent-primary"
-                checked={state.messenger === option}
-                onChange={() => pick(option)}
-              />
-              <span>
-                <span className="block font-medium text-text-primary">{t("common", OPTION_TEXT[option])}</span>
-                {unlinked && <span className="block text-sm text-text-secondary">{t("common", M.notLinked)}</span>}
-              </span>
-            </label>
-          );
-        })}
-      </div>
-
-      {saved && (
-        <p className="mt-4 text-sm font-medium text-primary" role="status">
-          {t("common", M.saved)}
-        </p>
-      )}
-      {error && (
-        <p className="mt-4 text-sm font-medium text-error" role="alert">
-          {error}
-        </p>
-      )}
-
-      <button
-        type="button"
-        className="mt-5 w-full rounded-2xl bg-primary px-5 py-3 font-bold text-on-accent shadow-lg shadow-primary-glow transition-opacity disabled:opacity-60"
-        disabled={pending}
-        onClick={save}
-      >
-        {t("common", M.save)}
-      </button>
-    </section>
+    <Card padding="lg">
+      <CardHeader title={t("common", M.title)} subtitle={t("common", M.subtitle)} />
+      <RadioCards<NoticeMessenger>
+        ariaLabel={t("common", M.title)}
+        columns={1}
+        value={state.messenger}
+        onChange={(v) => void pick(v)}
+        options={NOTICE_MESSENGERS.map((option) => ({
+          value: option,
+          label: t("common", OPTION_TEXT[option]),
+          description: option !== "both" && !state.linked.includes(option) ? t("common", M.notLinked) : undefined,
+          disabled: pending && option !== state.messenger,
+        }))}
+      />
+    </Card>
   );
 }
