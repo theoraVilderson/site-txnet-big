@@ -4935,7 +4935,15 @@
       "reopen": "Reopen",
       "expired": "This file was removed after its retention period.",
       "open": "Open the file",
-      "liveOff": "Live updates are unavailable; reopen the page to see new answers."
+      "liveOff": "Live updates are unavailable; reopen the page to see new answers.",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "jumpLatest": "Go to the latest message",
+      "jumpNew": "{{n}} new",
+      "sendShortcut": "Ctrl+Enter sends",
+      "sendShortcutMac": "⌘+Enter sends",
+      "imageOpen": "Open the image",
+      "dropFiles": "Drop the files to attach them"
     },
     "rating": {
       "title": "Were you happy with the help?",

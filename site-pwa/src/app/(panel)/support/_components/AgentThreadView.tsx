@@ -20,10 +20,11 @@ import { formatBytes } from "../../services/_lib/service-configs";
 import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
-import { Alert, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
-import { applySupportEvent, mergeMessages, readSupportEvent, senderKey, typingGate, type ThreadState } from "../_lib/support";
+import { Alert, input, quietButton } from "../../catalog/_components/catalog-ui";
+import { applySupportEvent, isSendKey, mergeMessages, readSupportEvent, senderKey, typingGate, type ThreadState } from "../_lib/support";
 import { AGENT_KEYS as K, PRIORITIES, PRIORITY_KEYS, agentActions } from "../_lib/support-agent";
-import { AttachmentRow, Frame } from "./SupportThreadView";
+import { Frame } from "./SupportThreadView";
+import { AttachmentList, JumpToLatest, SendButton, ThreadMessages, TypingDots, useAutoGrow, useFollowLatest } from "./ThreadParts";
 import { StatusPill } from "./SupportView";
 import { PriorityPill, SlaBadge } from "./SupportInboxView";
 import { usePresence } from "./usePresence";
@@ -146,10 +147,10 @@ export function AgentThreadView({ id }: { id: string }) {
     return () => clearTimeout(timer);
   }, [id, lastSeq, lastReadSeq]);
 
-  const endRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
-  }, [lastSeq]);
+  // Near the bottom a new message scrolls into view; away from it, it waits behind a button (T4).
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const lastHeld = thread?.messages.at(-1);
+  const follow = useFollowLatest(scrollerRef, thread?.messages.length ?? 0, lastHeld !== undefined && lastHeld.senderUserId === me?.userId);
 
   async function earlier() {
     const first = thread?.messages[0]?.seq;
@@ -269,28 +270,37 @@ export function AgentThreadView({ id }: { id: string }) {
           {liveOff && <p className="text-xs text-text-secondary">{t("common", K.thread.liveOff)}</p>}
         </header>
 
-        <section className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-4">
-          {hasEarlier && (
-            <div className="text-center">
-              <button type="button" className={quietButton} onClick={earlier}>
-                {t("common", K.thread.earlier)}
-              </button>
-            </div>
-          )}
-          <ol className="space-y-3">
-            {thread.messages.map((m) => (
-              <AgentBubble
-                key={m.seq}
-                message={m}
-                me={myId}
-                seen={m.seq === lastPublished?.seq ? thread.seenUpToSeq >= m.seq : null}
-                time={formatInstant(m.createdAt, lang) ?? ""}
-              />
-            ))}
-          </ol>
-          {thread.peerTypingUntil > now && <p className="text-xs text-text-secondary">{t("common", K.thread.typing)}</p>}
-          <div ref={endRef} />
-        </section>
+        <div className="relative">
+          <section
+            ref={scrollerRef}
+            onScroll={follow.onScroll}
+            className="max-h-[calc(100dvh-24rem)] min-h-[16rem] space-y-3 overflow-y-auto rounded-2xl border border-card-border bg-card-bg p-4"
+          >
+            {hasEarlier && (
+              <div className="text-center">
+                <button type="button" className={quietButton} onClick={earlier}>
+                  {t("common", K.thread.earlier)}
+                </button>
+              </div>
+            )}
+            <ThreadMessages
+              messages={thread.messages}
+              // One person's replies group; a note never joins a reply's group.
+              senderOf={(m) => `${m.senderUserId ?? m.senderKind}:${m.internal}`}
+              render={(m, first) => (
+                <AgentBubble
+                  message={m}
+                  first={first}
+                  me={myId}
+                  seen={m.seq === lastPublished?.seq ? thread.seenUpToSeq >= m.seq : null}
+                  time={formatInstant(m.createdAt, lang) ?? ""}
+                />
+              )}
+            />
+            {thread.peerTypingUntil > now && <TypingDots label={t("common", K.thread.typing)} />}
+          </section>
+          <JumpToLatest follow={follow} />
+        </div>
 
         {conversation.rating && <p className="text-xs text-text-secondary">{t("common", K.thread.rating, { n: conversation.rating.score })}</p>}
         {actions.canWrite ? (
@@ -315,7 +325,7 @@ export function AgentThreadView({ id }: { id: string }) {
   );
 }
 
-function AgentBubble({ message: m, me, seen, time }: { message: AgentMessage; me: string; seen: boolean | null; time: string }) {
+function AgentBubble({ message: m, first, me, seen, time }: { message: AgentMessage; first: boolean; me: string; seen: boolean | null; time: string }) {
   const { t } = useLocale();
   const fromUser = m.senderKind === "user";
   const label = fromUser
@@ -327,32 +337,28 @@ function AgentBubble({ message: m, me, seen, time }: { message: AgentMessage; me
         : t("common", senderKey(m.senderKind, false));
   const tone = m.internal ? "border border-dashed border-card-border bg-bg-inner" : fromUser ? "bg-bg-inner" : "bg-primary/10";
   return (
-    <li className={`flex ${fromUser ? "justify-start" : "justify-end"}`}>
+    <div className={`flex ${fromUser ? "justify-start" : "justify-end"}`}>
       <div className={`max-w-[85%] space-y-1 rounded-2xl px-3 py-2 ${tone}`}>
-        <p className="flex items-center gap-1 text-[11px] font-bold text-text-secondary">
-          {m.internal && <StickyNote size={11} aria-hidden />}
-          {label}
-          {m.internal && <span className="font-normal">· {t("common", K.thread.noteBadge)}</span>}
-        </p>
+        {first && (
+          <p className="flex items-center gap-1 text-[11px] font-bold text-text-secondary">
+            {m.internal && <StickyNote size={11} aria-hidden />}
+            {label}
+            {m.internal && <span className="font-normal">· {t("common", K.thread.noteBadge)}</span>}
+          </p>
+        )}
         {m.body && (
           <p dir="auto" className="whitespace-pre-wrap break-words text-sm text-text-primary">
             {m.body}
           </p>
         )}
-        {m.attachments.length > 0 && (
-          <ul className="space-y-1">
-            {m.attachments.map((a) => (
-              <AttachmentRow key={a.id} attachment={a} />
-            ))}
-          </ul>
-        )}
+        <AttachmentList attachments={m.attachments} />
         <p className="flex items-center gap-1 text-[11px] text-text-secondary">
           {time}
           {seen !== null &&
             (seen ? <CheckCheck size={12} className="text-primary" aria-label={t("common", K.thread.seen)} /> : <Check size={12} aria-hidden />)}
         </p>
       </div>
-    </li>
+    </div>
   );
 }
 
@@ -365,6 +371,8 @@ function AgentComposer({ id, claims, onSent }: { id: string; claims: boolean; on
   const [failure, setFailure] = useState<string | null>(null);
   const [canned, setCanned] = useState<CannedPick[] | null>(null);
   const gate = useRef(typingGate(TYPING_EVERY_MS));
+  const box = useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(box, body);
 
   useEffect(() => {
     supportAgentApi
@@ -392,7 +400,7 @@ function AgentComposer({ id, claims, onSent }: { id: string; claims: boolean; on
   async function submit(e?: FormEvent) {
     e?.preventDefault();
     const text = body.trim();
-    if (!text) return;
+    if (busy || !text) return;
     setBusy(true);
     setFailure(null);
     try {
@@ -424,15 +432,18 @@ function AgentComposer({ id, claims, onSent }: { id: string; claims: boolean; on
         ))}
       </div>
       <textarea
+        ref={box}
         dir="auto"
-        rows={4}
-        className={input}
+        rows={3}
+        className={`${input} resize-none`}
         placeholder={t("common", internal ? K.thread.notePlaceholder : K.thread.replyPlaceholder)}
         value={body}
         maxLength={SUPPORT_BODY_MAX}
         onChange={(e) => typed(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void submit();
+          if (!isSendKey({ ...e, isComposing: e.nativeEvent.isComposing })) return;
+          e.preventDefault();
+          void submit();
         }}
       />
       {failure && <Alert>{failure}</Alert>}
@@ -460,9 +471,7 @@ function AgentComposer({ id, claims, onSent }: { id: string; claims: boolean; on
         )}
         <div className="flex items-center gap-2">
           {!internal && claims && <span className="text-[11px] text-text-secondary">{t("common", K.thread.replyClaims)}</span>}
-          <button type="submit" className={primaryButton} disabled={busy || !body.trim()}>
-            {t("common", internal ? K.thread.sendNote : K.thread.send)}
-          </button>
+          <SendButton label={t("common", internal ? K.thread.sendNote : K.thread.send)} busy={busy} disabled={!body.trim()} />
         </div>
       </div>
     </form>

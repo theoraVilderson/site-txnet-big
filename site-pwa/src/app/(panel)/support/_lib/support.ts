@@ -185,3 +185,50 @@ export function acceptSupportFiles(files: readonly File[]): { accepted: File[]; 
   const accepted = files.filter((f) => types.includes(f.type));
   return { accepted, refused: files.filter((f) => !types.includes(f.type)).map((f) => f.name) };
 }
+
+/** One sender's messages this close together share one label (T4). */
+export const GROUP_WINDOW_MS = 5 * 60_000;
+
+/** `YYYY-MM-DD` of an instant on the wall clock of `zone` — the viewer's resolved zone (TZ-1-e), else this browser's. */
+export function dayKey(iso: string, zone?: string | null): string {
+  const date = new Date(iso);
+  const parts = { year: "numeric", month: "2-digit", day: "2-digit" } as const;
+  try {
+    return new Intl.DateTimeFormat("en-CA", zone ? { ...parts, timeZone: zone } : parts).format(date);
+  } catch {
+    return new Intl.DateTimeFormat("en-CA", parts).format(date);
+  }
+}
+
+export type ThreadItem<M extends SupportMessage> = { kind: "day"; day: string; at: string } | { kind: "message"; message: M; first: boolean };
+
+/**
+ * The thread as drawn (UX-1-x, `contract.ux.md` T4): a separator before each
+ * new day in `zone`, and `first` on a message that opens a group — another
+ * sender (`senderOf`), more than 5 minutes after the one before, or a new day.
+ */
+export function threadItems<M extends SupportMessage>(messages: readonly M[], senderOf: (m: M) => string, zone?: string | null): ThreadItem<M>[] {
+  const items: ThreadItem<M>[] = [];
+  let prev: M | null = null;
+  let prevDay = "";
+  for (const m of messages) {
+    const day = dayKey(m.createdAt, zone);
+    const newDay = day !== prevDay;
+    if (newDay) items.push({ kind: "day", day, at: m.createdAt });
+    const gap = prev ? Date.parse(m.createdAt) - Date.parse(prev.createdAt) : Infinity;
+    const first = newDay || !prev || senderOf(prev) !== senderOf(m) || gap > GROUP_WINDOW_MS;
+    items.push({ kind: "message", message: m, first });
+    prev = m;
+    prevDay = day;
+  }
+  return items;
+}
+
+/** Ctrl/⌘+Enter sends; Enter alone, Shift+Enter and an IME's Enter are a line (user, 2026-10-05). */
+export function isSendKey(e: { key: string; ctrlKey: boolean; metaKey: boolean; shiftKey?: boolean; isComposing?: boolean }): boolean {
+  return e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing;
+}
+
+/** Past this far from the bottom, a new message waits behind "go to the latest" instead of scrolling (T4). */
+export const AWAY_PX = 200;
+export const awayFromBottom = (el: { scrollHeight: number; scrollTop: number; clientHeight: number }) => el.scrollHeight - el.scrollTop - el.clientHeight > AWAY_PX;

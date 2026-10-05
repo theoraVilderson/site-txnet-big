@@ -2,14 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import { Check, CheckCheck, FileText, Paperclip, RotateCw, Send, Star, X } from "lucide-react";
+import { Check, CheckCheck, Paperclip, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import {
   SUPPORT_BODY_MAX,
   SUPPORT_FILE_TYPES,
   supportApi,
-  type SupportAttachment,
   type SupportChannel,
   type SupportConversation,
   type SupportMessage,
@@ -19,10 +18,10 @@ import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { Alert, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import {
-  SCAN_KEYS,
   SUPPORT_KEYS as K,
+  acceptSupportFiles,
   applySupportEvent,
-  fileSize,
+  isSendKey,
   mergeMessages,
   readSupportEvent,
   senderKey,
@@ -33,6 +32,8 @@ import {
 import { StatusPill } from "./SupportView";
 import { PageHeader } from "../../_components/kit/PageHeader";
 import { Alert as KitAlert } from "../../_components/kit/Alert";
+import { PendingFiles, useFileDrop } from "./SupportFiles";
+import { AttachmentList, JumpToLatest, SendButton, StarRating, ThreadMessages, TypingDots, useAutoGrow, useFollowLatest } from "./ThreadParts";
 
 /** Below the server's ~6s hold, so a steady typist never flickers off. */
 const TYPING_EVERY_MS = 4_000;
@@ -163,11 +164,9 @@ export function SupportThreadView({ id }: { id: string }) {
     return () => clearTimeout(timer);
   }, [id, lastSeq, lastReadSeq]);
 
-  // New messages scroll into view.
-  const endRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
-  }, [lastSeq]);
+  // New messages scroll into view near the bottom; away from it they wait behind a button (T4).
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const follow = useFollowLatest(scrollerRef, thread?.messages.length ?? 0, thread?.messages.at(-1)?.mine ?? false);
 
   async function earlier() {
     const first = thread?.messages[0]?.seq;
@@ -215,27 +214,35 @@ export function SupportThreadView({ id }: { id: string }) {
         actions={<StatusPill status={thread.status} />}
       />
 
-      <section className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-4">
-        {hasEarlier && (
-          <div className="text-center">
-            <button type="button" className={quietButton} onClick={earlier}>
-              {t("common", K.thread.earlier)}
-            </button>
-          </div>
-        )}
-        <ol className="space-y-3">
-          {thread.messages.map((m) => (
-            <MessageBubble
-              key={m.seq}
-              message={m}
-              seen={m.mine && m.seq === lastMine?.seq ? thread.seenUpToSeq >= m.seq : null}
-              time={formatInstant(m.createdAt, lang) ?? ""}
-            />
-          ))}
-        </ol>
-        {agentTyping && <p className="text-xs text-text-secondary">{t("common", K.thread.typing)}</p>}
-        <div ref={endRef} />
-      </section>
+      <div className="relative">
+        <section
+          ref={scrollerRef}
+          onScroll={follow.onScroll}
+          className="max-h-[calc(100dvh-22rem)] min-h-[16rem] space-y-3 overflow-y-auto rounded-2xl border border-card-border bg-card-bg p-4"
+        >
+          {hasEarlier && (
+            <div className="text-center">
+              <button type="button" className={quietButton} onClick={earlier}>
+                {t("common", K.thread.earlier)}
+              </button>
+            </div>
+          )}
+          <ThreadMessages
+            messages={thread.messages}
+            senderOf={(m) => (m.mine ? "me" : m.senderKind)}
+            render={(m, first) => (
+              <MessageBubble
+                message={m}
+                first={first}
+                seen={m.mine && m.seq === lastMine?.seq ? thread.seenUpToSeq >= m.seq : null}
+                time={formatInstant(m.createdAt, lang) ?? ""}
+              />
+            )}
+          />
+          {agentTyping && <TypingDots label={t("common", K.thread.typing)} />}
+        </section>
+        <JumpToLatest follow={follow} />
+      </div>
 
       {filesFailed && actions.canWrite && (
         <KitAlert tone="warning" title={t("common", K.ticket.filesFailedTitle)}>
@@ -269,24 +276,18 @@ export function Frame({ children }: { children: React.ReactNode }) {
   return <div className="mx-auto w-full max-w-3xl space-y-4 p-4 md:p-8">{children}</div>;
 }
 
-function MessageBubble({ message: m, seen, time }: { message: SupportMessage; seen: boolean | null; time: string }) {
+function MessageBubble({ message: m, first, seen, time }: { message: SupportMessage; first: boolean; seen: boolean | null; time: string }) {
   const { t } = useLocale();
   return (
-    <li className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
+    <div className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
       <div className={`max-w-[85%] space-y-1 rounded-2xl px-3 py-2 ${m.mine ? "bg-primary/10" : "bg-bg-inner"}`}>
-        <p className="text-[11px] font-bold text-text-secondary">{t("common", senderKey(m.senderKind, m.mine))}</p>
+        {first && <p className="text-[11px] font-bold text-text-secondary">{t("common", senderKey(m.senderKind, m.mine))}</p>}
         {m.body && (
           <p dir="auto" className="whitespace-pre-wrap break-words text-sm text-text-primary">
             {m.body}
           </p>
         )}
-        {m.attachments.length > 0 && (
-          <ul className="space-y-1">
-            {m.attachments.map((a) => (
-              <AttachmentRow key={a.id} attachment={a} />
-            ))}
-          </ul>
-        )}
+        <AttachmentList attachments={m.attachments} />
         <p className="flex items-center gap-1 text-[11px] text-text-secondary">
           {time}
           {seen !== null && (
@@ -296,51 +297,35 @@ function MessageBubble({ message: m, seen, time }: { message: SupportMessage; se
           )}
         </p>
       </div>
-    </li>
+    </div>
   );
 }
 
-export function AttachmentRow({ attachment: a }: { attachment: SupportAttachment }) {
-  const { t } = useLocale();
-  const size = fileSize(a.sizeBytes);
-  const label = (
-    <>
-      <FileText size={14} aria-hidden />
-      <span dir="auto" className="truncate">
-        {a.fileName}
-      </span>
-      <span className="shrink-0 text-text-secondary">({t("common", size.key, { n: size.n })})</span>
-    </>
-  );
-  if (a.expired) {
-    return <li className="flex items-center gap-1 text-xs text-text-secondary">{label} — {t("common", K.thread.expired)}</li>;
-  }
-  if (a.url) {
-    // Minted on the read, valid five minutes: a stale one fails, and the next read of the thread mints another.
-    return (
-      <li>
-        <a href={a.url} target="_blank" rel="noopener noreferrer" title={t("common", K.thread.open)} className="flex items-center gap-1 text-xs font-bold text-primary hover:underline">
-          {label}
-        </a>
-      </li>
-    );
-  }
-  return (
-    <li className="flex items-center gap-1 text-xs text-text-secondary">
-      {label} — {t("common", SCAN_KEYS[a.scanStatus] ?? K.scan.pending)}
-    </li>
-  );
-}
-
+/**
+ * The user's composer (T4): it grows with its text; Ctrl/⌘+Enter sends and
+ * Enter is a line; a pasted or dropped file joins the message, as support
+ * accepts them (`acceptSupportFiles`).
+ */
 function Composer({ id, onSent }: { id: string; onSent: (m: SupportMessage) => void }) {
   const { t } = useLocale();
   const errorMessage = useApiErrorMessage();
   const [body, setBody] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [refused, setRefused] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const gate = useRef(typingGate(TYPING_EVERY_MS));
   const picker = useRef<HTMLInputElement>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(box, body);
+
+  function addFiles(picked: File[]) {
+    if (picked.length === 0) return;
+    const { accepted, refused: names } = acceptSupportFiles(picked);
+    setFiles((held) => [...held, ...accepted]);
+    setRefused(names);
+  }
+  const drop = useFileDrop(addFiles, busy);
 
   function typed(value: string) {
     setBody(value);
@@ -350,13 +335,14 @@ function Composer({ id, onSent }: { id: string; onSent: (m: SupportMessage) => v
   async function submit(e?: FormEvent) {
     e?.preventDefault();
     const text = body.trim();
-    if (!text && files.length === 0) return;
+    if (busy || (!text && files.length === 0)) return;
     setBusy(true);
     setFailure(null);
     try {
       onSent(files.length > 0 ? await supportApi.attach(id, files, text || undefined) : await supportApi.send(id, text));
       setBody("");
       setFiles([]);
+      setRefused([]);
       gate.current.reset();
     } catch (err) {
       setFailure(errorMessage(err));
@@ -366,33 +352,37 @@ function Composer({ id, onSent }: { id: string; onSent: (m: SupportMessage) => v
   }
 
   return (
-    <form onSubmit={submit} className="space-y-2 rounded-2xl border border-card-border bg-card-bg p-3">
+    <form
+      onSubmit={submit}
+      {...drop.handlers}
+      className={`relative space-y-2 rounded-2xl border p-3 transition-colors ${drop.active ? "border-dashed border-[var(--accent-primary)] bg-[var(--leaf-bg)]" : "border-card-border bg-card-bg"}`}
+    >
+      {drop.active && (
+        <p className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-2xl text-sm font-bold text-primary">{t("common", K.thread.dropFiles)}</p>
+      )}
       <textarea
+        ref={box}
         dir="auto"
-        rows={3}
-        className={input}
+        rows={2}
+        className={`${input} resize-none`}
         placeholder={t("common", K.thread.placeholder)}
         value={body}
         maxLength={SUPPORT_BODY_MAX}
         onChange={(e) => typed(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void submit();
+          if (!isSendKey({ ...e, isComposing: e.nativeEvent.isComposing })) return;
+          e.preventDefault();
+          void submit();
+        }}
+        onPaste={(e) => {
+          const pasted = Array.from(e.clipboardData?.files ?? []);
+          if (pasted.length === 0) return;
+          e.preventDefault();
+          addFiles(pasted);
         }}
       />
-      {files.length > 0 && (
-        <ul className="flex flex-wrap gap-2">
-          {files.map((f, i) => (
-            <li key={`${f.name}-${i}`} className="flex items-center gap-1 rounded-lg bg-bg-inner px-2 py-1 text-xs text-text-primary">
-              <span dir="auto" className="max-w-[12rem] truncate">
-                {f.name}
-              </span>
-              <button type="button" aria-label={t("common", K.thread.removeFile)} onClick={() => setFiles(files.filter((_, j) => j !== i))}>
-                <X size={12} aria-hidden />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <PendingFiles files={files} disabled={busy} onRemove={(i) => setFiles((held) => held.filter((_, j) => j !== i))} />
+      {refused.length > 0 && <Alert>{t("common", K.ticket.filesRefused, { names: refused.join(", ") })}</Alert>}
       {failure && <Alert>{failure}</Alert>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -403,7 +393,7 @@ function Composer({ id, onSent }: { id: string; onSent: (m: SupportMessage) => v
             hidden
             accept={SUPPORT_FILE_TYPES.join(",")}
             onChange={(e) => {
-              setFiles([...files, ...Array.from(e.target.files ?? [])]);
+              addFiles(Array.from(e.target.files ?? []));
               e.target.value = "";
             }}
           />
@@ -413,10 +403,7 @@ function Composer({ id, onSent }: { id: string; onSent: (m: SupportMessage) => v
           </button>
           <span className="text-[11px] text-text-secondary">{t("common", K.thread.attachHint)}</span>
         </div>
-        <button type="submit" className={primaryButton} disabled={busy || (!body.trim() && files.length === 0)}>
-          <Send size={12} className="ltr:rotate-0 rtl:-scale-x-100" aria-hidden />
-          {t("common", K.thread.send)}
-        </button>
+        <SendButton label={t("common", K.thread.send)} busy={busy} disabled={!body.trim() && files.length === 0} />
       </div>
     </form>
   );
@@ -480,21 +467,7 @@ function RatingForm({ id, onRated }: { id: string; onRated: (r: NonNullable<Supp
   return (
     <form onSubmit={submit} className="space-y-2 rounded-2xl border border-card-border bg-card-bg p-3">
       <p className="text-sm font-bold text-text-primary">{t("common", K.rating.title)}</p>
-      <div className="flex gap-1" role="radiogroup" aria-label={t("common", K.rating.title)}>
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button
-            key={n}
-            type="button"
-            role="radio"
-            aria-checked={score === n}
-            aria-label={t("common", K.rating.star, { n })}
-            onClick={() => setScore(n)}
-            className="p-0.5"
-          >
-            <Star size={20} className={n <= score ? "fill-primary text-primary" : "text-text-secondary"} aria-hidden />
-          </button>
-        ))}
-      </div>
+      <StarRating value={score} onChange={setScore} label={t("common", K.rating.title)} starLabel={(n) => t("common", K.rating.star, { n })} />
       <input dir="auto" className={input} placeholder={t("common", K.rating.comment)} maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)} />
       {failure && <Alert>{failure}</Alert>}
       <button type="submit" className={primaryButton} disabled={busy || score < 1}>
