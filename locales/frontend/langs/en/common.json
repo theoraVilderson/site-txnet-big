@@ -4056,6 +4056,34 @@
       }
     }
   },
+  "sessions": {
+    "title": "Active sessions",
+    "hint": "Devices and bots signed in to this account right now. End any you do not recognise.",
+    "thisDevice": "This device",
+    "lastActive": "Last active: {{when}}",
+    "device": "{{browser}} on {{os}}",
+    "unknownDevice": "Unknown browser",
+    "surface": {
+      "telegram": "Telegram bot",
+      "bale": "Bale bot"
+    },
+    "terminate": "End",
+    "terminateOthers": "End all other sessions",
+    "confirm": {
+      "title": "End this session?",
+      "body": "That device is signed out, and this account is taken off that device's account list too.",
+      "bot": "This account is also disconnected from that bot. Until you sign in there again, notices and sign-in codes will not come from it.",
+      "othersTitle": "End all other sessions?",
+      "othersBody": "Every device and bot except this one is signed out, and the bots are disconnected too.",
+      "yes": "Yes, end it",
+      "no": "Cancel"
+    },
+    "ended": "The session was ended.",
+    "endedOthers": "{{count}} session(s) ended.",
+    "none": "You have no other active sessions.",
+    "loadFailed": "We could not load your sessions.",
+    "reload": "Try again"
+  },
   "ai": {
     "title": "AI",
     "subtitle": "Who may not renew, what the engine suggests, and whether it earns more than staying quiet.",

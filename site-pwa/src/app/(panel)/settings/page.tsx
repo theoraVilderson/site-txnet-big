@@ -10,12 +10,14 @@ import { EmailSection } from "./_components/EmailSection";
 import { canPinRates, canSetPlatformCurrency } from "./_lib/settings";
 import { MessengerSection } from "./_components/MessengerSection";
 import { NotificationsSection } from "./_components/NotificationsSection";
+import { SessionsSection } from "./_components/SessionsSection";
 import { TimeZoneSection } from "./_components/TimeZoneSection";
 
 /**
  * The user's own account settings: the email address (F-035-j), then which
  * service notices they are told and their quiet hours (F-601-m), and which
- * messenger tells them (F-601-u), and their time zone (TZ-1-e). The
+ * messenger tells them (F-601-u), their time zone (TZ-1-e), and every place
+ * the account is signed in, with ending the others (SES-1-b). The
  * sidebar's `settings` entry points here.
  *
  * The platform's own operating currency (F-116-h) is here too, for its staff
@@ -42,6 +44,7 @@ export default function SettingsPage() {
       <TimeZoneSection />
       <NotificationsSection />
       <MessengerSection />
+      <SessionsSection />
       {me && canSetPlatformCurrency(me) && <OperatingCurrencyCard tenantId={me.tenant.id} scope="platform" />}
       {me && canSetPlatformCurrency(me) && <TenantTimeZoneCard tenantId={me.tenant.id} scope="platform" />}
       {me && canPinRates(me) && (

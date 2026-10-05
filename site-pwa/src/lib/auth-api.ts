@@ -277,6 +277,15 @@ export type MeMessenger = { messenger: NoticeMessenger; chosen: boolean; linked:
 
 /** The caller's own zone and the one their dates are drawn in (TZ-1-c, auth-api `contract.time-zone.md`); `applied` on a save. */
 export type MeTimeZone = { timezone: string | null; source: TimeZoneSource | null; resolved: ResolvedTimeZone; applied?: boolean };
+/** One place the account is signed in (SES-1-a): a browser, or a bot chat with its Mini App. `id` is opaque. */
+export type ActiveSession = {
+  id: string;
+  current: boolean;
+  surface: "web" | "telegram" | "bale";
+  ipAddress: string | null;
+  userAgent: string | null;
+  lastActiveAt: string;
+};
 
 export const authApi = {
   async loginPassword(identifier: string, password: string, captchaToken: string) {
@@ -397,6 +406,11 @@ export const authApi = {
   async timeZone() { return request<MeTimeZone>("/auth/me/timezone", { method: "GET" }); },
   /** `user` picks (null clears the pick); `browser` reports, and is not stored over a pick (`applied: false`). */
   async saveTimeZone(zone: string | null, source: TimeZoneSource) { return request<MeTimeZone>("/auth/me/timezone", { method: "PUT", body: JSON.stringify({ zone, source }) }); },
+  /** Every place this account is signed in, the current one first (SES-1-a). */
+  async activeSessions() { return request<{ sessions: ActiveSession[] }>("/auth/sessions", { method: "GET" }); },
+  /** End that place for good: its sessions, its switcher entry, and — on a bot chat — this account's link to it. */
+  async terminateSession(id: string) { return request<{ terminated: number }>("/auth/sessions/terminate", { method: "POST", body: JSON.stringify({ id }) }); },
+  async terminateOtherSessions() { return request<{ terminated: number }>("/auth/sessions/terminate-others", { method: "POST" }); },
   /** The one refresh every client and the socket run (see `credentialRefresh`). */
   refreshCredential,
   /** Hold every tokenless call until `releaseSessionHold` — the panel's page load (see `sessionHold`). */
