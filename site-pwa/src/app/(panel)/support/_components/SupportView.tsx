@@ -1,63 +1,107 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Headphones, Plus, RotateCw } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Headphones, Inbox, Plus, RotateCw, Search, SearchX } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { PANEL_SUPPORT, panelSupportThreadPath } from "@/lib/routes";
-import {
-  SUPPORT_BODY_MAX,
-  supportApi,
-  type SupportAvailability,
-  type SupportCategory,
-  type SupportConversation,
-} from "@/lib/support-api";
-import { formatInstant } from "../../_lib/datetime";
+import { supportApi, type SupportAvailability, type SupportConversation, type SupportCounts, type SupportListedConversation } from "@/lib/support-api";
+import { formatInstant, formatRelative } from "../../_lib/datetime";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
-import { Alert, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
-import { STATUS_KEYS, SUPPORT_KEYS as K } from "../_lib/support";
-import { SupportGuideSuggestions } from "./SupportGuideSuggestions";
+import { Alert, Button, EmptyState, Input, StatusPill as KitStatusPill, Tabs, type Tone } from "../../_components/kit";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import {
+  SEARCH_MAX,
+  SEARCH_MIN,
+  STATUS_KEYS,
+  SUPPORT_KEYS as K,
+  TICKET_TABS,
+  readTicketTab,
+  tabCount,
+  tabStatuses,
+  type TicketTab,
+} from "../_lib/support";
+import { NewTicketSheet } from "./NewTicketSheet";
+
+/** Typing rests this long before the search goes to the URL, and so to the server (T2). */
+const SEARCH_REST_MS = 300;
+
+const TAB_KEYS: Record<TicketTab, string> = K.tabs;
 
 /**
- * The user's support (F-033-o): their conversations, newest activity first,
- * and a new one. support-service decides everything — whose threads, the
- * status, live or async; this page lists, opens and links.
+ * The user's tickets (F-033-o; UX-1-w, `contract.ux.md` T2–T3): tabs by status
+ * with the server's counts, a search, newest activity first, and a new ticket
+ * in a sheet. The tab and the search live in the URL (`?status=&q=`) and are
+ * the server's to apply (UX-1-v) — the browser holds one page of 30 and would
+ * filter only that.
  */
 export function SupportView() {
   const { lang, t } = useLocale();
   const errorMessage = useApiErrorMessage();
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
 
-  const [items, setItems] = useState<SupportConversation[] | null>(null);
-  const [nextBefore, setNextBefore] = useState<string | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  const tab = readTicketTab(params.get("status"));
+  const q = params.get("q") ?? "";
+  const [typed, setTyped] = useState(q);
+
+  const [counts, setCounts] = useState<SupportCounts | null>(null);
   const [asked, setAsked] = useState(0);
   const reload = useCallback(() => setAsked((n) => n + 1), []);
+  // What is held answers one tab, search and reload; another one reads as loading until its own lands.
+  const listKey = `${tab}|${q}|${asked}`;
+  const [held, setHeld] = useState<{ key: string; items: SupportListedConversation[]; nextBefore: string | null } | null>(null);
+  const [failed, setFailed] = useState<{ key: string; error: unknown } | null>(null);
+  const items = held?.key === listKey ? held.items : null;
+  const nextBefore = held?.key === listKey ? held.nextBefore : null;
+  const error = failed?.key === listKey ? failed.error : null;
   const [availability, setAvailability] = useState<SupportAvailability | null>(null);
-  // `?new=1` (the palette's "new ticket", UX-1-n) opens the form; closing it drops the query.
-  const askedNew = useSearchParams().get("new") === "1";
+
+  // `?new=1` (the palette's "new ticket", UX-1-n) opens the sheet; closing it drops the query.
+  const askedNew = params.get("new") === "1";
   const [opened, setOpened] = useState(false);
   const composing = opened || askedNew;
-  const setComposing = (next: boolean) => {
-    setOpened(next);
-    if (!next && askedNew) router.replace(PANEL_SUPPORT, { scroll: false });
+  const closeComposer = () => {
+    setOpened(false);
+    if (askedNew) router.replace(PANEL_SUPPORT, { scroll: false });
   };
+
+  // The search box, rested, becomes `?q=` — below support's floor it is no search at all.
+  useEffect(() => {
+    const want = typed.trim().length >= SEARCH_MIN ? typed.trim() : "";
+    if (want === q) return;
+    const timer = setTimeout(() => {
+      const next = new URLSearchParams(params.toString());
+      if (want) next.set("q", want);
+      else next.delete("q");
+      const query = next.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    }, SEARCH_REST_MS);
+    return () => clearTimeout(timer);
+  }, [typed, q, params, pathname, router]);
 
   useEffect(() => {
     let alive = true;
+    const key = `${tab}|${q}|${asked}`;
     supportApi
-      .list()
-      .then((page) => {
-        if (!alive) return;
-        setItems(page.items);
-        setNextBefore(page.nextBefore);
-        setError(null);
-      })
-      .catch((e) => alive && setError(e));
-    // The wait notice is a courtesy: a failed read shows none, never an error.
+      .list({ status: tabStatuses(tab), q: q || undefined })
+      .then((page) => alive && setHeld({ key, items: page.items, nextBefore: page.nextBefore }))
+      .catch((e) => alive && setFailed({ key, error: e }));
+    return () => {
+      alive = false;
+    };
+  }, [tab, q, asked]);
+
+  useEffect(() => {
+    let alive = true;
+    // Counts and the wait notice are courtesies: a failed read shows none, never an error.
+    supportApi
+      .counts()
+      .then((c) => alive && setCounts(c))
+      .catch(() => undefined);
     supportApi
       .availability()
       .then((a) => alive && setAvailability(a))
@@ -69,94 +113,147 @@ export function SupportView() {
 
   async function more() {
     if (!nextBefore) return;
+    const key = listKey;
     try {
-      const page = await supportApi.list(nextBefore);
-      setItems((held) => [...(held ?? []), ...page.items.filter((c) => !held?.some((h) => h.id === c.id))]);
-      setNextBefore(page.nextBefore);
+      const page = await supportApi.list({ before: nextBefore, status: tabStatuses(tab), q: q || undefined });
+      setHeld((h) =>
+        h?.key === key ? { key, items: [...h.items, ...page.items.filter((c) => !h.items.some((i) => i.id === c.id))], nextBefore: page.nextBefore } : h,
+      );
     } catch (e) {
-      setError(e);
+      setFailed({ key, error: e });
     }
   }
 
+  const filtered = tab !== "all" || q !== "";
+  const newTicket = (
+    <Button icon={<Plus size={16} aria-hidden />} onClick={() => setOpened(true)}>
+      {t("common", K.newConversation)}
+    </Button>
+  );
+
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
-      <PageHeader
-        icon={Headphones}
-        title={t("common", K.title)}
-        subtitle={t("common", K.subtitle)}
-        actions={
-          <>
-            {!composing && (
-              <button type="button" className={primaryButton} onClick={() => setComposing(true)}>
-                <Plus size={14} aria-hidden />
-                {t("common", K.newConversation)}
-              </button>
-            )}
-          </>
-        }
-      />
+    <div className="mx-auto w-full max-w-4xl space-y-5 p-4 md:p-8">
+      <PageHeader icon={Headphones} title={t("common", K.title)} subtitle={t("common", K.subtitle)} actions={newTicket} />
 
       {availability && <AvailabilityNotice availability={availability} />}
 
-      {composing && (
-        <NewConversation
-          onCancel={() => setComposing(false)}
-          onOpened={(c) => router.push(panelSupportThreadPath(c.id))}
+      <div className="space-y-3">
+        <Tabs<TicketTab>
+          ariaLabel={t("common", K.tabs.label)}
+          urlParam="status"
+          variant="pills"
+          tabs={TICKET_TABS.map((value) => ({
+            value,
+            label: t("common", TAB_KEYS[value]),
+            badge: counts ? String(tabCount(value, counts)) : undefined,
+          }))}
         />
-      )}
+        <Input
+          type="search"
+          dir="auto"
+          aria-label={t("common", K.search.label)}
+          placeholder={t("common", K.search.placeholder)}
+          maxLength={SEARCH_MAX}
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          end={<Search size={16} className="text-text-secondary" aria-hidden />}
+        />
+      </div>
 
       {error && !items ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <Alert>{errorMessage(error)}</Alert>
-          <button type="button" className={quietButton} onClick={reload}>
-            <RotateCw size={12} aria-hidden />
-            {t("common", K.retry)}
-          </button>
-        </div>
+        <Alert
+          tone="error"
+          action={
+            <Button variant="quiet" size="sm" icon={<RotateCw size={14} aria-hidden />} onClick={reload}>
+              {t("common", K.retry)}
+            </Button>
+          }
+        >
+          {errorMessage(error)}
+        </Alert>
       ) : items === null ? (
         <TableSkeleton rows={4} columns={2} withPagination={false} />
       ) : items.length === 0 ? (
-        <p className="rounded-2xl border border-card-border bg-card-bg p-6 text-sm text-text-secondary">{t("common", K.empty)}</p>
+        filtered ? (
+          <EmptyState icon={SearchX} title={t("common", K.emptyFiltered)} />
+        ) : (
+          <EmptyState icon={Inbox} title={t("common", K.empty)} action={newTicket} />
+        )
       ) : (
         <>
           <ul className="divide-y divide-card-border overflow-hidden rounded-2xl border border-card-border bg-card-bg">
             {items.map((c) => (
-              <li key={c.id}>
-                <Link href={panelSupportThreadPath(c.id)} className="flex flex-wrap items-center justify-between gap-2 p-4 hover:bg-bg-inner">
-                  <div className="min-w-0">
-                    <p dir="auto" className={`truncate text-sm text-text-primary ${c.unread > 0 ? "font-bold" : ""}`}>
-                      {c.subject}
-                    </p>
-                    <p className="mt-0.5 text-xs text-text-secondary">
-                      {t("common", K.lastActivity, { time: formatInstant(c.lastMessageAt, lang) ?? "" })}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {c.unread > 0 && (
-                      <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-on-accent">{t("common", K.unread, { n: c.unread })}</span>
-                    )}
-                    <StatusPill status={c.status} />
-                  </div>
-                </Link>
-              </li>
+              <TicketRow key={c.id} conversation={c} lang={lang} />
             ))}
           </ul>
           {nextBefore && (
-            <button type="button" className={quietButton} onClick={more}>
+            <Button variant="quiet" onClick={more}>
               {t("common", K.more)}
-            </button>
+            </Button>
           )}
-          {error !== null && <Alert>{errorMessage(error)}</Alert>}
+          {error !== null && <Alert tone="error">{errorMessage(error)}</Alert>}
         </>
       )}
+
+      <NewTicketSheet
+        open={composing}
+        onClose={closeComposer}
+        onOpened={(c, { filesFailed }) => {
+          setOpened(false);
+          router.push(`${panelSupportThreadPath(c.id)}${filesFailed ? "?files=failed" : ""}`);
+        }}
+      />
     </div>
   );
 }
 
+/** One ticket: its status, an unread dot, the subject, the last line and how long ago (T2). */
+function TicketRow({ conversation: c, lang }: { conversation: SupportListedConversation; lang: string }) {
+  const { t } = useLocale();
+  const unread = c.unread > 0;
+  return (
+    <li>
+      <Link href={panelSupportThreadPath(c.id)} className="flex items-start gap-3 p-4 transition-colors hover:bg-bg-inner">
+        <span className="mt-1.5 flex size-2.5 shrink-0 items-center justify-center">
+          {unread && <span role="img" aria-label={t("common", K.unread, { n: c.unread })} className="size-2.5 rounded-full bg-primary" />}
+        </span>
+        <span className="min-w-0 flex-1 space-y-1">
+          <span className="flex items-center justify-between gap-2">
+            <span dir="auto" className={`truncate text-sm text-text-primary ${unread ? "font-bold" : "font-medium"}`}>
+              {c.subject}
+            </span>
+            <time dateTime={c.lastMessageAt} title={formatInstant(c.lastMessageAt, lang) ?? undefined} className="shrink-0 text-[11px] text-text-secondary">
+              {formatRelative(c.lastMessageAt, lang)}
+            </time>
+          </span>
+          <span className="flex items-center justify-between gap-2">
+            <span dir="auto" className={`truncate text-xs ${unread ? "text-text-primary" : "text-text-secondary"}`}>
+              {c.lastLine ?? t("common", K.noMessage)}
+            </span>
+            <StatusPill status={c.status} />
+          </span>
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+/** The user's words for a status, on the kit pill: theirs to act on is `warning`, settled is `success`. */
+const STATUS_TONE: Record<SupportConversation["status"], Tone> = {
+  open: "info",
+  pending_agent: "info",
+  pending_user: "warning",
+  resolved: "success",
+  closed: "neutral",
+};
+
 export function StatusPill({ status }: { status: SupportConversation["status"] }) {
   const { t } = useLocale();
-  const tone = status === "pending_user" ? "bg-primary/10 text-primary" : "bg-bg-inner text-text-secondary";
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${tone}`}>{t("common", STATUS_KEYS[status] ?? K.status.open)}</span>;
+  return (
+    <KitStatusPill tone={STATUS_TONE[status] ?? "neutral"} className="shrink-0">
+      {t("common", STATUS_KEYS[status] ?? K.status.open)}
+    </KitStatusPill>
+  );
 }
 
 /** Live now, or when an answer can be expected (F-033-g). */
@@ -172,75 +269,5 @@ export function AvailabilityNotice({ availability }: { availability: SupportAvai
       <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${availability.live ? "bg-success" : "bg-text-secondary/40"}`} aria-hidden />
       {text}
     </p>
-  );
-}
-
-function NewConversation({ onCancel, onOpened }: { onCancel: () => void; onOpened: (c: SupportConversation) => void }) {
-  const { t } = useLocale();
-  const errorMessage = useApiErrorMessage();
-  const [categories, setCategories] = useState<SupportCategory[]>([]);
-  const [categoryId, setCategoryId] = useState("");
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-
-  useEffect(() => {
-    supportApi
-      .categories()
-      .then(setCategories)
-      .catch(() => undefined);
-  }, []);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!body.trim()) return;
-    setBusy(true);
-    setFailure(null);
-    try {
-      onOpened(await supportApi.open({ body, subject: subject.trim() || undefined, categoryId: categoryId || undefined }));
-    } catch (err) {
-      setFailure(errorMessage(err));
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-4">
-      <h2 className="text-base font-bold text-text-primary">{t("common", K.form.title)}</h2>
-      {categories.length > 0 && (
-        <label className="block text-xs font-bold text-text-primary">
-          {t("common", K.form.category)}
-          <select className={`${input} mt-1`} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-            <option value="">{t("common", K.form.categoryNone)}</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      <label className="block text-xs font-bold text-text-primary">
-        {t("common", K.form.subject)}
-        <input dir="auto" className={`${input} mt-1`} value={subject} maxLength={120} onChange={(e) => setSubject(e.target.value)} />
-        <span className="mt-1 block font-normal text-text-secondary">{t("common", K.form.subjectHint)}</span>
-      </label>
-      <label className="block text-xs font-bold text-text-primary">
-        {t("common", K.form.body)}
-        <textarea dir="auto" required rows={5} className={`${input} mt-1`} value={body} maxLength={SUPPORT_BODY_MAX} onChange={(e) => setBody(e.target.value)} />
-      </label>
-      {/* F-414-k: guides that may already answer it — offered, never in the way of sending. */}
-      <SupportGuideSuggestions subject={subject} body={body} />
-      {failure && <Alert>{failure}</Alert>}
-      <div className="flex items-center gap-2">
-        <button type="submit" className={primaryButton} disabled={busy || !body.trim()}>
-          {t("common", K.form.submit)}
-        </button>
-        <button type="button" className={quietButton} onClick={onCancel} disabled={busy}>
-          {t("common", K.form.cancel)}
-        </button>
-      </div>
-    </form>
   );
 }

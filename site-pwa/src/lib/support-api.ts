@@ -40,6 +40,14 @@ export interface SupportConversation {
   rating: SupportRating | null;
 }
 
+/** A row of the user's list: the first line of the newest message they can see, `null` for files only (UX-1-w). */
+export interface SupportListedConversation extends SupportConversation {
+  lastLine: string | null;
+}
+
+/** `GET …/conversations/counts`: every status, zeros included (UX-1-v). */
+export type SupportCounts = Record<ConversationStatus, number>;
+
 /** `AttachmentView`. `url` is a path on this Host, valid five minutes from the read. */
 export interface SupportAttachment {
   id: string;
@@ -119,9 +127,12 @@ export const supportApi = {
   availability(): Promise<SupportAvailability> {
     return call<SupportAvailability>("/availability", { method: "GET" });
   },
-  /** Newest activity first; `nextBefore` pages further back. */
-  list(before?: string): Promise<{ items: SupportConversation[]; nextBefore: string | null }> {
-    return call(`/conversations${query({ before, limit: 30 })}`, { method: "GET" });
+  /** Newest activity first; `nextBefore` pages further back. `status` and `q` filter on the server (UX-1-v). */
+  list(at: { before?: string; status?: readonly ConversationStatus[]; q?: string } = {}): Promise<{ items: SupportListedConversation[]; nextBefore: string | null }> {
+    return call(`/conversations${query({ before: at.before, status: at.status?.join(","), q: at.q, limit: 30 })}`, { method: "GET" });
+  },
+  counts(): Promise<SupportCounts> {
+    return call<SupportCounts>("/conversations/counts", { method: "GET" });
   },
   /** The caller's threads matching `q` (2–64, UX-1-v): the subject and the messages they see. The palette's tickets (UX-1-o). */
   search(q: string, limit = 8): Promise<{ items: SupportConversation[]; nextBefore: string | null }> {

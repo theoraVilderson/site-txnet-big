@@ -57,3 +57,33 @@ export function formatInstant(
     return instant;
   }
 }
+
+const RELATIVE_STEPS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+  ["second", 60],
+  ["minute", 60],
+  ["hour", 24],
+  ["day", 7],
+];
+
+/**
+ * "5 minutes ago", "yesterday" — in `Intl`'s own words for the language; past
+ * a week it is the date, as `formatInstant` draws it (UX-1-w: a ticket row).
+ * `title` the row with `formatInstant` when the exact time matters.
+ */
+export function formatRelative(instant: string | null | undefined, lang: string, now: number = Date.now()): string | null {
+  if (!instant) return null;
+  const at = new Date(instant).getTime();
+  if (Number.isNaN(at)) return null;
+  let value = Math.round((at - now) / 1000);
+  for (const [unit, size] of RELATIVE_STEPS) {
+    if (Math.abs(value) < size) {
+      try {
+        return new Intl.RelativeTimeFormat(numberLocale(lang), { numeric: "auto" }).format(value, unit);
+      } catch {
+        return formatInstant(instant, lang);
+      }
+    }
+    value = Math.round(value / size);
+  }
+  return formatInstant(instant, lang, { withTime: false });
+}

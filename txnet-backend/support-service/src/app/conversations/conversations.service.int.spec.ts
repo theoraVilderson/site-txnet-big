@@ -13,7 +13,8 @@
  *    refuses (invariant 7);
  *  - a send in a month with no partition still lands (point 3);
  *  - the list's `status` and `q` filters and the per-status counts see only
- *    the caller's threads, and `q` never matches an internal note (UX-1-v).
+ *    the caller's threads, and `q` never matches an internal note (UX-1-v);
+ *  - a row's last line is never an internal note's (UX-1-w).
  *
  *   npm run test:int
  */
@@ -40,6 +41,7 @@ const ARASH: SupportCaller = { tenantId: RESELLER_A, userId: '33333333-3333-4333
 const ROYA: SupportCaller = { tenantId: RESELLER_A, userId: '33333333-3333-4333-8333-3333333333a4' };
 const NIMA: SupportCaller = { tenantId: RESELLER_A, userId: '33333333-3333-4333-8333-3333333333a5' };
 const KIAN: SupportCaller = { tenantId: RESELLER_A, userId: '33333333-3333-4333-8333-3333333333a6' };
+const LEYLA: SupportCaller = { tenantId: RESELLER_A, userId: '33333333-3333-4333-8333-3333333333a7' };
 const BEHNAZ: SupportCaller = { tenantId: RESELLER_B, userId: '33333333-3333-4333-8333-3333333333b1' };
 const AGENT = '44444444-4444-4444-8444-444444444441';
 
@@ -243,5 +245,17 @@ describe('filtering the list (UX-1-v, panel-web contract.ux.md T1)', () => {
     expect(await ids({ status: ['closed'], q: 'thanks' })).toEqual([]);
 
     expect(await as(NIMA, () => support.counts(NIMA))).toEqual({ open: 1, pending_agent: 0, pending_user: 1, resolved: 1, closed: 0 });
+  });
+
+  it("shows each row's newest visible message as one line — an internal note never (UX-1-w, contract.ux.md T2)", async () => {
+    const a = await as(LEYLA, () => support.open(LEYLA, { body: '  first words\nsecond line', subject: 'Lines' }));
+    const b = await as(LEYLA, () => support.open(LEYLA, { body: 'asked once', subject: 'Noted' }));
+    await agentWrites(a.id, 'We are on it\nmore detail');
+    await agentWrites(b.id, 'note: only staff see this', true);
+
+    const items = (await as(LEYLA, () => support.list(LEYLA, {}))).items;
+    const line = (id: string) => items.find((c) => c.id === id)?.lastLine;
+    expect(line(a.id)).toBe('We are on it');
+    expect(line(b.id)).toBe('asked once');
   });
 });

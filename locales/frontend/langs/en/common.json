@@ -4943,6 +4943,41 @@
       "comment": "Comment (optional)",
       "submit": "Rate",
       "yours": "Your rating: {{n}} of 5"
+    },
+    "tabs": {
+      "label": "Tickets by status",
+      "all": "All",
+      "open": "Open",
+      "waiting": "Waiting for you",
+      "resolved": "Resolved",
+      "closed": "Closed"
+    },
+    "search": {
+      "label": "Search your tickets",
+      "placeholder": "Search subjects and messages…"
+    },
+    "emptyFiltered": "No ticket matches this.",
+    "noMessage": "Files only",
+    "ticket": {
+      "title": "New ticket",
+      "stepCategory": "Topic",
+      "stepCategoryHint": "What is it about?",
+      "stepMessage": "Your message",
+      "stepMessageHint": "Subject, message and files",
+      "stepGuides": "Before you send",
+      "stepGuidesHint": "Guides that may answer it",
+      "categoryRequired": "Choose a topic.",
+      "bodyRequired": "Write your message.",
+      "files": "Files",
+      "filesDrop": "Drop files here, or choose them",
+      "filesRefused": "Only images (PNG, JPEG, WebP) and PDF can be attached: {{names}}",
+      "noGuides": "No guide matched your message. Send it and the team will answer.",
+      "send": "Send the ticket",
+      "solved": "This solved it",
+      "solvedToast": "Glad it is sorted — nothing was sent.",
+      "closeQuestion": "Close this ticket without sending it?",
+      "filesFailedTitle": "Your ticket was sent without its files",
+      "filesFailed": "Attach them again below."
     }
   },
   "supportAgent": {

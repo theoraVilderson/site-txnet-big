@@ -53,6 +53,11 @@ export interface ConversationSummary {
   rating: { score: number; comment: string | null; ratedAt: Date } | null;
 }
 
+/** A row of the user's list: the summary and the first line of the newest message they can see (UX-1-w). */
+export interface ListedConversation extends ConversationSummary {
+  lastLine: string | null;
+}
+
 export interface MessageView {
   id: string;
   seq: number;
@@ -217,7 +222,7 @@ export class SupportConversationService {
   async list(
     caller: SupportCaller,
     query: { before?: Date; limit?: number; status?: ConversationStatus[]; q?: string },
-  ): Promise<{ items: ConversationSummary[]; nextBefore: Date | null }> {
+  ): Promise<{ items: ListedConversation[]; nextBefore: Date | null }> {
     const limit = Math.min(query.limit ?? LIST_DEFAULT, PAGE_MAX);
     const q = query.q ? { contains: query.q.replace(/[\\%_]/g, (c) => `\\${c}`), mode: 'insensitive' as const } : null;
     return tenantTransaction(this.prisma, async (tx) => {
@@ -232,9 +237,10 @@ export class SupportConversationService {
         take: limit + 1,
       });
       const page = rows.slice(0, limit);
-      const unread = await unreadCounts(tx, caller, page.map((c) => c.id));
+      const ids = page.map((c) => c.id);
+      const [unread, lines] = await Promise.all([unreadCounts(tx, caller, ids), lastLines(tx, ids)]);
       return {
-        items: page.map((c) => summaryOf(c, unread.get(c.id) ?? 0)),
+        items: page.map((c) => ({ ...summaryOf(c, unread.get(c.id) ?? 0), lastLine: lines.get(c.id) ?? null })),
         nextBefore: rows.length > limit ? page[page.length - 1].lastMessageAt : null,
       };
     });
@@ -507,6 +513,23 @@ export async function unreadCounts(
        AND m.seq > COALESCE(r."lastReadSeq", 0)
      GROUP BY m."conversationId"`;
   return new Map(rows.map((r) => [r.conversationId, Number(r.unread)]));
+}
+
+/**
+ * Per conversation, the first line of the newest message with text that a
+ * user may see — never an internal note (invariant 5). A message of files
+ * only is passed over for the one before it.
+ */
+async function lastLines(tx: Prisma.TransactionClient, ids: string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const rows = await tx.$queryRaw<{ conversationId: string; body: string }[]>`
+    SELECT DISTINCT ON (m."conversationId") m."conversationId"::text AS "conversationId", m.body
+      FROM support.message m
+     WHERE m."conversationId" IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))})
+       AND m.internal = false
+       AND btrim(m.body) <> ''
+     ORDER BY m."conversationId", m.seq DESC`;
+  return new Map(rows.map((r) => [r.conversationId, subjectFrom(r.body)]));
 }
 
 /** The first line of the body, trimmed to a subject's length. */

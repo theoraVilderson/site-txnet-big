@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { Check, CheckCheck, FileText, Paperclip, RotateCw, Send, Star, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
@@ -31,6 +32,7 @@ import {
 } from "../_lib/support";
 import { StatusPill } from "./SupportView";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { Alert as KitAlert } from "../../_components/kit/Alert";
 
 /** Below the server's ~6s hold, so a steady typist never flickers off. */
 const TYPING_EVERY_MS = 4_000;
@@ -56,6 +58,8 @@ export function SupportThreadView({ id }: { id: string }) {
   const [asked, setAsked] = useState(0);
   const reload = useCallback(() => setAsked((n) => n + 1), []);
   const [now, setNow] = useState(() => Date.now());
+  // A new ticket's files that did not go with it (UX-1-w, T3) — said until some are sent.
+  const [filesFailed, setFilesFailed] = useState(useSearchParams().get("files") === "failed");
 
   // The latest page: on mount, on reload, and after a reopen. It also carries a fresh channel proof.
   useEffect(() => {
@@ -233,12 +237,18 @@ export function SupportThreadView({ id }: { id: string }) {
         <div ref={endRef} />
       </section>
 
+      {filesFailed && actions.canWrite && (
+        <KitAlert tone="warning" title={t("common", K.ticket.filesFailedTitle)}>
+          {t("common", K.ticket.filesFailed)}
+        </KitAlert>
+      )}
       {thread.status === "resolved" && <p className="text-xs text-text-secondary">{t("common", K.thread.resolved)}</p>}
       {actions.canWrite ? (
         <Composer
           id={id}
           onSent={(m) => {
             setThread((s) => s && { ...s, messages: mergeMessages(s.messages, [m]) });
+            if (m.attachments.length > 0) setFilesFailed(false);
             setLastReadSeq((n) => Math.max(n, m.seq));
             // The status moved server-side (a resolved thread reopens); the channel may not be there to say so.
             void catchUp();

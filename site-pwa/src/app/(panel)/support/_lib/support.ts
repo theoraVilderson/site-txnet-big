@@ -1,5 +1,5 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import type { ConversationStatus, ScanStatus, SupportMessage, SupportRating } from "@/lib/support-api";
+import { SUPPORT_FILE_TYPES, type ConversationStatus, type ScanStatus, type SupportCounts, type SupportMessage, type SupportRating } from "@/lib/support-api";
 
 /** The page's strings as generated constants (C-06). */
 export const SUPPORT_KEYS = FrontendI18nKeys.common.support;
@@ -150,4 +150,38 @@ export function typingGate(intervalMs: number) {
 export function fileSize(bytes: number): { key: string; n: string } {
   if (bytes < 1024 * 1024) return { key: K.thread.sizeKb, n: String(Math.max(1, Math.round(bytes / 1024))) };
   return { key: K.thread.sizeMb, n: (bytes / (1024 * 1024)).toFixed(1) };
+}
+
+/** The list's tabs (UX-1-w, `contract.ux.md` T2), in their order on screen. */
+export const TICKET_TABS = ["all", "open", "waiting", "resolved", "closed"] as const;
+export type TicketTab = (typeof TICKET_TABS)[number];
+
+/** What each tab lists and counts; `all` filters nothing. "Open" is ours to answer, "waiting" is the user's. */
+const TAB_STATUSES: Record<TicketTab, readonly ConversationStatus[] | undefined> = {
+  all: undefined,
+  open: ["open", "pending_agent"],
+  waiting: ["pending_user"],
+  resolved: ["resolved"],
+  closed: ["closed"],
+};
+
+export const tabStatuses = (tab: TicketTab) => TAB_STATUSES[tab];
+
+/** `?status=` as a tab; anything else is the first tab, as the kit `Tabs` reads it. */
+export const readTicketTab = (v: string | null): TicketTab => (TICKET_TABS as readonly string[]).includes(v ?? "") ? (v as TicketTab) : "all";
+
+export function tabCount(tab: TicketTab, counts: SupportCounts): number {
+  const statuses = TAB_STATUSES[tab] ?? (Object.keys(counts) as ConversationStatus[]);
+  return statuses.reduce((sum, s) => sum + (counts[s] ?? 0), 0);
+}
+
+/** Search starts at support's own floor (`q`: 2–64). */
+export const SEARCH_MIN = 2;
+export const SEARCH_MAX = 64;
+
+/** Split picked files into what support accepts and the names it would refuse (`file_rejected`). */
+export function acceptSupportFiles(files: readonly File[]): { accepted: File[]; refused: string[] } {
+  const types: readonly string[] = SUPPORT_FILE_TYPES;
+  const accepted = files.filter((f) => types.includes(f.type));
+  return { accepted, refused: files.filter((f) => !types.includes(f.type)).map((f) => f.name) };
 }

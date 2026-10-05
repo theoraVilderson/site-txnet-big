@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BookOpen, ChevronDown } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -24,9 +24,10 @@ type Offered = { key: string; lang: string; title: string };
  * the guides placed on the support section first, then — once typing rests —
  * the ones the subject and message match (`suggest`, any word). Each opens in
  * place. An offer, never a gate: nothing here stops the form being sent, and
- * a failed read shows nothing rather than an error over the form.
+ * a failed read shows nothing rather than an error over the form. `empty` is
+ * what stands in when nothing is offered (the new ticket's last step, UX-1-w).
  */
-export function SupportGuideSuggestions({ subject, body }: { subject: string; body: string }) {
+export function SupportGuideSuggestions({ subject, body, empty = null }: { subject: string; body: string; empty?: ReactNode }) {
   const { t } = useLocale();
   const placed = useSlotGuides("route:support", () => guideReadApi.forSlot("route", "support"));
   const q = supportGuideQuery(subject, body);
@@ -49,7 +50,7 @@ export function SupportGuideSuggestions({ subject, body }: { subject: string; bo
 
   const hits = q && matched?.q === q ? matched.hits : [];
   const offered: Offered[] = (hits.length > 0 ? hits : (placed.guides ?? [])).slice(0, SHOWN);
-  if (offered.length === 0) return null;
+  if (offered.length === 0) return <>{empty}</>;
 
   return (
     <section aria-label={t("common", H.beforeSupport.title)} className="space-y-2 rounded-2xl border border-primary/40 bg-leaf-bg p-3">

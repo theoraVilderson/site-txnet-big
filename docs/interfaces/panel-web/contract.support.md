@@ -15,7 +15,7 @@ The agent's side and the settings are under "Staff" below.
 
 | Route | Component | What it does |
 |---|---|---|
-| `/support` | `support/_components/SupportView.tsx` | the caller's conversations (newest activity first, `nextBefore` pages), status, unread; the wait notice (`GET …/availability`); a new conversation — category (shown only when the tenant has any), optional subject (≤120), body (≤4000); `?new=1` (`PANEL_SUPPORT_NEW`, the palette's "new ticket", UX-1-n) opens it, and closing it drops the query |
+| `/support` | `support/_components/SupportView.tsx`, `NewTicketSheet.tsx` | the caller's conversations (newest activity first, `nextBefore` pages) under status tabs with counts and a search, both server-side in `?status=&q=` (`contract.ux.md` T2); the wait notice (`GET …/availability`); a new ticket in a sheet of steps — category (only when the tenant has any), optional subject (≤120), body (≤4000), files, the guides (T3); `?new=1` (`PANEL_SUPPORT_NEW`, the palette's "new ticket", UX-1-n) opens it, and closing it drops the query |
 | `/support/[id]` | `support/_components/SupportThreadView.tsx` | one thread: messages oldest first, "earlier" (`beforeSeq`), sender by kind, files, "seen" on the caller's last message, the agent typing; send, attach, rate, reopen |
 
 Menu: the existing `support` entry (`_lib/panel-menu.ts`) now links
@@ -58,11 +58,11 @@ pinned by `support/support.test.ts`.
    (scanned clean, five minutes from the read); otherwise its scan state, or
    "removed" when retention `expired` it.
 8a. **A guide before the conversation** (F-414-k, `SupportGuideSuggestions.tsx`):
-   the new-conversation form shows up to 3 guides — those placed on
+   the new ticket's last step shows up to 3 guides — those placed on
    `route:support`, then, once typing rests 500 ms, the ones subject + message
    match (`supportGuideQuery`, ≤ 100 characters; guide's `guide-search` with
    `match=any`). Each opens in place. An offer, never a gate: it never blocks
-   sending, and a failed read shows nothing.
+   sending, and a failed read shows nothing; with none, the step says so.
 
 Every refusal is support's translated `msg` (`useApiErrorMessage`); the page
 holds sentences only for statuses, scan states, sender kinds and its own
