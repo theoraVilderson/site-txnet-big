@@ -229,6 +229,8 @@ export const envSchema = z.object({
   ME_EMAIL_VERIFY_RATE_LIMIT: rateLimit(20),
   ME_MESSENGER_RATE_LIMIT: rateLimit(30),
   ME_TIMEZONE_RATE_LIMIT: rateLimit(30),
+  // Display preferences (UX-1-k): one read per panel load, writes debounced 600ms.
+  ME_UI_PREFERENCES_RATE_LIMIT: rateLimit(120),
   ME_SESSIONS_RATE_LIMIT: rateLimit(30),
   // The handoff to a reseller's own panel (F-061-f): a list read on load, a
   // mint per click, and a redeem per landing.

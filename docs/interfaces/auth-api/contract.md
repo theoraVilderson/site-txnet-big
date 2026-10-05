@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 39
+version: 40
 updated: 2026-10-05
 ---
 

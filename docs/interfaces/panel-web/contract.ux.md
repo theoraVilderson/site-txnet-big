@@ -69,7 +69,7 @@ undefined `success` colour, 82 `text-white` on `bg-primary`.
 
 | # | Rule | Row |
 |---|---|---|
-| P1 | They live in governance's existing `user_setting` table (`(userId, key)` unique, JSON value), never in a new column: it is already the home of a person's settings and already has a `display` category | UX-1-k |
+| P1 | They live in governance's existing `user_setting` table (`(userId, key)` unique, JSON value), never in a new column: it is already the home of a person's settings and already has a `display` category. Built: `governance/ui-preferences/`, proof `ui-preferences.spec.ts` | UX-1-k |
 | P2 | Keys: `ui.motion` `'system' \| 'full' \| 'reduced'` (default `system`); `ui.dashboard` `{order: string[], hidden: string[]}` (≤30 ids each, an id ≤40 chars); `ui.pins` string[] ≤8; `ui.sidebar` `{collapsed: boolean, closedSections: string[]}`. A value over 4 KB is refused | UX-1-k |
 | P3 | `GET /api/auth/me/ui-preferences` answers every key, defaults filled in. `PATCH` takes any subset, validated strictly; an unknown key is 400 `unknown_preference`. Only the caller's own row is ever read or written | UX-1-k |
 | P4 | The panel loads them once after `/auth/me`, applies them at once, and writes optimistically with a 600ms debounce; a failed write rolls back and says so with `notify.error` | UX-1-l |

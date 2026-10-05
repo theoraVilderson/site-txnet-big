@@ -13,6 +13,7 @@ import { ResellerBotModule } from './automation/reseller-bot.module';
 import { SupportConsentModule } from './support-consent/support-consent.module';
 import { VaultModule } from './tenant/vault/vault.module';
 import { UserGroupModule } from './governance/user-groups/user-group.module';
+import { UiPreferencesModule } from './governance/ui-preferences/ui-preferences.module';
 import { LanguageMiddleware } from './common/middlewares/language.middleware';
 import { ServiceCallerMiddleware } from './common/security/service-caller';
 import { SwitchScopeMiddleware } from './common/security/switch-scope.middleware';
@@ -34,6 +35,7 @@ import { TenantContextMiddleware } from './tenant-context/tenant-context.middlew
     ResellerBotModule,
     SupportConsentModule,
     UserGroupModule,
+    UiPreferencesModule,
   ],
 })
 export class AppModule implements NestModule {

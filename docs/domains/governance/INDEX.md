@@ -2,15 +2,15 @@
 id: governance
 layer: domain
 status: active
-version: 2
-keywords: [settings, access grant, restriction, cap, user group, user groups, group of users, segment, /api/auth/user-groups]
+version: 3
+keywords: [settings, display preferences, ui preferences, motion level, pinned pages, access grant, restriction, cap, user group, user groups, group of users, segment, /api/auth/user-groups]
 source:
   - txnet-backend/prisma/domains/governance.prisma
   - txnet-backend/auth-service/src/app/governance/**
   - txnet-backend/prisma/domains/migrations/20260925001600_user_groups/**
 owns_tables: [user_setting, temporal_access_grant, user_restriction, user_group, user_group_member]
 depends_on: [identity, tenant]
-updated: 2026-09-25
+updated: 2026-10-05
 ---
 
 # Governance
@@ -29,6 +29,7 @@ updated: 2026-09-25
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-05 | Contract v2 -> **v3** (additive, UX-1-k): display preferences — four `ui.*` keys in `user_setting`, `/api/auth/me/ui-preferences`, served by auth-service. Consumer panel-web (UX-1-l, not built yet) |
 | 2026-09-25 | **draft -> active**, contract v2 (F-114-j): user groups — `/api/auth/user-groups`, served by auth-service; the first code of this unit. Consumer billing (discount rules' `groupId`) |
 | 2026-09-04 | Documented from schema during onboarding — no service yet |
 

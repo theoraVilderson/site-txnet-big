@@ -2,14 +2,15 @@
 id: governance
 layer: domain
 status: active
-version: 2
-updated: 2026-09-25
+version: 3
+updated: 2026-10-05
 ---
 
 # Contract — governance
 
-**User groups are built** (F-114-j, below). Settings, temporal grants and
-restrictions are still **schema only** — no service implements them; their
+**User groups are built** (F-114-j, below), and so are display preferences
+(UX-1-k, below) — the first keys of `user_setting`. Other settings, temporal
+grants and restrictions are still **schema only** — no service implements them; their
 rows are intent derived from `txnet-backend/prisma/domains/governance.prisma`.
 
 ## TL;DR
@@ -24,7 +25,8 @@ campaigns and restrictions share (built). Low-traffic key/value config for users
 | manage user groups — **built** (F-114-j) | `user_group.manage`; name (≤ 80, unique in the tenant), `allTenants` | the caller's tenant's group, audited | sync | `name_taken`, `platform_only`, `all_tenants_conflict`, `group_in_use` |
 | manage a group's members — **built** | user ids and/or reseller ids (≤ 500 each per call) | added (idempotent) or removed, audited | sync | `user_not_found`, `tenant_not_found`, `not_a_reseller`, `platform_only`, `member_not_found` |
 | is this person / this reseller in group G — **built** | a member list, a user id or a tenant id | `admitsUser` / `admitsTenant` (`user-group.ts`) | sync | — |
-| get/set user setting (intended) | userId, key, JSON value | row | sync | — |
+| read / write the caller's display preferences — **built** (UX-1-k) | the token's user; any subset of `ui.motion`, `ui.dashboard`, `ui.pins`, `ui.sidebar` | every key, defaults filled in | sync | `unknown_preference`, `invalid_preference`, `preference_too_large` |
+| get/set any other user setting (intended) | userId, key, JSON value | row | sync | — |
 | grant temporal access | grantee, permissionKey, mode, window | `temporal_access_grant` | sync | overlapping active grant |
 | assign restriction | userId, restrictionKey, limit JSON, scope | `user_restriction` | sync | — |
 | evaluate effective access | userId, permissionKey, now | allow/deny (role ∪ active grants, minus hard blocks) | sync | — |
@@ -48,6 +50,18 @@ auth-service, beside the users it groups. Wire shapes:
 
 Consumers: billing's discount rules (`groupId`, user members only — billing
 `contract.purchase.md`). Campaigns and restrictions will target groups; neither does yet.
+
+## Display preferences (UX-1-k)
+
+Code: `txnet-backend/auth-service/src/app/governance/ui-preferences/`. Wire
+shapes: [auth-api/contract.ui-preferences.md](../../interfaces/auth-api/contract.ui-preferences.md);
+what each key means: [panel-web/contract.ux.md](../../interfaces/panel-web/contract.ux.md) P1–P4.
+
+| Rule | Held by |
+|---|---|
+| One `user_setting` row per key, category `display`; the keys and their schemas are owned here (`UI_PREFERENCE_SCHEMAS`) | `ui-preferences.ts` |
+| Only the caller's own rows: `user_setting` has no tenant column and no RLS, so the `userId = sub` filter is the whole boundary | `UiPreferencesService` |
+| A stored value off its current schema reads as the default — a narrower schema needs no migration | `readUiPreferences` |
 
 ## Emits (events)
 
