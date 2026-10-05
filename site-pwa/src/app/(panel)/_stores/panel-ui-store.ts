@@ -15,18 +15,28 @@ export interface PanelUiState {
   drawerOpen: boolean;
   /** One submenu open at a time, by group id. */
   openGroupId: string | null;
+  /** The command palette (UX-1-n): Ctrl/⌘+K, the top bar's button, not-found's. */
+  paletteOpen: boolean;
+  /** The gift-code modal (F-093-g): the wallet's quick action, or the palette's. */
+  giftCodeOpen: boolean;
 
   setDrawerOpen: (open: boolean) => void;
   toggleGroup: (id: string) => void;
   openGroup: (id: string) => void;
+  setPaletteOpen: (open: boolean) => void;
+  setGiftCodeOpen: (open: boolean) => void;
 }
 
 export const usePanelUiStore = create<PanelUiState>((set) => ({
   drawerOpen: false,
   openGroupId: null,
+  paletteOpen: false,
+  giftCodeOpen: false,
 
   setDrawerOpen: (drawerOpen) => set({ drawerOpen }),
   toggleGroup: (id) =>
     set((s) => ({ openGroupId: s.openGroupId === id ? null : id })),
   openGroup: (id) => set({ openGroupId: id }),
+  setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+  setGiftCodeOpen: (giftCodeOpen) => set({ giftCodeOpen }),
 }));

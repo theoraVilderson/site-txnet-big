@@ -66,7 +66,8 @@
     "notFound": {
       "title": "This page does not exist",
       "body": "The link may be old, or the address mistyped.",
-      "home": "Go to the dashboard"
+      "home": "Go to the dashboard",
+      "search": "Search the panel"
     },
     "progress": "Loading the page",
     "sections": {
@@ -88,6 +89,37 @@
       "moveUp": "Move {{label}} up",
       "moveDown": "Move {{label}} down",
       "drag": "Drag to reorder"
+    },
+    "palette": {
+      "open": "Search",
+      "openHint": "Search pages and actions (Ctrl+K)",
+      "label": "Search the panel",
+      "placeholder": "Search pages, settings and actions…",
+      "empty": "Nothing matches “{{query}}”",
+      "results": "Results",
+      "groups": {
+        "recent": "Recent",
+        "pages": "Pages",
+        "settings": "Settings",
+        "actions": "Actions"
+      },
+      "settingsTab": "Settings › {{tab}}",
+      "actions": {
+        "topUp": "Top up the wallet",
+        "newTicket": "New support ticket",
+        "giftCode": "Redeem a gift code",
+        "theme": "Theme: {{name}}",
+        "language": "Language: {{name}}",
+        "motion": "Motion: {{name}}"
+      },
+      "pin": "Pin to the menu",
+      "unpin": "Unpin from the menu",
+      "keys": {
+        "move": "to move",
+        "open": "to open",
+        "pin": "to pin",
+        "close": "to close"
+      }
     }
   },
   "gateways": {

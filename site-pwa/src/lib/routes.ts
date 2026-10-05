@@ -21,6 +21,8 @@ export const AUTH_REGISTER = "/auth/register";
 export const PANEL_ACCOUNTS_ADD = "/accounts/add";
 /** The user's own settings; first section: their email address (F-035-j). */
 export const PANEL_SETTINGS = "/settings";
+/** One settings tab, `?tab=` (UX-1-s, S1). */
+export const panelSettingsTabPath = (tab: string) => `${PANEL_SETTINGS}?tab=${encodeURIComponent(tab)}`;
 /**
  * The "my services" page (F-502-s) — the Grants a user holds, and the way back
  * to a subscription key that did not reach them. `/services` is the path
@@ -186,6 +188,8 @@ export const PANEL_LOTTERIES_MANAGE = "/lotteries/manage";
 export const panelLotteryManagePath = (id: string) => `${PANEL_LOTTERIES_MANAGE}/${encodeURIComponent(id)}`;
 /** The user's support: their conversations, a new one, and one thread live (F-033-o). */
 export const PANEL_SUPPORT = "/support";
+/** The support page with the new-ticket form already open (UX-1-n, the palette's "new ticket"). */
+export const PANEL_SUPPORT_NEW = `${PANEL_SUPPORT}?new=1`;
 export const panelSupportThreadPath = (id: string) => `${PANEL_SUPPORT}/${encodeURIComponent(id)}`;
 /** The agent's inbox and one thread from it (F-033-p); `support.agent`. */
 export const PANEL_SUPPORT_INBOX = `${PANEL_SUPPORT}/inbox`;

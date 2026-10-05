@@ -110,12 +110,18 @@ export function useLocale() {
   const setLang = useStore(store, (s) => s.setLang);
   const addNamespaces = useStore(store, (s) => s.addNamespaces);
 
-  const t = (
+  /**
+   * `t` in a language other than the current one — the palette searches every
+   * label in English too (UX-1-n). Every language's `common` is in the cache
+   * from the first render; another namespace may not be, and reads as its key.
+   */
+  const tIn = (
+    language: string,
     ns: string,
     key: string,
     vars?: Record<string, string | number>,
   ): string => {
-    const val = cache[lang]?.[ns]?.[key];
+    const val = cache[language]?.[ns]?.[key];
 
     // قبلاً `if (!val) return key` بود — یعنی اگه یه کلید عمداً مقدارش
     // رشته‌ی خالی "" بود، به‌جای نمایش متن خالی، خودِ کلید خام رو نشون
@@ -139,5 +145,7 @@ export function useLocale() {
     return result;
   };
 
-  return { lang, isRtl, availableLocales, setLang, addNamespaces, t };
+  const t = (ns: string, key: string, vars?: Record<string, string | number>): string => tIn(lang, ns, key, vars);
+
+  return { lang, isRtl, availableLocales, setLang, addNamespaces, t, tIn };
 }

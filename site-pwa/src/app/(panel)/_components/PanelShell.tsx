@@ -2,6 +2,7 @@
 
 import { Suspense } from "react";
 import { useUiPreferences } from "@/stores/ui-preferences-store";
+import { CommandPalette } from "./CommandPalette";
 import { PanelSidebar } from "./PanelSidebar";
 import { PanelTopBar } from "./PanelTopBar";
 import { RouteProgress } from "./RouteProgress";
@@ -10,7 +11,8 @@ import { RouteProgress } from "./RouteProgress";
  * The frame every panel page renders inside (F-093-a): the sidebar at the
  * inline start, and a column beside it holding the top bar and the page. The
  * column's margin follows the sidebar's width from `lg` up; below that the
- * sidebar is a drawer over the page and takes no room.
+ * sidebar is a drawer over the page and takes no room. The command palette
+ * (UX-1-n) is mounted here once, so Ctrl/⌘+K works on every page.
  */
 export function PanelShell({ children }: { children: React.ReactNode }) {
   // The person's own `ui.sidebar.collapsed` (UX-1-l), not this tab's.
@@ -23,6 +25,7 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
         <RouteProgress />
       </Suspense>
       <PanelSidebar />
+      <CommandPalette />
       <div
         className={`flex min-h-screen flex-col transition-[margin] duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] ${
           collapsed ? "lg:ms-20" : "lg:ms-72"

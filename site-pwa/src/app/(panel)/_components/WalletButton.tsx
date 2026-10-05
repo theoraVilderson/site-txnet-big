@@ -17,6 +17,7 @@ import { PANEL_DEPOSIT, PANEL_FINANCIAL } from "@/lib/routes";
 import { useWalletBalance } from "../_hooks/useWalletBalance";
 import { formatMoney, isNonZero } from "../_lib/money";
 import { GiftCodeModal } from "./GiftCodeModal";
+import { usePanelUiStore } from "../_stores/panel-ui-store";
 
 /** The control's strings as generated constants (C-06). */
 const W = FrontendI18nKeys.common.wallet;
@@ -85,7 +86,9 @@ export function WalletButton() {
   const { available: balance, held, currencyCode, isLoading, failed, refresh } = useWalletBalance();
   const holding = isNonZero(held);
   const [open, setOpen] = useState(false);
-  const [giftOpen, setGiftOpen] = useState(false);
+  // In the shell's store, so the palette's "redeem a gift code" opens the same modal (UX-1-n).
+  const giftOpen = usePanelUiStore((s) => s.giftCodeOpen);
+  const setGiftOpen = usePanelUiStore((s) => s.setGiftCodeOpen);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
 

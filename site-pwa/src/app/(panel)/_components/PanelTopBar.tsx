@@ -7,6 +7,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { usePanelUiStore } from "../_stores/panel-ui-store";
 import { AccountSwitcher } from "./AccountSwitcher";
+import { PaletteButton } from "./CommandPalette";
 import { HelpButton } from "./guide/HelpButton";
 import { NotificationsButton } from "./NotificationsButton";
 import { PANEL_SIDEBAR_ID } from "./PanelSidebar";
@@ -34,6 +35,12 @@ const Divider = ({ className = "" }: { className?: string }) => (
  * gives back ~110px, so the phone row is ~220px — with room for the control
  * after this one, which is the part a shrink of the last control never buys.
  * That control is `HelpButton` (F-414-e): 40px with the gap, ~260px of 304.
+ *
+ * The palette's button (UX-1-n, N6) sits at the start, beside the menu
+ * button: an icon below `sm`, a search box from `sm` up, where the start side
+ * is otherwise empty. At 360px it is an estimate, not a measurement: ~260px
+ * plus 40px with the gap is ~300px of 304 — the budget's edge. Measure it
+ * before adding anything else to this bar.
  */
 export function PanelTopBar() {
   const { t } = useLocale();
@@ -42,7 +49,7 @@ export function PanelTopBar() {
 
   return (
     <header className="sticky top-4 z-20 mx-4 mt-4 flex h-16 shrink-0 items-center justify-between gap-2 rounded-2xl border border-card-border bg-card-bg px-3 backdrop-blur-xl sm:px-6">
-      <div className="flex items-center">
+      <div className="flex min-w-0 items-center gap-1 sm:gap-3">
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
@@ -53,6 +60,7 @@ export function PanelTopBar() {
         >
           <Menu size={22} />
         </button>
+        <PaletteButton />
       </div>
       <div className="flex min-w-0 items-center gap-1 sm:gap-3">
         <WalletButton />

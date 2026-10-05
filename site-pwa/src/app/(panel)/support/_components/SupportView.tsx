@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Headphones, Plus, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
-import { panelSupportThreadPath } from "@/lib/routes";
+import { PANEL_SUPPORT, panelSupportThreadPath } from "@/lib/routes";
 import {
   SUPPORT_BODY_MAX,
   supportApi,
@@ -37,7 +37,14 @@ export function SupportView() {
   const [asked, setAsked] = useState(0);
   const reload = useCallback(() => setAsked((n) => n + 1), []);
   const [availability, setAvailability] = useState<SupportAvailability | null>(null);
-  const [composing, setComposing] = useState(false);
+  // `?new=1` (the palette's "new ticket", UX-1-n) opens the form; closing it drops the query.
+  const askedNew = useSearchParams().get("new") === "1";
+  const [opened, setOpened] = useState(false);
+  const composing = opened || askedNew;
+  const setComposing = (next: boolean) => {
+    setOpened(next);
+    if (!next && askedNew) router.replace(PANEL_SUPPORT, { scroll: false });
+  };
 
   useEffect(() => {
     let alive = true;

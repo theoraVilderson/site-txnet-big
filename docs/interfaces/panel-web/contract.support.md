@@ -15,7 +15,7 @@ The agent's side and the settings are under "Staff" below.
 
 | Route | Component | What it does |
 |---|---|---|
-| `/support` | `support/_components/SupportView.tsx` | the caller's conversations (newest activity first, `nextBefore` pages), status, unread; the wait notice (`GET …/availability`); a new conversation — category (shown only when the tenant has any), optional subject (≤120), body (≤4000) |
+| `/support` | `support/_components/SupportView.tsx` | the caller's conversations (newest activity first, `nextBefore` pages), status, unread; the wait notice (`GET …/availability`); a new conversation — category (shown only when the tenant has any), optional subject (≤120), body (≤4000); `?new=1` (`PANEL_SUPPORT_NEW`, the palette's "new ticket", UX-1-n) opens it, and closing it drops the query |
 | `/support/[id]` | `support/_components/SupportThreadView.tsx` | one thread: messages oldest first, "earlier" (`beforeSeq`), sender by kind, files, "seen" on the caller's last message, the agent typing; send, attach, rate, reopen |
 
 Menu: the existing `support` entry (`_lib/panel-menu.ts`) now links

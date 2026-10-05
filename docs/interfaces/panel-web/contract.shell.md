@@ -42,7 +42,9 @@ under `(panel)` renders in: `_components/PanelShell.tsx` = `PanelSidebar` +
    never `left`/`right`, because the same build runs RTL and LTR. The one
    physical transform (the drawer's slide) is written for both scripts.
 5. **The top bar has no profile menu.** Account actions live in
-   `AccountSwitcher` (F-0209). A new top-bar control (wallet F-093-c,
+   `AccountSwitcher` (F-0209). The palette's button (UX-1-n) is the one
+   control at the start, beside the menu button; it put the 360px row at an
+   estimated ~300px of 304, unmeasured. A new top-bar control (wallet F-093-c,
    notifications F-093-h) goes before the switcher and must fit a 360px bar:
    below `sm`, language and theme already moved into the drawer to make room.
    **The budget is the row, not the control**, and it is the rule that is
@@ -147,7 +149,8 @@ the balance it makes re-read is the wallet control's rule 1.
 ## State
 
 `_stores/panel-ui-store.ts` — drawer open (below `lg`) and the one open
-submenu. UI only, in memory, reset by a reload. The collapse (desktop), the
+submenu, whether the command palette (UX-1-n) and the gift-code modal are
+open. UI only, in memory, reset by a reload. The collapse (desktop), the
 folded sections and the pins are the person's own `ui.sidebar` and `ui.pins`,
 in `src/stores/ui-preferences-store.ts` (UX-1-l, UX-1-m); recent pages are this
 device's, `_lib/recent-pages.ts` (contract.ux.md N5). A modal that must
