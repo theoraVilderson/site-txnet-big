@@ -1,5 +1,5 @@
 import { UserStatus } from '@prisma/client';
-import { ResellerAccessRefused } from '@txnet-backend/shared-core';
+import { ResellerAccessRefused, runWithTenant } from '@txnet-backend/shared-core';
 import { ResellerUsersService } from './reseller-users.service';
 
 /**
@@ -67,7 +67,13 @@ describe('ResellerUsersService', () => {
         return {};
       }),
     };
-    const tx = { user, adminAuditLog };
+    // tenantTransaction's first statement: the tenant RLS will see.
+    const bound: unknown[] = [];
+    const $executeRaw = vi.fn(async (_s: unknown, tenantId: unknown) => {
+      order.push('bind');
+      bound.push(tenantId);
+    });
+    const tx = { user, adminAuditLog, $executeRaw };
     const tenant = {
       findUnique: vi.fn(async () => ({ ownerUserId: 'u-owner', tenantType: 'reseller' })),
     };
@@ -87,12 +93,13 @@ describe('ResellerUsersService', () => {
       runIncludingPlatform: vi.fn(async (_a: unknown, _t: unknown, capability: string, work: (r: unknown) => Promise<unknown>) => {
         order.push(`admit:${capability}`);
         if (options.admit) return (options.admit as () => Promise<unknown>)();
-        return work({ id: reseller, slug: 'vpnshop', as: options.as ?? 'staff' });
+        // The real door opens the tenant's scope around `work`; so does this one.
+        return runWithTenant({ id: reseller }, () => work({ id: reseller, slug: 'vpnshop', as: options.as ?? 'staff' }));
       }),
     };
 
     const service = new ResellerUsersService(prisma as never, access as never, sessions as never);
-    return { service, order, prisma, user, adminAuditLog, sessions, access, asked };
+    return { service, order, prisma, user, adminAuditLog, sessions, access, asked, bound };
   };
 
   describe('list', () => {
@@ -168,12 +175,21 @@ describe('ResellerUsersService', () => {
   });
 
   describe('block', () => {
+    it('binds the tenant as the transaction\'s first statement — a bare $transaction is refused by the scope', async () => {
+      const { service, order, bound } = build();
+
+      await service.block(actor, reseller, 'u-1', '10.0.0.1');
+
+      expect(bound).toEqual([reseller]);
+      expect(order.indexOf('bind')).toBeLessThan(order.indexOf('findFirst'));
+    });
+
     it('suspends, revokes every session and writes the trail in one transaction', async () => {
       const { service, order, user, adminAuditLog, sessions } = build();
 
       const result = await service.block(actor, reseller, 'u-1', '10.0.0.1');
 
-      expect(order).toEqual(['admit:staffWrite', 'findFirst', 'update', 'audit', 'revoke']);
+      expect(order).toEqual(['admit:staffWrite', 'bind', 'findFirst', 'update', 'audit', 'revoke']);
       expect(user.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { status: UserStatus.suspended } }),
       );

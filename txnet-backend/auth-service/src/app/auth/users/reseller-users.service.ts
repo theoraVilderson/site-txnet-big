@@ -9,6 +9,7 @@ import {
   SupportConsentRefused,
   SupportConsentRejection,
   TenantCapabilityName,
+  tenantTransaction,
 } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -159,7 +160,9 @@ export class ResellerUsersService {
       if (userId === actor.userId) throw new ResellerUsersRefused('cannot_block_self', userId);
       const ctx = { actor, admitted: reseller, tenant: await this.tenantOf(reseller.id) };
 
-      const changed = await this.prisma.$transaction(async (tx) => {
+      // tenantTransaction, not a bare $transaction: the scope refuses `User`
+      // queries in a transaction that bound no tenant (F-095).
+      const changed = await tenantTransaction(this.prisma, async (tx) => {
         // Inside the scope, so an id from another tenant is simply not found —
         // the same answer an id that never existed gets.
         const user = await tx.user.findFirst({ where: { id: userId, deletedAt: null }, select: SELECT });
