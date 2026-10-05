@@ -121,7 +121,8 @@ export function useOutsidePointer(active: boolean, refs: RefObject<HTMLElement |
   }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-export type Side = "top" | "bottom";
+/** `end`: beside the trigger at its inline end — the collapsed sidebar's flyout (N3). */
+export type Side = "top" | "bottom" | "end";
 export type Align = "start" | "center" | "end";
 
 const GAP = 6;
@@ -129,7 +130,8 @@ const EDGE = 8;
 
 /**
  * Fixed coordinates for something drawn beside a trigger: below it unless
- * there is no room and more above, aligned by the reading direction (`start`
+ * there is no room and more above (or, for `end`, at its inline end, top
+ * edges level), aligned by the reading direction (`start`
  * is the right edge in Persian), and kept 8px inside the viewport. Portaled
  * content needs this — inside a scrolling dialog an absolutely placed list is
  * clipped (the kit `Select` says the same).
@@ -152,6 +154,13 @@ export function useAnchoredPosition(
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const rtl = getComputedStyle(trigger).direction === "rtl";
+
+    if (side === "end") {
+      const beside = rtl ? t.left - GAP - w : t.right + GAP;
+      const top = Math.max(EDGE, Math.min(t.top, vh - h - EDGE));
+      setState({ style: { top, left: Math.max(EDGE, Math.min(beside, vw - w - EDGE)) }, placedSide: "end" });
+      return;
+    }
 
     const below = vh - t.bottom;
     const above = t.top;

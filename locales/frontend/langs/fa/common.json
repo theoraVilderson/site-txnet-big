@@ -12,7 +12,6 @@
       "dashboard": "داشبورد",
       "buy": "خرید سرویس",
       "myServices": "سرویس‌های من",
-      "financial": "امور مالی",
       "financialHistory": "تاریخچه مالی",
       "deposit": "افزایش موجودی",
       "gateways": "درگاه‌های پرداخت",
@@ -35,7 +34,11 @@
       "lotterySettings": "تنظیمات قرعه‌کشی",
       "supportInbox": "صندوق پشتیبانی",
       "supportSettings": "تنظیمات پشتیبانی",
-      "guides": "مدیریت راهنماها"
+      "guides": "مدیریت راهنماها",
+      "wallet": "کیف پول",
+      "resellerList": "فهرست نمایندگان",
+      "resellerPackages": "بسته‌های نمایندگی",
+      "resellerLimits": "سقف‌های نمایندگان"
     },
     "paymentCredited": {
       "title": "پرداخت تأیید شد",
@@ -65,7 +68,16 @@
       "body": "ممکن است پیوند قدیمی باشد یا نشانی اشتباه نوشته شده باشد.",
       "home": "رفتن به داشبورد"
     },
-    "progress": "در حال باز کردن صفحه"
+    "progress": "در حال باز کردن صفحه",
+    "sections": {
+      "account": "حساب من",
+      "sales": "فروش",
+      "finance": "مالی",
+      "people": "افراد",
+      "infra": "زیرساخت",
+      "support": "میز پشتیبانی"
+    },
+    "badge": "{{label}}، {{count}} مورد تازه"
   },
   "gateways": {
     "title": "درگاه‌های پرداخت",

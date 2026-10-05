@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { LangDropdown } from "@auth/auth/_components/LangDropdown";
 import { BrandMark } from "@/components/BrandMark";
 import { CollapsedTooltip } from "./CollapsedTooltip";
+import { Popover } from "./kit/Popover";
+import { useMediaQuery } from "./kit/overlay";
 import { LogoutButton } from "./LogoutButton";
 import { ResellerPanelButton, useOwnedResellers } from "./ResellerPanelButton";
 import { ThemeDropdown } from "@auth/auth/_components/ThemeDropdown";
@@ -15,16 +18,22 @@ import { useLocale } from "@/context/LocaleContext";
 import { resellerPurchaseApi, tenantAccessApi } from "@/lib/tenant-api";
 import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { DURATION, EASE } from "@/lib/motion";
 import {
   PANEL_MENU,
   activeHref,
+  badgeLabel,
   isMenuGroup,
+  menuFooter,
   menuHrefs,
+  menuSections,
   ownTenantOf,
   visibleMenu,
+  type VisibleMenuEntry,
   type VisibleMenuGroup,
   type VisibleMenuLink,
 } from "../_lib/panel-menu";
+import { useMenuBadges, type BadgedEntry } from "../_hooks/useMenuBadges";
 import { usePanelUiStore } from "../_stores/panel-ui-store";
 import { usePanelSession } from "../_context/PanelSessionContext";
 
@@ -32,6 +41,18 @@ import { usePanelSession } from "../_context/PanelSessionContext";
 const S = FrontendI18nKeys.common.shell;
 
 export const PANEL_SIDEBAR_ID = "panel-sidebar";
+
+/** Where the sidebar is a rail that may collapse, rather than a drawer. */
+const LG_UP = "(min-width: 1024px)";
+/** How far a finger must drag the drawer toward its edge to close it (N3). */
+const SWIPE_CLOSE_PX = 60;
+
+/** A height fold — a section (N2) or a group (N3) opening and shutting. */
+const FOLD = {
+  initial: { height: 0, opacity: 0 },
+  animate: { height: "auto", opacity: 1, transition: { duration: DURATION.base, ease: EASE.standard } },
+  exit: { height: 0, opacity: 0, transition: { duration: DURATION.fast, ease: EASE.exit } },
+} as const;
 
 /**
  * Whether the caller holds a live reseller — `GET /purchase/mine`, the one the
@@ -82,31 +103,50 @@ function useCanAdminister(tenantId: string | null): boolean | null {
 }
 
 /**
- * The panel's sidebar (F-093-a). One element, two behaviours: from `lg` up it
- * is pinned at the inline start and may collapse to icons; below `lg` it is an
- * off-canvas drawer the top bar opens. Every side is logical (`start`/`end`),
- * because the same panel runs RTL and LTR.
+ * The panel's sidebar (F-093-a, UX-1-j). One element, two behaviours: from
+ * `lg` up it is pinned at the inline start and may collapse to icons; below
+ * `lg` it is an off-canvas drawer the top bar opens, closed by its X, the
+ * backdrop, Esc, or a swipe toward its edge. Every side is logical
+ * (`start`/`end`), because the same panel runs RTL and LTR.
+ *
+ * The menu is drawn in N1's sections, each folding from its heading (N2);
+ * headings appear only when more than one section is visible. The active
+ * entry's highlight slides between entries (`layoutId`), a group opens with a
+ * height animation, and while collapsed a group opens as a flyout beside the
+ * rail (N3). Support, the support inbox and manual payments carry a count (N4).
  */
 export function PanelSidebar() {
   const { t } = useLocale();
   const pathname = usePathname();
-  const { collapsed, drawerOpen, openGroupId } = usePanelUiStore(
+  const { collapsed, drawerOpen, openGroupId, closedSections } = usePanelUiStore(
     useShallow((s) => ({
       collapsed: s.collapsed,
       drawerOpen: s.drawerOpen,
       openGroupId: s.openGroupId,
+      closedSections: s.closedSections,
     })),
   );
-  const { toggleCollapsed, setCollapsed, setDrawerOpen, toggleGroup, openGroup } =
+  const { toggleCollapsed, setDrawerOpen, toggleGroup, openGroup, toggleSection, loadClosedSections } =
     usePanelUiStore(
       useShallow((s) => ({
         toggleCollapsed: s.toggleCollapsed,
-        setCollapsed: s.setCollapsed,
         setDrawerOpen: s.setDrawerOpen,
         toggleGroup: s.toggleGroup,
         openGroup: s.openGroup,
+        toggleSection: s.toggleSection,
+        loadClosedSections: s.loadClosedSections,
       })),
     );
+  const wide = useMediaQuery(LG_UP);
+  // Collapsed applies from `lg` up only; the drawer always shows labels.
+  const railCollapsed = collapsed && wide;
+  // The flyout open, and the path it was opened on: a navigation closes it
+  // without an effect, because on any other path it reads as closed.
+  const [flyout, setFlyout] = useState<{ id: string; path: string } | null>(null);
+  const flyoutId = flyout !== null && flyout.path === pathname ? flyout.id : null;
+
+  // This device's folds, read after the first paint so the server render matches.
+  useEffect(() => loadClosedSections(), [loadClosedSections]);
 
   // Authority comes off the caller, never off the path (F-097): until `me`
   // answers, nothing gated is shown.
@@ -125,7 +165,11 @@ export function PanelSidebar() {
     () => visibleMenu(PANEL_MENU, held ?? [], tenantType, isOwner, ownsReseller, tenantId),
     [held, tenantType, isOwner, ownsReseller, tenantId],
   );
+  const sections = useMemo(() => menuSections(menu), [menu]);
+  const footer = useMemo(() => menuFooter(menu), [menu]);
+  const headings = sections.length > 1;
   const active = activeHref(menuHrefs(menu), pathname);
+  const badges = useMenuBadges();
 
   // A navigation closes the drawer, and opens the group the new page is in —
   // otherwise the highlighted entry sits inside a closed submenu.
@@ -147,34 +191,74 @@ export function PanelSidebar() {
     return () => window.removeEventListener("keydown", onKey);
   }, [drawerOpen, setDrawerOpen]);
 
-  // Collapsed applies from `lg` up only; the drawer always shows labels.
+  // Below `lg`, a horizontal drag toward the drawer's own edge closes it.
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: TouchEvent) => {
+    if (!drawerOpen || wide) return;
+    swipe.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const onTouchEnd = (e: TouchEvent) => {
+    const from = swipe.current;
+    swipe.current = null;
+    if (!from) return;
+    const dx = e.changedTouches[0].clientX - from.x;
+    const dy = e.changedTouches[0].clientY - from.y;
+    const rtl = getComputedStyle(e.currentTarget).direction === "rtl";
+    const towardEdge = rtl ? dx : -dx;
+    if (towardEdge > SWIPE_CLOSE_PX && Math.abs(dx) > Math.abs(dy)) setDrawerOpen(false);
+  };
+
   const whenCollapsed = (classes: string) => (collapsed ? classes : "");
+
+  const badgeOf = (id: string) => badgeLabel(badges[id as BadgedEntry] ?? null);
+
+  const renderBadge = (text: string | null) =>
+    text === null ? null : (
+      <span
+        aria-hidden
+        className={`min-w-5 rounded-full bg-error px-1.5 text-center text-[11px] font-bold leading-5 text-on-error ${whenCollapsed(
+          "lg:absolute lg:-top-0.5 lg:end-1 lg:min-w-4 lg:px-1 lg:text-[10px] lg:leading-4",
+        )}`}
+      >
+        {text}
+      </span>
+    );
 
   const renderLink = (item: VisibleMenuLink, nested: boolean) => {
     const isActive = item.href === active;
     const Icon = item.icon;
+    const label = t("common", item.label);
+    const badge = badgeOf(item.id);
     return (
       <Link
         key={item.id}
         href={item.href}
         aria-current={isActive ? "page" : undefined}
+        // With a count, the name says it as words in the reader's language; the
+        // number drawn beside the label is decorative.
+        aria-label={badge === null ? undefined : t("common", S.badge, { label, count: badge })}
         className={`group relative flex items-center gap-3 rounded-xl px-3 transition-colors duration-200 ${
           nested ? "py-2 text-sm" : "py-3"
         } ${
           isActive
             ? nested
-              ? "bg-leaf-bg font-bold text-primary"
-              : "bg-primary text-on-accent shadow-md shadow-primary-glow"
+              ? "font-bold text-primary"
+              : "text-on-accent"
             : "text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
         }`}
       >
+        {isActive && (
+          <motion.span
+            layoutId="panel-sidebar-active"
+            aria-hidden
+            transition={{ duration: DURATION.slow, ease: EASE.standard }}
+            className={`absolute inset-0 -z-10 rounded-xl ${nested ? "bg-leaf-bg" : "bg-primary shadow-md shadow-primary-glow"}`}
+          />
+        )}
         <Icon size={nested ? 18 : 22} className="shrink-0" />
-        <span
-          className={`flex-1 truncate font-medium ${whenCollapsed("lg:sr-only")}`}
-        >
-          {t("common", item.label)}
-        </span>
-        {!nested && <CollapsedTooltip collapsed={collapsed} label={t("common", item.label)} />}
+        <span className={`flex-1 truncate font-medium ${whenCollapsed("lg:sr-only")}`}>{label}</span>
+        {renderBadge(badge)}
+        {!nested && <CollapsedTooltip collapsed={collapsed} label={label} />}
       </Link>
     );
   };
@@ -184,57 +268,67 @@ export function PanelSidebar() {
     const containsActive = group.children.some((c) => c.href === active);
     const Icon = group.icon;
     const submenuId = `${PANEL_SIDEBAR_ID}-${group.id}`;
+    const label = t("common", group.label);
+    const trigger = (
+      <button
+        type="button"
+        aria-expanded={railCollapsed ? undefined : isOpen}
+        aria-controls={railCollapsed ? undefined : submenuId}
+        className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start transition-colors duration-200 ${
+          containsActive
+            ? "text-primary"
+            : "text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
+        }`}
+      >
+        <Icon size={22} className="shrink-0" />
+        <span className={`flex-1 truncate font-medium ${whenCollapsed("lg:sr-only")}`}>{label}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 transition-transform duration-300 ${isOpen ? "rotate-180" : ""} ${whenCollapsed("lg:hidden")}`}
+        />
+        <CollapsedTooltip collapsed={collapsed && flyoutId !== group.id} label={label} />
+      </button>
+    );
     return (
       <div key={group.id} className="flex flex-col">
-        <button
-          type="button"
-          aria-expanded={isOpen}
-          aria-controls={submenuId}
-          onClick={() => {
-            // Collapsed, a submenu has nowhere to open: widen first, then open.
-            if (collapsed && window.matchMedia("(min-width: 1024px)").matches) {
-              setCollapsed(false);
-              openGroup(group.id);
-              return;
-            }
-            toggleGroup(group.id);
+        {/* Collapsed, a group opens beside the rail (N3); otherwise the
+            popover never opens and the click folds the submenu in place. */}
+        <Popover
+          label={label}
+          side="end"
+          open={flyoutId === group.id}
+          onOpenChange={(next) => {
+            if (next && !railCollapsed) return toggleGroup(group.id);
+            setFlyout(next ? { id: group.id, path: pathname } : null);
           }}
-          className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start transition-colors duration-200 ${
-            containsActive
-              ? "text-primary"
-              : "text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
-          }`}
+          trigger={trigger}
+          className="w-60 p-2"
         >
-          <Icon size={22} className="shrink-0" />
-          <span
-            className={`flex-1 truncate font-medium ${whenCollapsed("lg:sr-only")}`}
-          >
-            {t("common", group.label)}
-          </span>
-          <ChevronDown
-            size={16}
-            className={`shrink-0 transition-transform duration-300 ${
-              isOpen ? "rotate-180" : ""
-            } ${whenCollapsed("lg:hidden")}`}
-          />
-          <CollapsedTooltip collapsed={collapsed} label={t("common", group.label)} />
-        </button>
-        {isOpen && (
-          <div
-            id={submenuId}
-            className={`ms-5 mt-1 space-y-1 border-s border-card-border ps-3 ${whenCollapsed("lg:hidden")}`}
-          >
-            {group.children.map((child) => renderLink(child, true))}
-          </div>
-        )}
+          <p className="px-3 pb-1 pt-1 text-xs font-bold text-text-secondary">{label}</p>
+          <div className="space-y-1">{group.children.map((child) => renderLink(child, true))}</div>
+        </Popover>
+        <AnimatePresence initial={false}>
+          {isOpen && !railCollapsed && (
+            <motion.div key="submenu" id={submenuId} {...FOLD} className="overflow-hidden">
+              <div className="ms-5 mt-1 space-y-1 border-s border-card-border ps-3">
+                {group.children.map((child) => renderLink(child, true))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   };
+
+  const renderEntry = (entry: VisibleMenuEntry) =>
+    isMenuGroup(entry) ? renderGroup(entry) : renderLink(entry, false);
 
   return (
     <>
       <aside
         id={PANEL_SIDEBAR_ID}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
         className={`fixed inset-y-0 start-0 z-40 flex w-72 flex-col border-e border-card-border bg-card-bg backdrop-blur-xl transition-[width,translate] duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] ${whenCollapsed("lg:w-20")} ${
           drawerOpen ? "" : "max-lg:ltr:-translate-x-full max-lg:rtl:translate-x-full"
         }`}
@@ -288,11 +382,42 @@ export function PanelSidebar() {
           aria-label={t("common", S.navigation)}
           // A collapsed tooltip is drawn outside the rail, which a scroll
           // container would clip — so the rail does not scroll while collapsed.
-          className={`flex-1 space-y-2 overflow-y-auto overflow-x-hidden px-3 py-6 ${whenCollapsed("lg:overflow-visible")}`}
+          className={`isolate flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 ${whenCollapsed("lg:overflow-visible")}`}
         >
-          {menu.map((entry) =>
-            isMenuGroup(entry) ? renderGroup(entry) : renderLink(entry, false),
-          )}
+          {sections.map((section) => {
+            const folded = headings && closedSections.includes(section.id);
+            const listId = `${PANEL_SIDEBAR_ID}-section-${section.id}`;
+            const list = <div className="space-y-1 pb-2">{section.entries.map(renderEntry)}</div>;
+            if (!headings) return <div key={section.id}>{list}</div>;
+            return (
+              <div key={section.id} className="mt-2 first:mt-0">
+                <button
+                  type="button"
+                  aria-expanded={!folded}
+                  aria-controls={listId}
+                  onClick={() => toggleSection(section.id)}
+                  className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-text-secondary transition-colors hover:text-text-primary ${whenCollapsed(
+                    "lg:justify-center lg:px-0",
+                  )}`}
+                >
+                  <span className={whenCollapsed("lg:sr-only")}>{t("common", section.label)}</span>
+                  <ChevronDown
+                    size={14}
+                    aria-hidden
+                    className={`transition-transform duration-200 ${folded ? "-rotate-90 rtl:rotate-90" : ""} ${whenCollapsed("lg:hidden")}`}
+                  />
+                  {collapsed && <span aria-hidden className="hidden h-px w-6 bg-card-border lg:block" />}
+                </button>
+                <AnimatePresence initial={false}>
+                  {!folded && (
+                    <motion.div key="list" id={listId} {...FOLD} className={`overflow-hidden ${whenCollapsed("lg:overflow-visible")}`}>
+                      {list}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })}
         </nav>
 
         {/*
@@ -302,21 +427,28 @@ export function PanelSidebar() {
           the nav, far from it — the two are different intentions and the
           destructive one must not sit a mis-tap away from the everyday one.
           Keeping it here also takes the widest control out of a bar that was
-          over budget at 360px **and** at 700px.
+          over budget at 360px **and** at 700px. Settings sits above it (N1).
         */}
-        <div className="shrink-0 border-t border-card-border px-3 py-4">
+        <div className="isolate shrink-0 space-y-1 border-t border-card-border px-3 py-4">
+          {footer.map(renderEntry)}
           <ResellerPanelButton resellers={resellers} collapsed={collapsed} />
           <LogoutButton collapsed={collapsed} />
         </div>
       </aside>
 
-      {drawerOpen && (
-        <div
-          aria-hidden
-          onClick={() => setDrawerOpen(false)}
-          className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm lg:hidden"
-        />
-      )}
+      <AnimatePresence>
+        {drawerOpen && (
+          <motion.div
+            key="backdrop"
+            aria-hidden
+            onClick={() => setDrawerOpen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { duration: DURATION.base } }}
+            exit={{ opacity: 0, transition: { duration: DURATION.fast } }}
+            className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm lg:hidden"
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }

@@ -10,6 +10,9 @@ import {
   Home,
   Inbox,
   Landmark,
+  List,
+  Gauge,
+  Boxes,
   Package,
   Rocket,
   Server,
@@ -27,12 +30,27 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_AI, PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_GUIDES, PANEL_HOME, PANEL_LOTTERIES, PANEL_LOTTERIES_MANAGE, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SUPPORT, PANEL_SUPPORT_INBOX, PANEL_SUPPORT_SETTINGS, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS, PANEL_WHEEL, PANEL_WHEEL_SETTINGS, myResellerUsersPath } from "@/lib/routes";
+import { PANEL_AI, PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_GUIDES, PANEL_HOME, PANEL_LOTTERIES, PANEL_LOTTERIES_MANAGE, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_LIMITS, PANEL_RESELLER_PACKAGES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SUPPORT, PANEL_SUPPORT_INBOX, PANEL_SUPPORT_SETTINGS, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS, PANEL_WHEEL, PANEL_WHEEL_SETTINGS, myResellerUsersPath } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { holdsEveryPermission } from "@/lib/permissions";
 
 /** The shell's menu labels as generated constants (C-06). */
 const M = FrontendI18nKeys.common.shell.menu;
+const SECTION = FrontendI18nKeys.common.shell.sections;
+
+/** N1's six sections, in its order (UX-1-j, `contract.ux.md` N1). */
+export const MENU_SECTIONS = [
+  { id: "account", label: SECTION.account },
+  { id: "sales", label: SECTION.sales },
+  { id: "finance", label: SECTION.finance },
+  { id: "people", label: SECTION.people },
+  { id: "infra", label: SECTION.infra },
+  { id: "support", label: SECTION.support },
+] as const;
+
+export type MenuSectionId = (typeof MENU_SECTIONS)[number]["id"];
+/** `footer`: drawn above logout, under no heading — settings (N1). */
+export type MenuPlacement = MenuSectionId | "footer";
 
 /**
  * Every RBAC permission key an entry needs before it is rendered — all of them,
@@ -100,70 +118,59 @@ export interface PanelMenuGroup extends PermissionGated {
   children: PanelMenuLink[];
 }
 
-export type PanelMenuEntry = PanelMenuLink | PanelMenuGroup;
+/**
+ * The section a top-level entry is drawn in; a group's children are in its.
+ * Absent reads as `account` — `sidebar.test.tsx` pins every entry of
+ * `PANEL_MENU` to the section N1 names, so a forgotten one goes red there.
+ */
+type Placed = { section?: MenuPlacement };
+
+export type PanelMenuEntry = (PanelMenuLink | PanelMenuGroup) & Placed;
 
 export type VisibleMenuLink = Omit<PanelMenuLink, "href"> & { href: string };
 export type VisibleMenuGroup = Omit<PanelMenuGroup, "children"> & {
   children: VisibleMenuLink[];
 };
-export type VisibleMenuEntry = VisibleMenuLink | VisibleMenuGroup;
+export type VisibleMenuEntry = (VisibleMenuLink | VisibleMenuGroup) & Placed;
 
 /**
- * Every entry the legacy panel's sidebar had (F-093-a), in its order. Most have
- * no page yet — see `href`.
+ * Every entry of the panel's menu, in N1's sections and order (UX-1-j). Each
+ * top-level entry names its `section`; the sidebar draws them under one
+ * heading per section (`menuSections`). An entry with no page yet is hidden —
+ * see `href`.
  */
 export const PANEL_MENU: readonly PanelMenuEntry[] = [
-  { id: "dashboard", label: M.dashboard, icon: Home, href: PANEL_HOME },
-  { id: "buy", label: M.buy, icon: ShoppingCart, href: PANEL_SHOP },
+  // ── account ──
+  { section: "account", id: "dashboard", label: M.dashboard, icon: Home, href: PANEL_HOME },
+  { section: "account", id: "buy", label: M.buy, icon: ShoppingCart, href: PANEL_SHOP },
   // F-502-s
-  { id: "my-services", label: M.myServices, icon: Globe, href: PANEL_MY_SERVICES },
+  { section: "account", id: "my-services", label: M.myServices, icon: Globe, href: PANEL_MY_SERVICES },
   {
-    id: "financial",
-    label: M.financial,
+    section: "account",
+    id: "wallet",
+    label: M.wallet,
     icon: Wallet,
     children: [
       // F-093-d
       { id: "financial-history", label: M.financialHistory, icon: ReceiptText, href: PANEL_FINANCIAL },
       // F-093-e
       { id: "deposit", label: M.deposit, icon: CreditCard, href: PANEL_DEPOSIT },
-      // F-102-d. The permission hides it; what the page then shows is decided
-      // by the tenant type, server-side (D-31).
-      { id: "gateways", label: M.gateways, icon: Landmark, href: PANEL_GATEWAYS, requires: ["gateway.manage"] },
-      // F-093-n. Like gateways: the permission hides it, billing scopes what it lists.
-      { id: "manual-payments", label: M.manualPayments, icon: ShieldCheck, href: PANEL_MANUAL_PAYMENTS, requires: ["payment.confirm_manual"] },
-      // F-502-g. Like gateways: the permission hides it, billing scopes what it lists (D-33).
-      { id: "coupons", label: M.coupons, icon: TicketPercent, href: PANEL_COUPONS, requires: ["coupon.manage"] },
-      // F-026-f. Like coupons: the permission hides it, billing scopes what it lists (D-34).
-      { id: "catalog", label: M.catalog, icon: Package, href: PANEL_CATALOG, requires: ["catalog.manage"] },
-      // F-019-d. A reseller's own balance with the platform; the service admits
-      // its owner too, who may hold no role that grants the permission (F-019-f).
-      {
-        id: "tenant-billing",
-        label: M.tenantBilling,
-        icon: HandCoins,
-        href: PANEL_TENANT_BILLING,
-        requires: ["tenant_billing.topup"],
-        tenantTypes: ["reseller"],
-        ownerSuffices: true,
-      },
     ],
   },
-  // F-018-k. Administration of other tenants is the platform owner's alone: a
-  // reseller can grant itself `tenant.manage`, so the tenant type gates it too.
-  {
-    id: "resellers",
-    label: M.resellers,
-    icon: Store,
-    href: PANEL_RESELLERS,
-    requires: ["tenant.manage"],
-    tenantTypes: ["platform_owner"],
-  },
-  // F-019-i. The other side of the same product: any user of the platform
+  // F-707-g. Every signed-in user: billing's `GET /wheel` says whether a wheel
+  // runs today and why this user may not spin it.
+  { section: "account", id: "wheel", label: M.wheel, icon: Gift, href: PANEL_WHEEL },
+  // F-707-n. Every signed-in user: billing shows each user only the lotteries of its groups.
+  { section: "account", id: "lotteries", label: M.lotteries, icon: Ticket, href: PANEL_LOTTERIES },
+  // F-033-o. Every signed-in user: support answers each with their own threads only.
+  { section: "account", id: "support", label: M.support, icon: Headphones, href: PANEL_SUPPORT },
+  // F-019-i. The other side of the reseller product: any user of the platform
   // owner's tenant may buy a reseller, so this one names no permission key —
   // only the tenant type, which is the service's own `not_platform_user`.
   // F-114-c: not the platform's own account, and not a user who already owns
   // one — the sidebar's "my reseller panel" is their way in.
   {
+    section: "account",
     id: "buy-reseller",
     label: M.buyReseller,
     icon: Rocket,
@@ -171,48 +178,82 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
     tenantTypes: ["platform_owner"],
     hiddenFrom: ["tenantOwner", "resellerOwner"],
   },
-  // F-027-ad. The platform's own panels. billing refuses anyone but the
-  // platform owner (`panelScopeOf`), so the tenant type gates it here too.
-  {
-    id: "systems",
-    label: M.systems,
-    icon: Server,
-    href: PANEL_SYSTEMS,
-    requires: ["panel.manage"],
-    tenantTypes: ["platform_owner"],
-  },
-  // F-114-m. Every tenant has its own groups: the permission hides it, and
-  // auth-service answers each tenant its own (F-114-j).
-  { id: "user-groups", label: M.userGroups, icon: Users, href: PANEL_USER_GROUPS, requires: ["user_group.manage"] },
+  { section: "account", id: "tutorials", label: M.tutorials, icon: BookOpen, href: null },
+
+  // ── sales ──
+  // F-026-f. The permission hides it, billing scopes what it lists (D-34).
+  { section: "sales", id: "catalog", label: M.catalog, icon: Package, href: PANEL_CATALOG, requires: ["catalog.manage"] },
+  // F-502-g. The permission hides it, billing scopes what it lists (D-33).
+  { section: "sales", id: "coupons", label: M.coupons, icon: TicketPercent, href: PANEL_COUPONS, requires: ["coupon.manage"] },
   // F-038-j2. Every tenant has its own AI: the permission hides it, and ai
   // answers each tenant its own (F-038-j1).
-  { id: "ai", label: M.ai, icon: Sparkles, href: PANEL_AI, requires: ["ai.manage"] },
-  // F-707-g. Every signed-in user: billing's `GET /wheel` says whether a wheel
-  // runs today and why this user may not spin it.
-  { id: "wheel", label: M.wheel, icon: Gift, href: PANEL_WHEEL },
-  // F-707-n. Every signed-in user: billing shows each user only the lotteries of its groups.
-  { id: "lotteries", label: M.lotteries, icon: Ticket, href: PANEL_LOTTERIES },
+  { section: "sales", id: "ai", label: M.ai, icon: Sparkles, href: PANEL_AI, requires: ["ai.manage"] },
   // F-707-f. Every tenant runs its own wheel: the permission hides it, RLS
   // answers each tenant its own (F-707-c).
-  { id: "wheel-settings", label: M.wheelSettings, icon: Dices, href: PANEL_WHEEL_SETTINGS, requires: ["engagement.manage"] },
+  { section: "sales", id: "wheel-settings", label: M.wheelSettings, icon: Dices, href: PANEL_WHEEL_SETTINGS, requires: ["engagement.manage"] },
   // F-707-o. The same permission as the wheel's settings; RLS keeps each tenant to its own lotteries.
-  { id: "lottery-settings", label: M.lotterySettings, icon: Ticket, href: PANEL_LOTTERIES_MANAGE, requires: ["engagement.manage"] },
+  { section: "sales", id: "lottery-settings", label: M.lotterySettings, icon: Ticket, href: PANEL_LOTTERIES_MANAGE, requires: ["engagement.manage"] },
+
+  // ── finance ──
+  // F-102-d. The permission hides it; what the page then shows is decided
+  // by the tenant type, server-side (D-31).
+  { section: "finance", id: "gateways", label: M.gateways, icon: Landmark, href: PANEL_GATEWAYS, requires: ["gateway.manage"] },
+  // F-093-n. Like gateways: the permission hides it, billing scopes what it lists.
+  { section: "finance", id: "manual-payments", label: M.manualPayments, icon: ShieldCheck, href: PANEL_MANUAL_PAYMENTS, requires: ["payment.confirm_manual"] },
+  // F-019-d. A reseller's own balance with the platform; the service admits
+  // its owner too, who may hold no role that grants the permission (F-019-f).
+  {
+    section: "finance",
+    id: "tenant-billing",
+    label: M.tenantBilling,
+    icon: HandCoins,
+    href: PANEL_TENANT_BILLING,
+    requires: ["tenant_billing.topup"],
+    tenantTypes: ["reseller"],
+    ownerSuffices: true,
+  },
+
+  // ── people ──
   // F-311-ab. One users page for every tenant (D-55), opened on the tenant the
   // session is in: platform staff reach the platform's own users (F-311-aa), a
   // reseller's staff on its domain the reseller's. `tenant.manage` hides it;
   // `ResellerAccess.…IncludingPlatform` is the door, and a seat it refuses reads
   // as that page's refusal. The owner signs in to the platform (ADR-0059), so
   // their reseller's users stay behind its console.
-  { id: "users", label: M.users, icon: UserCog, href: myResellerUsersPath, requires: ["tenant.manage"] },
-  { id: "tutorials", label: M.tutorials, icon: BookOpen, href: null },
-  // F-033-o. Every signed-in user: support answers each with their own threads only.
-  { id: "support", label: M.support, icon: Headphones, href: PANEL_SUPPORT },
+  { section: "people", id: "users", label: M.users, icon: UserCog, href: myResellerUsersPath, requires: ["tenant.manage"] },
+  // F-114-m. Every tenant has its own groups: the permission hides it, and
+  // auth-service answers each tenant its own (F-114-j).
+  { section: "people", id: "user-groups", label: M.userGroups, icon: Users, href: PANEL_USER_GROUPS, requires: ["user_group.manage"] },
+  // F-018-k. Administration of other tenants is the platform owner's alone: a
+  // reseller can grant itself `tenant.manage`, so the tenant type gates it too.
+  // Packages (F-118-n5) and limits (F-019-r) sit under the same gate.
+  {
+    section: "people",
+    id: "resellers",
+    label: M.resellers,
+    icon: Store,
+    requires: ["tenant.manage"],
+    tenantTypes: ["platform_owner"],
+    children: [
+      { id: "reseller-list", label: M.resellerList, icon: List, href: PANEL_RESELLERS },
+      { id: "reseller-packages", label: M.resellerPackages, icon: Boxes, href: PANEL_RESELLER_PACKAGES },
+      { id: "reseller-limits", label: M.resellerLimits, icon: Gauge, href: PANEL_RESELLER_LIMITS },
+    ],
+  },
+
+  // ── infra ──
+  // F-027-ad. The platform's own panels. billing refuses anyone but the
+  // platform owner (`panelScopeOf`), so the tenant type gates it here too.
+  { section: "infra", id: "systems", label: M.systems, icon: Server, href: PANEL_SYSTEMS, requires: ["panel.manage"], tenantTypes: ["platform_owner"] },
+
+  // ── support ──
   // F-033-p. RLS keeps an agent to its own tenant's threads; the permission hides the page.
-  { id: "support-inbox", label: M.supportInbox, icon: Inbox, href: PANEL_SUPPORT_INBOX, requires: ["support.agent"] },
-  { id: "support-settings", label: M.supportSettings, icon: SlidersHorizontal, href: PANEL_SUPPORT_SETTINGS, requires: ["support.manage"] },
+  { section: "support", id: "support-inbox", label: M.supportInbox, icon: Inbox, href: PANEL_SUPPORT_INBOX, requires: ["support.agent"] },
+  { section: "support", id: "support-settings", label: M.supportSettings, icon: SlidersHorizontal, href: PANEL_SUPPORT_SETTINGS, requires: ["support.manage"] },
   // F-414-d. tenant-service decides whose guides: the platform's for its own admin, else the tenant's.
-  { id: "guides", label: M.guides, icon: BookMarked, href: PANEL_GUIDES, requires: ["guide.manage"] },
-  { id: "settings", label: M.settings, icon: Settings, href: PANEL_SETTINGS },
+  { section: "support", id: "guides", label: M.guides, icon: BookMarked, href: PANEL_GUIDES, requires: ["guide.manage"] },
+
+  { section: "footer", id: "settings", label: M.settings, icon: Settings, href: PANEL_SETTINGS },
 ];
 
 export function isMenuGroup<T extends PanelMenuEntry | VisibleMenuEntry>(
@@ -307,6 +348,38 @@ export function menuHrefs(entries: readonly VisibleMenuEntry[]): string[] {
   );
 }
 
+export interface VisibleMenuSection {
+  id: MenuSectionId;
+  /** A `common` namespace key. */
+  label: string;
+  entries: VisibleMenuEntry[];
+}
+
+/**
+ * The visible menu under N1's headings, in N1's order (N2): a section with
+ * nothing visible is left out, and the footer's entries are `menuFooter`'s.
+ * The sidebar draws headings only when more than one section is left — a
+ * caller who sees only `account` sees none.
+ */
+export function menuSections(entries: readonly VisibleMenuEntry[]): VisibleMenuSection[] {
+  return MENU_SECTIONS.map((s) => ({
+    id: s.id,
+    label: s.label,
+    entries: entries.filter((e) => (e.section ?? "account") === s.id),
+  })).filter((s) => s.entries.length > 0);
+}
+
+/** The entries drawn in the sidebar's footer, above logout (N1: settings). */
+export function menuFooter(entries: readonly VisibleMenuEntry[]): VisibleMenuEntry[] {
+  return entries.filter((e) => e.section === "footer");
+}
+
+/** A menu badge's text (N4): nothing at zero or unknown, the count to 9, then `9+`. */
+export function badgeLabel(count: number | null): string | null {
+  if (count === null || count <= 0) return null;
+  return count > 9 ? "9+" : String(count);
+}
+
 const trimSlash = (path: string) =>
   path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
 
@@ -334,14 +407,16 @@ export function activeHref(
 export interface MenuCrumb {
   /** A `common` namespace key. */
   label: string;
-  /** `null` for a group, which is a heading and not a page. */
+  /** `null` for a section or a group, which are headings and not pages. */
   href: string | null;
+  /** A section's heading (UX-1-j) — drawn only beside a trail that is drawn anyway. */
+  section?: true;
 }
 
 /**
  * The breadcrumb trail for `pathname` (UX-1-i, `contract.ux.md` K14): the menu
- * tree from the top down to the entry `activeHref` would light up — a group,
- * then its page. Empty on a path no entry owns. It reads the whole menu, not
+ * tree from the top down to the entry `activeHref` would light up — its
+ * section (UX-1-j; none for the footer), a group, then its page. Empty on a path no entry owns. It reads the whole menu, not
  * the caller's visible one: whoever is on the page may see where it sits.
  *
  * An `href` that is a function of a tenant id is matched with any one segment
@@ -358,14 +433,17 @@ export function menuTrail(entries: readonly PanelMenuEntry[], pathname: string):
   };
   const trails: { href: string; trail: MenuCrumb[] }[] = [];
   for (const entry of entries) {
+    const placed = entry.section ?? "account";
+    const section = MENU_SECTIONS.find((s) => s.id === placed);
+    const top: MenuCrumb[] = section ? [{ label: section.label, href: null, section: true }] : [];
     if (isMenuGroup(entry)) {
       for (const child of entry.children) {
         const href = hrefOf(child);
-        if (href) trails.push({ href, trail: [{ label: entry.label, href: null }, { label: child.label, href }] });
+        if (href) trails.push({ href, trail: [...top, { label: entry.label, href: null }, { label: child.label, href }] });
       }
     } else {
       const href = hrefOf(entry);
-      if (href) trails.push({ href, trail: [{ label: entry.label, href }] });
+      if (href) trails.push({ href, trail: [...top, { label: entry.label, href }] });
     }
   }
   const active = activeHref(

@@ -31,7 +31,7 @@ export interface PageHeaderProps {
  * actions at the end, and above them the breadcrumb trail from `md` up — the
  * menu tree to this page (`menuTrail`) and the page's own `tail`. Below `md`
  * the trail is one back link to the nearest crumb that is a page. A page alone
- * at the top of the menu has no trail to show.
+ * in its section, with no group and no tail, has no trail to show.
  */
 export function PageHeader({ title, subtitle, icon: Icon, actions, tail, className }: PageHeaderProps) {
   const { t, isRtl } = useLocale();
@@ -39,9 +39,12 @@ export function PageHeader({ title, subtitle, icon: Icon, actions, tail, classNa
   const pathname = usePathname() ?? "";
 
   const crumbs = [
-    ...menuTrail(PANEL_MENU, pathname).map((c) => ({ label: t("common", c.label), href: c.href })),
-    ...(tail ? [{ label: tail, href: null }] : []),
+    ...menuTrail(PANEL_MENU, pathname).map((c) => ({ label: t("common", c.label), href: c.href, section: c.section })),
+    ...(tail ? [{ label: tail, href: null, section: undefined }] : []),
   ];
+  // A section's name alone before the page is not a trail (UX-1-j): one is
+  // drawn when a group or a tail makes two crumbs besides it.
+  const drawn = crumbs.filter((c) => !c.section).length > 1;
   const last = crumbs.length - 1;
   const back = crumbs.slice(0, last).reverse().find((c) => c.href !== null);
   const Separator = isRtl ? ChevronLeft : ChevronRight;
@@ -49,7 +52,7 @@ export function PageHeader({ title, subtitle, icon: Icon, actions, tail, classNa
 
   return (
     <header className={cn("flex flex-col gap-2", className)}>
-      {crumbs.length > 1 && (
+      {drawn && (
         <nav aria-label={t("common", K.breadcrumb)} className="hidden md:block">
           <ol className="flex flex-wrap items-center gap-1 text-xs text-text-secondary">
             {crumbs.map((c, i) => (

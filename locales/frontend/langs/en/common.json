@@ -12,7 +12,6 @@
       "dashboard": "Dashboard",
       "buy": "Buy a service",
       "myServices": "My services",
-      "financial": "Finances",
       "financialHistory": "Financial history",
       "deposit": "Top up",
       "gateways": "Payment gateways",
@@ -35,7 +34,11 @@
       "lotterySettings": "Lottery settings",
       "supportInbox": "Support inbox",
       "supportSettings": "Support settings",
-      "guides": "Guides"
+      "guides": "Guides",
+      "wallet": "Wallet",
+      "resellerList": "Reseller list",
+      "resellerPackages": "Reseller packages",
+      "resellerLimits": "Reseller limits"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -65,7 +68,16 @@
       "body": "The link may be old, or the address mistyped.",
       "home": "Go to the dashboard"
     },
-    "progress": "Loading the page"
+    "progress": "Loading the page",
+    "sections": {
+      "account": "My account",
+      "sales": "Sales",
+      "finance": "Finance",
+      "people": "People",
+      "infra": "Infrastructure",
+      "support": "Support desk"
+    },
+    "badge": "{{label}}, {{count}} new"
   },
   "gateways": {
     "title": "Payment gateways",
