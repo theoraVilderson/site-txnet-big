@@ -9,7 +9,7 @@ import { lotteryAdminApi, type AdminLottery, type LotteryPrizeType } from "@/lib
 import { displayZone } from "@/lib/time-zone";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { Select } from "../../../_components/kit/Select";
-import { Alert, Field, input, primaryButton, quietButton } from "../../../catalog/_components/catalog-ui";
+import { Field } from "../../../catalog/_components/catalog-ui";
 import { VariantPicker } from "../../../coupons/_components/VariantPicker";
 import {
   LOTTERY_ADMIN_KEYS as K,
@@ -25,6 +25,7 @@ import {
   type LotteryPrizeForm,
 } from "../_lib/lottery-admin";
 import { useLotteryMessage } from "./lottery-admin-ui";
+import { Alert, Button, Checkbox, IconButton, Input, Textarea } from "../../../_components/kit";
 
 /**
  * A lottery's draft: a new one, or a draft rewritten whole (F-707-i rule 1).
@@ -95,7 +96,7 @@ export function LotteryEditor({ from, onCancel, onSaved }: { from: AdminLottery 
 
       <div className="grid gap-4 md:grid-cols-2">
         <Field label={t("common", K.fields.title)} error={shown(check.fields.title)}>
-          <input className={input} dir="auto" value={form.title} onChange={(e) => set("title", e.target.value)} />
+          <Input dir="auto" value={form.title} onChange={(e) => set("title", e.target.value)} />
         </Field>
         <Field label={t("common", K.fields.group)} error={shown(check.fields.userGroupId)}>
           {groups === null ? (
@@ -107,12 +108,12 @@ export function LotteryEditor({ from, onCancel, onSaved }: { from: AdminLottery 
               options={[{ value: "", label: t("common", K.fields.pickGroup) }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
             />
           ) : (
-            <input className={input} dir="ltr" placeholder={t("common", K.fields.groupId)} value={form.userGroupId} onChange={(e) => set("userGroupId", e.target.value)} />
+            <Input dir="ltr" placeholder={t("common", K.fields.groupId)} value={form.userGroupId} onChange={(e) => set("userGroupId", e.target.value)} />
           )}
         </Field>
         <div className="md:col-span-2">
           <Field label={t("common", K.fields.description)} error={shown(check.fields.description)} hint={t("common", K.fields.optional)}>
-            <textarea className={`${input} min-h-20`} dir="auto" value={form.description} onChange={(e) => set("description", e.target.value)} />
+            <Textarea className="min-h-20" dir="auto" value={form.description} onChange={(e) => set("description", e.target.value)} />
           </Field>
         </div>
         <Field label={t("common", K.fields.entryMode)}>
@@ -123,7 +124,7 @@ export function LotteryEditor({ from, onCancel, onSaved }: { from: AdminLottery 
           />
         </Field>
         <Field label={t("common", K.fields.closesAt)} error={shown(check.fields.closesAt)} hint={t("common", K.fields.closesAtHint, { zone: zone ?? "—" })}>
-          <input className={input} dir="ltr" type="datetime-local" value={form.closesAt} onChange={(e) => set("closesAt", e.target.value)} />
+          <Input dir="ltr" type="datetime-local" value={form.closesAt} onChange={(e) => set("closesAt", e.target.value)} />
         </Field>
       </div>
 
@@ -131,15 +132,12 @@ export function LotteryEditor({ from, onCancel, onSaved }: { from: AdminLottery 
         <h3 className="text-xs font-bold text-text-primary">{t("common", K.fields.rules)}</h3>
         <div className="grid gap-4 md:grid-cols-3">
           <Field label={t("common", K.fields.minAgeHours)} error={shown(check.fields.requiresMinAccountAgeHours)}>
-            <input className={input} dir="ltr" inputMode="numeric" value={form.requiresMinAccountAgeHours} onChange={(e) => set("requiresMinAccountAgeHours", e.target.value)} />
+            <Input dir="ltr" inputMode="numeric" value={form.requiresMinAccountAgeHours} onChange={(e) => set("requiresMinAccountAgeHours", e.target.value)} />
           </Field>
           <Field label={t("common", K.fields.reservesCount)} error={shown(check.fields.reservesCount)} hint={t("common", K.fields.reservesHint)}>
-            <input className={input} dir="ltr" inputMode="numeric" value={form.reservesCount} onChange={(e) => set("reservesCount", e.target.value)} />
+            <Input dir="ltr" inputMode="numeric" value={form.reservesCount} onChange={(e) => set("reservesCount", e.target.value)} />
           </Field>
-          <label className="flex items-center gap-2 self-center text-xs font-bold text-text-primary">
-            <input type="checkbox" checked={form.requiresPhoneVerified} onChange={(e) => set("requiresPhoneVerified", e.target.checked)} />
-            {t("common", K.fields.phoneVerified)}
-          </label>
+          <Checkbox checked={form.requiresPhoneVerified} onChange={(on) => set("requiresPhoneVerified", on)} label={t("common", K.fields.phoneVerified)} />
         </div>
       </div>
 
@@ -152,21 +150,16 @@ export function LotteryEditor({ from, onCancel, onSaved }: { from: AdminLottery 
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold text-text-primary">{t("common", K.prizes.rank, { n: i + 1 })}</span>
                 <div className="flex gap-1">
-                  <button type="button" className={quietButton} disabled={i === 0} onClick={() => move(i, -1)} aria-label={t("common", K.prizes.moveUp)}>
-                    <ArrowUp size={12} aria-hidden />
-                  </button>
-                  <button type="button" className={quietButton} disabled={i === form.prizes.length - 1} onClick={() => move(i, 1)} aria-label={t("common", K.prizes.moveDown)}>
-                    <ArrowDown size={12} aria-hidden />
-                  </button>
-                  <button type="button" className={quietButton} onClick={() => setForm((f) => ({ ...f, prizes: f.prizes.filter((_, j) => j !== i) }))}>
-                    <Trash2 size={12} aria-hidden />
+                  <IconButton size="sm" disabled={i === 0} onClick={() => move(i, -1)} aria-label={t("common", K.prizes.moveUp)} icon={<ArrowUp size={12} aria-hidden />} />
+                  <IconButton size="sm" disabled={i === form.prizes.length - 1} onClick={() => move(i, 1)} aria-label={t("common", K.prizes.moveDown)} icon={<ArrowDown size={12} aria-hidden />} />
+                  <Button variant="quiet" size="sm" onClick={() => setForm((f) => ({ ...f, prizes: f.prizes.filter((_, j) => j !== i) }))} icon={<Trash2 size={12} aria-hidden />}>
                     {t("common", K.prizes.remove)}
-                  </button>
+                  </Button>
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-4">
                 <Field label={t("common", K.prizes.label)} error={e.label}>
-                  <input className={input} dir="auto" value={p.label} onChange={(ev) => setPrize(i, { label: ev.target.value })} />
+                  <Input dir="auto" value={p.label} onChange={(ev) => setPrize(i, { label: ev.target.value })} />
                 </Field>
                 <Field label={t("common", K.prizes.type)}>
                   <Select
@@ -180,7 +173,7 @@ export function LotteryEditor({ from, onCancel, onSaved }: { from: AdminLottery 
                     label={t("common", p.prizeType === "bonus_traffic_gb" ? K.prizes.valueGb : p.prizeType === "extra_days" ? K.prizes.valueDays : K.prizes.valuePercent)}
                     error={e.prizeValue}
                   >
-                    <input className={input} dir="ltr" inputMode="decimal" value={p.prizeValue} onChange={(ev) => setPrize(i, { prizeValue: ev.target.value })} />
+                    <Input dir="ltr" inputMode="decimal" value={p.prizeValue} onChange={(ev) => setPrize(i, { prizeValue: ev.target.value })} />
                   </Field>
                 )}
                 {p.prizeType === "discount_coupon" && (
@@ -189,8 +182,7 @@ export function LotteryEditor({ from, onCancel, onSaved }: { from: AdminLottery 
                       {templates === null ? (
                         <p className="py-2 text-xs text-text-secondary">{t("common", K.prizes.templatesLoading)}</p>
                       ) : templates === "failed" ? (
-                        <input
-                          className={input}
+                        <Input
                           dir="ltr"
                           placeholder={t("common", K.prizes.templateId)}
                           value={p.couponTemplateId}
@@ -207,7 +199,7 @@ export function LotteryEditor({ from, onCancel, onSaved }: { from: AdminLottery 
                       )}
                     </Field>
                     <Field label={t("common", K.prizes.validDays)} error={e.couponValidDays}>
-                      <input className={input} dir="ltr" inputMode="numeric" value={p.couponValidDays} onChange={(ev) => setPrize(i, { couponValidDays: ev.target.value })} />
+                      <Input dir="ltr" inputMode="numeric" value={p.couponValidDays} onChange={(ev) => setPrize(i, { couponValidDays: ev.target.value })} />
                     </Field>
                   </>
                 )}
@@ -217,29 +209,28 @@ export function LotteryEditor({ from, onCancel, onSaved }: { from: AdminLottery 
                   </Field>
                 )}
                 <Field label={t("common", K.prizes.winnersCount)} error={e.winnersCount}>
-                  <input className={input} dir="ltr" inputMode="numeric" value={p.winnersCount} onChange={(ev) => setPrize(i, { winnersCount: ev.target.value })} />
+                  <Input dir="ltr" inputMode="numeric" value={p.winnersCount} onChange={(ev) => setPrize(i, { winnersCount: ev.target.value })} />
                 </Field>
               </div>
             </div>
           );
         })}
         {form.prizes.length < PRIZES_MAX && (
-          <button type="button" className={quietButton} onClick={() => setForm((f) => ({ ...f, prizes: [...f.prizes, emptyLotteryPrize()] }))}>
-            <Plus size={12} aria-hidden />
+          <Button variant="quiet" size="sm" onClick={() => setForm((f) => ({ ...f, prizes: [...f.prizes, emptyLotteryPrize()] }))} icon={<Plus size={12} aria-hidden />}>
             {t("common", K.prizes.add)}
-          </button>
+          </Button>
         )}
       </div>
 
-      {tried && check.overall && <Alert>{t("common", check.overall)}</Alert>}
-      {failure && <Alert>{failure}</Alert>}
+      {tried && check.overall && <Alert tone="error">{t("common", check.overall)}</Alert>}
+      {failure && <Alert tone="error">{failure}</Alert>}
       <div className="flex flex-wrap justify-end gap-2">
-        <button type="button" className={quietButton} onClick={onCancel} disabled={saving}>
+        <Button variant="quiet" size="sm" onClick={onCancel} disabled={saving}>
           {t("common", K.editor.cancel)}
-        </button>
-        <button type="button" className={primaryButton} onClick={save} disabled={saving}>
+        </Button>
+        <Button variant="primary" size="sm" onClick={save} disabled={saving}>
           {t("common", saving ? K.editor.saving : K.editor.save)}
-        </button>
+        </Button>
       </div>
     </section>
   );

@@ -9,11 +9,12 @@ import { formatMoney } from "../../../_lib/money";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { formatDay } from "../../_lib/wheel";
 import { WHEEL_SETTINGS_KEYS as K, canManageWheel } from "../_lib/wheel-settings";
-import { Alert, primaryButton, quietButton, useMessage } from "./wheel-settings-ui";
+import { Alert, useMessage } from "./wheel-settings-ui";
 import { WheelEditor } from "./WheelEditor";
 import { WheelReport } from "./WheelReport";
 import { WheelVersions } from "./WheelVersions";
 import { PageHeader } from "../../../_components/kit/PageHeader";
+import { Button, Tabs } from "../../../_components/kit";
 
 type Tab = "settings" | "versions" | "report";
 
@@ -79,8 +80,6 @@ export function WheelSettingsView() {
     setEditing(v ?? "blank");
   };
   const money = (amount: string, currency: string) => formatMoney(amount, currency, { lang, t });
-  const tabButton = (id: Tab) =>
-    `rounded-lg px-3 py-1.5 text-xs font-bold ${tab === id ? "bg-[var(--leaf-bg)] text-primary" : "text-text-secondary hover:text-text-primary"}`;
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
@@ -91,22 +90,21 @@ export function WheelSettingsView() {
         actions={
           <>
             {state && !editing && (
-              <button type="button" className={primaryButton} onClick={() => startFrom(latest)}>
-                <Plus size={14} aria-hidden />
+              <Button variant="primary" size="sm" onClick={() => startFrom(latest)} icon={<Plus size={14} aria-hidden />}>
                 {t("common", K.newVersion)}
-              </button>
+              </Button>
             )}
           </>
         }
       />
 
-      <nav className="flex gap-1" role="tablist">
-        {(["settings", "versions", "report"] as const).map((id) => (
-          <button key={id} type="button" role="tab" aria-selected={tab === id} className={tabButton(id)} onClick={() => setTab(id)}>
-            {t("common", K.tabs[id])}
-          </button>
-        ))}
-      </nav>
+      <Tabs<Tab>
+        ariaLabel={t("common", K.title)}
+        variant="pills"
+        value={tab}
+        onChange={setTab}
+        tabs={(["settings", "versions", "report"] as const).map((id) => ({ value: id, label: t("common", K.tabs[id]) }))}
+      />
 
       {notice && <p className="text-xs font-bold text-primary">{notice}</p>}
 
@@ -117,10 +115,9 @@ export function WheelSettingsView() {
       ) : error || !state ? (
         <div className="flex flex-wrap items-center gap-3">
           <Alert>{message(error)}</Alert>
-          <button type="button" className={quietButton} onClick={reload}>
-            <RotateCw size={12} aria-hidden />
+          <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
             {t("common", K.retry)}
-          </button>
+          </Button>
         </div>
       ) : tab === "versions" ? (
         <WheelVersions state={state} onStartFrom={startFrom} />
@@ -156,10 +153,9 @@ export function WheelSettingsView() {
               }}
             />
           ) : !latest ? (
-            <button type="button" className={primaryButton} onClick={() => startFrom(null)}>
-              <Plus size={14} aria-hidden />
+            <Button variant="primary" size="sm" onClick={() => startFrom(null)} icon={<Plus size={14} aria-hidden />}>
               {t("common", K.newVersion)}
-            </button>
+            </Button>
           ) : null}
         </div>
       )}

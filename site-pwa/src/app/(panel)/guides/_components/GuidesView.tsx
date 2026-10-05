@@ -9,10 +9,11 @@ import { GUIDE_STATS_DAYS, guideApi, type GuideKind, type GuideLang, type GuideL
 import { panelGuidePath } from "@/lib/routes";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { Select } from "../../_components/kit/Select";
-import { Field, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
+import { Field } from "../../catalog/_components/catalog-ui";
 import { GUIDE_KEYS as K, GUIDE_KEY_PATTERN, GUIDE_KINDS, GUIDE_LANGS, KIND_KEYS } from "../_lib/guides";
 import { Badge, NoteLine, StateBadge, useAct, useGuideMessage } from "./guide-ui";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { Button, Input, Textarea, buttonClass } from "../../_components/kit";
 
 /**
  * `/guides` (F-414-d): the caller's own guides — the platform's, for the
@@ -79,10 +80,9 @@ export function GuidesView() {
             <p role="alert" className="text-xs font-bold text-error">
               {message(error)}
             </p>
-            <button type="button" className={quietButton} onClick={reload}>
-              <RotateCw size={12} aria-hidden />
+            <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
               {t("common", K.retry)}
-            </button>
+            </Button>
           </div>
         ) : (
           <TableSkeleton rows={4} columns={3} withPagination={false} />
@@ -122,7 +122,7 @@ export function GuidesView() {
                     {g.hasDraft && g.state !== "draft" && <Badge className="bg-gold-bg text-text-primary">{t("common", K.hasDraft)}</Badge>}
                     <span className="text-[11px] text-text-secondary">{g.publishedLangs.map((l) => t("common", K.language[l])).join("، ")}</span>
                     {stats && <GuideNumbers stat={stats.get(g.id)} />}
-                    <Link href={panelGuidePath(g.id)} className={`${quietButton} ms-auto`}>
+                    <Link href={panelGuidePath(g.id)} className={buttonClass({ variant: "quiet", size: "sm", className: "ms-auto" })}>
                       <Pencil size={12} aria-hidden />
                       {t("common", K.open)}
                     </Link>
@@ -148,20 +148,19 @@ export function GuidesView() {
                       {g.overriddenBy && <Badge className="bg-leaf-bg text-primary">{t("common", K.overriddenBadge)}</Badge>}
                       {stats && <GuideNumbers stat={stats.get(g.id)} />}
                       <div className="ms-auto flex flex-wrap gap-1">
-                        <Link href={panelGuidePath(g.overriddenBy ?? g.id)} className={quietButton}>
+                        <Link href={panelGuidePath(g.overriddenBy ?? g.id)} className={buttonClass({ variant: "quiet", size: "sm" })}>
                           <Eye size={12} aria-hidden />
                           {t("common", g.overriddenBy ? K.open : K.view)}
                         </Link>
                         {!g.overriddenBy && (
-                          <button type="button" className={quietButton} disabled={busy} onClick={() => override(g.key)}>
-                            <Pencil size={12} aria-hidden />
+                          <Button variant="quiet" size="sm" disabled={busy} onClick={() => override(g.key)} icon={<Pencil size={12} aria-hidden />}>
                             {t("common", K.override)}
-                          </button>
+                          </Button>
                         )}
-                        <button type="button" className={quietButton} disabled={busy} onClick={() => toggleHidden(g.key, g.hidden)}>
+                        <Button variant="quiet" size="sm" disabled={busy} onClick={() => toggleHidden(g.key, g.hidden)}>
                           {g.hidden ? <Eye size={12} aria-hidden /> : <EyeOff size={12} aria-hidden />}
                           {t("common", g.hidden ? K.unhide : K.hide)}
-                        </button>
+                        </Button>
                       </div>
                     </li>
                   ))}
@@ -216,10 +215,9 @@ function NewGuide({ onCreated }: { onCreated: (id: string) => void }) {
 
   if (!open) {
     return (
-      <button type="button" className={primaryButton} onClick={() => setOpen(true)}>
-        <Plus size={14} aria-hidden />
+      <Button variant="primary" size="sm" onClick={() => setOpen(true)} icon={<Plus size={14} aria-hidden />}>
         {t("common", K.newGuide)}
-      </button>
+      </Button>
     );
   }
 
@@ -231,7 +229,7 @@ function NewGuide({ onCreated }: { onCreated: (id: string) => void }) {
   return (
     <div className="grid gap-3 rounded-2xl border border-card-border bg-card-bg p-4 sm:grid-cols-2">
       <Field label={t("common", K.key)} hint={t("common", K.keyHint)} error={keyError}>
-        <input className={`${input} font-mono`} dir="ltr" value={key} onChange={(e) => setKey(e.target.value.trim())} maxLength={60} />
+        <Input className="font-mono" dir="ltr" value={key} onChange={(e) => setKey(e.target.value.trim())} maxLength={60} />
       </Field>
       <Field label={t("common", K.kindLabel)}>
         <Select value={kind} onChange={(v) => setKind(v as GuideKind)} options={GUIDE_KINDS.map((k) => ({ value: k, label: t("common", KIND_KEYS[k]) }))} />
@@ -240,20 +238,20 @@ function NewGuide({ onCreated }: { onCreated: (id: string) => void }) {
         <Select value={lang} onChange={(v) => setLang(v as GuideLang)} options={GUIDE_LANGS.map((l) => ({ value: l, label: t("common", K.language[l]) }))} />
       </Field>
       <Field label={t("common", K.titleLabel)}>
-        <input className={input} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} />
+        <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} />
       </Field>
       <div className="sm:col-span-2">
         <Field label={t("common", K.block.text)} hint={t("common", K.textHint)}>
-          <textarea className={`${input} min-h-24`} value={text} onChange={(e) => setText(e.target.value)} />
+          <Textarea className="min-h-24" value={text} onChange={(e) => setText(e.target.value)} />
         </Field>
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
-        <button type="button" className={primaryButton} disabled={!ready || busy} onClick={create}>
+        <Button variant="primary" size="sm" disabled={!ready || busy} onClick={create}>
           {t("common", K.create)}
-        </button>
-        <button type="button" className={quietButton} onClick={() => setOpen(false)}>
+        </Button>
+        <Button variant="quiet" size="sm" onClick={() => setOpen(false)}>
           {t("common", K.cancel)}
-        </button>
+        </Button>
         <NoteLine note={note} />
       </div>
     </div>

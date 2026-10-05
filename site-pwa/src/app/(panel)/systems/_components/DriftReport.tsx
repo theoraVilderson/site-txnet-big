@@ -8,6 +8,7 @@ import { formatInstant } from "../../_lib/datetime";
 import { DRIFT_EVENT_KEYS, SYSTEMS_KEYS as K, canAcknowledge, haltsCollection } from "../_lib/systems";
 import { ListState, NoteForm, Section, StateFilter, useSystemsError } from "./parts";
 import { useCursorList } from "./useCursorList";
+import { Button } from "../../_components/kit";
 
 const FILTERS = [
   { id: "open", label: K.filter.open },
@@ -42,9 +43,9 @@ export function DriftReport({ onAcknowledged }: { onAcknowledged: () => Promise<
           ))}
         </ul>
         {list.next && (
-          <button type="button" onClick={() => void list.more()} className="self-center text-xs font-bold text-primary">
+          <Button variant="quiet" size="sm" onClick={() => void list.more()} className="self-center text-primary hover:text-primary">
             {t("common", K.more)}
-          </button>
+          </Button>
         )}
       </ListState>
     </Section>
@@ -113,13 +114,13 @@ function DriftItem({ event, onAcknowledged }: { event: SystemsDriftEvent; onAckn
           {event.note && <span className="text-text-secondary">{event.note}</span>}
         </div>
         {canAcknowledge(event) && !formOpen && (
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => setFormOpen(true)}
-            className="rounded-xl bg-primary px-3 py-2 text-xs font-bold text-text-on-accent"
           >
             {t("common", K.drift.acknowledge)}
-          </button>
+          </Button>
         )}
       </div>
       {failure && (

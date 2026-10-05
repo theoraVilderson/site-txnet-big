@@ -10,11 +10,11 @@ import { supportAgentApi, type AgentConversation, type InboxView } from "@/lib/s
 import { formatInstant } from "../../_lib/datetime";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
-import { Alert, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { AGENT_KEYS as K, INBOX_VIEWS, PRIORITY_KEYS, VIEW_KEYS, slaState } from "../_lib/support-agent";
 import { StatusPill } from "./SupportView";
 import { usePresence } from "./usePresence";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { Alert, Button, IconButton, Tabs } from "../../_components/kit";
 
 /**
  * The agent's inbox (F-033-p) over `/api/support/agent/conversations`
@@ -81,42 +81,34 @@ export function SupportInboxView() {
             <div className="flex items-center gap-2 rounded-xl border border-card-border bg-card-bg px-3 py-2 text-xs text-text-secondary">
               <span className={`inline-block h-2 w-2 rounded-full ${presence.online ? "bg-success" : "bg-text-secondary/40"}`} aria-hidden />
               {t("common", presence.online ? K.presence.online : K.presence.away)}
-              <button type="button" className={quietButton} onClick={presence.toggle}>
+              <Button variant="quiet" size="sm" onClick={presence.toggle}>
                 {t("common", presence.online ? K.presence.goAway : K.presence.goOnline)}
-              </button>
+              </Button>
             </div>
           </>
         }
       />
 
-      <div role="tablist" className="flex flex-wrap gap-2">
-        {INBOX_VIEWS.map((v) => (
-          <button
-            key={v}
-            type="button"
-            role="tab"
-            aria-selected={view === v}
-            onClick={() => {
-              setItems(null);
-              setView(v);
-            }}
-            className={view === v ? primaryButton : `${quietButton} border border-card-border px-3 py-2`}
-          >
-            {t("common", VIEW_KEYS[v])}
-          </button>
-        ))}
-        <button type="button" className={quietButton} onClick={reload} aria-label={t("common", K.retry)}>
-          <RotateCw size={12} aria-hidden />
-        </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Tabs
+          ariaLabel={t("common", K.title)}
+          variant="pills"
+          value={view}
+          onChange={(v) => {
+            setItems(null);
+            setView(v);
+          }}
+          tabs={INBOX_VIEWS.map((v) => ({ value: v, label: t("common", VIEW_KEYS[v]) }))}
+        />
+        <IconButton size="sm" onClick={reload} aria-label={t("common", K.retry)} icon={<RotateCw size={12} aria-hidden />} />
       </div>
 
       {error && !items ? (
         <div className="flex flex-wrap items-center gap-3">
-          <Alert>{errorMessage(error)}</Alert>
-          <button type="button" className={quietButton} onClick={reload}>
-            <RotateCw size={12} aria-hidden />
+          <Alert tone="error">{errorMessage(error)}</Alert>
+          <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
             {t("common", K.retry)}
-          </button>
+          </Button>
         </div>
       ) : items === null ? (
         <TableSkeleton rows={5} columns={3} withPagination={false} />
@@ -150,11 +142,11 @@ export function SupportInboxView() {
             ))}
           </ul>
           {nextAfter && (
-            <button type="button" className={quietButton} onClick={more}>
+            <Button variant="quiet" size="sm" onClick={more}>
               {t("common", K.more)}
-            </button>
+            </Button>
           )}
-          {error !== null && <Alert>{errorMessage(error)}</Alert>}
+          {error !== null && <Alert tone="error">{errorMessage(error)}</Alert>}
         </>
       )}
     </div>

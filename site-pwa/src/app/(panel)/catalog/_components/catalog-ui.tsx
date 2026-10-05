@@ -12,14 +12,6 @@ import { useCatalogSurface } from "../_lib/surface";
 /** The pieces every catalog sheet and the wizard share. */
 
 /**
- * The look before the kit (UX-1-c). Kept only for the pages that still import
- * them until UX-1-ad / UX-1-ae move them; the catalog itself no longer does.
- */
-export const input = "w-full rounded-xl border border-card-border bg-bg-inner px-3 py-2 text-sm text-text-primary outline-none focus:border-primary";
-export const primaryButton = "inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-on-accent shadow-sm disabled:opacity-50";
-export const quietButton = "inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-primary hover:bg-[var(--leaf-bg)] disabled:opacity-50";
-
-/**
  * The refusal's own sentence, else the generic answer for that error. The
  * surface answers first: a reseller's screen has its own wording for the same
  * reasons, and for the two doors the ambient page never meets (F-066-w8).
@@ -60,10 +52,11 @@ export function Sheet({ title, onClose, children, footer }: { title: ReactNode; 
 }
 
 /**
- * A labelled control, the refusal given as a catalog key. The `<label>` still
- * wraps the control: some callers' children are not kit controls yet, and the
- * kit `Field` labels by id. It becomes the kit `Field` in UX-1-ae, when every
- * child is one (contract.ux.md R1).
+ * A labelled control, the refusal given as a catalog key, in the kit `Field`'s
+ * type. The `<label>` wraps the control rather than naming it by id: its
+ * children include whole pickers (`DatePicker`, `ParentSelect`, `OwnerPicker`,
+ * `ChoicePicker`, `VariantPicker`) that are not one kit control, and a wrapping
+ * label names whatever is inside (contract.ux.md R5).
  */
 export function Field({ label, error, hint, children }: { label: string; error?: string; hint?: string; children: ReactNode }) {
   const { t } = useLocale();

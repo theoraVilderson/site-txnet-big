@@ -51,6 +51,7 @@ import {
 } from "../_lib/register-wizard";
 import { useSystemsError } from "./parts";
 import { Wizard, useWizard } from "../../_components/kit/Wizard";
+import { Button, Field, Input } from "../../_components/kit";
 
 const R = SYSTEMS_KEYS.register;
 const F = R.field;
@@ -75,9 +76,6 @@ const BUDGET_PRESETS = [
   { value: "120", label: W.budget.fast },
 ] as const;
 
-const input =
-  "w-full rounded-xl border border-card-border bg-[var(--bg-inner)] px-3 py-2.5 text-sm text-[var(--text-input)] placeholder:text-[var(--text-label)] transition-colors hover:border-[var(--accent-primary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)]";
-const invalidInput = "border-error focus:border-error";
 
 /**
  * Register a panel, one concern per step (F-027-bq): family → details →
@@ -193,25 +191,20 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
   };
 
   const labeled = (k: keyof WizardErrors, label: string, control: ReactNode, hint?: string, optional = false) => (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={`rp-${k}`} className="flex items-center gap-2 text-xs font-bold text-text-primary">
-        {label}
-        {optional && <span className="font-normal text-text-secondary">({t("common", W.optional)})</span>}
-      </label>
+    <Field id={`rp-${k}`} label={label} hint={hint} optional={optional} error={errors[k] ? t("common", errors[k]!) : serverErrors[k] || undefined}>
       {control}
-      {errorText(k) ?? (hint && <span className="text-[11px] leading-5 text-text-secondary">{hint}</span>)}
-    </div>
+    </Field>
   );
 
   const textInput = (k: keyof RegisterForm, opts: { ltr?: boolean; placeholder?: string; numeric?: boolean; maxLength?: number } = {}) => (
-    <input
+    <Input
       id={`rp-${k}`}
       dir={opts.ltr ? "ltr" : undefined}
-      className={`${input} ${errors[k] || serverErrors[k] ? invalidInput : ""} ${opts.ltr ? "font-mono" : ""}`}
+      className={opts.ltr ? "font-mono" : undefined}
       inputMode={opts.numeric ? "numeric" : undefined}
       placeholder={opts.placeholder}
       maxLength={opts.maxLength}
-      aria-invalid={Boolean(errors[k])}
+      aria-invalid={Boolean(errors[k] || serverErrors[k as keyof WizardErrors])}
       value={String(form[k])}
       onChange={(e) => set(k, e.target.value as never)}
       onKeyDown={(e) => {
@@ -423,13 +416,13 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
             {labeled(
               "username",
               t("common", W.login.username),
-              <input
+              <Input
                 id="rp-username"
                 dir="ltr"
                 autoComplete="off"
                 autoCapitalize="off"
                 spellCheck={false}
-                className={`${input} font-mono ${errors.username ? invalidInput : ""}`}
+                className="font-mono"
                 aria-invalid={Boolean(errors.username)}
                 value={parts.username}
                 onChange={(e) => setPart("username", e.target.value)}
@@ -530,13 +523,13 @@ function BudgetField({ value, onChange, error }: { value: string; onChange: (v: 
             exit={reduceMotion ? undefined : { height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <input
+            <Input
               id="rp-maxRequestsPerMinute"
               dir="ltr"
               inputMode="numeric"
               value={value}
               onChange={(e) => onChange(e.target.value)}
-              className={`${input} max-w-40 font-mono`}
+              className="max-w-40 font-mono"
               aria-label={t("common", SYSTEMS_KEYS.register.field.maxRequestsPerMinute)}
             />
           </motion.div>
@@ -643,9 +636,9 @@ function ReviewStep({ form, onEdit }: { form: RegisterForm; onEdit: (id: Registe
                 <Icon size={14} className="text-primary" aria-hidden />
                 {t("common", W.steps[id].title)}
               </h3>
-              <button type="button" onClick={() => onEdit(id)} className="rounded-lg px-2 py-1 text-[11px] font-bold text-primary hover:bg-card-bg">
+              <Button variant="quiet" size="sm" onClick={() => onEdit(id)} className="text-primary hover:text-primary">
                 {t("common", W.edit)}
-              </button>
+              </Button>
             </div>
             <dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
               {rows.map(([k, v]) => (
@@ -722,12 +715,12 @@ function DoneScreen({ name, answer, onAnother, onFinish }: { name: string; answe
         </p>
       )}
       <div className="flex w-full max-w-md flex-col-reverse gap-2 sm:flex-row">
-        <button type="button" onClick={onAnother} className="flex-1 rounded-xl border border-card-border px-4 py-2.5 text-sm font-bold text-text-primary hover:bg-[var(--bg-inner)]">
+        <Button onClick={onAnother} className="flex-1">
           {t("common", W.done.another)}
-        </button>
-        <button type="button" onClick={onFinish} className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-on-accent shadow-md hover:brightness-110">
+        </Button>
+        <Button variant="primary" onClick={onFinish} className="flex-1">
           {t("common", W.done.finish)}
-        </button>
+        </Button>
       </div>
     </div>
   );

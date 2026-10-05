@@ -21,7 +21,7 @@ import {
 import { PANEL_GUIDES } from "@/lib/routes";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { Select } from "../../_components/kit/Select";
-import { Alert, Field, input, primaryButton, quietButton, useDirOf } from "../../catalog/_components/catalog-ui";
+import { Field, useDirOf } from "../../catalog/_components/catalog-ui";
 import {
   CALLOUT_TONES,
   EDITABLE_BLOCKS,
@@ -42,10 +42,10 @@ import {
 import { GuideBlocks } from "../../_components/guide/GuideBlocks";
 import { Badge, NoteLine, StateBadge, useAct, useGuideMessage } from "./guide-ui";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { Alert, Button, buttonClass, IconButton, Input, Tabs, Textarea } from "../../_components/kit";
 
 type Tab = "texts" | "placements" | "preview";
 const TABS: readonly Tab[] = ["texts", "placements", "preview"];
-const tabButton = (on: boolean) => (on ? primaryButton : `${quietButton} border border-card-border px-3 py-2`);
 
 /**
  * `/guides/[id]` (F-414-d): one guide. Texts are edited as a draft — saving
@@ -89,11 +89,10 @@ export function GuideEditor({ id }: { id: string }) {
         <BackLink />
         {error ? (
           <div className="flex flex-wrap items-center gap-3">
-            <Alert>{message(error)}</Alert>
-            <button type="button" className={quietButton} onClick={reload}>
-              <RotateCw size={12} aria-hidden />
+            <Alert tone="error">{message(error)}</Alert>
+            <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
               {t("common", K.retry)}
-            </button>
+            </Button>
           </div>
         ) : (
           <TableSkeleton rows={5} columns={2} withPagination={false} />
@@ -152,38 +151,37 @@ export function GuideEditor({ id }: { id: string }) {
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className={primaryButton} disabled={busy || !valid || (!dirty && !guide.hasDraft)} onClick={publish}>
+            <Button variant="primary" size="sm" disabled={busy || !valid || (!dirty && !guide.hasDraft)} onClick={publish}>
               {t("common", K.publish)}
-            </button>
-            <button type="button" className={`${quietButton} border border-card-border px-3 py-2`} disabled={busy || !dirty || !valid} onClick={save}>
+            </Button>
+            <Button variant="quiet" size="sm" className="border border-card-border px-3 py-2" disabled={busy || !dirty || !valid} onClick={save}>
               {t("common", K.saveDraft)}
-            </button>
+            </Button>
             {guide.hasDraft && guide.state !== "draft" && (
-              <button type="button" className={quietButton} disabled={busy} onClick={() => setConfirming("discard")}>
+              <Button variant="quiet" size="sm" disabled={busy} onClick={() => setConfirming("discard")}>
                 {t("common", K.discardDraft)}
-              </button>
+              </Button>
             )}
             {guide.state === "archived" ? (
-              <button type="button" className={quietButton} disabled={busy} onClick={() => run(() => guideApi.restore(id))}>
+              <Button variant="quiet" size="sm" disabled={busy} onClick={() => run(() => guideApi.restore(id))}>
                 {t("common", K.restore)}
-              </button>
+              </Button>
             ) : (
-              <button type="button" className={quietButton} disabled={busy} onClick={() => run(() => guideApi.archive(id))}>
+              <Button variant="quiet" size="sm" disabled={busy} onClick={() => run(() => guideApi.archive(id))}>
                 {t("common", K.archive)}
-              </button>
+              </Button>
             )}
-            <button type="button" className={`${quietButton} ms-auto text-error`} disabled={busy} onClick={() => setConfirming("delete")}>
-              <Trash2 size={12} aria-hidden />
+            <Button variant="quiet" size="sm" className="ms-auto text-error" disabled={busy} onClick={() => setConfirming("delete")} icon={<Trash2 size={12} aria-hidden />}>
               {t("common", K.delete)}
-            </button>
+            </Button>
           </div>
           {dirty && <p className="text-xs text-text-secondary">{t("common", K.unsaved)}</p>}
           {confirming && (
             <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-card-border bg-bg-inner p-3">
               <p className="text-xs text-text-primary">{t("common", confirming === "delete" ? K.deleteConfirm : K.discardConfirm)}</p>
-              <button
-                type="button"
-                className={primaryButton}
+              <Button
+                variant="primary"
+                size="sm"
                 disabled={busy}
                 onClick={() => {
                   setConfirming(null);
@@ -192,21 +190,15 @@ export function GuideEditor({ id }: { id: string }) {
                 }}
               >
                 {t("common", confirming === "delete" ? K.delete : K.discardDraft)}
-              </button>
-              <button type="button" className={quietButton} onClick={() => setConfirming(null)}>
+              </Button>
+              <Button variant="quiet" size="sm" onClick={() => setConfirming(null)}>
                 {t("common", K.cancel)}
-              </button>
+              </Button>
             </div>
           )}
           <NoteLine note={note} />
 
-          <div role="tablist" className="flex flex-wrap gap-2">
-            {TABS.map((v) => (
-              <button key={v} type="button" role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={tabButton(tab === v)}>
-                {t("common", K.tabs[v])}
-              </button>
-            ))}
-          </div>
+          <Tabs<Tab> ariaLabel={t("common", K.title)} variant="pills" value={tab} onChange={setTab} tabs={TABS.map((v) => ({ value: v, label: t("common", K.tabs[v]) }))} />
 
           {tab === "texts" && (
             <TextsTab
@@ -230,7 +222,7 @@ export function GuideEditor({ id }: { id: string }) {
 function BackLink() {
   const { t } = useLocale();
   return (
-    <Link href={PANEL_GUIDES} className={quietButton}>
+    <Link href={PANEL_GUIDES} className={buttonClass({ variant: "quiet", size: "sm" })}>
       <ArrowLeft size={12} aria-hidden className="rtl:rotate-180" />
       {t("common", K.back)}
     </Link>
@@ -246,9 +238,9 @@ function ReadOnly({ guide }: { guide: GuideDetail }) {
   return (
     <div className="space-y-4">
       <p className="rounded-2xl border border-card-border bg-bg-inner p-3 text-xs text-text-secondary">{t("common", K.readOnly)}</p>
-      <button
-        type="button"
-        className={primaryButton}
+      <Button
+        variant="primary"
+        size="sm"
         disabled={busy}
         onClick={async () => {
           const made = await act(() => guideApi.override(guide.key));
@@ -256,7 +248,7 @@ function ReadOnly({ guide }: { guide: GuideDetail }) {
         }}
       >
         {t("common", K.override)}
-      </button>
+      </Button>
       <NoteLine note={note} />
       {guide.published.map((text) => (
         <article key={text.lang} className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-4">
@@ -284,44 +276,38 @@ function TextsTab({ guideId, form, errors, onChange }: { guideId: string; form: 
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {GUIDE_LANGS.map((l) => {
-          const has = Object.keys(errors).some((k) => k.startsWith(`${l}.`));
-          return (
-            <button key={l} type="button" onClick={() => setLang(l)} className={tabButton(lang === l)}>
-              {t("common", K.language[l])}
-              {has && <span className="ms-1 text-error">•</span>}
-            </button>
-          );
-        })}
-      </div>
-      {errors["texts"] && <Alert>{t("common", errors["texts"])}</Alert>}
+      <Tabs
+        ariaLabel={t("common", K.tabs.texts)}
+        variant="pills"
+        value={lang}
+        onChange={setLang}
+        tabs={GUIDE_LANGS.map((l) => ({
+          value: l,
+          label: t("common", K.language[l]),
+          // A language with a refused field is marked, so the error is found from any tab.
+          badge: Object.keys(errors).some((k) => k.startsWith(`${l}.`)) ? <span className="text-error">•</span> : undefined,
+        }))}
+      />
+      {errors["texts"] && <Alert tone="error">{t("common", errors["texts"])}</Alert>}
 
       <Field label={t("common", K.titleLabel)} error={err("title")}>
-        <input className={input} dir={dirOf(lang)} value={text.title} maxLength={120} onChange={(e) => set({ ...text, title: e.target.value })} />
+        <Input dir={dirOf(lang)} value={text.title} maxLength={120} onChange={(e) => set({ ...text, title: e.target.value })} />
       </Field>
 
-      {err("blocks") && <Alert>{t("common", err("blocks"))}</Alert>}
+      {err("blocks") && <Alert tone="error">{t("common", err("blocks"))}</Alert>}
       <ol className="space-y-3">
         {text.blocks.map((block, i) => (
           <li key={i} className="space-y-2 rounded-2xl border border-card-border bg-card-bg p-3">
             <div className="flex flex-wrap items-center gap-1">
               <Badge>{t("common", K.block[block.type])}</Badge>
               <div className="ms-auto flex gap-1">
-                <button type="button" className={quietButton} aria-label={t("common", K.moveUp)} onClick={() => setBlocks(moveBlock(text.blocks, i, -1))}>
-                  <ArrowUp size={12} aria-hidden />
-                </button>
-                <button type="button" className={quietButton} aria-label={t("common", K.moveDown)} onClick={() => setBlocks(moveBlock(text.blocks, i, 1))}>
-                  <ArrowDown size={12} aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  className={`${quietButton} text-error`}
+                <IconButton size="sm" aria-label={t("common", K.moveUp)} onClick={() => setBlocks(moveBlock(text.blocks, i, -1))} icon={<ArrowUp size={12} aria-hidden />} />
+                <IconButton size="sm" aria-label={t("common", K.moveDown)} onClick={() => setBlocks(moveBlock(text.blocks, i, 1))} icon={<ArrowDown size={12} aria-hidden />} />
+                <IconButton
+                  size="sm"
+                  className="text-error"
                   aria-label={t("common", K.removeBlock)}
-                  onClick={() => setBlocks(text.blocks.filter((_, j) => j !== i))}
-                >
-                  <Trash2 size={12} aria-hidden />
-                </button>
+                  onClick={() => setBlocks(text.blocks.filter((_, j) => j !== i))} icon={<Trash2 size={12} aria-hidden />} />
               </div>
             </div>
             <BlockEditor
@@ -330,7 +316,7 @@ function TextsTab({ guideId, form, errors, onChange }: { guideId: string; form: 
               dir={dirOf(lang)}
               onChange={(b) => setBlocks(text.blocks.map((x, j) => (j === i ? b : x)))}
             />
-            {err(`blocks.${i}`) && <Alert>{t("common", err(`blocks.${i}`))}</Alert>}
+            {err(`blocks.${i}`) && <Alert tone="error">{t("common", err(`blocks.${i}`))}</Alert>}
           </li>
         ))}
       </ol>
@@ -338,10 +324,9 @@ function TextsTab({ guideId, form, errors, onChange }: { guideId: string; form: 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-bold text-text-secondary">{t("common", K.addBlock)}</span>
         {EDITABLE_BLOCKS.map((type: EditableBlockType) => (
-          <button key={type} type="button" className={`${quietButton} border border-card-border`} onClick={() => setBlocks([...text.blocks, emptyBlock(type)])}>
-            <Plus size={12} aria-hidden />
+          <Button variant="quiet" size="sm" key={type} className="border border-card-border" onClick={() => setBlocks([...text.blocks, emptyBlock(type)])} icon={<Plus size={12} aria-hidden />}>
             {t("common", K.block[type])}
-          </button>
+          </Button>
         ))}
       </div>
     </div>
@@ -354,7 +339,7 @@ function BlockEditor({ guideId, block, dir, onChange }: { guideId: string; block
     case "text":
       return (
         <Field label={t("common", K.block.text)} hint={t("common", K.textHint)}>
-          <textarea className={`${input} min-h-28`} dir={dir} value={block.text} onChange={(e) => onChange({ ...block, text: e.target.value })} />
+          <Textarea className="min-h-28" dir={dir} value={block.text} onChange={(e) => onChange({ ...block, text: e.target.value })} />
         </Field>
       );
     case "image":
@@ -363,10 +348,10 @@ function BlockEditor({ guideId, block, dir, onChange }: { guideId: string; block
           <ImagePicker guideId={guideId} value={block.file} onChange={(file) => onChange({ ...block, file })} />
           <div className="flex flex-col gap-2">
             <Field label={t("common", K.imageAlt)}>
-              <input className={input} dir={dir} maxLength={200} value={block.alt} onChange={(e) => onChange({ ...block, alt: e.target.value })} />
+              <Input dir={dir} maxLength={200} value={block.alt} onChange={(e) => onChange({ ...block, alt: e.target.value })} />
             </Field>
             <Field label={t("common", K.caption)}>
-              <input className={input} dir={dir} maxLength={300} value={block.caption ?? ""} onChange={(e) => onChange({ ...block, caption: e.target.value })} />
+              <Input dir={dir} maxLength={300} value={block.caption ?? ""} onChange={(e) => onChange({ ...block, caption: e.target.value })} />
             </Field>
           </div>
         </div>
@@ -378,7 +363,7 @@ function BlockEditor({ guideId, block, dir, onChange }: { guideId: string; block
           <div className="flex flex-col gap-2">
             <ImagePicker guideId={guideId} label={t("common", K.posterUpload)} value={block.poster} onChange={(poster) => onChange({ ...block, poster })} />
             <Field label={t("common", K.caption)}>
-              <input className={input} dir={dir} maxLength={300} value={block.caption ?? ""} onChange={(e) => onChange({ ...block, caption: e.target.value })} />
+              <Input dir={dir} maxLength={300} value={block.caption ?? ""} onChange={(e) => onChange({ ...block, caption: e.target.value })} />
             </Field>
           </div>
         </div>
@@ -389,8 +374,8 @@ function BlockEditor({ guideId, block, dir, onChange }: { guideId: string; block
           {block.items.map((item, j) => (
             <div key={j} className="grid gap-2 rounded-xl bg-bg-inner p-2 sm:grid-cols-[1fr_12rem]">
               <Field label={t("common", K.stepText, { n: String(j + 1) })}>
-                <textarea
-                  className={`${input} min-h-16`}
+                <Textarea
+                  className="min-h-16"
                   dir={dir}
                   value={item.text}
                   onChange={(e) => onChange({ ...block, items: block.items.map((x, k) => (k === j ? { ...x, text: e.target.value } : x)) })}
@@ -403,22 +388,22 @@ function BlockEditor({ guideId, block, dir, onChange }: { guideId: string; block
                   value={item.image ?? ""}
                   onChange={(image) => onChange({ ...block, items: block.items.map((x, k) => (k === j ? { ...x, image } : x)) })}
                 />
-                <button
-                  type="button"
-                  className={`${quietButton} text-error`}
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  className="text-error"
                   disabled={block.items.length === 1}
                   onClick={() => onChange({ ...block, items: block.items.filter((_, k) => k !== j) })}
+                  icon={<Trash2 size={12} aria-hidden />}
                 >
-                  <Trash2 size={12} aria-hidden />
                   {t("common", K.removeStep)}
-                </button>
+                </Button>
               </div>
             </div>
           ))}
-          <button type="button" className={quietButton} disabled={block.items.length >= 30} onClick={() => onChange({ ...block, items: [...block.items, { text: "" }] })}>
-            <Plus size={12} aria-hidden />
+          <Button variant="quiet" size="sm" disabled={block.items.length >= 30} onClick={() => onChange({ ...block, items: [...block.items, { text: "" }] })} icon={<Plus size={12} aria-hidden />}>
             {t("common", K.stepAdd)}
-          </button>
+          </Button>
         </div>
       );
     case "callout":
@@ -432,11 +417,11 @@ function BlockEditor({ guideId, block, dir, onChange }: { guideId: string; block
             />
           </Field>
           <Field label={t("common", K.calloutTitle)}>
-            <input className={input} dir={dir} maxLength={120} value={block.title ?? ""} onChange={(e) => onChange({ ...block, title: e.target.value })} />
+            <Input dir={dir} maxLength={120} value={block.title ?? ""} onChange={(e) => onChange({ ...block, title: e.target.value })} />
           </Field>
           <div className="sm:col-span-2">
             <Field label={t("common", K.block.text)}>
-              <textarea className={`${input} min-h-20`} dir={dir} value={block.text} onChange={(e) => onChange({ ...block, text: e.target.value })} />
+              <Textarea className="min-h-20" dir={dir} value={block.text} onChange={(e) => onChange({ ...block, text: e.target.value })} />
             </Field>
           </div>
         </div>
@@ -454,7 +439,7 @@ function ImagePicker({ guideId, value, label, onChange }: { guideId: string; val
         // eslint-disable-next-line @next/next/no-img-element -- a stored file on this Host
         <img src={guideFileUrl(value)} alt="" className="max-h-40 rounded-xl border border-card-border object-contain" />
       )}
-      <label className={`${quietButton} cursor-pointer border border-card-border`}>
+      <label className={buttonClass({ variant: "quiet", size: "sm", className: "cursor-pointer border border-card-border" })}>
         <Upload size={12} aria-hidden />
         {busy ? t("common", K.uploading) : (label ?? t("common", K.imageUpload))}
         <input
@@ -483,7 +468,7 @@ function VideoPicker({ guideId, value, onChange }: { guideId: string; value: str
   return (
     <div className="flex flex-col gap-2">
       {value && <video src={guideVideoUrl(value)} controls playsInline preload="metadata" className="max-h-48 w-full rounded-xl bg-black" />}
-      <label className={`${quietButton} cursor-pointer border border-card-border`}>
+      <label className={buttonClass({ variant: "quiet", size: "sm", className: "cursor-pointer border border-card-border" })}>
         <Upload size={12} aria-hidden />
         {busy ? t("common", K.uploading) : t("common", K.videoUpload)}
         <input
@@ -533,7 +518,7 @@ function PlacementsTab({ guide, onSaved }: { guide: GuideDetail; onSaved: (g: Gu
               {slot.refs ? (
                 <Select value={p.targetRef} onChange={(v) => set(i, { ...p, targetRef: v })} options={slot.refs.map((r) => ({ value: r, label: r }))} />
               ) : (
-                <input className={`${input} font-mono`} dir="ltr" value={p.targetRef} maxLength={64} onChange={(e) => set(i, { ...p, targetRef: e.target.value.trim() })} />
+                <Input className="font-mono" dir="ltr" value={p.targetRef} maxLength={64} onChange={(e) => set(i, { ...p, targetRef: e.target.value.trim() })} />
               )}
             </Field>
             <Field label={t("common", K.surfaceLabel)}>
@@ -543,20 +528,17 @@ function PlacementsTab({ guide, onSaved }: { guide: GuideDetail; onSaved: (g: Gu
                 options={slot.surfaces.map((s) => ({ value: s, label: t("common", K.surface[s]) }))}
               />
             </Field>
-            <button type="button" className={`${quietButton} text-error`} aria-label={t("common", K.removeBlock)} onClick={() => setRows(rows.filter((_, j) => j !== i))}>
-              <Trash2 size={14} aria-hidden />
-            </button>
+            <IconButton size="sm" className="text-error" aria-label={t("common", K.removeBlock)} onClick={() => setRows(rows.filter((_, j) => j !== i))} icon={<Trash2 size={14} aria-hidden />} />
           </div>
         );
       })}
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={quietButton} disabled={rows.length >= 50} onClick={() => setRows([...rows, emptyPlacement("os")])}>
-          <Plus size={12} aria-hidden />
+        <Button variant="quiet" size="sm" disabled={rows.length >= 50} onClick={() => setRows([...rows, emptyPlacement("os")])} icon={<Plus size={12} aria-hidden />}>
           {t("common", K.placementAdd)}
-        </button>
-        <button
-          type="button"
-          className={primaryButton}
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
           disabled={busy || errors.some(Boolean)}
           onClick={async () => {
             const g = await act(() => guideApi.setPlacements(guide.id, rows), t("common", K.saved));
@@ -564,7 +546,7 @@ function PlacementsTab({ guide, onSaved }: { guide: GuideDetail; onSaved: (g: Gu
           }}
         >
           {t("common", K.savePlacements)}
-        </button>
+        </Button>
         <NoteLine note={note} />
       </div>
     </div>
@@ -598,16 +580,10 @@ function PreviewTab({ guideId, dirty }: { guideId: string; dirty: boolean }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {GUIDE_LANGS.map((l) => (
-          <button key={l} type="button" onClick={() => setLang(l)} className={tabButton(lang === l)}>
-            {t("common", K.language[l])}
-          </button>
-        ))}
-      </div>
+      <Tabs ariaLabel={t("common", K.tabs.preview)} variant="pills" value={lang} onChange={setLang} tabs={GUIDE_LANGS.map((l) => ({ value: l, label: t("common", K.language[l]) }))} />
       {dirty && <p className="text-xs text-text-secondary">{t("common", K.unsaved)}</p>}
       {error ? (
-        <Alert>{message(error)}</Alert>
+        <Alert tone="error">{message(error)}</Alert>
       ) : !preview ? (
         <TableSkeleton rows={3} columns={1} withPagination={false} />
       ) : (

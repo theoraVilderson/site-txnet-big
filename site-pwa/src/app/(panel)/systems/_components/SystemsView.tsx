@@ -17,6 +17,7 @@ import { HolderNamesContext } from "./parts";
 import { RegisterPanel } from "./RegisterPanel";
 import { SystemsGuide } from "./SystemsGuide";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { Button, Tabs } from "../../_components/kit";
 
 const GUIDE_CLOSED = "txnet.systems.guideClosed";
 const TABS: SystemsTab[] = ["panels", "groups", "reports"];
@@ -158,14 +159,13 @@ export function SystemsView() {
             <>
               <div className="flex flex-wrap items-center gap-2">
                 {!guideOpen && (
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
                     onClick={openGuide}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg"
+                    icon={<BookOpen size={14} aria-hidden />}
                   >
-                    <BookOpen size={14} aria-hidden />
                     {t("common", K.guide.show)}
-                  </button>
+                  </Button>
                 )}
                 <RegisterPanel open={registering} onOpen={() => setRegistering(true)} onClose={() => setRegistering(false)} onRegistered={reload} />
               </div>
@@ -182,30 +182,23 @@ export function SystemsView() {
           />
         )}
 
-        <div role="tablist" className="flex gap-1 overflow-x-auto rounded-2xl border border-card-border bg-card-bg p-1">
-          {TABS.map((id) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={tab === id}
-              onClick={() => setTab(id)}
-              className={`inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-bold ${
-                tab === id ? "bg-primary text-text-on-accent" : "text-text-secondary hover:bg-leaf-bg"
-              }`}
-            >
-              {t("common", K.tabs[id])}
-              {attention[id] > 0 && (
-                <span
-                  title={t("common", K.tabs.attention, { n: String(attention[id]) })}
-                  className="grid min-w-5 place-items-center rounded-full bg-error px-1.5 text-[10px] font-bold text-on-error"
-                >
+        <Tabs<SystemsTab>
+          ariaLabel={t("common", K.title)}
+          variant="pills"
+          value={tab}
+          onChange={setTab}
+          tabs={TABS.map((id) => ({
+            value: id,
+            label: t("common", K.tabs[id]),
+            // What needs a look, counted on its tab; its sentence names the number for a screen reader.
+            badge:
+              attention[id] > 0 ? (
+                <span title={t("common", K.tabs.attention, { n: String(attention[id]) })} className="text-error">
                   {attention[id].toLocaleString(lang)}
                 </span>
-              )}
-            </button>
-          ))}
-        </div>
+              ) : undefined,
+          }))}
+        />
 
         {tab === "panels" && <PanelList panels={panels} groups={groups} isLoading={isLoading} error={error} onRetry={reloadPanels} />}
         {tab === "groups" && (

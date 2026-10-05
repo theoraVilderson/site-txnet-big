@@ -10,11 +10,11 @@ import { panelLotteryManagePath } from "@/lib/routes";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatInstant } from "../../../_lib/datetime";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
-import { Alert, primaryButton, quietButton } from "../../../catalog/_components/catalog-ui";
 import { LOTTERY_ADMIN_KEYS as K, canManageLotteries } from "../_lib/lottery-admin";
 import { LotteryEditor } from "./LotteryEditor";
 import { StatusPill, useLotteryMessage } from "./lottery-admin-ui";
 import { PageHeader } from "../../../_components/kit/PageHeader";
+import { Alert, Button, buttonClass } from "../../../_components/kit";
 
 /**
  * A tenant admin's lotteries (F-707-o), over billing's
@@ -58,7 +58,7 @@ export function LotteryAdminView() {
   if (!allowed) {
     return (
       <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
-        <Alert>{t("common", K.notAllowed)}</Alert>
+        <Alert tone="error">{t("common", K.notAllowed)}</Alert>
       </div>
     );
   }
@@ -72,10 +72,9 @@ export function LotteryAdminView() {
         actions={
           <>
             {!creating && (
-              <button type="button" className={primaryButton} onClick={() => setCreating(true)}>
-                <Plus size={14} aria-hidden />
+              <Button variant="primary" size="sm" onClick={() => setCreating(true)} icon={<Plus size={14} aria-hidden />}>
                 {t("common", K.newLottery)}
-              </button>
+              </Button>
             )}
           </>
         }
@@ -85,11 +84,10 @@ export function LotteryAdminView() {
 
       {error ? (
         <div className="flex flex-wrap items-center gap-3">
-          <Alert>{message(error)}</Alert>
-          <button type="button" className={quietButton} onClick={reload}>
-            <RotateCw size={12} aria-hidden />
+          <Alert tone="error">{message(error)}</Alert>
+          <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
             {t("common", K.retry)}
-          </button>
+          </Button>
         </div>
       ) : rows === null ? (
         <TableSkeleton rows={4} columns={4} withPagination={false} />
@@ -110,7 +108,7 @@ export function LotteryAdminView() {
                   {l.status !== "draft" && <> · {t("common", K.list.entrants, { n: l.entrantCount })}</>}
                 </p>
               </div>
-              <Link href={panelLotteryManagePath(l.id)} className={quietButton}>
+              <Link href={panelLotteryManagePath(l.id)} className={buttonClass({ variant: "quiet", size: "sm" })}>
                 {t("common", K.open)}
               </Link>
             </li>

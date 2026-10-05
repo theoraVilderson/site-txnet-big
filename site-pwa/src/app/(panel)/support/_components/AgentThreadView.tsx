@@ -20,7 +20,6 @@ import { formatBytes } from "../../services/_lib/service-configs";
 import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
-import { Alert, input, quietButton } from "../../catalog/_components/catalog-ui";
 import { applySupportEvent, isSendKey, mergeMessages, readSupportEvent, senderKey, typingGate, type ThreadState } from "../_lib/support";
 import { AGENT_KEYS as K, PRIORITIES, PRIORITY_KEYS, agentActions } from "../_lib/support-agent";
 import { Frame } from "./SupportThreadView";
@@ -29,7 +28,7 @@ import { StatusPill } from "./SupportView";
 import { PriorityPill, SlaBadge } from "./SupportInboxView";
 import { usePresence } from "./usePresence";
 import { PageHeader } from "../../_components/kit/PageHeader";
-import { useConfirm } from "../../_components/kit";
+import { Alert, Button, Field, NativeSelect, SegmentedControl, Textarea, useConfirm } from "../../_components/kit";
 
 const TYPING_EVERY_MS = 4_000;
 
@@ -185,11 +184,10 @@ export function AgentThreadView({ id }: { id: string }) {
     return (
       <Frame>
         <div className="flex flex-wrap items-center gap-3">
-          <Alert>{errorMessage(error)}</Alert>
-          <button type="button" className={quietButton} onClick={reload}>
-            <RotateCw size={12} aria-hidden />
+          <Alert tone="error">{errorMessage(error)}</Alert>
+          <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
             {t("common", K.retry)}
-          </button>
+          </Button>
         </div>
       </Frame>
     );
@@ -223,21 +221,19 @@ export function AgentThreadView({ id }: { id: string }) {
           />
           <div className="flex flex-wrap items-center gap-2">
             {actions.canTake && (
-              <button type="button" className={quietButton} disabled={busy} onClick={() => act(() => supportAgentApi.assign(id, myId))}>
-                <Hand size={12} aria-hidden />
+              <Button variant="quiet" size="sm" disabled={busy} onClick={() => act(() => supportAgentApi.assign(id, myId))} icon={<Hand size={12} aria-hidden />}>
                 {t("common", K.thread.take)}
-              </button>
+              </Button>
             )}
             {actions.canRelease && (
-              <button type="button" className={quietButton} disabled={busy} onClick={() => act(() => supportAgentApi.assign(id, null))}>
+              <Button variant="quiet" size="sm" disabled={busy} onClick={() => act(() => supportAgentApi.assign(id, null))}>
                 {t("common", K.thread.release)}
-              </button>
+              </Button>
             )}
             {actions.canPrioritize && (
-              <label className="flex items-center gap-1 text-xs text-text-secondary">
-                {t("common", K.thread.priority)}
-                <select
-                  className="rounded-lg border border-card-border bg-bg-inner px-2 py-1 text-xs text-text-primary"
+              <Field label={t("common", K.thread.priority)}>
+                <NativeSelect
+                  className="text-xs"
                   value={conversation.priority}
                   disabled={busy}
                   onChange={(e) => act(() => supportAgentApi.priority(id, e.target.value as SupportPriority))}
@@ -247,28 +243,27 @@ export function AgentThreadView({ id }: { id: string }) {
                       {t("common", PRIORITY_KEYS[p])}
                     </option>
                   ))}
-                </select>
-              </label>
+                </NativeSelect>
+              </Field>
             )}
             {actions.canResolve && (
-              <button type="button" className={quietButton} disabled={busy} onClick={() => act(() => supportAgentApi.resolve(id))}>
-                <CheckCircle2 size={12} aria-hidden />
+              <Button variant="quiet" size="sm" disabled={busy} onClick={() => act(() => supportAgentApi.resolve(id))} icon={<CheckCircle2 size={12} aria-hidden />}>
                 {t("common", K.thread.resolve)}
-              </button>
+              </Button>
             )}
             {actions.canClose && (
-              <button
-                type="button"
-                className={quietButton}
+              <Button
+                variant="quiet"
+                size="sm"
                 disabled={busy}
                 onClick={async () => (await confirm({ title: t("common", K.thread.closeConfirm), confirmLabel: t("common", K.thread.close) })) && act(() => supportAgentApi.close(id))}
+                icon={<XCircle size={12} aria-hidden />}
               >
-                <XCircle size={12} aria-hidden />
                 {t("common", K.thread.close)}
-              </button>
+              </Button>
             )}
           </div>
-          {failure && <Alert>{failure}</Alert>}
+          {failure && <Alert tone="error">{failure}</Alert>}
           {liveOff && <p className="text-xs text-text-secondary">{t("common", K.thread.liveOff)}</p>}
         </header>
 
@@ -280,9 +275,9 @@ export function AgentThreadView({ id }: { id: string }) {
           >
             {hasEarlier && (
               <div className="text-center">
-                <button type="button" className={quietButton} onClick={earlier}>
+                <Button variant="quiet" size="sm" onClick={earlier}>
                   {t("common", K.thread.earlier)}
-                </button>
+                </Button>
               </div>
             )}
             <ThreadMessages
@@ -418,26 +413,21 @@ function AgentComposer({ id, claims, onSent }: { id: string; claims: boolean; on
 
   return (
     <form onSubmit={submit} className={`space-y-2 rounded-2xl border p-3 ${internal ? "border-dashed border-card-border bg-bg-inner" : "border-card-border bg-card-bg"}`}>
-      <div role="tablist" className="flex gap-2">
-        {[false, true].map((note) => (
-          <button
-            key={String(note)}
-            type="button"
-            role="tab"
-            aria-selected={internal === note}
-            onClick={() => setInternal(note)}
-            className={`${quietButton} ${internal === note ? "bg-[var(--leaf-bg)]" : ""}`}
-          >
-            {note ? <StickyNote size={12} aria-hidden /> : <Send size={12} aria-hidden />}
-            {t("common", note ? K.thread.note : K.thread.reply)}
-          </button>
-        ))}
-      </div>
-      <textarea
+      <SegmentedControl<"reply" | "note">
+        ariaLabel={t("common", K.thread.reply)}
+        size="sm"
+        value={internal ? "note" : "reply"}
+        onChange={(v) => setInternal(v === "note")}
+        options={[
+          { value: "reply", label: t("common", K.thread.reply), icon: Send },
+          { value: "note", label: t("common", K.thread.note), icon: StickyNote },
+        ]}
+      />
+      <Textarea
         ref={box}
         dir="auto"
         rows={3}
-        className={`${input} resize-none`}
+        className="resize-none"
         placeholder={t("common", internal ? K.thread.notePlaceholder : K.thread.replyPlaceholder)}
         value={body}
         maxLength={SUPPORT_BODY_MAX}
@@ -448,7 +438,7 @@ function AgentComposer({ id, claims, onSent }: { id: string; claims: boolean; on
           void submit();
         }}
       />
-      {failure && <Alert>{failure}</Alert>}
+      {failure && <Alert tone="error">{failure}</Alert>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         {!internal && canned !== null ? (
           canned.length > 0 ? (

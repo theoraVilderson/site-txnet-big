@@ -19,11 +19,9 @@ import {
 import { LAYER_KEYS } from "../_lib/member-settings";
 import { SYSTEMS_KEYS } from "../_lib/systems";
 import { BAD, QUIET, useSystemsError } from "./parts";
+import { Button, Input, RadioCards } from "../../_components/kit";
 
 const K = SYSTEMS_KEYS.inbounds;
-const INPUT = "rounded-xl border border-card-border bg-card-bg px-3 py-2 text-sm text-text-primary";
-const PRIMARY = "rounded-xl bg-primary px-4 py-2 text-xs font-bold text-text-on-accent disabled:opacity-50";
-const SECONDARY = "inline-flex items-center gap-1 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:opacity-50";
 
 /**
  * One panel's inbounds (F-114-b), fetched when opened: which ones a buyer is
@@ -125,10 +123,9 @@ export function PanelInbounds({ panelId }: { panelId: string }) {
             <span className="ms-3">{t("common", K.users, { count: String(view.users) })}</span>
           </p>
         </div>
-        <button type="button" onClick={() => void refresh()} disabled={busy} className={SECONDARY}>
-          <RefreshCw size={14} aria-hidden />
+        <Button size="sm" onClick={() => void refresh()} disabled={busy} icon={<RefreshCw size={14} aria-hidden />}>
           {t("common", K.refresh)}
-        </button>
+        </Button>
       </div>
       <p className="text-xs leading-5 text-text-secondary">{t("common", K.hint)}</p>
 
@@ -146,26 +143,18 @@ export function PanelInbounds({ panelId }: { panelId: string }) {
             {t("common", K.from, { layer: t("common", LAYER_KEYS[view.effective.inboundPlacement.layer]) })}
           </span>
         </legend>
-        {INBOUND_PLACEMENTS.map((p) => (
-          <label key={p} className="flex items-start gap-2 text-xs text-text-primary">
-            <input
-              type="radio"
-              name={`placement-${panelId}`}
-              checked={form.placement === p}
-              onChange={() => setForm({ ...form, placement: p })}
-              className="mt-0.5 accent-primary"
-            />
-            <span className="flex flex-col">
-              <span className="font-bold">{t("common", PLACEMENT_KEYS[p].label)}</span>
-              <span className="text-text-secondary">{t("common", PLACEMENT_KEYS[p].hint)}</span>
-            </span>
-          </label>
-        ))}
+        <RadioCards
+          ariaLabel={t("common", K.placement.label)}
+          columns={1}
+          value={form.placement}
+          onChange={(p) => setForm({ ...form, placement: p })}
+          options={INBOUND_PLACEMENTS.map((p) => ({ value: p, label: t("common", PLACEMENT_KEYS[p].label), description: t("common", PLACEMENT_KEYS[p].hint) }))}
+        />
       </fieldset>
 
       <label className="flex max-w-xs flex-col gap-1 text-xs text-text-secondary">
         {t("common", K.panelMax)}
-        <input dir="ltr" inputMode="numeric" value={form.panelMax} onChange={(e) => setForm({ ...form, panelMax: e.target.value })} className={INPUT} />
+        <Input dir="ltr" inputMode="numeric" value={form.panelMax} onChange={(e) => setForm({ ...form, panelMax: e.target.value })} />
         <span className="leading-5">{t("common", K.panelMaxHint)}</span>
         <span>{t("common", K.from, { layer: t("common", LAYER_KEYS[view.effective.maxClients.layer]) })}</span>
         {errors.panelMax && <span className="text-error">{t("common", errors.panelMax)}</span>}
@@ -201,13 +190,13 @@ export function PanelInbounds({ panelId }: { panelId: string }) {
                 <span className="text-text-secondary">{t("common", K.clients, { count: String(i.clients) })}</span>
                 <label className="flex items-center gap-1 text-text-secondary">
                   {t("common", K.cap)}
-                  <input
+                  <Input
                     dir="ltr"
                     inputMode="numeric"
                     value={p.cap}
                     placeholder={t("common", K.capHint)}
                     onChange={(e) => pick(i.remoteId, { cap: e.target.value })}
-                    className={`${INPUT} w-24`}
+                    className="w-24"
                   />
                 </label>
                 {errors[capField(i.remoteId)] && <span className="w-full text-error">{t("common", errors[capField(i.remoteId)])}</span>}
@@ -229,9 +218,9 @@ export function PanelInbounds({ panelId }: { panelId: string }) {
         </p>
       )}
       <div>
-        <button type="button" onClick={() => void save()} disabled={busy} className={PRIMARY}>
+        <Button variant="primary" size="sm" onClick={() => void save()} disabled={busy}>
           {t("common", K.save)}
-        </button>
+        </Button>
       </div>
     </div>
   );

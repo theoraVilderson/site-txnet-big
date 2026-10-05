@@ -9,7 +9,8 @@ import { DataTable } from "../../../_components/kit/DataTable";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { WHEEL_KEYS, formatDay, plainNumber, refusalKeyOf } from "../../_lib/wheel";
 import { WHEEL_SETTINGS_KEYS as K } from "../_lib/wheel-settings";
-import { Alert, Field, input, primaryButton, useMessage } from "./wheel-settings-ui";
+import { Alert, Field, useMessage } from "./wheel-settings-ui";
+import { Button, Input } from "../../../_components/kit";
 
 /**
  * The day report (F-707-e): per tenant day, spins, refusals by reason, prizes
@@ -46,14 +47,14 @@ export function WheelReport({ today }: { today: string | null }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <Field label={t("common", K.report.from)}>
-          <input className={input} dir="ltr" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <Input dir="ltr" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </Field>
         <Field label={t("common", K.report.to)}>
-          <input className={input} dir="ltr" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <Input dir="ltr" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </Field>
-        <button type="button" className={primaryButton} onClick={() => setAsked({ from, to })}>
+        <Button variant="primary" size="sm" onClick={() => setAsked({ from, to })}>
           {t("common", K.report.show)}
-        </button>
+        </Button>
       </div>
 
       {error ? (

@@ -2948,7 +2948,8 @@
     "filter": {
       "open": "Open",
       "pending": "Waiting",
-      "all": "All"
+      "all": "All",
+      "label": "Show"
     },
     "register": {
       "open": "Register a panel",

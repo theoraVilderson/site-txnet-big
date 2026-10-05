@@ -1,10 +1,11 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { Loader2, MoreHorizontal, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { SYSTEMS_KEYS as K, refusalSentence, validateNote, type HolderNames } from "../_lib/systems";
+import { Button, Field, IconButton, Menu, SegmentedControl, Textarea } from "../../_components/kit";
 
 const NO_NAMES: HolderNames = { panel: () => null, group: () => null };
 
@@ -49,7 +50,7 @@ export function Section({ title, hint, actions, children }: { title: string; hin
   );
 }
 
-/** A card's button — green tokens, never gold (panel theme). `tone: "error"` for the one that gives something up. */
+/** A card's button — the kit `Button` (K3), green tokens, never gold. `tone: "error"` for the one that gives something up. */
 export function CardButton({
   icon,
   children,
@@ -65,23 +66,17 @@ export function CardButton({
   tone?: "plain" | "error";
   disabled?: boolean;
 }) {
-  const look =
-    tone === "error"
-      ? "border-error-border text-error hover:bg-error-bg"
-      : pressed
-        ? "border-primary/30 bg-leaf-bg text-primary"
-        : "border-card-border text-text-primary hover:bg-leaf-bg";
   return (
-    <button
-      type="button"
+    <Button
+      size="sm"
       onClick={onClick}
       disabled={disabled}
       aria-pressed={pressed}
-      className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold disabled:opacity-50 ${look}`}
+      icon={icon}
+      className={tone === "error" ? "border-error-border text-error hover:border-error hover:bg-error-bg hover:text-error" : pressed ? "border-primary/30 bg-leaf-bg text-primary" : undefined}
     >
-      {icon}
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -89,59 +84,16 @@ export type MenuItem = { label: string; icon?: ReactNode; onSelect: () => void; 
 
 /**
  * The rarer actions of a card, behind one button, so a row stays readable on
- * a phone. Closes on a pick, on Escape and on a click outside; the items are
- * real buttons, so the keyboard reaches them in order.
+ * a phone: the kit `Menu` (K7) — arrows, Esc and Tab, focus back to the button.
  */
 export function ActionsMenu({ label, items }: { label: string; items: readonly MenuItem[] }) {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
   if (items.length === 0) return null;
   return (
-    <div ref={box} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={label}
-        title={label}
-        className="inline-flex items-center rounded-xl border border-card-border p-2 text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
-      >
-        <MoreHorizontal size={16} aria-hidden />
-      </button>
-      {open && (
-        <div role="menu" className="absolute end-0 top-full z-20 mt-1 flex min-w-48 flex-col rounded-2xl border border-card-border bg-card-bg p-1 shadow-lg">
-          {items.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                item.onSelect();
-              }}
-              className={`flex items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-bold ${
-                item.tone === "error" ? "text-error hover:bg-error-bg" : "text-text-primary hover:bg-leaf-bg"
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <Menu
+      label={label}
+      trigger={<IconButton variant="secondary" size="sm" aria-label={label} title={label} icon={<MoreHorizontal size={16} aria-hidden />} />}
+      items={items.map((item) => ({ id: item.label, label: item.label, icon: item.icon, onSelect: item.onSelect, tone: item.tone === "error" ? "danger" : "default" }))}
+    />
   );
 }
 
@@ -185,10 +137,9 @@ export function ListState({
         <p role="alert" className="text-xs font-bold text-error">
           {message(error)}
         </p>
-        <button type="button" onClick={onRetry} className="inline-flex items-center gap-1 text-xs font-bold text-primary">
-          <RotateCw size={14} aria-hidden />
+        <Button variant="quiet" size="sm" onClick={onRetry} icon={<RotateCw size={14} aria-hidden />} className="text-primary hover:text-primary">
           {t("common", K.retry)}
-        </button>
+        </Button>
       </div>
     );
   }
@@ -196,24 +147,17 @@ export function ListState({
   return <>{children}</>;
 }
 
-/** Two or three tabs over a list's `state` query. Green tokens only — never gold on a control. */
+/** Two or three choices over a list's `state` query: the kit `SegmentedControl` (K5). Green tokens only — never gold on a control. */
 export function StateFilter<S extends string>({ value, options, onChange }: { value: S; options: readonly { id: S; label: string }[]; onChange: (s: S) => void }) {
   const { t } = useLocale();
   return (
-    <div role="tablist" className="inline-flex rounded-xl border border-card-border p-0.5">
-      {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          role="tab"
-          aria-selected={value === o.id}
-          onClick={() => onChange(o.id)}
-          className={`rounded-lg px-3 py-1 text-xs font-bold ${value === o.id ? "bg-primary text-text-on-accent" : "text-text-secondary hover:bg-leaf-bg"}`}
-        >
-          {t("common", o.label)}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl<S>
+      ariaLabel={t("common", K.filter.label)}
+      size="sm"
+      value={value}
+      onChange={onChange}
+      options={options.map((o) => ({ value: o.id, label: t("common", o.label) }))}
+    />
   );
 }
 
@@ -262,32 +206,21 @@ export function NoteForm({
     >
       <p className={`text-sm font-bold ${tone === "error" ? "text-error" : "text-text-primary"}`}>{title}</p>
       <p className="text-xs leading-5 text-text-secondary">{hint}</p>
-      <label className="flex flex-col gap-1 text-xs text-text-secondary">
-        {t("common", K.note.label)}
-        <textarea
+      <Field label={t("common", K.note.label)} error={error ? t("common", error) : undefined}>
+        <Textarea
           value={note}
           maxLength={1000}
           rows={2}
           onChange={(e) => setNote(e.target.value)}
-          className="rounded-xl border border-card-border bg-card-bg px-3 py-2 text-sm text-text-primary"
         />
-        {error && <span className="text-error">{t("common", error)}</span>}
-      </label>
+      </Field>
       <div className="flex flex-wrap gap-2">
-        <button
-          type="submit"
-          disabled={busy}
-          className={
-            tone === "error"
-              ? "rounded-xl border border-error-border bg-error-bg px-4 py-2 text-xs font-bold text-error disabled:opacity-50"
-              : "rounded-xl bg-primary px-4 py-2 text-xs font-bold text-text-on-accent disabled:opacity-50"
-          }
-        >
+        <Button type="submit" size="sm" variant={tone === "error" ? "danger" : "primary"} loading={busy}>
           {submitLabel}
-        </button>
-        <button type="button" onClick={onCancel} className="rounded-xl px-4 py-2 text-xs font-medium text-text-secondary hover:bg-leaf-bg">
+        </Button>
+        <Button variant="quiet" size="sm" onClick={onCancel}>
           {t("common", K.holds.cancel)}
-        </button>
+        </Button>
       </div>
     </form>
   );

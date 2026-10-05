@@ -6,7 +6,8 @@ import { useLocale } from "@/context/LocaleContext";
 import { authApi, userGroupsApi, type UserSearchHit } from "@/lib/auth-api";
 import { userQuery } from "../../resellers/_lib/resellers";
 import { USER_GROUP_KEYS as K } from "../_lib/user-groups";
-import { input, quietButton, useMessage } from "./user-groups-ui";
+import { useMessage } from "./user-groups-ui";
+import { Button, Input } from "../../_components/kit";
 
 /** Wait for the typing to settle: both searches are rate-limited per caller. */
 const DEBOUNCE_MS = 300;
@@ -49,7 +50,7 @@ export function UserSearch({ via, tenantId, onAdd, busy }: { via: "platform" | "
     <div className="flex flex-col gap-2">
       <div className="relative">
         <Search size={14} className="pointer-events-none absolute top-1/2 -translate-y-1/2 text-text-secondary start-3" aria-hidden />
-        <input className={`${input} ps-8`} value={text} placeholder={t("common", K.members.search)} onChange={(e) => setText(e.target.value)} />
+        <Input className="ps-8" value={text} placeholder={t("common", K.members.search)} onChange={(e) => setText(e.target.value)} />
       </div>
       {!q && <p className="text-xs text-text-secondary">{t("common", K.members.searchHint)}</p>}
       {q && !current && (
@@ -70,10 +71,9 @@ export function UserSearch({ via, tenantId, onAdd, busy }: { via: "platform" | "
                   {[hit.username && `@${hit.username}`, hit.phoneMasked].filter(Boolean).join(" · ")}
                 </span>
               </span>
-              <button type="button" className={quietButton} disabled={busy} onClick={() => onAdd(hit)}>
-                <Plus size={12} aria-hidden />
+              <Button variant="quiet" size="sm" disabled={busy} onClick={() => onAdd(hit)} icon={<Plus size={12} aria-hidden />}>
                 {t("common", K.members.add)}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>

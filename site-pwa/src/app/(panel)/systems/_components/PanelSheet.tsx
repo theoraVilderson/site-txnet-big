@@ -10,6 +10,7 @@ import { PANEL_STATE_KEYS, REVIEW_KEYS, SYSTEMS_KEYS as K, capabilityText, refus
 import { PanelEditForm } from "./PanelEditForm";
 import { PanelInbounds } from "./PanelInbounds";
 import { Pill, REVIEW_TONE, STATE_TONE, useSystemsError } from "./parts";
+import { Tabs } from "../../_components/kit";
 
 type Part = "general" | "sales" | "capabilities" | "status";
 const PARTS: Part[] = ["general", "sales", "capabilities", "status"];
@@ -39,20 +40,13 @@ export function PanelSheet({
 
   return (
     <Sheet title={t("common", K.panelSheet.title, { panel: panel.name })} onClose={onClose}>
-      <div role="tablist" className="flex gap-1 overflow-x-auto rounded-xl bg-bg-inner p-1">
-        {PARTS.map((id) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={part === id}
-            onClick={() => setPart(id)}
-            className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-bold ${part === id ? "bg-primary text-text-on-accent" : "text-text-secondary hover:bg-leaf-bg"}`}
-          >
-            {t("common", K.panelSheet.tabs[id])}
-          </button>
-        ))}
-      </div>
+      <Tabs<Part>
+        ariaLabel={t("common", K.panelSheet.title, { panel: panel.name })}
+        variant="pills"
+        value={part}
+        onChange={setPart}
+        tabs={PARTS.map((id) => ({ value: id, label: t("common", K.panelSheet.tabs[id]) }))}
+      />
 
       {part === "general" && <PanelEditForm panel={panel} onSaved={onSaved} />}
       {part === "sales" &&

@@ -9,11 +9,11 @@ import { formatInstant } from "../../_lib/datetime";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { DataTable } from "../../_components/kit/DataTable";
 import { USER_GROUP_KEYS as K, canManageGroups, canNameResellers } from "../_lib/user-groups";
-import { Alert, primaryButton, quietButton, useMessage } from "./user-groups-ui";
+import { Alert, useMessage } from "./user-groups-ui";
 import { GroupSheet } from "./GroupSheet";
 import { MembersSheet } from "./MembersSheet";
 import { PageHeader } from "../../_components/kit/PageHeader";
-import { useConfirm } from "../../_components/kit";
+import { Button, useConfirm } from "../../_components/kit";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /**
@@ -97,10 +97,9 @@ export function UserGroupsView() {
         subtitle={t("common", K.subtitle)}
         actions={
           <>
-            <button type="button" className={primaryButton} onClick={() => setEditing("new")}>
-              <Plus size={14} aria-hidden />
+            <Button variant="primary" size="sm" onClick={() => setEditing("new")} icon={<Plus size={14} aria-hidden />}>
               {t("common", K.new)}
-            </button>
+            </Button>
           </>
         }
       />
@@ -113,10 +112,9 @@ export function UserGroupsView() {
       ) : error ? (
         <div className="flex flex-wrap items-center gap-3">
           <Alert>{message(error)}</Alert>
-          <button type="button" className={quietButton} onClick={reload}>
-            <RotateCw size={12} aria-hidden />
+          <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
             {t("common", K.retry)}
-          </button>
+          </Button>
         </div>
       ) : !rows || rows.length === 0 ? (
         <p className="text-sm text-text-secondary">{t("common", K.empty)}</p>

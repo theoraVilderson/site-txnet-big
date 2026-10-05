@@ -4,8 +4,8 @@ import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { refusalKey } from "../_lib/wheel-settings";
 
-// The field and button styles are the catalog page's; they hold no catalog rule.
-export { Alert, Field, input, primaryButton, quietButton } from "../../../catalog/_components/catalog-ui";
+// The field is the catalog page's; it holds no catalog rule.
+export { Alert, Field } from "../../../catalog/_components/catalog-ui";
 
 /** The refusal's own sentence, else the generic answer for that error. */
 export function useMessage() {

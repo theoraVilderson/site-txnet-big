@@ -10,9 +10,9 @@ import { formatInstant } from "../../_lib/datetime";
 import { Select } from "../../_components/kit/Select";
 import { canAdministerResellers } from "../../resellers/_lib/resellers";
 import { MEMBER_IDS_MAX, USER_GROUP_KEYS as K, canNameResellers, memberSearchOf, membersBody, parseIds } from "../_lib/user-groups";
-import { Alert, Field, Sheet, input, primaryButton, quietButton, useMessage } from "./user-groups-ui";
+import { Alert, Field, Sheet, useMessage } from "./user-groups-ui";
 import { UserSearch } from "./UserSearch";
-import { useConfirm } from "../../_components/kit";
+import { Button, Textarea, useConfirm } from "../../_components/kit";
 
 const PAGE_SIZE = 50;
 
@@ -137,10 +137,9 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
       ) : error ? (
         <div className="flex flex-wrap items-center gap-3">
           <Alert>{message(error)}</Alert>
-          <button type="button" className={quietButton} onClick={reload}>
-            <RotateCw size={12} aria-hidden />
+          <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
             {t("common", K.retry)}
-          </button>
+          </Button>
         </div>
       ) : !rows || rows.items.length === 0 ? (
         <p className="text-sm text-text-secondary">{t("common", K.members.empty)}</p>
@@ -159,22 +158,21 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
                       <span className="text-[11px] text-text-secondary">{formatInstant(m.addedAt, lang, { withTime: false })}</span>
                     </span>
                   </span>
-                  <button type="button" className={quietButton} disabled={busy} onClick={() => remove(m)}>
-                    <Trash2 size={12} aria-hidden />
+                  <Button variant="quiet" size="sm" disabled={busy} onClick={() => remove(m)} icon={<Trash2 size={12} aria-hidden />}>
                     {t("common", K.members.remove)}
-                  </button>
+                  </Button>
                 </li>
               );
             })}
           </ul>
           {pages > 1 && (
             <nav className="flex justify-between">
-              <button type="button" className={quietButton} disabled={page <= 1} onClick={() => setPage(page - 1)}>
+              <Button variant="quiet" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
                 {t("common", K.prev)}
-              </button>
-              <button type="button" className={quietButton} disabled={page >= pages} onClick={() => setPage(page + 1)}>
+              </Button>
+              <Button variant="quiet" size="sm" disabled={page >= pages} onClick={() => setPage(page + 1)}>
                 {t("common", K.next)}
-              </button>
+              </Button>
             </nav>
           )}
         </div>
@@ -184,7 +182,7 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
         <h3 className="text-xs font-bold text-text-primary">{t("common", K.members.addUsers)}</h3>
         {search !== "ids" && me && <UserSearch via={search} tenantId={me.tenant.id} busy={busy} onAdd={(hit) => void add([hit.id], [])} />}
         <Field label={t("common", K.members.userIds)} hint={t("common", K.members.userIdsHint)}>
-          <textarea className={input} dir="ltr" rows={2} value={userText} onChange={(e) => setUserText(e.target.value)} />
+          <Textarea dir="ltr" rows={2} value={userText} onChange={(e) => setUserText(e.target.value)} />
         </Field>
         {resellersToo && (
           <>
@@ -198,15 +196,14 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
               />
             )}
             <Field label={t("common", K.members.resellerIds)} hint={t("common", K.members.resellerIdsHint)}>
-              <textarea className={input} dir="ltr" rows={2} value={tenantText} onChange={(e) => setTenantText(e.target.value)} />
+              <Textarea dir="ltr" rows={2} value={tenantText} onChange={(e) => setTenantText(e.target.value)} />
             </Field>
           </>
         )}
         <div>
-          <button type="button" className={primaryButton} disabled={busy} onClick={addTyped}>
-            {busy && <Loader2 size={14} className="animate-spin" aria-hidden />}
+          <Button variant="primary" size="sm" onClick={addTyped} loading={busy}>
             {t("common", K.members.addSubmit)}
-          </button>
+          </Button>
         </div>
         {notice && <p className="text-xs font-bold text-primary">{notice}</p>}
         {failure && <Alert>{failure}</Alert>}

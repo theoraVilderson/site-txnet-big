@@ -27,7 +27,8 @@ import {
   type PrizeForm,
   type WheelForm,
 } from "../_lib/wheel-settings";
-import { Alert, Field, dayAfter, input, primaryButton, quietButton, useMessage } from "./wheel-settings-ui";
+import { Alert, Field, dayAfter, useMessage } from "./wheel-settings-ui";
+import { Button, Checkbox, IconButton, Input } from "../../../_components/kit";
 
 /**
  * A new version of the wheel, opened on the one it starts from. The odds and
@@ -108,14 +109,11 @@ export function WheelEditor({
 
   const num = (field: "cooldownHours" | "maxSpins" | "minAgeHours" | "minOrders", label: string, hint?: string) => (
     <Field label={label} error={shown(check.fields[field])} hint={hint}>
-      <input className={input} dir="ltr" inputMode="numeric" value={form[field]} onChange={(e) => set(field, e.target.value)} />
+      <Input dir="ltr" inputMode="numeric" value={form[field]} onChange={(e) => set(field, e.target.value)} />
     </Field>
   );
   const box = (field: "isActive" | "activeService" | "phoneVerified", label: string) => (
-    <label className="flex items-center gap-2 text-xs font-bold text-text-primary">
-      <input type="checkbox" checked={form[field]} onChange={(e) => set(field, e.target.checked)} />
-      {label}
-    </label>
+    <Checkbox checked={form[field]} onChange={(on) => set(field, on)} label={label} />
   );
 
   return (
@@ -127,7 +125,7 @@ export function WheelEditor({
 
       <div className="grid gap-4 md:grid-cols-3">
         <Field label={t("common", K.fields.cap, { currency: cur })} error={shown(check.fields.cap)} hint={t("common", K.fields.capHint)}>
-          <input className={input} dir="ltr" inputMode="decimal" value={form.cap} onChange={(e) => set("cap", e.target.value)} />
+          <Input dir="ltr" inputMode="decimal" value={form.cap} onChange={(e) => set("cap", e.target.value)} />
         </Field>
         <div className="flex flex-col justify-center gap-1 rounded-xl bg-bg-inner p-3 text-xs md:col-span-2">
           {expected === null ? (
@@ -149,7 +147,7 @@ export function WheelEditor({
           {num("cooldownHours", t("common", K.fields.cooldownHours))}
           {num("minAgeHours", t("common", K.fields.minAgeHours))}
           <Field label={t("common", K.fields.minPaid, { currency: cur })} error={shown(check.fields.minPaid)} hint={t("common", K.fields.optional)}>
-            <input className={input} dir="ltr" inputMode="decimal" value={form.minPaid} onChange={(e) => set("minPaid", e.target.value)} />
+            <Input dir="ltr" inputMode="decimal" value={form.minPaid} onChange={(e) => set("minPaid", e.target.value)} />
           </Field>
           {num("minOrders", t("common", K.fields.minOrders), t("common", K.fields.optional))}
           <Field label={t("common", K.fields.userGroup)}>
@@ -160,8 +158,7 @@ export function WheelEditor({
                 options={[{ value: "", label: t("common", K.fields.everyone) }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
               />
             ) : (
-              <input
-                className={input}
+              <Input
                 dir="ltr"
                 placeholder={t("common", K.fields.groupId)}
                 value={form.userGroupId}
@@ -188,21 +185,16 @@ export function WheelEditor({
                   {odds && <span className="ms-2 font-normal text-text-secondary">{t("common", K.prizes.odds)}: {plainNumber(odds[i])}%</span>}
                 </span>
                 <div className="flex gap-1">
-                  <button type="button" className={quietButton} disabled={i === 0} onClick={() => move(i, -1)} aria-label={t("common", K.prizes.moveUp)}>
-                    <ArrowUp size={12} aria-hidden />
-                  </button>
-                  <button type="button" className={quietButton} disabled={i === form.prizes.length - 1} onClick={() => move(i, 1)} aria-label={t("common", K.prizes.moveDown)}>
-                    <ArrowDown size={12} aria-hidden />
-                  </button>
-                  <button type="button" className={quietButton} onClick={() => setForm((f) => ({ ...f, prizes: f.prizes.filter((_, j) => j !== i) }))}>
-                    <Trash2 size={12} aria-hidden />
+                  <IconButton size="sm" disabled={i === 0} onClick={() => move(i, -1)} aria-label={t("common", K.prizes.moveUp)} icon={<ArrowUp size={12} aria-hidden />} />
+                  <IconButton size="sm" disabled={i === form.prizes.length - 1} onClick={() => move(i, 1)} aria-label={t("common", K.prizes.moveDown)} icon={<ArrowDown size={12} aria-hidden />} />
+                  <Button variant="quiet" size="sm" onClick={() => setForm((f) => ({ ...f, prizes: f.prizes.filter((_, j) => j !== i) }))} icon={<Trash2 size={12} aria-hidden />}>
                     {t("common", K.prizes.remove)}
-                  </button>
+                  </Button>
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-4">
                 <Field label={t("common", K.prizes.label)} error={e.label}>
-                  <input className={input} dir="auto" value={p.label} onChange={(ev) => setPrize(i, { label: ev.target.value })} />
+                  <Input dir="auto" value={p.label} onChange={(ev) => setPrize(i, { label: ev.target.value })} />
                 </Field>
                 <Field label={t("common", K.prizes.type)}>
                   <Select
@@ -216,7 +208,7 @@ export function WheelEditor({
                     label={t("common", p.prizeType === "bonus_traffic_gb" ? K.prizes.valueGb : p.prizeType === "extra_days" ? K.prizes.valueDays : K.prizes.valuePercent)}
                     error={e.prizeValue}
                   >
-                    <input className={input} dir="ltr" inputMode="decimal" value={p.prizeValue} onChange={(ev) => setPrize(i, { prizeValue: ev.target.value })} />
+                    <Input dir="ltr" inputMode="decimal" value={p.prizeValue} onChange={(ev) => setPrize(i, { prizeValue: ev.target.value })} />
                   </Field>
                 )}
                 {p.prizeType === "discount_coupon" && (
@@ -225,8 +217,7 @@ export function WheelEditor({
                       {templates === null ? (
                         <p className="py-2 text-xs text-text-secondary">{t("common", K.prizes.templatesLoading)}</p>
                       ) : templates === "failed" ? (
-                        <input
-                          className={input}
+                        <Input
                           dir="ltr"
                           placeholder={t("common", K.prizes.templateId)}
                           value={p.couponTemplateId}
@@ -243,7 +234,7 @@ export function WheelEditor({
                       )}
                     </Field>
                     <Field label={t("common", K.prizes.validDays)} error={e.couponValidDays}>
-                      <input className={input} dir="ltr" inputMode="numeric" value={p.couponValidDays} onChange={(ev) => setPrize(i, { couponValidDays: ev.target.value })} />
+                      <Input dir="ltr" inputMode="numeric" value={p.couponValidDays} onChange={(ev) => setPrize(i, { couponValidDays: ev.target.value })} />
                     </Field>
                   </>
                 )}
@@ -253,16 +244,16 @@ export function WheelEditor({
                   </Field>
                 )}
                 <Field label={t("common", K.prizes.weight)} error={e.weight}>
-                  <input className={input} dir="ltr" inputMode="numeric" value={p.weight} onChange={(ev) => setPrize(i, { weight: ev.target.value })} />
+                  <Input dir="ltr" inputMode="numeric" value={p.weight} onChange={(ev) => setPrize(i, { weight: ev.target.value })} />
                 </Field>
                 {p.prizeType !== "empty" && (
                   <Field label={t("common", K.prizes.cost, { currency: cur })} error={e.costAmount}>
-                    <input className={input} dir="ltr" inputMode="decimal" value={p.costAmount} onChange={(ev) => setPrize(i, { costAmount: ev.target.value })} />
+                    <Input dir="ltr" inputMode="decimal" value={p.costAmount} onChange={(ev) => setPrize(i, { costAmount: ev.target.value })} />
                   </Field>
                 )}
                 {p.prizeType !== "empty" && (
                   <Field label={t("common", K.prizes.stock)} error={e.dailyStockLimit} hint={t("common", K.prizes.stockHint)}>
-                    <input className={input} dir="ltr" inputMode="numeric" value={p.dailyStockLimit} onChange={(ev) => setPrize(i, { dailyStockLimit: ev.target.value })} />
+                    <Input dir="ltr" inputMode="numeric" value={p.dailyStockLimit} onChange={(ev) => setPrize(i, { dailyStockLimit: ev.target.value })} />
                   </Field>
                 )}
               </div>
@@ -270,22 +261,21 @@ export function WheelEditor({
           );
         })}
         {form.prizes.length < PRIZES_MAX && (
-          <button type="button" className={quietButton} onClick={() => setForm((f) => ({ ...f, prizes: [...f.prizes, emptyPrize()] }))}>
-            <Plus size={12} aria-hidden />
+          <Button variant="quiet" size="sm" onClick={() => setForm((f) => ({ ...f, prizes: [...f.prizes, emptyPrize()] }))} icon={<Plus size={12} aria-hidden />}>
             {t("common", K.prizes.add)}
-          </button>
+          </Button>
         )}
       </div>
 
       {tried && check.overall && <Alert>{t("common", check.overall)}</Alert>}
       {failure && <Alert>{failure}</Alert>}
       <div className="flex flex-wrap justify-end gap-2">
-        <button type="button" className={quietButton} onClick={onCancel} disabled={saving}>
+        <Button variant="quiet" size="sm" onClick={onCancel} disabled={saving}>
           {t("common", K.cancel)}
-        </button>
-        <button type="button" className={primaryButton} onClick={save} disabled={saving}>
+        </Button>
+        <Button variant="primary" size="sm" onClick={save} disabled={saving}>
           {t("common", saving ? K.saving : K.save)}
-        </button>
+        </Button>
       </div>
     </section>
   );

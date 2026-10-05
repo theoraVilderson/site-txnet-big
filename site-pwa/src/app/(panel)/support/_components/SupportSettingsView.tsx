@@ -7,9 +7,9 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import { supportSettingsApi, type AdminCategory, type CategoryList, type SlaTarget } from "@/lib/support-api";
 import { DataTable } from "../../_components/kit/DataTable";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
-import { Alert, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { AGENT_KEYS, PRIORITIES, PRIORITY_KEYS, categoryTexts, fromHhmm, slaFormErrors, toHhmm } from "../_lib/support-agent";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { Alert, Button, Checkbox, Field, IconButton, Input, Tabs } from "../../_components/kit";
 
 const K = AGENT_KEYS.settings;
 type Tab = "hours" | "sla" | "categories";
@@ -43,20 +43,7 @@ export function SupportSettingsView() {
         title={t("common", K.title)}
         subtitle={t("common", K.subtitle)}
       />
-      <div role="tablist" className="flex flex-wrap gap-2">
-        {TABS.map((v) => (
-          <button
-            key={v}
-            type="button"
-            role="tab"
-            aria-selected={tab === v}
-            onClick={() => setTab(v)}
-            className={tab === v ? primaryButton : `${quietButton} border border-card-border px-3 py-2`}
-          >
-            {t("common", K.tabs[v])}
-          </button>
-        ))}
-      </div>
+      <Tabs<Tab> ariaLabel={t("common", K.title)} variant="pills" value={tab} onChange={setTab} tabs={TABS.map((v) => ({ value: v, label: t("common", K.tabs[v]) }))} />
       {tab === "hours" && <HoursTab />}
       {tab === "sla" && <SlaTab />}
       {tab === "categories" && <CategoriesTab />}
@@ -93,11 +80,10 @@ function Loading({ error, reload }: { error: unknown; reload: () => void }) {
   const errorMessage = useApiErrorMessage();
   return error ? (
     <div className="flex flex-wrap items-center gap-3">
-      <Alert>{errorMessage(error)}</Alert>
-      <button type="button" className={quietButton} onClick={reload}>
-        <RotateCw size={12} aria-hidden />
+      <Alert tone="error">{errorMessage(error)}</Alert>
+      <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
         {t("common", AGENT_KEYS.retry)}
-      </button>
+      </Button>
     </div>
   ) : (
     <TableSkeleton rows={4} columns={3} withPagination={false} />
@@ -127,7 +113,7 @@ function useSave() {
 
 function Note({ note }: { note: { ok: boolean; text: string } | null }) {
   if (!note) return null;
-  return note.ok ? <p className="text-xs font-bold text-success">{note.text}</p> : <Alert>{note.text}</Alert>;
+  return note.ok ? <p className="text-xs font-bold text-success">{note.text}</p> : <Alert tone="error">{note.text}</Alert>;
 }
 
 // ------------------------------------------------------------------ hours
@@ -165,33 +151,28 @@ function HoursTab() {
               {periods.map((p, i) =>
                 p.weekday !== day ? null : (
                   <div key={i} className="flex flex-wrap items-center gap-2 text-xs">
-                    <label className="flex items-center gap-1 text-text-secondary">
-                      {t("common", K.hours.start)}
-                      <input dir="ltr" className={`${input} w-24`} value={p.start} placeholder="09:00" onChange={(e) => set(i, { start: e.target.value })} />
-                    </label>
-                    <label className="flex items-center gap-1 text-text-secondary">
-                      {t("common", K.hours.end)}
-                      <input dir="ltr" className={`${input} w-24`} value={p.end} placeholder="17:00" onChange={(e) => set(i, { end: e.target.value })} />
-                    </label>
-                    <button type="button" className={quietButton} onClick={() => setPeriods(periods.filter((_, j) => j !== i))} aria-label={t("common", K.hours.remove)}>
-                      <Trash2 size={12} aria-hidden />
-                    </button>
+                    <Field label={t("common", K.hours.start)}>
+                      <Input dir="ltr" className="w-24" value={p.start} placeholder="09:00" onChange={(e) => set(i, { start: e.target.value })} />
+                    </Field>
+                    <Field label={t("common", K.hours.end)}>
+                      <Input dir="ltr" className="w-24" value={p.end} placeholder="17:00" onChange={(e) => set(i, { end: e.target.value })} />
+                    </Field>
+                    <IconButton size="sm" onClick={() => setPeriods(periods.filter((_, j) => j !== i))} aria-label={t("common", K.hours.remove)} icon={<Trash2 size={12} aria-hidden />} />
                     {!valid(p) && <span className="text-error">{t("common", K.hours.invalid)}</span>}
                   </div>
                 ),
               )}
-              <button type="button" className={quietButton} onClick={() => setPeriods([...periods, { weekday: day, start: "09:00", end: "17:00" }])}>
-                <Plus size={12} aria-hidden />
+              <Button variant="quiet" size="sm" onClick={() => setPeriods([...periods, { weekday: day, start: "09:00", end: "17:00" }])} icon={<Plus size={12} aria-hidden />}>
                 {t("common", K.hours.add)}
-              </button>
+              </Button>
             </div>
           </li>
         ))}
       </ul>
       <Note note={note} />
-      <button
-        type="button"
-        className={primaryButton}
+      <Button
+        variant="primary"
+        size="sm"
         disabled={busy || !periods.every(valid)}
         onClick={() => {
           setNote(null);
@@ -199,7 +180,7 @@ function HoursTab() {
         }}
       >
         {t("common", K.save)}
-      </button>
+      </Button>
     </section>
   );
 }
@@ -232,24 +213,24 @@ function SlaTab() {
             id: "firstResponse",
             header: t("common", K.sla.firstResponse),
             cell: (x) => (
-              <input dir="ltr" type="number" min={1} aria-label={t("common", K.sla.firstResponse)} className={`${input} w-28`} value={x.firstResponseMinutes} onChange={(e) => set(x.i, { firstResponseMinutes: Number(e.target.value) })} />
+              <Input dir="ltr" type="number" min={1} aria-label={t("common", K.sla.firstResponse)} className="w-28" value={x.firstResponseMinutes} onChange={(e) => set(x.i, { firstResponseMinutes: Number(e.target.value) })} />
             ),
           },
           {
             id: "resolution",
             header: t("common", K.sla.resolution),
             cell: (x) => (
-              <input dir="ltr" type="number" min={1} aria-label={t("common", K.sla.resolution)} className={`${input} w-28`} value={x.resolutionMinutes} onChange={(e) => set(x.i, { resolutionMinutes: Number(e.target.value) })} />
+              <Input dir="ltr" type="number" min={1} aria-label={t("common", K.sla.resolution)} className="w-28" value={x.resolutionMinutes} onChange={(e) => set(x.i, { resolutionMinutes: Number(e.target.value) })} />
             ),
           },
           { id: "source", header: "", cell: (x) => x.source && t("common", K.sla[x.source]), className: "text-text-secondary" },
         ]}
       />
-      {invalid.size > 0 && <Alert>{t("common", K.sla.invalid)}</Alert>}
+      {invalid.size > 0 && <Alert tone="error">{t("common", K.sla.invalid)}</Alert>}
       <Note note={note} />
-      <button
-        type="button"
-        className={primaryButton}
+      <Button
+        variant="primary"
+        size="sm"
         disabled={busy || invalid.size > 0}
         onClick={() =>
           void save(async () => {
@@ -258,7 +239,7 @@ function SlaTab() {
         }
       >
         {t("common", K.save)}
-      </button>
+      </Button>
     </section>
   );
 }
@@ -339,22 +320,22 @@ function CategoriesTab() {
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
-                  <button type="button" className={quietButton} disabled={busy} onClick={() => setDraft(draftOf(c))}>
+                  <Button variant="quiet" size="sm" disabled={busy} onClick={() => setDraft(draftOf(c))}>
                     {t("common", C.edit)}
-                  </button>
-                  <button type="button" className={quietButton} disabled={busy} onClick={() => write(() => supportSettingsApi.updateCategory(c.id, { isActive: !c.isActive }))}>
+                  </Button>
+                  <Button variant="quiet" size="sm" disabled={busy} onClick={() => write(() => supportSettingsApi.updateCategory(c.id, { isActive: !c.isActive }))}>
                     {t("common", c.isActive ? C.retire : C.restore)}
-                  </button>
-                  <button
-                    type="button"
-                    className={quietButton}
+                  </Button>
+                  <Button
+                    variant="quiet"
+                    size="sm"
                     disabled={busy || c.inUse}
                     title={c.inUse ? t("common", C.inUse) : undefined}
                     onClick={() => write(() => supportSettingsApi.removeCategory(c.id))}
+                    icon={<Trash2 size={12} aria-hidden />}
                   >
-                    <Trash2 size={12} aria-hidden />
                     {t("common", C.delete)}
-                  </button>
+                  </Button>
                 </div>
               </li>
             ),
@@ -362,21 +343,21 @@ function CategoriesTab() {
         </ul>
       )}
 
-      {failure && <Alert>{failure}</Alert>}
+      {failure && <Alert tone="error">{failure}</Alert>}
       {draft && draft.id === null ? (
         <CategoryForm draft={draft} onChange={setDraft} onSave={saveDraft} onCancel={() => setDraft(null)} busy={busy} />
       ) : (
-        <button
-          type="button"
-          className={primaryButton}
+        <Button
+          variant="primary"
+          size="sm"
           disabled={busy}
           onClick={() =>
             setDraft({ id: null, key: "", sortOrder: (data.own.at(-1)?.sortOrder ?? 0) + 1, isActive: true, names: Object.fromEntries(CATEGORY_LANGS.map((l) => [l, ""])) })
           }
+          icon={<Plus size={12} aria-hidden />}
         >
-          <Plus size={12} aria-hidden />
           {t("common", C.add)}
-        </button>
+        </Button>
       )}
     </section>
   );
@@ -404,31 +385,27 @@ function CategoryForm({
       {CATEGORY_LANGS.map((l) => (
         <label key={l} className="block font-bold text-text-primary">
           {t("common", C.name, { lang: langName(l) })}
-          <input dir="auto" className={`${input} mt-1`} maxLength={80} value={draft.names[l] ?? ""} onChange={(e) => onChange({ ...draft, names: { ...draft.names, [l]: e.target.value } })} />
+          <Input dir="auto" className="mt-1" maxLength={80} value={draft.names[l] ?? ""} onChange={(e) => onChange({ ...draft, names: { ...draft.names, [l]: e.target.value } })} />
         </label>
       ))}
       <div className="flex flex-wrap gap-3">
         <label className="block font-bold text-text-primary">
           {t("common", C.key)}
-          <input dir="ltr" className={`${input} mt-1 font-mono`} maxLength={40} value={draft.key} onChange={(e) => onChange({ ...draft, key: e.target.value.toLowerCase() })} />
+          <Input dir="ltr" className="mt-1 font-mono" maxLength={40} value={draft.key} onChange={(e) => onChange({ ...draft, key: e.target.value.toLowerCase() })} />
           <span className="mt-1 block font-normal text-text-secondary">{t("common", C.keyHint)}</span>
         </label>
-        <label className="block font-bold text-text-primary">
-          {t("common", C.order)}
-          <input dir="ltr" type="number" min={0} className={`${input} mt-1 w-24`} value={draft.sortOrder} onChange={(e) => onChange({ ...draft, sortOrder: Number(e.target.value) })} />
-        </label>
-        <label className="flex items-center gap-2 pt-5 font-bold text-text-primary">
-          <input type="checkbox" checked={draft.isActive} onChange={(e) => onChange({ ...draft, isActive: e.target.checked })} />
-          {t("common", C.active)}
-        </label>
+        <Field label={t("common", C.order)}>
+          <Input dir="ltr" type="number" min={0} className="mt-1 w-24" value={draft.sortOrder} onChange={(e) => onChange({ ...draft, sortOrder: Number(e.target.value) })} />
+        </Field>
+        <Checkbox checked={draft.isActive} onChange={(on) => onChange({ ...draft, isActive: on })} label={t("common", C.active)} />
       </div>
       <div className="flex gap-2">
-        <button type="button" className={primaryButton} disabled={busy || !ready} onClick={() => onSave(draft)}>
+        <Button variant="primary" size="sm" disabled={busy || !ready} onClick={() => onSave(draft)}>
           {t("common", K.save)}
-        </button>
-        <button type="button" className={quietButton} onClick={onCancel} disabled={busy}>
+        </Button>
+        <Button variant="quiet" size="sm" onClick={onCancel} disabled={busy}>
           {t("common", C.cancel)}
-        </button>
+        </Button>
       </div>
     </div>
   );

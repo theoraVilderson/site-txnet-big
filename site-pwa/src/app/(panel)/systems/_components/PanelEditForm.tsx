@@ -4,10 +4,11 @@ import { useState, type ReactNode } from "react";
 import { Globe, KeyRound, SlidersHorizontal, Tag, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type SystemsPanel } from "@/lib/billing-api";
-import { Alert, Field, input, primaryButton } from "../../catalog/_components/catalog-ui";
+import { Field } from "../../catalog/_components/catalog-ui";
 import { addressChanged, panelEditFormOf, validatePanelEdit, type PanelEditForm } from "../_lib/panel-lifecycle";
 import { SYSTEMS_KEYS as K, resubmitOutcome } from "../_lib/systems";
 import { BAD, useSystemsError } from "./parts";
+import { Alert, Button, Input } from "../../_components/kit";
 
 /**
  * Every setting of one panel in one form (F-027-cb -> billing F-027-by), the
@@ -61,10 +62,10 @@ export function PanelEditForm({ panel, onSaved }: { panel: SystemsPanel; onSaved
       <Group icon={<Tag size={14} aria-hidden />} title={t("common", K.edit.basics)}>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t("common", K.register.field.name)} error={error("name")}>
-            <input value={form.name} maxLength={100} onChange={set("name")} className={input} />
+            <Input value={form.name} maxLength={100} onChange={set("name")} />
           </Field>
           <Field label={t("common", K.register.field.region)} error={error("region")}>
-            <input value={form.region} maxLength={50} onChange={set("region")} className={input} />
+            <Input value={form.region} maxLength={50} onChange={set("region")} />
           </Field>
         </div>
       </Group>
@@ -73,15 +74,15 @@ export function PanelEditForm({ panel, onSaved }: { panel: SystemsPanel; onSaved
         {!push && (
           <>
             <Field label={t("common", K.register.field.apiBaseUrl)} error={error("apiBaseUrl")} hint={t("common", K.register.field.apiBaseUrlHint)}>
-              <input dir="ltr" value={form.apiBaseUrl} maxLength={500} onChange={set("apiBaseUrl")} className={`${input} font-mono`} />
+              <Input dir="ltr" value={form.apiBaseUrl} maxLength={500} onChange={set("apiBaseUrl")} className="font-mono" />
             </Field>
             <Field label={t("common", K.register.field.clientBaseUrl)} error={error("clientBaseUrl")} hint={t("common", K.register.field.clientBaseUrlHint)}>
-              <input dir="ltr" value={form.clientBaseUrl} maxLength={500} onChange={set("clientBaseUrl")} className={`${input} font-mono`} />
+              <Input dir="ltr" value={form.clientBaseUrl} maxLength={500} onChange={set("clientBaseUrl")} className="font-mono" />
             </Field>
           </>
         )}
         <Field label={t("common", K.register.field.ipAddress)} error={error("ipAddress")} hint={push ? t("common", K.edit.ipHint) : undefined}>
-          <input dir="ltr" value={form.ipAddress} onChange={set("ipAddress")} className={`${input} font-mono`} />
+          <Input dir="ltr" value={form.ipAddress} onChange={set("ipAddress")} className="font-mono" />
         </Field>
         {addressChanged(form, panel) && (
           <p className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs leading-5 ${BAD}`}>
@@ -93,32 +94,32 @@ export function PanelEditForm({ panel, onSaved }: { panel: SystemsPanel; onSaved
 
       <Group icon={<SlidersHorizontal size={14} aria-hidden />} title={t("common", K.edit.budget)} hint={t("common", K.budget.tradeOff)}>
         <Field label={t("common", K.register.field.maxRequestsPerMinute)} error={error("maxRequestsPerMinute")}>
-          <input dir="ltr" inputMode="numeric" value={form.maxRequestsPerMinute} onChange={set("maxRequestsPerMinute")} className={`${input} sm:max-w-40`} />
+          <Input dir="ltr" inputMode="numeric" value={form.maxRequestsPerMinute} onChange={set("maxRequestsPerMinute")} className="sm:max-w-40" />
         </Field>
       </Group>
 
       {panel.review.reviewState !== "refused" && (
         <Group icon={<KeyRound size={14} aria-hidden />} title={t("common", K.edit.login)} hint={t("common", K.edit.loginHint)}>
           <Field label={t("common", K.register.field.credentials)} error={error("credentials")}>
-            <input
+            <Input
               dir="ltr"
               type="password"
               autoComplete="new-password"
               value={form.credentials}
               maxLength={4096}
               onChange={set("credentials")}
-              className={`${input} font-mono`}
+              className="font-mono"
             />
           </Field>
         </Group>
       )}
 
-      {errors.form && <Alert>{t("common", errors.form)}</Alert>}
-      {failure && <Alert>{failure}</Alert>}
+      {errors.form && <Alert tone="error">{t("common", errors.form)}</Alert>}
+      {failure && <Alert tone="error">{failure}</Alert>}
       <div className="flex justify-end">
-        <button type="button" disabled={busy} onClick={() => void save()} className={primaryButton}>
+        <Button variant="primary" size="sm" disabled={busy} onClick={() => void save()}>
           {t("common", K.edit.submit)}
-        </button>
+        </Button>
       </div>
     </div>
   );

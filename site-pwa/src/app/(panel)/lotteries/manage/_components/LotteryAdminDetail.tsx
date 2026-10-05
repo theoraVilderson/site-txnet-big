@@ -11,12 +11,13 @@ import { PANEL_LOTTERIES_MANAGE } from "@/lib/routes";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatInstant } from "../../../_lib/datetime";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
-import { Alert, Field, input, primaryButton, quietButton } from "../../../catalog/_components/catalog-ui";
+import { Field } from "../../../catalog/_components/catalog-ui";
 import { passedOnKeyOf } from "../../_lib/lotteries";
 import { LOTTERY_ADMIN_KEYS as K, REASON_MAX, actionsFor, canManageLotteries, excludedCountKeyOf } from "../_lib/lottery-admin";
 import { LotteryEditor } from "./LotteryEditor";
 import { StatusPill, useLotteryMessage } from "./lottery-admin-ui";
 import { PageHeader } from "../../../_components/kit/PageHeader";
+import { Alert, Button, Textarea, buttonClass } from "../../../_components/kit";
 
 type Confirming = "publish" | "remove" | "cancel" | null;
 
@@ -81,7 +82,7 @@ export function LotteryAdminDetail({ id }: { id: string }) {
   if (!allowed) {
     return (
       <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
-        <Alert>{t("common", K.notAllowed)}</Alert>
+        <Alert tone="error">{t("common", K.notAllowed)}</Alert>
       </div>
     );
   }
@@ -111,7 +112,7 @@ export function LotteryAdminDetail({ id }: { id: string }) {
   }
 
   const back = (
-    <Link href={PANEL_LOTTERIES_MANAGE} className={quietButton}>
+    <Link href={PANEL_LOTTERIES_MANAGE} className={buttonClass({ variant: "quiet", size: "sm" })}>
       <ArrowLeft size={12} aria-hidden className="rtl:rotate-180" />
       {t("common", K.back)}
     </Link>
@@ -122,11 +123,10 @@ export function LotteryAdminDetail({ id }: { id: string }) {
       <div className="mx-auto w-full max-w-7xl space-y-4 p-4 md:p-8">
         {back}
         <div className="flex flex-wrap items-center gap-3">
-          <Alert>{message(error)}</Alert>
-          <button type="button" className={quietButton} onClick={reload}>
-            <RotateCw size={12} aria-hidden />
+          <Alert tone="error">{message(error)}</Alert>
+          <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
             {t("common", K.retry)}
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -194,24 +194,24 @@ export function LotteryAdminDetail({ id }: { id: string }) {
           {(acts.edit || acts.publish || acts.remove || acts.cancel) && (
             <div className="flex flex-wrap gap-2 border-t border-card-border pt-3">
               {acts.edit && (
-                <button type="button" className={quietButton} onClick={() => setEditing(true)} disabled={busy}>
+                <Button variant="quiet" size="sm" onClick={() => setEditing(true)} disabled={busy}>
                   {t("common", K.acts.edit)}
-                </button>
+                </Button>
               )}
               {acts.publish && (
-                <button type="button" className={primaryButton} onClick={() => setConfirming("publish")} disabled={busy}>
+                <Button variant="primary" size="sm" onClick={() => setConfirming("publish")} disabled={busy}>
                   {t("common", K.acts.publish)}
-                </button>
+                </Button>
               )}
               {acts.remove && (
-                <button type="button" className={quietButton} onClick={() => setConfirming("remove")} disabled={busy}>
+                <Button variant="quiet" size="sm" onClick={() => setConfirming("remove")} disabled={busy}>
                   {t("common", K.acts.delete)}
-                </button>
+                </Button>
               )}
               {acts.cancel && (
-                <button type="button" className={quietButton} onClick={() => setConfirming("cancel")} disabled={busy}>
+                <Button variant="quiet" size="sm" onClick={() => setConfirming("cancel")} disabled={busy}>
                   {t("common", K.acts.cancel)}
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -220,15 +220,15 @@ export function LotteryAdminDetail({ id }: { id: string }) {
             <div className="space-y-3 rounded-xl bg-bg-inner p-3">
               {confirming === "cancel" ? (
                 <Field label={t("common", K.acts.cancelReason)}>
-                  <textarea className={`${input} min-h-16`} dir="auto" maxLength={REASON_MAX} value={reason} onChange={(e) => setReason(e.target.value)} />
+                  <Textarea className="min-h-16" dir="auto" maxLength={REASON_MAX} value={reason} onChange={(e) => setReason(e.target.value)} />
                 </Field>
               ) : (
                 <p className="text-xs text-text-primary">{t("common", confirming === "publish" ? K.acts.publishConfirm : K.acts.deleteConfirm)}</p>
               )}
               <div className="flex flex-wrap justify-end gap-2">
-                <button
-                  type="button"
-                  className={quietButton}
+                <Button
+                  variant="quiet"
+                  size="sm"
                   onClick={() => {
                     setConfirming(null);
                     setFailure(null);
@@ -236,14 +236,14 @@ export function LotteryAdminDetail({ id }: { id: string }) {
                   disabled={busy}
                 >
                   {t("common", K.acts.keep)}
-                </button>
-                <button type="button" className={primaryButton} onClick={() => act(confirming)} disabled={busy || (confirming === "cancel" && !reason.trim())}>
+                </Button>
+                <Button variant="primary" size="sm" onClick={() => act(confirming)} disabled={busy || (confirming === "cancel" && !reason.trim())}>
                   {t("common", busy ? K.acts.working : confirming === "cancel" ? K.acts.cancelConfirm : K.acts.confirm)}
-                </button>
+                </Button>
               </div>
             </div>
           )}
-          {failure && <Alert>{failure}</Alert>}
+          {failure && <Alert tone="error">{failure}</Alert>}
         </section>
       )}
 
@@ -278,22 +278,22 @@ function EligibilityCard({ lotteryId, status }: { lotteryId: string; status: Adm
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-text-primary">{t("common", K.eligibility.title)}</h2>
         {!data?.final && (
-          <button
-            type="button"
-            className={quietButton}
+          <Button
+            variant="quiet"
+            size="sm"
             onClick={() => {
               setData(null);
               setError(null);
               setAsked((n) => n + 1);
             }}
+            icon={<RotateCw size={12} aria-hidden />}
           >
-            <RotateCw size={12} aria-hidden />
             {t("common", K.eligibility.refresh)}
-          </button>
+          </Button>
         )}
       </div>
       {error ? (
-        <Alert>{message(error)}</Alert>
+        <Alert tone="error">{message(error)}</Alert>
       ) : !data ? (
         <p className="text-xs text-text-secondary">{t("common", K.eligibility.loading)}</p>
       ) : (
@@ -351,7 +351,7 @@ function WinnersCard({ lotteryId }: { lotteryId: string }) {
     <section className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-4">
       <h2 className="text-sm font-bold text-text-primary">{t("common", K.winners.title)}</h2>
       {error ? (
-        <Alert>{message(error)}</Alert>
+        <Alert tone="error">{message(error)}</Alert>
       ) : !data ? (
         <TableSkeleton rows={3} columns={4} withPagination={false} />
       ) : (

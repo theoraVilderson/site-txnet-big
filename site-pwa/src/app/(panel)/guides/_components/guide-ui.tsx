@@ -4,8 +4,8 @@ import { useState, type ReactNode } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import type { GuideState } from "@/lib/guide-api";
-import { Alert } from "../../catalog/_components/catalog-ui";
 import { STATE_KEYS, refusalKey } from "../_lib/guides";
+import { Alert } from "../../_components/kit";
 
 /** tenant-service's refusal in its own sentence, else the generic answer. */
 export function useGuideMessage() {
@@ -43,7 +43,7 @@ export function useAct() {
 
 export function NoteLine({ note }: { note: Note }) {
   if (!note) return null;
-  return note.ok ? <p className="text-xs font-bold text-primary">{note.text}</p> : <Alert>{note.text}</Alert>;
+  return note.ok ? <p className="text-xs font-bold text-primary">{note.text}</p> : <Alert tone="error">{note.text}</Alert>;
 }
 
 const STATE_TONE: Record<GuideState, string> = {

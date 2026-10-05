@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { userGroupsApi, type UserGroup } from "@/lib/auth-api";
 import { usePanelSession } from "../../_context/PanelSessionContext";
@@ -15,7 +14,8 @@ import {
   type Errors,
   type GroupForm,
 } from "../_lib/user-groups";
-import { Alert, Field, Sheet, input, primaryButton, useMessage } from "./user-groups-ui";
+import { Alert, Field, Sheet, useMessage } from "./user-groups-ui";
+import { Button, Checkbox, Input } from "../../_components/kit";
 
 /**
  * Create a group, or rename one (F-114-m). "Every reseller" is the platform
@@ -65,23 +65,21 @@ export function GroupSheet({ group, onClose, onSaved }: { group: UserGroup | nul
       title={t("common", group ? K.form.editTitle : K.form.createTitle)}
       onClose={onClose}
       footer={
-        <button type="button" className={primaryButton} disabled={busy} onClick={submit}>
-          {busy && <Loader2 size={14} className="animate-spin" aria-hidden />}
+        <Button variant="primary" size="sm" onClick={submit} loading={busy}>
           {t("common", K.form.save)}
-        </button>
+        </Button>
       }
     >
       <Field label={t("common", K.form.name)} hint={t("common", K.form.nameHint)} error={errors.name}>
-        <input className={input} value={form.name} maxLength={80} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+        <Input value={form.name} maxLength={80} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
       </Field>
       {canNameResellers(me) && (
-        <label className="flex items-start gap-2 text-xs text-text-secondary">
-          <input type="checkbox" className="mt-0.5" checked={form.allTenants} onChange={(e) => setForm((f) => ({ ...f, allTenants: e.target.checked }))} />
-          <span className="flex flex-col gap-0.5">
-            <span className="font-bold text-text-primary">{t("common", K.form.allTenants)}</span>
-            <span>{t("common", K.form.allTenantsHint)}</span>
-          </span>
-        </label>
+        <Checkbox
+          checked={form.allTenants}
+          onChange={(allTenants) => setForm((f) => ({ ...f, allTenants }))}
+          label={<span className="font-bold">{t("common", K.form.allTenants)}</span>}
+          hint={t("common", K.form.allTenantsHint)}
+        />
       )}
       {failure && <Alert>{failure}</Alert>}
     </Sheet>

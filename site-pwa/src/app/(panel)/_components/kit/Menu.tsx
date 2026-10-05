@@ -81,7 +81,7 @@ function MenuList({
   const present = useIsPresent();
   const listRef = useRef<HTMLDivElement>(null);
   const { style, placedSide } = useAnchoredPosition(present, triggerRef, listRef, { align });
-  useOverlayLayer({ active: present, containerRef: listRef, onClose, trap: false });
+  useOverlayLayer({ active: present, containerRef: listRef, onClose, trap: false, returnFocusRef: triggerRef });
   useOutsidePointer(present, [listRef, triggerRef], onClose);
 
   const enabled = () => Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])') ?? []);

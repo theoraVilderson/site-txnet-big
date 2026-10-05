@@ -16,7 +16,6 @@ import {
 import { formatInstant } from "../../_lib/datetime";
 import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
-import { Alert, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import {
   SUPPORT_KEYS as K,
   acceptSupportFiles,
@@ -34,6 +33,7 @@ import { PageHeader } from "../../_components/kit/PageHeader";
 import { Alert as KitAlert } from "../../_components/kit/Alert";
 import { PendingFiles, useFileDrop } from "./SupportFiles";
 import { AttachmentList, JumpToLatest, SendButton, StarRating, ThreadMessages, TypingDots, useAutoGrow, useFollowLatest } from "./ThreadParts";
+import { Alert, Button, Input, Textarea, buttonClass } from "../../_components/kit";
 
 /** Below the server's ~6s hold, so a steady typist never flickers off. */
 const TYPING_EVERY_MS = 4_000;
@@ -184,11 +184,10 @@ export function SupportThreadView({ id }: { id: string }) {
     return (
       <Frame>
         <div className="flex flex-wrap items-center gap-3">
-          <Alert>{errorMessage(error)}</Alert>
-          <button type="button" className={quietButton} onClick={reload}>
-            <RotateCw size={12} aria-hidden />
+          <Alert tone="error">{errorMessage(error)}</Alert>
+          <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
             {t("common", K.retry)}
-          </button>
+          </Button>
         </div>
       </Frame>
     );
@@ -222,9 +221,9 @@ export function SupportThreadView({ id }: { id: string }) {
         >
           {hasEarlier && (
             <div className="text-center">
-              <button type="button" className={quietButton} onClick={earlier}>
+              <Button variant="quiet" size="sm" onClick={earlier}>
                 {t("common", K.thread.earlier)}
-              </button>
+              </Button>
             </div>
           )}
           <ThreadMessages
@@ -360,11 +359,11 @@ function Composer({ id, onSent }: { id: string; onSent: (m: SupportMessage) => v
       {drop.active && (
         <p className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-2xl text-sm font-bold text-primary">{t("common", K.thread.dropFiles)}</p>
       )}
-      <textarea
+      <Textarea
         ref={box}
         dir="auto"
         rows={2}
-        className={`${input} resize-none`}
+        className="resize-none"
         placeholder={t("common", K.thread.placeholder)}
         value={body}
         maxLength={SUPPORT_BODY_MAX}
@@ -382,8 +381,8 @@ function Composer({ id, onSent }: { id: string; onSent: (m: SupportMessage) => v
         }}
       />
       <PendingFiles files={files} disabled={busy} onRemove={(i) => setFiles((held) => held.filter((_, j) => j !== i))} />
-      {refused.length > 0 && <Alert>{t("common", K.ticket.filesRefused, { names: refused.join(", ") })}</Alert>}
-      {failure && <Alert>{failure}</Alert>}
+      {refused.length > 0 && <Alert tone="error">{t("common", K.ticket.filesRefused, { names: refused.join(", ") })}</Alert>}
+      {failure && <Alert tone="error">{failure}</Alert>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <input
@@ -397,10 +396,9 @@ function Composer({ id, onSent }: { id: string; onSent: (m: SupportMessage) => v
               e.target.value = "";
             }}
           />
-          <button type="button" className={quietButton} onClick={() => picker.current?.click()} disabled={busy}>
-            <Paperclip size={12} aria-hidden />
+          <Button variant="quiet" size="sm" onClick={() => picker.current?.click()} disabled={busy} icon={<Paperclip size={12} aria-hidden />}>
             {t("common", K.thread.attach)}
-          </button>
+          </Button>
           <span className="text-[11px] text-text-secondary">{t("common", K.thread.attachHint)}</span>
         </div>
         <SendButton label={t("common", K.thread.send)} busy={busy} disabled={!body.trim() && files.length === 0} />
@@ -419,7 +417,7 @@ function Reopen({ id, onReopened }: { id: string; onReopened: () => void }) {
       <span>{t("common", K.thread.closed)}</span>
       <button
         type="button"
-        className={quietButton}
+        className={buttonClass({ variant: "quiet", size: "sm" })}
         disabled={busy}
         onClick={async () => {
           setBusy(true);
@@ -438,7 +436,7 @@ function Reopen({ id, onReopened }: { id: string; onReopened: () => void }) {
         <RotateCw size={12} aria-hidden />
         {t("common", K.thread.reopen)}
       </button>
-      {failure && <Alert>{failure}</Alert>}
+      {failure && <Alert tone="error">{failure}</Alert>}
     </div>
   );
 }
@@ -468,11 +466,11 @@ function RatingForm({ id, onRated }: { id: string; onRated: (r: NonNullable<Supp
     <form onSubmit={submit} className="space-y-2 rounded-2xl border border-card-border bg-card-bg p-3">
       <p className="text-sm font-bold text-text-primary">{t("common", K.rating.title)}</p>
       <StarRating value={score} onChange={setScore} label={t("common", K.rating.title)} starLabel={(n) => t("common", K.rating.star, { n })} />
-      <input dir="auto" className={input} placeholder={t("common", K.rating.comment)} maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)} />
-      {failure && <Alert>{failure}</Alert>}
-      <button type="submit" className={primaryButton} disabled={busy || score < 1}>
+      <Input dir="auto" placeholder={t("common", K.rating.comment)} maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)} />
+      {failure && <Alert tone="error">{failure}</Alert>}
+      <Button variant="primary" size="sm" type="submit" disabled={busy || score < 1}>
         {t("common", K.rating.submit)}
-      </button>
+      </Button>
     </form>
   );
 }

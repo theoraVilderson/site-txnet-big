@@ -7,7 +7,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { PANEL_CATALOG } from "@/lib/routes";
 import { billingApi, type PanelGroup, type PanelGroupMember, type PanelInbounds, type SystemsPanel } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
-import { Alert, Field, Sheet, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
+import { Field, Sheet } from "../../catalog/_components/catalog-ui";
 import { groupDeleteBlock } from "../_lib/panel-lifecycle";
 import { INBOUND_PLACEMENTS, PLACEMENT_KEYS } from "../_lib/panel-inbounds";
 import { inboundChoices, memberChoiceOf, sellsNobody, validateMemberChoice, type MemberChoice, type MemberChoiceErrors } from "../_lib/member-settings";
@@ -28,11 +28,10 @@ import {
 } from "../_lib/panel-groups";
 import { PANEL_STATE_KEYS, REVIEW_KEYS, SYSTEMS_KEYS } from "../_lib/systems";
 import { ActionsMenu, BAD, CardButton, GOOD, ListState, Notice, Pill, QUIET, REVIEW_TONE, STATE_TONE, Section, useSystemsError } from "./parts";
+import { Alert, Button, Input, NativeSelect, RadioCards } from "../../_components/kit";
 
 const K = SYSTEMS_KEYS.groups;
 
-const INPUT = "rounded-xl border border-card-border bg-card-bg px-3 py-2 text-sm text-text-primary";
-const PRIMARY = "rounded-xl bg-primary px-4 py-2 text-xs font-bold text-text-on-accent disabled:opacity-50";
 
 /** "2 h", "3 days" — a wait as the sweep counts it, never rounded down. */
 function useWait(): (seconds: number) => string {
@@ -73,10 +72,9 @@ export function PanelGroups({
       title={t("common", K.title)}
       hint={t("common", K.hint)}
       actions={
-        <button type="button" onClick={() => setCreating(true)} className={`inline-flex items-center gap-1 ${PRIMARY}`}>
-          <Plus size={14} aria-hidden />
+        <Button variant="primary" size="sm" onClick={() => setCreating(true)} className="inline-flex items-center gap-1" icon={<Plus size={14} aria-hidden />}>
           {t("common", K.create)}
-        </button>
+        </Button>
       }
     >
       {notice && <Notice tone="good">{t("common", notice)}</Notice>}
@@ -150,28 +148,28 @@ function GroupEditor({
       onClose={onCancel}
       footer={
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <button type="button" onClick={onCancel} className={quietButton}>
+          <Button variant="quiet" size="sm" onClick={onCancel}>
             {t("common", K.cancel)}
-          </button>
-          <button type="button" disabled={busy} onClick={() => void submit()} className={primaryButton}>
+          </Button>
+          <Button variant="primary" size="sm" disabled={busy} onClick={() => void submit()}>
             {submitLabel}
-          </button>
+          </Button>
         </div>
       }
     >
       <p className="text-xs leading-5 text-text-secondary">{t("common", group ? K.editHint : K.hint)}</p>
       <Field label={t("common", K.field.name)} error={errors.name}>
-        <input value={form.name} maxLength={100} onChange={set("name")} className={input} />
+        <Input value={form.name} maxLength={100} onChange={set("name")} />
       </Field>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={t("common", K.field.minHealthyPanels)} error={errors.minHealthyPanels} hint={t("common", K.field.minHealthyPanelsHint)}>
-          <input dir="ltr" inputMode="numeric" value={form.minHealthyPanels} onChange={set("minHealthyPanels")} className={input} />
+          <Input dir="ltr" inputMode="numeric" value={form.minHealthyPanels} onChange={set("minHealthyPanels")} />
         </Field>
         <Field label={t("common", K.field.ttlMinutes)} error={errors.ttlMinutes} hint={t("common", K.field.ttlHint)}>
-          <input dir="ltr" inputMode="numeric" value={form.ttlMinutes} onChange={set("ttlMinutes")} className={input} />
+          <Input dir="ltr" inputMode="numeric" value={form.ttlMinutes} onChange={set("ttlMinutes")} />
         </Field>
       </div>
-      {failure && <Alert>{failure}</Alert>}
+      {failure && <Alert tone="error">{failure}</Alert>}
     </Sheet>
   );
 }
@@ -206,19 +204,19 @@ function DeleteGroupSheet({ group, onClose, onDone }: { group: PanelGroup; onClo
       onClose={onClose}
       footer={
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <button type="button" onClick={onClose} className={quietButton}>
+          <Button variant="quiet" size="sm" onClick={onClose}>
             {t("common", K.cancel)}
-          </button>
+          </Button>
           {!block && (
-            <button
-              type="button"
+            <Button
+              size="sm"
               disabled={busy}
               onClick={() => void remove()}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-error-border bg-error-bg px-3 py-2 text-xs font-bold text-error disabled:opacity-50"
+              icon={<Trash2 size={14} aria-hidden />}
+              className="text-error hover:text-error hover:bg-error-bg"
             >
-              <Trash2 size={14} aria-hidden />
               {t("common", SYSTEMS_KEYS.groupsRemove.submit)}
-            </button>
+            </Button>
           )}
         </div>
       }
@@ -465,8 +463,8 @@ function LeaveSheet({
         <div className="flex flex-col gap-2 rounded-2xl border border-error-border bg-bg-inner p-4">
           <p className="text-xs leading-5 text-text-secondary">{t("common", K.drain.confirmHint, { wait: wait(DRAIN_TTL_MULTIPLE * group.subscriptionTtlSeconds) })}</p>
           <div>
-            <button
-              type="button"
+            <Button
+              size="sm"
               disabled={busy}
               onClick={() =>
                 void run(async () => {
@@ -474,23 +472,22 @@ function LeaveSheet({
                   return t("common", K.drain.started, { wait: wait(answer.waitSeconds) });
                 })
               }
-              className="rounded-xl border border-error-border bg-error-bg px-4 py-2 text-xs font-bold text-error disabled:opacity-50"
+              className="text-error hover:text-error hover:bg-error-bg"
             >
               {t("common", K.drain.submit)}
-            </button>
+            </Button>
           </div>
         </div>
       )}
       {canRemove(member) && (
         <div>
-          <button
-            type="button"
+          <Button
+            size="sm"
             disabled={busy}
             onClick={() => void run(async () => (await billingApi.removePanelGroupMember(group.id, member.panelId), null))}
-            className="rounded-xl border border-card-border px-4 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:opacity-50"
           >
             {t("common", K.remove)}
-          </button>
+          </Button>
         </div>
       )}
       {failure && <Notice tone="bad">{failure}</Notice>}
@@ -498,16 +495,17 @@ function LeaveSheet({
   );
 }
 
-/** "Same as the panel" or this group's own, said as a choice (F-027-ck), with what "the panel" means right now. */
+/** "Same as the panel" or this group's own, said as a choice (F-027-ck), with what "the panel" means right now. `name` is the setting's name, the group's label. */
 function Choice({ name, value, onChange, same, own, children }: { name: string; value: "panel" | "own"; onChange: (v: "panel" | "own") => void; same: string; own: string; children?: ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
-      {(["panel", "own"] as const).map((v) => (
-        <label key={v} className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs ${value === v ? "border-primary/40 bg-leaf-bg" : "border-card-border"}`}>
-          <input type="radio" name={name} checked={value === v} onChange={() => onChange(v)} className="mt-0.5 accent-primary" />
-          <span className="font-bold text-text-primary">{v === "panel" ? same : own}</span>
-        </label>
-      ))}
+      <RadioCards<"panel" | "own">
+        ariaLabel={name}
+        columns={1}
+        value={value}
+        onChange={onChange}
+        options={(["panel", "own"] as const).map((v) => ({ value: v, label: v === "panel" ? same : own }))}
+      />
       {value === "own" && children && <div className="flex flex-col gap-2 ps-6">{children}</div>}
     </div>
   );
@@ -590,19 +588,19 @@ function MemberSheet({
       onClose={onClose}
       footer={
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <button type="button" onClick={onClose} className={quietButton}>
+          <Button variant="quiet" size="sm" onClick={onClose}>
             {t("common", K.cancel)}
-          </button>
-          <button type="button" disabled={busy || !form} onClick={() => void save()} className={primaryButton}>
+          </Button>
+          <Button variant="primary" size="sm" disabled={busy || !form} onClick={() => void save()}>
             {t("common", M.save)}
-          </button>
+          </Button>
         </div>
       }
     >
       <p className="text-xs leading-5 text-text-secondary">{t("common", M.intro)}</p>
       {!view || !form ? (
         failure ? (
-          <Alert>{failure}</Alert>
+          <Alert tone="error">{failure}</Alert>
         ) : (
           <p className="flex items-center gap-2 text-xs text-text-secondary">
             <Loader2 size={14} className="animate-spin" aria-hidden />
@@ -614,50 +612,48 @@ function MemberSheet({
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-2 text-xs font-bold text-text-primary">{t("common", M.placement)}</legend>
             <Choice
-              name={`placement-${member.panelId}`}
+              name={t("common", M.placement)}
               value={form.placementMode}
               onChange={(v) => set({ placementMode: v })}
               same={t("common", M.samePanelValue, { value: panelPlacement ?? "" })}
               own={t("common", M.own)}
             >
-              {INBOUND_PLACEMENTS.map((p) => (
-                <label key={p} className="flex items-start gap-2 text-xs">
-                  <input type="radio" name={`placement-own-${member.panelId}`} checked={form.placement === p} onChange={() => set({ placement: p })} className="mt-0.5 accent-primary" />
-                  <span className="flex flex-col">
-                    <span className="font-bold text-text-primary">{t("common", PLACEMENT_KEYS[p].label)}</span>
-                    <span className="leading-5 text-text-secondary">{t("common", PLACEMENT_KEYS[p].hint)}</span>
-                  </span>
-                </label>
-              ))}
+              <RadioCards
+                ariaLabel={t("common", M.placement)}
+                columns={1}
+                value={form.placement}
+                onChange={(p) => set({ placement: p })}
+                options={INBOUND_PLACEMENTS.map((p) => ({ value: p, label: t("common", PLACEMENT_KEYS[p].label), description: t("common", PLACEMENT_KEYS[p].hint) }))}
+              />
             </Choice>
           </fieldset>
 
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-2 text-xs font-bold text-text-primary">{t("common", M.cap)}</legend>
             <Choice
-              name={`cap-${member.panelId}`}
+              name={t("common", M.cap)}
               value={form.capMode}
               onChange={(v) => set({ capMode: v })}
               same={t("common", M.samePanelValue, { value: panelCap ?? "" })}
               own={t("common", M.own)}
             >
-              <input
+              <Input
                 dir="ltr"
                 inputMode="numeric"
                 value={form.maxClients}
                 onChange={(e) => set({ maxClients: e.target.value })}
                 aria-label={t("common", M.cap)}
-                className={`${input} sm:max-w-40`}
+                className="sm:max-w-40"
               />
               <span className="text-[11px] leading-5 text-text-secondary">{t("common", M.capHint)}</span>
-              {errors.maxClients && <Alert>{t("common", errors.maxClients)}</Alert>}
+              {errors.maxClients && <Alert tone="error">{t("common", errors.maxClients)}</Alert>}
             </Choice>
           </fieldset>
 
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-2 text-xs font-bold text-text-primary">{t("common", M.inbounds)}</legend>
             <Choice
-              name={`inbounds-${member.panelId}`}
+              name={t("common", M.inbounds)}
               value={form.inboundsMode === "pool" ? "panel" : "own"}
               onChange={(v) => set({ inboundsMode: v === "panel" ? "pool" : "own" })}
               same={t("common", M.pool)}
@@ -685,7 +681,7 @@ function MemberSheet({
                   </li>
                 ))}
               </ul>
-              {errors.inbounds && <Alert>{t("common", errors.inbounds)}</Alert>}
+              {errors.inbounds && <Alert tone="error">{t("common", errors.inbounds)}</Alert>}
             </Choice>
             {form.inboundsMode === "pool" && <span className="text-[11px] leading-5 text-text-secondary">{t("common", M.poolHint)}</span>}
           </fieldset>
@@ -696,8 +692,8 @@ function MemberSheet({
               {t("common", K.settings.sellsNobody)}
             </p>
           )}
-          {errors.form && <Alert>{t("common", errors.form)}</Alert>}
-          {failure && <Alert>{failure}</Alert>}
+          {errors.form && <Alert tone="error">{t("common", errors.form)}</Alert>}
+          {failure && <Alert tone="error">{failure}</Alert>}
         </>
       )}
     </Sheet>
@@ -735,17 +731,17 @@ function AddMember({ group, panels, onChanged }: { group: PanelGroup; panels: Sy
       <label className="flex flex-col gap-1 text-xs text-text-secondary">
         {t("common", K.add.label)}
         <span className="flex flex-wrap gap-2">
-          <select value={panelId} onChange={(e) => setPanelId(e.target.value)} className={`min-w-0 flex-1 ${INPUT}`}>
+          <NativeSelect value={panelId} onChange={(e) => setPanelId(e.target.value)} className="min-w-0 flex-1">
             <option value="">{t("common", K.add.pick)}</option>
             {options.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name} · {t("common", REVIEW_KEYS[p.review.reviewState])}
               </option>
             ))}
-          </select>
-          <button type="submit" disabled={busy || !panelId} className={PRIMARY}>
+          </NativeSelect>
+          <Button variant="primary" size="sm" type="submit" disabled={busy || !panelId}>
             {t("common", K.add.submit)}
-          </button>
+          </Button>
         </span>
         <span className="leading-5">{t("common", K.add.hint)}</span>
       </label>

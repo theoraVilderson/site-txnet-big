@@ -6,6 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { PANEL_CATALOG } from "@/lib/routes";
 import type { GuideStep, StepState } from "../_lib/systems-guide";
 import { SYSTEMS_KEYS } from "../_lib/systems";
+import { Button, IconButton } from "../../_components/kit";
 
 const K = SYSTEMS_KEYS.guide;
 
@@ -45,9 +46,7 @@ export function SystemsGuide({
           </h2>
           <p className="mt-1 text-xs leading-5 text-text-secondary">{t("common", done ? K.allDone : K.intro)}</p>
         </div>
-        <button type="button" onClick={onClose} aria-label={t("common", K.hide)} title={t("common", K.hide)} className="rounded-lg p-1 text-text-secondary hover:text-text-primary">
-          <X size={16} aria-hidden />
-        </button>
+        <IconButton size="sm" onClick={onClose} aria-label={t("common", K.hide)} title={t("common", K.hide)} icon={<X size={16} aria-hidden />} />
       </header>
 
       <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -68,9 +67,9 @@ export function SystemsGuide({
                     {t("common", K.steps.product.action)}
                   </Link>
                 ) : (
-                  <button type="button" onClick={() => onStep(step)} className="rounded-lg bg-primary px-2.5 py-1 text-[11px] font-bold text-text-on-accent">
+                  <Button variant="primary" size="sm" onClick={() => onStep(step)}>
                     {t("common", K.steps[step].action)}
-                  </button>
+                  </Button>
                 ))}
             </div>
           </li>

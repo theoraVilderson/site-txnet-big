@@ -82,7 +82,7 @@ function PopoverPanel({
   const present = useIsPresent();
   const panelRef = useRef<HTMLDivElement>(null);
   const { style, placedSide } = useAnchoredPosition(present, triggerRef, panelRef, { side, align });
-  useOverlayLayer({ active: present, containerRef: panelRef, onClose });
+  useOverlayLayer({ active: present, containerRef: panelRef, onClose, returnFocusRef: triggerRef });
   useOutsidePointer(present, [panelRef, triggerRef], onClose);
 
   const from = level === "reduced" ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: placedSide === "bottom" ? -4 : 4 };

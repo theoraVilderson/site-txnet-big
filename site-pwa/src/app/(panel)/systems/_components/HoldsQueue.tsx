@@ -8,6 +8,7 @@ import { formatBytes } from "../../services/_lib/service-configs";
 import { HOLD_REASON_KEYS, HOLD_STATE_KEYS, SYSTEMS_KEYS as K, canResolveHold } from "../_lib/systems";
 import { ListState, NoteForm, Section, StateFilter, useSystemsError } from "./parts";
 import { useCursorList } from "./useCursorList";
+import { Button } from "../../_components/kit";
 
 const FILTERS = [
   { id: "pending", label: K.filter.pending },
@@ -39,9 +40,9 @@ export function HoldsQueue() {
           ))}
         </ul>
         {list.next && (
-          <button type="button" onClick={() => void list.more()} className="self-center text-xs font-bold text-primary">
+          <Button variant="quiet" size="sm" onClick={() => void list.more()} className="self-center text-primary hover:text-primary">
             {t("common", K.more)}
-          </button>
+          </Button>
         )}
       </ListState>
     </Section>
@@ -110,22 +111,22 @@ function HoldItem({ hold, onDecided }: { hold: SystemsHold; onDecided: () => Pro
         </div>
         {canResolveHold(hold) && form === null && (
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
               disabled={busy}
               onClick={() => setForm("release")}
-              className="rounded-xl bg-primary px-3 py-2 text-xs font-bold text-text-on-accent disabled:opacity-50"
             >
               {t("common", K.holds.release)}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              size="sm"
               disabled={busy}
               onClick={() => setForm("writeOff")}
-              className="rounded-xl border border-error-border px-3 py-2 text-xs font-bold text-error hover:bg-error-bg disabled:opacity-50"
+              className="text-error hover:text-error hover:bg-error-bg"
             >
               {t("common", K.holds.writeOff)}
-            </button>
+            </Button>
           </div>
         )}
       </div>

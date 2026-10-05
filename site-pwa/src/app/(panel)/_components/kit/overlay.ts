@@ -47,9 +47,15 @@ export interface OverlayLayerOptions {
   lockScroll?: boolean;
   /** Focused on open; else the first focusable inside; else the container. */
   initialFocusRef?: RefObject<HTMLElement | null>;
+  /**
+   * Where focus goes on close — a menu's or a popover's trigger. Without it,
+   * whatever held focus when the layer opened: Safari does not focus a button
+   * it clicks, so that can be the page itself.
+   */
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }
 
-export function useOverlayLayer({ active, containerRef, onClose, trap = true, lockScroll: lock = true, initialFocusRef }: OverlayLayerOptions) {
+export function useOverlayLayer({ active, containerRef, onClose, trap = true, lockScroll: lock = true, initialFocusRef, returnFocusRef }: OverlayLayerOptions) {
   const close = useRef(onClose);
   close.current = onClose;
 
@@ -100,7 +106,8 @@ export function useOverlayLayer({ active, containerRef, onClose, trap = true, lo
       const at = stack.indexOf(id);
       if (at >= 0) stack.splice(at, 1);
       if (lock) unlockScroll();
-      if (returnTo && returnTo.isConnected) returnTo.focus({ preventScroll: true });
+      const back = returnFocusRef?.current ?? returnTo;
+      if (back && back.isConnected) back.focus({ preventScroll: true });
     };
   }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
 }

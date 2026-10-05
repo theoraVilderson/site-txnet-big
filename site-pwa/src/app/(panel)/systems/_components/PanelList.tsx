@@ -5,7 +5,7 @@ import { Archive, KeyRound, Loader2, RotateCcw, Settings2, Trash2, TriangleAlert
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type PanelGroup, type SystemsPanel } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
-import { Sheet, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
+import { Sheet } from "../../catalog/_components/catalog-ui";
 import { DELETE_OUTCOME_KEYS, groupsHolding, isArchived, visiblePanels } from "../_lib/panel-lifecycle";
 import { PANEL_STATUS_KEYS, panelStatusOf, type PanelStatus } from "../_lib/systems-guide";
 import {
@@ -23,6 +23,7 @@ import {
 } from "../_lib/systems";
 import { ActionsMenu, BAD, CardButton, GOOD, ListState, Notice, Pill, QUIET, Section, useSystemsError, type MenuItem } from "./parts";
 import { PanelSheet } from "./PanelSheet";
+import { Button, Field, Input } from "../../_components/kit";
 
 /**
  * The registered panels as cards (F-027-cb, F-027-ck). A card is a line or
@@ -230,19 +231,19 @@ function DeleteSheet({ panel, holding, onClose, onDone }: { panel: SystemsPanel;
       onClose={onClose}
       footer={
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <button type="button" onClick={onClose} className={quietButton}>
+          <Button variant="quiet" size="sm" onClick={onClose}>
             {t("common", K.groups.cancel)}
-          </button>
+          </Button>
           {!blocked && (
-            <button
-              type="button"
+            <Button
+              size="sm"
               disabled={busy}
               onClick={() => void remove()}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-error-border bg-error-bg px-3 py-2 text-xs font-bold text-error disabled:opacity-50"
+              icon={<Trash2 size={14} aria-hidden />}
+              className="text-error hover:text-error hover:bg-error-bg"
             >
-              <Trash2 size={14} aria-hidden />
               {t("common", K.remove.submit)}
-            </button>
+            </Button>
           )}
         </div>
       }
@@ -290,10 +291,9 @@ function ArchivedItem({ panel, onChanged, onNotice }: { panel: SystemsPanel; onC
             {t("common", K.panels.archivedHint, { when: formatInstant(panel.retiredAt, lang) ?? "" })}
           </span>
         </div>
-        <button type="button" disabled={busy} onClick={() => void restore()} className={primaryButton}>
-          {busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <RotateCcw size={14} aria-hidden />}
+        <Button variant="primary" size="sm" disabled={busy} onClick={() => void restore()} icon={busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <RotateCcw size={14} aria-hidden />}>
           {t("common", K.panels.restore)}
-        </button>
+        </Button>
       </div>
       {failure && <Notice tone="bad">{failure}</Notice>}
     </li>
@@ -377,26 +377,24 @@ function SecretForm({
     <Sheet title={t("common", copy.title)} onClose={onCancel}>
     <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
       <p className="text-xs leading-5 text-text-secondary">{t("common", copy.hint)}</p>
-      <label className="flex flex-col gap-1 text-xs text-text-secondary">
-        {t("common", copy.field)}
-        <input
+      <Field label={t("common", copy.field)} error={error ? error : undefined}>
+        <Input
           dir="ltr"
           type="password"
           autoComplete="off"
           value={login}
           maxLength={4096}
           onChange={(e) => setLogin(e.target.value)}
-          className="rounded-xl border border-card-border bg-card-bg px-3 py-2 font-mono text-sm text-text-primary"
+          className="font-mono"
         />
-        {error && <span className="text-error">{error}</span>}
-      </label>
+      </Field>
       <div className="flex flex-wrap gap-2">
-        <button type="submit" disabled={busy} className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-text-on-accent disabled:opacity-50">
+        <Button variant="primary" size="sm" type="submit" disabled={busy}>
           {t("common", copy.submit)}
-        </button>
-        <button type="button" onClick={onCancel} className="rounded-xl px-4 py-2 text-xs font-medium text-text-secondary hover:bg-leaf-bg">
+        </Button>
+        <Button variant="quiet" size="sm" onClick={onCancel}>
           {t("common", K.resubmit.cancel)}
-        </button>
+        </Button>
       </div>
     </form>
     </Sheet>
