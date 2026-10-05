@@ -25,6 +25,7 @@ import {
 import { USER_KEYS } from "../../../_lib/users";
 import { ActionFields } from "../[userId]/_components/GrantActions";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
+import { useConfirm } from "../../../../_components/kit";
 
 const JOBS_PAGE_SIZE = 10;
 const OUTCOMES_PAGE_SIZE = 20;
@@ -365,6 +366,7 @@ export function BulkByFilter({ id }: { id: string }) {
 /** One job: what it does and to what, its progress over the frozen total, a stop while it runs, and its refused services. */
 function JobRow({ job, api, label, onChanged }: { job: BulkJob; api: ReturnType<typeof resellerGrantsApi>; label: string; onChanged: () => void }) {
   const { t, lang } = useLocale();
+  const confirm = useConfirm();
   const message = useUserMessage();
   const [problems, setProblems] = useState<{ rows: BulkOutcomeRow[]; page: number; purgedAt: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -387,7 +389,7 @@ function JobRow({ job, api, label, onChanged }: { job: BulkJob; api: ReturnType<
   }
 
   async function cancel() {
-    if (!window.confirm(t("common", J.cancelConfirm))) return;
+    if (!(await confirm({ title: t("common", J.cancelConfirm), tone: "danger" }))) return;
     setBusy(true);
     setError(null);
     try {

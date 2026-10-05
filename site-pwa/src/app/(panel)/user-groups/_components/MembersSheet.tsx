@@ -12,6 +12,7 @@ import { canAdministerResellers } from "../../resellers/_lib/resellers";
 import { MEMBER_IDS_MAX, USER_GROUP_KEYS as K, canNameResellers, memberSearchOf, membersBody, parseIds } from "../_lib/user-groups";
 import { Alert, Field, Sheet, input, primaryButton, quietButton, useMessage } from "./user-groups-ui";
 import { UserSearch } from "./UserSearch";
+import { useConfirm } from "../../_components/kit";
 
 const PAGE_SIZE = 50;
 
@@ -23,6 +24,7 @@ const PAGE_SIZE = 50;
  */
 export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; onClose: () => void; onChanged: () => void }) {
   const { t, lang } = useLocale();
+  const confirm = useConfirm();
   const { me } = usePanelSession();
   const message = useMessage();
   const search = memberSearchOf(me);
@@ -113,9 +115,9 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
     });
   }
 
-  function remove(m: UserGroupMember) {
+  async function remove(m: UserGroupMember) {
     const label = m.label ?? t("common", K.members.noLabel);
-    if (!window.confirm(t("common", K.members.confirmRemove, { label }))) return;
+    if (!(await confirm({ title: t("common", K.members.confirmRemove, { label }), confirmLabel: t("common", K.members.remove), tone: "danger" }))) return;
     void write(async () => {
       if (m.memberType === "user" && m.userId) await userGroupsApi.removeUser(group.id, m.userId);
       else if (m.tenantId) await userGroupsApi.removeTenant(group.id, m.tenantId);

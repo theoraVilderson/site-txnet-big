@@ -6,6 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { authApi, supportConsentApi, type ConsentScope, type SupportConsentList } from "@/lib/auth-api";
 import { holdsPermission } from "@/lib/permissions";
+import { tenantApi } from "@/lib/tenant-api";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Alert, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import {
@@ -19,6 +20,7 @@ import {
   supportRefusalKey,
   timeLeft,
 } from "../_lib/support-access";
+import { useConfirm } from "../../_components/kit";
 
 const SCOPES: ConsentScope[] = ["read", "act"];
 
@@ -55,6 +57,7 @@ export function ConsentNeeded({ error }: { error: unknown }) {
  */
 export function PlatformAccessBanner({ tenantId, onChange }: { tenantId: string; onChange?: () => void }) {
   const { t } = useLocale();
+  const confirm = useConfirm();
   const errorMessage = useApiErrorMessage();
   const message = (e: unknown) => {
     const key = supportRefusalKey(e);
@@ -207,8 +210,12 @@ export function PlatformAccessBanner({ tenantId, onChange }: { tenantId: string;
                     type="button"
                     className={primaryButton}
                     disabled={busy || emergencyReason === null}
-                    onClick={() => {
-                      if (!emergencyReason || !window.confirm(t("common", K.staff.emergency.confirm))) return;
+                    onClick={async () => {
+                      if (!emergencyReason) return;
+                      // K9: the reseller's slug is typed; the id stands in when its record cannot be read.
+                      const slug = await tenantApi.reseller(tenantId).then((r) => r.slug, () => tenantId);
+                      const sure = await confirm({ title: t("common", K.staff.emergency.confirm), confirmLabel: t("common", K.staff.emergency.submit), tone: "danger", typeToConfirm: slug });
+                      if (!sure) return;
                       void act(() => supportConsentApi.enterEmergency(tenantId, emergencyReason));
                     }}
                   >

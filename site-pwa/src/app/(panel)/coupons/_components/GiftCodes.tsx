@@ -17,6 +17,7 @@ import { variantOwnerTenant } from "../_lib/variant-choices";
 import { CouponUsage } from "./CouponUsage";
 import { ListSkeleton } from "./ListSkeleton";
 import { VariantPicker } from "./VariantPicker";
+import { useConfirm } from "../../_components/kit";
 
 const PAGE_SIZE = 20;
 const input =
@@ -32,6 +33,7 @@ const input =
  */
 export function GiftCodes({ me, owner }: { me: Me | null; owner: boolean }) {
   const { t, lang } = useLocale();
+  const confirm = useConfirm();
   const errorMessage = useApiErrorMessage();
   const [page, setPage] = useState(1);
   const [data, setData] = useState<GiftBatchPage | null>(null);
@@ -84,8 +86,8 @@ export function GiftCodes({ me, owner }: { me: Me | null; owner: boolean }) {
       setNotice(t("common", G.downloaded));
     });
 
-  const deactivate = (b: GiftBatch) => {
-    if (!window.confirm(t("common", G.confirmDeactivate, { label: b.label }))) return;
+  const deactivate = async (b: GiftBatch) => {
+    if (!(await confirm({ title: t("common", G.confirmDeactivate, { label: b.label }), tone: "danger" }))) return;
     void act(b, async () => {
       const out = await billingApi.deactivateGiftBatch(b.id);
       setNotice(t("common", G.deactivatedNotice, { count: String(out.deactivated) }));

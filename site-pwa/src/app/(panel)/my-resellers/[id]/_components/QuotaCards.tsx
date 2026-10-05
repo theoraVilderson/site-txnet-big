@@ -23,6 +23,7 @@ import { Alert } from "../../../catalog/_components/catalog-ui";
 import { formatInstant } from "../../../_lib/datetime";
 import { formatMoney } from "../../../_lib/money";
 import { MY_LIMIT_KEYS as L, MY_QUOTA_KEYS as Q, capAmountOf, changeVerdict, includedReading } from "../../_lib/limits";
+import { useConfirm } from "../../../_components/kit";
 
 const box = "w-32 rounded-xl border border-card-border bg-bg-inner px-3 py-2 text-sm text-text-primary outline-none focus:border-primary";
 const primary = "rounded-xl bg-primary px-3 py-2 text-xs font-bold text-on-accent disabled:opacity-50";
@@ -218,6 +219,7 @@ export function OverageCapCard({ tenantId }: { tenantId: string }) {
  */
 export function PackageChangeCard({ tenantId }: { tenantId: string }) {
   const { t, lang } = useLocale();
+  const confirm = useConfirm();
   const message = useApiErrorMessage();
   const money = useMoney();
   const [offers, setOffers] = useState<PackageOffer[] | null>(null);
@@ -265,7 +267,7 @@ export function PackageChangeCard({ tenantId }: { tenantId: string }) {
   const apply = async () => {
     if (busy || !preview || (verdict !== "now" && verdict !== "renewal")) return;
     const question = verdict === "now" ? t("common", Q.change.confirmNow, { charge }) : t("common", Q.change.confirmRenewal, { date: renewal });
-    if (!window.confirm(question)) return;
+    if (!(await confirm({ title: question }))) return;
     setBusy(true);
     setError(null);
     try {

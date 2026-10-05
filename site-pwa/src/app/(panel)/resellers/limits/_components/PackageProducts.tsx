@@ -8,6 +8,7 @@ import { flattenTexts } from "../../../catalog/_lib/catalog-form";
 import { Alert, primaryButton, quietButton, useMessage } from "../../_components/resellers-ui";
 import { LIMIT_KEYS as K, productQuotaBodyOf, productQuotaFormOf, type ProductQuotaForm } from "../../_lib/limits";
 import { ModeRadios, useOverageHeld } from "./QuotaOverage";
+import { useConfirm } from "../../../_components/kit";
 
 const P = K.products;
 const WINDOWS = ["day", "week", "month"] as const;
@@ -123,6 +124,7 @@ function ProductTerms({
   onSaved: () => void;
 }) {
   const { t } = useLocale();
+  const confirm = useConfirm();
   const message = useMessage();
   const held = useOverageHeld();
   const radios = useId();
@@ -201,7 +203,7 @@ function ProductTerms({
             type="button"
             className={quietButton}
             disabled={busy}
-            onClick={() => window.confirm(t("common", P.unlistConfirm, { name })) && run(() => resellerLimitsApi.clearPackageProduct(packageId, productId))}
+            onClick={async () => (await confirm({ title: t("common", P.unlistConfirm, { name }), confirmLabel: t("common", P.unlist), tone: "danger", typeToConfirm: name })) && run(() => resellerLimitsApi.clearPackageProduct(packageId, productId))}
           >
             {t("common", P.unlist)}
           </button>

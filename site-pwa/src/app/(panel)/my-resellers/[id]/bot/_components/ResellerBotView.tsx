@@ -24,6 +24,7 @@ import {
   connectBody,
   isPrimaryTaken,
 } from "../../../_lib/bots";
+import { useConfirm } from "../../../../_components/kit";
 
 /** The refusal's own sentence, else the generic answer for that error. */
 function useMessage() {
@@ -225,6 +226,7 @@ function ConnectBot({ id, bots, onConnected }: { id: string; bots: ResellerBot[]
 
 function BotCard({ tenantId, bot, onRetired }: { tenantId: string; bot: ResellerBot; onRetired: () => void }) {
   const { t } = useLocale();
+  const confirm = useConfirm();
   const message = useMessage();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
@@ -234,7 +236,7 @@ function BotCard({ tenantId, bot, onRetired }: { tenantId: string; bot: Reseller
   async function retire() {
     // Asked once: the token is revoked and the reseller's customers stop
     // reaching the bot, and nothing here undoes that.
-    if (!window.confirm(t("common", K.removeConfirm))) return;
+    if (!(await confirm({ title: t("common", K.removeConfirm), confirmLabel: t("common", K.remove), tone: "danger" }))) return;
     setBusy(true);
     setFailure(null);
     try {

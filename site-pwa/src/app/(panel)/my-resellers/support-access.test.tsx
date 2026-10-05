@@ -16,12 +16,14 @@
  *    from consents, since the reseller never granted it.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render as rtlRender, within, screen, waitFor } from "@testing-library/react";
 import { useLocale } from "@/context/LocaleContext";
 import { ApiError } from "@/lib/api-error";
 import { supportConsentApi, type ConsentView, type SupportConsentList } from "@/lib/auth-api";
 import { SupportAccessCard } from "./[id]/_components/SupportAccessCard";
 import { consentSides, hoursOf, supportRefusalKey, timeLeft } from "./_lib/support-access";
+import type { ReactElement } from "react";
+import { ConfirmProvider } from "../_components/kit";
 
 vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
 vi.mock("@/lib/auth-api", async (importOriginal) => ({
@@ -39,6 +41,13 @@ vi.mock("@/lib/auth-api", async (importOriginal) => ({
 }));
 
 const t = (_ns: string, key: string, vars?: Record<string, string | number>) => (vars ? `${key}:${Object.values(vars).join(",")}` : key);
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
+/** The kit's question (K9), answered by its own buttons. */
+const answer = async (yes: boolean) => {
+  const dialog = within(await screen.findByRole("dialog"));
+  fireEvent.click(yes ? dialog.getAllByRole("button").at(-1)! : dialog.getByRole("button", { name: "kit.confirm.cancel" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+};
 const S = "supportAccess";
 const RESELLER = "22222222-2222-4222-8222-222222222222";
 const NOW = Date.parse("2026-10-04T10:00:00Z");
@@ -66,7 +75,6 @@ beforeEach(() => {
   vi.setSystemTime(NOW);
   vi.mocked(useLocale).mockReturnValue({ t, lang: "en" } as never);
   vi.mocked(supportConsentApi.activity).mockResolvedValue({ page: 1, items: [] });
-  vi.spyOn(window, "confirm").mockReturnValue(true);
 });
 
 describe("timeLeft", () => {
@@ -136,11 +144,12 @@ describe("SupportAccessCard", () => {
     render(<SupportAccessCard tenantId={RESELLER} />);
     expect(await screen.findByText(`${S}.live.left:1,15`)).toBeInTheDocument();
 
-    vi.mocked(window.confirm).mockReturnValueOnce(false);
     fireEvent.click(screen.getByRole("button", { name: `${S}.live.revoke` }));
+    await answer(false);
     expect(supportConsentApi.revoke).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: `${S}.live.revoke` }));
+    await answer(true);
     await waitFor(() => expect(supportConsentApi.revoke).toHaveBeenCalledWith(RESELLER, "g1"));
   });
 

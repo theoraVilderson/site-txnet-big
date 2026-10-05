@@ -9,6 +9,7 @@ import { Badge } from "../../../financial/_components/Badge";
 import { formatInstant } from "../../../_lib/datetime";
 import { Alert, input, primaryButton, quietButton } from "../../../catalog/_components/catalog-ui";
 import { SUPPORT_KEYS as K, consentSides, hoursOf, supportRefusalKey, timeLeft } from "../../_lib/support-access";
+import { useConfirm } from "../../../_components/kit";
 
 /** `ACTIVITY_PAGE` (auth-service): a full page means there may be an older one. */
 const ACTIVITY_PAGE = 50;
@@ -30,6 +31,7 @@ const SCOPES: ConsentScope[] = ["read", "act"];
  */
 export function SupportAccessCard({ tenantId }: { tenantId: string }) {
   const { t, lang } = useLocale();
+  const confirm = useConfirm();
   const errorMessage = useApiErrorMessage();
   const message = (e: unknown) => {
     const key = supportRefusalKey(e);
@@ -101,8 +103,8 @@ export function SupportAccessCard({ tenantId }: { tenantId: string }) {
   const when = (iso: string | null) => formatInstant(iso, lang) ?? "";
   const grant = (requestId?: string) =>
     typedHours !== undefined && act(() => supportConsentApi.grant(tenantId, { scope, hours: typedHours, ...(requestId ? { requestId } : {}) }));
-  const revoke = (consentId: string, ask: boolean) => {
-    if (ask && !window.confirm(t("common", K.live.confirmRevoke))) return;
+  const revoke = async (consentId: string, ask: boolean) => {
+    if (ask && !(await confirm({ title: t("common", K.live.confirmRevoke), confirmLabel: t("common", K.live.revoke), tone: "danger" }))) return;
     void act(() => supportConsentApi.revoke(tenantId, consentId));
   };
 

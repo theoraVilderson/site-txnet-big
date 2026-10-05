@@ -13,6 +13,7 @@ import { RESELLER_KEYS, canAdministerResellers } from "../../_lib/resellers";
 import { PACKAGE_KEYS as K, WHOLESALE_METERS, packageFormOf } from "../../_lib/packages";
 import { PackageSheet } from "./PackageSheet";
 import { PageHeader } from "../../../_components/kit/PageHeader";
+import { useConfirm } from "../../../_components/kit";
 
 /**
  * The packages the platform sells resellers (F-118-n5, `tenant/contract.admin.md`
@@ -25,6 +26,7 @@ import { PageHeader } from "../../../_components/kit/PageHeader";
  */
 export function PackagesView() {
   const { lang, t } = useLocale();
+  const confirm = useConfirm();
   const { me, isLoading: sessionLoading } = usePanelSession();
   const message = useMessage();
   const allowed = canAdministerResellers(me);
@@ -84,8 +86,8 @@ export function PackagesView() {
       return t("common", K.saved, { name: saved.name });
     });
 
-  const apply = (p: TenantPackage) => {
-    if (!window.confirm(t("common", K.applyConfirm))) return;
+  const apply = async (p: TenantPackage) => {
+    if (!(await confirm({ title: t("common", K.applyConfirm), confirmLabel: t("common", K.apply) }))) return;
     return act(p, async () => {
       const answer = await tenantApi.applyPackage(p.id);
       return t("common", K.applyDone, { count: answer.subscribers });

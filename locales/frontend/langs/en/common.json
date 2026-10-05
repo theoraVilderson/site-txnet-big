@@ -767,6 +767,7 @@
     "confirm": {
       "cancel": "Cancel",
       "confirm": "Confirm",
+      "delete": "Delete",
       "typeToConfirm": "Type “{{name}}” to confirm"
     },
     "saveBar": {

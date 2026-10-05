@@ -17,13 +17,15 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import { useLocale } from "@/context/LocaleContext";
 import { resellerLimitsApi, tenantApi } from "@/lib/tenant-api";
 import { usePanelSession } from "../_context/PanelSessionContext";
 import { catalogApi } from "@/lib/catalog-api";
 import { RESELLER_LIMIT_KEYS, limitValueOf, overageBodyOf, productQuotaBodyOf, unitPriceOf } from "./_lib/limits";
 import { LimitsView } from "./limits/_components/LimitsView";
+import type { ReactElement } from "react";
+import { ConfirmProvider } from "../_components/kit";
 
 vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
 vi.mock("../_context/PanelSessionContext", () => ({ usePanelSession: vi.fn() }));
@@ -51,6 +53,13 @@ vi.mock("@/lib/tenant-api", async (importOriginal) => ({
 vi.mock("@/lib/catalog-api", () => ({ catalogApi: { products: vi.fn(), texts: vi.fn() } }));
 
 const t = (_ns: string, key: string, vars?: Record<string, string | number>) => (vars ? `${key}:${Object.values(vars).join(",")}` : key);
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
+/** The kit's question (K9), answered by its own buttons. */
+const answer = async (yes: boolean) => {
+  const dialog = within(await screen.findByRole("dialog"));
+  fireEvent.click(yes ? dialog.getAllByRole("button").at(-1)! : dialog.getByRole("button", { name: "kit.confirm.cancel" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+};
 const K = "resellers.limits";
 const REGISTRY = join(__dirname, "../../../../../txnet-backend/shared-core/src/lib/tenant/reseller-limits.ts");
 
@@ -76,7 +85,6 @@ beforeEach(() => {
     { id: "prod-own", tenantId: "r-1", key: "own" },
   ] as never);
   vi.mocked(catalogApi.texts).mockResolvedValue({ product: { vpn: "VPN" } } as never);
-  vi.spyOn(window, "confirm").mockReturnValue(true);
 });
 
 describe("the keys", () => {
@@ -218,7 +226,10 @@ describe("LimitsView", () => {
     await waitFor(() => expect(resellerLimitsApi.setPackageProduct).toHaveBeenCalledWith("pkg-1", "prod-vpn", { day: 10, week: 50 }));
 
     fireEvent.click(within(vpn).getByRole("button", { name: `${K}.products.unlist` }));
-    expect(window.confirm).toHaveBeenCalled();
+    // K9: unlisting a package's product is typed — the product's name.
+    const dialog = within(await screen.findByRole("dialog"));
+    fireEvent.change(dialog.getByRole("textbox"), { target: { value: "VPN" } });
+    fireEvent.click(dialog.getByRole("button", { name: `${K}.products.unlist` }));
     await waitFor(() => expect(resellerLimitsApi.clearPackageProduct).toHaveBeenCalledWith("pkg-1", "prod-vpn"));
   });
 });

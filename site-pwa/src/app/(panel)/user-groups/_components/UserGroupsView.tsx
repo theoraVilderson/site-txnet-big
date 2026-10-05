@@ -13,6 +13,8 @@ import { Alert, primaryButton, quietButton, useMessage } from "./user-groups-ui"
 import { GroupSheet } from "./GroupSheet";
 import { MembersSheet } from "./MembersSheet";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { useConfirm } from "../../_components/kit";
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /**
  * An admin's user groups (F-114-m), by name, over `/auth/user-groups`
@@ -24,6 +26,7 @@ import { PageHeader } from "../../_components/kit/PageHeader";
  */
 export function UserGroupsView() {
   const { lang, t } = useLocale();
+  const confirm = useConfirm();
   const { me, isLoading: sessionLoading } = usePanelSession();
   const message = useMessage();
   const allowed = canManageGroups(me);
@@ -65,7 +68,7 @@ export function UserGroupsView() {
   const open = members ? rows?.find((g) => g.id === members.id) ?? members : null;
 
   async function remove(g: UserGroup) {
-    if (!window.confirm(t("common", K.confirmDelete, { name: g.name }))) return;
+    if (!(await confirm({ title: t("common", K.confirmDelete, { name: g.name }), confirmLabel: t("common", FrontendI18nKeys.common.kit.confirm.delete), tone: "danger" }))) return;
     setNotice(null);
     setFailure(null);
     try {

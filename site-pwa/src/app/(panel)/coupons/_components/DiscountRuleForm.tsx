@@ -26,6 +26,8 @@ import {
   type RuleTarget,
 } from "../_lib/discount-rules";
 import { ChoicePicker, type Choices } from "./ChoicePicker";
+import { useConfirm } from "../../_components/kit";
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 const F = K.form;
 
@@ -42,6 +44,7 @@ export interface RuleChoices {
  */
 export function DiscountRuleForm({ me, rule, choices, onClose, onSaved }: { me: Me | null; rule: DiscountRule | null; choices: RuleChoices; onClose: () => void; onSaved: (notice: string) => void | Promise<void> }) {
   const { t } = useLocale();
+  const confirm = useConfirm();
   const errorMessage = useApiErrorMessage();
   const [form, setForm] = useState<RuleForm>(() => (rule ? formFromRule(rule) : emptyRuleForm()));
   const [errors, setErrors] = useState<RuleFormErrors>({});
@@ -56,8 +59,8 @@ export function DiscountRuleForm({ me, rule, choices, onClose, onSaved }: { me: 
     if (errors[k]) setErrors((e) => ({ ...e, [k]: undefined }));
   };
 
-  const requestClose = () => {
-    if (touched && !window.confirm(t("common", F.confirmClose))) return;
+  const requestClose = async () => {
+    if (touched && !(await confirm({ title: t("common", F.confirmClose), confirmLabel: t("common", FrontendI18nKeys.common.kit.unsaved.leave) }))) return;
     onClose();
   };
 

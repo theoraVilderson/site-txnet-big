@@ -18,6 +18,7 @@ import { DepositTaxCard } from "./DepositTaxCard";
 import { GatewayLinks } from "./GatewayLinks";
 import { GatewayWizard } from "./GatewayWizard";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { useConfirm } from "../../_components/kit";
 
 const G = FrontendI18nKeys.common.gateways;
 
@@ -36,6 +37,7 @@ const G = FrontendI18nKeys.common.gateways;
  */
 export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: GatewaySurface } = {}) {
   const { t } = useLocale();
+  const confirm = useConfirm();
   const errorMessage = useGatewayMessage(surface);
   const { me, isLoading: sessionLoading } = usePanelSession();
   // Nothing is elevated on a reseller's screen: no links panel, and no owner
@@ -65,7 +67,7 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
   const [actionError, setActionError] = useState<string | null>(null);
 
   const remove = async (g: AdminGateway) => {
-    if (!window.confirm(t("common", G.confirmDelete, { name: g.displayName }))) return;
+    if (!(await confirm({ title: t("common", G.confirmDelete, { name: g.displayName }), confirmLabel: t("common", G.delete), tone: "danger", typeToConfirm: g.displayName }))) return;
     setActionError(null);
     try {
       const out = await surface.api.remove(g.source, g.id);

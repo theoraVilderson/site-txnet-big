@@ -17,6 +17,8 @@ import { DiscountRules } from "./DiscountRules";
 import { GiftCodes } from "./GiftCodes";
 import { ListSkeleton } from "./ListSkeleton";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { useConfirm } from "../../_components/kit";
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 const PAGE_SIZE = 20;
 type Tab = "discount" | "gift" | "rules";
@@ -70,6 +72,7 @@ export function CouponsView() {
 
 function DiscountCoupons({ owner }: { owner: boolean }) {
   const { t, lang } = useLocale();
+  const confirm = useConfirm();
   const errorMessage = useApiErrorMessage();
   const { me } = usePanelSession();
   const [query, setQuery] = useState<CouponListQuery>({ kind: "discount", page: 1, pageSize: PAGE_SIZE });
@@ -119,7 +122,7 @@ function DiscountCoupons({ owner }: { owner: boolean }) {
   };
 
   const remove = async (c: AdminCoupon) => {
-    if (!window.confirm(t("common", K.confirmDelete, { code: c.code }))) return;
+    if (!(await confirm({ title: t("common", K.confirmDelete, { code: c.code }), confirmLabel: t("common", FrontendI18nKeys.common.kit.confirm.delete), tone: "danger" }))) return;
     setActionError(null);
     try {
       const out = await billingApi.deleteCoupon(c.id);

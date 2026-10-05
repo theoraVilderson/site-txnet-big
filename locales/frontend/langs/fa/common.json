@@ -767,6 +767,7 @@
     "confirm": {
       "cancel": "انصراف",
       "confirm": "تأیید",
+      "delete": "حذف",
       "typeToConfirm": "برای تأیید، «{{name}}» را بنویسید"
     },
     "saveBar": {

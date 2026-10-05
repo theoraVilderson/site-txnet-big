@@ -28,6 +28,8 @@ import {
 } from "../_lib/coupon-form";
 import { variantOwnerTenant } from "../_lib/variant-choices";
 import { VariantPicker } from "./VariantPicker";
+import { useConfirm } from "../../_components/kit";
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 const F = K.form;
 
@@ -55,6 +57,7 @@ export function CouponForm({
   onSaved: (notice: string) => void | Promise<void>;
 }) {
   const { t } = useLocale();
+  const confirm = useConfirm();
   const errorMessage = useApiErrorMessage();
   const owner = isPlatformOwner(me);
   const frozen = coupon ? isFrozen(coupon) : false;
@@ -69,8 +72,8 @@ export function CouponForm({
     billingApi.adminGateways().then(setGateways, () => setGateways([]));
   }, []);
 
-  const requestClose = () => {
-    if (touched && !window.confirm(t("common", F.confirmClose))) return;
+  const requestClose = async () => {
+    if (touched && !(await confirm({ title: t("common", F.confirmClose), confirmLabel: t("common", FrontendI18nKeys.common.kit.unsaved.leave) }))) return;
     onClose();
   };
 

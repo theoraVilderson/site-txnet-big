@@ -20,7 +20,7 @@
  *    The preview's price is shown and asked about first; short of it, no button.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render as rtlRender, renderHook, screen, waitFor, within } from "@testing-library/react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { ApiError } from "@/lib/api-error";
@@ -30,6 +30,8 @@ import { catalogApi } from "@/lib/catalog-api";
 import { ResellerLimitsCard } from "./[id]/_components/ResellerLimitsCard";
 import { OverageCapCard, PackageChangeCard, ProductQuotasCard } from "./[id]/_components/QuotaCards";
 import { capAmountOf, changeVerdict, compareAmounts, includedReading, limitReading } from "./_lib/limits";
+import type { ReactElement } from "react";
+import { ConfirmProvider } from "../_components/kit";
 
 vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
 vi.mock("@/lib/tenant-api", async (importOriginal) => ({
@@ -41,6 +43,13 @@ vi.mock("@/lib/tenant-api", async (importOriginal) => ({
 vi.mock("@/lib/catalog-api", () => ({ catalogApi: { texts: vi.fn() } }));
 
 const t = (_ns: string, key: string, vars?: Record<string, string | number>) => (vars ? `${key}:${Object.values(vars).join(",")}` : key);
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
+/** The kit's question (K9), answered by its own buttons. */
+const answer = async (yes: boolean) => {
+  const dialog = within(await screen.findByRole("dialog"));
+  fireEvent.click(yes ? dialog.getAllByRole("button").at(-1)! : dialog.getByRole("button", { name: "kit.confirm.cancel" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+};
 const L = "resellerOnboarding.limits";
 const RESELLER = "22222222-2222-4222-8222-222222222222";
 
@@ -49,7 +58,6 @@ beforeEach(() => {
   vi.mocked(useLocale).mockReturnValue({ t, lang: "en" } as never);
   vi.mocked(resellerLimitsApi.ofReseller).mockReset();
   vi.mocked(catalogApi.texts).mockResolvedValue({ product: { vpn: "VPN" } } as never);
-  vi.spyOn(window, "confirm").mockReturnValue(true);
 });
 
 const Q = "resellerOnboarding.quotas";
@@ -226,7 +234,8 @@ describe("the workspace's quota cards (F-019-v10)", () => {
     await waitFor(() => expect(tenantApi.subscriptionChange).toHaveBeenCalledWith(RESELLER, "gold", "subscription_monthly"));
     expect(await screen.findByText(new RegExp(`^${Q}.change.now:`))).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: `${Q}.change.upgrade` }));
-    expect(window.confirm).toHaveBeenCalled();
+    expect(tenantApi.changeSubscription).not.toHaveBeenCalled();
+    await answer(true);
     await waitFor(() => expect(tenantApi.changeSubscription).toHaveBeenCalledWith(RESELLER, { packageId: "gold", billingModel: "subscription_monthly" }));
 
     vi.mocked(tenantApi.subscriptionChange).mockResolvedValue({ ...preview, balance: "5.00" });

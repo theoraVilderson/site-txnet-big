@@ -20,6 +20,7 @@ import { ConsentNeeded, PlatformAccessBanner } from "../../../_components/Platfo
 import { consentRefusal } from "../../../_lib/support-access";
 import { BulkByFilter } from "./BulkByFilter";
 import { FindByLink } from "./FindByLink";
+import { useConfirm } from "../../../../_components/kit";
 
 /** How long typing rests before the list is asked again. */
 const TYPING_MS = 350;
@@ -51,6 +52,7 @@ const STATUS_TONE: Record<ResellerUser["status"], string> = {
  */
 export function ResellerUsersView({ id }: { id: string }) {
   const { t, lang } = useLocale();
+  const confirm = useConfirm();
   // The platform's own users (F-311-ab) have no console to go back to.
   const { me } = usePanelSession();
   const platform = isPlatformTenant(id, me);
@@ -71,7 +73,12 @@ export function ResellerUsersView({ id }: { id: string }) {
     const action = blockActionOf(user.status);
     if (!action || blocking) return;
     const name = user.fullName || user.username || t("common", K.unnamed);
-    if (!window.confirm(t("common", action === "block" ? K.blockConfirm : K.unblockConfirm, { name }))) return;
+    const sure = await confirm({
+      title: t("common", action === "block" ? K.blockConfirm : K.unblockConfirm, { name }),
+      confirmLabel: t("common", action === "block" ? K.block : K.unblock),
+      tone: action === "block" ? "danger" : "default",
+    });
+    if (!sure) return;
     setBlocking(user.id);
     setBlockError(null);
     try {

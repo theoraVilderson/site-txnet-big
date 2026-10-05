@@ -13,6 +13,7 @@ import {
 } from "../../../../../services/_lib/service-configs";
 import { ADMIN_REFUSAL_KEYS, USER_KEYS as K, adminActionBody, type OfferedAction } from "../../../../_lib/users";
 import { useUserMessage } from "./useUserMessage";
+import { useConfirm } from "../../../../../_components/kit";
 
 const A = K.actions;
 
@@ -34,6 +35,7 @@ type Refused = Extract<AdminConfigActionOutcome, { ok: false }>;
  */
 export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsApi; rows: UserConfigRow[]; onActed: () => void }) {
   const { t, lang } = useLocale();
+  const confirm = useConfirm();
   const message = useUserMessage();
 
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -74,7 +76,17 @@ export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsAp
   async function act(action: OfferedAction, ids: string[], why?: string, panelId?: string) {
     const body = adminActionBody(action, ids, why, panelId);
     if (busy || !body) return;
-    if (action === "retire" && !window.confirm(t("common", A.retireConfirm, { count: ids.length }))) return;
+    // K9: retiring two or more is typed — the count, since no one name covers them.
+    if (
+      action === "retire" &&
+      !(await confirm({
+        title: t("common", A.retireConfirm, { count: ids.length }),
+        confirmLabel: t("common", A.retire),
+        tone: "danger",
+        ...(ids.length >= 2 ? { typeToConfirm: String(ids.length) } : {}),
+      }))
+    )
+      return;
     const labels = new Map(rows.map((r) => [r.id, configName(r)]));
     setBusy(true);
     setActError(null);

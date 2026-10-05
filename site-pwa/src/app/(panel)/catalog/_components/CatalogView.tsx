@@ -37,6 +37,8 @@ import { ProductDetailSheet } from "./ProductDetailSheet";
 import { ProductWizard } from "./ProductWizard";
 import { Alert, primaryButton, quietButton, useMessage } from "./catalog-ui";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { useConfirm } from "../../_components/kit";
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /**
  * The published `catalog` namespace in every language locale-service has —
@@ -84,6 +86,7 @@ type Renaming = { kind: "product" | "category" | "capability"; id: string; nameK
  */
 export function CatalogView() {
   const { t, lang, availableLocales } = useLocale();
+  const confirm = useConfirm();
   const langCodes = availableLocales.map((l) => l.code).join(",");
   const message = useMessage();
   const { me, isLoading: sessionLoading } = usePanelSession();
@@ -199,7 +202,7 @@ export function CatalogView() {
     });
   const removeSelected = async () => {
     const ids = [...selected];
-    if (ids.length === 0 || !window.confirm(t("common", K.removal.confirm, { count: ids.length }))) return;
+    if (ids.length === 0 || !(await confirm({ title: t("common", K.removal.confirm, { count: ids.length }), confirmLabel: t("common", FrontendI18nKeys.common.kit.confirm.delete), tone: "danger" }))) return;
     setRemoving(true);
     setActionError(null);
     setNotice(null);
@@ -225,7 +228,7 @@ export function CatalogView() {
     });
   const removeCategories = async () => {
     const ids = [...pickedCategories];
-    if (ids.length === 0 || !window.confirm(t("common", K.categories.confirm, { count: ids.length }))) return;
+    if (ids.length === 0 || !(await confirm({ title: t("common", K.categories.confirm, { count: ids.length }), confirmLabel: t("common", FrontendI18nKeys.common.kit.confirm.delete), tone: "danger" }))) return;
     setRemoving(true);
     setActionError(null);
     setNotice(null);
@@ -233,7 +236,12 @@ export function CatalogView() {
       // Billing keeps a category with products in it; only then, and only for those, the page asks again (F-026-m).
       let outcomes = await api.removeCategories(ids);
       const held = heldByProducts(outcomes);
-      if (held.length > 0 && window.confirm(t("common", K.categories.confirmWithProducts, { count: held.length }))) {
+      // K9: products go with them, so the name is typed — one category's own, or how many.
+      const typeToConfirm = held.length === 1 ? categoryName(held[0]) : String(held.length);
+      if (
+        held.length > 0 &&
+        (await confirm({ title: t("common", K.categories.confirmWithProducts, { count: held.length }), confirmLabel: t("common", FrontendI18nKeys.common.kit.confirm.delete), tone: "danger", typeToConfirm }))
+      ) {
         outcomes = mergeRemovals(outcomes, await api.removeCategories(held, true));
       }
       setReport(categoryRemovalReport(outcomes));

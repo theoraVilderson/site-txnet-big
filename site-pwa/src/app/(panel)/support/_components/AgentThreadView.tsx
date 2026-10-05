@@ -29,6 +29,7 @@ import { StatusPill } from "./SupportView";
 import { PriorityPill, SlaBadge } from "./SupportInboxView";
 import { usePresence } from "./usePresence";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { useConfirm } from "../../_components/kit";
 
 const TYPING_EVERY_MS = 4_000;
 
@@ -43,6 +44,7 @@ const TYPING_EVERY_MS = 4_000;
  */
 export function AgentThreadView({ id }: { id: string }) {
   const { lang, t } = useLocale();
+  const confirm = useConfirm();
   const errorMessage = useApiErrorMessage();
   const client = usePanelRealtime();
   const { me } = usePanelSession();
@@ -259,7 +261,7 @@ export function AgentThreadView({ id }: { id: string }) {
                 type="button"
                 className={quietButton}
                 disabled={busy}
-                onClick={() => window.confirm(t("common", K.thread.closeConfirm)) && act(() => supportAgentApi.close(id))}
+                onClick={async () => (await confirm({ title: t("common", K.thread.closeConfirm), confirmLabel: t("common", K.thread.close) })) && act(() => supportAgentApi.close(id))}
               >
                 <XCircle size={12} aria-hidden />
                 {t("common", K.thread.close)}

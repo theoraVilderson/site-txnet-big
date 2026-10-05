@@ -5,6 +5,7 @@ import { useLocale } from "@/context/LocaleContext";
 import type { CatalogCapability } from "@/lib/catalog-api";
 import { CATALOG_KEYS as K, canEditCapability } from "../_lib/catalog-form";
 import { quietButton } from "./catalog-ui";
+import { useConfirm } from "../../_components/kit";
 
 const C = K.capabilities;
 
@@ -28,6 +29,7 @@ export function CapabilitiesTab({
   onRemove: (c: CatalogCapability) => void;
 }) {
   const { t } = useLocale();
+  const confirm = useConfirm();
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[11px] text-text-secondary">{t("common", C.listHint)}</p>
@@ -57,8 +59,8 @@ export function CapabilitiesTab({
                     <button
                       type="button"
                       className={quietButton}
-                      onClick={() => {
-                        if (window.confirm(t("common", C.confirmRemove, { name: label(c) }))) onRemove(c);
+                      onClick={async () => {
+                        if (await confirm({ title: t("common", C.confirmRemove, { name: label(c) }), confirmLabel: t("common", C.removeOne), tone: "danger" })) onRemove(c);
                       }}
                     >
                       <Trash2 size={14} aria-hidden />

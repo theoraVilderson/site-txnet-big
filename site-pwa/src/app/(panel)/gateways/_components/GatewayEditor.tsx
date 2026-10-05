@@ -46,6 +46,7 @@ import {
   type GatewayForm,
 } from "../_lib/gateway-form";
 import { PROVIDER_DEFAULTS, type Provider } from "../_lib/gateway-wizard";
+import { useConfirm } from "../../_components/kit";
 
 const G = FrontendI18nKeys.common.gateways;
 const F = G.form;
@@ -108,6 +109,7 @@ interface GatewayEditorProps {
  */
 export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: GatewayEditorProps) {
   const { t, lang } = useLocale();
+  const confirm = useConfirm();
   const errorMessage = useGatewayMessage(surface);
   const reduceMotion = useReducedMotionConfig();
   const owner = isPlatformOwner(me);
@@ -136,9 +138,9 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: Gatewa
     setFailure(null);
   };
 
-  const requestClose = () => {
+  const requestClose = async () => {
     if (saving) return;
-    if (dirty && !window.confirm(t("common", E.confirmClose))) return;
+    if (dirty && !(await confirm({ title: t("common", E.confirmClose), confirmLabel: t("common", E.discard) }))) return;
     onClose();
   };
 

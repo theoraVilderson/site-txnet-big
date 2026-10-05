@@ -17,15 +17,18 @@
  *    `expiresAt` against now, rounded up.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render as rtlRender, within, screen, waitFor } from "@testing-library/react";
 import { useLocale } from "@/context/LocaleContext";
 import { authApi, supportConsentApi, type ConsentView, type Me, type SupportConsentList } from "@/lib/auth-api";
 import { usePanelSession } from "../_context/PanelSessionContext";
 import { ConsentNeeded, PlatformAccessBanner } from "./_components/PlatformAccessBanner";
 import { consentRefusal, staffVisitor } from "./_lib/support-access";
+import type { ReactElement } from "react";
+import { ConfirmProvider } from "../_components/kit";
 
 vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
 vi.mock("../_context/PanelSessionContext", () => ({ usePanelSession: vi.fn() }));
+vi.mock("@/lib/tenant-api", () => ({ tenantApi: { reseller: vi.fn(async () => ({ slug: "acme" })) } }));
 vi.mock("@/lib/auth-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/auth-api")>()),
   authApi: { ownedResellers: vi.fn() },
@@ -33,6 +36,13 @@ vi.mock("@/lib/auth-api", async (importOriginal) => ({
 }));
 
 const t = (_ns: string, key: string, vars?: Record<string, string | number>) => (vars ? `${key}:${Object.values(vars).join(",")}` : key);
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
+/** The kit's question (K9), answered by its own buttons. */
+const answer = async (yes: boolean) => {
+  const dialog = within(await screen.findByRole("dialog"));
+  fireEvent.click(yes ? dialog.getAllByRole("button").at(-1)! : dialog.getByRole("button", { name: "kit.confirm.cancel" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+};
 const S = "supportAccess";
 const PLATFORM = "11111111-1111-4111-8111-111111111111";
 const RESELLER = "22222222-2222-4222-8222-222222222222";
@@ -61,7 +71,6 @@ beforeEach(() => {
   vi.mocked(useLocale).mockReturnValue({ t, lang: "en" } as never);
   vi.mocked(usePanelSession).mockReturnValue({ me: staff() } as never);
   vi.mocked(authApi.ownedResellers).mockResolvedValue({ resellers: [] } as never);
-  vi.spyOn(window, "confirm").mockReturnValue(true);
 });
 
 describe("staffVisitor", () => {
@@ -141,10 +150,16 @@ describe("PlatformAccessBanner", () => {
     expect(enter).toBeDisabled();
     fireEvent.change(screen.getByLabelText(`${S}.staff.emergency.reason`), { target: { value: "court order 2026/114, served today" } });
 
-    vi.mocked(window.confirm).mockReturnValueOnce(false);
     fireEvent.click(enter);
+    await answer(false);
     expect(supportConsentApi.enterEmergency).not.toHaveBeenCalled();
     fireEvent.click(enter);
+    // K9: the reseller's slug is typed before the entry is allowed.
+    const dialog = within(await screen.findByRole("dialog"));
+    const go = dialog.getByRole("button", { name: `${S}.staff.emergency.submit` });
+    expect(go).toBeDisabled();
+    fireEvent.change(dialog.getByRole("textbox"), { target: { value: "acme" } });
+    fireEvent.click(go);
     await waitFor(() => expect(supportConsentApi.enterEmergency).toHaveBeenCalledWith(RESELLER, "court order 2026/114, served today"));
   });
 
