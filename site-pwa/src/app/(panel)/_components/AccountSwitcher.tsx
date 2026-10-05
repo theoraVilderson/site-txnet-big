@@ -325,7 +325,7 @@ export function AccountSwitcher() {
                       clearReturnTo();
                       router.replace(AUTH_LOGIN);
                     }}
-                    className="rounded-lg bg-error px-3 py-1.5 text-xs font-bold text-white disabled:opacity-60"
+                    className="rounded-lg bg-error px-3 py-1.5 text-xs font-bold text-on-error disabled:opacity-60"
                   >
                     {t("common", C.accounts.signOutAllYes)}
                   </button>

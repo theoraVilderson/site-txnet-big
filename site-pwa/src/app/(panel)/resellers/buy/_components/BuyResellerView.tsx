@@ -289,7 +289,7 @@ export function BuyResellerView() {
               {isInsufficientBalance(failure) && (
                 <Link
                   href={PANEL_DEPOSIT}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white hover:brightness-110"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-on-accent hover:brightness-110"
                 >
                   <HandCoins size={16} aria-hidden />
                   {t("common", K.topup)}

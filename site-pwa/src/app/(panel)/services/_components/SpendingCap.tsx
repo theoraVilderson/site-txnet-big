@@ -208,7 +208,7 @@ export function SpendingCap({
             <button
               type="submit"
               disabled={busy !== null}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-xs font-bold text-white disabled:cursor-wait disabled:opacity-60"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-xs font-bold text-on-accent disabled:cursor-wait disabled:opacity-60"
             >
               {busy === "save" && <Loader2 size={14} className="animate-spin" aria-hidden />}
               {t("common", busy === "save" ? K.saving : K.save)}
@@ -278,7 +278,7 @@ export function SpendingCap({
             <div className="rounded-2xl border border-error-border bg-error-bg p-3">
               <p className="text-sm font-bold text-error">{t("common", K.removeConfirm)}</p>
               <div className="mt-3 flex gap-2">
-                <button type="button" autoFocus onClick={() => setConfirmRemove(false)} className="flex-1 rounded-xl bg-primary py-2.5 text-xs font-bold text-white">
+                <button type="button" autoFocus onClick={() => setConfirmRemove(false)} className="flex-1 rounded-xl bg-primary py-2.5 text-xs font-bold text-on-accent">
                   {t("common", K.removeNo)}
                 </button>
                 <button type="button" onClick={() => void remove()} className="flex-1 rounded-xl bg-leaf-bg py-2.5 text-xs font-bold text-text-primary">

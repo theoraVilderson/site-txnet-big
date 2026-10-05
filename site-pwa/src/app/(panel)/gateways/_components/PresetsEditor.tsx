@@ -95,7 +95,7 @@ export function PresetsEditor({ value, onChange, emptyText, currency, id }: Pres
           type="button"
           onClick={add}
           disabled={full || !draft.trim()}
-          className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-primary px-3 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
+          className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-primary px-3 py-2.5 text-xs font-bold text-on-accent shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
         >
           <Plus size={14} aria-hidden />
           {t("common", P.add)}

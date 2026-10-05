@@ -75,7 +75,7 @@ export function AtRiskList() {
               setError(null);
               setKind(k);
             }}
-            className={`rounded-xl px-3 py-1.5 text-xs font-bold ${kind === k ? "bg-primary text-white" : "border border-card-border text-text-secondary"}`}
+            className={`rounded-xl px-3 py-1.5 text-xs font-bold ${kind === k ? "bg-primary text-on-accent" : "border border-card-border text-text-secondary"}`}
           >
             {t("common", k === "renewal" ? K.atRisk.renewal : K.atRisk.runOut)}
           </button>

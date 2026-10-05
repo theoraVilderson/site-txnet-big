@@ -25,7 +25,7 @@ import { formatMoney } from "../../../_lib/money";
 import { MY_LIMIT_KEYS as L, MY_QUOTA_KEYS as Q, capAmountOf, changeVerdict, includedReading } from "../../_lib/limits";
 
 const box = "w-32 rounded-xl border border-card-border bg-bg-inner px-3 py-2 text-sm text-text-primary outline-none focus:border-primary";
-const primary = "rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white disabled:opacity-50";
+const primary = "rounded-xl bg-primary px-3 py-2 text-xs font-bold text-on-accent disabled:opacity-50";
 const quiet = "rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-secondary disabled:opacity-50";
 
 /** Money in its currency, or the amount as it came when there is none to name. */

@@ -25,8 +25,8 @@ undefined `success` colour, 82 `text-white` on `bg-primary`.
 
 | # | Rule | Row |
 |---|---|---|
-| K1 | Semantic tokens `success`, `warning`, `info` (each with `-bg`, `-border`) and `on-accent`, `on-error` exist in all three themes and in `@theme`. A primary surface carries `text-on-accent`, never `text-white` — the dark theme's accent is light green and white on it fails contrast | UX-1-a |
-| K2 | One focus ring: `focus-visible` 2px `primary` outline, 2px offset, on every interactive primitive | UX-1-a |
+| K1 | Semantic tokens `success`, `warning`, `info` (each with `-bg`, `-border`) and `on-accent`, `on-error` exist in all three themes and in `@theme`. A primary surface carries `text-on-accent`, never `text-white` — the dark theme's accent is light green and white on it fails contrast. A tenant's brand colour sets `--text-on-accent` with the accent (`contract.branding.md`). Built: `globals.css`, proof `src/app/theme-tokens.test.ts` | UX-1-a |
+| K2 | One focus ring: `focus-visible` 2px `primary` outline, 2px offset, on every interactive primitive; today a base-layer `:focus-visible` rule in `globals.css`, which a control's own focus utility still overrides | UX-1-a |
 | K3 | `Button`: variants `primary` / `secondary` / `quiet` / `danger`; sizes `sm` h-8 text-xs, `md` h-10 text-sm, `lg` h-12 text-base; `rounded-xl` (`lg`: `rounded-2xl`). `loading` swaps the icon for a spinner, keeps the label and width, sets `disabled` and `aria-busy`. Press scales to 0.97. `IconButton` is the same with an `aria-label` it requires | UX-1-c |
 | K4 | `Field` wraps `Input` / `Textarea` / `Select` / `PasswordInput`: label above, hint below; an error replaces the hint, in `error` with an icon, wired by `aria-describedby` and `aria-invalid`. `maxLength` shows a counter. Inputs are h-11, `rounded-xl` | UX-1-c |
 | K5 | `Toggle` (moved out of `gateways/_components/gateway-fields.tsx`), `Checkbox`, `RadioCards`, `SegmentedControl` with a sliding indicator (`layoutId`) | UX-1-c |

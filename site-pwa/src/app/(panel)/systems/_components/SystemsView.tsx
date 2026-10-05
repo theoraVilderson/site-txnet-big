@@ -197,7 +197,7 @@ export function SystemsView() {
               {attention[id] > 0 && (
                 <span
                   title={t("common", K.tabs.attention, { n: String(attention[id]) })}
-                  className="grid min-w-5 place-items-center rounded-full bg-error px-1.5 text-[10px] font-bold text-white"
+                  className="grid min-w-5 place-items-center rounded-full bg-error px-1.5 text-[10px] font-bold text-on-error"
                 >
                   {attention[id].toLocaleString(lang)}
                 </span>

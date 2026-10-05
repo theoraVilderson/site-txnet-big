@@ -125,7 +125,7 @@ export function SupportView() {
                   </div>
                   <div className="flex items-center gap-2">
                     {c.unread > 0 && (
-                      <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-white">{t("common", K.unread, { n: c.unread })}</span>
+                      <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-on-accent">{t("common", K.unread, { n: c.unread })}</span>
                     )}
                     <StatusPill status={c.status} />
                   </div>

@@ -247,7 +247,7 @@ export function DepositView({ forInvoice = null }: { forInvoice?: ForInvoice | n
           {forInvoice ? (
             <Link
               href={panelShopInvoicePath(forInvoice.invoiceId)}
-              className="mt-6 inline-block rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white hover:brightness-110"
+              className="mt-6 inline-block rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-on-accent hover:brightness-110"
             >
               {t("common", D.forInvoice.back)}
             </Link>
@@ -255,7 +255,7 @@ export function DepositView({ forInvoice = null }: { forInvoice?: ForInvoice | n
             <button
               type="button"
               onClick={reset}
-              className="mt-6 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white hover:brightness-110"
+              className="mt-6 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-on-accent hover:brightness-110"
             >
               {t("common", D.summary.again)}
             </button>

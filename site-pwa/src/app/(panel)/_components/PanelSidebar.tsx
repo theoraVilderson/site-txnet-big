@@ -164,7 +164,7 @@ export function PanelSidebar() {
           isActive
             ? nested
               ? "bg-leaf-bg font-bold text-primary"
-              : "bg-primary text-white shadow-md shadow-primary-glow"
+              : "bg-primary text-on-accent shadow-md shadow-primary-glow"
             : "text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
         }`}
       >

@@ -279,7 +279,7 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
                   }`}
                 >
                   <span className="flex items-center gap-3">
-                    <span className={`grid size-10 place-items-center rounded-xl transition-colors ${selected ? "bg-primary text-white" : "bg-card-bg text-primary"}`}>
+                    <span className={`grid size-10 place-items-center rounded-xl transition-colors ${selected ? "bg-primary text-on-accent" : "bg-card-bg text-primary"}`}>
                       <Icon size={20} aria-hidden />
                     </span>
                     <span className="flex flex-col">
@@ -291,7 +291,7 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
                   </span>
                   <span className="text-xs leading-5 text-text-secondary">{t("common", W.providers[p].desc)}</span>
                   {selected && (
-                    <span className="absolute end-3 top-3 grid size-6 place-items-center rounded-full bg-primary text-white">
+                    <span className="absolute end-3 top-3 grid size-6 place-items-center rounded-full bg-primary text-on-accent">
                       <Check size={14} aria-hidden />
                     </span>
                   )}
@@ -463,7 +463,7 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
                     <span
                       className={`grid size-8 shrink-0 place-items-center rounded-full border text-xs font-bold transition-colors ${
                         done
-                          ? "border-transparent bg-primary text-white"
+                          ? "border-transparent bg-primary text-on-accent"
                           : current
                             ? "border-[var(--accent-primary)] bg-[var(--leaf-bg)] text-primary"
                             : "border-card-border text-text-secondary"
@@ -568,7 +568,7 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
                   type="button"
                   disabled={saving}
                   onClick={() => void submit()}
-                  className="inline-flex min-w-36 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:brightness-110 disabled:opacity-60"
+                  className="inline-flex min-w-36 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-on-accent shadow-md transition-all hover:brightness-110 disabled:opacity-60"
                 >
                   {saving ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Check size={16} aria-hidden />}
                   {t("common", saving ? W.creating : W.create)}
@@ -577,7 +577,7 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
                 <button
                   type="button"
                   onClick={next}
-                  className="inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:brightness-110"
+                  className="inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-on-accent shadow-md transition-all hover:brightness-110"
                 >
                   {t("common", W.next)}
                   <NextIcon size={16} aria-hidden />
@@ -736,7 +736,7 @@ function DoneScreen({ name, onAnother, onFinish }: { name: string; onAnother: ()
         <button type="button" onClick={onAnother} className="flex-1 rounded-xl border border-card-border px-4 py-2.5 text-sm font-bold text-text-primary hover:bg-[var(--bg-inner)]">
           {t("common", W.done.another)}
         </button>
-        <button type="button" onClick={onFinish} className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-md hover:brightness-110">
+        <button type="button" onClick={onFinish} className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-on-accent shadow-md hover:brightness-110">
           {t("common", W.done.finish)}
         </button>
       </div>

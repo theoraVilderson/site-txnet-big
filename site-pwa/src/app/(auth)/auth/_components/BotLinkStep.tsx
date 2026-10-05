@@ -37,7 +37,7 @@ export function BotLinkStep({ link, status, onBack }: BotLinkStepProps) {
         href={link.deepLink}
         target="_blank"
         rel="noopener noreferrer"
-        className="w-full inline-flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-primary text-white font-bold shadow transition-transform hover:scale-[1.01]"
+        className="w-full inline-flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-primary text-on-accent font-bold shadow transition-transform hover:scale-[1.01]"
       >
         <ExternalLink size={18} aria-hidden />
         {t.botLinkOpen}

@@ -249,7 +249,7 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
           <motion.div animate={shake} className="relative p-6 sm:p-8">
             <div className="mb-7 flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
-                <span className="gift-pop flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/70 text-white shadow-lg shadow-primary-glow [animation-delay:90ms]">
+                <span className="gift-pop flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/70 text-on-accent shadow-lg shadow-primary-glow [animation-delay:90ms]">
                   <Ticket size={24} aria-hidden />
                 </span>
                 <div className="min-w-0">
@@ -372,7 +372,7 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
                 <button
                   type="submit"
                   disabled={!canSubmit}
-                  className="gift-rise group/btn relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-primary to-primary/70 py-4 text-sm font-black text-white shadow-lg shadow-primary-glow transition-[filter,opacity,scale] duration-200 [animation-delay:260ms] hover:brightness-110 enabled:hover:scale-[1.02] enabled:active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none motion-reduce:enabled:hover:scale-100 motion-reduce:enabled:active:scale-100"
+                  className="gift-rise group/btn relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-primary to-primary/70 py-4 text-sm font-black text-on-accent shadow-lg shadow-primary-glow transition-[filter,opacity,scale] duration-200 [animation-delay:260ms] hover:brightness-110 enabled:hover:scale-[1.02] enabled:active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none motion-reduce:enabled:hover:scale-100 motion-reduce:enabled:active:scale-100"
                 >
                   {isSubmitting ? (
                     <>
@@ -410,7 +410,7 @@ function ServiceGranted({ redemption, onClose }: { redemption: GiftGrant; onClos
 
   return (
     <div className="py-2 text-center">
-      <div className="mx-auto mb-5 flex size-20 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-white shadow-xl shadow-primary-glow">
+      <div className="mx-auto mb-5 flex size-20 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-on-accent shadow-xl shadow-primary-glow">
         <Sparkles size={32} aria-hidden />
       </div>
       <p className="text-lg font-black text-text-primary">{t("common", G.serviceTitle)}</p>
@@ -422,7 +422,7 @@ function ServiceGranted({ redemption, onClose }: { redemption: GiftGrant; onClos
       <Link
         href={PANEL_MY_SERVICES}
         onClick={onClose}
-        className="mt-5 block w-full rounded-2xl bg-primary py-3.5 text-sm font-bold text-white hover:brightness-110"
+        className="mt-5 block w-full rounded-2xl bg-primary py-3.5 text-sm font-bold text-on-accent hover:brightness-110"
       >
         {t("common", G.toMyServices)}
       </Link>
@@ -496,7 +496,7 @@ function Success({
           initial={reduce ? false : { scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ type: "spring", stiffness: 300, damping: 16, delay: 0.05 }}
-          className="absolute inset-0 flex items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-white shadow-xl shadow-primary-glow"
+          className="absolute inset-0 flex items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-on-accent shadow-xl shadow-primary-glow"
         >
           <svg viewBox="0 0 32 32" className="size-10" fill="none" aria-hidden>
             <motion.path

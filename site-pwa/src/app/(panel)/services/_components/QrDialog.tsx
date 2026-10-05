@@ -90,7 +90,7 @@ export function QrDialog({
         <button
           type="button"
           onClick={onCopy}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3 text-sm font-bold text-white"
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3 text-sm font-bold text-on-accent"
         >
           {copied ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
           {t("common", copied ? S.lines.copied : S.lines.copy)}

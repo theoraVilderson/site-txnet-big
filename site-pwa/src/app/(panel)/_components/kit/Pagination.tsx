@@ -68,7 +68,7 @@ export function Pagination({ page, totalPages, totalItems, pageSize, onPageChang
                 aria-current={item === page ? "page" : undefined}
                 className={`h-9 min-w-9 rounded-lg text-sm font-medium transition-all ${
                   item === page
-                    ? "bg-primary text-white shadow-md shadow-primary-glow"
+                    ? "bg-primary text-on-accent shadow-md shadow-primary-glow"
                     : "text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
                 }`}
               >

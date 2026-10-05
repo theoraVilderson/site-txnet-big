@@ -303,7 +303,7 @@ export function CatalogView() {
             <Languages size={14} aria-hidden />
             {t("common", K.translations.open)}
             {pending ? (
-              <span className="rounded-full bg-primary px-1.5 text-[10px] text-white" title={t("common", K.translationsPending, { count: pending })}>
+              <span className="rounded-full bg-primary px-1.5 text-[10px] text-on-accent" title={t("common", K.translationsPending, { count: pending })}>
                 {pending}
               </span>
             ) : null}

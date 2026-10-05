@@ -164,7 +164,7 @@ export function CouponForm({
           type="button"
           aria-pressed={selected.includes(v)}
           onClick={() => onToggle(v)}
-          className={`rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors ${selected.includes(v) ? "border-primary bg-primary text-white" : "border-card-border bg-[var(--bg-inner)] text-text-secondary hover:border-[var(--accent-primary)]"}`}
+          className={`rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors ${selected.includes(v) ? "border-primary bg-primary text-on-accent" : "border-card-border bg-[var(--bg-inner)] text-text-secondary hover:border-[var(--accent-primary)]"}`}
         >
           {label(v)}
         </button>
@@ -361,7 +361,7 @@ export function CouponForm({
             type="button"
             disabled={saving}
             onClick={() => void submit()}
-            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-on-accent shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
           >
             {saving && <Loader2 size={14} className="animate-spin" aria-hidden />}
             {t("common", saving ? F.saving : F.save)}

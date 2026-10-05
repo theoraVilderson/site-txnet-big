@@ -49,7 +49,7 @@ export function ServiceBuilding({ stage }: { stage: "server" | "links" }) {
               <span
                 className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
                   state === "done"
-                    ? "bg-primary text-white"
+                    ? "bg-primary text-on-accent"
                     : state === "current"
                       ? "border-2 border-primary bg-card-bg text-primary"
                       : "border-2 border-card-border bg-card-bg text-text-secondary"

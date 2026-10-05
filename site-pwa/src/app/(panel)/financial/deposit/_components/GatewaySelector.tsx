@@ -94,7 +94,7 @@ export function GatewaySelector({
                     : "border-card-border bg-bg-inner hover:border-text-secondary"
                 }`}
               >
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-base font-bold text-white">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-base font-bold text-on-accent">
                   {gateway.displayName.slice(0, 1).toUpperCase()}
                 </span>
                 <span className="min-w-0">

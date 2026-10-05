@@ -110,7 +110,7 @@ export function SuggestionCard({ texts }: { texts: Record<string, string> }) {
       <div className="mt-4 flex flex-wrap items-center gap-4">
         <Link
           href={panelShopVariantPath(plan.variantId)}
-          className="rounded-2xl bg-primary px-5 py-2.5 text-sm font-bold text-white hover:brightness-110"
+          className="rounded-2xl bg-primary px-5 py-2.5 text-sm font-bold text-on-accent hover:brightness-110"
         >
           {t("common", text.cta, { plan: vars.plan })}
         </Link>

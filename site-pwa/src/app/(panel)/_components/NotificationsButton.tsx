@@ -100,7 +100,7 @@ export function NotificationsButton() {
         aria-controls={panelId}
         className={`relative rounded-xl border p-2 transition-colors ${
           open
-            ? "border-primary bg-primary text-white"
+            ? "border-primary bg-primary text-on-accent"
             : "border-card-border bg-leaf-bg text-text-primary hover:border-primary"
         }`}
       >
@@ -141,7 +141,7 @@ export function NotificationsButton() {
                 {t("common", N.label)}
               </h3>
               {unreadCount > 0 && (
-                <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-white">
+                <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-on-accent">
                   {t("common", N.new, { count: String(unreadCount) })}
                 </span>
               )}

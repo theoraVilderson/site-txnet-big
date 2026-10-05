@@ -106,7 +106,7 @@ export function GatewayLinks({ gateways, grants, onChanged }: GatewayLinksProps)
           type="button"
           disabled={busy || !tenantId.trim() || !gatewayKey}
           onClick={link}
-          className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+          className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-on-accent disabled:opacity-60"
         >
           {t("common", L.link)}
         </button>

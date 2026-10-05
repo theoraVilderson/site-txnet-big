@@ -165,7 +165,7 @@ export default function AddAccountPage() {
   const field =
     "autofill-tamed w-full rounded-2xl border-[1.5px] border-card-border bg-bg-inner px-5 py-3 text-text-primary outline-none transition-colors focus:border-primary";
   const button =
-    "w-full rounded-2xl bg-primary px-5 py-3 font-bold text-white shadow-lg shadow-primary-glow transition-opacity disabled:opacity-60";
+    "w-full rounded-2xl bg-primary px-5 py-3 font-bold text-on-accent shadow-lg shadow-primary-glow transition-opacity disabled:opacity-60";
 
   /**
    * The slider, titled — both tabs render it, so it is built once.

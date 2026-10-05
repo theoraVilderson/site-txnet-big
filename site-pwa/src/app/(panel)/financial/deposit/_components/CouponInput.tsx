@@ -93,7 +93,7 @@ export function CouponInput({ codes, onAdd, onRemove, quote, disabled }: CouponI
           type="button"
           disabled={disabled || !typed.trim()}
           onClick={submit}
-          className="shrink-0 rounded-2xl bg-primary px-4 text-sm font-bold text-white transition-[filter] hover:brightness-110 disabled:opacity-40"
+          className="shrink-0 rounded-2xl bg-primary px-4 text-sm font-bold text-on-accent transition-[filter] hover:brightness-110 disabled:opacity-40"
         >
           {t("common", D.add)}
         </button>

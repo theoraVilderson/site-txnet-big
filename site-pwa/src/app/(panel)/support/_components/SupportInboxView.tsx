@@ -139,7 +139,7 @@ export function SupportInboxView() {
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    {c.unread > 0 && <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-white">{t("common", K.unread, { n: c.unread })}</span>}
+                    {c.unread > 0 && <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-on-accent">{t("common", K.unread, { n: c.unread })}</span>}
                     <PriorityPill priority={c.priority} />
                     <SlaBadge conversation={c} now={now} />
                     <StatusPill status={c.status} />

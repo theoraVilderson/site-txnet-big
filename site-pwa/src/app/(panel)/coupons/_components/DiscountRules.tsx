@@ -107,7 +107,7 @@ export function DiscountRules({ me }: { me: Me | null }) {
         <button
           type="button"
           onClick={() => setEditing("new")}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:brightness-110"
+          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-on-accent shadow-sm transition-all hover:brightness-110"
         >
           <Plus size={16} aria-hidden />
           {t("common", K.add)}

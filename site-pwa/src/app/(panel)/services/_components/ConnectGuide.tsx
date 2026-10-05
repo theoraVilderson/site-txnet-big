@@ -58,7 +58,7 @@ function ConnectSheet({ onClose }: { onClose: () => void }) {
                 setOpenKey(null);
               }}
               className={`rounded-xl border px-3 py-1.5 text-xs font-bold ${
-                o === os ? "border-primary bg-primary text-white" : "border-card-border text-text-primary hover:bg-leaf-bg"
+                o === os ? "border-primary bg-primary text-on-accent" : "border-card-border text-text-primary hover:bg-leaf-bg"
               }`}
             >
               {t("common", C.os[o])}

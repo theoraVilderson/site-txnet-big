@@ -134,7 +134,7 @@ export function TenantTopupView() {
           onClick={() => void pay()}
           disabled={!body || isStarting}
           aria-busy={isStarting}
-          className="w-full rounded-2xl bg-primary px-5 py-4 text-sm font-bold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full rounded-2xl bg-primary px-5 py-4 text-sm font-bold text-on-accent hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t("common", isStarting ? B.paying : B.pay)}
         </button>

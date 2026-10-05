@@ -102,7 +102,7 @@ export function FinancialView() {
             onClick={() => filters.tab !== tab && go(forTab(filters, tab))}
             className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
               filters.tab === tab
-                ? "bg-primary text-white shadow-md shadow-primary-glow"
+                ? "bg-primary text-on-accent shadow-md shadow-primary-glow"
                 : "text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
             }`}
           >

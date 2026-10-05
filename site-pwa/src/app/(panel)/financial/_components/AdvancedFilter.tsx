@@ -80,7 +80,7 @@ export function AdvancedFilter({ filters, onApply }: AdvancedFilterProps) {
         aria-expanded={open}
         className={`relative flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition-all ${
           open
-            ? "bg-primary text-white shadow-lg shadow-primary-glow"
+            ? "bg-primary text-on-accent shadow-lg shadow-primary-glow"
             : "border border-card-border bg-card-bg text-text-primary hover:bg-leaf-bg"
         }`}
       >
@@ -228,7 +228,7 @@ export function AdvancedFilter({ filters, onApply }: AdvancedFilterProps) {
                 <button
                   type="button"
                   onClick={apply}
-                  className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-medium text-white shadow-lg shadow-primary-glow transition-transform hover:scale-105"
+                  className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-medium text-on-accent shadow-lg shadow-primary-glow transition-transform hover:scale-105"
                 >
                   <CheckCircle2 size={16} aria-hidden />
                   {t("common", F.filter.apply)}

@@ -305,7 +305,7 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
                           aria-hidden
                         />
                       )}
-                      <span className={`relative grid size-9 shrink-0 place-items-center rounded-xl transition-colors ${selected ? "bg-primary text-white" : "bg-card-bg text-primary"}`}>
+                      <span className={`relative grid size-9 shrink-0 place-items-center rounded-xl transition-colors ${selected ? "bg-primary text-on-accent" : "bg-card-bg text-primary"}`}>
                         <GroupIcon size={18} aria-hidden />
                       </span>
                       <span className="relative flex min-w-0 flex-col gap-1">
@@ -328,7 +328,7 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
                             animate={{ scale: 1 }}
                             exit={reduceMotion ? undefined : { scale: 0 }}
                             transition={{ type: "spring", stiffness: 500, damping: 22 }}
-                            className="absolute end-2 top-2 grid size-5 place-items-center rounded-full bg-primary text-white"
+                            className="absolute end-2 top-2 grid size-5 place-items-center rounded-full bg-primary text-on-accent"
                           >
                             <Check size={12} aria-hidden />
                           </motion.span>
@@ -539,7 +539,7 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
                     <span
                       className={`grid size-8 shrink-0 place-items-center rounded-full border text-xs font-bold transition-colors duration-300 ${
                         isDone
-                          ? "border-transparent bg-primary text-white"
+                          ? "border-transparent bg-primary text-on-accent"
                           : current
                             ? "border-[var(--accent-primary)] bg-[var(--leaf-bg)] text-primary"
                             : "border-card-border text-text-secondary"
@@ -686,7 +686,7 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
                   disabled={saving}
                   onClick={() => void submit()}
                   whileTap={reduceMotion ? undefined : { scale: 0.97 }}
-                  className="inline-flex min-w-36 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:brightness-110 disabled:opacity-60"
+                  className="inline-flex min-w-36 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-on-accent shadow-md transition-all hover:brightness-110 disabled:opacity-60"
                 >
                   {saving ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Check size={16} aria-hidden />}
                   {t("common", saving ? W.submitting : W.submit)}
@@ -696,7 +696,7 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
                   type="button"
                   onClick={next}
                   whileTap={reduceMotion ? undefined : { scale: 0.97 }}
-                  className="group inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:brightness-110"
+                  className="group inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-on-accent shadow-md transition-all hover:brightness-110"
                 >
                   {t("common", W.next)}
                   <NextIcon size={16} className="transition-transform group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5" aria-hidden />
@@ -740,7 +740,7 @@ function BudgetField({ value, onChange, error }: { value: string; onChange: (v: 
                 setCustom(false);
                 onChange(p.value);
               }}
-              className={`relative rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors ${selected ? "border-transparent text-white" : "border-card-border text-text-secondary hover:border-[var(--accent-primary)]"}`}
+              className={`relative rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors ${selected ? "border-transparent text-on-accent" : "border-card-border text-text-secondary hover:border-[var(--accent-primary)]"}`}
             >
               {selected && <motion.span layoutId="rp-budget" className="absolute inset-0 rounded-xl bg-primary" transition={{ type: "spring", stiffness: 420, damping: 32 }} aria-hidden />}
               <span className="relative">
@@ -754,7 +754,7 @@ function BudgetField({ value, onChange, error }: { value: string; onChange: (v: 
           role="radio"
           aria-checked={custom}
           onClick={() => setCustom(true)}
-          className={`relative rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors ${custom ? "border-transparent text-white" : "border-card-border text-text-secondary hover:border-[var(--accent-primary)]"}`}
+          className={`relative rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors ${custom ? "border-transparent text-on-accent" : "border-card-border text-text-secondary hover:border-[var(--accent-primary)]"}`}
         >
           {custom && <motion.span layoutId="rp-budget" className="absolute inset-0 rounded-xl bg-primary" transition={{ type: "spring", stiffness: 420, damping: 32 }} aria-hidden />}
           <span className="relative">{t("common", W.budget.custom)}</span>
@@ -928,7 +928,7 @@ function DoneScreen({ name, answer, onAnother, onFinish }: { name: string; answe
           initial={reduceMotion ? false : { scale: 0.3, opacity: 0, rotate: -30 }}
           animate={{ scale: 1, opacity: 1, rotate: 0 }}
           transition={{ type: "spring", stiffness: 260, damping: 16 }}
-          className="grid size-20 place-items-center rounded-full bg-[image:var(--card-gradient)] bg-primary text-white shadow-lg"
+          className="grid size-20 place-items-center rounded-full bg-[image:var(--card-gradient)] bg-primary text-on-accent shadow-lg"
         >
           <motion.svg viewBox="0 0 24 24" className="size-10" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <motion.path d="M5 12.5l4.5 4.5L19 7.5" initial={reduceMotion ? false : { pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ delay: 0.25, duration: 0.45, ease: "easeOut" }} />
@@ -963,7 +963,7 @@ function DoneScreen({ name, answer, onAnother, onFinish }: { name: string; answe
         <button type="button" onClick={onAnother} className="flex-1 rounded-xl border border-card-border px-4 py-2.5 text-sm font-bold text-text-primary hover:bg-[var(--bg-inner)]">
           {t("common", W.done.another)}
         </button>
-        <button type="button" onClick={onFinish} className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-md hover:brightness-110">
+        <button type="button" onClick={onFinish} className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-on-accent shadow-md hover:brightness-110">
           {t("common", W.done.finish)}
         </button>
       </div>

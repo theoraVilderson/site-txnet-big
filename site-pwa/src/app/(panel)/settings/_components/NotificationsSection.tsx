@@ -167,7 +167,7 @@ export function NotificationsSection() {
 
       <button
         type="button"
-        className="mt-5 w-full rounded-2xl bg-primary px-5 py-3 font-bold text-white shadow-lg shadow-primary-glow transition-opacity disabled:opacity-60"
+        className="mt-5 w-full rounded-2xl bg-primary px-5 py-3 font-bold text-on-accent shadow-lg shadow-primary-glow transition-opacity disabled:opacity-60"
         disabled={pending || sameTimes}
         onClick={save}
       >

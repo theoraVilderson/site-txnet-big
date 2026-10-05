@@ -104,7 +104,7 @@ export function ResellersAtRisk() {
               setError(null);
               setKind(k);
             }}
-            className={`rounded-xl px-3 py-1.5 text-xs font-bold ${kind === k ? "bg-primary text-white" : "border border-card-border text-text-secondary"}`}
+            className={`rounded-xl px-3 py-1.5 text-xs font-bold ${kind === k ? "bg-primary text-on-accent" : "border border-card-border text-text-secondary"}`}
           >
             {t("common", k === "quota_exhaustion" ? K.resellers.runOut : k === "churn_risk" ? K.resellers.churn : K.resellers.wallet)}
           </button>

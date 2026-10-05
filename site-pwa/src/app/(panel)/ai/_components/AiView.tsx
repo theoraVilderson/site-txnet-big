@@ -54,7 +54,7 @@ export function AiView() {
             role="tab"
             aria-selected={tab === id}
             onClick={() => setTab(id)}
-            className={`flex-1 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-bold transition-colors ${tab === id ? "bg-primary text-white shadow-sm" : "text-text-secondary hover:text-text-primary"}`}
+            className={`flex-1 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-bold transition-colors ${tab === id ? "bg-primary text-on-accent shadow-sm" : "text-text-secondary hover:text-text-primary"}`}
           >
             {t("common", K.tabs[id])}
           </button>

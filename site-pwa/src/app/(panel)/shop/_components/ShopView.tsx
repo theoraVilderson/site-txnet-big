@@ -230,7 +230,7 @@ function OfferList({
       onClick={() => setCategory(key)}
       className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition-colors ${
         category === key
-          ? "border-primary bg-primary text-white"
+          ? "border-primary bg-primary text-on-accent"
           : "border-card-border bg-card-bg text-text-secondary hover:border-primary hover:text-primary"
       }`}
     >
@@ -330,7 +330,7 @@ function ProductCard({
         <button
           type="button"
           onClick={() => onBuy(offer)}
-          className="flex shrink-0 items-center gap-2 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white hover:brightness-110"
+          className="flex shrink-0 items-center gap-2 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-on-accent hover:brightness-110"
         >
           {t("common", S.buy)}
         </button>
@@ -637,7 +637,7 @@ function Checkout({
             <p className="mt-1 text-text-secondary">{t("common", S.meteredStart.hint, { amount: money(startShort, walletCurrency ?? currency) })}</p>
             <Link
               href={invoice ? panelDepositForInvoicePath(invoice.id, startShort, invoice.currencyCode) : PANEL_DEPOSIT}
-              className="mt-3 inline-block rounded-2xl bg-primary px-4 py-2 font-bold text-white hover:brightness-110"
+              className="mt-3 inline-block rounded-2xl bg-primary px-4 py-2 font-bold text-on-accent hover:brightness-110"
             >
               {t("common", S.meteredStart.topUp)}
             </Link>
@@ -661,7 +661,7 @@ function Checkout({
             <p className="mt-1 text-text-secondary">{t("common", S.shortfall.hint, { time: until })}</p>
             <Link
               href={panelDepositForInvoicePath(invoice.id, missing, invoice.currencyCode)}
-              className="mt-3 inline-block rounded-2xl bg-primary px-4 py-2 font-bold text-white hover:brightness-110"
+              className="mt-3 inline-block rounded-2xl bg-primary px-4 py-2 font-bold text-on-accent hover:brightness-110"
             >
               {t("common", S.shortfall.topUp, { amount: money(missing, invoice.currencyCode) })}
             </Link>
@@ -675,7 +675,7 @@ function Checkout({
             type="button"
             onClick={() => void pay()}
             disabled={isBusy}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-base font-bold text-white hover:brightness-110 disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-base font-bold text-on-accent hover:brightness-110 disabled:opacity-50"
           >
             {isBusy && <Loader2 size={16} className="animate-spin" aria-hidden />}
             {t("common", S.invoice.pay)}
@@ -716,7 +716,7 @@ function Paid({ paid, name, money }: { paid: InvoicePaid; name: string; money: (
       <p className="text-xs text-text-secondary">{t("common", S.paid.preparing)}</p>
       <Link
         href={PANEL_MY_SERVICES}
-        className="inline-block rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white hover:brightness-110"
+        className="inline-block rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-on-accent hover:brightness-110"
       >
         {t("common", S.paid.myServices)}
       </Link>

@@ -208,7 +208,7 @@ export function ChoiceCards<V extends string>({
             }`}
           >
             {Icon && (
-              <span className={`grid size-9 shrink-0 place-items-center rounded-xl ${selected ? "bg-primary text-white" : "bg-card-bg text-primary"}`}>
+              <span className={`grid size-9 shrink-0 place-items-center rounded-xl ${selected ? "bg-primary text-on-accent" : "bg-card-bg text-primary"}`}>
                 <Icon size={18} aria-hidden />
               </span>
             )}
@@ -217,7 +217,7 @@ export function ChoiceCards<V extends string>({
               {o.desc && <span className="text-[11px] leading-5 text-text-secondary">{o.desc}</span>}
             </span>
             {selected && (
-              <span className="absolute end-2 top-2 grid size-5 place-items-center rounded-full bg-primary text-white">
+              <span className="absolute end-2 top-2 grid size-5 place-items-center rounded-full bg-primary text-on-accent">
                 <Check size={12} aria-hidden />
               </span>
             )}
@@ -282,7 +282,7 @@ export function FeeFields({ form, set, errors, money, currency }: { form: Gatewa
                   role="radio"
                   aria-checked={form.feeType === ft}
                   onClick={() => set("feeType", ft)}
-                  className={`rounded-lg px-2 py-2 text-xs font-bold transition-all ${form.feeType === ft ? "bg-primary text-white shadow-sm" : "text-text-secondary hover:text-text-primary"}`}
+                  className={`rounded-lg px-2 py-2 text-xs font-bold transition-all ${form.feeType === ft ? "bg-primary text-on-accent shadow-sm" : "text-text-secondary hover:text-text-primary"}`}
                 >
                   {t("common", W.feeTypes[ft])}
                 </button>

@@ -85,7 +85,7 @@ export function DatePicker({ label, value, onChange, placeholder }: DatePickerPr
               }`}
             >
               <div className="flex w-full items-center gap-3 overflow-hidden">
-                <span className={`rounded-lg p-1.5 ${value ? "bg-primary text-white" : "bg-leaf-bg text-text-secondary"}`}>
+                <span className={`rounded-lg p-1.5 ${value ? "bg-primary text-on-accent" : "bg-leaf-bg text-text-secondary"}`}>
                   <CalendarDays size={18} />
                 </span>
                 <span className={`truncate text-sm font-medium ${value ? "text-text-primary" : "text-text-secondary opacity-70"}`}>

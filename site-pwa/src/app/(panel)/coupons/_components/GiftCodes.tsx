@@ -98,7 +98,7 @@ export function GiftCodes({ me, owner }: { me: Me | null; owner: boolean }) {
   return (
     <>
       <div className="flex justify-end">
-        <button type="button" onClick={() => setCreating(true)} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:brightness-110">
+        <button type="button" onClick={() => setCreating(true)} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-on-accent shadow-sm transition-all hover:brightness-110">
           <Plus size={16} aria-hidden />
           {t("common", G.add)}
         </button>
@@ -342,7 +342,7 @@ function GiftBatchSheet({ me, onClose, onCreated }: { me: Me | null; onClose: ()
           <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-bold text-text-secondary">
             {t("common", F.cancel)}
           </button>
-          <button type="button" disabled={saving} onClick={() => void submit()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white shadow-sm transition-all hover:brightness-110 disabled:opacity-50">
+          <button type="button" disabled={saving} onClick={() => void submit()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-on-accent shadow-sm transition-all hover:brightness-110 disabled:opacity-50">
             {saving && <Loader2 size={14} className="animate-spin" aria-hidden />}
             {t("common", saving ? F.submitting : F.submit)}
           </button>

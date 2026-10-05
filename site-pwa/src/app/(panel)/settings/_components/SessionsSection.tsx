@@ -75,7 +75,7 @@ export function SessionsSection() {
   };
 
   const others = sessions?.filter((s) => !s.current) ?? [];
-  const primaryButton = "rounded-2xl bg-error px-4 py-2 text-sm font-bold text-white disabled:opacity-50";
+  const primaryButton = "rounded-2xl bg-error px-4 py-2 text-sm font-bold text-on-error disabled:opacity-50";
   const quietButton = "rounded-2xl border border-card-border px-4 py-2 text-sm font-bold text-text-primary disabled:opacity-50";
 
   const name = (s: ActiveSession) => {

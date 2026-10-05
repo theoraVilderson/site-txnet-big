@@ -122,7 +122,7 @@ export function AmountInput({ amount, onAmountChange, gateway, currency, disable
               onClick={() => onAmountChange(preset)}
               className={`rounded-xl border px-2 py-2.5 text-xs font-bold transition-colors ${
                 cents !== null && cents === toCents(preset)
-                  ? "border-primary bg-primary text-white"
+                  ? "border-primary bg-primary text-on-accent"
                   : "border-card-border bg-bg-inner text-text-secondary hover:border-text-primary"
               }`}
             >

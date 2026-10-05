@@ -558,7 +558,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: Gatewa
                   type="button"
                   onClick={() => void submit()}
                   disabled={!dirty || saving}
-                  className="inline-flex min-w-28 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:brightness-110 disabled:opacity-50 disabled:shadow-none"
+                  className="inline-flex min-w-28 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-on-accent shadow-md transition-all hover:brightness-110 disabled:opacity-50 disabled:shadow-none"
                 >
                   {saving ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Check size={16} aria-hidden />}
                   {t("common", saving ? F.saving : F.save)}

@@ -5,8 +5,9 @@
      (mint to warm cream), not Material's flat #4caf50. Gradients mix the
      accent toward young-leaf lime and deep forest, so a tenant brand colour
      (lib/branding.ts) gets the same light and depth. White on --accent-primary
-     is 3.4:1 — enough for the bold button labels (text-white is hardcoded on
-     bg-primary in ~50 places), not for body text: --text-primary is 5.4:1.
+     is 3.4:1 — enough for the bold button labels (`text-on-accent`, dark on
+     the dark theme's lighter accent), not for body text: --text-primary is
+     5.4:1.
      Gold is antique, not signal-yellow. */
   :root,
   [data-theme="light"] {
@@ -49,6 +50,16 @@
     --tab-bg: rgba(52, 199, 105, 0.09);
     --tab-active: #ffffff;
     --text-on-accent: #ffffff;
+    --text-on-error: #ffffff;
+    --success: #177a42;
+    --success-bg: rgba(23, 122, 66, 0.1);
+    --success-border: rgba(23, 122, 66, 0.3);
+    --warning: #8a5a00;
+    --warning-bg: rgba(138, 90, 0, 0.1);
+    --warning-border: rgba(138, 90, 0, 0.3);
+    --info: #1f6fa3;
+    --info-bg: rgba(31, 111, 163, 0.1);
+    --info-border: rgba(31, 111, 163, 0.3);
     color-scheme: light;
   }
 
@@ -88,6 +99,16 @@
     --tab-bg: rgba(0, 0, 0, 0.28);
     --tab-active: rgba(110, 231, 154, 0.15);
     --text-on-accent: #08240f;
+    --text-on-error: #3a0f06;
+    --success: #5ee69a;
+    --success-bg: rgba(94, 230, 154, 0.1);
+    --success-border: rgba(94, 230, 154, 0.3);
+    --warning: #f2c26b;
+    --warning-bg: rgba(242, 194, 107, 0.1);
+    --warning-border: rgba(242, 194, 107, 0.3);
+    --info: #7cc4f0;
+    --info-bg: rgba(124, 196, 240, 0.1);
+    --info-border: rgba(124, 196, 240, 0.3);
     color-scheme: dark;
   }
 
@@ -127,6 +148,16 @@
     --tab-bg: rgba(0, 0, 0, 0.22);
     --tab-active: rgba(111, 179, 208, 0.18);
     --text-on-accent: #ffffff;
+    --text-on-error: #3b0a12;
+    --success: #6fdc9c;
+    --success-bg: rgba(111, 220, 156, 0.1);
+    --success-border: rgba(111, 220, 156, 0.3);
+    --warning: #f2c26b;
+    --warning-bg: rgba(242, 194, 107, 0.1);
+    --warning-border: rgba(242, 194, 107, 0.3);
+    --info: #8fd0f0;
+    --info-bg: rgba(143, 208, 240, 0.1);
+    --info-border: rgba(143, 208, 240, 0.3);
     color-scheme: dark;
   }
 }
@@ -150,6 +181,32 @@
   --color-error-border: var(--error-border);
   --color-tab-bg: var(--tab-bg);
   --color-tab-active: var(--tab-active);
+  /* UX-1-a (contract.ux.md K1). The label on a filled accent or error
+     surface: white on the dark theme's light-green accent failed contrast, so
+     the colour is the theme's (and a tenant brand's, lib/branding.ts) choice,
+     never `text-white`. The tones are status colours that read as text on the
+     page at 4.5:1 in every theme; `-bg` / `-border` are their tinted pills. */
+  --color-on-accent: var(--text-on-accent);
+  --color-on-error: var(--text-on-error);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-success-border: var(--success-border);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-border: var(--warning-border);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --color-info-border: var(--info-border);
+}
+
+/* One focus ring (UX-1-a, contract.ux.md K2): keyboard focus on anything
+   interactive is a 2px accent outline at a 2px offset. In the base layer, so a
+   control that draws its own focus state with a utility still wins. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
 }
 
 body {

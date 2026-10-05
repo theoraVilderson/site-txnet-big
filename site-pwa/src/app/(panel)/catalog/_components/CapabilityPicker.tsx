@@ -223,7 +223,7 @@ export function CapabilityPicker({
               aria-pressed={on}
               onClick={() => toggle(c.key)}
               className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold ${
-                on ? "border-primary bg-primary text-white" : "border-card-border bg-bg-inner text-text-primary hover:border-primary"
+                on ? "border-primary bg-primary text-on-accent" : "border-card-border bg-bg-inner text-text-primary hover:border-primary"
               }`}
             >
               {on ? <Check size={12} aria-hidden /> : null}

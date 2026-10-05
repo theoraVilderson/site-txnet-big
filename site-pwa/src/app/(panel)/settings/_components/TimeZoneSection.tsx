@@ -111,7 +111,7 @@ export function TimeZoneSection() {
           {saved && <p className="text-sm font-medium text-primary">{t("common", Z.saved)}</p>}
           <button
             type="button"
-            className="rounded-2xl bg-primary px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+            className="rounded-2xl bg-primary px-5 py-2.5 text-sm font-bold text-on-accent disabled:opacity-50"
             disabled={pending || picked === chosen}
             onClick={save}
           >

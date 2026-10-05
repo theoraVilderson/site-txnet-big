@@ -126,11 +126,11 @@ export function WalletButton() {
         aria-hidden
       />
     ) : balance === null || currencyCode === null ? (
-      <span className={open ? "text-white/80" : "text-text-secondary"}>
+      <span className={open ? "text-on-accent/80" : "text-text-secondary"}>
         {t("common", W.unavailable)}
       </span>
     ) : (
-      <span className={open ? "text-white" : "text-gold"}>
+      <span className={open ? "text-on-accent" : "text-gold"}>
         {formatMoney(balance, currencyCode, { lang, t })}
       </span>
     );
@@ -151,13 +151,13 @@ export function WalletButton() {
         aria-controls={menuId}
         className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 transition-colors sm:gap-3 sm:px-3 ${
           open
-            ? "border-primary bg-primary text-white"
+            ? "border-primary bg-primary text-on-accent"
             : "border-card-border bg-leaf-bg text-text-primary hover:border-primary"
         }`}
       >
         <span
           className={`flex size-7 shrink-0 items-center justify-center rounded-lg sm:size-8 ${
-            open ? "bg-white/20 text-white" : "bg-primary text-white"
+            open ? "bg-white/20 text-on-accent" : "bg-primary text-on-accent"
           }`}
         >
           <Wallet size={16} aria-hidden />
@@ -168,7 +168,7 @@ export function WalletButton() {
             there instead — see the component note. */}
         <span className="hidden min-w-0 flex-col text-start leading-tight sm:flex">
           <span
-            className={`text-[10px] font-bold ${open ? "text-white/80" : "text-text-secondary"}`}
+            className={`text-[10px] font-bold ${open ? "text-on-accent/80" : "text-text-secondary"}`}
           >
             {t("common", holding ? W.available : W.label)}
           </span>
@@ -234,7 +234,7 @@ export function WalletButton() {
             <div className="grid grid-cols-2 gap-2">
               {visible.map(({ id, label, icon: Icon, href, modal, lead }) => {
                 const className = lead
-                  ? "col-span-2 flex items-center justify-center gap-2 rounded-xl bg-primary p-3 text-sm font-bold text-white hover:brightness-110"
+                  ? "col-span-2 flex items-center justify-center gap-2 rounded-xl bg-primary p-3 text-sm font-bold text-on-accent hover:brightness-110"
                   : "flex flex-col items-center justify-center gap-1.5 rounded-xl bg-leaf-bg p-3 text-xs font-medium text-text-primary hover:bg-card-border";
                 const inside = (
                   <>

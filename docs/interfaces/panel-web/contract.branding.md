@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 20
-updated: 2026-09-26
+updated: 2026-10-05
 ---
 
 # panel-web — the domain's brand (F-066-v, ADR-0059)
@@ -43,7 +43,7 @@ own shows every reseller's customer whose platform it is.
 | `brandName` | `<title>`, OG title, the sidebar and the auth nav (`components/BrandMark.tsx`) |
 | `logoLightUrl` / `logoDarkUrl` | `BrandMark`: the `light` theme takes the light logo, `dark` and `ocean` the dark one; each falls back to the other, then to the name's initial on the accent colour |
 | `faviconUrl`, `ogImageUrl` | `generateMetadata` in the root layout |
-| `primaryColorHex` | `--accent-primary`, and `--accent-glow` / `--leaf-bg` mixed from it, as a style on `<html>` — over every theme block |
+| `primaryColorHex` | `--accent-primary`, and `--accent-glow` / `--leaf-bg` mixed from it, as a style on `<html>` — over every theme block. `--text-on-accent` with it: white while white reads on it at 3:1, else `#111111` (UX-1-a, `contract.ux.md` K1) |
 | `secondaryColorHex` | `--card-gradient`, from primary to it; only with a primary |
 
 Client components get it through `context/BrandContext.tsx` (`useBrand()`).

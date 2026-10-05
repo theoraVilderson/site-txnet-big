@@ -68,6 +68,25 @@ export function parseBranding(body: unknown): Branding | null {
   };
 }
 
+/** WCAG relative luminance of a checked `#rrggbb`. */
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/**
+ * The label colour on a brand's filled surfaces (contract.ux.md K1). The brand
+ * replaces the accent in all three themes, so the theme's own label cannot be
+ * trusted on it: white while white still reads at 3:1, the bar the platform's
+ * own green was approved at, and a near-black otherwise.
+ */
+function labelOn(hex: string): string {
+  return 1.05 / (luminance(hex) + 0.05) >= 3 ? "#ffffff" : "#111111";
+}
+
 /**
  * The theme tokens the brand overrides, as a style for `<html>` — so they win
  * over every theme block in `globals.css`. React sets them as properties, and
@@ -78,6 +97,7 @@ export function brandStyle(brand: Branding | null): CSSProperties {
   if (!primary) return {};
   const style: Record<string, string> = {
     "--accent-primary": primary,
+    "--text-on-accent": labelOn(primary),
     "--accent-glow": `color-mix(in srgb, ${primary} 25%, transparent)`,
     "--leaf-bg": `color-mix(in srgb, ${primary} 10%, transparent)`,
   };

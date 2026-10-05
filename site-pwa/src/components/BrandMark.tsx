@@ -17,7 +17,7 @@ export function BrandMark({ nameClassName }: { nameClassName: string }) {
         // eslint-disable-next-line @next/next/no-img-element
         <img src={logoUrl} alt="" className="h-10 w-10 shrink-0 rounded-xl object-contain" />
       ) : (
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-xl font-bold text-white shadow-lg shadow-primary-glow">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-xl font-bold text-on-accent shadow-lg shadow-primary-glow">
           {name.charAt(0).toUpperCase()}
         </div>
       )}

@@ -225,7 +225,7 @@ export function ProductWizard({
                 aria-current={state === "now" ? "step" : undefined}
                 onClick={() => go(s)}
                 className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                  state === "now" ? "bg-primary text-white" : state === "seen" ? "bg-[var(--leaf-bg)] text-primary" : "bg-bg-inner text-text-secondary"
+                  state === "now" ? "bg-primary text-on-accent" : state === "seen" ? "bg-[var(--leaf-bg)] text-primary" : "bg-bg-inner text-text-secondary"
                 }`}
               >
                 <span className="inline-flex size-4 items-center justify-center rounded-full bg-white/25 text-[10px]">{i + 1}</span>

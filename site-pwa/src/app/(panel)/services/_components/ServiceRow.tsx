@@ -306,7 +306,7 @@ export const ServiceRow = memo(function ServiceRow({
               type="button"
               onClick={() => void sub.copy()}
               disabled={sub.isReading}
-              className="flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+              className="flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-on-accent disabled:opacity-50"
             >
               {sub.isReading ? (
                 <Loader2 size={14} className="animate-spin" aria-hidden />
@@ -369,7 +369,7 @@ export const ServiceRow = memo(function ServiceRow({
                     type="button"
                     onClick={() => setConfirmReset(false)}
                     autoFocus
-                    className="flex-1 rounded-xl bg-primary py-2.5 text-xs font-bold text-white"
+                    className="flex-1 rounded-xl bg-primary py-2.5 text-xs font-bold text-on-accent"
                   >
                     {t("common", L.resetNo)}
                   </button>

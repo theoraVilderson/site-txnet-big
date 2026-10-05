@@ -89,7 +89,7 @@ export function DepositTaxCard({ surface, initial }: { surface: GatewaySurface; 
           type="button"
           disabled={!dirty || saving || Boolean(error)}
           onClick={() => void save()}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-on-accent shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
         >
           {saving && <Loader2 size={14} className="animate-spin" aria-hidden />}
           {t("common", saving ? X.saving : X.save)}

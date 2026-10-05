@@ -76,7 +76,7 @@ export function CategoryMultiPicker({
             >
               <span
                 className={`inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-                  at >= 0 ? "bg-primary text-white" : "border border-card-border"
+                  at >= 0 ? "bg-primary text-on-accent" : "border border-card-border"
                 }`}
               >
                 {at >= 0 ? at + 1 : ""}

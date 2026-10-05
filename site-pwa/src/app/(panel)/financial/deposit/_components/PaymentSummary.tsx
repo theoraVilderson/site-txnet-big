@@ -153,7 +153,7 @@ export function PaymentSummary({
       type="button"
       disabled={!canPay}
       onClick={onPay}
-      className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-bold text-white transition-[filter] disabled:cursor-not-allowed disabled:bg-card-border disabled:text-text-secondary bg-primary hover:brightness-110`}
+      className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-bold text-on-accent transition-[filter] disabled:cursor-not-allowed disabled:bg-card-border disabled:text-text-secondary bg-primary hover:brightness-110`}
     >
       {isStarting ? (
         <>
