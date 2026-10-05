@@ -101,7 +101,10 @@
         "recent": "اخیر",
         "pages": "صفحه‌ها",
         "settings": "تنظیمات",
-        "actions": "کارها"
+        "actions": "کارها",
+        "services": "سرویس‌ها",
+        "tickets": "تیکت‌ها",
+        "users": "کاربران"
       },
       "settingsTab": "تنظیمات › {{tab}}",
       "actions": {
@@ -119,7 +122,8 @@
         "open": "باز کردن",
         "pin": "سنجاق",
         "close": "بستن"
-      }
+      },
+      "searching": "در حال جست‌وجو…"
     }
   },
   "gateways": {

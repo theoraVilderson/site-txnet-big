@@ -26,6 +26,7 @@ import { DURATION, EASE, type MotionPreference } from "@/lib/motion";
 import { PANEL_DEPOSIT, PANEL_SUPPORT, PANEL_SUPPORT_NEW, panelSettingsTabPath } from "@/lib/routes";
 import { useUiPreferences } from "@/stores/ui-preferences-store";
 import { usePanelSession } from "../_context/PanelSessionContext";
+import { usePaletteData } from "../_hooks/usePaletteData";
 import { useVisibleMenu } from "../_hooks/useVisibleMenu";
 import { isMenuGroup, type VisibleMenuLink } from "../_lib/panel-menu";
 import { PALETTE_GROUPS, paletteResults, type PaletteGroup, type PaletteItem } from "../_lib/palette";
@@ -42,6 +43,9 @@ const A = FrontendI18nKeys.common.settings.appearance;
 const GROUP_LABEL: Record<PaletteGroup, string> = {
   recent: P.groups.recent,
   pages: P.groups.pages,
+  services: P.groups.services,
+  tickets: P.groups.tickets,
+  users: P.groups.users,
   settings: P.groups.settings,
   actions: P.groups.actions,
 };
@@ -183,7 +187,9 @@ function PaletteLayer({ onClose }: { onClose: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menu, recent, me, lang, choice, motionPref, availableLocales]);
 
-  const results = useMemo(() => paletteResults(items, query), [items, query]);
+  // Services, tickets and users, from their own sources (UX-1-o, N7).
+  const data = usePaletteData(query, me, menu, t);
+  const results = useMemo(() => paletteResults([...items, ...data.items], query), [items, data.items, query]);
   const current = results[Math.min(active, results.length - 1)] ?? null;
   const optionId = (item: PaletteItem) => `${id}-${item.key}`;
 
@@ -270,7 +276,7 @@ function PaletteLayer({ onClose }: { onClose: () => void }) {
 
         <div ref={listRef} id={listId} role="listbox" aria-label={t("common", P.results)} className="flex-1 overflow-y-auto p-2">
           {results.length === 0 ? (
-            <p className="px-3 py-8 text-center text-sm text-text-secondary">{t("common", P.empty, { query })}</p>
+            !data.searching && <p className="px-3 py-8 text-center text-sm text-text-secondary">{t("common", P.empty, { query })}</p>
           ) : (
             PALETTE_GROUPS.map((group) => {
               const inGroup = results.filter((r) => r.group === group);
@@ -316,6 +322,9 @@ function PaletteLayer({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
+        <p role="status" className={cn("px-4 pb-2 text-xs text-text-secondary", !data.searching && "sr-only")}>
+          {data.searching ? t("common", P.searching) : ""}
+        </p>
         <div aria-hidden className="hidden flex-wrap items-center gap-x-4 gap-y-1 border-t border-card-border px-4 py-2 text-[11px] text-text-secondary sm:flex">
           <span><kbd dir="ltr">↑ ↓</kbd> {t("common", P.keys.move)}</span>
           <span><kbd dir="ltr">Enter</kbd> {t("common", P.keys.open)}</span>

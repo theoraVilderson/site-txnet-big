@@ -101,7 +101,10 @@
         "recent": "Recent",
         "pages": "Pages",
         "settings": "Settings",
-        "actions": "Actions"
+        "actions": "Actions",
+        "services": "Services",
+        "tickets": "Tickets",
+        "users": "Users"
       },
       "settingsTab": "Settings › {{tab}}",
       "actions": {
@@ -119,7 +122,8 @@
         "open": "to open",
         "pin": "to pin",
         "close": "to close"
-      }
+      },
+      "searching": "Searching…"
     }
   },
   "gateways": {

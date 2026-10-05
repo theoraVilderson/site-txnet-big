@@ -50,10 +50,13 @@ export function matchScore(query: string, haystacks: readonly string[]): number 
   return best;
 }
 
-export type PaletteGroup = "recent" | "pages" | "settings" | "actions";
+/** `services`, `tickets` and `users` are data, found by their sources (UX-1-o); the rest is matched here. */
+export type PaletteGroup = "recent" | "pages" | "services" | "tickets" | "users" | "settings" | "actions";
+export type PaletteDataGroup = Extract<PaletteGroup, "services" | "tickets" | "users">;
+export const PALETTE_DATA_GROUPS: readonly PaletteDataGroup[] = ["services", "tickets", "users"];
 
 /** The order groups are drawn in, which is also the order the arrows walk. */
-export const PALETTE_GROUPS: readonly PaletteGroup[] = ["recent", "pages", "settings", "actions"];
+export const PALETTE_GROUPS: readonly PaletteGroup[] = ["recent", "pages", "services", "tickets", "users", "settings", "actions"];
 
 /** At most this many per group while a query is typed. */
 export const PALETTE_GROUP_LIMIT = 8;
@@ -80,7 +83,8 @@ export interface PaletteItem {
  * The items to draw for `query`, in `PALETTE_GROUPS` order. Empty, it is the
  * recent pages and the pages as they stand; typed, recent pages step aside
  * (the pages themselves are found) and each group is its best matches, at
- * most `PALETTE_GROUP_LIMIT`, ties in their own order.
+ * most `PALETTE_GROUP_LIMIT`, ties in their own order. A data group's items
+ * were matched by their source, and are kept as it answered.
  */
 export function paletteResults(items: readonly PaletteItem[], query: string): PaletteItem[] {
   const typed = foldForSearch(query) !== "";
@@ -88,6 +92,7 @@ export function paletteResults(items: readonly PaletteItem[], query: string): Pa
     const own = items.filter((i) => i.group === group);
     if (!typed) return group === "recent" || group === "pages" ? own : [];
     if (group === "recent") return [];
+    if ((PALETTE_DATA_GROUPS as readonly PaletteGroup[]).includes(group)) return own.slice(0, PALETTE_GROUP_LIMIT);
     return own
       .map((item, i) => ({ item, i, score: matchScore(query, item.haystacks) }))
       .filter((r) => r.score > 0)

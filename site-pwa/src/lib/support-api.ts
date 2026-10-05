@@ -123,6 +123,10 @@ export const supportApi = {
   list(before?: string): Promise<{ items: SupportConversation[]; nextBefore: string | null }> {
     return call(`/conversations${query({ before, limit: 30 })}`, { method: "GET" });
   },
+  /** The caller's threads matching `q` (2–64, UX-1-v): the subject and the messages they see. The palette's tickets (UX-1-o). */
+  search(q: string, limit = 8): Promise<{ items: SupportConversation[]; nextBefore: string | null }> {
+    return call(`/conversations${query({ q, limit })}`, { method: "GET" });
+  },
   open(body: { body: string; subject?: string; categoryId?: string }): Promise<SupportConversation> {
     return call<SupportConversation>("/conversations", post(body));
   },

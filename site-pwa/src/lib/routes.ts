@@ -30,6 +30,8 @@ export const panelSettingsTabPath = (tab: string) => `${PANEL_SETTINGS}?tab=${en
  * the later home of the `/sub` link (F-113).
  */
 export const PANEL_MY_SERVICES = "/services";
+/** My services on a name search, `?q=` (F-307-n) — the palette's service hits (UX-1-o). Never a config link: that is a credential. */
+export const panelMyServicesSearchPath = (q: string) => `${PANEL_MY_SERVICES}?q=${encodeURIComponent(q)}`;
 /**
  * The shop (F-111-e): what the caller may buy, buy -> invoice -> pay from the
  * wallet. The sidebar's `buy` entry.
