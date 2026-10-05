@@ -5,6 +5,7 @@ import { Plus, RotateCw, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { supportSettingsApi, type AdminCategory, type CategoryList, type SlaTarget } from "@/lib/support-api";
+import { DataTable } from "../../_components/kit/DataTable";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { Alert, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { AGENT_KEYS, PRIORITIES, PRIORITY_KEYS, categoryTexts, fromHhmm, slaFormErrors, toHhmm } from "../_lib/support-agent";
@@ -220,32 +221,31 @@ function SlaTab() {
   return (
     <section className="space-y-4 rounded-2xl border border-card-border bg-card-bg p-4">
       <p className="text-xs text-text-secondary">{t("common", K.sla.hint)}</p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead className="text-text-secondary">
-            <tr>
-              <th className="p-2 text-start">{t("common", K.sla.priority)}</th>
-              <th className="p-2 text-start">{t("common", K.sla.firstResponse)}</th>
-              <th className="p-2 text-start">{t("common", K.sla.resolution)}</th>
-              <th className="p-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {targets.map((x, i) => (
-              <tr key={x.priority} className="border-t border-card-border">
-                <td className="p-2 font-bold text-text-primary">{t("common", PRIORITY_KEYS[x.priority])}</td>
-                <td className="p-2">
-                  <input dir="ltr" type="number" min={1} className={`${input} w-28`} value={x.firstResponseMinutes} onChange={(e) => set(i, { firstResponseMinutes: Number(e.target.value) })} />
-                </td>
-                <td className="p-2">
-                  <input dir="ltr" type="number" min={1} className={`${input} w-28`} value={x.resolutionMinutes} onChange={(e) => set(i, { resolutionMinutes: Number(e.target.value) })} />
-                </td>
-                <td className="p-2 text-text-secondary">{x.source && t("common", K.sla[x.source])}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        label={t("common", K.tabs.sla)}
+        compact
+        bare
+        rows={targets.map((x, i) => ({ ...x, i }))}
+        rowKey={(x) => x.priority}
+        columns={[
+          { id: "priority", header: t("common", K.sla.priority), cell: (x) => t("common", PRIORITY_KEYS[x.priority]), className: "font-bold text-text-primary" },
+          {
+            id: "firstResponse",
+            header: t("common", K.sla.firstResponse),
+            cell: (x) => (
+              <input dir="ltr" type="number" min={1} aria-label={t("common", K.sla.firstResponse)} className={`${input} w-28`} value={x.firstResponseMinutes} onChange={(e) => set(x.i, { firstResponseMinutes: Number(e.target.value) })} />
+            ),
+          },
+          {
+            id: "resolution",
+            header: t("common", K.sla.resolution),
+            cell: (x) => (
+              <input dir="ltr" type="number" min={1} aria-label={t("common", K.sla.resolution)} className={`${input} w-28`} value={x.resolutionMinutes} onChange={(e) => set(x.i, { resolutionMinutes: Number(e.target.value) })} />
+            ),
+          },
+          { id: "source", header: "", cell: (x) => x.source && t("common", K.sla[x.source]), className: "text-text-secondary" },
+        ]}
+      />
       {invalid.size > 0 && <Alert>{t("common", K.sla.invalid)}</Alert>}
       <Note note={note} />
       <button

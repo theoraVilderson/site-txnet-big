@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { AI_ACTION_TYPES, aiAdminApi, type AiActionType, type UpliftArm, type UpliftReport } from "@/lib/ai-api";
+import { DataTable } from "../../_components/kit/DataTable";
 import { formatMoney } from "../../_lib/money";
 import { K, card } from "./ai-ui";
 
@@ -49,30 +50,19 @@ export function UpliftReportView() {
       {report.types.length === 0 ? (
         <p className="text-sm text-text-secondary">{t("common", K.report.none)}</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-start text-sm">
-            <thead className="text-xs text-text-secondary">
-              <tr>
-                <th className="p-2 text-start">{t("common", K.report.type)}</th>
-                <th className="p-2 text-start">{t("common", K.report.suggested)}</th>
-                <th className="p-2 text-start">{t("common", K.report.holdout)}</th>
-                <th className="p-2 text-start">{t("common", K.report.uplift)}</th>
-                <th className="p-2 text-start">{t("common", K.report.revenue)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.types.map((row) => (
-                <tr key={row.actionType} className="border-t border-card-border">
-                  <td className="p-2 font-bold">{isType(row.actionType) ? t("common", K.types[row.actionType]) : row.actionType}</td>
-                  <td className="p-2">{arm(row.treated)}</td>
-                  <td className="p-2">{arm(row.control)}</td>
-                  <td className="p-2" dir="ltr">{pct(row.uplift.rate)}</td>
-                  <td className="p-2">{row.uplift.revenue.map((m) => formatMoney(m.amount, m.currencyCode, { lang, t })).join(" · ") || "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          label={t("common", K.tabs.report)}
+          bare
+          rows={report.types}
+          rowKey={(row) => row.actionType}
+          columns={[
+            { id: "type", header: t("common", K.report.type), cell: (row) => (isType(row.actionType) ? t("common", K.types[row.actionType]) : row.actionType), className: "font-bold" },
+            { id: "suggested", header: t("common", K.report.suggested), cell: (row) => arm(row.treated) },
+            { id: "holdout", header: t("common", K.report.holdout), cell: (row) => arm(row.control) },
+            { id: "uplift", header: t("common", K.report.uplift), cell: (row) => pct(row.uplift.rate), dir: "ltr" },
+            { id: "revenue", header: t("common", K.report.revenue), cell: (row) => row.uplift.revenue.map((m) => formatMoney(m.amount, m.currencyCode, { lang, t })).join(" · ") || "—" },
+          ]}
+        />
       )}
       <p className="text-xs text-text-secondary">{t("common", K.report.renewals, { treated: report.renewals.treated, control: report.renewals.control })}</p>
     </section>

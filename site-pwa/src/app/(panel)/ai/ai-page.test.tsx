@@ -186,12 +186,14 @@ describe("at risk and the report (F-038-j2)", () => {
     });
     render(<AiView />);
     tab("ai.tabs.report");
-    expect(await screen.findByText("ai.types.renew")).toBeTruthy();
+    // The kit DataTable draws a phone card beside the table (K13); read the table.
+    const table = within(await screen.findByRole("table"));
+    expect(table.getByText("ai.types.renew")).toBeTruthy();
     const [from, to] = vi.mocked(aiAdminApi.uplift).mock.calls[0];
     expect(new Date(to).getTime() - new Date(from).getTime()).toBe(30 * 86_400_000);
-    expect(screen.getByText("ai.report.converted:8,20")).toBeTruthy();
-    expect(screen.getByText("ai.report.converted:1,5")).toBeTruthy();
-    expect(screen.getByText("+20%")).toBeTruthy();
+    expect(table.getByText("ai.report.converted:8,20")).toBeTruthy();
+    expect(table.getByText("ai.report.converted:1,5")).toBeTruthy();
+    expect(table.getByText("+20%")).toBeTruthy();
   });
 });
 

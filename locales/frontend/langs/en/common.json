@@ -1378,7 +1378,8 @@
       "scheduled": "Scheduled",
       "history": "Price history",
       "effectiveFrom": "From {{time}}",
-      "noPrice": "No price in effect — not for sale"
+      "noPrice": "No price in effect — not for sale",
+      "state": "State"
     },
     "fulfilmentKind": {
       "network_access": "Network access",

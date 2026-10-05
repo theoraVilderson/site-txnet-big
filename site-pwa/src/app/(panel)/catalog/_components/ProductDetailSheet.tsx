@@ -8,6 +8,7 @@ import { PricingCurrencyContext, useCatalogSurface, usePricedIn, usePricingCurre
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Select } from "../../_components/kit/Select";
+import { DataTable } from "../../_components/kit/DataTable";
 import { formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
 import {
@@ -353,34 +354,24 @@ function VariantCard({
         {t("common", K.price.history)} ({v.prices.length})
       </button>
       {history && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-start text-xs">
-            <tbody className="divide-y divide-card-border text-text-primary">
-              {v.prices.map((p) => (
-                <tr key={p.id}>
-                  <td className="px-2 py-1.5">{money(p)}</td>
-                  <td className="px-2 py-1.5">{t("common", K.price.effectiveFrom, { time: formatInstant(p.effectiveFrom, lang) ?? "" })}</td>
-                  <td className="px-2 py-1.5">
-                    {p.id === current?.id
-                      ? t("common", K.price.current)
-                      : !p.isActive
-                        ? t("common", K.inactive)
-                        : new Date(p.effectiveFrom) > now
-                          ? t("common", K.price.scheduled)
-                          : ""}
-                  </td>
-                  <td className="px-2 py-1.5 text-end">
-                    {p.isActive && (
-                      <button type="button" className={quietButton} onClick={() => void act(() => api.deactivatePrice(p.id))}>
-                        {t("common", K.deactivate)}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          label={t("common", K.price.history)}
+          compact
+          bare
+          rows={v.prices}
+          rowKey={(p) => p.id}
+          columns={[
+              { id: "price", header: t("common", K.price.amount), cell: money },
+              { id: "from", header: t("common", K.price.day), cell: (p) => t("common", K.price.effectiveFrom, { time: formatInstant(p.effectiveFrom, lang) ?? "" }) },
+              {
+                id: "state",
+                header: t("common", K.price.state),
+                cell: (p) =>
+                  p.id === current?.id ? t("common", K.price.current) : !p.isActive ? t("common", K.inactive) : new Date(p.effectiveFrom) > now ? t("common", K.price.scheduled) : "",
+              },
+          ]}
+          actions={(p) => (p.isActive ? [{ id: "deactivate", label: t("common", K.deactivate), onSelect: () => void act(() => api.deactivatePrice(p.id)) }] : [])}
+        />
       )}
       {error && <Alert>{error}</Alert>}
     </section>

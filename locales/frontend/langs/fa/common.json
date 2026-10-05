@@ -1378,7 +1378,8 @@
       "scheduled": "زمان‌بندی‌شده",
       "history": "تاریخچه قیمت",
       "effectiveFrom": "از {{time}}",
-      "noPrice": "قیمتی در جریان نیست — قابل فروش نیست"
+      "noPrice": "قیمتی در جریان نیست — قابل فروش نیست",
+      "state": "وضعیت"
     },
     "fulfilmentKind": {
       "network_access": "دسترسی شبکه",

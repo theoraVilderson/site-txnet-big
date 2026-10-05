@@ -5,6 +5,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { wheelAdminApi, type WheelDayReport } from "@/lib/engagement-api";
 import { formatInstant } from "../../../_lib/datetime";
 import { formatMoney } from "../../../_lib/money";
+import { DataTable } from "../../../_components/kit/DataTable";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { WHEEL_KEYS, formatDay, plainNumber, refusalKeyOf } from "../../_lib/wheel";
 import { WHEEL_SETTINGS_KEYS as K } from "../_lib/wheel-settings";
@@ -41,7 +42,6 @@ export function WheelReport({ today }: { today: string | null }) {
     };
   }, [asked]);
 
-  const cell = "px-3 py-2 text-start align-top";
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
@@ -63,56 +63,63 @@ export function WheelReport({ today }: { today: string | null }) {
       ) : days.length === 0 ? (
         <p className="text-sm text-text-secondary">{t("common", K.report.empty)}</p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-card-border bg-card-bg">
-          <table className="w-full min-w-[760px] text-sm">
-            <thead className="text-[11px] text-text-secondary">
-              <tr>
-                <th className={cell}>{t("common", K.report.day)}</th>
-                <th className={cell}>{t("common", K.report.version)}</th>
-                <th className={cell}>{t("common", K.report.spins)}</th>
-                <th className={cell}>{t("common", K.report.nothing)}</th>
-                <th className={cell}>{t("common", K.report.prizesGiven)}</th>
-                <th className={cell}>{t("common", K.report.refusals)}</th>
-                <th className={cell}>{t("common", K.report.spent)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {days.map((d) => {
+        <DataTable
+          label={t("common", K.report.title)}
+          rows={days}
+          rowKey={(d) => d.day}
+          minWidth="min-w-[760px]"
+          rowClassName="align-top"
+          columns={[
+            { id: "day", header: t("common", K.report.day), cell: (d) => formatDay(d.day, lang), className: "font-bold text-text-primary" },
+            { id: "version", header: t("common", K.report.version), cell: (d) => d.version },
+            { id: "spins", header: t("common", K.report.spins), cell: (d) => d.spins },
+            { id: "nothing", header: t("common", K.report.nothing), cell: (d) => d.nothing },
+            {
+              id: "prizes",
+              header: t("common", K.report.prizesGiven),
+              cell: (d) =>
+                d.prizes
+                  .filter((p) => p.count > 0)
+                  .map((p) => (
+                    <div key={p.prizeId} dir="auto">
+                      {p.label} × {p.count} · {formatMoney(p.cost, d.currencyCode, { lang, t })}
+                    </div>
+                  )),
+              className: "text-xs",
+              hideOnCard: true,
+            },
+            {
+              id: "refusals",
+              header: t("common", K.report.refusals),
+              cell: (d) =>
+                d.refused > 0 &&
+                Object.entries(d.refusals).map(([reason, n]) => (
+                  <div key={reason}>
+                    {t("common", refusalKeyOf(reason) ?? WHEEL_KEYS.notEligible)} × {n}
+                  </div>
+                )),
+              className: "text-xs",
+              hideOnCard: true,
+            },
+            {
+              id: "spent",
+              header: t("common", K.report.spent),
+              cell: (d) => {
                 const money = (a: string) => formatMoney(a, d.currencyCode, { lang, t });
                 return (
-                  <tr key={d.day} className="border-t border-card-border">
-                    <td className={`${cell} font-bold text-text-primary`}>{formatDay(d.day, lang)}</td>
-                    <td className={cell}>{d.version}</td>
-                    <td className={cell}>{d.spins}</td>
-                    <td className={cell}>{d.nothing}</td>
-                    <td className={`${cell} text-xs`}>
-                      {d.prizes.filter((p) => p.count > 0).map((p) => (
-                        <div key={p.prizeId} dir="auto">
-                          {p.label} × {p.count} · {money(p.cost)}
-                        </div>
-                      ))}
-                    </td>
-                    <td className={`${cell} text-xs`}>
-                      {d.refused > 0 &&
-                        Object.entries(d.refusals).map(([reason, n]) => (
-                          <div key={reason}>
-                            {t("common", refusalKeyOf(reason) ?? WHEEL_KEYS.notEligible)} × {n}
-                          </div>
-                        ))}
-                    </td>
-                    <td className={`${cell} text-xs`}>
-                      <div className="font-bold text-text-primary">
-                        {money(d.costSpent)} / {money(d.cap)}
-                      </div>
-                      <div className="text-text-secondary">{t("common", K.report.capUsed, { percent: plainNumber(d.capUsedPercent) })}</div>
-                      {d.alertedAt && <div className="text-text-secondary">{t("common", K.report.alerted, { time: formatInstant(d.alertedAt, lang) ?? "" })}</div>}
-                    </td>
-                  </tr>
+                  <>
+                    <div className="font-bold text-text-primary">
+                      {money(d.costSpent)} / {money(d.cap)}
+                    </div>
+                    <div className="text-text-secondary">{t("common", K.report.capUsed, { percent: plainNumber(d.capUsedPercent) })}</div>
+                    {d.alertedAt && <div className="text-text-secondary">{t("common", K.report.alerted, { time: formatInstant(d.alertedAt, lang) ?? "" })}</div>}
+                  </>
                 );
-              })}
-            </tbody>
-          </table>
-        </div>
+              },
+              className: "text-xs",
+            },
+          ]}
+        />
       )}
     </div>
   );

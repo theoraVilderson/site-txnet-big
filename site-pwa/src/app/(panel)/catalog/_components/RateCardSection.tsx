@@ -7,6 +7,7 @@ import type { CatalogRateCard, CatalogVariant } from "@/lib/catalog-api";
 import { useCatalogSurface, usePricedIn } from "../_lib/surface";
 import { useMeterNames } from "../_lib/meter-names";
 import { DatePicker } from "../../_components/kit/DatePicker";
+import { DataTable } from "../../_components/kit/DataTable";
 import { Select } from "../../_components/kit/Select";
 import { currencyDecimals, formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
@@ -99,35 +100,25 @@ export function RateCardSection({ variant: v, act }: { variant: CatalogVariant; 
         {t("common", K.rateCard.history)} ({cards.length})
       </button>
       {history && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-start text-xs">
-            <tbody className="divide-y divide-card-border text-text-primary">
-              {cards.map((c) => (
-                <tr key={c.id}>
-                  <td className="px-2 py-1.5">{rate(c)}</td>
-                  <td className="px-2 py-1.5">{t("common", K.rateCard.modes[c.mode])}</td>
-                  <td className="px-2 py-1.5">{t("common", K.price.effectiveFrom, { time: formatInstant(c.effectiveFrom, lang) ?? "" })}</td>
-                  <td className="px-2 py-1.5">
-                    {c.id === current?.id
-                      ? t("common", K.price.current)
-                      : !c.isActive
-                        ? t("common", K.inactive)
-                        : new Date(c.effectiveFrom) > now
-                          ? t("common", K.price.scheduled)
-                          : ""}
-                  </td>
-                  <td className="px-2 py-1.5 text-end">
-                    {c.isActive && (
-                      <button type="button" className={quietButton} onClick={() => void act(() => api.deactivateRateCard(c.id))}>
-                        {t("common", K.deactivate)}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          label={t("common", K.rateCard.history)}
+          compact
+          bare
+          rows={cards}
+          rowKey={(c) => c.id}
+          columns={[
+              { id: "rate", header: t("common", K.rateCard.perGb), cell: rate },
+              { id: "mode", header: t("common", K.rateCard.mode), cell: (c) => t("common", K.rateCard.modes[c.mode]) },
+              { id: "from", header: t("common", K.price.day), cell: (c) => t("common", K.price.effectiveFrom, { time: formatInstant(c.effectiveFrom, lang) ?? "" }) },
+              {
+                id: "state",
+                header: t("common", K.price.state),
+                cell: (c) =>
+                  c.id === current?.id ? t("common", K.price.current) : !c.isActive ? t("common", K.inactive) : new Date(c.effectiveFrom) > now ? t("common", K.price.scheduled) : "",
+              },
+          ]}
+          actions={(c) => (c.isActive ? [{ id: "deactivate", label: t("common", K.deactivate), onSelect: () => void act(() => api.deactivateRateCard(c.id)) }] : [])}
+        />
       )}
     </div>
   );
@@ -223,35 +214,25 @@ export function RegenerateCardSection({ variant: v, act }: { variant: CatalogVar
         </button>
       )}
       {history && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-start text-xs">
-            <tbody className="divide-y divide-card-border text-text-primary">
-              {cards.map((c) => (
-                <tr key={c.id}>
-                  <td className="px-2 py-1.5">{shown(c)}</td>
-                  <td className="px-2 py-1.5">{c.afterIncluded === "metered" ? t("common", K.rateCard.modes[c.mode]) : ""}</td>
-                  <td className="px-2 py-1.5">{t("common", K.price.effectiveFrom, { time: formatInstant(c.effectiveFrom, lang) ?? "" })}</td>
-                  <td className="px-2 py-1.5">
-                    {c.id === current?.id
-                      ? t("common", K.price.current)
-                      : !c.isActive
-                        ? t("common", K.inactive)
-                        : new Date(c.effectiveFrom) > now
-                          ? t("common", K.price.scheduled)
-                          : ""}
-                  </td>
-                  <td className="px-2 py-1.5 text-end">
-                    {c.isActive && (
-                      <button type="button" className={quietButton} onClick={() => void act(() => api.deactivateRateCard(c.id))}>
-                        {t("common", K.deactivate)}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          label={t("common", K.regenerateCard.history)}
+          compact
+          bare
+          rows={cards}
+          rowKey={(c) => c.id}
+          columns={[
+              { id: "rate", header: t("common", K.rateCard.perGb), cell: shown },
+              { id: "mode", header: t("common", K.rateCard.mode), cell: (c) => (c.afterIncluded === "metered" ? t("common", K.rateCard.modes[c.mode]) : "") },
+              { id: "from", header: t("common", K.price.day), cell: (c) => t("common", K.price.effectiveFrom, { time: formatInstant(c.effectiveFrom, lang) ?? "" }) },
+              {
+                id: "state",
+                header: t("common", K.price.state),
+                cell: (c) =>
+                  c.id === current?.id ? t("common", K.price.current) : !c.isActive ? t("common", K.inactive) : new Date(c.effectiveFrom) > now ? t("common", K.price.scheduled) : "",
+              },
+          ]}
+          actions={(c) => (c.isActive ? [{ id: "deactivate", label: t("common", K.deactivate), onSelect: () => void act(() => api.deactivateRateCard(c.id)) }] : [])}
+        />
       )}
     </div>
   );
