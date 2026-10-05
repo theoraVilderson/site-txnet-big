@@ -17,7 +17,7 @@ import { DiscountRules } from "./DiscountRules";
 import { GiftCodes } from "./GiftCodes";
 import { ListSkeleton } from "./ListSkeleton";
 import { PageHeader } from "../../_components/kit/PageHeader";
-import { useConfirm } from "../../_components/kit";
+import { Button, useConfirm } from "../../_components/kit";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 const PAGE_SIZE = 20;
@@ -198,14 +198,13 @@ function DiscountCoupons({ owner }: { owner: boolean }) {
             className="w-72 max-w-full rounded-xl border border-card-border bg-[var(--bg-inner)] px-3 py-2.5 font-mono text-xs text-[var(--text-input)] focus:border-[var(--accent-primary)] focus:outline-none"
           />
         )}
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={() => setEditing("new")}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-on-accent shadow-sm transition-all hover:brightness-110"
+          icon={<Plus size={16} aria-hidden />}
         >
-          <Plus size={16} aria-hidden />
           {t("common", K.add)}
-        </button>
+        </Button>
       </div>
 
       {notice && (
@@ -228,10 +227,9 @@ function DiscountCoupons({ owner }: { owner: boolean }) {
               <p role="alert" className="text-xs font-bold text-error">
                 {message(error)}
               </p>
-              <button type="button" onClick={() => void reload()} className="inline-flex items-center gap-1 text-xs font-bold text-primary">
-                <RotateCw size={14} aria-hidden />
+              <Button variant="quiet" size="sm" onClick={() => void reload()} icon={<RotateCw size={14} aria-hidden />} className="text-primary hover:text-primary">
                 {t("common", K.retry)}
-              </button>
+              </Button>
             </div>
           ) : !data || data.items.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-6 text-center">

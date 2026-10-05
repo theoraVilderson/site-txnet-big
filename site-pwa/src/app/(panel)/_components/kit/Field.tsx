@@ -8,6 +8,7 @@ import {
   useState,
   type InputHTMLAttributes,
   type ReactNode,
+  type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
 import { useLocale } from "@/context/LocaleContext";
@@ -164,6 +165,28 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
         onChange?.(e);
       }}
       className={cn(CONTROL, "min-h-24 resize-y py-2.5 leading-relaxed", className)}
+    />
+  );
+});
+
+/**
+ * The browser's own select in the kit's box (K4) — for a long list (time zones,
+ * currencies) where the native type-to-find is worth more than the kit
+ * `Select`'s listbox. Inside a `Field` it takes its id and description.
+ */
+export const NativeSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(function NativeSelect(
+  { className, ...rest },
+  ref,
+) {
+  const wired = useWired({ ...rest, value: undefined });
+  return (
+    <select
+      ref={ref}
+      {...rest}
+      id={wired.id}
+      aria-describedby={wired["aria-describedby"]}
+      aria-invalid={wired["aria-invalid"]}
+      className={cn(CONTROL, "h-11", className)}
     />
   );
 });

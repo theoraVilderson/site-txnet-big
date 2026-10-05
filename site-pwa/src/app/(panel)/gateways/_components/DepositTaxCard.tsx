@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Loader2, Receipt } from "lucide-react";
+import { Check, Receipt } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useGatewayMessage, type GatewaySurface } from "../_lib/surface";
 import { taxRateError } from "../_lib/gateway-form";
 import { Field, TextInput } from "./gateway-fields";
+import { Button } from "../../_components/kit";
 
 const X = FrontendI18nKeys.common.gateways.tax;
 
@@ -85,15 +86,14 @@ export function DepositTaxCard({ surface, initial }: { surface: GatewaySurface; 
             {t("common", X.saved)}
           </p>
         )}
-        <button
-          type="button"
+        <Button
+          variant="primary"
           disabled={!dirty || saving || Boolean(error)}
           onClick={() => void save()}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-on-accent shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
+          loading={saving}
         >
-          {saving && <Loader2 size={14} className="animate-spin" aria-hidden />}
           {t("common", saving ? X.saving : X.save)}
-        </button>
+        </Button>
       </div>
     </section>
   );

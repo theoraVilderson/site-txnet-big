@@ -30,9 +30,10 @@ import {
   type WizardStepId,
 } from "../_lib/gateway-wizard";
 import { providerFields, secretFields } from "../_lib/provider-fields";
-import { ChoiceCards, FeeFields, PROVIDER_ICONS, SecretInput, fieldErrorText, useRangeText } from "./gateway-fields";
+import { ChoiceCards, FeeFields, Field, PROVIDER_ICONS, SecretInput, fieldErrorText, useRangeText } from "./gateway-fields";
 import { Toggle } from "../../_components/kit/Toggle";
 import { Wizard, useWizard } from "../../_components/kit/Wizard";
+import { Button, Input } from "../../_components/kit";
 
 const G = FrontendI18nKeys.common.gateways;
 const F = G.form;
@@ -46,9 +47,6 @@ const STEP_ICONS: Record<WizardStepId, LucideIcon> = {
   review: ListChecks,
 };
 
-const input =
-  "w-full rounded-xl border border-card-border bg-[var(--bg-inner)] px-3 py-2.5 text-sm text-[var(--text-input)] placeholder:text-[var(--text-label)] transition-colors hover:border-[var(--accent-primary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)]";
-const invalidInput = "border-error focus:border-error";
 
 interface GatewayWizardProps {
   surface: GatewaySurface;
@@ -143,23 +141,17 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
     ) : null;
 
   const labeled = (k: keyof GatewayForm, label: string, control: ReactNode, hint?: string, optional = false) => (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={`gw-${k}`} className="flex items-center gap-2 text-xs font-bold text-text-primary">
-        {label}
-        {optional && <span className="font-normal text-text-secondary">({t("common", W.optional)})</span>}
-      </label>
+    <Field id={`gw-${k}`} label={label} error={errors[k]} hint={hint} optional={optional}>
       {control}
-      {errorText(k) ?? (hint && <span className="text-[11px] text-text-secondary">{hint}</span>)}
-    </div>
+    </Field>
   );
 
   // The wrapper carries the input's direction: with only the input `ltr`, its
   // `pe-*` pads the right while the suffix's `end-*` sits left in RTL, on the text.
   const textInput = (k: keyof GatewayForm, opts: { ltr?: boolean; suffix?: string; placeholder?: string; decimal?: boolean } = {}) => (
-    <div className="relative" dir={opts.ltr ? "ltr" : undefined}>
-      <input
+    <div dir={opts.ltr ? "ltr" : undefined}>
+      <Input
         id={`gw-${k}`}
-        className={`${input} ${errors[k] ? invalidInput : ""} ${opts.suffix ? "pe-14" : ""}`}
         inputMode={opts.decimal ? "decimal" : undefined}
         placeholder={opts.placeholder}
         aria-invalid={Boolean(errors[k])}
@@ -168,12 +160,8 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
         onKeyDown={(e) => {
           if (e.key === "Enter") wizard.next();
         }}
+        end={opts.suffix ? <span className="pointer-events-none pe-1.5 text-xs font-bold text-text-secondary">{opts.suffix}</span> : undefined}
       />
-      {opts.suffix && (
-        <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-xs font-bold text-text-secondary">
-          {opts.suffix}
-        </span>
-      )}
     </div>
   );
 
@@ -423,9 +411,9 @@ function ReviewStep({ form, owner, money, onEdit }: { form: GatewayForm; owner: 
           })()}
           {t("common", W.steps[id].title)}
         </h3>
-        <button type="button" onClick={() => onEdit(id)} className="rounded-lg px-2 py-1 text-[11px] font-bold text-primary hover:bg-card-bg">
+        <Button variant="quiet" size="sm" onClick={() => onEdit(id)} className="text-primary hover:text-primary">
           {t("common", W.edit)}
-        </button>
+        </Button>
       </div>
       <dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
         {rows.map(([k, v]) => (
@@ -536,12 +524,12 @@ function DoneScreen({ name, onAnother, onFinish }: { name: string; onAnother: ()
         ))}
       </ol>
       <div className="flex w-full max-w-md flex-col-reverse gap-2 sm:flex-row">
-        <button type="button" onClick={onAnother} className="flex-1 rounded-xl border border-card-border px-4 py-2.5 text-sm font-bold text-text-primary hover:bg-[var(--bg-inner)]">
+        <Button onClick={onAnother} className="flex-1">
           {t("common", W.done.another)}
-        </button>
-        <button type="button" onClick={onFinish} className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-on-accent shadow-md hover:brightness-110">
+        </Button>
+        <Button variant="primary" onClick={onFinish} className="flex-1">
           {t("common", W.done.finish)}
-        </button>
+        </Button>
       </div>
     </div>
   );

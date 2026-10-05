@@ -6,6 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { formatMoney } from "../../_lib/money";
 import { MAX_PRESETS, addPreset, type PresetError } from "../_lib/presets";
+import { Button, Input } from "../../_components/kit";
 
 const P = FrontendI18nKeys.common.gateways.presets;
 
@@ -67,8 +68,8 @@ export function PresetsEditor({ value, onChange, emptyText, currency, id }: Pres
       </div>
 
       <div className="flex items-start gap-2">
-        <div className="relative flex-1" dir="ltr">
-          <input
+        <div className="flex-1" dir="ltr">
+          <Input
             id={id}
             inputMode="decimal"
             value={draft}
@@ -85,21 +86,18 @@ export function PresetsEditor({ value, onChange, emptyText, currency, id }: Pres
                 add();
               }
             }}
-            className={`w-full rounded-xl border bg-[var(--bg-inner)] px-3 py-2.5 pe-14 text-sm text-[var(--text-input)] placeholder:text-[var(--text-label)] transition-colors hover:border-[var(--accent-primary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)] disabled:opacity-50 ${
-              error ? "border-error" : "border-card-border"
-            }`}
+            end={<span className="pointer-events-none pe-1.5 text-xs font-bold text-text-secondary">{currency}</span>}
           />
-          <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-xs font-bold text-text-secondary">{currency}</span>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={add}
           disabled={full || !draft.trim()}
-          className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-primary px-3 py-2.5 text-xs font-bold text-on-accent shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
+          icon={<Plus size={14} aria-hidden />}
+          className="shrink-0"
         >
-          <Plus size={14} aria-hidden />
           {t("common", P.add)}
-        </button>
+        </Button>
       </div>
 
       <div className="flex items-center justify-between gap-2 text-[11px]">

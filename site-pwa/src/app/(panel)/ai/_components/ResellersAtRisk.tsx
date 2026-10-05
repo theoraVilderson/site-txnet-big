@@ -11,6 +11,7 @@ import { panelResellerPath } from "@/lib/routes";
 import { formatInstant } from "../../_lib/datetime";
 import { formatMoney } from "../../_lib/money";
 import { K, card } from "./ai-ui";
+import { Button, SegmentedControl } from "../../_components/kit";
 
 const LIMIT_NAMES = FrontendI18nKeys.common.resellers.limits.keys;
 const PERIODS = ["day", "week", "month"] as const;
@@ -92,24 +93,22 @@ export function ResellersAtRisk() {
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex gap-2">
-        {(["quota_exhaustion", "churn_risk", "wallet_need"] as const).map((k) => (
-          <button
-            key={k}
-            type="button"
-            aria-pressed={kind === k}
-            onClick={() => {
-              if (k === kind) return;
-              setItems(null);
-              setError(null);
-              setKind(k);
-            }}
-            className={`rounded-xl px-3 py-1.5 text-xs font-bold ${kind === k ? "bg-primary text-on-accent" : "border border-card-border text-text-secondary"}`}
-          >
-            {t("common", k === "quota_exhaustion" ? K.resellers.runOut : k === "churn_risk" ? K.resellers.churn : K.resellers.wallet)}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl<"quota_exhaustion" | "churn_risk" | "wallet_need">
+        ariaLabel={t("common", K.tabs.resellers)}
+        size="sm"
+        value={kind}
+        onChange={(k) => {
+          if (k === kind) return;
+          setItems(null);
+          setError(null);
+          setKind(k);
+        }}
+        options={(["quota_exhaustion", "churn_risk", "wallet_need"] as const).map((k) => ({
+          value: k,
+          label: t("common", k === "quota_exhaustion" ? K.resellers.runOut : k === "churn_risk" ? K.resellers.churn : K.resellers.wallet),
+        }))}
+        className="self-start"
+      />
       {error && <p role="alert" className="text-xs font-medium text-error">{error}</p>}
       {items === null ? (
         !error && <p className="text-sm text-text-secondary">{t("common", K.loading)}</p>
@@ -143,7 +142,7 @@ export function ResellersAtRisk() {
       )}
       {cursor && items && (
         <div>
-          <button type="button" className="text-xs font-bold text-text-secondary underline" onClick={() => void more()}>{t("common", K.resellers.more)}</button>
+          <Button variant="quiet" size="sm" onClick={() => void more()}>{t("common", K.resellers.more)}</Button>
         </div>
       )}
     </section>

@@ -4,8 +4,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import type { CatalogCapability } from "@/lib/catalog-api";
 import { CATALOG_KEYS as K, canEditCapability } from "../_lib/catalog-form";
-import { quietButton } from "./catalog-ui";
-import { useConfirm } from "../../_components/kit";
+import { Button, useConfirm } from "../../_components/kit";
 
 const C = K.capabilities;
 
@@ -52,20 +51,19 @@ export function CapabilitiesTab({
                 </div>
                 {editable ? (
                   <div className="flex gap-1">
-                    <button type="button" className={quietButton} onClick={() => onRename(c)}>
-                      <Pencil size={14} aria-hidden />
+                    <Button variant="quiet" size="sm" onClick={() => onRename(c)} icon={<Pencil size={14} aria-hidden />}>
                       {t("common", K.rename)}
-                    </button>
-                    <button
-                      type="button"
-                      className={quietButton}
+                    </Button>
+                    <Button
+                      variant="quiet"
+                      size="sm"
                       onClick={async () => {
                         if (await confirm({ title: t("common", C.confirmRemove, { name: label(c) }), confirmLabel: t("common", C.removeOne), tone: "danger" })) onRemove(c);
                       }}
+                      icon={<Trash2 size={14} aria-hidden />}
                     >
-                      <Trash2 size={14} aria-hidden />
                       {t("common", C.removeOne)}
-                    </button>
+                    </Button>
                   </div>
                 ) : (
                   <span className="text-[11px] text-text-secondary">{t("common", C.platformOnly)}</span>

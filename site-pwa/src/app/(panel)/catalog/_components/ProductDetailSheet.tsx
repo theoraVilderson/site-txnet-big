@@ -44,7 +44,8 @@ import {
 import { CapabilityPicker } from "./CapabilityPicker";
 import { FirstRateFields, RateCardSection, RegenerateCardSection } from "./RateCardSection";
 import { ProductCategories } from "./CategoryPickers";
-import { Alert, CopyId, Field, Sheet, input, primaryButton, quietButton, useMessage } from "./catalog-ui";
+import { CopyId, Field, Sheet, useMessage } from "./catalog-ui";
+import { Alert, Button, Input } from "../../_components/kit";
 
 /**
  * One product: what it unlocks (editable with the picker), and each variant
@@ -124,7 +125,7 @@ export function ProductDetailSheet({
         onSaved={async () => Promise.all([load(), onChanged()]).then(() => undefined)} />
 
       <h3 className="text-xs font-bold text-text-secondary">{t("common", K.open)}</h3>
-      {error && <Alert>{error}</Alert>}
+      {error && <Alert tone="error">{error}</Alert>}
       {!detail && !error && (
         <p className="flex items-center gap-2 text-xs text-text-secondary">
           <Loader2 size={14} className="animate-spin" aria-hidden />
@@ -149,10 +150,9 @@ export function ProductDetailSheet({
             }}
           />
         ) : (
-          <button type="button" className={`${primaryButton} self-start`} onClick={() => setAdding(true)}>
-            <Plus size={14} aria-hidden />
+          <Button variant="primary" size="sm" className="self-start" onClick={() => setAdding(true)} icon={<Plus size={14} aria-hidden />}>
             {t("common", K.newVariant)}
-          </button>
+          </Button>
         ))}
     </Sheet>
   );
@@ -191,9 +191,9 @@ function Capabilities({
       <section className="flex flex-col gap-2 rounded-2xl border border-card-border p-3">
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-bold text-text-secondary">{t("common", K.capabilities.label)}</p>
-          <button type="button" className={quietButton} onClick={() => setEditing([...product.featureKeys])}>
+          <Button variant="quiet" size="sm" onClick={() => setEditing([...product.featureKeys])}>
             {t("common", K.capabilities.edit)}
-          </button>
+          </Button>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {product.featureKeys.length === 0 ? (
@@ -235,14 +235,14 @@ function Capabilities({
         newTenant={owner ? product.tenantId : undefined}
         onCreated={onCreated}
       />
-      {error && <Alert>{error}</Alert>}
+      {error && <Alert tone="error">{error}</Alert>}
       <div className="flex justify-end gap-2">
-        <button type="button" className={quietButton} onClick={() => setEditing(null)}>
+        <Button variant="quiet" size="sm" onClick={() => setEditing(null)}>
           {t("common", K.cancel)}
-        </button>
-        <button type="button" className={primaryButton} disabled={busy} onClick={() => void save()}>
+        </Button>
+        <Button variant="primary" size="sm" disabled={busy} onClick={() => void save()}>
           {t("common", K.capabilities.save)}
-        </button>
+        </Button>
       </div>
     </section>
   );
@@ -323,10 +323,9 @@ function VariantCard({
             {current ? money(current) : t("common", K.price.noPrice)}
           </span>
           <CopyId id={v.id} />
-          <button type="button" className={quietButton} onClick={() => void act(() => api.updateVariant(v.id, { isActive: !v.isActive }))}>
-            <Power size={14} aria-hidden />
+          <Button variant="quiet" size="sm" onClick={() => void act(() => api.updateVariant(v.id, { isActive: !v.isActive }))} icon={<Power size={14} aria-hidden />}>
             {t("common", v.isActive ? K.deactivate : K.activate)}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -339,20 +338,19 @@ function VariantCard({
 
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
         <Field label={pricedIn(t("common", K.price.amount), currency)} error={errors.amount}>
-          <input className={input} dir="ltr" inputMode="decimal" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
+          <Input dir="ltr" inputMode="decimal" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
         </Field>
         <Field label={t("common", K.price.day)} error={errors.day} hint={t("common", K.price.dayHint)}>
           <DatePicker value={form.day || null} onChange={(d) => setForm((f) => ({ ...f, day: d ?? "" }))} />
         </Field>
-        <button type="button" className={primaryButton} onClick={() => void newPrice()}>
+        <Button variant="primary" size="sm" onClick={() => void newPrice()}>
           {t("common", K.newPrice)}
-        </button>
+        </Button>
       </div>
 
-      <button type="button" className={`${quietButton} self-start`} aria-expanded={history} onClick={() => setHistory((h) => !h)}>
-        <ChevronDown size={14} className={history ? "rotate-180" : ""} aria-hidden />
+      <Button variant="quiet" size="sm" className="self-start" aria-expanded={history} onClick={() => setHistory((h) => !h)} icon={<ChevronDown size={14} className={history ? "rotate-180" : ""} aria-hidden />}>
         {t("common", K.price.history)} ({v.prices.length})
-      </button>
+      </Button>
       {history && (
         <DataTable
           label={t("common", K.price.history)}
@@ -373,7 +371,7 @@ function VariantCard({
           actions={(p) => (p.isActive ? [{ id: "deactivate", label: t("common", K.deactivate), onSelect: () => void act(() => api.deactivatePrice(p.id)) }] : [])}
         />
       )}
-      {error && <Alert>{error}</Alert>}
+      {error && <Alert tone="error">{error}</Alert>}
     </section>
   );
 }
@@ -415,11 +413,11 @@ export function VariantFields({
         </Field>
         {metered ? (
           <Field label={pricedIn(t("common", K.variant.meteredPrice), currency)} error={errors.price} hint={t("common", K.variant.meteredPriceHint)}>
-            <input className={input} dir="ltr" inputMode="decimal" placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} />
+            <Input dir="ltr" inputMode="decimal" placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} />
           </Field>
         ) : (
           <Field label={pricedIn(t("common", K.variant.price), currency)} error={errors.price}>
-            <input className={input} dir="ltr" inputMode="decimal" value={form.price} onChange={(e) => set("price", e.target.value)} />
+            <Input dir="ltr" inputMode="decimal" value={form.price} onChange={(e) => set("price", e.target.value)} />
           </Field>
         )}
       </div>
@@ -434,15 +432,14 @@ export function VariantFields({
       )}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={t("common", K.variant.durationDays)} error={errors.durationDays} hint={t("common", K.variant.durationHint)}>
-          <input className={input} dir="ltr" inputMode="numeric" value={form.durationDays} onChange={(e) => set("durationDays", e.target.value)} />
+          <Input dir="ltr" inputMode="numeric" value={form.durationDays} onChange={(e) => set("durationDays", e.target.value)} />
         </Field>
         <Field label={t("common", K.variant.sku)} error={errors.sku} hint={t("common", K.variant.skuHint)}>
           <span className="flex gap-1">
-            <input className={input} dir="ltr" value={form.sku} onChange={(e) => set("sku", e.target.value.toUpperCase())} />
-            <button type="button" className={quietButton} onClick={() => set("sku", suggestSku(productKey, form.durationDays))}>
-              <Sparkles size={14} aria-hidden />
+            <Input dir="ltr" value={form.sku} onChange={(e) => set("sku", e.target.value.toUpperCase())} />
+            <Button variant="quiet" size="sm" onClick={() => set("sku", suggestSku(productKey, form.durationDays))} icon={<Sparkles size={14} aria-hidden />}>
               {t("common", K.wizard.suggestSku)}
-            </button>
+            </Button>
           </span>
         </Field>
       </div>
@@ -460,8 +457,7 @@ export function VariantFields({
               onChange={(v) => setQuota(i, { metric: v as typeof q.metric, limit: "" })}
               options={QUOTA_METRICS.map((m) => ({ value: m, label: t("common", K.metric[m]) }))}
             />
-            <input
-              className={input}
+            <Input
               dir="ltr"
               inputMode="numeric"
               aria-label={t("common", K.variant.limit)}
@@ -475,31 +471,31 @@ export function VariantFields({
               onChange={(v) => setQuota(i, { resetPolicy: v as typeof q.resetPolicy })}
               options={RESET_POLICIES.map((m) => ({ value: m, label: t("common", K.resetPolicy[m]) }))}
             />
-            <button type="button" className={quietButton} onClick={() => set("quotas", form.quotas.filter((_, j) => j !== i))}>
+            <Button variant="quiet" size="sm" onClick={() => set("quotas", form.quotas.filter((_, j) => j !== i))}>
               {t("common", K.variant.remove)}
-            </button>
+            </Button>
           </div>
         ))}
         {errors.quotas && <p className="text-[11px] text-error">{t("common", errors.quotas)}</p>}
         {form.quotas.length < QUOTA_METRICS.length && (
-          <button
-            type="button"
-            className={`${quietButton} self-start`}
+          <Button
+            variant="quiet"
+            size="sm"
+            className="self-start"
             onClick={() => {
               const free = QUOTA_METRICS.find((m) => !form.quotas.some((q) => q.metric === m)) ?? "traffic_bytes";
               set("quotas", [...form.quotas, { metric: free, limit: "", resetPolicy: "none" }]);
             }}
+            icon={<Plus size={14} aria-hidden />}
           >
-            <Plus size={14} aria-hidden />
             {t("common", K.variant.addQuota)}
-          </button>
+          </Button>
         )}
       </div>
 
-      <button type="button" className={`${quietButton} self-start`} aria-expanded={advanced} onClick={() => setAdvanced((a) => !a)}>
-        <ChevronDown size={14} className={advanced ? "rotate-180" : ""} aria-hidden />
+      <Button variant="quiet" size="sm" className="self-start" aria-expanded={advanced} onClick={() => setAdvanced((a) => !a)} icon={<ChevronDown size={14} className={advanced ? "rotate-180" : ""} aria-hidden />}>
         {t("common", K.wizard.advanced)}
-      </button>
+      </Button>
       {advanced && (
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t("common", K.variant.visibility)} hint={t("common", K.variantHint.visibility)}>
@@ -559,14 +555,14 @@ function NewVariant({
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-dashed border-primary p-3">
       <VariantFields form={form} set={set} errors={errors} productKey={productKey} kind={kind} groups={groups} />
-      {error && <Alert>{error}</Alert>}
+      {error && <Alert tone="error">{error}</Alert>}
       <div className="flex justify-end gap-2">
-        <button type="button" className={quietButton} onClick={onCancel}>
+        <Button variant="quiet" size="sm" onClick={onCancel}>
           {t("common", K.cancel)}
-        </button>
-        <button type="button" className={primaryButton} disabled={busy} onClick={() => void save()}>
+        </Button>
+        <Button variant="primary" size="sm" disabled={busy} onClick={() => void save()}>
           {t("common", K.save)}
-        </button>
+        </Button>
       </div>
     </section>
   );

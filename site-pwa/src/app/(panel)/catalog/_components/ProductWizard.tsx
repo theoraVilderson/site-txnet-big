@@ -39,8 +39,9 @@ import { CapabilityPicker } from "./CapabilityPicker";
 import { CategoryFields } from "./NameSheets";
 import { CategoryMultiPicker, TranslateAllBox } from "./CategoryPickers";
 import { VariantFields, usePanelGroups } from "./ProductDetailSheet";
-import { Field, KeyField, LanguageSelect, input, quietButton, useDirOf, useMessage } from "./catalog-ui";
+import { Field, KeyField, LanguageSelect, useDirOf, useMessage } from "./catalog-ui";
 import { Wizard as KitWizard, useWizard } from "../../_components/kit/Wizard";
+import { Button, Checkbox, Input, Textarea } from "../../_components/kit";
 
 /** Which step a refusal belongs to, so the wizard returns the admin to the field billing named. */
 const REFUSAL_STEP: Record<string, WizardStep> = {
@@ -220,9 +221,9 @@ export function ProductWizard({
                   {t("common", errors.categoryIds === K.wizard.categoryNotForOwner ? K.wizard.categoryNotForOwner : K.wizard.pickCategory)}
                 </p>
               )}
-              <button type="button" className={`${quietButton} self-start`} onClick={() => setW((x) => ({ ...x, categoryMode: "new" }))}>
+              <Button variant="quiet" size="sm" className="self-start" onClick={() => setW((x) => ({ ...x, categoryMode: "new" }))}>
                 {t("common", K.wizard.useNewCategory)}
-              </button>
+              </Button>
             </>
           ) : (
             <>
@@ -237,9 +238,9 @@ export function ProductWizard({
                 label={categoryLabel}
               />
               {categories.length > 0 && (
-                <button type="button" className={`${quietButton} self-start`} onClick={() => setW((x) => ({ ...x, categoryMode: "existing" }))}>
+                <Button variant="quiet" size="sm" className="self-start" onClick={() => setW((x) => ({ ...x, categoryMode: "existing" }))}>
                   {t("common", K.wizard.useExistingCategory)}
-                </button>
+                </Button>
               )}
             </>
           )}
@@ -253,8 +254,7 @@ export function ProductWizard({
               <LanguageSelect value={w.product.sourceLang} onChange={(v) => setProduct({ sourceLang: v })} />
             </Field>
             <Field label={t("common", K.product.name)} error={errors.name} hint={t("common", K.product.nameHint)}>
-              <input
-                className={input}
+              <Input
                 dir={nameDir}
                 maxLength={NAME_MAX}
                 autoFocus
@@ -266,7 +266,7 @@ export function ProductWizard({
             </Field>
           </div>
           <Field label={t("common", K.product.description)}>
-            <textarea className={input} dir={nameDir} rows={3} maxLength={DESCRIPTION_MAX} value={w.product.description} onChange={(e) => setProduct({ description: e.target.value })} />
+            <Textarea dir={nameDir} rows={3} maxLength={DESCRIPTION_MAX} value={w.product.description} onChange={(e) => setProduct({ description: e.target.value })} />
           </Field>
           <TranslateAllBox checked={w.product.translateAll} onChange={(v) => setProduct({ translateAll: v })} />
           <KeyField
@@ -297,7 +297,7 @@ export function ProductWizard({
               </Field>
               {w.product.owner === "tenant" && (
                 <Field label={t("common", K.product.tenantId)} error={errors.tenantId}>
-                  <input className={input} dir="ltr" value={w.product.tenantId} onChange={(e) => setProduct({ tenantId: e.target.value })} />
+                  <Input dir="ltr" value={w.product.tenantId} onChange={(e) => setProduct({ tenantId: e.target.value })} />
                 </Field>
               )}
             </div>
@@ -328,10 +328,7 @@ export function ProductWizard({
 
       {step === "variant" && (
         <div className="flex flex-col gap-3">
-          <label className="flex items-center gap-2 text-xs font-bold text-text-primary">
-            <input type="checkbox" checked={w.withVariant} onChange={(e) => setW((x) => ({ ...x, withVariant: e.target.checked }))} />
-            {t("common", K.wizard.withVariant)}
-          </label>
+          <Checkbox checked={w.withVariant} onChange={(on) => setW((x) => ({ ...x, withVariant: on }))} label={t("common", K.wizard.withVariant)} />
           {w.withVariant ? (
             <VariantFields
               form={w.variant}
@@ -428,9 +425,9 @@ function Row({ label, onEdit, children }: { label: string; onEdit: () => void; c
       <dt className="font-bold text-text-secondary">{label}</dt>
       <dd className="flex flex-wrap items-center justify-between gap-2 text-text-primary">
         <span>{children}</span>
-        <button type="button" className={quietButton} onClick={onEdit}>
+        <Button variant="quiet" size="sm" onClick={onEdit}>
           {t("common", K.wizard.edit)}
-        </button>
+        </Button>
       </dd>
     </>
   );

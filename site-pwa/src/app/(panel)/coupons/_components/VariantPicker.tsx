@@ -6,11 +6,10 @@ import { catalogApi, type CatalogProductDetail } from "@/lib/catalog-api";
 import { Select } from "../../_components/kit/Select";
 import { COUPON_KEYS } from "../_lib/coupon-form";
 import { variantChoices } from "../_lib/variant-choices";
+import { Button, Input } from "../../_components/kit";
 
 const P = COUPON_KEYS.form.variantPicker;
 
-const input =
-  "w-full rounded-xl border border-card-border bg-[var(--bg-inner)] px-3 py-2.5 text-sm text-[var(--text-input)] placeholder:text-[var(--text-label)] transition-colors hover:border-[var(--accent-primary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)] disabled:opacity-60";
 
 /**
  * The variant a free-service coupon or gift batch gives (F-502-l-c).
@@ -62,16 +61,17 @@ export function VariantPicker({
   const toggle = (label: string, next: boolean) =>
     catalog !== "failed" &&
     !disabled && (
-      <button
-        type="button"
+      <Button
+        variant="quiet"
+        size="sm"
         onClick={() => {
           setManual(next);
           if (!next && unknownValue) onChange("");
         }}
-        className="self-start text-[11px] font-bold text-primary hover:underline"
+        className="self-start text-primary hover:text-primary"
       >
         {label}
-      </button>
+      </Button>
     );
 
   if (catalog === null) return <p className="py-2.5 text-xs text-text-secondary">{t("common", P.loading)}</p>;
@@ -79,12 +79,11 @@ export function VariantPicker({
   if (byHand)
     return (
       <div className="flex flex-col gap-1">
-        <input
+        <Input
           id={id}
           dir="ltr"
           disabled={disabled}
           aria-invalid={invalid}
-          className={`${input} ${invalid ? "border-error focus:border-error" : ""}`}
           value={value}
           onChange={(e) => onChange(e.target.value)}
         />

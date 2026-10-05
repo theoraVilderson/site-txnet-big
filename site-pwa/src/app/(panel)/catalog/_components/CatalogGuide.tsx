@@ -3,6 +3,7 @@
 import { ArrowRight, BookOpen, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { CATALOG_KEYS as K } from "../_lib/catalog-form";
+import { IconButton } from "../../_components/kit";
 
 const STEPS = ["category", "product", "variant", "price", "translations"] as const;
 
@@ -16,9 +17,7 @@ export function CatalogGuide({ onClose }: { onClose: () => void }) {
           <BookOpen size={16} className="text-primary" aria-hidden />
           {t("common", K.guide.title)}
         </h2>
-        <button type="button" onClick={onClose} aria-label={t("common", K.guide.hide)} className="rounded-lg p-1 text-text-secondary hover:text-text-primary">
-          <X size={16} aria-hidden />
-        </button>
+        <IconButton size="sm" onClick={onClose} aria-label={t("common", K.guide.hide)} icon={<X size={16} aria-hidden />} />
       </header>
       <ol className="grid gap-2 sm:grid-cols-5">
         {STEPS.map((s, i) => (

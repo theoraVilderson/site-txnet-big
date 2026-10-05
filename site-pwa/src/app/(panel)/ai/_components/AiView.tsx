@@ -13,7 +13,7 @@ import { PlanLayoutView } from "./PlanLayoutView";
 import { ResellersAtRisk } from "./ResellersAtRisk";
 import { UsageForecastView } from "./UsageForecastView";
 import { UpliftReportView } from "./UpliftReportView";
-import { PageHeader } from "../../_components/kit/PageHeader";
+import { PageHeader, Tabs } from "../../_components/kit";
 
 const TABS = ["settings", "offers", "atRisk", "margins", "layout", "usage", "report", "resellers"] as const;
 type Tab = (typeof TABS)[number];
@@ -45,20 +45,13 @@ export function AiView() {
         subtitle={t("common", K.subtitle)}
       />
 
-      <div role="tablist" className="flex gap-2 overflow-x-auto rounded-2xl border border-card-border bg-card-bg p-1 shadow-sm">
-        {tabs.map((id) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            onClick={() => setTab(id)}
-            className={`flex-1 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-bold transition-colors ${tab === id ? "bg-primary text-on-accent shadow-sm" : "text-text-secondary hover:text-text-primary"}`}
-          >
-            {t("common", K.tabs[id])}
-          </button>
-        ))}
-      </div>
+      <Tabs<Tab>
+        ariaLabel={t("common", K.title)}
+        variant="pills"
+        value={tab}
+        onChange={setTab}
+        tabs={tabs.map((id) => ({ value: id, label: t("common", K.tabs[id]) }))}
+      />
 
       {tab === "settings" ? <AiSettingsPanel /> : tab === "offers" ? <AiOffers /> : tab === "atRisk" ? <AtRiskList /> : tab === "margins" ? <MarginsList /> : tab === "layout" ? <PlanLayoutView /> : tab === "usage" ? <UsageForecastView /> : tab === "resellers" ? <ResellersAtRisk /> : <UpliftReportView />}
     </div>

@@ -1,16 +1,20 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
-import { Check, Copy, X } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Check, Copy } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
+import { Alert as KitAlert, Button, Dialog, Input } from "../../_components/kit";
 import { Select } from "../../_components/kit/Select";
 import { CATALOG_KEYS as K, refusalKey } from "../_lib/catalog-form";
 import { useCatalogSurface } from "../_lib/surface";
 
 /** The pieces every catalog sheet and the wizard share. */
 
+/**
+ * The look before the kit (UX-1-c). Kept only for the pages that still import
+ * them until UX-1-ad / UX-1-ae move them; the catalog itself no longer does.
+ */
 export const input = "w-full rounded-xl border border-card-border bg-bg-inner px-3 py-2 text-sm text-text-primary outline-none focus:border-primary";
 export const primaryButton = "inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-on-accent shadow-sm disabled:opacity-50";
 export const quietButton = "inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-primary hover:bg-[var(--leaf-bg)] disabled:opacity-50";
@@ -42,49 +46,40 @@ export function useDirOf() {
   return (code: string) => availableLocales.find((l) => l.code === code)?.dir ?? "ltr";
 }
 
+/**
+ * A catalog sheet: the kit's `Dialog` at its wide size (contract.ux.md K7) —
+ * Esc and the backdrop close it, focus is trapped and returned, the page is
+ * locked. Mounted while open; the caller decides what closing a dirty form asks.
+ */
 export function Sheet({ title, onClose, children, footer }: { title: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
-  const { t } = useLocale();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  if (typeof document === "undefined") return null;
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-t-3xl border border-card-border bg-card-bg shadow-xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
-        <header className="flex items-center justify-between gap-3 border-b border-card-border p-4">
-          <h2 className="text-sm font-bold text-text-primary">{title}</h2>
-          <button type="button" onClick={onClose} aria-label={t("common", K.close)} className="rounded-lg p-1 text-text-secondary hover:text-text-primary">
-            <X size={18} aria-hidden />
-          </button>
-        </header>
-        <div className="flex flex-col gap-4 overflow-y-auto p-4">{children}</div>
-        {footer && <footer className="border-t border-card-border p-4">{footer}</footer>}
-      </div>
-    </div>,
-    document.body,
+  return (
+    <Dialog open size="lg" title={title} onClose={onClose} footer={footer}>
+      <div className="flex flex-col gap-4">{children}</div>
+    </Dialog>
   );
 }
 
+/**
+ * A labelled control, the refusal given as a catalog key. The `<label>` still
+ * wraps the control: some callers' children are not kit controls yet, and the
+ * kit `Field` labels by id. It becomes the kit `Field` in UX-1-ae, when every
+ * child is one (contract.ux.md R1).
+ */
 export function Field({ label, error, hint, children }: { label: string; error?: string; hint?: string; children: ReactNode }) {
   const { t } = useLocale();
   return (
-    <label className="flex flex-col gap-1 text-xs font-bold text-text-secondary">
+    <label className="flex flex-col gap-1.5 text-sm font-bold text-text-primary">
       {label}
       {children}
-      {hint && !error && <span className="text-[11px] font-normal">{hint}</span>}
-      {error && <span className="text-[11px] text-error">{t("common", error)}</span>}
+      {hint && !error && <span className="text-xs font-normal text-text-secondary">{hint}</span>}
+      {error && <span className="text-xs font-normal text-error">{t("common", error)}</span>}
     </label>
   );
 }
 
+/** A failure line under a form: the kit's error `Alert` (K6). */
 export function Alert({ children }: { children: ReactNode }) {
-  return (
-    <p role="alert" className="text-xs font-bold text-error">
-      {children}
-    </p>
-  );
+  return <KitAlert tone="error">{children}</KitAlert>;
 }
 
 /**
@@ -98,7 +93,7 @@ export function KeyField({ value, onChange, error, forceOpen }: { value: string;
   if (open || forceOpen || error) {
     return (
       <Field label={t("common", K.product.key)} error={error} hint={t("common", K.wizard.keyHint)}>
-        <input className={input} dir="ltr" value={value} onChange={(e) => onChange(e.target.value)} />
+        <Input dir="ltr" value={value} onChange={(e) => onChange(e.target.value)} />
       </Field>
     );
   }
@@ -110,9 +105,9 @@ export function KeyField({ value, onChange, error, forceOpen }: { value: string;
           {value || t("common", K.wizard.none)}
         </span>
       </span>
-      <button type="button" className={quietButton} onClick={() => setOpen(true)}>
+      <Button variant="quiet" size="sm" onClick={() => setOpen(true)}>
         {t("common", K.wizard.editKey)}
-      </button>
+      </Button>
     </p>
   );
 }
@@ -122,10 +117,11 @@ export function CopyId({ id }: { id: string }) {
   const { t } = useLocale();
   const [copied, setCopied] = useState(false);
   return (
-    <button
-      type="button"
-      className={quietButton}
+    <Button
+      variant="quiet"
+      size="sm"
       title={id}
+      icon={copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
       onClick={() => {
         void navigator.clipboard?.writeText(id).then(() => {
           setCopied(true);
@@ -133,8 +129,7 @@ export function CopyId({ id }: { id: string }) {
         });
       }}
     >
-      {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
       {t("common", copied ? K.copied : K.copyId)}
-    </button>
+    </Button>
   );
 }

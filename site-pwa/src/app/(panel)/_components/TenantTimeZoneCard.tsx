@@ -5,9 +5,9 @@ import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { tenantTimeZoneApi } from "@/lib/tenant-api";
-import { Alert, input, primaryButton, quietButton } from "../catalog/_components/catalog-ui";
 import { TableSkeleton } from "./kit/TableSkeleton";
 import { ZoneSelect } from "./ZoneSelect";
+import { Alert, Button, Card, CardHeader, Field, notify } from "./kit";
 
 const Z = FrontendI18nKeys.common.timeZone;
 
@@ -38,7 +38,6 @@ export function TenantTimeZoneCard({ tenantId, scope }: { tenantId: string; scop
   const [asked, setAsked] = useState(0);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -64,7 +63,8 @@ export function TenantTimeZoneCard({ tenantId, scope }: { tenantId: string; scop
       const answer = await tenantTimeZoneApi.set(tenantId, picked);
       setZone(answer.timezone);
       setPicked(answer.timezone);
-      setSaved(true);
+      // "Saved" is a toast, never a line that stays (contract.ux.md K11).
+      notify.success(t("common", Z.tenant.saved));
     } catch (e) {
       setFailure(e);
     } finally {
@@ -73,43 +73,38 @@ export function TenantTimeZoneCard({ tenantId, scope }: { tenantId: string; scop
   };
 
   return (
-    <section className="mt-6 rounded-3xl border border-card-border bg-card-bg p-6">
-      <h2 className="mb-1 text-lg font-bold text-text-primary">{t("common", Z.tenant.title)}</h2>
-      <p className="mb-5 text-sm text-text-secondary">{t("common", scope === "platform" ? Z.tenant.hintPlatform : Z.tenant.hint)}</p>
+    <Card padding="lg" className="mt-6">
+      <CardHeader title={t("common", Z.tenant.title)} subtitle={t("common", scope === "platform" ? Z.tenant.hintPlatform : Z.tenant.hint)} />
 
       {loadError !== null ? (
         <div className="space-y-3">
-          <Alert>{message(loadError)}</Alert>
-          <button type="button" className={quietButton} onClick={() => setAsked((n) => n + 1)}>
+          <Alert tone="error">{message(loadError)}</Alert>
+          <Button variant="quiet" size="sm" onClick={() => setAsked((n) => n + 1)}>
             {t("common", Z.reload)}
-          </button>
+          </Button>
         </div>
       ) : zone === null ? (
         <TableSkeleton rows={1} columns={2} />
       ) : (
         <div className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="flex-1">
-              <span className="mb-1 block text-sm text-text-secondary">{t("common", Z.label)}</span>
+            <Field label={t("common", Z.label)} className="flex-1">
               <ZoneSelect
-                className={input}
                 value={picked}
                 disabled={busy}
                 onChange={(next) => {
                   setPicked(next);
                   setFailure(null);
-                  setSaved(false);
                 }}
               />
-            </label>
-            <button type="button" className={primaryButton} disabled={busy || !picked || picked === zone} onClick={submit}>
+            </Field>
+            <Button variant="primary" loading={busy} disabled={!picked || picked === zone} onClick={submit}>
               {t("common", Z.save)}
-            </button>
+            </Button>
           </div>
-          {failure !== null && <Alert>{message(failure)}</Alert>}
-          {saved && <p className="text-sm font-medium text-primary">{t("common", Z.tenant.saved)}</p>}
+          {failure !== null && <Alert tone="error">{message(failure)}</Alert>}
         </div>
       )}
-    </section>
+    </Card>
   );
 }

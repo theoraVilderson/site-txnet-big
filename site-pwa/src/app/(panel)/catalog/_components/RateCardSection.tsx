@@ -28,7 +28,8 @@ import {
   type RateCardForm,
   type RegenerateCardForm,
 } from "../_lib/catalog-form";
-import { Field, input, primaryButton, quietButton } from "./catalog-ui";
+import { Field } from "./catalog-ui";
+import { Button, Input } from "../../_components/kit";
 
 /**
  * A metered variant's rate per GB of traffic (F-118-m, ADR-0105 decision 10):
@@ -85,20 +86,19 @@ export function RateCardSection({ variant: v, act }: { variant: CatalogVariant; 
           />
         </Field>
         <Field label={pricedIn(t("common", K.rateCard.perGb), currency)} error={errors.unitPrice}>
-          <input className={input} dir="ltr" inputMode="decimal" value={form.unitPrice} onChange={(e) => setForm((f) => ({ ...f, unitPrice: e.target.value }))} />
+          <Input dir="ltr" inputMode="decimal" value={form.unitPrice} onChange={(e) => setForm((f) => ({ ...f, unitPrice: e.target.value }))} />
         </Field>
         <Field label={t("common", K.price.day)} error={errors.day} hint={t("common", K.price.dayHint)}>
           <DatePicker value={form.day || null} onChange={(d) => setForm((f) => ({ ...f, day: d ?? "" }))} />
         </Field>
-        <button type="button" className={primaryButton} onClick={() => void newRate()}>
+        <Button variant="primary" size="sm" onClick={() => void newRate()}>
           {t("common", K.rateCard.newRate)}
-        </button>
+        </Button>
       </div>
 
-      <button type="button" className={`${quietButton} self-start`} aria-expanded={history} onClick={() => setHistory((h) => !h)}>
-        <ChevronDown size={14} className={history ? "rotate-180" : ""} aria-hidden />
+      <Button variant="quiet" size="sm" className="self-start" aria-expanded={history} onClick={() => setHistory((h) => !h)} icon={<ChevronDown size={14} className={history ? "rotate-180" : ""} aria-hidden />}>
         {t("common", K.rateCard.history)} ({cards.length})
-      </button>
+      </Button>
       {history && (
         <DataTable
           label={t("common", K.rateCard.history)}
@@ -176,7 +176,7 @@ export function RegenerateCardSection({ variant: v, act }: { variant: CatalogVar
 
       <div className="grid gap-2 sm:grid-cols-2 sm:items-end">
         <Field label={t("common", K.regenerateCard.included)} hint={t("common", K.regenerateCard.includedHint)} error={errors.included}>
-          <input className={input} dir="ltr" inputMode="numeric" value={form.included} onChange={(e) => setForm((f) => ({ ...f, included: e.target.value }))} />
+          <Input dir="ltr" inputMode="numeric" value={form.included} onChange={(e) => setForm((f) => ({ ...f, included: e.target.value }))} />
         </Field>
         <Field label={t("common", K.regenerateCard.after)}>
           <Select
@@ -195,23 +195,22 @@ export function RegenerateCardSection({ variant: v, act }: { variant: CatalogVar
               />
             </Field>
             <Field label={t("common", K.regenerateCard.perUse)} error={errors.unitPrice}>
-              <input className={input} dir="ltr" inputMode="decimal" value={form.unitPrice} onChange={(e) => setForm((f) => ({ ...f, unitPrice: e.target.value }))} />
+              <Input dir="ltr" inputMode="decimal" value={form.unitPrice} onChange={(e) => setForm((f) => ({ ...f, unitPrice: e.target.value }))} />
             </Field>
           </>
         )}
         <Field label={t("common", K.price.day)} error={errors.day} hint={t("common", K.price.dayHint)}>
           <DatePicker value={form.day || null} onChange={(d) => setForm((f) => ({ ...f, day: d ?? "" }))} />
         </Field>
-        <button type="button" className={primaryButton} onClick={() => void save()}>
+        <Button variant="primary" size="sm" onClick={() => void save()}>
           {t("common", K.regenerateCard.newCard)}
-        </button>
+        </Button>
       </div>
 
       {cards.length > 0 && (
-        <button type="button" className={`${quietButton} self-start`} aria-expanded={history} onClick={() => setHistory((h) => !h)}>
-          <ChevronDown size={14} className={history ? "rotate-180" : ""} aria-hidden />
+        <Button variant="quiet" size="sm" className="self-start" aria-expanded={history} onClick={() => setHistory((h) => !h)} icon={<ChevronDown size={14} className={history ? "rotate-180" : ""} aria-hidden />}>
           {t("common", K.regenerateCard.history)} ({cards.length})
-        </button>
+        </Button>
       )}
       {history && (
         <DataTable
@@ -260,7 +259,7 @@ export function FirstRateFields({
         <Select value={mode} onChange={(m) => onMode(m as RateCardForm["mode"])} options={RATE_CARD_MODES.map((m) => ({ value: m, label: t("common", K.rateCard.modes[m]) }))} />
       </Field>
       <Field label={pricedIn(t("common", K.rateCard.perGb), currency)} error={error}>
-        <input className={input} dir="ltr" inputMode="decimal" value={price} onChange={(e) => onPrice(e.target.value)} />
+        <Input dir="ltr" inputMode="decimal" value={price} onChange={(e) => onPrice(e.target.value)} />
       </Field>
     </div>
   );

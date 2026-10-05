@@ -21,6 +21,7 @@ import {
   type StateBadge,
 } from "../_lib/manual-confirm";
 import { PageHeader } from "../../../_components/kit/PageHeader";
+import { Button, Field, Input, Textarea } from "../../../_components/kit";
 
 /**
  * The manual confirmation screen (F-093-n, ADR-0044 decision 6) — what
@@ -102,10 +103,9 @@ export function ManualPaymentsView() {
             <p role="alert" className="text-xs font-bold text-error">
               {errorMessage(error)}
             </p>
-            <button type="button" onClick={() => void reload()} className="inline-flex items-center gap-1 text-xs font-bold text-primary">
-              <RotateCw size={14} aria-hidden />
+            <Button variant="quiet" size="sm" onClick={() => void reload()} icon={<RotateCw size={14} aria-hidden />} className="text-primary hover:text-primary">
               {t("common", K.retry)}
-            </button>
+            </Button>
           </div>
         ) : rows.length === 0 ? (
           <p className="py-6 text-center text-sm text-text-secondary">{t("common", K.empty)}</p>
@@ -222,46 +222,44 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             disabled={busy}
             onClick={() => void run(() => billingApi.manualInquire(row.id))}
-            className="inline-flex items-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-text-on-accent disabled:opacity-50"
+            icon={busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <SearchCheck size={14} aria-hidden />}
           >
-            {busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <SearchCheck size={14} aria-hidden />}
             {t("common", busy ? K.inquiring : K.inquire)}
-          </button>
+          </Button>
           {canAttachAuthority(row) && !authorityOpen && (
-            <button
-              type="button"
+            <Button
+              size="sm"
               disabled={busy}
               onClick={() => setAuthorityOpen(true)}
-              className="inline-flex items-center gap-1 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:opacity-50"
+              icon={<KeyRound size={14} aria-hidden />}
             >
-              <KeyRound size={14} aria-hidden />
               {t("common", K.attachAuthority)}
-            </button>
+            </Button>
           )}
           {canConfirmByHand(answer?.outcome ?? null) && !formOpen && (
-            <button
-              type="button"
+            <Button
+              size="sm"
               disabled={busy}
               onClick={() => setFormOpen(true)}
-              className="rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:opacity-50"
             >
               {t("common", K.confirmByHand)}
-            </button>
+            </Button>
           )}
           {canRejectByHand(answer?.outcome ?? null) && !rejectOpen && (
-            <button
-              type="button"
+            <Button
+              size="sm"
               disabled={busy}
               onClick={() => setRejectOpen(true)}
-              className="inline-flex items-center gap-1 rounded-xl border border-error-border px-3 py-2 text-xs font-bold text-error hover:bg-error-bg disabled:opacity-50"
+              icon={<Ban size={14} aria-hidden />}
+              className="text-error hover:text-error hover:bg-error-bg"
             >
-              <Ban size={14} aria-hidden />
               {t("common", K.rejectByHand)}
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -286,32 +284,31 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
         <form onSubmit={submitAuthority} className="flex flex-col gap-3 rounded-2xl border border-card-border bg-bg-inner p-4">
           <p className="text-sm font-bold text-text-primary">{t("common", K.authorityForm.title)}</p>
           <p className="text-xs leading-5 text-text-secondary">{t("common", K.authorityForm.hint)}</p>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
-            {t("common", K.authorityForm.label)}
-            <input
+          <Field label={t("common", K.authorityForm.label)} error={authorityError ? t("common", authorityError) : undefined}>
+            <Input
               dir="ltr"
               value={authority}
               maxLength={64}
               onChange={(e) => setAuthority(e.target.value)}
-              className="rounded-xl border border-card-border bg-card-bg px-3 py-2 font-mono text-sm text-text-primary"
+              className="font-mono"
             />
-            {authorityError && <span className="text-error">{t("common", authorityError)}</span>}
-          </label>
+          </Field>
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               type="submit"
               disabled={busy}
-              className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-text-on-accent disabled:opacity-50"
             >
               {t("common", K.authorityForm.submit)}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="quiet"
+              size="sm"
               onClick={() => setAuthorityOpen(false)}
-              className="rounded-xl px-4 py-2 text-xs font-medium text-text-secondary hover:bg-leaf-bg"
             >
               {t("common", K.authorityForm.cancel)}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -320,43 +317,38 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
         <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl border border-card-border bg-bg-inner p-4">
           <p className="text-sm font-bold text-text-primary">{t("common", K.form.title)}</p>
           <p className="text-xs leading-5 text-text-secondary">{t("common", K.form.hint)}</p>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
-            {t("common", K.form.referenceId)}
-            <input
+          <Field label={t("common", K.form.referenceId)} error={formErrors.referenceId ? t("common", formErrors.referenceId) : undefined}>
+            <Input
               dir="ltr"
               value={form.referenceId}
               maxLength={64}
               onChange={(e) => setForm((f) => ({ ...f, referenceId: e.target.value }))}
-              className="rounded-xl border border-card-border bg-card-bg px-3 py-2 text-sm text-text-primary"
             />
-            {formErrors.referenceId && <span className="text-error">{t("common", formErrors.referenceId)}</span>}
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
-            {t("common", K.form.reason)}
-            <textarea
+          </Field>
+          <Field label={t("common", K.form.reason)} error={formErrors.reason ? t("common", formErrors.reason) : undefined}>
+            <Textarea
               value={form.reason}
               maxLength={500}
               rows={3}
               onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
-              className="rounded-xl border border-card-border bg-card-bg px-3 py-2 text-sm text-text-primary"
             />
-            {formErrors.reason && <span className="text-error">{t("common", formErrors.reason)}</span>}
-          </label>
+          </Field>
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               type="submit"
               disabled={busy}
-              className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-text-on-accent disabled:opacity-50"
             >
               {t("common", K.form.submit)}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="quiet"
+              size="sm"
               onClick={() => setFormOpen(false)}
-              className="rounded-xl px-4 py-2 text-xs font-medium text-text-secondary hover:bg-leaf-bg"
             >
               {t("common", K.form.cancel)}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -368,32 +360,30 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
             {t("common", K.rejectForm.title)}
           </p>
           <p className="text-xs leading-5 text-text-secondary">{t("common", K.rejectForm.hint)}</p>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
-            {t("common", K.rejectForm.reason)}
-            <textarea
+          <Field label={t("common", K.rejectForm.reason)} error={rejectError ? t("common", rejectError) : undefined}>
+            <Textarea
               value={rejectReason}
               maxLength={500}
               rows={3}
               onChange={(e) => setRejectReason(e.target.value)}
-              className="rounded-xl border border-card-border bg-card-bg px-3 py-2 text-sm text-text-primary"
             />
-            {rejectError && <span className="text-error">{t("common", rejectError)}</span>}
-          </label>
+          </Field>
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
+              size="sm"
               type="submit"
               disabled={busy}
-              className="rounded-xl border border-error-border bg-error-bg px-4 py-2 text-xs font-bold text-error disabled:opacity-50"
+              className="text-error hover:text-error hover:bg-error-bg"
             >
               {t("common", K.rejectForm.submit)}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="quiet"
+              size="sm"
               onClick={() => setRejectOpen(false)}
-              className="rounded-xl px-4 py-2 text-xs font-medium text-text-secondary hover:bg-leaf-bg"
             >
               {t("common", K.rejectForm.cancel)}
-            </button>
+            </Button>
           </div>
         </form>
       )}

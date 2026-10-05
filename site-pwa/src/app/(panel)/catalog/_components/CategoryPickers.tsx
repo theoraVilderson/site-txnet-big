@@ -7,7 +7,8 @@ import type { CatalogCategory, CatalogProduct } from "@/lib/catalog-api";
 import { useCatalogSurface } from "../_lib/surface";
 import { Select } from "../../_components/kit/Select";
 import { CATALOG_KEYS as K, categoryPath, categoryTree, moveBody, parentChoices } from "../_lib/catalog-form";
-import { Alert, Field, Sheet, primaryButton, quietButton, useMessage } from "./catalog-ui";
+import { Field, Sheet, useMessage } from "./catalog-ui";
+import { Alert, Button, Checkbox } from "../../_components/kit";
 
 /**
  * Categories as a tree (F-026-s over F-026-r): the parent picker, the
@@ -95,13 +96,13 @@ export function CategoryMultiPicker({
 export function TranslateAllBox({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   const { t } = useLocale();
   return (
-    <label className="flex items-start gap-2 rounded-xl bg-bg-inner p-3 text-xs text-text-primary">
-      <input type="checkbox" className="mt-0.5" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <span className="flex flex-col gap-0.5">
-        <span className="font-bold">{t("common", K.product.translateAll)}</span>
-        <span className="text-[11px] text-text-secondary">{t("common", K.product.translateAllHint)}</span>
-      </span>
-    </label>
+    <Checkbox
+      checked={checked}
+      onChange={onChange}
+      label={<span className="font-bold">{t("common", K.product.translateAll)}</span>}
+      hint={t("common", K.product.translateAllHint)}
+      className="rounded-xl bg-bg-inner p-3"
+    />
   );
 }
 
@@ -144,14 +145,14 @@ export function MoveCategorySheet({
       <Field label={t("common", K.category.parent)} hint={t("common", K.category.parentHint)}>
         <ParentSelect categories={categories} self={category.id} label={label} value={parentId} onChange={setParentId} />
       </Field>
-      {error && <Alert>{error}</Alert>}
+      {error && <Alert tone="error">{error}</Alert>}
       <div className="flex justify-end gap-2">
-        <button type="button" className={quietButton} onClick={onClose}>
+        <Button variant="quiet" size="sm" onClick={onClose}>
           {t("common", K.cancel)}
-        </button>
-        <button type="button" className={primaryButton} disabled={busy} onClick={() => void save()}>
+        </Button>
+        <Button variant="primary" size="sm" disabled={busy} onClick={() => void save()}>
           {t("common", K.save)}
-        </button>
+        </Button>
       </div>
     </Sheet>
   );
@@ -197,10 +198,9 @@ export function ProductCategories({
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-xs font-bold text-text-secondary">{t("common", K.product.categories)}</h3>
         {!editing && (
-          <button type="button" className={quietButton} onClick={() => setEditing([...product.categoryIds])}>
-            <Pencil size={14} aria-hidden />
+          <Button variant="quiet" size="sm" onClick={() => setEditing([...product.categoryIds])} icon={<Pencil size={14} aria-hidden />}>
             {t("common", K.product.editCategories)}
-          </button>
+          </Button>
         )}
       </div>
       {editing ? (
@@ -208,15 +208,14 @@ export function ProductCategories({
           <p className="text-[11px] text-text-secondary">{t("common", K.product.categoriesHint)}</p>
           <CategoryMultiPicker categories={categories} label={label} value={editing} onChange={setEditing} />
           {editing.length === 0 && <p className="text-[11px] text-error">{t("common", K.wizard.pickCategory)}</p>}
-          {error && <Alert>{error}</Alert>}
+          {error && <Alert tone="error">{error}</Alert>}
           <div className="flex justify-end gap-2">
-            <button type="button" className={quietButton} onClick={() => setEditing(null)}>
+            <Button variant="quiet" size="sm" onClick={() => setEditing(null)}>
               {t("common", K.cancel)}
-            </button>
-            <button type="button" className={primaryButton} disabled={busy || editing.length === 0} onClick={() => void save()}>
-              <Check size={14} aria-hidden />
+            </Button>
+            <Button variant="primary" size="sm" disabled={busy || editing.length === 0} onClick={() => void save()} icon={<Check size={14} aria-hidden />}>
               {t("common", K.save)}
-            </button>
+            </Button>
           </div>
         </>
       ) : (

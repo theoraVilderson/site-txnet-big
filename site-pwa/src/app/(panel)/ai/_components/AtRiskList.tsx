@@ -9,6 +9,7 @@ import { myResellerUserPath } from "@/lib/routes";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { formatInstant } from "../../_lib/datetime";
 import { K, card } from "./ai-ui";
+import { Button, SegmentedControl } from "../../_components/kit";
 
 type KnownReason = keyof typeof K.reasons;
 const isKnown = (code: string): code is KnownReason => code in K.reasons;
@@ -63,24 +64,19 @@ export function AtRiskList() {
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex gap-2">
-        {(["renewal", "run_out"] as const).map((k) => (
-          <button
-            key={k}
-            type="button"
-            aria-pressed={kind === k}
-            onClick={() => {
-              if (k === kind) return;
-              setItems(null);
-              setError(null);
-              setKind(k);
-            }}
-            className={`rounded-xl px-3 py-1.5 text-xs font-bold ${kind === k ? "bg-primary text-on-accent" : "border border-card-border text-text-secondary"}`}
-          >
-            {t("common", k === "renewal" ? K.atRisk.renewal : K.atRisk.runOut)}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl<"renewal" | "run_out">
+        ariaLabel={t("common", K.tabs.atRisk)}
+        size="sm"
+        value={kind}
+        onChange={(k) => {
+          if (k === kind) return;
+          setItems(null);
+          setError(null);
+          setKind(k);
+        }}
+        options={(["renewal", "run_out"] as const).map((k) => ({ value: k, label: t("common", k === "renewal" ? K.atRisk.renewal : K.atRisk.runOut) }))}
+        className="self-start"
+      />
       {error && <p role="alert" className="text-xs font-medium text-error">{error}</p>}
       {items === null ? (
         !error && <p className="text-sm text-text-secondary">{t("common", K.loading)}</p>
@@ -121,7 +117,7 @@ export function AtRiskList() {
       )}
       {cursor && items && (
         <div>
-          <button type="button" className="text-xs font-bold text-text-secondary underline" onClick={() => void more()}>{t("common", K.atRisk.more)}</button>
+          <Button variant="quiet" size="sm" onClick={() => void more()}>{t("common", K.atRisk.more)}</Button>
         </div>
       )}
     </section>

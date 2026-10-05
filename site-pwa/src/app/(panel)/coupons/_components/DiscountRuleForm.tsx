@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import type { Me, UserSearchHit } from "@/lib/auth-api";
 import { billingApi, type DiscountRule } from "@/lib/billing-api";
 import { DatePicker } from "../../_components/kit/DatePicker";
-import { Alert, Field, Sheet, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
+import { Field, Sheet } from "../../catalog/_components/catalog-ui";
 import { Toggle } from "../../_components/kit/Toggle";
 import { UserSearch } from "../../user-groups/_components/UserSearch";
 import { memberSearchOf } from "../../user-groups/_lib/user-groups";
@@ -26,7 +25,7 @@ import {
   type RuleTarget,
 } from "../_lib/discount-rules";
 import { ChoicePicker, type Choices } from "./ChoicePicker";
-import { useConfirm } from "../../_components/kit";
+import { Alert, Button, Input, Textarea, useConfirm } from "../../_components/kit";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 const F = K.form;
@@ -109,23 +108,22 @@ export function DiscountRuleForm({ me, rule, choices, onClose, onSaved }: { me: 
 
   const footer = (
     <div className="flex items-center justify-end gap-2">
-      <button type="button" className={quietButton} onClick={requestClose}>
+      <Button variant="quiet" size="sm" onClick={requestClose}>
         {t("common", F.cancel)}
-      </button>
-      <button type="button" className={primaryButton} disabled={saving} onClick={() => void submit()}>
-        {saving && <Loader2 size={14} className="animate-spin" aria-hidden />}
+      </Button>
+      <Button variant="primary" size="sm" onClick={() => void submit()} loading={saving}>
         {t("common", saving ? F.saving : F.save)}
-      </button>
+      </Button>
     </div>
   );
 
   return (
     <Sheet title={rule ? t("common", F.titleEdit, { name: rule.name }) : t("common", F.titleNew)} onClose={requestClose} footer={footer}>
       {rule && <p className="text-xs text-text-secondary">{t("common", F.editNote)}</p>}
-      {failure && <Alert>{failure}</Alert>}
+      {failure && <Alert tone="error">{failure}</Alert>}
 
       <Field label={t("common", F.name)} error={errors.name} hint={t("common", F.nameHint)}>
-        <input className={input} value={form.name} maxLength={120} onChange={(e) => set("name", e.target.value)} />
+        <Input value={form.name} maxLength={120} onChange={(e) => set("name", e.target.value)} />
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -153,7 +151,7 @@ export function DiscountRuleForm({ me, rule, choices, onClose, onSaved }: { me: 
                 : t("common", F.valueHintAmountUnknown)
           }
         >
-          <input className={input} dir="ltr" inputMode="decimal" value={form.value} onChange={(e) => set("value", e.target.value)} />
+          <Input dir="ltr" inputMode="decimal" value={form.value} onChange={(e) => set("value", e.target.value)} />
         </Field>
       </div>
 
@@ -198,7 +196,7 @@ export function DiscountRuleForm({ me, rule, choices, onClose, onSaved }: { me: 
         <>
           {search !== "ids" && <UserSearch via={search} tenantId={me?.tenant?.id ?? ""} onAdd={addUser} busy={saving} />}
           <Field label={t("common", F.userIds)} error={errors.userIds} hint={t("common", F.userIdsHint)}>
-            <textarea className={`${input} min-h-24 font-mono text-xs`} dir="ltr" value={form.userIds} onChange={(e) => set("userIds", e.target.value)} />
+            <Textarea className="min-h-24 font-mono text-xs" dir="ltr" value={form.userIds} onChange={(e) => set("userIds", e.target.value)} />
           </Field>
         </>
       )}

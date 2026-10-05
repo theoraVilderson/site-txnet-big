@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Loader2, Zap } from "lucide-react";
+import { Check, Zap } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useGatewayMessage, type GatewaySurface } from "../_lib/surface";
 import { samePresets } from "../_lib/presets";
 import { PresetsEditor } from "./PresetsEditor";
+import { Button } from "../../_components/kit";
 
 const P = FrontendI18nKeys.common.gateways.presets;
 
@@ -77,15 +78,14 @@ export function DepositPresetsCard({ surface, initial, currency }: { surface: Ga
             {t("common", P.saved)}
           </p>
         )}
-        <button
-          type="button"
-          disabled={!dirty || saving}
+        <Button
+          variant="primary"
+          disabled={!dirty}
           onClick={() => void save()}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-on-accent shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
+          loading={saving}
         >
-          {saving && <Loader2 size={14} className="animate-spin" aria-hidden />}
           {t("common", saving ? P.saving : P.save)}
-        </button>
+        </Button>
       </div>
     </section>
   );

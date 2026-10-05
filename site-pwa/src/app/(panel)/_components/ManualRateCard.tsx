@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { currencyApi, type CurrencyPinForm, type CurrencyRate } from "@/lib/currency-api";
-import { Alert, input, primaryButton, quietButton } from "../catalog/_components/catalog-ui";
 import { formatInstant } from "../_lib/datetime";
 import { TableSkeleton } from "./kit/TableSkeleton";
+import { Alert, Button, Card, CardHeader, Checkbox, Field, Input, NativeSelect, notify } from "./kit";
 
 const K = FrontendI18nKeys.common.manualRate;
 
@@ -62,7 +62,6 @@ export function ManualRateCard({ scope }: { scope: "platform" | "reseller" }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -110,7 +109,6 @@ export function ManualRateCard({ scope }: { scope: "platform" | "reseller" }) {
     setCode(next);
     setRate("");
     setFailure(null);
-    setNotice(null);
     setConfirming(false);
   };
 
@@ -119,7 +117,7 @@ export function ManualRateCard({ scope }: { scope: "platform" | "reseller" }) {
     setFailure(null);
     try {
       const pin = await currencyApi.pin({ code, rate, reason: reason.trim(), hours: forever ? null : hoursN });
-      setNotice(t("common", K.pinned, { code: pin.code, rate: pin.rate }));
+      notify.success(t("common", K.pinned, { code: pin.code, rate: pin.rate }));
       setRate("");
       setReason("");
       reread();
@@ -136,7 +134,7 @@ export function ManualRateCard({ scope }: { scope: "platform" | "reseller" }) {
     setFailure(null);
     try {
       await currencyApi.endPin(id);
-      setNotice(t("common", K.ended, { code }));
+      notify.success(t("common", K.ended, { code }));
     } catch (e) {
       setFailure(e);
     } finally {
@@ -149,23 +147,22 @@ export function ManualRateCard({ scope }: { scope: "platform" | "reseller" }) {
   const suggestion = reading?.rate && reading.rate !== form?.lastAccepted?.rate ? reading.rate : null;
 
   return (
-    <section className="mt-6 rounded-3xl border border-card-border bg-card-bg p-6">
-      <h2 className="mb-1 text-lg font-bold text-text-primary">{t("common", K.title)}</h2>
-      <p className="mb-5 text-sm text-text-secondary">{t("common", scope === "platform" ? K.hintPlatform : K.hint)}</p>
+    <Card padding="lg" className="mt-6">
+      <CardHeader title={t("common", K.title)} subtitle={t("common", scope === "platform" ? K.hintPlatform : K.hint)} />
 
       {loadError !== null ? (
         <div className="space-y-3">
-          <Alert>{message(loadError)}</Alert>
-          <button
-            type="button"
-            className={quietButton}
+          <Alert tone="error">{message(loadError)}</Alert>
+          <Button
+            variant="quiet"
+            size="sm"
             onClick={() => {
               setLoadError(null);
               reread();
             }}
           >
             {t("common", K.reload)}
-          </button>
+          </Button>
         </div>
       ) : currencies === null ? (
         <TableSkeleton rows={1} columns={2} />
@@ -173,19 +170,18 @@ export function ManualRateCard({ scope }: { scope: "platform" | "reseller" }) {
         <p className="text-sm text-text-secondary">{t("common", K.none)}</p>
       ) : (
         <div className="space-y-4">
-          <label className="block">
-            <span className="mb-1 block text-sm text-text-secondary">{t("common", K.currency)}</span>
-            <select className={input} value={code} disabled={busy || confirming} onChange={(e) => pick(e.target.value)}>
+          <Field label={t("common", K.currency)}>
+            <NativeSelect value={code} disabled={busy || confirming} onChange={(e) => pick(e.target.value)}>
               {currencies.map((c) => (
                 <option key={c.code} value={c.code}>
                   {t("common", c.pinned ? K.choicePinned : K.choice, { name: c.name, code: c.code })}
                 </option>
               ))}
-            </select>
-          </label>
+            </NativeSelect>
+          </Field>
 
           {formError ? (
-            <Alert>{message(formError)}</Alert>
+            <Alert tone="error">{message(formError)}</Alert>
           ) : form === null ? (
             <TableSkeleton rows={2} columns={2} />
           ) : (
@@ -209,83 +205,65 @@ export function ManualRateCard({ scope }: { scope: "platform" | "reseller" }) {
                 <div className="space-y-2 rounded-2xl border border-primary/20 bg-leaf-bg p-4">
                   <p className="text-sm font-bold text-text-primary">{pinLine(form.current)}</p>
                   <p className="text-sm text-text-secondary">{form.current.reason}</p>
-                  <button type="button" className={quietButton} disabled={busy} onClick={() => end(form.current!.id)}>
+                  <Button variant="quiet" size="sm" disabled={busy} onClick={() => end(form.current!.id)}>
                     {t("common", K.end)}
-                  </button>
+                  </Button>
                 </div>
               )}
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block sm:col-span-2">
-                  <span className="mb-1 block text-sm text-text-secondary">{t("common", K.rate, { code })}</span>
-                  <input
-                    className={input}
+                <Field label={t("common", K.rate, { code })} className="sm:col-span-2">
+                  <Input
                     inputMode="decimal"
                     dir="ltr"
                     value={rate}
                     disabled={busy || confirming}
                     onChange={(e) => setRate(e.target.value.trim())}
                   />
-                </label>
+                </Field>
                 {suggestion && (
                   <div className="sm:col-span-2">
-                    <button
-                      type="button"
-                      className={quietButton}
+                    <Button
+                      variant="quiet"
+                      size="sm"
                       disabled={busy || confirming}
                       onClick={() => setRate(suggestion)}
                     >
                       {t("common", K.useReading, { rate: suggestion })}
-                    </button>
+                    </Button>
                   </div>
                 )}
-                <label className="block">
-                  <span className="mb-1 block text-sm text-text-secondary">{t("common", K.reason)}</span>
-                  <input
-                    className={input}
+                <Field label={t("common", K.reason)}>
+                  <Input
                     value={reason}
                     maxLength={500}
                     disabled={busy || confirming}
                     onChange={(e) => setReason(e.target.value)}
                   />
-                </label>
+                </Field>
                 <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm text-text-primary">
-                    <input
-                      type="checkbox"
-                      checked={forever}
-                      disabled={busy || confirming}
-                      onChange={(e) => setForever(e.target.checked)}
-                    />
-                    {t("common", K.noEnd)}
-                  </label>
+                  <Checkbox checked={forever} disabled={busy || confirming} onChange={setForever} label={t("common", K.noEnd)} />
                   {!forever && (
-                    <label className="block">
-                      <span className="mb-1 block text-sm text-text-secondary">{t("common", K.hours)}</span>
-                      <input
-                        className={input}
+                    <Field label={t("common", K.hours)}>
+                      <Input
                         inputMode="numeric"
                         dir="ltr"
                         value={hours}
                         disabled={busy || confirming}
                         onChange={(e) => setHours(e.target.value.trim())}
                       />
-                    </label>
+                    </Field>
                   )}
                 </div>
               </div>
 
-              <button
-                type="button"
-                className={primaryButton}
+              <Button
+                variant="primary"
                 disabled={busy || confirming || !valid}
-                onClick={() => {
-                  setNotice(null);
-                  setConfirming(true);
-                }}
+                onClick={() => setConfirming(true)}
               >
                 {t("common", K.pin)}
-              </button>
+              </Button>
 
               {confirming && (
                 <div className="space-y-3 rounded-2xl border border-gold/20 bg-gold-bg p-4">
@@ -299,27 +277,21 @@ export function ManualRateCard({ scope }: { scope: "platform" | "reseller" }) {
                     {t("common", scope === "platform" ? K.confirm.bodyPlatform : K.confirm.body)}
                   </p>
                   <div className="flex gap-2">
-                    <button type="button" className={primaryButton} disabled={busy} onClick={submit}>
+                    <Button variant="primary" size="sm" loading={busy} onClick={submit}>
                       {t("common", K.confirm.yes)}
-                    </button>
-                    <button type="button" className={quietButton} disabled={busy} onClick={() => setConfirming(false)}>
+                    </Button>
+                    <Button variant="quiet" size="sm" disabled={busy} onClick={() => setConfirming(false)}>
                       {t("common", K.confirm.no)}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
             </>
           )}
 
-          {failure !== null && <Alert>{message(failure)}</Alert>}
-          {notice && (
-            <p className="flex items-center gap-2 text-sm font-bold text-text-primary">
-              <CheckCircle2 size={16} className="shrink-0 text-primary" aria-hidden />
-              {notice}
-            </p>
-          )}
+          {failure !== null && <Alert tone="error">{message(failure)}</Alert>}
         </div>
       )}
-    </section>
+    </Card>
   );
 }

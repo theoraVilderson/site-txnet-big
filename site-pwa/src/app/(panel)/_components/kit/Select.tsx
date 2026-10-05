@@ -160,7 +160,9 @@ export function Select({
         choose(active);
         break;
       case "Escape":
+        // The list's own Esc: the dialog holding the select stays open (K7).
         e.preventDefault();
+        e.stopPropagation();
         close();
         break;
       case "Tab":

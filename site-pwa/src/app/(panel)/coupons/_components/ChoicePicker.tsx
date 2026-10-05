@@ -4,11 +4,10 @@ import { useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { Select } from "../../_components/kit/Select";
 import { RULE_KEYS } from "../_lib/discount-rules";
+import { Button, Input } from "../../_components/kit";
 
 const F = RULE_KEYS.form;
 
-const input =
-  "w-full rounded-xl border border-card-border bg-[var(--bg-inner)] px-3 py-2.5 text-sm text-[var(--text-input)] placeholder:text-[var(--text-label)] transition-colors hover:border-[var(--accent-primary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)] disabled:opacity-60";
 
 export interface Choice {
   value: string;
@@ -37,22 +36,23 @@ export function ChoicePicker({ id, value, onChange, choices, invalid = false }: 
 
   const toggle = (label: string, next: boolean) =>
     choices !== "failed" && (
-      <button
-        type="button"
+      <Button
+        variant="quiet"
+        size="sm"
         onClick={() => {
           setManual(next);
           if (!next && unknownValue) onChange("");
         }}
-        className="self-start text-[11px] font-bold text-primary hover:underline"
+        className="self-start text-primary hover:text-primary"
       >
         {label}
-      </button>
+      </Button>
     );
 
   if (byHand)
     return (
       <div className="flex flex-col gap-1">
-        <input id={id} dir="ltr" aria-invalid={invalid} className={`${input} ${invalid ? "border-error focus:border-error" : ""}`} value={value} onChange={(e) => onChange(e.target.value)} />
+        <Input id={id} dir="ltr" aria-invalid={invalid} value={value} onChange={(e) => onChange(e.target.value)} />
         {toggle(t("common", F.fromList), false)}
       </div>
     );

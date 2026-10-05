@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
-import { BarChart3, Download, Gift, Loader2, Plus, Power, RotateCw, X } from "lucide-react";
+import { BarChart3, Download, Gift, Loader2, Plus, Power, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import type { Me } from "@/lib/auth-api";
@@ -17,11 +16,9 @@ import { variantOwnerTenant } from "../_lib/variant-choices";
 import { CouponUsage } from "./CouponUsage";
 import { ListSkeleton } from "./ListSkeleton";
 import { VariantPicker } from "./VariantPicker";
-import { useConfirm } from "../../_components/kit";
+import { Button, Dialog, Input, Textarea, useConfirm } from "../../_components/kit";
 
 const PAGE_SIZE = 20;
-const input =
-  "w-full rounded-xl border border-card-border bg-[var(--bg-inner)] px-3 py-2.5 text-sm text-[var(--text-input)] placeholder:text-[var(--text-label)] transition-colors hover:border-[var(--accent-primary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)]";
 
 /**
  * The coupons page, tab 2 — gift codes (F-502-h, D-33): generate a batch, list
@@ -100,10 +97,9 @@ export function GiftCodes({ me, owner }: { me: Me | null; owner: boolean }) {
   return (
     <>
       <div className="flex justify-end">
-        <button type="button" onClick={() => setCreating(true)} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-on-accent shadow-sm transition-all hover:brightness-110">
-          <Plus size={16} aria-hidden />
+        <Button variant="primary" onClick={() => setCreating(true)} icon={<Plus size={16} aria-hidden />}>
           {t("common", G.add)}
-        </button>
+        </Button>
       </div>
       {notice && (
         <p role="status" className="rounded-xl border border-card-border bg-card-bg p-3 text-xs text-text-primary">
@@ -125,10 +121,9 @@ export function GiftCodes({ me, owner }: { me: Me | null; owner: boolean }) {
               <p role="alert" className="text-xs font-bold text-error">
                 {message(error)}
               </p>
-              <button type="button" onClick={() => void load(page)} className="inline-flex items-center gap-1 text-xs font-bold text-primary">
-                <RotateCw size={14} aria-hidden />
+              <Button variant="quiet" size="sm" onClick={() => void load(page)} icon={<RotateCw size={14} aria-hidden />} className="text-primary hover:text-primary">
                 {t("common", COUPON_KEYS.retry)}
-              </button>
+              </Button>
             </div>
           ) : !data || data.items.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-6 text-center">
@@ -218,12 +213,6 @@ function GiftBatchSheet({ me, onClose, onCreated }: { me: Me | null; onClose: ()
   const [failure, setFailure] = useState<string | null>(null);
   const F = G.form;
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const set = <K extends keyof GiftBatchForm>(k: K, v: GiftBatchForm[K]) => {
     setForm((f) => ({ ...f, [k]: v }));
     if (errors[k]) setErrors((e) => ({ ...e, [k]: undefined }));
@@ -245,8 +234,6 @@ function GiftBatchSheet({ me, onClose, onCreated }: { me: Me | null; onClose: ()
     }
   };
 
-  if (typeof document === "undefined") return null;
-
   const field = (k: keyof GiftBatchForm, label: string, control: ReactNode, hint?: string) => (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={`gb-${k}`} className="text-xs font-bold text-text-primary">
@@ -264,22 +251,35 @@ function GiftBatchSheet({ me, onClose, onCreated }: { me: Me | null; onClose: ()
   );
   const text = (k: keyof GiftBatchForm, opts: { ltr?: boolean; area?: boolean } = {}) =>
     opts.area ? (
-      <textarea id={`gb-${k}`} dir={opts.ltr ? "ltr" : undefined} rows={3} className={`${input} font-mono text-xs ${errors[k] ? "border-error" : ""}`} value={form[k]} onChange={(e) => set(k, e.target.value)} />
+      <Textarea id={`gb-${k}`} dir={opts.ltr ? "ltr" : undefined} rows={3} className="font-mono text-xs" aria-invalid={Boolean(errors[k])} value={form[k]} onChange={(e) => set(k, e.target.value)} />
     ) : (
-      <input id={`gb-${k}`} dir={opts.ltr ? "ltr" : undefined} className={`${input} ${errors[k] ? "border-error" : ""}`} value={form[k]} onChange={(e) => set(k, e.target.value)} />
+      <Input id={`gb-${k}`} dir={opts.ltr ? "ltr" : undefined} aria-invalid={Boolean(errors[k])} value={form[k]} onChange={(e) => set(k, e.target.value)} />
     );
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="flex max-h-[95vh] w-full max-w-lg flex-col rounded-t-3xl border border-card-border bg-card-bg shadow-xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
-        <header className="flex items-center justify-between gap-3 border-b border-card-border p-4">
-          <h2 className="text-sm font-bold text-text-primary">{t("common", F.title)}</h2>
-          <button type="button" onClick={onClose} aria-label={t("common", F.cancel)} className="rounded-lg p-1 text-text-secondary hover:text-text-primary">
-            <X size={18} aria-hidden />
-          </button>
-        </header>
-        <div className="flex flex-col gap-4 overflow-y-auto p-4">
-          {owner && (
+  return (
+    <Dialog
+      open
+      size="md"
+      onClose={onClose}
+      title={t("common", F.title)}
+      footer={
+        <>
+          {failure && (
+            <p role="alert" className="me-auto text-xs font-bold text-error">
+              {failure}
+            </p>
+          )}
+          <Button variant="quiet" onClick={onClose}>
+            {t("common", F.cancel)}
+          </Button>
+          <Button variant="primary" onClick={() => void submit()} loading={saving}>
+            {t("common", saving ? F.submitting : F.submit)}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {owner && (
             <div className="grid gap-3 sm:grid-cols-2">
               {field(
                 "owner",
@@ -335,22 +335,6 @@ function GiftBatchSheet({ me, onClose, onCreated }: { me: Me | null; onClose: ()
           </div>
           {field("note", t("common", F.note), text("note", { area: true }))}
         </div>
-        <footer className="flex flex-wrap items-center justify-end gap-3 border-t border-card-border p-4">
-          {failure && (
-            <p role="alert" className="me-auto text-xs font-bold text-error">
-              {failure}
-            </p>
-          )}
-          <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-bold text-text-secondary">
-            {t("common", F.cancel)}
-          </button>
-          <button type="button" disabled={saving} onClick={() => void submit()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-on-accent shadow-sm transition-all hover:brightness-110 disabled:opacity-50">
-            {saving && <Loader2 size={14} className="animate-spin" aria-hidden />}
-            {t("common", saving ? F.submitting : F.submit)}
-          </button>
-        </footer>
-      </div>
-    </div>,
-    document.body,
+    </Dialog>
   );
 }

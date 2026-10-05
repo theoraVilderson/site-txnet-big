@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { aiAdminApi, type AiActionType, type AiSettings, type AiSettingsPatch } from "@/lib/ai-api";
-import { HOLDOUT, K, THRESHOLD_RE, card, input, primaryButton } from "./ai-ui";
+import { HOLDOUT, K, THRESHOLD_RE, card } from "./ai-ui";
+import { Button, Checkbox, Field, Input } from "../../_components/kit";
 
 type Draft = { engineEnabled: boolean; confidenceThreshold: string; holdoutPercent: string; disabled: Set<AiActionType> };
 
@@ -89,25 +90,20 @@ export function AiSettingsPanel() {
           {t("common", K.settings.notRunning)}
         </p>
       )}
-      <label className="flex items-start gap-3">
-        <input type="checkbox" checked={draft.engineEnabled} onChange={(e) => edit({ engineEnabled: e.target.checked })} className="mt-1 size-4 accent-[var(--accent-primary)]" />
-        <span>
-          <span className="block text-sm font-bold text-text-primary">{t("common", K.settings.engine)}</span>
-          <span className="block text-xs text-text-secondary">{t("common", K.settings.engineHint)}</span>
-        </span>
-      </label>
+      <Checkbox
+        checked={draft.engineEnabled}
+        onChange={(engineEnabled) => edit({ engineEnabled })}
+        label={<span className="font-bold">{t("common", K.settings.engine)}</span>}
+        hint={t("common", K.settings.engineHint)}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label htmlFor="ai-threshold" className="text-sm font-bold text-text-primary">{t("common", K.settings.threshold)}</label>
-          <input id="ai-threshold" inputMode="decimal" dir="ltr" className={`${input} mt-1`} value={draft.confidenceThreshold} onChange={(e) => edit({ confidenceThreshold: e.target.value.trim() })} />
-          <p className="mt-1 text-xs text-text-secondary">{t("common", K.settings.thresholdHint)}</p>
-        </div>
-        <div>
-          <label htmlFor="ai-holdout" className="text-sm font-bold text-text-primary">{t("common", K.settings.holdout)}</label>
-          <input id="ai-holdout" inputMode="numeric" dir="ltr" className={`${input} mt-1`} value={draft.holdoutPercent} onChange={(e) => edit({ holdoutPercent: e.target.value.trim() })} />
-          <p className="mt-1 text-xs text-text-secondary">{t("common", K.settings.holdoutHint)}</p>
-        </div>
+        <Field id="ai-threshold" label={t("common", K.settings.threshold)} hint={t("common", K.settings.thresholdHint)}>
+          <Input id="ai-threshold" inputMode="decimal" dir="ltr" value={draft.confidenceThreshold} onChange={(e) => edit({ confidenceThreshold: e.target.value.trim() })} />
+        </Field>
+        <Field id="ai-holdout" label={t("common", K.settings.holdout)} hint={t("common", K.settings.holdoutHint)}>
+          <Input id="ai-holdout" inputMode="numeric" dir="ltr" value={draft.holdoutPercent} onChange={(e) => edit({ holdoutPercent: e.target.value.trim() })} />
+        </Field>
       </div>
 
       <fieldset>
@@ -115,28 +111,25 @@ export function AiSettingsPanel() {
         <p className="text-xs text-text-secondary">{t("common", K.settings.typesHint)}</p>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
           {saved.actionTypes.map((type) => (
-            <label key={type} className="flex items-center gap-2 text-sm text-text-primary">
-              <input
-                type="checkbox"
-                checked={!draft.disabled.has(type)}
-                onChange={(e) => {
-                  const disabled = new Set(draft.disabled);
-                  if (e.target.checked) disabled.delete(type);
-                  else disabled.add(type);
-                  edit({ disabled });
-                }}
-                className="size-4 accent-[var(--accent-primary)]"
-              />
-              {t("common", K.types[type])}
-            </label>
+            <Checkbox
+              key={type}
+              checked={!draft.disabled.has(type)}
+              onChange={(on) => {
+                const disabled = new Set(draft.disabled);
+                if (on) disabled.delete(type);
+                else disabled.add(type);
+                edit({ disabled });
+              }}
+              label={t("common", K.types[type])}
+            />
           ))}
         </div>
       </fieldset>
 
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" className={primaryButton} disabled={busy || !valid || Object.keys(patch).length === 0} onClick={() => void save()}>
+        <Button variant="primary" size="sm" disabled={busy || !valid || Object.keys(patch).length === 0} onClick={() => void save()}>
           {t("common", K.settings.save)}
-        </button>
+        </Button>
         {notice && <span role="status" className="text-xs font-bold text-primary">{t("common", K.saved)}</span>}
         {error && <span role="alert" className="text-xs font-medium text-error">{error}</span>}
       </div>

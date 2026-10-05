@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Bitcoin, Check, ChevronDown, CircleCheckBig, CreditCard, Eye, EyeOff, Globe, Landmark, MessageCircle, Percent, Star, type LucideIcon } from "lucide-react";
+import { Bitcoin, ChevronDown, CircleCheckBig, CreditCard, Eye, EyeOff, Globe, Landmark, MessageCircle, Percent, Star, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { FormError, FormErrors, GatewayForm } from "../_lib/gateway-form";
 import { feePreview, type Provider } from "../_lib/gateway-wizard";
+import { Field as KitField, IconButton, Input, RadioCards, SegmentedControl } from "../../_components/kit";
 
 const G = FrontendI18nKeys.common.gateways;
 const F = G.form;
@@ -30,11 +31,6 @@ export const PROVIDER_ICONS: Record<Provider, LucideIcon> = {
   bale: MessageCircle,
 };
 
-/** The same field look as the kit's `Select`, so a row of mixed controls reads as one form. */
-export const inputClass =
-  "w-full rounded-xl border border-card-border bg-[var(--bg-inner)] px-3 py-2.5 text-sm text-[var(--text-input)] placeholder:text-[var(--text-label)] transition-colors hover:border-[var(--accent-primary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)]";
-const invalidClass = "border-error focus:border-error";
-
 /**
  * One error's message. A `precision` error carries the column's scale, so it is
  * the only one with a variable — every other kind is a key on its own.
@@ -43,6 +39,7 @@ export function fieldErrorText(t: ReturnType<typeof useLocale>["t"], error: Form
   return typeof error === "string" ? t("common", G.errors[error]) : t("common", G.errors.precision, { places: String(error.places) });
 }
 
+/** The kit's `Field` (K4): the error is a form error this file words, the id the control's. */
 export function Field({
   id,
   label,
@@ -60,20 +57,9 @@ export function Field({
 }) {
   const { t } = useLocale();
   return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="flex items-center gap-2 text-xs font-bold text-text-primary">
-        {label}
-        {optional && <span className="font-normal text-text-secondary">({t("common", W.optional)})</span>}
-      </label>
+    <KitField id={id} label={label} hint={hint} optional={optional} error={error ? fieldErrorText(t, error) : undefined}>
       {children}
-      {error ? (
-        <span role="alert" className="text-[11px] font-bold text-error">
-          {fieldErrorText(t, error)}
-        </span>
-      ) : (
-        hint && <span className="text-[11px] leading-5 text-text-secondary">{hint}</span>
-      )}
-    </div>
+    </KitField>
   );
 }
 
@@ -99,19 +85,16 @@ export function TextInput({
   placeholder?: string;
 }) {
   return (
-    <div className="relative" dir={ltr ? "ltr" : undefined}>
-      <input
+    <div dir={ltr ? "ltr" : undefined}>
+      <Input
         id={id}
-        className={`${inputClass} ${invalid ? invalidClass : ""} ${suffix ? "pe-14" : ""}`}
         inputMode={decimal ? "decimal" : undefined}
         placeholder={placeholder}
         aria-invalid={invalid}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        end={suffix ? <span className="pointer-events-none pe-1.5 text-xs font-bold text-text-secondary">{suffix}</span> : undefined}
       />
-      {suffix && (
-        <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-xs font-bold text-text-secondary">{suffix}</span>
-      )}
     </div>
   );
 }
@@ -134,10 +117,10 @@ export function SecretInput({
 }) {
   const [visible, setVisible] = useState(false);
   return (
-    <div className="relative" dir="ltr">
-      <input
+    <div dir="ltr">
+      <Input
         id={id}
-        className={`${inputClass} pe-11 font-mono`}
+        className="font-mono"
         type={visible ? "text" : "password"}
         autoComplete="new-password"
         autoCorrect="off"
@@ -146,20 +129,20 @@ export function SecretInput({
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        end={
+          <IconButton
+            size="sm"
+            onClick={() => setVisible((v) => !v)}
+            aria-label={visible ? hideLabel : showLabel}
+            icon={visible ? <EyeOff size={16} aria-hidden /> : <Eye size={16} aria-hidden />}
+          />
+        }
       />
-      <button
-        type="button"
-        onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? hideLabel : showLabel}
-        className="absolute inset-y-0 end-1 grid w-9 place-items-center text-text-secondary hover:text-text-primary"
-      >
-        {visible ? <EyeOff size={16} aria-hidden /> : <Eye size={16} aria-hidden />}
-      </button>
     </div>
   );
 }
 
-/** Two or three mutually exclusive choices, as cards: every option visible, no list to open. */
+/** Two or three mutually exclusive choices, as the kit's `RadioCards` (K5): every option visible, no list to open. */
 export function ChoiceCards<V extends string>({
   name,
   value,
@@ -172,39 +155,12 @@ export function ChoiceCards<V extends string>({
   onPick: (v: V) => void;
 }) {
   return (
-    <div role="radiogroup" aria-label={name} className="grid gap-2 sm:grid-cols-2">
-      {options.map((o) => {
-        const selected = o.value === value;
-        const Icon = o.icon;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            onClick={() => onPick(o.value)}
-            className={`relative flex items-start gap-3 rounded-2xl border p-3 text-start transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-glow)] ${
-              selected ? "border-[var(--accent-primary)] bg-[var(--leaf-bg)] shadow-sm" : "border-card-border bg-[var(--bg-inner)] hover:border-[var(--accent-primary)]"
-            }`}
-          >
-            {Icon && (
-              <span className={`grid size-9 shrink-0 place-items-center rounded-xl ${selected ? "bg-primary text-on-accent" : "bg-card-bg text-primary"}`}>
-                <Icon size={18} aria-hidden />
-              </span>
-            )}
-            <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-sm font-bold text-text-primary">{o.title}</span>
-              {o.desc && <span className="text-[11px] leading-5 text-text-secondary">{o.desc}</span>}
-            </span>
-            {selected && (
-              <span className="absolute end-2 top-2 grid size-5 place-items-center rounded-full bg-primary text-on-accent">
-                <Check size={12} aria-hidden />
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
+    <RadioCards<V>
+      ariaLabel={name}
+      value={value as V}
+      onChange={onPick}
+      options={options.map((o) => ({ value: o.value, label: o.title, description: o.desc, icon: o.icon }))}
+    />
   );
 }
 
@@ -253,21 +209,14 @@ export function FeeFields({ form, set, errors, money, currency }: { form: Gatewa
       {manual ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-bold text-text-primary">{t("common", F.feeType)}</span>
-            <div role="radiogroup" aria-label={t("common", F.feeType)} className="grid grid-cols-2 gap-1 rounded-xl border border-card-border bg-[var(--bg-inner)] p-1">
-              {(["percentage", "fixed"] as const).map((ft) => (
-                <button
-                  key={ft}
-                  type="button"
-                  role="radio"
-                  aria-checked={form.feeType === ft}
-                  onClick={() => set("feeType", ft)}
-                  className={`rounded-lg px-2 py-2 text-xs font-bold transition-all ${form.feeType === ft ? "bg-primary text-on-accent shadow-sm" : "text-text-secondary hover:text-text-primary"}`}
-                >
-                  {t("common", W.feeTypes[ft])}
-                </button>
-              ))}
-            </div>
+            <span className="text-sm font-bold text-text-primary">{t("common", F.feeType)}</span>
+            <SegmentedControl<"percentage" | "fixed">
+              ariaLabel={t("common", F.feeType)}
+              value={form.feeType as "percentage" | "fixed"}
+              onChange={(ft) => set("feeType", ft)}
+              options={(["percentage", "fixed"] as const).map((ft) => ({ value: ft, label: t("common", W.feeTypes[ft]) }))}
+              className="grid h-11 grid-cols-2"
+            />
           </div>
           {decimal("feeValue", t("common", F.feeValue), form.feeType === "percentage" ? "%" : currency)}
         </div>

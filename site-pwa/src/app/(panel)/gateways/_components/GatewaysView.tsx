@@ -18,7 +18,7 @@ import { DepositTaxCard } from "./DepositTaxCard";
 import { GatewayLinks } from "./GatewayLinks";
 import { GatewayWizard } from "./GatewayWizard";
 import { PageHeader } from "../../_components/kit/PageHeader";
-import { useConfirm } from "../../_components/kit";
+import { Button, useConfirm } from "../../_components/kit";
 
 const G = FrontendI18nKeys.common.gateways;
 
@@ -97,15 +97,14 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
         subtitle={t("common", G.subtitle)}
         actions={
           <>
-            <button
-              type="button"
+            <Button
+              variant="primary"
               disabled={!ready}
               onClick={() => setEditing("new")}
-              className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-on-accent shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
+              icon={<Plus size={16} aria-hidden />}
             >
-              <Plus size={16} aria-hidden />
               {t("common", G.add)}
-            </button>
+            </Button>
           </>
         }
       />
@@ -145,10 +144,9 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
                   <p role="alert" className="text-xs font-bold text-error">
                     {errorMessage(error)}
                   </p>
-                  <button type="button" onClick={() => void reload()} className="inline-flex items-center gap-1 text-xs font-bold text-primary">
-                    <RotateCw size={14} aria-hidden />
+                  <Button variant="quiet" size="sm" onClick={() => void reload()} icon={<RotateCw size={14} aria-hidden />} className="text-primary hover:text-primary">
                     {t("common", G.retry)}
-                  </button>
+                  </Button>
                 </div>
               ) : gateways.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-6 text-center">
@@ -156,14 +154,13 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
                     <Landmark size={26} aria-hidden />
                   </span>
                   <p className="text-sm text-text-secondary">{t("common", G.empty)}</p>
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
                     onClick={() => setEditing("new")}
-                    className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-on-accent shadow-md"
+                    icon={<Plus size={16} aria-hidden />}
                   >
-                    <Plus size={16} aria-hidden />
                     {t("common", G.add)}
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <ul className="divide-y divide-card-border">
@@ -216,22 +213,24 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
+                        <Button
+                          variant="quiet"
+                          size="sm"
                           onClick={() => setEditing(g)}
-                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-primary"
+                          icon={<Pencil size={14} aria-hidden />}
+                          className="text-primary hover:text-primary"
                         >
-                          <Pencil size={14} aria-hidden />
                           {t("common", G.edit)}
-                        </button>
-                        <button
-                          type="button"
+                        </Button>
+                        <Button
+                          variant="quiet"
+                          size="sm"
                           onClick={() => void remove(g)}
-                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-error"
+                          icon={<Trash2 size={14} aria-hidden />}
+                          className="text-error hover:text-error hover:bg-error-bg"
                         >
-                          <Trash2 size={14} aria-hidden />
                           {t("common", G.delete)}
-                        </button>
+                        </Button>
                       </div>
                     </motion.li>
                   ))}

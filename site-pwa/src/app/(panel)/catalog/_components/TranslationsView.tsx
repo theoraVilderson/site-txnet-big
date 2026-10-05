@@ -10,11 +10,9 @@ import { Select } from "../../_components/kit/Select";
 import { CATALOG_KEYS, DESCRIPTION_MAX, editId, reviewWrites } from "../_lib/catalog-form";
 import { useMessage } from "./catalog-ui";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { Button, Textarea, buttonClass } from "../../_components/kit";
 
 const K = CATALOG_KEYS.translations;
-const input = "w-full rounded-xl border border-card-border bg-bg-inner px-3 py-2 text-sm text-text-primary outline-none focus:border-primary";
-const primaryButton = "inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-on-accent shadow-sm disabled:opacity-50";
-const quietButton = "inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-primary hover:bg-[var(--leaf-bg)] disabled:opacity-50";
 
 /**
  * Catalog translation review (F-1533-e; ADR-0050 decisions 3-4).
@@ -97,7 +95,7 @@ export function TranslationsView() {
         subtitle={t("common", K.subtitle)}
         actions={
           <>
-            <Link href={catalogHref} className={quietButton}>
+            <Link href={catalogHref} className={buttonClass({ variant: "quiet", size: "sm" })}>
               <ArrowRight size={14} className="ltr:rotate-180" aria-hidden />
               {t("common", K.back)}
             </Link>
@@ -117,15 +115,13 @@ export function TranslationsView() {
           className="w-44"
         />
         <div className="flex flex-wrap gap-2">
-          <button type="button" className={quietButton} disabled={busy} onClick={() => void draftMissing()}>
-            <Wand2 size={14} aria-hidden />
+          <Button variant="quiet" size="sm" disabled={busy} onClick={() => void draftMissing()} icon={<Wand2 size={14} aria-hidden />}>
             {t("common", K.draftMissing)}
-          </button>
+          </Button>
           {drafts && drafts.length > 0 && (
-            <button type="button" className={primaryButton} disabled={busy} onClick={() => void publish(drafts)}>
-              <Send size={14} aria-hidden />
+            <Button variant="primary" size="sm" disabled={busy} onClick={() => void publish(drafts)} icon={<Send size={14} aria-hidden />}>
               {t("common", K.publishAll)}
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -147,10 +143,9 @@ export function TranslationsView() {
           <p role="alert" className="text-xs font-bold text-error">
             {message(error)}
           </p>
-          <button type="button" className={quietButton} onClick={() => void load()}>
-            <RotateCw size={14} aria-hidden />
+          <Button variant="quiet" size="sm" onClick={() => void load()} icon={<RotateCw size={14} aria-hidden />}>
             {t("common", CATALOG_KEYS.retry)}
-          </button>
+          </Button>
         </div>
       ) : drafts!.length === 0 ? (
         <p className="py-8 text-center text-sm text-text-secondary">{t("common", K.empty)}</p>
@@ -186,8 +181,7 @@ export function TranslationsView() {
                 </dl>
                 <label className="flex flex-col gap-1 text-xs font-bold text-text-secondary">
                   {t("common", K.draft)}
-                  <textarea
-                    className={input}
+                  <Textarea
                     dir={dirOf(d.lang)}
                     rows={2}
                     maxLength={DESCRIPTION_MAX}
@@ -196,10 +190,9 @@ export function TranslationsView() {
                   />
                 </label>
                 <div className="flex justify-end">
-                  <button type="button" className={primaryButton} disabled={busy || value.trim() === ""} onClick={() => void publish([d])}>
-                    <Send size={14} aria-hidden />
+                  <Button variant="primary" size="sm" disabled={busy || value.trim() === ""} onClick={() => void publish([d])} icon={<Send size={14} aria-hidden />}>
                     {t("common", value !== d.draft ? K.publishEdited : K.publish)}
-                  </button>
+                  </Button>
                 </div>
               </li>
             );

@@ -35,9 +35,9 @@ import { CategorySheet, NamesSheet } from "./NameSheets";
 import { MoveCategorySheet } from "./CategoryPickers";
 import { ProductDetailSheet } from "./ProductDetailSheet";
 import { ProductWizard } from "./ProductWizard";
-import { Alert, primaryButton, quietButton, useMessage } from "./catalog-ui";
+import { useMessage } from "./catalog-ui";
 import { PageHeader } from "../../_components/kit/PageHeader";
-import { useConfirm } from "../../_components/kit";
+import { Alert, Button, buttonClass, Checkbox, Tabs, useConfirm } from "../../_components/kit";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /**
@@ -280,9 +280,6 @@ export function CatalogView() {
     await load();
   };
 
-  const tabClass = (on: boolean) =>
-    `rounded-lg px-3 py-1.5 text-xs font-bold ${on ? "bg-card-bg text-primary shadow-sm" : "text-text-secondary hover:text-text-primary"}`;
-
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-4 sm:p-6">
       {surface.chrome}
@@ -294,19 +291,19 @@ export function CatalogView() {
           <>
             <div className="flex flex-wrap items-center gap-2">
               {!guide && (
-                <button
-                  type="button"
-                  className={quietButton}
+                <Button
+                  variant="quiet"
+                  size="sm"
                   onClick={() => {
                     setGuide(true);
                     writeGuideClosed(false);
                   }}
+                  icon={<BookOpen size={14} aria-hidden />}
                 >
-                  <BookOpen size={14} aria-hidden />
                   {t("common", K.guide.show)}
-                </button>
+                </Button>
               )}
-              <Link href={surface.translationsHref} className={quietButton}>
+              <Link href={surface.translationsHref} className={buttonClass({ variant: "quiet", size: "sm" })}>
                 <Languages size={14} aria-hidden />
                 {t("common", K.translations.open)}
                 {pending ? (
@@ -315,10 +312,9 @@ export function CatalogView() {
                   </span>
                 ) : null}
               </Link>
-              <button type="button" className={primaryButton} onClick={() => setCreating("product")}>
-                <Plus size={14} aria-hidden />
+              <Button variant="primary" size="sm" onClick={() => setCreating("product")} icon={<Plus size={14} aria-hidden />}>
                 {t("common", K.newProduct)}
-              </button>
+              </Button>
             </div>
           </>
         }
@@ -327,17 +323,17 @@ export function CatalogView() {
       {guide && <CatalogGuide onClose={closeGuide} />}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div role="tablist" className="inline-flex gap-1 rounded-xl bg-bg-inner p-1">
-          <button type="button" role="tab" aria-selected={tab === "products"} className={tabClass(tab === "products")} onClick={() => setTab("products")}>
-            {t("common", K.tabs.products)} {products ? `(${products.length})` : ""}
-          </button>
-          <button type="button" role="tab" aria-selected={tab === "categories"} className={tabClass(tab === "categories")} onClick={() => setTab("categories")}>
-            {t("common", K.tabs.categories)} ({categories.length})
-          </button>
-          <button type="button" role="tab" aria-selected={tab === "capabilities"} className={tabClass(tab === "capabilities")} onClick={() => setTab("capabilities")}>
-            {t("common", K.tabs.capabilities)} ({capabilities.length})
-          </button>
-        </div>
+        <Tabs<"products" | "categories" | "capabilities">
+          ariaLabel={t("common", K.title)}
+          variant="pills"
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            { value: "products", label: t("common", K.tabs.products), badge: products ? String(products.length) : undefined },
+            { value: "categories", label: t("common", K.tabs.categories), badge: String(categories.length) },
+            { value: "capabilities", label: t("common", K.tabs.capabilities), badge: String(capabilities.length) },
+          ]}
+        />
         {tab === "products" ? (
           <div className="flex flex-wrap gap-2">
             <Select
@@ -360,47 +356,45 @@ export function CatalogView() {
               />
             )}
             {(archived.length > 0 || showArchived) && (
-              <button
-                type="button"
-                className={quietButton}
+              <Button
+                variant="quiet"
+                size="sm"
                 aria-pressed={showArchived}
                 onClick={() => {
                   setShowArchived(!showArchived);
                   setSelected(new Set());
                 }}
+                icon={<Archive size={14} aria-hidden />}
               >
-                <Archive size={14} aria-hidden />
                 {showArchived ? t("common", K.removal.showActive) : t("common", K.removal.showArchived, { count: archived.length })}
-              </button>
+              </Button>
             )}
           </div>
         ) : tab === "capabilities" ? (
-          <button type="button" className={quietButton} onClick={() => setCreating("capability")}>
-            <Plus size={14} aria-hidden />
+          <Button variant="quiet" size="sm" onClick={() => setCreating("capability")} icon={<Plus size={14} aria-hidden />}>
             {t("common", K.capabilities.new)}
-          </button>
+          </Button>
         ) : (
           <div className="flex flex-wrap gap-2">
             {(archivedCategories.length > 0 || showArchivedCategories) && (
-              <button
-                type="button"
-                className={quietButton}
+              <Button
+                variant="quiet"
+                size="sm"
                 aria-pressed={showArchivedCategories}
                 onClick={() => {
                   setShowArchivedCategories(!showArchivedCategories);
                   setPickedCategories(new Set());
                 }}
+                icon={<Archive size={14} aria-hidden />}
               >
-                <Archive size={14} aria-hidden />
                 {showArchivedCategories
                   ? t("common", K.categories.showActive)
                   : t("common", K.categories.showArchived, { count: archivedCategories.length })}
-              </button>
+              </Button>
             )}
-            <button type="button" className={quietButton} onClick={() => setCreating("category")}>
-              <Tags size={14} aria-hidden />
+            <Button variant="quiet" size="sm" onClick={() => setCreating("category")} icon={<Tags size={14} aria-hidden />}>
               {t("common", K.newCategory)}
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -409,9 +403,9 @@ export function CatalogView() {
         <p className="flex flex-wrap items-center gap-2 text-xs font-bold text-primary" role="status">
           {notice}
           {freshId && products?.some((p) => p.id === freshId) && (
-            <button type="button" className={quietButton} onClick={() => setOpenId(freshId)}>
+            <Button variant="quiet" size="sm" onClick={() => setOpenId(freshId)}>
               {t("common", K.wizard.openNew)}
-            </button>
+            </Button>
           )}
         </p>
       )}
@@ -422,7 +416,7 @@ export function CatalogView() {
           ))}
         </ul>
       )}
-      {actionError && <Alert>{actionError}</Alert>}
+      {actionError && <Alert tone="error">{actionError}</Alert>}
 
       {sessionLoading || (!products && !error) ? (
         <p className="flex items-center gap-2 text-xs text-text-secondary">
@@ -431,11 +425,10 @@ export function CatalogView() {
         </p>
       ) : error ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Alert>{message(error)}</Alert>
-          <button type="button" className={quietButton} onClick={() => void load()}>
-            <RotateCw size={14} aria-hidden />
+          <Alert tone="error">{message(error)}</Alert>
+          <Button variant="quiet" size="sm" onClick={() => void load()} icon={<RotateCw size={14} aria-hidden />}>
             {t("common", K.retry)}
-          </button>
+          </Button>
         </div>
       ) : tab === "products" && showArchived ? (
         <div className="flex flex-col gap-2">
@@ -453,10 +446,9 @@ export function CatalogView() {
                       {p.tenantId === null && ` · ${t("common", K.platform)}`}
                     </p>
                   </div>
-                  <button type="button" className={quietButton} onClick={() => void act(() => api.updateProduct(p.id, { archived: false }))}>
-                    <RotateCcw size={14} aria-hidden />
+                  <Button variant="quiet" size="sm" onClick={() => void act(() => api.updateProduct(p.id, { archived: false }))} icon={<RotateCcw size={14} aria-hidden />}>
                     {t("common", K.removal.restore)}
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -466,30 +458,30 @@ export function CatalogView() {
         shown.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-8">
             <p className="text-sm text-text-secondary">{t("common", K.empty)}</p>
-            <button type="button" className={primaryButton} onClick={() => setCreating("product")}>
-              <Plus size={14} aria-hidden />
+            <Button variant="primary" size="sm" onClick={() => setCreating("product")} icon={<Plus size={14} aria-hidden />}>
               {t("common", K.newProduct)}
-            </button>
+            </Button>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-3 px-1 text-xs">
-              <label className="flex items-center gap-2 font-bold text-text-primary">
-                <input type="checkbox" checked={allSelected} onChange={() => setSelected(allSelected ? new Set() : new Set(shown.map((p) => p.id)))} />
-                {t("common", K.removal.selectAll)}
-              </label>
+              <Checkbox
+                checked={allSelected}
+                onChange={() => setSelected(allSelected ? new Set() : new Set(shown.map((p) => p.id)))}
+                label={<span className="text-xs font-bold">{t("common", K.removal.selectAll)}</span>}
+              />
               {selected.size > 0 && (
                 <>
                   <span className="text-text-secondary">{t("common", K.removal.selected, { count: selected.size })}</span>
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
                     disabled={removing}
                     onClick={() => void removeSelected()}
-                    className="inline-flex items-center gap-1 rounded-xl border border-error-border px-2.5 py-1 font-bold text-error hover:bg-error-bg disabled:opacity-50"
+                    icon={removing ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Trash2 size={14} aria-hidden />}
+                    className="text-error hover:text-error hover:bg-error-bg"
                   >
-                    {removing ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Trash2 size={14} aria-hidden />}
                     {t("common", removing ? K.removal.removing : K.removal.remove)}
-                  </button>
+                  </Button>
                 </>
               )}
             </div>
@@ -518,22 +510,21 @@ export function CatalogView() {
                   )}
                 </button>
                 <div className="flex gap-1">
-                  <button
-                    type="button"
-                    className={quietButton}
+                  <Button
+                    variant="quiet"
+                    size="sm"
                     onClick={() => setRenaming({ kind: "product", id: p.id, nameKey: p.nameKey, descriptionKey: p.descriptionKey, sourceLang: p.sourceLang })}
+                    icon={<Pencil size={14} aria-hidden />}
                   >
-                    <Pencil size={14} aria-hidden />
                     {t("common", K.rename)}
-                  </button>
-                  <button type="button" className={quietButton} onClick={() => void act(() => api.updateProduct(p.id, { isActive: !p.isActive }))}>
-                    <Power size={14} aria-hidden />
+                  </Button>
+                  <Button variant="quiet" size="sm" onClick={() => void act(() => api.updateProduct(p.id, { isActive: !p.isActive }))} icon={<Power size={14} aria-hidden />}>
                     {t("common", p.isActive ? K.deactivate : K.activate)}
-                  </button>
-                  <button type="button" className={quietButton} onClick={() => setOpenId(p.id)}>
+                  </Button>
+                  <Button variant="quiet" size="sm" onClick={() => setOpenId(p.id)}>
                     {t("common", K.open)}
                     <ChevronLeft size={14} className="ltr:-scale-x-100" aria-hidden />
-                  </button>
+                  </Button>
                 </div>
                 </li>
               ))}
@@ -564,10 +555,9 @@ export function CatalogView() {
                       {c.tenantId === null && ` · ${t("common", K.platform)}`}
                     </p>
                   </div>
-                  <button type="button" className={quietButton} onClick={() => void act(() => api.updateCategory(c.id, RESTORE_CATEGORY))}>
-                    <RotateCcw size={14} aria-hidden />
+                  <Button variant="quiet" size="sm" onClick={() => void act(() => api.updateCategory(c.id, RESTORE_CATEGORY))} icon={<RotateCcw size={14} aria-hidden />}>
                     {t("common", K.removal.restore)}
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -576,42 +566,36 @@ export function CatalogView() {
       ) : categories.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-8">
           <p className="text-sm text-text-secondary">{t("common", K.categories.empty)}</p>
-          <button type="button" className={primaryButton} onClick={() => setCreating("category")}>
-            <Tags size={14} aria-hidden />
+          <Button variant="primary" size="sm" onClick={() => setCreating("category")} icon={<Tags size={14} aria-hidden />}>
             {t("common", K.newCategory)}
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-3 px-1 text-xs">
-            <label className="flex items-center gap-2 font-bold text-text-primary">
-              <input
-                type="checkbox"
-                checked={allCategoriesPicked}
-                onChange={() => setPickedCategories(allCategoriesPicked ? new Set() : new Set(categories.map((c) => c.id)))}
-              />
-              {t("common", K.removal.selectAll)}
-            </label>
+            <Checkbox
+              checked={allCategoriesPicked}
+              onChange={() => setPickedCategories(allCategoriesPicked ? new Set() : new Set(categories.map((c) => c.id)))}
+              label={<span className="text-xs font-bold">{t("common", K.removal.selectAll)}</span>}
+            />
             {pickedCategories.size > 0 && (
               <>
                 <span className="text-text-secondary">{t("common", K.categories.selected, { count: pickedCategories.size })}</span>
-                <button type="button" className={quietButton} disabled={switching || removing} onClick={() => void switchCategories(true)}>
-                  <Power size={14} aria-hidden />
+                <Button variant="quiet" size="sm" disabled={switching || removing} onClick={() => void switchCategories(true)} icon={<Power size={14} aria-hidden />}>
                   {t("common", K.categories.switchOn)}
-                </button>
-                <button type="button" className={quietButton} disabled={switching || removing} onClick={() => void switchCategories(false)}>
-                  <Power size={14} aria-hidden />
+                </Button>
+                <Button variant="quiet" size="sm" disabled={switching || removing} onClick={() => void switchCategories(false)} icon={<Power size={14} aria-hidden />}>
                   {t("common", K.categories.switchOff)}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  size="sm"
                   disabled={switching || removing}
                   onClick={() => void removeCategories()}
-                  className="inline-flex items-center gap-1 rounded-xl border border-error-border px-2.5 py-1 font-bold text-error hover:bg-error-bg disabled:opacity-50"
+                  icon={removing ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Trash2 size={14} aria-hidden />}
+                  className="text-error hover:text-error hover:bg-error-bg"
                 >
-                  {removing ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Trash2 size={14} aria-hidden />}
                   {t("common", removing ? K.removal.removing : K.removal.remove)}
-                </button>
+                </Button>
               </>
             )}
           </div>
@@ -639,22 +623,20 @@ export function CatalogView() {
                   </p>
                 </button>
                 <div className="flex gap-1">
-                  <button
-                    type="button"
-                    className={quietButton}
+                  <Button
+                    variant="quiet"
+                    size="sm"
                     onClick={() => setRenaming({ kind: "category", id: c.id, nameKey: c.nameKey, descriptionKey: null, sourceLang: c.sourceLang })}
+                    icon={<Pencil size={14} aria-hidden />}
                   >
-                    <Pencil size={14} aria-hidden />
                     {t("common", K.rename)}
-                  </button>
-                  <button type="button" className={quietButton} onClick={() => setMoving(c)}>
-                    <FolderTree size={14} aria-hidden />
+                  </Button>
+                  <Button variant="quiet" size="sm" onClick={() => setMoving(c)} icon={<FolderTree size={14} aria-hidden />}>
                     {t("common", K.categories.move)}
-                  </button>
-                  <button type="button" className={quietButton} onClick={() => void act(() => api.updateCategory(c.id, { isActive: !c.isActive }))}>
-                    <Power size={14} aria-hidden />
+                  </Button>
+                  <Button variant="quiet" size="sm" onClick={() => void act(() => api.updateCategory(c.id, { isActive: !c.isActive }))} icon={<Power size={14} aria-hidden />}>
                     {t("common", c.isActive ? K.deactivate : K.activate)}
-                  </button>
+                  </Button>
                 </div>
               </li>
             ))}

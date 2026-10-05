@@ -20,8 +20,9 @@ import {
   type Errors,
   type NamesForm,
 } from "../_lib/catalog-form";
-import { Alert, Field, KeyField, LanguageSelect, Sheet, input, primaryButton, quietButton, useDirOf, useMessage } from "./catalog-ui";
+import { Field, KeyField, LanguageSelect, Sheet, useDirOf, useMessage } from "./catalog-ui";
 import { ParentSelect, TranslateAllBox } from "./CategoryPickers";
+import { Alert, Button, Checkbox, Input, Textarea } from "../../_components/kit";
 
 /**
  * A category's fields: the name in its source language, the key made from it,
@@ -55,8 +56,7 @@ export function CategoryFields({
           <LanguageSelect value={form.sourceLang} onChange={(v) => onChange({ ...form, sourceLang: v })} />
         </Field>
         <Field label={t("common", K.category.name)} error={errors.name} hint={t("common", K.product.nameHint)}>
-          <input
-            className={input}
+          <Input
             dir={dirOf(form.sourceLang)}
             maxLength={NAME_MAX}
             value={form.name}
@@ -80,10 +80,7 @@ export function CategoryFields({
         </Field>
       )}
       {owner && (
-        <label className="flex items-center gap-2 text-xs text-text-primary">
-          <input type="checkbox" checked={form.shared} onChange={(e) => onChange({ ...form, shared: e.target.checked })} />
-          {t("common", K.category.shared)}
-        </label>
+        <Checkbox checked={form.shared} onChange={(on) => onChange({ ...form, shared: on })} label={t("common", K.category.shared)} />
       )}
       <TranslateAllBox checked={form.translateAll} onChange={(v) => onChange({ ...form, translateAll: v })} />
     </div>
@@ -133,14 +130,14 @@ export function CategorySheet({
     <Sheet title={t("common", K.newCategory)} onClose={onClose}>
       <p className="text-[11px] text-text-secondary">{t("common", K.guide.category.body)}</p>
       <CategoryFields form={form} onChange={setForm} errors={errors} takenKeys={takenKeys} owner={owner} categories={categories} label={label} />
-      {error && <Alert>{error}</Alert>}
+      {error && <Alert tone="error">{error}</Alert>}
       <div className="flex justify-end gap-2">
-        <button type="button" className={quietButton} onClick={onClose}>
+        <Button variant="quiet" size="sm" onClick={onClose}>
           {t("common", K.cancel)}
-        </button>
-        <button type="button" className={primaryButton} disabled={busy} onClick={() => void save()}>
+        </Button>
+        <Button variant="primary" size="sm" disabled={busy} onClick={() => void save()}>
           {t("common", K.save)}
-        </button>
+        </Button>
       </div>
     </Sheet>
   );
@@ -214,23 +211,23 @@ export function NamesSheet({
           <LanguageSelect value={form.sourceLang} onChange={(v) => setForm(textsIn(v))} />
         </Field>
         <Field label={t("common", P.name)} error={errors.name} hint={t("common", P.nameHint)}>
-          <input className={input} dir={dir} maxLength={NAME_MAX} value={form.name} onChange={(e) => set("name", e.target.value)} />
+          <Input dir={dir} maxLength={NAME_MAX} value={form.name} onChange={(e) => set("name", e.target.value)} />
         </Field>
       </div>
       {kind === "product" && (
         <Field label={t("common", P.description)}>
-          <textarea className={input} dir={dir} rows={3} maxLength={DESCRIPTION_MAX} value={form.description} onChange={(e) => set("description", e.target.value)} />
+          <Textarea dir={dir} rows={3} maxLength={DESCRIPTION_MAX} value={form.description} onChange={(e) => set("description", e.target.value)} />
         </Field>
       )}
       <TranslateAllBox checked={form.translateAll} onChange={(v) => setForm((f) => ({ ...f, translateAll: v }))} />
-      {error && <Alert>{error}</Alert>}
+      {error && <Alert tone="error">{error}</Alert>}
       <div className="flex justify-end gap-2">
-        <button type="button" className={quietButton} onClick={onClose}>
+        <Button variant="quiet" size="sm" onClick={onClose}>
           {t("common", K.cancel)}
-        </button>
-        <button type="button" className={primaryButton} disabled={busy} onClick={() => void save()}>
+        </Button>
+        <Button variant="primary" size="sm" disabled={busy} onClick={() => void save()}>
           {t("common", K.save)}
-        </button>
+        </Button>
       </div>
     </Sheet>
   );

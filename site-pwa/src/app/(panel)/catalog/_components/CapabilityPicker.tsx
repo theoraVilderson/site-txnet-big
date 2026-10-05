@@ -16,8 +16,9 @@ import {
   type CapabilityForm,
   type Errors,
 } from "../_lib/catalog-form";
-import { Alert, Field, KeyField, LanguageSelect, Sheet, input, primaryButton, quietButton, useDirOf, useMessage } from "./catalog-ui";
+import { Field, KeyField, LanguageSelect, Sheet, useDirOf, useMessage } from "./catalog-ui";
 import { TranslateAllBox } from "./CategoryPickers";
+import { Alert, Button, Checkbox, Input } from "../../_components/kit";
 
 const C = K.capabilities;
 
@@ -50,8 +51,7 @@ function CapabilityFields({
           <LanguageSelect value={form.sourceLang} onChange={(v) => onChange({ ...form, sourceLang: v })} />
         </Field>
         <Field label={t("common", C.name)} error={errors.name}>
-          <input
-            className={input}
+          <Input
             dir={dirOf(form.sourceLang)}
             maxLength={NAME_MAX}
             value={form.name}
@@ -68,10 +68,7 @@ function CapabilityFields({
         }}
       />
       {owner && (
-        <label className="flex items-center gap-2 text-xs text-text-primary">
-          <input type="checkbox" checked={form.shared} onChange={(e) => onChange({ ...form, shared: e.target.checked })} />
-          {t("common", C.shared)}
-        </label>
+        <Checkbox checked={form.shared} onChange={(on) => onChange({ ...form, shared: on })} label={t("common", C.shared)} />
       )}
       <TranslateAllBox checked={form.translateAll} onChange={(v) => onChange({ ...form, translateAll: v })} />
     </div>
@@ -125,14 +122,14 @@ export function CapabilitySheet({
   return (
     <Sheet title={t("common", C.new)} onClose={onClose}>
       <CapabilityFields form={form} onChange={setForm} errors={errors} takenKeys={takenKeys} owner={owner} />
-      {error && <Alert>{error}</Alert>}
+      {error && <Alert tone="error">{error}</Alert>}
       <div className="flex justify-end gap-2">
-        <button type="button" className={quietButton} onClick={onClose}>
+        <Button variant="quiet" size="sm" onClick={onClose}>
           {t("common", K.cancel)}
-        </button>
-        <button type="button" className={primaryButton} disabled={busy} onClick={() => void save()}>
+        </Button>
+        <Button variant="primary" size="sm" disabled={busy} onClick={() => void save()}>
           {t("common", K.save)}
-        </button>
+        </Button>
       </div>
     </Sheet>
   );
@@ -196,8 +193,7 @@ export function CapabilityPicker({
       <p className="text-xs font-bold text-text-secondary">{t("common", C.label)}</p>
       <p className="text-[11px] text-text-secondary">{t("common", C.hint)}</p>
       {options.length > 0 && (
-        <input
-          className={input}
+        <Input
           value={query}
           placeholder={t("common", C.search)}
           aria-label={t("common", C.search)}
@@ -260,15 +256,15 @@ export function CapabilityPicker({
       {adding && (
         <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-primary p-3">
           <CapabilityFields form={adding} onChange={setAdding} errors={creating.errors} takenKeys={takenKeys} owner={false} />
-          {creating.error && <Alert>{creating.error}</Alert>}
+          {creating.error && <Alert tone="error">{creating.error}</Alert>}
           <div className="flex justify-end gap-2">
-            <button type="button" className={quietButton} onClick={() => setAdding(null)}>
+            <Button variant="quiet" size="sm" onClick={() => setAdding(null)}>
               {t("common", K.cancel)}
-            </button>
-            <button type="button" className={primaryButton} disabled={creating.busy} onClick={() => void add()}>
+            </Button>
+            <Button variant="primary" size="sm" disabled={creating.busy} onClick={() => void add()}>
               {creating.busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Plus size={14} aria-hidden />}
               {t("common", C.create)}
-            </button>
+            </Button>
           </div>
         </div>
       )}

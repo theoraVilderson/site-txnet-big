@@ -304,7 +304,7 @@ describe("resellers at risk, platform owner only (F-038-o3)", () => {
     render(<AiView />);
     fireEvent.click(screen.getByRole("tab", { name: "ai.tabs.resellers" }));
     await waitFor(() => expect(aiAdminApi.resellers).toHaveBeenCalledTimes(1));
-    fireEvent.click(screen.getByRole("button", { name: "ai.resellers.churn" }));
+    fireEvent.click(screen.getByRole("radio", { name: "ai.resellers.churn" }));
     await screen.findByText("r-gone");
     expect(aiAdminApi.resellers).toHaveBeenLastCalledWith("churn_risk");
     expect(screen.queryByRole("link", { name: "r-gone" })).toBeNull();
@@ -357,7 +357,7 @@ describe("usage forecast (F-1525-b)", () => {
     render(<AiView />);
     fireEvent.click(screen.getByRole("tab", { name: "ai.tabs.resellers" }));
     await waitFor(() => expect(aiAdminApi.resellers).toHaveBeenCalledTimes(1));
-    fireEvent.click(screen.getByRole("button", { name: "ai.resellers.wallet" }));
+    fireEvent.click(screen.getByRole("radio", { name: "ai.resellers.wallet" }));
     await screen.findByRole("link", { name: "alpha" });
     expect(aiAdminApi.resellers).toHaveBeenLastCalledWith("wallet_need");
     expect(screen.getByText(/^ai\.resellers\.walletRunsOut:.* · ai\.resellers\.topUp:/)).toBeInTheDocument();

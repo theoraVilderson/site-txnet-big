@@ -7,7 +7,8 @@ import { aiAdminApi, type AiOffer } from "@/lib/ai-api";
 import { billingApi, type AdminCoupon } from "@/lib/billing-api";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { formatMoney } from "../../_lib/money";
-import { AMOUNT_RE, K, PERCENT_RE, card, input, primaryButton, refusalKey } from "./ai-ui";
+import { AMOUNT_RE, K, PERCENT_RE, card, refusalKey } from "./ai-ui";
+import { Button, Field, Input, NativeSelect } from "../../_components/kit";
 
 /** A coupon ai accepts as a template (F-038-f1): the tenant's own, a discount, not deleted. */
 export function templateChoices(coupons: AdminCoupon[], tenantId: string | null): AdminCoupon[] {
@@ -104,37 +105,31 @@ export function AiOffers() {
       {error && <p role="alert" className="text-xs font-medium text-error">{error}</p>}
       {!form && (
         <div>
-          <button type="button" className={primaryButton} onClick={() => void open()}>{t("common", K.offers.add)}</button>
+          <Button variant="primary" size="sm" onClick={() => void open()}>{t("common", K.offers.add)}</Button>
         </div>
       )}
       {form && (
         <div className={`${card} grid gap-3 sm:grid-cols-2`}>
-          <div>
-            <label htmlFor="ai-offer-name" className="text-sm font-bold text-text-primary">{t("common", K.offers.name)}</label>
-            <input id="ai-offer-name" className={`${input} mt-1`} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </div>
-          <div>
-            <label htmlFor="ai-offer-template" className="text-sm font-bold text-text-primary">{t("common", K.offers.template)}</label>
-            <select id="ai-offer-template" className={`${input} mt-1`} value={form.couponTemplateId} onChange={(e) => setForm({ ...form, couponTemplateId: e.target.value })}>
+          <Field id="ai-offer-name" label={t("common", K.offers.name)}>
+            <Input id="ai-offer-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </Field>
+          <Field id="ai-offer-template" label={t("common", K.offers.template)} hint={t("common", templates && templates.length === 0 ? K.offers.templateNone : K.offers.templateHint)}>
+            <NativeSelect id="ai-offer-template" value={form.couponTemplateId} onChange={(e) => setForm({ ...form, couponTemplateId: e.target.value })}>
               <option value="" />
               {(templates ?? []).map((c) => (
                 <option key={c.id} value={c.id}>{c.code}</option>
               ))}
-            </select>
-            <p className="mt-1 text-xs text-text-secondary">{t("common", templates && templates.length === 0 ? K.offers.templateNone : K.offers.templateHint)}</p>
-          </div>
-          <div>
-            <label htmlFor="ai-offer-max" className="text-sm font-bold text-text-primary">{t("common", K.offers.maxDiscount)}</label>
-            <input id="ai-offer-max" inputMode="decimal" dir="ltr" className={`${input} mt-1`} value={form.maxDiscountPercent} onChange={(e) => setForm({ ...form, maxDiscountPercent: e.target.value.trim() })} />
-          </div>
-          <div>
-            <label htmlFor="ai-offer-budget" className="text-sm font-bold text-text-primary">{t("common", K.offers.dailyBudget)}</label>
-            <input id="ai-offer-budget" inputMode="decimal" dir="ltr" className={`${input} mt-1`} value={form.dailyBudget} onChange={(e) => setForm({ ...form, dailyBudget: e.target.value.trim() })} />
-            {template && <p className="mt-1 text-xs text-text-secondary">{t("common", K.offers.currency)}: {template.currencyCode}</p>}
-          </div>
+            </NativeSelect>
+          </Field>
+          <Field id="ai-offer-max" label={t("common", K.offers.maxDiscount)}>
+            <Input id="ai-offer-max" inputMode="decimal" dir="ltr" value={form.maxDiscountPercent} onChange={(e) => setForm({ ...form, maxDiscountPercent: e.target.value.trim() })} />
+          </Field>
+          <Field id="ai-offer-budget" label={t("common", K.offers.dailyBudget)} hint={template ? `${t("common", K.offers.currency)}: ${template.currencyCode}` : undefined}>
+            <Input id="ai-offer-budget" inputMode="decimal" dir="ltr" value={form.dailyBudget} onChange={(e) => setForm({ ...form, dailyBudget: e.target.value.trim() })} />
+          </Field>
           <div className="flex gap-3 sm:col-span-2">
-            <button type="button" className={primaryButton} disabled={busy || !valid} onClick={() => void create()}>{t("common", K.offers.create)}</button>
-            <button type="button" className="text-sm font-bold text-text-secondary" onClick={() => setForm(null)}>{t("common", K.offers.cancel)}</button>
+            <Button variant="primary" size="sm" disabled={busy || !valid} onClick={() => void create()}>{t("common", K.offers.create)}</Button>
+            <Button variant="quiet" onClick={() => setForm(null)}>{t("common", K.offers.cancel)}</Button>
           </div>
         </div>
       )}
@@ -157,9 +152,9 @@ export function AiOffers() {
                 <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${o.isActive ? "bg-primary/10 text-primary" : "bg-[var(--leaf-bg)] text-text-secondary"}`}>
                   {t("common", o.isActive ? K.offers.active : K.offers.inactive)}
                 </span>
-                <button type="button" className="text-xs font-bold text-text-secondary underline" onClick={() => void toggle(o)}>
+                <Button variant="quiet" size="sm" onClick={() => void toggle(o)}>
                   {t("common", o.isActive ? K.offers.turnOff : K.offers.turnOn)}
-                </button>
+                </Button>
               </div>
             </li>
           ))}

@@ -21,7 +21,8 @@ page still owns on top of them.
 | `TableSkeleton` | `_components/kit/TableSkeleton.tsx` | `rows`, `columns`, `withPagination` |
 | `Pagination` | `_components/kit/Pagination.tsx` | `page`, `totalPages`, `totalItems`, `pageSize`, `onPageChange` |
 | `DatePicker` | `_components/kit/DatePicker.tsx` | `value` / `onChange` as ISO `YYYY-MM-DD` |
-| `Select` | `_components/kit/Select.tsx` | `value`, `onChange`, `options` `{value,label}[]`, `placeholder?`, `ariaLabel?`, `invalid?` — use it instead of a native `<select>`, whose option list the browser draws unstyled; the list is portaled, so it is not clipped inside a modal |
+| `Select` | `_components/kit/Select.tsx` | `value`, `onChange`, `options` `{value,label}[]`, `placeholder?`, `ariaLabel?`, `invalid?` — use it instead of a native `<select>`, whose option list the browser draws unstyled; the list is portaled, so it is not clipped inside a modal, and its own Esc closes only the list |
+| `NativeSelect` | `_components/kit/Field.tsx` | a native `<select>` in the kit's box, wired by a `Field` — only for a long list where type-to-find matters: zones (`ZoneSelect`), currencies, coupon templates (UX-1-ac) |
 | `formatMoney`, `amountInWords` | `_lib/money.ts` | amount, currency code, `useLocale()` |
 | `copyText` | `_lib/clipboard.ts` | text; resolves `false` when refused |
 | `formatInstant` | `_lib/datetime.ts` | an ISO instant, `useLocale().lang` |

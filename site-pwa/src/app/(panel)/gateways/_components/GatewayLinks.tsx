@@ -8,6 +8,7 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi, type AdminGateway, type GatewayGrant } from "@/lib/billing-api";
 import { Select } from "../../_components/kit/Select";
 import { grantRefusalKey } from "../_lib/grants";
+import { Button, Input } from "../../_components/kit";
 
 const L = FrontendI18nKeys.common.gateways.links;
 
@@ -78,9 +79,6 @@ export function GatewayLinks({ gateways, grants, onChanged }: GatewayLinksProps)
     });
   };
 
-  const input =
-    "rounded-xl border border-card-border bg-[var(--bg-inner)] px-3 py-2 text-sm text-[var(--text-input)] placeholder:text-[var(--text-label)] transition-colors hover:border-[var(--accent-primary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)]";
-
   return (
     <section className="rounded-3xl border border-card-border bg-card-bg p-5 shadow-sm sm:p-6">
       <h2 className="flex items-center gap-2 text-sm font-bold text-text-primary">
@@ -90,7 +88,7 @@ export function GatewayLinks({ gateways, grants, onChanged }: GatewayLinksProps)
       <p className="mb-4 text-xs text-text-secondary">{t("common", L.subtitle)}</p>
 
       <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
-        <input className={input} dir="ltr" placeholder={t("common", L.tenantId)} value={tenantId} onChange={(e) => setTenantId(e.target.value)} />
+        <Input dir="ltr" placeholder={t("common", L.tenantId)} value={tenantId} onChange={(e) => setTenantId(e.target.value)} />
         <Select
           value={gatewayKey}
           onChange={setGatewayKey}
@@ -101,15 +99,14 @@ export function GatewayLinks({ gateways, grants, onChanged }: GatewayLinksProps)
             label: `${g.displayName} (${t("common", g.source === "platform" ? FrontendI18nKeys.common.gateways.platform : FrontendI18nKeys.common.gateways.tenant)})`,
           }))}
         />
-        <input className={input} placeholder={t("common", L.note)} value={note} onChange={(e) => setNote(e.target.value)} />
-        <button
-          type="button"
+        <Input placeholder={t("common", L.note)} value={note} onChange={(e) => setNote(e.target.value)} />
+        <Button
+          variant="primary"
           disabled={busy || !tenantId.trim() || !gatewayKey}
           onClick={link}
-          className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-on-accent disabled:opacity-60"
         >
           {t("common", L.link)}
-        </button>
+        </Button>
       </div>
 
       {failure && (
@@ -129,15 +126,16 @@ export function GatewayLinks({ gateways, grants, onChanged }: GatewayLinksProps)
                 {grant.note ? ` · ${grant.note}` : ""}
               </span>
               {grant.isActive ? (
-                <button
-                  type="button"
+                <Button
+                  variant="quiet"
+                  size="sm"
                   disabled={busy}
                   onClick={() => void run(() => billingApi.withdrawGatewayGrant(grant.id))}
-                  className="inline-flex items-center gap-1 font-bold text-error disabled:opacity-60"
+                  icon={<Unlink size={12} aria-hidden />}
+                  className="text-error hover:text-error hover:bg-error-bg"
                 >
-                  <Unlink size={12} aria-hidden />
                   {t("common", L.unlink)}
-                </button>
+                </Button>
               ) : (
                 <span className="text-text-secondary">{t("common", L.withdrawn)}</span>
               )}

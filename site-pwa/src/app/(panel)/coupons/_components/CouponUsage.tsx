@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { Loader2, RotateCw, X } from "lucide-react";
+import { Loader2, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi, type CouponUsageReport, type UsageQuery } from "@/lib/billing-api";
@@ -21,6 +20,7 @@ import {
   validateUsageFilter,
   type UsageFilter,
 } from "../_lib/coupon-form";
+import { Button, Dialog } from "../../_components/kit";
 
 const U = K.usage;
 
@@ -82,13 +82,6 @@ export function CouponUsage({
     ...USAGE_STATUSES.map((s) => ({ value: s, label: t("common", U.status[s]) })),
   ];
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  if (typeof document === "undefined") return null;
   const money = (amount: string, currency: string) => formatMoney(amount, currency, { lang, t });
   const totals = report?.totals;
   const tiles: Array<[string, string]> = totals
@@ -108,17 +101,15 @@ export function CouponUsage({
       ]
     : [];
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-t-3xl border border-card-border bg-card-bg shadow-xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
-        <header className="flex items-center justify-between gap-3 border-b border-card-border p-4">
-          <h2 className="text-sm font-bold text-text-primary">{title ?? t("common", U.title, { code: coupon?.code ?? "" })}</h2>
-          <button type="button" onClick={onClose} aria-label={t("common", U.close)} className="rounded-lg p-1 text-text-secondary hover:text-text-primary">
-            <X size={18} aria-hidden />
-          </button>
-        </header>
-        <div className="flex flex-col gap-4 overflow-y-auto p-4">
-          <div className="flex flex-wrap items-end gap-2">
+  return (
+    <Dialog
+      open
+      size="lg"
+      onClose={onClose}
+      title={title ?? t("common", U.title, { code: coupon?.code ?? "" })}
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-end gap-2">
             <Select
               ariaLabel={t("common", U.filters.status)}
               value={filter.status}
@@ -133,9 +124,9 @@ export function CouponUsage({
               <DatePicker label={t("common", U.filters.to)} value={filter.to || null} onChange={(v) => narrow({ to: v ?? "" })} />
             </div>
             {filtered && (
-              <button type="button" onClick={() => narrow(emptyUsageFilter())} className="pb-2 text-xs font-bold text-primary">
+              <Button variant="quiet" size="sm" onClick={() => narrow(emptyUsageFilter())} className="text-primary hover:text-primary">
                 {t("common", U.filters.clear)}
-              </button>
+              </Button>
             )}
           </div>
           {badRange && (
@@ -148,10 +139,9 @@ export function CouponUsage({
               <p role="alert" className="text-xs font-bold text-error">
                 {refusalKey(error) ? t("common", refusalKey(error)!) : errorMessage(error)}
               </p>
-              <button type="button" onClick={() => void fetchPage(page)} className="inline-flex items-center gap-1 text-xs font-bold text-primary">
-                <RotateCw size={14} aria-hidden />
+              <Button variant="quiet" size="sm" onClick={() => void fetchPage(page)} icon={<RotateCw size={14} aria-hidden />} className="text-primary hover:text-primary">
                 {t("common", K.retry)}
-              </button>
+              </Button>
             </div>
           ) : !report ? (
             <p className="flex items-center gap-2 text-xs text-text-secondary">
@@ -208,8 +198,6 @@ export function CouponUsage({
             </>
           )}
         </div>
-      </div>
-    </div>,
-    document.body,
+    </Dialog>
   );
 }

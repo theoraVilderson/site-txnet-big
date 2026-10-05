@@ -4,9 +4,6 @@ import { AI_OFFER_REFUSALS } from "@/lib/ai-api";
 
 export const K = FrontendI18nKeys.common.ai;
 
-export const input =
-  "w-full rounded-xl border border-card-border bg-[var(--bg-inner)] px-3 py-2.5 text-sm text-[var(--text-input)] placeholder:text-[var(--text-label)] transition-colors hover:border-[var(--accent-primary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)] disabled:opacity-60";
-export const primaryButton = "rounded-2xl bg-primary px-5 py-2.5 text-sm font-bold text-on-accent hover:brightness-110 disabled:opacity-50";
 export const card = "rounded-3xl border border-card-border bg-card-bg p-5";
 
 /** ai's refusal worded by its reason; anything else is the page's generic line. */

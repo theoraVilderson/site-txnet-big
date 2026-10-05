@@ -21,7 +21,7 @@ export { SaveBar, type SaveBarProps } from "./SaveBar";
 export { Sheet, type SheetProps } from "./Sheet";
 export { Tabs, type TabItem } from "./Tabs";
 export { Tooltip } from "./Tooltip";
-export { Field, Input, PasswordInput, Textarea, useFieldControl, type FieldProps } from "./Field";
+export { Field, Input, NativeSelect, PasswordInput, Textarea, useFieldControl, type FieldProps } from "./Field";
 export { Select, type SelectOption, type SelectProps } from "./Select";
 export { Badge, StatusPill, type Tone } from "./StatusPill";
 export { Checkbox, Toggle } from "./Toggle";

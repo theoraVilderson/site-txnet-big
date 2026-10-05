@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
-import { Loader2, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import type { Me } from "@/lib/auth-api";
@@ -28,14 +27,11 @@ import {
 } from "../_lib/coupon-form";
 import { variantOwnerTenant } from "../_lib/variant-choices";
 import { VariantPicker } from "./VariantPicker";
-import { useConfirm } from "../../_components/kit";
+import { Button, Dialog, Input, Textarea, useConfirm } from "../../_components/kit";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 const F = K.form;
 
-const input =
-  "w-full rounded-xl border border-card-border bg-[var(--bg-inner)] px-3 py-2.5 text-sm text-[var(--text-input)] placeholder:text-[var(--text-label)] transition-colors hover:border-[var(--accent-primary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)] disabled:opacity-60";
-const invalidInput = "border-error focus:border-error";
 
 /**
  * Create or edit a discount coupon (F-502-g). Five sections — code and
@@ -77,19 +73,6 @@ export function CouponForm({
     onClose();
   };
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") requestClose();
-    };
-    document.addEventListener("keydown", onKey);
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = overflow;
-    };
-  });
-
   const set = <Key extends keyof Form>(k: Key, v: Form[Key]) => {
     setTouched(true);
     setForm((f) => ({ ...f, [k]: v }));
@@ -120,8 +103,6 @@ export function CouponForm({
     }
   };
 
-  if (typeof document === "undefined") return null;
-
   const field = (k: keyof Form, label: string, control: ReactNode, hint?: string) => (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={`cp-${k}`} className="text-xs font-bold text-text-primary">
@@ -139,22 +120,22 @@ export function CouponForm({
   );
   const text = (k: keyof Form, opts: { ltr?: boolean; decimal?: boolean; disabled?: boolean; area?: boolean } = {}) =>
     opts.area ? (
-      <textarea
+      <Textarea
         id={`cp-${k}`}
         dir={opts.ltr ? "ltr" : undefined}
         rows={3}
-        className={`${input} font-mono text-xs ${errors[k] ? invalidInput : ""}`}
+        className="font-mono text-xs"
+        aria-invalid={Boolean(errors[k])}
         value={String(form[k])}
         onChange={(e) => set(k, e.target.value as never)}
       />
     ) : (
-      <input
+      <Input
         id={`cp-${k}`}
         dir={opts.ltr ? "ltr" : undefined}
         inputMode={opts.decimal ? "decimal" : undefined}
         disabled={opts.disabled}
         aria-invalid={Boolean(errors[k])}
-        className={`${input} ${errors[k] ? invalidInput : ""}`}
         value={String(form[k])}
         onChange={(e) => set(k, e.target.value as never)}
       />
@@ -187,18 +168,34 @@ export function CouponForm({
   const platformCoupon = coupon ? coupon.tenantId === null : owner && form.owner === "platform";
   const gatewayChoices = (gateways ?? []).filter((g) => !platformCoupon || g.source === "platform");
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6" role="dialog" aria-modal="true" onClick={requestClose}>
-      <div className="flex max-h-[95vh] w-full max-w-2xl flex-col rounded-t-3xl border border-card-border bg-card-bg shadow-xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
-        <header className="flex items-center justify-between gap-3 border-b border-card-border p-4">
-          <h2 className="text-sm font-bold text-text-primary">{coupon ? t("common", F.editTitle, { code: coupon.code }) : t("common", F.createTitle)}</h2>
-          <button type="button" onClick={requestClose} aria-label={t("common", F.cancel)} className="rounded-lg p-1 text-text-secondary hover:text-text-primary">
-            <X size={18} aria-hidden />
-          </button>
-        </header>
-
-        <div className="flex flex-col gap-4 overflow-y-auto p-4">
-          {section(
+  return (
+    <Dialog
+      open
+      size="lg"
+      onClose={requestClose}
+      title={coupon ? t("common", F.editTitle, { code: coupon.code }) : t("common", F.createTitle)}
+      footer={
+        <>
+          {failure && (
+            <p role="alert" className="me-auto text-xs font-bold text-error">
+              {failure}
+            </p>
+          )}
+          <Button variant="quiet" onClick={requestClose}>
+            {t("common", F.cancel)}
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => void submit()}
+            loading={saving}
+          >
+            {t("common", saving ? F.saving : F.save)}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {section(
             "basics",
             <>
               {owner && !coupon && (
@@ -350,28 +347,6 @@ export function CouponForm({
             </>,
           )}
         </div>
-
-        <footer className="flex flex-wrap items-center justify-end gap-3 border-t border-card-border p-4">
-          {failure && (
-            <p role="alert" className="me-auto text-xs font-bold text-error">
-              {failure}
-            </p>
-          )}
-          <button type="button" onClick={requestClose} className="rounded-xl px-4 py-2 text-sm font-bold text-text-secondary">
-            {t("common", F.cancel)}
-          </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void submit()}
-            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-on-accent shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
-          >
-            {saving && <Loader2 size={14} className="animate-spin" aria-hidden />}
-            {t("common", saving ? F.saving : F.save)}
-          </button>
-        </footer>
-      </div>
-    </div>,
-    document.body,
+    </Dialog>
   );
 }

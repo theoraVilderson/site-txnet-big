@@ -9,7 +9,6 @@ import {
   ChevronDown,
   CircleAlert,
   KeyRound,
-  Loader2,
   Percent,
   RotateCcw,
   ShieldCheck,
@@ -46,7 +45,8 @@ import {
   type GatewayForm,
 } from "../_lib/gateway-form";
 import { PROVIDER_DEFAULTS, type Provider } from "../_lib/gateway-wizard";
-import { useConfirm } from "../../_components/kit";
+import { Button, IconButton, useConfirm } from "../../_components/kit";
+import { useOverlayLayer } from "../../_components/kit/overlay";
 
 const G = FrontendI18nKeys.common.gateways;
 const F = G.form;
@@ -179,21 +179,20 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: Gatewa
     setShowChanges(false);
   };
 
+  // The kit's overlay layer (contract.ux.md K7): Esc asks through
+  // `requestClose`, Tab stays inside, the page is locked and focus returns.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useOverlayLayer({ active: true, containerRef: dialogRef, onClose: () => requestClose() });
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") requestClose();
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (dirty) void submit();
       }
     };
     document.addEventListener("keydown", onKey);
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = overflow;
-    };
+    return () => document.removeEventListener("keydown", onKey);
   });
 
   // The section nearest the top of the scroll area is the one the list marks.
@@ -422,13 +421,15 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: Gatewa
       onMouseDown={(e) => e.target === e.currentTarget && requestClose()}
     >
       <motion.div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="gw-editor-title"
+        tabIndex={-1}
         initial={reduceMotion ? false : { opacity: 0, y: 24, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.2 }}
-        className="flex h-full w-full flex-col overflow-hidden border-card-border bg-card-bg shadow-2xl sm:h-auto sm:max-h-[92vh] sm:max-w-3xl sm:rounded-3xl sm:border lg:max-w-5xl lg:flex-row"
+        className="flex h-full w-full flex-col overflow-hidden border-card-border bg-card-bg shadow-2xl focus:outline-none sm:h-auto sm:max-h-[92vh] sm:max-w-3xl sm:rounded-3xl sm:border lg:max-w-5xl lg:flex-row"
       >
         {/* Section list — the side rail on lg; tabs in the header below it. */}
         <aside className="hidden w-64 shrink-0 flex-col gap-4 border-e border-card-border bg-[var(--bg-inner)] p-5 lg:flex">
@@ -455,14 +456,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: Gatewa
                   </div>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={requestClose}
-                aria-label={t("common", W.close)}
-                className="grid size-9 shrink-0 place-items-center rounded-xl text-text-secondary transition-colors hover:bg-[var(--bg-inner)] hover:text-text-primary"
-              >
-                <X size={18} />
-              </button>
+              <IconButton onClick={requestClose} aria-label={t("common", W.close)} icon={<X size={18} aria-hidden />} />
             </div>
             <nav className="-mx-4 mt-3 flex gap-1.5 overflow-x-auto px-4 pb-0.5 sm:-mx-6 sm:px-6 lg:hidden">
               {EDITOR_SECTIONS.map((s) => navItem(s.id, true))}
@@ -535,37 +529,33 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: Gatewa
                   <span className="truncate">{t("common", E.needsAttention)}</span>
                 </p>
               ) : (
-                <button
-                  type="button"
+                <Button
+                  variant="quiet"
+                  size="sm"
                   onClick={() => setShowChanges((v) => !v)}
                   disabled={!dirty}
                   aria-expanded={dirty ? showChanges : undefined}
-                  className="inline-flex min-w-0 items-center gap-2 rounded-lg px-1 py-1 text-xs font-bold text-text-primary disabled:text-text-secondary"
+                  className="min-w-0"
                 >
                   <span className={`size-2 shrink-0 rounded-full ${dirty ? "bg-primary" : "bg-card-border"}`} aria-hidden />
                   <span className="truncate">{dirty ? t("common", E.unsaved, { count: String(changed.length) }) : t("common", E.clean)}</span>
                   {dirty && <ChevronDown size={14} className={`shrink-0 transition-transform ${showChanges ? "rotate-180" : ""}`} aria-hidden />}
-                </button>
+                </Button>
               )}
               <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={discard}
-                  disabled={!dirty || saving}
-                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-bold text-text-secondary transition-colors hover:bg-[var(--bg-inner)] hover:text-text-primary disabled:opacity-40"
-                >
-                  <RotateCcw size={15} aria-hidden />
+                <Button variant="quiet" onClick={discard} disabled={!dirty || saving} icon={<RotateCcw size={15} aria-hidden />} aria-label={t("common", E.discard)}>
                   <span className="hidden sm:inline">{t("common", E.discard)}</span>
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={() => void submit()}
-                  disabled={!dirty || saving}
-                  className="inline-flex min-w-28 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-on-accent shadow-md transition-all hover:brightness-110 disabled:opacity-50 disabled:shadow-none"
+                  disabled={!dirty}
+                  loading={saving}
+                  icon={<Check size={16} aria-hidden />}
+                  className="min-w-28"
                 >
-                  {saving ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Check size={16} aria-hidden />}
                   {t("common", saving ? F.saving : F.save)}
-                </button>
+                </Button>
               </div>
             </div>
           </footer>
