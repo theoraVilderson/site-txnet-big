@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ApiError } from "@/lib/api-error";
 import { passwordChecks, passwordStrength } from "../_lib/password";
+import { onSessionsChanged } from "../_lib/sessions";
 import { ConfirmProvider } from "../../_components/kit/confirm";
 import { ProfileSection } from "./ProfileSection";
 
@@ -103,6 +104,20 @@ describe("the profile section", () => {
 
     await waitFor(() => expect(changePassword).toHaveBeenCalledWith("Old-pass1!", STRONG, true));
     await waitFor(() => expect(screen.getByLabelText("settings.profile.password.current")).toHaveValue(""));
+  });
+
+  it("tells the sessions list to re-read once other places were ended", async () => {
+    const heard = vi.fn();
+    const stop = onSessionsChanged(heard);
+    view();
+    fill("settings.profile.password.current", "Old-pass1!");
+    fill("settings.profile.password.new", STRONG);
+    fill("settings.profile.password.repeat", STRONG);
+    fireEvent.click(screen.getByRole("button", { name: "kit.saveBar.save" }));
+
+    await waitFor(() => expect(heard).toHaveBeenCalledTimes(1));
+    expect(success).toHaveBeenCalledWith("settings.profile.password.savedEnded");
+    stop();
   });
 
   it("says a wrong current password under that field, and keeps what was typed", async () => {

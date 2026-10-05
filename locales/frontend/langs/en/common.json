@@ -1863,7 +1863,7 @@
           "special": "A symbol, like ! or #"
         },
         "saved": "Your password has been changed",
-        "savedEnded": "Your password has been changed and {{count}} other places were signed out"
+        "savedEnded": "Your password has been changed and every other place was signed out"
       }
     }
   },

@@ -35,3 +35,22 @@ const SYSTEMS: Array<[RegExp, string]> = [
   [/\bCrOS\b/, "ChromeOS"],
   [/\bLinux\b/, "Linux"],
 ];
+
+/**
+ * "The account's places changed elsewhere on this page" — said by a form that
+ * ends them as a side effect (the password change, UX-1-u), heard by the
+ * sessions list so it re-reads instead of showing places that are gone.
+ * A window event, because the two are sibling cards with no shared parent
+ * state, and nothing beyond this page needs to know.
+ */
+const SESSIONS_CHANGED = "txnet:sessions-changed";
+
+export function sessionsChanged(): void {
+  window.dispatchEvent(new Event(SESSIONS_CHANGED));
+}
+
+/** Subscribes; returns the unsubscribe, ready for a `useEffect` cleanup. */
+export function onSessionsChanged(listener: () => void): () => void {
+  window.addEventListener(SESSIONS_CHANGED, listener);
+  return () => window.removeEventListener(SESSIONS_CHANGED, listener);
+}

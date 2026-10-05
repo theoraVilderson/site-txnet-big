@@ -7,7 +7,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { formatInstant } from "../../_lib/datetime";
-import { describeDevice } from "../_lib/sessions";
+import { describeDevice, onSessionsChanged } from "../_lib/sessions";
 import { Alert } from "../../_components/kit/Alert";
 import { Button } from "../../_components/kit/Button";
 import { Card, CardHeader } from "../../_components/kit/Card";
@@ -54,6 +54,9 @@ export function SessionsSection() {
       live = false;
     };
   }, [asked]);
+
+  // Another card ended places (a password change): re-read, as after an end here.
+  useEffect(() => onSessionsChanged(() => setAsked((n) => n + 1)), []);
 
   const end = async () => {
     if (!ending) return;

@@ -16,6 +16,7 @@ import { notify } from "../../_components/kit/notify";
 import { SaveBar } from "../../_components/kit/SaveBar";
 import { Toggle } from "../../_components/kit/Toggle";
 import { meetsPasswordRules, PASSWORD_RULES, passwordChecks, passwordStrength } from "../_lib/password";
+import { sessionsChanged } from "../_lib/sessions";
 
 const P = FrontendI18nKeys.common.settings.profile;
 
@@ -131,16 +132,13 @@ function PasswordCard() {
   const mismatch = form.repeat !== "" && form.repeat !== form.next;
   const valid = form.current !== "" && meetsPasswordRules(form.next) && form.repeat === form.next;
 
-  const [savedMessage, setSavedMessage] = useState<string>(t("common", P.password.saved));
-
   const save = async () => {
     setErrors({});
     try {
       const { otherSessionsEnded } = await authApi.changePassword(form.current, form.next, endOthers);
-      setSavedMessage(
-        otherSessionsEnded > 0 ? t("common", P.password.savedEnded, { count: otherSessionsEnded }) : t("common", P.password.saved),
-      );
       setForm(EMPTY);
+      // The sessions card beside this one still lists the places just ended.
+      if (otherSessionsEnded > 0) sessionsChanged();
     } catch (e) {
       const message = toMessage(e);
       setErrors(e instanceof ApiError && e.reason === "wrong_password" ? { current: message } : { next: message });
@@ -181,7 +179,9 @@ function PasswordCard() {
           setForm(EMPTY);
           setErrors({});
         }}
-        savedMessage={savedMessage}
+        // From the toggle, not the answer: the bar toasts with the props of the
+        // render that started the save, so a message set from the answer is late.
+        savedMessage={t("common", endOthers ? P.password.savedEnded : P.password.saved)}
       />
     </Card>
   );
