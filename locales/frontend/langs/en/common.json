@@ -690,7 +690,15 @@
       "show": "Show password",
       "hide": "Hide password"
     },
-    "optional": "Optional"
+    "optional": "Optional",
+    "dialog": {
+      "close": "Close"
+    },
+    "confirm": {
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "typeToConfirm": "Type “{{name}}” to confirm"
+    }
   },
   "money": {
     "currency": {

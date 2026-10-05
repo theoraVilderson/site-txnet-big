@@ -690,7 +690,15 @@
       "show": "نمایش رمز",
       "hide": "پنهان کردن رمز"
     },
-    "optional": "اختیاری"
+    "optional": "اختیاری",
+    "dialog": {
+      "close": "بستن"
+    },
+    "confirm": {
+      "cancel": "انصراف",
+      "confirm": "تأیید",
+      "typeToConfirm": "برای تأیید، «{{name}}» را بنویسید"
+    }
   },
   "money": {
     "currency": {

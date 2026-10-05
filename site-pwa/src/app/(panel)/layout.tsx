@@ -1,3 +1,4 @@
+import { ConfirmProvider } from "./_components/kit/confirm";
 import { PanelMotion } from "./_components/PanelMotion";
 import { PanelShell } from "./_components/PanelShell";
 import { PaymentCreditedToast } from "./_components/PaymentCreditedToast";
@@ -23,7 +24,10 @@ export default function PanelLayout({
       <PanelRealtimeProvider>
         {/* UX-1-b: one motion level for framer-motion and the CSS below it. */}
         <PanelMotion>
-          <PanelShell>{children}</PanelShell>
+          {/* UX-1-d: one `useConfirm` dialog for every panel screen (K9). */}
+          <ConfirmProvider>
+            <PanelShell>{children}</PanelShell>
+          </ConfirmProvider>
         </PanelMotion>
         {/* F-067-l: a late credit is announced on any screen (ADR-0045). */}
         <PaymentCreditedToast />
