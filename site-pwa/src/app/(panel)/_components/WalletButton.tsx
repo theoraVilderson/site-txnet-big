@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
   ChevronDown,
@@ -18,6 +18,7 @@ import { useWalletBalance } from "../_hooks/useWalletBalance";
 import { formatMoney, isNonZero } from "../_lib/money";
 import { GiftCodeModal } from "./GiftCodeModal";
 import { usePanelUiStore } from "../_stores/panel-ui-store";
+import { Button, Popover } from "./kit";
 
 /** The control's strings as generated constants (C-06). */
 const W = FrontendI18nKeys.common.wallet;
@@ -89,30 +90,9 @@ export function WalletButton() {
   // In the shell's store, so the palette's "redeem a gift code" opens the same modal (UX-1-n).
   const giftOpen = usePanelUiStore((s) => s.giftCodeOpen);
   const setGiftOpen = usePanelUiStore((s) => s.setGiftCodeOpen);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const menuId = useId();
-
-  // `pointerdown` rather than `click`, so a press that starts outside closes the
-  // menu before the thing under it reacts to the same gesture.
-  // Suspended while the modal is up: its backdrop covers this control, so an
-  // outside press is aimed at the modal, and an Escape there is the modal's to
-  // answer. Without this, one key closes both and the dropdown is gone when the
-  // user comes back to it.
-  useEffect(() => {
-    if (!open || giftOpen) return;
-    function onPointerDown(event: PointerEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open, giftOpen]);
+  // The dropdown is the kit's `Popover` (contract.ux.md K7): portaled, so the
+  // bar's `backdrop-filter` cannot box it; Esc and an outside press close it,
+  // and Esc reaches only the topmost overlay — the gift modal, while it is up.
 
   // An entry with neither destination is the "not built yet" state, and stays
   // hidden (`contract.shell.md` rule 2). Every entry has one since F-093-e;
@@ -144,124 +124,114 @@ export function WalletButton() {
   }
 
   return (
-    <div className="relative" ref={rootRef}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-label={t("common", open ? W.close : W.open)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={menuId}
-        className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 transition-colors sm:gap-3 sm:px-3 ${
-          open
-            ? "border-primary bg-primary text-on-accent"
-            : "border-card-border bg-leaf-bg text-text-primary hover:border-primary"
-        }`}
-      >
-        <span
-          className={`flex size-7 shrink-0 items-center justify-center rounded-lg sm:size-8 ${
-            open ? "bg-white/20 text-on-accent" : "bg-primary text-on-accent"
-          }`}
-        >
-          <Wallet size={16} aria-hidden />
-        </span>
-
-        {/* The figure and the chevron are the bar's whole cost below `sm`, and
-            the figure is the unbounded one. They live in the dropdown's header
-            there instead — see the component note. */}
-        <span className="hidden min-w-0 flex-col text-start leading-tight sm:flex">
-          <span
-            className={`text-[10px] font-bold ${open ? "text-on-accent/80" : "text-text-secondary"}`}
+    <div className="relative">
+      <Popover
+        label={t("common", W.label)}
+        align="end"
+        open={open}
+        onOpenChange={setOpen}
+        className="w-72 p-3"
+        trigger={
+          <button
+            type="button"
+            aria-label={t("common", open ? W.close : W.open)}
+            className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 transition-colors sm:gap-3 sm:px-3 ${
+              open
+                ? "border-primary bg-primary text-on-accent"
+                : "border-card-border bg-leaf-bg text-text-primary hover:border-primary"
+            }`}
           >
-            {t("common", holding ? W.available : W.label)}
-          </span>
-          <span className="font-mono text-sm font-bold">{figure}</span>
-        </span>
-
-        <ChevronDown
-          size={14}
-          aria-hidden
-          className={`ms-1 hidden shrink-0 transition-transform sm:block ${open ? "rotate-180" : ""}`}
-        />
-      </button>
-
-      {/* Rendered only while open: a hidden-but-mounted menu keeps its links in
-          the tab order, which is how a keyboard user lands on a control they
-          cannot see. Legacy animated a permanently mounted panel. */}
-      {open && (
-        <div
-          id={menuId}
-          className="absolute end-0 z-30 mt-3 w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-card-border bg-card-bg p-3 shadow-xl backdrop-blur-xl"
-        >
-          {/* The figure's home below `sm`, where the button is the icon alone.
-              It is shown at every width rather than only there: a balance that
-              appears and disappears with the viewport is one the user has to
-              hunt for, and this is the panel that every wallet action starts
-              from. */}
-          <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-leaf-bg px-3 py-2 sm:hidden">
-            <span className="text-[10px] font-bold text-text-secondary">{t("common", holding ? W.available : W.label)}</span>
-            <span className="font-mono text-sm font-bold">{figure}</span>
-          </div>
-
-          {/* Held money apart (F-118-j): part of the wallet, not spendable. */}
-          {holding && currencyCode !== null && (
-            <div className="mb-3 rounded-xl border border-card-border px-3 py-2">
-              <p className="text-xs font-bold text-text-primary" dir="auto">
-                {t("common", W.held, { amount: formatMoney(held, currencyCode, { lang, t }) })}
-              </p>
-              <p className="mt-0.5 text-[10px] leading-4 text-text-secondary">{t("common", W.heldHint)}</p>
-            </div>
-          )}
-
-          <div className="mb-3 flex items-center justify-between px-1">
-            <span className="text-xs font-bold text-text-secondary">
-              {t("common", W.quickActions)}
+            <span
+              className={`flex size-7 shrink-0 items-center justify-center rounded-lg sm:size-8 ${
+                open ? "bg-white/20 text-on-accent" : "bg-primary text-on-accent"
+              }`}
+            >
+              <Wallet size={16} aria-hidden />
             </span>
-            {failed && (
-              <button
-                type="button"
-                onClick={refresh}
-                className="flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
-              >
-                <RotateCw size={12} aria-hidden />
-                {t("common", W.retry)}
-              </button>
-            )}
-          </div>
 
-          {visible.length === 0 ? (
-            <p className="px-1 py-4 text-center text-xs text-text-secondary">
-              {t("common", W.noActions)}
+            {/* The figure and the chevron are the bar's whole cost below `sm`, and
+                the figure is the unbounded one. They live in the dropdown's header
+                there instead — see the component note. */}
+            <span className="hidden min-w-0 flex-col text-start leading-tight sm:flex">
+              <span
+                className={`text-[10px] font-bold ${open ? "text-on-accent/80" : "text-text-secondary"}`}
+              >
+                {t("common", holding ? W.available : W.label)}
+              </span>
+              <span className="font-mono text-sm font-bold">{figure}</span>
+            </span>
+
+            <ChevronDown
+              size={14}
+              aria-hidden
+              className={`ms-1 hidden shrink-0 transition-transform sm:block ${open ? "rotate-180" : ""}`}
+            />
+          </button>
+        }
+      >
+        {/* The figure's home below `sm`, where the button is the icon alone.
+            It is shown at every width rather than only there: a balance that
+            appears and disappears with the viewport is one the user has to
+            hunt for, and this is the panel that every wallet action starts
+            from. */}
+        <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-leaf-bg px-3 py-2 sm:hidden">
+          <span className="text-[10px] font-bold text-text-secondary">{t("common", holding ? W.available : W.label)}</span>
+          <span className="font-mono text-sm font-bold">{figure}</span>
+        </div>
+
+        {/* Held money apart (F-118-j): part of the wallet, not spendable. */}
+        {holding && currencyCode !== null && (
+          <div className="mb-3 rounded-xl border border-card-border px-3 py-2">
+            <p className="text-xs font-bold text-text-primary" dir="auto">
+              {t("common", W.held, { amount: formatMoney(held, currencyCode, { lang, t }) })}
             </p>
-          ) : (
-            <div className="grid grid-cols-2 gap-2">
-              {visible.map(({ id, label, icon: Icon, href, modal, lead }) => {
-                const className = lead
-                  ? "col-span-2 flex items-center justify-center gap-2 rounded-xl bg-primary p-3 text-sm font-bold text-on-accent hover:brightness-110"
-                  : "flex flex-col items-center justify-center gap-1.5 rounded-xl bg-leaf-bg p-3 text-xs font-medium text-text-primary hover:bg-card-border";
-                const inside = (
-                  <>
-                    <Icon size={lead ? 18 : 20} aria-hidden />
-                    {label && <span>{t("common", label)}</span>}
-                  </>
-                );
-                // A modal entry is a `button`, not a `Link` with a dead href: a
-                // link that navigates nowhere is announced as a link and
-                // offered to "open in a new tab".
-                return modal ? (
-                  <button key={id} type="button" onClick={() => openModal(modal)} className={className}>
-                    {inside}
-                  </button>
-                ) : (
-                  <Link key={id} href={href as string} onClick={() => setOpen(false)} className={className}>
-                    {inside}
-                  </Link>
-                );
-              })}
-            </div>
+            <p className="mt-0.5 text-[10px] leading-4 text-text-secondary">{t("common", W.heldHint)}</p>
+          </div>
+        )}
+
+        <div className="mb-3 flex items-center justify-between px-1">
+          <span className="text-xs font-bold text-text-secondary">
+            {t("common", W.quickActions)}
+          </span>
+          {failed && (
+            <Button size="sm" variant="quiet" icon={<RotateCw size={12} aria-hidden />} onClick={refresh} className="h-6 px-2 text-[10px]">
+              {t("common", W.retry)}
+            </Button>
           )}
         </div>
-      )}
+
+        {visible.length === 0 ? (
+          <p className="px-1 py-4 text-center text-xs text-text-secondary">
+            {t("common", W.noActions)}
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {visible.map(({ id, label, icon: Icon, href, modal, lead }) => {
+              const className = lead
+                ? "col-span-2 flex items-center justify-center gap-2 rounded-xl bg-primary p-3 text-sm font-bold text-on-accent hover:brightness-110"
+                : "flex flex-col items-center justify-center gap-1.5 rounded-xl bg-leaf-bg p-3 text-xs font-medium text-text-primary hover:bg-card-border";
+              const inside = (
+                <>
+                  <Icon size={lead ? 18 : 20} aria-hidden />
+                  {label && <span>{t("common", label)}</span>}
+                </>
+              );
+              // A modal entry is a `button`, not a `Link` with a dead href: a
+              // link that navigates nowhere is announced as a link and
+              // offered to "open in a new tab".
+              return modal ? (
+                <button key={id} type="button" onClick={() => openModal(modal)} className={className}>
+                  {inside}
+                </button>
+              ) : (
+                <Link key={id} href={href as string} onClick={() => setOpen(false)} className={className}>
+                  {inside}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </Popover>
 
       {/* Outside the dropdown's own `open &&`: opening it closes the dropdown,
           and a modal unmounted by that would take the user's half-typed code

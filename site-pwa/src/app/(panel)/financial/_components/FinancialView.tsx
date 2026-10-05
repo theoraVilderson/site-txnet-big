@@ -18,7 +18,7 @@ import { AdvancedFilter } from "./AdvancedFilter";
 import { FinancialTable } from "./FinancialTable";
 import { LedgerRow } from "./LedgerRow";
 import { PaymentRow } from "./PaymentRow";
-import { PageHeader } from "../../_components/kit/PageHeader";
+import { PageHeader, Tabs } from "../../_components/kit";
 
 const F = FrontendI18nKeys.common.financial;
 
@@ -91,28 +91,14 @@ export function FinancialView() {
         }
       />
 
-      <div
-        role="tablist"
-        aria-label={t("common", F.title)}
-        className="flex w-fit gap-1 rounded-xl border border-card-border bg-card-bg p-1"
-      >
-        {TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={filters.tab === tab}
-            onClick={() => filters.tab !== tab && go(forTab(filters, tab))}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-              filters.tab === tab
-                ? "bg-primary text-on-accent shadow-md shadow-primary-glow"
-                : "text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
-            }`}
-          >
-            {t("common", F.tabs[tab])}
-          </button>
-        ))}
-      </div>
+      <Tabs<FinancialTab>
+        ariaLabel={t("common", F.title)}
+        variant="pills"
+        value={filters.tab}
+        onChange={(tab) => filters.tab !== tab && go(forTab(filters, tab))}
+        tabs={TABS.map((tab) => ({ value: tab, label: t("common", F.tabs[tab]) }))}
+        className="w-fit"
+      />
 
       <AdvancedFilter filters={filters} onApply={(next) => go({ ...next, page: 1 })} />
 

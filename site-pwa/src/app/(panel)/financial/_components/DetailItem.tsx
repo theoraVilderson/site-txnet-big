@@ -5,6 +5,7 @@ import { Check, Copy, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { copyText } from "../../_lib/clipboard";
+import { IconButton } from "../../_components/kit";
 
 const F = FrontendI18nKeys.common.financial;
 
@@ -63,14 +64,13 @@ export function DetailItem({
           {value}
         </span>
         {copyable && (
-          <button
-            type="button"
+          <IconButton
+            size="sm"
             onClick={copy}
             aria-label={t("common", copied ? F.copied : F.copy)}
-            className="shrink-0 rounded-md p-1 text-text-secondary transition-colors hover:bg-leaf-bg hover:text-primary"
-          >
-            {copied ? <Check size={12} className="text-primary" /> : <Copy size={12} />}
-          </button>
+            icon={copied ? <Check size={12} className="text-primary" aria-hidden /> : <Copy size={12} aria-hidden />}
+            className="size-6 rounded-md hover:text-primary"
+          />
         )}
       </div>
     </div>

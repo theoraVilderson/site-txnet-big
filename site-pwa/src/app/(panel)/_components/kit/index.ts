@@ -4,7 +4,7 @@
  */
 export { Alert, type AlertProps, type AlertTone } from "./Alert";
 export { AnimatedNumber } from "./AnimatedNumber";
-export { Button, IconButton, type ButtonProps, type ButtonSize, type ButtonVariant, type IconButtonProps } from "./Button";
+export { Button, IconButton, buttonClass, type ButtonProps, type ButtonSize, type ButtonVariant, type IconButtonProps } from "./Button";
 export { Card, CardHeader } from "./Card";
 export { ConfirmProvider, useConfirm, type ConfirmOptions } from "./confirm";
 export { celebrate, useCelebration } from "./celebrate";

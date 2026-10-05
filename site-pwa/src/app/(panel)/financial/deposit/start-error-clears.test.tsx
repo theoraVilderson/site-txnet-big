@@ -37,7 +37,7 @@ vi.mock("@/lib/billing-api", () => ({
     depositAbandon: vi.fn(),
   },
 }));
-vi.mock("@/lib/mini-app", () => ({ openMiniAppInvoice: vi.fn() }));
+vi.mock("@/lib/mini-app", async (actual) => ({ ...(await actual<object>()), openMiniAppInvoice: vi.fn() }));
 vi.mock("@/context/LocaleContext", () => ({ useLocale: () => ({ t, lang: "en" }) }));
 vi.mock("@/hooks/useApiError", () => ({
   useApiErrorMessage: () => (e: unknown) => (e as Error).message,

@@ -8,11 +8,11 @@ import { wheelApi, type SpinResult, type UserWheel, type WheelHistoryRow } from 
 import { copyText } from "../../_lib/clipboard";
 import { formatInstant } from "../../_lib/datetime";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
-import { Alert, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { WHEEL_KEYS as K, landingRotation, nextRequestId, plainNumber, refusalKey, refusalKeyOf, resultLine } from "../_lib/wheel";
 import { WheelDisc } from "./WheelDisc";
 import { PageHeader } from "../../_components/kit/PageHeader";
 import { celebrate } from "../../_components/kit/celebrate";
+import { Alert, Button } from "../../_components/kit";
 
 /** How long the wheel turns; the answer is already in hand when it starts. */
 const SPIN_MS = 4500;
@@ -123,19 +123,18 @@ export function WheelView() {
         <p className="rounded-2xl border border-card-border bg-card-bg p-6 text-sm text-text-secondary">{t("common", K.noWheel)}</p>
       ) : error || !wheel ? (
         <div className="flex flex-wrap items-center gap-3">
-          <Alert>{message(error)}</Alert>
-          <button type="button" className={quietButton} onClick={reload}>
-            <RotateCw size={12} aria-hidden />
+          <Alert tone="error">{message(error)}</Alert>
+          <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
             {t("common", K.retry)}
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <section className="flex flex-col items-center gap-4 rounded-2xl border border-card-border bg-card-bg p-6">
             <WheelDisc slots={wheel.prizes.map((p) => p.label)} rotation={rotation} durationMs={SPIN_MS} />
-            <button type="button" className={`${primaryButton} px-8 py-3 text-sm`} disabled={!wheel.eligible || spinning} onClick={spin}>
+            <Button variant="primary" size="lg" className="px-8" disabled={!wheel.eligible || spinning} onClick={spin}>
               {t("common", spinning ? K.spinning : K.spin)}
-            </button>
+            </Button>
             {wheel.eligible ? (
               <p className="text-xs text-text-secondary">{t("common", K.spinsLeft, { n: wheel.spinsLeftToday })}</p>
             ) : (
@@ -146,7 +145,7 @@ export function WheelView() {
             )}
             {wheel.nextSpinAt && <p className="text-xs text-text-secondary">{t("common", K.nextSpinAt, { time: formatInstant(wheel.nextSpinAt, lang) ?? "" })}</p>}
 
-            {failure && <Alert>{failure}</Alert>}
+            {failure && <Alert tone="error">{failure}</Alert>}
             {line && !spinning && (
               <div role="status" className="w-full rounded-xl bg-bg-inner p-4 text-center text-sm">
                 <p className="font-bold text-text-primary">{t("common", line.key, { ...line.values, reason: line.reason ? t("common", line.reason) : "" })}</p>
@@ -156,14 +155,14 @@ export function WheelView() {
                       {coupon.code}
                     </p>
                     <p className="text-text-secondary">{t("common", K.coupon.expires, { date: formatInstant(coupon.expiresAt, lang, { withTime: false }) ?? "" })}</p>
-                    <button
-                      type="button"
-                      className={quietButton}
+                    <Button
+                      variant="quiet"
+                      size="sm"
                       onClick={async () => setCopied(await copyText(coupon.code))}
+                      icon={copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
                     >
-                      {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
                       {t("common", copied ? K.coupon.copied : K.coupon.copy)}
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>

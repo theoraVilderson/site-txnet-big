@@ -28,6 +28,8 @@ export interface DialogProps {
   initialFocusRef?: RefObject<HTMLElement | null>;
   /** Hides the X — for a question that has its own answers (`useConfirm`). */
   hideClose?: boolean;
+  /** `alertdialog` for a warning that interrupts and waits for an answer. */
+  role?: "dialog" | "alertdialog";
   className?: string;
   children?: ReactNode;
 }
@@ -42,7 +44,7 @@ export function Dialog(props: DialogProps) {
   return <AnimatePresence>{props.open && <DialogLayer key="dialog" {...props} />}</AnimatePresence>;
 }
 
-function DialogLayer({ onClose, title, description, size = "md", footer, initialFocusRef, hideClose, className, children }: DialogProps) {
+function DialogLayer({ onClose, title, description, size = "md", footer, initialFocusRef, hideClose, role = "dialog", className, children }: DialogProps) {
   const { t } = useLocale();
   const level = useMotionLevel();
   const present = useIsPresent();
@@ -64,7 +66,7 @@ function DialogLayer({ onClose, title, description, size = "md", footer, initial
       />
       <motion.div
         ref={panelRef}
-        role="dialog"
+        role={role}
         aria-modal="true"
         aria-labelledby={`${id}-title`}
         aria-describedby={description ? `${id}-desc` : undefined}

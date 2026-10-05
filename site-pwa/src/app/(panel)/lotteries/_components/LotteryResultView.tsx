@@ -9,9 +9,9 @@ import { lotteryApi, type LotteryResult } from "@/lib/engagement-api";
 import { PANEL_LOTTERIES } from "@/lib/routes";
 import { formatInstant } from "../../_lib/datetime";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
-import { Alert, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { LOTTERY_KEYS as K, passedOnKeyOf, refusalKey, verifyDraw, type VerifyOutcome } from "../_lib/lotteries";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { Alert, Button, buttonClass } from "../../_components/kit";
 
 /**
  * One drawn lottery's result (F-707-n), from billing's
@@ -63,14 +63,14 @@ export function LotteryResultView({ id }: { id: string }) {
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-8">
       {!result && (
-        <Link href={PANEL_LOTTERIES} className={quietButton}>
+        <Link href={PANEL_LOTTERIES} className={buttonClass({ variant: "quiet", size: "sm" })}>
           <ArrowRight size={12} aria-hidden className="ltr:rotate-180" />
           {t("common", K.result.back)}
         </Link>
       )}
 
       {error ? (
-        <Alert>{refusalKey(error) ? t("common", refusalKey(error) as string) : errorMessage(error)}</Alert>
+        <Alert tone="error">{refusalKey(error) ? t("common", refusalKey(error) as string) : errorMessage(error)}</Alert>
       ) : !result ? (
         <TableSkeleton rows={4} columns={2} withPagination={false} />
       ) : (
@@ -127,9 +127,9 @@ export function LotteryResultView({ id }: { id: string }) {
               <dt className="text-text-secondary">{t("common", K.verify.listHash)}</dt>
               <dd dir="ltr" className="break-all font-mono text-text-primary">{result.listHash}</dd>
             </dl>
-            <button type="button" className={primaryButton} disabled={checking} onClick={check}>
+            <Button variant="primary" size="sm" disabled={checking} onClick={check}>
               {t("common", checking ? K.verify.running : K.verify.run)}
-            </button>
+            </Button>
             {verdict && (
               <p role="status" className={`rounded-xl bg-bg-inner p-3 text-xs ${verdict !== "failed" && verdict.outcome === "ok" ? "text-text-primary" : "font-bold text-text-primary"}`}>
                 {verdictText(verdict)}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AlertCircle, ChevronDown, Loader2, Receipt, ShieldCheck, Sparkles } from "lucide-react";
+import { Button } from "../../../_components/kit";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { DepositQuote } from "@/lib/billing-api";
@@ -149,26 +150,19 @@ export function PaymentSummary({
   );
 
   const button = (
-    <button
-      type="button"
+    <Button
+      variant="primary"
+      size="lg"
+      fullWidth
       disabled={!canPay}
+      loading={isStarting || isQuoting}
+      // An icon slot while busy, so the spinner sits beside a label that says
+      // what is happening ("quoting", "starting") instead of hiding it (K3).
+      icon={isStarting || isQuoting ? <Loader2 size={18} aria-hidden /> : undefined}
       onClick={onPay}
-      className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-bold text-on-accent transition-[filter] disabled:cursor-not-allowed disabled:bg-card-border disabled:text-text-secondary bg-primary hover:brightness-110`}
     >
-      {isStarting ? (
-        <>
-          <Loader2 size={16} className="animate-spin" aria-hidden />
-          {t("common", D.starting)}
-        </>
-      ) : isQuoting ? (
-        <>
-          <Loader2 size={16} className="animate-spin" aria-hidden />
-          {t("common", D.quoting)}
-        </>
-      ) : (
-        t("common", free ? D.payFree : D.pay)
-      )}
-    </button>
+      {t("common", isStarting ? D.starting : isQuoting ? D.quoting : free ? D.payFree : D.pay)}
+    </Button>
   );
 
   const failure = error && (

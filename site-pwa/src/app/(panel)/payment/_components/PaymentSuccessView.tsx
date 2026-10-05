@@ -8,15 +8,14 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { PANEL_FINANCIAL, PANEL_HOME, panelShopInvoicePath } from "@/lib/routes";
 import { returnInvoice } from "../../shop/_lib/shop";
 import { PAYMENT_RESULT_KEYS as P, type PaymentSuccess } from "../_lib/payment-result";
+import { buttonClass } from "../../_components/kit";
 import { PaymentResultCard } from "./PaymentResultCard";
 import { ReferenceCard } from "./ReferenceCard";
 
-/** The main action on both result pages. */
-export const PRIMARY_ACTION =
-  "group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-primary px-5 py-3.5 text-sm font-bold text-text-on-accent shadow-[0_10px_30px_-10px_var(--accent-glow)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-10px_var(--accent-glow)] active:translate-y-0 active:scale-[0.98]";
+/** The main action on both result pages: a kit button's look on a link (K3). */
+export const PRIMARY_ACTION = buttonClass({ variant: "primary", size: "lg", fullWidth: true, className: "group" });
 
-export const SECONDARY_ACTION =
-  "flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-medium text-text-secondary transition-colors hover:bg-leaf-bg hover:text-text-primary";
+export const SECONDARY_ACTION = buttonClass({ variant: "quiet", size: "lg", fullWidth: true });
 
 /**
  * Where a bank returns a payer whose top-up settled (F-093-f).

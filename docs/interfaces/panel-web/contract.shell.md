@@ -66,9 +66,9 @@ under `(panel)` renders in: `_components/PanelShell.tsx` = `PanelSidebar` +
      decides drawer-or-rail is the one these follow, and `sm` never was.
      Below `lg` the bar is now the menu button, the wallet and the switcher,
      ~430px.
-   - **The header cannot clip the spill.** The wallet and switcher dropdowns are
-     absolutely positioned children of it, so `overflow-hidden` there cuts the
-     open menus and leaves the overflow.
+   - **The header cannot clip the spill.** `overflow-hidden` there cuts the
+     row and leaves the overflow. (The wallet, bell and switcher panels are
+     portaled kit `Popover`s since UX-1-ab, so they are no longer the reason.)
 
    So a control that does not fit does not belong in the bar. Logout is now a
    **nav** entry (below), which is where ADR-0035 always said it lived.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { HandCoins } from "lucide-react";
+import { HandCoins, Loader2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
@@ -9,7 +9,7 @@ import { billingApi, type DepositGateway } from "@/lib/billing-api";
 import { AmountInput } from "../../../deposit/_components/AmountInput";
 import { GatewaySelector, gatewayKey } from "../../../deposit/_components/GatewaySelector";
 import { topupBody } from "../_lib/topup";
-import { PageHeader } from "../../../../_components/kit/PageHeader";
+import { Button, PageHeader } from "../../../../_components/kit";
 
 const B = FrontendI18nKeys.common.tenantBilling.topupPage;
 
@@ -117,15 +117,17 @@ export function TenantTopupView() {
             {startError}
           </p>
         )}
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="lg"
+          fullWidth
           onClick={() => void pay()}
-          disabled={!body || isStarting}
-          aria-busy={isStarting}
-          className="w-full rounded-2xl bg-primary px-5 py-4 text-sm font-bold text-on-accent hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!body}
+          loading={isStarting}
+          icon={isStarting ? <Loader2 size={18} aria-hidden /> : undefined}
         >
           {t("common", isStarting ? B.paying : B.pay)}
-        </button>
+        </Button>
       </div>
     </div>
   );

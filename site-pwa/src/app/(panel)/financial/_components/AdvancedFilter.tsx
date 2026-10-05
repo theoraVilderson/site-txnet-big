@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Filter, Search, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { Button, Card, Field, Input, Select } from "../../_components/kit";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import {
   DIRECTIONS,
@@ -68,37 +69,27 @@ export function AdvancedFilter({ filters, onApply }: AdvancedFilterProps) {
     setOpen(false);
   };
 
-  const field =
-    "w-full rounded-xl border border-card-border bg-bg-inner px-3 py-2.5 text-sm text-text-primary outline-none focus:border-primary";
-  const label = "mb-1.5 block text-xs font-medium text-text-secondary";
+  const all = { value: "", label: t("common", F.filter.all) };
 
   return (
     <div className="relative z-20 mb-6">
-      <button
-        type="button"
+      <Button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className={`relative flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition-all ${
-          open
-            ? "bg-primary text-on-accent shadow-lg shadow-primary-glow"
-            : "border border-card-border bg-card-bg text-text-primary hover:bg-leaf-bg"
-        }`}
+        variant={open ? "primary" : "secondary"}
+        icon={<Filter size={18} aria-hidden />}
+        iconEnd={open ? <X size={16} aria-hidden /> : undefined}
       >
-        <Filter size={18} aria-hidden />
-        <span>{t("common", open ? F.filter.close : F.filter.open)}</span>
-        {open ? (
-          <X size={16} aria-hidden />
-        ) : (
-          hasNarrowingFilter(filters) && (
-            <span
-              title={t("common", F.filter.active)}
-              className="absolute end-1.5 top-1.5 h-2 w-2 animate-pulse rounded-full bg-error"
-            >
-              <span className="sr-only">{t("common", F.filter.active)}</span>
-            </span>
-          )
+        {t("common", open ? F.filter.close : F.filter.open)}
+        {!open && hasNarrowingFilter(filters) && (
+          <span
+            title={t("common", F.filter.active)}
+            className="absolute end-1.5 top-1.5 h-2 w-2 animate-pulse rounded-full bg-error"
+          >
+            <span className="sr-only">{t("common", F.filter.active)}</span>
+          </span>
         )}
-      </button>
+      </Button>
 
       <AnimatePresence initial={false}>
         {open && (
@@ -109,98 +100,53 @@ export function AdvancedFilter({ filters, onApply }: AdvancedFilterProps) {
             transition={{ duration: 0.25, ease: "easeInOut" }}
             className="overflow-hidden"
           >
-            <div className="mt-3 rounded-2xl border border-card-border bg-card-bg p-5 shadow-xl md:p-6">
+            <Card padding="lg" className="mt-3">
               <div className="grid grid-cols-1 gap-5 md:grid-cols-4">
                 {filters.tab === "ledger" && (
                   <>
-                    <div className="md:col-span-4">
-                      <label className={label} htmlFor="financial-search">
-                        {t("common", F.filter.search)}
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="financial-search"
-                          type="text"
-                          value={draft.search}
-                          onChange={(e) => set("search", e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && apply()}
-                          placeholder={t("common", F.filter.searchPlaceholder)}
-                          className={`${field} ps-10`}
-                        />
-                        <Search
-                          size={18}
-                          aria-hidden
-                          className="pointer-events-none absolute inset-y-0 start-3 my-auto text-text-secondary"
-                        />
-                      </div>
-                    </div>
+                    <Field label={t("common", F.filter.search)} className="md:col-span-4">
+                      <Input
+                        type="text"
+                        value={draft.search}
+                        onChange={(e) => set("search", e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && apply()}
+                        placeholder={t("common", F.filter.searchPlaceholder)}
+                        end={<Search size={18} aria-hidden className="pointer-events-none me-1.5 text-text-secondary" />}
+                      />
+                    </Field>
 
-                    <div>
-                      <label className={label} htmlFor="financial-type">
-                        {t("common", F.filter.type)}
-                      </label>
-                      <select
-                        id="financial-type"
+                    <Field label={t("common", F.filter.type)} optional>
+                      <Select
                         value={draft.types[0] ?? ""}
-                        onChange={(e) =>
-                          set("types", e.target.value ? [e.target.value as ReasonType] : [])
-                        }
-                        className={field}
-                      >
-                        <option value="">{t("common", F.filter.all)}</option>
-                        {REASON_TYPES.map((type) => {
-                          const key = reasonLabelKey(type);
-                          return (
-                            <option key={type} value={type}>
-                              {key ? t("common", key) : type}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
+                        onChange={(v) => set("types", v ? [v as ReasonType] : [])}
+                        options={[
+                          all,
+                          ...REASON_TYPES.map((type) => {
+                            const key = reasonLabelKey(type);
+                            return { value: type, label: key ? t("common", key) : type };
+                          }),
+                        ]}
+                      />
+                    </Field>
 
-                    <div>
-                      <label className={label} htmlFor="financial-direction">
-                        {t("common", F.filter.direction)}
-                      </label>
-                      <select
-                        id="financial-direction"
+                    <Field label={t("common", F.filter.direction)} optional>
+                      <Select
                         value={draft.direction ?? ""}
-                        onChange={(e) => set("direction", (e.target.value || null) as Direction | null)}
-                        className={field}
-                      >
-                        <option value="">{t("common", F.filter.all)}</option>
-                        {DIRECTIONS.map((d) => (
-                          <option key={d} value={d}>
-                            {t("common", F.direction[d])}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                        onChange={(v) => set("direction", (v || null) as Direction | null)}
+                        options={[all, ...DIRECTIONS.map((d) => ({ value: d, label: t("common", F.direction[d]) }))]}
+                      />
+                    </Field>
                   </>
                 )}
 
                 {filters.tab === "payments" && (
-                  <div className="md:col-span-2">
-                    <label className={label} htmlFor="financial-status">
-                      {t("common", F.filter.status)}
-                    </label>
-                    <select
-                      id="financial-status"
+                  <Field label={t("common", F.filter.status)} className="md:col-span-2">
+                    <Select
                       value={draft.statuses[0] ?? ""}
-                      onChange={(e) =>
-                        set("statuses", e.target.value ? [e.target.value as PaymentStatus] : [])
-                      }
-                      className={field}
-                    >
-                      <option value="">{t("common", F.filter.all)}</option>
-                      {PAYMENT_STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {t("common", F.status[s])}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                      onChange={(v) => set("statuses", v ? [v as PaymentStatus] : [])}
+                      options={[all, ...PAYMENT_STATUSES.map((st) => ({ value: st, label: t("common", F.status[st]) }))]}
+                    />
+                  </Field>
                 )}
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:col-span-2">
@@ -218,23 +164,14 @@ export function AdvancedFilter({ filters, onApply }: AdvancedFilterProps) {
               </div>
 
               <div className="mt-6 flex justify-end gap-3 border-t border-card-border pt-4">
-                <button
-                  type="button"
-                  onClick={reset}
-                  className="rounded-lg px-5 py-2 text-sm text-text-secondary transition-colors hover:bg-leaf-bg"
-                >
+                <Button variant="quiet" onClick={reset}>
                   {t("common", F.filter.reset)}
-                </button>
-                <button
-                  type="button"
-                  onClick={apply}
-                  className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-medium text-on-accent shadow-lg shadow-primary-glow transition-transform hover:scale-105"
-                >
-                  <CheckCircle2 size={16} aria-hidden />
+                </Button>
+                <Button variant="primary" icon={<CheckCircle2 size={16} aria-hidden />} onClick={apply}>
                   {t("common", F.filter.apply)}
-                </button>
+                </Button>
               </div>
-            </div>
+            </Card>
           </motion.div>
         )}
       </AnimatePresence>

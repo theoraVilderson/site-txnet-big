@@ -6,6 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { DepositQuote } from "@/lib/billing-api";
 import { formatMoney } from "../../../_lib/money";
+import { Badge, Button, IconButton, Input } from "../../../_components/kit";
 
 const D = FrontendI18nKeys.common.deposit.coupon;
 
@@ -70,7 +71,7 @@ export function CouponInput({ codes, onAdd, onRemove, quote, disabled }: CouponI
       </div>
 
       <div className="flex gap-2">
-        <input
+        <Input
           id={inputId}
           type="text"
           autoComplete="off"
@@ -87,16 +88,11 @@ export function CouponInput({ codes, onAdd, onRemove, quote, disabled }: CouponI
               submit();
             }
           }}
-          className="w-full rounded-2xl border-2 border-card-border bg-bg-inner px-4 py-3 text-sm font-bold text-text-primary outline-none transition-colors focus:border-primary disabled:opacity-50"
+          className="font-bold"
         />
-        <button
-          type="button"
-          disabled={disabled || !typed.trim()}
-          onClick={submit}
-          className="shrink-0 rounded-2xl bg-primary px-4 text-sm font-bold text-on-accent transition-[filter] hover:brightness-110 disabled:opacity-40"
-        >
+        <Button variant="primary" disabled={disabled || !typed.trim()} onClick={submit} className="h-11">
           {t("common", D.add)}
-        </button>
+        </Button>
       </div>
 
       {/* The one message this box owns: the code is already on the page, so
@@ -130,16 +126,8 @@ export function CouponInput({ codes, onAdd, onRemove, quote, disabled }: CouponI
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-bold tracking-wide text-text-primary">{key}</span>
-                    {discount !== undefined && (
-                      <span className="rounded-md bg-leaf-bg px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                        {t("common", D.active)}
-                      </span>
-                    )}
-                    {refusal && (
-                      <span className="rounded-md bg-error-bg px-1.5 py-0.5 text-[10px] font-bold text-error">
-                        {t("common", D.rejected)}
-                      </span>
-                    )}
+                    {discount !== undefined && <Badge tone="success">{t("common", D.active)}</Badge>}
+                    {refusal && <Badge tone="error">{t("common", D.rejected)}</Badge>}
                   </div>
                   {refusal && <p className="mt-1 text-[11px] font-bold text-error">{refusal}</p>}
                 </div>
@@ -148,14 +136,13 @@ export function CouponInput({ codes, onAdd, onRemove, quote, disabled }: CouponI
                     -{formatMoney(discount, quote?.currencyCode ?? "", { lang, t })}
                   </span>
                 )}
-                <button
-                  type="button"
+                <IconButton
+                  size="sm"
                   onClick={() => onRemove(code)}
                   aria-label={t("common", D.remove, { code: key })}
-                  className="flex size-8 shrink-0 items-center justify-center rounded-xl text-text-secondary transition-colors hover:bg-error-bg hover:text-error"
-                >
-                  <Trash2 size={16} aria-hidden />
-                </button>
+                  icon={<Trash2 size={16} aria-hidden />}
+                  className="hover:bg-error-bg hover:text-error"
+                />
               </div>
             );
           })}

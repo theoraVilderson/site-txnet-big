@@ -85,6 +85,9 @@ balance behind it is the wallet control's
 7. **It locks the page behind it and gives the scroll back on unmount.** The
    lock lifts when the dialog leaves, not when the prop flips, because the
    dialog animates out; a page left unscrollable is the failure that matters.
+   Since UX-1-ab the lock, Esc, the focus trap and focus returned are the kit's
+   overlay layer (`useOverlayLayer`, `contract.ux.md` K7), counted with every
+   other overlay; the frame, the code box and the motion stay this modal's own.
 8. **The overlay scrolls; the card is not centred in a frame that cannot.**
    `fixed inset-0 overflow-y-auto` holding a `flex min-h-full items-center`
    wrapper, with the backdrop `fixed` so it does not scroll away. A centred card
@@ -119,9 +122,9 @@ with its glow already says where focus is, and a straight line under a
 `rounded-2xl` border was never the tidier answer.
 
 The modal is mounted outside the dropdown's own `open &&`, so closing the
-dropdown does not unmount a code the user is half-way through typing, and the
-dropdown suspends its own Escape and outside-press handlers while the modal is
-up. One key closing both would leave the user with neither.
+dropdown does not unmount a code the user is half-way through typing. Opening
+the modal closes the dropdown, and Esc reaches only the topmost overlay (the
+kit's stack, UX-1-ab): one key never closes both.
 
 `AnimatePresence` is what stays mounted; the dialog is not, so **mounting is the
 reset** — a closed modal holds no half-typed code and no previous attempt's

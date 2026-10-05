@@ -4,6 +4,7 @@ import { CreditCard, FlaskConical, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { DepositGateway } from "@/lib/billing-api";
+import { Button } from "../../../_components/kit";
 import { Skeleton } from "../../../_components/kit/Skeleton";
 import { formatMoney } from "../../../_lib/money";
 
@@ -66,14 +67,9 @@ export function GatewaySelector({
           <p role="alert" className="text-xs font-bold text-error">
             {error}
           </p>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="flex items-center gap-1.5 rounded-xl border border-card-border px-3 py-1.5 text-xs font-bold text-text-secondary hover:text-text-primary"
-          >
-            <RotateCw size={12} aria-hidden />
+          <Button size="sm" icon={<RotateCw size={12} aria-hidden />} onClick={onRetry}>
             {t("common", D.retry)}
-          </button>
+          </Button>
         </div>
       ) : gateways.length === 0 ? (
         <p className="text-xs font-bold text-text-secondary">{t("common", D.empty)}</p>

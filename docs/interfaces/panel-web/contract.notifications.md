@@ -69,13 +69,13 @@ and hears about new rows over the panel socket
    that does not exist is hidden, not rendered as a dead link
    ([contract.shell.md](contract.shell.md) rule 2); the row that builds an
    inbox page fills it in.
-10. **The panel is `absolute`, not portalled.** Rule 9 of `contract.shell.md`
-    predicted this control would need `GiftCodeModal`'s portal, and it does
-    not: the two traps it names — the bar's `backdrop-filter` becoming the
-    containing block, and its `z-20` capping the stack — are about `fixed`
-    children. This is the wallet dropdown's shape, anchored to its own
-    `relative` parent, opening over the page and never over the sidebar. A
-    *modal* this control grows later still wants the portal.
+10. **The panel is the kit's `Popover`, portaled (UX-1-ab, `contract.ux.md`
+    K7).** It was an `absolute` box with its own Esc and outside-press
+    listeners; on the kit it shares the overlay stack — Esc closes only the
+    topmost overlay, focus returns to the bell — and the bar's
+    `backdrop-filter` and `z-20` cannot box it. Rendered only while open, so a
+    hidden panel's buttons are never in the tab order. Proof
+    `_components/topbar.test.tsx`.
 
 ## What it cost the bar, and what the bar bought
 

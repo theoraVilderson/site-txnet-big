@@ -5,6 +5,7 @@ import { Inbox, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { Alert, Button, EmptyState } from "../../_components/kit";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 
 const F = FrontendI18nKeys.common.financial;
@@ -63,24 +64,21 @@ export function FinancialTable({
 
       <div className="min-h-[280px]">
         {error ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-            <p className="max-w-md px-6 text-sm text-error">{errorMessage(error)}</p>
-            <button
-              type="button"
-              onClick={onRetry}
-              className="flex items-center gap-2 rounded-lg border border-card-border px-4 py-2 text-sm text-text-primary transition-colors hover:bg-leaf-bg"
+          <div className="p-6 py-16">
+            <Alert
+              tone="error"
+              className="mx-auto max-w-md"
+              action={
+                <Button size="sm" icon={<RotateCw size={14} aria-hidden />} onClick={onRetry}>
+                  {t("common", F.retry)}
+                </Button>
+              }
             >
-              <RotateCw size={14} aria-hidden />
-              {t("common", F.retry)}
-            </button>
+              {errorMessage(error)}
+            </Alert>
           </div>
         ) : isEmpty ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-20 text-text-secondary">
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-leaf-bg text-primary">
-              <Inbox size={26} aria-hidden />
-            </span>
-            <p className="text-sm">{emptyLabel}</p>
-          </div>
+          <EmptyState icon={Inbox} title={emptyLabel} className="py-20" />
         ) : (
           children
         )}

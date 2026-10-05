@@ -23,7 +23,7 @@ import { GatewaySelector, gatewayKey } from "./GatewaySelector";
 import { PaymentSummary } from "./PaymentSummary";
 import { VerifyingBanner, VerifyingConfirm } from "./VerifyingNotice";
 import { WalletPreview } from "./WalletPreview";
-import { PageHeader } from "../../../_components/kit/PageHeader";
+import { Button, PageHeader, buttonClass } from "../../../_components/kit";
 
 const D = FrontendI18nKeys.common.deposit;
 
@@ -248,18 +248,14 @@ export function DepositView({ forInvoice = null }: { forInvoice?: ForInvoice | n
           {forInvoice ? (
             <Link
               href={panelShopInvoicePath(forInvoice.invoiceId)}
-              className="mt-6 inline-block rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-on-accent hover:brightness-110"
+              className={buttonClass({ variant: "primary", size: "lg", className: "mt-6" })}
             >
               {t("common", D.forInvoice.back)}
             </Link>
           ) : (
-            <button
-              type="button"
-              onClick={reset}
-              className="mt-6 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-on-accent hover:brightness-110"
-            >
+            <Button variant="primary" size="lg" onClick={reset} className="mt-6">
               {t("common", D.summary.again)}
-            </button>
+            </Button>
           )}
         </div>
       </div>

@@ -9,6 +9,7 @@ import { usePanelUiStore } from "../_stores/panel-ui-store";
 import { AccountSwitcher } from "./AccountSwitcher";
 import { PaletteButton } from "./CommandPalette";
 import { HelpButton } from "./guide/HelpButton";
+import { IconButton } from "./kit";
 import { NotificationsButton } from "./NotificationsButton";
 import { PANEL_SIDEBAR_ID } from "./PanelSidebar";
 import { WalletButton } from "./WalletButton";
@@ -50,16 +51,14 @@ export function PanelTopBar() {
   return (
     <header className="sticky top-4 z-20 mx-4 mt-4 flex h-16 shrink-0 items-center justify-between gap-2 rounded-2xl border border-card-border bg-card-bg px-3 backdrop-blur-xl sm:px-6">
       <div className="flex min-w-0 items-center gap-1 sm:gap-3">
-        <button
-          type="button"
+        <IconButton
           onClick={() => setDrawerOpen(true)}
           aria-label={t("common", S.openMenu)}
           aria-controls={PANEL_SIDEBAR_ID}
           aria-expanded={drawerOpen}
-          className="rounded-lg bg-leaf-bg p-2 text-text-primary lg:hidden"
-        >
-          <Menu size={22} />
-        </button>
+          icon={<Menu size={22} aria-hidden />}
+          className="bg-leaf-bg text-text-primary lg:hidden"
+        />
         <PaletteButton />
       </div>
       <div className="flex min-w-0 items-center gap-1 sm:gap-3">

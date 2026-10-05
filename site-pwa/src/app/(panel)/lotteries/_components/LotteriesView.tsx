@@ -9,9 +9,9 @@ import { lotteryApi, type UserLottery } from "@/lib/engagement-api";
 import { panelLotteryPath } from "@/lib/routes";
 import { formatInstant } from "../../_lib/datetime";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
-import { Alert, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { LOTTERY_KEYS as K, entryState, excludedKeyOf, refusalKey, statusKey } from "../_lib/lotteries";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { Alert, Button, buttonClass } from "../../_components/kit";
 
 /**
  * The user's lotteries (F-707-n), over billing's `/api/billing/lotteries`
@@ -73,11 +73,10 @@ export function LotteriesView() {
 
       {error && !lotteries ? (
         <div className="flex flex-wrap items-center gap-3">
-          <Alert>{message(error)}</Alert>
-          <button type="button" className={quietButton} onClick={reload}>
-            <RotateCw size={12} aria-hidden />
+          <Alert tone="error">{message(error)}</Alert>
+          <Button variant="quiet" size="sm" onClick={reload} icon={<RotateCw size={12} aria-hidden />}>
             {t("common", K.retry)}
-          </button>
+          </Button>
         </div>
       ) : lotteries === null ? (
         <TableSkeleton rows={3} columns={2} withPagination={false} />
@@ -131,17 +130,17 @@ export function LotteriesView() {
                   {state === "can_join" && (
                     <>
                       <p className="text-text-secondary">{t("common", K.mode.opt_in)}</p>
-                      <button type="button" className={primaryButton} disabled={busy === l.id} onClick={() => act(l, true)}>
+                      <Button variant="primary" size="sm" disabled={busy === l.id} onClick={() => act(l, true)}>
                         {t("common", K.join)}
-                      </button>
+                      </Button>
                     </>
                   )}
                   {state === "can_leave" && (
                     <>
                       <p className="text-text-primary">{t("common", K.joined)}</p>
-                      <button type="button" className={quietButton} disabled={busy === l.id} onClick={() => act(l, false)}>
+                      <Button variant="quiet" size="sm" disabled={busy === l.id} onClick={() => act(l, false)}>
                         {t("common", K.leave)}
-                      </button>
+                      </Button>
                     </>
                   )}
                   {state === "ticket" && <p className="font-bold text-text-primary">{t("common", K.ticket, { n: l.entry?.ticketNumber ?? 0 })}</p>}
@@ -152,12 +151,12 @@ export function LotteriesView() {
                     </p>
                   )}
                   {l.status === "drawn" && (
-                    <Link href={panelLotteryPath(l.id)} className={quietButton}>
+                    <Link href={panelLotteryPath(l.id)} className={buttonClass({ variant: "quiet", size: "sm" })}>
                       {t("common", K.viewResult)}
                     </Link>
                   )}
                 </div>
-                {failure?.id === l.id && <Alert>{failure.text}</Alert>}
+                {failure?.id === l.id && <Alert tone="error">{failure.text}</Alert>}
               </li>
             );
           })}

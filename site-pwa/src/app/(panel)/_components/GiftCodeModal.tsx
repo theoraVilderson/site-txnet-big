@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
   AnimatePresence,
   motion,
   useAnimationControls,
+  useIsPresent,
   useReducedMotionConfig,
   type Variants,
 } from "framer-motion";
-import { AlertCircle, Loader2, Sparkles, Ticket, Trash2, X } from "lucide-react";
+import { AlertCircle, Sparkles, Ticket, Trash2, X } from "lucide-react";
+import { Button, IconButton, buttonClass } from "./kit";
 import { celebrate } from "./kit/celebrate";
+import { useOverlayLayer } from "./kit/overlay";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
@@ -114,34 +117,20 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
   const toMessage = useApiErrorMessage();
   const reduce = useReducedMotionConfig();
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const shake = useAnimationControls();
+  const present = useIsPresent();
 
   const [code, setCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<{ message: string; ref?: string } | null>(null);
   const [redeemed, setRedeemed] = useState<GiftRedemption | null>(null);
 
-  // The code box is what the user came here to fill in.
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
-  // The page behind a modal should not scroll under it.
-  useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, []);
+  // The kit's overlay layer (contract.ux.md K7): Esc closes only the topmost
+  // overlay, Tab stays inside, the page behind is locked with a count every
+  // overlay shares, and focus goes back to the wallet when it closes. The code
+  // box is what the user came here to fill in, so it takes focus first.
+  useOverlayLayer({ active: present, containerRef: dialogRef, onClose, initialFocusRef: inputRef });
 
   const trimmed = code.trim();
   const canSubmit = trimmed.length > 0 && !isSubmitting && redeemed === null;
@@ -227,14 +216,16 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
 
       <div className="relative flex min-h-full items-center justify-center p-4 sm:p-6">
         <motion.div
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
+          tabIndex={-1}
           aria-label={t("common", G.title)}
           variants={card}
           initial="hidden"
           animate="shown"
           exit="gone"
-          className="relative w-full max-w-md overflow-hidden rounded-3xl border border-card-border bg-card-bg shadow-2xl backdrop-blur-xl"
+          className="relative w-full max-w-md overflow-hidden rounded-3xl border border-card-border bg-card-bg shadow-2xl backdrop-blur-xl focus:outline-none"
         >
           {/* The two orbs legacy lit its modal with — the one thing about it
               worth keeping. Purely decorative, so they are inert and hidden, and
@@ -264,14 +255,12 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
+              <IconButton
                 onClick={onClose}
                 aria-label={t("common", G.close)}
-                className="rounded-xl p-2 text-text-secondary transition-[background-color,color,rotate,scale] duration-300 hover:bg-leaf-bg hover:text-text-primary hover:rotate-90 active:scale-90 motion-reduce:hover:rotate-0 motion-reduce:active:scale-100"
-              >
-                <X size={20} aria-hidden />
-              </button>
+                icon={<X size={20} aria-hidden />}
+                className="duration-300 hover:rotate-90 motion-reduce:hover:rotate-0"
+              />
             </div>
 
             {redeemed?.kind === "free_grant" ? (
@@ -372,25 +361,17 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
                 {/* The label swaps without `AnimatePresence` on purpose: the
                     accessible name of a submit button has to be one word at a
                     time, and a cross-fade briefly makes it both. */}
-                <button
+                <Button
                   type="submit"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
                   disabled={!canSubmit}
-                  className="gift-rise group/btn relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-primary to-primary/70 py-4 text-sm font-black text-on-accent shadow-lg shadow-primary-glow transition-[filter,opacity,scale] duration-200 [animation-delay:260ms] hover:brightness-110 enabled:hover:scale-[1.02] enabled:active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none motion-reduce:enabled:hover:scale-100 motion-reduce:enabled:active:scale-100"
+                  loading={isSubmitting}
+                  className="gift-rise [animation-delay:260ms]"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" aria-hidden />
-                      {t("common", G.submitting)}
-                    </>
-                  ) : (
-                    t("common", G.submit)
-                  )}
-                  {/* A light sweep across the face on hover. Decorative. */}
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-1000 group-hover/btn:translate-x-full motion-reduce:hidden"
-                  />
-                </button>
+                  {t("common", isSubmitting ? G.submitting : G.submit)}
+                </Button>
               </form>
             )}
           </motion.div>
@@ -425,17 +406,13 @@ function ServiceGranted({ redemption, onClose }: { redemption: GiftGrant; onClos
       <Link
         href={PANEL_MY_SERVICES}
         onClick={onClose}
-        className="mt-5 block w-full rounded-2xl bg-primary py-3.5 text-sm font-bold text-on-accent hover:brightness-110"
+        className={buttonClass({ variant: "primary", size: "lg", fullWidth: true, className: "mt-5" })}
       >
         {t("common", G.toMyServices)}
       </Link>
-      <button
-        type="button"
-        onClick={onClose}
-        className="mt-3 w-full rounded-2xl bg-leaf-bg py-3.5 text-sm font-bold text-text-primary transition-[background-color] duration-200 hover:bg-card-border"
-      >
+      <Button size="lg" fullWidth onClick={onClose} className="mt-3">
         {t("common", G.done)}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -531,13 +508,9 @@ function Success({
         <span>{t("common", G.newBalance, { balance })}</span>
       </motion.div>
 
-      <button
-        type="button"
-        onClick={onClose}
-        className="mt-6 w-full rounded-2xl bg-leaf-bg py-3.5 text-sm font-bold text-text-primary transition-[background-color,scale] duration-200 hover:bg-card-border hover:scale-[1.02] active:scale-[0.97] motion-reduce:hover:scale-100 motion-reduce:active:scale-100"
-      >
+      <Button size="lg" fullWidth onClick={onClose} className="mt-6">
         {t("common", G.done)}
-      </button>
+      </Button>
     </motion.div>
   );
 }

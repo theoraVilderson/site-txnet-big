@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRef } from "react";
 import { ShieldCheck, TriangleAlert } from "lucide-react";
-import { useEffect } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { WalletPaymentRow } from "@/lib/billing-api";
 import { PANEL_FINANCIAL } from "@/lib/routes";
 import { formatMoney } from "../../../_lib/money";
+import { Button, Dialog } from "../../../_components/kit";
 
 const V = FrontendI18nKeys.common.deposit.verifying;
 
@@ -35,7 +36,9 @@ export function VerifyingBanner({ payment }: { payment: WalletPaymentRow }) {
 /**
  * The confirm before a second payment (F-093-m). **Warn, not block** — the
  * user's choice (2026-09-14): "pay anyway" always goes through. The safe answer
- * is the prominent one.
+ * is the prominent one, and it holds the focus when the dialog opens. The frame
+ * is the kit's `Dialog` (contract.ux.md K7): Esc and the backdrop are the safe
+ * answer too.
  */
 export function VerifyingConfirm({
   payment,
@@ -48,50 +51,34 @@ export function VerifyingConfirm({
 }) {
   const { lang, t } = useLocale();
   const amount = formatMoney(payment.amountCredited, payment.currencyCode, { lang, t });
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => e.key === "Escape" && onCancel();
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onCancel]);
+  const safe = useRef<HTMLButtonElement>(null);
 
   return (
-    // Above the sidebar's `z-40`, like the gift modal (`contract.gift-code.md`).
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm" onClick={onCancel}>
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div
-          role="alertdialog"
-          aria-modal="true"
-          aria-labelledby="verifying-confirm-title"
-          onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-sm rounded-3xl border border-card-border bg-card-bg p-6 text-center shadow-xl"
-        >
-          <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-error-bg text-error">
-            <TriangleAlert size={24} aria-hidden />
+    <Dialog
+      open
+      role="alertdialog"
+      onClose={onCancel}
+      size="sm"
+      hideClose
+      initialFocusRef={safe}
+      title={
+        <span className="flex items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-error-bg text-error">
+            <TriangleAlert size={20} aria-hidden />
           </span>
-          <h2 id="verifying-confirm-title" className="mt-4 text-lg font-bold text-text-primary">
-            {t("common", V.warn.title)}
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-text-secondary">{t("common", V.warn.body, { amount })}</p>
-          <div className="mt-6 flex flex-col gap-2">
-            <button
-              type="button"
-              autoFocus
-              onClick={onCancel}
-              className="rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-text-on-accent hover:brightness-110"
-            >
-              {t("common", V.warn.cancel)}
-            </button>
-            <button
-              type="button"
-              onClick={onConfirm}
-              className="rounded-2xl px-5 py-3 text-sm font-medium text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
-            >
-              {t("common", V.warn.confirm)}
-            </button>
-          </div>
-        </div>
+          {t("common", V.warn.title)}
+        </span>
+      }
+    >
+      <p className="text-sm leading-6 text-text-secondary">{t("common", V.warn.body, { amount })}</p>
+      <div className="mt-6 flex flex-col gap-2">
+        <Button ref={safe} variant="primary" size="lg" fullWidth onClick={onCancel}>
+          {t("common", V.warn.cancel)}
+        </Button>
+        <Button variant="quiet" size="lg" fullWidth onClick={onConfirm}>
+          {t("common", V.warn.confirm)}
+        </Button>
       </div>
-    </div>
+    </Dialog>
   );
 }

@@ -33,6 +33,20 @@ const ICON_PX: Record<ButtonSize, number> = { sm: 14, md: 16, lg: 18 };
 const BASE =
   "relative inline-flex shrink-0 select-none items-center justify-center font-bold whitespace-nowrap transition-[background-color,border-color,color,filter,transform] duration-[120ms] motion-safe:active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50";
 
+/**
+ * A kit button's look for something that is not a `<button>` — a `Link` that
+ * navigates (K3). Same variants, sizes and press as `Button`; the caller's
+ * element keeps its own semantics.
+ */
+export function buttonClass({
+  variant = "secondary",
+  size = "md",
+  fullWidth = false,
+  className,
+}: { variant?: ButtonVariant; size?: ButtonSize; fullWidth?: boolean; className?: string } = {}): string {
+  return cn(BASE, VARIANT[variant], SIZE[size], fullWidth && "w-full", className);
+}
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
