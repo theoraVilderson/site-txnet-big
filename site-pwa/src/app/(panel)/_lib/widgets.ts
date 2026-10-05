@@ -28,6 +28,13 @@ export interface WidgetDef extends PermissionGated {
  * there too (`dashboardLayout`).
  */
 export const WIDGETS: readonly WidgetDef[] = [
+  // D4: every signed-in user's, over APIs that already answer each user their own.
+  { id: "quick-actions", titleKey: W.quickActions, size: 1, component: lazy(() => import("../_components/dashboard/widgets/QuickActionsWidget")) },
+  { id: "wallet", titleKey: W.wallet, size: 1, component: lazy(() => import("../_components/dashboard/widgets/WalletWidget")) },
+  { id: "services", titleKey: W.services, size: 2, component: lazy(() => import("../_components/dashboard/widgets/ServicesWidget")) },
+  { id: "support", titleKey: W.support, size: 1, component: lazy(() => import("../_components/dashboard/widgets/SupportWidget")) },
+  { id: "notifications", titleKey: W.notifications, size: 1, component: lazy(() => import("../_components/dashboard/widgets/NotificationsWidget")) },
+  { id: "wheel", titleKey: W.wheel, size: 1, component: lazy(() => import("../_components/dashboard/widgets/WheelWidget")) },
   // D2 (F-0209): a switch must be visible, so "accounts in this browser" stays.
   { id: "accounts", titleKey: W.accounts, size: 1, component: lazy(() => import("../_components/dashboard/widgets/AccountsWidget")) },
 ];

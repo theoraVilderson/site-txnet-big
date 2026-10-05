@@ -5377,7 +5377,42 @@
       "retry": "Try again"
     },
     "widgets": {
+      "quickActions": "Quick actions",
+      "wallet": "Wallet",
+      "services": "My services",
+      "support": "Support",
+      "notifications": "Notifications",
+      "wheel": "Lucky wheel",
       "accounts": "Accounts in this browser"
+    },
+    "quick": {
+      "topUp": "Top up",
+      "giftCode": "Gift code",
+      "buy": "Buy a service",
+      "newTicket": "New ticket"
+    },
+    "wallet": {
+      "held": "{{amount}} held for your services"
+    },
+    "services": {
+      "runningOut": "Running out",
+      "seeAll": "All my services",
+      "empty": "You have no active service yet.",
+      "used": "{{used}} of {{total}} used",
+      "usedOnly": "{{used}} used",
+      "usedUnlimited": "{{used}} used · unlimited"
+    },
+    "support": {
+      "empty": "You have no open ticket.",
+      "unread": "{{count}} new",
+      "seeAll": "All tickets"
+    },
+    "notifications": {
+      "empty": "Nothing new."
+    },
+    "wheel": {
+      "open": "Today's spin is waiting for you",
+      "closed": "No spin is open for you today"
     }
   }
 }

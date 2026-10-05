@@ -1,4 +1,5 @@
-import type { GrantStatus, UserConfigRow } from "@/lib/billing-api";
+import type { GrantRow, GrantStatus, UserConfigRow } from "@/lib/billing-api";
+import { usedShare } from "./usage";
 
 /**
  * Whether a service is moving data, and where a purchase is on its way to
@@ -87,4 +88,35 @@ export function buildStage(status: GrantStatus, configs: UserConfigRow[] | null)
   if (status === "pending") return "server";
   if (status !== "active" || !configs || configs.length === 0) return null;
   return configs.every((c) => c.lines.length === 0 && c.linksCapturedAt === null) ? "links" : null;
+}
+
+/** U3: this close to its end, a service is running out. */
+export const RUNNING_OUT_MS = 3 * 24 * 60 * 60 * 1000;
+/** U3: this share of a bounded quota left, or less, and it is running out. */
+export const RUNNING_OUT_SHARE = 0.1;
+
+/**
+ * The traffic a Grant is bounded by, as the meter reads it (`UsageMeter`): a
+ * capped prepaid one's cap; none for unlimited traffic, for a metered one
+ * (what billing bought is a bag, not a limit) or for a prepaid one with no cap.
+ */
+export function trafficBound(row: Pick<GrantRow, "billingMode" | "trafficUnlimited" | "trafficCapBytes">): string | null {
+  if (row.trafficUnlimited || row.billingMode === "metered") return null;
+  return row.trafficCapBytes;
+}
+
+/**
+ * "Running out" (UX-1-q, `contract.ux.md` U3): it ends within 3 days, or 10% or
+ * less of its bounded quota is left. A service already ended is not running
+ * out — it has run out, and its status says so.
+ */
+export function runningOut(
+  row: Pick<GrantRow, "endsAt" | "consumedBytes" | "billingMode" | "trafficUnlimited" | "trafficCapBytes">,
+  now: Date,
+): boolean {
+  const ends = row.endsAt ? new Date(row.endsAt).getTime() - now.getTime() : null;
+  if (ends !== null && !Number.isNaN(ends) && ends > 0 && ends <= RUNNING_OUT_MS) return true;
+  const bound = trafficBound(row);
+  const used = bound === null ? null : usedShare(row.consumedBytes, bound);
+  return used !== null && 1 - used <= RUNNING_OUT_SHARE + 1e-9;
 }

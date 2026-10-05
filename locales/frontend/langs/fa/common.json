@@ -5377,7 +5377,42 @@
       "retry": "تلاش دوباره"
     },
     "widgets": {
+      "quickActions": "کارهای سریع",
+      "wallet": "کیف پول",
+      "services": "سرویس‌های من",
+      "support": "پشتیبانی",
+      "notifications": "اعلان‌ها",
+      "wheel": "گردونهٔ شانس",
       "accounts": "حساب‌های این مرورگر"
+    },
+    "quick": {
+      "topUp": "افزایش موجودی",
+      "giftCode": "کد هدیه",
+      "buy": "خرید سرویس",
+      "newTicket": "تیکت تازه"
+    },
+    "wallet": {
+      "held": "{{amount}} برای سرویس‌هایتان کنار گذاشته شده"
+    },
+    "services": {
+      "runningOut": "رو به پایان",
+      "seeAll": "همهٔ سرویس‌های من",
+      "empty": "هنوز سرویس فعالی ندارید.",
+      "used": "{{used}} از {{total}} مصرف شده",
+      "usedOnly": "{{used}} مصرف شده",
+      "usedUnlimited": "{{used}} مصرف شده · نامحدود"
+    },
+    "support": {
+      "empty": "تیکت بازی ندارید.",
+      "unread": "{{count}} پیام تازه",
+      "seeAll": "همهٔ تیکت‌ها"
+    },
+    "notifications": {
+      "empty": "خبر تازه‌ای نیست."
+    },
+    "wheel": {
+      "open": "چرخش امروزتان منتظر شماست",
+      "closed": "امروز چرخشی برایتان باز نیست"
     }
   }
 }
