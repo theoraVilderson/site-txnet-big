@@ -1,11 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotionConfig } from "framer-motion";
 import {
-  ArrowLeft,
-  ArrowRight,
   Boxes,
   Check,
   ChevronDown,
@@ -13,17 +10,13 @@ import {
   FlaskConical,
   Gauge,
   KeyRound,
-  Lightbulb,
   ListChecks,
-  Loader2,
   Plug,
   Router,
   Server,
   ShieldCheck,
   Sparkles,
   Tag,
-  TriangleAlert,
-  X,
   type LucideIcon,
 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
@@ -57,6 +50,7 @@ import {
   type WizardErrors,
 } from "../_lib/register-wizard";
 import { useSystemsError } from "./parts";
+import { Wizard, useWizard } from "../../_components/kit/Wizard";
 
 const R = SYSTEMS_KEYS.register;
 const F = R.field;
@@ -97,15 +91,12 @@ const invalidInput = "border-error focus:border-error";
  * the done screen says only what the answer's `configured` flags say.
  */
 export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void; onRegistered: () => Promise<void> }) {
-  const { t, isRtl } = useLocale();
+  const { t } = useLocale();
   const message = useSystemsError();
   const reduceMotion = useReducedMotionConfig();
 
   const [form, setForm] = useState<RegisterForm>(() => applyDriver(emptyRegisterForm(), "marzban"));
   const [parts, setParts] = useState<LoginParts>(emptyLoginParts);
-  const [stepIndex, setStepIndex] = useState(0);
-  const [reached, setReached] = useState(0);
-  const [direction, setDirection] = useState(1);
   const [errors, setErrors] = useState<WizardErrors>({});
   /** Billing's own words for a field it refused, by field — shown until that field changes. */
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
@@ -113,10 +104,17 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
   const [failure, setFailure] = useState<string | null>(null);
   const [done, setDone] = useState<{ name: string; answer: RegisteredPanel } | null>(null);
   const [touched, setTouched] = useState(false);
-  const bodyRef = useRef<HTMLDivElement>(null);
+  const wizard = useWizard({
+    count: REGISTER_STEPS.length,
+    validate: (i) => {
+      const found = registerStepErrors(form, parts, REGISTER_STEPS[i].id);
+      setErrors(found);
+      return Object.keys(found).length === 0;
+    },
+    onMove: () => setFailure(null),
+  });
 
-  const step = REGISTER_STEPS[stepIndex];
-  const total = REGISTER_STEPS.length;
+  const step = REGISTER_STEPS[wizard.index];
   const profile = DRIVER_PROFILES[form.driverType];
 
   const clear = (k: keyof WizardErrors) => {
@@ -145,46 +143,13 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
     setErrors({});
   };
 
-  const requestClose = () => {
-    if (touched && !done && !window.confirm(t("common", W.confirmClose))) return;
-    onClose();
-  };
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") requestClose();
-    };
-    document.addEventListener("keydown", onKey);
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = overflow;
-    };
-  });
-
-  const goTo = (index: number) => {
-    setDirection(index > stepIndex ? 1 : -1);
-    setStepIndex(index);
-    setReached((r) => Math.max(r, index));
-    setFailure(null);
-    bodyRef.current?.scrollTo({ top: 0 });
-  };
-
-  const next = () => {
-    const found = registerStepErrors(form, parts, step.id);
-    setErrors(found);
-    if (Object.keys(found).length > 0) return;
-    goTo(stepIndex + 1);
-  };
-
   const submit = async () => {
     const bad = firstInvalidRegisterStep(form, parts);
     const checked = validateRegister(form);
     if (bad || !checked.ok) {
       const at = bad ?? "details";
       setErrors(registerStepErrors(form, parts, at));
-      goTo(REGISTER_STEPS.findIndex((s) => s.id === at));
+      wizard.goTo(REGISTER_STEPS.findIndex((s) => s.id === at));
       return;
     }
     setSaving(true);
@@ -200,7 +165,7 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
       const byField = fieldErrorsByPath(e);
       setServerErrors(byField);
       const owner = REGISTER_STEPS.find((s) => s.fields.some((f) => byField[f]));
-      if (owner) goTo(REGISTER_STEPS.indexOf(owner));
+      if (owner) wizard.goTo(REGISTER_STEPS.indexOf(owner));
       setFailure(message(e));
     } finally {
       setSaving(false);
@@ -214,11 +179,8 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
     setServerErrors({});
     setDone(null);
     setTouched(false);
-    setStepIndex(0);
-    setReached(0);
+    wizard.reset();
   };
-
-  if (typeof document === "undefined") return null;
 
   const errorText = (k: keyof WizardErrors) => {
     const text = errors[k] ? t("common", errors[k]!) : serverErrors[k];
@@ -253,7 +215,7 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
       value={String(form[k])}
       onChange={(e) => set(k, e.target.value as never)}
       onKeyDown={(e) => {
-        if (e.key === "Enter") next();
+        if (e.key === "Enter") wizard.next();
       }}
     />
   );
@@ -486,228 +448,28 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
       </div>
     ),
 
-    review: <ReviewStep form={form} onEdit={(id) => goTo(REGISTER_STEPS.findIndex((s) => s.id === id))} />,
+    review: <ReviewStep form={form} onEdit={(id) => wizard.goTo(REGISTER_STEPS.findIndex((s) => s.id === id))} />,
   };
 
-  const StepIcon = STEP_ICONS[step.id];
-  const slide = reduceMotion ? {} : { x: direction * (isRtl ? -28 : 28), opacity: 0 };
-  const leave = reduceMotion ? {} : { x: direction * (isRtl ? 28 : -28), opacity: 0 };
-  const progress = ((stepIndex + 1) / total) * 100;
-  const BackIcon = isRtl ? ArrowRight : ArrowLeft;
-  const NextIcon = isRtl ? ArrowLeft : ArrowRight;
-
-  return createPortal(
-    <motion.div
-      initial={reduceMotion ? false : { opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/50 backdrop-blur-sm sm:items-center sm:p-4"
-      onMouseDown={(e) => e.target === e.currentTarget && requestClose()}
+  return (
+    <Wizard
+      title={t("common", R.title)}
+      icon={Server}
+      steps={REGISTER_STEPS.map((s) => ({ id: s.id, title: t("common", W.steps[s.id].title), subtitle: t("common", W.steps[s.id].subtitle), icon: STEP_ICONS[s.id] }))}
+      wizard={wizard}
+      dirty={touched}
+      closeQuestion={t("common", W.confirmClose)}
+      busy={saving}
+      submitLabel={t("common", saving ? W.submitting : W.submit)}
+      onSubmit={() => void submit()}
+      onClose={onClose}
+      done={done ? <DoneScreen name={done.name} answer={done.answer} onAnother={restart} onFinish={onClose} /> : undefined}
+      intro={<p className="text-xs text-text-secondary">{t("common", W.steps[step.id].subtitle)}</p>}
+      tip={t("common", W.steps[step.id].tip)}
+      error={failure}
     >
-      <motion.div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="rp-wizard-title"
-        initial={reduceMotion ? false : { opacity: 0, y: 28, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: "spring", stiffness: 300, damping: 28 }}
-        className="flex h-full w-full flex-col overflow-hidden border-card-border bg-card-bg shadow-2xl sm:h-auto sm:max-h-[92vh] sm:max-w-2xl sm:rounded-3xl sm:border lg:max-w-4xl lg:flex-row"
-      >
-        {/* Step rail — at the side on lg; below it the progress bar says the same. */}
-        <aside className="hidden w-64 shrink-0 flex-col gap-1 border-e border-card-border bg-[var(--bg-inner)] p-5 lg:flex">
-          <p className="mb-3 flex items-center gap-2 text-sm font-bold text-text-primary">
-            <Server size={16} className="text-primary" aria-hidden />
-            {t("common", R.title)}
-          </p>
-          <ol className="relative flex flex-col gap-1">
-            {REGISTER_STEPS.map((s, i) => {
-              const Icon = STEP_ICONS[s.id];
-              const isDone = i < stepIndex || Boolean(done);
-              const current = i === stepIndex && !done;
-              const reachable = i <= reached && !done && !saving;
-              return (
-                <li key={s.id} className="relative">
-                  {current && (
-                    <motion.span layoutId="rp-rail-current" className="absolute inset-0 rounded-xl bg-card-bg shadow-sm" transition={{ type: "spring", stiffness: 400, damping: 34 }} aria-hidden />
-                  )}
-                  <button
-                    type="button"
-                    disabled={!reachable}
-                    onClick={() => goTo(i)}
-                    aria-current={current ? "step" : undefined}
-                    className={`relative flex w-full items-center gap-3 rounded-xl px-2 py-2 text-start transition-colors disabled:cursor-default ${!current && reachable ? "hover:bg-card-bg/60" : ""}`}
-                  >
-                    <span
-                      className={`grid size-8 shrink-0 place-items-center rounded-full border text-xs font-bold transition-colors duration-300 ${
-                        isDone
-                          ? "border-transparent bg-primary text-on-accent"
-                          : current
-                            ? "border-[var(--accent-primary)] bg-[var(--leaf-bg)] text-primary"
-                            : "border-card-border text-text-secondary"
-                      }`}
-                    >
-                      <AnimatePresence mode="wait" initial={false}>
-                        <motion.span
-                          key={isDone ? "done" : "icon"}
-                          initial={reduceMotion ? false : { scale: 0.3, rotate: -45, opacity: 0 }}
-                          animate={{ scale: 1, rotate: 0, opacity: 1 }}
-                          exit={reduceMotion ? undefined : { scale: 0.3, opacity: 0 }}
-                          transition={{ type: "spring", stiffness: 500, damping: 24 }}
-                        >
-                          {isDone ? <Check size={14} aria-hidden /> : <Icon size={14} aria-hidden />}
-                        </motion.span>
-                      </AnimatePresence>
-                    </span>
-                    <span className="flex flex-col">
-                      <span className={`text-xs font-bold ${current || isDone ? "text-text-primary" : "text-text-secondary"}`}>{t("common", W.steps[s.id].title)}</span>
-                      <span className="line-clamp-1 text-[10px] text-text-secondary">{t("common", W.steps[s.id].subtitle)}</span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
-        </aside>
-
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="shrink-0 border-b border-card-border px-4 pb-3 pt-4 sm:px-6">
-            <div className="flex items-start justify-between gap-3">
-              {done ? (
-                <span id="rp-wizard-title" className="text-sm font-bold text-text-primary">
-                  {t("common", R.title)}
-                </span>
-              ) : (
-                <div className="flex min-w-0 items-center gap-3">
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.span
-                      key={step.id}
-                      initial={reduceMotion ? false : { scale: 0.6, rotate: -20, opacity: 0 }}
-                      animate={{ scale: 1, rotate: 0, opacity: 1 }}
-                      exit={reduceMotion ? undefined : { scale: 0.6, opacity: 0 }}
-                      transition={{ type: "spring", stiffness: 420, damping: 22 }}
-                      className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--leaf-bg)] text-primary"
-                    >
-                      <StepIcon size={20} aria-hidden />
-                    </motion.span>
-                  </AnimatePresence>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-text-secondary">{t("common", W.stepOf, { current: String(stepIndex + 1), total: String(total) })}</p>
-                    <h2 id="rp-wizard-title" className="truncate text-base font-bold text-text-primary">
-                      {t("common", W.steps[step.id].title)}
-                    </h2>
-                  </div>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={requestClose}
-                aria-label={t("common", W.close)}
-                className="grid size-9 shrink-0 place-items-center rounded-xl text-text-secondary transition-colors hover:bg-[var(--bg-inner)] hover:text-text-primary"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            {!done && (
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--leaf-bg)]" role="progressbar" aria-valuemin={1} aria-valuemax={total} aria-valuenow={stepIndex + 1}>
-                <motion.div
-                  className="h-full rounded-full bg-primary"
-                  animate={{ width: `${progress}%` }}
-                  transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 120, damping: 20 }}
-                />
-              </div>
-            )}
-          </header>
-
-          <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-6">
-            {done ? (
-              <DoneScreen name={done.name} answer={done.answer} onAnother={restart} onFinish={onClose} />
-            ) : (
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div key={step.id} initial={slide} animate={{ x: 0, opacity: 1 }} exit={leave} transition={{ duration: 0.2, ease: "easeOut" }} className="flex flex-col gap-5">
-                  <p className="text-xs text-text-secondary">{t("common", W.steps[step.id].subtitle)}</p>
-                  {steps[step.id]}
-                  <motion.aside
-                    initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: reduceMotion ? 0 : 0.15 }}
-                    className="flex items-start gap-3 rounded-2xl border border-dashed border-[var(--accent-primary)]/40 bg-[var(--leaf-bg)] p-3"
-                  >
-                    <motion.span
-                      animate={reduceMotion ? undefined : { rotate: [0, -12, 12, 0] }}
-                      transition={{ delay: 0.4, duration: 0.6 }}
-                      className="mt-0.5 shrink-0 text-primary"
-                    >
-                      <Lightbulb size={16} aria-hidden />
-                    </motion.span>
-                    <p className="text-xs leading-6 text-text-primary">
-                      <b>{t("common", W.tip)}: </b>
-                      {t("common", W.steps[step.id].tip)}
-                    </p>
-                  </motion.aside>
-                  <AnimatePresence>
-                    {failure && (
-                      <motion.p
-                        role="alert"
-                        initial={reduceMotion ? false : { opacity: 0, x: 0 }}
-                        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, x: [0, -6, 6, -3, 3, 0] }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.4 }}
-                        className="flex items-center gap-2 rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] p-3 text-xs font-bold text-error"
-                      >
-                        <TriangleAlert size={14} aria-hidden />
-                        {failure}
-                      </motion.p>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              </AnimatePresence>
-            )}
-          </div>
-
-          {!done && (
-            <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-card-border bg-card-bg px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
-              {stepIndex > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => goTo(stepIndex - 1)}
-                  disabled={saving}
-                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-bold text-text-secondary transition-colors hover:bg-[var(--bg-inner)] hover:text-text-primary disabled:opacity-50"
-                >
-                  <BackIcon size={16} aria-hidden />
-                  {t("common", W.back)}
-                </button>
-              ) : (
-                <button type="button" onClick={requestClose} className="rounded-xl px-3 py-2.5 text-sm font-bold text-text-secondary hover:bg-[var(--bg-inner)]">
-                  {t("common", R.cancel)}
-                </button>
-              )}
-              {step.id === "review" ? (
-                <motion.button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => void submit()}
-                  whileTap={reduceMotion ? undefined : { scale: 0.97 }}
-                  className="inline-flex min-w-36 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-on-accent shadow-md transition-all hover:brightness-110 disabled:opacity-60"
-                >
-                  {saving ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Check size={16} aria-hidden />}
-                  {t("common", saving ? W.submitting : W.submit)}
-                </motion.button>
-              ) : (
-                <motion.button
-                  type="button"
-                  onClick={next}
-                  whileTap={reduceMotion ? undefined : { scale: 0.97 }}
-                  className="group inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-on-accent shadow-md transition-all hover:brightness-110"
-                >
-                  {t("common", W.next)}
-                  <NextIcon size={16} className="transition-transform group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5" aria-hidden />
-                </motion.button>
-              )}
-            </footer>
-          )}
-        </div>
-      </motion.div>
-    </motion.div>,
-    document.body,
+      {steps[step.id]}
+    </Wizard>
   );
 }
 

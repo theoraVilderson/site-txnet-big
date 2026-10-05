@@ -168,14 +168,10 @@
       }
     },
     "wizard": {
-      "stepOf": "Step {{current}} of {{total}}",
-      "back": "Back",
-      "next": "Continue",
       "create": "Create gateway",
       "creating": "Creating…",
       "close": "Close",
       "confirmClose": "What you entered will not be saved. Leave anyway?",
-      "tip": "Tip",
       "optional": "Optional",
       "edit": "Change",
       "steps": {
@@ -709,6 +705,14 @@
       "title": "Leave without saving?",
       "body": "The changes on this page will be lost.",
       "leave": "Leave"
+    },
+    "wizard": {
+      "stepOf": "Step {{current}} of {{total}}",
+      "back": "Back",
+      "next": "Next",
+      "cancel": "Cancel",
+      "leave": "Close",
+      "tip": "Tip"
     }
   },
   "money": {
@@ -1494,7 +1498,6 @@
     },
     "wizard": {
       "title": "New product",
-      "stepOf": "Step {{current}} of {{total}}",
       "steps": {
         "category": "Category",
         "names": "Name",
@@ -1509,8 +1512,6 @@
         "variant": "The first sellable version: duration, price and quotas. You can add more variants later.",
         "review": "Check everything; “Create” saves it."
       },
-      "next": "Next",
-      "back": "Back",
       "create": "Create product",
       "pickCategory": "Pick at least one category",
       "useNewCategory": "Create a new category",
@@ -1528,7 +1529,8 @@
       "done": "Product created. If you ticked “Translate into every language”, drafts will appear shortly under “Translations”.",
       "openNew": "Open it",
       "edit": "Edit",
-      "categoryNotForOwner": "A platform product goes only in shared categories, and another tenant's product in that tenant's or shared ones. Pick another category, or change the owner under “Type & capabilities”."
+      "categoryNotForOwner": "A platform product goes only in shared categories, and another tenant's product in that tenant's or shared ones. Pick another category, or change the owner under “Type & capabilities”.",
+      "confirmClose": "What you entered will not be saved. Close anyway?"
     },
     "fulfilmentHint": {
       "network_access": "Internet/VPN subscription: the user gets a connection link with traffic and device quotas.",
@@ -2841,15 +2843,10 @@
       },
       "radiusSecretStored": "The RADIUS secret was stored in the vault too.",
       "wizard": {
-        "stepOf": "Step {{current}} of {{total}}",
-        "close": "Close",
-        "back": "Back",
-        "next": "Next",
         "submit": "Register panel",
         "submitting": "Registering…",
         "edit": "Edit",
         "optional": "optional",
-        "tip": "Tip",
         "confirmClose": "What you entered will not be saved. Close anyway?",
         "steps": {
           "family": {

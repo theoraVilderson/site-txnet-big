@@ -23,3 +23,4 @@ export { Select, type SelectOption, type SelectProps } from "./Select";
 export { Badge, StatusPill, type Tone } from "./StatusPill";
 export { Checkbox, Toggle } from "./Toggle";
 export { useUnsavedGuard } from "./useUnsavedGuard";
+export { Wizard, useWizard, type WizardProps, type WizardState, type WizardStepMeta } from "./Wizard";

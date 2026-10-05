@@ -1,25 +1,8 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
-import { AnimatePresence, motion, useReducedMotionConfig } from "framer-motion";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Building2,
-  Check,
-  Globe,
-  KeyRound,
-  Landmark,
-  Lightbulb,
-  ListChecks,
-  Loader2,
-  Percent,
-  ShieldCheck,
-  TriangleAlert,
-  X,
-  type LucideIcon,
-} from "lucide-react";
+import { Fragment, useState, type ReactNode } from "react";
+import { motion, useReducedMotionConfig } from "framer-motion";
+import { Building2, Check, Globe, KeyRound, Landmark, ListChecks, Percent, ShieldCheck, TriangleAlert, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useGatewayMessage, type GatewaySurface } from "../_lib/surface";
@@ -49,6 +32,7 @@ import {
 import { providerFields, secretFields } from "../_lib/provider-fields";
 import { ChoiceCards, FeeFields, PROVIDER_ICONS, SecretInput, fieldErrorText, useRangeText } from "./gateway-fields";
 import { Toggle } from "../../_components/kit/Toggle";
+import { Wizard, useWizard } from "../../_components/kit/Wizard";
 
 const G = FrontendI18nKeys.common.gateways;
 const F = G.form;
@@ -91,27 +75,31 @@ interface GatewayWizardProps {
  * says whether one was entered, never what it is.
  */
 export function GatewayWizard({ surface, me, currency, onClose, onCreated }: GatewayWizardProps) {
-  const { t, lang, isRtl } = useLocale();
+  const { t, lang } = useLocale();
   const errorMessage = useGatewayMessage(surface);
-  const reduceMotion = useReducedMotionConfig();
   const owner = isPlatformOwner(me);
 
   const initialForm = () => emptyForm(owner ? "platform" : "tenant");
   const [form, setForm] = useState<GatewayForm>(initialForm);
-  const [stepIndex, setStepIndex] = useState(0);
-  const [reached, setReached] = useState(0);
-  const [direction, setDirection] = useState(1);
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
-  const bodyRef = useRef<HTMLDivElement>(null);
+  const wizard = useWizard({
+    count: WIZARD_STEPS.length,
+    validate: (i) => {
+      const found = stepErrors(form, WIZARD_STEPS[i].id);
+      setErrors(found);
+      return Object.keys(found).length === 0;
+    },
+    onMove: () => setFailure(null),
+  });
 
-  const step = WIZARD_STEPS[stepIndex];
-  const total = WIZARD_STEPS.length;
+  const step = WIZARD_STEPS[wizard.index];
   const code = currency ?? "";
   const money = (amount: string) => (code ? formatMoney(amount, code, { lang, t }) : amount);
+  const goTo = (id: WizardStepId) => wizard.goTo(WIZARD_STEPS.findIndex((s) => s.id === id));
 
   const set = <K extends keyof GatewayForm>(k: K, v: GatewayForm[K]) => {
     setTouched(true);
@@ -119,44 +107,11 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
     if (errors[k]) setErrors((e) => ({ ...e, [k]: undefined }));
   };
 
-  const requestClose = () => {
-    if (touched && !created && !window.confirm(t("common", W.confirmClose))) return;
-    onClose();
-  };
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") requestClose();
-    };
-    document.addEventListener("keydown", onKey);
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = overflow;
-    };
-  });
-
-  const goTo = (index: number) => {
-    setDirection(index > stepIndex ? 1 : -1);
-    setStepIndex(index);
-    setReached((r) => Math.max(r, index));
-    setFailure(null);
-    bodyRef.current?.scrollTo({ top: 0 });
-  };
-
-  const next = () => {
-    const found = stepErrors(form, step.id);
-    setErrors(found);
-    if (Object.keys(found).length > 0) return;
-    goTo(stepIndex + 1);
-  };
-
   const submit = async () => {
     const bad = firstInvalidStep(form);
     if (bad) {
       setErrors(stepErrors(form, bad));
-      goTo(WIZARD_STEPS.findIndex((s) => s.id === bad));
+      goTo(bad);
       return;
     }
     setSaving(true);
@@ -177,11 +132,8 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
     setErrors({});
     setCreated(null);
     setTouched(false);
-    setStepIndex(0);
-    setReached(0);
+    wizard.reset();
   };
-
-  if (typeof document === "undefined") return null;
 
   const errorText = (k: keyof GatewayForm) =>
     errors[k] ? (
@@ -214,7 +166,7 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
         value={String(form[k])}
         onChange={(e) => set(k, e.target.value as never)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") next();
+          if (e.key === "Enter") wizard.next();
         }}
       />
       {opts.suffix && (
@@ -416,180 +368,30 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
         form={form}
         owner={owner}
         money={money}
-        onEdit={(id) => goTo(WIZARD_STEPS.findIndex((s) => s.id === id))}
+        onEdit={goTo}
       />
     ),
   };
 
-  const StepIcon = STEP_ICONS[step.id];
-  const slide = reduceMotion ? {} : { x: direction * (isRtl ? -24 : 24), opacity: 0 };
-  const progress = ((stepIndex + 1) / total) * 100;
-  const BackIcon = isRtl ? ArrowRight : ArrowLeft;
-  const NextIcon = isRtl ? ArrowLeft : ArrowRight;
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/50 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && requestClose()}>
-      <motion.div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="gw-wizard-title"
-        initial={reduceMotion ? false : { opacity: 0, y: 24, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.2 }}
-        className="flex h-full w-full flex-col overflow-hidden border-card-border bg-card-bg shadow-2xl sm:h-auto sm:max-h-[92vh] sm:max-w-2xl sm:rounded-3xl sm:border lg:max-w-4xl lg:flex-row"
-      >
-        {/* Step list — the side rail on lg, hidden below it where the progress bar says the same. */}
-        <aside className="hidden w-64 shrink-0 flex-col gap-1 border-e border-card-border bg-[var(--bg-inner)] p-5 lg:flex">
-          <p className="mb-3 flex items-center gap-2 text-sm font-bold text-text-primary">
-            <Landmark size={16} className="text-primary" aria-hidden />
-            {t("common", F.createTitle)}
-          </p>
-          <ol className="flex flex-col gap-1">
-            {WIZARD_STEPS.map((s, i) => {
-              const Icon = STEP_ICONS[s.id];
-              const done = i < stepIndex || Boolean(created);
-              const current = i === stepIndex && !created;
-              const reachable = i <= reached && !created && !saving;
-              return (
-                <li key={s.id}>
-                  <button
-                    type="button"
-                    disabled={!reachable}
-                    onClick={() => goTo(i)}
-                    aria-current={current ? "step" : undefined}
-                    className={`flex w-full items-center gap-3 rounded-xl px-2 py-2 text-start transition-colors disabled:cursor-default ${
-                      current ? "bg-card-bg shadow-sm" : reachable ? "hover:bg-card-bg" : ""
-                    }`}
-                  >
-                    <span
-                      className={`grid size-8 shrink-0 place-items-center rounded-full border text-xs font-bold transition-colors ${
-                        done
-                          ? "border-transparent bg-primary text-on-accent"
-                          : current
-                            ? "border-[var(--accent-primary)] bg-[var(--leaf-bg)] text-primary"
-                            : "border-card-border text-text-secondary"
-                      }`}
-                    >
-                      {done ? <Check size={14} aria-hidden /> : <Icon size={14} aria-hidden />}
-                    </span>
-                    <span className="flex flex-col">
-                      <span className={`text-xs font-bold ${current || done ? "text-text-primary" : "text-text-secondary"}`}>{t("common", W.steps[s.id].title)}</span>
-                      <span className="line-clamp-1 text-[10px] text-text-secondary">{t("common", W.steps[s.id].subtitle)}</span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
-        </aside>
-
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="shrink-0 border-b border-card-border px-4 pb-3 pt-4 sm:px-6">
-            <div className="flex items-start justify-between gap-3">
-              {created ? (
-                <span id="gw-wizard-title" className="text-sm font-bold text-text-primary">
-                  {t("common", F.createTitle)}
-                </span>
-              ) : (
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--leaf-bg)] text-primary">
-                    <StepIcon size={20} aria-hidden />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-text-secondary">
-                      {t("common", W.stepOf, { current: String(stepIndex + 1), total: String(total) })}
-                    </p>
-                    <h2 id="gw-wizard-title" className="truncate text-base font-bold text-text-primary">
-                      {t("common", W.steps[step.id].title)}
-                    </h2>
-                  </div>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={requestClose}
-                aria-label={t("common", W.close)}
-                className="grid size-9 shrink-0 place-items-center rounded-xl text-text-secondary transition-colors hover:bg-[var(--bg-inner)] hover:text-text-primary"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            {!created && (
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--leaf-bg)]" role="progressbar" aria-valuemin={1} aria-valuemax={total} aria-valuenow={stepIndex + 1}>
-                <motion.div className="h-full rounded-full bg-primary" animate={{ width: `${progress}%` }} transition={{ duration: reduceMotion ? 0 : 0.3 }} />
-              </div>
-            )}
-          </header>
-
-          <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
-            {created ? (
-              <DoneScreen name={created} onAnother={restart} onFinish={onClose} />
-            ) : (
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div key={step.id} initial={slide} animate={{ x: 0, opacity: 1 }} exit={reduceMotion ? {} : { opacity: 0 }} transition={{ duration: 0.18 }} className="flex flex-col gap-5">
-                  <p className="text-xs text-text-secondary">{t("common", W.steps[step.id].subtitle)}</p>
-                  {steps[step.id]}
-                  <aside className="flex items-start gap-3 rounded-2xl border border-dashed border-[var(--accent-primary)]/40 bg-[var(--leaf-bg)] p-3">
-                    <Lightbulb size={16} className="mt-0.5 shrink-0 text-primary" aria-hidden />
-                    <p className="text-xs leading-6 text-text-primary">
-                      <b>{t("common", W.tip)}: </b>
-                      {t("common", W.steps[step.id].tip)}
-                    </p>
-                  </aside>
-                  {failure && (
-                    <p role="alert" className="flex items-center gap-2 rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] p-3 text-xs font-bold text-error">
-                      <TriangleAlert size={14} aria-hidden />
-                      {failure}
-                    </p>
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            )}
-          </div>
-
-          {!created && (
-            <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-card-border bg-card-bg px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
-              {stepIndex > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => goTo(stepIndex - 1)}
-                  disabled={saving}
-                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-bold text-text-secondary transition-colors hover:bg-[var(--bg-inner)] hover:text-text-primary disabled:opacity-50"
-                >
-                  <BackIcon size={16} aria-hidden />
-                  {t("common", W.back)}
-                </button>
-              ) : (
-                <button type="button" onClick={requestClose} className="rounded-xl px-3 py-2.5 text-sm font-bold text-text-secondary hover:bg-[var(--bg-inner)]">
-                  {t("common", F.cancel)}
-                </button>
-              )}
-              {step.id === "review" ? (
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => void submit()}
-                  className="inline-flex min-w-36 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-on-accent shadow-md transition-all hover:brightness-110 disabled:opacity-60"
-                >
-                  {saving ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Check size={16} aria-hidden />}
-                  {t("common", saving ? W.creating : W.create)}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={next}
-                  className="inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-on-accent shadow-md transition-all hover:brightness-110"
-                >
-                  {t("common", W.next)}
-                  <NextIcon size={16} aria-hidden />
-                </button>
-              )}
-            </footer>
-          )}
-        </div>
-      </motion.div>
-    </div>,
-    document.body,
+  return (
+    <Wizard
+      title={t("common", F.createTitle)}
+      icon={Landmark}
+      steps={WIZARD_STEPS.map((s) => ({ id: s.id, title: t("common", W.steps[s.id].title), subtitle: t("common", W.steps[s.id].subtitle), icon: STEP_ICONS[s.id] }))}
+      wizard={wizard}
+      dirty={touched}
+      closeQuestion={t("common", W.confirmClose)}
+      busy={saving}
+      submitLabel={t("common", saving ? W.creating : W.create)}
+      onSubmit={() => void submit()}
+      onClose={onClose}
+      done={created ? <DoneScreen name={created} onAnother={restart} onFinish={onClose} /> : undefined}
+      intro={<p className="text-xs text-text-secondary">{t("common", W.steps[step.id].subtitle)}</p>}
+      tip={t("common", W.steps[step.id].tip)}
+      error={failure}
+    >
+      {steps[step.id]}
+    </Wizard>
   );
 }
 

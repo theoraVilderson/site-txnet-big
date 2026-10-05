@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { PackagePlus } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { type CatalogCapability, type CatalogCategory } from "@/lib/catalog-api";
 import { PricingCurrencyContext, useCatalogSurface, usePricingCurrency } from "../_lib/surface";
@@ -39,7 +39,8 @@ import { CapabilityPicker } from "./CapabilityPicker";
 import { CategoryFields } from "./NameSheets";
 import { CategoryMultiPicker, TranslateAllBox } from "./CategoryPickers";
 import { VariantFields, usePanelGroups } from "./ProductDetailSheet";
-import { Alert, Field, KeyField, LanguageSelect, Sheet, input, primaryButton, quietButton, useDirOf, useMessage } from "./catalog-ui";
+import { Field, KeyField, LanguageSelect, input, quietButton, useDirOf, useMessage } from "./catalog-ui";
+import { Wizard as KitWizard, useWizard } from "../../_components/kit/Wizard";
 
 /** Which step a refusal belongs to, so the wizard returns the admin to the field billing named. */
 const REFUSAL_STEP: Record<string, WizardStep> = {
@@ -99,13 +100,12 @@ export function ProductWizard({
   // reseller, and its schema refuses the `tenantId` an owner's form would send.
   const actor = surfaceActor(me, tenantId);
   const owner = isPlatformOwner(actor);
-  const [w, setW] = useState<Wizard>(() => ({
+  const [initial] = useState<Wizard>(() => ({
     ...emptyWizard(DEFAULT_LOCALE),
     categoryMode: categories.length ? "existing" : "new",
     categoryIds: categories.length === 1 ? [categories[0].id] : [],
   }));
-  const [step, setStep] = useState<WizardStep>("category");
-  const [reached, setReached] = useState(0);
+  const [w, setW] = useState<Wizard>(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [keyTouched, setKeyTouched] = useState(false);
   const [skuTouched, setSkuTouched] = useState(false);
@@ -125,21 +125,23 @@ export function ProductWizard({
     return c ? capabilityLabel(c) : k;
   };
 
-  const index = WIZARD_STEPS.indexOf(step);
-  const go = (to: WizardStep) => {
-    setErrors({});
-    setError(null);
-    setStep(to);
-    setReached((r) => Math.max(r, WIZARD_STEPS.indexOf(to)));
-  };
-  const next = () => {
-    const found = wizardStepErrors(step, w, actor, categories);
-    setErrors(found);
-    if (Object.keys(found).length) return;
-    // The SKU follows the product key and the duration until the admin types one.
-    if (step === "names" && !skuTouched) setVariant({ sku: suggestSku(w.product.key, w.variant.durationDays) });
-    go(WIZARD_STEPS[index + 1]);
-  };
+  const wizard = useWizard({
+    count: WIZARD_STEPS.length,
+    validate: (i) => {
+      const found = wizardStepErrors(WIZARD_STEPS[i], w, actor, categories);
+      setErrors(found);
+      if (Object.keys(found).length) return false;
+      // The SKU follows the product key and the duration until the admin types one.
+      if (WIZARD_STEPS[i] === "names" && !skuTouched) setVariant({ sku: suggestSku(w.product.key, w.variant.durationDays) });
+      return true;
+    },
+    onMove: () => {
+      setErrors({});
+      setError(null);
+    },
+  });
+  const step = WIZARD_STEPS[wizard.index];
+  const go = (to: WizardStep) => wizard.goTo(WIZARD_STEPS.indexOf(to));
 
   const setProduct = (patch: Partial<ProductForm>) => setW((x) => ({ ...x, product: { ...x.product, ...patch } }));
   const setVariant = (patch: Partial<VariantForm>) => setW((x) => ({ ...x, variant: { ...x.variant, ...patch } }));
@@ -179,7 +181,7 @@ export function ProductWizard({
         await onCreated(ids.productId!, true);
         return;
       }
-      setStep(to === "names" && stage === "category" ? "category" : to);
+      go(to === "names" && stage === "category" ? "category" : to);
       if (reason === "key_taken") setErrors({ key: K.refusals.key_taken });
       if (reason === "sku_taken") setErrors({ sku: K.refusals.sku_taken });
       setError(message(e));
@@ -191,51 +193,21 @@ export function ProductWizard({
   const nameDir = dirOf(w.product.sourceLang);
   const picked = w.categoryIds.map((id) => categories.find((c) => c.id === id)).filter((c): c is CatalogCategory => c !== undefined);
 
-  const footer = (
-    <div className="flex items-center justify-between gap-2">
-      <button type="button" className={quietButton} disabled={index === 0 || busy} onClick={() => go(WIZARD_STEPS[index - 1])}>
-        <ChevronRight size={14} className="ltr:-scale-x-100" aria-hidden />
-        {t("common", K.wizard.back)}
-      </button>
-      <span className="text-[11px] text-text-secondary">{t("common", K.wizard.stepOf, { current: index + 1, total: WIZARD_STEPS.length })}</span>
-      {step === "review" ? (
-        <button type="button" className={primaryButton} disabled={busy} onClick={() => void create()}>
-          {busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Check size={14} aria-hidden />}
-          {t("common", K.wizard.create)}
-        </button>
-      ) : (
-        <button type="button" className={primaryButton} onClick={next}>
-          {t("common", K.wizard.next)}
-          <ChevronLeft size={14} className="ltr:-scale-x-100" aria-hidden />
-        </button>
-      )}
-    </div>
-  );
-
   const sheet = (
-    <Sheet title={t("common", K.wizard.title)} onClose={onClose} footer={footer}>
-      <ol className="flex flex-wrap gap-1.5">
-        {WIZARD_STEPS.map((s, i) => {
-          const state = s === step ? "now" : i <= reached ? "seen" : "later";
-          return (
-            <li key={s}>
-              <button
-                type="button"
-                disabled={state === "later" || busy}
-                aria-current={state === "now" ? "step" : undefined}
-                onClick={() => go(s)}
-                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                  state === "now" ? "bg-primary text-on-accent" : state === "seen" ? "bg-[var(--leaf-bg)] text-primary" : "bg-bg-inner text-text-secondary"
-                }`}
-              >
-                <span className="inline-flex size-4 items-center justify-center rounded-full bg-white/25 text-[10px]">{i + 1}</span>
-                {t("common", K.wizard.steps[s])}
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-      <p className="text-sm font-bold text-text-primary">{t("common", K.wizard.intro[step])}</p>
+    <KitWizard
+      title={t("common", K.wizard.title)}
+      icon={PackagePlus}
+      steps={WIZARD_STEPS.map((s) => ({ id: s, title: t("common", K.wizard.steps[s]) }))}
+      wizard={wizard}
+      dirty={JSON.stringify(w) !== JSON.stringify(initial)}
+      closeQuestion={t("common", K.wizard.confirmClose)}
+      busy={busy}
+      submitLabel={t("common", K.wizard.create)}
+      onSubmit={() => void create()}
+      onClose={onClose}
+      intro={<p className="text-sm font-bold text-text-primary">{t("common", K.wizard.intro[step])}</p>}
+      error={error}
+    >
 
       {step === "category" && (
         <div className="flex flex-col gap-3">
@@ -429,8 +401,7 @@ export function ProductWizard({
         </dl>
       )}
 
-      {error && <Alert>{error}</Alert>}
-    </Sheet>
+    </KitWizard>
   );
   return <PricingCurrencyContext.Provider value={currency}>{sheet}</PricingCurrencyContext.Provider>;
 }
