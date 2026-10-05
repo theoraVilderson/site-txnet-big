@@ -60,7 +60,7 @@ export type MiniAppHost = {
 };
 
 /** Where the marker is kept for the rest of the tab's life (F-104-o). */
-const MARKER_STORAGE_KEY = "txnet.miniApp";
+export const MARKER_STORAGE_KEY = "txnet.miniApp";
 
 /**
  * Which messenger opened this page, according to the URL the bot handed over.

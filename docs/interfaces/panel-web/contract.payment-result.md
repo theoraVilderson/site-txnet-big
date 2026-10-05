@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 18
-updated: 2026-09-25
+updated: 2026-10-05
 ---
 
 # Contract — panel-web: where a bank returns a payer (F-093-f)
@@ -117,7 +117,7 @@ The motion (2026-09-13) is CSS keyframes in `globals.css` (`pay-*`): ring and
 mark draw, the emblem pops (success) or shakes once (failure), and a fresh
 success adds waves and confetti — never on `?already=1` (rule 3). Colours are
 theme tokens only, never gold. Every resting style is the final state, so
-`prefers-reduced-motion` switches animation off and shows the finished page.
+the reduced motion level (`contract.ux.md` M3) switches animation off and shows the finished page.
 The confetti comes from `_lib/celebration.ts` with a fixed seed: the page is
 server-rendered, and a `Math.random()` burst would fail hydration.
 

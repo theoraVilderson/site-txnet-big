@@ -199,6 +199,23 @@
   --color-info-border: var(--info-border);
 }
 
+/* The motion switch (UX-1-b, contract.ux.md M3). `data-motion="reduced"` on
+   <html> — set before the first paint by MOTION_SCRIPT (lib/motion.ts) and kept
+   in step by PanelMotion — is the only reduced-motion input any rule here reads;
+   the OS is one input to the level, not a second switch. Tailwind's own
+   `motion-reduce:` / `motion-safe:` variants read the same attribute. */
+@custom-variant motion-reduce (&:where([data-motion="reduced"], [data-motion="reduced"] *));
+@custom-variant motion-safe (&:where(html:not([data-motion="reduced"]), html:not([data-motion="reduced"]) *));
+
+@keyframes motionFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* One focus ring (UX-1-a, contract.ux.md K2): keyboard focus on anything
    interactive is a 2px accent outline at a 2px offset. In the base layer, so a
    control that draws its own focus state with a utility still wins. */
@@ -311,6 +328,12 @@ button {
   }
 }
 
+[data-motion="reduced"] .organic-border,
+[data-motion="reduced"] .zen-logo svg,
+[data-motion="reduced"] .zen-glow {
+  animation: none;
+}
+
 .zen-logo {
   position: relative;
   width: 60px;
@@ -372,10 +395,8 @@ button {
   animation: zenGlow 5s ease-in-out infinite;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .gift-orb {
-    animation: none;
-  }
+[data-motion="reduced"] .gift-orb {
+  animation: none;
 }
 
 /* The gift-code modal's one-shot entrances (F-093-g): the header pieces, the
@@ -419,30 +440,11 @@ button {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  @keyframes giftRise {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  @keyframes giftPop {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  .gift-rise,
-  .gift-pop {
-    animation-duration: 0.15s;
-    animation-delay: 0s !important;
-  }
+[data-motion="reduced"] .gift-rise,
+[data-motion="reduced"] .gift-pop {
+  animation-name: motionFade;
+  animation-duration: 0.12s;
+  animation-delay: 0s !important;
 }
 
 .organic-field {
@@ -768,7 +770,7 @@ div:has(> .password-field-input:autofill) > .password-field-label {
    CSS and not framer-motion, for the reason written above `giftRise`: a card
    that mounts once has no exit, no `auto` height and no gesture
    (contract.payment-result.md). Every element's resting style is its final
-   state and the keyframes run `both`, so `prefers-reduced-motion` only has to
+   state and the keyframes run `both`, so the reduced level only has to
    switch animation off to show the finished page. Colours come from `--pay-tone`,
    which the card sets from theme tokens — never gold. */
 
@@ -919,24 +921,22 @@ div:has(> .password-field-input:autofill) > .password-field-label {
   to { opacity: 1; transform: none; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .pay-card,
-  .pay-rise,
-  .pay-halo,
-  .pay-disc,
-  .pay-stroke,
-  .pay-emblem-success,
-  .pay-emblem-failure,
-  .pay-pop-in {
-    animation: none;
-  }
+[data-motion="reduced"] .pay-card,
+[data-motion="reduced"] .pay-rise,
+[data-motion="reduced"] .pay-halo,
+[data-motion="reduced"] .pay-disc,
+[data-motion="reduced"] .pay-stroke,
+[data-motion="reduced"] .pay-emblem-success,
+[data-motion="reduced"] .pay-emblem-failure,
+[data-motion="reduced"] .pay-pop-in {
+  animation: none;
+}
 
-  .pay-ripple,
-  .pay-confetti,
-  .pay-shine,
-  .pay-twinkle {
-    display: none;
-  }
+[data-motion="reduced"] .pay-ripple,
+[data-motion="reduced"] .pay-confetti,
+[data-motion="reduced"] .pay-shine,
+[data-motion="reduced"] .pay-twinkle {
+  display: none;
 }
 
 /* ── My services: a service that looks alive (F-307-u) ──────────────────────
@@ -1136,30 +1136,28 @@ div:has(> .password-field-input:autofill) > .password-field-label {
   to { transform: rotate(360deg); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .tank-fill,
-  .tank-critical,
-  .tank-head,
-  .tank-live .tank-head,
-  .meter-figure,
-  .pulse-bump,
-  .build-orbit {
-    animation: none;
-  }
+[data-motion="reduced"] .tank-fill,
+[data-motion="reduced"] .tank-critical,
+[data-motion="reduced"] .tank-head,
+[data-motion="reduced"] .tank-live .tank-head,
+[data-motion="reduced"] .meter-figure,
+[data-motion="reduced"] .pulse-bump,
+[data-motion="reduced"] .build-orbit {
+  animation: none;
+}
 
-  .tank-fill,
-  .tank-head {
-    transition: none;
-  }
+[data-motion="reduced"] .tank-fill,
+[data-motion="reduced"] .tank-head {
+  transition: none;
+}
 
-  .tank-glint,
-  .tank-ripple {
-    display: none;
-  }
+[data-motion="reduced"] .tank-glint,
+[data-motion="reduced"] .tank-ripple {
+  display: none;
+}
 
-  .build-sweep {
-    animation: none;
-    width: 100%;
-    opacity: 0.35;
-  }
+[data-motion="reduced"] .build-sweep {
+  animation: none;
+  width: 100%;
+  opacity: 0.35;
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotionConfig } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
@@ -99,7 +99,7 @@ const invalidInput = "border-error focus:border-error";
 export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void; onRegistered: () => Promise<void> }) {
   const { t, isRtl } = useLocale();
   const message = useSystemsError();
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useReducedMotionConfig();
 
   const [form, setForm] = useState<RegisterForm>(() => applyDriver(emptyRegisterForm(), "marzban"));
   const [parts, setParts] = useState<LoginParts>(emptyLoginParts);
@@ -718,7 +718,7 @@ function Chip({ children }: { children: ReactNode }) {
 /** Three presets and a custom number; the trade-off is said beside it (contract rule 5). */
 function BudgetField({ value, onChange, error }: { value: string; onChange: (v: string) => void; error: ReactNode }) {
   const { t } = useLocale();
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useReducedMotionConfig();
   const preset = BUDGET_PRESETS.find((p) => p.value === value.trim());
   const [custom, setCustom] = useState(!preset);
   return (
@@ -787,7 +787,7 @@ function BudgetField({ value, onChange, error }: { value: string; onChange: (v: 
 }
 
 function Advanced({ title, hint, forceOpen, children }: { title: string; hint: string; forceOpen: boolean; children: ReactNode }) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useReducedMotionConfig();
   const [open, setOpen] = useState(false);
   const shown = open || forceOpen;
   return (
@@ -820,7 +820,7 @@ function Advanced({ title, hint, forceOpen, children }: { title: string; hint: s
 
 function ReviewStep({ form, onEdit }: { form: RegisterForm; onEdit: (id: RegisterStepId) => void }) {
   const { t } = useLocale();
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useReducedMotionConfig();
   const profile = DRIVER_PROFILES[form.driverType];
   const none = t("common", W.review.none);
   const ltr = (v: string) => (v.trim() ? <span dir="ltr" className="break-all font-mono">{v.trim()}</span> : none);
@@ -908,7 +908,7 @@ function ReviewStep({ form, onEdit }: { form: RegisterForm; onEdit: (id: Registe
 
 function DoneScreen({ name, answer, onAnother, onFinish }: { name: string; answer: RegisteredPanel; onAnother: () => void; onFinish: () => void }) {
   const { t } = useLocale();
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useReducedMotionConfig();
   const stored = [answer.credentials.configured && R.credentialsStored, answer.radiusSecret?.configured && R.radiusSecretStored].filter(Boolean) as string[];
   return (
     <div className="flex flex-col items-center gap-5 py-6 text-center">

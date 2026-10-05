@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 40
-updated: 2026-09-27
+updated: 2026-10-05
 ---
 
 # Contract — panel-web: a service that looks alive (F-307-u)
@@ -75,7 +75,7 @@ should say so; the usage bar is confusing".
    page watched on its way shows "ready" for 10 s once it lands. A row that
    was already ready shows no "ready".
 6. **Motion is decoration, never the message.** Every state has its words.
-   Under `prefers-reduced-motion` the fill-up, glint, beat, ripple,
+   At the reduced motion level (`contract.ux.md` M3) the fill-up, glint, beat, ripple,
    bump, ring and sweep stop, and nothing else changes (`globals.css`, "My services").
 7. **A pay-as-you-go service has no limit** (F-118-aj; user, 2026-09-30: the
    bag read as a cap, and a lifetime total that only grows confuses). A metered

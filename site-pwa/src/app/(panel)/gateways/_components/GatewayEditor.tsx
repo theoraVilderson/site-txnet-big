@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotionConfig } from "framer-motion";
 import {
   Building2,
   Check,
@@ -108,7 +108,7 @@ interface GatewayEditorProps {
 export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: GatewayEditorProps) {
   const { t, lang } = useLocale();
   const errorMessage = useGatewayMessage(surface);
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useReducedMotionConfig();
   const owner = isPlatformOwner(me);
 
   const initial = useMemo(() => formFromGateway(gateway), [gateway]);

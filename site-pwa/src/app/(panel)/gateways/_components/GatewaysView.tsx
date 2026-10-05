@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotionConfig } from "framer-motion";
 import { KeyRound, Landmark, Loader2, Pencil, Plus, RotateCw, Trash2, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -42,7 +42,7 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
   const owner = surface.tenantId === null && canManageLinks(me);
   const actor = surfaceActor(me, surface.tenantId);
   const { gateways, grants, presets, tax, isLoading, isRefreshing, error, reload } = useGateways(surface.api, owner, !sessionLoading);
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useReducedMotionConfig();
   // One moment for the whole page: the list and the links panel appear together,
   // never the list first and the owner's panel a beat later.
   const ready = !sessionLoading && !isLoading;

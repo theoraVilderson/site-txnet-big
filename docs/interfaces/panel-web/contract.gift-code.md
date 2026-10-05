@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 28
-updated: 2026-09-25
+updated: 2026-10-05
 ---
 
 # Contract — panel-web: the gift-code modal (F-093-g)
@@ -52,8 +52,8 @@ balance behind it is the wallet control's
    body of the card. **No figure is ever animated from one value to another**: a
    number counting up is a number that is briefly wrong, which is the same habit
    rules 1 and 2 exist to break. Everything collapses to a plain cross-fade
-   under `prefers-reduced-motion` — in CSS where the animation is CSS, and via
-   `useReducedMotion` where it is not — and every decorative element (the two
+   at the reduced motion level (`contract.ux.md` M3) — `data-motion` where the
+   animation is CSS, `useReducedMotionConfig` where it is not — and every decorative element (the two
    orbs, the sparks, the focus underline, the button sweep) is `aria-hidden`
    and inert.
 6. **CSS animates, framer-motion only where CSS cannot.** framer-motion earns

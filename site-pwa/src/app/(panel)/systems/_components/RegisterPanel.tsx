@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotionConfig } from "framer-motion";
 import { Plus } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { SYSTEMS_KEYS as K } from "../_lib/systems";
@@ -28,7 +28,7 @@ export function RegisterPanel({
   onRegistered: () => Promise<void>;
 }) {
   const { t } = useLocale();
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useReducedMotionConfig();
 
   return (
     <>

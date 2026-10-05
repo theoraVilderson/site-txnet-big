@@ -16,6 +16,7 @@ import { startWatching } from "@/lib/locale-watcher";
 import { LocaleShell } from "@/context/LocaleShell";
 import { ThemeShell } from "@/context/ThemeShell";
 import { THEME_SCRIPT } from "@/lib/theme-script";
+import { MOTION_SCRIPT } from "@/lib/motion";
 import { BrandProvider } from "@/context/BrandContext";
 import { brandStyle, fetchBranding } from "@/lib/branding";
 import { visitorHost } from "@/lib/visitor-host";
@@ -92,6 +93,7 @@ export default async function RootLayout({
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: MOTION_SCRIPT }} />
       </head>
       <body className="transition-colors duration-300">
         <ThemeShell initialTheme={theme} initialChoice={choice}>

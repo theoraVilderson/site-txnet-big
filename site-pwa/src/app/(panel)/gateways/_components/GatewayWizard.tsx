@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotionConfig } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
@@ -92,7 +92,7 @@ interface GatewayWizardProps {
 export function GatewayWizard({ surface, me, currency, onClose, onCreated }: GatewayWizardProps) {
   const { t, lang, isRtl } = useLocale();
   const errorMessage = useGatewayMessage(surface);
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useReducedMotionConfig();
   const owner = isPlatformOwner(me);
 
   const initialForm = () => emptyForm(owner ? "platform" : "tenant");
@@ -709,7 +709,7 @@ function ReviewStep({ form, owner, money, onEdit }: { form: GatewayForm; owner: 
 
 function DoneScreen({ name, onAnother, onFinish }: { name: string; onAnother: () => void; onFinish: () => void }) {
   const { t } = useLocale();
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useReducedMotionConfig();
   return (
     <div className="flex flex-col items-center gap-5 py-6 text-center">
       <motion.span

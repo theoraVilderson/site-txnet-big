@@ -1,3 +1,4 @@
+import { PanelMotion } from "./_components/PanelMotion";
 import { PanelShell } from "./_components/PanelShell";
 import { PaymentCreditedToast } from "./_components/PaymentCreditedToast";
 import { TenantClosedBanner } from "./_components/TenantClosedBanner";
@@ -20,7 +21,10 @@ export default function PanelLayout({
         makes one connection outlive every screen under it (F-070-c).
       */}
       <PanelRealtimeProvider>
-        <PanelShell>{children}</PanelShell>
+        {/* UX-1-b: one motion level for framer-motion and the CSS below it. */}
+        <PanelMotion>
+          <PanelShell>{children}</PanelShell>
+        </PanelMotion>
         {/* F-067-l: a late credit is announced on any screen (ADR-0045). */}
         <PaymentCreditedToast />
         {/* F-018-ac: the gateway closed the socket because the tenant is terminated. */}

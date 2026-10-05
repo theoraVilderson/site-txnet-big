@@ -7,7 +7,7 @@ import {
   AnimatePresence,
   motion,
   useAnimationControls,
-  useReducedMotion,
+  useReducedMotionConfig,
   type Variants,
 } from "framer-motion";
 import { AlertCircle, Loader2, Sparkles, Ticket, Trash2, X } from "lucide-react";
@@ -66,9 +66,9 @@ interface GiftCodeModalProps {
  * **Why it is this animated.** Redeeming a gift is the one moment in the panel
  * that is pure good news, and the rest of the app is deliberately flat. The
  * motion is all on the frame — the card, the check, the burst — and none of it
- * is on the money. Every bit of it collapses to a plain cross-fade under
- * `prefers-reduced-motion`: in the CSS itself where the animation is CSS, and
- * through `useReducedMotion` where it is not.
+ * is on the money. Every bit of it collapses to a plain cross-fade at the
+ * reduced motion level (contract.ux.md M3): through `data-motion` where the
+ * animation is CSS, and through `useReducedMotionConfig` where it is not.
  *
  * **Why half of it is CSS.** framer-motion is here for the three things CSS
  * cannot do — an exit animation, an `auto` height, an imperative shake. The
@@ -111,7 +111,7 @@ const SPARKS = Array.from({ length: 8 }, (_, i) => (i * 360) / 8);
 function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open">) {
   const { t, lang } = useLocale();
   const toMessage = useApiErrorMessage();
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionConfig();
   const inputRef = useRef<HTMLInputElement>(null);
   const shake = useAnimationControls();
 
