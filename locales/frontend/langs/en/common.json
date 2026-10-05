@@ -77,7 +77,8 @@
       "infra": "Infrastructure",
       "support": "Support desk"
     },
-    "badge": "{{label}}, {{count}} new"
+    "badge": "{{label}}, {{count}} new",
+    "preferenceNotSaved": "Your display preference could not be saved, so it was put back"
   },
   "gateways": {
     "title": "Payment gateways",

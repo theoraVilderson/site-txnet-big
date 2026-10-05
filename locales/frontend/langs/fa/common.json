@@ -77,7 +77,8 @@
       "infra": "زیرساخت",
       "support": "میز پشتیبانی"
     },
-    "badge": "{{label}}، {{count}} مورد تازه"
+    "badge": "{{label}}، {{count}} مورد تازه",
+    "preferenceNotSaved": "ترجیح نمایش شما ذخیره نشد و به حالت قبل برگشت"
   },
   "gateways": {
     "title": "درگاه‌های پرداخت",

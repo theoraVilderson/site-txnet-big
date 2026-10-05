@@ -13,6 +13,7 @@ import {
   visibleMenu,
 } from "../_lib/panel-menu";
 import { usePanelUiStore } from "../_stores/panel-ui-store";
+import { DEFAULT_UI_PREFERENCES, useUiPreferences } from "@/stores/ui-preferences-store";
 import { PanelSidebar } from "./PanelSidebar";
 
 /**
@@ -62,7 +63,8 @@ beforeEach(() => {
   pathname = "/";
   me = USER;
   localStorage.clear();
-  usePanelUiStore.setState({ collapsed: false, drawerOpen: false, openGroupId: null, closedSections: [] });
+  usePanelUiStore.setState({ drawerOpen: false, openGroupId: null, closedSections: [] });
+  useUiPreferences.getState().reset();
   window.matchMedia = ((query: string) => ({ matches: query.includes("min-width"), addEventListener() {}, removeEventListener() {} })) as never;
   vi.mocked(supportApi.list).mockResolvedValue({ items: [], nextBefore: null });
   vi.mocked(supportAgentApi.inbox).mockResolvedValue({ items: [], nextAfter: null });
@@ -146,11 +148,12 @@ describe("PanelSidebar", () => {
 
   it("collapsed, opens a group as a flyout beside the rail rather than widening it", async () => {
     me = STAFF;
-    usePanelUiStore.setState({ collapsed: true });
+    // The collapse is the person's `ui.sidebar.collapsed` (UX-1-l).
+    useUiPreferences.setState({ prefs: { ...DEFAULT_UI_PREFERENCES, "ui.sidebar": { collapsed: true, closedSections: [] } } });
     render(<PanelSidebar />);
     fireEvent.click(screen.getByRole("button", { name: S.menu.wallet }));
 
-    expect(usePanelUiStore.getState().collapsed).toBe(true);
+    expect(useUiPreferences.getState().prefs["ui.sidebar"].collapsed).toBe(true);
     const flyout = await screen.findByRole("dialog", { name: S.menu.wallet });
     expect(within(flyout).getByRole("link", { name: S.menu.deposit })).toBeInTheDocument();
   });

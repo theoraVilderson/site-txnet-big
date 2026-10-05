@@ -43,4 +43,4 @@ Both are **Bearer required** and share the `ME_UI_PREFERENCES` bucket, 120 /
 | 3 | A stored value that no longer fits its key's schema reads as the default, so narrowing a schema needs no migration |
 | 4 | Only the caller's own rows, by the token's `sub`; there is no path to another user's |
 
-Consumers: panel-web (UX-1-l, not built yet).
+Consumers: panel-web (UX-1-l, `src/stores/ui-preferences-store.ts`).

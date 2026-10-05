@@ -2,6 +2,7 @@
 // Traefik routes to the service — no Next.js proxy hop, and no CORS: the
 // refresh cookie is first-party to whichever domain the panel is on (ADR-0060).
 import { RequestHeaders } from "@/generated/wire";
+import type { UiPreferences, UiPreferencesPatch } from "@/stores/ui-preferences-store";
 import { API_BASE } from "./api-origin";
 import { createApiClient } from "./api-request";
 import type { ResolvedTimeZone, TimeZoneSource } from "./time-zone";
@@ -406,6 +407,10 @@ export const authApi = {
   async timeZone() { return request<MeTimeZone>("/auth/me/timezone", { method: "GET" }); },
   /** `user` picks (null clears the pick); `browser` reports, and is not stored over a pick (`applied: false`). */
   async saveTimeZone(zone: string | null, source: TimeZoneSource) { return request<MeTimeZone>("/auth/me/timezone", { method: "PUT", body: JSON.stringify({ zone, source }) }); },
+  /** The caller's display preferences, every key with defaults filled in (UX-1-k). */
+  async uiPreferences() { return request<UiPreferences>("/auth/me/ui-preferences", { method: "GET" }); },
+  /** Any subset, validated strictly; answers every key after the write. */
+  async saveUiPreferences(patch: UiPreferencesPatch) { return request<UiPreferences>("/auth/me/ui-preferences", { method: "PATCH", body: JSON.stringify(patch) }); },
   /** Every place this account is signed in, the current one first (SES-1-a). */
   async activeSessions() { return request<{ sessions: ActiveSession[] }>("/auth/sessions", { method: "GET" }); },
   /** End that place for good: its sessions, its switcher entry, and — on a bot chat — this account's link to it. */

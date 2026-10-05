@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import { usePanelUiStore } from "../_stores/panel-ui-store";
+import { useUiPreferences } from "@/stores/ui-preferences-store";
 import { PanelSidebar } from "./PanelSidebar";
 import { PanelTopBar } from "./PanelTopBar";
 import { RouteProgress } from "./RouteProgress";
@@ -13,7 +13,8 @@ import { RouteProgress } from "./RouteProgress";
  * sidebar is a drawer over the page and takes no room.
  */
 export function PanelShell({ children }: { children: React.ReactNode }) {
-  const collapsed = usePanelUiStore((s) => s.collapsed);
+  // The person's own `ui.sidebar.collapsed` (UX-1-l), not this tab's.
+  const collapsed = useUiPreferences((s) => s.prefs["ui.sidebar"].collapsed);
 
   return (
     <div className="relative min-h-screen w-full transition-colors duration-500">

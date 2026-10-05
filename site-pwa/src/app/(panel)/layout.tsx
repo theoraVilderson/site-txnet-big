@@ -1,6 +1,7 @@
 import { ConfirmProvider } from "./_components/kit/confirm";
 import { PanelToaster } from "./_components/kit/notify";
 import { PanelMotion } from "./_components/PanelMotion";
+import { PanelPreferences } from "./_components/PanelPreferences";
 import { PanelShell } from "./_components/PanelShell";
 import { PaymentCreditedToast } from "./_components/PaymentCreditedToast";
 import { TenantClosedBanner } from "./_components/TenantClosedBanner";
@@ -23,6 +24,8 @@ export default function PanelLayout({
         makes one connection outlive every screen under it (F-070-c).
       */}
       <PanelRealtimeProvider>
+        {/* UX-1-l: the person's display preferences, loaded once `me` is known. */}
+        <PanelPreferences />
         {/* UX-1-b: one motion level for framer-motion and the CSS below it. */}
         <PanelMotion>
           {/* UX-1-d: one `useConfirm` dialog for every panel screen (K9). */}

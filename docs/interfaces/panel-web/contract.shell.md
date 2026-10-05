@@ -146,9 +146,10 @@ the balance it makes re-read is the wallet control's rule 1.
 
 ## State
 
-`_stores/panel-ui-store.ts` — collapsed (desktop), drawer open (below `lg`),
-the one open submenu, the folded sections (UX-1-j). UI only, in memory, reset
-by a reload — except the folds, kept in this device's `localStorage` until
-UX-1-m moves them to `ui.sidebar`. A modal that must
+`_stores/panel-ui-store.ts` — drawer open (below `lg`), the one open
+submenu, the folded sections (UX-1-j). UI only, in memory, reset by a reload —
+except the folds, kept in this device's `localStorage` until UX-1-m moves them
+to `ui.sidebar`. The collapse (desktop) is the person's own
+`ui.sidebar.collapsed`, in `src/stores/ui-preferences-store.ts` (UX-1-l). A modal that must
 cover the sidebar (F-093-g) needs a z-index above the sidebar's `z-40` and its
 `z-30` backdrop; `GiftCodeModal` is `z-50` for that reason.

@@ -35,6 +35,7 @@ import {
 } from "../_lib/panel-menu";
 import { useMenuBadges, type BadgedEntry } from "../_hooks/useMenuBadges";
 import { usePanelUiStore } from "../_stores/panel-ui-store";
+import { toggleSidebarCollapsed, useUiPreferences } from "@/stores/ui-preferences-store";
 import { usePanelSession } from "../_context/PanelSessionContext";
 
 /** The shell's strings as generated constants (C-06). */
@@ -118,18 +119,18 @@ function useCanAdminister(tenantId: string | null): boolean | null {
 export function PanelSidebar() {
   const { t } = useLocale();
   const pathname = usePathname();
-  const { collapsed, drawerOpen, openGroupId, closedSections } = usePanelUiStore(
+  // The collapse is the person's `ui.sidebar.collapsed` (UX-1-l); the rest is this tab's.
+  const collapsed = useUiPreferences((s) => s.prefs["ui.sidebar"].collapsed);
+  const { drawerOpen, openGroupId, closedSections } = usePanelUiStore(
     useShallow((s) => ({
-      collapsed: s.collapsed,
       drawerOpen: s.drawerOpen,
       openGroupId: s.openGroupId,
       closedSections: s.closedSections,
     })),
   );
-  const { toggleCollapsed, setDrawerOpen, toggleGroup, openGroup, toggleSection, loadClosedSections } =
+  const { setDrawerOpen, toggleGroup, openGroup, toggleSection, loadClosedSections } =
     usePanelUiStore(
       useShallow((s) => ({
-        toggleCollapsed: s.toggleCollapsed,
         setDrawerOpen: s.setDrawerOpen,
         toggleGroup: s.toggleGroup,
         openGroup: s.openGroup,
@@ -341,7 +342,7 @@ export function PanelSidebar() {
           </div>
           <button
             type="button"
-            onClick={toggleCollapsed}
+            onClick={toggleSidebarCollapsed}
             aria-label={t("common", collapsed ? S.expand : S.collapse)}
             aria-controls={PANEL_SIDEBAR_ID}
             aria-expanded={!collapsed}
