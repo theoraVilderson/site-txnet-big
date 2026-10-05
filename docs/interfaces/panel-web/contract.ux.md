@@ -107,9 +107,9 @@ undefined `success` colour, 82 `text-white` on `bg-primary`.
 
 | # | Rule | Row |
 |---|---|---|
-| U1 | The shop shows three steps — choose, invoice and pay, delivered — mapped from its `phase`, and slides between them; an offer card lifts on hover and marks the chosen one | UX-1-aa |
-| U2 | My services: the usage meter animates to its value; each row's actions are one `Menu` | UX-1-aa |
-| U3 | "Running out": a service ending within 3 days or with 10% or less of its quota left carries a `gold` `StatusPill` (gold is allowed on status, never on a control). The list's order does not change. The quota is the meter's bound (`trafficBound`: none for unlimited or metered traffic); an ended service is not running out. `runningOut` in `services/_lib/pulse.ts`, used by the dashboard since UX-1-q | UX-1-q, UX-1-aa |
+| U1 | The shop shows three steps — choose, invoice and pay, delivered — mapped from its `phase`, and slides between them; an offer card lifts on hover and marks the chosen one. Built: `shopStep` + `SHOP_STEPS` in `shop/_lib/shop.ts`, `ShopSteps` (`aria-current="step"`, done ones checked), the phase keyed in `AnimatePresence` sliding by direction (opacity only under M3); the chosen variant carries a check; proof `shop/steps.test.tsx` | UX-1-aa |
+| U2 | My services: the usage meter animates to its value (the tank's own `tankGrow` and width transition, already there); each row's actions are one `Menu` beside its status — copy link, QR, configs, manage, reset (which opens the fold on its question). The primary copy stays in the link row. Proof `services/my-services.test.tsx` | UX-1-aa |
+| U3 | "Running out": a service ending within 3 days or with 10% or less of its quota left carries a `gold` `StatusPill` (gold is allowed on status, never on a control). The list's order does not change. The quota is the meter's bound (`trafficBound`: none for unlimited or metered traffic); an ended service is not running out. `runningOut` in `services/_lib/pulse.ts`, used by the dashboard since UX-1-q and by `ServiceRow` for an `active` row since UX-1-aa, in the dashboard's words | UX-1-q, UX-1-aa |
 
 ## Enforced
 

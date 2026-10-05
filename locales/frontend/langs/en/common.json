@@ -3695,7 +3695,13 @@
       "hint": "Its usage is taken from your wallet, and it will not connect until the wallet is topped up. One GB needs at least {{amount}} more.",
       "topUp": "Top up the wallet"
     },
-    "meteredCap": "You already have {{open}} open pay-as-you-go services — the most allowed for you is {{cap}}. To have more, open a support ticket and ask for a higher limit."
+    "meteredCap": "You already have {{open}} open pay-as-you-go services — the most allowed for you is {{cap}}. To have more, open a support ticket and ask for a higher limit.",
+    "steps": {
+      "label": "Steps of a purchase",
+      "choose": "Choose",
+      "pay": "Invoice and pay",
+      "delivered": "Delivered"
+    }
   },
   "userGroups": {
     "title": "User groups",

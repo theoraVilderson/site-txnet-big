@@ -1,18 +1,21 @@
 "use client";
 
 import { memo, useEffect, useState } from "react";
-import { AlertCircle, BellOff, Check, ChevronDown, Copy, Link2, Loader2, QrCode, RotateCcw, Search, X } from "lucide-react";
+import { AlertCircle, BellOff, Check, ChevronDown, Copy, Link2, Loader2, MoreVertical, QrCode, RotateCcw, Search, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import type { GrantRow } from "@/lib/billing-api";
 import type { GrantNoticeLevel } from "@/lib/notification-api";
 import { formatInstant } from "../../_lib/datetime";
+import { IconButton } from "../../_components/kit/Button";
+import { Menu } from "../../_components/kit/Menu";
+import { StatusPill } from "../../_components/kit/StatusPill";
 import { useGrantConfigs } from "../_hooks/useGrantConfigs";
 import { useGrantPeriod } from "../_hooks/useGrantPeriod";
 import { useSubscriptionLink } from "../_hooks/useSubscriptionLink";
 import { GRANT_TONES, type CapabilityName } from "../_lib/my-services";
-import { buildStage } from "../_lib/pulse";
+import { buildStage, runningOut } from "../_lib/pulse";
 import { matchesConfig, purgeCountdown } from "../_lib/service-configs";
 import { capOffered } from "../_lib/spending-cap";
 import { ConfigLines } from "./ConfigLines";
@@ -29,6 +32,9 @@ import { UsageMeter } from "./UsageMeter";
 
 const S = FrontendI18nKeys.common.myServices;
 const L = S.link;
+const ACTIONS = FrontendI18nKeys.common.kit.table.actions;
+/** The dashboard's own words for it (D4), so the two never drift apart. */
+const RUNNING_OUT = FrontendI18nKeys.common.dashboard.services.runningOut;
 
 /**
  * How many configs a service holds before it offers a search (user,
@@ -150,6 +156,26 @@ export const ServiceRow = memo(function ServiceRow({
     if (await sub.readLink()) setQrOpen(true);
   }
 
+  // U2: the row's actions in one menu. Reset is asked in the fold, as from its own button.
+  const actions = [
+    { id: "copy", label: t("common", L.copy), icon: <Copy size={14} />, onSelect: () => void sub.copy(), disabled: sub.isReading },
+    { id: "qr", label: t("common", L.showQr), icon: <QrCode size={14} />, onSelect: () => void openQr(), disabled: sub.isReading },
+    { id: "configs", label: t("common", S.configs.show), icon: <Link2 size={14} />, onSelect: () => setConfigsOpen(true) },
+    { id: "manage", label: t("common", S.manage.open), icon: <ChevronDown size={14} />, onSelect: () => setManageOpen(true) },
+    {
+      id: "reset",
+      label: t("common", L.reset),
+      icon: <RotateCcw size={14} />,
+      disabled: sub.isResetting || resetWaits,
+      onSelect: () => {
+        setManageOpen(true);
+        setConfirmReset(true);
+      },
+    },
+  ];
+  // U3: ending within 3 days, or 10% or less of its quota left — a live service only.
+  const endingSoon = row.status === "active" && runningOut(row, new Date());
+
   return (
     <li
       className={`overflow-hidden rounded-3xl border bg-card-bg transition-[border-color,box-shadow] duration-500 ${
@@ -163,10 +189,18 @@ export const ServiceRow = memo(function ServiceRow({
             {showPulse && <ServicePulse pulse={pulse} lastTrafficAt={row.lastTrafficAt} />}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1.5">
-            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${tone.className}`}>
-              <tone.icon size={14} aria-hidden />
-              {t("common", tone.labelKey)}
-            </span>
+            <div className="flex items-center gap-1">
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${tone.className}`}>
+                <tone.icon size={14} aria-hidden />
+                {t("common", tone.labelKey)}
+              </span>
+              <Menu
+                label={t("common", ACTIONS)}
+                items={actions}
+                trigger={<IconButton aria-label={t("common", ACTIONS)} icon={<MoreVertical size={16} aria-hidden />} variant="quiet" size="sm" />}
+              />
+            </div>
+            {endingSoon && <StatusPill tone="gold">{t("common", RUNNING_OUT)}</StatusPill>}
             {noticeLevel === "essential" && (
               <span className="inline-flex items-center gap-1 rounded-full bg-bg-inner px-2 py-0.5 text-[11px] text-text-secondary">
                 <BellOff size={12} aria-hidden />

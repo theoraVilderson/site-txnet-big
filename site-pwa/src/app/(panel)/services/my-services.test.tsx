@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type GrantRow } from "@/lib/billing-api";
@@ -147,6 +147,43 @@ const show = (row: Partial<GrantRow> = {}) =>
   render(<ServiceRow row={{ ...GRANT, ...row }} name="VPN Pro" capabilities={[]} />);
 /** Open the row's "manage" fold — the 30 days, the configs' actions, reset. */
 const details = () => fireEvent.click(screen.getByRole("button", { name: "myServices.manage.open" }));
+
+describe("a row's actions and 'running out' (UX-1-aa, contract.ux.md U2–U3)", () => {
+  beforeEach(() => vi.mocked(useLocale).mockReturnValue({ t, lang: "en", isRtl: false } as never));
+  const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+
+  it("carries a gold 'running out' pill within 3 days of its end or at 10% left, never once ended", () => {
+    const pill = () => screen.queryByText("dashboard.services.runningOut");
+    const { unmount } = show({ endsAt: inDays(2) });
+    expect(pill()).toBeInTheDocument();
+    unmount();
+    const capped = show({ endsAt: inDays(30), billingMode: "prepaid", trafficCapBytes: "1000", consumedBytes: "950" });
+    expect(pill()).toBeInTheDocument();
+    capped.unmount();
+    const far = show({ endsAt: inDays(30) });
+    expect(pill()).toBeNull();
+    far.unmount();
+    show({ endsAt: inDays(-1) });
+    expect(pill()).toBeNull();
+  });
+
+  it("gathers the row's actions in one menu; reset opens the fold on its question", async () => {
+    const user = userEvent.setup();
+    show();
+    await user.click(screen.getByRole("button", { name: "kit.table.actions" }));
+    const menu = screen.getByRole("menu");
+    expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
+      "myServices.link.copy",
+      "myServices.link.showQr",
+      "myServices.configs.show",
+      "myServices.manage.open",
+      "myServices.link.reset",
+    ]);
+    await user.click(within(menu).getByRole("menuitem", { name: "myServices.link.reset" }));
+    expect(await screen.findByText("myServices.link.resetConfirm")).toBeInTheDocument();
+    expect(resetSubscriptionLink).not.toHaveBeenCalled();
+  });
+});
 
 const L = "myServices.link";
 const LINK_1 = "https://sub.example.com/sub/tok-first";

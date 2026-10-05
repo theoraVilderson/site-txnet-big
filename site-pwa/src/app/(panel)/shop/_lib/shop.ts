@@ -171,3 +171,12 @@ export function forgetReturnInvoice(): void {
     // Nothing was kept.
   }
 }
+
+/** The shop's steps (contract.ux.md U1), in the order they are walked. */
+export const SHOP_STEPS = ["choose", "pay", "delivered"] as const;
+export type ShopStep = (typeof SHOP_STEPS)[number];
+
+/** Which step a phase of the page is: read from the phase, never kept beside it. */
+export function shopStep(phase: "list" | "checkout" | "paid"): number {
+  return phase === "list" ? 0 : phase === "checkout" ? 1 : 2;
+}

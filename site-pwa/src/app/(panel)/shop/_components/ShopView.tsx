@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, ArrowRight, CheckCircle2, Clock, Gauge, Loader2, ShoppingCart, Smartphone, Wallet, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { AlertCircle, ArrowRight, Check, CheckCircle2, Clock, Gauge, Loader2, ShoppingCart, Smartphone, Wallet, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
+import { useMotionLevel } from "@/hooks/useMotionLevel";
+import { DURATION, EASE } from "@/lib/motion";
 import { ApiError } from "@/lib/api-error";
 import { billingApi, type InvoicePaid, type ShopInvoice, type ShopOffer } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
@@ -15,9 +18,10 @@ import { formatBytes } from "../../services/_lib/service-configs";
 import { useWalletBalance } from "../../_hooks/useWalletBalance";
 import { formatInstant } from "../../_lib/datetime";
 import { formatMoney } from "../../_lib/money";
-import { categoriesOf, forgetReturnInvoice, groupOffers, hasOwnName, meteredCapOf, meteredStartShortOf, quotaLimit, shortfallOf, trafficRateOf, type OfferGroup } from "../_lib/shop";
+import { categoriesOf, forgetReturnInvoice, groupOffers, shopStep, hasOwnName, meteredCapOf, meteredStartShortOf, quotaLimit, shortfallOf, trafficRateOf, type OfferGroup } from "../_lib/shop";
 import { PageHeader } from "../../_components/kit/PageHeader";
 import { useCelebration } from "../../_components/kit/celebrate";
+import { ShopSteps } from "./ShopSteps";
 
 const S = FrontendI18nKeys.common.shop;
 
@@ -57,9 +61,10 @@ type Names = { of: (key: string | null, fallback: string) => string };
  * (F-038-h); one not on the list leaves the list, never a guessed checkout.
  */
 export function ShopView({ invoiceId, variantId = null }: { invoiceId: string | null; variantId?: string | null }) {
-  const { lang, t } = useLocale();
+  const { lang, t, isRtl } = useLocale();
   const messageFor = useApiErrorMessage();
   const money = (value: string, currency: string) => formatMoney(value, currency, { lang, t });
+  const reduced = useMotionLevel() === "reduced";
 
   const [phase, setPhase] = useState<Phase>({ kind: "list" });
   const [offers, setOffers] = useState<ShopOffer[] | null>(null);
@@ -119,6 +124,13 @@ export function ShopView({ invoiceId, variantId = null }: { invoiceId: string | 
 
   const names: Names = { of: (key, fallback) => (key && texts[key]) || fallback };
 
+  // U1: the steps slide the way they are walked — forward from the end side,
+  // back from the start side; opacity alone under reduced motion (M3).
+  const step = shopStep(phase.kind);
+  const [steps, setSteps] = useState({ now: step, direction: 1 });
+  if (steps.now !== step) setSteps({ now: step, direction: step > steps.now ? 1 : -1 });
+  const slide = reduced ? { opacity: 0 } : { x: steps.direction * (isRtl ? -24 : 24), opacity: 0 };
+
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-8">
       <PageHeader
@@ -126,6 +138,7 @@ export function ShopView({ invoiceId, variantId = null }: { invoiceId: string | 
         title={t("common", S.title)}
         subtitle={t("common", S.subtitle)}
       />
+      <ShopSteps current={step} />
 
       {loadError ? (
         <ErrorBox message={messageFor(loadError)}>
@@ -152,38 +165,50 @@ export function ShopView({ invoiceId, variantId = null }: { invoiceId: string | 
             </button>
           )}
         </ErrorBox>
-      ) : phase.kind === "list" ? (
-        returning ? (
-          <Spinner />
-        ) : (
-          <OfferList
-            offers={offers}
-            names={names}
-            money={money}
-            onBuy={(offer) =>
-              setPhase({
-                kind: "checkout",
-                buying: { variantId: offer.variantId, nameKey: offer.nameKey, sku: offer.sku, offer },
-                invoice: null,
-              })
-            }
-          />
-        )
-      ) : phase.kind === "checkout" ? (
-        <Checkout
-          key={phase.buying.variantId}
-          buying={phase.buying}
-          initial={phase.invoice}
-          names={names}
-          money={money}
-          onBack={() => setPhase({ kind: "list" })}
-          onPaid={(paid) => {
-            forgetReturnInvoice();
-            setPhase({ kind: "paid", buying: phase.buying, paid });
-          }}
-        />
       ) : (
-        <Paid paid={phase.paid} name={names.of(phase.buying.nameKey, phase.buying.sku)} money={money} />
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={phase.kind}
+            initial={slide}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduced ? DURATION.fast : DURATION.base, ease: EASE.standard }}
+          >
+            {phase.kind === "list" ? (
+              returning ? (
+                <Spinner />
+              ) : (
+                <OfferList
+                  offers={offers}
+                  names={names}
+                  money={money}
+                  onBuy={(offer) =>
+                    setPhase({
+                      kind: "checkout",
+                      buying: { variantId: offer.variantId, nameKey: offer.nameKey, sku: offer.sku, offer },
+                      invoice: null,
+                    })
+                  }
+                />
+              )
+            ) : phase.kind === "checkout" ? (
+              <Checkout
+                key={phase.buying.variantId}
+                buying={phase.buying}
+                initial={phase.invoice}
+                names={names}
+                money={money}
+                onBack={() => setPhase({ kind: "list" })}
+                onPaid={(paid) => {
+                  forgetReturnInvoice();
+                  setPhase({ kind: "paid", buying: phase.buying, paid });
+                }}
+              />
+            ) : (
+              <Paid paid={phase.paid} name={names.of(phase.buying.nameKey, phase.buying.sku)} money={money} />
+            )}
+          </motion.div>
+        </AnimatePresence>
       )}
     </div>
   );
@@ -288,7 +313,7 @@ function ProductCard({
   const title = names.of(group.productNameKey, group.variants[0].sku);
 
   return (
-    <article className="flex flex-col gap-4 rounded-3xl border border-card-border bg-card-bg p-5 shadow-sm transition-shadow hover:shadow-md md:p-6">
+    <article className="flex flex-col gap-4 rounded-3xl border border-card-border bg-card-bg p-5 shadow-sm transition-[box-shadow,transform,border-color] duration-200 hover:border-primary/40 hover:shadow-lg motion-safe:hover:-translate-y-1 md:p-6">
       <div>
         <h2 className="text-lg font-bold text-text-primary">{title}</h2>
         {description && <p className="mt-1 line-clamp-2 text-sm text-text-secondary">{description}</p>}
@@ -305,10 +330,11 @@ function ProductCard({
                 role="radio"
                 aria-checked={on}
                 onClick={() => setPicked(v.variantId)}
-                className={`rounded-2xl border px-3 py-2 text-sm font-bold transition-colors ${
+                className={`inline-flex items-center gap-1.5 rounded-2xl border px-3 py-2 text-sm font-bold transition-colors ${
                   on ? "border-primary bg-leaf-bg text-primary" : "border-card-border text-text-secondary hover:border-primary"
                 }`}
               >
+                {on && <Check size={14} aria-hidden />}
                 {labelOf(v)}
               </button>
             );
