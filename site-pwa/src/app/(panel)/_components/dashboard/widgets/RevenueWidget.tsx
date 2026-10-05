@@ -19,9 +19,9 @@ const WINDOWS = [
 ] as const;
 
 /**
- * Revenue (UX-1-r, D5): what the caller's reseller sold today (from midnight in
+ * Revenue (UX-1-r, D5): what the caller's tenant sold today (from midnight in
  * their resolved zone), over 7 and over 30 days — F-311-b's totals, one call
- * per window, each in the reseller's operating currency. A total billing could
+ * per window, each in that tenant's operating currency. A total billing could
  * not convert reads as a dash, never as a sum of two currencies.
  */
 export default function RevenueWidget() {

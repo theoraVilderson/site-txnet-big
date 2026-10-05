@@ -896,8 +896,9 @@ export function grantLimitsApi(tenantId: string) {
  * A reseller's own revenue over a window (F-311-b, billing `reseller-revenue.controller.ts`):
  * what it sold and what its users paid in. `total` is in `currencyCode`, the
  * reseller's operating currency, and `null` when a currency it was written in
- * has no way into it. The door is `ResellerAccess`: a reseller's owner, member
- * or the platform's staff — never the platform's own tenant.
+ * has no way into it. The door is `ResellerAccess`'s figures door: a
+ * reseller's owner, member or the platform's staff, and the platform's own
+ * tenant to its staff (UX-1-r2).
  */
 export interface ResellerRevenueTotals {
   from: string;

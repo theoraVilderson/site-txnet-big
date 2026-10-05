@@ -21,12 +21,13 @@ different audience. It is not reused, re-scoped or extended here.
 
 `GET /api/billing/tenants/:tenantId/revenue?from=&to=` (`revenue/`, F-311-b).
 The reseller is the **path's**, never the session's: its owner signs in to the
-platform owner's tenant (ADR-0059). Consumers: bot-app (F-311-c), and the
-panel dashboard's `revenue` widget for a reseller's own staff (UX-1-r).
+platform owner's tenant (ADR-0059). The path may also name the platform's own
+tenant, for its staff (UX-1-r2). Consumers: bot-app (F-311-c), and the panel
+dashboard's `revenue` widget, for a reseller's staff and the platform's (UX-1-r, UX-1-r2).
 
 | Rule | Why |
 |---|---|
-| `ResellerAccess.admit`/`run` is the whole door (tenant invariant 21) — the reseller's owner, a staff seat of it holding `tenant.manage`, or platform staff. **No permission guard**, and `read` not `staffWrite` | a reseller's owner holds no operator permission; a suspended reseller may still see what it earned |
+| `ResellerAccess.runFiguresIncludingPlatform` is the whole door (tenant invariant 21) — the reseller's owner, a staff seat of it holding `tenant.manage`, or platform staff with no consent (as `admit`); and the platform's own tenant to its staff only (UX-1-r2). On the platform's tenant the same arithmetic answers what its direct users spent: a reseller package (`reseller_purchase`) and what resellers pay the platform are not in it. **No permission guard**, and `read` not `staffWrite` | a reseller's owner holds no operator permission; a suspended reseller may still see what it earned |
 | The refusal reasons are the door's four, mapped `not_allowed` 403, `reseller_not_found` 404, `reseller_suspended` 403, `reseller_terminated` 409 | the shape every reseller-named surface answers, so one client reads them all |
 | **The scope is the whole filter.** The work runs inside `ResellerAccess.run`, and no query names a `tenantId` | both tables are strict under RLS (`20260909001500`, list C) *and* in `TENANT_SCOPED_MODELS`; a filter written by hand is one that can be written wrong, and the failure is a reseller reading another's takings |
 | Two figures, answered together, neither folded into the other: `sales` (what its users spent) and `topUps` (what they paid in) | a user who tops up 100 and spends 40 is 40 of revenue and 100 of cash in — ADR-0067 decision 1 |
@@ -42,7 +43,7 @@ panel dashboard's `revenue` widget for a reseller's own staff (UX-1-r).
 | Nothing is cached or stored | the ledger says what was earned; a remembered total is a second memory (the reasoning of ADR-0041 §5) |
 | The window defaults to 30 days, is capped at 366 by the schema, and the answer echoes the `from`/`to` actually used. Its own rate-limit bucket, `RESELLER_REVENUE_READ` | two aggregates scan the tenant's whole ledgers over the period with no index narrowing them further — the most expensive read on any reseller-named surface |
 | `.strict()` on the query | the path already said whose revenue this is; a second answer is refused rather than ignored |
-| **To the platform's staff, every split of the totals is a breakdown** (F-117-k, F-117-l, ADR-0104 (3)): `sales.byCurrency`, `sales.byReason` and `topUps.byCurrency`. A cell under 5 distinct people answers `total: null, count: null, people: 'fewer_than_5'` beside its `currencyCode` or `reasonType`, and a lone hidden cell takes the smallest other of its split with it (`suppressSplit`). People come from `readSplitPeople`: the same rows, a refund under the sale it undoes, settled top-ups of its users only, scoped by `current_tenant_id()`, asked for staff only. The wholes — `sales.total`/`count`, `topUps.total`/`count` — are never hidden; the reseller's own people see every cell | a cell held by one small group is that group's money; without the pair, the whole minus the shown cells would be. This also closes a breakdown cell that is the only one in its currency. No reason × currency table is answered |
+| **To the platform's staff reading a reseller, every split of the totals is a breakdown** (on the platform's own tenant, `platform: true`, nothing is hidden: they are its own people) (F-117-k, F-117-l, ADR-0104 (3)): `sales.byCurrency`, `sales.byReason` and `topUps.byCurrency`. A cell under 5 distinct people answers `total: null, count: null, people: 'fewer_than_5'` beside its `currencyCode` or `reasonType`, and a lone hidden cell takes the smallest other of its split with it (`suppressSplit`). People come from `readSplitPeople`: the same rows, a refund under the sale it undoes, settled top-ups of its users only, scoped by `current_tenant_id()`, asked for staff only. The wholes — `sales.total`/`count`, `topUps.total`/`count` — are never hidden; the reseller's own people see every cell | a cell held by one small group is that group's money; without the pair, the whole minus the shown cells would be. This also closes a breakdown cell that is the only one in its currency. No reason × currency table is answered |
 
 ## By product and by day — tier A (F-117-h)
 
@@ -55,7 +56,7 @@ reads keep their shape and cost.
 
 | Rule | Why |
 |---|---|
-| **For the platform's staff (`as: 'staff'`), a cell under `SMALL_GROUP` (5) people answers `people: 'fewer_than_5'` with `count`, `total` and `byCurrency` empty**; suppressed cells come after the shown ones, in a fixed order | ADR-0104 (3): a cell of one buyer is that person's spending, and tier A needs no consent |
+| **For the platform's staff on a reseller (`as: 'staff'`, not `platform`), a cell under `SMALL_GROUP` (5) people answers `people: 'fewer_than_5'` with `count`, `total` and `byCurrency` empty**; suppressed cells come after the shown ones, in a fixed order | ADR-0104 (3): a cell of one buyer is that person's spending, and tier A needs no consent |
 | The reseller's own people (owner, a seat) see every cell, `suppressed: false` | the rule is for the platform; they already see the people |
 | **The whole reseller (`people`, `count`) is never suppressed** | ADR-0104 (3) |
 | **The complement is chosen per currency** (`hiddenCells`, F-117-i, F-117-j): when a currency's money sits in exactly one hidden cell, the smallest shown cell holding that currency is hidden too — fewest people, then fewest sales, then position — and the check repeats, since that cell may hold a currency of its own. Products and days each on their own | `/revenue` answers each currency's total (`byCurrency`), so a lone hidden cell in a currency is that total minus the shown cells; two give only their sum. A currency no shown cell holds is closed one level up, in the totals' own currency split (F-117-k, below) |

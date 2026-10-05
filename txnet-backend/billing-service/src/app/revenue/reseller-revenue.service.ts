@@ -167,6 +167,13 @@ const listed = (sums: ByCurrency, counts: Map<string, number>): CurrencyTotal[] 
     .map((currencyCode) => ({ currencyCode, total: money(sums.get(currencyCode)), count: counts.get(currencyCode) ?? 0 }));
 
 /**
+ * ADR-0104 (3): the platform's staff reading a **reseller** see a cell under 5
+ * people hidden. The platform's own figures (UX-1-r2) are its own people's, so
+ * nothing is hidden from its staff there.
+ */
+const hidesSmallCells = (admitted: AdmittedReseller) => admitted.as === 'staff' && admitted.platform !== true;
+
+/**
  * A reseller's own revenue (F-311-b, spec F-311, ADR-0067):
  * `GET /api/billing/tenants/:tenantId/revenue` — totals over a period for the
  * reseller the **path** names. The data half of the bot's revenue figure
@@ -285,7 +292,7 @@ export class ResellerRevenueService {
         // see a cell under 5 people hidden, paired (F-117-k, F-117-l). The
         // wholes — sales.total/count, topUps.total/count — are never hidden.
         const people: SplitPeople[] | null =
-          reseller.as === 'staff' ? await readSplitPeople(tx, period, SALE_REASONS, REFUND_REASONS, UNDONE_SALES) : null;
+          hidesSmallCells(reseller) ? await readSplitPeople(tx, period, SALE_REASONS, REFUND_REASONS, UNDONE_SALES) : null;
         const currency = (c: CurrencyTotal): HiddenCurrency => ({ currencyCode: c.currencyCode, total: null, count: null, people: FEWER_THAN });
         const split = <C extends { count: number }, H>(cells: C[], keyOf: (c: C) => string, of: SplitPeople['split'], hide: (c: C) => H): (C | H)[] =>
           people ? suppressSplit(cells, keyOf, people, of, hide) : cells;
@@ -330,7 +337,7 @@ export class ResellerRevenueService {
         const timeZone = tenant?.timezone ?? 'UTC';
         const rows = await readBreakdown(tx, period, timeZone, SALE_REASONS, REFUND_REASONS);
         const convert = await this.converter(tx, tenantId);
-        return breakdownOf(rows, { staff: reseller.as === 'staff', convert, period, timeZone });
+        return breakdownOf(rows, { staff: hidesSmallCells(reseller), convert, period, timeZone });
       }),
     );
   }
@@ -362,7 +369,8 @@ export class ResellerRevenueService {
   /** Admit, run in the reseller's scope, and translate the door's refusal into this surface's one type. */
   private async run<T>(actor: ResellerActor, tenantId: string, work: (reseller: AdmittedReseller) => Promise<T>): Promise<T> {
     try {
-      return await this.access.run(actor, tenantId, 'read', (reseller) => work(reseller));
+      // The platform's own tenant too, to its staff (UX-1-r2): its dashboard's revenue.
+      return await this.access.runFiguresIncludingPlatform(actor, tenantId, 'read', (reseller) => work(reseller));
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new ResellerRevenueRefused(e.reason, tenantId);
       throw e;

@@ -12,8 +12,8 @@ import { WIDGETS, startOfDayIn, visibleWidgets } from "./_lib/widgets";
  * The staff's widgets (UX-1-r, `contract.ux.md` D5), each by the permission of
  * the page it links to, over APIs that already exist:
  *
- * - revenue: a reseller's own, today / 7 / 30 days, from F-311-b's endpoint —
- *   its door admits a reseller, never the platform's own tenant;
+ * - revenue: the caller's own tenant's, today / 7 / 30 days, from F-311-b's
+ *   endpoint — a reseller's, or the platform's own for its staff (UX-1-r2);
  * - manual payments, the support queue (unassigned, mine, waiting), users (the
  *   total and a search that opens the users page), systems (platform only:
  *   panels by verdict).
@@ -72,16 +72,16 @@ describe("the registry (D5, D6)", () => {
     expect(ids.slice(ids.indexOf("services") + 1, ids.indexOf("support"))).toEqual(STAFF);
   });
 
-  it("shows each by the page it links to; revenue to a reseller's staff, systems to the platform's", () => {
+  it("shows each by the page it links to; revenue to either tenant's staff, systems to the platform's", () => {
     expect(seen({ held: [], tenantType: "platform_owner", menuIds: new Set(["dashboard", "support"]) })).toEqual([]);
     const platformMenu = new Set(["manual-payments", "support-inbox", "users", "systems"]);
-    expect(seen({ held: ["*"], tenantType: "platform_owner", menuIds: platformMenu })).toEqual(["manual-payments", "support-queue", "users", "systems"]);
+    expect(seen({ held: ["*"], tenantType: "platform_owner", menuIds: platformMenu })).toEqual(["revenue", "manual-payments", "support-queue", "users", "systems"]);
     expect(seen({ held: ["tenant.manage"], tenantType: "reseller", menuIds: new Set(["users"]) })).toEqual(["revenue", "users"]);
   });
 });
 
 describe("the widgets (D5)", () => {
-  it("revenue: a reseller's own today, 7 and 30 days, today from midnight in the caller's zone", async () => {
+  it("revenue: the caller's own tenant today, 7 and 30 days, today from midnight in the caller's zone", async () => {
     me = RESELLER_STAFF;
     vi.mocked(resellerRevenueApi.totals).mockImplementation(async (_id, q) => totals(q.from ? "100.00" : "900.00") as never);
     widget("revenue");
@@ -91,6 +91,13 @@ describe("the widgets (D5)", () => {
     expect(calls[0][1]).toEqual({ from: "2026-10-04T20:30:00.000Z", to: NOW.toISOString() });
     expect(calls[1][1]).toEqual({ from: "2026-09-28T12:00:00.000Z", to: NOW.toISOString() });
     expect(calls[2][1]).toEqual({ from: "2026-09-05T12:00:00.000Z", to: NOW.toISOString() });
+  });
+
+  it("revenue: the platform's staff see the platform's own (UX-1-r2)", async () => {
+    vi.mocked(resellerRevenueApi.totals).mockResolvedValue(totals("5.00") as never);
+    widget("revenue");
+    await screen.findByText(D.revenue.today);
+    expect(vi.mocked(resellerRevenueApi.totals).mock.calls.map(([id]) => id)).toEqual(["t-1", "t-1", "t-1"]);
   });
 
   it("support queue: unassigned, mine and waiting, a full first page as 50+", async () => {

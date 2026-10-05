@@ -316,6 +316,37 @@ describe('ResellerRevenueService.totals', () => {
  * else the converted total minus the shown currencies is its money. The
  * converted whole is never hidden. The reseller's own people see every currency.
  */
+/**
+ * UX-1-r2: the platform's own figures, for its dashboard. Its staff may total
+ * the platform's tenant as they total a reseller's; nobody else may. They are
+ * the platform's own people, so no split is hidden from them.
+ */
+describe("ResellerRevenueService.totals — the platform's own tenant (UX-1-r2)", () => {
+  const staff = { userId: '66666666-6666-4666-8666-666666666666', tenantId: PLATFORM, permissions: ['tenant.manage'] };
+  const sales = [
+    { reasonType: WalletReasonType.product_purchase, sum: '300.00', count: 30, currencyCode: 'USD' },
+    { reasonType: WalletReasonType.product_purchase, sum: '80.00', count: 2, currencyCode: 'EUR' },
+  ];
+  const changes = [{ fromCode: 'EUR', toCode: 'USD', rate: '1' }];
+
+  it("totals the platform's ledgers in its own scope for its staff, every split shown", async () => {
+    const { seen, service } = build({ sales, changes, people: [{ split: 'salesCurrency', key: 'EUR', people: 1 }] });
+    const total = await service.totals(staff, PLATFORM, { from: FROM, to: TO });
+    expect(total.sales.total).toBe('380.00');
+    expect(Object.fromEntries(total.sales.byCurrency.map((c) => [c.currencyCode, c.total]))).toEqual({ EUR: '80.00', USD: '300.00' });
+    expect(seen.map((s) => s.what)).not.toContain('people');
+    expect(seen.filter((s) => s.what !== 'people').every((s) => s.scope === PLATFORM)).toBe(true);
+  });
+
+  it('refuses anyone but its staff, before reading anything', async () => {
+    for (const caller of [owner, stranger, { ...staff, tenantId: RESELLER }]) {
+      const { seen, service } = build({ sales, changes });
+      await expect(service.totals(caller, PLATFORM, { from: FROM, to: TO })).rejects.toMatchObject({ reason: 'not_allowed' });
+      expect(seen).toEqual([]);
+    }
+  });
+});
+
 describe('ResellerRevenueService.totals — the currency split for the platform (F-117-k)', () => {
   const staff = { userId: '66666666-6666-4666-8666-666666666666', tenantId: PLATFORM, permissions: ['tenant.manage'] };
   const sales = [

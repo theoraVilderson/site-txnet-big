@@ -195,6 +195,30 @@ describe('ResellerAccess', () => {
     expect(seen).toBe(PLATFORM);
   });
 
+  it("admits the platform's own tenant to its staff on a figures route, and a reseller exactly as `admit` does — no consent (UX-1-r2)", async () => {
+    const access = build();
+    await expect(access.admitFiguresIncludingPlatform(staff, PLATFORM, 'read', T0)).resolves.toEqual({
+      id: PLATFORM,
+      slug: 'platform_owner',
+      as: 'staff',
+      platform: true,
+    });
+    // Nobody else learns anything of the platform's figures.
+    for (const caller of [
+      { userId: STAFF, tenantId: PLATFORM, permissions: [] as string[] },
+      owner,
+      { userId: CUSTOMER, tenantId: RESELLER, permissions: ['tenant.manage'] },
+    ]) {
+      await expect(build('active', [seat()]).admitFiguresIncludingPlatform(caller, PLATFORM, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    }
+    // Figures are not a reseller's people: staff need no consent, as under `admit` (ADR-0104 (3)).
+    await expect(access.admitFiguresIncludingPlatform(staff, RESELLER, 'read', T0)).resolves.toEqual({ id: RESELLER, slug: 'ali', as: 'staff' });
+    await expect(access.admitFiguresIncludingPlatform(owner, RESELLER, 'read', T0)).resolves.toEqual({ id: RESELLER, slug: 'ali', as: 'owner' });
+    await expect(build('suspended').admitFiguresIncludingPlatform(owner, RESELLER, 'staffWrite', T0)).rejects.toMatchObject({ reason: 'reseller_suspended' });
+    // The work runs in the admitted tenant's scope.
+    await expect(access.runFiguresIncludingPlatform(staff, PLATFORM, 'read', async () => TenantContext.current().id, T0)).resolves.toBe(PLATFORM);
+  });
+
   it("admits platform staff to a reseller's people only under its live consent; `read` refuses writes (F-117-b, ADR-0104 (4))", async () => {
     // No consent, an expired one, a revoked one, a request never granted, another reseller's: none admit.
     for (const dead of [

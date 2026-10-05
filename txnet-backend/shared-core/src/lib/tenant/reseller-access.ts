@@ -109,7 +109,7 @@ export class ResellerAccess {
   constructor(@Inject(RESELLER_ACCESS_READER) private readonly prisma: ResellerAccessReader) {}
 
   admit(actor: ResellerActor, tenantId: string, capability: TenantCapabilityName, now = new Date()): Promise<AdmittedReseller> {
-    return this.admitTarget(actor, tenantId, capability, now, false);
+    return this.admitTarget(actor, tenantId, capability, now, 'reseller');
   }
 
   /**
@@ -129,7 +129,19 @@ export class ResellerAccess {
    * route's job.
    */
   admitIncludingPlatform(actor: ResellerActor, tenantId: string, capability: TenantCapabilityName, now = new Date()): Promise<AdmittedReseller> {
-    return this.admitTarget(actor, tenantId, capability, now, true);
+    return this.admitTarget(actor, tenantId, capability, now, 'people');
+  }
+
+  /**
+   * {@link admit}, on a route that answers **figures** and may also name the
+   * platform's own tenant (UX-1-r2): a reseller's revenue, and the platform's
+   * own on its dashboard. The platform's tenant is admitted to its staff only,
+   * as under {@link admitIncludingPlatform}; a reseller is answered exactly as
+   * {@link admit} answers it — no consent, because figures are not a
+   * reseller's people (ADR-0104 (3): a small cell is hidden instead).
+   */
+  admitFiguresIncludingPlatform(actor: ResellerActor, tenantId: string, capability: TenantCapabilityName, now = new Date()): Promise<AdmittedReseller> {
+    return this.admitTarget(actor, tenantId, capability, now, 'figures');
   }
 
   private async admitTarget(
@@ -137,8 +149,10 @@ export class ResellerAccess {
     tenantId: string,
     capability: TenantCapabilityName,
     now: Date,
-    platform: boolean,
+    /** `reseller`: resellers only. `people` and `figures`: the platform's tenant too; `people` holds staff to a reseller's consent. */
+    route: 'reseller' | 'people' | 'figures',
   ): Promise<AdmittedReseller> {
+    const platform = route !== 'reseller';
     const tenantType = platform ? { in: [TenantType.reseller, TenantType.platform_owner] } : TenantType.reseller;
     const [caller, tenant] = await Promise.all([
       this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } }),
@@ -163,7 +177,7 @@ export class ResellerAccess {
     if (!staff) {
       const state = { status: reseller.status, graceEndsAt: reseller.graceEndsAt?.toISOString() ?? null };
       if (!tenantAllows(state, capability, now)) throw new ResellerAccessRefused('reseller_suspended', tenantId);
-    } else if (platform && !owner) {
+    } else if (route === 'people' && !owner) {
       const support = await this.mustHoldConsent(actor, reseller.id, capability, now);
       return { id: reseller.id, slug: reseller.slug, as: 'staff', support };
     }
@@ -185,6 +199,18 @@ export class ResellerAccess {
   ): Promise<T> {
     const reseller = await this.admit(actor, tenantId, capability, now);
     return runWithTenant({ id: reseller.id }, () => work(reseller));
+  }
+
+  /** {@link admitFiguresIncludingPlatform}, then `work` in the admitted tenant's scope — {@link run}'s rule. */
+  async runFiguresIncludingPlatform<T>(
+    actor: ResellerActor,
+    tenantId: string,
+    capability: TenantCapabilityName,
+    work: (reseller: AdmittedReseller) => Promise<T>,
+    now = new Date(),
+  ): Promise<T> {
+    const admitted = await this.admitFiguresIncludingPlatform(actor, tenantId, capability, now);
+    return runWithTenant({ id: admitted.id }, () => work(admitted));
   }
 
   /** {@link admitIncludingPlatform}, then `work` in the admitted tenant's scope — {@link run}'s rule, the platform's tenant included. */
