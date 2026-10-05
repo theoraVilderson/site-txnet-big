@@ -2,8 +2,8 @@
 id: support
 layer: domain
 status: active
-version: 3
-updated: 2026-10-04
+version: 4
+updated: 2026-10-05
 ---
 
 # Contract — support
@@ -27,7 +27,7 @@ answers exactly as a missing one.
 | Route | Input | Output | Errors |
 |---|---|---|---|
 | `GET /api/support/categories` | `Accept-Language` | `[{id, key, name}]`: the tenant's active categories, else the platform defaults (ADR-0112 point 6) | — |
-| `GET /api/support/conversations` | `?before=<nextBefore>&limit≤100` | `{items: [summary + unread], nextBefore}`, newest activity first | — |
+| `GET /api/support/conversations` (and `…/counts`, UX-1-v) | `?before=<nextBefore>&limit≤100`; `status` (comma-separated `ConversationStatus`), `q` (2–64, case-insensitive on the subject and non-internal bodies; `%`/`_` literal) | `{items: [summary + unread], nextBefore}`, newest activity first; `…/counts`: `{open, pending_user, pending_agent, resolved, closed}` over the caller's own threads | 400 on a bad `status`/`q` |
 | `POST /api/support/conversations` | `{body ≤4000, subject?, categoryId?}` | summary (`open`, `async`, `lastSeq` 1); subject = body's first line when absent | 404 `category_unknown`, 409 `too_many_unfinished` |
 | `GET /api/support/conversations/:id/messages` | `?afterSeq=` or `?beforeSeq=`, `limit≤100`; neither = latest page | `{conversation, messages (oldest first, never internal, each with `attachments`), hasEarlier, lastReadSeq, seenUpToSeq, realtime: {channel, proof, expiresInSec} \| null}` | 404 `not_found` |
 | `POST /api/support/conversations/:id/messages` | `{body ≤4000}` | `{id, seq, senderKind, mine, body, createdAt}` | 404 `not_found`, 409 `closed` |

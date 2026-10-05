@@ -11,7 +11,9 @@
  *    (invariant 5);
  *  - the status follows who wrote last, a resolved thread reopens, a closed one
  *    refuses (invariant 7);
- *  - a send in a month with no partition still lands (point 3).
+ *  - a send in a month with no partition still lands (point 3);
+ *  - the list's `status` and `q` filters and the per-status counts see only
+ *    the caller's threads, and `q` never matches an internal note (UX-1-v).
  *
  *   npm run test:int
  */
@@ -25,6 +27,7 @@ import {
   startPostgresFixture,
 } from '../../../../test-support/postgres-fixture';
 import type { PrismaService } from '../prisma/prisma.service';
+import { listQuerySchema } from './conversations.schema';
 import { ConversationRefused, SupportCaller, SupportConversationService } from './conversations.service';
 
 vi.setConfig({ testTimeout: HARNESS_TIMEOUT_MS, hookTimeout: HARNESS_TIMEOUT_MS });
@@ -35,6 +38,8 @@ const ALICE: SupportCaller = { tenantId: RESELLER_A, userId: '33333333-3333-4333
 const AMIR: SupportCaller = { tenantId: RESELLER_A, userId: '33333333-3333-4333-8333-3333333333a2' };
 const ARASH: SupportCaller = { tenantId: RESELLER_A, userId: '33333333-3333-4333-8333-3333333333a3' };
 const ROYA: SupportCaller = { tenantId: RESELLER_A, userId: '33333333-3333-4333-8333-3333333333a4' };
+const NIMA: SupportCaller = { tenantId: RESELLER_A, userId: '33333333-3333-4333-8333-3333333333a5' };
+const KIAN: SupportCaller = { tenantId: RESELLER_A, userId: '33333333-3333-4333-8333-3333333333a6' };
 const BEHNAZ: SupportCaller = { tenantId: RESELLER_B, userId: '33333333-3333-4333-8333-3333333333b1' };
 const AGENT = '44444444-4444-4444-8444-444444444441';
 
@@ -201,5 +206,42 @@ describe('reading (ADR-0112 point 5, invariant 5)', () => {
     await as(ROYA, () => support.send(ROYA, opened.id, { body: 'yes' }));
     const replied = await as(ROYA, () => support.list(ROYA, {}));
     expect(replied.items.find((c) => c.id === opened.id)?.unread).toBe(0);
+  });
+});
+
+describe('filtering the list (UX-1-v, panel-web contract.ux.md T1)', () => {
+  it('takes status as a comma-separated list and q as 2-64 characters, nothing else', () => {
+    expect(listQuerySchema.parse({ status: 'open,pending_agent', q: ' vpn ' })).toMatchObject({ status: ['open', 'pending_agent'], q: 'vpn' });
+    expect(listQuerySchema.safeParse({ status: 'open,bogus' }).success).toBe(false);
+    expect(listQuerySchema.safeParse({ q: 'a' }).success).toBe(false);
+    expect(listQuerySchema.safeParse({ q: 'a'.repeat(65) }).success).toBe(false);
+  });
+
+  it('narrows by status and by q over the subject and visible bodies, and counts per status — the caller\'s own only', async () => {
+    const slow = await as(NIMA, () => support.open(NIMA, { body: 'my vpn is slow', subject: 'Slow connection' }));
+    const bill = await as(NIMA, () => support.open(NIMA, { body: 'charged twice', subject: 'Billing' }));
+    const done = await as(NIMA, () => support.open(NIMA, { body: 'thanks, 100% fixed', subject: 'All good' }));
+    await agentWrites(bill.id, 'We refunded it');
+    await agentWrites(slow.id, 'note: secretword', true);
+    await owner.supportConversation.update({ where: { id: done.id }, data: { status: 'resolved' } });
+    // Another user of the same tenant says the same words: never in NIMA's answer.
+    await as(KIAN, () => support.open(KIAN, { body: 'my vpn is slow too', subject: 'Slow' }));
+
+    const ids = async (query: Parameters<SupportConversationService['list']>[1]) =>
+      (await as(NIMA, () => support.list(NIMA, query))).items.map((c) => c.id).sort();
+
+    expect(await ids({ status: ['open', 'pending_agent'] })).toEqual([slow.id]);
+    expect(await ids({ status: ['pending_user', 'resolved'] })).toEqual([bill.id, done.id].sort());
+    expect(await ids({ q: 'SLOW' })).toEqual([slow.id]);
+    expect(await ids({ q: 'refunded' })).toEqual([bill.id]);
+    expect(await ids({ q: 'twice' })).toEqual([bill.id]);
+    expect(await ids({ q: 'secretword' })).toEqual([]);
+    // A wildcard typed is a character, not a pattern.
+    expect(await ids({ q: '0%' })).toEqual([done.id]);
+    expect(await ids({ q: '_%' })).toEqual([]);
+    expect(await ids({ status: ['resolved'], q: 'thanks' })).toEqual([done.id]);
+    expect(await ids({ status: ['closed'], q: 'thanks' })).toEqual([]);
+
+    expect(await as(NIMA, () => support.counts(NIMA))).toEqual({ open: 1, pending_agent: 0, pending_user: 1, resolved: 1, closed: 0 });
   });
 });

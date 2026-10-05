@@ -1,3 +1,4 @@
+import { ConversationStatus } from '@prisma/client';
 import { BackendI18nKeys } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
@@ -32,11 +33,25 @@ export const attachSchema = z
 /** `POST /api/support/conversations/:id/read` — no `upToSeq` (or no body at all) reads to the end. */
 export const readSchema = z.object({ upToSeq: seq.optional() }).strict().optional();
 
-/** `GET /api/support/conversations?before=&limit=` — `before` is the previous page's `nextBefore`. */
+/** A search over the caller's own threads (UX-1-v, panel-web `contract.ux.md` T1). */
+export const LIST_QUERY_MIN = 2;
+export const LIST_QUERY_MAX = 64;
+
+/**
+ * `GET /api/support/conversations?before=&limit=&status=&q=` — `before` is the
+ * previous page's `nextBefore`; `status` a comma-separated list of
+ * `ConversationStatus`; `q` matched on the subject and the bodies the user sees.
+ */
 export const listQuerySchema = z
   .object({
     before: z.coerce.date({ message: invalid }).optional(),
     limit: z.coerce.number().int().min(1, invalid).max(PAGE_MAX, invalid).optional(),
+    status: z
+      .string()
+      .transform((v) => v.split(',').map((s) => s.trim()).filter(Boolean))
+      .pipe(z.array(z.nativeEnum(ConversationStatus, { message: invalid })).min(1, invalid))
+      .optional(),
+    q: z.string().trim().min(LIST_QUERY_MIN, invalid).max(LIST_QUERY_MAX, invalid).optional(),
   })
   .strict();
 

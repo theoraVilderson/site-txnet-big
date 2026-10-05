@@ -208,14 +208,26 @@ export class SupportConversationService {
     return { expiresInMs: TYPING_TTL_MS };
   }
 
+  /**
+   * The caller's own conversations, newest activity first. `status` keeps the
+   * listed ones; `q` matches the subject or any message the user can see — an
+   * agent's internal note never (invariant 5), so a search cannot reveal one
+   * (UX-1-v). A `%` or `_` typed is a character, not a pattern.
+   */
   async list(
     caller: SupportCaller,
-    query: { before?: Date; limit?: number },
+    query: { before?: Date; limit?: number; status?: ConversationStatus[]; q?: string },
   ): Promise<{ items: ConversationSummary[]; nextBefore: Date | null }> {
     const limit = Math.min(query.limit ?? LIST_DEFAULT, PAGE_MAX);
+    const q = query.q ? { contains: query.q.replace(/[\\%_]/g, (c) => `\\${c}`), mode: 'insensitive' as const } : null;
     return tenantTransaction(this.prisma, async (tx) => {
       const rows = await tx.supportConversation.findMany({
-        where: { userId: caller.userId, ...(query.before ? { lastMessageAt: { lt: query.before } } : {}) },
+        where: {
+          userId: caller.userId,
+          ...(query.before ? { lastMessageAt: { lt: query.before } } : {}),
+          ...(query.status ? { status: { in: query.status } } : {}),
+          ...(q ? { OR: [{ subject: q }, { messages: { some: { internal: false, body: q } } }] } : {}),
+        },
         orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
         take: limit + 1,
       });
@@ -226,6 +238,16 @@ export class SupportConversationService {
         nextBefore: rows.length > limit ? page[page.length - 1].lastMessageAt : null,
       };
     });
+  }
+
+  /** How many of the caller's own conversations are in each status (UX-1-v) — every status, zeros included. */
+  async counts(caller: SupportCaller): Promise<Record<ConversationStatus, number>> {
+    const groups = await tenantTransaction(this.prisma, (tx) =>
+      tx.supportConversation.groupBy({ by: ['status'], where: { userId: caller.userId }, _count: { _all: true } }),
+    );
+    const counts = Object.fromEntries(Object.values(ConversationStatus).map((s) => [s, 0])) as Record<ConversationStatus, number>;
+    for (const g of groups) counts[g.status] = g._count._all;
+    return counts;
   }
 
   /**

@@ -143,6 +143,13 @@ export class SupportConversationsController {
     return this.support.list(callerOf(req), query);
   }
 
+  /** A count per status over the caller's own threads (UX-1-v) — the tickets page's tabs. */
+  @Get('conversations/counts')
+  @RateLimit(READ)
+  counts(@Req() req: Request) {
+    return this.support.counts(callerOf(req));
+  }
+
   @Post('conversations')
   @RateLimit(OPEN)
   open(@Req() req: Request, @Body(new ZodValidationPipe(openSchema)) body: OpenBody): Promise<ConversationSummary> {
