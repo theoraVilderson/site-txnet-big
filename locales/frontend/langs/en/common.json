@@ -75,10 +75,20 @@
       "finance": "Finance",
       "people": "People",
       "infra": "Infrastructure",
-      "support": "Support desk"
+      "support": "Support desk",
+      "pinned": "Pinned"
     },
     "badge": "{{label}}, {{count}} new",
-    "preferenceNotSaved": "Your display preference could not be saved, so it was put back"
+    "preferenceNotSaved": "Your display preference could not be saved, so it was put back",
+    "pins": {
+      "actions": "{{label}} options",
+      "pin": "Pin to the top",
+      "unpin": "Unpin",
+      "full": "8 pages are pinned already",
+      "moveUp": "Move {{label}} up",
+      "moveDown": "Move {{label}} down",
+      "drag": "Drag to reorder"
+    }
   },
   "gateways": {
     "title": "Payment gateways",

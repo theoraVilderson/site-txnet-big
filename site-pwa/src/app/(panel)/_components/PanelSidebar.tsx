@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
+import { AnimatePresence, Reorder, motion, useDragControls } from "framer-motion";
+import { ChevronDown, ChevronUp, GripVertical, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pin, PinOff, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { LangDropdown } from "@auth/auth/_components/LangDropdown";
 import { BrandMark } from "@/components/BrandMark";
 import { CollapsedTooltip } from "./CollapsedTooltip";
+import { IconButton } from "./kit/Button";
+import { Menu } from "./kit/Menu";
 import { Popover } from "./kit/Popover";
 import { useMediaQuery } from "./kit/overlay";
 import { LogoutButton } from "./LogoutButton";
@@ -33,9 +35,11 @@ import {
   type VisibleMenuGroup,
   type VisibleMenuLink,
 } from "../_lib/panel-menu";
+import { MAX_PINS, pinnedLinks, reorderPins, stepPin, togglePin } from "../_lib/pins";
+import { recordRecentPage } from "../_lib/recent-pages";
 import { useMenuBadges, type BadgedEntry } from "../_hooks/useMenuBadges";
 import { usePanelUiStore } from "../_stores/panel-ui-store";
-import { toggleSidebarCollapsed, useUiPreferences } from "@/stores/ui-preferences-store";
+import { toggleSidebarCollapsed, toggleSidebarSection, useUiPreferences } from "@/stores/ui-preferences-store";
 import { usePanelSession } from "../_context/PanelSessionContext";
 
 /** The shell's strings as generated constants (C-06). */
@@ -119,25 +123,15 @@ function useCanAdminister(tenantId: string | null): boolean | null {
 export function PanelSidebar() {
   const { t } = useLocale();
   const pathname = usePathname();
-  // The collapse is the person's `ui.sidebar.collapsed` (UX-1-l); the rest is this tab's.
-  const collapsed = useUiPreferences((s) => s.prefs["ui.sidebar"].collapsed);
-  const { drawerOpen, openGroupId, closedSections } = usePanelUiStore(
-    useShallow((s) => ({
-      drawerOpen: s.drawerOpen,
-      openGroupId: s.openGroupId,
-      closedSections: s.closedSections,
-    })),
+  // The collapse, the folds and the pins are the person's (UX-1-l, UX-1-m); the rest is this tab's.
+  const { collapsed, closedSections } = useUiPreferences(useShallow((s) => s.prefs["ui.sidebar"]));
+  const pins = useUiPreferences((s) => s.prefs["ui.pins"]);
+  const { drawerOpen, openGroupId } = usePanelUiStore(
+    useShallow((s) => ({ drawerOpen: s.drawerOpen, openGroupId: s.openGroupId })),
   );
-  const { setDrawerOpen, toggleGroup, openGroup, toggleSection, loadClosedSections } =
-    usePanelUiStore(
-      useShallow((s) => ({
-        setDrawerOpen: s.setDrawerOpen,
-        toggleGroup: s.toggleGroup,
-        openGroup: s.openGroup,
-        toggleSection: s.toggleSection,
-        loadClosedSections: s.loadClosedSections,
-      })),
-    );
+  const { setDrawerOpen, toggleGroup, openGroup } = usePanelUiStore(
+    useShallow((s) => ({ setDrawerOpen: s.setDrawerOpen, toggleGroup: s.toggleGroup, openGroup: s.openGroup })),
+  );
   const wide = useMediaQuery(LG_UP);
   // Collapsed applies from `lg` up only; the drawer always shows labels.
   const railCollapsed = collapsed && wide;
@@ -145,9 +139,6 @@ export function PanelSidebar() {
   // without an effect, because on any other path it reads as closed.
   const [flyout, setFlyout] = useState<{ id: string; path: string } | null>(null);
   const flyoutId = flyout !== null && flyout.path === pathname ? flyout.id : null;
-
-  // This device's folds, read after the first paint so the server render matches.
-  useEffect(() => loadClosedSections(), [loadClosedSections]);
 
   // Authority comes off the caller, never off the path (F-097): until `me`
   // answers, nothing gated is shown.
@@ -171,6 +162,22 @@ export function PanelSidebar() {
   const headings = sections.length > 1;
   const active = activeHref(menuHrefs(menu), pathname);
   const badges = useMenuBadges();
+  const pinned = useMemo(() => pinnedLinks(menu, pins), [menu, pins]);
+  const pinnedIds = pinned.map((l) => l.id);
+  // Read at the click, not the render: two quick changes must not undo each other.
+  const writePins = (next: (current: string[]) => string[]) =>
+    useUiPreferences.getState().update({ "ui.pins": next(useUiPreferences.getState().prefs["ui.pins"]) });
+
+  // This device's recent pages (N5), once `me` has drawn the real menu: before
+  // it, `/` would light up for every path the caller's menu does not hold yet.
+  const activeId = useMemo(
+    () => menu.flatMap((e) => (isMenuGroup(e) ? e.children : [e])).find((l) => l.href === active)?.id ?? null,
+    [menu, active],
+  );
+  useEffect(() => {
+    if (!me || activeId === null || (active === "/" && pathname !== "/")) return;
+    recordRecentPage({ href: pathname, id: activeId });
+  }, [me, pathname, active, activeId]);
 
   // A navigation closes the drawer, and opens the group the new page is in —
   // otherwise the highlighted entry sits inside a closed submenu.
@@ -225,42 +232,116 @@ export function PanelSidebar() {
       </span>
     );
 
-  const renderLink = (item: VisibleMenuLink, nested: boolean) => {
+  /** An entry's own menu (N5): pin it to the top, or take it off. */
+  const renderEntryMenu = (id: string, label: string) => {
+    const isPinned = pins.includes(id);
+    const full = !isPinned && pins.length >= MAX_PINS;
+    return (
+      <Menu
+        label={t("common", S.pins.actions, { label })}
+        trigger={
+          <IconButton
+            aria-label={t("common", S.pins.actions, { label })}
+            icon={<MoreHorizontal size={16} aria-hidden />}
+            size="sm"
+            variant="quiet"
+          />
+        }
+        items={[
+          {
+            id: "pin",
+            label: t("common", isPinned ? S.pins.unpin : full ? S.pins.full : S.pins.pin),
+            icon: isPinned ? <PinOff size={16} aria-hidden /> : <Pin size={16} aria-hidden />,
+            disabled: full,
+            onSelect: () => writePins((current) => togglePin(current, id)),
+          },
+        ]}
+      />
+    );
+  };
+
+  /**
+   * One link. In the pinned block (`pin`) it carries a drag handle and up/down
+   * buttons, and its highlight has its own `layoutId` so the same page lit in
+   * both places does not make the two fight over one.
+   */
+  const renderLink = (
+    item: VisibleMenuLink,
+    nested: boolean,
+    pin?: { handle: ReactNode; up: boolean; down: boolean },
+  ) => {
     const isActive = item.href === active;
     const Icon = item.icon;
     const label = t("common", item.label);
     const badge = badgeOf(item.id);
+    const filled = isActive && !nested;
+    const step = (delta: -1 | 1) =>
+      writePins((current) => reorderPins(current, stepPin(pinnedIds, item.id, delta)));
     return (
-      <Link
+      <div
         key={item.id}
-        href={item.href}
-        aria-current={isActive ? "page" : undefined}
-        // With a count, the name says it as words in the reader's language; the
-        // number drawn beside the label is decorative.
-        aria-label={badge === null ? undefined : t("common", S.badge, { label, count: badge })}
-        className={`group relative flex items-center gap-3 rounded-xl px-3 transition-colors duration-200 ${
-          nested ? "py-2 text-sm" : "py-3"
-        } ${
-          isActive
-            ? nested
-              ? "font-bold text-primary"
-              : "text-on-accent"
-            : "text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
+        className={`group/entry relative flex items-center rounded-xl transition-colors duration-200 ${
+          isActive ? "" : "hover:bg-leaf-bg"
         }`}
       >
         {isActive && (
           <motion.span
-            layoutId="panel-sidebar-active"
+            layoutId={pin ? "panel-sidebar-active-pinned" : "panel-sidebar-active"}
             aria-hidden
             transition={{ duration: DURATION.slow, ease: EASE.standard }}
             className={`absolute inset-0 -z-10 rounded-xl ${nested ? "bg-leaf-bg" : "bg-primary shadow-md shadow-primary-glow"}`}
           />
         )}
-        <Icon size={nested ? 18 : 22} className="shrink-0" />
-        <span className={`flex-1 truncate font-medium ${whenCollapsed("lg:sr-only")}`}>{label}</span>
-        {renderBadge(badge)}
-        {!nested && <CollapsedTooltip collapsed={collapsed} label={label} />}
-      </Link>
+        <Link
+          href={item.href}
+          aria-current={isActive ? "page" : undefined}
+          // With a count, the name says it as words in the reader's language; the
+          // number drawn beside the label is decorative.
+          aria-label={badge === null ? undefined : t("common", S.badge, { label, count: badge })}
+          className={`group relative flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 ${
+            nested ? "py-2 text-sm" : "py-3"
+          } ${
+            isActive
+              ? nested
+                ? "font-bold text-primary"
+                : "text-on-accent"
+              : "text-text-secondary group-hover/entry:text-text-primary"
+          }`}
+        >
+          <Icon size={nested ? 18 : 22} className="shrink-0" />
+          <span className={`flex-1 truncate font-medium ${whenCollapsed("lg:sr-only")}`}>{label}</span>
+          {renderBadge(badge)}
+          {!nested && <CollapsedTooltip collapsed={collapsed} label={label} />}
+        </Link>
+        {/* Shown on hover or focus where there is a pointer, always on touch;
+            the rail's icons have no room for them. */}
+        <div
+          className={`flex shrink-0 items-center pe-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover/entry:opacity-100 [@media(hover:none)]:opacity-100 ${
+            filled ? "text-on-accent" : ""
+          } ${whenCollapsed("lg:hidden")}`}
+        >
+          {pin?.up && (
+            <IconButton
+              aria-label={t("common", S.pins.moveUp, { label })}
+              icon={<ChevronUp size={14} aria-hidden />}
+              size="sm"
+              variant="quiet"
+              onClick={() => step(-1)}
+            />
+          )}
+          {pin?.down && (
+            <IconButton
+              aria-label={t("common", S.pins.moveDown, { label })}
+              icon={<ChevronDown size={14} aria-hidden />}
+              size="sm"
+              variant="quiet"
+              onClick={() => step(1)}
+            />
+          )}
+          {renderEntryMenu(item.id, label)}
+          {pin?.handle}
+        </div>
+      </div>
     );
   };
 
@@ -385,6 +466,31 @@ export function PanelSidebar() {
           // container would clip — so the rail does not scroll while collapsed.
           className={`isolate flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 ${whenCollapsed("lg:overflow-visible")}`}
         >
+          {pinned.length > 0 && (
+            <div className="mb-2 border-b border-card-border pb-2">
+              <p
+                aria-hidden
+                className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-text-secondary ${whenCollapsed("lg:sr-only")}`}
+              >
+                {t("common", S.sections.pinned)}
+              </p>
+              {/* Drag (by the handle) and up/down write the same `ui.pins` (N5). */}
+              <Reorder.Group
+                as="ul"
+                axis="y"
+                values={pinnedIds}
+                onReorder={(order: string[]) => writePins((current) => reorderPins(current, order))}
+                aria-label={t("common", S.sections.pinned)}
+                className="space-y-1"
+              >
+                {pinned.map((link, i) => (
+                  <PinnedItem key={link.id} id={link.id} dragLabel={t("common", S.pins.drag)} hidden={railCollapsed}>
+                    {(handle) => renderLink(link, false, { handle, up: i > 0, down: i < pinned.length - 1 })}
+                  </PinnedItem>
+                ))}
+              </Reorder.Group>
+            </div>
+          )}
           {sections.map((section) => {
             const folded = headings && closedSections.includes(section.id);
             const listId = `${PANEL_SIDEBAR_ID}-section-${section.id}`;
@@ -396,7 +502,7 @@ export function PanelSidebar() {
                   type="button"
                   aria-expanded={!folded}
                   aria-controls={listId}
-                  onClick={() => toggleSection(section.id)}
+                  onClick={() => toggleSidebarSection(section.id)}
                   className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-text-secondary transition-colors hover:text-text-primary ${whenCollapsed(
                     "lg:justify-center lg:px-0",
                   )}`}
@@ -451,5 +557,39 @@ export function PanelSidebar() {
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+/**
+ * A row of the pinned block (N5). Dragged by its handle only, so pressing the
+ * link itself still navigates; the keyboard's way is the up/down buttons.
+ */
+function PinnedItem({
+  id,
+  dragLabel,
+  hidden,
+  children,
+}: {
+  id: string;
+  dragLabel: string;
+  /** The collapsed rail: no handle, as there is no room for one. */
+  hidden: boolean;
+  children: (handle: ReactNode) => ReactNode;
+}) {
+  const controls = useDragControls();
+  const handle = hidden ? null : (
+    <span
+      aria-hidden
+      title={dragLabel}
+      onPointerDown={(e) => controls.start(e)}
+      className="flex h-8 w-5 cursor-grab touch-none items-center justify-center active:cursor-grabbing"
+    >
+      <GripVertical size={14} />
+    </span>
+  );
+  return (
+    <Reorder.Item as="li" value={id} dragListener={false} dragControls={controls} className="list-none">
+      {children(handle)}
+    </Reorder.Item>
   );
 }

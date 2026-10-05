@@ -23,7 +23,7 @@ import { PanelSidebar } from "./PanelSidebar";
  *   in the footer, not in a section;
  * - a section with nothing visible is not drawn, and a caller who sees only
  *   `account` sees no headings at all;
- * - a section folds from its heading, and the fold is kept on this device;
+ * - a section folds from its heading, and the fold is the person's (UX-1-m);
  * - collapsed, a group opens a flyout beside it instead of widening the rail;
  * - support, the support inbox and manual payments carry a count, 1–9 then 9+.
  */
@@ -63,7 +63,7 @@ beforeEach(() => {
   pathname = "/";
   me = USER;
   localStorage.clear();
-  usePanelUiStore.setState({ drawerOpen: false, openGroupId: null, closedSections: [] });
+  usePanelUiStore.setState({ drawerOpen: false, openGroupId: null });
   useUiPreferences.getState().reset();
   window.matchMedia = ((query: string) => ({ matches: query.includes("min-width"), addEventListener() {}, removeEventListener() {} })) as never;
   vi.mocked(supportApi.list).mockResolvedValue({ items: [], nextBefore: null });
@@ -128,7 +128,7 @@ describe("PanelSidebar", () => {
     expect(screen.getByRole("link", { name: S.menu.dashboard })).toBeInTheDocument();
   });
 
-  it("folds a section from its heading, and keeps the fold on this device", async () => {
+  it("folds a section from its heading, and keeps the fold in the person's preferences", async () => {
     me = STAFF;
     const { unmount } = render(<PanelSidebar />);
     const heading = screen.getByRole("button", { name: S.sections.sales });
@@ -137,11 +137,12 @@ describe("PanelSidebar", () => {
 
     fireEvent.click(heading);
     expect(heading).toHaveAttribute("aria-expanded", "false");
+    // UX-1-m: the fold is `ui.sidebar.closedSections`, not this device's.
+    expect(useUiPreferences.getState().prefs["ui.sidebar"].closedSections).toEqual(["sales"]);
     await waitFor(() => expect(screen.queryByRole("link", { name: S.menu.catalog })).toBeNull());
     unmount();
 
-    usePanelUiStore.setState({ closedSections: [] });
-    usePanelUiStore.getState().loadClosedSections();
+    useUiPreferences.setState({ prefs: { ...DEFAULT_UI_PREFERENCES, "ui.sidebar": { collapsed: false, closedSections: ["sales"] } } });
     render(<PanelSidebar />);
     expect(screen.getByRole("button", { name: S.sections.sales })).toHaveAttribute("aria-expanded", "false");
   });

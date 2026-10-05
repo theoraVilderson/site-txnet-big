@@ -141,3 +141,13 @@ export function toggleSidebarCollapsed(): void {
   const sidebar = prefs["ui.sidebar"];
   update({ "ui.sidebar": { ...sidebar, collapsed: !sidebar.collapsed } });
 }
+
+/** A section's fold (N2) is `ui.sidebar.closedSections`, written with the collapse it already holds. */
+export function toggleSidebarSection(id: string): void {
+  const { prefs, update } = useUiPreferences.getState();
+  const sidebar = prefs["ui.sidebar"];
+  const closedSections = sidebar.closedSections.includes(id)
+    ? sidebar.closedSections.filter((c) => c !== id)
+    : [...sidebar.closedSections, id];
+  update({ "ui.sidebar": { ...sidebar, closedSections } });
+}
