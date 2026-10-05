@@ -23,6 +23,7 @@ import { GatewaySelector, gatewayKey } from "./GatewaySelector";
 import { PaymentSummary } from "./PaymentSummary";
 import { VerifyingBanner, VerifyingConfirm } from "./VerifyingNotice";
 import { WalletPreview } from "./WalletPreview";
+import { PageHeader } from "../../../_components/kit/PageHeader";
 
 const D = FrontendI18nKeys.common.deposit;
 
@@ -279,15 +280,12 @@ export function DepositView({ forInvoice = null }: { forInvoice?: ForInvoice | n
   return (
     // The mobile footer is `fixed`, so the column ends above where it sits.
     <div className="mx-auto w-full max-w-6xl p-4 pb-56 md:p-8 md:pb-8">
-      <header className="mb-8 flex items-center gap-3">
-        <span className="flex size-12 items-center justify-center rounded-2xl bg-leaf-bg text-primary">
-          <Sparkles size={24} aria-hidden />
-        </span>
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary md:text-3xl">{t("common", D.title)}</h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", D.subtitle)}</p>
-        </div>
-      </header>
+      <PageHeader
+        className="mb-8"
+        icon={Sparkles}
+        title={t("common", D.title)}
+        subtitle={t("common", D.subtitle)}
+      />
 
       {forInvoice && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-card-border bg-leaf-bg px-4 py-3 text-sm">

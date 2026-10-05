@@ -16,6 +16,7 @@ import { PanelList } from "./PanelList";
 import { HolderNamesContext } from "./parts";
 import { RegisterPanel } from "./RegisterPanel";
 import { SystemsGuide } from "./SystemsGuide";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 const GUIDE_CLOSED = "txnet.systems.guideClosed";
 const TABS: SystemsTab[] = ["panels", "groups", "reports"];
@@ -149,28 +150,28 @@ export function SystemsView() {
   return (
     <HolderNamesContext.Provider value={names}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-4 sm:p-6">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="flex items-center gap-2 text-lg font-bold text-text-primary">
-              <Server size={18} className="text-primary" aria-hidden />
-              {t("common", K.title)}
-            </h1>
-            <p className="text-xs leading-5 text-text-secondary">{t("common", K.subtitle)}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {!guideOpen && (
-              <button
-                type="button"
-                onClick={openGuide}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg"
-              >
-                <BookOpen size={14} aria-hidden />
-                {t("common", K.guide.show)}
-              </button>
-            )}
-            <RegisterPanel open={registering} onOpen={() => setRegistering(true)} onClose={() => setRegistering(false)} onRegistered={reload} />
-          </div>
-        </header>
+        <PageHeader
+          icon={Server}
+          title={t("common", K.title)}
+          subtitle={t("common", K.subtitle)}
+          actions={
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                {!guideOpen && (
+                  <button
+                    type="button"
+                    onClick={openGuide}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg"
+                  >
+                    <BookOpen size={14} aria-hidden />
+                    {t("common", K.guide.show)}
+                  </button>
+                )}
+                <RegisterPanel open={registering} onOpen={() => setRegistering(true)} onClose={() => setRegistering(false)} onRegistered={reload} />
+              </div>
+            </>
+          }
+        />
 
         {guideOpen && loaded && (
           <SystemsGuide

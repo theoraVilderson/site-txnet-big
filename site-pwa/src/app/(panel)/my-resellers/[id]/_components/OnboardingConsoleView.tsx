@@ -27,6 +27,7 @@ import {
   stepHref,
   type ClosedCapability,
 } from "../../_lib/onboarding";
+import { PageHeader } from "../../../_components/kit/PageHeader";
 
 const USERS = FrontendI18nKeys.common.resellerUsers.moreUsers;
 
@@ -88,18 +89,18 @@ export function OnboardingConsoleView({ id }: { id: string }) {
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
-      <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary md:text-3xl">
-            {slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-        </div>
-        <button type="button" className={quietButton} onClick={retry}>
-          <RefreshCw size={12} aria-hidden />
-          {t("common", K.refresh)}
-        </button>
-      </header>
+      <PageHeader
+        title={slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}
+        subtitle={t("common", K.subtitle)}
+        actions={
+          <>
+            <button type="button" className={quietButton} onClick={retry}>
+              <RefreshCw size={12} aria-hidden />
+              {t("common", K.refresh)}
+            </button>
+          </>
+        }
+      />
 
       {loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">

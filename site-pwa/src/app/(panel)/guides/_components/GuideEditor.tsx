@@ -41,6 +41,7 @@ import {
 } from "../_lib/guides";
 import { GuideBlocks } from "../../_components/guide/GuideBlocks";
 import { Badge, NoteLine, StateBadge, useAct, useGuideMessage } from "./guide-ui";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 type Tab = "texts" | "placements" | "preview";
 const TABS: readonly Tab[] = ["texts", "placements", "preview"];
@@ -130,13 +131,21 @@ export function GuideEditor({ id }: { id: string }) {
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-5 p-4 md:p-8">
-      <BackLink />
-      <header className="flex flex-wrap items-center gap-2">
-        <h1 className="font-mono text-xl font-bold text-text-primary md:text-2xl">{guide.key}</h1>
-        <Badge>{t("common", KIND_KEYS[guide.kind])}</Badge>
-        <StateBadge state={guide.state} />
-        {guide.hasDraft && guide.state !== "draft" && <Badge className="bg-gold-bg text-text-primary">{t("common", K.hasDraft)}</Badge>}
-      </header>
+      <PageHeader
+        tail={guide.key}
+        title={
+          <span dir="ltr" className="font-mono">
+            {guide.key}
+          </span>
+        }
+        actions={
+          <>
+            <Badge>{t("common", KIND_KEYS[guide.kind])}</Badge>
+            <StateBadge state={guide.state} />
+            {guide.hasDraft && guide.state !== "draft" && <Badge className="bg-gold-bg text-text-primary">{t("common", K.hasDraft)}</Badge>}
+          </>
+        }
+      />
 
       {guide.readOnly ? (
         <ReadOnly guide={guide} />

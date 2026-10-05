@@ -17,6 +17,7 @@ import { ServiceRow } from "./ServiceRow";
 import { ServiceSearch } from "./ServiceSearch";
 import { SuggestionCard } from "./SuggestionCard";
 import { WalletFunds } from "./WalletFunds";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 const S = FrontendI18nKeys.common.myServices;
 
@@ -195,10 +196,10 @@ export function MyServicesView() {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-5 p-4 md:p-8">
-      <header>
-        <h1 className="text-2xl font-bold text-text-primary md:text-3xl">{t("common", S.title)}</h1>
-        <p className="mt-1 text-sm text-text-secondary">{t("common", S.subtitle)}</p>
-      </header>
+      <PageHeader
+        title={t("common", S.title)}
+        subtitle={t("common", S.subtitle)}
+      />
 
       {/* F-038-h: the user's one open AI suggestion, or nothing. */}
       <SuggestionCard texts={state.texts} />

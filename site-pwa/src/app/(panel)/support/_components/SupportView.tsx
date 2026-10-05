@@ -19,6 +19,7 @@ import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { Alert, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { STATUS_KEYS, SUPPORT_KEYS as K } from "../_lib/support";
 import { SupportGuideSuggestions } from "./SupportGuideSuggestions";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 /**
  * The user's support (F-033-o): their conversations, newest activity first,
@@ -72,21 +73,21 @@ export function SupportView() {
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary md:text-3xl">
-            <Headphones size={22} className="text-primary" aria-hidden />
-            {t("common", K.title)}
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-        </div>
-        {!composing && (
-          <button type="button" className={primaryButton} onClick={() => setComposing(true)}>
-            <Plus size={14} aria-hidden />
-            {t("common", K.newConversation)}
-          </button>
-        )}
-      </header>
+      <PageHeader
+        icon={Headphones}
+        title={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+        actions={
+          <>
+            {!composing && (
+              <button type="button" className={primaryButton} onClick={() => setComposing(true)}>
+                <Plus size={14} aria-hidden />
+                {t("common", K.newConversation)}
+              </button>
+            )}
+          </>
+        }
+      />
 
       {availability && <AvailabilityNotice availability={availability} />}
 

@@ -1,16 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, HandCoins } from "lucide-react";
+import { HandCoins } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi, type DepositGateway } from "@/lib/billing-api";
-import { PANEL_TENANT_BILLING } from "@/lib/routes";
 import { AmountInput } from "../../../deposit/_components/AmountInput";
 import { GatewaySelector, gatewayKey } from "../../../deposit/_components/GatewaySelector";
 import { topupBody } from "../_lib/topup";
+import { PageHeader } from "../../../../_components/kit/PageHeader";
 
 const B = FrontendI18nKeys.common.tenantBilling.topupPage;
 
@@ -92,23 +91,12 @@ export function TenantTopupView() {
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-4 md:p-8">
-      <Link
-        href={PANEL_TENANT_BILLING}
-        className="inline-flex items-center gap-1.5 text-xs font-bold text-text-secondary hover:text-text-primary"
-      >
-        <ArrowLeft size={14} className="rtl:rotate-180" aria-hidden />
-        {t("common", B.back)}
-      </Link>
-
-      <header className="flex items-center gap-3">
-        <span className="flex size-12 items-center justify-center rounded-2xl bg-leaf-bg text-primary">
-          <HandCoins size={24} aria-hidden />
-        </span>
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary md:text-3xl">{t("common", B.title)}</h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", B.subtitle)}</p>
-        </div>
-      </header>
+      <PageHeader
+        icon={HandCoins}
+        tail={t("common", B.title)}
+        title={t("common", B.title)}
+        subtitle={t("common", B.subtitle)}
+      />
 
       <AmountInput amount={amount} onAmountChange={setAmount} gateway={gateway} currency={gateway?.currencyCode ?? null} disabled={noGateway} />
 

@@ -11,6 +11,7 @@ import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { Alert, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { WHEEL_KEYS as K, landingRotation, nextRequestId, plainNumber, refusalKey, refusalKeyOf, resultLine } from "../_lib/wheel";
 import { WheelDisc } from "./WheelDisc";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 /** How long the wheel turns; the answer is already in hand when it starts. */
 const SPIN_MS = 4500;
@@ -107,13 +108,11 @@ export function WheelView() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-8">
-      <header>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary md:text-3xl">
-          <Gift size={22} className="text-primary" aria-hidden />
-          {t("common", K.title)}
-        </h1>
-        <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-      </header>
+      <PageHeader
+        icon={Gift}
+        title={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+      />
 
       {!ready ? (
         <p className="text-sm text-text-secondary">{t("common", K.loading)}</p>

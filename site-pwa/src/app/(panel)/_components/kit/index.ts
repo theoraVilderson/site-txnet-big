@@ -13,6 +13,7 @@ export { cn } from "./cn";
 export { DataTable, type DataColumn, type DataTableProps, type DataTableSelection } from "./DataTable";
 export { EmptyState } from "./EmptyState";
 export { Menu, type MenuItem } from "./Menu";
+export { PageHeader, type PageHeaderProps } from "./PageHeader";
 export { notify, PanelToaster } from "./notify";
 export { Popover } from "./Popover";
 export { SaveBar, type SaveBarProps } from "./SaveBar";

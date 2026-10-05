@@ -1,11 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, Gauge, RotateCw } from "lucide-react";
+import { Gauge, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { resellerLimitsApi, tenantApi, type Reseller, type ResellerLimitKey, type ResellerLimitRow, type TenantPackage } from "@/lib/tenant-api";
-import { PANEL_RESELLERS } from "@/lib/routes";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { Alert, primaryButton, quietButton, useMessage } from "../../_components/resellers-ui";
@@ -13,6 +11,7 @@ import { RESELLER_KEYS, canAdministerResellers } from "../../_lib/resellers";
 import { LIMIT_KEYS as K, limitValueOf } from "../../_lib/limits";
 import { PackageProducts } from "./PackageProducts";
 import { QuotaOverage } from "./QuotaOverage";
+import { PageHeader } from "../../../_components/kit/PageHeader";
 
 const input = "w-28 rounded-xl border border-card-border bg-bg-inner px-3 py-2 text-sm text-text-primary outline-none focus:border-primary";
 
@@ -70,17 +69,12 @@ export function LimitsView() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-8">
-      <header>
-        <Link href={PANEL_RESELLERS} className="mb-2 inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
-          <ArrowLeft size={14} aria-hidden />
-          {t("common", K.back)}
-        </Link>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary md:text-3xl">
-          <Gauge size={22} className="text-primary" aria-hidden />
-          {t("common", K.title)}
-        </h1>
-        <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-      </header>
+      <PageHeader
+        icon={Gauge}
+        title={t("common", K.title)}
+        tail={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+      />
 
       {error !== null ? (
         <div className="flex flex-wrap items-center gap-3">

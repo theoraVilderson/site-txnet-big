@@ -13,6 +13,7 @@ import { Alert, primaryButton, quietButton, useMessage } from "./wheel-settings-
 import { WheelEditor } from "./WheelEditor";
 import { WheelReport } from "./WheelReport";
 import { WheelVersions } from "./WheelVersions";
+import { PageHeader } from "../../../_components/kit/PageHeader";
 
 type Tab = "settings" | "versions" | "report";
 
@@ -83,21 +84,21 @@ export function WheelSettingsView() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
-      <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary md:text-3xl">
-            <Dices size={22} className="text-primary" aria-hidden />
-            {t("common", K.title)}
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-        </div>
-        {state && !editing && (
-          <button type="button" className={primaryButton} onClick={() => startFrom(latest)}>
-            <Plus size={14} aria-hidden />
-            {t("common", K.newVersion)}
-          </button>
-        )}
-      </header>
+      <PageHeader
+        icon={Dices}
+        title={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+        actions={
+          <>
+            {state && !editing && (
+              <button type="button" className={primaryButton} onClick={() => startFrom(latest)}>
+                <Plus size={14} aria-hidden />
+                {t("common", K.newVersion)}
+              </button>
+            )}
+          </>
+        }
+      />
 
       <nav className="flex gap-1" role="tablist">
         {(["settings", "versions", "report"] as const).map((id) => (

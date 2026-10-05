@@ -17,6 +17,7 @@ import { DepositPresetsCard } from "./DepositPresetsCard";
 import { DepositTaxCard } from "./DepositTaxCard";
 import { GatewayLinks } from "./GatewayLinks";
 import { GatewayWizard } from "./GatewayWizard";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 const G = FrontendI18nKeys.common.gateways;
 
@@ -88,24 +89,24 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       {surface.chrome}
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-lg font-bold text-text-primary">
-            <Landmark size={18} className="text-primary" aria-hidden />
-            {t("common", G.title)}
-          </h1>
-          <p className="text-xs text-text-secondary">{t("common", G.subtitle)}</p>
-        </div>
-        <button
-          type="button"
-          disabled={!ready}
-          onClick={() => setEditing("new")}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-on-accent shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
-        >
-          <Plus size={16} aria-hidden />
-          {t("common", G.add)}
-        </button>
-      </header>
+      <PageHeader
+        icon={Landmark}
+        title={t("common", G.title)}
+        subtitle={t("common", G.subtitle)}
+        actions={
+          <>
+            <button
+              type="button"
+              disabled={!ready}
+              onClick={() => setEditing("new")}
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-on-accent shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
+            >
+              <Plus size={16} aria-hidden />
+              {t("common", G.add)}
+            </button>
+          </>
+        }
+      />
 
       <AnimatePresence initial={false}>
         {notice && (

@@ -37,6 +37,7 @@ import {
   type PurchaseForm,
 } from "../../_lib/purchase";
 import type { Errors } from "../../_lib/resellers";
+import { PageHeader } from "../../../_components/kit/PageHeader";
 
 /** The suggestion is asked as the name is typed; the same wait the owner picker uses. */
 const SUGGEST_AFTER_MS = 300;
@@ -400,13 +401,15 @@ function Shell({
 }) {
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-4 md:p-8">
-      <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary md:text-3xl">{title}</h1>
-          <p className="mt-1 text-sm text-text-secondary">{subtitle}</p>
-        </div>
-        {aside}
-      </header>
+      <PageHeader
+        title={title}
+        subtitle={subtitle}
+        actions={
+          <>
+            {aside}
+          </>
+        }
+      />
       {children}
     </div>
   );

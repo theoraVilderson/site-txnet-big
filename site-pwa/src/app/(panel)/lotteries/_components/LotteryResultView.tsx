@@ -11,6 +11,7 @@ import { formatInstant } from "../../_lib/datetime";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { Alert, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { LOTTERY_KEYS as K, passedOnKeyOf, refusalKey, verifyDraw, type VerifyOutcome } from "../_lib/lotteries";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 /**
  * One drawn lottery's result (F-707-n), from billing's
@@ -61,10 +62,12 @@ export function LotteryResultView({ id }: { id: string }) {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-8">
-      <Link href={PANEL_LOTTERIES} className={quietButton}>
-        <ArrowRight size={12} aria-hidden className="ltr:rotate-180" />
-        {t("common", K.result.back)}
-      </Link>
+      {!result && (
+        <Link href={PANEL_LOTTERIES} className={quietButton}>
+          <ArrowRight size={12} aria-hidden className="ltr:rotate-180" />
+          {t("common", K.result.back)}
+        </Link>
+      )}
 
       {error ? (
         <Alert>{refusalKey(error) ? t("common", refusalKey(error) as string) : errorMessage(error)}</Alert>
@@ -72,16 +75,19 @@ export function LotteryResultView({ id }: { id: string }) {
         <TableSkeleton rows={4} columns={2} withPagination={false} />
       ) : (
         <>
-          <header>
-            <h1 dir="auto" className="flex items-center gap-2 text-2xl font-bold text-text-primary md:text-3xl">
-              <Ticket size={22} className="text-primary" aria-hidden />
-              {result.title}
-            </h1>
-            <p className="mt-1 text-sm text-text-secondary">
-              {t("common", K.result.drawnAt, { time: formatInstant(result.drawnAt, lang) ?? "" })} · {t("common", K.result.tickets, { n: result.entrantCount })}
-            </p>
+          <div>
+            <PageHeader
+              icon={Ticket}
+              tail={result.title}
+              title={<span dir="auto">{result.title}</span>}
+              subtitle={
+                <>
+                  {t("common", K.result.drawnAt, { time: formatInstant(result.drawnAt, lang) ?? "" })} · {t("common", K.result.tickets, { n: result.entrantCount })}
+                </>
+              }
+            />
             {mine !== null && <p className="mt-1 text-sm font-bold text-text-primary">{t("common", K.ticket, { n: mine })}</p>}
-          </header>
+          </div>
 
           <section className="rounded-2xl border border-card-border bg-card-bg p-4">
             <h2 className="text-sm font-bold text-text-primary">{t("common", K.result.placesTitle)}</h2>

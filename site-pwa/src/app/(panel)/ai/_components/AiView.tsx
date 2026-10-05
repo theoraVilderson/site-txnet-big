@@ -13,6 +13,7 @@ import { PlanLayoutView } from "./PlanLayoutView";
 import { ResellersAtRisk } from "./ResellersAtRisk";
 import { UsageForecastView } from "./UsageForecastView";
 import { UpliftReportView } from "./UpliftReportView";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 const TABS = ["settings", "offers", "atRisk", "margins", "layout", "usage", "report", "resellers"] as const;
 type Tab = (typeof TABS)[number];
@@ -38,13 +39,11 @@ export function AiView() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      <header>
-        <h1 className="flex items-center gap-2 text-lg font-bold text-text-primary">
-          <Sparkles size={18} className="text-primary" aria-hidden />
-          {t("common", K.title)}
-        </h1>
-        <p className="text-xs text-text-secondary">{t("common", K.subtitle)}</p>
-      </header>
+      <PageHeader
+        icon={Sparkles}
+        title={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+      />
 
       <div role="tablist" className="flex gap-2 overflow-x-auto rounded-2xl border border-card-border bg-card-bg p-1 shadow-sm">
         {tabs.map((id) => (

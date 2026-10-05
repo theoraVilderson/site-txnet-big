@@ -12,6 +12,7 @@ import { USER_GROUP_KEYS as K, canManageGroups, canNameResellers } from "../_lib
 import { Alert, primaryButton, quietButton, useMessage } from "./user-groups-ui";
 import { GroupSheet } from "./GroupSheet";
 import { MembersSheet } from "./MembersSheet";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 /**
  * An admin's user groups (F-114-m), by name, over `/auth/user-groups`
@@ -87,19 +88,19 @@ export function UserGroupsView() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
-      <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary md:text-3xl">
-            <UsersRound size={22} className="text-primary" aria-hidden />
-            {t("common", K.title)}
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-        </div>
-        <button type="button" className={primaryButton} onClick={() => setEditing("new")}>
-          <Plus size={14} aria-hidden />
-          {t("common", K.new)}
-        </button>
-      </header>
+      <PageHeader
+        icon={UsersRound}
+        title={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+        actions={
+          <>
+            <button type="button" className={primaryButton} onClick={() => setEditing("new")}>
+              <Plus size={14} aria-hidden />
+              {t("common", K.new)}
+            </button>
+          </>
+        }
+      />
 
       {notice && <p className="text-xs font-bold text-primary">{notice}</p>}
       {failure && <Alert>{failure}</Alert>}

@@ -50,7 +50,22 @@
     "tenantClosed": {
       "title": "This service has been closed",
       "body": "Live updates have stopped. Contact your provider for more information."
-    }
+    },
+    "error": {
+      "title": "Something went wrong on this page",
+      "body": "The rest of the panel still works. Try again, or go back to the dashboard. If it keeps happening, send support the code below.",
+      "retry": "Try again",
+      "home": "Back to the dashboard",
+      "digest": "Code for support",
+      "copy": "Copy the code",
+      "copied": "Code copied"
+    },
+    "notFound": {
+      "title": "This page does not exist",
+      "body": "The link may be old, or the address mistyped.",
+      "home": "Go to the dashboard"
+    },
+    "progress": "Loading the page"
   },
   "gateways": {
     "title": "Payment gateways",
@@ -720,6 +735,10 @@
       "selectRow": "Select this row",
       "selected": "{{count}} selected",
       "clear": "Clear the selection"
+    },
+    "pageHeader": {
+      "breadcrumb": "Breadcrumb",
+      "back": "Back to {{page}}"
     }
   },
   "money": {
@@ -1751,7 +1770,6 @@
     "topupPage": {
       "title": "Top up platform billing",
       "subtitle": "Pay the platform through its gateways; the amount lands in your reseller's billing balance.",
-      "back": "Back to platform billing",
       "pay": "Continue to the bank",
       "paying": "Sending you to the bank…",
       "noGateway": "The platform has no gateway to pay through right now.",
@@ -1890,7 +1908,6 @@
       "title": "Reseller packages",
       "subtitle": "What the platform sells resellers: the price per period, the features included and the wholesale rate for usage on the platform's panels",
       "link": "Packages",
-      "back": "Resellers",
       "new": "New package",
       "empty": "No package yet.",
       "active": "On sale",
@@ -1956,7 +1973,6 @@
     },
     "limits": {
       "link": "Limits",
-      "back": "Resellers",
       "title": "Reseller limits",
       "subtitle": "What a reseller may use of the platform's resources. A reseller's own value wins over its package's, and a package's over the value for every reseller. Lowering a limit takes nothing away: only the next one past it is refused.",
       "keys": {
@@ -4780,7 +4796,6 @@
       "ai": "Assistant"
     },
     "thread": {
-      "back": "All conversations",
       "earlier": "Earlier messages",
       "seen": "Seen",
       "typing": "Support is typing…",
@@ -4842,7 +4857,6 @@
     "unassigned": "Unassigned",
     "liveMode": "Live",
     "thread": {
-      "back": "Support inbox",
       "earlier": "Earlier messages",
       "you": "You",
       "colleague": "Colleague",

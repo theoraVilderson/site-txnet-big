@@ -11,6 +11,7 @@ import { formatInstant } from "../../_lib/datetime";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { Alert, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { LOTTERY_KEYS as K, entryState, excludedKeyOf, refusalKey, statusKey } from "../_lib/lotteries";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 /**
  * The user's lotteries (F-707-n), over billing's `/api/billing/lotteries`
@@ -64,13 +65,11 @@ export function LotteriesView() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-8">
-      <header>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary md:text-3xl">
-          <Ticket size={22} className="text-primary" aria-hidden />
-          {t("common", K.title)}
-        </h1>
-        <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-      </header>
+      <PageHeader
+        icon={Ticket}
+        title={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+      />
 
       {error && !lotteries ? (
         <div className="flex flex-wrap items-center gap-3">

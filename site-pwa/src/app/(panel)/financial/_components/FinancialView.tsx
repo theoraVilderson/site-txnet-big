@@ -18,6 +18,7 @@ import { AdvancedFilter } from "./AdvancedFilter";
 import { FinancialTable } from "./FinancialTable";
 import { LedgerRow } from "./LedgerRow";
 import { PaymentRow } from "./PaymentRow";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 const F = FrontendI18nKeys.common.financial;
 
@@ -71,22 +72,24 @@ export function FinancialView() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
-      <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary md:text-3xl">{t("common", F.title)}</h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", F.subtitle)}</p>
-        </div>
-        {/* The same figure the top bar shows, read from the same field of the
-            same route — never a total added up from the rows on screen. */}
-        {page.balance !== null && (
-          <div className="rounded-2xl border border-card-border bg-card-bg px-5 py-3">
-            <p className="text-[11px] text-text-secondary">{t("common", F.balance)}</p>
-            <p dir="ltr" className="text-lg font-bold text-gold">
-              {formatMoney(page.balance.balance, page.balance.currencyCode, { lang, t })}
-            </p>
-          </div>
-        )}
-      </header>
+      <PageHeader
+        title={t("common", F.title)}
+        subtitle={t("common", F.subtitle)}
+        actions={
+          <>
+            {/* The same figure the top bar shows, read from the same field of the
+                same route — never a total added up from the rows on screen. */}
+            {page.balance !== null && (
+              <div className="rounded-2xl border border-card-border bg-card-bg px-5 py-3">
+                <p className="text-[11px] text-text-secondary">{t("common", F.balance)}</p>
+                <p dir="ltr" className="text-lg font-bold text-gold">
+                  {formatMoney(page.balance.balance, page.balance.currencyCode, { lang, t })}
+                </p>
+              </div>
+            )}
+          </>
+        }
+      />
 
       <div
         role="tablist"

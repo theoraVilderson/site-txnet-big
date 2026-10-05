@@ -14,6 +14,7 @@ import { Alert, primaryButton, quietButton } from "../../catalog/_components/cat
 import { AGENT_KEYS as K, INBOX_VIEWS, PRIORITY_KEYS, VIEW_KEYS, slaState } from "../_lib/support-agent";
 import { StatusPill } from "./SupportView";
 import { usePresence } from "./usePresence";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 /**
  * The agent's inbox (F-033-p) over `/api/support/agent/conversations`
@@ -71,22 +72,22 @@ export function SupportInboxView() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-5 p-4 md:p-8">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary md:text-3xl">
-            <Inbox size={22} className="text-primary" aria-hidden />
-            {t("common", K.title)}
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-        </div>
-        <div className="flex items-center gap-2 rounded-xl border border-card-border bg-card-bg px-3 py-2 text-xs text-text-secondary">
-          <span className={`inline-block h-2 w-2 rounded-full ${presence.online ? "bg-success" : "bg-text-secondary/40"}`} aria-hidden />
-          {t("common", presence.online ? K.presence.online : K.presence.away)}
-          <button type="button" className={quietButton} onClick={presence.toggle}>
-            {t("common", presence.online ? K.presence.goAway : K.presence.goOnline)}
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        icon={Inbox}
+        title={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+        actions={
+          <>
+            <div className="flex items-center gap-2 rounded-xl border border-card-border bg-card-bg px-3 py-2 text-xs text-text-secondary">
+              <span className={`inline-block h-2 w-2 rounded-full ${presence.online ? "bg-success" : "bg-text-secondary/40"}`} aria-hidden />
+              {t("common", presence.online ? K.presence.online : K.presence.away)}
+              <button type="button" className={quietButton} onClick={presence.toggle}>
+                {t("common", presence.online ? K.presence.goAway : K.presence.goOnline)}
+              </button>
+            </div>
+          </>
+        }
+      />
 
       <div role="tablist" className="flex flex-wrap gap-2">
         {INBOX_VIEWS.map((v) => (

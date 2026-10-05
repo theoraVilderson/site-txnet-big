@@ -20,6 +20,7 @@ import {
   type ConfirmInput,
   type StateBadge,
 } from "../_lib/manual-confirm";
+import { PageHeader } from "../../../_components/kit/PageHeader";
 
 /**
  * The manual confirmation screen (F-093-n, ADR-0044 decision 6) — what
@@ -73,13 +74,11 @@ export function ManualPaymentsView() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      <header>
-        <h1 className="flex items-center gap-2 text-lg font-bold text-text-primary">
-          <ShieldCheck size={18} className="text-primary" aria-hidden />
-          {t("common", K.title)}
-        </h1>
-        <p className="text-xs text-text-secondary">{t("common", K.subtitle)}</p>
-      </header>
+      <PageHeader
+        icon={ShieldCheck}
+        title={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+      />
 
       {notice && (
         <p role="status" className="rounded-xl border border-card-border bg-card-bg p-3 text-xs font-bold text-text-primary">

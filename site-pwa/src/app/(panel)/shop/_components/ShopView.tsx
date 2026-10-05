@@ -16,6 +16,7 @@ import { useWalletBalance } from "../../_hooks/useWalletBalance";
 import { formatInstant } from "../../_lib/datetime";
 import { formatMoney } from "../../_lib/money";
 import { categoriesOf, forgetReturnInvoice, groupOffers, hasOwnName, meteredCapOf, meteredStartShortOf, quotaLimit, shortfallOf, trafficRateOf, type OfferGroup } from "../_lib/shop";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 const S = FrontendI18nKeys.common.shop;
 
@@ -119,15 +120,11 @@ export function ShopView({ invoiceId, variantId = null }: { invoiceId: string | 
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-8">
-      <header className="flex items-center gap-3">
-        <span className="flex size-12 items-center justify-center rounded-2xl bg-leaf-bg text-primary">
-          <ShoppingCart size={24} aria-hidden />
-        </span>
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary md:text-3xl">{t("common", S.title)}</h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", S.subtitle)}</p>
-        </div>
-      </header>
+      <PageHeader
+        icon={ShoppingCart}
+        title={t("common", S.title)}
+        subtitle={t("common", S.subtitle)}
+      />
 
       {loadError ? (
         <ErrorBox message={messageFor(loadError)}>

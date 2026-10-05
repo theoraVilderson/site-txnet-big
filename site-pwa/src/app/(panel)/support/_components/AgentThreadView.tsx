@@ -1,11 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import Link from "next/link";
-import { ArrowRight, Check, CheckCheck, CheckCircle2, Hand, Lock, RotateCw, Send, StickyNote, XCircle } from "lucide-react";
+import { Check, CheckCheck, CheckCircle2, Hand, Lock, RotateCw, Send, StickyNote, XCircle } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
-import { PANEL_SUPPORT_INBOX } from "@/lib/routes";
 import {
   SUPPORT_BODY_MAX,
   supportAgentApi,
@@ -29,6 +27,7 @@ import { AttachmentRow, Frame } from "./SupportThreadView";
 import { StatusPill } from "./SupportView";
 import { PriorityPill, SlaBadge } from "./SupportInboxView";
 import { usePresence } from "./usePresence";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 const TYPING_EVERY_MS = 4_000;
 
@@ -208,20 +207,17 @@ export function AgentThreadView({ id }: { id: string }) {
     <div className="mx-auto grid w-full max-w-6xl gap-4 p-4 md:p-8 lg:grid-cols-[1fr_18rem]">
       <div className="min-w-0 space-y-4">
         <header className="space-y-2">
-          <Link href={PANEL_SUPPORT_INBOX} className={quietButton}>
-            <ArrowRight size={12} className="ltr:rotate-180" aria-hidden />
-            {t("common", K.thread.back)}
-          </Link>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h1 dir="auto" className="text-xl font-bold text-text-primary">
-              {conversation.subject}
-            </h1>
-            <div className="flex flex-wrap items-center gap-2">
-              <PriorityPill priority={conversation.priority} />
-              <SlaBadge conversation={conversation} now={now} />
-              <StatusPill status={thread.status} />
-            </div>
-          </div>
+          <PageHeader
+            tail={conversation.subject}
+            title={<span dir="auto">{conversation.subject}</span>}
+            actions={
+              <>
+                <PriorityPill priority={conversation.priority} />
+                <SlaBadge conversation={conversation} now={now} />
+                <StatusPill status={thread.status} />
+              </>
+            }
+          />
           <div className="flex flex-wrap items-center gap-2">
             {actions.canTake && (
               <button type="button" className={quietButton} disabled={busy} onClick={() => act(() => supportAgentApi.assign(id, myId))}>

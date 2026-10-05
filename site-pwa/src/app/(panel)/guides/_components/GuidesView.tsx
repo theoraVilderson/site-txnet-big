@@ -12,6 +12,7 @@ import { Select } from "../../_components/kit/Select";
 import { Field, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { GUIDE_KEYS as K, GUIDE_KEY_PATTERN, GUIDE_KINDS, GUIDE_LANGS, KIND_KEYS } from "../_lib/guides";
 import { Badge, NoteLine, StateBadge, useAct, useGuideMessage } from "./guide-ui";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 /**
  * `/guides` (F-414-d): the caller's own guides — the platform's, for the
@@ -66,13 +67,11 @@ export function GuidesView() {
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
-      <header>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary md:text-3xl">
-          <BookMarked size={22} className="text-primary" aria-hidden />
-          {t("common", K.title)}
-        </h1>
-        <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-      </header>
+      <PageHeader
+        icon={BookMarked}
+        title={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+      />
 
       {!data ? (
         error ? (

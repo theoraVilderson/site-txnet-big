@@ -1,11 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import Link from "next/link";
-import { ArrowRight, Check, CheckCheck, FileText, Paperclip, RotateCw, Send, Star, X } from "lucide-react";
+import { Check, CheckCheck, FileText, Paperclip, RotateCw, Send, Star, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
-import { PANEL_SUPPORT } from "@/lib/routes";
 import {
   SUPPORT_BODY_MAX,
   SUPPORT_FILE_TYPES,
@@ -32,6 +30,7 @@ import {
   type ThreadState,
 } from "../_lib/support";
 import { StatusPill } from "./SupportView";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 /** Below the server's ~6s hold, so a steady typist never flickers off. */
 const TYPING_EVERY_MS = 4_000;
@@ -205,19 +204,12 @@ export function SupportThreadView({ id }: { id: string }) {
 
   return (
     <Frame>
-      <header className="space-y-2">
-        <Link href={PANEL_SUPPORT} className={quietButton}>
-          <ArrowRight size={12} className="ltr:rotate-180" aria-hidden />
-          {t("common", K.thread.back)}
-        </Link>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 dir="auto" className="text-xl font-bold text-text-primary">
-            {conversation.subject}
-          </h1>
-          <StatusPill status={thread.status} />
-        </div>
-        {liveOff && <p className="text-xs text-text-secondary">{t("common", K.thread.liveOff)}</p>}
-      </header>
+      <PageHeader
+        tail={conversation.subject}
+        title={<span dir="auto">{conversation.subject}</span>}
+        subtitle={liveOff && t("common", K.thread.liveOff)}
+        actions={<StatusPill status={thread.status} />}
+      />
 
       <section className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-4">
         {hasEarlier && (

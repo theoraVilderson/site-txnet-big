@@ -15,6 +15,7 @@ import { DataTable } from "../../_components/kit/DataTable";
 import { Alert, StatusBadge, primaryButton, quietButton, useMessage } from "./resellers-ui";
 import { RESELLER_KEYS as K, canAdministerResellers } from "../_lib/resellers";
 import { CreateResellerSheet } from "./CreateResellerSheet";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 const PAGE_SIZE = 20;
 
@@ -90,29 +91,29 @@ export function ResellersView() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
-      <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary md:text-3xl">
-            <Store size={22} className="text-primary" aria-hidden />
-            {t("common", K.title)}
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href={PANEL_RESELLER_PACKAGES} className={quietButton}>
-            <Package size={14} aria-hidden />
-            {t("common", K.packages.link)}
-          </Link>
-          <Link href={PANEL_RESELLER_LIMITS} className={quietButton}>
-            <Gauge size={14} aria-hidden />
-            {t("common", K.limits.link)}
-          </Link>
-          <button type="button" className={primaryButton} onClick={() => setCreating(true)}>
-            <Plus size={14} aria-hidden />
-            {t("common", K.new)}
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        icon={Store}
+        title={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+        actions={
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href={PANEL_RESELLER_PACKAGES} className={quietButton}>
+                <Package size={14} aria-hidden />
+                {t("common", K.packages.link)}
+              </Link>
+              <Link href={PANEL_RESELLER_LIMITS} className={quietButton}>
+                <Gauge size={14} aria-hidden />
+                {t("common", K.limits.link)}
+              </Link>
+              <button type="button" className={primaryButton} onClick={() => setCreating(true)}>
+                <Plus size={14} aria-hidden />
+                {t("common", K.new)}
+              </button>
+            </div>
+          </>
+        }
+      />
 
       {notice && <p className="text-xs font-bold text-primary">{notice}</p>}
 

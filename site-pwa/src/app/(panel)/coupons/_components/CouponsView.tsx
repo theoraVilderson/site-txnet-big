@@ -16,6 +16,7 @@ import { CouponUsage } from "./CouponUsage";
 import { DiscountRules } from "./DiscountRules";
 import { GiftCodes } from "./GiftCodes";
 import { ListSkeleton } from "./ListSkeleton";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 const PAGE_SIZE = 20;
 type Tab = "discount" | "gift" | "rules";
@@ -41,15 +42,11 @@ export function CouponsView() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-lg font-bold text-text-primary">
-            <TicketPercent size={18} className="text-primary" aria-hidden />
-            {t("common", K.title)}
-          </h1>
-          <p className="text-xs text-text-secondary">{t("common", K.subtitle)}</p>
-        </div>
-      </header>
+      <PageHeader
+        icon={TicketPercent}
+        title={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+      />
 
       <div role="tablist" className="flex gap-2 rounded-2xl border border-card-border bg-card-bg p-1 shadow-sm">
         {(["discount", "gift", "rules"] as const).map((id) => (

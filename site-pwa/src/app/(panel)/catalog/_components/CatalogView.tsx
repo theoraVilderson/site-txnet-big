@@ -36,6 +36,7 @@ import { MoveCategorySheet } from "./CategoryPickers";
 import { ProductDetailSheet } from "./ProductDetailSheet";
 import { ProductWizard } from "./ProductWizard";
 import { Alert, primaryButton, quietButton, useMessage } from "./catalog-ui";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 /**
  * The published `catalog` namespace in every language locale-service has —
@@ -277,43 +278,43 @@ export function CatalogView() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-4 sm:p-6">
       {surface.chrome}
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-lg font-bold text-text-primary">
-            <Package size={18} className="text-primary" aria-hidden />
-            {t("common", K.title)}
-          </h1>
-          <p className="text-xs text-text-secondary">{t("common", K.subtitle)}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {!guide && (
-            <button
-              type="button"
-              className={quietButton}
-              onClick={() => {
-                setGuide(true);
-                writeGuideClosed(false);
-              }}
-            >
-              <BookOpen size={14} aria-hidden />
-              {t("common", K.guide.show)}
-            </button>
-          )}
-          <Link href={surface.translationsHref} className={quietButton}>
-            <Languages size={14} aria-hidden />
-            {t("common", K.translations.open)}
-            {pending ? (
-              <span className="rounded-full bg-primary px-1.5 text-[10px] text-on-accent" title={t("common", K.translationsPending, { count: pending })}>
-                {pending}
-              </span>
-            ) : null}
-          </Link>
-          <button type="button" className={primaryButton} onClick={() => setCreating("product")}>
-            <Plus size={14} aria-hidden />
-            {t("common", K.newProduct)}
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        icon={Package}
+        title={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+        actions={
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              {!guide && (
+                <button
+                  type="button"
+                  className={quietButton}
+                  onClick={() => {
+                    setGuide(true);
+                    writeGuideClosed(false);
+                  }}
+                >
+                  <BookOpen size={14} aria-hidden />
+                  {t("common", K.guide.show)}
+                </button>
+              )}
+              <Link href={surface.translationsHref} className={quietButton}>
+                <Languages size={14} aria-hidden />
+                {t("common", K.translations.open)}
+                {pending ? (
+                  <span className="rounded-full bg-primary px-1.5 text-[10px] text-on-accent" title={t("common", K.translationsPending, { count: pending })}>
+                    {pending}
+                  </span>
+                ) : null}
+              </Link>
+              <button type="button" className={primaryButton} onClick={() => setCreating("product")}>
+                <Plus size={14} aria-hidden />
+                {t("common", K.newProduct)}
+              </button>
+            </div>
+          </>
+        }
+      />
 
       {guide && <CatalogGuide onClose={closeGuide} />}
 

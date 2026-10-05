@@ -12,6 +12,7 @@ import { formatMoney } from "../../../_lib/money";
 import { Pagination } from "../../../_components/kit/Pagination";
 import { FinancialTable } from "../../_components/FinancialTable";
 import { TenantBillingRow } from "./TenantBillingRow";
+import { PageHeader } from "../../../_components/kit/PageHeader";
 
 const B = FrontendI18nKeys.common.tenantBilling;
 
@@ -77,30 +78,32 @@ export function TenantBillingView() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
-      <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary md:text-3xl">{t("common", B.title)}</h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", B.subtitle)}</p>
-        </div>
-        {data && (
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-card-border bg-card-bg px-5 py-3">
-              <p className="text-[11px] text-text-secondary">{t("common", B.balance)}</p>
-              <p dir="ltr" className="text-lg font-bold text-gold">
-                {formatMoney(data.balance, data.currencyCode, { lang, t })}
-              </p>
-            </div>
-            {/* Only once the wallet read succeeded: a refused reader would be refused there too (F-019-e). */}
-            <Link
-              href={PANEL_TENANT_BILLING_TOPUP}
-              className="inline-flex items-center gap-2 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-on-accent hover:brightness-110"
-            >
-              <HandCoins size={16} aria-hidden />
-              {t("common", B.topup)}
-            </Link>
-          </div>
-        )}
-      </header>
+      <PageHeader
+        title={t("common", B.title)}
+        subtitle={t("common", B.subtitle)}
+        actions={
+          <>
+            {data && (
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl border border-card-border bg-card-bg px-5 py-3">
+                  <p className="text-[11px] text-text-secondary">{t("common", B.balance)}</p>
+                  <p dir="ltr" className="text-lg font-bold text-gold">
+                    {formatMoney(data.balance, data.currencyCode, { lang, t })}
+                  </p>
+                </div>
+                {/* Only once the wallet read succeeded: a refused reader would be refused there too (F-019-e). */}
+                <Link
+                  href={PANEL_TENANT_BILLING_TOPUP}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-on-accent hover:brightness-110"
+                >
+                  <HandCoins size={16} aria-hidden />
+                  {t("common", B.topup)}
+                </Link>
+              </div>
+            )}
+          </>
+        }
+      />
 
       <FinancialTable
         columns={[

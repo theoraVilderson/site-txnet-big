@@ -1,11 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, Package, Plus, RotateCw } from "lucide-react";
+import { Package, Plus, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { operatingCurrencyApi, tenantApi, type TenantPackage } from "@/lib/tenant-api";
-import { PANEL_RESELLERS } from "@/lib/routes";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatMoney } from "../../../_lib/money";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
@@ -14,6 +12,7 @@ import { Alert, primaryButton, quietButton, useMessage } from "../../_components
 import { RESELLER_KEYS, canAdministerResellers } from "../../_lib/resellers";
 import { PACKAGE_KEYS as K, WHOLESALE_METERS, packageFormOf } from "../../_lib/packages";
 import { PackageSheet } from "./PackageSheet";
+import { PageHeader } from "../../../_components/kit/PageHeader";
 
 /**
  * The packages the platform sells resellers (F-118-n5, `tenant/contract.admin.md`
@@ -115,23 +114,20 @@ export function PackagesView() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
-      <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <Link href={PANEL_RESELLERS} className="mb-2 inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
-            <ArrowLeft size={14} aria-hidden />
-            {t("common", K.back)}
-          </Link>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary md:text-3xl">
-            <Package size={22} className="text-primary" aria-hidden />
-            {t("common", K.title)}
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-        </div>
-        <button type="button" className={primaryButton} disabled={!currency} onClick={() => setEditing("new")}>
-          <Plus size={14} aria-hidden />
-          {t("common", K.new)}
-        </button>
-      </header>
+      <PageHeader
+        icon={Package}
+        title={t("common", K.title)}
+        tail={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+        actions={
+          <>
+            <button type="button" className={primaryButton} disabled={!currency} onClick={() => setEditing("new")}>
+              <Plus size={14} aria-hidden />
+              {t("common", K.new)}
+            </button>
+          </>
+        }
+      />
 
       {notice && <p className="text-xs font-bold text-primary">{notice}</p>}
       {failure && <Alert>{failure}</Alert>}

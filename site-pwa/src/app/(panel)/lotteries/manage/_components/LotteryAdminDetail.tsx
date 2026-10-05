@@ -16,6 +16,7 @@ import { passedOnKeyOf } from "../../_lib/lotteries";
 import { LOTTERY_ADMIN_KEYS as K, REASON_MAX, actionsFor, canManageLotteries, excludedCountKeyOf } from "../_lib/lottery-admin";
 import { LotteryEditor } from "./LotteryEditor";
 import { StatusPill, useLotteryMessage } from "./lottery-admin-ui";
+import { PageHeader } from "../../../_components/kit/PageHeader";
 
 type Confirming = "publish" | "remove" | "cancel" | null;
 
@@ -144,18 +145,16 @@ export function LotteryAdminDetail({ id }: { id: string }) {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
-      {back}
-      <header className="space-y-2">
-        <h1 className="flex flex-wrap items-center gap-2 text-2xl font-bold text-text-primary">
-          <span dir="auto">{lottery.title}</span>
-          <StatusPill lottery={lottery} />
-        </h1>
-        {lottery.description && (
-          <p className="text-sm text-text-secondary" dir="auto">
-            {lottery.description}
-          </p>
-        )}
-      </header>
+      <PageHeader
+        tail={lottery.title}
+        title={
+          <>
+            <span dir="auto">{lottery.title}</span>
+            <StatusPill lottery={lottery} />
+          </>
+        }
+        subtitle={lottery.description && <span dir="auto">{lottery.description}</span>}
+      />
 
       {notice && <p className="text-xs font-bold text-primary">{notice}</p>}
 

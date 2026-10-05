@@ -9,6 +9,7 @@ import { DataTable } from "../../_components/kit/DataTable";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { Alert, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
 import { AGENT_KEYS, PRIORITIES, PRIORITY_KEYS, categoryTexts, fromHhmm, slaFormErrors, toHhmm } from "../_lib/support-agent";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 const K = AGENT_KEYS.settings;
 type Tab = "hours" | "sla" | "categories";
@@ -37,13 +38,11 @@ export function SupportSettingsView() {
   const [tab, setTab] = useState<Tab>("hours");
   return (
     <div className="mx-auto w-full max-w-4xl space-y-5 p-4 md:p-8">
-      <header>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary md:text-3xl">
-          <SlidersHorizontal size={22} className="text-primary" aria-hidden />
-          {t("common", K.title)}
-        </h1>
-        <p className="mt-1 text-sm text-text-secondary">{t("common", K.subtitle)}</p>
-      </header>
+      <PageHeader
+        icon={SlidersHorizontal}
+        title={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+      />
       <div role="tablist" className="flex flex-wrap gap-2">
         {TABS.map((v) => (
           <button

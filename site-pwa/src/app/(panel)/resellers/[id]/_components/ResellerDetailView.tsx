@@ -45,6 +45,7 @@ import {
 import { Alert, Field, StatusBadge, input, primaryButton, useMessage } from "../../_components/resellers-ui";
 import { LIMIT_KEYS } from "../../_lib/limits";
 import { ResellerLedger } from "./ResellerLedger";
+import { PageHeader } from "../../../_components/kit/PageHeader";
 
 type Loaded = { reseller: Reseller; subscription: TenantSubscription | null; packages: TenantPackage[] };
 
@@ -119,10 +120,12 @@ export function ResellerDetailView({ id }: { id: string }) {
 
   return shell(
     <>
-      <Link href={PANEL_RESELLERS} className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
-        <ArrowLeft size={14} aria-hidden />
-        {t("common", K.detail.back)}
-      </Link>
+      {(!data || !r) && (
+        <Link href={PANEL_RESELLERS} className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
+          <ArrowLeft size={14} aria-hidden />
+          {t("common", K.detail.back)}
+        </Link>
+      )}
 
       {error && !data ? (
         <Alert>{message(error)}</Alert>
@@ -130,12 +133,15 @@ export function ResellerDetailView({ id }: { id: string }) {
         <Loader2 size={18} className="mx-auto animate-spin text-text-secondary" aria-hidden />
       ) : (
         <>
-          <header className="flex flex-wrap items-center gap-3">
-            <h1 dir="ltr" className="text-2xl font-bold text-text-primary md:text-3xl">
-              {r.slug}
-            </h1>
-            <StatusBadge status={r.status} />
-          </header>
+          <PageHeader
+            tail={r.slug}
+            title={
+              <>
+                <span dir="ltr">{r.slug}</span>
+                <StatusBadge status={r.status} />
+              </>
+            }
+          />
 
           {tabs.length > 1 && (
             <div role="tablist" className="inline-flex gap-1 rounded-xl bg-bg-inner p-1">

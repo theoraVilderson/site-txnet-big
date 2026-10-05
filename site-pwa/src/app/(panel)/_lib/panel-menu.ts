@@ -330,3 +330,50 @@ export function activeHref(
   }
   return best;
 }
+
+export interface MenuCrumb {
+  /** A `common` namespace key. */
+  label: string;
+  /** `null` for a group, which is a heading and not a page. */
+  href: string | null;
+}
+
+/**
+ * The breadcrumb trail for `pathname` (UX-1-i, `contract.ux.md` K14): the menu
+ * tree from the top down to the entry `activeHref` would light up — a group,
+ * then its page. Empty on a path no entry owns. It reads the whole menu, not
+ * the caller's visible one: whoever is on the page may see where it sits.
+ *
+ * An `href` that is a function of a tenant id is matched with any one segment
+ * in the id's place, and the crumb links to the segment the path holds — the
+ * tenant the page is already on, so no session is needed to draw it.
+ */
+export function menuTrail(entries: readonly PanelMenuEntry[], pathname: string): MenuCrumb[] {
+  const hrefOf = (l: PanelMenuLink) => {
+    if (typeof l.href !== "function") return l.href;
+    // Letters only, so a path builder that encodes its id hands the probe back unchanged.
+    const [before, after] = l.href("TENANTPROBE").split("TENANTPROBE");
+    const escape = (part: string) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return pathname.match(new RegExp(`^${escape(before)}[^/]+${escape(after)}(?=/|$)`))?.[0] ?? null;
+  };
+  const trails: { href: string; trail: MenuCrumb[] }[] = [];
+  for (const entry of entries) {
+    if (isMenuGroup(entry)) {
+      for (const child of entry.children) {
+        const href = hrefOf(child);
+        if (href) trails.push({ href, trail: [{ label: entry.label, href: null }, { label: child.label, href }] });
+      }
+    } else {
+      const href = hrefOf(entry);
+      if (href) trails.push({ href, trail: [{ label: entry.label, href }] });
+    }
+  }
+  const active = activeHref(
+    trails.map((t) => t.href),
+    pathname,
+  );
+  if (active === null) return [];
+  // `/` is the dashboard's own href and prefixes every path: only the dashboard itself is in it.
+  if (active === "/" && trimSlash(pathname) !== "/") return [];
+  return trails.find((t) => trimSlash(t.href) === active)?.trail ?? [];
+}

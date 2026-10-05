@@ -9,6 +9,7 @@ import { useCatalogSurface } from "../_lib/surface";
 import { Select } from "../../_components/kit/Select";
 import { CATALOG_KEYS, DESCRIPTION_MAX, editId, reviewWrites } from "../_lib/catalog-form";
 import { useMessage } from "./catalog-ui";
+import { PageHeader } from "../../_components/kit/PageHeader";
 
 const K = CATALOG_KEYS.translations;
 const input = "w-full rounded-xl border border-card-border bg-bg-inner px-3 py-2 text-sm text-text-primary outline-none focus:border-primary";
@@ -89,19 +90,20 @@ export function TranslationsView() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-lg font-bold text-text-primary">
-            <Languages size={18} className="text-primary" aria-hidden />
-            {t("common", K.title)}
-          </h1>
-          <p className="text-xs text-text-secondary">{t("common", K.subtitle)}</p>
-        </div>
-        <Link href={catalogHref} className={quietButton}>
-          <ArrowRight size={14} className="ltr:rotate-180" aria-hidden />
-          {t("common", K.back)}
-        </Link>
-      </header>
+      <PageHeader
+        icon={Languages}
+        tail={t("common", K.title)}
+        title={t("common", K.title)}
+        subtitle={t("common", K.subtitle)}
+        actions={
+          <>
+            <Link href={catalogHref} className={quietButton}>
+              <ArrowRight size={14} className="ltr:rotate-180" aria-hidden />
+              {t("common", K.back)}
+            </Link>
+          </>
+        }
+      />
 
       <div className="flex flex-wrap items-end justify-between gap-2">
         <Select
