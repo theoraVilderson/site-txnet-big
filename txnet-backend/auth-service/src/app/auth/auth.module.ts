@@ -25,6 +25,8 @@ import { AuthGuard } from './auth.guard';
 import { NoActiveSessionGuard } from './guards/no-active-session.guard';
 import { SessionService } from './session/session.service';
 import { SessionStore } from './session/session.store';
+import { ActiveSessionsController } from './session/active-sessions.controller';
+import { ActiveSessionsService } from './session/active-sessions.service';
 import { OtpStore } from './otp/otp.store';
 import { OtpDeliveryStore } from './otp/otp-delivery.store';
 import { OtpDeliveryPublisher } from './otp/otp-delivery.publisher';
@@ -94,6 +96,7 @@ import { ConfigService } from '@nestjs/config';
     RolesController,
     UserSearchController,
     ResellerUsersController,
+    ActiveSessionsController,
   ],
   providers: [
     UserNotifier,
@@ -129,6 +132,7 @@ import { ConfigService } from '@nestjs/config';
     ServiceOnlyGuard,
     SessionService,
     SessionStore,
+    ActiveSessionsService,
     OtpStore,
     OtpDeliveryStore,
     OtpDeliveryPublisher,

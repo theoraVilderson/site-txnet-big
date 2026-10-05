@@ -7,6 +7,7 @@ import { OtpChannel } from '../auth/otp/otp.interface';
 import { err, ok, safeExecute } from '../common/response/response.util';
 import { SwitchScope } from '../common/security/switch-scope';
 import { maskPhone } from '../common/validation/phone.schema';
+import { leaveGroup } from './leave-group';
 import { SurfaceOwnerService } from '../auth/surface-owner/surface-owner.service';
 import { runWithTenant } from '../tenant-context/tenant-context';
 import {
@@ -405,20 +406,7 @@ export class AccountSwitchService {
 
       const groupId = targetMembership.groupId;
 
-      await this.prisma.$transaction(async (tx) => {
-        await tx.linkedAccountMember.delete({
-          where: { id: targetMembership.id },
-        });
-
-        const left = await tx.linkedAccountMember.findMany({
-          where: { groupId },
-          select: { id: true },
-        });
-        if (left.length <= 1) {
-          await tx.linkedAccountMember.deleteMany({ where: { groupId } });
-          await tx.linkedAccountGroup.delete({ where: { id: groupId } });
-        }
-      });
+      await leaveGroup(this.prisma, targetMembership);
 
       // After the row is gone, never before: a revoked session with the
       // membership still in place would leave the removed account signed out

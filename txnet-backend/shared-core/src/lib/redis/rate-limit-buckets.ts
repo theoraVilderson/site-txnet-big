@@ -132,6 +132,8 @@ export const RateLimitBucket = {
   ME_MESSENGER: 'me:messenger',
   /** `GET`/`PUT /auth/me/timezone` (TZ-1-c), per caller: a settings screen and one report per sign-in. */
   ME_TIMEZONE: 'me:timezone',
+  /** `GET /auth/sessions` and its two terminate routes (SES-1-a), per caller: a settings screen, not a loop. */
+  ME_SESSIONS: 'me:sessions',
 
   /**
    * The handoff to a reseller's own panel (F-061-f): the list and the mint per

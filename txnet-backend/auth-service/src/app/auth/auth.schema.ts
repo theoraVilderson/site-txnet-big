@@ -118,3 +118,6 @@ export const userSearchSchema = z.object({
   limit: z.coerce.number().int().min(1).max(20).default(10),
 });
 export type UserSearchInput = z.infer<typeof userSearchSchema>;
+
+/** `POST /auth/sessions/terminate` (SES-1-a): one of the caller's own session ids, as the list showed it. */
+export const terminateSessionSchema = z.object({ id: z.string().uuid() }).strict();
