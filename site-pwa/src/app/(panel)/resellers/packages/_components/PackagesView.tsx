@@ -9,6 +9,7 @@ import { PANEL_RESELLERS } from "@/lib/routes";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatMoney } from "../../../_lib/money";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
+import { DataTable } from "../../../_components/kit/DataTable";
 import { Alert, primaryButton, quietButton, useMessage } from "../../_components/resellers-ui";
 import { RESELLER_KEYS, canAdministerResellers } from "../../_lib/resellers";
 import { PACKAGE_KEYS as K, WHOLESALE_METERS, packageFormOf } from "../../_lib/packages";
@@ -111,7 +112,6 @@ export function PackagesView() {
     });
     return lines.length > 0 ? lines.join(" · ") : t("common", K.noRate);
   };
-  const cell = "px-3 py-2 text-start";
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
@@ -149,54 +149,37 @@ export function PackagesView() {
       ) : !rows || rows.length === 0 ? (
         <p className="text-sm text-text-secondary">{t("common", K.empty)}</p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-card-border bg-card-bg">
-          <table className="w-full min-w-[860px] text-sm">
-            <thead className="text-[11px] text-text-secondary">
-              <tr>
-                <th className={cell}>{t("common", K.columns.name)}</th>
-                <th className={cell}>{t("common", K.columns.monthly)}</th>
-                <th className={cell}>{t("common", K.columns.yearly)}</th>
-                <th className={cell}>{t("common", K.columns.rate)}</th>
-                <th className={cell}>{t("common", K.columns.features)}</th>
-                <th className={cell}>{t("common", K.columns.state)}</th>
-                <th className={cell} />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p) => (
-                <tr key={p.id} className="border-t border-card-border align-top hover:bg-bg-inner">
-                  <td className={`${cell} font-bold text-text-primary`}>{p.name}</td>
-                  <td className={cell} dir="ltr">
-                    {money(p.monthlyPrice, p.currencyCode)}
-                  </td>
-                  <td className={cell} dir="ltr">
-                    {money(p.yearlyPrice, p.currencyCode)}
-                  </td>
-                  <td className={`${cell} text-text-secondary`}>{rateOf(p)}</td>
-                  <td className={`${cell} text-xs text-text-secondary`}>
-                    {p.includedFeatureKeys.map((k) => ((K.features as Record<string, string>)[k] ? t("common", (K.features as Record<string, string>)[k]) : k)).join("، ") || "—"}
-                  </td>
-                  <td className={`${cell} text-xs font-bold ${p.isActive ? "text-primary" : "text-text-secondary"}`}>
-                    {t("common", p.isActive ? K.active : K.inactive)}
-                  </td>
-                  <td className={cell}>
-                    <div className="flex flex-wrap justify-end gap-1">
-                      <button type="button" className={quietButton} disabled={busy === p.id} onClick={() => setEditing(p)}>
-                        {t("common", K.edit)}
-                      </button>
-                      <button type="button" className={quietButton} disabled={busy === p.id} onClick={() => toggleActive(p)}>
-                        {t("common", p.isActive ? K.deactivate : K.activate)}
-                      </button>
-                      <button type="button" className={quietButton} disabled={busy === p.id} onClick={() => apply(p)}>
-                        {t("common", K.apply)}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          label={t("common", K.title)}
+          rows={rows}
+          rowKey={(p) => p.id}
+          minWidth="min-w-[860px]"
+          rowClassName="align-top"
+          columns={[
+            { id: "name", header: t("common", K.columns.name), cell: (p) => p.name, className: "font-bold text-text-primary" },
+            { id: "monthly", header: t("common", K.columns.monthly), cell: (p) => money(p.monthlyPrice, p.currencyCode), dir: "ltr" },
+            { id: "yearly", header: t("common", K.columns.yearly), cell: (p) => money(p.yearlyPrice, p.currencyCode), dir: "ltr" },
+            { id: "rate", header: t("common", K.columns.rate), cell: rateOf, className: "text-text-secondary" },
+            {
+              id: "features",
+              header: t("common", K.columns.features),
+              cell: (p) => p.includedFeatureKeys.map((k) => ((K.features as Record<string, string>)[k] ? t("common", (K.features as Record<string, string>)[k]) : k)).join("، ") || "—",
+              className: "text-xs text-text-secondary",
+              hideOnCard: true,
+            },
+            {
+              id: "state",
+              header: t("common", K.columns.state),
+              cell: (p) => <span className={p.isActive ? "text-primary" : "text-text-secondary"}>{t("common", p.isActive ? K.active : K.inactive)}</span>,
+              className: "text-xs font-bold",
+            },
+          ]}
+          actions={(p) => [
+            { id: "edit", label: t("common", K.edit), disabled: busy === p.id, onSelect: () => setEditing(p) },
+            { id: "toggle", label: t("common", p.isActive ? K.deactivate : K.activate), disabled: busy === p.id, onSelect: () => void toggleActive(p) },
+            { id: "apply", label: t("common", K.apply), disabled: busy === p.id, onSelect: () => void apply(p) },
+          ]}
+        />
       )}
 
       {editing && (

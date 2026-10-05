@@ -10,6 +10,7 @@ import { myResellerConsolePath } from "@/lib/routes";
 import { resellerDomainsApi, type DomainPurpose, type DomainStatus, type ResellerDomain } from "@/lib/tenant-api";
 import { Select } from "../../../../_components/kit/Select";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
+import { DataTable } from "../../../../_components/kit/DataTable";
 import { formatInstant } from "../../../../_lib/datetime";
 import { Badge } from "../../../../financial/_components/Badge";
 import { Alert, Field, input, primaryButton, quietButton } from "../../../../catalog/_components/catalog-ui";
@@ -253,21 +254,22 @@ function DomainCard({
 
       <div className="space-y-2">
         <h3 className="text-xs font-bold text-text-secondary">{t("common", K.records.title)}</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-start text-xs">
-            <thead className="text-text-secondary">
-              <tr>
-                <th className="py-1 pe-3 text-start font-medium">{t("common", K.records.type)}</th>
-                <th className="py-1 pe-3 text-start font-medium">{t("common", K.records.name)}</th>
-                <th className="py-1 text-start font-medium">{t("common", K.records.value)}</th>
-              </tr>
-            </thead>
-            <tbody className="text-text-primary">
-              <RecordRow type={domain.record.type} name={domain.record.name} value={domain.record.value} />
-              <RecordRow type="CNAME" name={domain.domainValue} value={domain.cnameTarget} />
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          label={t("common", K.records.title)}
+          compact
+          bare
+          rowClassName="align-top"
+          rows={[
+            { type: domain.record.type, name: domain.record.name, value: domain.record.value },
+            { type: "CNAME", name: domain.domainValue, value: domain.cnameTarget },
+          ]}
+          rowKey={(r) => `${r.type}|${r.name}`}
+          columns={[
+            { id: "type", header: t("common", K.records.type), cell: (r) => r.type, className: "font-mono" },
+            { id: "name", header: t("common", K.records.name), cell: (r) => <Copyable text={r.name} /> },
+            { id: "value", header: t("common", K.records.value), cell: (r) => <Copyable text={r.value} /> },
+          ]}
+        />
       </div>
 
       <p className="text-[11px] text-text-secondary">
@@ -305,17 +307,11 @@ function DomainCard({
   );
 }
 
-function RecordRow({ type, name, value }: { type: string; name: string; value: string }) {
+function Copyable({ text }: { text: string }) {
   return (
-    <tr className="border-t border-card-border align-top">
-      <td className="py-2 pe-3 font-mono">{type}</td>
-      <td className="py-2 pe-3">
-        <span dir="ltr" className="break-all font-mono">{name}</span> <CopyButton text={name} />
-      </td>
-      <td className="py-2">
-        <span dir="ltr" className="break-all font-mono">{value}</span> <CopyButton text={value} />
-      </td>
-    </tr>
+    <>
+      <span dir="ltr" className="break-all font-mono">{text}</span> <CopyButton text={text} />
+    </>
   );
 }
 

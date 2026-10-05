@@ -7,6 +7,7 @@ import { userGroupsApi, type UserGroup } from "@/lib/auth-api";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { formatInstant } from "../../_lib/datetime";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
+import { DataTable } from "../../_components/kit/DataTable";
 import { USER_GROUP_KEYS as K, canManageGroups, canNameResellers } from "../_lib/user-groups";
 import { Alert, primaryButton, quietButton, useMessage } from "./user-groups-ui";
 import { GroupSheet } from "./GroupSheet";
@@ -84,7 +85,6 @@ export function UserGroupsView() {
     );
   }
 
-  const cell = "px-3 py-2 text-start";
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
       <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -117,45 +117,25 @@ export function UserGroupsView() {
       ) : !rows || rows.length === 0 ? (
         <p className="text-sm text-text-secondary">{t("common", K.empty)}</p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-card-border bg-card-bg">
-          <table className="w-full min-w-[560px] text-sm">
-            <thead className="text-[11px] text-text-secondary">
-              <tr>
-                <th className={cell}>{t("common", K.columns.name)}</th>
-                <th className={cell}>{t("common", K.columns.users)}</th>
-                {platform && <th className={cell}>{t("common", K.columns.resellers)}</th>}
-                <th className={cell}>{t("common", K.columns.created)}</th>
-                <th className={cell} />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((g) => (
-                <tr key={g.id} className="border-t border-card-border hover:bg-bg-inner">
-                  <td className={`${cell} font-bold text-text-primary`} dir="auto">{g.name}</td>
-                  <td className={cell}>{g.userCount}</td>
-                  {platform && <td className={cell}>{g.allTenants ? t("common", K.everyReseller) : g.tenantCount}</td>}
-                  <td className={`${cell} text-text-secondary`}>{formatInstant(g.createdAt, lang, { withTime: false })}</td>
-                  <td className={cell}>
-                    <div className="flex flex-wrap justify-end gap-1">
-                      <button type="button" className={quietButton} onClick={() => setMembers(g)}>
-                        <Users size={12} aria-hidden />
-                        {t("common", K.actions.members)}
-                      </button>
-                      <button type="button" className={quietButton} onClick={() => setEditing(g)}>
-                        <Pencil size={12} aria-hidden />
-                        {t("common", K.actions.edit)}
-                      </button>
-                      <button type="button" className={quietButton} onClick={() => remove(g)}>
-                        <Trash2 size={12} aria-hidden />
-                        {t("common", K.actions.delete)}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          label={t("common", K.title)}
+          rows={rows}
+          rowKey={(g) => g.id}
+          minWidth="min-w-[560px]"
+          columns={[
+            { id: "name", header: t("common", K.columns.name), cell: (g) => g.name, dir: "auto", className: "font-bold text-text-primary" },
+            { id: "users", header: t("common", K.columns.users), cell: (g) => g.userCount },
+            ...(platform
+              ? [{ id: "resellers", header: t("common", K.columns.resellers), cell: (g: UserGroup) => (g.allTenants ? t("common", K.everyReseller) : g.tenantCount) }]
+              : []),
+            { id: "created", header: t("common", K.columns.created), cell: (g) => formatInstant(g.createdAt, lang, { withTime: false }), className: "text-text-secondary" },
+          ]}
+          actions={(g) => [
+            { id: "members", label: t("common", K.actions.members), icon: <Users size={14} aria-hidden />, onSelect: () => setMembers(g) },
+            { id: "edit", label: t("common", K.actions.edit), icon: <Pencil size={14} aria-hidden />, onSelect: () => setEditing(g) },
+            { id: "delete", label: t("common", K.actions.delete), icon: <Trash2 size={14} aria-hidden />, tone: "danger", onSelect: () => remove(g) },
+          ]}
+        />
       )}
 
       {editing && (

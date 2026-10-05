@@ -713,6 +713,13 @@
       "cancel": "Cancel",
       "leave": "Close",
       "tip": "Tip"
+    },
+    "table": {
+      "actions": "Actions",
+      "selectAll": "Select every row",
+      "selectRow": "Select this row",
+      "selected": "{{count}} selected",
+      "clear": "Clear the selection"
     }
   },
   "money": {

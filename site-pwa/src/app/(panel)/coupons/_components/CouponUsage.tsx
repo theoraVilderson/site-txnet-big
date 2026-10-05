@@ -6,6 +6,7 @@ import { Loader2, RotateCw, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi, type CouponUsageReport, type UsageQuery } from "@/lib/billing-api";
+import { DataTable } from "../../_components/kit/DataTable";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Pagination } from "../../_components/kit/Pagination";
 import { Select } from "../../_components/kit/Select";
@@ -167,44 +168,40 @@ export function CouponUsage({
                   </div>
                 ))}
               </dl>
-              {report.items.length === 0 ? (
-                <p className="py-4 text-center text-sm text-text-secondary">{t("common", U.empty)}</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-start text-xs">
-                    <thead className="text-text-secondary">
-                      <tr>
-                        {(["code", "user", "payment", "amount", "status", "time"] as const).map((c) => (
-                          <th key={c} className="px-2 py-2 text-start font-bold">
-                            {t("common", U.columns[c])}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-card-border text-text-primary">
-                      {report.items.map((r) => (
-                        <tr key={r.id}>
-                          <td className="px-2 py-2 font-mono" dir="ltr">
-                            {r.code}
-                          </td>
-                          <td className="px-2 py-2">
-                            {r.userName ?? "—"}
-                            <span dir="ltr" className="block font-mono text-[10px] text-text-secondary">
-                              {r.username ?? r.userId.slice(0, 8)}
-                            </span>
-                          </td>
-                          <td className="px-2 py-2 font-mono text-[10px]" dir="ltr">
-                            {r.paymentTransactionId ? `${r.paymentTransactionId.slice(0, 8)} · ${r.paymentStatus ?? ""}` : "—"}
-                          </td>
-                          <td className="px-2 py-2">{money(r.discountAmount, r.currencyCode)}</td>
-                          <td className="px-2 py-2">{t("common", U.status[r.status])}</td>
-                          <td className="px-2 py-2">{formatInstant(r.redeemedAt, lang) ?? ""}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <DataTable
+                label={t("common", U.title)}
+                compact
+                bare
+                rows={report.items}
+                rowKey={(r) => r.id}
+                empty={<p className="py-4 text-center text-sm text-text-secondary">{t("common", U.empty)}</p>}
+                columns={[
+                  { id: "code", header: t("common", U.columns.code), cell: (r) => r.code, dir: "ltr", className: "font-mono" },
+                  {
+                    id: "user",
+                    header: t("common", U.columns.user),
+                    cell: (r) => (
+                      <>
+                        {r.userName ?? "—"}
+                        <span dir="ltr" className="block font-mono text-[10px] text-text-secondary">
+                          {r.username ?? r.userId.slice(0, 8)}
+                        </span>
+                      </>
+                    ),
+                  },
+                  {
+                    id: "payment",
+                    header: t("common", U.columns.payment),
+                    cell: (r) => (r.paymentTransactionId ? `${r.paymentTransactionId.slice(0, 8)} · ${r.paymentStatus ?? ""}` : "—"),
+                    dir: "ltr",
+                    className: "font-mono text-[10px]",
+                    hideOnCard: true,
+                  },
+                  { id: "amount", header: t("common", U.columns.amount), cell: (r) => money(r.discountAmount, r.currencyCode) },
+                  { id: "status", header: t("common", U.columns.status), cell: (r) => t("common", U.status[r.status]) },
+                  { id: "time", header: t("common", U.columns.time), cell: (r) => formatInstant(r.redeemedAt, lang) ?? "" },
+                ]}
+              />
               {report.total > report.pageSize && (
                 <Pagination page={report.page} totalPages={Math.ceil(report.total / report.pageSize)} totalItems={report.total} pageSize={report.pageSize} onPageChange={setPage} />
               )}

@@ -10,6 +10,7 @@ export { ConfirmProvider, useConfirm, type ConfirmOptions } from "./confirm";
 export { Dialog, type DialogProps } from "./Dialog";
 export { RadioCards, SegmentedControl, type ChoiceOption } from "./choice";
 export { cn } from "./cn";
+export { DataTable, type DataColumn, type DataTableProps, type DataTableSelection } from "./DataTable";
 export { EmptyState } from "./EmptyState";
 export { Menu, type MenuItem } from "./Menu";
 export { notify, PanelToaster } from "./notify";

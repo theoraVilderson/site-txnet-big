@@ -11,6 +11,7 @@ import { usePanelSession } from "../../_context/PanelSessionContext";
 import { formatInstant } from "../../_lib/datetime";
 import { formatMoney } from "../../_lib/money";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
+import { DataTable } from "../../_components/kit/DataTable";
 import { Alert, StatusBadge, primaryButton, quietButton, useMessage } from "./resellers-ui";
 import { RESELLER_KEYS as K, canAdministerResellers } from "../_lib/resellers";
 import { CreateResellerSheet } from "./CreateResellerSheet";
@@ -87,7 +88,6 @@ export function ResellersView() {
     );
   }
 
-  const cell = "px-3 py-2 text-start";
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
       <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -129,40 +129,28 @@ export function ResellersView() {
       ) : !rows || rows.length === 0 ? (
         <p className="text-sm text-text-secondary">{t("common", K.empty)}</p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-card-border bg-card-bg">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead className="text-[11px] text-text-secondary">
-              <tr>
-                <th className={cell}>{t("common", K.columns.slug)}</th>
-                <th className={cell}>{t("common", K.columns.owner)}</th>
-                <th className={cell}>{t("common", K.columns.status)}</th>
-                <th className={cell}>{t("common", K.columns.period)}</th>
-                <th className={cell}>{t("common", K.columns.balance)}</th>
-                <th className={cell}>{t("common", K.columns.created)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-t border-card-border hover:bg-bg-inner">
-                  <td className={cell}>
-                    <Link href={panelResellerPath(r.id)} className="font-bold text-primary hover:underline" dir="ltr">
-                      {r.slug}
-                    </Link>
-                  </td>
-                  <td className={`${cell} text-text-secondary`}>{r.owner?.fullName || r.owner?.username || "—"}</td>
-                  <td className={cell}>
-                    <StatusBadge status={r.status} />
-                  </td>
-                  <td className={`${cell} text-text-secondary`}>{t("common", K.period[r.billingModel])}</td>
-                  <td className={cell} dir="ltr">
-                    {formatMoney(r.billingBalance, r.billingCurrencyCode, { lang, t })}
-                  </td>
-                  <td className={`${cell} text-text-secondary`}>{formatInstant(r.createdAt, lang, { withTime: false })}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          label={t("common", K.title)}
+          rows={rows}
+          rowKey={(r) => r.id}
+          minWidth="min-w-[720px]"
+          columns={[
+            {
+              id: "slug",
+              header: t("common", K.columns.slug),
+              cell: (r) => (
+                <Link href={panelResellerPath(r.id)} className="font-bold text-primary hover:underline" dir="ltr">
+                  {r.slug}
+                </Link>
+              ),
+            },
+            { id: "owner", header: t("common", K.columns.owner), cell: (r) => r.owner?.fullName || r.owner?.username || "—", className: "text-text-secondary" },
+            { id: "status", header: t("common", K.columns.status), cell: (r) => <StatusBadge status={r.status} /> },
+            { id: "period", header: t("common", K.columns.period), cell: (r) => t("common", K.period[r.billingModel]), className: "text-text-secondary" },
+            { id: "balance", header: t("common", K.columns.balance), cell: (r) => formatMoney(r.billingBalance, r.billingCurrencyCode, { lang, t }), dir: "ltr" },
+            { id: "created", header: t("common", K.columns.created), cell: (r) => formatInstant(r.createdAt, lang, { withTime: false }), className: "text-text-secondary" },
+          ]}
+        />
       )}
 
       {!isLoading && !error && (page > 1 || rows?.length === PAGE_SIZE) && (
