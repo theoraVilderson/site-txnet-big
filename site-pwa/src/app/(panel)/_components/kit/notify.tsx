@@ -4,6 +4,7 @@ import { Info } from "lucide-react";
 import { useEffect } from "react";
 import toast, { Toaster, useToasterStore, type Renderable } from "react-hot-toast";
 import { useLocale } from "@/context/LocaleContext";
+import { haptic } from "@/lib/haptics";
 import { MD_UP, useMediaQuery } from "./overlay";
 
 /** K10: long enough to read once; an error longer, since it may need acting on. */
@@ -24,7 +25,11 @@ export const notify = {
   success: (message: Renderable) => toast.success(message, { duration: TOAST_MS.success, ariaProps: POLITE }),
   info: (message: Renderable) =>
     toast(message, { duration: TOAST_MS.info, ariaProps: POLITE, icon: <Info size={18} aria-hidden className="shrink-0 text-info" /> }),
-  error: (message: Renderable) => toast.error(message, { duration: TOAST_MS.error, ariaProps: ASSERTIVE }),
+  /** Felt as an error in Telegram's Mini App, too (M6). */
+  error: (message: Renderable) => {
+    haptic.error();
+    return toast.error(message, { duration: TOAST_MS.error, ariaProps: ASSERTIVE });
+  },
   /** One toast that turns from "working…" into the outcome. */
   promise: <T,>(work: Promise<T>, messages: { loading: Renderable; success: Renderable | ((value: T) => Renderable); error: Renderable | ((e: unknown) => Renderable) }) =>
     toast.promise(work, messages, {

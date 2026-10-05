@@ -12,6 +12,7 @@ import { Alert, primaryButton, quietButton } from "../../catalog/_components/cat
 import { WHEEL_KEYS as K, landingRotation, nextRequestId, plainNumber, refusalKey, refusalKeyOf, resultLine } from "../_lib/wheel";
 import { WheelDisc } from "./WheelDisc";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { celebrate } from "../../_components/kit/celebrate";
 
 /** How long the wheel turns; the answer is already in hand when it starts. */
 const SPIN_MS = 4500;
@@ -98,6 +99,8 @@ export function WheelView() {
     window.setTimeout(() => {
       setSpinning(false);
       setResult(answer);
+      // M5: when the wheel stops on a prize; an empty slot is not one.
+      if (answer.prize && answer.prize.prizeType !== "empty") celebrate();
       reload();
     }, SPIN_MS);
   }

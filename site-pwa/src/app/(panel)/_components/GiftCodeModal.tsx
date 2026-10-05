@@ -11,6 +11,7 @@ import {
   type Variants,
 } from "framer-motion";
 import { AlertCircle, Loader2, Sparkles, Ticket, Trash2, X } from "lucide-react";
+import { celebrate } from "./kit/celebrate";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
@@ -157,6 +158,8 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
       const redemption = await billingApi.redeemGift(trimmed);
       setRedeemed(redemption);
       onRedeemed?.(redemption);
+      // M5: once per code — the box is closed to a second submit once redeemed.
+      celebrate();
     } catch (e) {
       // The only exit from a failure. There is no `setRedeemed` below it, which
       // is the whole difference from the file this was ported from.

@@ -17,6 +17,7 @@ import { formatInstant } from "../../_lib/datetime";
 import { formatMoney } from "../../_lib/money";
 import { categoriesOf, forgetReturnInvoice, groupOffers, hasOwnName, meteredCapOf, meteredStartShortOf, quotaLimit, shortfallOf, trafficRateOf, type OfferGroup } from "../_lib/shop";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { useCelebration } from "../../_components/kit/celebrate";
 
 const S = FrontendI18nKeys.common.shop;
 
@@ -696,6 +697,8 @@ function Checkout({
  */
 function Paid({ paid, name, money }: { paid: InvoicePaid; name: string; money: (v: string, currency: string) => string }) {
   const { t } = useLocale();
+  // M5: the purchase is delivered — once, on the step's arrival.
+  useCelebration(true);
 
   return (
     <section className="mx-auto max-w-xl space-y-5 rounded-3xl border border-card-border bg-card-bg p-6 text-center shadow-lg md:p-8">

@@ -7,6 +7,7 @@ export { AnimatedNumber } from "./AnimatedNumber";
 export { Button, IconButton, type ButtonProps, type ButtonSize, type ButtonVariant, type IconButtonProps } from "./Button";
 export { Card, CardHeader } from "./Card";
 export { ConfirmProvider, useConfirm, type ConfirmOptions } from "./confirm";
+export { celebrate, useCelebration } from "./celebrate";
 export { Dialog, type DialogProps } from "./Dialog";
 export { RadioCards, SegmentedControl, type ChoiceOption } from "./choice";
 export { cn } from "./cn";

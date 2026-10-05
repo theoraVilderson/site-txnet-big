@@ -2,6 +2,7 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { confettiBurst } from "../_lib/celebration";
+import { useCelebration } from "../../_components/kit/celebrate";
 
 export interface PaymentResultCardProps {
   /** `success` for a settled payment, `failure` for one that is not, `pending` for one not yet known (F-093-l). */
@@ -78,6 +79,8 @@ export function PaymentResultCard({
   const style = TONE[tone];
   const success = tone === "success";
   const pending = tone === "pending";
+  // M5: a payment credited on this visit — the page's burst and, in Telegram, the buzz.
+  useCelebration(success && celebrate);
 
   return (
     <div className="mx-auto flex min-h-[70vh] w-full max-w-md items-center p-4 md:p-8">

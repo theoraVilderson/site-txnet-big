@@ -2,6 +2,7 @@
 
 import { Loader2 } from "lucide-react";
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { haptic } from "@/lib/haptics";
 import { cn } from "./cn";
 
 export type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
@@ -49,7 +50,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * `button`: a kit button inside a form submits only when it says so.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = "secondary", size = "md", loading = false, icon, iconEnd, fullWidth, className, children, disabled, type = "button", ...rest },
+  { variant = "secondary", size = "md", loading = false, icon, iconEnd, fullWidth, className, children, disabled, type = "button", onClick, ...rest },
   ref,
 ) {
   const spinner = <Loader2 size={ICON_PX[size]} aria-hidden className="animate-spin" />;
@@ -60,6 +61,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(BASE, VARIANT[variant], SIZE[size], fullWidth && "w-full", className)}
+      onClick={(e) => {
+        // M6: a primary press is felt in Telegram's Mini App; elsewhere nothing.
+        if (variant === "primary") haptic.tap();
+        onClick?.(e);
+      }}
       {...rest}
     >
       {icon ? (loading ? spinner : icon) : null}
