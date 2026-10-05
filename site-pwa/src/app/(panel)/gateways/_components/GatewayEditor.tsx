@@ -30,7 +30,8 @@ import { Select } from "../../_components/kit/Select";
 import { formatMoney } from "../../_lib/money";
 import { PresetsEditor } from "./PresetsEditor";
 import { secretFields, takesStaticRate } from "../_lib/provider-fields";
-import { FeeFields, Field, PROVIDER_ICONS, SecretInput, TextInput, Toggle, fieldErrorText, useRangeText, type SetField } from "./gateway-fields";
+import { FeeFields, Field, PROVIDER_ICONS, SecretInput, TextInput, fieldErrorText, useRangeText, type SetField } from "./gateway-fields";
+import { Toggle } from "../../_components/kit/Toggle";
 import { EDITOR_SECTIONS, firstInvalidSection, sectionOf, type EditorSectionId } from "../_lib/gateway-editor";
 import {
   CATEGORIES,

@@ -8,7 +8,7 @@ import type { Me, UserSearchHit } from "@/lib/auth-api";
 import { billingApi, type DiscountRule } from "@/lib/billing-api";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Alert, Field, Sheet, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
-import { Toggle } from "../../gateways/_components/gateway-fields";
+import { Toggle } from "../../_components/kit/Toggle";
 import { UserSearch } from "../../user-groups/_components/UserSearch";
 import { memberSearchOf } from "../../user-groups/_lib/user-groups";
 import {

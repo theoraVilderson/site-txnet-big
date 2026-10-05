@@ -9,7 +9,7 @@ import type { Me } from "@/lib/auth-api";
 import { billingApi, type AdminCoupon, type AdminGateway } from "@/lib/billing-api";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Select } from "../../_components/kit/Select";
-import { Toggle } from "../../gateways/_components/gateway-fields";
+import { Toggle } from "../../_components/kit/Toggle";
 import {
   CHANNELS,
   COUPON_KEYS as K,

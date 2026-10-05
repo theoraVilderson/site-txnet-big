@@ -685,7 +685,12 @@
     "datePicker": {
       "placeholder": "انتخاب تاریخ",
       "clear": "حذف تاریخ"
-    }
+    },
+    "password": {
+      "show": "نمایش رمز",
+      "hide": "پنهان کردن رمز"
+    },
+    "optional": "اختیاری"
   },
   "money": {
     "currency": {

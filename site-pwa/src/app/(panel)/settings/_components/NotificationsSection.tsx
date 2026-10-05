@@ -5,7 +5,7 @@ import { notificationApi, NOTICE_KINDS, type NoticeKind, type NoticePreferences 
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { Toggle } from "../../gateways/_components/gateway-fields";
+import { Toggle } from "../../_components/kit/Toggle";
 import { ZoneSelect } from "../../_components/ZoneSelect";
 
 const N = FrontendI18nKeys.common.settings.notifications;

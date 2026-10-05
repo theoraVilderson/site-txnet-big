@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
+import { useFieldControl } from "./field-context";
 
 export interface SelectOption {
   value: string;
@@ -53,11 +54,15 @@ export function Select({
   options,
   placeholder,
   ariaLabel,
-  id,
-  invalid = false,
+  id: givenId,
+  invalid: givenInvalid = false,
   disabled = false,
   className = "",
 }: SelectProps) {
+  // Inside a kit `Field` (UX-1-c, K4) the label, description and error state come from it.
+  const field = useFieldControl();
+  const id = givenId ?? field?.id;
+  const invalid = givenInvalid || !!field?.invalid;
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [placement, setPlacement] = useState<Placement | null>(null);
@@ -180,10 +185,12 @@ export function Select({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
+        aria-describedby={field?.describedBy}
+        aria-invalid={invalid || undefined}
         aria-label={ariaLabel ? `${ariaLabel}: ${selected?.label ?? placeholder ?? ""}` : undefined}
         onClick={() => (open ? close() : openList())}
         onKeyDown={onButtonKey}
-        className={`flex w-full items-center justify-between gap-2 rounded-xl border bg-[var(--bg-inner)] px-3 py-2 text-start text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-glow)] disabled:cursor-not-allowed disabled:opacity-60 ${border} ${className}`}
+        className={`flex w-full items-center ${field ? "h-11" : ""} justify-between gap-2 rounded-xl border bg-[var(--bg-inner)] px-3 py-2 text-start text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-glow)] disabled:cursor-not-allowed disabled:opacity-60 ${border} ${className}`}
       >
         <span className={`truncate ${selected ? "text-[var(--text-input)]" : "text-[var(--text-label)]"}`}>
           {selected?.label ?? placeholder ?? " "}

@@ -116,26 +116,6 @@ export function TextInput({
   );
 }
 
-export function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-card-border bg-[var(--bg-inner)] p-3 text-start transition-colors hover:border-[var(--accent-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-glow)]"
-    >
-      <span className="flex flex-col gap-0.5">
-        <span className="text-sm font-bold text-text-primary">{label}</span>
-        {hint && <span className="text-[11px] text-text-secondary">{hint}</span>}
-      </span>
-      <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${checked ? "bg-primary" : "bg-[var(--leaf-bg)] ring-1 ring-inset ring-card-border"}`}>
-        <span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${checked ? "start-[1.375rem]" : "start-0.5"}`} />
-      </span>
-    </button>
-  );
-}
-
 /** A write-only secret box: never filled from the server, shown only while the eye is open. */
 export function SecretInput({
   id,

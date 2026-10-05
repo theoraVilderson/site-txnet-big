@@ -47,7 +47,8 @@ import {
   type WizardStepId,
 } from "../_lib/gateway-wizard";
 import { providerFields, secretFields } from "../_lib/provider-fields";
-import { ChoiceCards, FeeFields, PROVIDER_ICONS, SecretInput, Toggle, fieldErrorText, useRangeText } from "./gateway-fields";
+import { ChoiceCards, FeeFields, PROVIDER_ICONS, SecretInput, fieldErrorText, useRangeText } from "./gateway-fields";
+import { Toggle } from "../../_components/kit/Toggle";
 
 const G = FrontendI18nKeys.common.gateways;
 const F = G.form;
