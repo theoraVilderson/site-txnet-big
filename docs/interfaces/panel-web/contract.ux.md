@@ -125,6 +125,6 @@ undefined `success` colour, 82 `text-white` on `bg-primary`.
 
 | # | Rule | Row |
 |---|---|---|
-| E1 | Under `site-pwa/src/app/(panel)/`, outside `_components/kit/`, `tools/conventions.py` fails on `window.confirm(`, on a local `primaryButton` / `quietButton` / `input` class constant, and on `text-white` beside `bg-primary`; a new `C-nn` names it. `@mui/material` and `@emotion/*` leave `site-pwa/package.json` when nothing imports them | UX-1-af |
+| E1 | Under `site-pwa/src/app/(panel)/`, outside `_components/kit/`, `tools/conventions.py` fails on `window.confirm(`, on a local `primaryButton` / `quietButton` / `input` class constant, and on `text-white` beside `bg-primary`; a new `C-nn` names it. `@mui/material` and `@emotion/*` leave `site-pwa/package.json` when nothing imports them. Built: `C-13` in `docs/CONVENTIONS.md` (it also names `secondaryButton`, `dangerButton`, `inputClass`, `PRIMARY`, `SECONDARY`, `INPUT`, the other spellings UX-1-ac…ae removed); the three packages are gone | UX-1-af |
 
 Every new string is a key in every language under `locales/frontend`, referenced through the generated constants (C-06).

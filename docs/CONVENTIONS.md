@@ -1,7 +1,7 @@
 ---
 id: conventions
 status: active
-updated: 2026-09-11
+updated: 2026-10-05
 ---
 
 # House style
@@ -34,6 +34,7 @@ needs to move up that table.
 |---|---|---|
 | C-01 | Technical docs, code, commit messages and logs are in English. Existing Persian inline comments may stay; do not add new ones. | review |
 | C-02 | Money is `Decimal`, never a float, and every money row records its `currencyCode` (ADR-0098) — one currency per row, never a second amount column in another. A payment's gateway receipt, `amountReceivedMinor` + `receivedCurrency` (D-32), is evidence, not money of record. Balances are ledger-derived; never write a balance field directly outside a ledger-append transaction. See ADR-0002. | review |
+| C-13 | A panel control is a kit primitive (`(panel)/_components/kit`, `contract.ux.md` K3–K14). Under `site-pwa/src/app/(panel)/`, outside the kit, `window.confirm(` (use `useConfirm`), a local button or input class constant (`primaryButton`, `quietButton`, `secondaryButton`, `dangerButton`, `input`, `inputClass`, `PRIMARY`, `SECONDARY`, `INPUT`) and `text-white` beside `bg-primary` (use `text-on-accent`) are violations. | check |
 | C-12 | A Nest route or middleware path names its wildcard: `'{*path}'`, `'internal/*path'`, `@Get('*key')`. A bare `*` — `forRoutes('*')`, `'internal/*'` — is a violation. | check |
 | C-11 | A backend app that opens a tenant scope (`runWithTenant(...)`) registers `TenantStatusGuard` as an `APP_GUARD`, so every route it serves obeys `TenantStatusPolicy`. See `docs/domains/tenant/rules.md`. | check |
 | C-10 | A panel route is a constant in `site-pwa/src/lib/routes.ts`. A path literal in `href=`, `redirect(` or `router.push/replace(` is a violation. | check |
@@ -452,4 +453,29 @@ forbid: (?:\b(?:forRoutes|exclude)\(|@(?:Get|Post|Put|Patch|Delete|All|Options|H
 in: txnet-backend/*/src/**/*.ts
 except: txnet-backend/**/*.spec.ts
 message: name the wildcard (C-12) — `'{*path}'` for every route, `'prefix/*path'` under a prefix; a bare `*` is only auto-converted by Nest 11 and matches nothing once that stops
+```
+
+## C-13 — a panel control is a kit primitive
+
+**Rule.** Inside `site-pwa/src/app/(panel)/`, a button is the kit `Button` /
+`IconButton` (a link that looks like one takes `buttonClass()`), a text box is
+the kit `Input` / `Textarea` / `Select` / `NativeSelect` in a `Field`, and a
+question is `useConfirm()`. A primary surface carries `text-on-accent`.
+
+**Why.** Before UX-1 the panel had 578 hand-rolled `<button>`s, 24 local input
+class constants, four different `primaryButton` strings and 26
+`window.confirm`s, so one fix (a focus ring, a disabled state, the dark
+theme's light-green accent) had to be made in every copy and was not.
+`text-white` on `bg-primary` fails contrast in the dark theme, where the
+accent is light (`contract.ux.md` K1). UX-1-ab … UX-1-ae moved every area onto
+the kit; this check keeps the three patterns that would bring the copies back
+from returning. A control the kit has no primitive for (a choice card, a row
+that is itself a button) is still written by hand, with theme tokens —
+`contract.ux.md` R1.
+
+```check C-13
+forbid: window\.confirm\(|^\s*(?:export\s+)?const\s+(?:primaryButton|quietButton|secondaryButton|dangerButton|input|inputClass|PRIMARY|SECONDARY|INPUT)\s*=\s*(?:["'`]|$)|\bbg-primary(?![\w-])[^"'`]*\btext-white\b|\btext-white\b[^"'`]*\bbg-primary(?![\w-])
+in: site-pwa/src/app/(panel)/**/*.tsx, site-pwa/src/app/(panel)/**/*.ts
+except: site-pwa/src/app/(panel)/_components/kit/**, site-pwa/src/app/(panel)/**/*.test.tsx, site-pwa/src/app/(panel)/**/*.test.ts
+message: use the kit (C-13) — useConfirm for a question, Button / Input / buttonClass for a control, text-on-accent on a primary surface (contract.ux.md K3–K14, E1)
 ```
