@@ -13,6 +13,7 @@ import (
 	"network-service/internal/driver"
 	"network-service/internal/driver/fake"
 	"network-service/internal/panelstate"
+	"network-service/internal/reach"
 )
 
 const (
@@ -918,5 +919,45 @@ func TestAReopenKeepsThePacerAndThePlannerSeesItsRate(t *testing.T) {
 	}
 	if got := collect.WriteRate(collect.Panel{Driver: fake.New(fake.Config{})}); got != 0 {
 		t.Fatalf("an unpaced driver's WriteRate = %v, want 0", got)
+	}
+}
+
+// ---- the pass is judged whole (ADR-0122) -----------------------------------
+
+type passJudge struct {
+	begun []reach.PanelRef
+	ended int
+	seen  int
+}
+
+func (j *passJudge) Ask(string, time.Time) bool { return true }
+func (j *passJudge) Observe(context.Context, string, error, time.Time) error {
+	j.seen++
+	return nil
+}
+func (j *passJudge) BeginPass(panels []reach.PanelRef)        { j.begun = panels }
+func (j *passJudge) EndPass(context.Context, time.Time) error { j.ended++; return nil }
+
+// A health that rules on the whole pass is told every panel's host before the
+// turns, and the pass's end after them: without both, a network failure is
+// never forwarded and the collector never beats.
+func TestAPassIsBracketedForTheReachGate(t *testing.T) {
+	r := newRig(t, driver.CounterCumulative, "c1")
+	judge := &passJudge{}
+	r.loop.Health = judge
+	inner := r.loop.Source
+	r.loop.Source = collect.PanelsFunc(func(ctx context.Context) ([]collect.Panel, error) {
+		panels, err := inner.Panels(ctx)
+		for i := range panels {
+			panels[i].Host = "fra.example.com"
+		}
+		return panels, err
+	})
+	r.pass(t)
+	if len(judge.begun) != 1 || judge.begun[0] != (reach.PanelRef{ID: "panel-1", Host: "fra.example.com"}) {
+		t.Fatalf("BeginPass got %+v", judge.begun)
+	}
+	if judge.ended != 1 || judge.seen != 1 {
+		t.Fatalf("ended %d, observed %d", judge.ended, judge.seen)
 	}
 }

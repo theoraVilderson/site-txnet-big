@@ -88,6 +88,8 @@ while the collector is dead:
 | `NetworkCollectionStopped` | > 900s for 5m | metered users on that panel are at their ceiling |
 | `NetworkPanelNeverCollected` | any, for 30m | accepted and never read: its traffic is counted by nobody |
 | `NetworkCollectionWatchdogBlind` | postgres target down 5m | the three above cannot fire |
+| `NetworkCollectorSilent` | heartbeat > 300s for 2m | the collector itself is not running — every stall above is this one cause ([contract.panel-health.md](contract.panel-health.md)) |
+| `NetworkCollectorEgressDown` | `egress` not `ok` for 5m | our reach is down; panels' network failures are frozen, no owner is told |
 
 The thresholds are multiples of `collect.DefaultInterval` (60s). Change the
 interval and they move with it.

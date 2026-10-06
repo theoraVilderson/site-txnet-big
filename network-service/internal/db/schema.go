@@ -40,6 +40,10 @@ type ColumnSet []ColumnRef
 //
 // A row that begins reading a new column adds it here in the same change.
 var RequiredColumns = map[string][]string{
+	// The collector's own heartbeat, one row per instance (ADR-0122, F-027-ek).
+	"collector_heartbeat": {
+		"instance", "startedAt", "passAt", "panelsAsked", "panelsFailed", "egress", "egressSince",
+	},
 	// What a panel declares about itself — the driver contract's input
 	// (F-027-i) and the request budget every loop holds itself to (F-027-v).
 	"panel": {

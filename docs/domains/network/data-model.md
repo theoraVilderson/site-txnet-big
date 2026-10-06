@@ -47,7 +47,7 @@ clock on it. `maxRequestsPerMinute`, `maxLineRateBps` and
 `observedWriteLatencyMs` are what size a ceiling in seconds rather than bytes
 (ADR-0072); `lastHealthyAt` and `lastSuccessfulCollectionAt` are what an
 external watchdog reads. `panelStateCause`/`Since`/`panelCheckedAt` say why,
-since when and how fresh (ADR-0122, [contract.panel-health.md](contract.panel-health.md)).
+since when and how fresh; `collector_heartbeat` whether anything is judging at all (ADR-0122, [contract.panel-health.md](contract.panel-health.md)).
 
 Six are CHECKs, as each is a silent wrong number if only a convention: `panel_ownership_matches_tenant`, `panel_pull_has_base_url`,
 `panel_capabilities_object`, `panel_request_budget_positive`,

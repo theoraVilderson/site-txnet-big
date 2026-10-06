@@ -176,6 +176,24 @@ network_collection:
         usage: "GAUGE"
         description: "Accepted panels that have never completed a collection pass. A newly registered panel sits here until its first pass."
 
+# network — the collector's own heartbeat (F-027-ek, ADR-0122). The per-panel
+# watchdog above ages every panel when the collector itself stops, which reads
+# as every panel failing; this says the collector stopped. -1 when no pass was
+# ever recorded; `egress_ok` is 0 while the last pass ruled our own reach down.
+# Metrics: `network_collector_seconds_since_pass`, `network_collector_egress_ok`.
+network_collector:
+  master: true
+  cache_seconds: 30
+  query: >-
+    SELECT seconds_since_pass, egress_ok FROM network.collector_watchdog()
+  metrics:
+    - seconds_since_pass:
+        usage: "GAUGE"
+        description: "Seconds since any collector instance completed a bulk pass. -1 means none ever has."
+    - egress_ok:
+        usage: "GAUGE"
+        description: "1 while the freshest heartbeat says our reach is ok; 0 while it says down, dns_down or suspect."
+
 # network — the lease planner's learned figures, per panel (F-027-dm, SPEC §10).
 # `network.planner_panels()` is SECURITY DEFINER for the watchdog's reason
 # above: under RLS this role would see only the platform's panels. Lag is -1

@@ -95,6 +95,7 @@ func TestManifestNamesOnlyTablesTheUnitOwns(t *testing.T) {
 		"unattributed_usage": true, "radius_session": true,
 		"panel_inbound": true, "panel_group_member_inbound": true,
 		"lease_close": true, "grant_rate_limit": true,
+		"collector_heartbeat": true,
 	}
 	for table := range RequiredColumns {
 		if !owned[table] {

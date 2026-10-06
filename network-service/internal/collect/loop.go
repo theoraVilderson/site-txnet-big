@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"network-service/internal/driver"
+	"network-service/internal/reach"
 )
 
 // The three figures the row is written around. They are defaults, not limits:
@@ -93,6 +94,14 @@ type SessionTotals interface {
 type PanelHealth interface {
 	Ask(panelID string, at time.Time) bool
 	Observe(ctx context.Context, panelID string, err error, at time.Time) error
+}
+
+// PassJudge is a PanelHealth that rules on a whole pass — `reach.Gate`
+// (ADR-0122): a network failure is the panel's only once the pass shows our
+// own reach was not the outage, and every pass ends in a heartbeat.
+type PassJudge interface {
+	BeginPass(panels []reach.PanelRef)
+	EndPass(ctx context.Context, at time.Time) error
 }
 
 // PanelProgress is one panel's turn having completed — the moment
@@ -243,6 +252,14 @@ func (l *Loop) Pass(ctx context.Context) (PassReport, error) {
 		reviewed = append(reviewed, p)
 	}
 	panels = reviewed
+	judge, judged := l.Health.(PassJudge)
+	if judged {
+		refs := make([]reach.PanelRef, len(panels))
+		for i, p := range panels {
+			refs[i] = reach.PanelRef{ID: p.ID, Host: p.Host}
+		}
+		judge.BeginPass(refs)
+	}
 	// The panels whose turn completed, stamped together once the pass is over:
 	// one write for a pass over two hundred panels, not two hundred.
 	marks := make([]PanelProgress, 0, len(panels))
@@ -281,6 +298,11 @@ func (l *Loop) Pass(ctx context.Context) (PassReport, error) {
 	}
 	wg.Wait()
 	l.stamp(ctx, marks)
+	if judged && ctx.Err() == nil {
+		if err := judge.EndPass(ctx, l.now()); err != nil {
+			l.log().Error("panel state write failed", "error", err)
+		}
+	}
 	return report, nil
 }
 

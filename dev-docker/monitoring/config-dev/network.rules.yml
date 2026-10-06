@@ -58,6 +58,41 @@ groups:
       # The -1 the query returns when no panel has been collected is below
       # every threshold here, so an empty platform stays silent; a panel that
       # was never collected is NetworkPanelNeverCollected's, below.
+      # The collector itself, not a panel (F-027-ek, ADR-0122). Five missed
+      # passes with no heartbeat is a collector that is not running: every
+      # NetworkCollectionStalled below is then this one cause, and the panels
+      # are not at fault — the systems page shows them `unknown`.
+      - alert: NetworkCollectorSilent
+        expr: network_collector_seconds_since_pass > 300
+        for: 2m
+        labels:
+          severity: critical
+          unit: network
+        annotations:
+          summary: "The traffic collector has not completed a pass for five intervals"
+          description: >-
+            No collector instance has written its heartbeat for
+            {{ $value | humanizeDuration }}. Nothing is read, billed or judged.
+            On dev, check `docker exec txnet-dev-network-service ps` shows
+            `./tmp/main`; a boot refusal (`refusing to start`) is a migration
+            not yet applied.
+
+      # Our own reach, ruled on by the last pass: the probes failed, our
+      # resolver failed, or a mass failure is judged ours. Panels' network
+      # failures are frozen meanwhile, so no owner is told — this is the alert.
+      - alert: NetworkCollectorEgressDown
+        expr: network_collector_egress_ok == 0
+        for: 5m
+        labels:
+          severity: critical
+          unit: network
+        annotations:
+          summary: "The collector cannot reach the panels — the outage is ours"
+          description: >-
+            The last passes ruled our own reach down (`collector_heartbeat.egress`).
+            Panel states are on hold until it is back. Check the server's
+            network, its resolver, and NETWORK_EGRESS_PROBES.
+
       - alert: NetworkCollectionStalled
         expr: network_collection_stalest_panel_seconds > 300
         for: 5m

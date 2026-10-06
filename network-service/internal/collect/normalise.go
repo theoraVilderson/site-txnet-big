@@ -55,6 +55,9 @@ const (
 // its remote clients belong to.
 type Panel struct {
 	ID string
+	// Host is where it is dialled — its API address's host, empty for a push
+	// panel. Only the reach gate's mass rule reads it (ADR-0122).
+	Host string
 	// CounterSemantics and Transport are the declaration (ADR-0074). They
 	// select the arithmetic below, and a panel re-declared invalidates every
 	// cursor computed under the old one.

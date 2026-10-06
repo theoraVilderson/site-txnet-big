@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"network-service/internal/collect"
 	"network-service/internal/config"
@@ -28,6 +29,7 @@ import (
 	"network-service/internal/panelstate"
 	"network-service/internal/publish"
 	"network-service/internal/radius"
+	"network-service/internal/reach"
 	"network-service/internal/register"
 	"network-service/internal/shutdown"
 	"network-service/pkg/logger"
@@ -117,9 +119,19 @@ func main() {
 	// registrar tested them with, so a panel is read by the driver it was
 	// accepted through.
 	cursors := &collect.PostgresCursors{DB: pool}
-	health := &panelstate.Tracker{Writer: panelstate.PostgresWriter{DB: pool}, Log: log}
+	tracker := &panelstate.Tracker{Writer: panelstate.PostgresWriter{DB: pool}, Log: log}
+	// A network failure is the panel's only once the pass shows our own reach
+	// was not the outage, and every pass beats (ADR-0122, F-027-ek).
+	health := &reach.Gate{
+		Inner:      tracker,
+		Probe:      reach.NetProber{TCP: cfg.EgressProbes, DNSName: cfg.EgressDNSProbe},
+		Heartbeats: reach.PostgresHeartbeats{DB: pool},
+		Instance:   cfg.CollectorInstance,
+		StartedAt:  time.Now(),
+		Log:        log,
+	}
 	panels := &collect.PostgresSource{
-		DB: pool, Opener: panelOpener, Cursors: cursors, States: health, Log: log,
+		DB: pool, Opener: panelOpener, Cursors: cursors, States: tracker, Log: log,
 	}
 	turns := &collect.TurnLocks{}
 	driftEvents := collect.PostgresDriftEvents{DB: pool}

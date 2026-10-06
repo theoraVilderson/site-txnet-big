@@ -72,9 +72,56 @@ publish or a cursor write, is ours: it is neither judged nor stamped. A
 reader tells a fresh state from a stale one by `panelCheckedAt`, never by
 `panelState` alone.
 
+## Our reach is ruled on before a panel is blamed (F-027-ek)
+
+`reach.Gate` wraps the tracker. An answer goes straight through. A
+network-layer failure is **held until its pass ends**: a bulk pass is
+bracketed by `BeginPass` (each panel's host) and `EndPass`, and a polled
+turn's failure waits for the next pass. At `EndPass`, if anything was held:
+
+| ruling (`collector_heartbeat.egress`) | when | held failures |
+|---|---|---|
+| `down` | no `NETWORK_EGRESS_PROBES` TCP probe connected | all frozen |
+| `suspect` | ≥ 5 distinct **hosts** asked and ≥ 80% failed at the network layer, probes up | all frozen |
+| `dns_down` | `NETWORK_EGRESS_DNS_PROBE` did not resolve | `dns_failed` frozen, the rest forwarded |
+| `ok` | otherwise | forwarded, at the moment each was seen |
+
+- **Frozen** means never forwarded: the panel keeps its state, cause and
+  count, and `panelCheckedAt` is not stamped. Readers show it *on hold*,
+  never *down*, and no owner is told. `NetworkCollectorEgressDown` is the
+  operator's alert.
+- **Mass is counted by host**, so six panels on one dead server are that
+  server down. The panels are told; it is not our outage.
+- **Probes are operator-set** (`host:port`, comma-separated, `none` for an
+  empty list). Defaults: `1.1.1.1:443, 8.8.8.8:443, 9.9.9.9:443` and
+  `cloudflare.com`. Pick them on the same side of any national border as the
+  panels: a domestic server whose international link is cut must fail its
+  probes exactly when it fails its panels. An empty list proves nothing and
+  freezes nothing. Probes are dialled only on a pass that has a network
+  failure, never per panel.
+
+## The collector beats every pass
+
+`EndPass` upserts `network.collector_heartbeat` for its instance
+(`NETWORK_COLLECTOR_INSTANCE`, default the hostname): `passAt`, panels
+judged and failed, and the ruling with `egressSince` (when it began, not
+restarted while it holds). A pass with nothing to say still beats. Billing
+reads the freshest row; older than `STALE_AFTER_SECONDS` (300) means the
+collector is **stopped**, and every panel is `unknown` whatever it stores.
+A dead instance's row is never deleted, it is just not the freshest.
+`network.collector_watchdog()` serves the exporter (`network_collector`):
+`NetworkCollectorSilent` (> 300s for 2m), `NetworkCollectorEgressDown`.
+
+On dev the binary runs under `air` with `rerun = true`. A binary that exits,
+typically the boot check refusing a schema whose migration has not landed,
+is run again rather than leaving the collector dead until the next file
+change (the incident ADR-0122 records).
+
+A panel the vault cannot open is not offered to the pass at all
+(`PostgresSource`), so it is never judged: its `panelCheckedAt` ages while
+the heartbeat is fresh, and that is how a reader shows "not being checked".
+
 ## Not yet
 
-Our own reach (egress probes, the mass-failure rule, freezing) and the
-collector heartbeat are F-027-ek. The `network.panel.state_changed` event is
-F-027-el: a type with no bound queue stalls the relay. What the page shows
-is F-027-em.
+The `network.panel.state_changed` event is F-027-el: a type with no bound
+queue stalls the relay. What the page shows is F-027-em.

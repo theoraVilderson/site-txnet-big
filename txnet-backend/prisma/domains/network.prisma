@@ -955,6 +955,34 @@ model UsageHold {
   @@schema("network")
 }
 
+/// One row per collector instance, upserted at the end of every bulk pass
+/// (ADR-0122, F-027-ek). A stale `passAt` is a collector that is not running,
+/// and every panel's stored state is then `unknown`, not current; `egress` is
+/// the pass's ruling on our own reach, so an outage of ours never reads as a
+/// panel's. Written by network-service alone; no tenant data, no RLS.
+model CollectorHeartbeat {
+  instance     String          @id
+  startedAt    DateTime
+  passAt       DateTime
+  panelsAsked  Int
+  panelsFailed Int
+  egress       CollectorEgress
+  egressSince  DateTime
+
+  @@map("collector_heartbeat")
+  @@schema("network")
+}
+
+/// `reach.Egress`: our reach as one pass ruled on it.
+enum CollectorEgress {
+  ok
+  down
+  dns_down
+  suspect
+
+  @@schema("network")
+}
+
 /// 5.10 — A verdict over a whole panel's population (F-027-ab). One config
 /// going backward is a reset; a third of them going backward together is a
 /// backup restore, and carrying on is ~$16k of wrong charges in a minute —

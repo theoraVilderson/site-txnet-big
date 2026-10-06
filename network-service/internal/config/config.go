@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"network-service/internal/egress"
@@ -59,6 +60,15 @@ type Config struct {
 	// operator's own routers behind the platform VPN. Empty by default: every
 	// private, loopback, link-local and metadata address is refused (F-027-dl).
 	PanelEgressAllow []netip.Prefix
+	// EgressProbes are the TCP host:port our own reach is checked against
+	// before a network failure is blamed on a panel (ADR-0122). Pick ones on
+	// the same side of any national border as the panels. Empty proves
+	// nothing and freezes nothing.
+	EgressProbes []string
+	// EgressDNSProbe is a name our resolver must resolve; empty skips it.
+	EgressDNSProbe string
+	// CollectorInstance names this process's heartbeat row.
+	CollectorInstance string
 }
 
 // Load reads configuration from the environment and validates it.
@@ -91,6 +101,10 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	cfg.PanelEgressAllow = allow
+	cfg.EgressProbes = splitList(getEnv("NETWORK_EGRESS_PROBES", "1.1.1.1:443,8.8.8.8:443,9.9.9.9:443"))
+	cfg.EgressDNSProbe = getEnv("NETWORK_EGRESS_DNS_PROBE", "cloudflare.com")
+	host, _ := os.Hostname()
+	cfg.CollectorInstance = getEnv("NETWORK_COLLECTOR_INSTANCE", host)
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
 	}
@@ -162,4 +176,18 @@ func getEnvDuration(key string, fallback time.Duration) time.Duration {
 		}
 	}
 	return fallback
+}
+
+// splitList reads a comma-separated list; "none" is an explicit empty one.
+func splitList(v string) []string {
+	if strings.TrimSpace(v) == "none" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"sync"
 	"time"
 
@@ -138,6 +139,9 @@ func (s *PostgresSource) Panels(ctx context.Context) ([]Panel, error) {
 		p.ReviewState = driver.ReviewState(review)
 		row.PanelID, row.DriverType, row.Transport, row.CounterSemantics = p.ID, driver.DriverType(family), p.Transport, p.CounterSemantics
 		row.TenantID = p.TenantID
+		if u, err := url.Parse(row.APIBaseURL); err == nil {
+			p.Host = u.Hostname()
+		}
 		row.perMinute = p.MaxRequestsPerMinute
 		if s.States != nil {
 			rec := panelstate.Record{State: panelstate.State(state), Cause: driver.Cause(cause)}

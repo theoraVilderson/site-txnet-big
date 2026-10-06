@@ -9,6 +9,12 @@ include_dir = ["cmd", "internal", "pkg"]
 include_ext = ["go"]
 exclude_dir = ["tmp"]
 delay = 1000
+# Run the binary again when it exits (ADR-0122, F-027-ek). Without this, a
+# binary that exits — a boot check refusing a schema whose migration has not
+# landed yet — leaves air alive and the collector dead until the next file
+# change, and every panel keeps its last state: dev, 2026-10-03 to 10-06.
+rerun = true
+rerun_delay = 5000
 
 [misc]
 clean_on_exit = true
