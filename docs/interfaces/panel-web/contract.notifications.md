@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 25
-updated: 2026-09-28
+version: 26
+updated: 2026-10-06
 ---
 
 # Contract — panel-web: the notifications control (F-093-h)
@@ -75,6 +75,20 @@ and hears about new rows over the panel socket
     topmost overlay, focus returns to the bell — and the bar's
     `backdrop-filter` and `z-20` cannot box it. Rendered only while open, so a
     hidden panel's buttons are never in the tab order. Proof
+    `_components/topbar.test.tsx`.
+
+11. **A row that arrives live is also a toast (F-093-h1).** The badge alone is
+    missed by anyone not looking at the bar. `useNotifications` reports as
+    `arrived` the unread rows a re-read finds that no earlier read showed —
+    only for a read a live `notification.created` asked for, never the first
+    read or a reconnect's (`onMissed`): what was already waiting is the
+    badge's to say, and a reconnect would otherwise toast a burst. Several in
+    one report are one toast with the count; one is its title and body in its
+    type's tone (rule 7). No toast while the panel is open; one id, so a second
+    arrival replaces the toast rather than stacking. Pressing it opens the
+    panel and marks nothing (rule 5). Every type is toasted — what reaches the
+    inbox is already the user's choice (F-601-m). Rule 4 holds: the toast is
+    drawn from the re-read, not the event. Proof `_hooks/useNotifications.test.ts`,
     `_components/topbar.test.tsx`.
 
 ## What it cost the bar, and what the bar bought

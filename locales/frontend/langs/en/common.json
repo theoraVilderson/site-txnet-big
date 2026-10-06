@@ -479,6 +479,7 @@
     "close": "Close notifications",
     "unread": "{{count}} unread notifications",
     "new": "{{count}} new",
+    "arrived": "{{count}} new notifications",
     "markAllRead": "Mark all read",
     "markRead": "Mark as read",
     "empty": "No notifications yet",

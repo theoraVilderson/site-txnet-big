@@ -23,8 +23,14 @@ const ASSERTIVE = { role: "alert", "aria-live": "assertive" } as const;
  */
 export const notify = {
   success: (message: Renderable) => toast.success(message, { duration: TOAST_MS.success, ariaProps: POLITE }),
-  info: (message: Renderable) =>
-    toast(message, { duration: TOAST_MS.info, ariaProps: POLITE, icon: <Info size={18} aria-hidden className="shrink-0 text-info" /> }),
+  /** With an `id`, a second call replaces the toast on screen instead of stacking a new one. */
+  info: (message: Renderable, options?: { id?: string; icon?: Renderable }) =>
+    toast(message, {
+      id: options?.id,
+      duration: TOAST_MS.info,
+      ariaProps: POLITE,
+      icon: options?.icon ?? <Info size={18} aria-hidden className="shrink-0 text-info" />,
+    }),
   /** Felt as an error in Telegram's Mini App, too (M6). */
   error: (message: Renderable) => {
     haptic.error();

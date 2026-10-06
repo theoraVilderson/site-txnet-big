@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   Bell,
@@ -14,10 +14,13 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useNotifications } from "../_hooks/useNotifications";
 import { formatInstant } from "../_lib/datetime";
-import { Button, IconButton, Popover } from "./kit";
+import { Button, IconButton, notify, Popover } from "./kit";
 
 /** The control's strings as generated constants (C-06). */
 const N = FrontendI18nKeys.common.notifications;
+
+/** One id for the arrival toast, so a second arrival replaces it rather than stacking. */
+const ARRIVED_TOAST = "notification-arrived";
 
 /** Above this the badge says "99+": a four-digit pill is wider than the bell. */
 const BADGE_CEILING = 99;
@@ -61,8 +64,51 @@ const UNKNOWN_TONE = { icon: Bell, className: "bg-bg-inner text-text-secondary",
  */
 export function NotificationsButton() {
   const { t, lang } = useLocale();
-  const { items, unreadCount, isLoading, failed, refresh, markRead, markAllRead } = useNotifications();
+  const { items, unreadCount, isLoading, failed, refresh, markRead, markAllRead, arrived } = useNotifications();
   const [open, setOpen] = useState(false);
+
+  // Read inside the toast effect without making `open` a reason to toast again.
+  const openRef = useRef(open);
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
+
+  // A row that arrives live is toasted (F-093-h1): the badge alone is missed by
+  // anyone not looking at the bar. One toast however many landed, none while
+  // the panel is open — the row is already on screen — and pressing it opens
+  // the panel, where the row is marked read on purpose (rule 5), not here.
+  useEffect(() => {
+    if (!arrived || openRef.current) return;
+    const [first] = arrived.items;
+    const single = arrived.items.length === 1;
+    const tone = single ? (TYPE_TONES[first.type] ?? UNKNOWN_TONE) : UNKNOWN_TONE;
+    const Icon = tone.icon;
+    notify.info(
+      <button
+        type="button"
+        onClick={() => {
+          notify.dismiss(ARRIVED_TOAST);
+          setOpen(true);
+        }}
+        className="min-w-0 text-start"
+      >
+        <span className="block font-semibold text-text-primary">
+          {single ? first.title : t("common", N.arrived, { count: String(arrived.items.length) })}
+        </span>
+        {single && <span className="mt-0.5 line-clamp-2 block text-xs text-text-secondary">{first.body}</span>}
+      </button>,
+      {
+        id: ARRIVED_TOAST,
+        icon: (
+          <span className={`flex size-7 shrink-0 items-center justify-center rounded-lg ${tone.className}`}>
+            <Icon size={16} aria-hidden />
+          </span>
+        ),
+      },
+    );
+    // `t` is not a reason to toast the same arrival again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arrived]);
 
   const badge = useMemo(
     () => (unreadCount > BADGE_CEILING ? `${BADGE_CEILING}+` : String(unreadCount)),

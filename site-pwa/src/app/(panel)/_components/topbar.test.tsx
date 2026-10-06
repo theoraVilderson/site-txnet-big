@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NotificationsButton } from "./NotificationsButton";
 import { WalletButton } from "./WalletButton";
+import { notify, PanelToaster } from "./kit";
 
 /**
  * The top bar's two panels on the kit (UX-1-ab, `contract.ux.md` K7).
@@ -19,8 +20,10 @@ vi.mock("@/context/LocaleContext", () => ({ useLocale: () => ({ t, lang: "en", i
 vi.mock("../_hooks/useWalletBalance", () => ({
   useWalletBalance: () => ({ available: "12.00", held: "0", currencyCode: "USD", isLoading: false, failed: false, refresh: vi.fn() }),
 }));
+const live = vi.hoisted(() => ({ arrived: null as null | { items: Array<{ id: string; title: string; body: string }> } }));
 vi.mock("../_hooks/useNotifications", () => ({
   useNotifications: () => ({
+    arrived: live.arrived,
     items: [{ id: "n1", type: "admin_message", title: "Hello", body: "A message", createdAt: "2026-10-05T10:00:00.000Z", readAt: null }],
     unreadCount: 1,
     isLoading: false,
@@ -31,11 +34,19 @@ vi.mock("../_hooks/useNotifications", () => ({
   }),
 }));
 
+// jsdom has no matchMedia, and react-hot-toast asks it for the OS motion setting.
+vi.stubGlobal(
+  "matchMedia",
+  (query: string) => ({ matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }),
+);
+
 /** The key back, so an assertion names the string the component asked for. */
 const t = (_ns: string, key: string, vars?: Record<string, string | number>) => (vars ? `${key}:${Object.values(vars).join(",")}` : key);
 
 beforeEach(() => {
   document.body.innerHTML = "";
+  live.arrived = null;
+  notify.dismiss();
 });
 
 describe.each([
@@ -70,5 +81,42 @@ describe.each([
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: panel })).not.toBeInTheDocument());
     expect(trigger).toHaveFocus();
+  });
+});
+
+describe("a notification that arrives live (F-093-h1)", () => {
+  it("is toasted, and the toast opens the bell", async () => {
+    live.arrived = { items: [{ id: "n2", title: "Panel down", body: "Your server is being moved" }] };
+    const user = userEvent.setup();
+    render(
+      <>
+        <NotificationsButton />
+        <PanelToaster />
+      </>,
+    );
+
+    const toast = await screen.findByRole("button", { name: /Panel down/ });
+    expect(toast).toHaveTextContent("Your server is being moved");
+    await user.click(toast);
+
+    await screen.findByRole("dialog", { name: "notifications.label" });
+  });
+
+  it("is one toast with the count when several land together", async () => {
+    live.arrived = {
+      items: [
+        { id: "n3", title: "One", body: "b" },
+        { id: "n2", title: "Two", body: "b" },
+      ],
+    };
+    render(
+      <>
+        <NotificationsButton />
+        <PanelToaster />
+      </>,
+    );
+
+    await screen.findByRole("button", { name: "notifications.arrived:2" });
+    expect(screen.queryByText("One")).not.toBeInTheDocument();
   });
 });

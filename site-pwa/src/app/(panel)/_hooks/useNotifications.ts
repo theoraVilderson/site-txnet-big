@@ -29,6 +29,12 @@ export interface NotificationsState {
   markRead: (id: string) => Promise<void>;
   /** Mark every unread row read — the route's absent-`ids` meaning. */
   markAllRead: () => Promise<void>;
+  /**
+   * The unread rows a live `notification.created` brought, newest first — what
+   * the bell toasts (F-093-h1). Never set by the first read or a reconnect's:
+   * what was already waiting is the badge's to say. A new object per report.
+   */
+  arrived: { items: NotificationItem[] } | null;
 }
 
 /**
@@ -61,6 +67,14 @@ export function useNotifications(): NotificationsState {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [arrived, setArrived] = useState<{ items: NotificationItem[] } | null>(null);
+
+  // Ids every read so far has shown, `null` before the first one lands. A row
+  // is "arrived" only against this, so the first page is never a toast.
+  const seenRef = useRef<Set<string> | null>(null);
+  // Set by a live event, cleared by the read that answers it. Not cleared when
+  // a read is overtaken: the read that replaces it still answers the event.
+  const liveRef = useRef(false);
 
   // Bumped to ask again. The read lives in one effect keyed to the account and
   // this counter, so a refresh and an account switch cannot race into two
@@ -74,6 +88,13 @@ export function useNotifications(): NotificationsState {
   const refreshRef = useRef(refresh);
   refreshRef.current = refresh;
 
+  // Another account's inbox is a first read again. A stale `arrived` can stay:
+  // the bell toasts a new report, never the same one twice.
+  useEffect(() => {
+    seenRef.current = null;
+    liveRef.current = false;
+  }, [userId]);
+
   useEffect(() => {
     if (!userId) return;
     let alive = true;
@@ -85,6 +106,13 @@ export function useNotifications(): NotificationsState {
         setItems(answer.items);
         setUnreadCount(answer.unreadCount);
         setFailed(false);
+        const seen = seenRef.current;
+        if (liveRef.current && seen) {
+          const fresh = answer.items.filter((item) => item.readAt === null && !seen.has(item.id));
+          if (fresh.length > 0) setArrived({ items: fresh });
+        }
+        liveRef.current = false;
+        seenRef.current = new Set([...(seen ?? []), ...answer.items.map((item) => item.id)]);
       } catch {
         // Nothing translated comes back for a listing — the route raises no
         // domain error at all — so a failure is the limiter or the network.
@@ -102,10 +130,13 @@ export function useNotifications(): NotificationsState {
     if (!client || !userId) return;
     return client.subscribe(userChannel(userId), {
       onMessage: (payload) => {
-        if (isNotificationCreated(payload)) refreshRef.current();
+        if (!isNotificationCreated(payload)) return;
+        liveRef.current = true;
+        refreshRef.current();
       },
       // A notification created while the socket was down was told to nobody,
-      // and the badge would stay short until the next one (F-070-d).
+      // and the badge would stay short until the next one (F-070-d). Not live:
+      // what it finds was gathered while away and is no toast.
       onMissed: () => refreshRef.current(),
     });
   }, [client, userId]);
@@ -128,5 +159,5 @@ export function useNotifications(): NotificationsState {
   const markOne = useCallback((id: string) => mark([id]), [mark]);
   const markAll = useCallback(() => mark(undefined), [mark]);
 
-  return { items, unreadCount, isLoading, failed, refresh, markRead: markOne, markAllRead: markAll };
+  return { items, unreadCount, isLoading, failed, refresh, markRead: markOne, markAllRead: markAll, arrived };
 }

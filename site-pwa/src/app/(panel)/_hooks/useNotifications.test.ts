@@ -133,6 +133,34 @@ describe("useNotifications", () => {
     expect(result.current.failed).toBe(false);
   });
 
+  it("reports the unread rows a live notification brought, and nothing for the first read (F-093-h1)", async () => {
+    const { result } = renderHook(() => useNotifications());
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    // What was already waiting is the badge's job, not a toast's.
+    expect(result.current.arrived).toBeNull();
+
+    const row = (id: string) => ({ id, type: "system_alert", title: id, body: "b", readAt: null, createdAt: "2026-10-06T10:00:00.000Z" });
+    inbox.mockResolvedValue(page({ items: [row("n3"), row("n2"), page().items[0]], unreadCount: 3 }) as never);
+    act(() => client.listeners.forEach((l) => l({ type: RealtimeEvents.notificationCreated, userId: "user-1" })));
+
+    // Two that landed together are one report, not two.
+    await waitFor(() => expect(result.current.arrived?.items.map((i) => i.id)).toEqual(["n3", "n2"]));
+  });
+
+  it("reports nothing as arrived for a reconnect's re-read", async () => {
+    const { result } = renderHook(() => useNotifications());
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+
+    const n2 = { id: "n2", type: "admin_message", title: "t", body: "b", readAt: null, createdAt: "2026-10-06T10:00:00.000Z" };
+    inbox.mockResolvedValue(page({ items: [n2, page().items[0]], unreadCount: 2 }) as never);
+    await act(async () => client.missed.forEach((onMissed) => onMissed()));
+
+    // Rows gathered while the socket was down would arrive as a burst on every
+    // reconnect; the badge already says they are there.
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+    expect(result.current.arrived).toBeNull();
+  });
+
   it("takes the new count from the mark-read answer and re-reads the page", async () => {
     const { result } = renderHook(() => useNotifications());
     await waitFor(() => expect(result.current.unreadCount).toBe(1));
