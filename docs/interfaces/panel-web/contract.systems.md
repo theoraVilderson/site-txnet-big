@@ -69,8 +69,11 @@ The *why* is **ADR-0080**.
    list; nothing is patched in from an answer.
 8. **A new login, on every panel but a refused one** (F-027-av → billing
    F-027-au). `canResubmit` hides it on a refused panel (billing answers 409
-   `panel_refused`); `validateLogin` mirrors the schema (1–4096, untrimmed),
-   in a password input cleared on success. `resubmitOutcome` says what the
+   `panel_refused`); `validateLogin` mirrors the schema (1–4096, untrimmed).
+   The login is asked **in its parts, as rule 10 asks it** — username and
+   password, or the API key alone (`PanelLoginFields.tsx`, `checkNewLogin`)
+   — never as one string: a bare password would be read as the username.
+   Cleared on success. `resubmitOutcome` says what the
    answer means — re-tested on the next pass, cooling off after
    `rate_limited`, or rotated under a live panel — and the list is re-read.
    A push panel also offers a new **RADIUS secret** (F-027-az,
@@ -157,8 +160,9 @@ The *why* is **ADR-0080**.
    `validatePanelEdit` mirrors `updatePanelSchema` and sends **only what
    differs** — an untouched form is refused here — and a changed API or link
    address is warned about before the save (`addressChanged`): it re-tests
-   the panel and pauses its collection. A typed login goes to rule 8's route
-   after the settings; blank keeps the stored one. A new login, a RADIUS
+   the panel and pauses its collection. A typed login (rule 8's parts) goes
+   to rule 8's route after the settings; blank keeps the stored one, a
+   half-typed one names the missing half. A new login, a RADIUS
    secret and delete sit behind the card's "more" (`ActionsMenu`), each in
    its own sheet.
 14. **Delete says what it will do** (F-027-cb -> billing F-027-bz). The

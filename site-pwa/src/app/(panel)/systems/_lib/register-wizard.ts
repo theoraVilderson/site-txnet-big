@@ -108,7 +108,12 @@ export function composeLogin(kind: LoginKind, parts: LoginParts): string {
 
 export type WizardErrors = Partial<Record<keyof RegisterForm | keyof LoginParts, string>>;
 
-function loginErrors(kind: LoginKind, parts: LoginParts): WizardErrors {
+/** How a registered panel's family logs in; a family this page does not know is asked for a username and password. */
+export function loginKindOf(driverType: string): LoginKind {
+  return (DRIVER_PROFILES as Partial<Record<string, DriverProfile>>)[driverType]?.login ?? "userPassword";
+}
+
+export function loginErrors(kind: LoginKind, parts: LoginParts): WizardErrors {
   const out: WizardErrors = {};
   if (kind === "apiKey") {
     if (!parts.apiKey) out.apiKey = W.invalid.apiKey;

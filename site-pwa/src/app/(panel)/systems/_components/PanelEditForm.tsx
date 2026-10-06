@@ -8,6 +8,7 @@ import { Field } from "../../catalog/_components/catalog-ui";
 import { addressChanged, panelEditFormOf, validatePanelEdit, type PanelEditForm } from "../_lib/panel-lifecycle";
 import { SYSTEMS_KEYS as K, resubmitOutcome } from "../_lib/systems";
 import { BAD, useSystemsError } from "./parts";
+import { PanelLoginFields } from "./PanelLoginFields";
 import { Alert, Button, Input } from "../../_components/kit";
 
 /**
@@ -23,12 +24,12 @@ export function PanelEditForm({ panel, onSaved }: { panel: SystemsPanel; onSaved
   const { t } = useLocale();
   const message = useSystemsError();
   const [form, setForm] = useState<PanelEditForm>(() => panelEditFormOf(panel));
-  const [errors, setErrors] = useState<Partial<Record<keyof PanelEditForm | "form", string>>>({});
+  const [errors, setErrors] = useState<Partial<Record<keyof PanelEditForm | "credentials" | "form", string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const push = panel.transport === "push";
   const set = (field: keyof PanelEditForm) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [field]: e.target.value }));
-  const error = (field: keyof PanelEditForm) => (errors[field] ? errors[field] : undefined);
+  const error = (field: keyof PanelEditForm | "credentials") => (errors[field] ? errors[field] : undefined);
 
   const save = async () => {
     const checked = validatePanelEdit(form, panel);
@@ -100,17 +101,12 @@ export function PanelEditForm({ panel, onSaved }: { panel: SystemsPanel; onSaved
 
       {panel.review.reviewState !== "refused" && (
         <Group icon={<KeyRound size={14} aria-hidden />} title={t("common", K.edit.login)} hint={t("common", K.edit.loginHint)}>
-          <Field label={t("common", K.register.field.credentials)} error={error("credentials")}>
-            <Input
-              dir="ltr"
-              type="password"
-              autoComplete="new-password"
-              value={form.credentials}
-              maxLength={4096}
-              onChange={set("credentials")}
-              className="font-mono"
-            />
-          </Field>
+          <PanelLoginFields
+            driverType={panel.driverType}
+            parts={form}
+            errors={errors}
+            onChange={(field, value) => setForm((f) => ({ ...f, [field]: value }))}
+          />
         </Group>
       )}
 

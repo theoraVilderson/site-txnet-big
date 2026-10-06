@@ -2,6 +2,7 @@ import type { PanelGroup, SystemsPanel } from "@/lib/billing-api";
 import {
   DELETE_OUTCOME_KEYS,
   addressChanged,
+  checkNewLogin,
   groupDeleteBlock,
   groupsHolding,
   isRemoving,
@@ -52,9 +53,35 @@ describe("editing a panel (F-027-by)", () => {
     expect(validatePanelEdit(panelEditFormOf(p), p)).toEqual({ ok: false, errors: { form: K.edit.unchanged } });
   });
 
-  it("a new login alone is a change, sent untrimmed to its own route", () => {
-    const p = pull();
-    expect(validatePanelEdit({ ...panelEditFormOf(p), credentials: " root:pw " }, p)).toEqual({ ok: true, body: {}, credentials: " root:pw " });
+  it("a new login alone is a change, asked in its parts and sent untrimmed as `username:password`", () => {
+    const p = pull({ driverType: "x_ui_alireza" });
+    expect(validatePanelEdit({ ...panelEditFormOf(p), username: "root", password: " pw " }, p)).toEqual({ ok: true, body: {}, credentials: "root: pw " });
+  });
+
+  it("a half-typed login names the missing half, never sends a password as the whole login", () => {
+    const p = pull({ driverType: "x_ui_alireza" });
+    expect(validatePanelEdit({ ...panelEditFormOf(p), password: "newpw" }, p)).toEqual({
+      ok: false,
+      errors: { username: K.register.wizard.invalid.username },
+    });
+    expect(validatePanelEdit({ ...panelEditFormOf(p), username: "ad:min", password: "pw" }, p)).toMatchObject({
+      ok: false,
+      errors: { username: K.register.wizard.invalid.usernameColon },
+    });
+  });
+
+  it("the resubmit sheet requires a login; the edit form keeps the stored one when blank", () => {
+    const blank = { username: "", password: "", apiKey: "" };
+    expect(checkNewLogin("marzban", blank, false)).toEqual({ ok: true, credentials: null });
+    expect(checkNewLogin("marzban", blank, true)).toEqual({
+      ok: false,
+      errors: { username: K.register.wizard.invalid.username, password: K.register.wizard.invalid.password },
+    });
+  });
+
+  it("a family whose login is an API key is asked for the key alone", () => {
+    const p = pull({ driverType: "hiddify" });
+    expect(validatePanelEdit({ ...panelEditFormOf(p), apiKey: "k-123" }, p)).toEqual({ ok: true, body: {}, credentials: "k-123" });
   });
 
   it("an address change is said before the save; an unchanged one is not", () => {

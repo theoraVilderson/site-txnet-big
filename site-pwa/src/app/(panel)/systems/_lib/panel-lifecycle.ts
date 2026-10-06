@@ -1,5 +1,6 @@
 import type { PanelGroup, PanelSettingsBody, RemovedPanel, SystemsPanel } from "@/lib/billing-api";
 import { SYSTEMS_KEYS, isIp, isUrl, validateLogin } from "./systems";
+import { composeLogin, loginErrors, loginKindOf, type LoginParts } from "./register-wizard";
 
 /**
  * A registered panel's life on the systems page (F-027-cb): editing its
@@ -12,7 +13,11 @@ const K = SYSTEMS_KEYS;
 
 // ── Editing a panel ───────────────────────────────────────────────────────────
 
-/** Every setting as typed. The login is blank unless the admin types a new one. */
+/**
+ * Every setting as typed. The login is blank unless the admin types a new one,
+ * and is asked in its parts as the register wizard asks it: a username and a
+ * password, or the API key for a family that logs in with one.
+ */
 export type PanelEditForm = {
   name: string;
   region: string;
@@ -20,7 +25,9 @@ export type PanelEditForm = {
   apiBaseUrl: string;
   clientBaseUrl: string;
   maxRequestsPerMinute: string;
-  credentials: string;
+  username: string;
+  password: string;
+  apiKey: string;
 };
 
 export function panelEditFormOf(panel: SystemsPanel): PanelEditForm {
@@ -31,23 +38,27 @@ export function panelEditFormOf(panel: SystemsPanel): PanelEditForm {
     apiBaseUrl: panel.apiBaseUrl ?? "",
     clientBaseUrl: panel.clientBaseUrl ?? "",
     maxRequestsPerMinute: String(panel.budget.maxRequestsPerMinute),
-    credentials: "",
+    username: "",
+    password: "",
+    apiKey: "",
   };
 }
 
 export type PanelEditValidation =
   | { ok: true; body: PanelSettingsBody; credentials: string | null }
-  | { ok: false; errors: Partial<Record<keyof PanelEditForm | "form", string>> };
+  | { ok: false; errors: Partial<Record<keyof PanelEditForm | "credentials" | "form", string>> };
 
 /**
  * billing's `updatePanelSchema`, sending **only what differs** from the panel:
  * a field nobody touched is never re-sent, so an address that did not change
  * never re-tests the panel. A push panel is never asked for an API or link
  * address and cannot clear its IP (`not_for_transport`); a pull panel's IP is
- * optional. A new login goes to its own route; blank keeps the stored one.
+ * optional. A new login goes to its own route; blank keeps the stored one,
+ * and a half-typed one names the missing half rather than sending a password
+ * the collector would read as a username.
  */
 export function validatePanelEdit(form: PanelEditForm, panel: SystemsPanel): PanelEditValidation {
-  const errors: Partial<Record<keyof PanelEditForm | "form", string>> = {};
+  const errors: Partial<Record<keyof PanelEditForm | "credentials" | "form", string>> = {};
   const push = panel.transport === "push";
   const name = form.name.trim();
   const region = form.region.trim();
@@ -63,11 +74,9 @@ export function validatePanelEdit(form: PanelEditForm, panel: SystemsPanel): Pan
   if (!push && clientBaseUrl && (clientBaseUrl.length > 500 || !isUrl(clientBaseUrl))) errors.clientBaseUrl = K.register.invalid.clientBaseUrl;
   if (!(Number.isInteger(budget) && budget >= 1 && budget <= 6000)) errors.maxRequestsPerMinute = K.edit.invalidBudget;
   let credentials: string | null = null;
-  if (form.credentials !== "") {
-    const login = validateLogin(form.credentials);
-    if (login.ok) credentials = login.credentials;
-    else errors.credentials = login.error;
-  }
+  const login = checkNewLogin(panel.driverType, form, false);
+  if (login.ok) credentials = login.credentials;
+  else Object.assign(errors, login.errors);
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
   const body: PanelSettingsBody = {};
@@ -79,6 +88,28 @@ export function validatePanelEdit(form: PanelEditForm, panel: SystemsPanel): Pan
   if (budget !== panel.budget.maxRequestsPerMinute) body.maxRequestsPerMinute = budget;
   if (Object.keys(body).length === 0 && credentials === null) return { ok: false, errors: { form: K.edit.unchanged } };
   return { ok: true, body, credentials };
+}
+
+export type NewLoginErrors = Partial<Record<keyof LoginParts | "credentials", string>>;
+
+/**
+ * A new login typed in its parts, composed the way the collector reads it:
+ * `username:password`, or the API key alone (`loginKindOf`). Not required, a
+ * blank one is `credentials: null` and keeps the stored login; a half-typed
+ * one names the missing half rather than sending a password as the username.
+ */
+export function checkNewLogin(
+  driverType: string,
+  parts: LoginParts,
+  required: boolean,
+): { ok: true; credentials: string | null } | { ok: false; errors: NewLoginErrors } {
+  const kind = loginKindOf(driverType);
+  const typed = kind === "apiKey" ? parts.apiKey !== "" : parts.username !== "" || parts.password !== "";
+  if (!typed && !required) return { ok: true, credentials: null };
+  const missing = loginErrors(kind, parts) as NewLoginErrors;
+  if (Object.keys(missing).length > 0) return { ok: false, errors: missing };
+  const login = validateLogin(composeLogin(kind, parts));
+  return login.ok ? { ok: true, credentials: login.credentials } : { ok: false, errors: { credentials: login.error } };
 }
 
 /** Whether saving this form re-tests the panel: billing's rule 2, said before the save. */

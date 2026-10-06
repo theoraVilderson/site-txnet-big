@@ -7,7 +7,8 @@ import { billingApi, type EvictOrphans, type PanelGroup, type PanelRemovePreview
 import { formatInstant } from "../../_lib/datetime";
 import { Sheet } from "../../catalog/_components/catalog-ui";
 import { ORPHAN_CHOICES } from "../_lib/panel-groups";
-import { DELETE_OUTCOME_KEYS, groupsHolding, isArchived, isRemoving, visiblePanels } from "../_lib/panel-lifecycle";
+import { DELETE_OUTCOME_KEYS, checkNewLogin, groupsHolding, isArchived, isRemoving, visiblePanels, type NewLoginErrors } from "../_lib/panel-lifecycle";
+import { emptyLoginParts, type LoginParts } from "../_lib/register-wizard";
 import { PANEL_STATUS_KEYS, panelStatusOf, type PanelStatus } from "../_lib/systems-guide";
 import {
   driverLabel,
@@ -24,6 +25,7 @@ import {
 } from "../_lib/systems";
 import { ActionsMenu, BAD, CardButton, GOOD, ListState, Notice, Pill, QUIET, Section, useSystemsError, type MenuItem } from "./parts";
 import { OrphanChoice } from "./OrphanChoice";
+import { PanelLoginFields } from "./PanelLoginFields";
 import { PanelSheet } from "./PanelSheet";
 import { Button, Field, Input } from "../../_components/kit";
 
@@ -152,7 +154,7 @@ function PanelItem({
 
       {sheet === "settings" && <PanelSheet panel={panel} onClose={() => setSheet(null)} onSaved={done} />}
       {(sheet === "login" || sheet === "radiusSecret") && (
-        <SecretForm panelId={panel.id} secret={sheet} onDone={done} onCancel={() => setSheet(null)} />
+        <SecretForm panel={panel} secret={sheet} onDone={done} onCancel={() => setSheet(null)} />
       )}
       {sheet === "delete" && (
         <DeleteSheet
@@ -360,17 +362,18 @@ const SECRET_FORM = {
 } satisfies Record<Secret, unknown>;
 
 /**
- * A new secret for this panel, in a sheet. A password input, sent once and
- * cleared from state with the form. For the login, the answer's `retest` decides the
- * sentence; a RADIUS secret re-tests nothing.
+ * A new secret for this panel, in a sheet, sent once and cleared from state
+ * with the form. The login is asked in its parts (`PanelLoginFields`) and the
+ * answer's `retest` decides the sentence; a RADIUS secret is one password
+ * input and re-tests nothing.
  */
 function SecretForm({
-  panelId,
+  panel,
   secret,
   onDone,
   onCancel,
 }: {
-  panelId: string;
+  panel: SystemsPanel;
   secret: Secret;
   onDone: (sentence: string) => Promise<void>;
   onCancel: () => void;
@@ -379,20 +382,33 @@ function SecretForm({
   const message = useSystemsError();
   const copy = SECRET_FORM[secret];
   const [login, setLogin] = useState("");
+  const [parts, setParts] = useState<LoginParts>(emptyLoginParts);
+  const [partErrors, setPartErrors] = useState<NewLoginErrors>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    let value = login;
+    if (secret === "login") {
+      const checked = checkNewLogin(panel.driverType, parts, true);
+      if (!checked.ok) {
+        setPartErrors(checked.errors);
+        return;
+      }
+      value = checked.credentials ?? "";
+    }
+    setPartErrors({});
     setBusy(true);
     setError(null);
     try {
-      const answer = await copy.send(panelId, login);
+      const answer = await copy.send(panel.id, value);
       if ("error" in answer) {
         setError(t("common", answer.error));
         return;
       }
       setLogin("");
+      setParts(emptyLoginParts());
       await onDone(answer.sentence);
     } catch (e) {
       setError(message(e));
@@ -405,17 +421,29 @@ function SecretForm({
     <Sheet title={t("common", copy.title)} onClose={onCancel}>
     <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
       <p className="text-xs leading-5 text-text-secondary">{t("common", copy.hint)}</p>
-      <Field label={t("common", copy.field)} error={error ? error : undefined}>
-        <Input
-          dir="ltr"
-          type="password"
-          autoComplete="off"
-          value={login}
-          maxLength={4096}
-          onChange={(e) => setLogin(e.target.value)}
-          className="font-mono"
-        />
-      </Field>
+      {secret === "login" ? (
+        <>
+          <PanelLoginFields
+            driverType={panel.driverType}
+            parts={parts}
+            errors={partErrors}
+            onChange={(field, value) => setParts((p) => ({ ...p, [field]: value }))}
+          />
+          {error && <p className="text-xs text-error">{error}</p>}
+        </>
+      ) : (
+        <Field label={t("common", copy.field)} error={error ? error : undefined}>
+          <Input
+            dir="ltr"
+            type="password"
+            autoComplete="off"
+            value={login}
+            maxLength={4096}
+            onChange={(e) => setLogin(e.target.value)}
+            className="font-mono"
+          />
+        </Field>
+      )}
       <div className="flex flex-wrap gap-2">
         <Button variant="primary" size="sm" type="submit" disabled={busy}>
           {t("common", copy.submit)}
