@@ -1,4 +1,4 @@
-import { IdentityHeaders } from '@txnet-backend/shared-core';
+import { answersAsPanel, IdentityHeaders } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 
 /**
@@ -21,7 +21,7 @@ export type TenantVia = 'session' | 'bot' | 'domain';
  * one. All of them resolve to the same tenant — purpose is not a second
  * tenancy — but only a `panel` domain serves this process's routes.
  */
-export type TenantSurfacePurpose = 'panel' | 'subscription' | 'assets';
+export type TenantSurfacePurpose = 'panel' | 'subscription' | 'assets' | 'api';
 
 /**
  * How the tenant got the host (mirrors `tenant.TenantDomainType`).
@@ -52,7 +52,7 @@ export type TenantSurfaceTenantType = 'platform_owner' | 'reseller';
  * `/auth/login` is the same bug under a different name, and denying is the
  * side that fails safe — see `docs/domains/tenant/open-questions.md`.
  */
-const SERVED_PATHS: Record<Exclude<TenantSurfacePurpose, 'panel'>, readonly string[]> =
+const SERVED_PATHS: Record<Exclude<TenantSurfacePurpose, 'panel' | 'api'>, readonly string[]> =
   {
     subscription: [],
     assets: [],
@@ -71,8 +71,8 @@ export function surfaceServesPath(
   purpose: TenantSurfacePurpose,
   path: string,
 ): boolean {
-  if (purpose === 'panel') return true;
-  return SERVED_PATHS[purpose].some(
+  if (answersAsPanel(purpose)) return true;
+  return SERVED_PATHS[purpose as keyof typeof SERVED_PATHS].some(
     (prefix) => path === prefix || path.startsWith(`${prefix}/`),
   );
 }

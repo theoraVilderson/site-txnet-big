@@ -6,7 +6,7 @@ import {
   TenantDomainType,
   TenantType,
 } from '@prisma/client';
-import { panelHostOf } from '@txnet-backend/shared-core';
+import { answersAsPanel, panelHostOf } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { RedisKeys, RedisTtl } from '../../redis/redis.keys';
@@ -114,7 +114,7 @@ export class HandoffService {
       const door = this.surfaceOwners.surface();
       const key = RedisKeys.handoff(code);
       const grant = parseGrant(await this.redis.client.get(key));
-      if (!grant || door?.surfacePurpose !== 'panel' || grant.tenantId !== door.id) {
+      if (!grant || !answersAsPanel(door?.surfacePurpose) || grant.tenantId !== door?.id) {
         return err('auth.handoffInvalid');
       }
       if ((await this.redis.client.del(key)) !== 1) return err('auth.handoffInvalid');

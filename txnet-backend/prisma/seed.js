@@ -30,7 +30,8 @@ const ROLE_NAMES = ['user', 'Support', 'Admin', 'SuperAdmin'];
 // matches `tenant_domain.domainValue` against exactly those. `panel.<domain>`
 // is where the platform's own panel calls `/api/*` on its own origin (F-066-u,
 // ADR-0060); `api.<domain>` is still where bot-service and other callers reach
-// the gate (dev-docker/docker-compose.main.yml). `subdomain` rather than
+// the gate (dev-docker/docker-compose.main.yml) — an `api` door, so it answers
+// like a panel but no link ("open your service", a payment's return) lands on it. `subdomain` rather than
 // `custom_domain` because the platform issued them — a custom domain would need
 // verifying before it routed (tenant invariant 5).
 // `sub.<domain>` is the platform's `subscription` door: a Grant's `/sub` link
@@ -41,7 +42,7 @@ function platformHosts() {
   const domain = (process.env.DOMAIN_NAME || '').trim().toLowerCase();
   return domain
     ? [
-        { host: `api.${domain}`, purpose: 'panel' },
+        { host: `api.${domain}`, purpose: 'api' },
         { host: `panel.${domain}`, purpose: 'panel' },
         { host: `sub.${domain}`, purpose: 'subscription' },
       ]

@@ -24,6 +24,10 @@ describe('a non-panel surface serves no panel route', () => {
       expect(surfaceServesPath('panel', '/api/auth/workers')).toBe(true);
     });
 
+    it('serves every path on an api surface, as on a panel one', async () => {
+      expect(surfaceServesPath('api', '/api/auth/login')).toBe(true);
+    });
+
     it('serves no auth-service path on a subscription surface', async () => {
       // This process has no subscription route to allow: `/sub` belongs to
       // `network`, which has no service yet. An empty allowlist is the honest

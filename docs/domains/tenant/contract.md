@@ -174,7 +174,7 @@ here is the same header restricted to a verified service caller — see
 
 ### A domain says what it is for, and a non-panel door serves nothing (F-1212)
 
-`tenant_domain` carries a `purpose` — `panel`, `subscription` or `assets`
+`tenant_domain` carries a `purpose` — `panel`, `subscription`, `assets` or `api`
 (catalog 13.1 / C-16). **Every purpose resolves to the same tenant.** Purpose is
 not a second tenancy and it never changes the answer above; it changes what may
 be *served* once the answer is known.
@@ -185,7 +185,7 @@ are different facts and are treated differently:
 
 | the request | `surfacePurpose` | what is served |
 |---|---|---|
-| matched a `panel` row | `panel` | everything |
+| matched a `panel` / `api` row | that value | everything — but `api` (the gateway host) is never a panel page or a link (`answersAsPanel`, `panelHostOf`) |
 | matched a `subscription` / `assets` row | that value | only that purpose's allowlist |
 | matched no row — a claim answered alone, as an internal caller's does | absent | everything |
 

@@ -10,7 +10,7 @@ import {
 } from './public-route';
 // From its owner, not through `public-route`: the two services share one cache
 // entry and therefore one shape, so it has exactly one home (`contract.public-routes.md`).
-import type { HostSurface } from './host-surface';
+import { isHostSurface, type HostSurface } from './host-surface';
 
 /**
  * A public route (F-018-ak, ADR-0065) is a controller under
@@ -70,6 +70,10 @@ describe('PublicRouteGuard', () => {
     @PublicRoute({ doors: ['panel', 'assets'] })
     serve() {}
   }
+  class AssetsOnly {
+    @PublicRoute({ doors: ['assets'] })
+    serve() {}
+  }
   class ServesPanel {
     @PublicRoute({ doors: 'any' })
     ask() {}
@@ -111,6 +115,13 @@ describe('PublicRouteGuard', () => {
     );
     expect(run(Files.prototype.serve, Files, { [PUBLIC_SURFACE]: closed })).toThrow(NotFoundException);
     expect(run(Files.prototype.serve, Files, { [PUBLIC_SURFACE]: null })).toThrow(NotFoundException);
+  });
+
+  it('admits an api door wherever a panel one is admitted, and nowhere else', () => {
+    const api: HostSurface = { ...panel, purpose: 'api', domainType: 'subdomain', tenantType: 'platform_owner' };
+    expect(isHostSurface(api)).toBe(true);
+    expect(run(Files.prototype.serve, Files, { [PUBLIC_SURFACE]: api })()).toBe(true);
+    expect(run(AssetsOnly.prototype.serve, AssetsOnly, { [PUBLIC_SURFACE]: api })).toThrow(NotFoundException);
   });
 
   it("'any' answers on every surface, closed ones included, and never on none", () => {

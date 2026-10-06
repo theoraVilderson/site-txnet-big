@@ -8,7 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import type { PrismaClient, TenantDomainPurpose } from '@prisma/client';
 
-import { doorClosed } from './door';
+import { answersAsPanel, doorClosed } from './door';
 import type { HostSurface } from './host-surface';
 
 /**
@@ -122,7 +122,8 @@ export class PublicRouteGuard implements CanActivate {
     const surface = request[PUBLIC_SURFACE];
     if (!surface) throw new NotFoundException();
     if (doors === 'any') return true;
-    if (!doors.includes(surface.purpose) || doorClosed(surface)) throw new NotFoundException();
+    const admitted = doors.includes(surface.purpose) || (doors.includes('panel') && answersAsPanel(surface.purpose));
+    if (!admitted || doorClosed(surface)) throw new NotFoundException();
     return true;
   }
 }

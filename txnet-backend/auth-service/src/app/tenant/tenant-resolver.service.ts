@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
+import { answersAsPanel } from '@txnet-backend/shared-core';
 import { CachedSurface, CachedTenant, TenantCacheService } from './tenant-cache.service';
 import {
   ResolvedTenant,
@@ -117,7 +118,7 @@ export class TenantResolverService {
     tenantId: string,
     userId: string | null | undefined,
   ): Promise<ResolvedTenant | null> {
-    if (!userId || surface.purpose !== 'panel' || surface.ownerUserId !== userId) {
+    if (!userId || !answersAsPanel(surface.purpose) || surface.ownerUserId !== userId) {
       return null;
     }
     const own = await this.byId(tenantId);

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { answersAsPanel } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { TenantContext } from '../../tenant-context/tenant-context';
 import type { ResolvedTenant } from '../../tenant/tenant';
@@ -69,7 +70,7 @@ export class SurfaceOwnerService {
     include: Prisma.UserInclude,
   ): Promise<{ user: { id: string; tenantId: string }; scope: ResolvedTenant } | null> {
     const door = this.surface();
-    if (!door || door.surfacePurpose !== 'panel') return null;
+    if (!door || !answersAsPanel(door.surfacePurpose)) return null;
     if ((await this.ownerOf(door)) !== userId) return null;
 
     const user = await this.all.user.findFirst({
@@ -104,9 +105,9 @@ export class SurfaceOwnerService {
   surface(): ResolvedTenant | null {
     const current = TenantContext.currentOrNull();
     if (!current) return null;
-    if (current.surfacePurpose === 'panel') {
+    if (answersAsPanel(current.surfacePurpose)) {
       const door = current.brand ?? current;
-      return { id: door.id, slug: door.slug, via: 'domain', surfacePurpose: 'panel' };
+      return { id: door.id, slug: door.slug, via: 'domain', surfacePurpose: current.surfacePurpose };
     }
     if (current.brand && !current.surfacePurpose) {
       return { id: current.brand.id, slug: current.brand.slug, via: 'bot' };
@@ -160,6 +161,6 @@ export class SurfaceOwnerService {
  * A subscription or assets host is neither.
  */
 function isDoor(tenant: ResolvedTenant): boolean {
-  if (tenant.surfacePurpose) return tenant.surfacePurpose === 'panel';
+  if (tenant.surfacePurpose) return answersAsPanel(tenant.surfacePurpose);
   return tenant.via === 'bot';
 }

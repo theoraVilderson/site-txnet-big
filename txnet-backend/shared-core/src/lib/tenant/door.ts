@@ -4,7 +4,7 @@
  * field is absent when the request had no surface at all.
  */
 export interface DoorSurface {
-  purpose?: 'panel' | 'subscription' | 'assets' | null;
+  purpose?: 'panel' | 'subscription' | 'assets' | 'api' | null;
   domainType?: 'subdomain' | 'custom_domain' | null;
   tenantType?: 'platform_owner' | 'reseller' | null;
 }
@@ -31,12 +31,23 @@ export function doorClosed(surface: DoorSurface): boolean {
 }
 
 /**
+ * Does the API answer on this door as it does on a panel one? An `api` door is
+ * the gateway host (`api.<domain>`) bot-service and webhooks call: every route
+ * a panel door reaches, but never a page and never a link (`panelHostOf` reads
+ * `panel` rows only). One predicate, so the guards cannot disagree about it.
+ */
+export function answersAsPanel(purpose: DoorSurface['purpose']): boolean {
+  return purpose === 'panel' || purpose === 'api';
+}
+
+/**
  * Does this host serve the panel at all? The panel's half of the door rules
  * (F-066-x): `site-pwa` is a separate deployable and asks before it renders,
  * at `GET /api/public/tenant/serves-panel`.
  *
  * No: a `subscription` or `assets` domain (F-066-q — it serves no panel page,
- * as it serves no panel route), and a reseller's platform subdomain.
+ * as it serves no panel route), an `api` one (routes, never pages), and a
+ * reseller's platform subdomain.
  * Yes: everything else, including a request with no surface at all.
  */
 export function doorServesPanel(surface: DoorSurface): boolean {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { doorClosed, doorServesPanel } from './door';
+import { answersAsPanel, doorClosed, doorServesPanel } from './door';
 
 /**
  * The door rules, once, for every process that answers on a Host (F-018-ak).
@@ -25,6 +25,17 @@ describe('door rules', () => {
   it('serves no panel on a subscription or assets door (F-066-q)', () => {
     expect(doorServesPanel({ ...resellerCustom, purpose: 'subscription' })).toBe(false);
     expect(doorServesPanel({ ...resellerCustom, purpose: 'assets' })).toBe(false);
+  });
+
+  it('serves no panel page on an api door: the gateway host is never a link target', () => {
+    expect(doorServesPanel({ ...platformPanel, purpose: 'api' })).toBe(false);
+  });
+
+  it('answers the API on an api door exactly as on a panel one, and on nothing else', () => {
+    expect(answersAsPanel('panel')).toBe(true);
+    expect(answersAsPanel('api')).toBe(true);
+    expect(answersAsPanel('subscription')).toBe(false);
+    expect(answersAsPanel('assets')).toBe(false);
   });
 
   it("serves no panel on a reseller's platform subdomain", () => {

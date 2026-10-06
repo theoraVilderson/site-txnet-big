@@ -25,7 +25,10 @@ export const addDomainSchema = z
         }
         return host;
       }),
-    purpose: z.nativeEnum(TenantDomainPurpose).default(TenantDomainPurpose.panel),
+    // `api` is the platform's gateway host (seeded), never a domain a tenant adds.
+    purpose: z
+      .enum([TenantDomainPurpose.panel, TenantDomainPurpose.subscription, TenantDomainPurpose.assets])
+      .default(TenantDomainPurpose.panel),
   })
   .strict();
 

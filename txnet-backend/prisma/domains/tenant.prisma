@@ -52,10 +52,16 @@ enum TenantDomainType {
 ///
 /// `state` / `tlsStatus` / the health columns of that catalog block are F-102
 /// and F-113 and are deliberately not here: this column is the one F-1212 needs.
+///
+/// `api` is the gateway host other services and webhooks call (`api.<domain>`):
+/// it answers every request a `panel` domain answers, but serves no panel page
+/// and is never where a link sends a user — before it existed the platform's
+/// `api.<domain>` was a `panel` row, and won `panelHostOf` alphabetically.
 enum TenantDomainPurpose {
   panel
   subscription
   assets
+  api
 
   @@schema("tenant")
 }

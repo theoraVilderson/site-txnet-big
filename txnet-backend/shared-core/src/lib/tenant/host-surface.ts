@@ -57,7 +57,7 @@ export type HostSurface = CachedTenantRow & {
  */
 export const HOST_SURFACE_MISS = '-';
 
-const PURPOSES: readonly string[] = ['panel', 'subscription', 'assets'];
+const PURPOSES: readonly string[] = ['panel', 'subscription', 'assets', 'api'];
 const DOMAIN_TYPES: readonly string[] = ['subdomain', 'custom_domain'];
 const TENANT_TYPES: readonly string[] = ['platform_owner', 'reseller'];
 
