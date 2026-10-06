@@ -11,6 +11,7 @@ import { DELETE_OUTCOME_KEYS, checkNewLogin, groupsHolding, isArchived, isRemovi
 import { emptyLoginParts, type LoginParts } from "../_lib/register-wizard";
 import { PANEL_STATUS_KEYS, panelStatusOf, type PanelStatus } from "../_lib/systems-guide";
 import {
+  CAUSE_KEYS,
   driverLabel,
   FAULT_KEYS,
   PANEL_STATE_KEYS,
@@ -83,7 +84,16 @@ export function PanelList({
   );
 }
 
-const STATUS_TONE: Record<PanelStatus, string> = { ready: GOOD, limited: QUIET, testing: QUIET, refused: BAD, problem: BAD, archived: QUIET };
+const STATUS_TONE: Record<PanelStatus, string> = {
+  ready: GOOD,
+  limited: QUIET,
+  testing: QUIET,
+  refused: BAD,
+  onHold: QUIET,
+  notChecked: BAD,
+  problem: BAD,
+  archived: QUIET,
+};
 
 /**
  * One panel as a card (F-027-ck): its name, one status and the sentence
@@ -180,9 +190,17 @@ function StatusLine({ panel, status }: { panel: SystemsPanel; status: PanelStatu
   const { lang, t } = useLocale();
   if (status === "ready") return null;
   if (status === "testing" || status === "refused") return <VerdictLine panel={panel} />;
+  // The outage is ours (ADR-0122): the reason is said once over the list, and nothing about the panel is.
+  if (status === "onHold") {
+    return <p className={`rounded-xl border px-3 py-2 text-xs leading-5 ${QUIET}`}>{t("common", PANEL_STATUS_KEYS.onHold.hint)}</p>;
+  }
+  const { cause, since, checkedAt, panelState } = panel.health;
+  const at = (iso: string | null) => formatInstant(iso, lang) ?? "";
+  const unwell = panelState === "down" || panelState === "degraded" || panelState === "throttled_or_blocked";
   const reasons = [
     panel.health.collectionHalted && t("common", K.panels.halted),
-    (panel.health.panelState === "down" || panel.health.panelState === "throttled_or_blocked") && t("common", PANEL_STATE_KEYS[panel.health.panelState]),
+    // The cause says what to fix (F-027-em); a state with none, written before ADR-0122, says only its name.
+    unwell && (cause ? t("common", CAUSE_KEYS[cause]) : t("common", PANEL_STATE_KEYS[panelState])),
     panel.budget.blockedSince && `${t("common", K.budget.blockedSince)} ${formatInstant(panel.budget.blockedSince, lang) ?? ""}`,
     radiusSecretMissing(panel) && t("common", K.radiusSecret.missing),
   ].filter((r): r is string => Boolean(r));
@@ -200,6 +218,12 @@ function StatusLine({ panel, status }: { panel: SystemsPanel; status: PanelStatu
         </ul>
       )}
       {panel.health.openDriftEvents > 0 && <p>{t("common", K.panels.openDrift, { count: String(panel.health.openDriftEvents) })}</p>}
+      {(unwell || status === "notChecked") && (
+        <p className="text-text-secondary">
+          {unwell && since && `${t("common", K.health.since, { at: at(since) })} · `}
+          {checkedAt ? t("common", K.health.checked, { at: at(checkedAt) }) : t("common", K.health.neverChecked)}
+        </p>
+      )}
     </div>
   );
 }

@@ -3619,6 +3619,14 @@
       "archived": {
         "label": "Archived",
         "hint": "No longer tested or collected."
+      },
+      "onHold": {
+        "label": "Status unknown",
+        "hint": "Our monitoring is not checking panels right now, so this panel's last known state may be out of date. This is on our side, not the panel's."
+      },
+      "notChecked": {
+        "label": "Not being checked",
+        "hint": "Our monitoring is running but has not checked this panel for over five minutes. Its login may not be readable; open Settings and give the login again."
       }
     },
     "panelSheet": {
@@ -3669,6 +3677,31 @@
       "noProduct": "No product is sold on this group yet. To start selling, pick this group for a VPN product in the catalog.",
       "toCatalog": "Go to the catalog",
       "addOpen": "Add a panel"
+    },
+    "cause": {
+      "dns_failed": "Its domain does not resolve. Check the domain's DNS record, then the address under Settings.",
+      "connection_refused": "It refuses connections on its port. The port may have changed or the panel's service stopped. Check the port in the address under Settings.",
+      "unreachable": "Its server does not answer. It may be off, or a firewall drops our connection.",
+      "unresponsive": "It connects but does not answer in time. The panel may be stuck or overloaded.",
+      "tls_failed": "Its secure connection failed: the certificate is invalid, expired or for another name.",
+      "not_found": "It answers, but not at the address we have: its path has probably changed. Update the address under Settings.",
+      "server_error": "It answers with errors. The problem is on the panel itself.",
+      "login_refused": "It refused our login. If you changed its username or password, give the new login under Settings.",
+      "forbidden": "It refuses our server's address. Check the panel's firewall and allowed addresses.",
+      "rate_limited": "It is limiting how often we may ask. It is retried automatically.",
+      "bad_answer": "It answered with something we cannot read. The panel's version may not be supported."
+    },
+    "held": {
+      "collector_stopped": "Our monitoring stopped at {{at}}. Panel states will update when it is back; the panels themselves are not at fault.",
+      "collector_never_ran": "Our monitoring has not run yet, so no panel has been checked.",
+      "egress_down": "Since {{at}} our server cannot reach the internet, so panels cannot be checked. This is on our side, not the panels'.",
+      "egress_suspect": "Since {{at}} most panels fail at once, which points to our server's connection, not the panels. Panel states are on hold.",
+      "dns_down": "Since {{at}} our server cannot resolve domain names, so panels addressed by domain cannot be checked. This is on our side."
+    },
+    "health": {
+      "since": "Since {{at}}",
+      "checked": "Last checked {{at}}",
+      "neverChecked": "Not checked yet"
     }
   },
   "shop": {

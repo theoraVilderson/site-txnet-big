@@ -138,6 +138,9 @@ outage writes nothing, so it announces nothing. automation's
 inbox read «پنل در دسترس نیست: اتصال رد شد» three passes after the port
 closed.
 
-## Not yet
+## What the page shows
 
-What the page shows is F-027-em.
+Billing's systems read judges every stored state against the heartbeat
+(`judgePanelHealth`, billing `contract.systems.md`). The page shows `on_hold`
+as *unknown* with our reason over the list, `not_checked`, or the cause and
+its fix (panel-web `contract.systems.md`, F-027-em).

@@ -31,7 +31,7 @@ export function guideOf(panels: readonly SystemsPanel[], groups: readonly PanelG
   };
 }
 
-export type PanelStatus = "ready" | "limited" | "testing" | "refused" | "problem" | "archived";
+export type PanelStatus = "ready" | "limited" | "testing" | "refused" | "onHold" | "notChecked" | "problem" | "archived";
 
 /** One word for a card, the worst first: a refusal is fixed at registration, so it outranks a stopped collection. */
 export function panelStatusOf(panel: SystemsPanel): PanelStatus {
@@ -39,10 +39,20 @@ export function panelStatusOf(panel: SystemsPanel): PanelStatus {
   const { reviewState } = panel.review;
   if (reviewState === "refused") return "refused";
   if (reviewState === "pending") return "testing";
+  // The outage is ours (ADR-0122): what the panel stores is not shown as its state, good or bad.
+  if (panel.health.view === "on_hold") return "onHold";
   const { collectionHalted, panelState } = panel.health;
-  if (collectionHalted || panelState === "down" || panelState === "throttled_or_blocked" || panel.budget.blockedSince || radiusSecretMissing(panel)) {
+  if (
+    collectionHalted ||
+    panelState === "down" ||
+    panelState === "degraded" ||
+    panelState === "throttled_or_blocked" ||
+    panel.budget.blockedSince ||
+    radiusSecretMissing(panel)
+  ) {
     return "problem";
   }
+  if (panel.health.view === "not_checked") return "notChecked";
   return reviewState === "accepted_low_trust" ? "limited" : "ready";
 }
 
@@ -52,6 +62,8 @@ export const PANEL_STATUS_KEYS: Record<PanelStatus, { label: string; hint: strin
   testing: K.status.testing,
   refused: K.status.refused,
   problem: K.status.problem,
+  onHold: K.status.onHold,
+  notChecked: K.status.notChecked,
   archived: K.status.archived,
 };
 
@@ -61,7 +73,8 @@ export type SystemsTab = "panels" | "groups" | "reports";
 export function attentionOf(panels: readonly SystemsPanel[], groups: readonly PanelGroup[]): Record<SystemsTab, number> {
   const live = panels.filter((p) => !isArchived(p));
   return {
-    panels: live.filter((p) => ["refused", "problem"].includes(panelStatusOf(p))).length,
+    // On hold is ours, never the reseller's to act on, so it is not counted.
+    panels: live.filter((p) => ["refused", "problem", "notChecked"].includes(panelStatusOf(p))).length,
     groups: groups.filter((g) => groupHealth(g).short).length,
     reports: live.reduce((n, p) => n + p.health.openDriftEvents, 0),
   };

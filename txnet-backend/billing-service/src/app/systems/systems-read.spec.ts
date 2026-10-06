@@ -95,6 +95,8 @@ function harness() {
         return p ? pick(p, select) : null;
       },
     },
+    // F-027-em: no collector ever ran in this fixture, so every accepted panel is on hold.
+    collectorHeartbeat: { findFirst: async () => null },
     panelDriftEvent: {
       findMany: async ({ where, select }: { where: Row; select?: Record<string, boolean> }) =>
         events.filter((e) => matches(e, where, panels)).map((e) => pick(e, select)),
@@ -120,6 +122,8 @@ describe('SystemsReadService', () => {
 
     expect(list.map((p) => p.id)).toEqual([PLATFORM_PANEL]);
     expect(list[0].health).toMatchObject({ panelState: PanelState.healthy, collectionHalted: true, openDriftEvents: 1 });
+    // Nothing has judged it, so what it stores is not shown as current (F-027-em).
+    expect(list[0].health).toMatchObject({ view: 'on_hold', heldBy: { reason: 'collector_never_ran', since: null } });
     expect(list[0].budget).toMatchObject({ maxRequestsPerMinute: 60 });
     expect(JSON.stringify(list)).not.toContain('vault:');
     for (const s of selects) expect(s).not.toHaveProperty('panelApiCredentials');

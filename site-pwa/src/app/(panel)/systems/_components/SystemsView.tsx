@@ -7,7 +7,8 @@ import { billingApi, type PanelGroup, type SystemsPanel } from "@/lib/billing-ap
 import { LIVE_REREAD_MS, trailingThrottle } from "@/lib/realtime";
 import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
 import { usePanelSession } from "../../_context/PanelSessionContext";
-import { SYSTEMS_KEYS as K, isPanelTested, liveChannelOf } from "../_lib/systems";
+import { formatInstant } from "../../_lib/datetime";
+import { HELD_KEYS, SYSTEMS_KEYS as K, isPanelEvent, liveChannelOf } from "../_lib/systems";
 import { attentionOf, guideOf, type SystemsTab } from "../_lib/systems-guide";
 import { DriftReport } from "./DriftReport";
 import { HoldsQueue } from "./HoldsQueue";
@@ -17,7 +18,7 @@ import { HolderNamesContext } from "./parts";
 import { RegisterPanel } from "./RegisterPanel";
 import { SystemsGuide } from "./SystemsGuide";
 import { PageHeader } from "../../_components/kit/PageHeader";
-import { Button, Tabs } from "../../_components/kit";
+import { Alert, Button, Tabs } from "../../_components/kit";
 
 const GUIDE_CLOSED = "txnet.systems.guideClosed";
 const TABS: SystemsTab[] = ["panels", "groups", "reports"];
@@ -117,7 +118,7 @@ export function SystemsView() {
     const live = trailingThrottle(() => void reload(), LIVE_REREAD_MS);
     const unsubscribe = client.subscribe(channel, {
       onMessage: (payload) => {
-        if (isPanelTested(payload)) live.call();
+        if (isPanelEvent(payload)) live.call();
       },
     });
     return () => {
@@ -136,6 +137,8 @@ export function SystemsView() {
   );
 
   const guide = useMemo(() => guideOf(panels, groups), [panels, groups]);
+  // Our own outage, said once over the list (F-027-em, ADR-0122): every held panel shares the reason.
+  const held = useMemo(() => panels.find((p) => p.health.heldBy)?.health.heldBy ?? null, [panels]);
   const attention = useMemo(() => attentionOf(panels, groups), [panels, groups]);
   const loaded = !isLoading && !groupsLoading;
 
@@ -180,6 +183,10 @@ export function SystemsView() {
             onClose={closeGuide}
             onStep={(step) => (step === "register" ? setRegistering(true) : setTab(step === "group" ? "groups" : "panels"))}
           />
+        )}
+
+        {held && (
+          <Alert tone="warning">{t("common", HELD_KEYS[held.reason], { at: formatInstant(held.since, lang) ?? "" })}</Alert>
         )}
 
         <Tabs<SystemsTab>

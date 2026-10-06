@@ -2010,6 +2010,21 @@ export interface ManualAnswer {
 export type PanelReviewState = "pending" | "accepted" | "accepted_low_trust" | "refused";
 /** `network.PanelState`. `throttled_or_blocked` is a panel answering and refusing us, not one that is down. */
 export type PanelState = "healthy" | "degraded" | "maintenance" | "down" | "throttled_or_blocked";
+/** `network.PanelFaultCause` (ADR-0122): why a panel is not healthy, with what to fix. */
+export type PanelFaultCause =
+  | "dns_failed"
+  | "connection_refused"
+  | "unreachable"
+  | "unresponsive"
+  | "tls_failed"
+  | "not_found"
+  | "server_error"
+  | "login_refused"
+  | "forbidden"
+  | "rate_limited"
+  | "bad_answer";
+/** Why a panel's state is on hold — the outage is ours (billing `systems/panel-health.ts`). */
+export type PanelHeldReason = "collector_stopped" | "collector_never_ran" | "egress_down" | "egress_suspect" | "dns_down";
 /** `network.ConnectionTestFault`: the test did not get an answer — not a verdict. */
 export type ConnectionTestFault =
   | "timeout"
@@ -2048,6 +2063,15 @@ export interface SystemsPanel {
   };
   health: {
     panelState: PanelState;
+    /** Why it is not healthy; null while it is (F-027-ej). */
+    cause: PanelFaultCause | null;
+    /** When it entered panelState — the start of the trouble. */
+    since: string | null;
+    /** The last turn the collector judged it on. */
+    checkedAt: string | null;
+    /** Whether panelState is current, on hold because the outage is ours, or not being checked (F-027-em). */
+    view: "current" | "on_hold" | "not_checked";
+    heldBy: { reason: PanelHeldReason; since: string | null } | null;
     lastHealthyAt: string | null;
     lastSuccessfulCollectionAt: string | null;
     collectionHalted: boolean;

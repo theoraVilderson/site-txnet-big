@@ -14,7 +14,8 @@ import {
   FAULT_KEYS,
   HOLD_REASON_KEYS,
   HOLD_STATE_KEYS,
-  isPanelTested,
+  CAUSE_KEYS,
+  isPanelEvent,
   liveChannelOf,
   PANEL_MANAGE,
   PANEL_ROLES,
@@ -70,6 +71,8 @@ describe("every value the backend can write has a sentence here", () => {
   it.each<[string, readonly string[]]>([
     ["PanelReviewState", Object.keys(REVIEW_KEYS)],
     ["PanelState", Object.keys(PANEL_STATE_KEYS)],
+    // F-027-em: every cause the collector can store has its sentence.
+    ["PanelFaultCause", Object.keys(CAUSE_KEYS)],
     ["ConnectionTestFault", Object.keys(FAULT_KEYS)],
     ["HoldReason", Object.keys(HOLD_REASON_KEYS)],
     ["UsageDispositionState", Object.keys(HOLD_STATE_KEYS)],
@@ -221,7 +224,18 @@ const panel = (review: Partial<SystemsPanel["review"]>): SystemsPanel => ({
   retiredAt: null,
   removeRequestedAt: null,
   review: { reviewState: "pending", connectionTestedAt: null, connectionTestFault: null, connectionTestDetail: null, duplicateOf: null, ...review },
-  health: { panelState: "healthy", lastHealthyAt: null, lastSuccessfulCollectionAt: null, collectionHalted: false, openDriftEvents: 0 },
+  health: {
+    panelState: "healthy",
+    cause: null,
+    since: null,
+    checkedAt: null,
+    view: "current",
+    heldBy: null,
+    lastHealthyAt: null,
+    lastSuccessfulCollectionAt: null,
+    collectionHalted: false,
+    openDriftEvents: 0,
+  },
   budget: { maxRequestsPerMinute: 60, blockedSince: null },
   radiusSecretConfigured: null,
 });
@@ -406,9 +420,11 @@ describe("a connection test's answer arrives without a reload (F-027-bs)", () =>
     expect(liveChannelOf(null)).toBeNull();
   });
 
-  it("re-reads on network.panel.tested and on nothing else the channel carries", () => {
-    expect(isPanelTested({ type: "network.panel.tested", panelId: "p", reviewState: "accepted", fault: null })).toBe(true);
-    expect(isPanelTested({ type: "notification.created" })).toBe(false);
-    expect(isPanelTested(null)).toBe(false);
+  it("re-reads on a panel's test result or health change, and on nothing else the channel carries", () => {
+    expect(isPanelEvent({ type: "network.panel.tested", panelId: "p", reviewState: "accepted", fault: null })).toBe(true);
+    // F-027-em: a confirmed health change (ADR-0122).
+    expect(isPanelEvent({ type: "network.panel.state_changed", panelId: "p", panelState: "down", cause: "connection_refused" })).toBe(true);
+    expect(isPanelEvent({ type: "notification.created" })).toBe(false);
+    expect(isPanelEvent(null)).toBe(false);
   });
 });

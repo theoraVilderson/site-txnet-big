@@ -207,9 +207,14 @@ The *why* is **ADR-0080**.
    page read (`guideOf`), the first undone one leading to where it is done,
    and the page's words explained once. Closing it is remembered per browser
    and never needed. Each tab is badged with what needs a hand
-   (`attentionOf`: refused or stopped panels, short groups, open drift). A
-   panel card is one status (`panelStatusOf`, the worst first) and the
-   sentence behind it.
+   (`attentionOf`: refused, stopped or unchecked panels, short groups, open
+   drift). A panel card is one status (`panelStatusOf`, the worst first) and
+   the sentence behind it. **Since F-027-em (ADR-0122)** a panel billing
+   answers `on_hold` is `onHold` (unknown, ahead of anything it stores, never
+   counted against it), with the reason said once over the list (`HELD_KEYS`
+   in an `Alert`); `not_checked` is `notChecked`; a down, degraded or refusing
+   panel names its cause and fix (`CAUSE_KEYS`), since when and the last
+   check. The page re-reads on `network.panel.state_changed` too (`isPanelEvent`).
 ## Proof
 
 `systems/register-wizard.test.ts` — rule 10: the steps, each blocking on its own fields, the family profiles (the ready set read out of `opener.go`), the composed login, the IP an address names.

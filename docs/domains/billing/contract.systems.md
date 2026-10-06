@@ -37,7 +37,7 @@ would dial an address a tenant chose (`network/open-questions.md`).
 | `POST /api/billing/systems/panels` | `name`, `ipAddress` (required for `push`, its NAS's allowlist entry; optional for `pull`, F-027-br, CHECK `panel_push_has_ip_address`), `apiBaseUrl` (required for `pull`), `clientBaseUrl?` (where users are served their links, F-027-bg; refused for `push`), `driverType`, `counterSemantics`, `transport`, `role`, `region`, `maxRequestsPerMinute?`, `credentials` (≤4096), `radiusSecret` (≤4096; required for `push`, refused for `pull`); `.strict()` | `201 {id, reviewState: 'pending', credentials: {configured, version, rotatedAt}, radiusSecret?}` (`radiusSecret` on a push panel, same three fields) | 400 validation; 403 `panel.manage` / `not_platform_owner`; 409 `panel_already_registered` + `facts.panelId` when in scope (rule 4a); 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
 | `PUT /api/billing/systems/panels/:id/credentials` | `credentials` (1–4096, untrimmed); `.strict()` | `200 {id, reviewState, retest, credentials: {configured, version, rotatedAt}}` | 400; 403; 404 `not_found`; 409 `panel_refused`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
 | `PUT /api/billing/systems/panels/:id/radius-secret` | `radiusSecret` (1–4096, untrimmed); `.strict()` | `200 {id, reviewState, radiusSecret: {configured, version, rotatedAt}}` | 400; 403; 404 `not_found`; 409 `panel_not_push` / `panel_refused`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
-| `GET /api/billing/systems/panels` | — | `[{id, name, driverType, transport, role, region, ipAddress, apiBaseUrl, clientBaseUrl, retiredAt, radiusSecretConfigured, review: {reviewState, connectionTestedAt, connectionTestFault, connectionTestDetail, duplicateOf: {id, name} | null}, health: {panelState, lastHealthyAt, lastSuccessfulCollectionAt, collectionHalted, openDriftEvents}, budget: {maxRequestsPerMinute, blockedSince}}]`, by name | 403 |
+| `GET /api/billing/systems/panels` | — | `[{id, name, driverType, transport, role, region, ipAddress, apiBaseUrl, clientBaseUrl, retiredAt, radiusSecretConfigured, review: {reviewState, connectionTestedAt, connectionTestFault, connectionTestDetail, duplicateOf: {id, name} | null}, health: {panelState, cause, since, checkedAt, view, heldBy, lastHealthyAt, lastSuccessfulCollectionAt, collectionHalted, openDriftEvents}, budget: {maxRequestsPerMinute, blockedSince}}]`, by name | 403 |
 | `PATCH /api/billing/systems/panels/:id`, `DELETE …/panels/:id`, `POST …/panels/:id/restore` | edit, delete or archive, restore — [contract.panel-lifecycle.md](contract.panel-lifecycle.md) | | |
 | `GET /api/billing/systems/panels/:id/capabilities` | — | `{id, transport, reviewState, connectionTestedAt, documentVersion, current, answeredAt, rows: [{key, scope, severity, state, detail}]}` | 400 id not a uuid; 403; 404 `not_found` |
 | `GET /api/billing/systems/drift-events` | query `state?` (`open` \| `all`, default `all`), `after?` (event id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, panelId, panelName, eventType, foreignPanel: {id, name} \| null, affectedConfigCount, observedConfigCount, detectedAt, collectionHalted, acknowledgedAt, acknowledgedByAdminId, note}], next}`, newest first; `next` is the `after` of the following page, null on the last | 400; 403 |
@@ -203,3 +203,22 @@ Rules 20–24c and their routes are [contract.panel-groups.md](contract.panel-gr
     unselling is always allowed. `refresh` clears `inboundsReadAt`, and the
     panel's next pass reads again. On the cross-tenant pool, scoped as rule 20.
     `panel-inbounds.spec.ts` pins it.
+
+## A panel's health is current only while something judges it (F-027-em)
+
+`health.view` and `heldBy` are `judgePanelHealth` (`systems/panel-health.ts`,
+ADR-0122), read against the freshest `network.collector_heartbeat`. Every
+reader of a panel's health goes through it:
+
+| view | when | `heldBy.reason` |
+|---|---|---|
+| `on_hold` | no heartbeat ever, or none for `STALE_AFTER_SECONDS` (300) | `collector_never_ran`, `collector_stopped` (since: the last pass) |
+| `on_hold` | the last pass ruled our reach not `ok`, and the panel was not judged since (90s grace) | `egress_down`, `egress_suspect`, `dns_down` (since: `egressSince`) |
+| `not_checked` | collector running, panel not judged for 300s and not `throttled_or_blocked` (not asked in its cool-off) | — |
+| `current` | otherwise, and always for a panel the collector does not read (`pending`, `refused`) | — |
+
+`cause`, `since`, `checkedAt` are `panelStateCause`, `panelStateSince` and
+`panelCheckedAt` as stored (network `contract.panel-health.md`). The
+response stays an array: the outage that holds every panel is told through
+any one of them.
+

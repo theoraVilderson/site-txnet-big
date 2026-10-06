@@ -27,7 +27,19 @@ const panel = (over: Partial<SystemsPanel> = {}, review: Partial<SystemsPanel["r
   retiredAt: null,
   removeRequestedAt: null,
   review: { reviewState: "accepted", connectionTestedAt: null, connectionTestFault: null, connectionTestDetail: null, duplicateOf: null, ...review },
-  health: { panelState: "healthy", lastHealthyAt: null, lastSuccessfulCollectionAt: null, collectionHalted: false, openDriftEvents: 0, ...health },
+  health: {
+    panelState: "healthy",
+    cause: null,
+    since: null,
+    checkedAt: null,
+    view: "current",
+    heldBy: null,
+    lastHealthyAt: null,
+    lastSuccessfulCollectionAt: null,
+    collectionHalted: false,
+    openDriftEvents: 0,
+    ...health,
+  },
   budget: { maxRequestsPerMinute: 60, blockedSince: null },
   radiusSecretConfigured: null,
   ...over,
@@ -163,6 +175,25 @@ describe("panelStatusOf — one status per card, the worst first", () => {
 
   it("refused outranks a stopped collection: the fix is the registration, not the collector", () => {
     expect(panelStatusOf(panel({}, { reviewState: "refused" }, { collectionHalted: true }))).toBe("refused");
+  });
+
+  // F-027-em (ADR-0122): a degraded panel answered with something we cannot act on.
+  it("a degraded panel is a problem", () => {
+    expect(panelStatusOf(panel({}, {}, { panelState: "degraded", cause: "bad_answer" }))).toBe("problem");
+  });
+
+  // The outage is ours: whatever it stores, it is neither healthy nor the panel's fault.
+  it("on hold outranks what the panel stores, and is never counted against it", () => {
+    const held = panel({}, {}, { panelState: "healthy", view: "on_hold", heldBy: { reason: "collector_stopped", since: "2026-10-03T13:16:21Z" } });
+    expect(panelStatusOf(held)).toBe("onHold");
+    expect(panelStatusOf(panel({}, {}, { panelState: "down", view: "on_hold", heldBy: { reason: "egress_down", since: null } }))).toBe("onHold");
+    expect(attentionOf([held], []).panels).toBe(0);
+  });
+
+  it("a panel nothing is judging is not checked, and needs attention", () => {
+    const unchecked = panel({}, {}, { view: "not_checked" });
+    expect(panelStatusOf(unchecked)).toBe("notChecked");
+    expect(attentionOf([unchecked], []).panels).toBe(1);
   });
 });
 

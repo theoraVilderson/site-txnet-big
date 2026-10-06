@@ -3,6 +3,8 @@ import { RealtimeEvents } from "@/generated/wire";
 import { holdsPermission } from "@/lib/permissions";
 import { tenantChannel } from "@/lib/realtime";
 import type {
+  PanelFaultCause,
+  PanelHeldReason,
   CapabilityRow,
   ConnectionTestFault,
   HoldReason,
@@ -36,13 +38,16 @@ export function liveChannelOf(me: { tenant: { id: string }; permissions: readonl
 }
 
 /**
- * A filter, not a parser: `automation` pushes `{type:'network.panel.tested',
- * panelId, reviewState, fault}` and the page re-reads `GET /systems/panels`
- * for the row, so what is shown is still only what billing reads back.
+ * A filter, not a parser: `automation` pushes a test result
+ * (`network.panel.tested`) or a confirmed health change
+ * (`network.panel.state_changed`, F-027-el), and the page re-reads
+ * `GET /systems/panels` for the row, so what is shown is still only what
+ * billing reads back.
  */
-export function isPanelTested(payload: unknown): boolean {
+export function isPanelEvent(payload: unknown): boolean {
   if (!payload || typeof payload !== "object") return false;
-  return (payload as Record<string, unknown>).type === RealtimeEvents.panelTested;
+  const type = (payload as Record<string, unknown>).type;
+  return type === RealtimeEvents.panelTested || type === RealtimeEvents.panelStateChanged;
 }
 
 // The closed sets the register form offers, as `network.prisma` declares them
@@ -114,6 +119,30 @@ export const PANEL_STATE_KEYS: Record<PanelState, string> = {
   maintenance: K.panelState.maintenance,
   down: K.panelState.down,
   throttled_or_blocked: K.panelState.throttled_or_blocked,
+};
+
+/** What each cause tells the owner to fix (F-027-em, ADR-0122). */
+export const CAUSE_KEYS: Record<PanelFaultCause, string> = {
+  dns_failed: K.cause.dns_failed,
+  connection_refused: K.cause.connection_refused,
+  unreachable: K.cause.unreachable,
+  unresponsive: K.cause.unresponsive,
+  tls_failed: K.cause.tls_failed,
+  not_found: K.cause.not_found,
+  server_error: K.cause.server_error,
+  login_refused: K.cause.login_refused,
+  forbidden: K.cause.forbidden,
+  rate_limited: K.cause.rate_limited,
+  bad_answer: K.cause.bad_answer,
+};
+
+/** Why every panel is on hold: the outage is ours, said once over the list. */
+export const HELD_KEYS: Record<PanelHeldReason, string> = {
+  collector_stopped: K.held.collector_stopped,
+  collector_never_ran: K.held.collector_never_ran,
+  egress_down: K.held.egress_down,
+  egress_suspect: K.held.egress_suspect,
+  dns_down: K.held.dns_down,
 };
 
 export const FAULT_KEYS: Record<ConnectionTestFault, string> = {

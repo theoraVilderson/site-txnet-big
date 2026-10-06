@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { capabilityMatrix } from './capabilities';
+import { judgePanelHealth } from './panel-health';
 import { inScope, panelScopeOf, SystemsActor } from './panel-scope';
 
 export type SystemsRejection =
@@ -72,6 +73,10 @@ const PANEL_FIELDS = {
   // The panel a refused duplicate is (F-027-ce): its id and name, and whose it is to decide whether to name it.
   duplicateOf: { select: { id: true, name: true, ownershipType: true, tenantId: true } },
   panelState: true,
+  // Why it is not healthy, since when, and when it was last judged (ADR-0122).
+  panelStateCause: true,
+  panelStateSince: true,
+  panelCheckedAt: true,
   blockedSince: true,
   lastHealthyAt: true,
   lastSuccessfulCollectionAt: true,
@@ -125,6 +130,13 @@ export class SystemsReadService {
       where: { panelId: { in: panels.map((p) => p.id) }, acknowledgedAt: null },
       select: { panelId: true, collectionHalted: true },
     });
+    // The collector's own heartbeat (F-027-em, ADR-0122): a stored state is
+    // current only while something is still judging it.
+    const beat = await this.prisma.collectorHeartbeat.findFirst({
+      orderBy: { passAt: 'desc' },
+      select: { passAt: true, egress: true, egressSince: true },
+    });
+    const now = new Date();
 
     return panels.map((p) => {
       const mine = open.filter((e) => e.panelId === p.id);
@@ -155,6 +167,10 @@ export class SystemsReadService {
         },
         health: {
           panelState: p.panelState,
+          cause: p.panelStateCause,
+          since: p.panelStateSince,
+          checkedAt: p.panelCheckedAt,
+          ...judgePanelHealth(p, beat, now),
           lastHealthyAt: p.lastHealthyAt,
           lastSuccessfulCollectionAt: p.lastSuccessfulCollectionAt,
           collectionHalted: mine.some((e) => e.collectionHalted),
