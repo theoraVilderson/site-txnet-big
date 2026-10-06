@@ -9,7 +9,7 @@ source:
   - txnet-backend/shared-core/src/lib/realtime/**
 owns_tables: []
 depends_on: [identity, forward-auth, redis-keyspace, tenant]
-updated: 2026-09-18
+updated: 2026-10-06
 ---
 
 # realtime
@@ -27,6 +27,7 @@ authenticating the upgrade (`forward-auth` does, ADR-0030).
 | [contract.md](contract.md) | changing the frames, the channel families, or the limits |
 | [contract.channels.md](contract.channels.md) | changing who may hear a channel, or adding a family |
 | [contract.fanout.md](contract.fanout.md) | an event does not reach a socket, or a new producer needs to send one |
+| [contract.live-events.md](contract.live-events.md) | adding an event a page re-reads on, or an RT-1 row (ADR-0121) |
 
 ## Changelog
 | Date | Change |

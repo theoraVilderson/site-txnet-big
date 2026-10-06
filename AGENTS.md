@@ -294,6 +294,11 @@ is yours.
   has already been run once.
 - Never ingest the whole catalog at once. An area you are not building costs
   nothing; ingesting it early fills the backlog with rows nobody can start.
+- **Queued work reaches the page over the socket (user, 2026-10-06; ADR-0121,
+  C-14).** When an item adds a job, a consumer or a service write that changes
+  something a page shows, the same item writes its outbox event (a
+  `LIVE_PUSH_FIELDS` row or an `EventNotice`) and the page re-reads on it with
+  `useLiveReread`. A new poller fails `conventions.py`; `RT-1` holds the rest.
 - Tests come before the code they cover, and the e2e tier is never run
   unasked. Both rules live with the rest of the test policy in
   `docs/CODE-LAYOUT.md` ("Order of work" and "Running them without burning the

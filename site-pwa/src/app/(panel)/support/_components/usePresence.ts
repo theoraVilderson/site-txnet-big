@@ -48,7 +48,7 @@ export function usePresence(): { online: boolean; toggle: () => void } {
     if (!online) return;
     const beat = () => void supportAgentApi.presence("online").catch(() => undefined);
     beat();
-    const timer = setInterval(beat, PRESENCE_EVERY_MS);
+    const timer = setInterval(beat, PRESENCE_EVERY_MS); // live-exempt: a beat the page sends
     return () => clearInterval(timer);
   }, [online]);
 

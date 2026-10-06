@@ -1,0 +1,135 @@
+---
+id: realtime
+layer: platform
+status: active
+version: 2
+updated: 2026-10-06
+---
+
+# Contract — live events: which event reaches which page
+
+The catalog ADR-0121 asks for: every event a page re-reads on, who produces
+it, on which channel, and which screen listens. A §10 split from
+`contract.md`; the transport is [contract.fanout.md](contract.fanout.md) and
+who may hear a channel is [contract.channels.md](contract.channels.md).
+
+**A new live event is a row here first**, in the same item that builds it.
+The `RT-1` rows below are written so that an implementing session has nothing
+left to decide; a fact that turns out wrong is said in one line and the row
+corrected, per "Decide once".
+
+## How every event is built (all RT-1 rows)
+
+1. **Declare the type** in `contracts/realtime/events.json`, then
+   `python3 tools/wire-gen.py` (C-08). The same string is the
+   `OutboxEventType` in `shared-core/src/lib/automation/routing-keys.ts`;
+   `routing-keys.contract.spec.ts` holds the two together.
+2. **Write the outbox row in the producer's own transaction**
+   (`tx.outboxEvent.create({ data: { aggregate, aggregateId, type, payload } })`,
+   ADR-0021), with `tenantId` (or `userId`) in the payload. Never publish from
+   the producer directly, except the two direct publishers named below.
+3. **Route it** with a `LIVE_PUSH_FIELDS` row (`worker-service/src/app/outbox/live-push.consumer.ts`)
+   and its queue binding in `broker.service.ts`. Nobody is told by inbox or
+   bot: these are page refreshes, not notices (ADR-0084).
+4. **Body = `type` + ids.** The page re-reads its own API (ADR-0121 point 3).
+5. **The page listens with `useLiveReread`** (RT-1-a) and still reads on mount.
+6. **Tests, one spec per side:** the producer's existing spec gains "writes
+   the outbox row in the same transaction"; the page's test gains "re-reads on
+   the event, ignores other types". No e2e.
+7. **Leave the C-14 `except`** for the page's file, in `docs/CONVENTIONS.md`.
+
+## Existing events
+
+| type | channel | producer | page |
+|---|---|---|---|
+| `billing.payment.confirmed` / `reversed` | `user:` | billing → payment consumers | PaymentCreditedToast, wallet |
+| `billing.wallet.changed` | `user:` | billing → live-push | useWalletBalance |
+| `notification.created` | `user:` | notification → consumer | useNotifications, useMenuBadges |
+| `entitlement.grant.delivered` / `refunded`, `network.grant.linksCaptured`, `entitlement.grant.usage` | `user:` | billing, network → live-push | useGrantsPage |
+| `network.panel.tested` | `tenant:` | network → panel-tested consumer | SystemsView |
+| OTP delivery state | `otp:<channelId>` | auth-service, direct (`OtpDeliveryStore.publish`) | useOtpDelivery |
+| `support.message` / `read` / `typing` / `status` | `support:<id>` | support-service, direct (`SupportRealtime`) | thread views |
+
+## Planned — the RT-1 rows
+
+**RT-1-a — `useLiveReread`** (`site-pwa/src/hooks/useLiveReread.ts`).
+`useLiveReread(channel: string | null, types: readonly string[], reread: () => void)`.
+Reads the client from `usePanelRealtime()`; no subscription while either is
+null. Keeps `reread` in a ref, so callers need not memoize it. On a message
+whose `payload.type` is in `types`, and on `onMissed`, calls a
+`trailingThrottle(reread, LIVE_REREAD_MS)`; cancels and unsubscribes on
+cleanup. Move SystemsView, useGrantsPage, useWalletBalance, useNotifications
+and useMenuBadges onto it. useMenuBadges **keeps** its 60 s poll until RT-1-j.
+A consumer that renders from the payload (PaymentCreditedToast, support
+threads, OTP) is not moved. Spec `useLiveReread.test.ts`: type filter, a burst
+of five makes two reads, `onMissed` re-reads, a null channel never
+subscribes, unmount unsubscribes.
+
+**RT-1-b — the tenant audience, and someone to hear it.**
+`LIVE_PUSH_FIELDS` becomes `{ audience: 'user' | 'tenant', fields }`; the
+channel is `user:<payload.userId>` or `tenant:<payload.tenantId>`, and a
+missing id throws as today. Existing rows become `audience: 'user'`.
+`realtime.tenant.read` is granted to **nobody** today except SuperAdmin via
+`*` (`forward-auth/contract.headers.md`), so a reseller hears no `tenant:`
+event at all, `network.panel.tested` included. Grant it to `Admin` and
+`Support`: a line under each in `auth-handler/configs/permissions.yaml`, a
+grant function in `prisma/seed.js` on the `grantGatewayManageToAdmin`
+pattern, and a migration inserting it for existing databases (dev: applied
+without asking). It joins the set a tenant-made role may grant (F-018-n2),
+which is intended: hearing your own tenant's refreshes is not a power.
+
+**RT-1-c — payment pending.** No new type: PaymentPendingView re-reads on
+`billing.payment.confirmed` / `reversed` on `user:`, matching `paymentId`.
+It also re-reads when the tab becomes visible: a pending payment that closes
+without credit (expiry, rejection) has no event, and inventing one only for
+this page buys a few seconds on a page that says "your money is safe".
+`setInterval` goes.
+
+**RT-1-d — bulk-by-filter progress.** Type `billing.grant_bulk.progressed`,
+`tenant:`, body `{type, jobId}`. Written by `GrantBulkJobService`
+(`billing-service/src/app/payment/gift/grant-bulk-job.ts`) in `drainJob`'s
+transaction after each batch, in the one that sets `done`, and in `cancel`.
+BulkByFilter re-reads its job list; `JOB_POLL_MS` goes from `grant-bulk.ts`.
+
+**RT-1-e — reseller domain status.** Type `tenant.domain.changed`, `tenant:`,
+body `{type, domainId}`. Written in `TenantDomainService.write`
+(`tenant-service/src/app/domains/tenant-domain.service.ts`) inside its
+transaction, only when `status` actually changed. tenant-service already
+writes outbox rows (`tenant-renewal.service.ts`). ResellerDomainsView
+re-reads; the re-read button stays for a person who wants to check now.
+
+**RT-1-f — panel drain and removal.** Type `network.panel.drained`,
+`tenant:`, body `{type, panelId, groupId}`. Written by `GroupDrainService.drainDue`
+(`billing-service/src/app/traffic/group-drain.ts`) when a pass retired at
+least one config or removed the member, in that write's transaction; the
+tenant is the member's. No Go change. SystemsView adds the type to the
+`useLiveReread` it got in RT-1-a.
+
+**RT-1-g — support inbox.** Type `support.inbox.changed`, `tenant:`, body
+`{type, conversationId}`. support-service has no outbox: publish directly,
+as `SupportRealtime` does, with a `tenant(tenantId, conversationId)` method
+on the same class (logged and swallowed). Called on a conversation created,
+assigned, resolved or closed, and on a user's message to an unassigned
+thread. Also declared in `events.json` for the browser's type. SupportInboxView
+re-reads the current view; its 60 s poll goes.
+
+**RT-1-h — bot linking before sign-in.** No new channel family: reuse `otp:`.
+`BotLinkService.startLink` calls `OtpDeliveryStore.mintHandles()` and returns
+`channel` + `channelToken` beside `linkToken`. `completeLink` and `fail`
+publish `{state, otpSent, failureKey?}` on that channel through the store.
+useBotLink subscribes on the anonymous socket the way useOtpDelivery does and
+calls `botLinkStatus` once per event, on `onMissed`, and on mount; the 2.5 s
+poll goes. `contract.channels.md` needs no new rule.
+
+**RT-1-i — delete `useLocaleVersion`.** Nothing imports it (2026-10-06). The
+file goes, and its C-14 `except` entry with it. A new-version banner, if ever
+wanted, is a new row with a broadcast decision of its own.
+
+**RT-1-j — manual payments, and the badges stop polling.** Type
+`billing.payment.verifying_changed`, `tenant:`, body `{type, paymentId}`.
+Written by every write that moves a payment into or out of `verifying` in
+`billing-service/src/app/payment/deposit/` (`verify-retry.ts`,
+`deposit-settlement.ts`, `manual-confirm.service.ts` confirm and reject).
+`ManualPaymentsView` and `ManualPaymentsWidget` re-read. useMenuBadges listens to it,
+`support.inbox.changed` and `notification.created`, and drops its 60 s poll
+(keeping the re-read on tab visible).

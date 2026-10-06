@@ -1,7 +1,7 @@
 ---
 id: conventions
 status: active
-updated: 2026-10-05
+updated: 2026-10-06
 ---
 
 # House style
@@ -34,6 +34,7 @@ needs to move up that table.
 |---|---|---|
 | C-01 | Technical docs, code, commit messages and logs are in English. Existing Persian inline comments may stay; do not add new ones. | review |
 | C-02 | Money is `Decimal`, never a float, and every money row records its `currencyCode` (ADR-0098) — one currency per row, never a second amount column in another. A payment's gateway receipt, `amountReceivedMinor` + `receivedCurrency` (D-32), is evidence, not money of record. Balances are ledger-derived; never write a balance field directly outside a ledger-append transaction. See ADR-0002. | review |
+| C-14 | A page never polls the server for state that someone else's work changes — it subscribes and re-reads (`useLiveReread`, ADR-0121). Under `site-pwa/src/app/` and `site-pwa/src/hooks/`, a `setInterval(` is a violation unless it is a clock (`setNow(`, `setSeconds(`) or carries a `live-exempt: <reason>` comment on its line. | check |
 | C-13 | A panel control is a kit primitive (`(panel)/_components/kit`, `contract.ux.md` K3–K14). Under `site-pwa/src/app/(panel)/`, outside the kit, `window.confirm(` (use `useConfirm`), a local button or input class constant (`primaryButton`, `quietButton`, `secondaryButton`, `dangerButton`, `input`, `inputClass`, `PRIMARY`, `SECONDARY`, `INPUT`) and `text-white` beside `bg-primary` (use `text-on-accent`) are violations. | check |
 | C-12 | A Nest route or middleware path names its wildcard: `'{*path}'`, `'internal/*path'`, `@Get('*key')`. A bare `*` — `forRoutes('*')`, `'internal/*'` — is a violation. | check |
 | C-11 | A backend app that opens a tenant scope (`runWithTenant(...)`) registers `TenantStatusGuard` as an `APP_GUARD`, so every route it serves obeys `TenantStatusPolicy`. See `docs/domains/tenant/rules.md`. | check |
@@ -478,4 +479,27 @@ forbid: window\.confirm\(|^\s*(?:export\s+)?const\s+(?:primaryButton|quietButton
 in: site-pwa/src/app/(panel)/**/*.tsx, site-pwa/src/app/(panel)/**/*.ts
 except: site-pwa/src/app/(panel)/_components/kit/**, site-pwa/src/app/(panel)/**/*.test.tsx, site-pwa/src/app/(panel)/**/*.test.ts
 message: use the kit (C-13) — useConfirm for a question, Button / Input / buttonClass for a control, text-on-accent on a primary surface (contract.ux.md K3–K14, E1)
+```
+
+## C-14 — a page hears queued work, it does not poll for it
+
+**Rule.** A page learns that a job, a worker tick or another service changed
+something by its event on `user:` or `tenant:`, through `useLiveReread`, and
+re-reads the API. It still reads on mount. A timer is a clock, a beat the page
+*sends*, or marked `// live-exempt: <reason>` on the same line.
+
+**Why.** On 2026-10-06 six pages polled — payment pending, bulk jobs, the
+support inbox, menu badges, bot linking, the locale version — and two more
+waited for a click, each built before its producer had an event (ADR-0121).
+The socket, the fan-out and the outbox wake already existed; nothing stopped
+the next page from polling. Each file in `except` is a poller with an open
+`RT-1` row and leaves the list when its row lands. A producer that changes
+visible state owes the event — ADR-0121 point 2; this check sees only the
+page's half, and only `setInterval`, not a `setTimeout` that re-arms itself.
+
+```check C-14
+forbid: \bsetInterval\((?!.*\bset(?:Now|Seconds)\()(?!.*live-exempt:)
+in: site-pwa/src/app/**/*.ts, site-pwa/src/app/**/*.tsx, site-pwa/src/hooks/**/*.ts, site-pwa/src/hooks/**/*.tsx
+except: site-pwa/src/**/*.test.ts, site-pwa/src/**/*.test.tsx, site-pwa/src/app/(panel)/_hooks/useMenuBadges.ts, site-pwa/src/app/(panel)/payment/_components/PaymentPendingView.tsx, site-pwa/src/app/(panel)/support/_components/SupportInboxView.tsx, site-pwa/src/app/(panel)/my-resellers/*/users/_components/BulkByFilter.tsx, site-pwa/src/app/(auth)/auth/_hooks/useBotLink.ts, site-pwa/src/hooks/useLocaleVersion.ts
+message: subscribe and re-read with useLiveReread (C-14, ADR-0121); the producer owes an outbox event — a clock or a beat the page sends is marked `// live-exempt: <reason>`
 ```

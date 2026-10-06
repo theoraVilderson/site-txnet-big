@@ -1110,6 +1110,17 @@ ingested rows reuse the catalog id verbatim as their row id.
 | F-1548 | Safety floor no tenant can turn off: budget, outage silence, bot rate limits, no other tenant's data | ai | done | F-1501 F-1506 | F-1548 | txnet-backend/ai-service/src/app/floor/safety-floor.ts, …/floor/silence.ts, …/floor/silence-internal.controller.ts, …/floor/safety-floor.spec.ts, txnet-backend/shared-core/src/lib/redis/keys.ts | Ingested 2026-10-02 (area 24, ADR-0109). Built 2026-10-02: SafetyFloor (cross-tenant, platform silence switch failing closed, budget); bot ceiling stays in the driver (contract.md "The safety floor"). |
 | F-1549 | Provider per message key, not one global key | ai | dropped | F-1539 | F-1549 |  | Dropped 2026-10-03 by the user: no BYO-AI language layer, templates only (ADR-0109 point 1). Revive only on a new request. |
 | F-1550 | Factory default by package: `ai_recommendation` in the package → engine and v1 types on with templates; otherwise no run; the model off until a provider is added | ai | done | F-038-b | F-1550 | txnet-backend/ai-service/src/app/policy/ai-defaults.ts, txnet-backend/ai-service/src/app/policy/ai-tenant-policy.ts, txnet-backend/ai-service/src/app/triggers/trigger.consumer.ts, txnet-backend/ai-service/src/app/policy/ai-defaults.spec.ts | Ingested 2026-10-02 (area 24, ADR-0109). User 2026-10-02, ADR-0109 point 12. Done 2026-10-02: resolveAiMode gates every trigger; no key = no run. ai/contract.md "Factory default". |
+| RT-1 | Queued work reaches the page over the socket; no page polls for it (umbrella) | panel-web | todo | RT-1-a RT-1-b RT-1-c RT-1-d RT-1-e RT-1-f RT-1-g RT-1-h RT-1-i RT-1-j | — |  | Umbrella. Split 2026-10-06 into RT-1-a…j (ADR-0121, C-14). Every child is specified in realtime/contract.live-events.md; nothing is left to ask. |
+| RT-1-a | `useLiveReread(channel, types, reread)` hook; SystemsView, useGrantsPage, useWalletBalance, useNotifications, useMenuBadges move onto it | panel-web | todo | — | — |  | Spec: realtime/contract.live-events.md RT-1-a. useMenuBadges keeps its poll until RT-1-j. One spec: useLiveReread.test.ts. |
+| RT-1-b | Live push gains a `tenant:` audience, and `realtime.tenant.read` is granted to Admin and Support (today nobody but SuperAdmin hears `tenant:`) | automation | todo | — | — |  | Spec: realtime/contract.live-events.md RT-1-b. Touches permissions.yaml, seed.js and a migration (dev: apply it, no ask). |
+| RT-1-c | Payment pending page re-reads on `billing.payment.confirmed` / `reversed` and on tab visible; its 10 s poll goes | panel-web | todo | RT-1-a | — |  | Spec: realtime/contract.live-events.md RT-1-c. No new event type. PaymentPendingView leaves the C-14 except. |
+| RT-1-d | Bulk-by-filter job progress: `billing.grant_bulk.progressed` on `tenant:`; BulkByFilter drops `JOB_POLL_MS` | billing | todo | RT-1-a RT-1-b | — |  | Spec: realtime/contract.live-events.md RT-1-d. BulkByFilter leaves the C-14 except. |
+| RT-1-e | Reseller domain status: `tenant.domain.changed` on `tenant:`; the domains page updates by itself | tenant | todo | RT-1-a RT-1-b | — |  | Spec: realtime/contract.live-events.md RT-1-e. Written only when status changed. |
+| RT-1-f | Panel drain and removal progress: `network.panel.drained` on `tenant:` from GroupDrainService; `/systems` re-reads | billing | todo | RT-1-a RT-1-b | — |  | Spec: realtime/contract.live-events.md RT-1-f. No Go change. |
+| RT-1-g | Support inbox: `support.inbox.changed` on `tenant:`, published directly by support-service; SupportInboxView drops its 60 s poll | support | todo | RT-1-a RT-1-b | — |  | Spec: realtime/contract.live-events.md RT-1-g. SupportInboxView leaves the C-14 except. |
+| RT-1-h | Bot linking before sign-in rides the existing `otp:` channel; useBotLink drops its 2.5 s poll | identity | todo | — | — |  | Spec: realtime/contract.live-events.md RT-1-h. No new channel family. useBotLink leaves the C-14 except. |
+| RT-1-i | Delete the unused `useLocaleVersion` hook | panel-web | todo | — | — |  | Spec: realtime/contract.live-events.md RT-1-i. Nothing imports it; its C-14 except entry goes too. |
+| RT-1-j | Manual payments: `billing.payment.verifying_changed` on `tenant:`; the manual list and the menu badges re-read, the badges' 60 s poll goes | billing | todo | RT-1-a RT-1-b RT-1-g | — |  | Spec: realtime/contract.live-events.md RT-1-j. useMenuBadges leaves the C-14 except. |
 
 ## Order of work — the F-027 network metering series
 
@@ -1436,6 +1447,10 @@ user group (F-114-j), both inside `billing-service`, no cash prizes.
 3. **Lottery:** F-707-i → F-707-j, F-707-k → F-707-l → F-707-m →
    F-707-n, F-707-o, F-707-p.
 4. **AI engine:** F-038-y after F-707-b; F-038-u after F-707-d.
+
+## Order of work — the RT-1 live-update series
+
+ADR-0121, C-14, `realtime/contract.live-events.md`. RT-1-a → RT-1-b → (RT-1-c, RT-1-d, RT-1-e, RT-1-f, RT-1-g) → RT-1-j; RT-1-h and RT-1-i whenever.
 
 ## Order of work — the F-414 guide series
 
