@@ -195,6 +195,23 @@ describe('the request', () => {
 });
 
 describe('the access token', () => {
+  it('is never sent by a login: a live token from another tab must not stop the form minting a fresh session', async () => {
+    // A tab holds a token while this browser's refresh cookie is dead — a
+    // rotation whose answer was lost. Sent with the login, it is refused 409
+    // `alreadyAuthenticated`, and the form is a dead end; sent with nothing,
+    // the login answers a new session and cookie.
+    fetchMock.mockImplementation(async () => envelope({ ok: true, data: { accessToken: 'at_live', expiresIn: 900 } }));
+    await authApi.verifyLoginOtp('09120000000', '123456');
+
+    await authApi.loginPassword('someone', 'pw', 'captcha');
+    expect(lastCall().headers.get('authorization')).toBeNull();
+    fetchMock.mockResolvedValueOnce(envelope({ ok: true, data: { status: 'queued' } }, 202));
+    await authApi.requestLoginOtp('09120000000', 'captcha');
+    expect(lastCall().headers.get('authorization')).toBeNull();
+    await authApi.verifyLoginOtp('09120000000', '123456');
+    expect(lastCall().headers.get('authorization')).toBeNull();
+  });
+
   it('is remembered after an OTP login and sent on the next call', async () => {
     fetchMock.mockResolvedValueOnce(
       envelope({ ok: true, data: { accessToken: 'at_1', expiresIn: 900 } }),

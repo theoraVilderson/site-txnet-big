@@ -156,6 +156,20 @@ function rawRequest<T>(path: string, init: RequestInit): Promise<T> {
   return rawCall<T>(path, init);
 }
 
+/**
+ * A login, with no credential at all. auth-service refuses a login that
+ * carries a live session's token (409 `alreadyAuthenticated`), and a tab can
+ * hold one while this browser's refresh cookie is dead — a rotation whose
+ * answer was lost, say, to an auth-service restart. The page-load check then
+ * shows the form, and with the token attached every submit was refused: a
+ * dead end. A login is never an authenticated call; sent bare, it mints the
+ * fresh session and cookie the browser needs.
+ */
+const loginCall = createApiClient({ baseUrl: API_URL, service: "auth-api" });
+function loginRequest<T>(path: string, init: RequestInit, captchaToken?: string): Promise<T> {
+  return loginCall<T>(path, init, captchaToken ? { [RequestHeaders.captchaToken]: captchaToken } : undefined);
+}
+
 async function request<T>(path: string, init: RequestInit = {}, captchaToken?: string): Promise<T> {
   return call<T>(path, init, captchaToken ? { [RequestHeaders.captchaToken]: captchaToken } : undefined);
 }
@@ -290,14 +304,14 @@ export type ActiveSession = {
 
 export const authApi = {
   async loginPassword(identifier: string, password: string, captchaToken: string) {
-    const result = await request<AuthResult | ({ requiresOtp: true; otpToken: string } & OtpDeliveryHandles)>("/auth/login/password", { method: "POST", body: JSON.stringify({ identifier, password }) }, captchaToken);
+    const result = await loginRequest<AuthResult | ({ requiresOtp: true; otpToken: string } & OtpDeliveryHandles)>("/auth/login/password", { method: "POST", body: JSON.stringify({ identifier, password }) }, captchaToken);
     if ("accessToken" in result) accessToken = result.accessToken;
     return result;
   },
   /** The delivery methods this deployment has switched on. */
   async otpChannels() { return request<{ channels: OtpChannelDescriptor[] }>("/auth/otp/channels", { method: "GET" }); },
-  async requestLoginOtp(phoneNumber: string, captchaToken: string, channel?: OtpChannel) { return request<OtpQueuedResult>("/auth/login/otp/request", { method: "POST", body: JSON.stringify({ phoneNumber, ...(channel ? { channel } : {}) }) }, captchaToken); },
-  async verifyLoginOtp(phoneNumber: string, otpCode: string) { const result = await request<AuthResult>("/auth/login/otp/verify", { method: "POST", body: JSON.stringify({ phoneNumber, otpCode }) }); accessToken = result.accessToken; return result; },
+  async requestLoginOtp(phoneNumber: string, captchaToken: string, channel?: OtpChannel) { return loginRequest<OtpQueuedResult>("/auth/login/otp/request", { method: "POST", body: JSON.stringify({ phoneNumber, ...(channel ? { channel } : {}) }) }, captchaToken); },
+  async verifyLoginOtp(phoneNumber: string, otpCode: string) { const result = await loginRequest<AuthResult>("/auth/login/otp/verify", { method: "POST", body: JSON.stringify({ phoneNumber, otpCode }) }); accessToken = result.accessToken; return result; },
   async register(input: { fullName: string; username: string; phoneNumber: string; password: string }, captchaToken: string, channel?: OtpChannel) { return request<({ phoneNumber: string; requiresPhoneVerification: boolean } & OtpDeliveryHandles & { linkRequired?: undefined }) | ({ phoneNumber: string; requiresPhoneVerification: boolean } & BotLinkRequired)>("/auth/register", { method: "POST", body: JSON.stringify({ ...input, ...(channel ? { channel } : {}) }) }, captchaToken); },
   async verifyPhone(phoneNumber: string, otpCode: string) { const result = await request<AuthResult & { userId: string }>("/auth/register/verify-phone", { method: "POST", body: JSON.stringify({ phoneNumber, otpCode }) }); accessToken = result.accessToken; return result; },
   async forgot(phoneNumber: string, captchaToken: string, channel?: OtpChannel) { return request<OtpQueuedResult>("/auth/password/forgot", { method: "POST", body: JSON.stringify({ phoneNumber, ...(channel ? { channel } : {}) }) }, captchaToken); },
