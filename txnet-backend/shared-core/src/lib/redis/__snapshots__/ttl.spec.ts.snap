@@ -9,6 +9,7 @@ exports[`RedisTtl > records the whole catalogue in one place 1`] = `
   "botSession": 2592000,
   "captchaChallenge": 60,
   "captchaVerified": 120,
+  "grantLinesLatest": 86400,
   "guideViewSeen": 172800,
   "handoff": 60,
   "impersonation": 1800,

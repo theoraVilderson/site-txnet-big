@@ -15,6 +15,8 @@ import {
   NOTICE_BURST_DELAY_ROUTING_KEY,
   NOTICE_BURST_FLUSH_ROUTING_KEY,
   NOTICE_BURST_HOUR_DELAY_ROUTING_KEY,
+  GRANT_LINES_SETTLE_DELAY_ROUTING_KEY,
+  GRANT_LINES_SETTLE_ROUTING_KEY,
   OTP_DELIVERY_ROUTING_PREFIX,
   OutboxEventType,
   outboxRoutingKey,
@@ -208,6 +210,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly retentionNoticeQueue: string;
   private readonly noticeDelayQueue: string;
   private readonly noticeHourDelayQueue: string;
+  private readonly linesSettleDelayQueue: string;
   private readonly noticeFlushQueue: string;
   private readonly outboxPrefetch: number;
   private readonly botUpdatePrefix: string;
@@ -241,6 +244,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     this.retentionNoticeQueue = config.getOrThrow<string>('AUTOMATION_RETENTION_NOTICE_QUEUE');
     this.noticeDelayQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_DELAY_QUEUE');
     this.noticeHourDelayQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_HOUR_DELAY_QUEUE');
+    this.linesSettleDelayQueue = config.getOrThrow<string>('AUTOMATION_LINES_SETTLE_DELAY_QUEUE');
     this.noticeFlushQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_FLUSH_QUEUE');
     this.outboxPrefetch = config.getOrThrow<number>('AUTOMATION_OUTBOX_PREFETCH');
     this.botUpdatePrefix = config.getOrThrow<string>('BOT_UPDATE_QUEUE_PREFIX');
@@ -375,6 +379,17 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     ]) {
       await this.channel.bindQueue(this.grantDeliveryNoticeQueue, this.exchange, outboxRoutingKey(type));
     }
+    // F-027-eo: the settle check of a Grant's changed lines waits out its
+    // window in a queue nobody consumes, then lands on the buyer-notice queue.
+    await this.channel.assertQueue(this.linesSettleDelayQueue, {
+      durable: true,
+      arguments: {
+        'x-dead-letter-exchange': this.exchange,
+        'x-dead-letter-routing-key': GRANT_LINES_SETTLE_ROUTING_KEY,
+      },
+    });
+    await this.channel.bindQueue(this.linesSettleDelayQueue, this.exchange, GRANT_LINES_SETTLE_DELAY_ROUTING_KEY);
+    await this.channel.bindQueue(this.grantDeliveryNoticeQueue, this.exchange, GRANT_LINES_SETTLE_ROUTING_KEY);
     // F-114-i: a purchase delivered at once. Its own queue, apart from the
     // notices: this one asks billing to act, and its depth means buyers waiting.
     // F-111-n: a config confirmed on its panel is the same ask for a network
@@ -539,6 +554,21 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       persistent: true,
       contentType: 'application/json',
       messageId: flush.flushId,
+      expiration: String(delayMs),
+    });
+  }
+
+  /**
+   * Schedule a Grant's lines settle check `delayMs` from now (F-027-eo), as
+   * `publishNoticeFlush` schedules a flush: it expires in its delay queue and
+   * the broker moves it to the buyer-notice queue.
+   */
+  async publishLinesSettle(message: OutboxMessage, delayMs: number): Promise<void> {
+    if (!this.publish) throw new Error('broker channel is not open');
+    await this.publish(this.exchange, GRANT_LINES_SETTLE_DELAY_ROUTING_KEY, Buffer.from(JSON.stringify(message)), {
+      persistent: true,
+      contentType: 'application/json',
+      messageId: message.id,
       expiration: String(delayMs),
     });
   }

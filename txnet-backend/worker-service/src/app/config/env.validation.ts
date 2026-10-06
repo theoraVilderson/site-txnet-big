@@ -143,6 +143,8 @@ export const envSchema = z.object({
   AUTOMATION_NOTICE_FLUSH_QUEUE: z.string().min(1).default('txnet.automation.notice.flush'),
   /** The hour lane's delay queue (F-601-p): its own, since a delay queue must hold one window. */
   AUTOMATION_NOTICE_HOUR_DELAY_QUEUE: z.string().min(1).default('txnet.automation.notice.delay-hour'),
+  /** Where a Grant's lines change waits to settle (F-027-eo): its own queue, one window. */
+  AUTOMATION_LINES_SETTLE_DELAY_QUEUE: z.string().min(1).default('txnet.automation.lines-settle.delay'),
   /**
    * The bot-update queue set (F-067-b): `<prefix>.0` … `<prefix>.N-1`, each
    * bound to its own `bot.update.<slot>` on the same exchange and
@@ -215,6 +217,8 @@ export const envSchema = z.object({
    * keep `AUTOMATION_NOTICE_WINDOW_MS`.
    */
   AUTOMATION_RETENTION_WINDOW_MS: z.coerce.number().int().positive().default(3_600_000),
+  /** How long a Grant's lines must stand unchanged before its buyer is told (F-027-eo). */
+  AUTOMATION_LINES_SETTLE_MS: z.coerce.number().int().positive().default(300_000),
 
   /**
    * How many unpublished `automation.outbox_event` rows one relay run claims

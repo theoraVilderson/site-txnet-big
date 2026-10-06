@@ -80,6 +80,7 @@ describe('the key catalogue', () => {
       noticeBurst: UnscopedRedisKeys.noticeBurst('tenant-1', 'user-1', 'panelAccepted'),
       noticeBurstScheduled: UnscopedRedisKeys.noticeBurstScheduled('tenant-1', 'user-1', 'panelAccepted'),
       noticeBurstBatch: UnscopedRedisKeys.noticeBurstBatch('flush-1'),
+      grantLinesLatest: UnscopedRedisKeys.grantLinesLatest('grant-1'),
       subUsage: UnscopedRedisKeys.subUsage('grant-1'),
     }).toMatchSnapshot();
   });

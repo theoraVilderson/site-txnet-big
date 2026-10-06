@@ -1,4 +1,4 @@
-import { OutboxEventType, type OutboxMessage } from '@txnet-backend/shared-core';
+import { GRANT_LINES_SETTLE_ROUTING_KEY, OutboxEventType, RedisTtl, UnscopedRedisKeys, type OutboxMessage } from '@txnet-backend/shared-core';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -11,10 +11,12 @@ import { EventNoticeSender } from './event-notice';
 const CONSUMER = 'grant-delivery-notify';
 /** The tenant owner's notice of a delayed purchase has its own markers (F-601-i): the buyer's landing never stands for it. */
 const ALERT_CONSUMER = 'grant-delivery-alert';
-/** Lines a panel-side change replaced (F-027-eo) have their own markers, one per Grant and hour. */
+/** Lines a panel-side change replaced (F-027-eo) have their own markers, under the last change's event id. */
 const LINES_CONSUMER = 'grant-lines-changed';
-/** How long one Grant's replaced configs are one notice: an inbound edit replaces them within a few passes. */
-const LINES_NOTICE_BUCKET_MS = 60 * 60 * 1000;
+/** Record this change as the Grant's last, whatever was there. */
+const LINES_LATEST_SET = `redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])`;
+/** 1 while the Grant's last change is still this one. */
+const LINES_LATEST_IS = `return redis.call('GET', KEYS[1]) == ARGV[1] and 1 or 0`;
 
 /** Why billing says a purchase is still waiting (`DeliveryDelay`, entitlement `delivery.ts`) -> the owner's template. */
 const DELAY_TEMPLATE: Record<string, string> = {
@@ -45,21 +47,28 @@ const DELAY_TEMPLATE: Record<string, string> = {
  * so they are told to update the subscription in their app. `ours` — a
  * create, a move, their own regenerate — and an event with no cause tell
  * nobody. One notice per Grant: every config of it replaced within the same
- * hour shares one event id, so the markers and the burst hold it once. The
- * live push stays `LivePushConsumer`'s.
+ * nobody. The buyer is told **once the edits settle** (user, 2026-10-06): each
+ * change records itself as the Grant's last (`grantLinesLatest`) and schedules
+ * a check `AUTOMATION_LINES_SETTLE_MS` (5 min) on; the check tells only while
+ * it is still the last, so a Grant's configs replaced over several passes, and
+ * an owner's several edits in a row, are one notice after the last of them —
+ * when updating the app gets the final lines. The live push stays
+ * `LivePushConsumer`'s.
  */
 @Injectable()
 export class GrantDeliveryConsumer implements OnApplicationBootstrap {
   private readonly logger = new Logger(GrantDeliveryConsumer.name);
   private readonly notices: EventNoticeSender;
+  private readonly settleMs: number;
 
   constructor(
     private readonly broker: BrokerService,
-    redis: RedisService,
+    private readonly redis: RedisService,
     realtime: RealtimePublisher,
     config: ConfigService,
   ) {
     this.notices = new EventNoticeSender(redis, realtime, config, broker);
+    this.settleMs = config.get<number>('AUTOMATION_LINES_SETTLE_MS', 300_000);
   }
 
   async onApplicationBootstrap() {
@@ -70,6 +79,7 @@ export class GrantDeliveryConsumer implements OnApplicationBootstrap {
   async handle(event: OutboxMessage): Promise<void> {
     if (event.type === OutboxEventType.GRANT_DELIVERY_DELAYED) return this.delayed(event);
     if (event.type === OutboxEventType.GRANT_LINKS_CAPTURED) return this.linesChanged(event);
+    if (event.type === GRANT_LINES_SETTLE_ROUTING_KEY) return this.linesSettled(event);
     const grant = grantOf(event);
     const refunded = event.type === OutboxEventType.GRANT_REFUNDED;
     await this.notices.send({
@@ -90,6 +100,7 @@ export class GrantDeliveryConsumer implements OnApplicationBootstrap {
     });
   }
 
+  /** A panel-side change: record it as the Grant's last and schedule its settle check. */
   private async linesChanged(event: OutboxMessage): Promise<void> {
     const p = (event.payload ?? {}) as Record<string, unknown>;
     if (p['cause'] !== 'panel') return;
@@ -98,11 +109,23 @@ export class GrantDeliveryConsumer implements OnApplicationBootstrap {
     const userId = str('userId');
     const grantId = str('grantId');
     if (!tenantId || !userId || !grantId) throw new Error(`outbox event ${event.id} has replaced lines without its tenant, user or Grant`);
-    const bucket = Math.floor(Date.parse(event.occurredAt) / LINES_NOTICE_BUCKET_MS);
-    if (!Number.isFinite(bucket)) throw new Error(`outbox event ${event.id} has no readable occurredAt`);
+    await this.redis.evalScript(LINES_LATEST_SET, [UnscopedRedisKeys.grantLinesLatest(grantId)], [event.id, RedisTtl.grantLinesLatest]);
+    await this.broker.publishLinesSettle(
+      { ...event, type: GRANT_LINES_SETTLE_ROUTING_KEY, payload: { tenantId, userId, grantId } },
+      this.settleMs,
+    );
+  }
+
+  /** The settle check: tell the buyer only if no later change superseded this one. */
+  private async linesSettled(event: OutboxMessage): Promise<void> {
+    const p = (event.payload ?? {}) as Record<string, string>;
+    const { tenantId, userId, grantId } = p;
+    if (!tenantId || !userId || !grantId) throw new Error(`settle check ${event.id} without its tenant, user or Grant`);
+    const latest = await this.redis.evalScript<number>(LINES_LATEST_IS, [UnscopedRedisKeys.grantLinesLatest(grantId)], [event.id]);
+    if (latest !== 1) return;
     await this.notices.send({
       consumer: LINES_CONSUMER,
-      eventId: `${grantId}:${bucket}`,
+      eventId: event.id,
       person: { tenantId, userId, template: 'serviceLinesChanged', params: {}, grantId },
     });
   }

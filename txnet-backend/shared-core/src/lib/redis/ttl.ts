@@ -100,6 +100,8 @@ export const RedisTtl = {
    * the next event schedules another.
    */
   noticeBurstScheduledSlack: 60,
+  /** A Grant's last lines change (F-027-eo): well past its settle window, then forgotten. */
+  grantLinesLatest: 24 * 3600,
 
   botNav: 30 * 60,
   botSession: 30 * 24 * 3600,

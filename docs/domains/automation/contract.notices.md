@@ -49,7 +49,7 @@ The person half of `network.grant.linksCaptured`, told by `GrantDeliveryConsumer
 |---|---|
 | Told only when the payload's `cause` is `panel`: lines were served for this very uuid and the panel now builds others (network `contract.links.md` rule 7a). `ours` — a first capture, a move, the buyer's own regenerate — and no cause tell nobody | the buyer's app holds the old lines until it updates; their own regenerate they already see |
 | Template `serviceLinesChanged`, class `important` (inbox and bot), `person` only, with `grantId` so a combined one names the services | "update the subscription in your app"; the live push stays `LivePushConsumer`'s |
-| **One per Grant**: the event id is `<grantId>:<hour of occurredAt>`, so every config of a Grant replaced within the hour shares one marker and one burst field | an edited inbound replaces a Grant's configs over a few passes; three configs are one message, not three |
+| **Told once the edits settle** (user, 2026-10-06): a `panel` change sets `grantLinesLatest(grantId)` to its event id and publishes a settle check (type `grant.lines.settle`, same id) through its own delay queue (`AUTOMATION_LINES_SETTLE_DELAY_QUEUE`, `AUTOMATION_LINES_SETTLE_MS` = 5 min) back onto this queue; the check tells only while that key still holds its id, under its id's markers | a Grant's configs replaced over a few passes, and an owner's edits in a row, are one notice after the last — when updating the app gets the final lines. A fixed hour bucket (the first cut) left a second edit two minutes later untold |
 | A `panel` payload without tenant, user or Grant, or an unreadable `occurredAt`, throws and dead-letters | whose service it is is never guessed |
 
 ## A burst is told once (F-067-p, ADR-0084 decision 3)

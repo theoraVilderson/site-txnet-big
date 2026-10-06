@@ -326,6 +326,12 @@ export const UnscopedRedisKeys = {
     `notice:burst-scheduled${noticeLane(window, only)}:${tenantId}:${userId}:${template}`,
   /** What one flush took, kept so a redelivered flush tells the same batch and nothing newer. */
   noticeBurstBatch: (flushId: string) => `notice:burst-batch:${flushId}`,
+  /**
+   * The last panel-side change to one Grant's lines (F-027-eo): the id of its
+   * `network.grant.linksCaptured` event. Its settle check tells the buyer only
+   * while it still holds that id — a later change supersedes it.
+   */
+  grantLinesLatest: (grantId: string) => `grant:lines-latest:${grantId}`,
 
   /**
    * A Grant's `consumedBytes`, as last committed (F-609-a). Written by

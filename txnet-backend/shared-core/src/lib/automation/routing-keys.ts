@@ -254,6 +254,14 @@ export const NOTICE_BURST_FLUSH_ROUTING_KEY = 'notice.burst.flush';
  * delay queue expires only its head and every message in one must share a window.
  */
 export const NOTICE_BURST_HOUR_DELAY_ROUTING_KEY = 'notice.burst.delay-hour';
+/**
+ * A Grant's lines changed on its panel (F-027-eo): the check waits out
+ * `AUTOMATION_LINES_SETTLE_MS` in a delay queue of its own and lands on
+ * `GRANT_LINES_SETTLE_ROUTING_KEY`, the buyer-notice queue's, as an
+ * outbox-shaped message of that type.
+ */
+export const GRANT_LINES_SETTLE_DELAY_ROUTING_KEY = 'grant.lines.settle-delay';
+export const GRANT_LINES_SETTLE_ROUTING_KEY = 'grant.lines.settle';
 
 /** A topic binding matching every routing key under `prefix` (which ends in `.`). */
 export const topicBindingAll = (prefix: string): string => `${prefix}#`;

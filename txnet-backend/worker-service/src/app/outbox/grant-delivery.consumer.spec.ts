@@ -104,36 +104,65 @@ describe('GrantDeliveryConsumer — a purchase still waiting (F-601-i)', () => {
 });
 
 describe('GrantDeliveryConsumer — lines a panel-side change replaced (F-027-eo)', () => {
-  const captured = (payload: Record<string, unknown>, id = '77777777-7777-4777-8777-777777777771', occurredAt = '2026-10-06T10:05:00Z') => ({
+  const captured = (payload: Record<string, unknown>, id = '77777777-7777-4777-8777-777777777771') => ({
     ...event(OutboxEventType.GRANT_LINKS_CAPTURED, { configId: 'c-1', ...payload }),
     id,
     aggregate: 'network.config',
-    occurredAt,
+    occurredAt: '2026-10-06T10:05:00Z',
   });
 
-  it('tells the buyer in inbox and bot, naming the Grant, with no live push of its own', async () => {
-    const { consumer, send } = build();
+  /** A consumer over an in-memory Redis and a broker that records each settle it is asked to schedule. */
+  function settling() {
+    const store = new Map<string, string>();
+    const redis = {
+      evalScript: vi.fn(async (script: string, keys: string[], args: (string | number)[]) => {
+        if (script.includes("'SET'")) return void store.set(keys[0]!, String(args[0]));
+        return store.get(keys[0]!) === String(args[0]) ? 1 : 0;
+      }),
+    };
+    const settles: { message: OutboxMessage; delayMs: number }[] = [];
+    const broker = { publishLinesSettle: vi.fn(async (message: OutboxMessage, delayMs: number) => void settles.push({ message, delayMs })) };
+    const config = { get: (_k: string, fallback?: unknown) => fallback };
+    const consumer = new GrantDeliveryConsumer(broker as never, redis as never, { publish: vi.fn() } as never, config as never);
+    const send = vi.fn(async (_notice: unknown) => undefined);
+    (consumer as unknown as { notices: { send: typeof send } }).notices = { send };
+    return { consumer, send, settles };
+  }
+
+  it('waits for the edits to settle: a change tells nobody yet, and schedules the check 5 minutes on', async () => {
+    const { consumer, send, settles } = settling();
     await consumer.handle(captured({ cause: 'panel' }));
+    expect(send).not.toHaveBeenCalled();
+    expect(settles).toHaveLength(1);
+    expect(settles[0]!.delayMs).toBe(5 * 60 * 1000);
+  });
+
+  it('tells the buyer once the last change has stood its 5 minutes, naming the Grant, with no live push of its own', async () => {
+    const { consumer, send, settles } = settling();
+    await consumer.handle(captured({ cause: 'panel' }));
+    await consumer.handle(settles[0]!.message);
     expect(send).toHaveBeenCalledTimes(1);
-    const notice = send.mock.calls[0]![0] as { live?: unknown; person: { template: string; grantId?: string; userId: string } };
+    const notice = send.mock.calls[0]![0] as { live?: unknown; eventId: string; person: { template: string; grantId?: string; userId: string } };
     expect(notice.live).toBeUndefined();
     expect(notice.person).toMatchObject({ template: 'serviceLinesChanged', userId: USER, grantId: GRANT });
   });
 
-  it('tells nobody about the buyer\'s own regenerate, a create or a move — cause `ours`, or none at all', async () => {
-    const { consumer, send } = build();
-    await consumer.handle(captured({ cause: 'ours' }));
-    await consumer.handle(captured({}));
+  it('is one notice after the last of several edits: a change superseded inside the 5 minutes tells nobody', async () => {
+    const { consumer, send, settles } = settling();
+    await consumer.handle(captured({ cause: 'panel' }, '77777777-7777-4777-8777-777777777771'));
+    await consumer.handle(captured({ cause: 'panel', configId: 'c-2' }, '77777777-7777-4777-8777-777777777772'));
+    await consumer.handle(settles[0]!.message);
     expect(send).not.toHaveBeenCalled();
+    await consumer.handle(settles[1]!.message);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect((send.mock.calls[0]![0] as { eventId: string }).eventId).toBe('77777777-7777-4777-8777-777777777772');
   });
 
-  it('is one notice per Grant: its configs replaced within the hour share one event id', async () => {
-    const { consumer, send } = build();
-    await consumer.handle(captured({ cause: 'panel', configId: 'c-1' }, '77777777-7777-4777-8777-777777777771', '2026-10-06T10:05:00Z'));
-    await consumer.handle(captured({ cause: 'panel', configId: 'c-2' }, '77777777-7777-4777-8777-777777777772', '2026-10-06T10:40:00Z'));
-    await consumer.handle(captured({ cause: 'panel', configId: 'c-1' }, '77777777-7777-4777-8777-777777777773', '2026-10-06T12:01:00Z'));
-    const ids = send.mock.calls.map((c) => (c[0] as unknown as { eventId: string }).eventId);
-    expect(ids[0]).toBe(ids[1]);
-    expect(ids[2]).not.toBe(ids[0]);
+  it('tells nobody about the buyer\'s own regenerate, a create or a move — cause `ours`, or none at all', async () => {
+    const { consumer, send, settles } = settling();
+    await consumer.handle(captured({ cause: 'ours' }));
+    await consumer.handle(captured({}));
+    expect(settles).toHaveLength(0);
+    expect(send).not.toHaveBeenCalled();
   });
 });
