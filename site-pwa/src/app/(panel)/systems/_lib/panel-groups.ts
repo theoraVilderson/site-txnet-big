@@ -141,6 +141,20 @@ export function canDrain(member: PanelGroupMember): boolean {
   return member.role !== "drain";
 }
 
+/**
+ * The group's last member that is not draining: draining it is refused
+ * (`no_other_member`, F-027-ee) — no panel could take its users, so the drain
+ * would hold every active Grant for good. Add a panel first, or remove it now.
+ */
+export function isLastToServe(member: PanelGroupMember, group: PanelGroup): boolean {
+  return !group.members.some((m) => m.panelId !== member.panelId && m.role !== "drain");
+}
+
+/** "Remove now" (groups rule 16): any member, a draining one too — the way out of a held drain — until it is marked. */
+export function canEvict(member: PanelGroupMember): boolean {
+  return member.evictedAt === null;
+}
+
 /** A draining member goes on its own when the sweep has emptied it (groups rule 15). */
 export function canRemove(member: PanelGroupMember): boolean {
   return member.role !== "drain";
@@ -153,7 +167,7 @@ export function canRemove(member: PanelGroupMember): boolean {
  * than", never "at".
  */
 export function drainEarliestAt(member: PanelGroupMember, group: PanelGroup): string | null {
-  if (member.role !== "drain" || !member.drainingSince) return null;
+  if (member.role !== "drain" || !member.drainingSince || member.evictedAt) return null;
   return new Date(Date.parse(member.drainingSince) + DRAIN_TTL_MULTIPLE * group.subscriptionTtlSeconds * 1000).toISOString();
 }
 

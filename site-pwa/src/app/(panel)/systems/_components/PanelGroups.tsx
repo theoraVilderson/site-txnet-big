@@ -16,7 +16,9 @@ import {
   MEMBER_ROLE_KEYS,
   addablePanels,
   canDrain,
+  canEvict,
   canRemove,
+  isLastToServe,
   drainEarliestAt,
   emptyGroupForm,
   groupFormOf,
@@ -342,7 +344,7 @@ function MemberRow({ group, member, onChanged }: { group: PanelGroup; member: Pa
   const [notice, setNotice] = useState<string | null>(null);
   const earliest = drainEarliestAt(member, group);
   const placeable = memberPlaceable(member);
-  const leaving = canDrain(member) || canRemove(member);
+  const leaving = canDrain(member) || canRemove(member) || canEvict(member);
 
   return (
     <li className="flex flex-col gap-2 py-3 text-xs">
@@ -363,10 +365,16 @@ function MemberRow({ group, member, onChanged }: { group: PanelGroup; member: Pa
               <Pill tone={STATE_TONE[member.panelState]}>{t("common", PANEL_STATE_KEYS[member.panelState])}</Pill>
             )}
           </span>
-          {earliest && member.drainingSince ? (
-            <span className="text-text-secondary">
-              {t("common", K.drain.since, { since: formatInstant(member.drainingSince, lang) ?? member.drainingSince, at: formatInstant(earliest, lang) ?? earliest })}
-            </span>
+          {member.evictedAt ? (
+            <span className="text-text-secondary">{t("common", K.evict.since, { since: formatInstant(member.evictedAt, lang) ?? member.evictedAt })}</span>
+          ) : earliest && member.drainingSince ? (
+            <>
+              <span className="text-text-secondary">
+                {t("common", K.drain.since, { since: formatInstant(member.drainingSince, lang) ?? member.drainingSince, at: formatInstant(earliest, lang) ?? earliest })}
+              </span>
+              {/* Held by the sweep (rule 14): said, with the way out, instead of a wait that silently never ends. */}
+              {!!member.heldGrants && <span className="font-bold text-error">{t("common", K.drain.held, { n: member.heldGrants })}</span>}
+            </>
           ) : (
             <span className={isCustom(member) ? "font-bold text-primary" : "text-text-secondary"}>
               {t("common", isCustom(member) ? SYSTEMS_KEYS.member.summary.custom : SYSTEMS_KEYS.member.summary.same)}
@@ -418,10 +426,12 @@ function MemberRow({ group, member, onChanged }: { group: PanelGroup; member: Pa
 }
 
 /**
- * Taking a member out of its group, both ways said side by side (rule 11):
+ * Taking a member out of its group, every way said side by side (rule 11):
  * remove while nothing is on it, drain — with its least wait — while users
- * are. A refusal re-reads too: `already_draining` or `member_not_found`
- * means the list is stale.
+ * are and another member can take them, and "remove now" (rule 16) for a
+ * panel that is broken or gone, its cost counted before the confirm. A
+ * refusal re-reads too: `already_draining` or `member_not_found` means the
+ * list is stale.
  */
 function LeaveSheet({
   group,
@@ -442,6 +452,22 @@ function LeaveSheet({
   const message = useSystemsError();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ liveConfigs: number; soleLineGrants: number } | null>(null);
+  const lastToServe = isLastToServe(member, group);
+
+  /** The cost of "remove now", read before its confirm is offered; the sheet stays open. */
+  const check = async () => {
+    setBusy(true);
+    setFailure(null);
+    try {
+      setPreview(await billingApi.panelGroupMemberEvictPreview(group.id, member.panelId));
+    } catch (e) {
+      setFailure(message(e));
+      await onChanged();
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const run = async (call: () => Promise<string | null>) => {
     setBusy(true);
@@ -459,7 +485,10 @@ function LeaveSheet({
   return (
     <Sheet title={t("common", K.drain.confirmTitle, { panel: member.panelName })} onClose={onClose}>
       <p className="text-sm leading-6 text-text-secondary">{t("common", SYSTEMS_KEYS.member.leave.hint)}</p>
-      {canDrain(member) && (
+      {canDrain(member) && lastToServe && (
+        <div className="rounded-2xl border border-border bg-bg-inner p-4 text-xs leading-5 text-text-secondary">{t("common", K.drain.lastMember)}</div>
+      )}
+      {canDrain(member) && !lastToServe && (
         <div className="flex flex-col gap-2 rounded-2xl border border-error-border bg-bg-inner p-4">
           <p className="text-xs leading-5 text-text-secondary">{t("common", K.drain.confirmHint, { wait: wait(DRAIN_TTL_MULTIPLE * group.subscriptionTtlSeconds) })}</p>
           <div>
@@ -488,6 +517,42 @@ function LeaveSheet({
           >
             {t("common", K.remove)}
           </Button>
+        </div>
+      )}
+      {canEvict(member) && (
+        <div className="flex flex-col gap-2 rounded-2xl border border-error-border bg-bg-inner p-4">
+          <p className="text-sm font-bold text-text-primary">{t("common", K.evict.title)}</p>
+          <p className="text-xs leading-5 text-text-secondary">{t("common", K.evict.hint)}</p>
+          {preview ? (
+            <>
+              <Alert tone={preview.soleLineGrants > 0 ? "error" : "info"}>
+                {preview.soleLineGrants > 0
+                  ? t("common", K.evict.preview, { configs: preview.liveConfigs, users: preview.soleLineGrants })
+                  : t("common", K.evict.previewSafe, { configs: preview.liveConfigs })}
+              </Alert>
+              <div>
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void run(async () => (await billingApi.evictPanelGroupMember(group.id, member.panelId), t("common", K.evict.started)))}
+                  className="text-error hover:text-error hover:bg-error-bg"
+                >
+                  {t("common", K.evict.confirm)}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div>
+              <Button
+                size="sm"
+                disabled={busy}
+                onClick={() => void check()}
+                className="text-error hover:text-error hover:bg-error-bg"
+              >
+                {t("common", K.evict.check)}
+              </Button>
+            </div>
+          )}
         </div>
       )}
       {failure && <Notice tone="bad">{failure}</Notice>}

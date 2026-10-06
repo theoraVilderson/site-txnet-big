@@ -3323,6 +3323,7 @@
       "member_not_found": "That panel is no longer in this group.",
       "already_member": "That panel is already in this group.",
       "already_draining": "It is already draining; its wait was not restarted.",
+      "no_other_member": "This is the group's last panel: no other panel could take its users, so draining it would never finish. Add another panel to the group first — or, if this one is broken or gone, use “Remove now”.",
       "member_has_configs": "Users still have configs on this panel through this group. Drain it instead — it leaves the group on its own once they have moved.",
       "inbound_not_found": "That inbound is not on this panel any more. Read the inbounds again.",
       "inbound_not_sellable": "That inbound cannot be sold: it is gone from the panel, or serves a protocol we do not sell.",
@@ -3404,7 +3405,19 @@
         "confirmHint": "It takes no new configs. Each user is given another member's line first; this panel's configs go no sooner than {{wait}} after that, and the member leaves the group on its own. No user is cut off.",
         "submit": "Drain",
         "started": "Draining. Its configs go no sooner than {{wait}} from now — later for a Grant whose replacement is not served yet.",
-        "since": "Draining since {{since}} · configs go no sooner than {{at}}"
+        "since": "Draining since {{since}} · configs go no sooner than {{at}}",
+        "lastMember": "Draining needs another panel in the group for users to move to. This is the group's last one — add another panel first.",
+        "held": "Waiting: {{n}} subscription(s) no other panel in this group serves. Add a panel to the group, or use “Remove now” if this one is broken."
+      },
+      "evict": {
+        "title": "Remove now",
+        "hint": "For a panel that is broken, gone, or must stop serving. It does not wait for users to move: within a minute every config of this group on it is deleted and the panel leaves the group.",
+        "check": "Remove now…",
+        "preview": "{{configs}} config(s) will be deleted. {{users}} subscription(s) have no line anywhere else and stay disconnected until you add a panel to this group; once you do, they are placed on it automatically.",
+        "previewSafe": "{{configs}} config(s) will be deleted. Every one of these users is also served by another panel of this group; no one is cut off.",
+        "confirm": "Yes, remove it now",
+        "started": "Removing. Within a minute its configs are deleted and the panel leaves the group.",
+        "since": "Being removed since {{since}} · takes under a minute"
       },
       "role": {
         "primary": "Primary",

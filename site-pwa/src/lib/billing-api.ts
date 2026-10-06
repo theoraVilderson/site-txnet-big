@@ -1562,6 +1562,18 @@ export const billingApi = {
     });
   },
 
+  /** What "remove now" would take: the member's live configs, and the active Grants left with no line (F-027-ee). */
+  async panelGroupMemberEvictPreview(groupId: string, panelId: string): Promise<EvictPreview> {
+    return call<EvictPreview>(`/systems/panel-groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(panelId)}/evict-preview`);
+  },
+
+  /** "Remove now": the drain sweep retires its configs on its next tick, no wait, then removes it. A second call keeps the first mark. */
+  async evictPanelGroupMember(groupId: string, panelId: string): Promise<EvictedMember> {
+    return call<EvictedMember>(`/systems/panel-groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(panelId)}/evict`, {
+      method: "POST",
+    });
+  },
+
   // The six gateway calls are {@link ambientGatewayApi}'s, kept here under
   // their old names for the pages that ask about the caller's own tenant and
   // nothing else (the coupon form's gateway picker). A screen that configures
@@ -2128,6 +2140,10 @@ export interface PanelGroupMember {
   inbounds: string[];
   role: PanelGroupMemberRole;
   drainingSince: string | null;
+  /** "Remove now" was chosen (F-027-ee): the sweep takes it on its next tick. Only while `drain`. */
+  evictedAt: string | null;
+  /** A draining member's active Grants with no line served elsewhere, which the sweep holds; null when not draining. */
+  heldGrants: number | null;
   createdAt: string;
   panelName: string;
   panelState: PanelState;
@@ -2204,6 +2220,8 @@ export type MemberSellingBody = Partial<Pick<PanelGroupMember, "inboundPlacement
 
 export type DrainedMember = PanelGroupMember & { waitSeconds: number };
 export type RemovedMember = { groupId: string; panelId: string; removed: true };
+export type EvictPreview = { liveConfigs: number; soleLineGrants: number };
+export type EvictedMember = PanelGroupMember & { soleLineGrants: number };
 
 /** billing `updatePanelSchema` (F-027-by): any of these, at least one. `apiBaseUrl` is never cleared. */
 export type PanelSettingsBody = Partial<{

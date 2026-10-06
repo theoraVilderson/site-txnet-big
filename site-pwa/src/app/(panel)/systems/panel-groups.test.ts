@@ -8,7 +8,9 @@ import {
   MEMBER_ROLE_KEYS,
   addablePanels,
   canDrain,
+  canEvict,
   canRemove,
+  isLastToServe,
   drainEarliestAt,
   emptyGroupForm,
   groupFormOf,
@@ -31,6 +33,9 @@ import { REFUSAL_KEYS, SYSTEMS_KEYS as K } from "./_lib/systems";
  *    than its `minHealthyPanels` — a Grant sold there never activates;
  *  - a drain whose stated wait is not the sweep's (`2 × subscriptionTtlSeconds`);
  *  - remove or drain offered on a member already draining;
+ *  - a drain offered on the group's last serving panel — it never ends, since
+ *    no panel could take its users (F-027-ef) — or "remove now" taken away
+ *    from a draining member, the one way out of a held drain;
  *  - a panel's inbound pick (F-114-b) that sends what `updatePanelInboundsSchema`
  *    refuses, re-sends picks nobody touched, or sells an inbound nobody can be
  *    placed on — and a panel with nothing sellable ticked not said to place nobody.
@@ -63,6 +68,8 @@ const member = (over: Partial<PanelGroupMember> = {}): PanelGroupMember => ({
   inbounds: [],
   role: "primary",
   drainingSince: null,
+  evictedAt: null,
+  heldGrants: null,
   createdAt: "2026-09-25T10:00:00.000Z",
   panelName: "de-1",
   panelState: "healthy",
@@ -166,10 +173,26 @@ describe("adding and draining a member", () => {
     expect(canRemove(draining)).toBe(false);
   });
 
+  it("drains only with another non-draining member to take the users (billing `no_other_member`)", () => {
+    const only = member({ panelId: "p-1" });
+    expect(isLastToServe(only, group({ members: [only] }))).toBe(true);
+    const drainingOther = member({ panelId: "p-2", role: "drain", drainingSince: "2026-09-25T10:00:00.000Z" });
+    expect(isLastToServe(only, group({ members: [only, drainingOther] }))).toBe(true);
+    expect(isLastToServe(only, group({ members: [only, member({ panelId: "p-2" })] }))).toBe(false);
+  });
+
+  it("offers remove now on any member, a draining one included, until it is marked", () => {
+    expect(canEvict(member())).toBe(true);
+    expect(canEvict(member({ role: "drain", drainingSince: "2026-09-25T10:00:00.000Z", heldGrants: 13 }))).toBe(true);
+    expect(canEvict(member({ role: "drain", drainingSince: "2026-09-25T10:00:00.000Z", evictedAt: "2026-09-25T11:00:00.000Z" }))).toBe(false);
+  });
+
   it("states the least wait from drainingSince, as the sweep counts it", () => {
     const g = group({ subscriptionTtlSeconds: 3600 });
     expect(drainEarliestAt(member({ role: "drain", drainingSince: "2026-09-25T10:00:00.000Z" }), g)).toBe("2026-09-25T12:00:00.000Z");
     expect(drainEarliestAt(member(), g)).toBeNull();
+    // Removed now: no wait is promised, the sweep takes it on its next tick.
+    expect(drainEarliestAt(member({ role: "drain", drainingSince: "2026-09-25T10:00:00.000Z", evictedAt: "2026-09-25T11:00:00.000Z" }), g)).toBeNull();
   });
 
   it("says a wait in the largest whole unit", () => {

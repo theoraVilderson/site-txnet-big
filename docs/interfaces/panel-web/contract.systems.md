@@ -117,7 +117,12 @@ The *why* is **ADR-0080**.
    (`DRAIN_TTL_MULTIPLE × subscriptionTtlSeconds`, the sweep's constant,
    `waitOf` rounding up), and a draining member reads "no sooner than"
    `drainEarliestAt` — never "at", since a Grant whose replacement is served
-   later waits longer. Every write re-reads the groups; a refusal does too.
+   later waits longer. The group's last serving member offers no drain but
+   says why (`isLastToServe`, billing `no_other_member`); a held drain says
+   how many subscriptions wait and the way out (`heldGrants`). **Remove now**
+   (`canEvict`, F-027-ef: any member until marked, a draining one too) reads
+   `evict-preview` first and says the subscriptions it cuts off before its
+   confirm — red when any, "no one is cut off" when none. Every write re-reads the groups; a refusal does too.
    The page's live re-read (rule 2) re-reads the groups with the panels.
    A group names no protocol: its panels' picked inbounds do (rule 12).
 12. **A panel's inbounds: which ones a buyer is placed on** (F-114-b,
@@ -210,4 +215,4 @@ and drift predicates, `validateNote`, the menu entry, every key in `en` and `fa`
 `systems/member-settings.test.ts` — rules 16–17: `LAYER_KEYS` against billing's `SellingLayer`, `inboundChoices`, `sellsNobody`, `refusalSentence` named and plain.
 `systems/systems-guide.test.ts` — rules 16 and 18: `guideOf`, `panelStatusOf`, `attentionOf`; `memberChoiceOf` / `validateMemberChoice` ("same as the panel" as null, an own cap, own inbounds needing one, only what changed).
 `systems/panel-lifecycle.test.ts` — rules 13–15: only what changed is sent, the untouched form refused, the address warning, a push panel's fields, `groupsHolding`, both delete outcomes, `groupDeleteBlock`, `visiblePanels`.
-`systems/panel-groups.test.ts` — rule 11: `ConfigProtocol` and `PanelGroupMemberRole` read out of `network.prisma`; rule 12: `InboundPlacement` and the two inbound refusals from their homes, `validateInbounds` (only what changed, caps, never an unsellable tick), `inboundNote`, `nothingPicked`; the drain multiple out of `group-drain.ts`, `validateGroup` (create, limits, an edit sending only what changed), `memberPlaceable`, `groupHealth`, `addablePanels`, `canDrain` / `canRemove`, `drainEarliestAt`, `waitOf`.
+`systems/panel-groups.test.ts` — rule 11: `ConfigProtocol` and `PanelGroupMemberRole` read out of `network.prisma`; rule 12: `InboundPlacement` and the two inbound refusals from their homes, `validateInbounds` (only what changed, caps, never an unsellable tick), `inboundNote`, `nothingPicked`; the drain multiple out of `group-drain.ts`, `validateGroup` (create, limits, an edit sending only what changed), `memberPlaceable`, `groupHealth`, `addablePanels`, `canDrain` / `canRemove` / `isLastToServe` / `canEvict`, `drainEarliestAt`, `waitOf`.

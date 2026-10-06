@@ -195,6 +195,7 @@ export type SystemsRefusal =
   | "member_not_found"
   | "already_member"
   | "already_draining"
+  | "no_other_member"
   | "member_has_configs"
   // A panel's inbounds (F-114-b).
   | "inbound_not_found"
@@ -225,6 +226,7 @@ export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   member_not_found: K.refusals.member_not_found,
   already_member: K.refusals.already_member,
   already_draining: K.refusals.already_draining,
+  no_other_member: K.refusals.no_other_member,
   member_has_configs: K.refusals.member_has_configs,
   inbound_not_found: K.refusals.inbound_not_found,
   inbound_not_sellable: K.refusals.inbound_not_sellable,
