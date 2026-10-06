@@ -107,6 +107,16 @@ enum InboundPlacement {
 
 /// A member's part in its group, not the panel's HA role (`PanelRole`).
 /// `drain` takes no new Grants and is then emptied (F-027-bm).
+/// What "remove now" does with a Grant it leaves with no line (F-027-eg):
+/// `pause` freezes it until a panel joins the group, `refund` cancels it and
+/// gives its unused share back.
+enum EvictOrphans {
+  pause
+  refund
+
+  @@schema("network")
+}
+
 enum PanelGroupMemberRole {
   primary
   replica
@@ -386,6 +396,11 @@ model Panel {
   /// `network-service` loop skips it; its configs, usage and holds stay for
   /// the record. Null for a panel in service; one with no history is deleted.
   retiredAt                  DateTime?
+  /// Deleted in one step while in groups (F-027-eg): every membership was
+  /// evicted, and the drain sweep archives the panel once it is in no group,
+  /// none of its configs is live and its clients are gone from it (or an hour
+  /// has passed — a dead panel never confirms). It takes no new group meanwhile.
+  removeRequestedAt          DateTime?
   /// The registered panel the connection test found this one to be, under
   /// another address (F-027-ce, ADR-0090): a claim tag of its configs, or a
   /// canary created through it, seen here. Set only with `refused`
@@ -697,6 +712,11 @@ model PanelGroupMember {
   /// hold, then removes the member. Only while `drain` (CHECK; cleared by the
   /// drain-clock trigger on leaving it).
   evictedAt DateTime?
+  /// What the evict does with a Grant it leaves with no line (F-027-eg): set
+  /// with `evictedAt`, and only with it (CHECK).
+  evictOrphans EvictOrphans?
+  /// The owner who evicted: the actor of a refund's `grant_deletion`.
+  evictedBy String? @db.Uuid
   createdAt DateTime             @default(now())
 
   group    PanelGroup                @relation(fields: [groupId], references: [id], onDelete: Restrict)

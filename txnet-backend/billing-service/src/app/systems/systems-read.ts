@@ -79,6 +79,7 @@ const PANEL_FIELDS = {
   // Selected only to answer whether it is set; the reference never leaves.
   panelRadiusSecret: true,
   retiredAt: true,
+  removeRequestedAt: true,
 } satisfies Prisma.PanelSelect;
 
 const DRIFT_FIELDS = {
@@ -140,6 +141,8 @@ export class SystemsReadService {
         ovpnProfile: p.ovpnProfile,
         // Archived (F-027-bz): kept for its records, skipped by every loop.
         retiredAt: p.retiredAt,
+        // Deleted in one step (F-027-eg): leaving its groups, archived once empty.
+        removeRequestedAt: p.removeRequestedAt,
         // A push panel with no secret never reaches the RADIUS allowlist (F-027-az); null on a pull panel.
         radiusSecretConfigured: p.transport === 'push' ? p.panelRadiusSecret !== null : null,
         review: {

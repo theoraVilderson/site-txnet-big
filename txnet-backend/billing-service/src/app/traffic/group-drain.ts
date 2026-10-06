@@ -1,11 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ActorType, GrantStatus } from '@prisma/client';
+import { ActorType, EvictOrphans, GrantStatus, Prisma } from '@prisma/client';
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
+import { deleteGrant } from '../entitlement/delete';
+import { ADMIN_FROZEN, freezeGrant, unfreezeGrant } from '../entitlement/freeze';
 import { errorLine } from '../log-line';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionsService, ConfigActor } from './config-actions';
+import { RemainderCreditService } from './remainder-credit';
 
 /** Who retired a drained member's configs in `config_action_log`: the drain sweep. */
 export const GROUP_DRAIN_ACTOR: ConfigActor = { actorType: ActorType.system, actorId: '00000000-0000-4000-8000-0000000f027c' };
@@ -67,12 +70,50 @@ export function planDrain(facts: DrainFacts, now: Date): DrainPlan {
   return { retire, held: [...held], removeMember: held.size === 0 && since + wait <= now.getTime() };
 }
 
-export type DrainDueResult = { scanned: number; configsRetired: number; grantsHeld: number; membersRemoved: number; failed: number };
+export type DrainDueResult = {
+  scanned: number;
+  configsRetired: number;
+  grantsHeld: number;
+  membersRemoved: number;
+  failed: number;
+  /** Grants an evict left with no line, frozen until a panel joins (F-027-eg). */
+  grantsPaused: number;
+  /** ... or cancelled with their unused share given back. */
+  grantsRefunded: number;
+  /** Paused Grants whose group has a healthy member again, unfrozen. */
+  grantsResumed: number;
+  /** Panels deleted in one step (F-027-eg), archived now that nothing is left on them. */
+  panelsArchived: number;
+};
+
+/** The `grant_deletion.reason` of a Grant cancelled because its panel was removed. */
+export const PANEL_REMOVED = 'panel_removed';
+
+/**
+ * What happens to a Grant an evict leaves with no line, in the transaction
+ * that retired those lines (F-027-eg); and the way back. A spec replaces them.
+ */
+export type OrphanHandlers = {
+  pause(tx: Prisma.TransactionClient, grantId: string, at: Date): Promise<void>;
+  refund(tx: Prisma.TransactionClient, grantId: string, at: Date, actorUserId: string): Promise<void>;
+  resume(tx: Prisma.TransactionClient, grantId: string, at: Date): Promise<void>;
+};
 
 /** Members per sweep. A held member stays due, so this bounds a tick, not the backlog. */
 const DRAIN_BATCH_SIZE = 50;
 
-type DueMember = { groupId: string; panelId: string; drainingSince: Date; subscriptionTtlSeconds: number; evicted: boolean };
+/** Paused Grants unfrozen per sweep; the rest are found again next tick. */
+const RESUME_BATCH_SIZE = 200;
+
+type DueMember = {
+  groupId: string;
+  panelId: string;
+  drainingSince: Date;
+  subscriptionTtlSeconds: number;
+  evicted: boolean;
+  evictOrphans: EvictOrphans | null;
+  evictedBy: string | null;
+};
 
 /**
  * Draining a panel group member (F-027-bm, catalog §7.3): `role = drain` takes
@@ -92,10 +133,30 @@ export class GroupDrainService {
     private readonly actions: ConfigActionsService,
     private readonly prisma: PrismaService,
     private readonly crossTenant: CrossTenantPrismaService,
+    private readonly remainders: RemainderCreditService,
   ) {}
 
   /** The wait is judged against this; a spec replaces it. */
   now: () => Date = () => new Date();
+
+  /**
+   * Pause is the admin freeze (F-311-h) — clock stopped, never purged, a
+   * refund counting time to the freeze — marked `awaitingPanel` so the sweep,
+   * not an admin, lifts it. Refund is the admin delete (F-311-m) with the
+   * remainder given back, by the owner who evicted.
+   */
+  orphans: OrphanHandlers = {
+    pause: async (tx, grantId, at) => {
+      await freezeGrant(tx, grantId, { at });
+      await tx.grant.updateMany({ where: { id: grantId, statusReason: ADMIN_FROZEN }, data: { awaitingPanel: true } });
+    },
+    refund: async (tx, grantId, at, actorUserId) => {
+      await deleteGrant(tx, grantId, { at, actorUserId, reason: PANEL_REMOVED, refund: true }, (t, id, clock) => this.remainders.settle(t, { grantId: id, ...clock }));
+    },
+    resume: async (tx, grantId, at) => {
+      await unfreezeGrant(tx, grantId, at);
+    },
+  };
 
   /**
    * One sweep, for `worker-service`'s tick. The scan is cross-tenant — a
@@ -104,8 +165,10 @@ export class GroupDrainService {
    * read again, and a removed member is not due.
    */
   async drainDue(): Promise<DrainDueResult> {
+    const grantsResumed = await this.resumeWaiting();
     const due = await this.crossTenant.$queryRaw<DueMember[]>`
-      SELECT m."groupId", m."panelId", m."drainingSince", pg."subscriptionTtlSeconds", m."evictedAt" IS NOT NULL AS "evicted"
+      SELECT m."groupId", m."panelId", m."drainingSince", pg."subscriptionTtlSeconds", m."evictedAt" IS NOT NULL AS "evicted",
+             m."evictOrphans", m."evictedBy"
         FROM "network"."panel_group_member" m
         JOIN "network"."panel_group" pg ON pg."id" = m."groupId"
        WHERE m."role" = 'drain'
@@ -113,14 +176,27 @@ export class GroupDrainService {
        ORDER BY m."evictedAt" ASC NULLS LAST, m."drainingSince" ASC
        LIMIT ${DRAIN_BATCH_SIZE}`;
 
-    const result: DrainDueResult = { scanned: due.length, configsRetired: 0, grantsHeld: 0, membersRemoved: 0, failed: 0 };
+    const result: DrainDueResult = { scanned: due.length, configsRetired: 0, grantsHeld: 0, membersRemoved: 0, failed: 0, grantsPaused: 0, grantsRefunded: 0, grantsResumed, panelsArchived: 0 };
     for (const member of due) {
       const configs = await drainConfigs(this.crossTenant, member);
       const plan = planDrain({ drainingSince: member.drainingSince, subscriptionTtlSeconds: member.subscriptionTtlSeconds, evicted: member.evicted, configs }, this.now());
       result.grantsHeld += plan.held.length;
 
+      // An evict's orphans: each Grant's lines go with its pause or refund, in one transaction.
+      const orphans = member.evicted && member.evictOrphans ? orphanLines(plan.retire) : new Map<string, DrainConfig[]>();
       let failed = 0;
-      for (const c of plan.retire) {
+      for (const [grantId, lines] of orphans) {
+        try {
+          await this.settleOrphan(member, grantId, lines);
+          result.configsRetired += lines.length;
+          if (member.evictOrphans === EvictOrphans.refund) result.grantsRefunded += 1;
+          else result.grantsPaused += 1;
+        } catch (e) {
+          failed += 1;
+          this.logger.warn(`${member.evictOrphans} of Grant ${grantId} evicted from panel ${member.panelId} failed: ${errorLine(e)}`);
+        }
+      }
+      for (const c of plan.retire.filter((c) => !orphans.has(c.grantId))) {
         try {
           await runWithTenant({ id: c.tenantId }, () => tenantTransaction(this.prisma, (tx) => this.actions.drain(tx, { configId: c.configId, actor: GROUP_DRAIN_ACTOR })));
           result.configsRetired += 1;
@@ -134,10 +210,77 @@ export class GroupDrainService {
       result.failed += failed;
       if (plan.removeMember && failed === 0) result.membersRemoved += await this.removeMember(member);
     }
+    result.panelsArchived = await this.archiveRemoved();
     if (result.configsRetired > 0 || result.membersRemoved > 0) {
-      this.logger.log(`retired ${result.configsRetired} config(s), removed ${result.membersRemoved} drained member(s)`);
+      this.logger.log(
+        `retired ${result.configsRetired} config(s), removed ${result.membersRemoved} drained member(s); ` +
+          `${result.grantsPaused} Grant(s) paused, ${result.grantsRefunded} refunded for want of a panel`,
+      );
     }
     return result;
+  }
+
+  /**
+   * A panel deleted in one step is archived once it is in no group and has no
+   * live config, and its clients are gone from it — `remoteId` cleared by the
+   * convergence pass, so no user keeps a working line on a panel nobody
+   * watches any more — or an hour after the ask, for a dead panel that will
+   * never confirm. One statement; a panel not ready is found again next tick.
+   */
+  private archiveRemoved(): Promise<number> {
+    return this.crossTenant.$executeRaw`UPDATE "network"."panel" p
+         SET "retiredAt" = now() AT TIME ZONE 'UTC', "removeRequestedAt" = NULL
+       WHERE p."removeRequestedAt" IS NOT NULL AND p."retiredAt" IS NULL
+         AND NOT EXISTS (SELECT 1 FROM "network"."panel_group_member" m WHERE m."panelId" = p."id")
+         AND NOT EXISTS (SELECT 1 FROM "network"."config" c WHERE c."panelId" = p."id" AND c."status" <> 'retired')
+         AND (p."removeRequestedAt" <= now() AT TIME ZONE 'UTC' - interval '1 hour'
+              OR NOT EXISTS (SELECT 1 FROM "network"."config" c WHERE c."panelId" = p."id" AND c."remoteId" IS NOT NULL))`;
+  }
+
+  private settleOrphan(member: DueMember, grantId: string, lines: DrainConfig[]) {
+    const at = this.now();
+    return runWithTenant({ id: lines[0].tenantId }, () =>
+      tenantTransaction(this.prisma, async (tx) => {
+        for (const c of lines) await this.actions.drain(tx, { configId: c.configId, actor: GROUP_DRAIN_ACTOR });
+        if (member.evictOrphans === EvictOrphans.refund) await this.orphans.refund(tx, grantId, at, member.evictedBy ?? GROUP_DRAIN_ACTOR.actorId);
+        else await this.orphans.pause(tx, grantId, at);
+      }),
+    );
+  }
+
+  /**
+   * Paused Grants (`awaitingPanel`) whose group has a member fulfilment can
+   * place on — not `drain`, not retired, accepted, healthy — are unfrozen: the
+   * clock runs again from now, `endsAt` moved by the pause, and fulfil-due
+   * places their configs on its next pass. Health is asked here, unlike
+   * `deliverableGroupIds`: the clock must not restart on a panel that is down.
+   */
+  private async resumeWaiting(): Promise<number> {
+    const waiting = await this.crossTenant.$queryRaw<Array<{ id: string; tenantId: string }>>`
+      SELECT g."id", g."tenantId"
+        FROM "entitlement"."grant" g
+        JOIN "catalog"."product_variant" v ON v."id" = g."variantId"
+       WHERE g."awaitingPanel"
+         AND g."status" = 'suspended' AND g."statusReason" = ${ADMIN_FROZEN}
+         AND EXISTS (SELECT 1 FROM "network"."panel_group_member" m
+                       JOIN "network"."panel" p ON p."id" = m."panelId"
+                      WHERE m."groupId" = v."panelGroupId" AND m."role" <> 'drain'
+                        AND p."retiredAt" IS NULL AND p."reviewState" IN ('accepted', 'accepted_low_trust')
+                        AND p."panelState" = 'healthy')
+       ORDER BY g."suspendedAt" ASC
+       LIMIT ${RESUME_BATCH_SIZE}`;
+    let resumed = 0;
+    for (const g of waiting) {
+      try {
+        await runWithTenant({ id: g.tenantId }, () => tenantTransaction(this.prisma, (tx) => this.orphans.resume(tx, g.id, this.now())));
+        resumed += 1;
+      } catch (e) {
+        // An admin's own unfreeze or delete meanwhile: nothing left to resume.
+        this.logger.warn(`resume of Grant ${g.id} failed: ${errorLine(e)}`);
+      }
+    }
+    if (resumed > 0) this.logger.log(`resumed ${resumed} Grant(s) whose group has a panel again`);
+    return resumed;
   }
 
   /**
@@ -183,6 +326,16 @@ export function drainConfigs(db: Pick<CrossTenantPrismaService, '$queryRaw'>, me
        AND v."panelGroupId" = ${member.groupId}::uuid
        AND c."status" <> 'retired'
      ORDER BY c."id"`;
+}
+
+/** An evict's orphans among the configs it retires: each sole-line active Grant with its lines here. */
+function orphanLines(configs: DrainConfig[]): Map<string, DrainConfig[]> {
+  const out = new Map<string, DrainConfig[]>();
+  for (const c of configs) {
+    if (c.grantStatus !== GrantStatus.active || c.replacementSince) continue;
+    out.set(c.grantId, [...(out.get(c.grantId) ?? []), c]);
+  }
+  return out;
 }
 
 /** The active Grants with a line here and none served elsewhere: who has no line once these configs go. */

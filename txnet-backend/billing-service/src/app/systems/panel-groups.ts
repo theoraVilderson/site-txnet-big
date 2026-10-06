@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PanelGroupMemberRole, Prisma } from '@prisma/client';
+import { EvictOrphans, PanelGroupMemberRole, Prisma } from '@prisma/client';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -34,6 +34,8 @@ const MEMBER_FIELDS = {
   role: true,
   drainingSince: true,
   evictedAt: true,
+  evictOrphans: true,
+  evictedBy: true,
   createdAt: true,
   // The inbounds it sells instead of the pool (F-027-ch); none = the pool.
   inbounds: { select: { inboundRemoteId: true } },
@@ -116,7 +118,8 @@ export class PanelGroupsService {
     const [scope, panelScope] = await this.scopes(actor);
     const group = await this.groupInScope(scope, groupId);
     // An archived panel (F-027-bz) takes no group; the trigger `panel_group_member_panel_not_retired` holds it too.
-    const panel = await this.prisma.panel.findFirst({ where: { id: input.panelId, ...panelScope, retiredAt: null }, select: { id: true } });
+    // ... nor one being deleted (F-027-eg): the sweep is taking it out of every group.
+    const panel = await this.prisma.panel.findFirst({ where: { id: input.panelId, ...panelScope, retiredAt: null, removeRequestedAt: null }, select: { id: true } });
     if (!panel) throw new SystemsRefused('panel_not_found');
 
     try {
@@ -232,24 +235,25 @@ export class PanelGroupsService {
    * member becomes `drain` with `evictedAt`, and the drain sweep retires every
    * config of the group's Grants on it on its next tick — no wait, no hold —
    * then removes it. Any member, the last and a draining one included. A Grant
-   * with no other line is left with none until a panel joins the group, which
-   * fulfilment then places it on. A second call keeps the first mark.
+   * it leaves with no other line is `orphans`' to settle (F-027-eg): paused
+   * until a panel joins, then placed there, or cancelled with its unused share
+   * refunded. A second call keeps the first mark and the first choice.
    */
-  async evict(actor: SystemsActor, groupId: string, panelId: string) {
+  async evict(actor: SystemsActor, groupId: string, panelId: string, orphans: EvictOrphans) {
     const scope = await this.groupScopeOf(actor);
     const group = await this.groupInScope(scope, groupId);
 
     const where = { groupId: group.id, panelId };
     const { count } = await this.crossTenant.panelGroupMember.updateMany({
       where: { ...where, evictedAt: null },
-      data: { role: PanelGroupMemberRole.drain, evictedAt: new Date() },
+      data: { role: PanelGroupMemberRole.drain, evictedAt: new Date(), evictOrphans: orphans, evictedBy: actor.adminId },
     });
     const member = await this.crossTenant.panelGroupMember.findFirst({ where, select: MEMBER_FIELDS });
     if (!member) throw new SystemsRefused('member_not_found');
 
     const configs = await drainConfigs(this.crossTenant, where);
     const sole = soleLineGrants(configs);
-    if (count > 0) this.logger.log(`panel ${panelId} evicted from group ${group.id} by ${actor.adminId}; ${configs.length} config(s) go, ${sole} Grant(s) left with no line`);
+    if (count > 0) this.logger.log(`panel ${panelId} evicted from group ${group.id} by ${actor.adminId}; ${configs.length} config(s) go, ${sole} Grant(s) left with no line, to ${orphans}`);
     return { ...wireMember(member, sole), soleLineGrants: sole };
   }
 

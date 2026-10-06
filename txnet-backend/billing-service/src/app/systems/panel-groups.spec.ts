@@ -26,7 +26,7 @@ import { GrantStatus, PanelGroupMemberRole, PanelGroupStrategy, Prisma, TenantTy
 
 import { DrainConfig } from '../traffic/group-drain';
 import { PanelGroupsService } from './panel-groups';
-import { createPanelGroupSchema, updatePanelGroupSchema, addPanelGroupMemberSchema } from './panel-registration.schema';
+import { createPanelGroupSchema, updatePanelGroupSchema, addPanelGroupMemberSchema, evictPanelGroupMemberSchema } from './panel-registration.schema';
 import { PanelScopeRefused } from './panel-scope';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
@@ -58,7 +58,7 @@ function harness() {
     { id: TENANT_GROUP, tenantId: RESELLER, name: 'Theirs', strategy: PanelGroupStrategy.mirror, minHealthyPanels: 1, subscriptionTtlSeconds: 3600 },
   ];
   const members: Row[] = [
-    { groupId: GROUP, panelId: PLATFORM_PANEL, tenantId: null, priority: 0, weight: 1, role: PanelGroupMemberRole.primary, drainingSince: null, evictedAt: null },
+    { groupId: GROUP, panelId: PLATFORM_PANEL, tenantId: null, priority: 0, weight: 1, role: PanelGroupMemberRole.primary, drainingSince: null, evictedAt: null, evictOrphans: null, evictedBy: null },
   ];
   // Panels holding an unretired config of the group's Grants — what the DELETE's NOT EXISTS reads.
   const livePanels = new Set<string>();
@@ -132,7 +132,7 @@ function harness() {
         if (members.some((m) => m['groupId'] === data['groupId'] && m['panelId'] === data['panelId'])) {
           throw new Prisma.PrismaClientKnownRequestError('unique', { code: 'P2002', clientVersion: 'test' });
         }
-        const m = { priority: 0, weight: 1, role: PanelGroupMemberRole.primary, drainingSince: null, evictedAt: null, ...data };
+        const m = { priority: 0, weight: 1, role: PanelGroupMemberRole.primary, drainingSince: null, evictedAt: null, evictOrphans: null, evictedBy: null, ...data };
         members.push(m);
         return withPanel(m);
       },
@@ -178,7 +178,7 @@ describe('PanelGroupsService', () => {
     await expect(service.addMember(reseller, GROUP, { panelId: SECOND_PANEL })).rejects.toBeInstanceOf(PanelScopeRefused);
     await expect(service.removeMember(reseller, GROUP, PLATFORM_PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
     await expect(service.drain(reseller, GROUP, PLATFORM_PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
-    await expect(service.evict(reseller, GROUP, PLATFORM_PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
+    await expect(service.evict(reseller, GROUP, PLATFORM_PANEL, 'pause')).rejects.toBeInstanceOf(PanelScopeRefused);
     await expect(service.evictPreview(reseller, GROUP, PLATFORM_PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
     await expect(service.remove(reseller, GROUP)).rejects.toBeInstanceOf(PanelScopeRefused);
     expect(groups).toHaveLength(2);
@@ -318,16 +318,19 @@ describe('PanelGroupsService', () => {
   it('evicts a member — even the last, even one already draining — by marking it; the sweep does the retiring', async () => {
     const { service, members, lines } = harness();
     lines.set(PLATFORM_PANEL, [drainLine('c1', 'g1', null)]);
-    const m = await service.evict(owner, GROUP, PLATFORM_PANEL);
-    expect(m).toMatchObject({ panelId: PLATFORM_PANEL, role: PanelGroupMemberRole.drain, soleLineGrants: 1 });
+    const m = await service.evict(owner, GROUP, PLATFORM_PANEL, 'refund');
+    expect(m).toMatchObject({ panelId: PLATFORM_PANEL, role: PanelGroupMemberRole.drain, soleLineGrants: 1, evictOrphans: 'refund', evictedBy: ADMIN });
     expect(m.evictedAt).toBeInstanceOf(Date);
     expect(members[0]).toMatchObject({ role: PanelGroupMemberRole.drain, drainingSince: new Date('2026-09-25T10:00:00Z') });
     expect(members).toHaveLength(1);
 
-    // Asked twice, the first mark stands.
+    // Asked twice, the first mark — and the first choice for its orphans — stands.
     const first = members[0]['evictedAt'];
-    await expect(service.evict(owner, GROUP, PLATFORM_PANEL)).resolves.toMatchObject({ evictedAt: first });
-    await expect(service.evict(owner, GROUP, SECOND_PANEL)).rejects.toMatchObject({ reason: 'member_not_found' });
+    await expect(service.evict(owner, GROUP, PLATFORM_PANEL, 'pause')).resolves.toMatchObject({ evictedAt: first, evictOrphans: 'refund' });
+    await expect(service.evict(owner, GROUP, SECOND_PANEL, 'pause')).rejects.toMatchObject({ reason: 'member_not_found' });
+    expect(evictPanelGroupMemberSchema.safeParse({}).success).toBe(false);
+    expect(evictPanelGroupMemberSchema.safeParse({ orphans: 'delete' }).success).toBe(false);
+    expect(evictPanelGroupMemberSchema.safeParse({ orphans: 'pause' }).success).toBe(true);
   });
 });
 

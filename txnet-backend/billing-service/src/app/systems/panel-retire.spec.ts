@@ -9,9 +9,14 @@
  *    live, is refused — draining is how configs leave a panel;
  *  - **an archived panel back in service by the side door.** Editing it is
  *    refused; only restoring brings it back, and a restore is re-tested;
- *  - **whose panel.** The owner's scope, as on every systems route.
+ *  - **whose panel.** The owner's scope, as on every systems route;
+ *  - **a panel still in a group, deleted in one step** (F-027-eg): with the
+ *    owner's choice for its users (`orphans`), every membership is evicted
+ *    with it and the panel is marked; the drain sweep archives it once it is
+ *    out of every group. Without the choice it is still `panel_in_group`, and
+ *    a panel being removed takes no new group.
  */
-import { Prisma, PanelReviewState, TenantType } from '@prisma/client';
+import { EvictOrphans, Prisma, PanelReviewState, TenantType } from '@prisma/client';
 
 import { PanelLifecycleService } from './panel-lifecycle';
 import { PanelScopeRefused } from './panel-scope';
@@ -27,6 +32,7 @@ type Row = Record<string, unknown>;
 type State = { inGroup?: boolean; liveConfig?: boolean; history?: boolean; keyedByDelete?: boolean };
 
 function harness(row: Row = {}, state: State = {}) {
+  const evicted: Array<{ where: Row; data: Row }> = [];
   let panel: Row | null = {
     id: PANEL,
     ownershipType: 'platform',
@@ -46,7 +52,14 @@ function harness(row: Row = {}, state: State = {}) {
     panel: { findFirst: async ({ where }: { where: Row }) => (inScope(where) ? { ...panel } : null) },
   };
   const all = {
-    panelGroupMember: { findFirst: async () => (state.inGroup ? { panelId: PANEL } : null) },
+    panelGroupMember: {
+      findFirst: async () => (state.inGroup ? { panelId: PANEL } : null),
+      findMany: async () => (state.inGroup ? [{ groupId: 'g-1' }, { groupId: 'g-2' }] : []),
+      updateMany: async ({ where, data }: { where: Row; data: Row }) => {
+        evicted.push({ where, data });
+        return { count: state.inGroup ? 2 : 0 };
+      },
+    },
     config: { findFirst: async () => (state.liveConfig ? { id: 'c1' } : null) },
     // hasHistory's one EXISTS query.
     $queryRaw: async () => [{ history: !!state.history }],
@@ -74,7 +87,7 @@ function harness(row: Row = {}, state: State = {}) {
     },
   };
   const service = new PanelLifecycleService(prisma as never, all as never);
-  return { service, get panel() { return panel; }, actor: { adminId: ADMIN, tenantId: OWNER } };
+  return { service, evicted, get panel() { return panel; }, actor: { adminId: ADMIN, tenantId: OWNER } };
 }
 
 describe('PanelLifecycleService.remove (F-027-bz)', () => {
@@ -112,6 +125,32 @@ describe('PanelLifecycleService.remove (F-027-bz)', () => {
     const h = harness({ tenantId: RESELLER, ownershipType: 'tenant' });
     await expect(h.service.remove({ adminId: ADMIN, tenantId: RESELLER }, PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
     await expect(h.service.remove(h.actor, PANEL)).rejects.toEqual(new SystemsRefused('not_found'));
+  });
+});
+
+describe('PanelLifecycleService.remove with the users\' fate chosen (F-027-eg)', () => {
+  it('a panel in groups is evicted from every one, with the choice, and marked for archiving', async () => {
+    const h = harness({}, { inGroup: true, liveConfig: true, history: true });
+    expect(await h.service.remove(h.actor, PANEL, EvictOrphans.refund)).toEqual({ id: PANEL, outcome: 'removing', groups: 2 });
+    expect(h.evicted).toEqual([
+      {
+        where: { panelId: PANEL, evictedAt: null },
+        data: expect.objectContaining({ role: 'drain', evictOrphans: EvictOrphans.refund, evictedBy: ADMIN, evictedAt: expect.any(Date) }),
+      },
+    ]);
+    expect(h.panel?.['removeRequestedAt']).toBeInstanceOf(Date);
+    expect(h.panel?.['retiredAt']).toBeNull();
+  });
+
+  it('without the choice a panel in a group is still refused, and nothing is evicted', async () => {
+    const h = harness({}, { inGroup: true, history: true });
+    await expect(h.service.remove(h.actor, PANEL)).rejects.toEqual(new SystemsRefused('panel_in_group'));
+    expect(h.evicted).toEqual([]);
+  });
+
+  it('a panel in no group goes as before, whatever was chosen', async () => {
+    const h = harness({}, { history: true });
+    expect(await h.service.remove(h.actor, PANEL, EvictOrphans.pause)).toEqual({ id: PANEL, outcome: 'archived' });
   });
 });
 

@@ -20,7 +20,8 @@ its next tick.
 | Route | Body | Answers | Errors |
 |---|---|---|---|
 | `PATCH /api/billing/systems/panels/:id` | any of `name` (1–100), `region` (1–50), `ipAddress` (v4/v6 \| null), `apiBaseUrl` (URL ≤500, never null), `clientBaseUrl` (URL ≤500 \| null), `maxRequestsPerMinute` (1–6000), `ovpnProfile` (text ≤64 KiB \| null, rule 5a); at least one; `.strict()` | `200 {id, reviewState, retest}` | 400; 403; 404 `not_found`; 409 `not_for_transport` / `not_for_driver` / `panel_retired` / `panel_already_registered` + `facts.panelId` when in scope (rule 2a) |
-| `DELETE /api/billing/systems/panels/:id` | — | `200 {id, outcome: 'deleted' \| 'archived'}` | 400; 403; 404 `not_found`; 409 `panel_in_group` / `panel_has_configs` / `panel_retired` |
+| `DELETE /api/billing/systems/panels/:id` | `?orphans=pause\|refund` (optional; rule 6a) | `200 {id, outcome: 'deleted' \| 'archived' \| 'removing', groups?}` | 400; 403; 404 `not_found`; 409 `panel_in_group` / `panel_has_configs` / `panel_retired` |
+| `GET /api/billing/systems/panels/:id/remove-preview` | — | `{groups, liveConfigs, soleLineGrants}`, summed over its groups (rule 6a) | 400; 403; 404 `not_found` |
 | `POST /api/billing/systems/panels/:id/restore` | — | `200 {id, reviewState: 'pending'}` | 400; 403; 404 `not_found`; 409 `panel_not_retired` |
 
 `SYSTEMS_ADMIN_WRITE` (30 per user per 15 minutes), as every systems write.
@@ -72,8 +73,18 @@ its next tick.
 Decided with the user 2026-09-25, the catalog's rule for products (F-026-i).
 
 6. **Refused while it serves.** A panel any group holds is 409
-   `panel_in_group` — remove the member, or drain it (contract.systems.md
+   `panel_in_group` — remove the member, or drain it (contract.panel-groups.md
    rules 23–24). One with a config not `retired` is 409 `panel_has_configs`.
+6a. **Or deleted in one step** (F-027-eg, user 2026-10-06). With `?orphans`,
+   a panel in groups has every membership evicted with that choice
+   (contract.panel-groups.md rule 24e; a first evict's choice stands), is
+   marked `removeRequestedAt`, and answers `removing`. The drain sweep
+   archives it (`retiredAt`, the mark cleared) once it is in no group, no
+   config on it is live, and no config still has a `remoteId` — its clients
+   gone from the server, so no user keeps a line nobody watches — or an hour
+   after the ask, for a dead panel that never confirms. Meanwhile it takes
+   no new group (`panel_not_found`) and the list answers `removeRequestedAt`.
+   `remove-preview` sums the evict preview over its groups.
 7. **No history: deleted.** History is any row that names the panel: a
    config in any state, counter state, a seen or quarantined delta, a hold,
    a drift event, unattributed usage, a RADIUS session, or an HA partner. With
@@ -89,4 +100,4 @@ Decided with the user 2026-09-25, the catalog's rule for products (F-026-i).
    back to `pending` with its last test cleared — it is tested before it is
    collected again.
 
-`panel-retire.spec.ts` pins rules 6–9 and the scope.
+`panel-retire.spec.ts` pins rules 6–9 and the scope; `group-drain.spec.ts` the archive of 6a.

@@ -191,6 +191,11 @@ model Grant {
   /// unfreezes it then. Null = not frozen, or frozen until the admin unfreezes
   /// it. Only on a frozen Grant (`grant_frozen_until_is_frozen`).
   frozenUntil           DateTime?
+  /// Frozen because an evict left it with no line (F-027-eg): the drain sweep
+  /// unfreezes it once its group has a healthy member again. A trigger clears
+  /// it whenever the Grant stops being `admin_frozen`, so an admin's own later
+  /// freeze is never lifted by the sweep.
+  awaitingPanel         Boolean            @default(false)
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @default(now()) @updatedAt
 

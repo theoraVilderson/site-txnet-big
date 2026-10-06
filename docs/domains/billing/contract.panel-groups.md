@@ -30,7 +30,7 @@ desired state; nothing calls `network-service` (ADR-0071).
 | `PUT /api/billing/systems/panel-groups/:id/members/:panelId/inbounds` | `inbounds: [remoteId]` (≤500, each once; `[]` = the pool again); `.strict()` | `200 {groupId, panelId, inbounds}` | 400; 403; 404 `not_found` / `member_not_found` / `inbound_not_found`; 409 `inbound_not_sellable`, `inbound_assigned_elsewhere` `facts: {remoteId, groupId}` (none after a race on the unique index), `inbound_has_configs` `facts: {remoteId, configs}` |
 | `POST /api/billing/systems/panel-groups/:id/members/:panelId/drain` | — | `200` the member, `drain`, with `drainingSince` and `waitSeconds` | 400; 403; 404 `not_found` / `member_not_found`; 409 `already_draining` / `no_other_member` |
 | `GET /api/billing/systems/panel-groups/:id/members/:panelId/evict-preview` | — | `{liveConfigs, soleLineGrants}` (rule 24e) | 400; 403; 404 `not_found` / `member_not_found` |
-| `POST /api/billing/systems/panel-groups/:id/members/:panelId/evict` | — | `200` the member, `drain`, with `evictedAt` and `soleLineGrants` (rule 24e) | 400; 403; 404 `not_found` / `member_not_found` |
+| `POST /api/billing/systems/panel-groups/:id/members/:panelId/evict` | `orphans: 'pause' \| 'refund'`; `.strict()` | `200` the member, `drain`, with `evictedAt`, `evictOrphans`, `evictedBy` and `soleLineGrants` (rule 24e) | 400; 403; 404 `not_found` / `member_not_found` |
 
 ## The rules
 
@@ -78,9 +78,11 @@ desired state; nothing calls `network-service` (ADR-0071).
     rule 16). Any member, the last and a draining one included: it is set
     `drain` with `evictedAt`, and the route retires nothing — the drain sweep
     does, on its next tick, with no wait and no hold, then removes the member.
-    It cuts off the `soleLineGrants` (24d's count, on any member) until a panel
-    joins the group; `evict-preview` answers that count and `liveConfigs`
-    first, and the page says it before the confirm. A second evict keeps the
-    first `evictedAt`.
+    The `soleLineGrants` (24d's count, on any member) are settled as the
+    required `orphans` says (F-027-eg, user 2026-10-06): `pause` or `refund`
+    (network groups rule 16). `evict-preview` answers that count and
+    `liveConfigs` first, and the page asks the choice beside it. A second
+    evict keeps the first `evictedAt` and choice; `evictedBy` is the owner,
+    the actor of a refund's `grant_deletion`.
 
 `panel-groups.spec.ts` pins rules 20–24e.

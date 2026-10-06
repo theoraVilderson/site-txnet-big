@@ -1,4 +1,4 @@
-import { CounterSemantics, DriverType, InboundPlacement, PanelRole, PanelTransport } from '@prisma/client';
+import { CounterSemantics, DriverType, EvictOrphans, InboundPlacement, PanelRole, PanelTransport } from '@prisma/client';
 import { z } from 'zod';
 
 /**
@@ -231,6 +231,20 @@ export const addPanelGroupMemberSchema = z
   .strict();
 
 export type AddPanelGroupMemberBody = z.infer<typeof addPanelGroupMemberSchema>;
+
+/**
+ * "Remove now" (F-027-eg): what to do with a Grant it leaves with no line —
+ * `pause` until a panel joins, or `refund` its unused share and cancel it.
+ * Required: the owner decides it with the count in front of them.
+ */
+export const evictPanelGroupMemberSchema = z.object({ orphans: z.nativeEnum(EvictOrphans) }).strict();
+
+export type EvictPanelGroupMemberBody = z.infer<typeof evictPanelGroupMemberSchema>;
+
+/** Deleting a panel (F-027-eg): `?orphans=` deletes one still in groups in one step, with that choice. */
+export const removePanelQuerySchema = z.object({ orphans: z.nativeEnum(EvictOrphans).optional() }).strict();
+
+export type RemovePanelQuery = z.infer<typeof removePanelQuerySchema>;
 
 /** Editing a member's overrides: any of the four, at least one; null clears it. */
 export const updatePanelGroupMemberSchema = z

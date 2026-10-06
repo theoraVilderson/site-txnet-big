@@ -164,9 +164,16 @@ the count in front of them.
     while `drain`, CHECK `panel_group_member_evicted_is_drain`; the drain
     clock trigger clears it on leaving `drain`) makes the member due at once:
     `planDrain` retires every config of the group's Grants on it — no wait, no
-    hold — and rule 15 removes it. An active Grant with no other line is cut
-    off: the owner was told the count first (billing `contract.panel-groups.md`
-    rule 24e). Fulfilment places it again when a panel joins the group.
+    hold — and rule 15 removes it. An active Grant with no other line (an
+    orphan) is settled as `evictOrphans` says, its lines retired in the same
+    transaction (F-027-eg): `pause` is the admin freeze (entitlement
+    `contract.admin.md`) marked `grant.awaitingPanel`; `refund` is the admin
+    delete with the remainder (actor `evictedBy`, reason `panel_removed`). A
+    failed one keeps its lines and the member, and is retried whole. Each
+    sweep first unfreezes the `awaitingPanel` Grants whose group has a member
+    not `drain`, not retired, accepted and `healthy` — the clock restarts and
+    `endsAt` moves by the pause — and fulfilment places them. A trigger
+    clears `awaitingPanel` whenever the Grant leaves `admin_frozen`.
     Draining the group's last non-`drain` member is refused upstream
     (`no_other_member`), so only an evict cuts anyone off.
 

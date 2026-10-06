@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigStatus, DriverType, PanelReviewState, PanelTransport, Prisma } from '@prisma/client';
+import { ConfigStatus, DriverType, EvictOrphans, PanelGroupMemberRole, PanelReviewState, PanelTransport, Prisma } from '@prisma/client';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
+import { drainConfigs, soleLineGrants } from '../traffic/group-drain';
 import { PrismaService } from '../prisma/prisma.service';
 import { claimingAddress } from './panel-address';
 import { panelScopeOf, SystemsActor } from './panel-scope';
@@ -104,12 +105,22 @@ export class PanelLifecycleService {
    * config on it is live (`panel_has_configs`). The archive holds both
    * conditions in its own `UPDATE`; a key the history check did not see (the
    * delete fails on it) archives instead of failing.
+   *
+   * **In groups, in one step** (F-027-eg): with `orphans` — the owner's
+   * choice for the users it leaves with no line, as on a member's evict —
+   * every membership is evicted with that choice and the panel is marked
+   * `removeRequestedAt`; the drain sweep archives it once it is out of every
+   * group and its clients are gone. Answer `removing`, with how many groups.
    */
-  async remove(actor: SystemsActor, panelId: string) {
+  async remove(actor: SystemsActor, panelId: string, orphans?: EvictOrphans) {
     const scope = await panelScopeOf(this.prisma, actor);
     const panel = await this.prisma.panel.findFirst({ where: { id: panelId, ...scope }, select: { retiredAt: true } });
     if (!panel) throw new SystemsRefused('not_found');
     if (panel.retiredAt !== null) throw new SystemsRefused('panel_retired');
+    if (orphans) {
+      const removing = await this.evictEverywhere(actor, panelId, scope, orphans);
+      if (removing) return removing;
+    }
     await this.refuseInService(panelId);
 
     if (!(await this.hasHistory(panelId))) {
@@ -162,6 +173,40 @@ export class PanelLifecycleService {
     }
     this.logger.log(`panel ${panelId} restored by ${actor.adminId}; re-tested on the next tick`);
     return { id: panelId, reviewState: PanelReviewState.pending };
+  }
+
+  /**
+   * What deleting it in one step would take: per group it is in, the live
+   * configs and the active Grants left with no line (`soleLineGrants`, the
+   * evict preview's own count), summed.
+   */
+  async removePreview(actor: SystemsActor, panelId: string) {
+    const scope = await panelScopeOf(this.prisma, actor);
+    const panel = await this.prisma.panel.findFirst({ where: { id: panelId, ...scope }, select: { id: true } });
+    if (!panel) throw new SystemsRefused('not_found');
+    const memberships = await this.all.panelGroupMember.findMany({ where: { panelId }, select: { groupId: true } });
+    let liveConfigs = 0;
+    let sole = 0;
+    for (const m of memberships) {
+      const configs = await drainConfigs(this.all, { groupId: m.groupId, panelId });
+      liveConfigs += configs.length;
+      sole += soleLineGrants(configs);
+    }
+    return { groups: memberships.length, liveConfigs, soleLineGrants: sole };
+  }
+
+  /** Every membership evicted with the choice (a first evict's choice stands), the panel marked. Null when it is in no group. */
+  private async evictEverywhere(actor: SystemsActor, panelId: string, scope: Awaited<ReturnType<typeof panelScopeOf>>, orphans: EvictOrphans) {
+    const memberships = await this.all.panelGroupMember.findMany({ where: { panelId }, select: { groupId: true } });
+    if (memberships.length === 0) return null;
+    await this.all.panelGroupMember.updateMany({
+      where: { panelId, evictedAt: null },
+      data: { role: PanelGroupMemberRole.drain, evictedAt: new Date(), evictOrphans: orphans, evictedBy: actor.adminId },
+    });
+    const { count } = await this.all.panel.updateMany({ where: { id: panelId, ...scope, retiredAt: null }, data: { removeRequestedAt: new Date() } });
+    if (count === 0) throw new SystemsRefused('panel_retired');
+    this.logger.log(`panel ${panelId} removing from ${memberships.length} group(s) by ${actor.adminId}; users left with no line: ${orphans}`);
+    return { id: panelId, outcome: 'removing' as const, groups: memberships.length };
   }
 
   private async refuseInService(panelId: string) {

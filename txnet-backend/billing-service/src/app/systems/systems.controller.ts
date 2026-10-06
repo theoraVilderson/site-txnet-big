@@ -40,6 +40,10 @@ import {
   AssignMemberInboundsBody,
   assignMemberInboundsSchema,
   CreatePanelGroupBody,
+  EvictPanelGroupMemberBody,
+  evictPanelGroupMemberSchema,
+  RemovePanelQuery,
+  removePanelQuerySchema,
   createPanelGroupSchema,
   UpdatePanelGroupBody,
   updatePanelGroupSchema,
@@ -303,6 +307,7 @@ export class SystemsController {
    * `200` the member, `drain` with `evictedAt`: "remove now" for a broken or
    * gone panel (F-027-ee). The drain sweep retires its configs on its next
    * tick with no wait, then removes it. Any member, the group's last included.
+   * `orphans` (F-027-eg): `pause` or `refund` the Grants it leaves with no line.
    */
   @Post('panel-groups/:id/members/:panelId/evict')
   @HttpCode(HttpStatus.OK)
@@ -310,9 +315,10 @@ export class SystemsController {
   evictMember(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Param('panelId', new ParseUUIDPipe()) panelId: string,
+    @Body(new ZodValidationPipe(evictPanelGroupMemberSchema)) body: EvictPanelGroupMemberBody,
     @Req() req: Request,
   ) {
-    return refusing(() => this.panelGroups.evict(actorOf(req), id, panelId));
+    return refusing(() => this.panelGroups.evict(actorOf(req), id, panelId, body.orphans));
   }
 
   @Get('panels')
@@ -338,12 +344,25 @@ export class SystemsController {
   /**
    * Delete a panel (F-027-bz). `200 {id, outcome}`: `deleted` when it had no
    * history, `archived` when it had. 409 while a group holds it or a config
-   * on it is live.
+   * on it is live — unless `?orphans=pause|refund` (F-027-eg): then a panel in
+   * groups is evicted from every one with that choice, answered `removing`,
+   * and archived by the drain sweep once it is empty.
    */
   @Delete('panels/:id')
   @RateLimit(SYSTEMS_ADMIN_WRITE)
-  removePanel(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
-    return refusing(() => this.lifecycle.remove(actorOf(req), id));
+  removePanel(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Query(new ZodValidationPipe(removePanelQuerySchema)) query: RemovePanelQuery,
+    @Req() req: Request,
+  ) {
+    return refusing(() => this.lifecycle.remove(actorOf(req), id, query.orphans));
+  }
+
+  /** What deleting it in one step would take: `{groups, liveConfigs, soleLineGrants}`, summed over its groups. */
+  @Get('panels/:id/remove-preview')
+  @RateLimit(SYSTEMS_ADMIN_READ)
+  removePanelPreview(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
+    return refusing(() => this.lifecycle.removePreview(actorOf(req), id));
   }
 
   /** Restore an archived panel (F-027-bz). `200 {id, reviewState: 'pending'}`: it is re-tested first. */

@@ -29,7 +29,11 @@ hourly `purge-due` tick unfreezes each due one first (`GrantUnfreezeService`,
 answer `unfrozen`). Refused: `grant_not_active` (a quota stop stays the top-up's),
 `grant_not_frozen`, `freeze_until_not_future`, `grant_moved` (the end moved: retry).
 A top-up or renewal never lifts it (both key on `quota_exhausted`). Its HTTP
-route is billing's `contract.reseller-grants.md` (F-311-h).
+route is billing's `contract.reseller-grants.md` (F-311-h). **A panel evict
+freezes too** (F-027-eg): the Grant is marked `awaitingPanel`, and the drain
+sweep unfreezes it once its group has a healthy member (network
+`contract.groups.md` rule 16); trigger `grant_awaiting_panel_is_frozen`
+clears the mark whenever the Grant is not a suspended `admin_frozen` one.
 
 **Days (F-311-i)** — `changeGrantDuration(tx, id, {at, actorUserId, change, reason})`
 in `entitlement/duration.ts`, proved by `duration.spec.ts`. `change` is `{days}`
