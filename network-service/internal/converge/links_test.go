@@ -164,8 +164,8 @@ func TestAPanelWithNoLinksIsCapturedAsNoneAndAskedAgainLater(t *testing.T) {
 	if n := r.panel.CallCount("ClientLinks"); n != 2 {
 		t.Fatalf("ClientLinks called %d times after EmptyRecapture, want 2", n)
 	}
-	if again := r.row(t, "c1"); !again.Links.At.After(got.Links.At) {
-		t.Errorf("the second capture kept the first's time %v, want a new one", again.Links.At)
+	if again := r.row(t, "c1"); !again.Links.CheckedAt.After(got.Links.CheckedAt) || !again.Links.At.Equal(got.Links.At) {
+		t.Errorf("the second capture: checked %v, since %v; want a new check and none served since the first", again.Links.CheckedAt, again.Links.At)
 	}
 	r.pass(t)
 	if n := r.panel.CallCount("ClientLinks"); n != 2 {
@@ -262,5 +262,79 @@ func TestRefreshesAreCappedPerPassAndTheRestFollow(t *testing.T) {
 	r.at = r.at.Add(converge.LinesRecapture)
 	if report := r.pass(t); report.Refreshed != converge.AgedRefreshPerPass {
 		t.Fatalf("refreshed %d for age in one pass, want %d", report.Refreshed, converge.AgedRefreshPerPass)
+	}
+}
+
+// `linksCapturedAt` is since when these lines are served: billing's drain
+// waits on it (group-drain.ts, replacementSince), so a refresh that read the
+// same lines must not move it, or every daily refresh restarts a drain's
+// wait. The refresh's own age is CheckedAt; refreshes are due from it.
+func TestARefreshThatReadsTheSameLinesKeepsSinceWhenTheyAreServed(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	r.desired.Put("panel-1", wanted("c1"))
+	r.pass(t)
+	r.pass(t)
+	first := r.row(t, "c1").Links
+
+	r.at = r.at.Add(converge.LinesRecapture)
+	r.pass(t)
+	got := r.row(t, "c1").Links
+	if n := r.panel.CallCount("ClientLinks"); n != 2 {
+		t.Fatalf("ClientLinks called %d times after LinesRecapture, want 2", n)
+	}
+	if !got.At.Equal(first.At) || !got.CheckedAt.After(first.CheckedAt) {
+		t.Fatalf("same-lines refresh: served since %v (want %v kept), checked %v (want a new time)", got.At, first.At, got.CheckedAt)
+	}
+	r.pass(t)
+	if n := r.panel.CallCount("ClientLinks"); n != 2 {
+		t.Fatalf("ClientLinks called %d times right after the refresh, want 2: age runs from CheckedAt", n)
+	}
+
+	row := r.row(t, "c1")
+	row.Links.Lines = []string{"vless://old-port"}
+	row.InboundFingerprint = "fp-2"
+	r.desired.Put("panel-1", row)
+	r.pass(t)
+	if moved := r.row(t, "c1").Links; !moved.At.Equal(r.at) {
+		t.Errorf("lines that changed are served since %v, want the refresh's %v", moved.At, r.at)
+	}
+}
+
+// A family that builds lines from the read the pass already makes (Sanaee and
+// alireza0 from the inbound list, Marzban from the user list) hands them over
+// in ListClients: they are compared on every pass, written and announced only
+// on a change, and cost no request and no share of the refresh cap
+// (decision 2026-10-06, contract.links.md rule 6b). An inbound edit reaches
+// every config in the next pass.
+func TestListedLinesAreComparedEveryPassWithNoRequestAndNoCap(t *testing.T) {
+	r := newProvRig(t, fake.Config{LinesInList: true})
+	total := converge.InboundRefreshPerPass + 3
+	for i := 0; i < total; i++ {
+		r.desired.Put("panel-1", wanted(fmt.Sprintf("c%02d", i)))
+	}
+	r.pass(t)
+	r.pass(t)
+	asked := r.panel.CallCount("ClientLinks")
+	if report := r.pass(t); report.Captured != 0 {
+		t.Fatalf("a steady panel captured %d, want 0", report.Captured)
+	}
+
+	r.panel.SetLinkHost("edited.invalid:8443")
+	report := r.pass(t)
+	if report.Captured != total || report.Refreshed != 0 {
+		t.Fatalf("after an inbound edit: captured %d, refreshed %d; want %d and 0 (no cap)", report.Captured, report.Refreshed, total)
+	}
+	for i := 0; i < total; i++ {
+		if got := r.row(t, fmt.Sprintf("c%02d", i)).Links.Lines; len(got) != 1 || !strings.Contains(got[0], "edited.invalid") {
+			t.Fatalf("c%02d lines = %v, want the edited inbound's", i, got)
+		}
+	}
+	if report := r.pass(t); report.Captured != 0 {
+		t.Fatalf("the pass after captured %d, want 0", report.Captured)
+	}
+	r.at = r.at.Add(converge.LinesRecapture)
+	r.pass(t)
+	if n := r.panel.CallCount("ClientLinks"); n != asked {
+		t.Fatalf("ClientLinks called %d times after the creates, want %d: listed lines are never asked for", n, asked)
 	}
 }

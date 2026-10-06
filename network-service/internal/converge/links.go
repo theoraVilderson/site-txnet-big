@@ -2,6 +2,7 @@ package converge
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"network-service/internal/collect"
@@ -22,7 +23,12 @@ import (
 // nobody changed is never asked again, so capture spends no budget on a
 // steady panel — except one captured with no lines, asked again hourly.
 //
-// Lines read from this very client are still read again — a refresh, rule 6b
+// A family that builds lines from the pass's own read hands them over in
+// ListClients (driver.RemoteClient.LinesRead): those are compared on every
+// pass and written only on a change, with no request and no cap, so an edit
+// on the panel reaches `/sub` in the next pass (rule 6b).
+//
+// Otherwise, lines read from this very client are still read again — a refresh, rule 6b
 // — when what they were built from changed with no key of ours: the inbound
 // was edited on the panel (its fingerprint, as the inventory read stores it,
 // is not the one they were read under), or they are LinesRecapture old, for a
@@ -40,6 +46,10 @@ type CapturedLinks struct {
 	// InboundFingerprint is the inbound's as the inventory read it when these
 	// lines were read (rule 6b); empty is none known.
 	InboundFingerprint string
+	// CheckedAt is the last read of them, a refresh's too; At moves only when
+	// the lines or the uuid changed, since it is when these lines began to be
+	// served (rule 7, billing's drain waits on it). Zero with At set: none since.
+	CheckedAt time.Time
 }
 
 // EmptyRecapture is how long a capture that stored no lines stands before it
@@ -75,10 +85,25 @@ func (l CapturedLinks) due(fingerprint string, at time.Time) refresh {
 	switch {
 	case fingerprint != "" && l.InboundFingerprint != fingerprint:
 		return refreshInbound
-	case at.Sub(l.At) >= LinesRecapture:
+	case at.Sub(l.checked()) >= LinesRecapture:
 		return refreshAged
 	}
 	return refreshNone
+}
+
+// checked is when these lines were last read: a row captured before
+// CheckedAt existed has only At.
+func (l CapturedLinks) checked() time.Time {
+	if l.CheckedAt.IsZero() {
+		return l.At
+	}
+	return l.CheckedAt
+}
+
+// same says whether lines read now for uuid are the ones already served, so
+// that the time they are served since stands.
+func (l CapturedLinks) same(lines []string, uuid string) bool {
+	return !l.At.IsZero() && l.UUID == uuid && slices.Equal(l.Lines, lines)
 }
 
 // From says whether these lines were read from this client and still stand
@@ -87,7 +112,7 @@ func (l CapturedLinks) From(client driver.RemoteClient, at time.Time) bool {
 	if l.At.IsZero() || l.RemoteID != client.RemoteID || l.UUID != client.UUID {
 		return false
 	}
-	return len(l.Lines) > 0 || at.Sub(l.At) < EmptyRecapture
+	return len(l.Lines) > 0 || at.Sub(l.checked()) < EmptyRecapture
 }
 
 // ActionLinksUnread: the client is confirmed and its lines could not be read.
@@ -99,6 +124,13 @@ const ActionLinksUnread Action = "links_unread"
 // were read from another client, or are due a refresh. A failed read is a finding and leaves the
 // outcome without lines.
 func (v *Provisioning) capture(ctx context.Context, p collect.Panel, row DesiredConfig, client driver.RemoteClient, outcome *Outcome, report *ProvisionReport) {
+	if client.LinesRead {
+		if row.Links.RemoteID != client.RemoteID || !row.Links.same(client.Lines, client.UUID) {
+			report.Captured++
+			outcome.Links = row.Links.read(client, client.Lines, outcome.At, row.InboundFingerprint)
+		}
+		return
+	}
 	if row.Links.From(client, outcome.At) {
 		switch row.Links.due(row.InboundFingerprint, outcome.At) {
 		case refreshNone:
@@ -122,7 +154,18 @@ func (v *Provisioning) capture(ctx context.Context, p collect.Panel, row Desired
 		return
 	}
 	report.Captured++
-	outcome.Links = &CapturedLinks{
-		Lines: lines, RemoteID: client.RemoteID, UUID: client.UUID, At: outcome.At, InboundFingerprint: row.InboundFingerprint,
+	outcome.Links = row.Links.read(client, lines, outcome.At, row.InboundFingerprint)
+}
+
+// read is lines just read from client at `at`, over the stored l: they are
+// served since `at` unless they are the ones already served.
+func (l CapturedLinks) read(client driver.RemoteClient, lines []string, at time.Time, fingerprint string) *CapturedLinks {
+	since := at
+	if l.same(lines, client.UUID) {
+		since = l.At
+	}
+	return &CapturedLinks{
+		Lines: lines, RemoteID: client.RemoteID, UUID: client.UUID, At: since, CheckedAt: at,
+		InboundFingerprint: fingerprint,
 	}
 }

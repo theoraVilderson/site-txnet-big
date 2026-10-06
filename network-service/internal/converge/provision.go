@@ -269,8 +269,11 @@ type Provisioning struct {
 }
 
 // InboundReadEvery is how stale a panel's stored inbounds may get before a
-// pass reads them again. An admin's refresh makes them due at once.
-const InboundReadEvery = 10 * time.Minute
+// pass reads them again. An admin's refresh makes them due at once. Two
+// minutes, because an edited inbound is seen through this read where a family
+// cannot hand its lines over in ListClients (contract.links.md rule 6b): one
+// list request per panel, so it reaches `/sub` within a few passes.
+const InboundReadEvery = 2 * time.Minute
 
 // Inbounds is the panel's inventory of inbounds: what the admin picks from.
 type Inbounds interface {

@@ -540,7 +540,12 @@ model Config {
   /// or a rebuild.
   linksRemoteId            String?
   linksUuid                String?
+  /// Since when these lines are served: moved only when the lines or the uuid
+  /// change, never by a refresh that read the same (billing's drain waits on it).
   linksCapturedAt          DateTime?
+  /// The last read of the lines, a refresh's too; a refresh is due from it
+  /// (contract.links.md rule 6b).
+  linksCheckedAt           DateTime?
   /// The inbound's `fingerprint` when the lines were read; another one now is
   /// an edit on the panel, and the lines are read again (contract.links.md
   /// rule 6b). Null: none known.

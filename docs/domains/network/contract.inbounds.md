@@ -38,8 +38,9 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
 
 1. **The panel's inbounds are read, never typed.** The convergence pass writes
    `ListInbounds` into `panel_inbound` when `inboundsReadAt` is null or older
-   than `converge.InboundReadEvery` (10 min), reusing the read a create already
-   made. A listed inbound is upserted (its `goneAt` cleared), an unlisted one
+   than `converge.InboundReadEvery` (2 min: an edited inbound's fingerprint is
+   how 3x-ui v3 lines follow the panel, `contract.links.md` rule 6b), reusing
+   the read a create already made. A listed inbound is upserted (its `goneAt` cleared), an unlisted one
    gets `goneAt`, and **the read never touches `sold` or `maxClients`**: an
    inbound that disappears and returns keeps its pick. A failed read is logged
    and never fails the pass. A push panel is never called, so it has none.

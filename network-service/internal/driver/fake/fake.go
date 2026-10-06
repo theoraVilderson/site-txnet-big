@@ -46,6 +46,9 @@ type Config struct {
 	// CutOffAsOneByte stores a ceiling of 0 as driver.CutOffBytes, as every
 	// family with a per-client limit does: 0 is "no limit" on their wire.
 	CutOffAsOneByte bool
+	// LinesInList builds each client's lines into ListClients, as the families
+	// that build them from the same read do (Sanaee, alireza0, Marzban).
+	LinesInList bool
 }
 
 type client struct {
@@ -98,6 +101,9 @@ type Panel struct {
 	ceilingDelay int
 	// linksDown is the subscription server off while the admin API answers.
 	linksDown bool
+	// linkHost is the address every line names; SetLinkHost is an inbound
+	// edited on the panel, which changes lines and no client key.
+	linkHost string
 
 	calls map[string]int
 }
@@ -305,6 +311,23 @@ func (p *Panel) FailLinks(down bool) {
 	p.linksDown = down
 }
 
+// SetLinkHost edits the panel's inbound: every client's lines name host from
+// the next read, and no client key moves.
+func (p *Panel) SetLinkHost(host string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.linkHost = host
+}
+
+// lines is a client's lines as the panel builds them. Callers hold p.mu.
+func (p *Panel) lines(c *client) []string {
+	host := p.linkHost
+	if host == "" {
+		host = "fake.invalid:443"
+	}
+	return []string{"vless://" + c.uuid + "@" + host + "#" + c.label}
+}
+
 // AbandonSession leaves the session open and un-updated: the NAS that never
 // sent a Stop. Nothing served afterwards is reported, and the session's last
 // observed figure is the most that may ever be published for it (invariant 27).
@@ -452,6 +475,9 @@ func (p *Panel) ListClients(ctx context.Context) ([]driver.RemoteClient, error) 
 			InboundRemoteID: c.inbound, Enabled: c.enabled,
 			DataLimitBytes: enforcing, RateLimitBps: c.rateLimit, IPLimit: c.ipLimit, ExpiresAt: c.expiresAt,
 		})
+		if p.cfg.LinesInList && p.supports(driver.RowNativeSubscriptionLink) {
+			out[len(out)-1].Lines, out[len(out)-1].LinesRead = p.lines(c), true
+		}
 	}
 	return out, nil
 }
@@ -747,7 +773,7 @@ func (p *Panel) ClientLinks(ctx context.Context, client driver.RemoteClient) ([]
 	if c == nil {
 		return nil, p.notFound("ClientLinks", client.RemoteID)
 	}
-	return []string{"vless://" + c.uuid + "@fake.invalid:443#" + c.label}, nil
+	return p.lines(c), nil
 }
 
 func (p *Panel) SubscriptionURL(ctx context.Context, remoteID string) (string, bool) {

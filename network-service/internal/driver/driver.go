@@ -170,6 +170,13 @@ type RemoteClient struct {
 	// ExpiresAt is the panel's own expiry, where it enforces one
 	// (RowServerSideExpiry). Zero means none.
 	ExpiresAt time.Time
+	// Lines are the client's link lines where ListClients built them from the
+	// same read (LinesRead): Sanaee and alireza0 from the inbound list,
+	// Marzban from the user list. Provisioning compares them every pass and
+	// asks ClientLinks for nothing (contract.links.md rule 6b). LinesRead with
+	// no Lines is a client the panel gives none.
+	Lines     []string
+	LinesRead bool
 }
 
 // CreateClientRequest is what provisioning asks for. The driver turns it into

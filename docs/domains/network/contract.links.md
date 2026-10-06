@@ -41,13 +41,14 @@ when the provisioning pass captures them and where they are kept (F-027-bj,
    is. Inside it a family makes at most three requests (3x-ui v3: the client
    list, the settings, the sub server; alireza0 and Sanaee: the client list). Capture runs only when a client is created,
    regenerated, moved or re-keyed (rule 6), and on a capped refresh (rule 6b):
-   its inbound edited, or once a day.
+   its inbound edited, or once a day. Sanaee, alireza0 and Marzban are never
+   asked after a create: `ListClients` hands their lines over (rule 6b).
 
 ## Per family
 
 | Family | Lines come from | None when |
 |---|---|---|
-| Marzban | `links` on `GET /api/user/{name}` (`contract.drivers.md` rule 6) | the user has no links |
+| Marzban | `links` on `GET /api/user/{name}`, and on every user of the list `ListClients` reads (`contract.drivers.md` rule 6) | the user has no links |
 | Marzneshin | `<subscription_url>/links` (`contract.marzneshin.md` rule 9) | no `subscription_url` |
 | Hiddify | `<clientBaseUrl>/<uuid>/sub/` (`contract.hiddify.md` rule 8) | no `clientBaseUrl` |
 | Sanaee, x-ui (alireza0) | built from the client's inbound (`driver.XrayLines`, ADR-0088): one line, or one per `externalProxy` entry; the address is the inbound's `listen`, else `clientBaseUrl`'s host, else the panel's | the inbound's stream is one the port does not cover |
@@ -70,14 +71,21 @@ that should exist and does not, which is drift (`contract.drift.md`).
    **no** lines stands for `converge.EmptyRecapture` (one hour) and is then
    asked again (F-111-v, ADR-0088 rule 5), so lines that appear later, or a
    config captured before its family's lines were built, fill in with no key.
-6b. **A refresh: the inbound changed, or a day passed** (ADR-0123). Lines
+6b. **Lines follow the panel: from the pass's own read, else a refresh**
+   (ADR-0123). Sanaee and alireza0 build every client's lines from the inbound
+   list, and Marzban's user list carries its `links`, so `ListClients` hands
+   them over (`RemoteClient.Lines`, `LinesRead`). The pass compares them with
+   the stored ones on **every** pass and writes only a change: no request, no
+   cap, and an inbound edited on the panel reaches `/sub` in the next pass.
+   For the rest (3x-ui v3, Hiddify, Marzneshin), lines
    read from this very client are read again when the row's inbound's
    `panel_inbound.fingerprint` is set and is not the `linksInboundFingerprint`
    they were read under — the inbound was edited on the panel — or when they
    are `converge.LinesRecapture` (24h) old, for a family whose edits move no
-   fingerprint of ours. The x-ui family fingerprints (`driver.XrayFingerprint`:
-   address, port, protocol, remark, stream, `settings` less `clients`); the
-   others return none. A pass refreshes at most `InboundRefreshPerPass` (10),
+   fingerprint of ours; age runs from `linksCheckedAt`. The x-ui family
+   fingerprints (`driver.XrayFingerprint`: address, port, protocol, remark,
+   stream, `settings` less `clients`), read every `InboundReadEvery` (2 min,
+   `contract.inbounds.md` rule 1); the others return none. A pass refreshes at most `InboundRefreshPerPass` (10),
    and for age only while under `AgedRefreshPerPass` (2): one counter, so an
    edited inbound goes first, and the pass's writes are not starved of the
    budget. A row with no inbound of its own (rule 7 of `contract.inbounds.md`)
@@ -92,7 +100,12 @@ that should exist and does not, which is drift (`contract.drift.md`).
    answers with no client to key the lines by.
 7. **Stored on `network.config`.** `linkLines` (in the panel's order),
    `linksRemoteId` and `linksUuid` (the key), `linksCapturedAt`,
-   `linksInboundFingerprint` (rule 6b, null = none known). CHECK
+   `linksCheckedAt`, `linksInboundFingerprint` (rule 6b, null = none known).
+   `linksCapturedAt` is **since when these lines are served**: it moves only
+   when the lines or `linksUuid` change, never on a same-lines refresh, because
+   billing's drain waits `2 × subscriptionTtlSeconds` from it
+   (`group-drain.ts`, `replacementSince`). `linksCheckedAt` is the last read,
+   a refresh's too, and the age rule 6b and `EmptyRecapture` count from. CHECK
    `config_links_captured_from_a_client`: key and time together, and lines only
    with both. Empty lines with a time is a panel that gives none (rule 2); no
    time is a client never captured. `/sub` can tell a stale capture from a

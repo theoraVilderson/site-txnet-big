@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -471,4 +472,37 @@ func TestAnUnlimitedClientCarriesNoLimit(t *testing.T) {
 	conformance.NoLimitRoundTrip(t, d, driver.CreateClientRequest{
 		ClaimTag: "cfg_7f3a", UUID: "8a3c1e2b-0000-4000-8000-00000000abcd", InboundRemoteID: "VLESS TCP", Protocol: "vless", Enabled: true,
 	}, 0)
+}
+
+// ListClients builds each client's lines from the read it already makes, the
+// same lines ClientLinks gives: the provisioning pass compares them every
+// minute with no request of its own (contract.links.md rule 6b).
+func TestListClientsCarriesTheLinesClientLinksGives(t *testing.T) {
+	_, d := open(t)
+	ctx := context.Background()
+	created, err := d.CreateClient(ctx, driver.CreateClientRequest{
+		ClaimTag: "cfg_1", UUID: "11111111-1111-4111-8111-111111111111", InboundRemoteID: "VLESS TCP",
+		Protocol: "vless", DataLimitBytes: 1 << 30, Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateClient: %v", err)
+	}
+	want, err := d.ClientLinks(ctx, created)
+	if err != nil || len(want) == 0 {
+		t.Fatalf("ClientLinks = %q, %v", want, err)
+	}
+	listed, err := d.ListClients(ctx)
+	if err != nil {
+		t.Fatalf("ListClients: %v", err)
+	}
+	for _, c := range listed {
+		if c.RemoteID != created.RemoteID {
+			continue
+		}
+		if !c.LinesRead || !slices.Equal(c.Lines, want) {
+			t.Fatalf("listed lines = %q (read %v), want %q", c.Lines, c.LinesRead, want)
+		}
+		return
+	}
+	t.Fatalf("ListClients does not hold %s", created.RemoteID)
 }

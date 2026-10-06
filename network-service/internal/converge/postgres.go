@@ -76,7 +76,7 @@ SELECT c.id::text, coalesce(c."remoteId", ''), c."claimTag", c.uuid, c.protocol:
        coalesce(rl."rateMbps"::bigint * 1000000, 0),
        CASE WHEN jsonb_typeof(g.quotas #> '{concurrent_devices,limit}') = 'number'
             THEN greatest((g.quotas #>> '{concurrent_devices,limit}')::numeric, 0)::int ELSE 0 END,
-       coalesce(pi.fingerprint, ''), coalesce(c."linksInboundFingerprint", '')
+       coalesce(pi.fingerprint, ''), coalesce(c."linksInboundFingerprint", ''), c."linksCheckedAt"
   FROM network.config c
   LEFT JOIN network.panel_inbound pi ON pi."panelId" = c."panelId" AND pi."remoteId" = c."inboundRemoteId"
   LEFT JOIN network.grant_rate_limit rl ON rl."grantId" = c."grantId"
@@ -98,12 +98,12 @@ func (s PostgresDesired) For(ctx context.Context, panelID string) ([]DesiredConf
 	for rows.Next() {
 		var d DesiredConfig
 		var state, drift string
-		var repairedAt, capturedAt *time.Time
+		var repairedAt, capturedAt, checkedAt *time.Time
 		if err := rows.Scan(&d.ConfigID, &d.RemoteID, &d.ClaimTag, &d.UUID, &d.Protocol, &d.InboundRemoteID,
 			&d.Enabled, &d.Present, &d.AllocatedBytes, &d.ServedBytes, &d.SessionBytes, &d.SessionBaselineBytes,
 			&state, &drift, &d.RepairCount, &repairedAt,
 			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt, &d.Unlimited, &d.InboundResolved, &d.CredentialGroupID, &d.RateBps, &d.RateCapBps, &d.IPLimit,
-			&d.InboundFingerprint, &d.Links.InboundFingerprint); err != nil {
+			&d.InboundFingerprint, &d.Links.InboundFingerprint, &checkedAt); err != nil {
 			return nil, fmt.Errorf("reading panel %s desired state: %w", panelID, err)
 		}
 		d.State, d.Drift = EnforcementState(state), DriftState(drift)
@@ -112,6 +112,9 @@ func (s PostgresDesired) For(ctx context.Context, panelID string) ([]DesiredConf
 		}
 		if capturedAt != nil {
 			d.Links.At = *capturedAt
+		}
+		if checkedAt != nil {
+			d.Links.CheckedAt = *checkedAt
 		}
 		out = append(out, d)
 	}
@@ -136,7 +139,10 @@ const ConfirmedEvent = "network.config.confirmed"
 // in the same statement: an action that wrote in between leaves no row to
 // update, and the next pass judges what it wrote. The lines move only with a
 // capture ($8), and then with their key and time together
-// (`config_links_captured_from_a_client`). A capture ($8) and a confirmation
+// (`config_links_captured_from_a_client`). `linksCheckedAt` is that capture's
+// time ($12); `linksCapturedAt` takes it only when the lines or the uuid
+// changed, since it is when the served lines began and billing's drain waits
+// on it (rule 7): a same-lines refresh moves only the check. A capture ($8) and a confirmation
 // of a Grant's config ($15) are announced in the same statement, so the event
 // and the row commit or fail together (ADR-0021); a dropped outcome updates no
 // row and announces nothing. A capture is announced only when the lines or the
@@ -159,7 +165,8 @@ UPDATE network.config
        "linkLines" = CASE WHEN $8 THEN $9::text[] ELSE "linkLines" END,
        "linksRemoteId" = CASE WHEN $8 THEN $10 ELSE "linksRemoteId" END,
        "linksUuid" = CASE WHEN $8 THEN $11 ELSE "linksUuid" END,
-       "linksCapturedAt" = CASE WHEN $8 THEN $12 ELSE "linksCapturedAt" END,
+       "linksCapturedAt" = CASE WHEN $8 AND ("linksCapturedAt" IS NULL OR "linkLines" IS DISTINCT FROM $9::text[] OR "linksUuid" IS DISTINCT FROM $11) THEN $12 ELSE "linksCapturedAt" END,
+       "linksCheckedAt" = CASE WHEN $8 THEN $12 ELSE "linksCheckedAt" END,
        "linksInboundFingerprint" = CASE WHEN $8 THEN NULLIF($18, '') ELSE "linksInboundFingerprint" END,
        "confirmedAt" = CASE WHEN $15 THEN COALESCE("confirmedAt", $4) ELSE "confirmedAt" END,
        "inboundRemoteId" = CASE
@@ -201,7 +208,10 @@ func (s PostgresDesired) Record(ctx context.Context, rows []Outcome) error {
 				lines = o.Links.Lines
 			}
 			linksRemote, linksUUID, linksFingerprint = o.Links.RemoteID, o.Links.UUID, o.Links.InboundFingerprint
-			at := o.Links.At
+			at := o.Links.CheckedAt
+			if at.IsZero() {
+				at = o.Links.At
+			}
 			linksAt = &at
 		}
 		if _, err := s.DB.Exec(ctx, recordSQL,

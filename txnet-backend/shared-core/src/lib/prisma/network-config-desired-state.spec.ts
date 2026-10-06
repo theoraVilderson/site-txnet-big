@@ -81,6 +81,8 @@ const CONFIG_COLUMNS = [
   'linksRemoteId',
   'linksUuid',
   'linksCapturedAt',
+  'linksInboundFingerprint',
+  'linksCheckedAt',
   'confirmedAt',
 ];
 

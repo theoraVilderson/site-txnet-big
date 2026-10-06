@@ -467,3 +467,41 @@ func TestTheInboundFingerprintKeysTheLinksAndASameRefreshIsSilent(t *testing.T) 
 		t.Errorf("the inventory read does not store the inbound's fingerprint: %v", f.args[0])
 	}
 }
+
+// `linksCapturedAt` is when the served lines began (billing's drain waits on
+// it); `linksCheckedAt` is the last read, a same-lines refresh's too.
+func TestASameLinesRefreshMovesOnlyLinksCheckedAt(t *testing.T) {
+	captured := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
+	checked := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	f := &pgDB{rows: []pgRow{
+		{pgConfig, "r-1", "txn-abc", "uuid-1", "vless", "7", true, true, int64(5_000), int64(1_200), int64(0), int64(0),
+			"complete", "synced", 0, nil, []string{"vless://a"}, "r-1", "uuid-1", captured, false, false,
+			"", int64(0), int64(0), 0, "fp-1", "fp-1", checked},
+	}}
+	got, err := PostgresDesired{DB: f}.For(context.Background(), pgPanel)
+	if err != nil {
+		t.Fatalf("For: %v", err)
+	}
+	if !got[0].Links.At.Equal(captured) || !got[0].Links.CheckedAt.Equal(checked) {
+		t.Errorf("links served since %v, checked %v; want %v and %v", got[0].Links.At, got[0].Links.CheckedAt, captured, checked)
+	}
+
+	f = &pgDB{}
+	if err := (PostgresDesired{DB: f}).Record(context.Background(), []Outcome{
+		{ConfigID: pgConfig, RemoteID: "r-1", State: StateComplete, At: checked, UUID: "uuid-1", Enabled: true, Present: true,
+			Links: &CapturedLinks{Lines: []string{"vless://a"}, RemoteID: "r-1", UUID: "uuid-1", At: captured, CheckedAt: checked}},
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	for _, want := range []string{
+		`"linksCapturedAt" = CASE WHEN $8 AND ("linksCapturedAt" IS NULL OR "linkLines" IS DISTINCT FROM $9::text[] OR "linksUuid" IS DISTINCT FROM $11) THEN $12 ELSE "linksCapturedAt" END`,
+		`"linksCheckedAt" = CASE WHEN $8 THEN $12 ELSE "linksCheckedAt" END`,
+	} {
+		if !strings.Contains(f.sql[0], want) {
+			t.Errorf("recordSQL lacks %s", want)
+		}
+	}
+	if at, ok := f.args[0][11].(*time.Time); !ok || !at.Equal(checked) {
+		t.Errorf("$12 is %v, want the read's time %v", f.args[0][11], checked)
+	}
+}

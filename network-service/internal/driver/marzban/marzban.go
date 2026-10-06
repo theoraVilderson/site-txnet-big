@@ -394,7 +394,9 @@ func (d *Driver) ListClients(ctx context.Context) ([]driver.RemoteClient, error)
 	}
 	out := make([]driver.RemoteClient, 0, len(users))
 	for _, u := range users {
-		out = append(out, u.remote())
+		c := u.remote()
+		c.Lines, c.LinesRead = u.lines(), true
+		out = append(out, c)
 	}
 	return out, nil
 }
@@ -576,13 +578,19 @@ func (d *Driver) ClientLinks(ctx context.Context, client driver.RemoteClient) ([
 	if err != nil {
 		return nil, err
 	}
+	return u.lines(), nil
+}
+
+// lines is the user's `links`, which the user list carries too, so
+// ListClients hands them over from the read it already makes.
+func (u user) lines() []string {
 	var out []string
 	for _, link := range u.Links {
 		if link = strings.TrimSpace(link); link != "" {
 			out = append(out, link)
 		}
 	}
-	return out, nil
+	return out
 }
 
 func isProtocol(p string) bool {

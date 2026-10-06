@@ -528,7 +528,9 @@ func (d *Driver) ListClients(ctx context.Context) ([]driver.RemoteClient, error)
 	}
 	out := make([]driver.RemoteClient, 0, len(all))
 	for _, f := range all {
-		out = append(out, f.remote())
+		c := f.remote()
+		c.Lines, c.LinesRead = d.lines(f), true
+		out = append(out, c)
 	}
 	return out, nil
 }
@@ -733,6 +735,12 @@ func (d *Driver) ClientLinks(ctx context.Context, client driver.RemoteClient) ([
 	if err != nil {
 		return nil, err
 	}
+	return d.lines(f), nil
+}
+
+// lines builds one found client's lines from its inbound: ClientLinks for one
+// client, ListClients for every client of the same read.
+func (d *Driver) lines(f found) []string {
 	return driver.XrayLines(
 		driver.XrayInbound{
 			Listen: f.inbound.Listen, Port: f.inbound.Port, Protocol: f.inbound.Protocol,
@@ -743,7 +751,7 @@ func (d *Driver) ClientLinks(ctx context.Context, client driver.RemoteClient) ([
 			Flow: f.client.Flow, Security: f.client.Security,
 		},
 		d.served.Hostname(),
-	), nil
+	)
 }
 
 // subscription builds the address from the panel's settings. ok is false for
