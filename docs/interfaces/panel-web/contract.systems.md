@@ -122,7 +122,12 @@ The *why* is **ADR-0080**.
    how many subscriptions wait and the way out (`heldGrants`). **Remove now**
    (`canEvict`, F-027-ef: any member until marked, a draining one too) reads
    `evict-preview` first and says the subscriptions it cuts off before its
-   confirm — red when any, "no one is cut off" when none. Every write re-reads the groups; a refusal does too.
+   confirm — red when any, "no one is cut off" when none — and then asks
+   what happens to them (`OrphanChoice`, F-027-eh): kept paused (first,
+   recommended) or cancelled with the rest refunded. **Delete panel** on a
+   panel in groups does the same over all of them (`remove-preview`,
+   `?orphans`); a panel being deleted shows a pill and no delete action
+   (`isRemoving`) until the sweep archives it. Every write re-reads the groups; a refusal does too.
    The page's live re-read (rule 2) re-reads the groups with the panels.
    A group names no protocol: its panels' picked inbounds do (rule 12).
 12. **A panel's inbounds: which ones a buyer is placed on** (F-114-b,

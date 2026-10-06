@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { Archive, KeyRound, Loader2, RotateCcw, Settings2, Trash2, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { billingApi, type PanelGroup, type SystemsPanel } from "@/lib/billing-api";
+import { billingApi, type EvictOrphans, type PanelGroup, type PanelRemovePreview, type SystemsPanel } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
 import { Sheet } from "../../catalog/_components/catalog-ui";
-import { DELETE_OUTCOME_KEYS, groupsHolding, isArchived, visiblePanels } from "../_lib/panel-lifecycle";
+import { ORPHAN_CHOICES } from "../_lib/panel-groups";
+import { DELETE_OUTCOME_KEYS, groupsHolding, isArchived, isRemoving, visiblePanels } from "../_lib/panel-lifecycle";
 import { PANEL_STATUS_KEYS, panelStatusOf, type PanelStatus } from "../_lib/systems-guide";
 import {
   driverLabel,
@@ -22,6 +23,7 @@ import {
   verdictOf,
 } from "../_lib/systems";
 import { ActionsMenu, BAD, CardButton, GOOD, ListState, Notice, Pill, QUIET, Section, useSystemsError, type MenuItem } from "./parts";
+import { OrphanChoice } from "./OrphanChoice";
 import { PanelSheet } from "./PanelSheet";
 import { Button, Field, Input } from "../../_components/kit";
 
@@ -118,7 +120,8 @@ function PanelItem({
     ...(canResubmitRadiusSecret(panel)
       ? [{ label: t("common", K.radiusSecret.open), icon: <KeyRound size={14} aria-hidden />, onSelect: () => open("radiusSecret") }]
       : []),
-    { label: t("common", K.remove.action), icon: <Trash2 size={14} aria-hidden />, tone: "error", onSelect: () => open("delete") },
+    // Being deleted (F-027-eh): the sweep is taking it out; there is nothing left to ask.
+    ...(isRemoving(panel) ? [] : [{ label: t("common", K.remove.action), icon: <Trash2 size={14} aria-hidden />, tone: "error" as const, onSelect: () => open("delete") }]),
   ];
 
   return (
@@ -128,6 +131,7 @@ function PanelItem({
           <span className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-bold text-text-primary">{panel.name}</span>
             <Pill tone={STATUS_TONE[status]}>{t("common", PANEL_STATUS_KEYS[status].label)}</Pill>
+            {isRemoving(panel) && <Pill tone={BAD}>{t("common", K.panels.removing)}</Pill>}
           </span>
           <span dir="ltr" className="truncate text-start font-mono text-[11px] text-text-secondary">
             {driverLabel(panel.driverType)}
@@ -200,23 +204,41 @@ function StatusLine({ panel, status }: { panel: SystemsPanel; status: PanelStatu
 
 /**
  * Delete, said before it happens: deleted if it never had users, archived if
- * it had (billing rules 7–8). A panel a group holds is not offered the button
- * — the sheet names the groups instead (rule 6); a live config outside any
- * group is billing's to refuse, and its sentence is shown here.
+ * it had (billing rules 7–8). A panel a group holds is deleted in one step
+ * (F-027-eh): the sheet names the groups, reads what leaving them now costs,
+ * and asks what happens to anyone left with no line before the confirm. A
+ * live config outside any group is billing's to refuse, and its sentence is
+ * shown here.
  */
 function DeleteSheet({ panel, holding, onClose, onDone }: { panel: SystemsPanel; holding: string[]; onClose: () => void; onDone: (sentence: string) => Promise<void> }) {
   const { lang, t } = useLocale();
   const message = useSystemsError();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-  const blocked = holding.length > 0;
+  const inGroups = holding.length > 0;
   const names = new Intl.ListFormat(lang, { type: "conjunction" }).format(holding);
+  const [preview, setPreview] = useState<PanelRemovePreview | null>(null);
+  const [orphans, setOrphans] = useState<EvictOrphans>(ORPHAN_CHOICES[0]);
+  // In groups, the cost is read first; the delete is offered only beside it.
+  const ready = !inGroups || preview !== null;
+
+  const check = async () => {
+    setBusy(true);
+    setFailure(null);
+    try {
+      setPreview(await billingApi.panelRemovePreview(panel.id));
+    } catch (e) {
+      setFailure(message(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const remove = async () => {
     setBusy(true);
     setFailure(null);
     try {
-      const answer = await billingApi.deletePanel(panel.id);
+      const answer = await billingApi.deletePanel(panel.id, inGroups ? orphans : undefined);
       await onDone(DELETE_OUTCOME_KEYS[answer.outcome]);
     } catch (e) {
       setFailure(message(e));
@@ -234,7 +256,12 @@ function DeleteSheet({ panel, holding, onClose, onDone }: { panel: SystemsPanel;
           <Button variant="quiet" size="sm" onClick={onClose}>
             {t("common", K.groups.cancel)}
           </Button>
-          {!blocked && (
+          {inGroups && !preview && (
+            <Button size="sm" disabled={busy} onClick={() => void check()} className="text-error hover:text-error hover:bg-error-bg">
+              {t("common", K.remove.check)}
+            </Button>
+          )}
+          {ready && (
             <Button
               size="sm"
               disabled={busy}
@@ -249,7 +276,8 @@ function DeleteSheet({ panel, holding, onClose, onDone }: { panel: SystemsPanel;
       }
     >
       <p className="text-sm leading-6 text-text-secondary">{t("common", K.remove.hint)}</p>
-      {blocked && <Notice tone="bad">{t("common", K.remove.blockedGroups, { groups: names })}</Notice>}
+      {inGroups && <Notice tone="bad">{t("common", K.remove.inGroups, { groups: names })}</Notice>}
+      {preview && <OrphanChoice preview={preview} value={orphans} onChange={setOrphans} safe={K.remove.previewSafe} />}
       {failure && <Notice tone="bad">{failure}</Notice>}
     </Sheet>
   );

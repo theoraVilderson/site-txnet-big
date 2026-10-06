@@ -11,6 +11,8 @@ import {
   canEvict,
   canRemove,
   isLastToServe,
+  needsOrphanChoice,
+  ORPHAN_CHOICES,
   drainEarliestAt,
   emptyGroupForm,
   groupFormOf,
@@ -69,6 +71,8 @@ const member = (over: Partial<PanelGroupMember> = {}): PanelGroupMember => ({
   role: "primary",
   drainingSince: null,
   evictedAt: null,
+  evictOrphans: null,
+  evictedBy: null,
   heldGrants: null,
   createdAt: "2026-09-25T10:00:00.000Z",
   panelName: "de-1",
@@ -179,6 +183,13 @@ describe("adding and draining a member", () => {
     const drainingOther = member({ panelId: "p-2", role: "drain", drainingSince: "2026-09-25T10:00:00.000Z" });
     expect(isLastToServe(only, group({ members: [only, drainingOther] }))).toBe(true);
     expect(isLastToServe(only, group({ members: [only, member({ panelId: "p-2" })] }))).toBe(false);
+  });
+
+  it("asks what happens to the users only when someone would be left with no line (F-027-eh)", () => {
+    expect([...ORPHAN_CHOICES].sort()).toEqual(prismaEnum("EvictOrphans").sort());
+    expect(ORPHAN_CHOICES[0]).toBe("pause"); // the recommended one, first
+    expect(needsOrphanChoice({ liveConfigs: 4, soleLineGrants: 0 })).toBe(false);
+    expect(needsOrphanChoice({ liveConfigs: 4, soleLineGrants: 2 })).toBe(true);
   });
 
   it("offers remove now on any member, a draining one included, until it is marked", () => {

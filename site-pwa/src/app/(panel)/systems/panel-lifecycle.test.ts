@@ -4,6 +4,7 @@ import {
   addressChanged,
   groupDeleteBlock,
   groupsHolding,
+  isRemoving,
   panelEditFormOf,
   validatePanelEdit,
   visiblePanels,
@@ -32,6 +33,7 @@ const pull = (over: Partial<SystemsPanel> = {}): SystemsPanel =>
     apiBaseUrl: "https://fra.example.com:2053/panel",
     clientBaseUrl: null,
     retiredAt: null,
+    removeRequestedAt: null,
     budget: { maxRequestsPerMinute: 60, blockedSince: null },
     ...over,
   }) as SystemsPanel;
@@ -101,7 +103,13 @@ describe("deleting (F-027-bz, F-027-ca)", () => {
   });
 
   it("says each outcome billing can answer", () => {
-    expect(Object.keys(DELETE_OUTCOME_KEYS).sort()).toEqual(["archived", "deleted"]);
+    expect(Object.keys(DELETE_OUTCOME_KEYS).sort()).toEqual(["archived", "deleted", "removing"]);
+  });
+
+  it("a panel being deleted in one step is said so, and is not archived yet (F-027-eh)", () => {
+    expect(isRemoving(pull())).toBe(false);
+    expect(isRemoving(pull({ removeRequestedAt: "2026-10-06T08:00:00Z" }))).toBe(true);
+    expect(visiblePanels([pull({ id: "r", removeRequestedAt: "2026-10-06T08:00:00Z" })], false).map((p) => p.id)).toEqual(["r"]);
   });
 
   it("offers a group's delete only when it is empty and unsold", () => {

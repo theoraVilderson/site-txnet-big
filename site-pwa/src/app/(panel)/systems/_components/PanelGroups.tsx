@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Layers, Loader2, LogOut, Pencil, Plus, SlidersHorizontal, Trash2, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { PANEL_CATALOG } from "@/lib/routes";
-import { billingApi, type PanelGroup, type PanelGroupMember, type PanelInbounds, type SystemsPanel } from "@/lib/billing-api";
+import { billingApi, type EvictOrphans, type EvictPreview, type PanelGroup, type PanelGroupMember, type PanelInbounds, type SystemsPanel } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
 import { Field, Sheet } from "../../catalog/_components/catalog-ui";
 import { groupDeleteBlock } from "../_lib/panel-lifecycle";
@@ -19,6 +19,7 @@ import {
   canEvict,
   canRemove,
   isLastToServe,
+  ORPHAN_CHOICES,
   drainEarliestAt,
   emptyGroupForm,
   groupFormOf,
@@ -29,6 +30,7 @@ import {
   type GroupForm,
 } from "../_lib/panel-groups";
 import { PANEL_STATE_KEYS, REVIEW_KEYS, SYSTEMS_KEYS } from "../_lib/systems";
+import { OrphanChoice } from "./OrphanChoice";
 import { ActionsMenu, BAD, CardButton, GOOD, ListState, Notice, Pill, QUIET, REVIEW_TONE, STATE_TONE, Section, useSystemsError } from "./parts";
 import { Alert, Button, Input, NativeSelect, RadioCards } from "../../_components/kit";
 
@@ -452,7 +454,8 @@ function LeaveSheet({
   const message = useSystemsError();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ liveConfigs: number; soleLineGrants: number } | null>(null);
+  const [preview, setPreview] = useState<EvictPreview | null>(null);
+  const [orphans, setOrphans] = useState<EvictOrphans>(ORPHAN_CHOICES[0]);
   const lastToServe = isLastToServe(member, group);
 
   /** The cost of "remove now", read before its confirm is offered; the sheet stays open. */
@@ -525,16 +528,12 @@ function LeaveSheet({
           <p className="text-xs leading-5 text-text-secondary">{t("common", K.evict.hint)}</p>
           {preview ? (
             <>
-              <Alert tone={preview.soleLineGrants > 0 ? "error" : "info"}>
-                {preview.soleLineGrants > 0
-                  ? t("common", K.evict.preview, { configs: preview.liveConfigs, users: preview.soleLineGrants })
-                  : t("common", K.evict.previewSafe, { configs: preview.liveConfigs })}
-              </Alert>
+              <OrphanChoice preview={preview} value={orphans} onChange={setOrphans} safe={K.evict.previewSafe} />
               <div>
                 <Button
                   size="sm"
                   disabled={busy}
-                  onClick={() => void run(async () => (await billingApi.evictPanelGroupMember(group.id, member.panelId), t("common", K.evict.started)))}
+                  onClick={() => void run(async () => (await billingApi.evictPanelGroupMember(group.id, member.panelId, orphans), t("common", K.evict.started)))}
                   className="text-error hover:text-error hover:bg-error-bg"
                 >
                   {t("common", K.evict.confirm)}

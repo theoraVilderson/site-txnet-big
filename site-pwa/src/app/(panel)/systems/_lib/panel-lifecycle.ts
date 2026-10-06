@@ -111,7 +111,13 @@ export function groupsHolding(panel: SystemsPanel, groups: readonly PanelGroup[]
 export const DELETE_OUTCOME_KEYS: Record<RemovedPanel["outcome"], string> = {
   deleted: K.remove.deleted,
   archived: K.remove.archived,
+  removing: K.remove.removing,
 };
+
+/** Deleted in one step while in groups (F-027-eg): leaving them now, archived by the sweep once empty — still listed meanwhile. */
+export function isRemoving(panel: SystemsPanel): boolean {
+  return panel.removeRequestedAt != null;
+}
 
 /** Why a group cannot be deleted yet (rule 24a), with the count to say; null when it can. */
 export function groupDeleteBlock(group: PanelGroup): { key: string; n: number } | null {

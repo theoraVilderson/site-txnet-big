@@ -1432,10 +1432,18 @@ export const billingApi = {
 
   /**
    * Delete a panel (F-027-bz): `deleted` with no history, `archived` with it.
-   * 409 `panel_in_group` / `panel_has_configs` while it serves.
+   * 409 `panel_in_group` / `panel_has_configs` while it serves — unless
+   * `orphans` is given (F-027-eg): then a panel in groups is evicted from all
+   * of them with that choice and answered `removing`.
    */
-  async deletePanel(id: string): Promise<RemovedPanel> {
-    return call<RemovedPanel>(`/systems/panels/${encodeURIComponent(id)}`, { method: "DELETE" });
+  async deletePanel(id: string, orphans?: EvictOrphans): Promise<RemovedPanel> {
+    const query = orphans ? `?orphans=${orphans}` : "";
+    return call<RemovedPanel>(`/systems/panels/${encodeURIComponent(id)}${query}`, { method: "DELETE" });
+  },
+
+  /** What deleting it in one step takes, summed over its groups (F-027-eg). */
+  async panelRemovePreview(id: string): Promise<PanelRemovePreview> {
+    return call<PanelRemovePreview>(`/systems/panels/${encodeURIComponent(id)}/remove-preview`);
   },
 
   /** Restore an archived panel (F-027-bz): back to `pending`, tested before it is collected. */
@@ -1568,9 +1576,10 @@ export const billingApi = {
   },
 
   /** "Remove now": the drain sweep retires its configs on its next tick, no wait, then removes it. A second call keeps the first mark. */
-  async evictPanelGroupMember(groupId: string, panelId: string): Promise<EvictedMember> {
+  async evictPanelGroupMember(groupId: string, panelId: string, orphans: EvictOrphans): Promise<EvictedMember> {
     return call<EvictedMember>(`/systems/panel-groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(panelId)}/evict`, {
       method: "POST",
+      body: JSON.stringify({ orphans }),
     });
   },
 
@@ -2025,6 +2034,8 @@ export interface SystemsPanel {
   clientBaseUrl: string | null;
   /** Archived (F-027-bz): kept for its records, skipped by every loop. Null for a panel in service. */
   retiredAt: string | null;
+  /** Deleted in one step while in groups (F-027-eg): leaving them, archived once empty. */
+  removeRequestedAt: string | null;
   /** Whether a push panel's RADIUS secret is stored (F-027-az); null on a pull panel. */
   radiusSecretConfigured: boolean | null;
   review: {
@@ -2142,6 +2153,9 @@ export interface PanelGroupMember {
   drainingSince: string | null;
   /** "Remove now" was chosen (F-027-ee): the sweep takes it on its next tick. Only while `drain`. */
   evictedAt: string | null;
+  /** What the evict does with a Grant it leaves with no line (F-027-eg); set with `evictedAt`. */
+  evictOrphans: EvictOrphans | null;
+  evictedBy: string | null;
   /** A draining member's active Grants with no line served elsewhere, which the sweep holds; null when not draining. */
   heldGrants: number | null;
   createdAt: string;
@@ -2221,6 +2235,8 @@ export type MemberSellingBody = Partial<Pick<PanelGroupMember, "inboundPlacement
 export type DrainedMember = PanelGroupMember & { waitSeconds: number };
 export type RemovedMember = { groupId: string; panelId: string; removed: true };
 export type EvictPreview = { liveConfigs: number; soleLineGrants: number };
+/** billing `network.EvictOrphans`: pause a Grant left with no line until a panel joins, or cancel it with a refund. */
+export type EvictOrphans = "pause" | "refund";
 export type EvictedMember = PanelGroupMember & { soleLineGrants: number };
 
 /** billing `updatePanelSchema` (F-027-by): any of these, at least one. `apiBaseUrl` is never cleared. */
@@ -2235,7 +2251,8 @@ export type PanelSettingsBody = Partial<{
 
 export type UpdatedPanel = { id: string; reviewState: PanelReviewState; retest: boolean };
 
-export type RemovedPanel = { id: string; outcome: "deleted" | "archived" };
+export type RemovedPanel = { id: string; outcome: "deleted" | "archived" | "removing"; groups?: number };
+export type PanelRemovePreview = EvictPreview & { groups: number };
 
 /** What re-submitting a login answers (F-027-au). `retest`: the next tick tests the panel again. */
 export interface ResubmittedLogin {

@@ -1,4 +1,4 @@
-import type { ConfigProtocol, PanelGroup, PanelGroupBody, PanelGroupMember, PanelGroupMemberRole, SystemsPanel } from "@/lib/billing-api";
+import type { ConfigProtocol, EvictOrphans, EvictPreview, PanelGroup, PanelGroupBody, PanelGroupMember, PanelGroupMemberRole, SystemsPanel } from "@/lib/billing-api";
 import { SYSTEMS_KEYS } from "./systems";
 
 /**
@@ -148,6 +148,14 @@ export function canDrain(member: PanelGroupMember): boolean {
  */
 export function isLastToServe(member: PanelGroupMember, group: PanelGroup): boolean {
   return !group.members.some((m) => m.panelId !== member.panelId && m.role !== "drain");
+}
+
+/** What "remove now" does with a Grant it leaves with no line (billing `EvictOrphans`, F-027-eg); the recommended first. */
+export const ORPHAN_CHOICES = ["pause", "refund"] as const satisfies readonly EvictOrphans[];
+
+/** The choice is asked only when someone would be left with no line; otherwise nothing hangs on it. */
+export function needsOrphanChoice(preview: EvictPreview): boolean {
+  return preview.soleLineGrants > 0;
 }
 
 /** "Remove now" (groups rule 16): any member, a draining one too — the way out of a held drain — until it is marked. */
