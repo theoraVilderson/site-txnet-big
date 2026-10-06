@@ -1137,6 +1137,37 @@ ingested rows reuse the catalog id verbatim as their row id.
 | RT-1-h | Bot linking before sign-in rides the existing `otp:` channel; useBotLink drops its 2.5 s poll | identity | todo | — | — |  | Spec: realtime/contract.live-events.md RT-1-h. No new channel family. useBotLink leaves the C-14 except. |
 | RT-1-i | Delete the unused `useLocaleVersion` hook | panel-web | todo | — | — |  | Spec: realtime/contract.live-events.md RT-1-i. Nothing imports it; its C-14 except entry goes too. |
 | RT-1-j | Manual payments: `billing.payment.verifying_changed` on `tenant:`; the manual list and the menu badges re-read, the badges' 60 s poll goes | billing | todo | RT-1-a RT-1-b RT-1-g | — |  | Spec: realtime/contract.live-events.md RT-1-j. useMenuBadges leaves the C-14 except. |
+| F-1001 | Revenue, cost, and margin dashboard per user / panel / product / reseller | billing | todo | F-1001-a F-1001-b F-1001-c F-1001-d F-1001-e F-1001-f F-1001-g F-1001-h F-1001-i F-1001-j F-1001-k F-1001-l F-1001-m | F-1001 |  | Umbrella. Split 2026-10-06 (user). Spec: billing/contract.analytics.md and panel-web/contract.analytics.md. Order: 'the F-1001 analytics series' below. |
+| F-1001-a | Rollup: `analytics_sales_day`, `_user_day`, `_payment_day`, `_stock_day`; a worker that rebuilds any tenant's day range idempotently; `billing.analytics.refreshed` on `tenant:` | billing | todo | F-311-b RT-1-b | F-1001 |  | Spec: billing/contract.analytics.md principles, tables, worker. One spec proves net sales equals /revenue's sales.total for the same range. |
+| F-1001-b | Analytics read routes `overview`, `sales`, `catalog`: KPIs with previous period and delta, server-chosen granularity, Jalali buckets; the `analytics.read` permission; Redis-cached | billing | todo | F-1001-a | F-1001 |  | Spec: billing/contract.analytics.md read routes. Touches permissions.yaml, seed and a migration (dev: apply, no ask). |
+| F-1001-c | Chart kit on visx: StatTile, DeltaPill, TrendChart, BarList, StackedColumns, CalendarHeatmap, Meter, ChartCard with table view; validated palette, brand check, LTR plot | panel-web | todo | — | F-1001 |  | Spec: panel-web/contract.analytics.md chart kit, rules 1-12, colour. New dependency (visx, pinned exact). Proof: kit charts specs. |
+| F-1001-d | Panel: `/analytics` — menu entry, sticky filter bar in the URL, tabs, 'updated N min ago', live re-read; the Overview tab (hero, six KPI tiles, by product, new vs returning, calendar heatmap) | panel-web | todo | F-1001-b F-1001-c RT-1-a | F-1001 |  | Spec: panel-web/contract.analytics.md the page, Overview. New surface: its SURFACES.md row lands with it. |
+| F-1001-e | Panel: the Sales tab and the Products and panels tab | panel-web | todo | F-1001-d | F-1001 |  | Spec: panel-web/contract.analytics.md other tabs. |
+| F-1001-f | Customers: `analytics_grant_end` and `_signup_day`, renewal by the tenant's `renewalWindowDays` (1..30, default 7), the `customers` route | billing | todo | F-1001-a | F-1001 |  | Spec: billing/contract.analytics.md renewal, customers tab. Signups arrive by identity's event, never a cross-schema read. |
+| F-1001-g | Panel: the Customers tab, and the renewal-window setting on it | panel-web | todo | F-1001-f F-1001-d | F-1001 |  | Spec: panel-web/contract.analytics.md other tabs. |
+| F-1001-h | Platform owner: the `resellers` route — every reseller's totals, delta and sparkline, tier A | billing | todo | F-1001-a | F-1001 |  | Spec: billing/contract.analytics.md resellers; ADR-0104 tier A, under-5 cells suppressed, no names. |
+| F-1001-i | Panel: the Resellers tab, and the top-5 resellers card on Overview (owner only) | panel-web | todo | F-1001-h F-1001-d | F-1001 |  | Spec: panel-web/contract.analytics.md Overview item 6, other tabs. |
+| F-1001-j | Insights: up to three 'what changed' lines on `overview` from locale keys — biggest KPI move, the product behind the sales change, an unusual day | billing | todo | F-1001-b | F-1001 |  | Spec: billing/contract.analytics.md insights. No language model. |
+| F-1001-k | Panel: the insights strip on Overview; the dashboard's revenue widget gains a sparkline and a link to `/analytics` | panel-web | todo | F-1001-j F-1001-d | F-1001 |  | Spec: panel-web/contract.analytics.md Overview item 3, Elsewhere. |
+| F-1001-l | Margin route: net minus attributed cost per user, product, panel and reseller; loss-making rows flagged | billing | todo | F-1002-b | F-1001 |  | Spec: billing/contract.analytics.md cost and margin. |
+| F-1001-m | Panel: the Profit tab | panel-web | todo | F-1001-l F-1001-d | F-1001 |  | Spec: panel-web/contract.analytics.md other tabs. |
+| F-1002 | Bandwidth cost attribution to the panel owner | network | todo | F-1002-a F-1002-b F-1002-c | F-1002 |  | Umbrella. Split 2026-10-06: a monthly cost per panel, split by traffic (user). Spec: billing/contract.analytics.md cost and margin. |
+| F-1002-a | A panel carries a monthly cost (USD, effective-from; a change adds a row, never edits one), set by the panel's owner over a staff route | network | todo | — | F-1002 |  | History kept so a past month's margin never moves when the price changes. |
+| F-1002-b | Daily cost attribution into `analytics_cost_day`: a panel's month spread over its days, split by bytes per Grant; a day with no traffic stays on the panel as idle; a reseller's cost is what it pays the platform | billing | todo | F-1002-a F-1001-a | F-1002 |  | Spec: billing/contract.analytics.md cost and margin. |
+| F-1002-c | Panel: the monthly cost field and its history on a panel in `/systems` | panel-web | todo | F-1002-a | F-1002 |  |  |
+| F-1003 | "This user costs more than they pay" alert | billing | todo | F-1001-l | F-1003 |  | Spec: billing/contract.analytics.md cost and margin. Once per user per month to staff (bot + panel inbox), as F-1528-b. |
+| F-1004 | Cohort and LTV by acquisition channel | billing | todo | F-1004-a F-1004-b | F-1004 |  | Umbrella. Split 2026-10-06 into F-1004-a/b. |
+| F-1004-a | Cohorts route: first-purchase month × month k — share still buying, net per user, cumulative LTV; by acquisition channel | billing | todo | F-1001-a | F-1004 |  | Spec: billing/contract.analytics.md cohorts. Open at start: where a user's acquisition channel is recorded — ask before building. |
+| F-1004-b | Panel: the Cohorts tab — the retention grid (CohortGrid) and LTV per channel | panel-web | todo | F-1004-a F-1001-d | F-1004 |  | Spec: panel-web/contract.analytics.md. |
+| F-1005 | Usage forecast and capacity planning | ai | todo | F-1005-a F-1005-b | F-1005 |  | Umbrella. Split 2026-10-06 into F-1005-a/b; builds on F-1525's forecast, not a second one. |
+| F-1005-a | Capacity read: per panel, forecast traffic against its capacity and cost — days until full, the month's projected cost and margin | ai | todo | F-1525-b F-1002-a | F-1005 |  |  |
+| F-1005-b | Panel: the Capacity tab on `/analytics` for the owner (and a reseller's own panels) | panel-web | todo | F-1005-a F-1001-d | F-1005 |  | Spec: panel-web/contract.analytics.md. |
+| F-1006 | Scheduled report to bot or email | automation | todo | F-1006-a F-1006-b | F-1006 |  | Umbrella. Split 2026-10-06 into F-1006-a/b. F-1531 (bot summary) is this report's bot rendering. |
+| F-1006-a | A tenant's report schedules (daily / weekly / monthly, bot and/or email, which tab); a worker renders from the analytics routes and sends through notification | automation | todo | F-1001-b | F-1006 |  | Times in the tenant's zone (TZ-1). |
+| F-1006-b | Panel: the Reports tab — add, pause, send now | panel-web | todo | F-1006-a F-1001-d | F-1006 |  | Spec: panel-web/contract.analytics.md. |
+| F-1007 | CSV/Excel export of every report | billing | todo | F-1007-a F-1007-b | F-1007 |  | Umbrella. Split 2026-10-06 into F-1007-a/b. Part of the first slice (user). |
+| F-1007-a | Every analytics tab route answers `format=csv` or `format=xlsx` through one exporter: same filters, scope and under-5 rule; a Jalali date column in fa | billing | todo | F-1001-b | F-1007 |  | Spec: billing/contract.analytics.md export. |
+| F-1007-b | Panel: the Export menu (CSV, Excel) in the `/analytics` header, for the current tab | panel-web | todo | F-1007-a F-1001-d | F-1007 |  | Spec: panel-web/contract.analytics.md the page. |
 
 ## Order of work — the F-027 network metering series
 
@@ -1475,6 +1506,13 @@ Opened 2026-10-04 (user, ADR-0115): F-414-a → F-414-g, F-414-h (ADR-0116) → 
 ## Order of work — the F-0401 freeze series
 
 Opened 2026-10-06 (user): F-0401-a → F-0401-b → (F-0401-c, F-0401-d) → (F-0401-e, F-0401-f) → F-0401-g.
+
+## Order of work — the F-1001 analytics series
+
+Opened 2026-10-06 (user). Decisions: (1) every analytics read comes from a daily rollup a worker fills and can rebuild, never the ledger live; (2) the owner's cost is a monthly cost per panel split by traffic, a reseller's cost what it pays the platform; (3) first slice: the sales dashboard for the owner and every reseller (own data only) with CSV/Excel; (4) charts on visx with our own kit; the brand colour for the main series only when it passes the colour check; time runs left to right in every language; renewal window per tenant, default 7 days. Spec: billing/contract.analytics.md, panel-web/contract.analytics.md.
+
+First slice: (RT-1-a, RT-1-b) → F-1001-a → F-1001-b → F-1001-c → F-1001-d → F-1007-a → F-1007-b → F-1001-e → F-1001-j → F-1001-k.
+Then: F-1001-f → F-1001-g → F-1001-h → F-1001-i → F-1002-a → F-1002-b → F-1002-c → F-1001-l → F-1001-m → F-1003 → F-1004-a → F-1004-b → F-1005-a → F-1005-b → F-1006-a → F-1006-b.
 
 ## Rules
 

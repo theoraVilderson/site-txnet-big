@@ -1,0 +1,144 @@
+---
+id: billing
+layer: domain
+status: active
+version: 1
+updated: 2026-10-06
+---
+
+# Contract — billing / analytics: the rollup every report reads (F-1001…F-1007)
+
+The figures behind `/analytics` for the platform owner and for every reseller.
+Decided by the user on 2026-10-06; written before any of it is built, so an
+implementing session has nothing left to decide. **Nothing below exists yet** —
+each rule names the backlog row that builds it. The page and its charts are
+[panel-web/contract.analytics.md](../../interfaces/panel-web/contract.analytics.md).
+A fact that turns out wrong is said in one line and the rule corrected.
+
+## Principles (every row)
+
+1. **One source per figure.** Every analytics number is read from the rollup
+   tables below. No analytics route reads a ledger; only the rollup worker does.
+   A report that needs a figure the rollup lacks adds a measure here first.
+2. **A sale is what `IS_SALE` says.** The worker imports `SALE_REASONS` and
+   `UNDOES` from `revenue/reseller-revenue.service.ts` — no second
+   classification. For the same tenant and range, `/analytics` net sales equals
+   `/revenue`'s `sales.total` to the cent; a spec proves it (F-1001-a).
+3. **Sales and top-ups are never one number** (ADR-0067). Both are answered;
+   neither is folded into the other, and no response field is named `revenue`.
+4. **Scope is the path's tenant, through `ResellerAccess`.** A reseller reads
+   only its own `tenant_billing` tree; no reseller figure ever comes from
+   `platform_billing` (catalog rule, area 18). The platform owner's own
+   analytics are the platform tenant's. Across resellers the owner gets tier A
+   only (ADR-0104): whole-reseller totals, a breakdown cell under 5 people as
+   `fewer_than_5`, no names, no drill to people — exports included.
+5. **A day is the tenant's day.** `day` is the calendar date of the event in
+   the tenant's resolved zone (TZ-1). Changing the zone rebuilds that tenant's
+   whole rollup; until it finishes, reads say `rebuilding`.
+6. **A sum never crosses currencies.** Every money row carries
+   `currencyCode`. A range that spans a currency change (F-116) answers one
+   series per currency, and the page says so; nothing is converted here.
+7. **Money is a decimal string** end to end (C-02); counts are ints.
+8. **Permission `analytics.read`**, granted to Admin by default, so a
+   reseller can give a staff seat its numbers without `tenant.manage`
+   (permissions.yaml, seed, a migration — F-1001-b).
+
+## Rollup tables — schema `billing` (F-1001-a)
+
+Two kinds, never mixed: **flows** (what happened during a day, summable over
+days) and **stocks** (what stood at the end of a day, never summed over days).
+
+| table | grain (key) | measures |
+|---|---|---|
+| `analytics_sales_day` (flow) | tenant · day · currency · product · variant · panel · kind (`package` = `product_purchase`, `usage` = `traffic_consumption`) | `gross`, `refunds`, `net`, `orders` (package purchases net of refunds), `bytesSold`, `discounts` (invoice discount taken) |
+| `analytics_user_day` (flow) | tenant · day · currency · user | `net`, `orders`, `topUps`, `firstPurchase` (bool) — sparse, only users with activity |
+| `analytics_payment_day` (flow) | tenant · day · currency · gateway kind | `started`, `settled`, `failed`, `settledAmount`, `giftsCredited` (coupon/gift credits) |
+| `analytics_stock_day` (stock) | tenant · day · product · panel | `activeGrants`, `frozenGrants`, `activeUsers`, `bytesUsed` |
+| `analytics_grant_end` (F-1001-f) | grant | tenant, user, product, `endedOn`, `renewedOn?`, `state` (`renewed` / `lapsed` / `pending`) |
+| `analytics_signup_day` (flow, F-1001-f) | tenant · day · source | `signups` — from identity's user-created event, never a cross-schema read |
+
+`buyers` over any range is `count(distinct user)` on `analytics_user_day`;
+`newBuyers` counts `firstPurchase`. That is why the user grain exists: distinct
+counts cannot be summed from daily totals.
+
+**Renewal.** A Grant whose term ended in the range is `renewed` when its own
+term was extended, or the same user started a Grant of the same product, within
+`renewalWindowDays` before or after the end; `lapsed` once the window passed
+without one; `pending` while it is open. Rate = renewed ÷ (renewed + lapsed);
+`pending` is shown beside it, never in it. An admin renewal (F-311-d) counts as
+a renewal and never as a sale. `renewalWindowDays` is a tenant setting, 1..30,
+default 7 (user, 2026-10-06; F-1001-f).
+
+## The worker (F-1001-a)
+
+- `rollup(tenantId, fromDay, toDay)` replaces every row of that tenant and
+  range in one transaction — idempotent; running it twice changes nothing.
+- Today and yesterday every 5 minutes; yesterday closed at 03:00 tenant time;
+  a full rebuild through an internal route (zone change, a fixed bug).
+- A pass that changed a row writes `billing.analytics.refreshed`
+  `{tenantId, from, to}` in the same transaction, on `tenant:` (ADR-0121, C-14;
+  a row in `realtime/contract.live-events.md`). Every read answers
+  `refreshedAt`.
+- Read answers are cached in Redis by tenant + query + rollup version (built
+  with `RedisKeys`, C-03); a refresh bumps the version.
+
+## Read routes — one request per tab
+
+All `GET /api/billing/tenants/:tenantId/analytics/<tab>` with
+`from`, `to` (ISO dates, tenant days, ≤ 3 years), `compare` = `previous`
+(default, same length just before) | `year` | `none`, filters `product`,
+`panel`, `kind`, and `calendar` = `jalali` | `gregorian` (from the language).
+
+- **Granularity is chosen by the server**: ≤ 62 days → day, ≤ 26 weeks → week
+  (Saturday-start in `jalali`, Monday otherwise), else month (a Jalali month in
+  `jalali`). The answer names it; `previousSeries` is aligned by index.
+- **Every KPI** is `{value, previous, delta}`; `delta` is a ratio, or `new`
+  when `previous` is 0 — never infinity, never a division by zero.
+
+| tab | row | answers |
+|---|---|---|
+| `overview` | F-1001-b | KPIs: `net`, `gross`, `refunds`, `topUps`, `orders`, `aov` (net ÷ orders), `buyers`, `newBuyers`, `returningBuyers`, `arpu`, `renewal` `{rate, renewed, lapsed, pending}`, `activeGrants` (end of range), `bytesUsed`; `series` (`salesPackage`, `salesUsage`, `topUps`, `orders`, `newBuyers` per bucket); `byProduct` top 7 + `other`; `calendar` (net per day, last 365 days) |
+| `sales` | F-1001-b | series by kind; payments `started / settled / failed` and success rate by gateway kind; `discounts` and `giftsCredited`; refunds by product |
+| `catalog` | F-1001-b | per product and per panel: net, orders, buyers, bytes, share, and a 12-point sparkline |
+| `customers` | F-1001-f | new vs returning per bucket, signups → first purchase (within 7 and 30 days), renewal by product, top 20 customers by net — **a reseller's own users only**; the owner's view of a reseller never lists people |
+| `resellers` | F-1001-h | platform owner only: each reseller's net, top-ups, buyers, active Grants, delta, sparkline — tier A |
+| `margin` | F-1001-l | revenue − attributed cost per user, product, panel (and reseller for the owner); loss-making rows flagged |
+| `cohorts` | F-1004-a | first-purchase month × month k: share still buying, net per user, cumulative LTV; split by acquisition channel |
+
+**Insights** (F-1001-j): `overview` also answers up to three `insights`, each
+`{key, params}` rendered from locale keys — no language model. In order: the
+KPI with the largest absolute delta; the product that contributed most to the
+change in `net`; a day more than 2σ off its 28-day mean. A rule with nothing
+to say says nothing.
+
+## Export (F-1007-a)
+
+Every tab route answers `format=csv` or `format=xlsx` through one exporter:
+same filters, same scope, same tier-A suppression. `xlsx` has one sheet per
+block (Summary, Series, By product, …), numbers as numbers with the currency's
+decimals, dates in the tenant zone, and in `jalali` a Jalali date column beside
+the Gregorian one. File name `analytics-<tab>-<from>-<to>.<ext>`. A later report
+gets export by being a tab — it adds nothing to the exporter.
+
+## Cost and margin (F-1002-b, F-1001-l, F-1003)
+
+- **The platform's cost is a panel's monthly cost** (network, F-1002-a: USD,
+  `effectiveFrom`, a change adds a row). A day's cost is the month's amount ÷
+  the month's days, split over Grants by the bytes each used on that panel
+  that day. A day with no traffic keeps its cost on the panel as **idle** —
+  shown, never spread or hidden. A panel with no cost set attributes 0 and the
+  margin says `no cost set`.
+- **A reseller's cost is what it pays the platform**: `metered_usage_charge`
+  split by bytes per product; `subscription_charge` spread over its period's
+  days as an unallocated fixed cost.
+- `analytics_cost_day`: tenant · day · panel · product · user? — `cost`, `bytes`.
+- Margin = net − cost, and margin % = margin ÷ net (none when net is 0).
+- **F-1003**: a user whose 30-day cost exceeds their 30-day net, by more than
+  the tenant's threshold, is reported once per month to the tenant's staff
+  (bot + panel inbox), as F-1528-b is.
+
+## Cohorts (F-1004-a)
+
+A cohort is a first-purchase month. **Open, asked at the start of F-1004-a:**
+no doc names where a user's acquisition channel is recorded (referral, deep
+link, campaign, organic). Cohorts without a channel split can ship first.
