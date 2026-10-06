@@ -92,7 +92,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 | [contract.revenue.md](contract.revenue.md) | what one reseller sold and what its users paid in, over a period — and the same split by product and by day, small cells suppressed for the platform (F-117-h) |
 | [contract.metering.md](contract.metering.md) | a collection pass becoming usage: what `metering-service` writes, and what it refuses to |
 | [contract.traffic-block.md](contract.traffic-block.md) | the money a metered Grant's bytes cost: block pricing, the debit, the cursors, and the remainder given back at close; any other meter's blocks, holds and captures: [contract.usage-rating.md](contract.usage-rating.md) |
-| [contract.systems.md](contract.systems.md) | the platform owner's systems routes: registering a panel, and what the systems page reads and acts on |
+| [contract.systems.md](contract.systems.md) | the platform owner's systems routes: registering a panel, and what the systems page reads and acts on; panel groups — members, draining one, removing one now: [contract.panel-groups.md](contract.panel-groups.md) |
 | [contract.panel-lifecycle.md](contract.panel-lifecycle.md) | editing a registered panel's settings, deleting or archiving one, deleting a panel group |
 | [contract.reseller-quota.md](contract.reseller-quota.md) | consuming or giving back a quota a reseller's package sells — a key, or a product's sales per day/week/month; adding a new quota (F-019-v2, F-019-v6) |
 | [invariants.md](invariants.md) | writing any code that touches it |

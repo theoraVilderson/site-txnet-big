@@ -27,7 +27,8 @@ export type DrainConfig = {
   replacementSince: Date | null;
 };
 
-export type DrainFacts = { drainingSince: Date; subscriptionTtlSeconds: number; configs: DrainConfig[] };
+/** `evicted`: the owner chose "remove now" (F-027-ee) — no wait, no hold. */
+export type DrainFacts = { drainingSince: Date; subscriptionTtlSeconds: number; evicted?: boolean; configs: DrainConfig[] };
 export type DrainPlan = { retire: DrainConfig[]; held: string[]; removeMember: boolean };
 
 /**
@@ -41,8 +42,12 @@ export type DrainPlan = { retire: DrainConfig[]; held: string[]; removeMember: b
  * nothing of (not `active`) has no client to cut off, and waits from the drain.
  * An active Grant with no replacement is held: deleting its only line would
  * cut the user off.
+ *
+ * An evicted member (rule 16) is the owner's call that the panel is broken or
+ * gone: everything on it goes now, and the member with it.
  */
 export function planDrain(facts: DrainFacts, now: Date): DrainPlan {
+  if (facts.evicted) return { retire: [...facts.configs], held: [], removeMember: true };
   const wait = DRAIN_TTL_MULTIPLE * facts.subscriptionTtlSeconds * 1000;
   const since = facts.drainingSince.getTime();
   const retire: DrainConfig[] = [];
@@ -67,7 +72,7 @@ export type DrainDueResult = { scanned: number; configsRetired: number; grantsHe
 /** Members per sweep. A held member stays due, so this bounds a tick, not the backlog. */
 const DRAIN_BATCH_SIZE = 50;
 
-type DueMember = { groupId: string; panelId: string; drainingSince: Date; subscriptionTtlSeconds: number };
+type DueMember = { groupId: string; panelId: string; drainingSince: Date; subscriptionTtlSeconds: number; evicted: boolean };
 
 /**
  * Draining a panel group member (F-027-bm, catalog §7.3): `role = drain` takes
@@ -100,18 +105,18 @@ export class GroupDrainService {
    */
   async drainDue(): Promise<DrainDueResult> {
     const due = await this.crossTenant.$queryRaw<DueMember[]>`
-      SELECT m."groupId", m."panelId", m."drainingSince", pg."subscriptionTtlSeconds"
+      SELECT m."groupId", m."panelId", m."drainingSince", pg."subscriptionTtlSeconds", m."evictedAt" IS NOT NULL AS "evicted"
         FROM "network"."panel_group_member" m
         JOIN "network"."panel_group" pg ON pg."id" = m."groupId"
        WHERE m."role" = 'drain'
-         AND m."drainingSince" + make_interval(secs => ${DRAIN_TTL_MULTIPLE} * pg."subscriptionTtlSeconds") <= now() AT TIME ZONE 'UTC'
-       ORDER BY m."drainingSince" ASC
+         AND (m."evictedAt" IS NOT NULL OR m."drainingSince" + make_interval(secs => ${DRAIN_TTL_MULTIPLE} * pg."subscriptionTtlSeconds") <= now() AT TIME ZONE 'UTC')
+       ORDER BY m."evictedAt" ASC NULLS LAST, m."drainingSince" ASC
        LIMIT ${DRAIN_BATCH_SIZE}`;
 
     const result: DrainDueResult = { scanned: due.length, configsRetired: 0, grantsHeld: 0, membersRemoved: 0, failed: 0 };
     for (const member of due) {
-      const configs = await this.liveConfigs(member);
-      const plan = planDrain({ drainingSince: member.drainingSince, subscriptionTtlSeconds: member.subscriptionTtlSeconds, configs }, this.now());
+      const configs = await drainConfigs(this.crossTenant, member);
+      const plan = planDrain({ drainingSince: member.drainingSince, subscriptionTtlSeconds: member.subscriptionTtlSeconds, evicted: member.evicted, configs }, this.now());
       result.grantsHeld += plan.held.length;
 
       let failed = 0;
@@ -135,28 +140,6 @@ export class GroupDrainService {
     return result;
   }
 
-  /** Every unretired config of the group's Grants on the member's panel, with its Grant's replacement. */
-  private liveConfigs(member: DueMember): Promise<DrainConfig[]> {
-    return this.crossTenant.$queryRaw<DrainConfig[]>`
-      SELECT c."id" AS "configId", c."grantId", g."tenantId", g."status" AS "grantStatus",
-             (SELECT min(r."linksCapturedAt")
-                FROM "network"."config" r
-                JOIN "network"."panel" p ON p."id" = r."panelId"
-               WHERE r."grantId" = g."id" AND r."panelId" <> c."panelId"
-                 AND r."status" = 'active' AND r."desiredRemote" = 'present' AND r."linksUuid" = r."uuid"
-                 AND p."panelState" IN ('healthy', 'degraded', 'throttled_or_blocked')
-                 AND NOT EXISTS (SELECT 1 FROM "network"."panel_group_member" d
-                                  WHERE d."groupId" = v."panelGroupId" AND d."panelId" = r."panelId" AND d."role" = 'drain')
-             ) AS "replacementSince"
-        FROM "network"."config" c
-        JOIN "entitlement"."grant" g ON g."id" = c."grantId"
-        JOIN "catalog"."product_variant" v ON v."id" = g."variantId"
-       WHERE c."panelId" = ${member.panelId}::uuid
-         AND v."panelGroupId" = ${member.groupId}::uuid
-         AND c."status" <> 'retired'
-       ORDER BY c."id"`;
-  }
-
   /**
    * Conditional on what made it removable: still `drain` (an un-drain
    * meanwhile stands) and no live config of the group's Grants on the panel (a
@@ -173,4 +156,36 @@ export class GroupDrainService {
                  JOIN "catalog"."product_variant" v ON v."id" = g."variantId"
                 WHERE c."panelId" = m."panelId" AND v."panelGroupId" = m."groupId" AND c."status" <> 'retired')`;
   }
+}
+
+/**
+ * Every unretired config of the group's Grants on the member's panel, with its
+ * Grant's replacement: what the sweep plans from, and what the systems routes
+ * count for a held drain and a "remove now" (F-027-ee) — one reading of
+ * "another line is served" for all three.
+ */
+export function drainConfigs(db: Pick<CrossTenantPrismaService, '$queryRaw'>, member: { groupId: string; panelId: string }): Promise<DrainConfig[]> {
+  return db.$queryRaw<DrainConfig[]>`
+    SELECT c."id" AS "configId", c."grantId", g."tenantId", g."status" AS "grantStatus",
+           (SELECT min(r."linksCapturedAt")
+              FROM "network"."config" r
+              JOIN "network"."panel" p ON p."id" = r."panelId"
+             WHERE r."grantId" = g."id" AND r."panelId" <> c."panelId"
+               AND r."status" = 'active' AND r."desiredRemote" = 'present' AND r."linksUuid" = r."uuid"
+               AND p."panelState" IN ('healthy', 'degraded', 'throttled_or_blocked')
+               AND NOT EXISTS (SELECT 1 FROM "network"."panel_group_member" d
+                                WHERE d."groupId" = v."panelGroupId" AND d."panelId" = r."panelId" AND d."role" = 'drain')
+           ) AS "replacementSince"
+      FROM "network"."config" c
+      JOIN "entitlement"."grant" g ON g."id" = c."grantId"
+      JOIN "catalog"."product_variant" v ON v."id" = g."variantId"
+     WHERE c."panelId" = ${member.panelId}::uuid
+       AND v."panelGroupId" = ${member.groupId}::uuid
+       AND c."status" <> 'retired'
+     ORDER BY c."id"`;
+}
+
+/** The active Grants with a line here and none served elsewhere: who has no line once these configs go. */
+export function soleLineGrants(configs: DrainConfig[]): number {
+  return new Set(configs.filter((c) => c.grantStatus === GrantStatus.active && !c.replacementSince).map((c) => c.grantId)).size;
 }

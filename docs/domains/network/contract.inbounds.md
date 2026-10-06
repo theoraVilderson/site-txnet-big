@@ -57,7 +57,7 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
    own inbounds and never the pool, even when all of them are disabled; one
    with none sells the pool, which is shared on purpose. The unique
    `(panelId, inboundRemoteId)` holds "one group at most" against a race. The
-   write is billing's (`contract.systems.md` rule 24c), the whole set at once
+   write is billing's (`contract.panel-groups.md` rule 24c), the whole set at once
    under the panel's fulfilment lock (rule 5): a named inbound held by another
    membership is 409 `inbound_assigned_elsewhere` naming that group, one with
    live configs (`present`, not drained) of another group's Grants is 409

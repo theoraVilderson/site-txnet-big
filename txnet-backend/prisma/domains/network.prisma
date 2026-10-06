@@ -692,6 +692,11 @@ model PanelGroupMember {
   /// When `role` became `drain`; the database's clock, set and held by trigger
   /// `panel_group_member_drain_clock` (F-027-bm). Null when not draining.
   drainingSince DateTime?
+  /// The owner chose "remove now" (F-027-ee): the drain sweep retires every
+  /// config of the group's Grants on it on its next tick, with no wait and no
+  /// hold, then removes the member. Only while `drain` (CHECK; cleared by the
+  /// drain-clock trigger on leaving it).
+  evictedAt DateTime?
   createdAt DateTime             @default(now())
 
   group    PanelGroup                @relation(fields: [groupId], references: [id], onDelete: Restrict)

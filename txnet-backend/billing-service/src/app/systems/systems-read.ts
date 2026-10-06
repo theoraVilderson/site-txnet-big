@@ -14,6 +14,7 @@ export type SystemsRejection =
   | 'member_not_found'
   | 'already_member'
   | 'already_draining'
+  | 'no_other_member'
   | 'member_has_configs'
   // A panel's inbounds (F-114-b).
   | 'inbound_not_found'

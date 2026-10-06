@@ -59,7 +59,7 @@ tenant's rows and the platform's), everything for `txnet_cross_tenant`.
 ## Who writes a group
 
 The platform owner, on billing's systems routes (F-027-bw,
-`billing/contract.systems.md` rules 20–24) from the panel's `/systems` page
+`billing/contract.panel-groups.md` rules 20–24e) from the panel's `/systems` page
 (F-027-bx, panel-web `contract.systems.md` rule 11): list, create, edit, add
 and remove a member, drain one, delete an empty group no variant names (F-027-ca). Platform groups only, always `mirror`; a member
 with a live config of the group's Grants is drained, never removed.
@@ -134,7 +134,8 @@ bytes wait on the cursors until a pass can publish them.
 
 `billing-service/src/app/traffic/group-drain.ts`. Setting a member's `role` to
 `drain` is the whole operator action; the rest follows, and **no user is cut
-off at any step**.
+off at any step** — except by an evict (rule 16), which the owner chooses with
+the count in front of them.
 
 13. **`/sub` stops handing out a drain line once the Grant has another.**
     sub-api "What is served" rule 4: a config on a `drain` member of its
@@ -158,6 +159,16 @@ off at any step**.
     `drain` and no unretired config of the group's Grants on the panel. An
     un-drain meanwhile stands. Re-added later, the panel is placed again for
     those Grants: a drained row covers nothing (rule 9, F-027-bp).
+16. **Evicted — "remove now" — goes on the next tick** (F-027-ee). For a
+    panel broken or gone, a held drain would never end. `evictedAt` (only
+    while `drain`, CHECK `panel_group_member_evicted_is_drain`; the drain
+    clock trigger clears it on leaving `drain`) makes the member due at once:
+    `planDrain` retires every config of the group's Grants on it — no wait, no
+    hold — and rule 15 removes it. An active Grant with no other line is cut
+    off: the owner was told the count first (billing `contract.panel-groups.md`
+    rule 24e). Fulfilment places it again when a panel joins the group.
+    Draining the group's last non-`drain` member is refused upstream
+    (`no_other_member`), so only an evict cuts anyone off.
 
 The sweep is `POST /api/internal/billing/network/drain-due`
 (`ServiceOnlyGuard`), asked by the same `grant_group_fulfilment` tick after

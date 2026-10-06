@@ -3,7 +3,7 @@ import { PanelGroupMemberRole, Prisma } from '@prisma/client';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { DRAIN_TTL_MULTIPLE } from '../traffic/group-drain';
+import { DRAIN_TTL_MULTIPLE, drainConfigs, soleLineGrants } from '../traffic/group-drain';
 import { effectiveSellingSettings, SellingLayerValues } from '../traffic/selling-settings';
 import { panelScopeOf, SystemsActor } from './panel-scope';
 import { SystemsRefused } from './systems-read';
@@ -33,6 +33,7 @@ const MEMBER_FIELDS = {
   inboundsPerBuyer: true,
   role: true,
   drainingSince: true,
+  evictedAt: true,
   createdAt: true,
   // The inbounds it sells instead of the pool (F-027-ch); none = the pool.
   inbounds: { select: { inboundRemoteId: true } },
@@ -87,7 +88,7 @@ export class PanelGroupsService {
   async groups(actor: SystemsActor) {
     const scope = await this.groupScopeOf(actor);
     const rows = await this.crossTenant.panelGroup.findMany({ where: scope, select: GROUP_FIELDS, orderBy: { name: 'asc' } });
-    return rows.map(wireGroup);
+    return Promise.all(rows.map((g) => this.wireGroupHeld(g)));
   }
 
   async create(actor: SystemsActor, input: PanelGroupInput & { name: string }) {
@@ -107,7 +108,7 @@ export class PanelGroupsService {
     const { count } = await this.crossTenant.panelGroup.updateMany({ where: { id: groupId, ...scope }, data: input });
     if (count === 0) throw new SystemsRefused('not_found');
     this.logger.log(`panel group ${groupId} edited by ${actor.adminId}`);
-    return wireGroup(await this.groupInScope(scope, groupId));
+    return this.wireGroupHeld(await this.groupInScope(scope, groupId));
   }
 
   /** A panel in scope, once. It enters as `primary`; fulfilment places on it once it is accepted and healthy. */
@@ -181,22 +182,75 @@ export class PanelGroupsService {
    * (`panel_group_member_drain_clock`); a second drain is `already_draining`
    * and never restarts it. `waitSeconds` is the least the sweep will wait from
    * `drainingSince` — longer for a Grant whose replacement is served later.
+   *
+   * The group's last non-draining member is `no_other_member` (F-027-ee): no
+   * panel could take its users, so every active Grant on it would be held for
+   * good. Add a panel first, or evict it if it is broken or gone.
    */
   async drain(actor: SystemsActor, groupId: string, panelId: string) {
     const scope = await this.groupScopeOf(actor);
     const group = await this.groupInScope(scope, groupId);
 
     const where = { groupId: group.id, panelId };
+    const current = await this.crossTenant.panelGroupMember.findFirst({ where, select: { role: true } });
+    if (!current) throw new SystemsRefused('member_not_found');
+    if (current.role === PanelGroupMemberRole.drain) throw new SystemsRefused('already_draining');
+    const other = await this.crossTenant.panelGroupMember.findFirst({
+      where: { groupId: group.id, panelId: { not: panelId }, role: { not: PanelGroupMemberRole.drain } },
+      select: { panelId: true },
+    });
+    if (!other) throw new SystemsRefused('no_other_member');
+
     const { count } = await this.crossTenant.panelGroupMember.updateMany({
       where: { ...where, role: { not: PanelGroupMemberRole.drain } },
       data: { role: PanelGroupMemberRole.drain },
     });
+    if (count === 0) throw new SystemsRefused('already_draining');
     const member = await this.crossTenant.panelGroupMember.findFirst({ where, select: MEMBER_FIELDS });
     if (!member) throw new SystemsRefused('member_not_found');
-    if (count === 0) throw new SystemsRefused('already_draining');
 
     this.logger.log(`panel ${panelId} draining from group ${group.id}, by ${actor.adminId}`);
-    return { ...wireMember(member), waitSeconds: DRAIN_TTL_MULTIPLE * group.subscriptionTtlSeconds };
+    return { ...(await this.wireMemberHeld(member)), waitSeconds: DRAIN_TTL_MULTIPLE * group.subscriptionTtlSeconds };
+  }
+
+  /**
+   * What "remove now" would take (rule 16): the member's live configs of the
+   * group's Grants, and the active Grants among them with no line served
+   * elsewhere — the users it leaves without service until a panel joins.
+   */
+  async evictPreview(actor: SystemsActor, groupId: string, panelId: string) {
+    const scope = await this.groupScopeOf(actor);
+    const group = await this.groupInScope(scope, groupId);
+    const member = await this.crossTenant.panelGroupMember.findFirst({ where: { groupId: group.id, panelId }, select: { panelId: true } });
+    if (!member) throw new SystemsRefused('member_not_found');
+    const configs = await drainConfigs(this.crossTenant, { groupId: group.id, panelId });
+    return { liveConfigs: configs.length, soleLineGrants: soleLineGrants(configs) };
+  }
+
+  /**
+   * "Remove now" (F-027-ee, rule 16), for a panel that is broken or gone: the
+   * member becomes `drain` with `evictedAt`, and the drain sweep retires every
+   * config of the group's Grants on it on its next tick — no wait, no hold —
+   * then removes it. Any member, the last and a draining one included. A Grant
+   * with no other line is left with none until a panel joins the group, which
+   * fulfilment then places it on. A second call keeps the first mark.
+   */
+  async evict(actor: SystemsActor, groupId: string, panelId: string) {
+    const scope = await this.groupScopeOf(actor);
+    const group = await this.groupInScope(scope, groupId);
+
+    const where = { groupId: group.id, panelId };
+    const { count } = await this.crossTenant.panelGroupMember.updateMany({
+      where: { ...where, evictedAt: null },
+      data: { role: PanelGroupMemberRole.drain, evictedAt: new Date() },
+    });
+    const member = await this.crossTenant.panelGroupMember.findFirst({ where, select: MEMBER_FIELDS });
+    if (!member) throw new SystemsRefused('member_not_found');
+
+    const configs = await drainConfigs(this.crossTenant, where);
+    const sole = soleLineGrants(configs);
+    if (count > 0) this.logger.log(`panel ${panelId} evicted from group ${group.id} by ${actor.adminId}; ${configs.length} config(s) go, ${sole} Grant(s) left with no line`);
+    return { ...wireMember(member, sole), soleLineGrants: sole };
   }
 
   /**
@@ -233,6 +287,17 @@ export class PanelGroupsService {
     return [{ tenantId: panelScope.tenantId }, panelScope] as const;
   }
 
+  /** A draining member's held Grants (rule 14): active, a line here, none served elsewhere. Null when not draining. */
+  private async wireMemberHeld(member: MemberRow) {
+    if (member.role !== PanelGroupMemberRole.drain) return wireMember(member);
+    return wireMember(member, soleLineGrants(await drainConfigs(this.crossTenant, member)));
+  }
+
+  private async wireGroupHeld({ members, _count, ...g }: GroupRow) {
+    const wired = (await Promise.all(members.map((m) => this.wireMemberHeld(m)))).sort((a, b) => a.effective.priority.value - b.effective.priority.value);
+    return { ...g, variantCount: _count.variants, members: wired };
+  }
+
   private async groupInScope(scope: { tenantId: string | null }, groupId: string) {
     const group = await this.crossTenant.panelGroup.findFirst({ where: { id: groupId, ...scope }, select: GROUP_FIELDS });
     if (!group) throw new SystemsRefused('not_found');
@@ -250,10 +315,13 @@ function sellingData(input: MemberSellingInput) {
  * The member's own values as stored (null = inherited), and `effective`:
  * each setting's value for this group and the layer it came from. `inbounds`
  * are the ones assigned to it (F-027-ch); `[]` = it sells the panel's pool.
+ * `heldGrants`: a draining member's Grants the sweep holds (rule 14); null
+ * when not draining, or on an answer that did not count them.
  */
-function wireMember({ panel, inbounds, ...m }: MemberRow) {
+function wireMember({ panel, inbounds, ...m }: MemberRow, heldGrants: number | null = null) {
   return {
     ...m,
+    heldGrants,
     inbounds: inbounds.map((i) => i.inboundRemoteId).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })),
     panelName: panel.name,
     panelState: panel.panelState,

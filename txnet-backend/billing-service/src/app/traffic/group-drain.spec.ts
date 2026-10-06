@@ -11,7 +11,10 @@
  *  - **the member removed while a config is still on it**, which would leave a
  *    client on a panel no group governs;
  *  - **an un-drain meanwhile overwritten**: the removal is conditional on
- *    `role = drain` at the moment of the delete.
+ *    `role = drain` at the moment of the delete;
+ *  - **a dead panel kept forever** (F-027-ee): an evicted member — the owner
+ *    chose "remove now" — goes on the next sweep, held Grants and all, with no
+ *    wait; a Grant with no other line is the owner's stated cost, not a hold.
  */
 import { ConfigStatus, GrantStatus, Prisma } from '@prisma/client';
 
@@ -66,6 +69,19 @@ describe('planDrain', () => {
     expect(plan.removeMember).toBe(true);
   });
 
+  it('retires everything of an evicted member at once, a Grant with no replacement included, and removes it', () => {
+    const facts = {
+      drainingSince: SINCE,
+      subscriptionTtlSeconds: TTL,
+      evicted: true,
+      configs: [drainConfig('c1', { replacementSince: null }), drainConfig('c2', { replacementSince: at(0.5) })],
+    };
+    const plan = planDrain(facts, at(0.01));
+    expect(plan.retire.map((c) => c.configId)).toEqual(['c1', 'c2']);
+    expect(plan.held).toEqual([]);
+    expect(plan.removeMember).toBe(true);
+  });
+
   it('removes a member with nothing left on it once its wait is over', () => {
     expect(planDrain({ drainingSince: SINCE, subscriptionTtlSeconds: TTL, configs: [] }, at(1)).removeMember).toBe(false);
     expect(planDrain({ drainingSince: SINCE, subscriptionTtlSeconds: TTL, configs: [] }, at(2)).removeMember).toBe(true);
@@ -73,7 +89,7 @@ describe('planDrain', () => {
 });
 
 describe('GroupDrainService.drainDue', () => {
-  function build(configs: DrainConfig[], opts: { failRetire?: string } = {}) {
+  function build(configs: DrainConfig[], opts: { failRetire?: string; evicted?: boolean } = {}) {
     const statements: string[] = [];
     const retired: string[] = [];
     const crossTenant = {
@@ -81,7 +97,7 @@ describe('GroupDrainService.drainDue', () => {
         const text = sql.join('?');
         statements.push(text);
         if (text.includes('"drainingSince" +')) {
-          return [{ groupId: 'group-1', panelId: 'panel-d', drainingSince: SINCE, subscriptionTtlSeconds: TTL }];
+          return [{ groupId: 'group-1', panelId: 'panel-d', drainingSince: SINCE, subscriptionTtlSeconds: TTL, evicted: opts.evicted ?? false }];
         }
         return configs;
       },
@@ -130,5 +146,13 @@ describe('GroupDrainService.drainDue', () => {
     const failing = build([drainConfig('c1'), drainConfig('c2')], { failRetire: 'c1' });
     expect(await failing.service.drainDue()).toEqual({ scanned: 1, configsRetired: 1, grantsHeld: 0, membersRemoved: 0, failed: 1 });
     expect(failing.statements.some((s) => s.startsWith('DELETE'))).toBe(false);
+  });
+
+  it('takes an evicted member as due before its wait, and retires its held Grant too (F-027-ee)', async () => {
+    const { service, statements, retired } = build([drainConfig('c1', { replacementSince: null })], { evicted: true });
+    service.now = () => at(0.01);
+    expect(await service.drainDue()).toEqual({ scanned: 1, configsRetired: 1, grantsHeld: 0, membersRemoved: 1, failed: 0 });
+    expect(retired).toEqual(['c1']);
+    expect(statements[0]).toContain('"evictedAt" IS NOT NULL');
   });
 });

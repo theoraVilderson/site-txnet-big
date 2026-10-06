@@ -13,11 +13,18 @@
  *    refused, and draining is the way out;
  *  - **the drain clock.** Draining twice does not restart the wait, and the
  *    answer states the wait the sweep will hold to;
+ *  - **a drain that never ends** (F-027-ee). Draining the group's last
+ *    non-draining panel is refused (`no_other_member`): nothing could take its
+ *    users, so every active Grant would be held for good. A draining member
+ *    answers how many Grants it holds, and "remove now" (evict) is the way
+ *    out for a panel that is broken or gone — with the users it cuts off
+ *    counted before, and nothing retired by the route itself;
  *  - **a group deleted under a sale.** A group a variant names, or that still
  *    has members, is not deleted (F-027-ca).
  */
-import { PanelGroupMemberRole, PanelGroupStrategy, Prisma, TenantType } from '@prisma/client';
+import { GrantStatus, PanelGroupMemberRole, PanelGroupStrategy, Prisma, TenantType } from '@prisma/client';
 
+import { DrainConfig } from '../traffic/group-drain';
 import { PanelGroupsService } from './panel-groups';
 import { createPanelGroupSchema, updatePanelGroupSchema, addPanelGroupMemberSchema } from './panel-registration.schema';
 import { PanelScopeRefused } from './panel-scope';
@@ -51,10 +58,12 @@ function harness() {
     { id: TENANT_GROUP, tenantId: RESELLER, name: 'Theirs', strategy: PanelGroupStrategy.mirror, minHealthyPanels: 1, subscriptionTtlSeconds: 3600 },
   ];
   const members: Row[] = [
-    { groupId: GROUP, panelId: PLATFORM_PANEL, tenantId: null, priority: 0, weight: 1, role: PanelGroupMemberRole.primary, drainingSince: null },
+    { groupId: GROUP, panelId: PLATFORM_PANEL, tenantId: null, priority: 0, weight: 1, role: PanelGroupMemberRole.primary, drainingSince: null, evictedAt: null },
   ];
   // Panels holding an unretired config of the group's Grants — what the DELETE's NOT EXISTS reads.
   const livePanels = new Set<string>();
+  // Each panel's unretired configs of the group's Grants, with their replacement — what `drainConfigs` reads.
+  const lines = new Map<string, DrainConfig[]>();
   // Variants naming each group — `_count.variants`, and the FK the delete meets.
   const variants = new Map<string, number>();
   const tenants = new Map([
@@ -123,7 +132,7 @@ function harness() {
         if (members.some((m) => m['groupId'] === data['groupId'] && m['panelId'] === data['panelId'])) {
           throw new Prisma.PrismaClientKnownRequestError('unique', { code: 'P2002', clientVersion: 'test' });
         }
-        const m = { priority: 0, weight: 1, role: PanelGroupMemberRole.primary, drainingSince: null, ...data };
+        const m = { priority: 0, weight: 1, role: PanelGroupMemberRole.primary, drainingSince: null, evictedAt: null, ...data };
         members.push(m);
         return withPanel(m);
       },
@@ -135,6 +144,7 @@ function harness() {
         return { count: hit.length };
       },
     },
+    $queryRaw: async (_sql: TemplateStringsArray, ...values: unknown[]) => lines.get(values.find((v) => typeof v === 'string' && lines.has(v)) as string) ?? [],
     $executeRaw: async (_sql: TemplateStringsArray, groupId: string, panelId: string) => {
       const i = members.findIndex((m) => m['groupId'] === groupId && m['panelId'] === panelId);
       if (i < 0 || livePanels.has(panelId)) return 0;
@@ -142,7 +152,7 @@ function harness() {
       return 1;
     },
   };
-  return { service: new PanelGroupsService(prisma as never, crossTenant as never), groups, members, livePanels, variants };
+  return { service: new PanelGroupsService(prisma as never, crossTenant as never), groups, members, livePanels, variants, lines };
 }
 
 const owner = { adminId: ADMIN, tenantId: OWNER };
@@ -168,6 +178,8 @@ describe('PanelGroupsService', () => {
     await expect(service.addMember(reseller, GROUP, { panelId: SECOND_PANEL })).rejects.toBeInstanceOf(PanelScopeRefused);
     await expect(service.removeMember(reseller, GROUP, PLATFORM_PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
     await expect(service.drain(reseller, GROUP, PLATFORM_PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
+    await expect(service.evict(reseller, GROUP, PLATFORM_PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
+    await expect(service.evictPreview(reseller, GROUP, PLATFORM_PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
     await expect(service.remove(reseller, GROUP)).rejects.toBeInstanceOf(PanelScopeRefused);
     expect(groups).toHaveLength(2);
     expect(members).toHaveLength(1);
@@ -242,12 +254,13 @@ describe('PanelGroupsService', () => {
 
   it('drains a member once, stating the wait, and a second drain does not restart the clock', async () => {
     const { service, members } = harness();
+    await service.addMember(owner, GROUP, { panelId: SECOND_PANEL });
     const m = await service.drain(owner, GROUP, PLATFORM_PANEL);
     expect(m).toMatchObject({ panelId: PLATFORM_PANEL, role: PanelGroupMemberRole.drain, waitSeconds: 7200 });
     expect(m.drainingSince).toEqual(new Date('2026-09-25T10:00:00Z'));
 
     await expect(service.drain(owner, GROUP, PLATFORM_PANEL)).rejects.toMatchObject({ reason: 'already_draining' });
-    await expect(service.drain(owner, GROUP, SECOND_PANEL)).rejects.toMatchObject({ reason: 'member_not_found' });
+    await expect(service.drain(owner, GROUP, RESELLER_PANEL)).rejects.toMatchObject({ reason: 'member_not_found' });
     expect(members[0]['role']).toBe(PanelGroupMemberRole.drain);
   });
 
@@ -264,4 +277,60 @@ describe('PanelGroupsService', () => {
     await expect(service.remove(owner, GROUP)).resolves.toEqual({ id: GROUP, removed: true });
     expect(groups.map((g) => g['id'])).toEqual([TENANT_GROUP]);
   });
+
+  it("refuses to drain the group's last non-draining panel: nothing could take its users (F-027-ee)", async () => {
+    const { service, members } = harness();
+    await expect(service.drain(owner, GROUP, PLATFORM_PANEL)).rejects.toMatchObject({ reason: 'no_other_member' });
+    expect(members[0]).toMatchObject({ role: PanelGroupMemberRole.primary, drainingSince: null });
+
+    // Another member that is itself draining takes no one either.
+    await service.addMember(owner, GROUP, { panelId: SECOND_PANEL });
+    members[1]['role'] = PanelGroupMemberRole.drain;
+    await expect(service.drain(owner, GROUP, PLATFORM_PANEL)).rejects.toMatchObject({ reason: 'no_other_member' });
+    await expect(service.drain(owner, GROUP, SECOND_PANEL)).rejects.toMatchObject({ reason: 'already_draining' });
+  });
+
+  it('a draining member answers how many active Grants it holds with no other line; others answer null', async () => {
+    const { service, members, lines } = harness();
+    members[0]['role'] = PanelGroupMemberRole.drain;
+    members[0]['drainingSince'] = new Date('2026-09-25T10:00:00Z');
+    lines.set(PLATFORM_PANEL, [
+      drainLine('c1', 'g1', null),
+      drainLine('c2', 'g1', null), // a second config of the same Grant counts once
+      drainLine('c3', 'g2', new Date('2026-09-25T11:00:00Z')),
+      drainLine('c4', 'g3', null, GrantStatus.suspended),
+    ]);
+    const [group] = await service.groups(owner);
+    expect(group.members[0]).toMatchObject({ role: 'drain', heldGrants: 1, evictedAt: null });
+
+    members[0]['role'] = PanelGroupMemberRole.primary;
+    expect((await service.groups(owner))[0].members[0].heldGrants).toBeNull();
+  });
+
+  it('previews "remove now": the live configs that go, and the active Grants left with no line', async () => {
+    const { service, lines } = harness();
+    lines.set(PLATFORM_PANEL, [drainLine('c1', 'g1', null), drainLine('c2', 'g2', new Date('2026-09-25T11:00:00Z'))]);
+    await expect(service.evictPreview(owner, GROUP, PLATFORM_PANEL)).resolves.toEqual({ liveConfigs: 2, soleLineGrants: 1 });
+    await expect(service.evictPreview(owner, GROUP, SECOND_PANEL)).rejects.toMatchObject({ reason: 'member_not_found' });
+    await expect(service.evictPreview(owner, TENANT_GROUP, PLATFORM_PANEL)).rejects.toMatchObject({ reason: 'not_found' });
+  });
+
+  it('evicts a member — even the last, even one already draining — by marking it; the sweep does the retiring', async () => {
+    const { service, members, lines } = harness();
+    lines.set(PLATFORM_PANEL, [drainLine('c1', 'g1', null)]);
+    const m = await service.evict(owner, GROUP, PLATFORM_PANEL);
+    expect(m).toMatchObject({ panelId: PLATFORM_PANEL, role: PanelGroupMemberRole.drain, soleLineGrants: 1 });
+    expect(m.evictedAt).toBeInstanceOf(Date);
+    expect(members[0]).toMatchObject({ role: PanelGroupMemberRole.drain, drainingSince: new Date('2026-09-25T10:00:00Z') });
+    expect(members).toHaveLength(1);
+
+    // Asked twice, the first mark stands.
+    const first = members[0]['evictedAt'];
+    await expect(service.evict(owner, GROUP, PLATFORM_PANEL)).resolves.toMatchObject({ evictedAt: first });
+    await expect(service.evict(owner, GROUP, SECOND_PANEL)).rejects.toMatchObject({ reason: 'member_not_found' });
+  });
 });
+
+function drainLine(configId: string, grantId: string, replacementSince: Date | null, grantStatus: GrantStatus = GrantStatus.active): DrainConfig {
+  return { configId, grantId, tenantId: OWNER, grantStatus, replacementSince };
+}

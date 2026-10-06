@@ -107,6 +107,7 @@ const CONFLICTS: ReadonlySet<SystemsRejection> = new Set([
   'already_resolved',
   'already_member',
   'already_draining',
+  'no_other_member',
   'member_has_configs',
   'inbound_not_sellable',
   'not_for_transport',
@@ -285,6 +286,33 @@ export class SystemsController {
     @Req() req: Request,
   ) {
     return refusing(() => this.panelGroups.drain(actorOf(req), id, panelId));
+  }
+
+  /** What "remove now" would take: `liveConfigs`, and `soleLineGrants` — active Grants left with no line. */
+  @Get('panel-groups/:id/members/:panelId/evict-preview')
+  @RateLimit(SYSTEMS_ADMIN_READ)
+  evictPreview(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('panelId', new ParseUUIDPipe()) panelId: string,
+    @Req() req: Request,
+  ) {
+    return refusing(() => this.panelGroups.evictPreview(actorOf(req), id, panelId));
+  }
+
+  /**
+   * `200` the member, `drain` with `evictedAt`: "remove now" for a broken or
+   * gone panel (F-027-ee). The drain sweep retires its configs on its next
+   * tick with no wait, then removes it. Any member, the group's last included.
+   */
+  @Post('panel-groups/:id/members/:panelId/evict')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  evictMember(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('panelId', new ParseUUIDPipe()) panelId: string,
+    @Req() req: Request,
+  ) {
+    return refusing(() => this.panelGroups.evict(actorOf(req), id, panelId));
   }
 
   @Get('panels')

@@ -1,0 +1,86 @@
+---
+id: billing
+layer: domain
+status: active
+version: 49
+updated: 2026-10-06
+---
+
+# Systems — panel groups
+
+A topic file of `contract.md` (§10), beside [contract.systems.md](contract.systems.md),
+whose "Who may call" and rate limits apply here. Where a `network_access`
+variant's Grants are placed, as the platform owner manages it:
+`billing-service/src/app/systems/panel-groups.ts`. What fulfilment and the
+drain sweep do with these rows is network
+[contract.groups.md](../network/contract.groups.md). Every route writes
+desired state; nothing calls `network-service` (ADR-0071).
+
+## Routes
+
+| Route | Body | Answers | Errors |
+|---|---|---|---|
+| `GET /api/billing/systems/panel-groups` | — | `[{id, name, strategy, minHealthyPanels, subscriptionTtlSeconds, createdAt, updatedAt, variantCount, members: [{groupId, panelId, panelName, panelState, reviewState, lastHealthyAt, inboundPlacement, maxClients, priority, weight, inboundsPerBuyer, effective, inbounds, role, drainingSince, evictedAt, heldGrants, createdAt}]}]`, by name; members by effective `priority`. The five are the member's own (null = inherited); `inbounds` its assigned remote ids, `[]` = the pool (rule 24c); `effective` is `{<setting>: {value, layer}}`, layer `member` \| `panel` \| `platform` (rule 24b); `heldGrants` (rule 24d) | 403 |
+| `POST /api/billing/systems/panel-groups` | `name`, `minHealthyPanels?` (1–100), `subscriptionTtlSeconds?` (60–604800); `.strict()` — `protocol` is refused since F-114-b | `201` the group, `strategy: mirror` | 400; 403 |
+| `PATCH /api/billing/systems/panel-groups/:id` | any of the three, at least one; `.strict()` | `200` the group | 400; 403; 404 `not_found` |
+| `DELETE /api/billing/systems/panel-groups/:id` | — | `200 {id, removed: true}` | 400; 403; 404 `not_found`; 409 `group_has_members` / `group_in_use` |
+| `POST /api/billing/systems/panel-groups/:id/members` | `panelId`, and any of `inboundPlacement`, `maxClients` (1–1000000), `priority` (0–1000), `weight` (1–1000), `inboundsPerBuyer` (1–16, K under `hrw`), each nullable; `.strict()` | `201` the member, `primary` | 400; 403; 404 `not_found` / `panel_not_found`; 409 `already_member` |
+| `PATCH /api/billing/systems/panel-groups/:id/members/:panelId` | any of those four, at least one; null inherits; `.strict()` — a server fact is refused | `200` the member | 400; 403; 404 `not_found` / `member_not_found` |
+| `DELETE /api/billing/systems/panel-groups/:id/members/:panelId` | — | `200 {groupId, panelId, removed: true}` | 400; 403; 404 `not_found` / `member_not_found`; 409 `member_has_configs` |
+| `PUT /api/billing/systems/panel-groups/:id/members/:panelId/inbounds` | `inbounds: [remoteId]` (≤500, each once; `[]` = the pool again); `.strict()` | `200 {groupId, panelId, inbounds}` | 400; 403; 404 `not_found` / `member_not_found` / `inbound_not_found`; 409 `inbound_not_sellable`, `inbound_assigned_elsewhere` `facts: {remoteId, groupId}` (none after a race on the unique index), `inbound_has_configs` `facts: {remoteId, configs}` |
+| `POST /api/billing/systems/panel-groups/:id/members/:panelId/drain` | — | `200` the member, `drain`, with `drainingSince` and `waitSeconds` | 400; 403; 404 `not_found` / `member_not_found`; 409 `already_draining` / `no_other_member` |
+| `GET /api/billing/systems/panel-groups/:id/members/:panelId/evict-preview` | — | `{liveConfigs, soleLineGrants}` (rule 24e) | 400; 403; 404 `not_found` / `member_not_found` |
+| `POST /api/billing/systems/panel-groups/:id/members/:panelId/evict` | — | `200` the member, `drain`, with `evictedAt` and `soleLineGrants` (rule 24e) | 400; 403; 404 `not_found` / `member_not_found` |
+
+## The rules
+
+20. **The platform's groups, and only through the scope.** The group scope is
+    `panelScopeOf`'s `tenantId` (null for the owner); a tenant's group is 404
+    `not_found`, and a member's panel must be in the panel scope
+    (`panel_not_found`). The writes run on `CrossTenantPrismaService`: the
+    `tenant_isolation` `WITH CHECK` refuses a null `tenantId` on the app pool.
+    Every query carries the scope; `panel_group_member_fits` still holds a
+    platform group to platform panels. Tenant groups open in that one scope.
+21. **Every group is `mirror`.** No route sets `strategy`, and a body naming it
+    is refused (`.strict()`): the others have no fulfilment (groups rule 7).
+22. **A change reaches what is placed next.** Fulfilment reads the group on
+    its next tick: a new member is placed for Grants already sold, and configs
+    already placed keep theirs (groups rule 9). A group names no protocol: its
+    panels' picked inbounds do (rule 25).
+23. **A member with a live config is drained, not removed.** The `DELETE`
+    holds the drain sweep's own condition — no unretired config of the group's
+    Grants on the panel — so a removal cannot leave configs outside every
+    drain; one it does not remove is 409 `member_has_configs`.
+24. **Draining is `role = drain`, once.** Conditional on not `drain`; a second
+    is 409 `already_draining`, and the database's clock is never restarted
+    (groups rule 14). `waitSeconds` is `2 × subscriptionTtlSeconds`, the least
+    the sweep waits from `drainingSince`; the member row goes on its own. The
+    group's **last** member that is not `drain` is 409 `no_other_member`
+    (F-027-ee): no panel could take its users, so the sweep would hold every
+    active Grant on it for good — add a panel first, or evict it (24e).
+24a. **A group goes only empty and unsold** (F-027-ca). Members are 409
+    `group_has_members` (remove or drain them); a variant naming it is 409
+    `group_in_use` — the FK is `RESTRICT`, and the delete meets both keys.
+
+24b. **A member's selling settings override its panel's** (F-027-cg). Resolved
+    member -> panel -> platform default, each read naming the layer (network
+    `contract.inbounds.md` rule 4a). `selling-settings.spec.ts` pins it.
+
+24c. **An inbound is the pool's or one group's** (F-027-ch, ADR-0090 decision 3): the `PUT` sets a
+    member's whole set — network `contract.inbounds.md` rule 3a. `member-inbounds.spec.ts` pins it.
+
+24d. **A held drain says so.** A `drain` member answers `heldGrants`: its
+    active Grants with a line on it and none served elsewhere (groups rule 14,
+    `drainConfigs` + `soleLineGrants` in `traffic/group-drain.ts` — the
+    sweep's own reading). Null on any other member.
+
+24e. **Evict is "remove now", for a panel broken or gone** (F-027-ee, groups
+    rule 16). Any member, the last and a draining one included: it is set
+    `drain` with `evictedAt`, and the route retires nothing — the drain sweep
+    does, on its next tick, with no wait and no hold, then removes the member.
+    It cuts off the `soleLineGrants` (24d's count, on any member) until a panel
+    joins the group; `evict-preview` answers that count and `liveConfigs`
+    first, and the page says it before the confirm. A second evict keeps the
+    first `evictedAt`.
+
+`panel-groups.spec.ts` pins rules 20–24e.
