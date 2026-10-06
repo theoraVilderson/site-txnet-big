@@ -39,7 +39,9 @@ func (r *LoginRefusals) Refused(op string, status int, msg string) *Fault {
 	if r.worked && r.streak < LoginRefusalsToBlock {
 		kind = FaultUnavailable
 	}
-	return NewFault(kind, op, status, fmt.Errorf("login refused (%d in a row): %s", r.streak, msg))
+	fault := NewFault(kind, op, status, fmt.Errorf("login refused (%d in a row): %s", r.streak, msg))
+	fault.Cause = CauseLoginRefused
+	return fault
 }
 
 // RefusalFault classifies an API answer of success=false. A locked panel

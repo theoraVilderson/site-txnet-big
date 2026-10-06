@@ -100,6 +100,7 @@ SELECT id::text, "driverType"::text, "counterSemantics"::text,
        "reviewState"::text, "ownershipType"::text, coalesce("tenantId"::text, ''),
        coalesce("maxLineRateBps", 0)::bigint, "maxRequestsPerMinute",
        "panelState"::text, "blockedSince",
+       coalesce("panelStateCause"::text, ''), "panelStateSince",
        coalesce("lagMeanSec", 0), coalesce("lagVarianceSec2", 0), "lagSamples",
        transport::text,
        coalesce(capabilities #>> '{answers,per_client_rate_limit,supported}' = 'true', false),
@@ -121,11 +122,12 @@ func (s *PostgresSource) Panels(ctx context.Context) ([]Panel, error) {
 		var p Panel
 		var row panelRow
 		var family, semantics, review, state, transport string
-		var blockedSince *time.Time
+		var blockedSince, stateSince *time.Time
+		var cause string
 		if err := rows.Scan(&p.ID, &family, &semantics,
 			&row.APIBaseURL, &row.ClientBaseURL, &row.Credentials,
 			&review, &p.OwnershipType, &p.TenantID,
-			&p.MaxLineRateBps, &p.MaxRequestsPerMinute, &state, &blockedSince,
+			&p.MaxLineRateBps, &p.MaxRequestsPerMinute, &state, &blockedSince, &cause, &stateSince,
 			&p.LagMeanSec, &p.LagVarianceSec2, &p.LagSamples, &transport, &p.RateLimitable, &p.IPLimitable); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("reading panels: %w", err)
@@ -138,9 +140,12 @@ func (s *PostgresSource) Panels(ctx context.Context) ([]Panel, error) {
 		row.TenantID = p.TenantID
 		row.perMinute = p.MaxRequestsPerMinute
 		if s.States != nil {
-			rec := panelstate.Record{State: panelstate.State(state)}
+			rec := panelstate.Record{State: panelstate.State(state), Cause: driver.Cause(cause)}
 			if blockedSince != nil {
 				rec.BlockedSince = *blockedSince
+			}
+			if stateSince != nil {
+				rec.Since = *stateSince
 			}
 			s.States.Restore(p.ID, rec)
 		}

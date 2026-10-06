@@ -27,6 +27,8 @@ introduce a synonym, record why.
 | Display currency | A per-user/-admin presentation choice applied only at render time. | currency | Base currency |
 | Config | A user's VPN/proxy credential on a Panel (Xray uuid + protocol). | network | App configuration, `.env`, RemoteClient (driver-internal name for the same thing) |
 | Panel (infra) | The remote VPN control install a Config lives on — x-ui / 3x-ui / Marzban / Marzneshin / S-UI / Hiddify. Wrapped by one Driver. `ownershipType` = platform \| tenant. | network | User panel (the site-pwa web app), PanelGroup, ResellerNode, Tenant |
+| Panel fault cause | *Why* a panel turn failed — `PanelFaultCause`, a closed set (ADR-0122). Network-layer causes count against the panel only once our own reach is proven; answer-layer causes always do. | network | `driver.FaultKind` (what the loop *does*: retry, back off, stop asking), `connectionTestFault` (the registration test's) |
+| Collector heartbeat | The collector's own row per completed pass (`network.collector_heartbeat`): when, how many panels, and whether our egress was up. Stale = the collector is stopped, and every panel is `unknown`. | network | `/health` (process reachability), `lastSuccessfulCollectionAt` (one panel's) |
 | PanelGroup | A mirroring set of Panels (`role` = primary \| replica \| drain) resolved per variant; gives zero-downtime subscription links. | network | Panel, Cluster, ResellerNode |
 | Entitlement | Whether a feature key is switched on for a Tenant (`TenantFeatureEntitlement`). | tenant | Permission (RBAC), Restriction |
 | Restriction | An upper bound / cap on a user's or tenant's usage or spend. | governance / tenant | Entitlement, Permission |

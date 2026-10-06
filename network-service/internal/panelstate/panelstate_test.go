@@ -36,7 +36,8 @@ func TestJudgeSeparatesRefusalFromFailure(t *testing.T) {
 		{"a clean pass is healthy", nil, state(panelstate.Healthy), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := panelstate.Judge(panelstate.Record{State: panelstate.Healthy}, tc.err, at)
+			// One failure short of confirmed, so the state each kind lands on is visible.
+			got := panelstate.Judge(panelstate.Record{State: panelstate.Healthy, Failures: panelstate.ConfirmAfter - 1}, tc.err, at)
 			if state(got.State) != tc.want {
 				t.Fatalf("state = %q, want %q", got.State, tc.want)
 			}
@@ -52,9 +53,9 @@ func TestJudgeSeparatesRefusalFromFailure(t *testing.T) {
 
 type state string
 
-// Our own deadline implicates the panel in nothing (`contract.md`), so a
-// timeout must not move a panel off the state its last real answer earned.
-func TestJudgeLeavesTheStateAloneOnOurOwnTimeout(t *testing.T) {
+// A panel already down that now runs past our deadline is still down; the
+// owner is not alerted again for it.
+func TestJudgeKeepsADownPanelDownOnATimeout(t *testing.T) {
 	was := panelstate.Record{State: panelstate.Down}
 	got := panelstate.Judge(was, driver.NewFault(driver.FaultTimeout, "GetUsage", 0, context.DeadlineExceeded), at)
 	if got.State != panelstate.Down {
@@ -104,11 +105,112 @@ func TestJudgeClearsTheBanOnASuccessfulPass(t *testing.T) {
 	}
 }
 
+// ADR-0122 point 4: one lost packet is not an outage. A panel leaves
+// `healthy` only on the ConfirmAfter-th judged failure in a row, and the
+// first clean turn brings it back.
+func TestJudgeConfirmsAFailureBeforeCallingThePanelDown(t *testing.T) {
+	fault := driver.FaultForStatus("GetUsage", http.StatusBadGateway, nil)
+	rec := panelstate.Record{State: panelstate.Healthy}
+	for i := 1; i < panelstate.ConfirmAfter; i++ {
+		v := panelstate.Judge(rec, fault, at.Add(time.Duration(i)*time.Minute))
+		if v.State != panelstate.Healthy || v.Changed {
+			t.Fatalf("failure %d moved the panel to %q (changed=%v)", i, v.State, v.Changed)
+		}
+		if !v.Judged {
+			t.Fatalf("failure %d was not judged: the panel was asked and answered", i)
+		}
+		rec = v.Record
+	}
+	third := at.Add(time.Duration(panelstate.ConfirmAfter) * time.Minute)
+	v := panelstate.Judge(rec, fault, third)
+	if v.State != panelstate.Down || !v.Changed {
+		t.Fatalf("the confirming failure left the panel %q (changed=%v)", v.State, v.Changed)
+	}
+	if v.Cause != driver.CauseServerError || !v.Since.Equal(third) {
+		t.Fatalf("cause %q since %v, want %q since %v", v.Cause, v.Since, driver.CauseServerError, third)
+	}
+
+	back := panelstate.Judge(v.Record, nil, third.Add(time.Minute))
+	if back.State != panelstate.Healthy || !back.Changed || back.Cause != "" || back.Failures != 0 {
+		t.Fatalf("a clean turn left %+v", back.Record)
+	}
+	if !back.Since.Equal(third.Add(time.Minute)) {
+		t.Fatalf("recovered since %v", back.Since)
+	}
+}
+
+// A panel that keeps running past our deadline is not one answering slowly
+// once: confirmed, it is down as `unresponsive` (ADR-0122), where a single
+// timeout still says nothing.
+func TestJudgeConfirmedTimeoutsAreUnresponsive(t *testing.T) {
+	timeout := driver.NewFault(driver.FaultTimeout, "GetUsage", 0, context.DeadlineExceeded)
+	rec := panelstate.Record{State: panelstate.Healthy}
+	for i := 0; i < panelstate.ConfirmAfter; i++ {
+		rec = panelstate.Judge(rec, timeout, at).Record
+	}
+	if rec.State != panelstate.Down || rec.Cause != driver.CauseUnresponsive {
+		t.Fatalf("got %q / %q", rec.State, rec.Cause)
+	}
+}
+
+// Since is when the trouble started, not when it was last seen: a panel down
+// for three days says three days. A change of cause is written; the clock is not restarted.
+func TestJudgeKeepsSinceWhileThePanelStaysDown(t *testing.T) {
+	was := panelstate.Record{State: panelstate.Down, Cause: driver.CauseServerError, Since: at}
+	same := panelstate.Judge(was, driver.FaultForStatus("GetUsage", http.StatusBadGateway, nil), at.Add(time.Hour))
+	if same.Changed || !same.Since.Equal(at) {
+		t.Fatalf("an unchanged outage was rewritten (changed=%v, since=%v)", same.Changed, same.Since)
+	}
+	moved := panelstate.Judge(was, driver.FaultForStatus("GetUsage", http.StatusNotFound, nil), at.Add(time.Hour))
+	if !moved.Changed || moved.Cause != driver.CauseNotFound || !moved.Since.Equal(at) {
+		t.Fatalf("a new cause: changed=%v cause=%q since=%v", moved.Changed, moved.Cause, moved.Since)
+	}
+}
+
 // ---- the tracker -----------------------------------------------------------
 
+// Every turn the panel was actually judged on is stamped, so a reader can tell
+// a fresh `healthy` from a stale one; a failure that was ours is not.
+func TestTrackerStampsEveryJudgedTurn(t *testing.T) {
+	w := &writes{}
+	tracker := &panelstate.Tracker{Writer: w}
+	observe(t, tracker, nil, at)
+	observe(t, tracker, driver.FaultForStatus("GetUsage", http.StatusBadGateway, nil), at.Add(time.Minute))
+	observe(t, tracker, errors.New("broker refused the publish"), at.Add(2*time.Minute))
+	if len(w.checked) != 2 || !w.checked[0] || w.checked[1] {
+		t.Fatalf("checked stamps = %v, want [true false]", w.checked)
+	}
+	if len(w.rows) != 0 {
+		t.Fatalf("an unconfirmed failure wrote a state: %+v", w.rows)
+	}
+}
+
+// The count lives in the tracker across passes, so three failing passes —
+// not three failures inside one judge call — make a panel down.
+func TestTrackerConfirmsAcrossPasses(t *testing.T) {
+	w := &writes{}
+	tracker := &panelstate.Tracker{Writer: w}
+	fault := driver.FaultForStatus("GetUsage", http.StatusBadGateway, nil)
+	for i := 0; i < panelstate.ConfirmAfter; i++ {
+		observe(t, tracker, fault, at.Add(time.Duration(i)*time.Minute))
+	}
+	if got := tracker.State(panelID); got.State != panelstate.Down {
+		t.Fatalf("after %d failing passes the panel is %q", panelstate.ConfirmAfter, got.State)
+	}
+	if len(w.rows) != 1 || w.rows[0].State != panelstate.Down || w.rows[0].Cause != driver.CauseServerError {
+		t.Fatalf("state writes = %+v", w.rows)
+	}
+}
+
 type writes struct {
-	rows []panelstate.Record
-	err  error
+	rows    []panelstate.Record
+	checked []bool
+	err     error
+}
+
+func (w *writes) Checked(_ context.Context, _ string, _ time.Time, healthy bool) error {
+	w.checked = append(w.checked, healthy)
+	return nil
 }
 
 func (w *writes) SetState(_ context.Context, _ string, rec panelstate.Record) error {

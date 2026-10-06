@@ -154,6 +154,25 @@ enum PanelState {
   @@schema("network")
 }
 
+/// Why a panel turn failed (ADR-0122, `driver.Cause`). The first five are the
+/// network layer — nothing answered, so they can be our own outage; the rest
+/// are answers, always the panel's.
+enum PanelFaultCause {
+  dns_failed
+  connection_refused
+  unreachable
+  unresponsive
+  tls_failed
+  not_found
+  server_error
+  login_refused
+  forbidden
+  rate_limited
+  bad_answer
+
+  @@schema("network")
+}
+
 /// Every protocol a driver family can hand us: the Xray set, the two modern
 /// UDP protocols Hiddify/Marzneshin add, WireGuard, and the two an ISP
 /// billing system reports over RADIUS.
@@ -361,6 +380,13 @@ model Panel {
   role                       PanelRole
   pairedPanelId              String?            @db.Uuid // برای HA
   panelState                 PanelState         @default(healthy)
+  /// Why it is not healthy (ADR-0122); null while it is (CHECK `panel_state_cause_needs_trouble`).
+  panelStateCause            PanelFaultCause?
+  /// When it entered `panelState` — the start of an outage, not its last sighting.
+  panelStateSince            DateTime?
+  /// The last turn the collector judged it on, clean or not. A state older
+  /// than this is stale, whatever it says (ADR-0122).
+  panelCheckedAt             DateTime?
   /// Set when it first answered `429`/`403`, cleared when it stops.
   blockedSince               DateTime?
   region                     String

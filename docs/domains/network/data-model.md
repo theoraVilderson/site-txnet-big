@@ -46,8 +46,8 @@ unsuitable panel is refused (before it has users, not at billing time).
 clock on it. `maxRequestsPerMinute`, `maxLineRateBps` and
 `observedWriteLatencyMs` are what size a ceiling in seconds rather than bytes
 (ADR-0072); `lastHealthyAt` and `lastSuccessfulCollectionAt` are what an
-external watchdog reads, so a stalled collector is visible before a wrong
-number is.
+external watchdog reads. `panelStateCause`/`Since`/`panelCheckedAt` say why,
+since when and how fresh (ADR-0122, [contract.panel-health.md](contract.panel-health.md)).
 
 Six are CHECKs, as each is a silent wrong number if only a convention: `panel_ownership_matches_tenant`, `panel_pull_has_base_url`,
 `panel_capabilities_object`, `panel_request_budget_positive`,

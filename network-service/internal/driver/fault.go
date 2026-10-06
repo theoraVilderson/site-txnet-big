@@ -62,6 +62,9 @@ type Fault struct {
 	Status int
 	// RetryAfter is the panel's own answer to "when", where it gave one.
 	RetryAfter time.Duration
+	// Cause is set only where the driver knows better than CauseOf would read
+	// it — a refused login answered as a 200. Empty means "derive it".
+	Cause Cause
 	// Err is what actually happened, kept so a caller can unwrap to
 	// context.DeadlineExceeded or a transport error.
 	Err error

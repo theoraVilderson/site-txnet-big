@@ -24,6 +24,12 @@
 //     act on: rotate a credential, unban an address, raise a budget. One
 //     alert per ban, not one per pass.
 //
+// Since ADR-0122 a verdict also carries the failure's **cause**
+// (`driver.Cause`) and **when the trouble started**, and a panel leaves
+// `healthy` only on the ConfirmAfter-th judged failure in a row: one lost
+// packet is not an outage, and at two hundred panels a pass an alert per
+// blip is an alert nobody reads. A refusal keeps its immediate gate.
+//
 // What is deliberately not here: the request budget itself, which is
 // `driver.Pace` and is held on every call rather than after one has failed;
 // where an alert is delivered, which is the notification domain's; and the
@@ -62,12 +68,25 @@ const (
 // rather than one working day.
 const DefaultCooloff = 15 * time.Minute
 
+// ConfirmAfter is how many judged failures in a row move a healthy panel to
+// `down` or `degraded` (ADR-0122 point 4) — about three minutes at the bulk
+// pass's interval. A refusal is not counted: it is gated at once.
+const ConfirmAfter = 3
+
 // Record is a panel's state as the database holds it: `panel.panelState` and
-// `panel.blockedSince`, which invariant 11 ties together.
+// `panel.blockedSince`, which invariant 11 ties together, and since ADR-0122
+// `panelStateCause` and `panelStateSince`. Failures is the tracker's alone.
 type Record struct {
 	State State
 	// BlockedSince is the zero time unless State is ThrottledOrBlocked.
 	BlockedSince time.Time
+	// Cause is why the panel is not healthy; empty while it is.
+	Cause driver.Cause
+	// Since is when the panel entered State. Zero when nobody knows.
+	Since time.Time
+	// Failures is the judged failures in a row, never written: a restart
+	// starts it again, which only delays a first alert.
+	Failures int
 }
 
 // Verdict is what one turn's outcome says. It is a value rather than a write
@@ -82,9 +101,13 @@ type Verdict struct {
 	Kind driver.FaultKind
 	// RetryAfter is the panel's own answer to "when", where it gave one.
 	RetryAfter time.Duration
-	// Changed is false where the outcome said nothing about the panel — our
-	// own deadline, or a failure that happened on our side of the wire.
+	// Changed is true where the stored record moves: the state or its cause.
+	// An unconfirmed failure is not one.
 	Changed bool
+	// Judged is true where the outcome said something about the panel — it
+	// was asked and the turn is evidence. False for a failure on our side of
+	// the wire, which is not stamped as a check.
+	Judged bool
 }
 
 // Judge maps one turn's outcome onto the panel's state.
@@ -94,9 +117,13 @@ type Verdict struct {
 // silent reading of a failure this whole row exists to remove.
 func Judge(was Record, err error, at time.Time) Verdict {
 	if err == nil {
-		// Answering is the only evidence that a refusal is over, and it clears
-		// the clock with it: invariant 11 in the other direction.
-		return Verdict{Record: Record{State: Healthy}, Changed: was.State != Healthy}
+		// Answering is the only evidence that a refusal or an outage is over,
+		// and it clears the clock with it: invariant 11 in the other direction.
+		next := Record{State: Healthy, Since: was.Since}
+		if was.State != Healthy || next.Since.IsZero() {
+			next.Since = at
+		}
+		return Verdict{Record: next, Changed: was.State != Healthy, Judged: true}
 	}
 
 	kind, classified := driver.KindOf(err)
@@ -107,33 +134,50 @@ func Judge(was Record, err error, at time.Time) Verdict {
 		return Verdict{Record: was}
 	}
 
-	verdict := Verdict{Record: was, Kind: kind, Changed: true}
+	cause := driver.CauseOf(err)
+	verdict := Verdict{Record: was, Kind: kind, Judged: true}
+	verdict.Failures = was.Failures + 1
 	if fault, ok := err.(*driver.Fault); ok {
 		verdict.RetryAfter = fault.RetryAfter
 	}
 
+	var target State
 	switch kind {
 	case driver.FaultRateLimited, driver.FaultBlocked:
-		verdict.State = ThrottledOrBlocked
+		// Gated at once, unconfirmed: retrying through a ban is what makes it
+		// permanent (F-027-v).
+		verdict.State, verdict.Cause = ThrottledOrBlocked, cause
 		if was.State == ThrottledOrBlocked && !was.BlockedSince.IsZero() {
 			// Already banned: keep the original clock. Restarting it every
 			// pass is a cool-off that can never elapse.
 			verdict.Alert = false
 		} else {
-			verdict.BlockedSince = at
+			verdict.BlockedSince, verdict.Since = at, at
 			verdict.Alert = true
 		}
-	case driver.FaultUnavailable:
-		verdict.Record = Record{State: Down}
-	case driver.FaultTimeout:
-		// Our own deadline. The panel is implicated in nothing, so it keeps
-		// whatever its last real answer earned it.
-		verdict.Record, verdict.Changed = was, false
+		verdict.Changed = was.State != ThrottledOrBlocked || was.Cause != cause
+		return verdict
+	case driver.FaultUnavailable, driver.FaultTimeout:
+		// A timeout once is our deadline and says little; confirmed, it is a
+		// panel that does not answer (`unresponsive`, ADR-0122).
+		target = Down
 	case driver.FaultUnsupported, driver.FaultProtocol:
 		// It answered, and the answer was not one we can act on. That is a
 		// panel to look at, not one to stop asking.
-		verdict.Record = Record{State: Degraded}
+		target = Degraded
+	default:
+		target = Down
 	}
+
+	if was.State == Healthy && verdict.Failures < ConfirmAfter {
+		// Not yet: counted, judged, nothing written.
+		return verdict
+	}
+	verdict.State, verdict.Cause, verdict.BlockedSince = target, cause, time.Time{}
+	if was.State == Healthy || was.Since.IsZero() {
+		verdict.Since = at
+	}
+	verdict.Changed = was.State != target || was.Cause != cause
 	return verdict
 }
 
@@ -141,6 +185,9 @@ func Judge(was Record, err error, at time.Time) Verdict {
 // the Tracker keeps the state in memory only, which is what every test wants.
 type Writer interface {
 	SetState(ctx context.Context, panelID string, rec Record) error
+	// Checked stamps a judged turn: `panelCheckedAt`, and `lastHealthyAt`
+	// when it was clean. A reader tells a fresh state from a stale one by it.
+	Checked(ctx context.Context, panelID string, at time.Time, healthy bool) error
 }
 
 // Alerter is how a refusal reaches the person who can end it. Routing it to
@@ -233,13 +280,20 @@ func (t *Tracker) Observe(ctx context.Context, panelID string, err error, at tim
 	t.mu.Unlock()
 
 	verdict := Judge(was.Record, err, at)
-	if !verdict.Changed && known {
+	if !verdict.Judged {
 		return nil
 	}
 
 	if t.Writer != nil {
-		if writeErr := t.Writer.SetState(ctx, panelID, verdict.Record); writeErr != nil {
-			return writeErr
+		if verdict.Changed {
+			if writeErr := t.Writer.SetState(ctx, panelID, verdict.Record); writeErr != nil {
+				return writeErr
+			}
+		}
+		if writeErr := t.Writer.Checked(ctx, panelID, at, err == nil); writeErr != nil {
+			// The state is written; a missing stamp ages into "not checked",
+			// which is the safe direction on its own.
+			t.log().Error("panel check stamp failed", "panel", panelID, "error", writeErr)
 		}
 	}
 

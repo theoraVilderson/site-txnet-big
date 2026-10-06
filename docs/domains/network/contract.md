@@ -75,8 +75,8 @@ distinction that pays for the type is `429` against `5xx`: a rate limit is a
 healthy panel asking for a slower caller, a `5xx` is a panel that is failing.
 Conflating them either quarantines a panel we were rude to or keeps hammering
 one that is down. `rate_limited` and `blocked` (`401`/`403`) together are
-F-027-v's `throttled_or_blocked`; `unavailable` is its `down`; `timeout` is our
-own deadline and implicates the panel in nothing. Classification happens in the
+F-027-v's `throttled_or_blocked`; `unavailable` is its `down`; one `timeout`
+implicates nothing ([contract.panel-health.md](contract.panel-health.md)). Classification happens in the
 driver, so nothing above it reads a status code.
 
 Byte figures are raw readings, never deltas: what a `ClientUsage` means

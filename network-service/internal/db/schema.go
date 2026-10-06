@@ -55,6 +55,8 @@ var RequiredColumns = map[string][]string{
 		// What the duplicate check compares and names a suspect by (F-027-ce).
 		"name", "ipAddress",
 		"panelState", "blockedSince", "maxRequestsPerMinute",
+		// Why it is not healthy, since when, and when it was last judged (ADR-0122).
+		"panelStateCause", "panelStateSince", "panelCheckedAt",
 		"maxLineRateBps", "observedWriteLatencyMs",
 		"lastHealthyAt", "lastSuccessfulCollectionAt",
 		// When its inbounds were last read (F-114-b).

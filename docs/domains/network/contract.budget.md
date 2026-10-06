@@ -85,12 +85,14 @@ added later cannot fall through to "nothing happened":
 | fault kind | state | what the loops do |
 |---|---|---|
 | `rate_limited`, `blocked` | `throttled_or_blocked` | not asked again until the cool-off has run; the owner is alerted once |
-| `unavailable` | `down` | read again on the very next pass — nothing is gained by waiting on a broken machine |
-| `unsupported`, `protocol` | `degraded` | it answered and we cannot act on the answer: a panel to look at, not one to stop asking |
-| `timeout` | unchanged | our own deadline implicates the panel in nothing |
+| `unavailable` | `down`, on the 3rd in a row | read again on the very next pass — nothing is gained by waiting on a broken machine |
+| `unsupported`, `protocol` | `degraded`, on the 3rd in a row | it answered and we cannot act on the answer: a panel to look at, not one to stop asking |
+| `timeout` | `down` as `unresponsive`, on the 3rd in a row | one is our deadline and implicates nothing; three running is a panel that does not answer |
 | not a `driver.Fault` | unchanged | a failed publish or cursor write is ours, not the far end's |
 
 A clean pass is `healthy`, and that is the only evidence a refusal is over.
+The confirmation, the cause each state carries and since when are
+[contract.panel-health.md](contract.panel-health.md) (ADR-0122).
 
 ## A pass writes its hottest config first (F-027-ct)
 
