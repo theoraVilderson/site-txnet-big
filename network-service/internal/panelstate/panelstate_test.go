@@ -319,3 +319,16 @@ func observe(t *testing.T, tracker *panelstate.Tracker, err error, when time.Tim
 		t.Fatalf("Observe: %v", obsErr)
 	}
 }
+
+// A call our own breaker stopped never reached the panel: it is not evidence.
+// Judged, it alternated with the real dial's cause every pass on dev
+// (2026-10-06) — connection_refused, unreachable, connection_refused — and
+// each flip was a "new cause" told to the owner, once a minute.
+func TestJudgeIgnoresACallOurBreakerStopped(t *testing.T) {
+	was := panelstate.Record{State: panelstate.Down, Cause: driver.CauseConnectionRefused, Since: at}
+	open := driver.NewFault(driver.FaultUnavailable, "GetUsage", 0, driver.ErrCircuitOpen)
+	got := panelstate.Judge(was, open, at.Add(time.Minute))
+	if got.Changed || got.Judged || got.Cause != driver.CauseConnectionRefused {
+		t.Fatalf("a breaker-stopped call was judged: %+v (changed=%v judged=%v)", got.Record, got.Changed, got.Judged)
+	}
+}

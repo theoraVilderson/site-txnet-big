@@ -79,6 +79,9 @@ func TestCauseOfAnUnclassifiedErrorIsNone(t *testing.T) {
 	if got := driver.CauseOf(errors.New("broker refused the publish")); got != "" {
 		t.Fatalf("cause = %q for an error no driver classified", got)
 	}
+	if got := driver.CauseOf(driver.NewFault(driver.FaultUnavailable, "GetUsage", 0, driver.ErrCircuitOpen)); got != "" {
+		t.Fatalf("cause = %q for a call our own breaker stopped", got)
+	}
 	if got := driver.CauseOf(nil); got != "" {
 		t.Fatalf("cause = %q for no error", got)
 	}

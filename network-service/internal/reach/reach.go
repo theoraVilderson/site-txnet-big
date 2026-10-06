@@ -131,7 +131,7 @@ func (g *Gate) Observe(ctx context.Context, panelID string, err error, at time.T
 	cause := driver.CauseOf(err)
 	g.mu.Lock()
 	g.init()
-	if _, classified := driver.KindOf(err); err == nil || classified {
+	if _, classified := driver.KindOf(err); err == nil || (classified && driver.Reached(err)) {
 		g.asked[panelID] = true
 	}
 	if cause.NetworkLayer() {

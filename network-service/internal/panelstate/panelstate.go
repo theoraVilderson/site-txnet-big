@@ -127,7 +127,7 @@ func Judge(was Record, err error, at time.Time) Verdict {
 	}
 
 	kind, classified := driver.KindOf(err)
-	if !classified {
+	if !classified || !driver.Reached(err) {
 		// A publish that failed or a cursor that would not write is not the
 		// panel's doing, and marking it down for one would take a healthy
 		// panel out of service over our own outage.

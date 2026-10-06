@@ -220,3 +220,16 @@ func contains(got []observed, id string) bool {
 	}
 	return false
 }
+
+// Nor is it a network failure for the mass rule: our breaker stopping calls
+// to many panels is not many panels failing.
+func TestABreakerStoppedCallIsNeitherHeldNorCounted(t *testing.T) {
+	p := &probe{res: reach.Probe{TCP: true, DNS: true}}
+	g, _, b := gate(p)
+	g.BeginPass(refs("a.example"))
+	_ = g.Observe(context.Background(), "p0", driver.NewFault(driver.FaultUnavailable, "GetUsage", 0, driver.ErrCircuitOpen), at)
+	_ = g.EndPass(context.Background(), at)
+	if p.calls != 0 || b.got[0].Asked != 0 || b.got[0].Failed != 0 {
+		t.Fatalf("probes=%d beat=%+v", p.calls, b.got[0])
+	}
+}

@@ -68,7 +68,11 @@ answers and are always the panel's.
 Every turn that judged the panel stamps `panel.panelCheckedAt`
 (`Writer.Checked`), and a clean one stamps `lastHealthyAt` as well. Neither
 stamp ever moves backwards. A failure no driver classified, such as a failed
-publish or a cursor write, is ours: it is neither judged nor stamped. A
+publish or a cursor write, is ours: it is neither judged nor stamped. Nor is a
+call **our own breaker stopped** (`driver.Reached`, `ErrCircuitOpen`): it never
+reached the panel. Judged, it read as `unreachable` every other pass between
+real dials, and each flip was a new cause told to the owner, once a minute
+(dev, 2026-10-06). It is not counted toward the mass rule either. A
 reader tells a fresh state from a stale one by `panelCheckedAt`, never by
 `panelState` alone.
 

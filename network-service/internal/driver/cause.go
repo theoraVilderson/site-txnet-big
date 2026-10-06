@@ -63,7 +63,7 @@ func CauseOf(err error) Cause {
 		return ""
 	}
 	var fault *Fault
-	if !errors.As(err, &fault) {
+	if !errors.As(err, &fault) || !Reached(err) {
 		return ""
 	}
 	if fault.Cause != "" {
@@ -97,6 +97,15 @@ func CauseOf(err error) Cause {
 	default:
 		return CauseBadAnswer
 	}
+}
+
+// Reached is false for a call that never left us: our own breaker stopped it
+// (ErrCircuitOpen). It says nothing about the panel, so it has no cause, is
+// not judged and is not counted — judged, it alternated with the real dial's
+// cause every other pass and each flip was told to the owner (dev,
+// 2026-10-06).
+func Reached(err error) bool {
+	return !errors.Is(err, ErrCircuitOpen)
 }
 
 // transportCause names a failure below HTTP. The order matters: a DNS
