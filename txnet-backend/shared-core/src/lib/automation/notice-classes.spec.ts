@@ -70,6 +70,8 @@ describe('notice classes (F-601-s)', () => {
       'resellerQuotaDigest',
       'resellerQuotaNearing',
       'resellerQuotaOverageStarted',
+      // F-027-eo: a panel-side edit replaced a buyer's lines.
+      'serviceLinesChanged',
       'subscriptionPaymentDue',
       // F-707-e: the wheel's day at 80% of its cap.
       'wheelCapNearing',

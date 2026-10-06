@@ -2,8 +2,8 @@
 id: automation
 layer: domain
 status: active
-version: 8
-updated: 2026-09-28
+version: 9
+updated: 2026-10-06
 ---
 
 # Contract — automation: telling a person about an event
@@ -35,9 +35,22 @@ in `LIVE_PUSH_FIELDS` plus its binding in `BrokerService`, and
 
 | Rule | Why |
 |---|---|
-| `live` only, on `user:<payload.userId>`; never `person` | a Grant with three configs captured would be three bot messages about one purchase |
+| `live` only, on `user:<payload.userId>`; never `person` | a Grant with three configs captured would be three bot messages about one purchase; the one person notice, for a panel-side change only, is below (F-027-eo) |
 | The body is `{type}` plus exactly the fields the row names — `network.grant.linksCaptured` carries `grantId`, `billing.wallet.changed` nothing (F-111-m) | a payload holds what its producer needed; that is not the browser's |
 | A payload without `userId` or a named field, or a type with no row, throws and dead-letters | whose page it is is never guessed |
+
+## Lines a panel-side change replaced (F-027-eo)
+
+The person half of `network.grant.linksCaptured`, told by `GrantDeliveryConsumer`
+(its queue is bound to the type beside the live-push one), consumer
+`grant-lines-changed`. User 2026-10-06.
+
+| Rule | Why |
+|---|---|
+| Told only when the payload's `cause` is `panel`: lines were served for this very uuid and the panel now builds others (network `contract.links.md` rule 7a). `ours` — a first capture, a move, the buyer's own regenerate — and no cause tell nobody | the buyer's app holds the old lines until it updates; their own regenerate they already see |
+| Template `serviceLinesChanged`, class `important` (inbox and bot), `person` only, with `grantId` so a combined one names the services | "update the subscription in your app"; the live push stays `LivePushConsumer`'s |
+| **One per Grant**: the event id is `<grantId>:<hour of occurredAt>`, so every config of a Grant replaced within the hour shares one marker and one burst field | an edited inbound replaces a Grant's configs over a few passes; three configs are one message, not three |
+| A `panel` payload without tenant, user or Grant, or an unreadable `occurredAt`, throws and dead-letters | whose service it is is never guessed |
 
 ## A burst is told once (F-067-p, ADR-0084 decision 3)
 

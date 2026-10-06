@@ -102,3 +102,38 @@ describe('GrantDeliveryConsumer — a purchase still waiting (F-601-i)', () => {
     expect(send).not.toHaveBeenCalled();
   });
 });
+
+describe('GrantDeliveryConsumer — lines a panel-side change replaced (F-027-eo)', () => {
+  const captured = (payload: Record<string, unknown>, id = '77777777-7777-4777-8777-777777777771', occurredAt = '2026-10-06T10:05:00Z') => ({
+    ...event(OutboxEventType.GRANT_LINKS_CAPTURED, { configId: 'c-1', ...payload }),
+    id,
+    aggregate: 'network.config',
+    occurredAt,
+  });
+
+  it('tells the buyer in inbox and bot, naming the Grant, with no live push of its own', async () => {
+    const { consumer, send } = build();
+    await consumer.handle(captured({ cause: 'panel' }));
+    expect(send).toHaveBeenCalledTimes(1);
+    const notice = send.mock.calls[0]![0] as { live?: unknown; person: { template: string; grantId?: string; userId: string } };
+    expect(notice.live).toBeUndefined();
+    expect(notice.person).toMatchObject({ template: 'serviceLinesChanged', userId: USER, grantId: GRANT });
+  });
+
+  it('tells nobody about the buyer\'s own regenerate, a create or a move — cause `ours`, or none at all', async () => {
+    const { consumer, send } = build();
+    await consumer.handle(captured({ cause: 'ours' }));
+    await consumer.handle(captured({}));
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('is one notice per Grant: its configs replaced within the hour share one event id', async () => {
+    const { consumer, send } = build();
+    await consumer.handle(captured({ cause: 'panel', configId: 'c-1' }, '77777777-7777-4777-8777-777777777771', '2026-10-06T10:05:00Z'));
+    await consumer.handle(captured({ cause: 'panel', configId: 'c-2' }, '77777777-7777-4777-8777-777777777772', '2026-10-06T10:40:00Z'));
+    await consumer.handle(captured({ cause: 'panel', configId: 'c-1' }, '77777777-7777-4777-8777-777777777773', '2026-10-06T12:01:00Z'));
+    const ids = send.mock.calls.map((c) => (c[0] as unknown as { eventId: string }).eventId);
+    expect(ids[0]).toBe(ids[1]);
+    expect(ids[2]).not.toBe(ids[0]);
+  });
+});

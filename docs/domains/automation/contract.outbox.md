@@ -220,7 +220,7 @@ Both in `outbox/tenant-renewal.consumers.ts`. The producers are tenant's:
 ## A purchase's end, told (F-111-d)
 
 `GrantDeliveryConsumer`, queue `AUTOMATION_GRANT_DELIVERY_NOTICE_QUEUE` bound to
-`outbox.entitlement.grant.delivered`, `.refunded` and `.delivery_delayed`, consumer
+`outbox.entitlement.grant.delivered`, `.refunded`, `.delivery_delayed` and `outbox.network.grant.linksCaptured` (F-027-eo, [contract.notices.md](contract.notices.md)), consumer
 `grant-delivery-notify`. The producer is entitlement's delivery
 (`domains/entitlement/contract.md`).
 

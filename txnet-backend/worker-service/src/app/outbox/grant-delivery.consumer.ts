@@ -11,6 +11,10 @@ import { EventNoticeSender } from './event-notice';
 const CONSUMER = 'grant-delivery-notify';
 /** The tenant owner's notice of a delayed purchase has its own markers (F-601-i): the buyer's landing never stands for it. */
 const ALERT_CONSUMER = 'grant-delivery-alert';
+/** Lines a panel-side change replaced (F-027-eo) have their own markers, one per Grant and hour. */
+const LINES_CONSUMER = 'grant-lines-changed';
+/** How long one Grant's replaced configs are one notice: an inbound edit replaces them within a few passes. */
+const LINES_NOTICE_BUCKET_MS = 60 * 60 * 1000;
 
 /** Why billing says a purchase is still waiting (`DeliveryDelay`, entitlement `delivery.ts`) -> the owner's template. */
 const DELAY_TEMPLATE: Record<string, string> = {
@@ -35,6 +39,14 @@ const DELAY_TEMPLATE: Record<string, string> = {
  * `reason`. Each is sent even when the other throws; the event then throws and
  * dead-letters, and a replay repeats only the channel still owed. No live push:
  * no page re-reads on it.
+ *
+ * `network.grant.linksCaptured` with `cause: 'panel'` (F-027-eo, user
+ * 2026-10-06): an edit on the panel replaced the lines the buyer's app holds,
+ * so they are told to update the subscription in their app. `ours` — a
+ * create, a move, their own regenerate — and an event with no cause tell
+ * nobody. One notice per Grant: every config of it replaced within the same
+ * hour shares one event id, so the markers and the burst hold it once. The
+ * live push stays `LivePushConsumer`'s.
  */
 @Injectable()
 export class GrantDeliveryConsumer implements OnApplicationBootstrap {
@@ -52,11 +64,12 @@ export class GrantDeliveryConsumer implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     await this.broker.consumeGrantDeliveryNotices((event) => this.handle(event));
-    this.logger.log('consuming entitlement.grant.delivered / .refunded / .delivery_delayed for the buyer notice');
+    this.logger.log('consuming entitlement.grant.delivered / .refunded / .delivery_delayed and network.grant.linksCaptured for the buyer notice');
   }
 
   async handle(event: OutboxMessage): Promise<void> {
     if (event.type === OutboxEventType.GRANT_DELIVERY_DELAYED) return this.delayed(event);
+    if (event.type === OutboxEventType.GRANT_LINKS_CAPTURED) return this.linesChanged(event);
     const grant = grantOf(event);
     const refunded = event.type === OutboxEventType.GRANT_REFUNDED;
     await this.notices.send({
@@ -74,6 +87,23 @@ export class GrantDeliveryConsumer implements OnApplicationBootstrap {
         template: refunded ? 'purchaseRefunded' : 'purchaseDelivered',
         params: refunded ? { amount: grant.amount ?? '' } : grant.servicesUrl ? { servicesUrl: grant.servicesUrl } : {},
       },
+    });
+  }
+
+  private async linesChanged(event: OutboxMessage): Promise<void> {
+    const p = (event.payload ?? {}) as Record<string, unknown>;
+    if (p['cause'] !== 'panel') return;
+    const str = (k: string) => (typeof p[k] === 'string' && p[k] !== '' ? (p[k] as string) : null);
+    const tenantId = str('tenantId');
+    const userId = str('userId');
+    const grantId = str('grantId');
+    if (!tenantId || !userId || !grantId) throw new Error(`outbox event ${event.id} has replaced lines without its tenant, user or Grant`);
+    const bucket = Math.floor(Date.parse(event.occurredAt) / LINES_NOTICE_BUCKET_MS);
+    if (!Number.isFinite(bucket)) throw new Error(`outbox event ${event.id} has no readable occurredAt`);
+    await this.notices.send({
+      consumer: LINES_CONSUMER,
+      eventId: `${grantId}:${bucket}`,
+      person: { tenantId, userId, template: 'serviceLinesChanged', params: {}, grantId },
     });
   }
 

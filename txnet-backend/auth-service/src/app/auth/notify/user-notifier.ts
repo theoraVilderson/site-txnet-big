@@ -70,6 +70,7 @@ export const NOTIFY_TEMPLATES = [
   'serviceTrafficResetByAdmin',
   'serviceDeletedByAdmin',
   'serviceLinkRotatedByAdmin',
+  'serviceLinesChanged',
   'serviceSpeedCappedByAdmin',
   'serviceSpeedUncappedByAdmin',
   'serviceDevicesLimitedByAdmin',
@@ -827,7 +828,19 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       fallback: '🔗 Support changed the subscription links of {{count}} of your services. The old links no longer work: copy the new ones from My services and update them in your VPN app.',
       inbox: { read: (ns) => ns?.retention?.adminLinkRotatedManyTitle, fallback: 'Links of {{count}} services changed' },
     },
-  },  serviceSpeedCappedByAdmin: {
+  },
+  // F-027-eo: the panel's owner edited what the buyer's lines are built from; the app holds the old ones until it updates.
+  serviceLinesChanged: {
+    read: (ns) => ns?.retention?.linesChanged,
+    fallback: '🔄 The connection settings of your service were changed on the server. Open your VPN app and update the subscription; if you added a config by hand, copy it again from My services.',
+    inbox: { read: (ns) => ns?.retention?.linesChangedTitle, fallback: 'Update your subscription' },
+    many: {
+      read: (ns) => ns?.retention?.linesChangedMany,
+      fallback: '🔄 The connection settings of {{count}} of your services were changed on the server. Open your VPN app and update their subscriptions; configs added by hand are in My services to copy again.',
+      inbox: { read: (ns) => ns?.retention?.linesChangedManyTitle, fallback: 'Update {{count}} subscriptions' },
+    },
+  },
+  serviceSpeedCappedByAdmin: {
     read: (ns) => ns?.retention?.adminSpeedCapped,
     fallback: '🐢 Support limited your service\'s speed to {{mbps}} Mbps.',
     inbox: { read: (ns) => ns?.retention?.adminSpeedCappedTitle, fallback: 'Your service\'s speed was limited to {{mbps}} Mbps' },

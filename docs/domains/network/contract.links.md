@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 18
+version: 19
 updated: 2026-10-06
 ---
 
@@ -117,7 +117,11 @@ that should exist and does not, which is drift (`contract.drift.md`).
    refresh that read the same is silent (rule 6b) — so the event and the lines commit together
    (ADR-0021) and a dropped outcome announces nothing. One event per captured
    config that changed; a steady one is refreshed silently (rule 6b).
-   Automation pushes it to the owner (`automation/contract.notices.md`).
+   Automation pushes it to the owner (`automation/contract.notices.md`). The
+   payload carries `cause` (F-027-eo): `panel` when lines were already served
+   for this very `linksUuid` and the panel built others — an edit on the
+   panel, and the buyer is told to update their app — else `ours` (a first
+   capture, a move, a regenerate).
 8. **A failed read keeps what is stored.** It is a `links_unread` finding with
    the driver's fault, not a refused write; the re-key or state change the
    pass made is still recorded, and the capture is retried on the next pass

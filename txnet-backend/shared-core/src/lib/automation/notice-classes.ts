@@ -106,6 +106,8 @@ export const NOTICE_CLASS_OF: Readonly<Record<string, NoticeClass>> = {
   lotteryOpenedAutomatic: 'info',
   paymentCredited: 'important',
   purchaseDelivered: 'important',
+  // F-027-eo: a panel-side edit replaced the buyer's lines — their app needs an update before it connects again.
+  serviceLinesChanged: 'important',
   purchaseDelayed: 'important',
   subscriptionPaymentDue: 'important',
   panelRefused: 'important',

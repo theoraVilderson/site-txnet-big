@@ -505,3 +505,22 @@ func TestASameLinesRefreshMovesOnlyLinksCheckedAt(t *testing.T) {
 		t.Errorf("$12 is %v, want the read's time %v", f.args[0][11], checked)
 	}
 }
+
+// A capture's event says why the lines moved (F-027-eo): `panel` when lines
+// were already served for this very uuid and the panel now builds others — an
+// edit on the panel the buyer's app must follow — and `ours` for a first
+// capture, a move or a regenerate, which the buyer caused or already sees.
+func TestALinesCapturedEventSaysWhetherThePanelChangedThem(t *testing.T) {
+	f := &pgDB{}
+	at := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	if err := (PostgresDesired{DB: f}).Record(context.Background(), []Outcome{
+		{ConfigID: pgConfig, RemoteID: "r-1", State: StateComplete, At: at, UUID: "uuid-1", Enabled: true, Present: true,
+			Links: &CapturedLinks{Lines: []string{"vless://b"}, RemoteID: "r-1", UUID: "uuid-1", At: at, CheckedAt: at}},
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	want := `CASE WHEN e.confirm THEN '{}'::jsonb ELSE jsonb_build_object('cause', CASE WHEN cardinality(prior."linkLines") > 0 AND prior."linksUuid" = $11 THEN 'panel' ELSE 'ours' END) END`
+	if !strings.Contains(f.sql[0], want) {
+		t.Errorf("recordSQL does not name the cause of a capture:\n%s", want)
+	}
+}

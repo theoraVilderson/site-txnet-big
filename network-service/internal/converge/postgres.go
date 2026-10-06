@@ -150,6 +150,9 @@ const ConfirmedEvent = "network.config.confirmed"
 // same lines, daily for every config, tells nobody. Only a config's first confirmation is announced
 // (`confirmedAt`, F-111-o): `prior` is the row before this statement, so a
 // later disable, rotation or repair has no Grant waiting on it and is silent.
+// A capture's event carries its `cause` (F-027-eo): `panel` when lines were
+// served for this very uuid and the panel built others — the buyer's app must
+// update — else `ours` (a first capture, a move, a regenerate).
 // The inbound a client was found on ($16, F-027-ch) is written only over none,
 // and not where another live row of the Grant holds it on the panel: that is
 // `config_group_panel_once`, and one row's guess must not fail the batch.
@@ -189,6 +192,7 @@ SELECT gen_random_uuid(), 'network.config', r.id::text, e.type,
          'userId', r."userId"::text,
          'grantId', r."grantId"::text,
          'configId', r.id::text)
+       || CASE WHEN e.confirm THEN '{}'::jsonb ELSE jsonb_build_object('cause', CASE WHEN cardinality(prior."linkLines") > 0 AND prior."linksUuid" = $11 THEN 'panel' ELSE 'ours' END) END
   FROM recorded r
  CROSS JOIN prior
  CROSS JOIN (VALUES ($13::text, $8::boolean, false), ($14::text, $15::boolean, true)) AS e(type, due, confirm)
