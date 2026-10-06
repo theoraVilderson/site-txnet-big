@@ -193,8 +193,8 @@ transaction that writes the row (`notification/contract.md` "Emits").
 
 ## A connection test's answer, live (F-027-bs)
 
-`PanelTestedConsumer`, queue `AUTOMATION_PANEL_TESTED_QUEUE` bound to exactly
-`outbox.network.panel.tested`. The producer is `network-service`
+`PanelTestedConsumer`, queue `AUTOMATION_PANEL_TESTED_QUEUE` bound to
+`outbox.network.panel.tested` and `.state_changed` (F-027-el). The producer is `network-service`
 (`network/contract.registration.md` "Every result is announced").
 
 | Rule | Why |
@@ -202,7 +202,7 @@ transaction that writes the row (`notification/contract.md` "Emits").
 | `{type:'network.panel.tested', panelId, reviewState, fault}` on `tenant:<tenantId>` — the first push on a `tenant:` channel | the systems page is an operator's view, and only a `realtime.tenant.read` holder in that tenant hears it |
 | The tenant is the payload's; a payload without `tenantId` or `panelId` throws and dead-letters | the producer names the platform owner for a platform panel; this side never guesses |
 | Consumer `panel-tested`. A **verdict** (`accepted`, `accepted_low_trust` → `panelAccepted`; `refused` → `panelRefused`, `{panel}` = `panelName`) also goes to `ownerUserId`'s inbox and bot (F-067-o) | a fault repeats every 5 minutes while it lasts; a message each time is noise, and the page shows it |
-| A payload without `ownerUserId` (written before F-067-o) is pushed live only | nobody is guessed at |
+| A payload without `ownerUserId` (written before F-067-o) is pushed live only. A `state_changed` (ADR-0122) is pushed as `{type, panelId, panelState, cause}` and **always** told: `PANEL_CAUSE_TEMPLATE` by cause, `panelRecovered` on `healthy`; an unknown cause throws | nobody is guessed at; a state change is written only when confirmed and never for our own outage (`network/contract.panel-health.md`) |
 
 ## The tenant consumers: a reseller's renewal (F-019-c)
 

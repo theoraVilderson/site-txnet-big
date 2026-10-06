@@ -23,6 +23,8 @@ export const RealtimeEventType = {
   NOTIFICATION_CREATED: 'notification.created',
   /** F-027-bs: `network-service` wrote a connection test's verdict or fault (`register.PostgresStore`). */
   PANEL_TESTED: 'network.panel.tested',
+  /** F-027-el (ADR-0122): a panel's health changed, confirmed — state or cause, with since when (`panelstate.PostgresWriter`). */
+  PANEL_STATE_CHANGED: 'network.panel.state_changed',
   /** F-111-d: a paid Grant was delivered — `pending` -> `active` (spec §5.8 step 3). */
   GRANT_DELIVERED: 'entitlement.grant.delivered',
   /** F-111-d: a paid Grant could not be delivered — cancelled, its invoice refunded in full. */
@@ -165,6 +167,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.PAYMENT_REVERSED]: 'worker-service',
   [OutboxEventType.NOTIFICATION_CREATED]: 'worker-service',
   [OutboxEventType.PANEL_TESTED]: 'worker-service',
+  [OutboxEventType.PANEL_STATE_CHANGED]: 'worker-service',
   [OutboxEventType.GRANT_DELIVERED]: 'worker-service',
   [OutboxEventType.GRANT_REFUNDED]: 'worker-service',
   [OutboxEventType.GRANT_LINKS_CAPTURED]: 'worker-service',

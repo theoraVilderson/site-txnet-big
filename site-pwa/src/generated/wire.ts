@@ -52,6 +52,7 @@ export const RealtimeEvents = {
   "paymentReversed": "billing.payment.reversed",
   "notificationCreated": "notification.created",
   "panelTested": "network.panel.tested",
+  "panelStateChanged": "network.panel.state_changed",
   "grantDelivered": "entitlement.grant.delivered",
   "grantRefunded": "entitlement.grant.refunded",
   "grantLinksCaptured": "network.grant.linksCaptured",

@@ -53,7 +53,16 @@ describe('notice classes (F-601-s)', () => {
       'lotteryOpened',
       // F-707-m: a lottery prize given.
       'lotteryWon',
+      // F-027-el (ADR-0122): a panel went down, told by what the owner has to fix.
+      'panelDownDns',
+      'panelDownPath',
+      'panelDownPort',
+      'panelDownServer',
+      'panelDownTls',
+      'panelDownUnreachable',
+      'panelLoginRefused',
       'panelRefused',
+      'panelRefusingUs',
       'paymentCredited',
       'purchaseDelayed',
       'purchaseDelivered',
@@ -66,7 +75,7 @@ describe('notice classes (F-601-s)', () => {
       'wheelCapNearing',
     ]);
     // F-707-q: an automatic lottery asks nothing — the inbox's alone.
-    expect(by('info')).toEqual(['lotteryOpenedAutomatic', 'panelAccepted']);
+    expect(by('info')).toEqual(['lotteryOpenedAutomatic', 'panelAccepted', 'panelRecovered']);
   });
 
   it('gives a combined notice the stronger class', () => {

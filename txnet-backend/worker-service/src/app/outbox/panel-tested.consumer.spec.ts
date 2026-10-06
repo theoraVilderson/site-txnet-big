@@ -116,3 +116,79 @@ describe('PanelTestedConsumer.handle', () => {
     expect(published).toHaveLength(2);
   });
 });
+
+/**
+ * F-027-el (ADR-0122): a confirmed change of a panel's health rides the same
+ * queue. What breaks silently: a cause told as the wrong fix (a changed port
+ * sent as "re-enter the login"), a recovery nobody hears about, or a cause the
+ * worker does not know — told as nothing instead of refused.
+ */
+function changed(payload: Record<string, unknown> = {}): OutboxMessage {
+  return {
+    ...event(),
+    type: 'network.panel.state_changed',
+    payload: {
+      panelId: PANEL,
+      tenantId: TENANT,
+      ownerUserId: OWNER,
+      panelName: 'Frankfurt',
+      panelState: 'down',
+      previousState: 'healthy',
+      cause: 'connection_refused',
+      since: '2026-10-06T06:05:55.255Z',
+      ...payload,
+    },
+  };
+}
+
+describe('PanelTestedConsumer.handle — a panel state change (F-027-el)', () => {
+  it("pushes it on the owner's tenant channel with the cause", async () => {
+    const { consumer, published } = build();
+
+    await consumer.handle(changed());
+
+    expect(published).toEqual([
+      {
+        channel: `tenant:${TENANT}`,
+        payload: { type: OutboxEventType.PANEL_STATE_CHANGED, panelId: PANEL, panelState: 'down', cause: 'connection_refused' },
+      },
+    ]);
+  });
+
+  it.each([
+    ['dns_failed', 'panelDownDns'],
+    ['connection_refused', 'panelDownPort'],
+    ['unreachable', 'panelDownUnreachable'],
+    ['unresponsive', 'panelDownUnreachable'],
+    ['tls_failed', 'panelDownTls'],
+    ['not_found', 'panelDownPath'],
+    ['server_error', 'panelDownServer'],
+    ['bad_answer', 'panelDownServer'],
+    ['login_refused', 'panelLoginRefused'],
+    ['forbidden', 'panelRefusingUs'],
+    ['rate_limited', 'panelRefusingUs'],
+  ])('tells the owner %s as %s, naming the panel', async (cause, template) => {
+    const { consumer, joined } = build();
+
+    await consumer.handle(changed({ cause }));
+
+    expect(joined).toEqual([{ burst: UnscopedRedisKeys.noticeBurst(TENANT, OWNER, template), params: { panel: 'Frankfurt' } }]);
+  });
+
+  it('tells the owner a recovery, in the inbox alone (an `info` notice)', async () => {
+    const { consumer, joined } = build();
+
+    await consumer.handle(changed({ panelState: 'healthy', previousState: 'down', cause: null }));
+
+    expect(joined).toEqual([
+      { burst: UnscopedRedisKeys.noticeBurst(TENANT, OWNER, 'panelRecovered', undefined, 'inbox'), params: { panel: 'Frankfurt' } },
+    ]);
+  });
+
+  it('refuses a cause it does not know rather than telling the owner nothing', async () => {
+    const { consumer, published } = build();
+
+    await expect(consumer.handle(changed({ cause: 'cosmic_rays' }))).rejects.toThrow(/cause/);
+    expect(published).toEqual([]);
+  });
+});

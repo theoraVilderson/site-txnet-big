@@ -47,6 +47,7 @@ corrected, per "Decide once".
 | `notification.created` | `user:` | notification → consumer | useNotifications, useMenuBadges |
 | `entitlement.grant.delivered` / `refunded`, `network.grant.linksCaptured`, `entitlement.grant.usage` | `user:` | billing, network → live-push | useGrantsPage |
 | `network.panel.tested` | `tenant:` | network → panel-tested consumer | SystemsView |
+| `network.panel.state_changed` | `tenant:` | network → panel-tested consumer (F-027-el) | SystemsView (F-027-em) |
 | OTP delivery state | `otp:<channelId>` | auth-service, direct (`OtpDeliveryStore.publish`) | useOtpDelivery |
 | `support.message` / `read` / `typing` / `status` | `support:<id>` | support-service, direct (`SupportRealtime`) | thread views |
 

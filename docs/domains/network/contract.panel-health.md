@@ -121,7 +121,19 @@ A panel the vault cannot open is not offered to the pass at all
 (`PostgresSource`), so it is never judged: its `panelCheckedAt` ages while
 the heartbeat is fresh, and that is how a reader shows "not being checked".
 
+## A confirmed change is announced (F-027-el)
+
+Every state write (`Verdict.Changed`: a new state or a new cause) inserts
+`network.panel.state_changed` in **the same statement**
+(`panelstate.StateChangedEvent`). Its payload is the panel, its name, the
+owner tenant (the platform_owner's for a platform panel) and `ownerUserId`,
+`panelState`, `previousState`, `cause` and `since`. A turn frozen as our own
+outage writes nothing, so it announces nothing. automation's
+`PanelTestedConsumer` pushes it on `tenant:` and tells the owner by cause
+(automation `contract.outbox.md`). Verified on dev 2026-10-06: the owner's
+inbox read «پنل در دسترس نیست: اتصال رد شد» three passes after the port
+closed.
+
 ## Not yet
 
-The `network.panel.state_changed` event is F-027-el: a type with no bound
-queue stalls the relay. What the page shows is F-027-em.
+What the page shows is F-027-em.

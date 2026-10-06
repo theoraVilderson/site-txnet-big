@@ -110,6 +110,16 @@ export const NOTICE_CLASS_OF: Readonly<Record<string, NoticeClass>> = {
   subscriptionPaymentDue: 'important',
   panelRefused: 'important',
   panelAccepted: 'info',
+  // F-027-el: a panel went down, with what to fix — the owner must act soon; its recovery is news.
+  panelDownDns: 'important',
+  panelDownPort: 'important',
+  panelDownUnreachable: 'important',
+  panelDownTls: 'important',
+  panelDownPath: 'important',
+  panelDownServer: 'important',
+  panelLoginRefused: 'important',
+  panelRefusingUs: 'important',
+  panelRecovered: 'info',
   [SUGGESTION_NOTICE]: 'suggestion',
 };
 
