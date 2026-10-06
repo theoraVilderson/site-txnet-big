@@ -433,6 +433,19 @@ Product name and description are **i18n keys, not text**. A reseller who wants t
 
 > **C-09:** volume rollover follows exactly this same path — a `QuotaAdjustment` on the **new** Grant with `source = rollover`, a percentage cap, and an independent expiry. The old Grant stays untouched in the `exhausted` state.
 
+#### Freezing a Grant
+
+| #      | Feature                                                                                         | Status |
+| ------ | ----------------------------------------------------------------------------------------------- | ------ |
+| F-0401 | **The user freezes their own pay-as-you-go Grant; the admin freezes hard or soft** | new    |
+
+- **Admin freeze is `hard` by default**: only an admin lifts it. A **`soft`** freeze lets the user unfreeze it themselves. Soft is allowed on every Grant, prepaid included — the admin chose it.
+- **Self-freeze only on a `metered` Grant.** A prepaid time package frozen by its user would buy free days; a metered Grant frozen costs the seller nothing. Frozen: configs off, the traffic hold released, never purged.
+- **Whether a self-freeze stops the clock is the reseller's setting** (default: the clock runs), fixed on the Grant at the freeze, so a later change of the setting never moves a frozen Grant.
+- **Each reseller may turn self-freeze off** for its users (default: on).
+- **At most 3 self-freezes per Grant per day**, no limit on how long a freeze lasts (the open-Grant cap already bounds how many a user holds).
+- **Precedence:** hard beats soft beats self. The user never lifts a hard freeze or a system one (a panel evict, `awaitingPanel`); an admin's unfreeze lifts any.
+
 ### 4.5 Quota Types
 
 | Metric               | Unit         | Used by         |

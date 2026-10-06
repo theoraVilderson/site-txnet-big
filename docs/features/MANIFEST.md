@@ -9,7 +9,7 @@ Rebuild: `python3 tools/features-scan.py`
 
 - catalog files: 1
 - addressable blocks: 164
-- features: 215
+- features: 216
 
 **Never read the catalog directly.** `python3 tools/spec.py <F-id>` prints exactly the block you need.
 
@@ -55,7 +55,7 @@ Rebuild: `python3 tools/features-scan.py`
 | `App-Features.md` · 4.1 A Product-Agnostic Platform | 13 |  |  |  |
 | `App-Features.md` · 4.2 Catalog Structure | 14 |  |  |  |
 | `App-Features.md` · 4.3 Product Names as Translation Keys | 4 |  |  |  |
-| `App-Features.md` · 4.4 Grant — The Single Concept of Entitlement | 20 |  | C-09 C-15 |  |
+| `App-Features.md` · 4.4 Grant — The Single Concept of Entitlement | 33 | F-0401 | C-09 C-15 |  |
 | `App-Features.md` · 4.5 Quota Types | 13 |  |  |  |
 | `App-Features.md` · 4.6 One Package, Five Configs, One Shared Quota | 9 |  |  |  |
 | `App-Features.md` · 4.7 Discount Coupons | 14 |  |  |  |
@@ -301,6 +301,7 @@ Rebuild: `python3 tools/features-scan.py`
 | F-0208 | Removing an account from the group — from either side — revoking that member's live sessio | changed | 2.8 Account Switching |
 | F-0209 | The panel's account switcher: current account, the rest of the group, "add an account", on | changed | 2.8 Account Switching |
 | F-0210 | Switching accounts inside the bot | changed | 2.8 Account Switching |
+| F-0401 | The user freezes their own pay-as-you-go Grant; the admin freezes hard or soft | new | 4.4 Grant — The Single Concept of Entitlement |
 | F-0601 | Products are priced only in USD — one catalog.Price row per variant, no per-currency price | new | 6.1 Why Dollars |
 | F-0602 | A price change writes a new Price row and keeps the old one; an invoice is computed at the | new | 6.1 Why Dollars |
 | F-0603 | FX worker off the request path: every 5 minutes all active sources are queried concurrentl | new | 6.2 The FX Worker |
