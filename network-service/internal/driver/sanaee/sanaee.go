@@ -505,6 +505,10 @@ func (d *Driver) ListInbounds(ctx context.Context) ([]driver.Inbound, error) {
 	for _, in := range list {
 		out = append(out, driver.Inbound{
 			RemoteID: strconv.Itoa(in.ID), Tag: in.Tag, Protocol: in.Protocol, Port: in.Port, Enabled: in.Enable,
+			Fingerprint: driver.XrayFingerprint(driver.XrayInbound{
+				Listen: in.Listen, Port: in.Port, Protocol: in.Protocol, Remark: in.Remark,
+				Settings: in.Settings, StreamSettings: in.StreamSettings,
+			}),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Tag < out[j].Tag })

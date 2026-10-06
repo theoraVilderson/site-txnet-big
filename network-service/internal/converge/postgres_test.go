@@ -412,3 +412,58 @@ func TestBatchedConfigWritesLockInIDOrder(t *testing.T) {
 		}
 	}
 }
+
+// An inbound edited on the panel is read as a new fingerprint
+// (`panel_inbound.fingerprint`); the lines carry the one they were read under
+// (`config.linksInboundFingerprint`), and only a capture moves it. A refresh
+// that read the same lines for the same credential tells the owner nothing:
+// the daily read would otherwise push a notice a day per config.
+func TestTheInboundFingerprintKeysTheLinksAndASameRefreshIsSilent(t *testing.T) {
+	captured := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
+	f := &pgDB{rows: []pgRow{
+		{pgConfig, "r-1", "txn-abc", "uuid-1", "vless", "7", true, true, int64(5_000), int64(1_200), int64(0), int64(0),
+			"complete", "synced", 0, nil, []string{"vless://a"}, "r-1", "uuid-1", captured, false, false,
+			"", int64(0), int64(0), 0, "fp-2", "fp-1"},
+	}}
+	got, err := PostgresDesired{DB: f}.For(context.Background(), pgPanel)
+	if err != nil {
+		t.Fatalf("For: %v", err)
+	}
+	if got[0].InboundFingerprint != "fp-2" || got[0].Links.InboundFingerprint != "fp-1" {
+		t.Errorf("fingerprints read %q / %q, want fp-2 (the inbound now) and fp-1 (the lines')",
+			got[0].InboundFingerprint, got[0].Links.InboundFingerprint)
+	}
+	// The row's own inbound only: a guessed one (rule 7) is not where its client is.
+	if !strings.Contains(f.sql[0], `pi."panelId" = c."panelId" AND pi."remoteId" = c."inboundRemoteId"`) {
+		t.Error("the fingerprint is not read from the config's own inbound")
+	}
+
+	at := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	f = &pgDB{}
+	err = PostgresDesired{DB: f}.Record(context.Background(), []Outcome{
+		{ConfigID: pgConfig, RemoteID: "r-1", State: StateComplete, At: at, UUID: "uuid-1", Enabled: true, Present: true,
+			Links: &CapturedLinks{Lines: []string{"vless://b"}, RemoteID: "r-1", UUID: "uuid-1", At: at, InboundFingerprint: "fp-2"}},
+	})
+	if err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	if len(f.args[0]) < 18 || f.args[0][17] != "fp-2" {
+		t.Errorf("the capture's fingerprint is not written: args %v", f.args[0])
+	}
+	if !strings.Contains(f.sql[0], `"linksInboundFingerprint" = CASE WHEN $8 THEN NULLIF($18, '') ELSE "linksInboundFingerprint" END`) {
+		t.Error("the lines' fingerprint does not move with the capture, and only with it")
+	}
+	if !strings.Contains(f.sql[0], `prior."linkLines" IS DISTINCT FROM $9::text[] OR prior."linksUuid" IS DISTINCT FROM $11`) {
+		t.Error("a refresh that read the same lines is announced")
+	}
+
+	f = &pgDB{}
+	if err := (PostgresInbounds{DB: f}).Record(context.Background(), pgPanel, []driver.Inbound{
+		{RemoteID: "1", Tag: "vless-443", Protocol: "vless", Port: 443, Enabled: true, Fingerprint: "fp-2"},
+	}, at); err != nil {
+		t.Fatalf("inbounds Record: %v", err)
+	}
+	if len(f.args[0]) < 9 || f.args[0][8] != "fp-2" || !strings.Contains(f.sql[0], `fingerprint = EXCLUDED.fingerprint`) {
+		t.Errorf("the inventory read does not store the inbound's fingerprint: %v", f.args[0])
+	}
+}

@@ -110,13 +110,13 @@ func (s PostgresInbounds) Due(ctx context.Context, panelID string, at time.Time)
 // A protocol that is not one of `ConfigProtocol` is stored as null: such an
 // inbound is listed for the admin to see and can never be sold.
 const upsertInboundSQL = `
-INSERT INTO network.panel_inbound ("panelId", "remoteId", tag, protocol, port, host, enabled, "goneAt", "seenAt")
+INSERT INTO network.panel_inbound ("panelId", "remoteId", tag, protocol, port, host, enabled, "goneAt", "seenAt", fingerprint)
 VALUES ($1::uuid, $2, $3,
         CASE WHEN $4 = ANY(enum_range(NULL::network."ConfigProtocol")::text[]) THEN $4::network."ConfigProtocol" END,
-        $5, $6, $7, NULL, $8)
+        $5, $6, $7, NULL, $8, NULLIF($9, ''))
 ON CONFLICT ("panelId", "remoteId") DO UPDATE
    SET tag = EXCLUDED.tag, protocol = EXCLUDED.protocol, port = EXCLUDED.port, host = EXCLUDED.host,
-       enabled = EXCLUDED.enabled, "goneAt" = NULL, "seenAt" = EXCLUDED."seenAt"`
+       enabled = EXCLUDED.enabled, "goneAt" = NULL, "seenAt" = EXCLUDED."seenAt", fingerprint = EXCLUDED.fingerprint`
 
 const goneInboundsSQL = `
 UPDATE network.panel_inbound SET "goneAt" = $3
@@ -129,7 +129,7 @@ func (s PostgresInbounds) Record(ctx context.Context, panelID string, rows []dri
 	ids := make([]string, 0, len(rows))
 	for _, in := range rows {
 		ids = append(ids, in.RemoteID)
-		if _, err := s.DB.Exec(ctx, upsertInboundSQL, panelID, in.RemoteID, in.Tag, in.Protocol, in.Port, in.Host, in.Enabled, at); err != nil {
+		if _, err := s.DB.Exec(ctx, upsertInboundSQL, panelID, in.RemoteID, in.Tag, in.Protocol, in.Port, in.Host, in.Enabled, at, in.Fingerprint); err != nil {
 			return fmt.Errorf("writing panel %s inbound %s: %w", panelID, in.RemoteID, err)
 		}
 	}

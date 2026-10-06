@@ -184,7 +184,7 @@ func TestXrayLinesNeverGuess(t *testing.T) {
 		"an old h2 network": {Port: 443, Protocol: "vless", Settings: vlessClients,
 			StreamSettings: `{"network":"http","security":"tls"}`},
 		"a stream that does not parse": {Port: 443, Protocol: "vless", Settings: vlessClients, StreamSettings: `{`},
-		"no port": {Protocol: "vless", Settings: vlessClients, StreamSettings: `{}`},
+		"no port":                      {Protocol: "vless", Settings: vlessClients, StreamSettings: `{}`},
 	}
 	for name, in := range cases {
 		if got := XrayLines(in, XrayClient{ID: "ID", Password: "PW", Email: "c"}, "panel.example"); len(got) != 0 {
@@ -198,5 +198,40 @@ func TestXrayLinesNeverGuess(t *testing.T) {
 	if got := XrayLines(XrayInbound{Port: 443, Protocol: "vless", Settings: vlessClients, StreamSettings: `{}`},
 		XrayClient{Email: "c"}, "panel.example"); len(got) != 0 {
 		t.Errorf("a client with no id: XrayLines = %q, want none", got)
+	}
+}
+
+// An inbound's fingerprint is what its lines are built from (ADR-0088) and
+// nothing else: a client added changes `settings` and no line, so it must not
+// change the fingerprint; an edit to the port or the stream must.
+func TestXrayFingerprint(t *testing.T) {
+	base := XrayInbound{
+		Listen: "", Port: 443, Protocol: "vless", Remark: "de",
+		Settings:       `{"clients":[{"id":"a"}],"decryption":"none"}`,
+		StreamSettings: `{"network":"ws","security":"none","wsSettings":{"path":"/a"}}`,
+	}
+	fp := XrayFingerprint(base)
+	if fp == "" {
+		t.Fatal("no fingerprint for an ordinary inbound")
+	}
+	more := base
+	more.Settings = `{"decryption":"none","clients":[{"id":"a"},{"id":"b"}]}`
+	if XrayFingerprint(more) != fp {
+		t.Error("a client added changed the fingerprint: every config on the inbound would be read again")
+	}
+	for name, edit := range map[string]func(*XrayInbound){
+		"port": func(in *XrayInbound) { in.Port = 8443 },
+		"path": func(in *XrayInbound) {
+			in.StreamSettings = `{"network":"ws","security":"none","wsSettings":{"path":"/b"}}`
+		},
+		"remark":     func(in *XrayInbound) { in.Remark = "nl" },
+		"listen":     func(in *XrayInbound) { in.Listen = "1.2.3.4" },
+		"encryption": func(in *XrayInbound) { in.Settings = `{"clients":[],"decryption":"none","encryption":"x"}` },
+	} {
+		in := base
+		edit(&in)
+		if XrayFingerprint(in) == fp {
+			t.Errorf("an edit to the %s left the fingerprint as it was", name)
+		}
 	}
 }

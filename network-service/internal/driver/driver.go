@@ -134,6 +134,11 @@ type Inbound struct {
 	Port     int
 	Host     string
 	Enabled  bool
+	// Fingerprint is a hash of what this inbound's link lines are built from,
+	// so an edit on the panel is seen without reading a line (contract.links.md
+	// rule 6b). Empty is a family that cannot say: its lines are refreshed on
+	// age alone.
+	Fingerprint string
 }
 
 // RemoteClient is one client as the panel holds it — never as we hold it. The

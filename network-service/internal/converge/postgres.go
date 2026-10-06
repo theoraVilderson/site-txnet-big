@@ -49,6 +49,10 @@ var _ Desired = PostgresDesired{}
 // placed on its own group's either; the pass writes down where its client is
 // (recordSQL), and such a row is a guess only until then.
 //
+// The fingerprint is the row's own inbound's as the inventory last read it,
+// beside the one its lines were read under (contract.links.md rule 6b). A row
+// that names no inbound has none: the guessed one is not where its client is.
+//
 // Enabled is `desiredEnabled` while the lease planner has not closed the
 // Grant (`network.lease_close`, F-027-dd): a closed Grant's clients are
 // disabled, and billing's own switch is left as it was.
@@ -71,8 +75,10 @@ SELECT c.id::text, coalesce(c."remoteId", ''), c."claimTag", c.uuid, c.protocol:
        coalesce(c."observedRateBps", 0)::bigint,
        coalesce(rl."rateMbps"::bigint * 1000000, 0),
        CASE WHEN jsonb_typeof(g.quotas #> '{concurrent_devices,limit}') = 'number'
-            THEN greatest((g.quotas #>> '{concurrent_devices,limit}')::numeric, 0)::int ELSE 0 END
+            THEN greatest((g.quotas #>> '{concurrent_devices,limit}')::numeric, 0)::int ELSE 0 END,
+       coalesce(pi.fingerprint, ''), coalesce(c."linksInboundFingerprint", '')
   FROM network.config c
+  LEFT JOIN network.panel_inbound pi ON pi."panelId" = c."panelId" AND pi."remoteId" = c."inboundRemoteId"
   LEFT JOIN network.grant_rate_limit rl ON rl."grantId" = c."grantId"
   LEFT JOIN entitlement."grant" g ON g.id = c."grantId"
   LEFT JOIN network.config_counter_state s ON s."configId" = c.id
@@ -96,7 +102,8 @@ func (s PostgresDesired) For(ctx context.Context, panelID string) ([]DesiredConf
 		if err := rows.Scan(&d.ConfigID, &d.RemoteID, &d.ClaimTag, &d.UUID, &d.Protocol, &d.InboundRemoteID,
 			&d.Enabled, &d.Present, &d.AllocatedBytes, &d.ServedBytes, &d.SessionBytes, &d.SessionBaselineBytes,
 			&state, &drift, &d.RepairCount, &repairedAt,
-			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt, &d.Unlimited, &d.InboundResolved, &d.CredentialGroupID, &d.RateBps, &d.RateCapBps, &d.IPLimit); err != nil {
+			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt, &d.Unlimited, &d.InboundResolved, &d.CredentialGroupID, &d.RateBps, &d.RateCapBps, &d.IPLimit,
+			&d.InboundFingerprint, &d.Links.InboundFingerprint); err != nil {
 			return nil, fmt.Errorf("reading panel %s desired state: %w", panelID, err)
 		}
 		d.State, d.Drift = EnforcementState(state), DriftState(drift)
@@ -132,7 +139,9 @@ const ConfirmedEvent = "network.config.confirmed"
 // (`config_links_captured_from_a_client`). A capture ($8) and a confirmation
 // of a Grant's config ($15) are announced in the same statement, so the event
 // and the row commit or fail together (ADR-0021); a dropped outcome updates no
-// row and announces nothing. Only a config's first confirmation is announced
+// row and announces nothing. A capture is announced only when the lines or the
+// credential they were read for changed (rule 6b): a refresh that read the
+// same lines, daily for every config, tells nobody. Only a config's first confirmation is announced
 // (`confirmedAt`, F-111-o): `prior` is the row before this statement, so a
 // later disable, rotation or repair has no Grant waiting on it and is silent.
 // The inbound a client was found on ($16, F-027-ch) is written only over none,
@@ -141,7 +150,7 @@ const ConfirmedEvent = "network.config.confirmed"
 // A create's session baseline ($17, F-027-du) is written with it, and the
 // router's last total forgotten: the new client's is read afresh. Null keeps both.
 const recordSQL = `
-WITH prior AS (SELECT "confirmedAt" FROM network.config WHERE id = $1::uuid),
+WITH prior AS (SELECT "confirmedAt", "linkLines", "linksUuid" FROM network.config WHERE id = $1::uuid),
 recorded AS (
 UPDATE network.config
    SET "remoteId" = NULLIF($2, ''),
@@ -151,6 +160,7 @@ UPDATE network.config
        "linksRemoteId" = CASE WHEN $8 THEN $10 ELSE "linksRemoteId" END,
        "linksUuid" = CASE WHEN $8 THEN $11 ELSE "linksUuid" END,
        "linksCapturedAt" = CASE WHEN $8 THEN $12 ELSE "linksCapturedAt" END,
+       "linksInboundFingerprint" = CASE WHEN $8 THEN NULLIF($18, '') ELSE "linksInboundFingerprint" END,
        "confirmedAt" = CASE WHEN $15 THEN COALESCE("confirmedAt", $4) ELSE "confirmedAt" END,
        "inboundRemoteId" = CASE
          WHEN "inboundRemoteId" IS NULL AND $16 <> ''
@@ -175,7 +185,8 @@ SELECT gen_random_uuid(), 'network.config', r.id::text, e.type,
   FROM recorded r
  CROSS JOIN prior
  CROSS JOIN (VALUES ($13::text, $8::boolean, false), ($14::text, $15::boolean, true)) AS e(type, due, confirm)
- WHERE e.due AND (NOT e.confirm OR (r."grantId" IS NOT NULL AND prior."confirmedAt" IS NULL))`
+ WHERE e.due AND CASE WHEN e.confirm THEN r."grantId" IS NOT NULL AND prior."confirmedAt" IS NULL
+                      ELSE prior."linkLines" IS DISTINCT FROM $9::text[] OR prior."linksUuid" IS DISTINCT FROM $11 END`
 
 // Record writes each outcome on its own: a capture carries an array per row,
 // which one set-based statement cannot. An outcome whose row moved on is
@@ -183,20 +194,20 @@ SELECT gen_random_uuid(), 'network.config', r.id::text, e.type,
 func (s PostgresDesired) Record(ctx context.Context, rows []Outcome) error {
 	for _, o := range rows {
 		captured, lines := o.Links != nil, []string{}
-		var linksRemote, linksUUID string
+		var linksRemote, linksUUID, linksFingerprint string
 		var linksAt *time.Time
 		if captured {
 			if o.Links.Lines != nil {
 				lines = o.Links.Lines
 			}
-			linksRemote, linksUUID = o.Links.RemoteID, o.Links.UUID
+			linksRemote, linksUUID, linksFingerprint = o.Links.RemoteID, o.Links.UUID, o.Links.InboundFingerprint
 			at := o.Links.At
 			linksAt = &at
 		}
 		if _, err := s.DB.Exec(ctx, recordSQL,
 			o.ConfigID, o.RemoteID, string(o.State), o.At,
 			o.UUID, o.Enabled, o.Present,
-			captured, lines, linksRemote, linksUUID, linksAt, LinksCapturedEvent, ConfirmedEvent, o.Confirmed, o.InboundRemoteID, o.SessionBaseline); err != nil {
+			captured, lines, linksRemote, linksUUID, linksAt, LinksCapturedEvent, ConfirmedEvent, o.Confirmed, o.InboundRemoteID, o.SessionBaseline, linksFingerprint); err != nil {
 			return fmt.Errorf("recording config %s: %w", o.ConfigID, err)
 		}
 	}

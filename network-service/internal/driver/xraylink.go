@@ -2,7 +2,9 @@ package driver
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -706,4 +708,26 @@ func joinNonEmpty(sep string, parts ...string) string {
 		}
 	}
 	return strings.Join(kept, sep)
+}
+
+// XrayFingerprint is a hash of what an inbound's lines are built from — its
+// address, port, protocol, remark, stream and `settings` without `clients`
+// (contract.links.md rule 6b). A client added or removed is no edit of the
+// inbound, so it moves nothing; any edit a line could show does. Settings
+// that are not JSON are hashed as they are.
+func XrayFingerprint(in XrayInbound) string {
+	settings := in.Settings
+	var fields map[string]json.RawMessage
+	if json.Unmarshal([]byte(in.Settings), &fields) == nil {
+		delete(fields, "clients")
+		if b, err := json.Marshal(fields); err == nil {
+			settings = string(b)
+		}
+	}
+	h := sha256.New()
+	for _, part := range []string{in.Listen, strconv.Itoa(in.Port), in.Protocol, in.Remark, in.StreamSettings, settings} {
+		h.Write([]byte(part))
+		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }

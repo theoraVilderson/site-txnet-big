@@ -511,6 +511,12 @@ type inbound struct {
 	Port     int    `json:"port"`
 	Protocol string `json:"protocol"`
 	Tag      string `json:"tag"`
+	// Listen, Remark, Settings and StreamSettings are what the inbound's
+	// lines are built from: the fingerprint an edit is seen by (rule 6b).
+	Listen         string `json:"listen"`
+	Remark         string `json:"remark"`
+	Settings       string `json:"settings"`
+	StreamSettings string `json:"streamSettings"`
 }
 
 func (d *Driver) inbounds(ctx context.Context, op string) ([]inbound, error) {
@@ -528,6 +534,10 @@ func (d *Driver) ListInbounds(ctx context.Context) ([]driver.Inbound, error) {
 	for _, in := range list {
 		out = append(out, driver.Inbound{
 			RemoteID: strconv.Itoa(in.ID), Tag: in.Tag, Protocol: in.Protocol, Port: in.Port, Enabled: in.Enable,
+			Fingerprint: driver.XrayFingerprint(driver.XrayInbound{
+				Listen: in.Listen, Port: in.Port, Protocol: in.Protocol, Remark: in.Remark,
+				Settings: in.Settings, StreamSettings: in.StreamSettings,
+			}),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Tag < out[j].Tag })

@@ -541,6 +541,10 @@ model Config {
   linksRemoteId            String?
   linksUuid                String?
   linksCapturedAt          DateTime?
+  /// The inbound's `fingerprint` when the lines were read; another one now is
+  /// an edit on the panel, and the lines are read again (contract.links.md
+  /// rule 6b). Null: none known.
+  linksInboundFingerprint  String?
   /// The first read that found this client on its panel holding its desired
   /// state (F-111-o). Set once; the read that sets it is the one that announces
   /// `network.config.confirmed`, so a later disable or rotation announces nothing.
@@ -700,6 +704,10 @@ model PanelInbound {
   /// Set when a read no longer lists it; cleared when it returns.
   goneAt     DateTime?
   seenAt     DateTime        @default(now())
+  /// A hash of what this inbound's link lines are built from, so an edit on
+  /// the panel refreshes them (contract.links.md rule 6b). Null: the family
+  /// cannot say.
+  fingerprint String?
   sold       Boolean         @default(false)
   /// The most clients placed on it; null = no cap.
   maxClients Int?

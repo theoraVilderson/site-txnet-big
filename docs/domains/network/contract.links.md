@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: draft
-version: 17
-updated: 2026-09-26
+version: 18
+updated: 2026-10-06
 ---
 
 # Link capture: what a panel gives one client (F-027-bi)
@@ -40,7 +40,8 @@ when the provisioning pass captures them and where they are kept (F-027-bj,
 5. **One budgeted call.** `ClientLinks` is paced as one call, as `BuildLink`
    is. Inside it a family makes at most three requests (3x-ui v3: the client
    list, the settings, the sub server; alireza0 and Sanaee: the client list). Capture runs only when a client is created,
-   regenerated, moved or re-keyed (rule 6), never for a config that is steady.
+   regenerated, moved or re-keyed (rule 6), and on a capped refresh (rule 6b):
+   its inbound edited, or once a day.
 
 ## Per family
 
@@ -63,12 +64,24 @@ that should exist and does not, which is drift (`contract.drift.md`).
    provisioning pass calls `ClientLinks` on a client the pass confirmed
    (`complete`: matched, present, holding the desired state), and only when the
    row's lines were read from another client, another `remoteId` or `uuid`.
-   That one test is every trigger: a create, a move (a new row) and a recreate
+   That test is every trigger but a refresh (rule 6b): a create, a move (a new row) and a recreate
    confirm a client the row has no lines from; a regenerate confirms a new
    `uuid`; a rename or a rebuild re-keys `remoteId`. A capture that stored
    **no** lines stands for `converge.EmptyRecapture` (one hour) and is then
    asked again (F-111-v, ADR-0088 rule 5), so lines that appear later, or a
    config captured before its family's lines were built, fill in with no key.
+6b. **A refresh: the inbound changed, or a day passed** (ADR-0123). Lines
+   read from this very client are read again when the row's inbound's
+   `panel_inbound.fingerprint` is set and is not the `linksInboundFingerprint`
+   they were read under — the inbound was edited on the panel — or when they
+   are `converge.LinesRecapture` (24h) old, for a family whose edits move no
+   fingerprint of ours. The x-ui family fingerprints (`driver.XrayFingerprint`:
+   address, port, protocol, remark, stream, `settings` less `clients`); the
+   others return none. A pass refreshes at most `InboundRefreshPerPass` (10),
+   and for age only while under `AgedRefreshPerPass` (2): one counter, so an
+   edited inbound goes first, and the pass's writes are not starved of the
+   budget. A row with no inbound of its own (rule 7 of `contract.inbounds.md`)
+   has no fingerprint and is refreshed on age alone.
 6a. **A create captures in its own pass** (F-111-k). After a create or a
    recreate the pass calls `ClientLinks` on the client the panel answered
    with, keyed by that client, so a buyer's `/sub` is filled in the pass that
@@ -78,7 +91,8 @@ that should exist and does not, which is drift (`contract.drift.md`).
    rule 8. A regenerate still captures on the confirming read: an update
    answers with no client to key the lines by.
 7. **Stored on `network.config`.** `linkLines` (in the panel's order),
-   `linksRemoteId` and `linksUuid` (the key), `linksCapturedAt`. CHECK
+   `linksRemoteId` and `linksUuid` (the key), `linksCapturedAt`,
+   `linksInboundFingerprint` (rule 6b, null = none known). CHECK
    `config_links_captured_from_a_client`: key and time together, and lines only
    with both. Empty lines with a time is a panel that gives none (rule 2); no
    time is a client never captured. `/sub` can tell a stale capture from a
@@ -86,9 +100,10 @@ that should exist and does not, which is drift (`contract.drift.md`).
 7a. **A capture is announced in the statement that writes it** (F-111-l).
    `recordSQL` returns the row and inserts `network.grant.linksCaptured`
    (`{tenantId, userId, grantId, configId}`) into the outbox only when the
-   outcome carries lines, so the event and the lines commit together
+   capture changed the lines or the `linksUuid` they were read for — a
+   refresh that read the same is silent (rule 6b) — so the event and the lines commit together
    (ADR-0021) and a dropped outcome announces nothing. One event per captured
-   config; rule 6 already keeps a steady config from being captured again.
+   config that changed; a steady one is refreshed silently (rule 6b).
    Automation pushes it to the owner (`automation/contract.notices.md`).
 8. **A failed read keeps what is stored.** It is a `links_unread` finding with
    the driver's fault, not a refused write; the re-key or state change the
@@ -118,6 +133,5 @@ columns are in `db.RequiredColumns`.
 
 ## Revisit
 
-ADR-0082's trigger: a family whose lines change on the panel with no change we
-make (rotating keys, per-request tokens) needs a capture schedule, not only a
-capture at convergence.
+ADR-0123's: a family whose inbound edits a buyer needs sooner than a day and
+that has no fingerprint — give its driver one.

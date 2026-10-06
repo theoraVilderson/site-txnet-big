@@ -22,7 +22,7 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
 
 | where | columns | who writes |
 |---|---|---|
-| `panel_inbound` | key `(panelId, remoteId)`; `tag`, `protocol` (null = one we do not sell), `port`, `host`, `enabled`, `goneAt`, `seenAt` | `network-service`'s read |
+| `panel_inbound` | key `(panelId, remoteId)`; `tag`, `protocol` (null = one we do not sell), `port`, `host`, `enabled`, `goneAt`, `seenAt`, `fingerprint` (what its lines are built from; `contract.links.md` rule 6b) | `network-service`'s read |
 | `panel_inbound` | `sold`, `maxClients` (null = no cap, else `>= 1`) | the admin, on billing's systems routes |
 | `panel` | the panel's layer of the selling settings (rule 4a): `inboundPlacement` (`all` \| `spread` \| `hrw`), `maxClients` (`>= 1`), `priority` (`>= 0`), `weight` (`>= 1`), `inboundsPerBuyer` (`>= 1`, K under `hrw`); null = the platform default | the admin |
 | `panel_group_member` | the member's layer: the same five, null = the panel's | the admin |

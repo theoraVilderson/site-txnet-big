@@ -73,7 +73,7 @@ var RequiredColumns = map[string][]string{
 	// The panel's inbounds as last read, and the admin's pick (F-114-b).
 	"panel_inbound": {
 		"panelId", "remoteId", "tenantId", "tag", "protocol", "port", "host",
-		"enabled", "goneAt", "seenAt", "sold",
+		"enabled", "goneAt", "seenAt", "sold", "fingerprint",
 	},
 	// An inbound a group holds is out of the pool (F-027-ch).
 	"panel_group_member_inbound": {"panelId", "inboundRemoteId"},
@@ -88,7 +88,7 @@ var RequiredColumns = map[string][]string{
 		// The lease planner's pessimistic ceiling and its write in flight (F-027-db).
 		"limitPeakBytes", "writePending", "sessionBaselineBytes", "sessionCounterBytes",
 		// The lines `/sub` renders, and the client they were read from (F-027-bj).
-		"linkLines", "linksRemoteId", "linksUuid", "linksCapturedAt",
+		"linkLines", "linksRemoteId", "linksUuid", "linksCapturedAt", "linksInboundFingerprint",
 		// The first confirmation, announced once (F-111-o).
 		"confirmedAt",
 		// The inbound fulfilment placed it on (F-114-b).

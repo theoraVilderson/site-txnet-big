@@ -1,6 +1,7 @@
 package converge_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -169,5 +170,97 @@ func TestAPanelWithNoLinksIsCapturedAsNoneAndAskedAgainLater(t *testing.T) {
 	r.pass(t)
 	if n := r.panel.CallCount("ClientLinks"); n != 2 {
 		t.Errorf("ClientLinks called %d times right after the second capture, want 2", n)
+	}
+}
+
+// An inbound edited on the panel — its port, its SNI, its path — changes the
+// lines built from it and neither key of the client, so the key alone kept
+// serving the old lines until a regenerate (user, 2026-10-06). The inventory
+// read stores the inbound's fingerprint; lines read under another one are
+// read again, once.
+func TestAnInboundEditedOnThePanelIsCapturedAgain(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	row := wanted("c1")
+	row.InboundFingerprint = "fp-1"
+	r.desired.Put("panel-1", row)
+	r.pass(t)
+	r.pass(t)
+	if got := r.row(t, "c1"); got.Links.InboundFingerprint != "fp-1" {
+		t.Fatalf("links = %+v, want them keyed by the inbound they were read under", got.Links)
+	}
+
+	row = r.row(t, "c1")
+	row.InboundFingerprint = "fp-2"
+	r.desired.Put("panel-1", row)
+	report := r.pass(t)
+	if n := r.panel.CallCount("ClientLinks"); n != 2 || report.Refreshed != 1 {
+		t.Fatalf("ClientLinks called %d times (refreshed %d) after the inbound changed, want 2 (1)", n, report.Refreshed)
+	}
+	if got := r.row(t, "c1"); got.Links.InboundFingerprint != "fp-2" {
+		t.Fatalf("links = %+v, want them read under the edited inbound", got.Links)
+	}
+	r.pass(t)
+	if n := r.panel.CallCount("ClientLinks"); n != 2 {
+		t.Fatalf("ClientLinks called %d times on a steady inbound, want 2", n)
+	}
+}
+
+// A family that cannot fingerprint its inbounds (Marzban's hosts, Hiddify's
+// domains) still changes lines with no key we see: every config's lines are
+// read again once LinesRecapture has passed, and not before.
+func TestStoredLinesAreReadAgainOnceLinesRecaptureHasPassed(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	r.desired.Put("panel-1", wanted("c1"))
+	r.pass(t)
+	r.pass(t)
+	r.pass(t)
+	if n := r.panel.CallCount("ClientLinks"); n != 1 {
+		t.Fatalf("ClientLinks called %d times inside the day, want 1", n)
+	}
+
+	r.at = r.at.Add(converge.LinesRecapture)
+	r.pass(t)
+	if n := r.panel.CallCount("ClientLinks"); n != 2 {
+		t.Fatalf("ClientLinks called %d times after LinesRecapture, want 2", n)
+	}
+	r.pass(t)
+	if n := r.panel.CallCount("ClientLinks"); n != 2 {
+		t.Fatalf("ClientLinks called %d times right after the refresh, want 2", n)
+	}
+}
+
+// A refresh spends the panel's budget that the pass's writes also wait on
+// (pace.go), so a pass refreshes at most InboundRefreshPerPass for an edited
+// inbound and AgedRefreshPerPass for age; the rest wait for the next pass.
+// A capture for a new key — a create, a regenerate — is never held back.
+func TestRefreshesAreCappedPerPassAndTheRestFollow(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	total := converge.InboundRefreshPerPass + 3
+	for i := 0; i < total; i++ {
+		row := wanted(fmt.Sprintf("c%02d", i))
+		row.InboundFingerprint = "fp-1"
+		r.desired.Put("panel-1", row)
+	}
+	r.pass(t)
+	r.pass(t)
+	if n := r.panel.CallCount("ClientLinks"); n != total {
+		t.Fatalf("ClientLinks called %d times for %d creates, want one each: a new key is never capped", n, total)
+	}
+
+	for i := 0; i < total; i++ {
+		row := r.row(t, fmt.Sprintf("c%02d", i))
+		row.InboundFingerprint = "fp-2"
+		r.desired.Put("panel-1", row)
+	}
+	if report := r.pass(t); report.Refreshed != converge.InboundRefreshPerPass {
+		t.Fatalf("refreshed %d in one pass, want %d", report.Refreshed, converge.InboundRefreshPerPass)
+	}
+	if report := r.pass(t); report.Refreshed != 3 {
+		t.Fatalf("refreshed %d on the next pass, want the 3 left", report.Refreshed)
+	}
+
+	r.at = r.at.Add(converge.LinesRecapture)
+	if report := r.pass(t); report.Refreshed != converge.AgedRefreshPerPass {
+		t.Fatalf("refreshed %d for age in one pass, want %d", report.Refreshed, converge.AgedRefreshPerPass)
 	}
 }

@@ -123,6 +123,9 @@ type DesiredConfig struct {
 	// Links is the lines stored for `/sub` and the client they were read
 	// from (links.go, F-027-bj).
 	Links CapturedLinks
+	// InboundFingerprint is the row's own inbound's, as the last inventory
+	// read stored it (`panel_inbound.fingerprint`); empty is none known.
+	InboundFingerprint string
 }
 
 // Outcome is what the pass learned about one row. RemoteID is the value the
@@ -237,11 +240,14 @@ type ProvisionReport struct {
 	Failed  int
 	// Captured is the configs whose lines this pass read and stored.
 	Captured int
-	Findings []ProvisionFinding
-	Removed  map[string]bool
-	Drift    map[string]Judgement
-	Orphans  []string
-	Stopped  map[string]DriftState
+	// Refreshed is the captures of lines already read from the same client
+	// (links.go, rule 6b), counted when asked whether or not the panel answered.
+	Refreshed int
+	Findings  []ProvisionFinding
+	Removed   map[string]bool
+	Drift     map[string]Judgement
+	Orphans   []string
+	Stopped   map[string]DriftState
 	// Foreign is the panel whose clients this one answered with; set, the
 	// pass wrote nothing (F-027-cf).
 	Foreign *ForeignHolder
@@ -660,7 +666,7 @@ func (c *Converger) Converge(ctx context.Context, p collect.Panel, res collect.R
 	prov, ceil := report.Provisioning, report.Ceilings
 	if prov.Written > 0 || prov.Failed > 0 || prov.Captured > 0 || ceil.Written > 0 || ceil.Failed > 0 || len(prov.Orphans) > 0 {
 		c.log().Info("panel converged",
-			"panel", p.ID, "provisioned", prov.Written, "provision_failed", prov.Failed, "links_captured", prov.Captured,
+			"panel", p.ID, "provisioned", prov.Written, "provision_failed", prov.Failed, "links_captured", prov.Captured, "links_refreshed", prov.Refreshed,
 			"ceilings_written", ceil.Written, "ceilings_failed", ceil.Failed, "orphans", len(prov.Orphans))
 	}
 	if prov.Written > 0 && !res.Confirming && c.Confirm != nil {
