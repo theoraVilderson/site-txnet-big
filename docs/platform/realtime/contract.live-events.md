@@ -134,3 +134,39 @@ Written by every write that moves a payment into or out of `verifying` in
 `ManualPaymentsView` and `ManualPaymentsWidget` re-read. useMenuBadges listens to it,
 `support.inbox.changed` and `notification.created`, and drops its 60 s poll
 (keeping the re-read on tab visible).
+
+**RT-1-k — the `members:` channel** (user, 2026-10-06). A change that
+reaches a whole tenant, staff or not, reaches **that tenant's own users
+only**, in one publish. The platform's users include its resellers' accounts
+on the platform domain; a reseller's own users are a different tenant and do
+not hear it. `members:<tenantId>`: a signed-in connection whose
+`identity.tenantId` equals the id — no permission, because the body is
+`type` + ids and says nothing a member could not read. Anonymous is refused.
+Add `members` to `RealtimeChannelFamily` (`shared-core/src/lib/realtime/fanout.ts`),
+a case in `channelRefusal` (`gateway-service/src/app/realtime/channel.ts`)
+and a row in [contract.channels.md](contract.channels.md). Live push gains
+`audience: 'members'` on RT-1-b's shape, channel `members:<payload.tenantId>`.
+`channel.spec.ts`: a member hears it, another tenant's member and an
+anonymous connection are refused.
+
+**RT-1-l — the operating currency changed.** Type `tenant.currency.changed`,
+`members:`, body `{type, tenantId}`. Written in `OperatingCurrencyService.set`
+(`tenant-service/src/app/currency/operating-currency.service.ts`) inside the
+`$transaction` callback, after `convertOperatingCurrency`, and only when it
+returned a `changeId` (a retry that converted nothing writes nothing), with
+`aggregate: 'tenant.currency'`, `aggregateId` = the target tenant. Its spec
+gains "writes the row in the same transaction" and "a retry writes none".
+
+**RT-1-m — the panel re-reads every money surface.** One listener, not one
+per page: `useLiveReread(members:<session tenantId>, ['tenant.currency.changed'], …)`
+in `(panel)/template.tsx`, whose reread bumps a `key` on `{children}`. The
+page remounts and re-reads on mount (C-14 already makes every page do so),
+which covers wallet, buy, gateways, catalog, packages, deposit, coupons and
+the currency cards without touching them. `useWalletBalance` (top bar, outside
+`children`) adds the type to its own subscription. **A page with unsaved
+edits is not remounted:** a form calls `useHoldsUnsavedEdits(dirty)`
+(`(panel)/_hooks/`, a counter in the same template); while it is above zero
+the remount waits and a kit banner says the currency changed with a reload
+button. GatewayForm, ProductWizard and the PackagesView editor register.
+Spec: template test — remounts on the type, ignores others, waits while a
+form holds edits.

@@ -31,6 +31,7 @@ with no rule yet.
 | `tenant:<tenantId>` | a connection in that tenant holding `realtime.tenant.read` |
 | `otp:<channelId>` | anyone presenting the `proof` minted with that delivery — signed in or not |
 | `support:<conversationId>` | a signed-in connection presenting the `proof` support-service minted **for that user** (F-034, ADR-0114) |
+| `members:<tenantId>` | *(RT-1-k, planned)* any signed-in connection whose tenant is that id — no permission; body is `type` + ids only ([contract.live-events.md](contract.live-events.md)) |
 
 **The first two refuse an anonymous connection by construction.** There is no
 id to compare, and "no id" must never compare equal to a channel's.
