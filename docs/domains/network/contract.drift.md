@@ -173,6 +173,10 @@ unattributed and recreate our own configs there as `missing`.
 - **Acknowledging resumes it**, the same route as a restore. An address left
   pointing at the other server raises it again on the next pass — which is
   the point; the admin puts the address right first.
+- **Not caught yet:** a server with no client of ours — unknown, reinstalled,
+  or a registered panel with no configs — is converged as if it were this
+  one. Decided, not built: ADR-0130 (an anchor per panel, a pinned address),
+  rows F-027-ew..fh.
 
 ## Proof
 
