@@ -93,7 +93,7 @@ lookup that errors (not "no record") is a sweep `error` and changes nothing.
 
 Run by `check-due` after the checks, so a domain verified this tick is
 registered this tick; only with `EDGE_LIFECYCLE_ENABLED=true` (off until
-go-live, EDGE-1-i). **Live = `verified` and edge `issued`.**
+go-live, EDGE-1-i, "The CDN and go-live" below). **Live = `verified` and edge `issued`.**
 
 | edge step | read | leaves by |
 |---|---|---|
@@ -178,27 +178,49 @@ Each registration is its own hostname and certificate, never a shared SAN
 `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ZONE_ID` are both set. Without them every
 call refuses (`EdgeProviderError`). Proven live on `txnet.cyou`, 2026-10-07.
 
-## Setting up the CDN (ArvanCloud)
+## The CDN and go-live (EDGE-1-i, ADR-0129)
 
-> **Superseded by ADR-0129 (2026-10-07):** Cloudflare for SaaS, run by the
-> platform, replaces each reseller's own Arvan zone. A reseller may still put its
-> own CDN in front. This section holds until EDGE-1-i rewrites it.
+The platform runs the CDN (Cloudflare for SaaS); a reseller only points
+records at it. This replaces the per-reseller ArvanCloud zones of 2026-09-19 (ADR-0060).
 
-The platform and its resellers use ArvanCloud (user, 2026-09-19). Two zones
-take part, and the gateway's address must appear in neither:
-
-| zone | record | CDN proxy | why |
+| zone | record | proxy | made by |
 |---|---|---|---|
-| the platform's | `*.edge.<domain>` -> the gateway | **on** | a lookup of any target answers Arvan's addresses, never the gateway's |
-| the reseller's | its domain, CNAME -> `<slug>.edge.<domain>` | **on** | the reseller's certificate and address are Arvan's |
+| the platform's | `EDGE_FALLBACK_ORIGIN` (`edge-origin.<domain>`) A -> the origin | on | `scripts/edge/edge_zone.py apply` |
+| the platform's | `*.edge.<domain>` CNAME -> `EDGE_FALLBACK_ORIGIN` | on | the same run |
+| the platform's | Custom Hostnames fallback origin = `EDGE_FALLBACK_ORIGIN` | — | the same run |
+| the reseller's | ownership TXT, and its domain CNAME -> `<slug>.edge.<domain>` | — | the reseller, from the domains page (panel-web `contract.reseller-domains.md`) |
 
-- **Keep the visitor's host.** At the reseller's zone, the origin must receive
-  `Host: <the reseller's domain>`, not the target's name. A zone that sends the
-  target fails the `https` line with `200 as <slug>.edge.<domain>` — that line
-  is the test, and ADR-0063 is why nothing else will work.
-- **Untested:** whether Arvan proxies a record whose origin is a name Arvan
-  itself proxies in another account. Prove it with one reseller before
-  onboarding more; the domain check's `https` line says whether it arrived.
-- **Nothing here is code.** The gateway accepts any host (ADR-0060 (3)); which
-  host is served is `TenantGuard`'s call. Limiting the gateway to Arvan's
-  address ranges, so it cannot be reached around the CDN, is a firewall rule.
+- **Our table is the list.** With `EDGE_LIFECYCLE_ENABLED=true` the job
+  registers every `verified` domain (the edge lifecycle above). Nothing is
+  registered by hand, so go-live needs no import step.
+- **Keep the visitor's host** (ADR-0063). A reseller's own CDN sends its domain
+  as `Host` and SNI; the check's `https` line is the test.
+- **No record shows the origin's address DNS-only.** `edge_zone.py` warns on
+  each one it finds and changes none (mail has to stay DNS-only: move it off the
+  origin's address, or accept that it is public).
+- `edge_zone.py` refuses a fallback outside the zone or under `*.edge`, and two
+  records for one name. `plan` and `status` change nothing.
+
+**Go-live, in order** (on the production zone, when the user schedules it; dev `txnet.cyou` has held
+steps 2-6 since 2026-10-07, and `edge_zone.py plan` there finds nothing to do):
+1. *User:* add the zone to the Cloudflare account (held outside Iran), check
+   every Arvan record was imported, switch the nameservers at the registrar,
+   and wait until `dig NS` answers Cloudflare. SSL/TLS mode Full (strict): the
+   pull must reach 443, where the pull certificate is checked.
+2. The prod `CLOUDFLARE_API_TOKEN` gains the zone (DNS Edit, SSL and
+   Certificates Edit). `.env.prod`: `CLOUDFLARE_ZONE_ID`,
+   `EDGE_FALLBACK_ORIGIN=edge-origin.<domain>`.
+3. `ENV_FILE=.env.prod EDGE_ORIGIN_IP=<address> scripts/edge/edge_zone.py plan`,
+   then `apply`.
+4. `ENV_FILE=.env.prod scripts/edge/origin-pull.sh upload` (hosting O1-O2: on
+   the prod host, `issue` first unless dev's pair is copied there).
+5. `.env.prod`: `EDGE_ORIGIN_PULL=required`, `EDGE_LIFECYCLE_ENABLED=true`;
+   restart the gateway and `tenant-service`.
+6. Swarm host: `cloudflare_firewall.py install` and `apply` (hosting O7).
+7. *User:* the new address from the host's provider (the old one is in public
+   DNS history). `ENV_FILE=.env.prod scripts/edge/edge_zone.py repoint OLD NEW`
+   moves every A record on it, then the old address is released.
+
+Done when `edge_zone.py status` and `origin-pull.sh status` show all three and
+AOP on, a handshake to the new address without the certificate is refused, and
+one reseller domain's check is green with edge `issued`.

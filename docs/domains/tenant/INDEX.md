@@ -63,7 +63,7 @@ end-user RBAC (`identity`), product pricing (`catalog`).
 | [contract.billing.md](contract.billing.md) | moving a reseller's billing balance |
 | [contract.limits.md](contract.limits.md) | what a reseller may spend of the platform's — the limit keys, quota or guard, their three levels, stop or overage past a quota, terms held for the paid period, and setting them (F-019-m, F-019-v1, F-019-v3) |
 | [contract.admin.md](contract.admin.md) | creating, listing or reading a reseller, a package sold to one, or its subscription |
-| [contract.domains.md](contract.domains.md) | adding or proving a reseller's custom domain |
+| [contract.domains.md](contract.domains.md) | adding or proving a reseller's custom domain; the CDN zone and go-live |
 | [contract.onboarding.md](contract.onboarding.md) | asking why a reseller cannot sell yet, or what it still has to set up |
 | [contract.staff.md](contract.staff.md) | putting someone on a reseller's team, or taking them off |
 | [contract.branding.md](contract.branding.md) | editing or rendering a reseller's brand |
