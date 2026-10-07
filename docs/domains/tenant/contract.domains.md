@@ -111,6 +111,10 @@ lookup that errors (not "no record") is a sweep `error` and changes nothing.
 
 ## Setting up the CDN (ArvanCloud)
 
+> **Superseded by ADR-0129 (2026-10-07):** Cloudflare for SaaS, run by the
+> platform, replaces each reseller's own Arvan zone. A reseller may still put its
+> own CDN in front. This section holds until EDGE-1-i rewrites it.
+
 The platform and its resellers use ArvanCloud (user, 2026-09-19). Two zones
 take part, and the gateway's address must appear in neither:
 
