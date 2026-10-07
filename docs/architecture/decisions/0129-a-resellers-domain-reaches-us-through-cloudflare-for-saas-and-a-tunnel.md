@@ -82,3 +82,29 @@ reseller domain on that proxy and on 7844 staying open. The user chose:
   also admits 80/443 from Cloudflare's published ranges only. `CF-Connecting-IP`
   is trusted only on a verified pull. The address change at go-live stands.
 - Dropped: `cloudflared`, the tunnel, and its token.
+
+## Amendment 2 — behind a reseller's own CDN, an address counts as two (2026-10-07, D-71)
+EDGE-1-g proved that Cloudflare names the visitor only for the hop it sees: a
+domain behind the reseller's own CDN (decision 4) arrives with that CDN's edge
+as `CF-Connecting-IP`, so every visitor through one Arvan edge shared one
+per-IP budget, and one attacker could spend it for all of them. The user wanted
+it to work for any CDN, with no setup by the reseller, no captcha and no
+address list to keep in step. Decided:
+- The verified client address stays the only `req.ip`: audit, fraud and every
+  log keep the address Cloudflare saw. Nothing a CDN says replaces it.
+- On a verified pull, the gateway plugin forwards what the CDN *claims* the
+  visitor was as `X-Edge-Claimed-Ip`, from the first of a configured list of
+  CDN client headers (`True-Client-IP`, `AR-Real-IP`, …). It never trusts the
+  claim. A client cannot set the header itself: the plugin removes it first.
+  `X-Forwarded-For` cannot carry the claim: Traefik drops it from an untrusted
+  sender before any middleware runs.
+- A per-IP limit with a claim is two counters: the address and the claim
+  together at the route's own limit, and the address alone at
+  `EDGE_SHARED_ADDRESS_FACTOR` times it. Visitors behind one CDN edge each get
+  their own budget. A forged claim buys at most the coarse ceiling, and the
+  limits on each account and phone number still hold. With no claim, nothing
+  changes. A CDN whose header is not listed counts as one caller, as before.
+- Rejected: a list of each CDN's address ranges (always behind with many CDNs,
+  and other customers of the same CDN can still send any claim), and a key per
+  domain set by the reseller in the CDN (one more step to forget).
+Rows EDGE-1-k (gateway), EDGE-1-l (limiter).

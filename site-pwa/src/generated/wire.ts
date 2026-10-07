@@ -35,6 +35,7 @@ export const ProxyHeaders = {
   "forwardedFor": "X-Forwarded-For",
   "forwardedHost": "X-Forwarded-Host",
   "cfConnectingIp": "CF-Connecting-IP",
+  "edgeClaimedIp": "X-Edge-Claimed-Ip",
 } as const;
 
 /** `contracts/http/wire.json` -> `cookieLifetimesSec`. */

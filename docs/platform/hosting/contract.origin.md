@@ -11,7 +11,7 @@ updated: 2026-10-07
 ADR-0129 amendment 1 (D-70): no tunnel. The origin keeps 443 open, but only
 Cloudflare can complete a handshake, and on the swarm host only Cloudflare's
 addresses reach it. Rows EDGE-1-g (certificate, client address) and EDGE-1-h
-(firewall). Rules O1…O8.
+(firewall), EDGE-1-k (a CDN's claim, amendment 2). Rules O1…O9.
 
 ## The pull certificate (EDGE-1-g)
 
@@ -70,9 +70,24 @@ the visitor, not a Cloudflare edge.
 | no SNI, an unknown SNI, a routed host | `CN = TRAEFIK DEFAULT CERT` |
 
 With `optional`, no certificate reaches the router with the socket's address,
-and another CA's certificate is still refused. The dev gateway runs the plugin
-with `off`, and a forged `CF-Connecting-IP` is dropped there. O2 on `txnet.cyou`
-is the user's step.
+and another CA's certificate is still refused.
+
+Live on dev, 2026-10-07: O2 done on `txnet.cyou` (certificate `active`, expires
+2031-10-06), and the dev gateway on `optional`. Through Cloudflare, `panel.<domain>`
+and the Custom Hostname `edgetest.chillshop.ir` both arrive as verified pulls
+with the caller's address. A direct call with a forged header keeps the socket's
+address. **Behind a reseller's own CDN, the visitor Cloudflare names is that CDN's
+edge** (Arvan, 185.215.232.x), so per-caller limits there count per CDN edge.
+
+**O9 — A CDN's claim rides beside the address (EDGE-1-k).** Behind a
+reseller's own CDN, O5's address is that CDN's edge. On a verified pull, the
+plugin reads the first IP address in `claimHeaders` (in `origin-pull.yml`:
+`True-Client-IP`, `AR-Real-IP`, `Fastly-Client-IP`). If it differs from the
+address, the plugin writes it as `X-Edge-Claimed-Ip` (`EDGE_CLAIMED_IP_HEADER`).
+It removes a client-sent `X-Edge-Claimed-Ip` and the listed headers on every
+request, so services read one name only. The claim is never `req.ip`: only the
+limiter counts it (redis-keyspace `contract.shared-address.md`). Adding a CDN
+means adding its header to the list.
 
 ## The firewall (EDGE-1-h)
 

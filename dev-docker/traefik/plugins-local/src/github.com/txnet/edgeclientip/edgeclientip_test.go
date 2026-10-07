@@ -11,16 +11,23 @@ import (
 
 // seen is what the next handler — Traefik's proxy to the service — receives.
 type seen struct {
-	remoteAddr, realIP, forwardedFor, cfConnectingIP string
+	remoteAddr, realIP, forwardedFor, cfConnectingIP, claimed string
+	trueClientIP, arRealIP                                    string
 }
 
 func serve(t *testing.T, req *http.Request) seen {
 	t.Helper()
+	return serveWith(t, CreateConfig(), req)
+}
+
+func serveWith(t *testing.T, cfg *Config, req *http.Request) seen {
+	t.Helper()
 	var got seen
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		got = seen{r.RemoteAddr, r.Header.Get("X-Real-Ip"), r.Header.Get("X-Forwarded-For"), r.Header.Get("CF-Connecting-IP")}
+		got = seen{r.RemoteAddr, r.Header.Get("X-Real-Ip"), r.Header.Get("X-Forwarded-For"), r.Header.Get("CF-Connecting-IP"),
+			r.Header.Get("X-Edge-Claimed-Ip"), r.Header.Get("True-Client-IP"), r.Header.Get("AR-Real-IP")}
 	})
-	h, err := New(context.Background(), next, CreateConfig(), "edge-client-ip")
+	h, err := New(context.Background(), next, cfg, "edge-client-ip")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,5 +95,63 @@ func TestAForwardedForLeftOnAVerifiedPullIsDropped(t *testing.T) {
 	req.Header.Set("X-Forwarded-For", "1.1.1.1")
 	if got := serve(t, req); got.forwardedFor != "" {
 		t.Fatalf("got X-Forwarded-For %q", got.forwardedFor)
+	}
+}
+
+// Behind a reseller's own CDN, Cloudflare's visitor is that CDN's edge, and the
+// CDN names the person in a header of its own (ADR-0129 amendment 2).
+func behindCDN(edge string, headers map[string]string) *http.Request {
+	req := verified(fromEdge(edge))
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	return req
+}
+
+func TestACDNsClaimIsForwardedBesideTheVerifiedAddress(t *testing.T) {
+	got := serve(t, behindCDN("185.215.232.193", map[string]string{"AR-Real-IP": "104.248.193.151"}))
+	if got.realIP != "185.215.232.193" || got.claimed != "104.248.193.151" {
+		t.Fatalf("got %+v: the address stays the edge, the claim rides beside it", got)
+	}
+	if got.arRealIP != "" {
+		t.Fatalf("the CDN's own header must not reach a service, got %q", got.arRealIP)
+	}
+}
+
+func TestTheFirstListedHeaderWins(t *testing.T) {
+	got := serve(t, behindCDN("185.215.232.193", map[string]string{"True-Client-IP": "1.1.1.1", "AR-Real-IP": "2.2.2.2"}))
+	if got.claimed != "1.1.1.1" || got.trueClientIP != "" || got.arRealIP != "" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestTheHeaderListIsConfigured(t *testing.T) {
+	cfg := &Config{ClaimHeaders: []string{"X-Cdn-Visitor"}}
+	got := serveWith(t, cfg, behindCDN("185.215.232.193", map[string]string{"X-Cdn-Visitor": "3.3.3.3", "AR-Real-IP": "2.2.2.2"}))
+	if got.claimed != "3.3.3.3" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestNoClaimWhenItIsNotAnAddressOrIsTheVisitorItself(t *testing.T) {
+	for _, claim := range []string{"", "nope", "1.1.1.1, 2.2.2.2", "185.215.232.193"} {
+		if got := serve(t, behindCDN("185.215.232.193", map[string]string{"True-Client-IP": claim})); got.claimed != "" {
+			t.Fatalf("claim %q: got %+v", claim, got)
+		}
+	}
+}
+
+// A client cannot write the claim itself, nor make one without a verified pull.
+func TestAClaimIsOnlyEverTheGatewaysOwn(t *testing.T) {
+	forged := fromEdge("5.6.7.8")
+	forged.Header.Set("X-Edge-Claimed-Ip", "9.9.9.9")
+	forged.Header.Set("True-Client-IP", "9.9.9.9")
+	if got := serve(t, forged); got.claimed != "" || got.trueClientIP != "" {
+		t.Fatalf("unverified: got %+v", got)
+	}
+	direct := verified(fromEdge("5.6.7.8"))
+	direct.Header.Set("X-Edge-Claimed-Ip", "9.9.9.9")
+	if got := serve(t, direct); got.claimed != "" {
+		t.Fatalf("verified, no CDN header: got %+v", got)
 	}
 }
