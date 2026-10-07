@@ -1,6 +1,7 @@
 import type { Me } from "@/lib/auth-api";
 import type { OwnedReseller, PackageOffer, PurchaseBody, ResellerBillingModel } from "@/lib/tenant-api";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { PACKAGE_FEATURE_KEYS } from "./packages";
 import { RESERVED_SLUGS, type Errors } from "./resellers";
 
 /** The page's strings as generated constants (C-06). */
@@ -45,8 +46,31 @@ export const isInsufficientBalance = (e: unknown) => reasonOf(e) === "insufficie
  * permission key — a reseller's own user is refused `not_platform_user`, which
  * stays the boundary. Deliberately not `canAdministerResellers`: the buyer of
  * a reseller is the visitor this page exists for, and they hold nothing.
+ * The account that owns the platform is not a buyer: it already holds every
+ * key (tenant invariant 6), so the page refuses it as the sidebar hides it
+ * (user, 2026-10-06).
  */
-export const canBuyReseller = (me: Me | null) => me?.tenant?.type === "platform_owner";
+export const canBuyReseller = (me: Me | null) => me?.tenant?.type === "platform_owner" && !me.tenant.isOwner;
+
+/** The caller this page turns away because they own the platform, not because they are outside it. */
+export const isPlatformOwner = (me: Me | null) => me?.tenant?.type === "platform_owner" && me.tenant.isOwner;
+
+/**
+ * What every reseller gets whatever the package (user, 2026-10-06): its own
+ * panel and domain (F-066), brand (F-020), catalog and prices (F-026), users
+ * and their wallets, and staff seats. Keys of `resellerPurchase.basics`.
+ */
+export const RESELLER_BASICS = ["panel", "brand", "catalog", "users", "staff"] as const;
+
+/**
+ * Every feature a package may carry (`PACKAGE_FEATURE_KEYS`, shared-core's
+ * order) against the packages on sale, so the buyer sees all of what a
+ * reseller can do and which package carries each — `included[i]` is
+ * `offers[i]`'s.
+ */
+export function featureChart(offers: readonly PackageOffer[]): { key: string; included: boolean[] }[] {
+  return PACKAGE_FEATURE_KEYS.map((key) => ({ key, included: offers.map((o) => o.includedFeatureKeys.includes(key)) }));
+}
 
 /**
  * Where a held reseller lives (F-019-l). `panel` is a proved custom panel

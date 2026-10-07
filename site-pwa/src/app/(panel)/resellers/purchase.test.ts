@@ -6,10 +6,13 @@ import type { Me } from "@/lib/auth-api";
 import type { OwnedReseller, PackageOffer } from "@/lib/tenant-api";
 import { PANEL_HOME, PANEL_RESELLERS, PANEL_RESELLER_PURCHASE } from "@/lib/routes";
 import { PANEL_MENU, menuHrefs, visibleMenu } from "../_lib/panel-menu";
+import { PACKAGE_FEATURE_KEYS } from "./_lib/packages";
 import {
   PURCHASE_REFUSAL_KEYS,
+  RESELLER_BASICS,
   canBuyReseller,
   emptyPurchaseForm,
+  featureChart,
   isInsufficientBalance,
   offerChoices,
   offerPrice,
@@ -74,6 +77,12 @@ describe("who may buy", () => {
     expect(canBuyReseller(null)).toBe(false);
   });
 
+  // The account that owns the platform already holds every key (tenant
+  // invariant 6): the page refuses it, not only the sidebar (user, 2026-10-06).
+  it("is not the platform owner's, even by its address", () => {
+    expect(canBuyReseller({ ...OWNER, tenant: { ...OWNER.tenant, isOwner: true } })).toBe(false);
+  });
+
   it("shows the menu entry to a platform user who may not administer resellers", () => {
     const hrefs = (me: Me) => menuHrefs(visibleMenu(PANEL_MENU, me.permissions, me.tenant.type, me.tenant.isOwner, false));
     expect(hrefs(BUYER)).toContain(PANEL_RESELLER_PURCHASE);
@@ -101,7 +110,8 @@ describe("who may buy", () => {
   // The holder is the one `already_reseller` counts — a live reseller — not the
   // handoff list, which keeps a terminated one whose owner may buy again.
   it("asks the sidebar's holder question of `/purchase/mine`", () => {
-    const sidebar = readFileSync(join(__dirname, "../_components/PanelSidebar.tsx"), "utf8");
+    // The sidebar's menu is built in `useVisibleMenu` since the command palette shares it.
+    const sidebar = readFileSync(join(__dirname, "../_hooks/useVisibleMenu.ts"), "utf8");
     expect(sidebar).toMatch(/resellerPurchaseApi\s*\.mine\(\)/);
     // `ownsReseller` is passed to the menu rule; arguments after it (the tenant, F-311-ab) do not change that.
     expect(sidebar).toMatch(/visibleMenu\(PANEL_MENU, [^)]*ownsReseller[,)]/);
@@ -124,6 +134,23 @@ describe("the packages on sale", () => {
     ...over,
   });
   const all = [offer("basic"), offer("monthly-only", { yearlyPrice: null })];
+
+  // The buyer sees everything a reseller can do before paying (user,
+  // 2026-10-06): every feature key a package may carry, in shared-core's order,
+  // and which package on sale carries it — never a raw key list.
+  it("charts every feature against every package", () => {
+    const chart = featureChart([offer("basic", { includedFeatureKeys: ["spin_wheel"] }), offer("pro", { includedFeatureKeys: ["spin_wheel", "own_gateway"] })]);
+    expect(chart.map((r) => r.key)).toEqual([...PACKAGE_FEATURE_KEYS]);
+    expect(chart.find((r) => r.key === "spin_wheel")?.included).toEqual([true, true]);
+    expect(chart.find((r) => r.key === "own_gateway")?.included).toEqual([false, true]);
+    expect(chart.find((r) => r.key === "own_sms")?.included).toEqual([false, false]);
+  });
+
+  it("says every capability in words, the basics and the features alike", () => {
+    const fa = JSON.parse(readFileSync(join(REPO, "locales/frontend/langs/fa/common.json"), "utf8"));
+    for (const k of RESELLER_BASICS) expect(fa.resellerPurchase.basics[k]).toBeTruthy();
+    for (const k of PACKAGE_FEATURE_KEYS) expect(fa.resellers.packages.features[k]).toBeTruthy();
+  });
 
   it("offers only a package priced for the period", () => {
     expect(offerChoices(all, "subscription_yearly").map((p) => p.id)).toEqual(["basic"]);

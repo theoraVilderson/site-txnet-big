@@ -2260,6 +2260,19 @@
       "wallet_changed": "Your wallet changed while this was going through. Check the balance and try again.",
       "package_inactive": "That package is no longer on sale.",
       "package_not_sold_for_period": "That package is not sold for this period."
+    },
+    "ownerNotice": "You own the platform and already hold every reseller capability; buying a reseller is for the platform's users.",
+    "everyPackage": "In every package",
+    "features": "Package features",
+    "feature": "Feature",
+    "has": "Included",
+    "hasNot": "Not included",
+    "basics": {
+      "panel": "Your own panel on your own domain",
+      "brand": "Your own brand, logo and colours",
+      "catalog": "Sell products at your own prices",
+      "users": "Users and their wallets",
+      "staff": "Colleagues with their own access"
     }
   },
   "resellerDomains": {

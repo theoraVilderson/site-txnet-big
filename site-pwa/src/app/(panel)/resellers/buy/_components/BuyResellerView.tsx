@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, HandCoins, Loader2, Store } from "lucide-react";
+import { Check, CheckCircle2, HandCoins, Loader2, Minus, Store } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi } from "@/lib/billing-api";
@@ -21,12 +21,16 @@ import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatInstant } from "../../../_lib/datetime";
 import { formatMoney } from "../../../_lib/money";
 import { Alert, Field, StatusBadge } from "../../_components/resellers-ui";
+import { PACKAGE_KEYS } from "../../_lib/packages";
 import { BILLING_MODELS, RESELLER_KEYS } from "../../_lib/resellers";
 import {
   PURCHASE_KEYS as K,
+  RESELLER_BASICS,
   canBuyReseller,
   emptyPurchaseForm,
+  featureChart,
   isInsufficientBalance,
+  isPlatformOwner,
   offerChoices,
   offerPrice,
   ownedHosts,
@@ -168,7 +172,7 @@ export function BuyResellerView() {
   if (!mayBuy) {
     return (
       <Shell title={t("common", K.title)} subtitle={t("common", K.subtitle)}>
-        <Alert>{t("common", K.refusals.not_platform_user)}</Alert>
+        <Alert>{t("common", isPlatformOwner(me) ? K.ownerNotice : K.refusals.not_platform_user)}</Alert>
       </Shell>
     );
   }
@@ -263,11 +267,7 @@ export function BuyResellerView() {
             )}
           </Field>
 
-          {picked && picked.includedFeatureKeys.length > 0 && (
-            <p className="text-xs text-text-secondary">
-              {t("common", K.included)}: {picked.includedFeatureKeys.join("، ")}
-            </p>
-          )}
+          <Capabilities offers={choices} pickedId={form.packageId} />
 
           <Field label={t("common", K.name)} hint={t("common", K.nameHint)} error={errors.name}>
             <Input value={form.name} onChange={(e) => set({ name: e.target.value })} />
@@ -305,6 +305,66 @@ export function BuyResellerView() {
         </div>
       )}
     </Shell>
+  );
+}
+
+/**
+ * Everything a reseller can do, before the buyer pays (user, 2026-10-06): what
+ * every package gives, then every feature a package may carry against the
+ * packages on sale for this period, the picked one marked. Words, never keys.
+ */
+function Capabilities({ offers, pickedId }: { offers: PackageOffer[]; pickedId: string }) {
+  const { t } = useLocale();
+  const features = PACKAGE_KEYS.features as Record<string, string>;
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-xs font-bold text-text-secondary">{t("common", K.everyPackage)}</p>
+        <ul className="mt-2 grid gap-1.5 text-sm text-text-primary sm:grid-cols-2">
+          {RESELLER_BASICS.map((k) => (
+            <li key={k} className="flex items-center gap-2">
+              <Check size={14} className="shrink-0 text-primary" aria-hidden />
+              {t("common", K.basics[k])}
+            </li>
+          ))}
+        </ul>
+      </div>
+      {offers.length > 0 && (
+        <div>
+          <p className="text-xs font-bold text-text-secondary">{t("common", K.features)}</p>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-card-border text-xs text-text-secondary">
+                  <th className="py-2 text-start font-medium">{t("common", K.feature)}</th>
+                  {offers.map((o) => (
+                    <th key={o.id} className={`px-3 py-2 text-center font-medium ${o.id === pickedId ? "text-primary" : ""}`}>
+                      {o.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {featureChart(offers).map((row) => (
+                  <tr key={row.key} className="border-b border-card-border last:border-0">
+                    <td className="py-2 text-text-primary">{features[row.key] ? t("common", features[row.key]) : row.key}</td>
+                    {row.included.map((has, i) => (
+                      <td key={offers[i].id} className={`px-3 py-2 text-center ${offers[i].id === pickedId ? "bg-primary/5" : ""}`}>
+                        {has ? (
+                          <Check size={16} className="mx-auto text-primary" aria-label={t("common", K.has)} />
+                        ) : (
+                          <Minus size={16} className="mx-auto text-text-secondary" aria-label={t("common", K.hasNot)} />
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

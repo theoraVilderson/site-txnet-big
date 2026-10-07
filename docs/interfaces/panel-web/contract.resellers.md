@@ -100,14 +100,14 @@ wallet. `_lib/purchase.ts` holds its rules, `resellerPurchaseApi`
 rule behind them is [tenant/contract.admin.md](../../domains/tenant/contract.admin.md)
 "A platform user buys a reseller" (F-019-h, ADR-0061).
 
-12. **A different audience, and no permission key.** `canBuyReseller` is
-    `me.tenant.type === "platform_owner"` and nothing else: the routes admit
-    any signed-in user of the platform owner's tenant, so a key would hide the
-    page from the people it is for. The menu entry (`buy-reseller`) names
-    `tenantTypes` alone for the same reason, and is `hiddenFrom` the platform's
-    own owner and a caller who holds a live one — `GET /purchase/mine`, asked
-    only of a platform user, hiding while unanswered (F-114-c). `not_platform_user`
-    stays the boundary; the page shows that sentence, not a form sure to fail.
+12. **A different audience, no permission key, never the owner.** `canBuyReseller`
+    is a platform user who is not `me.tenant.isOwner` (the owner holds every key,
+    tenant invariant 6; it gets `ownerNotice`, a reseller's user `not_platform_user`).
+    The menu entry `buy-reseller` names `tenantTypes` alone, `hiddenFrom` the owner
+    and a live holder (`GET /purchase/mine`, hiding while unanswered, F-114-c).
+    Before paying, the buyer sees **everything a reseller gets**, in words: the
+    `RESELLER_BASICS` every package gives, and `featureChart` — every
+    `PACKAGE_FEATURE_KEYS` row against each package on sale (user, 2026-10-06).
 13. **Its own refusal sentences** (`PURCHASE_REFUSAL_KEYS`, namespace
     `common.resellerPurchase`), read from `PurchaseRejection`'s own source by
     the spec. Not `REFUSAL_KEYS`: the same word means something else here —
