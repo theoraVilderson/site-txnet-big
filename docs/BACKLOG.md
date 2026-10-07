@@ -1306,6 +1306,25 @@ ingested rows reuse the catalog id verbatim as their row id.
 | EDGE-1-h | `cloudflared` runs on the swarm host (outbound only, token from env, two replicas) as the fallback origin, and the host firewall closes 80/443 | hosting | todo | EDGE-1-g | — |  | ADR-0129 (7). Dev keeps its open ports; this is the swarm host. |
 | EDGE-1-i | Go-live: the platform zone moves to Cloudflare's nameservers, `*.edge.<domain>` is proxied to the tunnel, every verified reseller domain is registered from our table, the origin's address is changed, contract.domains.md's CDN section rewritten | tenant | todo | EDGE-1-e EDGE-1-f EDGE-1-h EDGE-1-j | — |  | ADR-0129 (2, 7). With the user: the nameserver move and the address change are theirs to schedule. |
 | EDGE-1-j | A response that depends on the signed-in user carries `Cache-Control: private, no-store` at the gateway unless the service set a cache rule itself, so a reseller's CDN that caches everything serves no one else's page | hosting | todo | EDGE-1-a | — |  | ADR-0129 (8). EDGE-1-e's domain check is what notices a CDN that ignores it. |
+| MSG-1 | Several SMS and email providers per tenant, like payment gateways: routed by country and priority, falling back automatically | notification | todo | — | — |  | Umbrella. D-68, ADR-0131. Children MSG-1-a..r. Spec: notification/contract.providers.md |
+| MSG-1-a | Schema: `notification.message_provider` (P1) and `email_suppression` (P3), RLS; enums `MessageProviderName`, `MessagePurpose`; vault kinds `messaging_api_key` / `messaging_api_secret`; feature key `own_mail` | notification | todo | — | — |  | Spec: notification/contract.providers.md P1-P4. Additive; also touches tenant.prisma and feature-keys.ts. One schema int spec. |
+| MSG-1-b | shared-core `messaging/`: the driver port, `MESSAGING_PROVIDER_FIELDS`, the router (candidates, E.164, failure classes, failover, circuit, timeouts, health + outbox event); `legacy_http` and `smtp` wrap today's drivers | notification | todo | MSG-1-a | — |  | Spec: notification/contract.providers.md R1-R8, D1, D8. message-router.spec.ts; existing driver specs pass unchanged. New redis-keyspace key. |
+| MSG-1-c | `migrate-message-providers` script (M1); campaign SMS, campaign email and notice SMS go through the router, `lineFor`'s whose-line rule becomes R9 | notification | todo | MSG-1-b | — |  | Spec: notification/contract.providers.md M1-M2, R9. sms-line / mail-line specs move, not loosen. Run on dev after. |
+| MSG-1-d | auth-service: SMS and email OTP senders through the router (template when the row has one); `GET /auth/otp/channels` answers from the rows | identity | todo | MSG-1-c | — |  | Spec: notification/contract.providers.md R7-R9. otp-senders.spec.ts; F-018-b's who-gets-which-line cases unchanged. |
+| MSG-1-e | Admin routes A1-A7 in notification-service, permission `messaging.manage`, feature keys, vault writer row, audit | notification | todo | MSG-1-b | — |  | Spec: notification/contract.providers.md A1-A7, P4. Updates tenant/contract.vault.md writers table. provider-admin.service.spec.ts. |
+| MSG-1-f | Driver: Kavenegar, text and lookup template | notification | todo | MSG-1-b | — |  | Spec: notification/contract.providers.md D2. Read kavenegar.com/rest first; correct the table in the same change. Fixtures, no live account. |
+| MSG-1-g | Driver: SMS.ir, bulk and verify template | notification | todo | MSG-1-b | — |  | Spec: notification/contract.providers.md D3. Read sms.ir's API docs first; correct the table. |
+| MSG-1-h | Driver: Melipayamak, REST send and shared-line template | notification | todo | MSG-1-b | — |  | Spec: notification/contract.providers.md D4. Read melipayamak's REST/console docs first; correct the table. |
+| MSG-1-i | Driver: IPPanel (Faraz SMS), single send and pattern | notification | todo | MSG-1-b | — |  | Spec: notification/contract.providers.md D5. Read ippanel's docs first; correct the table. |
+| MSG-1-j | Driver: Twilio, Messages API | notification | todo | MSG-1-b | — |  | Spec: notification/contract.providers.md D6. Read twilio.com/docs first; error codes to classes R4. |
+| MSG-1-k | Driver: Infobip, SMS API on the account's base URL | notification | todo | MSG-1-b | — |  | Spec: notification/contract.providers.md D7. Read infobip.com/docs first. Raise F-035-l's F-112 dependency (ADR-0131) when done. |
+| MSG-1-l | Driver: Amazon SES (v2 SendEmail) and its SNS bounce/complaint door | notification | todo | MSG-1-b MSG-1-n | — |  | Spec: notification/contract.providers.md D9, B1-B2. SNS signature spec with a self-signed vector, no network. |
+| MSG-1-m | Driver: Brevo transactional email and its webhook door | notification | todo | MSG-1-b MSG-1-n | — |  | Spec: notification/contract.providers.md D10, B1-B2. Read developers.brevo.com first. |
+| MSG-1-n | Suppression: the door's route, `email_suppression` writes, notices and campaigns skip a suppressed address, list and lift routes, re-verify lifts a hard bounce | notification | todo | MSG-1-c | — |  | Spec: notification/contract.providers.md B1-B4. Lift on re-verify touches auth-service me-email.service.ts. |
+| MSG-1-o | Panel `/messaging`: SMS and Email tabs, add wizard from the fields table, reorder, countries, purposes, test send, webhook URL; en/fa; SURFACES row panel-messaging | panel-web | todo | MSG-1-e RT-1-a | — |  | Spec: notification/contract.providers.md U1-U5. |
+| MSG-1-p | Panel: provider health and the suppression list re-read live on `notification.provider.health` | panel-web | todo | MSG-1-o | — |  | Spec: notification/contract.providers.md R6, U5. C-14: a LIVE_PUSH_FIELDS row, useLiveReread. |
+| MSG-1-q | Dev seed: Mailpit `smtp` row and a `legacy_http` row for the owner, so a fresh dev stack sends without env lines | notification | todo | MSG-1-c | — |  | Spec: notification/contract.providers.md M1. Replaces seed-sms-line.sh for dev. |
+| MSG-1-r | Retire `tenant_sms_config`, the singular SMS vault kinds, `SMS_API_URL` and `SMTP_*` | notification | todo | MSG-1-c MSG-1-d MSG-1-q | — |  | Spec: notification/contract.providers.md M3. One release after MSG-1-d. Drops a table: ask the user with row counts first. |
 
 ## Order of work — the F-027 network metering series
 
@@ -1708,6 +1727,15 @@ Opened 2026-10-07 (user, D-67, ADR-0130). Every value is decided; a building ses
 
 The small fixes first, in any order: F-027-fe, F-027-ff, F-027-fd, F-027-fc. Then F-027-ew → (F-027-ex, F-027-ey) and F-027-ez → F-027-fa → F-027-fb. F-027-fg → F-027-fh (after RT-1-a).
 
+## Order of work — the MSG-1 messaging providers series
+
+Opened 2026-10-07 (user, D-68, ADR-0131). Spec: notification/contract.providers.md. Planned only; every value is decided, a building session does not reopen one.
+
+Core first: MSG-1-a → MSG-1-b → MSG-1-c → MSG-1-d, then MSG-1-q. Nothing changes for a user until MSG-1-c, and the existing line keeps working as a `legacy_http` row.
+Drivers after MSG-1-b, in any order: MSG-1-f, MSG-1-g, MSG-1-h, MSG-1-i (Iran) and MSG-1-j, MSG-1-k (abroad). Email: MSG-1-n → MSG-1-l, MSG-1-m.
+Admin and panel: MSG-1-e → MSG-1-o (after RT-1-a) → MSG-1-p. Last, one release after MSG-1-d and with the user: MSG-1-r.
+Before a driver is switched on for real users, the user's: an account at that provider, an approved OTP template for the four Iranian ones, and one A6 test send.
+
 ## Rules
 
 - Never delete a row. Move it to `dropped` with a reason in `note`.
@@ -1794,6 +1822,7 @@ been ingested yet — not one of these.
 | D-65 | Resellers connect their own domain with DNS records alone, behind a CDN that Iran does not disrupt, with the origin address never public | 2026-10-06 | 2026-10-06 | **Fastly, as recommended (user):** versionless domains on one service, a certificate per domain via `_acme-challenge` CNAME to our zone, the reseller CNAMEs to `<slug>.edge.<domain>`, origin open to Fastly only. ADR-0128, rows EDGE-1-a..i Superseded 2026-10-07 by D-66. |
 | D-66 | Keep Fastly (ADR-0128), or front reseller domains with Cloudflare though Iran disrupts its addresses at times? | 2026-10-07 | 2026-10-07 | **Cloudflare (user):** Custom Hostnames on our zone, the reseller still CNAMEs to `<slug>.edge.<domain>`, a reseller may put its own CDN (e.g. Arvan) in front, origin reached only through `cloudflared`. ADR-0129, rows EDGE-1-a..j |
 | D-67 | A panel's address re-pointed (DNS or a new database) to an unknown, empty or another registered server: how is the server recognised, and is the login sent first? | 2026-10-07 | 2026-10-07 | **All as recommended (user):** an anchor client on every panel, checked first each pass; a domain pinned to the IPs it was accepted at, with a CDN opt-out; `mass_reset` also on every counter backward. ADR-0130, rows F-027-ew..fh |
+| D-68 | Several SMS and email providers per tenant, like payment gateways: which providers, which email service, and how a message picks one | 2026-10-07 | 2026-10-07 | **SMS in Iran: Kavenegar, SMS.ir, Melipayamak, IPPanel; abroad: Twilio, Infobip. Email: SMTP kept, plus Amazon SES and Brevo (bounce and complaint reports). A message goes to the first active row by priority that covers its country and purpose, and falls back to the next automatically** — the user's calls, all as recommended. ADR-0131. Rows MSG-1-a..r |
 
 Decided in the same session, though never a `D-` row: **a request resolves its
 tenant from the Host header, falling back to a per-deployment default tenant**

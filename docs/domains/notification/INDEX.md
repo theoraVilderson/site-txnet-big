@@ -3,7 +3,7 @@ id: notification
 layer: domain
 status: active
 version: 13
-keywords: [notification, notice settings, quiet hours, mute notices, essential notices only, notices per service, campaign, delivery, push, sms, email, bulk send, reseller campaign, ارسال انبوه, stop a reseller's campaigns, stop sending campaigns, توقف ارسال کمپین‌های نماینده]
+keywords: [notification, notice settings, quiet hours, mute notices, essential notices only, notices per service, campaign, delivery, push, sms, email, bulk send, reseller campaign, ارسال انبوه, stop a reseller's campaigns, stop sending campaigns, توقف ارسال کمپین‌های نماینده, sms provider, email provider, several sms providers, ارائه دهنده پیامک, ارایه دهنده پیامک, سرویس پیامک, ارائه دهنده ایمیل, kavenegar, sms.ir, melipayamak, ippanel, twilio, infobip, ses, brevo, bounce, suppression]
 source:
   - txnet-backend/notification-service/**
   - txnet-backend/prisma/domains/notification.prisma
@@ -23,6 +23,7 @@ updated: 2026-10-02
 | [contract.md](contract.md) | using or changing notification from outside |
 | [contract.reseller.md](contract.reseller.md) | a reseller drafts, sizes or starts a campaign of its own (F-313-d) |
 | [contract.retention.md](contract.retention.md) | a domain emits a retention notice, or a row adds one (F-601) |
+| [contract.providers.md](contract.providers.md) | SMS / email providers, routing by country, fallback, bounces, `/messaging` (MSG-1, ADR-0131) |
 | [contract.reseller-quota.md](contract.reseller-quota.md) | a reseller is told about its quotas — 80%, 100%, stopped, the daily digest (F-019-v8) |
 | [invariants.md](invariants.md) | writing any code that touches it |
 | [data-model.md](data-model.md) | changing storage |
