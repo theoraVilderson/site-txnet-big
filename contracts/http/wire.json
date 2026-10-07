@@ -37,9 +37,10 @@
     "domainProbe": "x-domain-probe"
   },
   "proxyHeaders": {
-    "note": "Set by Traefik, not by anything in this repo, so there is no drift to prevent — recorded only so the codebase spells each one in exactly one place (C-04).",
+    "note": "Set by Traefik (cfConnectingIp: by Cloudflare, read and removed by the gateway plugin edgeclientip, hosting/contract.origin.md O5), not by anything in this repo, so there is no drift to prevent — recorded only so the codebase spells each one in exactly one place (C-04).",
     "forwardedFor": "X-Forwarded-For",
-    "forwardedHost": "X-Forwarded-Host"
+    "forwardedHost": "X-Forwarded-Host",
+    "cfConnectingIp": "CF-Connecting-IP"
   },
   "cookieLifetimesSec": {
     "note": "Seconds, matching Max-Age and every TTL in the platform. The cookie and the token it carries are one lifetime: a cookie outliving its token is a browser that believes it is signed in and is refused on every refresh.",

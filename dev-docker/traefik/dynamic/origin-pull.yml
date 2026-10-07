@@ -1,0 +1,32 @@
+# The origin answers only Cloudflare (ADR-0129 amendment 1, EDGE-1-g).
+# A Go template: Traefik's file provider renders it with the gateway's env.
+#
+# EDGE_ORIGIN_PULL:
+#   off       no client certificate asked for; CF-Connecting-IP is dropped.
+#   optional  a certificate is checked if presented (dev: Cloudflare pulls get
+#             the visitor's address, a direct caller still gets in).
+#   anything else — `required` on swarm — every TLS handshake must present a
+#             certificate from OUR origin-pull CA, never Cloudflare's shared
+#             one, which any Cloudflare customer can send. A typo fails closed.
+#
+# The options are `default`, so they hold for every router and for an unknown
+# SNI, which also gets only Traefik's self-signed default certificate: no
+# certificate here names a real host for an address scan to read.
+# scripts/edge/origin-pull.sh issues the CA and uploads the client certificate.
+{{- $mode := env "EDGE_ORIGIN_PULL" | default "off" }}
+http:
+  middlewares:
+    # On every router through both entrypoints (the gateway's command line).
+    edge-client-ip:
+      plugin:
+        edgeclientip: {}
+{{- if ne $mode "off" }}
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      clientAuth:
+        caFiles:
+          - /etc/traefik/origin-pull/ca.pem
+        clientAuthType: {{ if eq $mode "optional" }}VerifyClientCertIfGiven{{ else }}RequireAndVerifyClientCert{{ end }}
+{{- end }}

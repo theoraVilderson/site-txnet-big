@@ -34,6 +34,7 @@ export const RequestHeaders = {
 export const ProxyHeaders = {
   "forwardedFor": "X-Forwarded-For",
   "forwardedHost": "X-Forwarded-Host",
+  "cfConnectingIp": "CF-Connecting-IP",
 } as const;
 
 /** `contracts/http/wire.json` -> `cookieLifetimesSec`. */

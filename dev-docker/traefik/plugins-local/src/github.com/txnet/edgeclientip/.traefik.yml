@@ -1,0 +1,5 @@
+displayName: Edge client address
+type: middleware
+import: github.com/txnet/edgeclientip
+summary: Takes the client address from CF-Connecting-IP only on a verified origin pull (ADR-0129 amendment 1).
+testData: {}
