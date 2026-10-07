@@ -1,7 +1,7 @@
 ---
 id: billing
 layer: domain
-updated: 2026-09-29
+updated: 2026-10-06
 ---
 
 # Open questions — billing
@@ -21,3 +21,4 @@ updated: 2026-09-29
 | 2026-09-29 | A postpaid Grant's hold (ADR-0105 (6)): how often is measured usage captured, and how large is the hold it keeps topped up? | resolved | **Answered 2026-09-29 by the user (D-59 (g))**: captured hourly, at close and before each re-top; the hold is sized like a block | -> [contract.usage-rating.md](contract.usage-rating.md) (F-118-g) |
 | 2026-09-29 | A spending cap's `period` (ADR-0105 (9)): does `monthly` reset on the calendar month or on the cap's own start date? | resolved | **Answered 2026-09-29 by the user (D-59 (g))**: `monthly` resets on the cap's own start date, the day clamped to a short month. **Superseded 2026-09-30 by the user (F-118-ak)**: it resets on its Grant's billing period | -> [contract.spending-cap.md](contract.spending-cap.md) rule 6 |
 | 2026-09-29 | The per-use door (F-118-h): how long does a token reserve its money, is a reseller charged wholesale for a regenerate on its own panel, and does a give-back return spending-cap room? | resolved | **Answered 2026-09-29 by the user (D-59 (g))**: 10 minutes; wholesale on every regenerate, the reseller's own panel included; a give-back does not lower `spent` | -> [contract.usage-rating.md](contract.usage-rating.md) |
+| 2026-10-06 | Automatic confirmation of a manual transfer (unique amount, rotation, `matchTransfer`, the `tron-usdt` watcher, bank SMS): when is it built? | yes — F-804, F-807, F-803-e, F-803-f, F-806 are `blocked` on it | Deferred by the user (D-60): the first slice is confirmed by a person; its schema and descriptors keep the hooks (contract.manual-transfer.md principle 7) | the user asks for it -> rows back to `todo` |
