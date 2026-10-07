@@ -83,7 +83,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 | [contract.gateways.md](contract.gateways.md) | creating, changing or deleting a payment gateway — a tenant's own, or a named reseller's |
 | [contract.purchase.md](contract.purchase.md) | buying a catalog product: the invoice, its coupons and discounts with no code, its 30-minute clock, and paying it from the wallet |
 | [contract.deposit.md](contract.deposit.md) | one whole top-up: gateway list, quote, start — and the bank's callback that settles it; what an AI suggestion's delivery asks billing — names, an offer's coupon, another gateway: [contract.ai-delivery.md](contract.ai-delivery.md) — **or a top-up paid by card-to-card or to a wallet, its proof and its matching:** [contract.manual-transfer.md](contract.manual-transfer.md) (F-803) |
-| [contract.webhook.md](contract.webhook.md) | a provider's signed webhook, and money that arrived for more, for less, or after the row was settled |
+| [contract.webhook.md](contract.webhook.md) | a provider's signed webhook, and money that arrived for more, for less, or after the row was settled — **PayPal and a charge currency per gateway:** [contract.paypal.md](contract.paypal.md) (PP-1); **money taken back after credit — disputes, refunds, a locked account:** [contract.disputes.md](contract.disputes.md) (CB-1) |
 | [contract.history.md](contract.history.md) | the panel's financial page: the wallet ledger and the top-up attempts |
 | [contract.verify.md](contract.verify.md) | a payment the gateway met with silence: the retry clock, the flag, manual confirmation |
 | [contract.gift.md](contract.gift.md) | the panel's gift-code box, and a user's own Grants, configs, usage and `/sub` link |
