@@ -11,7 +11,8 @@ updated: 2026-10-07
 ADR-0129 amendment 1 (D-70): no tunnel. The origin keeps 443 open, but only
 Cloudflare can complete a handshake, and on the swarm host only Cloudflare's
 addresses reach it. Rows EDGE-1-g (certificate, client address) and EDGE-1-h
-(firewall), EDGE-1-k/m (a CDN's claim, amendment 2). Rules O1…O10.
+(firewall), EDGE-1-k/m (a CDN's claim, amendment 2), EDGE-1-j (private
+responses, decision 8). Rules O1…O11.
 
 ## The pull certificate (EDGE-1-g)
 
@@ -113,6 +114,20 @@ on an entrypoint without this middleware. Proven 2026-10-07 on a throwaway
 Traefik and on dev: a forged `X-Forwarded-Host` arrives as the real host, a
 chain sent without a certificate yields no claim, and Arvan -> Cloudflare
 carries `104.248.193.151` as the claim.
+
+**O11 — A signed-in caller's response is never shared (EDGE-1-j, ADR-0129
+decision 8).** The local plugin `privatecache` (middleware `private-cache@file`,
+after `edge-client-ip@file` on both entrypoints) sets `Cache-Control: private,
+no-store` on a response when the request carried `Authorization` or a cookie
+named in `contracts/http/wire.json` `cookies` (its test holds the two equal),
+or the response sets a cookie, **and** the service set no `Cache-Control`. A
+service's own rule always wins; a cookie that is not a credential (`theme`,
+locale) changes nothing; a `101` is never marked, and the writer keeps
+`Hijack`/`Flush`, so the realtime socket and SSE pass. A CDN that ignores the
+header is caught by tenant `contract.domains.md`'s `cache` probe, not here.
+Proven on dev 2026-10-07 through `http://api.<domain>`: anonymous billing 401
+unmarked, bearer or `device_id` marked, auth-service's `device_id` Set-Cookie
+marked, `/realtime` still `101`. Tests: `privatecache_test.go`.
 
 ## The firewall (EDGE-1-h)
 

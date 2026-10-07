@@ -1,0 +1,5 @@
+displayName: Private cache
+type: middleware
+import: github.com/txnet/privatecache
+summary: Marks a response to a signed-in caller Cache-Control private, no-store unless the service set a rule (ADR-0129 decision 8).
+testData: {}

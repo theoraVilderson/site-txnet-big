@@ -25,6 +25,12 @@ http:
           # claim, counted beside the address and never trusted (ADR-0129
           # amendment 2). CloudFront-Viewer-Address is `ip:port`.
           claimHeaders: [True-Client-IP, AR-Real-IP, Fastly-Client-IP, X-Azure-ClientIP, CloudFront-Viewer-Address]
+    # Also on every router: a response to a signed-in caller (bearer token or a
+    # session cookie) or one that sets a cookie leaves `private, no-store` when
+    # the service set no Cache-Control (ADR-0129 decision 8, EDGE-1-j).
+    private-cache:
+      plugin:
+        privatecache: {}
 {{- if ne $mode "off" }}
 tls:
   options:

@@ -21,14 +21,18 @@ services:
       # Every router on both doors: CF-Connecting-IP becomes the client address
       # only on a verified origin pull, and is dropped otherwise (EDGE-1-g,
       # traefik/dynamic/origin-pull.yml).
-      - "--entrypoints.web.http.middlewares=edge-client-ip@file"
-      - "--entrypoints.websecure.http.middlewares=edge-client-ip@file"
+      # private-cache: a signed-in caller's response leaves `private, no-store`
+      # unless the service set a rule, so a reseller's CDN never shares it
+      # (EDGE-1-j).
+      - "--entrypoints.web.http.middlewares=edge-client-ip@file,private-cache@file"
+      - "--entrypoints.websecure.http.middlewares=edge-client-ip@file,private-cache@file"
       # Kept, not trusted: the plugin reads a reseller CDN's entry in
       # X-Forwarded-For as a claim, then rewrites every X-Forwarded-* and
       # X-Real-Ip from the request itself (EDGE-1-m). Never without that
       # middleware on the entrypoint: a client's X-Forwarded-Host picks the tenant.
       - "--entrypoints.websecure.forwardedHeaders.insecure=true"
       - "--experimental.localPlugins.edgeclientip.moduleName=github.com/txnet/edgeclientip"
+      - "--experimental.localPlugins.privatecache.moduleName=github.com/txnet/privatecache"
       # Let's Encrypt — HTTP challenge (production)
       - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
       - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
