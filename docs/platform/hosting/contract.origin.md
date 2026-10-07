@@ -37,8 +37,8 @@ restarting the gateway. Until the restart, the gateway still trusts the old CA.
 | value | `clientAuthType` | used on |
 |---|---|---|
 | `off` (unset) | none: no certificate asked | before O2 is done |
-| `optional` | `VerifyClientCertIfGiven` | dev: Cloudflare's pulls verify, direct callers still get in |
-| `required` (any other value) | `RequireAndVerifyClientCert` | swarm. A typo fails closed. |
+| `optional` | `VerifyClientCertIfGiven` | Cloudflare's pulls verify, direct callers still get in (dev until 2026-10-07) |
+| `required` (any other value) | `RequireAndVerifyClientCert` | dev since 2026-10-07 (user), and prod at go-live. A typo fails closed. |
 
 Options `default` hold for every router and for an unknown SNI. No router may
 name other TLS options: they would bypass this.
@@ -73,7 +73,9 @@ With `optional`, no certificate reaches the router with the socket's address,
 and another CA's certificate is still refused.
 
 Live on dev, 2026-10-07: O2 done on `txnet.cyou` (certificate `active`, expires
-2031-10-06), and the dev gateway on `optional`. Through Cloudflare, `panel.<domain>`
+2031-10-06), and the dev gateway on `optional`, then on `required` (user, same day).
+On `required`, Cloudflare, Arvan -> Cloudflare, barghgo's bot host and the internal
+`http://api.<domain>` hop all answer 200. A direct handshake without the certificate is refused. Through Cloudflare, `panel.<domain>`
 and the Custom Hostname `edgetest.chillshop.ir` both arrive as verified pulls
 with the caller's address. A direct call with a forged header keeps the socket's
 address. **Behind a reseller's own CDN, the visitor Cloudflare names is that CDN's
