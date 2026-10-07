@@ -11,7 +11,7 @@ updated: 2026-10-07
 ADR-0129 amendment 1 (D-70): no tunnel. The origin keeps 443 open, but only
 Cloudflare can complete a handshake, and on the swarm host only Cloudflare's
 addresses reach it. Rows EDGE-1-g (certificate, client address) and EDGE-1-h
-(firewall), EDGE-1-k (a CDN's claim, amendment 2). Rules O1…O9.
+(firewall), EDGE-1-k/m (a CDN's claim, amendment 2). Rules O1…O10.
 
 ## The pull certificate (EDGE-1-g)
 
@@ -79,15 +79,38 @@ with the caller's address. A direct call with a forged header keeps the socket's
 address. **Behind a reseller's own CDN, the visitor Cloudflare names is that CDN's
 edge** (Arvan, 185.215.232.x), so per-caller limits there count per CDN edge.
 
-**O9 — A CDN's claim rides beside the address (EDGE-1-k).** Behind a
-reseller's own CDN, O5's address is that CDN's edge. On a verified pull, the
-plugin reads the first IP address in `claimHeaders` (in `origin-pull.yml`:
-`True-Client-IP`, `AR-Real-IP`, `Fastly-Client-IP`). If it differs from the
-address, the plugin writes it as `X-Edge-Claimed-Ip` (`EDGE_CLAIMED_IP_HEADER`).
-It removes a client-sent `X-Edge-Claimed-Ip` and the listed headers on every
-request, so services read one name only. The claim is never `req.ip`: only the
-limiter counts it (redis-keyspace `contract.shared-address.md`). Adding a CDN
-means adding its header to the list.
+**O9 — A CDN's claim rides beside the address (EDGE-1-k, EDGE-1-m).** Behind
+a reseller's own CDN, O5's address is that CDN's edge. On a verified pull, the
+plugin takes the claim from the first IP in `claimHeaders` (`origin-pull.yml`:
+`True-Client-IP`, `AR-Real-IP`, `Fastly-Client-IP`, `X-Azure-ClientIP`,
+`CloudFront-Viewer-Address`, the last as `ip:port`). With none of those, it
+reads `X-Forwarded-For`: Cloudflare appends the edge it saw, and the CDN
+appended the visitor just before. So the claim is the entry before the last,
+and only when the last is `CF-Connecting-IP`. A claim that differs from the
+address is written as `X-Edge-Claimed-Ip` (`EDGE_CLAIMED_IP_HEADER`). A
+client-sent one and the listed headers are removed on every request. The claim
+is never `req.ip`: only the limiter counts it (redis-keyspace
+`contract.shared-address.md`). Adding a CDN with a header of its own means
+adding the header to the list. Any other CDN already works through
+`X-Forwarded-For`.
+
+**O10 — The plugin makes every forwarded header (EDGE-1-m).** To read
+`X-Forwarded-For`, websecure runs with `forwardedHeaders.insecure=true`, so
+Traefik keeps whatever a request arrives with. The plugin therefore drops every
+`X-Forwarded-*` and `X-Real-Ip` on every request and rewrites them from the
+request itself:
+- `Host` -> `X-Forwarded-Host`, which services read to choose the tenant.
+- `http`/`https`/`ws`/`wss` -> `X-Forwarded-Proto`.
+- The `Host` port, else 443/80 -> `X-Forwarded-Port`.
+- The socket address, or O5's -> `X-Real-Ip`.
+
+`X-Forwarded-For` is left empty for Traefik's proxy to fill with the address.
+`-Server`, `-Prefix`, `-Uri`, `-Method` and `-Tls-Client-Cert*` are dropped:
+ForwardAuth computes its own (`trustForwardHeader` is off). The flag never goes
+on an entrypoint without this middleware. Proven 2026-10-07 on a throwaway
+Traefik and on dev: a forged `X-Forwarded-Host` arrives as the real host, a
+chain sent without a certificate yields no claim, and Arvan -> Cloudflare
+carries `104.248.193.151` as the claim.
 
 ## The firewall (EDGE-1-h)
 

@@ -15,11 +15,18 @@
 // they already trust (`trustProxySetting`) and change nothing.
 //
 // Behind a reseller's own CDN, that verified address is the CDN's edge. The
-// CDN names the person in a header of its own, which nothing can verify, so it
-// is forwarded as a claim (`X-Edge-Claimed-Ip`) beside the address and never
-// replaces it. The limiter counts it, and nothing else reads it (ADR-0129
-// amendment 2, EDGE-1-k). `X-Forwarded-For` cannot carry it: Traefik has already
-// dropped that header from an untrusted sender by the time this runs.
+// CDN names the person in a header of its own, or else in the entry it
+// appended to `X-Forwarded-For` just before Cloudflare appended the edge.
+// Nothing can verify either, so it is forwarded as a claim
+// (`X-Edge-Claimed-Ip`) beside the address and never replaces it. The limiter
+// counts it, and nothing else reads it (ADR-0129 amendment 2, EDGE-1-k/m).
+//
+// Reading `X-Forwarded-For` needs the entrypoint to keep forwarded headers
+// (`forwardedHeaders.insecure`). That makes this middleware the one place
+// they are made: every `X-Forwarded-*` and `X-Real-Ip` a request arrives with
+// is discarded and rewritten from the request itself, as Traefik does for an
+// untrusted sender. A client's `X-Forwarded-Host` would otherwise choose the
+// tenant (EDGE-1-m).
 package edgeclientip
 
 import (
@@ -32,11 +39,22 @@ import (
 const (
 	cfConnectingIP = "CF-Connecting-IP"
 	claimedIP      = "X-Edge-Claimed-Ip"
+	forwardedFor   = "X-Forwarded-For"
 )
 
 // defaultClaimHeaders: where CDNs put the visitor's address — Akamai, Arvan,
-// Fastly. A CDN not listed counts as one caller, as before amendment 2.
-var defaultClaimHeaders = []string{"True-Client-IP", "AR-Real-IP", "Fastly-Client-IP"}
+// Fastly, Azure Front Door, CloudFront (`ip:port`). A CDN not listed is read
+// from `X-Forwarded-For`.
+var defaultClaimHeaders = []string{
+	"True-Client-IP", "AR-Real-IP", "Fastly-Client-IP", "X-Azure-ClientIP", "CloudFront-Viewer-Address",
+}
+
+// Made by this middleware alone; whatever a request arrives with is dropped.
+var forwardedHeaders = []string{
+	forwardedFor, "X-Real-Ip", "X-Forwarded-Host", "X-Forwarded-Proto", "X-Forwarded-Port",
+	"X-Forwarded-Server", "X-Forwarded-Prefix", "X-Forwarded-Uri", "X-Forwarded-Method",
+	"X-Forwarded-Tls-Client-Cert", "X-Forwarded-Tls-Client-Cert-Info",
+}
 
 // Config holds no trust decision: that is the TLS options'. ClaimHeaders is
 // the order a CDN's claim is looked for in; empty means the defaults.
@@ -62,33 +80,106 @@ func New(_ context.Context, next http.Handler, cfg *Config, _ string) (http.Hand
 }
 
 func (e *edgeClientIP) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	claimed := strings.TrimSpace(req.Header.Get(cfConnectingIP))
-	// No service reads it: the address it names is RemoteAddr or nothing.
-	req.Header.Del(cfConnectingIP)
-	// The claim is only ever this middleware's, so a client's is dropped, and
-	// the CDNs' own headers with it: one name for services to read, not three.
-	req.Header.Del(claimedIP)
+	cfVisitor := net.ParseIP(strings.TrimSpace(req.Header.Get(cfConnectingIP)))
+	chain := req.Header.Values(forwardedFor)
 	var cdnClaim net.IP
 	for _, h := range e.claimHeaders {
 		if cdnClaim == nil {
-			cdnClaim = net.ParseIP(strings.TrimSpace(req.Header.Get(h)))
+			cdnClaim = parseAddress(req.Header.Get(h))
 		}
+		// One name for services to read, not one per CDN.
 		req.Header.Del(h)
 	}
+	req.Header.Del(cfConnectingIP)
+	req.Header.Del(claimedIP)
+	rewriteForwarded(req)
 
-	if visitor := net.ParseIP(claimed); visitor != nil && verifiedPull(req) {
+	if cfVisitor != nil && verifiedPull(req) {
 		port := "0"
 		if _, p, err := net.SplitHostPort(req.RemoteAddr); err == nil {
 			port = p
 		}
-		req.RemoteAddr = net.JoinHostPort(visitor.String(), port)
-		req.Header.Set("X-Real-Ip", visitor.String())
-		req.Header.Del("X-Forwarded-For")
-		if cdnClaim != nil && !cdnClaim.Equal(visitor) {
+		req.RemoteAddr = net.JoinHostPort(cfVisitor.String(), port)
+		req.Header.Set("X-Real-Ip", cfVisitor.String())
+		if cdnClaim == nil {
+			cdnClaim = appendedBefore(chain, cfVisitor)
+		}
+		if cdnClaim != nil && !cdnClaim.Equal(cfVisitor) {
 			req.Header.Set(claimedIP, cdnClaim.String())
 		}
 	}
 	e.next.ServeHTTP(rw, req)
+}
+
+// rewriteForwarded drops every forwarded header and writes the ones Traefik
+// writes for an untrusted sender, spelled as Traefik spells them. Traefik's
+// proxy appends RemoteAddr to the emptied `X-Forwarded-For`.
+func rewriteForwarded(req *http.Request) {
+	for _, h := range forwardedHeaders {
+		req.Header.Del(h)
+	}
+	proto := "http"
+	if req.TLS != nil {
+		proto = "https"
+	}
+	if isWebSocket(req) {
+		proto = map[string]string{"http": "ws", "https": "wss"}[proto]
+	}
+	req.Header.Set("X-Forwarded-Proto", proto)
+	if req.Host != "" {
+		req.Header.Set("X-Forwarded-Host", req.Host)
+	}
+	port := "80"
+	if _, p, err := net.SplitHostPort(req.Host); err == nil && p != "" {
+		port = p
+	} else if req.TLS != nil {
+		port = "443"
+	}
+	req.Header.Set("X-Forwarded-Port", port)
+	if host, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
+		req.Header.Set("X-Real-Ip", host)
+	}
+}
+
+// appendedBefore: Cloudflare appends the address it saw (the CDN's edge) to
+// the `X-Forwarded-For` it received, and that CDN appended the visitor just
+// before. So the claim is the entry before the last, and only when the last
+// is that edge: any other shape is not a CDN in front of Cloudflare.
+func appendedBefore(chain []string, edge net.IP) net.IP {
+	var entries []string
+	for _, line := range chain {
+		for _, entry := range strings.Split(line, ",") {
+			entries = append(entries, strings.TrimSpace(entry))
+		}
+	}
+	if len(entries) < 2 {
+		return nil
+	}
+	if last := net.ParseIP(entries[len(entries)-1]); last == nil || !last.Equal(edge) {
+		return nil
+	}
+	return net.ParseIP(entries[len(entries)-2])
+}
+
+// parseAddress takes one IP, or one IP with a port (CloudFront writes
+// `ip:port`, an IPv6 address unbracketed).
+func parseAddress(raw string) net.IP {
+	raw = strings.TrimSpace(raw)
+	if ip := net.ParseIP(raw); ip != nil {
+		return ip
+	}
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		return net.ParseIP(host)
+	}
+	if i := strings.LastIndex(raw, ":"); i > 0 {
+		return net.ParseIP(raw[:i])
+	}
+	return nil
+}
+
+func isWebSocket(req *http.Request) bool {
+	return strings.Contains(strings.ToLower(req.Header.Get("Connection")), "upgrade") &&
+		strings.EqualFold(req.Header.Get("Upgrade"), "websocket")
 }
 
 // verifiedPull: the client presented a certificate that chained to the CA in

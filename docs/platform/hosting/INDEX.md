@@ -24,13 +24,13 @@ business unit (`billing.rules.yml`, …), what a service does once it is up.
 | File | Read it when |
 |---|---|
 | [contract.md](contract.md) | building any OPS-1 row — rules H1…H22 are the spec |
-| [contract.origin.md](contract.origin.md) | the origin answering only Cloudflare: pull certificate, client address, firewall (EDGE-1-g, EDGE-1-h) — rules O1…O8 |
+| [contract.origin.md](contract.origin.md) | the origin answering only Cloudflare: pull certificate, client address, firewall (EDGE-1-g, EDGE-1-h) — rules O1…O10 |
 | [open-questions.md](open-questions.md) | the standby server (OPS-1-y) |
 
 ## Status
 
 `draft`. Opened 2026-10-06 by ADR-0126 (D-62); the OPS-1 rows are `todo`.
-EDGE-1-g, EDGE-1-h and EDGE-1-k (`contract.origin.md`) are built. The unit
+EDGE-1-g, -h, -k and -m (`contract.origin.md`) are built. The unit
 claims `dev-docker/postgres/**`, `dev-docker/pgbouncer/**`, `swarm/**`,
 `dev-docker/monitoring/config-dev/database.rules.yml` and `loki.yaml` in
 `source:` as each row lands.

@@ -94,10 +94,12 @@ address list to keep in step. Decided:
   log keep the address Cloudflare saw. Nothing a CDN says replaces it.
 - On a verified pull, the gateway plugin forwards what the CDN *claims* the
   visitor was as `X-Edge-Claimed-Ip`, from the first of a configured list of
-  CDN client headers (`True-Client-IP`, `AR-Real-IP`, …). It never trusts the
-  claim. A client cannot set the header itself: the plugin removes it first.
-  `X-Forwarded-For` cannot carry the claim: Traefik drops it from an untrusted
-  sender before any middleware runs.
+  CDN client headers (`True-Client-IP`, `AR-Real-IP`, …), else from the entry
+  the CDN appended to `X-Forwarded-For` before Cloudflare appended its edge
+  (the user, 2026-10-07: any CDN must work). It never trusts the claim. A
+  client cannot set the header itself: the plugin removes it first. Keeping
+  `X-Forwarded-For` to read it needs `forwardedHeaders.insecure`, so the
+  plugin rewrites every forwarded header itself (hosting O10).
 - A per-IP limit with a claim is two counters: the address and the claim
   together at the route's own limit, and the address alone at
   `SHARED_ADDRESS_FACTOR` (20, a constant in shared-core) times it. Visitors behind one CDN edge each get
@@ -107,4 +109,4 @@ address list to keep in step. Decided:
 - Rejected: a list of each CDN's address ranges (always behind with many CDNs,
   and other customers of the same CDN can still send any claim), and a key per
   domain set by the reseller in the CDN (one more step to forget).
-Rows EDGE-1-k (gateway), EDGE-1-l (limiter).
+Rows EDGE-1-k, EDGE-1-m (gateway), EDGE-1-l (limiter).

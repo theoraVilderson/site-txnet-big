@@ -23,6 +23,11 @@ services:
       # traefik/dynamic/origin-pull.yml).
       - "--entrypoints.web.http.middlewares=edge-client-ip@file"
       - "--entrypoints.websecure.http.middlewares=edge-client-ip@file"
+      # Kept, not trusted: the plugin reads a reseller CDN's entry in
+      # X-Forwarded-For as a claim, then rewrites every X-Forwarded-* and
+      # X-Real-Ip from the request itself (EDGE-1-m). Never without that
+      # middleware on the entrypoint: a client's X-Forwarded-Host picks the tenant.
+      - "--entrypoints.websecure.forwardedHeaders.insecure=true"
       - "--experimental.localPlugins.edgeclientip.moduleName=github.com/txnet/edgeclientip"
       # Let's Encrypt — HTTP challenge (production)
       - "--certificatesresolvers.myresolver.acme.httpchallenge=true"

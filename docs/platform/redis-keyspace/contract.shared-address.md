@@ -39,7 +39,7 @@ route's limit, so one attacker there spends only their own. A caller who
 invents a claim per request opens a new fine counter each time, and the
 address it really came from stops them at 20x the limit. The per-account and
 per-phone limits stay unchanged. A CDN whose header the gateway does not list
-sends no claim and counts as one caller, as before.
+is read from the entry it appended to `X-Forwarded-For` (hosting O9).
 
 **S4 — Who calls it.** `RateLimitGuard` (every `@RateLimit` route) and
 tenant-service `PublicHostMiddleware` (`/api/public/*`). A new per-IP spender

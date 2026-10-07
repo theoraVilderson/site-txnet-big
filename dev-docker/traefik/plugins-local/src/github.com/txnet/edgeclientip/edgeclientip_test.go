@@ -69,7 +69,7 @@ func TestAnIPv6VisitorIsBracketedInTheSocketAddress(t *testing.T) {
 // Anyone can send the header; without a verified chain it is a claim.
 func TestTheHeaderIsIgnoredWithoutAVerifiedChain(t *testing.T) {
 	for name, req := range map[string]*http.Request{
-		"plain http":           fromEdge("5.6.7.8"),
+		"plain http":           func() *http.Request { r := fromEdge("5.6.7.8"); r.TLS = nil; return r }(),
 		"tls, no client chain": func() *http.Request { r := fromEdge("5.6.7.8"); r.TLS = &tls.ConnectionState{}; return r }(),
 	} {
 		got := serve(t, req)
@@ -153,5 +153,119 @@ func TestAClaimIsOnlyEverTheGatewaysOwn(t *testing.T) {
 	direct.Header.Set("X-Edge-Claimed-Ip", "9.9.9.9")
 	if got := serve(t, direct); got.claimed != "" {
 		t.Fatalf("verified, no CDN header: got %+v", got)
+	}
+}
+
+// headersAfter is every header the next handler receives.
+func headersAfter(t *testing.T, req *http.Request) (http.Header, string) {
+	t.Helper()
+	var got http.Header
+	var remote string
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { got, remote = r.Header.Clone(), r.RemoteAddr })
+	h, err := New(context.Background(), next, CreateConfig(), "edge-client-ip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.ServeHTTP(httptest.NewRecorder(), req)
+	return got, remote
+}
+
+// A CDN with no header of its own appends the visitor to X-Forwarded-For, and
+// Cloudflare appends that CDN's edge after it (EDGE-1-m).
+func TestWithNoCDNHeaderTheClaimIsTheEntryBeforeTheEdge(t *testing.T) {
+	req := behindCDN("185.215.232.193", map[string]string{"X-Forwarded-For": "6.6.6.6, 104.248.193.151, 185.215.232.193"})
+	if got := serve(t, req); got.claimed != "104.248.193.151" || got.forwardedFor != "" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestACDNsOwnHeaderOutranksXForwardedFor(t *testing.T) {
+	req := behindCDN("185.215.232.193", map[string]string{"AR-Real-IP": "2.2.2.2", "X-Forwarded-For": "1.1.1.1, 185.215.232.193"})
+	if got := serve(t, req); got.claimed != "2.2.2.2" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestXForwardedForAcrossHeaderLinesIsOneList(t *testing.T) {
+	req := behindCDN("185.215.232.193", nil)
+	req.Header.Add("X-Forwarded-For", "104.248.193.151")
+	req.Header.Add("X-Forwarded-For", "185.215.232.193")
+	if got := serve(t, req); got.claimed != "104.248.193.151" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+// Only a list Cloudflare ended with the edge it saw is read; anything else
+// is not the shape a CDN in front of Cloudflare leaves.
+func TestNoClaimFromAnXForwardedForCloudflareDidNotEnd(t *testing.T) {
+	for _, xff := range []string{"185.215.232.193", "104.248.193.151, 9.9.9.9", "nope, 185.215.232.193", ", 185.215.232.193"} {
+		if got := serve(t, behindCDN("185.215.232.193", map[string]string{"X-Forwarded-For": xff})); got.claimed != "" {
+			t.Fatalf("xff %q: got %+v", xff, got)
+		}
+	}
+	unverified := fromEdge("185.215.232.193")
+	unverified.Header.Set("X-Forwarded-For", "104.248.193.151, 185.215.232.193")
+	if got := serve(t, unverified); got.claimed != "" || got.forwardedFor != "" {
+		t.Fatalf("unverified: got %+v", got)
+	}
+}
+
+func TestCloudFrontsAddressCarriesAPort(t *testing.T) {
+	for in, want := range map[string]string{"104.248.193.151:51234": "104.248.193.151", "2001:db8::7:51234": "2001:db8::7"} {
+		got := serve(t, behindCDN("185.215.232.193", map[string]string{"CloudFront-Viewer-Address": in}))
+		if got.claimed != want {
+			t.Fatalf("%q: got %+v", in, got)
+		}
+	}
+}
+
+// The gateway's entrypoint keeps every forwarded header so the plugin can read
+// X-Forwarded-For; the plugin then rewrites them all from the request itself.
+// A client's X-Forwarded-Host would otherwise pick the tenant (EDGE-1-m).
+func TestEveryForwardedHeaderIsTheGatewaysOwn(t *testing.T) {
+	forge := func(r *http.Request) *http.Request {
+		r.Host = "panel.example.test"
+		for k, v := range map[string]string{
+			"X-Forwarded-Host": "evil.example", "X-Forwarded-Proto": "http", "X-Forwarded-Port": "1",
+			"X-Forwarded-Server": "x", "X-Forwarded-Prefix": "/x", "X-Forwarded-Uri": "/x", "X-Forwarded-Method": "DELETE",
+			"X-Forwarded-Tls-Client-Cert": "x", "X-Forwarded-Tls-Client-Cert-Info": "x", "X-Real-Ip": "9.9.9.9",
+		} {
+			r.Header.Set(k, v)
+		}
+		return r
+	}
+	cases := map[string]struct {
+		req                 *http.Request
+		proto, port, realIP string
+	}{
+		"verified":      {forge(verified(fromEdge("5.6.7.8"))), "https", "443", "5.6.7.8"},
+		"plain http":    {func() *http.Request { r := forge(fromEdge("5.6.7.8")); r.TLS = nil; return r }(), "http", "80", "172.70.1.2"},
+		"tls, no chain": {func() *http.Request { r := forge(fromEdge("5.6.7.8")); r.TLS = &tls.ConnectionState{}; return r }(), "https", "443", "172.70.1.2"},
+	}
+	for name, c := range cases {
+		h, _ := headersAfter(t, c.req)
+		want := map[string]string{"X-Forwarded-Host": "panel.example.test", "X-Forwarded-Proto": c.proto, "X-Forwarded-Port": c.port, "X-Real-Ip": c.realIP}
+		for k, v := range want {
+			if h.Get(k) != v {
+				t.Fatalf("%s: %s = %q, want %q", name, k, h.Get(k), v)
+			}
+		}
+		for _, k := range []string{"X-Forwarded-Server", "X-Forwarded-Prefix", "X-Forwarded-Uri", "X-Forwarded-Method",
+			"X-Forwarded-Tls-Client-Cert", "X-Forwarded-Tls-Client-Cert-Info", "X-Forwarded-For"} {
+			if h.Get(k) != "" {
+				t.Fatalf("%s: %s survived as %q", name, k, h.Get(k))
+			}
+		}
+	}
+}
+
+func TestAHostWithAPortAndAWebSocketKeepTraefiksSpelling(t *testing.T) {
+	req := verified(fromEdge("5.6.7.8"))
+	req.Host = "panel.example.test:8443"
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", "websocket")
+	h, _ := headersAfter(t, req)
+	if h.Get("X-Forwarded-Proto") != "wss" || h.Get("X-Forwarded-Port") != "8443" || h.Get("X-Forwarded-Host") != "panel.example.test:8443" {
+		t.Fatalf("got %v", h)
 	}
 }

@@ -20,10 +20,11 @@ http:
     edge-client-ip:
       plugin:
         edgeclientip:
-          # Where a reseller's own CDN names the visitor, first found wins. The
-          # value is a claim, counted beside the address and never trusted
-          # (ADR-0129 amendment 2). A CDN missing here counts as one caller.
-          claimHeaders: [True-Client-IP, AR-Real-IP, Fastly-Client-IP]
+          # Where a reseller's own CDN names the visitor, first found wins; a
+          # CDN with none of these is read from X-Forwarded-For. The value is a
+          # claim, counted beside the address and never trusted (ADR-0129
+          # amendment 2). CloudFront-Viewer-Address is `ip:port`.
+          claimHeaders: [True-Client-IP, AR-Real-IP, Fastly-Client-IP, X-Azure-ClientIP, CloudFront-Viewer-Address]
 {{- if ne $mode "off" }}
 tls:
   options:
