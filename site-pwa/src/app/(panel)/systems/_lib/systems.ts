@@ -44,10 +44,12 @@ export function liveChannelOf(me: { tenant: { id: string }; permissions: readonl
  * `GET /systems/panels` for the row, so what is shown is still only what
  * billing reads back.
  */
+export const PANEL_EVENTS: readonly string[] = [RealtimeEvents.panelTested, RealtimeEvents.panelStateChanged];
+
 export function isPanelEvent(payload: unknown): boolean {
   if (!payload || typeof payload !== "object") return false;
   const type = (payload as Record<string, unknown>).type;
-  return type === RealtimeEvents.panelTested || type === RealtimeEvents.panelStateChanged;
+  return typeof type === "string" && PANEL_EVENTS.includes(type);
 }
 
 // The closed sets the register form offers, as `network.prisma` declares them

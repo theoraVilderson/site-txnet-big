@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { billingApi } from "@/lib/billing-api";
 import { holdsPermission } from "@/lib/permissions";
-import { LIVE_REREAD_MS, trailingThrottle, userChannel } from "@/lib/realtime";
+import { userChannel } from "@/lib/realtime";
+import { RealtimeEvents } from "@/generated/wire";
+import { useLiveReread } from "@/hooks/useLiveReread";
 import { supportAgentApi, supportApi } from "@/lib/support-api";
-import { isNotificationCreated } from "../_lib/notification-event";
-import { usePanelRealtime } from "../_context/PanelRealtimeContext";
 import { usePanelSession } from "../_context/PanelSessionContext";
 
 /** The menu entries that carry a count (N4), by menu id. */
@@ -15,6 +15,8 @@ export type MenuBadges = Partial<Record<BadgedEntry, number>>;
 
 /** N4: re-read this often while the tab is visible, when no live event says sooner. */
 export const BADGE_POLL_MS = 60_000;
+
+const BADGE_EVENTS = [RealtimeEvents.notificationCreated];
 
 /**
  * The sidebar's counts (UX-1-j, `contract.ux.md` N4), each over the first page
@@ -29,7 +31,6 @@ export const BADGE_POLL_MS = 60_000;
  */
 export function useMenuBadges(): MenuBadges {
   const { me, group } = usePanelSession();
-  const client = usePanelRealtime();
   const userId = group?.current.userId ?? null;
   const signedIn = me !== null && me !== undefined;
   const agent = holdsPermission(me?.permissions, "support.agent");
@@ -65,20 +66,7 @@ export function useMenuBadges(): MenuBadges {
     };
   }, [read]);
 
-  useEffect(() => {
-    if (!client || !userId) return;
-    const throttled = trailingThrottle(() => readRef.current(), LIVE_REREAD_MS);
-    const off = client.subscribe(userChannel(userId), {
-      onMessage: (payload) => {
-        if (isNotificationCreated(payload)) throttled.call();
-      },
-      onMissed: () => throttled.call(),
-    });
-    return () => {
-      throttled.cancel();
-      off();
-    };
-  }, [client, userId]);
+  useLiveReread(userId ? userChannel(userId) : null, BADGE_EVENTS, () => readRef.current());
 
   return badges;
 }

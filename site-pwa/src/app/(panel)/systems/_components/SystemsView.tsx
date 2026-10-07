@@ -4,11 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BookOpen, Server } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type PanelGroup, type SystemsPanel } from "@/lib/billing-api";
-import { LIVE_REREAD_MS, trailingThrottle } from "@/lib/realtime";
-import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
+import { useLiveReread } from "@/hooks/useLiveReread";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { formatInstant } from "../../_lib/datetime";
-import { HELD_KEYS, SYSTEMS_KEYS as K, isPanelEvent, liveChannelOf } from "../_lib/systems";
+import { HELD_KEYS, SYSTEMS_KEYS as K, PANEL_EVENTS, liveChannelOf } from "../_lib/systems";
 import { attentionOf, guideOf, type SystemsTab } from "../_lib/systems-guide";
 import { DriftReport } from "./DriftReport";
 import { HoldsQueue } from "./HoldsQueue";
@@ -108,24 +107,9 @@ export function SystemsView() {
   }, [reload]);
 
   const { me } = usePanelSession();
-  const client = usePanelRealtime();
   const channel = liveChannelOf(me);
-  // `reload` is stable (its deps are), so this subscribes once per socket and
-  // channel — a channel dropped and re-declared is a window where an event is lost.
   // A burst of tests is one read now and one at the end (F-067-p), not one per event.
-  useEffect(() => {
-    if (!client || !channel) return;
-    const live = trailingThrottle(() => void reload(), LIVE_REREAD_MS);
-    const unsubscribe = client.subscribe(channel, {
-      onMessage: (payload) => {
-        if (isPanelEvent(payload)) live.call();
-      },
-    });
-    return () => {
-      live.cancel();
-      unsubscribe();
-    };
-  }, [client, channel, reload]);
+  useLiveReread(channel, PANEL_EVENTS, () => void reload());
 
   // A refusal names its holder from these (F-027-ci): billing sends only ids, and only inside this reader's scope.
   const names = useMemo(

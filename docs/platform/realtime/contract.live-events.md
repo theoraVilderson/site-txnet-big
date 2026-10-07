@@ -53,18 +53,19 @@ corrected, per "Decide once".
 
 ## Planned — the RT-1 rows
 
-**RT-1-a — `useLiveReread`** (`site-pwa/src/hooks/useLiveReread.ts`).
-`useLiveReread(channel: string | null, types: readonly string[], reread: () => void)`.
-Reads the client from `usePanelRealtime()`; no subscription while either is
-null. Keeps `reread` in a ref, so callers need not memoize it. On a message
-whose `payload.type` is in `types`, and on `onMissed`, calls a
-`trailingThrottle(reread, LIVE_REREAD_MS)`; cancels and unsubscribes on
-cleanup. Move SystemsView, useGrantsPage, useWalletBalance, useNotifications
-and useMenuBadges onto it. useMenuBadges **keeps** its 60 s poll until RT-1-j.
-A consumer that renders from the payload (PaymentCreditedToast, support
-threads, OTP) is not moved. Spec `useLiveReread.test.ts`: type filter, a burst
-of five makes two reads, `onMissed` re-reads, a null channel never
-subscribes, unmount unsubscribes.
+**RT-1-a — `useLiveReread`** (`site-pwa/src/hooks/useLiveReread.ts`) — built
+2026-10-07. `useLiveReread(channel: string | null, types: readonly string[] |
+'any', reread: (cause: 'event' | 'missed') => void)`. Reads the client from
+`usePanelRealtime()`; no subscription while either is null. Keeps `reread`
+and `types` in refs, so callers need not memoize and nothing resubscribes. On
+a message whose `payload.type` is in `types` (`'any'`: every message), and on
+`onMissed`, it re-reads throttled to `LIVE_REREAD_MS`; a window that held an
+event reads as `'event'`. Cleanup drops the owed read and unsubscribes.
+On it: SystemsView, useWalletBalance (`'any'`), useNotifications (only an
+`'event'` read can toast) and useMenuBadges, which keeps its 60 s poll until
+RT-1-j. **useGrantsPage is not moved**: it renders usage from the payload
+(F-307-t), which this hook never hands over — the same exclusion as
+PaymentCreditedToast, support threads and OTP.
 
 **RT-1-b — the tenant audience, and someone to hear it.**
 `LIVE_PUSH_FIELDS` becomes `{ audience: 'user' | 'tenant', fields }`; the

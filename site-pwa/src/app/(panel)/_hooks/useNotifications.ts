@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { notificationApi, type NotificationItem } from "@/lib/notification-api";
 import { userChannel } from "@/lib/realtime";
-import { isNotificationCreated } from "../_lib/notification-event";
-import { usePanelRealtime } from "../_context/PanelRealtimeContext";
+import { useLiveReread } from "@/hooks/useLiveReread";
+import { RealtimeEvents } from "@/generated/wire";
 import { usePanelSession } from "../_context/PanelSessionContext";
 
 /**
@@ -13,6 +13,9 @@ import { usePanelSession } from "../_context/PanelSessionContext";
  * never understates what is waiting.
  */
 export const DROPDOWN_PAGE_SIZE = 10;
+
+/** Only `notification.created` is a reason to ask again; see the hook's note. */
+const NOTIFICATION_EVENTS = [RealtimeEvents.notificationCreated];
 
 export interface NotificationsState {
   items: NotificationItem[];
@@ -61,7 +64,6 @@ export interface NotificationsState {
 export function useNotifications(): NotificationsState {
   const { group } = usePanelSession();
   const userId = group?.current.userId ?? null;
-  const client = usePanelRealtime();
 
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -126,20 +128,13 @@ export function useNotifications(): NotificationsState {
     };
   }, [userId, asked]);
 
-  useEffect(() => {
-    if (!client || !userId) return;
-    return client.subscribe(userChannel(userId), {
-      onMessage: (payload) => {
-        if (!isNotificationCreated(payload)) return;
-        liveRef.current = true;
-        refreshRef.current();
-      },
-      // A notification created while the socket was down was told to nobody,
-      // and the badge would stay short until the next one (F-070-d). Not live:
-      // what it finds was gathered while away and is no toast.
-      onMissed: () => refreshRef.current(),
-    });
-  }, [client, userId]);
+  // A notification created while the socket was down was told to nobody, and
+  // the badge would stay short until the next one (F-070-d). Not live: what a
+  // reconnect finds was gathered while away and is no toast.
+  useLiveReread(userId ? userChannel(userId) : null, NOTIFICATION_EVENTS, (cause) => {
+    if (cause === "event") liveRef.current = true;
+    refreshRef.current();
+  });
 
   const mark = useCallback(async (ids?: readonly string[]) => {
     try {

@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { billingApi } from "@/lib/billing-api";
 import { userChannel } from "@/lib/realtime";
-import { usePanelRealtime } from "../_context/PanelRealtimeContext";
+import { useLiveReread } from "@/hooks/useLiveReread";
 import { usePanelSession } from "../_context/PanelSessionContext";
 
 export interface WalletBalanceState {
@@ -51,7 +51,6 @@ export interface WalletBalanceState {
 export function useWalletBalance(): WalletBalanceState {
   const { group } = usePanelSession();
   const userId = group?.current.userId ?? null;
-  const client = usePanelRealtime();
 
   const [balance, setBalance] = useState<string | null>(null);
   const [held, setHeld] = useState<string | null>(null);
@@ -65,12 +64,6 @@ export function useWalletBalance(): WalletBalanceState {
   // in-flight reads whose answers land in the wrong order.
   const [asked, setAsked] = useState(0);
   const refresh = useCallback(() => setAsked((n) => n + 1), []);
-
-  // The socket effect must not re-run when `refresh` does, or every event would
-  // also cost a resubscribe — and a channel dropped and re-declared is a window
-  // in which the next event is simply lost.
-  const refreshRef = useRef(refresh);
-  refreshRef.current = refresh;
 
   useEffect(() => {
     if (!userId) return;
@@ -100,20 +93,14 @@ export function useWalletBalance(): WalletBalanceState {
     };
   }, [userId, asked]);
 
-  useEffect(() => {
-    if (!client || !userId) return;
-    // Any event on this user's own channel is a reason to ask again — though a
-    // hold moving writes none yet (billing `contract.holds.md`), so `held` is
-    // as of the last movement or read. Today only
-    // a payment can move a wallet; tomorrow a transfer or a spin can, and a
-    // filter written now would have to be widened by each of them.
-    return client.subscribe(userChannel(userId), {
-      onMessage: () => refreshRef.current(),
-      // A payment credited while the socket was down was told to nobody, so a
-      // reconnect asks again (F-070-d) — the same read an event would cost.
-      onMissed: () => refreshRef.current(),
-    });
-  }, [client, userId]);
+  // Any event on this user's own channel is a reason to ask again — though a
+  // hold moving writes none yet (billing `contract.holds.md`), so `held` is
+  // as of the last movement or read. Today only
+  // a payment can move a wallet; tomorrow a transfer or a spin can, and a
+  // filter written now would have to be widened by each of them. A payment
+  // credited while the socket was down was told to nobody, so a reconnect
+  // asks again (F-070-d) — the same read an event would cost.
+  useLiveReread(userId ? userChannel(userId) : null, "any", refresh);
 
   return { balance, held, available, currencyCode, isLoading, failed, refresh };
 }
