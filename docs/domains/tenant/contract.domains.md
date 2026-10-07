@@ -109,6 +109,26 @@ lookup that errors (not "no record") is a sweep `error` and changes nothing.
 | panel-web | the three routes above, on `/my-resellers/:id/domains` (F-066-w2, `resellerDomainsApi`); the onboarding console's checklist is `GET /api/tenants/:id/onboarding` (F-018-l), on `/my-resellers/:id` (F-066-w). Both on the platform's own panel — a gated reseller's platform subdomain serves nothing (F-066-x) |
 | `auth-api` resolver, `billing` callback / return address | read `verified` only; unchanged |
 
+## Cloudflare for SaaS — what EDGE-1-a proved (dev, 2026-10-07)
+
+Test domain `edgetest.chillshop.ir` (DNS at ArvanCloud), Custom Hostname on
+`txnet.cyou` with `ssl.method: http`, CNAME to `chillshop.edge.txnet.cyou`.
+`*.edge.<domain>` is a proxied CNAME to the fallback origin
+(`EDGE_FALLBACK_ORIGIN`), a proxied A record to the origin on 443 — no tunnel
+(ADR-0129 amendment 1).
+
+| path | hostname ownership | certificate | `http`/`https` line | WebSocket `/realtime` |
+|---|---|---|---|---|
+| CNAME straight to the target | automatic (the CNAME) | one SAN, Google Trust Services, ~2 min | arrived as the domain | 101 |
+| Arvan in front (Host = the domain) | **needs `_cf-custom-hostname.<host> TXT <value>`** — Arvan answers DNS with its own addresses, and until then Cloudflare answers 409 | issued over HTTP **through Arvan** in ~30 s | `200 as <host>`, both schemes | 101 |
+
+- **Behind a reseller's CDN the reseller adds one record more**, Cloudflare's
+  ownership TXT (its value is per registration; re-registering changes it).
+  No TXT for the certificate and no DCV delegation: HTTP validation reaches
+  Cloudflare through Arvan, so renewal is expected to need nothing (EDGE-1-d).
+- Untested: renewal itself (first one ~2026-12), and a CDN set to force HTTPS
+  on `/.well-known/` — HTTP validation through it is unproven.
+
 ## Setting up the CDN (ArvanCloud)
 
 > **Superseded by ADR-0129 (2026-10-07):** Cloudflare for SaaS, run by the

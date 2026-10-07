@@ -6,7 +6,7 @@ updated: 2026-10-07
 
 # ADR 0129 — a reseller's domain reaches us through Cloudflare for SaaS, and the origin is reached only through a tunnel
 
-- **Status:** accepted (nothing built yet — rows EDGE-1-a..EDGE-1-j)
+- **Status:** accepted, amended 2026-10-07 (amendment 1: no tunnel) — rows EDGE-1-a..EDGE-1-j
 - **Date:** 2026-10-07
 - **Affects units:** tenant (domain lifecycle), panel-web (domains page), hosting (origin lockdown)
 - **Decision row:** D-66 (the user, 2026-10-07)
@@ -65,3 +65,20 @@ secret header to keep in step.
 - **Risk:** Cloudflare follows US sanctions, so the account is held outside Iran. The `EdgeProvider` port and decision 2 bound the cost of leaving.
 - Price (Cloudflare docs, 2026-10-07): every plan, Free included, has 100 hostnames free, then $0.10 per hostname per month. The user confirms it in the account before EDGE-1-c.
 - `tenant_domain.arvanRegisteredAt` is replaced by the edge columns. ADR-0128's ACME label, firewall ranges and secret header are not built.
+
+## Amendment 1 — no tunnel; the origin answers only Cloudflare's pull certificate (2026-10-07, D-70)
+EDGE-1-a's first step failed on the dev host: from Iran, `cloudflared` cannot
+hold a tunnel. QUIC (UDP 7844) gets no answer, a direct TLS handshake on TCP
+7844 is cut, and through the host's foreign proxy the handshake completes but
+the edge never opens the HTTP/2 session. Cloudflare -> origin on 443 works
+(the dev panel is served that way). A tunnel through the proxy would hang every
+reseller domain on that proxy and on 7844 staying open. The user chose:
+- Decision 1: the fallback origin (`EDGE_FALLBACK_ORIGIN`) is a **proxied
+  record to the origin**, not to a tunnel. `*.edge.<domain>` CNAMEs to it.
+- Decision 7 is replaced: the origin keeps 443 open but **answers only
+  Cloudflare**. Authenticated Origin Pulls use a certificate issued for our zone,
+  never Cloudflare's shared one (any Cloudflare customer can send that one).
+  Traefik's websecure entrypoint requires it. On the swarm host, the firewall
+  also admits 80/443 from Cloudflare's published ranges only. `CF-Connecting-IP`
+  is trusted only on a verified pull. The address change at go-live stands.
+- Dropped: `cloudflared`, the tunnel, and its token.
