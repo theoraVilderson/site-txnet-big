@@ -23,12 +23,20 @@ services:
       - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
       - "--certificatesresolvers.myresolver.acme.email=${EMAIL_SSL}"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      # Routes to things outside this stack that share the host's 80/443 —
+      # Cloudflare reaches the origin on those ports only (barghgo's Telegram
+      # bots, see traefik/dynamic/barghgo-bots.yml).
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${HTTP_ENTRANCE_PORT:-80}:80"
       - "${HTTPS_ENTRANCE_PORT:-443}:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ../dev_letsencrypt:/letsencrypt
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
     networks:
       public_gateway_network:
       private_backend_network:

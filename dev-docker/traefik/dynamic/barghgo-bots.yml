@@ -1,0 +1,42 @@
+# barghgo's Telegram bots (/root/barghgo/barghgo_{prod,dev}) run their own
+# Traefik on host ports 8780 / 8180. txnet.cyou is behind Cloudflare, which
+# reaches the origin on 80/443 only, and Telegram accepts webhooks on
+# 443/80/88/8443 only — so the webhook hosts land on this gateway and are
+# forwarded to that Traefik by Host. The Host header is passed through, which
+# is what barghgo's own routers match on.
+http:
+  # Plain :80 too, in case Cloudflare's SSL mode is Flexible.
+  routers:
+    barghgo-tel-bot-http:
+      rule: Host(`tel-bot.txnet.cyou`)
+      entryPoints: [web]
+      service: barghgo-tel-bot
+      priority: 500
+    barghgo-tel-bot-https:
+      rule: Host(`tel-bot.txnet.cyou`)
+      entryPoints: [websecure]
+      service: barghgo-tel-bot
+      priority: 500
+      tls:
+        certResolver: myresolver
+    barghgo-dev-tel-bot-http:
+      rule: Host(`dev-tel-bot.txnet.cyou`)
+      entryPoints: [web]
+      service: barghgo-dev-tel-bot
+      priority: 500
+    barghgo-dev-tel-bot-https:
+      rule: Host(`dev-tel-bot.txnet.cyou`)
+      entryPoints: [websecure]
+      service: barghgo-dev-tel-bot
+      priority: 500
+      tls:
+        certResolver: myresolver
+  services:
+    barghgo-tel-bot:
+      loadBalancer:
+        servers:
+          - url: http://host.docker.internal:8780
+    barghgo-dev-tel-bot:
+      loadBalancer:
+        servers:
+          - url: http://host.docker.internal:8180
