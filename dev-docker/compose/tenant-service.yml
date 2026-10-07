@@ -37,6 +37,7 @@ services:
       # Both empty: no edge provider, and every edge call refuses.
       - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-}
       - CLOUDFLARE_ZONE_ID=${CLOUDFLARE_ZONE_ID:-}
+      - EDGE_LIFECYCLE_ENABLED=${EDGE_LIFECYCLE_ENABLED:-false}
       - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
       # `worker-service`'s renewal reaches `/api/internal/*` once F-018-v moves
       # it here; Traefik does not route it. Refused empty in production.

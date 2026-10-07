@@ -6,6 +6,7 @@ import {
   TenantDomainEdgeStatus,
   TenantDomainPurpose,
   TenantDomainType,
+  TenantType,
 } from '@prisma/client';
 import {
   AdmittedReseller,
@@ -13,6 +14,8 @@ import {
   RESELLER_LIMIT_USAGE,
   cnameTargetHost,
   normalizeHost,
+  OutboxEventType,
+  RequestHeaders,
   ResellerAccess,
   ResellerAccessRefused,
   ResellerAccessRejection,
@@ -29,6 +32,7 @@ import {
   ADVISORY_LINES,
   CheckLine,
   DomainCheck,
+  cacheLine,
   PROBE_PATH,
   cnameLine,
   edgeOwnerLine,
@@ -37,7 +41,7 @@ import {
   verifyRecordName,
 } from './domain-check';
 import { DOMAIN_LOOKUP, DomainLookup } from './domain-lookup';
-import type { EdgeRecord } from './edge/edge-provider';
+import { EDGE_PROVIDER, EdgeProvider, EdgeProviderError, EdgeRecord, edgeColumns } from './edge/edge-provider';
 import type { AddDomainInput } from './tenant-domain.schema';
 
 /**
@@ -60,6 +64,15 @@ import type { AddDomainInput } from './tenant-domain.schema';
  * `tenant:host:<host>` is deleted inside the transaction that writes it, so a
  * Redis that cannot be reached refuses the change rather than leaving the old
  * answer cached.
+ *
+ * **The edge (ADR-0129 (6), EDGE-1-e).** Once `verified`, the domain is
+ * registered with the {@link EdgeProvider} and read every tick until its
+ * certificate is `issued` or `failed`, then on the re-validation clock (renewal
+ * is the provider's; `renew_failed` is read, never retried). A domain no
+ * longer `verified` leaves the CDN. Live = `verified` and `issued`.
+ *
+ * **Every change of status writes `tenant.domain.changed`** in the transaction
+ * that made it (RT-1-e, C-14), for the owner's page and the platform staff's.
  *
  * **Who.** {@link ResellerAccess}: the reseller the path names, reached by its
  * owner or the platform owner's staff (F-061-h). Only then is the cross-tenant
@@ -99,10 +112,17 @@ export type DomainSweep = {
   revalidated: number;
   revalidating: number;
   dropped: number;
+  /** The edge pass (EDGE-1-e): registered this tick, issued, still issuing, failed, taken off the CDN. */
+  edgeRegistered: number;
+  edgeIssued: number;
+  edgeWaiting: number;
+  edgeFailed: number;
+  edgeRemoved: number;
   errors: number;
 };
 
-type SweepOutcome = Exclude<keyof DomainSweep, 'due' | 'errors'>;
+type EdgeOutcome = 'edgeRegistered' | 'edgeIssued' | 'edgeWaiting' | 'edgeFailed' | 'edgeRemoved';
+type SweepOutcome = Exclude<keyof DomainSweep, 'due' | 'errors' | EdgeOutcome>;
 
 export type DomainRejection = ResellerAccessRejection | 'domain_not_found' | 'domain_taken' | 'domain_reserved';
 
@@ -129,11 +149,14 @@ const DOMAIN_SELECT = {
   lastCheckedAt: true,
   lastCheck: true,
   revalidatingSince: true,
+  edgeProvider: true,
+  edgeHostnameId: true,
   edgeStatus: true,
+  edgeCheckedAt: true,
   edgeLastError: true,
   edgeOwnershipName: true,
   edgeOwnershipValue: true,
-  tenant: { select: { slug: true } },
+  tenant: { select: { slug: true, ownerUserId: true } },
 } satisfies Prisma.TenantDomainSelect;
 
 type DomainRow = Prisma.TenantDomainGetPayload<{ select: typeof DOMAIN_SELECT }>;
@@ -146,9 +169,25 @@ const SWEEP_BATCH = 50;
 
 const HOUR_MS = 3_600_000;
 
+/** Edge steps read every tick; the rest wait for the re-validation clock. */
+const EDGE_MOVING: TenantDomainEdgeStatus[] = [TenantDomainEdgeStatus.none, TenantDomainEdgeStatus.registering, TenantDomainEdgeStatus.issuing];
+const EDGE_SETTLED: TenantDomainEdgeStatus[] = [TenantDomainEdgeStatus.issued, TenantDomainEdgeStatus.renew_failed, TenantDomainEdgeStatus.failed];
+
+/** The edge columns of a domain the CDN does not hold. */
+const OFF_EDGE = {
+  edgeProvider: null,
+  edgeHostnameId: null,
+  edgeStatus: TenantDomainEdgeStatus.none,
+  edgeLastError: null,
+  edgeOwnershipName: null,
+  edgeOwnershipValue: null,
+} satisfies Prisma.TenantDomainUpdateManyMutationInput;
+
 @Injectable()
 export class TenantDomainService {
   private readonly logger = new Logger(TenantDomainService.name);
+  /** The platform owner's tenant, whose staff watch every reseller's domains. Never changes. */
+  private platformTenantId: string | null = null;
 
   constructor(
     private readonly resellerAccess: ResellerAccess,
@@ -156,6 +195,7 @@ export class TenantDomainService {
     private readonly redis: RedisService,
     private readonly config: ConfigService,
     @Inject(DOMAIN_LOOKUP) private readonly lookup: DomainLookup,
+    @Inject(EDGE_PROVIDER) private readonly edge: EdgeProvider,
   ) {}
 
   async add(actor: DomainActor, tenantId: string, input: AddDomainInput, now = new Date()): Promise<DomainView> {
@@ -227,9 +267,21 @@ export class TenantDomainService {
     const row = await this.all.tenantDomain.findFirst({ where, select: DOMAIN_SELECT });
     if (!row) throw new DomainRefused('domain_not_found', domainId);
     if (CHECKABLE.includes(row.verificationStatus)) {
-      await this.all.tenantDomain.updateMany({
-        where: { ...where, verificationStatus: row.verificationStatus },
-        data: { verificationStatus: DomainVerificationStatus.verifying, statusChangedAt: now },
+      await this.all.$transaction(async (tx) => {
+        const { count } = await tx.tenantDomain.updateMany({
+          where: { ...where, verificationStatus: row.verificationStatus },
+          data: { verificationStatus: DomainVerificationStatus.verifying, statusChangedAt: now },
+        });
+        if (count > 0) await this.announce(tx, row);
+      });
+    } else if (row.verificationStatus === DomainVerificationStatus.verified && row.edgeStatus === TenantDomainEdgeStatus.failed) {
+      // The edge gave up: start it over. The next tick removes the failed hostname and registers anew.
+      await this.all.$transaction(async (tx) => {
+        const { count } = await tx.tenantDomain.updateMany({
+          where: { ...where, edgeStatus: TenantDomainEdgeStatus.failed },
+          data: { edgeStatus: TenantDomainEdgeStatus.none, edgeLastError: null },
+        });
+        if (count > 0) await this.announce(tx, row);
       });
     }
     const current = await this.all.tenantDomain.findFirst({ where, select: DOMAIN_SELECT });
@@ -256,13 +308,38 @@ export class TenantDomainService {
       select: DOMAIN_SELECT,
     });
 
-    const sweep: DomainSweep = { due: rows.length, verified: 0, waiting: 0, failed: 0, revalidated: 0, revalidating: 0, dropped: 0, errors: 0 };
+    const sweep: DomainSweep = {
+      due: rows.length,
+      verified: 0,
+      waiting: 0,
+      failed: 0,
+      revalidated: 0,
+      revalidating: 0,
+      dropped: 0,
+      edgeRegistered: 0,
+      edgeIssued: 0,
+      edgeWaiting: 0,
+      edgeFailed: 0,
+      edgeRemoved: 0,
+      errors: 0,
+    };
     for (const row of rows) {
       try {
         sweep[await this.checkOne(row, now)] += 1;
       } catch (e) {
         sweep.errors += 1;
         this.logger.warn(`domain check of ${row.domainValue} failed: ${(e as Error).message}`);
+      }
+    }
+    if (this.config.get<string>('EDGE_LIFECYCLE_ENABLED') === 'true') {
+      // After the checks, so a domain verified this tick is registered this tick.
+      for (const row of await this.edgeDue(now)) {
+        try {
+          sweep[await this.edgeOne(row, now)] += 1;
+        } catch (e) {
+          sweep.errors += 1;
+          this.logger.warn(`edge step of ${row.domainValue} failed: ${(e as Error).message}`);
+        }
       }
     }
     return sweep;
@@ -297,6 +374,7 @@ export class TenantDomainService {
             .probe(`${scheme}://${host}/${this.prefix()}/${PROBE_PATH}?n=${nonce}`)
             .then((answer) => probeLine(scheme, host, target, nonce, answer));
         }),
+        this.cacheCheck(host),
         ...this.edgeLines(row, target, cname),
       ]);
       if (check.ok) {
@@ -342,6 +420,113 @@ export class TenantDomainService {
     return 'dropped';
   }
 
+  /** Two requests to one URL, one after the other, each with its own nonce (ADR-0129 (8)). */
+  private async cacheCheck(host: string): Promise<CheckLine> {
+    const url = `https://${host}/${this.prefix()}/${PROBE_PATH}`;
+    const nonces: [string, string] = [randomBytes(8).toString('hex'), randomBytes(8).toString('hex')];
+    const first = await this.lookup.probe(url, { [RequestHeaders.domainProbe]: nonces[0] });
+    const second = await this.lookup.probe(url, { [RequestHeaders.domainProbe]: nonces[1] });
+    return cacheLine(nonces, [first, second]);
+  }
+
+  /**
+   * The domains the edge owes a step: verified ones not yet issued (every
+   * tick) or settled and due again on the re-validation clock, and any domain
+   * no longer verified that the CDN still holds.
+   */
+  private async edgeDue(now: Date): Promise<DomainRow[]> {
+    const every = this.hours('DOMAIN_REVALIDATE_EVERY_HOURS');
+    return this.all.tenantDomain.findMany({
+      where: {
+        domainType: TenantDomainType.custom_domain,
+        OR: [
+          { verificationStatus: DomainVerificationStatus.verified, edgeStatus: { in: EDGE_MOVING } },
+          {
+            verificationStatus: DomainVerificationStatus.verified,
+            edgeStatus: { in: EDGE_SETTLED },
+            OR: [{ edgeCheckedAt: null }, { edgeCheckedAt: { lte: new Date(now.getTime() - every) } }],
+          },
+          { verificationStatus: { not: DomainVerificationStatus.verified }, edgeHostnameId: { not: null } },
+        ],
+      },
+      orderBy: { edgeCheckedAt: { sort: 'asc', nulls: 'first' } },
+      take: SWEEP_BATCH,
+      select: DOMAIN_SELECT,
+    });
+  }
+
+  /** One domain's next edge step. Every write is guarded on the edge step it read. */
+  private async edgeOne(row: DomainRow, now: Date): Promise<EdgeOutcome> {
+    const id = row.edgeHostnameId;
+    if (row.verificationStatus !== DomainVerificationStatus.verified) {
+      await this.edge.remove(id!);
+      await this.edgeWrite(row, { ...OFF_EDGE, edgeCheckedAt: now });
+      this.logger.log(`custom domain ${row.domainValue} is no longer verified: taken off the edge`);
+      return 'edgeRemoved';
+    }
+
+    if (id && row.edgeStatus !== TenantDomainEdgeStatus.none && row.edgeStatus !== TenantDomainEdgeStatus.registering) {
+      const hostname = await this.edge.status(id);
+      // Gone at the provider: our table is the list, so it is registered again next tick.
+      if (!hostname) {
+        await this.edgeWrite(row, { ...OFF_EDGE, edgeCheckedAt: now });
+        return 'edgeWaiting';
+      }
+      await this.edgeWrite(row, edgeColumns(this.edge.name, hostname, now));
+      return hostname.status === 'issued' ? 'edgeIssued' : hostname.status === 'failed' ? 'edgeFailed' : 'edgeWaiting';
+    }
+
+    // `none` (a retry removes the hostname that failed first) or a `registering` that did not land.
+    if (id && row.edgeStatus === TenantDomainEdgeStatus.none) await this.edge.remove(id);
+    let current = row;
+    if (row.edgeStatus === TenantDomainEdgeStatus.none) {
+      if (!(await this.edgeWrite(row, { edgeStatus: TenantDomainEdgeStatus.registering, edgeHostnameId: null, edgeCheckedAt: now }))) return 'edgeWaiting';
+      current = { ...row, edgeStatus: TenantDomainEdgeStatus.registering, edgeHostnameId: null };
+    }
+    try {
+      const hostname = await this.edge.register(row.domainValue);
+      await this.edgeWrite(current, edgeColumns(this.edge.name, hostname, now));
+      return hostname.status === 'failed' ? 'edgeFailed' : 'edgeRegistered';
+    } catch (e) {
+      // Kept for the page, and `registering` is tried again next tick.
+      if (e instanceof EdgeProviderError) await this.edgeWrite(current, { edgeLastError: e.detail, edgeCheckedAt: now });
+      throw e;
+    }
+  }
+
+  /** An edge write, guarded on the step it read; announced when the step changed. */
+  private async edgeWrite(row: DomainRow, data: Prisma.TenantDomainUpdateManyMutationInput): Promise<boolean> {
+    return this.all.$transaction(async (tx) => {
+      const { count } = await tx.tenantDomain.updateMany({
+        where: { id: row.id, verificationStatus: row.verificationStatus, edgeStatus: row.edgeStatus },
+        data,
+      });
+      if (count > 0 && data.edgeStatus !== undefined && data.edgeStatus !== row.edgeStatus) await this.announce(tx, row);
+      return count > 0;
+    });
+  }
+
+  /**
+   * `tenant.domain.changed` (RT-1-e): the reseller's owner hears it on their
+   * own channel and the platform's staff on the platform's `tenant:` channel —
+   * the page is on the platform's panel (`/my-resellers/:id/domains`), so the
+   * reseller's own `tenant:` channel reaches nobody looking at it. Ids only.
+   */
+  private async announce(tx: Prisma.TransactionClient, row: DomainRow): Promise<void> {
+    this.platformTenantId ??=
+      (await tx.tenant.findFirst({ where: { tenantType: TenantType.platform_owner }, select: { id: true } }))?.id ?? null;
+    if (!this.platformTenantId) throw new Error('no platform_owner tenant');
+    await tx.outboxEvent.create({
+      data: {
+        aggregate: 'tenant.domain',
+        aggregateId: row.id,
+        type: OutboxEventType.TENANT_DOMAIN_CHANGED,
+        payload: { tenantId: this.platformTenantId, userId: row.tenant.ownerUserId, resellerId: row.tenantId, domainId: row.id },
+      },
+      select: { id: true },
+    });
+  }
+
   /** `ok` is the domain's own proof; an advisory line is shown, never decisive. */
   private async check(now: Date, lines: Promise<CheckLine>[]): Promise<DomainCheck> {
     const done = await Promise.all(lines);
@@ -374,6 +559,7 @@ export class TenantDomainService {
         data: { ...data, lastCheckedAt: now, lastCheck: check as unknown as Prisma.InputJsonValue },
       });
       if (count > 0 && retract) await this.redis.del(UnscopedRedisKeys.tenantByHost(row.domainValue));
+      if (count > 0 && statusOf({ ...row, ...data } as DomainRow) !== statusOf(row)) await this.announce(tx, row);
     });
   }
 
@@ -388,8 +574,7 @@ export class TenantDomainService {
   }
 
   private view(row: DomainRow): DomainView {
-    const status: DomainStatus =
-      row.verificationStatus === DomainVerificationStatus.verified && row.revalidatingSince ? 'revalidating' : row.verificationStatus;
+    const status = statusOf(row);
     return {
       id: row.id,
       domainValue: row.domainValue,
@@ -422,4 +607,9 @@ export class TenantDomainService {
   private hours(key: string): number {
     return Number(this.config.get<number>(key)) * HOUR_MS;
   }
+}
+
+/** The status the tenant sees: `revalidating` is `verified` inside its grace. */
+function statusOf(row: Pick<DomainRow, 'verificationStatus' | 'revalidatingSince'>): DomainStatus {
+  return row.verificationStatus === DomainVerificationStatus.verified && row.revalidatingSince ? 'revalidating' : row.verificationStatus;
 }

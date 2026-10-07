@@ -27,6 +27,7 @@ export const RequestHeaders = {
   "botChatId": "x-bot-chat-id",
   "botPlatform": "x-bot-platform",
   "botTenantId": "x-bot-tenant-id",
+  "domainProbe": "x-domain-probe",
 } as const;
 
 /** `contracts/http/wire.json` -> `proxyHeaders`. */
@@ -58,4 +59,5 @@ export const RealtimeEvents = {
   "grantLinksCaptured": "network.grant.linksCaptured",
   "walletChanged": "billing.wallet.changed",
   "grantUsage": "entitlement.grant.usage",
+  "tenantDomainChanged": "tenant.domain.changed",
 } as const;

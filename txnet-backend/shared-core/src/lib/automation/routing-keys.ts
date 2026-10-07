@@ -35,6 +35,8 @@ export const RealtimeEventType = {
   WALLET_CHANGED: 'billing.wallet.changed',
   /** F-307-t: a Grant's committed `consumedBytes`, at most once per 30 s per Grant (`MeteringService.charge`). */
   GRANT_USAGE: 'entitlement.grant.usage',
+  /** RT-1-e / EDGE-1-e: a reseller domain's status or edge step changed (`TenantDomainService`). */
+  TENANT_DOMAIN_CHANGED: 'tenant.domain.changed',
 } as const;
 
 /** Outbox event types (`outbox_event.type`), routed as `outboxRoutingKey(type)`. Only {@link RealtimeEventType} reach a browser. */
@@ -173,6 +175,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.GRANT_LINKS_CAPTURED]: 'worker-service',
   [OutboxEventType.WALLET_CHANGED]: 'worker-service',
   [OutboxEventType.GRANT_USAGE]: 'worker-service',
+  [OutboxEventType.TENANT_DOMAIN_CHANGED]: 'worker-service',
   [OutboxEventType.TENANT_BILLING_CREDITED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED]: 'worker-service',

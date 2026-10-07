@@ -15,7 +15,7 @@ export interface DomainLookup {
   /** The CNAME answers for `host`; `[]` when there are none. */
   cname(host: string): Promise<string[]>;
   /** One GET, redirects followed — a CDN sending http to https still serves a visitor. */
-  probe(url: string): Promise<ProbeAnswer>;
+  probe(url: string, headers?: Record<string, string>): Promise<ProbeAnswer>;
 }
 
 export const DOMAIN_LOOKUP = Symbol('DOMAIN_LOOKUP');
@@ -40,9 +40,9 @@ export class NodeDomainLookup implements DomainLookup {
     return this.empty(() => this.resolver.resolveCname(host));
   }
 
-  async probe(url: string): Promise<ProbeAnswer> {
+  async probe(url: string, headers: Record<string, string> = {}): Promise<ProbeAnswer> {
     try {
-      const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(this.timeoutMs) });
+      const response = await fetch(url, { headers, redirect: 'follow', signal: AbortSignal.timeout(this.timeoutMs) });
       const text = await response.text();
       let body: unknown = null;
       try {

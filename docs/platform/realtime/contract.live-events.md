@@ -90,12 +90,15 @@ this page buys a few seconds on a page that says "your money is safe".
 transaction after each batch, in the one that sets `done`, and in `cancel`.
 BulkByFilter re-reads its job list; `JOB_POLL_MS` goes from `grant-bulk.ts`.
 
-**RT-1-e — reseller domain status.** Type `tenant.domain.changed`, `tenant:`,
-body `{type, domainId}`. Written in `TenantDomainService.write`
-(`tenant-service/src/app/domains/tenant-domain.service.ts`) inside its
-transaction, only when `status` actually changed. tenant-service already
-writes outbox rows (`tenant-renewal.service.ts`). ResellerDomainsView
-re-reads; the re-read button stays for a person who wants to check now.
+**RT-1-e — reseller domain status** — producer built 2026-10-07 with
+EDGE-1-e. Type `tenant.domain.changed`, body `{type, domainId}`, written by
+`TenantDomainService` in the transaction of every change of the view's
+`status` or of the edge step (a check asked for, the sweep, the edge pass).
+**Corrected:** on `user:<reseller owner>` *and* `tenant:<platform owner>`, not
+the reseller's `tenant:` — the page is on the platform's panel, where the owner
+is a platform user and staff are the platform's; the reseller's channel
+reaches nobody looking at it. Payload `{tenantId, userId, resellerId,
+domainId}`. ResellerDomainsView re-reads (EDGE-1-f); the button stays.
 
 **RT-1-f — panel drain and removal.** Type `network.panel.drained`,
 `tenant:`, body `{type, panelId, groupId}`. Written by `GroupDrainService.drainDue`

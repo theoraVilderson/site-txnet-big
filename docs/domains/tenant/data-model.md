@@ -95,7 +95,8 @@ any service, so nothing is backfilled; RLS is untouched (its `tenantId` did not 
 
 `20261007000100_a_domain_is_held_at_the_edge` (EDGE-1-b, ADR-0129) adds the five edge columns of
 `tenant_domain` and drops `arvanRegisteredAt`, which nothing ever wrote. Nothing reads or writes the
-edge columns until EDGE-1-c; the domain view and check read them since EDGE-1-d.
+edge columns until EDGE-1-c; the domain view and check read them since EDGE-1-d, and the domain
+job writes them since EDGE-1-e.
 
 `20260918000100_tenant_domain_verification` (F-018-i) adds the status `verifying` and the five check columns of
 `tenant_domain`.

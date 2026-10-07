@@ -115,6 +115,25 @@ describe('LivePushConsumer.handle', () => {
   });
 });
 
+describe('tenant.domain.changed (RT-1-e)', () => {
+  it("reaches the reseller owner's channel and the platform staff's, naming only the domain", async () => {
+    const { consumer, published } = build();
+
+    await consumer.handle({
+      ...event(),
+      aggregate: 'tenant.domain',
+      type: OutboxEventType.TENANT_DOMAIN_CHANGED,
+      payload: { tenantId: TENANT, userId: USER, resellerId: 'r-1', domainId: 'd-1' },
+    });
+
+    const body = { type: OutboxEventType.TENANT_DOMAIN_CHANGED, domainId: 'd-1' };
+    expect(published).toEqual([
+      { channel: `user:${USER}`, payload: body },
+      { channel: `tenant:${TENANT}`, payload: body },
+    ]);
+  });
+});
+
 // RT-1-b: a row names whose page re-reads — one user's, or a tenant's operators'.
 describe('liveChannel', () => {
   it("names the user's channel for a user row and the tenant's for a tenant row", () => {
@@ -130,7 +149,7 @@ describe('liveChannel', () => {
 
   it('keeps every existing row on its owner: a balance or a Grant is nobody else’s', () => {
     for (const type of [OutboxEventType.GRANT_LINKS_CAPTURED, OutboxEventType.WALLET_CHANGED, OutboxEventType.GRANT_USAGE]) {
-      expect(LIVE_PUSH_FIELDS[type]?.audience).toBe('user');
+      expect(LIVE_PUSH_FIELDS[type]?.audience).toEqual(['user']);
     }
   });
 });

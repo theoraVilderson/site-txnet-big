@@ -23,7 +23,7 @@ export const LEGACY_PROBE_PATH = 'tenant-domain-probe';
 
 export const verifyRecordName = (host: string): string => `${VERIFY_RECORD_LABEL}.${host}`;
 
-export type CheckName = 'txt' | 'cname' | 'http' | 'https' | 'edge_owner';
+export type CheckName = 'txt' | 'cname' | 'http' | 'https' | 'cache' | 'edge_owner';
 
 /**
  * Lines shown with a check that never decide it: the edge's ownership record
@@ -79,6 +79,24 @@ export function probeLine(
   }
   const as = String(data['host']);
   return { check: scheme, expected, found: [`200 as ${as}`], ok: as === host };
+}
+
+/**
+ * A page for one signed-in user must never reach another (ADR-0129 (8)). Two
+ * requests to one URL, each with its own nonce in a header the way a session
+ * rides in a cookie or a token: a CDN that caches by URL whatever the request
+ * carried hands the second one the first one's answer. The probe answers
+ * `Cache-Control: private, no-store`, so a CDN that honours it passes.
+ */
+export function cacheLine(nonces: [string, string], answers: [ProbeAnswer, ProbeAnswer]): CheckLine {
+  const expected = ['each request answered on its own — the CDN honours Cache-Control: private, no-store'];
+  for (const [i, answer] of answers.entries()) {
+    if ('error' in answer) return { check: 'cache', expected, found: [answer.error], ok: false };
+    const nonce = envelopeData(answer.body)?.['nonce'];
+    if (answer.status !== 200 || typeof nonce !== 'string') return { check: 'cache', expected, found: [String(answer.status)], ok: false };
+    if (nonce !== nonces[i]) return { check: 'cache', expected, found: ['cached'], ok: false };
+  }
+  return { check: 'cache', expected, found: ['each its own'], ok: true };
 }
 
 function envelopeData(body: unknown): Record<string, unknown> | null {

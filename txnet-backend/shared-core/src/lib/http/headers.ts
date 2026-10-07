@@ -90,6 +90,8 @@ export const RequestHeaders = {
   botChatId: 'x-bot-chat-id',
   botPlatform: 'x-bot-platform',
   botTenantId: 'x-bot-tenant-id',
+  /** The domain check's nonce, sent as a header so two requests share one URL (ADR-0129 (8), EDGE-1-e). */
+  domainProbe: 'x-domain-probe',
 } as const;
 
 /**

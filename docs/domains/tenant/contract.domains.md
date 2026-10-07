@@ -20,8 +20,8 @@ the `/sub` domain, TLS and the CDN setup are other ids of area 13, not here.
 | `POST /api/tenants/:id/domains` `{domainValue, purpose?}` | the reseller's owner, or platform staff with `tenant.manage` | `201` the domain, `pending`, with its TXT record and CNAME target |
 | `GET /api/tenants/:id/domains` | same | the reseller's custom domains, each with its last check |
 | `POST /api/tenants/:id/domains/:domainId/check` | same | `pending` / `failed` -> `verifying`; any other status is returned as is |
-| `POST /api/internal/tenant-domains/check-due` | `worker-service` (`ServiceOnlyGuard`) | `{due, verified, waiting, failed, revalidated, revalidating, dropped, errors}` |
-| `GET /api/public/tenant/domain-probe?n=<hex nonce>` | public (ADR-0065, `@PublicRoute` doors `'none'`: an unverified domain has no surface yet, so the handler checks the row; `system`, so no status refuses it). `GET /api/tenant-domain-probe` is **@deprecated since 2026-09-19**, remove after the next release | `{host, nonce}` on a host with a `tenant_domain` row; the neutral 404 elsewhere (F-1210) |
+| `POST /api/internal/tenant-domains/check-due` | `worker-service` (`ServiceOnlyGuard`) | `{due, verified, waiting, failed, revalidated, revalidating, dropped, edgeRegistered, edgeIssued, edgeWaiting, edgeFailed, edgeRemoved, errors}` |
+| `GET /api/public/tenant/domain-probe?n=<hex nonce>` | public (ADR-0065, `@PublicRoute` doors `'none'`: an unverified domain has no surface yet, so the handler checks the row; `system`, so no status refuses it). `GET /api/tenant-domain-probe` is **@deprecated since 2026-09-19**, remove after the next release | `{host, nonce}` on a host with a `tenant_domain` row; the neutral 404 elsewhere (F-1210). The nonce is `n`, or the `x-domain-probe` header for the `cache` line; always `Cache-Control: private, no-store` |
 
 The domain view: `{id, domainValue, purpose, status, record: {type: 'TXT',
 name, value}, cnameTarget, verifiedAt, lastCheckedAt, lastCheck, edge: {status,
@@ -67,7 +67,7 @@ keeps checking `verified` alone, and a new reader cannot forget a second value.
 
 ## What a check is
 
-A `verifying` domain passes when all four lines pass; each line stores what it
+A `verifying` domain passes when all five lines pass; each line stores what it
 expected and what it found (catalog 13.2 step 3 — the support ticket this row
 exists to prevent):
 
@@ -75,9 +75,10 @@ exists to prevent):
 |---|---|---|
 | `txt` | `_domain-verification.<host> TXT <token>` | the token is among the TXT strings there |
 | `cname` | `<slug>.edge.<domain>` | the CNAME names **no other** reseller's target. A CDN in front answers DNS with its own name; the target is then its origin, visible only to the probe lines |
+| `cache` | each request answered on its own | two requests to one `https` URL, each with its own nonce in `x-domain-probe`, each got its own answer. A CDN that caches by URL whatever the request carries serves one signed-in user's page to another: `found: ['cached']` (ADR-0129 (8), EDGE-1-e) |
 | `http`, `https` | `200 as <host>` | the platform answered the probe with the nonce this check sent (redirects followed), and the request arrived **as the domain itself**. Arriving as the reseller's own target fails too (ADR-0063): the target serves nothing, so a CDN that forwards it would break every page — the line names the host the CDN sent |
 
-A domain with an `edge.record` gets a fifth line, `edge_owner`: that TXT holds
+A domain with an `edge.record` gets a sixth line, `edge_owner`: that TXT holds
 the value, or the CNAME names the target straight (then the CDN proves the
 hostname by it). It is **advisory**: shown, never part of `ok`, so a missing
 CDN record never holds back or drops the domain's own proof (EDGE-1-d).
@@ -87,6 +88,30 @@ A `verified` domain is re-validated on its **TXT record only** (and the advisory
 `DOMAIN_REVALIDATE_EVERY_HOURS` (6), and every tick while `revalidating`:
 catalog 13.2 step 6 is about a lost record, and a CDN outage is not one. A DNS
 lookup that errors (not "no record") is a sweep `error` and changes nothing.
+
+## The edge lifecycle (EDGE-1-e, ADR-0129 (6))
+
+Run by `check-due` after the checks, so a domain verified this tick is
+registered this tick; only with `EDGE_LIFECYCLE_ENABLED=true` (off until
+go-live, EDGE-1-i). **Live = `verified` and edge `issued`.**
+
+| edge step | read | leaves by |
+|---|---|---|
+| `none` (verified) | every tick | written `registering`, then `register(host)` -> the answer's step; a hostname left from a failure is removed first |
+| `registering` | every tick | a register that threw keeps `edgeLastError` and is sent again |
+| `issuing` | every tick | `status(id)` -> `issued` / `failed` / still `issuing` |
+| `issued`, `renew_failed`, `failed` | every `DOMAIN_REVALIDATE_EVERY_HOURS` | `status(id)`; renewal is Cloudflare's, `renew_failed` is read, never retried |
+
+- A hostname the provider no longer has is written `none` and registered again:
+  our table is the list. A domain no longer `verified` (dropped to `pending`)
+  is removed from the CDN and its edge columns cleared.
+- `failed` keeps what the provider said (`edgeLastError`). A check the tenant
+  asks for on a `verified` domain whose edge `failed` sets it back to `none`.
+- Every write is guarded on the step it read. A provider error is a sweep
+  `error`; the next tick tries again.
+- **Every change of status or edge step writes `tenant.domain.changed`** in its
+  transaction ([live-events RT-1-e](../../platform/realtime/contract.live-events.md)):
+  the owner's `user:` channel and the platform's `tenant:` channel.
 
 ## Rules
 

@@ -14,17 +14,23 @@ const CONSUMER = 'live-push';
 export type LiveAudience = 'user' | 'tenant';
 
 /**
- * Each live-only type: whose channel it goes to, and the payload fields its
+ * Each live-only type: whose channels it goes to, and the payload fields its
  * body carries besides `type`. Every field named here is required: a body
  * missing one would be a page re-reading for a record it cannot name.
  */
-export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: LiveAudience; fields: readonly string[] }>> = {
+export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: readonly LiveAudience[]; fields: readonly string[] }>> = {
   /** F-111-l: `network-service` captured a config's lines — the Grant's configs are ready. */
-  [OutboxEventType.GRANT_LINKS_CAPTURED]: { audience: 'user', fields: ['grantId'] },
+  [OutboxEventType.GRANT_LINKS_CAPTURED]: { audience: ['user'], fields: ['grantId'] },
   /** F-111-m: a wallet balance moved — the top bar re-reads it; no amount rides along. */
-  [OutboxEventType.WALLET_CHANGED]: { audience: 'user', fields: [] },
+  [OutboxEventType.WALLET_CHANGED]: { audience: ['user'], fields: [] },
   /** F-307-t: a Grant's committed total — the row's used figure follows it, no read. */
-  [OutboxEventType.GRANT_USAGE]: { audience: 'user', fields: ['grantId', 'consumedBytes'] },
+  [OutboxEventType.GRANT_USAGE]: { audience: ['user'], fields: ['grantId', 'consumedBytes'] },
+  /**
+   * RT-1-e: a reseller domain's status or edge step changed. The page is on the
+   * platform's panel, so its owner (`userId`) and the platform's staff
+   * (`tenantId` is the platform owner's) are who look at it.
+   */
+  [OutboxEventType.TENANT_DOMAIN_CHANGED]: { audience: ['user', 'tenant'], fields: ['domainId'] },
 };
 
 /**
@@ -79,13 +85,16 @@ export class LivePushConsumer implements OnApplicationBootstrap {
     if (!row) throw new Error(`outbox event ${event.id} of type ${event.type} has no live push row`);
     const p = (event.payload ?? {}) as Record<string, unknown>;
     const str = (k: string) => (typeof p[k] === 'string' && p[k] !== '' ? (p[k] as string) : null);
-    const channel = liveChannel(row.audience, p, event.id);
+    const channels = row.audience.map((audience) => [audience, liveChannel(audience, p, event.id)] as const);
     const body: Record<string, unknown> = { type: event.type };
     for (const field of row.fields) {
       const value = str(field);
       if (!value) throw new Error(`outbox event ${event.id} has a payload without its ${field}`);
       body[field] = value;
     }
-    await this.notices.send({ consumer: CONSUMER, eventId: event.id, live: { channel, body } });
+    // One marker per audience, so a replay after a failed second push repeats only that one.
+    for (const [audience, channel] of channels) {
+      await this.notices.send({ consumer: audience === 'user' ? CONSUMER : `${CONSUMER}-${audience}`, eventId: event.id, live: { channel, body } });
+    }
   }
 }

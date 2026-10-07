@@ -1,5 +1,5 @@
-import { Controller, Get, HttpCode, HttpStatus, NotFoundException, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { PublicRoute, ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
+import { Controller, Get, Header, HttpCode, HttpStatus, NotFoundException, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { headerValue, PublicRoute, RequestHeaders, ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { LEGACY_PROBE_PATH, PROBE_PATH } from './domain-check';
@@ -35,6 +35,11 @@ const NONCE = /^[0-9a-f]{16,64}$/;
  *
  * It answers the host the request arrived as and the nonce, and only on a host
  * with a `tenant_domain` row; anything else is the neutral 404 (F-1210).
+ *
+ * The nonce comes in the query, or in `x-domain-probe` for the cache line: two
+ * requests to one URL, as two signed-in users load one page, and the answer is
+ * `private, no-store` — a CDN that serves the second the first one's answer
+ * fails the check (ADR-0129 (8), EDGE-1-e).
  */
 @Controller([PROBE_PATH, LEGACY_PROBE_PATH])
 export class DomainProbeController {
@@ -43,7 +48,9 @@ export class DomainProbeController {
   @Get()
   @PublicRoute({ doors: 'none' })
   @TenantCapability('system')
-  async probe(@Req() req: Request, @Query('n') nonce: unknown): Promise<{ host: string; nonce: string }> {
+  @Header('Cache-Control', 'private, no-store')
+  async probe(@Req() req: Request, @Query('n') query: unknown): Promise<{ host: string; nonce: string }> {
+    const nonce = query ?? headerValue(req.headers, RequestHeaders.domainProbe);
     const answer = typeof nonce === 'string' && NONCE.test(nonce) ? await this.domains.probeAnswer(req.hostname, nonce) : null;
     if (!answer) throw new NotFoundException();
     return answer;

@@ -66,6 +66,12 @@ export const envSchema = z.object({
    */
   CLOUDFLARE_API_TOKEN: z.string().default(''),
   CLOUDFLARE_ZONE_ID: z.string().default(''),
+  /**
+   * Whether the domain job registers verified domains at the edge and follows
+   * them (EDGE-1-e). Off until go-live (EDGE-1-i): before the platform zone is
+   * on Cloudflare, a registered hostname cannot validate and only costs.
+   */
+  EDGE_LIFECYCLE_ENABLED: z.enum(['true', 'false']).default('false'),
 
   /**
    * Object storage (F-018-m, `platform/object-storage`): which driver holds the
