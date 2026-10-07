@@ -60,6 +60,14 @@ export const envSchema = z.object({
   DOMAIN_PROBE_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 
   /**
+   * The edge (ADR-0129, EDGE-1-c): a reseller's domain is a Custom Hostname on
+   * the platform zone. The token is scoped to that one zone (SSL and
+   * Certificates: Edit). Both empty: no provider, and every edge call refuses.
+   */
+  CLOUDFLARE_API_TOKEN: z.string().default(''),
+  CLOUDFLARE_ZONE_ID: z.string().default(''),
+
+  /**
    * Object storage (F-018-m, `platform/object-storage`): which driver holds the
    * bytes, and for `local` the mounted volume. Only `local` is built; an
    * S3-compatible driver arrives behind the same port. **One node, or a volume

@@ -129,6 +129,18 @@ Test domain `edgetest.chillshop.ir` (DNS at ArvanCloud), Custom Hostname on
 - Untested: renewal itself (first one ~2026-12), and a CDN set to force HTTPS
   on `/.well-known/` — HTTP validation through it is unproven.
 
+**The port (EDGE-1-c).** `domains/edge/edge-provider.ts`: `register(host)`,
+`status(id)`, `remove(id)`. `register` of a host the zone already holds answers
+that registration (Cloudflare `1406`), so re-sending our table never doubles a
+hostname. A hostname that is gone is `null` to `status` and done to `remove`.
+Each registration is its own hostname and certificate, never a shared SAN
+(F-109). Cloudflare to `edgeStatus`: hostname `active` with certificate
+`active`/`pending_expiration` -> `issued`; certificate `expired` ->
+`renew_failed`; hostname `blocked`/`moved`/`deleted` or certificate
+`*_timed_out`/`deleted` -> `failed`; else `issuing`. The driver is used when
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ZONE_ID` are both set. Without them every
+call refuses (`EdgeProviderError`). Proven live on `txnet.cyou`, 2026-10-07.
+
 ## Setting up the CDN (ArvanCloud)
 
 > **Superseded by ADR-0129 (2026-10-07):** Cloudflare for SaaS, run by the
