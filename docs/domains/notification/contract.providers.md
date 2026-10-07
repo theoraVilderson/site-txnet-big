@@ -55,15 +55,17 @@ until MSG-1-c and MSG-1-d switch the readers.
   stop, the message failed; `account` (credentials, credit, sender not
   allowed, template not approved) and `unreachable` (DNS, connect, TLS, 5xx,
   a 429) → the next row; `ambiguous` (timeout after the request left) → the
-  next row for `otp` and `notice`, stop and defer for `campaign`.
+  next row for `otp` and `notice`, stop and defer for `campaign`; `content`
+  (a blocked word, ours or the vendor's) → stop (contract.templates.md W3, W5).
 - **R5 Answer.** `{ sent: true, providerId }` or `{ sent: false, class, tried:
   providerId[] }`; never a throw for a vendor's refusal.
 - **R6 Health.** Every attempt updates its row's health columns, at most once
   per row per ten seconds; a change of `lastFailureClass` or a success after a
   failure writes outbox `notification.provider.health` (C-14, RT-1).
-- **R7 OTP templates.** A row with `settings.otpTemplate` sends `purpose: otp`
-  as the template with `otpCode` as its one parameter; without it, as `text`.
-  The other purposes always go as text.
+- **R7 Patterns and text** (ADR-0132, replacing "only the OTP is a
+  template"): R1 also takes `kind` and `vars`; each row sends the kind's
+  pattern, or the rendered text when `settings.freeText`, or is skipped —
+  [contract.templates.md](contract.templates.md) N1-N4, after W3's check.
 - **R8 Timeouts.** 5s connect, 10s whole for `otp`; 20s for the rest. An OTP's
   whole attempt, every row included, stops at 25s.
 - **R9 Whose rows** (D-38, D-41, identity invariant 16, notification invariant
@@ -79,13 +81,13 @@ driver reads its vendor's current docs first and corrects this table in the
 same change** (as CB-1-l). Fixtures come from those docs; no live account is
 needed for `done`.
 
-| id | driver | secrets | settings | text send | OTP template |
+| id | driver | secrets | settings | text send | pattern send |
 |---|---|---|---|---|---|
 | D1 | `legacy_http` | key (`user@pass`) | `baseUrl` (today's `SMS_API_URL`) | `GET /SendSms`, `SendWasSuccessful` | — |
-| D2 | `kavenegar` | key | `otpTemplate` | `/v1/{key}/sms/send.json` | `/v1/{key}/verify/lookup.json` (`token`, `template`) |
-| D3 | `sms_ir` | key (`x-api-key`) | `otpTemplate`, `otpParam` | `/v1/send/bulk` | `/v1/send/verify` (`templateId`, parameters) |
-| D4 | `melipayamak` | key (user), secret (pass or console token) | `otpTemplate` (bodyId) | REST `SendSMS` | `BaseServiceNumber` (shared line) |
-| D5 | `ippanel` | key (`apikey`) | `otpTemplate`, `otpParam` | `/api/v1/sms/send/webservice/single` | `/api/v1/sms/pattern/normal/send` |
+| D2 | `kavenegar` | key | `patterns` | `/v1/{key}/sms/send.json` | `/v1/{key}/verify/lookup.json` (`token`, `template`) |
+| D3 | `sms_ir` | key (`x-api-key`) | `patterns` | `/v1/send/bulk` | `/v1/send/verify` (`templateId`, parameters) |
+| D4 | `melipayamak` | key (user), secret (pass or console token) | `patterns` (bodyId) | REST `SendSMS` | `BaseServiceNumber` (shared line) |
+| D5 | `ippanel` | key (`apikey`) | `patterns` | `/api/v1/sms/send/webservice/single` | `/api/v1/sms/pattern/normal/send` |
 | D6 | `twilio` | key (Account SID), secret (auth token) | `messagingServiceSid?` | `POST /2010-04-01/Accounts/{sid}/Messages.json` | — |
 | D7 | `infobip` | key (`App` key) | `baseUrl` (per account) | `POST /sms/2/text/advanced` (or v3) | — |
 | D8 | `smtp` | key (user), secret (pass) | `host`, `port`, `secure` | today's `MailProviderService` | — |
@@ -155,7 +157,8 @@ in the audit log; a tenant sees only its own rows, another's id is 404.
   active switch and a health badge (ok / failing / paused = circuit open).
 - **U2** Add: pick a driver, then only the fields
   `MESSAGING_PROVIDER_FIELDS` names for it; a hint per field in en/fa; the
-  Iranian drivers show the OTP-template field with a line on why it matters.
+  Iranian drivers say why patterns matter; patterns per kind are U6
+  (contract.templates.md).
 - **U3** Countries: "all" or a chip list; a shortcut "Iran only" / "everything
   but Iran".
 - **U4** "Send me a test" per row (A6); the answer's class shown in words.

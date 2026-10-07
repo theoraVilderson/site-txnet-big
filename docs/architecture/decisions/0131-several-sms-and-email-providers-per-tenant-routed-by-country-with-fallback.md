@@ -62,7 +62,8 @@ send.
 5. **OTP by template where the provider has one.** A row's settings may name
    an OTP template; the router then sends the code as the template's parameter
    instead of as text. Notices and campaigns are always text; a template-only
-   account is a row with `purposes: [otp]`.
+   account is a row with `purposes: [otp]`. *Amended by ADR-0132: every SMS
+   kind may be a pattern, and free text only where the row allows it.*
 6. **API email reports back.** `ses` and `brevo` post bounces and complaints
    to a signed door per row; a hard bounce or a complaint puts the address on
    the tenant's `email_suppression`, which notices and campaigns obey. SMTP
