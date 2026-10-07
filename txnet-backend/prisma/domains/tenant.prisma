@@ -286,6 +286,12 @@ model TenantDomain {
   edgeCheckedAt      DateTime?
   /// What the provider last refused or reported, verbatim; null once `issued`.
   edgeLastError      String?
+  /// The record the provider asks the reseller to publish before it serves the
+  /// host — Cloudflare's `_cf-custom-hostname.<host>` TXT, needed only behind the
+  /// reseller's own CDN; its value changes with each registration. Null once the
+  /// provider no longer asks (EDGE-1-d, ADR-0129 (4)).
+  edgeOwnershipName  String?
+  edgeOwnershipValue String?
   /// When `verificationStatus` last changed: where a `verifying` window starts (F-018-i).
   statusChangedAt    DateTime?
   /// The last check of a custom domain, and what it expected and found (`DomainCheck`).

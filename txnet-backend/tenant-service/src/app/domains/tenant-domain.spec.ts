@@ -1,6 +1,7 @@
 import { ResellerLimitReached, ResellerAccess, UnscopedRedisKeys } from '@txnet-backend/shared-core';
 
-import { verifyRecordName } from './domain-check';
+import { DomainCheck, verifyRecordName } from './domain-check';
+import { edgeColumns } from './edge/edge-provider';
 import type { DomainLookup, ProbeAnswer } from './domain-lookup';
 import { addDomainSchema } from './tenant-domain.schema';
 import { TenantDomainService } from './tenant-domain.service';
@@ -166,6 +167,10 @@ describe('TenantDomainService', () => {
     lastCheck: null,
     lastRevalidatedAt: null,
     revalidatingSince: null,
+    edgeStatus: 'none',
+    edgeLastError: null,
+    edgeOwnershipName: null,
+    edgeOwnershipValue: null,
     ...over,
   });
 
@@ -376,6 +381,85 @@ describe('TenantDomainService', () => {
       healthy(world);
       expect(await service.checkDue(at(12))).toMatchObject({ revalidated: 1 });
       expect(rows[0]).toMatchObject({ verificationStatus: 'verified', revalidatingSince: null, lastRevalidatedAt: at(12) });
+    });
+  });
+
+  describe('the edge ownership record behind a reseller\'s own CDN (EDGE-1-d, ADR-0129 (4))', () => {
+    const OWNER_NAME = '_cf-custom-hostname.ali-vpn.ir';
+    const registered = (over: Partial<Row> = {}) =>
+      pendingRow({
+        verificationStatus: 'verified',
+        verifiedAt: T0,
+        lastCheckedAt: T0,
+        lastRevalidatedAt: T0,
+        edgeStatus: 'issuing',
+        edgeOwnershipName: OWNER_NAME,
+        edgeOwnershipValue: 'cf-v1',
+        ...over,
+      });
+
+    it('stores what the provider answered, and clears the record once the provider no longer asks for it', () => {
+      const asked = { id: 'ch-1', host: 'ali-vpn.ir', status: 'issuing' as const, ownership: { type: 'TXT' as const, name: OWNER_NAME, value: 'cf-v1' }, errors: ['not yet'] };
+      expect(edgeColumns('cloudflare', asked, T0)).toEqual({
+        edgeProvider: 'cloudflare',
+        edgeHostnameId: 'ch-1',
+        edgeStatus: 'issuing',
+        edgeCheckedAt: T0,
+        edgeLastError: 'not yet',
+        edgeOwnershipName: OWNER_NAME,
+        edgeOwnershipValue: 'cf-v1',
+      });
+      expect(edgeColumns('cloudflare', { ...asked, status: 'issued', ownership: null, errors: [] }, T0)).toMatchObject({
+        edgeLastError: null,
+        edgeOwnershipName: null,
+        edgeOwnershipValue: null,
+      });
+    });
+
+    it('returns the record with the domain, and nothing while there is none', async () => {
+      const { service } = build({ rows: [registered(), pendingRow({ id: 'd2', domainValue: 'b.ir', verificationToken: 'tok-2' })] });
+      const [a, b] = await service.list(owner, RESELLER);
+      expect(a.edge).toEqual({ status: 'issuing', record: { type: 'TXT', name: OWNER_NAME, value: 'cf-v1' }, lastError: null });
+      expect(b.edge).toEqual({ status: 'none', record: null, lastError: null });
+    });
+
+    it('reads it on re-validation and says Cloudflare answers 409 until it is there — without touching the domain\'s own proof', async () => {
+      const { service, rows, world } = build({ rows: [registered()] });
+      healthy(world);
+      world.cname['ali-vpn.ir'] = ['ali-vpn.ir.cdn.arvancdn.ir'];
+
+      expect(await service.checkDue(at(6))).toMatchObject({ revalidated: 1 });
+      const check = rows[0]['lastCheck'] as DomainCheck;
+      expect(check.ok).toBe(true);
+      expect(check.lines.find((l) => l.check === 'edge_owner')).toMatchObject({ ok: false, found: [] });
+      expect(check.lines.find((l) => l.check === 'edge_owner')?.expected[0]).toContain(`${OWNER_NAME} TXT cf-v1`);
+      expect(check.lines.find((l) => l.check === 'edge_owner')?.expected[0]).toContain('409');
+
+      world.txt[OWNER_NAME] = ['cf-v1'];
+      await service.checkDue(at(12));
+      expect((rows[0]['lastCheck'] as DomainCheck).lines.find((l) => l.check === 'edge_owner')).toMatchObject({ ok: true, found: ['cf-v1'] });
+    });
+
+    it('needs no TXT when the CNAME goes straight to the target: the provider proves ownership by it', async () => {
+      const { service, rows, world } = build({ rows: [registered()] });
+      healthy(world);
+      await service.checkDue(at(6));
+      expect((rows[0]['lastCheck'] as DomainCheck).lines.find((l) => l.check === 'edge_owner')).toMatchObject({ ok: true });
+    });
+
+    it('verifies a domain whose ownership record is missing: the record is the edge\'s, not the domain\'s proof', async () => {
+      const { service, rows, world } = build({ rows: [registered({ verificationStatus: 'verifying', verifiedAt: null })] });
+      healthy(world);
+      world.cname['ali-vpn.ir'] = ['ali-vpn.ir.cdn.arvancdn.ir'];
+      expect(await service.checkDue(at(1))).toMatchObject({ verified: 1 });
+      expect((rows[0]['lastCheck'] as DomainCheck).lines.map((l) => l.check)).toEqual(['txt', 'cname', 'http', 'https', 'edge_owner']);
+    });
+
+    it('adds no line for a domain with no record', async () => {
+      const { service, rows, world } = build({ rows: [registered({ edgeOwnershipName: null, edgeOwnershipValue: null })] });
+      healthy(world);
+      await service.checkDue(at(6));
+      expect((rows[0]['lastCheck'] as DomainCheck).lines.map((l) => l.check)).toEqual(['txt']);
     });
   });
 

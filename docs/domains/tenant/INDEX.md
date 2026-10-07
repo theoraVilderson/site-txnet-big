@@ -19,6 +19,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20261001000800_upgrade_now_downgrade_at_renewal/**
   - txnet-backend/prisma/domains/migrations/20261001000900_a_reseller_is_told_about_its_quotas/**
   - txnet-backend/prisma/domains/migrations/20261007000100_a_domain_is_held_at_the_edge/**
+  - txnet-backend/prisma/domains/migrations/20261007000200_a_domain_behind_its_own_cdn_is_told_the_edge_record/**
   - txnet-backend/prisma/domains/migrations/20260909000100_credential_access_audit/**
   - txnet-backend/prisma/domains/migrations/20260909002000_tenant_domain_purpose/**
   - txnet-backend/prisma/domains/migrations/20260917000800_tenant_sms_config_vault/**

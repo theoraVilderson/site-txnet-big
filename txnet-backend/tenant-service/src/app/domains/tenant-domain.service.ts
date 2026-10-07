@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   DomainVerificationStatus,
   Prisma,
+  TenantDomainEdgeStatus,
   TenantDomainPurpose,
   TenantDomainType,
 } from '@prisma/client';
@@ -24,8 +25,19 @@ import { randomBytes } from 'node:crypto';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { RedisService } from '../redis/redis.service';
-import { CheckLine, DomainCheck, PROBE_PATH, cnameLine, probeLine, txtLine, verifyRecordName } from './domain-check';
+import {
+  ADVISORY_LINES,
+  CheckLine,
+  DomainCheck,
+  PROBE_PATH,
+  cnameLine,
+  edgeOwnerLine,
+  probeLine,
+  txtLine,
+  verifyRecordName,
+} from './domain-check';
 import { DOMAIN_LOOKUP, DomainLookup } from './domain-lookup';
+import type { EdgeRecord } from './edge/edge-provider';
 import type { AddDomainInput } from './tenant-domain.schema';
 
 /**
@@ -71,6 +83,12 @@ export type DomainView = {
   verifiedAt: Date | null;
   lastCheckedAt: Date | null;
   lastCheck: DomainCheck | null;
+  /**
+   * The domain at the CDN (ADR-0129 (6)). `record` is the provider's ownership
+   * TXT while it still asks for it: needed behind the reseller's own CDN, where
+   * the edge answers 409 until it is published (EDGE-1-d).
+   */
+  edge: { status: TenantDomainEdgeStatus; record: EdgeRecord | null; lastError: string | null };
 };
 
 export type DomainSweep = {
@@ -111,6 +129,10 @@ const DOMAIN_SELECT = {
   lastCheckedAt: true,
   lastCheck: true,
   revalidatingSince: true,
+  edgeStatus: true,
+  edgeLastError: true,
+  edgeOwnershipName: true,
+  edgeOwnershipValue: true,
   tenant: { select: { slug: true } },
 } satisfies Prisma.TenantDomainSelect;
 
@@ -263,17 +285,19 @@ export class TenantDomainService {
     const host = row.domainValue;
     const token = row.verificationToken ?? '';
 
+    const target = cnameTargetHost(row.tenant.slug, this.base());
     if (row.verificationStatus === DomainVerificationStatus.verifying) {
-      const target = cnameTargetHost(row.tenant.slug, this.base());
+      const cname = this.lookup.cname(host);
       const check = await this.check(now, [
         this.lookup.txt(verifyRecordName(host)).then((found) => txtLine(host, token, found)),
-        this.lookup.cname(host).then((found) => cnameLine(target, this.base(), found)),
+        cname.then((found) => cnameLine(target, this.base(), found)),
         ...(['http', 'https'] as const).map((scheme) => {
           const nonce = randomBytes(8).toString('hex');
           return this.lookup
             .probe(`${scheme}://${host}/${this.prefix()}/${PROBE_PATH}?n=${nonce}`)
             .then((answer) => probeLine(scheme, host, target, nonce, answer));
         }),
+        ...this.edgeLines(row, target, cname),
       ]);
       if (check.ok) {
         await this.write(row, now, check, {
@@ -292,7 +316,10 @@ export class TenantDomainService {
 
     // `verified`: catalog 13.2 step 6 re-validates the record, not the path —
     // a CDN outage is not a lost domain.
-    const check = await this.check(now, [this.lookup.txt(verifyRecordName(host)).then((found) => txtLine(host, token, found))]);
+    const check = await this.check(now, [
+      this.lookup.txt(verifyRecordName(host)).then((found) => txtLine(host, token, found)),
+      ...this.edgeLines(row, target),
+    ]);
     if (check.ok) {
       await this.write(row, now, check, { lastRevalidatedAt: now, revalidatingSince: null }, false);
       return 'revalidated';
@@ -315,9 +342,19 @@ export class TenantDomainService {
     return 'dropped';
   }
 
+  /** `ok` is the domain's own proof; an advisory line is shown, never decisive. */
   private async check(now: Date, lines: Promise<CheckLine>[]): Promise<DomainCheck> {
     const done = await Promise.all(lines);
-    return { at: now.toISOString(), ok: done.every((l) => l.ok), lines: done };
+    return { at: now.toISOString(), ok: done.every((l) => l.ok || ADVISORY_LINES.has(l.check)), lines: done };
+  }
+
+  /** The edge's ownership record, read while the provider asks for one (EDGE-1-d). */
+  private edgeLines(row: DomainRow, target: string, cname?: Promise<string[]>): Promise<CheckLine>[] {
+    const name = row.edgeOwnershipName;
+    const value = row.edgeOwnershipValue;
+    if (!name || !value) return [];
+    const found = cname ?? this.lookup.cname(row.domainValue);
+    return [Promise.all([this.lookup.txt(name), found]).then(([txt, names]) => edgeOwnerLine({ name, value }, target, txt, names))];
   }
 
   /**
@@ -363,6 +400,14 @@ export class TenantDomainService {
       verifiedAt: row.verifiedAt,
       lastCheckedAt: row.lastCheckedAt,
       lastCheck: (row.lastCheck as unknown as DomainCheck | null) ?? null,
+      edge: {
+        status: row.edgeStatus,
+        record:
+          row.edgeOwnershipName && row.edgeOwnershipValue
+            ? { type: 'TXT', name: row.edgeOwnershipName, value: row.edgeOwnershipValue }
+            : null,
+        lastError: row.edgeLastError,
+      },
     };
   }
 

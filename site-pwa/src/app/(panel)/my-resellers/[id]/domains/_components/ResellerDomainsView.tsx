@@ -255,6 +255,7 @@ function DomainCard({
           rows={[
             { type: domain.record.type, name: domain.record.name, value: domain.record.value },
             { type: "CNAME", name: domain.domainValue, value: domain.cnameTarget },
+            ...(domain.edge.record ? [domain.edge.record] : []),
           ]}
           rowKey={(r) => `${r.type}|${r.name}`}
           columns={[
@@ -263,6 +264,7 @@ function DomainCard({
             { id: "value", header: t("common", K.records.value), cell: (r) => <Copyable text={r.value} /> },
           ]}
         />
+        {domain.edge.record && <p className="text-xs text-text-secondary">{t("common", K.records.edgeHint)}</p>}
       </div>
 
       <p className="text-[11px] text-text-secondary">

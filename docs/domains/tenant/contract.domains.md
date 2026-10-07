@@ -24,7 +24,11 @@ the `/sub` domain, TLS and the CDN setup are other ids of area 13, not here.
 | `GET /api/public/tenant/domain-probe?n=<hex nonce>` | public (ADR-0065, `@PublicRoute` doors `'none'`: an unverified domain has no surface yet, so the handler checks the row; `system`, so no status refuses it). `GET /api/tenant-domain-probe` is **@deprecated since 2026-09-19**, remove after the next release | `{host, nonce}` on a host with a `tenant_domain` row; the neutral 404 elsewhere (F-1210) |
 
 The domain view: `{id, domainValue, purpose, status, record: {type: 'TXT',
-name, value}, cnameTarget, verifiedAt, lastCheckedAt, lastCheck}`.
+name, value}, cnameTarget, verifiedAt, lastCheckedAt, lastCheck, edge: {status,
+record, lastError}}`. `edge.record` is the CDN's ownership TXT while the CDN
+still asks for it, else null (EDGE-1-d). The page lists it as a third record and
+says it is needed only behind the reseller's own CDN, which answers 409 until
+it is in place.
 `record.name` is `_domain-verification.<host>` — a neutral label, since a
 reseller's DNS zone is public and must not name the platform (catalog 13.4).
 `cnameTarget` is the reseller's own `<slug>.edge.<domain>` (ADR-0060 (6)) —
@@ -73,7 +77,13 @@ exists to prevent):
 | `cname` | `<slug>.edge.<domain>` | the CNAME names **no other** reseller's target. A CDN in front answers DNS with its own name; the target is then its origin, visible only to the probe lines |
 | `http`, `https` | `200 as <host>` | the platform answered the probe with the nonce this check sent (redirects followed), and the request arrived **as the domain itself**. Arriving as the reseller's own target fails too (ADR-0063): the target serves nothing, so a CDN that forwards it would break every page — the line names the host the CDN sent |
 
-A `verified` domain is re-validated on its **TXT record only**, every
+A domain with an `edge.record` gets a fifth line, `edge_owner`: that TXT holds
+the value, or the CNAME names the target straight (then the CDN proves the
+hostname by it). It is **advisory**: shown, never part of `ok`, so a missing
+CDN record never holds back or drops the domain's own proof (EDGE-1-d).
+
+A `verified` domain is re-validated on its **TXT record only** (and the advisory
+`edge_owner` line), every
 `DOMAIN_REVALIDATE_EVERY_HOURS` (6), and every tick while `revalidating`:
 catalog 13.2 step 6 is about a lost record, and a CDN outage is not one. A DNS
 lookup that errors (not "no record") is a sweep `error` and changes nothing.
@@ -125,7 +135,9 @@ Test domain `edgetest.chillshop.ir` (DNS at ArvanCloud), Custom Hostname on
 - **Behind a reseller's CDN the reseller adds one record more**, Cloudflare's
   ownership TXT (its value is per registration; re-registering changes it).
   No TXT for the certificate and no DCV delegation: HTTP validation reaches
-  Cloudflare through Arvan, so renewal is expected to need nothing (EDGE-1-d).
+  Cloudflare through Arvan, so renewal is expected to need nothing. The record
+  is stored as `edgeOwnershipName`/`edgeOwnershipValue` from each provider
+  answer (`edgeColumns`) and cleared once Cloudflare stops asking (EDGE-1-d).
 - Untested: renewal itself (first one ~2026-12), and a CDN set to force HTTPS
   on `/.well-known/` — HTTP validation through it is unproven.
 

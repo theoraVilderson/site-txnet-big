@@ -392,7 +392,7 @@ export const resellerLimitsApi = {
 export type DomainStatus = "pending" | "verifying" | "verified" | "revalidating" | "failed";
 /** Prisma's `TenantDomainPurpose`. */
 export type DomainPurpose = "panel" | "subscription" | "assets";
-export type CheckName = "txt" | "cname" | "http" | "https";
+export type CheckName = "txt" | "cname" | "http" | "https" | "edge_owner";
 /** One line of a check: what it expected, what it found (`tenant/contract.domains.md` "What a check is"). */
 export interface CheckLine {
   check: CheckName;
@@ -414,6 +414,16 @@ export interface ResellerDomain {
   verifiedAt: string | null;
   lastCheckedAt: string | null;
   lastCheck: { at: string; ok: boolean; lines: CheckLine[] } | null;
+  /**
+   * The domain at the CDN. `record` is the edge's ownership TXT while it still
+   * asks for it: needed behind the reseller's own CDN, where the edge answers
+   * 409 until it is published (EDGE-1-d).
+   */
+  edge: {
+    status: "none" | "registering" | "issuing" | "issued" | "renew_failed" | "failed";
+    record: { type: "TXT"; name: string; value: string } | null;
+    lastError: string | null;
+  };
 }
 
 /**

@@ -23,7 +23,13 @@ export const LEGACY_PROBE_PATH = 'tenant-domain-probe';
 
 export const verifyRecordName = (host: string): string => `${VERIFY_RECORD_LABEL}.${host}`;
 
-export type CheckName = 'txt' | 'cname' | 'http' | 'https';
+export type CheckName = 'txt' | 'cname' | 'http' | 'https' | 'edge_owner';
+
+/**
+ * Lines shown with a check that never decide it: the edge's ownership record
+ * belongs to the CDN's step after `verified`, not to the domain's own proof.
+ */
+export const ADVISORY_LINES: ReadonlySet<CheckName> = new Set(['edge_owner']);
 
 /** One line of a check: what was expected, what was found, and whether they agree. */
 export type CheckLine = { check: CheckName; expected: string[]; found: string[]; ok: boolean };
@@ -79,4 +85,20 @@ function envelopeData(body: unknown): Record<string, unknown> | null {
   if (!body || typeof body !== 'object') return null;
   const { ok, data } = body as { ok?: unknown; data?: unknown };
   return ok === true && data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
+}
+
+/**
+ * The edge's ownership record (EDGE-1-d, ADR-0129 (4)). Behind a reseller's own
+ * CDN, DNS answers with the CDN's addresses, so the provider asks for this TXT
+ * and answers every request with 409 until it is there. A CNAME straight to the
+ * reseller's target proves the hostname by itself, and then no TXT is needed.
+ */
+export function edgeOwnerLine(record: { name: string; value: string }, target: string, txt: string[], cname: string[]): CheckLine {
+  const direct = cname.some((n) => n.toLowerCase().replace(/\.+$/, '') === target);
+  return {
+    check: 'edge_owner',
+    expected: [`${record.name} TXT ${record.value} (behind your own CDN; until it is there the edge answers 409)`],
+    found: txt,
+    ok: direct || txt.includes(record.value),
+  };
 }

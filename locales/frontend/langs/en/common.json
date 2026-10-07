@@ -2312,7 +2312,8 @@
       "title": "Records to publish at your DNS provider",
       "type": "Type",
       "name": "Name",
-      "value": "Value"
+      "value": "Value",
+      "edgeHint": "Only if your own CDN (for example ArvanCloud) sits in front of this domain: publish the second TXT record too. Until it is in place, visitors get error 409. With the CNAME straight to the target it is not needed."
     },
     "copy": "Copy",
     "copied": "Copied",
@@ -2331,7 +2332,8 @@
       "txt": "TXT record",
       "cname": "CNAME",
       "http": "HTTP",
-      "https": "HTTPS"
+      "https": "HTTPS",
+      "edge_owner": "Ownership record (your own CDN)"
     },
     "errors": {
       "domain": "Enter a host name such as panel.example.com — no port, no IP address."

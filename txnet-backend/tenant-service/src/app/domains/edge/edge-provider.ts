@@ -1,4 +1,4 @@
-import { TenantDomainEdgeProvider } from '@prisma/client';
+import { Prisma, TenantDomainEdgeProvider } from '@prisma/client';
 
 /**
  * The CDN that holds a reseller's custom domain and issues its certificate
@@ -43,6 +43,24 @@ export interface EdgeProvider {
 }
 
 export const EDGE_PROVIDER = Symbol('EDGE_PROVIDER');
+
+/**
+ * What a provider's answer writes to `tenant_domain`: the registration, where
+ * it stands, and the ownership record while the provider still asks for it
+ * (EDGE-1-d). A record no longer asked for is cleared, so the page stops
+ * showing it.
+ */
+export function edgeColumns(provider: TenantDomainEdgeProvider, hostname: EdgeHostname, now: Date) {
+  return {
+    edgeProvider: provider,
+    edgeHostnameId: hostname.id,
+    edgeStatus: hostname.status,
+    edgeCheckedAt: now,
+    edgeLastError: hostname.status === 'issued' || hostname.errors.length === 0 ? null : hostname.errors.join('; '),
+    edgeOwnershipName: hostname.ownership?.name ?? null,
+    edgeOwnershipValue: hostname.ownership?.value ?? null,
+  } satisfies Prisma.TenantDomainUpdateManyMutationInput;
+}
 
 /** The provider refused or could not be reached; `detail` is what it said. */
 export class EdgeProviderError extends Error {
