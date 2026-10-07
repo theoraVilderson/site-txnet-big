@@ -12,7 +12,7 @@
  */
 import { OutboxEventType, type OutboxMessage } from '@txnet-backend/shared-core';
 
-import { LivePushConsumer } from './live-push.consumer';
+import { LIVE_PUSH_FIELDS, LivePushConsumer, liveChannel } from './live-push.consumer';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -112,5 +112,25 @@ describe('LivePushConsumer.handle', () => {
 
     expect(published).toEqual([{ channel: `user:${USER}`, payload: { type: OutboxEventType.WALLET_CHANGED } }]);
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+// RT-1-b: a row names whose page re-reads — one user's, or a tenant's operators'.
+describe('liveChannel', () => {
+  it("names the user's channel for a user row and the tenant's for a tenant row", () => {
+    const payload = { tenantId: TENANT, userId: USER };
+    expect(liveChannel('user', payload, EVENT)).toBe(`user:${USER}`);
+    expect(liveChannel('tenant', payload, EVENT)).toBe(`tenant:${TENANT}`);
+  });
+
+  it('refuses a payload without the id its audience needs, never falling back to the other', () => {
+    expect(() => liveChannel('tenant', { userId: USER }, EVENT)).toThrow(/tenant/);
+    expect(() => liveChannel('user', { tenantId: TENANT, userId: '' }, EVENT)).toThrow(/user/);
+  });
+
+  it('keeps every existing row on its owner: a balance or a Grant is nobody else’s', () => {
+    for (const type of [OutboxEventType.GRANT_LINKS_CAPTURED, OutboxEventType.WALLET_CHANGED, OutboxEventType.GRANT_USAGE]) {
+      expect(LIVE_PUSH_FIELDS[type]?.audience).toBe('user');
+    }
   });
 });

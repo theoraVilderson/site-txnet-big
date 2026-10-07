@@ -10,23 +10,38 @@ import { EventNoticeSender } from './event-notice';
 /** This consumer's segment of its per-channel markers (F-067-o). */
 const CONSUMER = 'live-push';
 
+/** Whose page re-reads (RT-1-b): one user's, or the operators' of one tenant. */
+export type LiveAudience = 'user' | 'tenant';
+
 /**
- * Each live-only type, and the payload fields its body carries besides `type`.
- * Every field named here is required: a body missing one would be a page
- * re-reading for a record it cannot name.
+ * Each live-only type: whose channel it goes to, and the payload fields its
+ * body carries besides `type`. Every field named here is required: a body
+ * missing one would be a page re-reading for a record it cannot name.
  */
-export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, readonly string[]>> = {
+export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: LiveAudience; fields: readonly string[] }>> = {
   /** F-111-l: `network-service` captured a config's lines — the Grant's configs are ready. */
-  [OutboxEventType.GRANT_LINKS_CAPTURED]: ['grantId'],
+  [OutboxEventType.GRANT_LINKS_CAPTURED]: { audience: 'user', fields: ['grantId'] },
   /** F-111-m: a wallet balance moved — the top bar re-reads it; no amount rides along. */
-  [OutboxEventType.WALLET_CHANGED]: [],
+  [OutboxEventType.WALLET_CHANGED]: { audience: 'user', fields: [] },
   /** F-307-t: a Grant's committed total — the row's used figure follows it, no read. */
-  [OutboxEventType.GRANT_USAGE]: ['grantId', 'consumedBytes'],
+  [OutboxEventType.GRANT_USAGE]: { audience: 'user', fields: ['grantId', 'consumedBytes'] },
 };
 
 /**
+ * `user:<userId>` or `tenant:<tenantId>`, from the id the producer put in the
+ * payload. A missing id throws — never the other audience's channel instead.
+ */
+export function liveChannel(audience: LiveAudience, payload: Record<string, unknown>, eventId: string): `${LiveAudience}:${string}` {
+  const key = audience === 'user' ? 'userId' : 'tenantId';
+  const id = payload[key];
+  if (typeof id !== 'string' || id === '') throw new Error(`outbox event ${eventId} has a payload without its ${audience}`);
+  return `${audience}:${id}`;
+}
+
+/**
  * Push an event that only an open page needs to the owner's `user:` channel
- * (F-111-l), and tell nobody's inbox or bot.
+ * (F-111-l) or its tenant's `tenant:` channel (RT-1-b), and tell nobody's
+ * inbox or bot.
  *
  * These are the events a page re-reads on and a person is not told about: a
  * config's lines being captured is a Grant becoming usable a few seconds after
@@ -36,8 +51,8 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, readonly string[]
  * one queue for all of them and one consumer, and a new type is a row in
  * {@link LIVE_PUSH_FIELDS} plus its binding.
  *
- * The user is the one the producer named in the payload — never looked up,
- * never guessed — and the body is the fields the row names, nothing more: a
+ * The user or tenant is the one the producer named in the payload — never
+ * looked up, never guessed — and the body is the fields the row names, nothing more: a
  * payload may carry what the producer needed, and that is not the browser's.
  */
 @Injectable()
@@ -60,18 +75,17 @@ export class LivePushConsumer implements OnApplicationBootstrap {
   }
 
   async handle(event: OutboxMessage): Promise<void> {
-    const fields = LIVE_PUSH_FIELDS[event.type as OutboxEventType];
-    if (!fields) throw new Error(`outbox event ${event.id} of type ${event.type} has no live push row`);
+    const row = LIVE_PUSH_FIELDS[event.type as OutboxEventType];
+    if (!row) throw new Error(`outbox event ${event.id} of type ${event.type} has no live push row`);
     const p = (event.payload ?? {}) as Record<string, unknown>;
     const str = (k: string) => (typeof p[k] === 'string' && p[k] !== '' ? (p[k] as string) : null);
-    const userId = str('userId');
-    if (!userId) throw new Error(`outbox event ${event.id} has a payload without its user`);
+    const channel = liveChannel(row.audience, p, event.id);
     const body: Record<string, unknown> = { type: event.type };
-    for (const field of fields) {
+    for (const field of row.fields) {
       const value = str(field);
       if (!value) throw new Error(`outbox event ${event.id} has a payload without its ${field}`);
       body[field] = value;
     }
-    await this.notices.send({ consumer: CONSUMER, eventId: event.id, live: { channel: `user:${userId}`, body } });
+    await this.notices.send({ consumer: CONSUMER, eventId: event.id, live: { channel, body } });
   }
 }

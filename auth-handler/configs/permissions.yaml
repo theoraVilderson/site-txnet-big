@@ -118,6 +118,9 @@ roles:
     permissions:
       - user.read
       - support.agent
+      # The tenant's page refreshes (RT-1-b): the inbox and the domains page
+      # re-read on `tenant:` events, which carry ids and never content.
+      - realtime.tenant.read
   user:
     permissions:
       - self.read

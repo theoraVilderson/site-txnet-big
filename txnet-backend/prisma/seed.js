@@ -143,6 +143,15 @@ async function grantGatewayManageToAdmin() {
     update: {},
     create: { roleId: support.id, permissionId: agent.id },
   });
+  // RT-1-b (20261007000300): a tenant's operators hear its `tenant:` channel.
+  const live = await prisma.permission.upsert({ where: { key: 'realtime.tenant.read' }, update: {}, create: { key: 'realtime.tenant.read' } });
+  for (const operator of [role, support]) {
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: operator.id, permissionId: live.id } },
+      update: {},
+      create: { roleId: operator.id, permissionId: live.id },
+    });
+  }
 }
 
 // ADR-0019: USD is the one base currency, two decimal places, and every money

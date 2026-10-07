@@ -67,18 +67,15 @@ RT-1-j. **useGrantsPage is not moved**: it renders usage from the payload
 (F-307-t), which this hook never hands over — the same exclusion as
 PaymentCreditedToast, support threads and OTP.
 
-**RT-1-b — the tenant audience, and someone to hear it.**
-`LIVE_PUSH_FIELDS` becomes `{ audience: 'user' | 'tenant', fields }`; the
-channel is `user:<payload.userId>` or `tenant:<payload.tenantId>`, and a
-missing id throws as today. Existing rows become `audience: 'user'`.
-`realtime.tenant.read` is granted to **nobody** today except SuperAdmin via
-`*` (`forward-auth/contract.headers.md`), so a reseller hears no `tenant:`
-event at all, `network.panel.tested` included. Grant it to `Admin` and
-`Support`: a line under each in `auth-handler/configs/permissions.yaml`, a
-grant function in `prisma/seed.js` on the `grantGatewayManageToAdmin`
-pattern, and a migration inserting it for existing databases (dev: applied
-without asking). It joins the set a tenant-made role may grant (F-018-n2),
-which is intended: hearing your own tenant's refreshes is not a power.
+**RT-1-b — the tenant audience, and someone to hear it** — built 2026-10-07.
+`LIVE_PUSH_FIELDS` rows are `{ audience: 'user' | 'tenant', fields }`;
+`liveChannel` names `user:<payload.userId>` or `tenant:<payload.tenantId>`
+and throws on a missing id, never falling back to the other. Existing rows
+are `audience: 'user'`. `realtime.tenant.read` is held by `Admin` and
+`Support` (`permissions.yaml` — Admin's line already existed, but no database
+role held it — `seed.js`, migration `20261007000300`). It joins the set a
+tenant-made role may grant (F-018-n2): hearing your own tenant's refreshes is
+not a power.
 
 **RT-1-c — payment pending.** No new type: PaymentPendingView re-reads on
 `billing.payment.confirmed` / `reversed` on `user:`, matching `paymentId`.
