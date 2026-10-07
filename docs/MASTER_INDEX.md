@@ -1,7 +1,7 @@
 ---
 id: master-index
 status: active
-updated: 2026-09-24
+updated: 2026-10-06
 ---
 
 # Master Index
@@ -51,6 +51,7 @@ no service yet. A unit that is `active` with an empty `source:` is a lie and
 | tenant-context | carries the tenant a request resolved to; every scoped query derives its `tenantId` from it (ADR-0024) | active | [->](platform/tenant-context/INDEX.md) |
 | realtime | one WebSocket per signed-in user, multiplexed into channels; the upgrade is authenticated by `forward-auth` (ADR-0030) | active | [->](platform/realtime/INDEX.md) |
 | object-storage | uploaded files behind one port by a tenant-prefixed key; local driver now, S3-compatible later (D-42) | active | [->](platform/object-storage/INDEX.md) |
+| hosting | how the services run and survive: Swarm/compose stacks, Postgres backup + tuning + connection pool, log bounds and format, healthchecks, operational-table housekeeping (ADR-0126) | draft | [->](platform/hosting/INDEX.md) |
 
 ## Cross-cutting docs
 - [Surface map](SURFACES.md) — user-visible thing -> unit -> file, plus `## Flows` (cached walks). **Start here for any vague request.**
