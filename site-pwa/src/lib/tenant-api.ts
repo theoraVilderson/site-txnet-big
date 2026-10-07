@@ -392,7 +392,9 @@ export const resellerLimitsApi = {
 export type DomainStatus = "pending" | "verifying" | "verified" | "revalidating" | "failed";
 /** Prisma's `TenantDomainPurpose`. */
 export type DomainPurpose = "panel" | "subscription" | "assets";
-export type CheckName = "txt" | "cname" | "http" | "https" | "edge_owner";
+export type CheckName = "txt" | "cname" | "http" | "https" | "cache" | "edge_owner";
+/** Prisma's `TenantDomainEdgeStatus`: the domain's step at the CDN (EDGE-1-e). */
+export type EdgeStatus = "none" | "registering" | "issuing" | "issued" | "renew_failed" | "failed";
 /** One line of a check: what it expected, what it found (`tenant/contract.domains.md` "What a check is"). */
 export interface CheckLine {
   check: CheckName;
@@ -420,7 +422,7 @@ export interface ResellerDomain {
    * 409 until it is published (EDGE-1-d).
    */
   edge: {
-    status: "none" | "registering" | "issuing" | "issued" | "renew_failed" | "failed";
+    status: EdgeStatus;
     record: { type: "TXT"; name: string; value: string } | null;
     lastError: string | null;
   };

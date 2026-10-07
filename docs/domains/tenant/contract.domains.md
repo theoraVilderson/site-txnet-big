@@ -141,7 +141,7 @@ go-live, EDGE-1-i). **Live = `verified` and edge `issued`.**
 | Consumer | Uses |
 |---|---|
 | `automation` (`tenant_domain_verification` job, seeded `*/5`) | `check-due` |
-| panel-web | the three routes above, on `/my-resellers/:id/domains` (F-066-w2, `resellerDomainsApi`); the onboarding console's checklist is `GET /api/tenants/:id/onboarding` (F-018-l), on `/my-resellers/:id` (F-066-w). Both on the platform's own panel — a gated reseller's platform subdomain serves nothing (F-066-x) |
+| panel-web | the three routes above, on `/my-resellers/:id/domains` (F-066-w2, `resellerDomainsApi`), re-read on `tenant.domain.changed` (EDGE-1-f); the onboarding console's checklist is `GET /api/tenants/:id/onboarding` (F-018-l), on `/my-resellers/:id` (F-066-w). Both on the platform's own panel — a gated reseller's platform subdomain serves nothing (F-066-x) |
 | `auth-api` resolver, `billing` callback / return address | read `verified` only; unchanged |
 
 ## Cloudflare for SaaS — what EDGE-1-a proved (dev, 2026-10-07)

@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { AlertCircle, Check, CheckCircle2, Clock, Copy, Loader2, RefreshCw, XCircle, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
+import { useLiveReread } from "@/hooks/useLiveReread";
 import { authApi } from "@/lib/auth-api";
-import { resellerDomainsApi, type DomainPurpose, type DomainStatus, type ResellerDomain } from "@/lib/tenant-api";
+import { resellerDomainsApi, type DomainPurpose, type DomainStatus, type EdgeStatus, type ResellerDomain } from "@/lib/tenant-api";
+import { usePanelSession } from "../../../../_context/PanelSessionContext";
 import { Select } from "../../../../_components/kit/Select";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { DataTable } from "../../../../_components/kit/DataTable";
@@ -15,11 +17,18 @@ import { Field } from "../../../../catalog/_components/catalog-ui";
 import {
   CHECK_LINE_KEYS,
   DOMAIN_KEYS as K,
+  DOMAIN_LIVE_EVENTS,
   DOMAIN_PURPOSES,
   DOMAIN_STATUS_KEYS,
+  EDGE_HINT_KEYS,
+  EDGE_STATUS_KEYS,
   canRequestCheck,
   domainHost,
+  domainLiveChannels,
   domainRefusalKey,
+  isApex,
+  isLive,
+  isRoutable,
 } from "../../../_lib/domains";
 import { Alert, Button, Input, PageHeader } from "../../../../_components/kit";
 import { WorkspaceTabs } from "../../../_components/WorkspaceTabs";
@@ -42,6 +51,16 @@ const STATUS_TONE: Record<DomainStatus, { icon: LucideIcon; className: string }>
   failed: { icon: XCircle, className: "border-error-border bg-error-bg text-error" },
 };
 
+const WAITING = { icon: Loader2, className: "border-gold/20 bg-gold-bg text-gold" };
+const EDGE_TONE: Record<EdgeStatus, { icon: LucideIcon; className: string }> = {
+  none: { icon: Clock, className: "border-gold/20 bg-gold-bg text-gold" },
+  registering: WAITING,
+  issuing: WAITING,
+  issued: { icon: CheckCircle2, className: "border-primary/20 bg-leaf-bg text-primary" },
+  renew_failed: { icon: XCircle, className: "border-error-border bg-error-bg text-error" },
+  failed: { icon: XCircle, className: "border-error-border bg-error-bg text-error" },
+};
+
 /**
  * A reseller's custom domains (F-066-w2, `panel-web/contract.resellers.md`
  * "A reseller's workspace"). By the reseller the path names, never the
@@ -54,7 +73,10 @@ const STATUS_TONE: Record<DomainStatus, { icon: LucideIcon; className: string }>
  *    `failed`). The check itself is the sweep's, within minutes, so a
  *    `verifying` domain offers a re-read, not a second request;
  *  - **nothing is inferred.** Status, records and the last check's lines are
- *    the view's, printed as they came.
+ *    the view's, printed as they came;
+ *  - **it follows the sweep live** (EDGE-1-f, RT-1-e): `tenant.domain.changed`
+ *    on the owner's `user:` channel or the platform's `tenant:` channel makes
+ *    it re-read the list quietly. The refresh button stays for "check now".
  */
 export function ResellerDomainsView({ id }: { id: string }) {
   const { t } = useLocale();
@@ -79,6 +101,16 @@ export function ResellerDomainsView({ id }: { id: string }) {
       alive = false;
     };
   }, [id, asked]);
+
+  // A live event is a hint, not the record: the list is read again with no
+  // skeleton, and a failed read keeps what is on screen.
+  const { me, group } = usePanelSession();
+  const [own, platform] = domainLiveChannels(group?.current.userId ?? null, me);
+  const quietRead = () => {
+    resellerDomainsApi.list(id).then(setDomains, () => undefined);
+  };
+  useLiveReread(own, DOMAIN_LIVE_EVENTS, quietRead);
+  useLiveReread(platform, DOMAIN_LIVE_EVENTS, quietRead);
 
   // The name for the title, when the visitor owns it; staff see the plain title.
   useEffect(() => {
@@ -148,8 +180,9 @@ function AddDomain({ id, onAdded }: { id: string; onAdded: (d: ResellerDomain) =
 
   async function submit() {
     const host = domainHost(raw);
-    setError(host ? undefined : K.errors.domain);
-    if (!host) return;
+    const problem = !host ? K.errors.domain : isApex(host) ? K.errors.apex : undefined;
+    setError(problem);
+    if (!host || problem) return;
     setBusy(true);
     setFailure(null);
     try {
@@ -213,6 +246,8 @@ function DomainCard({
   const [failure, setFailure] = useState<unknown>(null);
   const when = (iso: string) => formatInstant(iso, lang) ?? iso;
   const tone = STATUS_TONE[domain.status];
+  // A verified domain whose edge failed is started over by the same route.
+  const checkable = canRequestCheck(domain.status) || (isRoutable(domain.status) && domain.edge.status === "failed");
 
   async function check() {
     setBusy(true);
@@ -234,9 +269,10 @@ function DomainCard({
             {domain.domainValue}
           </span>
           <Badge {...tone} label={t("common", DOMAIN_STATUS_KEYS[domain.status])} />
+          {isLive(domain.status, domain.edge.status) && <Badge {...EDGE_TONE.issued} label={t("common", K.live)} />}
           <span className="text-xs text-text-secondary">{t("common", K.purposes[domain.purpose])}</span>
         </div>
-        {canRequestCheck(domain.status) && (
+        {checkable && (
           <Button variant="primary" size="sm" onClick={() => void check()} loading={busy}>
             {t("common", K.checkNow)}
           </Button>
@@ -266,6 +302,10 @@ function DomainCard({
         />
         {domain.edge.record && <p className="text-xs text-text-secondary">{t("common", K.records.edgeHint)}</p>}
       </div>
+
+      {(isRoutable(domain.status) || domain.edge.status !== "none") && <EdgeStep domain={domain} />}
+
+      <CdnSettings domain={domain} />
 
       <p className="text-[11px] text-text-secondary">
         {domain.verifiedAt && <span>{t("common", K.verifiedAt, { date: when(domain.verifiedAt) })} · </span>}
@@ -299,6 +339,54 @@ function DomainCard({
         </div>
       )}
     </section>
+  );
+}
+
+/** The domain's step at the CDN after `verified` (ADR-0129 (6)), and the provider's reason when it failed. */
+function EdgeStep({ domain }: { domain: ResellerDomain }) {
+  const { t } = useLocale();
+  const { status, lastError } = domain.edge;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-xs font-bold text-text-secondary">{t("common", K.edge.title)}</h3>
+        <Badge {...EDGE_TONE[status]} label={t("common", EDGE_STATUS_KEYS[status])} />
+      </div>
+      <p className="text-xs text-text-secondary">{t("common", EDGE_HINT_KEYS[status])}</p>
+      {lastError && (
+        <p className="text-xs text-error">
+          {t("common", K.edge.why)}: <span dir="ltr" className="font-mono">{lastError}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** What a reseller's own CDN in front of the domain must send (ADR-0129 (4), ADR-0063). */
+function CdnSettings({ domain }: { domain: ResellerDomain }) {
+  const { t } = useLocale();
+  const rows = [
+    { id: "origin", label: t("common", K.cdn.origin), value: domain.cnameTarget, copy: true },
+    { id: "host", label: t("common", K.cdn.host), value: domain.domainValue, copy: true },
+    { id: "sni", label: t("common", K.cdn.sni), value: domain.domainValue, copy: true },
+    { id: "websocket", label: t("common", K.cdn.websocket), value: t("common", K.cdn.websocketOn), copy: false },
+  ];
+  return (
+    <details className="rounded-xl border border-card-border p-3 text-xs">
+      <summary className="cursor-pointer font-bold text-text-secondary">{t("common", K.cdn.title)}</summary>
+      <div className="mt-2 space-y-2">
+        <p className="text-text-secondary">{t("common", K.cdn.intro)}</p>
+        <dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[auto_1fr]">
+          {rows.map((r) => (
+            <div key={r.id} className="contents">
+              <dt className="text-text-secondary">{r.label}</dt>
+              <dd className="text-text-primary">{r.copy ? <Copyable text={r.value} /> : r.value}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="text-text-secondary">{t("common", K.cdn.cache)}</p>
+      </div>
+    </details>
   );
 }
 

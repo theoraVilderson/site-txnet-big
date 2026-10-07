@@ -1,5 +1,8 @@
-import type { CheckName, DomainPurpose, DomainStatus } from "@/lib/tenant-api";
+import type { CheckName, DomainPurpose, DomainStatus, EdgeStatus } from "@/lib/tenant-api";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { RealtimeEvents } from "@/generated/wire";
+import { holdsPermission } from "@/lib/permissions";
+import { tenantChannel, userChannel } from "@/lib/realtime";
 
 /** The page's strings as generated constants (C-06). */
 export const DOMAIN_KEYS = FrontendI18nKeys.common.resellerDomains;
@@ -29,6 +32,36 @@ export function domainRefusalKey(e: unknown): string | null {
 
 export const DOMAIN_STATUS_KEYS: Record<DomainStatus, string> = K.status;
 export const CHECK_LINE_KEYS: Record<CheckName, string> = K.lines;
+export const EDGE_STATUS_KEYS: Record<EdgeStatus, string> = K.edge.status;
+export const EDGE_HINT_KEYS: Record<EdgeStatus, string> = K.edge.hint;
+
+/** Live = verified (or inside its grace) and its certificate issued (ADR-0129 (3)). */
+export const isLive = (status: DomainStatus, edge: EdgeStatus) => isRoutable(status) && edge === "issued";
+
+/**
+ * Two labels is an apex (`example.com`), which a Custom Hostname cannot be
+ * below Enterprise (ADR-0129 Consequences). A suffix of two labels
+ * (`example.co.uk`) is not told apart without the public suffix list.
+ */
+export const isApex = (host: string) => host.split(".").length === 2;
+
+/** What the page re-reads on (RT-1-e): the domain service writes it on every change of status or edge step. */
+export const DOMAIN_LIVE_EVENTS: readonly string[] = [RealtimeEvents.tenantDomainChanged];
+
+/**
+ * Where that event reaches this viewer: the reseller owner's own `user:`
+ * channel, and the platform's `tenant:` channel for its staff — the page is
+ * on the platform's panel. `null` where the viewer has no such channel.
+ */
+export function domainLiveChannels(
+  userId: string | null,
+  me: { tenant: { id: string }; permissions: readonly string[] } | null | undefined,
+): [string | null, string | null] {
+  return [
+    userId ? userChannel(userId) : null,
+    me && holdsPermission(me.permissions, "realtime.tenant.read") ? tenantChannel(me.tenant.id) : null,
+  ];
+}
 
 /** `panel` first: it is the one that lifts the onboarding gate (`contract.domains.md` rule 6). */
 export const DOMAIN_PURPOSES = ["panel", "subscription", "assets"] as const satisfies readonly DomainPurpose[];

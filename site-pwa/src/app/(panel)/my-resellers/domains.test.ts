@@ -2,10 +2,16 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { RealtimeEvents } from "@/generated/wire";
 import { PANEL_MY_RESELLERS, myResellerDomainsPath } from "@/lib/routes";
 import {
   CHECK_LINE_KEYS,
+  DOMAIN_LIVE_EVENTS,
   DOMAIN_PURPOSES,
+  EDGE_STATUS_KEYS,
+  domainLiveChannels,
+  isApex,
+  isLive,
   DOMAIN_REFUSAL_KEYS,
   DOMAIN_STATUS_KEYS,
   canRequestCheck,
@@ -64,9 +70,23 @@ describe("what a domain can be", () => {
     expect(Object.keys(CHECK_LINE_KEYS).sort()).toEqual(lines.sort());
   });
 
+  it("labels every edge step Prisma has (EDGE-1-e)", () => {
+    const block = /enum TenantDomainEdgeStatus \{([^}]*)\}/.exec(read("prisma/domains/tenant.prisma"));
+    const steps = block![1].split("\n").map((l) => l.trim()).filter((l) => /^[a-z_]+$/.test(l));
+    expect(Object.keys(EDGE_STATUS_KEYS).sort()).toEqual(steps.sort());
+  });
+
+  it("is live only verified with its certificate issued (ADR-0129 (3))", () => {
+    expect(isLive("verified", "issued")).toBe(true);
+    expect(isLive("revalidating", "issued")).toBe(true);
+    expect(isLive("verified", "issuing")).toBe(false);
+    expect(isLive("pending", "issued")).toBe(false);
+  });
+
   it("offers every purpose Prisma has, panel first", () => {
     const block = /enum TenantDomainPurpose \{([^}]*)\}/.exec(read("prisma/domains/tenant.prisma"));
-    const purposes = block![1].split("\n").map((l) => l.trim()).filter((l) => /^[a-z_]+$/.test(l));
+    // `api` is the platform's gateway host (seeded), never a domain a reseller adds (3a474da8).
+    const purposes = block![1].split("\n").map((l) => l.trim()).filter((l) => /^[a-z_]+$/.test(l) && l !== "api");
     expect([...DOMAIN_PURPOSES].sort()).toEqual(purposes.sort());
     expect(DOMAIN_PURPOSES[0]).toBe("panel");
   });
@@ -103,6 +123,28 @@ describe("the host an owner types", () => {
     expect(domainHost("localhost")).toBeNull();
     expect(domainHost("-bad.example.com")).toBeNull();
     expect(domainHost("")).toBeNull();
+  });
+});
+
+describe("an apex domain (ADR-0129 Consequences)", () => {
+  it("is refused: below Enterprise a Custom Hostname must be a subdomain", () => {
+    expect(isApex("example.com")).toBe(true);
+    expect(isApex("my-vpn.ir")).toBe(true);
+    expect(isApex("panel.example.com")).toBe(false);
+    expect(isApex("shop.my-vpn.ir")).toBe(false);
+  });
+});
+
+describe("the page re-reads live (RT-1-e)", () => {
+  it("on tenant.domain.changed and nothing else", () => {
+    expect([...DOMAIN_LIVE_EVENTS]).toEqual([RealtimeEvents.tenantDomainChanged]);
+  });
+
+  it("hears the owner's own channel, and the platform's when the session may", () => {
+    const me = (permissions: string[]) => ({ tenant: { id: "p-1" }, permissions });
+    expect(domainLiveChannels("u-1", me([]))).toEqual(["user:u-1", null]);
+    expect(domainLiveChannels("u-1", me(["realtime.tenant.read"]))).toEqual(["user:u-1", "tenant:p-1"]);
+    expect(domainLiveChannels(null, null)).toEqual([null, null]);
   });
 });
 

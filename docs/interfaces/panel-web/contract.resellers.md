@@ -163,7 +163,7 @@ front page; the gateways screen (w4) is beside it, the bot screen (w6) is
 | page | route | files |
 |---|---|---|
 | its console | `/my-resellers/[id]` (`myResellerConsolePath`) | `my-resellers/[id]/_components/OnboardingConsoleView.tsx`, rules `my-resellers/_lib/onboarding.ts` |
-| its domains | `/my-resellers/[id]/domains` (`myResellerDomainsPath`) | `my-resellers/[id]/domains/_components/ResellerDomainsView.tsx`, rules `my-resellers/_lib/domains.ts` |
+| its domains | `/my-resellers/[id]/domains` (`myResellerDomainsPath`) | `my-resellers/[id]/domains/_components/ResellerDomainsView.tsx`, rules `my-resellers/_lib/domains.ts`; certificate, own CDN, live: [contract.reseller-domains.md](contract.reseller-domains.md) (EDGE-1-f) |
 | its gateways | `/my-resellers/[id]/gateways` (`myResellerGatewaysPath`) | `my-resellers/[id]/gateways/_components/ResellerGatewaysView.tsx`, rules `my-resellers/_lib/gateways.ts` |
 | its bot | `/my-resellers/[id]/bot` (`myResellerBotPath`) | [contract.reseller-bot.md](contract.reseller-bot.md) (F-066-w6) |
 | its catalog | `/my-resellers/[id]/catalog` (`myResellerCatalogPath`) | [contract.catalog.md](contract.catalog.md) "The same page for a reseller a route names" (F-066-w8) |

@@ -2278,7 +2278,7 @@
   "resellerDomains": {
     "title": "Domains of {{slug}}",
     "titlePlain": "Your reseller's domains",
-    "subtitle": "Add your own domain, publish the two records below at your DNS provider, then ask for a check. Until a panel domain is verified, your customers cannot register or buy.",
+    "subtitle": "Use a subdomain such as panel.example.com. Publish the two records below at your DNS provider, then ask for a check. Until a panel domain is verified, your customers cannot register or buy.",
     "reload": "Try again",
     "empty": "No domain yet. Add the one your customers will open.",
     "add": {
@@ -2304,7 +2304,7 @@
     "statusHint": {
       "pending": "Publish both records, then press “Check now”.",
       "verifying": "We check every few minutes for up to 72 hours. This page shows the result once it is in.",
-      "verified": "This domain is live.",
+      "verified": "Verified. It goes live once its certificate is issued — see “Certificate” below.",
       "revalidating": "The TXT record is gone. The domain still works, but it stops within 72 hours unless the record is back.",
       "failed": "The records were not found in time. Fix them and press “Check now” again."
     },
@@ -2333,10 +2333,12 @@
       "cname": "CNAME",
       "http": "HTTP",
       "https": "HTTPS",
+      "cache": "Signed-in pages not cached",
       "edge_owner": "Ownership record (your own CDN)"
     },
     "errors": {
-      "domain": "Enter a host name such as panel.example.com — no port, no IP address."
+      "domain": "Enter a host name such as panel.example.com — no port, no IP address.",
+      "apex": "Use a subdomain such as panel.example.com — a bare domain like example.com cannot be served."
     },
     "refusals": {
       "not_allowed": "You cannot manage this reseller's domains.",
@@ -2347,7 +2349,39 @@
       "domain_taken": "That domain is already in use.",
       "domain_reserved": "That is one of the platform's own addresses. Use a domain of your own."
     },
-    "backToConsole": "Back to setup"
+    "backToConsole": "Back to setup",
+    "live": "Live",
+    "edge": {
+      "title": "Certificate",
+      "why": "Why",
+      "status": {
+        "none": "Not started",
+        "registering": "Registering",
+        "issuing": "Issuing",
+        "issued": "Issued",
+        "renew_failed": "Renewal failed",
+        "failed": "Failed"
+      },
+      "hint": {
+        "none": "Starts on its own once the domain is verified.",
+        "registering": "Adding the domain to our network. This takes a minute.",
+        "issuing": "Issuing a certificate for this domain, usually within a few minutes. Behind your own CDN, the ownership record above must be in place.",
+        "issued": "The certificate is active and renews on its own.",
+        "renew_failed": "The certificate could not be renewed and has expired. Check that both records and your CDN settings are still in place.",
+        "failed": "The certificate could not be issued. Fix what is shown below, then press “Check now”."
+      },
+      "retry": "Check now"
+    },
+    "cdn": {
+      "title": "Using your own CDN in front of this domain?",
+      "intro": "Only if a CDN of yours (for example ArvanCloud) sits in front of this domain. Set it up like this, and publish the ownership record above too:",
+      "origin": "Origin",
+      "host": "Host header sent to the origin",
+      "sni": "SNI sent to the origin",
+      "websocket": "WebSocket",
+      "websocketOn": "On",
+      "cache": "Never cache pages for signed-in users: honour Cache-Control: private, no-store. The check fails a CDN that does."
+    }
   },
   "resellerOnboarding": {
     "title": "Set up {{slug}}",

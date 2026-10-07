@@ -98,7 +98,7 @@ EDGE-1-e. Type `tenant.domain.changed`, body `{type, domainId}`, written by
 the reseller's `tenant:` — the page is on the platform's panel, where the owner
 is a platform user and staff are the platform's; the reseller's channel
 reaches nobody looking at it. Payload `{tenantId, userId, resellerId,
-domainId}`. ResellerDomainsView re-reads (EDGE-1-f); the button stays.
+domainId}`. ResellerDomainsView re-reads on both (EDGE-1-f, built); the button stays.
 
 **RT-1-f — panel drain and removal.** Type `network.panel.drained`,
 `tenant:`, body `{type, panelId, groupId}`. Written by `GroupDrainService.drainDue`
