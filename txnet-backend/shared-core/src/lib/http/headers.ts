@@ -106,6 +106,15 @@ export const RequestHeaders = {
  */
 export const FORWARDED_FOR_HEADER = 'X-Forwarded-For';
 
+/**
+ * What a reseller's own CDN says the visitor was, when the verified address is
+ * that CDN's edge (ADR-0129 amendment 2). Written only by the gateway plugin
+ * `edgeclientip`, which removes any a client sent. It is still a claim: the
+ * limiter counts it beside the address (`SHARED_ADDRESS_FACTOR`), and
+ * nothing may use it as the caller's address.
+ */
+export const EDGE_CLAIMED_IP_HEADER = 'X-Edge-Claimed-Ip';
+
 /** Every header name declared here, in the fixture's order. */
 export const ALL_WIRE_HEADERS = [
   ...Object.values(IdentityHeaders),

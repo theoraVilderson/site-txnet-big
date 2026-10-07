@@ -100,7 +100,7 @@ address list to keep in step. Decided:
   sender before any middleware runs.
 - A per-IP limit with a claim is two counters: the address and the claim
   together at the route's own limit, and the address alone at
-  `EDGE_SHARED_ADDRESS_FACTOR` times it. Visitors behind one CDN edge each get
+  `SHARED_ADDRESS_FACTOR` (20, a constant in shared-core) times it. Visitors behind one CDN edge each get
   their own budget. A forged claim buys at most the coarse ceiling, and the
   limits on each account and phone number still hold. With no claim, nothing
   changes. A CDN whose header is not listed counts as one caller, as before.

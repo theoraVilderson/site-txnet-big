@@ -74,10 +74,7 @@ describe('tenant-service public routes', () => {
     // what keeps this test about the Host and not about the cache
     // (`host-surface-cache.spec.ts` covers that).
     const redis = { get: vi.fn(async () => null), setWithTtl: vi.fn(async () => undefined) };
-    const rateLimiter = {
-      hit: vi.fn(async () => ({ allowed: true, current: 1, limit: 300 })),
-      hitPlatform: vi.fn(async () => ({ allowed: true, current: 1, limit: 3000 })),
-    };
+    const rateLimiter = { hitCaller: vi.fn(async () => true) };
     const middleware = new PublicHostMiddleware(
       new HostSurfaceCache(redis as never, prisma as never),
       rateLimiter as never,

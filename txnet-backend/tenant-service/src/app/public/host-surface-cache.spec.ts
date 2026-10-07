@@ -112,10 +112,9 @@ describe('PublicHostMiddleware rate limit', () => {
     const redis = redisDouble();
     const cache = new HostSurfaceCache(redis as never, prismaDouble() as never);
     let i = 0;
-    const rateLimiter = {
-      hit: vi.fn(async () => ({ allowed: hits[i] <= LIMIT, current: hits[i], limit: LIMIT })),
-      hitPlatform: vi.fn(async () => ({ allowed: true, current: hits[i++], limit: LIMIT * 10 })),
-    };
+    // `hitCaller` spends the tenant counter and the platform ceiling together
+    // (shared-core `shared-address.spec.ts` covers the counters themselves).
+    const rateLimiter = { hitCaller: vi.fn(async () => hits[i++] <= LIMIT) };
     return {
       rateLimiter,
       middleware: new PublicHostMiddleware(cache, rateLimiter as never, config as never),
@@ -130,8 +129,8 @@ describe('PublicHostMiddleware rate limit', () => {
     await middleware.use(request('shop-acme.com'), {} as never, next);
     expect(next).toHaveBeenCalledOnce();
     const bucket = rateLimitBucketKey(RateLimitBucket.PUBLIC_ROUTE, '1.2.3.4');
-    expect(rateLimiter.hit).toHaveBeenCalledWith(bucket, LIMIT, expect.any(Number));
-    expect(rateLimiter.hitPlatform).toHaveBeenCalledWith(bucket, LIMIT, expect.any(Number));
+    // No CDN claim on this request, so the bucket is counted as one caller.
+    expect(rateLimiter.hitCaller).toHaveBeenCalledWith(bucket, LIMIT, expect.any(Number), null);
   });
 
   it('refuses 429 over the limit, without running the route', async () => {
@@ -144,6 +143,6 @@ describe('PublicHostMiddleware rate limit', () => {
   it('counts a flood on a host that resolves to nothing', async () => {
     const { middleware, rateLimiter } = middlewareWith([1]);
     await middleware.use(request('stranger.com'), {} as never, vi.fn());
-    expect(rateLimiter.hit).toHaveBeenCalledOnce();
+    expect(rateLimiter.hitCaller).toHaveBeenCalledOnce();
   });
 });

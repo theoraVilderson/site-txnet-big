@@ -3,7 +3,7 @@ id: redis-keyspace
 layer: platform
 status: active
 version: 5
-keywords: [redis, keyspace, session key, otp key, captcha key, bot link key, botlink token, tenant segment, tenant scoped key, keyspace version, TenantContextMissing, rate limit bucket, per-tenant rate limit]
+keywords: [redis, keyspace, session key, otp key, captcha key, bot link key, botlink token, tenant segment, tenant scoped key, keyspace version, TenantContextMissing, rate limit bucket, per-tenant rate limit, shared address, cdn edge, claimed ip, visitors behind a cdn]
 source:
   - contracts/redis/keyspace.json
   - txnet-backend/shared-core/src/lib/redis/**
@@ -20,12 +20,12 @@ source:
   - auth-handler/internal/config/config.go
 owns_tables: []
 depends_on: [tenant-context]
-updated: 2026-09-11
+updated: 2026-10-07
 ---
 
 # redis-keyspace
 **Responsibility:** the shared Redis key convention — the `<namespace>:<version>:` prefix both auth services must agree on, plus the catalogue of keys (sessions, OTP, rate limits) and their TTLs. **Not:** the auth logic that uses the keys (`identity` / `forward-auth`).
-See [contract.md](contract.md) (adding a key / TTL / keyspace version) and [open-questions.md](open-questions.md).
+See [contract.md](contract.md) (adding a key / TTL / keyspace version), [contract.shared-address.md](contract.shared-address.md) (a per-IP limit behind a reseller's CDN: the claimed visitor, EDGE-1-l) and [open-questions.md](open-questions.md).
 ## Changelog
 | Date | Change |
 |---|---|

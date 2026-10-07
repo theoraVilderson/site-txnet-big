@@ -4,6 +4,7 @@ import {
   PUBLIC_SURFACE,
   RateLimitBucket,
   RateLimiter,
+  claimedAddressOf,
   normalizeHost,
   rateLimitBucketKey,
   runWithTenant,
@@ -66,16 +67,20 @@ export class PublicHostMiddleware implements NestMiddleware {
   }
 
   /**
-   * Two counters, both incremented before either is judged, exactly as
-   * `RateLimitGuard` spends a route's own limit: the tenant's budget, and the
-   * platform-wide ceiling over the same bucket (F-066-s). A refused request is
-   * still traffic, so it counts in both — hammering the prefix keeps the window
-   * open rather than resetting it.
+   * Spent exactly as `RateLimitGuard` spends a route's own limit: the tenant's
+   * budget and the platform-wide ceiling over the same bucket (F-066-s), both
+   * incremented before either is judged, and each split by the visitor a
+   * reseller's own CDN claims (`hitCaller`, ADR-0129 amendment 2). A refused
+   * request is still traffic — hammering the prefix keeps the window open.
    */
   private async spend(req: Request): Promise<void> {
     const bucket = rateLimitBucketKey(RateLimitBucket.PUBLIC_ROUTE, req.ip ?? 'unknown');
-    const tenant = await this.rateLimiter.hit(bucket, this.limit, PUBLIC_ROUTE_WINDOW_SEC);
-    const platform = await this.rateLimiter.hitPlatform(bucket, this.limit, PUBLIC_ROUTE_WINDOW_SEC);
-    if (!tenant.allowed || !platform.allowed) throw new HttpException('Too Many Requests', 429);
+    const allowed = await this.rateLimiter.hitCaller(
+      bucket,
+      this.limit,
+      PUBLIC_ROUTE_WINDOW_SEC,
+      claimedAddressOf(req, bucket),
+    );
+    if (!allowed) throw new HttpException('Too Many Requests', 429);
   }
 }
