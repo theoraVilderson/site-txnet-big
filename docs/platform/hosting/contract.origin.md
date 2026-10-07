@@ -73,3 +73,25 @@ With `optional`, no certificate reaches the router with the socket's address,
 and another CA's certificate is still refused. The dev gateway runs the plugin
 with `off`, and a forged `CF-Connecting-IP` is dropped there. O2 on `txnet.cyou`
 is the user's step.
+
+## The firewall (EDGE-1-h)
+
+**O7 — Cloudflare's ranges only, swarm host.** `scripts/edge/cloudflare_firewall.py
+apply` reads `https://api.cloudflare.com/client/v4/ips` and writes chain
+`TXNET-EDGE` in one `iptables-restore --noflush` / `ip6tables-restore` commit:
+`RETURN` per range, then `DROP`. The chain is reached from `INPUT`
+(`--dports 80,443`) and `DOCKER-USER` (`--ctorigdstport 80|443`: a published
+port is DNATed before `FORWARD`). Both match only the public interface
+(`EDGE_PUBLIC_IFACE`, default the default route's), so bridges and the tailnet
+are never filtered. Re-running adds no second jump. `remove` undoes it, and
+`print` shows the rules without changing anything.
+
+**O8 — Kept in step, never emptied.** A list with fewer than 10 IPv4 or 5 IPv6
+ranges, a malformed or wrong-family range, a range wider than /8 (v4) or /16
+(v6), or a failed answer is refused. The last good list
+(`/var/lib/txnet/cloudflare-ips.json`) is used instead, and with none the run
+fails and changes nothing. `install` writes `/etc/cron.d/txnet-cloudflare-firewall`:
+at boot (after Docker) and daily at 04:23. Dev does not run it.
+Proven 2026-10-07 in an empty network namespace: the cached list was used,
+re-applying kept one jump, a non-Cloudflare caller on 443 was dropped, and
+`remove` restored it. Tests: `scripts/edge/test_cloudflare_firewall.py`.

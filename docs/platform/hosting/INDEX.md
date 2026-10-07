@@ -30,7 +30,7 @@ business unit (`billing.rules.yml`, …), what a service does once it is up.
 ## Status
 
 `draft`. Opened 2026-10-06 by ADR-0126 (D-62); the OPS-1 rows are `todo`.
-EDGE-1-g (`contract.origin.md`) is built. The unit
+EDGE-1-g and EDGE-1-h (`contract.origin.md`) are built. The unit
 claims `dev-docker/postgres/**`, `dev-docker/pgbouncer/**`, `swarm/**`,
 `dev-docker/monitoring/config-dev/database.rules.yml` and `loki.yaml` in
 `source:` as each row lands.
