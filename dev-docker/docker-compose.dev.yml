@@ -156,6 +156,14 @@ services:
   # Sized at ~2-3x what each uses at rest (docker stats, 2026-10-06).
   site-pwa:
     mem_limit: ${DEV_SITE_PWA_MEM_LIMIT:-3g} # `next dev --turbopack` grows with every edit
+    # No swap: at the limit the container is killed and restarts in ~30 s.
+    # With swap it paged instead and served requests in minutes (2026-10-07:
+    # 3 GB after ~14 h and 1,188 requests — the dev server's own growth, not load).
+    memswap_limit: ${DEV_SITE_PWA_MEM_LIMIT:-3g}
+    environment:
+      # Caps the JS heap below the container, so V8 collects harder and exits
+      # cleanly when it cannot; Turbopack's native memory is outside it.
+      - NODE_OPTIONS=--max-old-space-size=1536
     logging: *dev-logs
   coinsite:
     mem_limit: ${DEV_COINSITE_MEM_LIMIT:-1536m}
