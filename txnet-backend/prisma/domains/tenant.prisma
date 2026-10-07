@@ -66,6 +66,30 @@ enum TenantDomainPurpose {
   @@schema("tenant")
 }
 
+/// The CDN behind the `EdgeProvider` port (ADR-0129 (5)).
+enum TenantDomainEdgeProvider {
+  cloudflare
+
+  @@schema("tenant")
+}
+
+/// A custom domain at the CDN once it is `verified` (ADR-0129 (6), catalog 13.1
+/// `tlsStatus`). Live means `verified` and `issued`.
+enum TenantDomainEdgeStatus {
+  /// Not registered with any provider (every subdomain, and a custom domain
+  /// before it is verified).
+  none
+  registering
+  /// Registered; the provider is validating it and issuing the certificate.
+  issuing
+  issued
+  /// The provider could not renew a certificate that was issued.
+  renew_failed
+  failed
+
+  @@schema("tenant")
+}
+
 enum DomainVerificationStatus {
   pending
   /// The tenant says its TXT record is in place; the sweep checks it until it
@@ -252,7 +276,16 @@ model TenantDomain {
   verificationStatus DomainVerificationStatus @default(pending) // فقط برای custom_domain معتبر
   verificationToken  String? // برای رکورد TXT اثبات مالکیت
   verifiedAt         DateTime?
-  arvanRegisteredAt  DateTime? // فیلد پیشنهادی بخش ح-۱: زمان ثبت در آروان‌کلاد
+  /// The CDN that holds this domain as a custom hostname and issues its
+  /// certificate (ADR-0129 (5)); null until the domain is first registered there.
+  edgeProvider       TenantDomainEdgeProvider?
+  /// The provider's id for the custom hostname (Cloudflare's `custom_hostnames` id).
+  edgeHostnameId     String?
+  edgeStatus         TenantDomainEdgeStatus   @default(none)
+  /// When `edgeStatus` was last read from the provider.
+  edgeCheckedAt      DateTime?
+  /// What the provider last refused or reported, verbatim; null once `issued`.
+  edgeLastError      String?
   /// When `verificationStatus` last changed: where a `verifying` window starts (F-018-i).
   statusChangedAt    DateTime?
   /// The last check of a custom domain, and what it expected and found (`DomainCheck`).
@@ -267,6 +300,7 @@ model TenantDomain {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([edgeProvider, edgeHostnameId])
   @@index([tenantId])
   @@map("tenant_domain")
   @@schema("tenant")
