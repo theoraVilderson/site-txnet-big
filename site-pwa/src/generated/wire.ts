@@ -62,4 +62,5 @@ export const RealtimeEvents = {
   "walletChanged": "billing.wallet.changed",
   "grantUsage": "entitlement.grant.usage",
   "tenantDomainChanged": "tenant.domain.changed",
+  "tenantSubscriptionRenewed": "tenant.subscription.renewed",
 } as const;

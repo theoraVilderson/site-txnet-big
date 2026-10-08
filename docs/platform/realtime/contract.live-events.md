@@ -102,6 +102,12 @@ domainId}`. ResellerDomainsView re-reads on both (EDGE-1-f, built); the button s
 The setup wizard and the workspace's setup row re-read the onboarding
 checklist on the same two (UX-2-c, UX-2-e).
 
+**F-019-c1 — a reseller's paid renewal.** Type `tenant.subscription.renewed`,
+`user:<reseller owner>`, body `{type}`; payload `{tenantId, userId}`. Written
+by `TenantRenewalService` in a paid renewal's transaction only — an unpaid one
+is already a notice, whose inbox row is live. My services' reseller section
+re-reads on it (`contract.reseller-subscription.md`).
+
 **RT-1-f — panel drain and removal.** Type `network.panel.drained`,
 `tenant:`, body `{type, panelId, groupId}`. Written by `GroupDrainService.drainDue`
 (`billing-service/src/app/traffic/group-drain.ts`) when a pass retired at

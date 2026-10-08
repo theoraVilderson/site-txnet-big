@@ -192,6 +192,8 @@ describe('TenantRenewalService — a scheduled package (F-019-v7)', () => {
       tenantBillingWallet: { findUnique: vi.fn(async () => ({ cachedBalance: D('1000') })) },
       tenantFeatureEntitlement: { deleteMany: vi.fn(async () => ({ count: 1 })), createMany: vi.fn(async () => ({ count: 1 })) },
       tenant: { update: vi.fn(async () => ({})) },
+      // A paid renewal tells the owner's open pages (F-019-c1).
+      outboxEvent: { create: vi.fn(async () => ({})) },
     };
     const all = {
       $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),

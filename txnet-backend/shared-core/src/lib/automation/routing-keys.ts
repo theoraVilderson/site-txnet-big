@@ -37,6 +37,8 @@ export const RealtimeEventType = {
   GRANT_USAGE: 'entitlement.grant.usage',
   /** RT-1-e / EDGE-1-e: a reseller domain's status or edge step changed (`TenantDomainService`). */
   TENANT_DOMAIN_CHANGED: 'tenant.domain.changed',
+  /** F-019-c1: a reseller's renewal was paid — a new period, and a suspension for non-payment lifted (`TenantRenewalService`). */
+  TENANT_SUBSCRIPTION_RENEWED: 'tenant.subscription.renewed',
 } as const;
 
 /** Outbox event types (`outbox_event.type`), routed as `outboxRoutingKey(type)`. Only {@link RealtimeEventType} reach a browser. */
@@ -178,6 +180,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.WALLET_CHANGED]: 'worker-service',
   [OutboxEventType.GRANT_USAGE]: 'worker-service',
   [OutboxEventType.TENANT_DOMAIN_CHANGED]: 'worker-service',
+  [OutboxEventType.TENANT_SUBSCRIPTION_RENEWED]: 'worker-service',
   [OutboxEventType.TENANT_BILLING_CREDITED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED]: 'worker-service',

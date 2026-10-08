@@ -7,8 +7,11 @@ import { userChannel } from "@/lib/realtime";
 import { resellerPurchaseApi, type OwnedReseller } from "@/lib/tenant-api";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 
-/** A renewal warned or suspended is an inbox row, and that row is live (F-035-b). */
-const RENEWAL_EVENTS = [RealtimeEvents.notificationCreated];
+/**
+ * A paid renewal is pushed as itself (F-019-c1); a warned or suspended one is
+ * an inbox row, and that row is live (F-035-b).
+ */
+const RENEWAL_EVENTS = [RealtimeEvents.tenantSubscriptionRenewed, RealtimeEvents.notificationCreated];
 
 /**
  * The reseller the caller holds, for My services (F-502-v): `GET
@@ -17,9 +20,9 @@ const RENEWAL_EVENTS = [RealtimeEvents.notificationCreated];
  * `null` while unasked, pending, answered none or failed: the section is a
  * view beside the Grants and its failure costs only itself.
  *
- * Re-read when the user's channel says an inbox row arrived — a renewal's
- * "payment due" and "suspended" are both one — and after a reconnect
- * (C-14). Never on a clock.
+ * Re-read when the user's channel says a renewal was paid, or that an inbox
+ * row arrived — a renewal's "payment due" and "suspended" are both one — and
+ * after a reconnect (C-14). Never on a clock.
  */
 export function useOwnedReseller(): OwnedReseller | null {
   const { me, group } = usePanelSession();

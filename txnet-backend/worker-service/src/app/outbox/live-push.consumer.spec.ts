@@ -134,6 +134,21 @@ describe('tenant.domain.changed (RT-1-e)', () => {
   });
 });
 
+describe('tenant.subscription.renewed (F-019-c1)', () => {
+  it("reaches the reseller owner's channel only, naming nothing", async () => {
+    const { consumer, published } = build();
+
+    await consumer.handle({
+      ...event(),
+      aggregate: 'tenant.subscription',
+      type: OutboxEventType.TENANT_SUBSCRIPTION_RENEWED,
+      payload: { tenantId: TENANT, userId: USER },
+    });
+
+    expect(published).toEqual([{ channel: `user:${USER}`, payload: { type: OutboxEventType.TENANT_SUBSCRIPTION_RENEWED } }]);
+  });
+});
+
 // RT-1-b: a row names whose page re-reads — one user's, or a tenant's operators'.
 describe('liveChannel', () => {
   it("names the user's channel for a user row and the tenant's for a tenant row", () => {

@@ -26,6 +26,7 @@ import { lockPackage, replacePackageEntitlements } from '../packages/package-ent
  *   2026-09-17) — the package's keys replace the `package_included`
  *   entitlements (F-018-o's removals take effect here), and `trial` or a
  *   `non_payment` suspension becomes `active`. A manual suspension stays.
+ *   `tenant.subscription.renewed` tells the owner's open pages (F-019-c1).
  * - **Short:** until `currentPeriodEnd` + `renewalGraceDays` — or the platform
  *   owner's later `graceUntil` (F-019-g) — the owner is
  *   warned at most once a day; after it the tenant is suspended as
@@ -200,6 +201,8 @@ export class TenantRenewalService {
         if (tenant.status === TenantStatus.trial || unpaidSuspension) {
           await applyTenantStatus(tx, tenantId, { from: tenant.status, to: TenantStatus.active, reason: 'subscription_renewed', actorUserId: null, now });
         }
+        // F-019-c1: the owner's open My services re-reads the new period (C-14). Ids only.
+        await this.announce(tx, tenantId, OutboxEventType.TENANT_SUBSCRIPTION_RENEWED, { tenantId, userId: tenant.ownerUserId });
         return 'renewed';
       }
 

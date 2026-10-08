@@ -115,6 +115,17 @@ describe('TenantRenewalService', () => {
     });
   });
 
+  it("a paid renewal tells the owner's open pages, in the same transaction (F-019-c1, C-14)", async () => {
+    const { service, tx } = build();
+    await expect(service.renew(TENANT, NOW)).resolves.toBe('renewed');
+    expect(tx.outboxEvent.create).toHaveBeenCalledTimes(1);
+    expect(tx.outboxEvent.create.mock.calls[0][0].data).toMatchObject({
+      aggregateId: TENANT,
+      type: OutboxEventType.TENANT_SUBSCRIPTION_RENEWED,
+      payload: { tenantId: TENANT, userId: OWNER },
+    });
+  });
+
   it('an active subscriber renewed stays active with no status write', async () => {
     const { service, tx, writes } = build();
     await expect(service.renew(TENANT, NOW)).resolves.toBe('renewed');

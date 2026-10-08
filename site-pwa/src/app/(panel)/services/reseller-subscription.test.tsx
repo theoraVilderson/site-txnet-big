@@ -21,7 +21,7 @@ import { subscriptionState } from "./_lib/reseller-subscription";
  * > the tenant's status; a live one past `currentPeriodEnd` is in grace —
  * > the renewal is owed and not yet paid.
  *
- * > **A renewal's notice re-reads it** (C-14): never a clock.
+ * > **A renewal re-reads it** (C-14, F-019-c1): paid, or told as a notice; never a clock.
  */
 
 vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
@@ -124,14 +124,14 @@ describe("ResellerSubscription", () => {
     expect(mine).not.toHaveBeenCalled();
   });
 
-  it("re-reads on a renewal's notice on the user's channel, with no clock", async () => {
+  it("re-reads on a paid renewal or a renewal's notice on the user's channel, with no clock", async () => {
     mine.mockResolvedValue({ reseller: HELD });
     render(<ResellerSubscription />);
     await screen.findByText(K.state.active);
 
     const [channel, types, reread] = vi.mocked(useLiveReread).mock.calls.at(-1)!;
     expect(channel).toBe("user:u-1");
-    expect(types).toEqual([RealtimeEvents.notificationCreated]);
+    expect(types).toEqual([RealtimeEvents.tenantSubscriptionRenewed, RealtimeEvents.notificationCreated]);
 
     mine.mockResolvedValue({ reseller: { ...HELD, status: "suspended" } });
     act(() => reread("event"));
