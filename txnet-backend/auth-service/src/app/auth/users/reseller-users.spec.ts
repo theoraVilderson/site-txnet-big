@@ -24,6 +24,7 @@ describe('ResellerUsersService', () => {
     username: 'ali',
     phoneNumber: '+989121234567',
     status: UserStatus.active,
+    statusReason: null,
     createdAt: new Date('2026-09-01T00:00:00Z'),
     role: { rolePermissions: [] as { permission: { key: string } }[] },
     ...over,
@@ -120,6 +121,8 @@ describe('ResellerUsersService', () => {
             username: 'ali',
             phoneMasked: expect.any(String),
             status: UserStatus.active,
+            // ADR-0133: what the person is shown, so the admin sees it too.
+            statusReason: null,
             createdAt: '2026-09-01T00:00:00.000Z',
             canAct: true,
             staff: false,

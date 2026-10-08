@@ -206,11 +206,11 @@ export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   [BotKeys.reseller.user]:
     '{{name}}\nUsername: {{username}}\nNumber: {{phone}}\nStatus: {{status}}\nJoined: {{joined}}',
   [BotKeys.reseller.statusActive]: 'Active',
-  [BotKeys.reseller.statusSuspended]: 'Blocked',
-  [BotKeys.reseller.statusBanned]: 'Blocked by the platform',
+  [BotKeys.reseller.statusSuspended]: 'Restricted (support only)',
+  [BotKeys.reseller.statusBanned]: 'Banned',
   [BotKeys.reseller.blockAsk]:
-    'Block {{name}}? They are signed out everywhere and cannot sign in until you unblock them.',
-  [BotKeys.reseller.blocked]: '{{name}} is blocked ✅',
+    'Restrict {{name}}? They are signed out once; after that they can only talk to support.',
+  [BotKeys.reseller.blocked]: '{{name}} is restricted ✅',
   [BotKeys.reseller.unblocked]: '{{name}} is active again ✅',
   [BotKeys.reseller.revenue]:
     '{{from}} to {{to}}\nService sales: {{sales}} ({{salesCount}})\nCustomer top-ups: {{topUps}} ({{topUpsCount}})',

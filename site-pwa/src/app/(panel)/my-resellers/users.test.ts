@@ -12,7 +12,8 @@ import {
   USERS_QUERY_MIN,
   USER_REFUSAL_KEYS,
   adminActionBody,
-  blockActionOf,
+  statusActionsOf,
+  canBanHere,
   userRefusalKey,
   isPlatformTenant,
   issuableProducts,
@@ -138,11 +139,26 @@ describe("blocking a user from the list (F-311-v4)", () => {
     expect(source(USERS_CONTROLLER)).toContain("@Delete(':userId/block')");
   });
 
-  it("offers block to an active user, unblock to a blocked one, and nothing to a platform ban", () => {
-    expect(blockActionOf("active")).toBe("block");
-    expect(blockActionOf("suspended")).toBe("unblock");
-    // A reseller neither deepens nor lifts the platform's ban (`user_banned`).
-    expect(blockActionOf("banned")).toBeNull();
+  // ADR-0133 / BAN-1-h: "block" is the restricted level, and a ban needs `user.ban`.
+  it("offers restrict to an active user and lift to a restricted one, to anyone admitted", () => {
+    expect(statusActionsOf("active", false)).toEqual(["restrict"]);
+    expect(statusActionsOf("suspended", false)).toEqual(["lift"]);
+    expect(statusActionsOf("banned", false)).toEqual([]);
+  });
+
+  it("adds the ban, and the lift of one, for a holder of user.ban on its own tenant", () => {
+    expect(statusActionsOf("active", true)).toEqual(["restrict", "ban"]);
+    expect(statusActionsOf("suspended", true)).toEqual(["lift", "ban"]);
+    expect(statusActionsOf("banned", true)).toEqual(["unban"]);
+  });
+
+  it("lets only the session's own tenant ban, and only with the key", () => {
+    const me = (tenant: string, permissions: string[]) => ({ tenant: { id: tenant }, permissions });
+    expect(canBanHere("T", me("T", ["user.ban"]))).toBe(true);
+    expect(canBanHere("T", me("T", ["*"]))).toBe(true);
+    expect(canBanHere("R", me("T", ["user.ban"]))).toBe(false);
+    expect(canBanHere("T", me("T", ["restriction.assign"]))).toBe(false);
+    expect(canBanHere("T", null)).toBe(false);
   });
 });
 

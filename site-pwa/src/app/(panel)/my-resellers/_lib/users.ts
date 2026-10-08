@@ -1,3 +1,4 @@
+import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { ResellerUser } from "@/lib/auth-api";
 import type { AdminConfigAction, AdminConfigActionBody, ConfigActionRefusal, UsersCatalogProduct } from "@/lib/billing-api";
@@ -54,10 +55,29 @@ export function usersQuery(raw: string, page: number): { q?: string; page: numbe
  * one, unblock a blocked one, and nothing for a platform ban — a reseller
  * neither deepens nor lifts it (`user_banned`).
  */
-export function blockActionOf(status: ResellerUser["status"]): "block" | "unblock" | null {
-  if (status === "active") return "block";
-  if (status === "suspended") return "unblock";
-  return null;
+/** One act on a person's status from the users list (ADR-0133, BAN-1-h). */
+export type StatusAction = "restrict" | "lift" | "ban" | "unban";
+
+/**
+ * What the list offers a person: restrict or lift (the reseller block, open to
+ * anyone the page admits), and the ban and its lift only where `canBan`.
+ */
+export function statusActionsOf(status: ResellerUser["status"], canBan: boolean): StatusAction[] {
+  if (status === "banned") return canBan ? ["unban"] : [];
+  const first: StatusAction = status === "active" ? "restrict" : "lift";
+  return canBan ? [first, "ban"] : [first];
+}
+
+/**
+ * A ban goes through `PUT /auth/users/:id/status`, which acts in the caller's
+ * own tenant only — so only on the session's own users page, and only with
+ * `user.ban`.
+ */
+export function canBanHere(
+  id: string,
+  me: { tenant: { id: string }; permissions: readonly string[] } | null,
+): boolean {
+  return !!me && me.tenant.id === id && holdsPermission(me.permissions, "user.ban");
 }
 
 /**

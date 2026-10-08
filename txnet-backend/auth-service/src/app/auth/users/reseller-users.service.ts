@@ -52,6 +52,8 @@ export type ResellerUserView = {
   username: string | null;
   phoneMasked: string | null;
   status: UserStatus;
+  /** What the person is shown for their status (ADR-0133); null while `active`. */
+  statusReason: string | null;
   createdAt: string;
   canAct: boolean;
   staff: boolean;
@@ -72,6 +74,7 @@ const SELECT = {
   username: true,
   phoneNumber: true,
   status: true,
+  statusReason: true,
   createdAt: true,
   ...TARGET_PERMISSIONS_SELECT,
 } as const;
@@ -259,6 +262,7 @@ function view(row: UserRow, ctx: ViewContext): ResellerUserView {
     username: row.username,
     phoneMasked: maskPhone(row.phoneNumber),
     status: row.status,
+    statusReason: row.statusReason,
     createdAt: row.createdAt.toISOString(),
     canAct: refusal === null,
     staff: permissions.length > 0 || row.id === ctx.tenant.ownerUserId,

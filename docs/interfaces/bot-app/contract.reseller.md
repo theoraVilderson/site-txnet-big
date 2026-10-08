@@ -68,7 +68,7 @@ directly: that route reads the identity headers `my-auth` writes, exactly as
 |---|---|
 | `canWrite` decides whether the button is drawn, re-read for that screen | a suspended reseller still reads its customers and no longer writes (`tenant/rules.md`); deciding the second verdict from the first would copy the status matrix out of the door |
 | A `banned` account gets no button at all | the platform banned it, and a reseller neither deepens nor lifts that (`user_banned`, 409) |
-| Block asks first, on its own screen, and the confirming tap must name the same customer the state does | blocking signs that account out everywhere, and the tap that causes it sits on the screen someone opened to *look* at a customer. Same two-prefix shape as `drop:` in [contract.accounts.md](contract.accounts.md) |
+| Block (the restricted level, ADR-0133 — the copy says "restrict") asks first, on its own screen, and the confirming tap must name the same customer the state does | blocking signs that account out everywhere, and the tap that causes it sits on the screen someone opened to *look* at a customer. Same two-prefix shape as `drop:` in [contract.accounts.md](contract.accounts.md) |
 | Unblock is one tap, and a `DELETE` | giving access back needs no confirmation, and unblock is the **deletion of the block**, not a second verb on the user |
 | Every refusal is `auth-api`'s own sentence, rendered `raw` | the bot writes no rule of its own about who may block whom (ADR-0009) |
 

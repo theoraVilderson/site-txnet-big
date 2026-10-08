@@ -570,7 +570,8 @@ export type UserGroupMember = {
 };
 
 /** One user as a reseller's own list answers it (F-311-a, `contract.reseller-users.md`). */
-export type ResellerUser = UserSearchHit & { createdAt: string };
+/** `statusReason`: what the person is shown for their status (ADR-0133). */
+export type ResellerUser = UserSearchHit & { createdAt: string; statusReason?: string | null };
 
 /** A reseller's own users, by the **path's** tenant (F-311-a) — never the session's, which is the platform's for its owner (ADR-0059). */
 export const resellerUsersApiPath = (tenantId: string) => `/auth/tenants/${encodeURIComponent(tenantId)}/users`;
@@ -592,7 +593,7 @@ export const resellerUsersApi = {
     return request<{ items: ResellerUser[]; total: number; page: number; pageSize: number }>(`${resellerUsersApiPath(tenantId)}?${params}`, { method: "GET" });
   },
   /** Answers the user at `suspended`, every session revoked; already blocked is the same 200. `staffWrite`. */
-  async block(tenantId: string, userId: string) { return request<ResellerUser>(resellerUserBlockPath(tenantId, userId), { method: "POST" }); },
+  async block(tenantId: string, userId: string, reason?: string) { return request<ResellerUser>(resellerUserBlockPath(tenantId, userId), { method: "POST", body: JSON.stringify(reason ? { reason } : {}) }); },
   /** Answers the user at `active`. */
   async unblock(tenantId: string, userId: string) { return request<ResellerUser>(resellerUserBlockPath(tenantId, userId), { method: "DELETE" }); },
 };
