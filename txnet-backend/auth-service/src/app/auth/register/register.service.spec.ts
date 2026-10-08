@@ -319,6 +319,16 @@ describe('RegisterService — a reseller full of users (F-019-t2)', () => {
     expect(h.prisma.user.create).not.toHaveBeenCalled();
     expect(h.prisma.$executeRaw).toHaveBeenCalled();
   });
+
+  it("binds the reseller's tenant before it counts, or the count is refused", async () => {
+    // 2026-10-08, panel.barghgho.ir: a plain `$transaction` bound no tenant, so the
+    // limit's `User.count` threw TenantScopeConflict and verify answered 500.
+    const h = harness({ tenantType: 'reseller', endUsers: 2, users: 1 });
+    h.redis.getJson.mockResolvedValue({ fullName: 'B', username: 'b', phoneNumber: PHONE, passwordHash: 'h', tenantId: 'tenant-1', roleId: 'role-user' });
+    await runWithTenant(TENANT as never, () => h.service.verifyPhone({ phoneNumber: PHONE, otpCode: '123456' } as never));
+    const first = (h.prisma.$executeRaw.mock.calls[0][0] as TemplateStringsArray).join('?');
+    expect(first).toContain("set_config('app.tenant_id'");
+  });
 });
 
 describe('RegisterService.register — messenger channels', () => {

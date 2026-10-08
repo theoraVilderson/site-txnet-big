@@ -14,7 +14,7 @@ import {
   OtpPurpose,
 } from '../otp/otp.interface';
 import { OtpChannelRegistry } from '../otp/otp-channels.service';
-import { otpRealtimeChannel, RESELLER_LIMIT_USAGE, resellerLimitOf, type ResellerLimitReader, type ResellerUsageReader } from '@txnet-backend/shared-core';
+import { otpRealtimeChannel, RESELLER_LIMIT_USAGE, resellerLimitOf, tenantTransaction, type ResellerLimitReader, type ResellerUsageReader } from '@txnet-backend/shared-core';
 import { OtpDeliveryStore } from '../otp/otp-delivery.store';
 import { BotLinkService } from '../bot-link/bot-link.service';
 import { BotPlatform } from '@txnet-backend/messenger';
@@ -218,8 +218,10 @@ export class RegisterService {
       // Create user with unique constraint handling
       try {
         // Checked again under a per-reseller lock: the reseller may have
-        // filled while this code was on its way (F-019-t2).
-        const user = await this.prisma.$transaction(async (tx) => {
+        // filled while this code was on its way (F-019-t2). `tenantTransaction`,
+        // not `$transaction`: the limit's `User.count` is refused in a
+        // transaction that bound no tenant.
+        const user = await tenantTransaction(this.prisma, async (tx) => {
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_limit:end_users_max:${pending.tenantId}`}))`;
           if (await this.full(tx, pending.tenantId)) return null;
           return tx.user.create({
