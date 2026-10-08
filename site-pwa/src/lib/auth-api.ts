@@ -498,11 +498,16 @@ export const authApi = {
    * one this browser's `device_id` cookie names, so nothing here touches a set
    * the same person built inside a bot chat.
    *
-   * `userId` may be the current account, which is how it leaves — and that case
-   * revokes this browser's own session, so the caller must reload rather than
-   * carry on with a token the server has already dropped.
+   * `userId` may be the current account, which is how it leaves. The browser
+   * then falls back to another member — `switchedTo`, with a fresh token pair,
+   * exactly as a switch — or, with none left, is signed out. Either way the old
+   * token is dead, so the caller reloads rather than carry on with it.
    */
-  async removeAccount(userId: string) { return request<{ userId: string; removed: boolean }>("/auth/accounts/remove", { method: "POST", body: JSON.stringify({ userId }) }); },
+  async removeAccount(userId: string) {
+    const result = await request<{ userId: string; removed: boolean; switchedTo?: { userId: string; fullName: string } } & Partial<AuthResult>>("/auth/accounts/remove", { method: "POST", body: JSON.stringify({ userId }) });
+    if (result.accessToken) accessToken = result.accessToken;
+    return result;
+  },
   getAccessToken() { return accessToken; },
   // Server-verified slide challenge (F-0201) — see docs/interfaces/auth-api/contract.md
   async captchaChallenge() { return request<CaptchaChallenge>("/auth/captcha/challenge", { method: "POST", body: JSON.stringify({}) }); },

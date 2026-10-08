@@ -85,11 +85,11 @@ export function AccountSwitcher() {
   /**
    * Remove a member from this browser's group (F-0208).
    *
-   * Removing the *current* account revokes this browser's own session, so that
-   * case reloads the page rather than re-reading the group: the token this tab
-   * holds is already dead, and `reload()` would only turn that into a bounce to
-   * the login screen one render later. Removing anyone else leaves the session
-   * alone, so the menu simply re-reads and stays open.
+   * Removing the *current* account moves this browser to another member (the
+   * server picks the one it was switched in from), or signs it out when none
+   * is left. Either way the token this tab holds is dead, so that case reloads
+   * the page rather than re-reading the group. Removing anyone else leaves the
+   * session alone, so the menu simply re-reads and stays open.
    */
   const handleRemove = async (userId: string) => {
     const isSelf = userId === group.current.userId;

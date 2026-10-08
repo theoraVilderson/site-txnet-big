@@ -734,6 +734,71 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
     expect(revokeInScope).toHaveBeenCalledWith(CALLER, BROWSER, 'account_unlinked');
   });
 
+  describe('when the caller removes itself, the browser falls back', () => {
+    const HANDOVER = { sessionId: SESSION, ip: '1.1.1.1', userAgent: 'jest' };
+
+    it('to the oldest remaining member, as a logout does (ADR-0035)', async () => {
+      const res: any = await service.remove(BROWSER, CALLER, CALLER, HANDOVER);
+
+      expect(res.ok).toBe(true);
+      expect(switchSession).toHaveBeenCalledWith(
+        SESSION,
+        CALLER,
+        USERS[SAME_TENANT],
+        '1.1.1.1',
+        'jest',
+        BROWSER,
+      );
+      expect(res.data).toMatchObject({
+        userId: CALLER,
+        removed: true,
+        switchedTo: { userId: SAME_TENANT, fullName: 'Sibling' },
+        refreshToken: 'refresh',
+      });
+      // Its other sessions here still end: leaving is leaving.
+      expect(revokeInScope).toHaveBeenCalledWith(CALLER, BROWSER, 'account_unlinked');
+    });
+
+    it('skipping a member this door does not admit (C-22)', async () => {
+      // OTHER_TENANT now the oldest: the fake keeps insertion order.
+      delete members[rowKey(BROWSER, SAME_TENANT)];
+      put(BROWSER, SAME_TENANT, 'g1');
+
+      const res: any = await service.remove(BROWSER, CALLER, CALLER, HANDOVER);
+
+      expect(res.data.switchedTo.userId).toBe(SAME_TENANT);
+    });
+
+    it('even when leaving tears the group down', async () => {
+      delete members[rowKey(BROWSER, OTHER_TENANT)];
+
+      const res: any = await service.remove(BROWSER, CALLER, CALLER, HANDOVER);
+
+      expect(deletedGroups).toEqual(['g1']);
+      expect(res.data.switchedTo.userId).toBe(SAME_TENANT);
+      expect(groupUpdate).not.toHaveBeenCalled();
+    });
+
+    it("records the account the place is now on while the group stands", async () => {
+      await service.remove(BROWSER, CALLER, CALLER, HANDOVER);
+
+      expect(groupUpdate).toHaveBeenCalledWith({
+        where: { id: 'g1' },
+        data: { actingAsUserId: SAME_TENANT },
+      });
+    });
+
+    it('to the login screen when no member is left to hand it to', async () => {
+      delete members[rowKey(BROWSER, SAME_TENANT)];
+
+      const res: any = await service.remove(BROWSER, CALLER, CALLER, HANDOVER);
+
+      expect(switchSession).not.toHaveBeenCalled();
+      expect(res.data).toEqual({ userId: CALLER, removed: true });
+      expect(revokeInScope).toHaveBeenCalledWith(CALLER, BROWSER, 'account_unlinked');
+    });
+  });
+
   it('leaves the same account untouched in every other scope', async () => {
     put(CHAT, SAME_TENANT, 'g-chat');
     put(CHAT, CALLER, 'g-chat');

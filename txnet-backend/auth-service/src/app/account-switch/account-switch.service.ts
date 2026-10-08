@@ -373,11 +373,19 @@ export class AccountSwitchService {
    * A group is torn down once it would be left with a single member: a group
    * of one is not a switcher, and leaving it standing means the next add finds
    * a stale group instead of creating a fresh one.
+   *
+   * **Leaving hands the place over** (`handover`, the caller's own session):
+   * removing the account you are on signs *it* out, not the browser. The
+   * session moves to the oldest remaining member, as a logout's does
+   * (ADR-0035), exactly as a switch would, and the tokens come back for the
+   * cookie. Only when no member is left to take it does leaving end in the
+   * login screen.
    */
   async remove(
     scopeKey: SwitchScope | null,
     callerUserId: string,
     targetUserId: string,
+    handover?: { sessionId: string; ip: string; userAgent: string },
   ) {
     return safeExecute(async () => {
       if (!scopeKey) return err('accountSwitch.notAMember');
@@ -406,7 +414,26 @@ export class AccountSwitchService {
 
       const groupId = targetMembership.groupId;
 
+      // Chosen while the group still stands: leaving a group of two tears it
+      // down, and the one left behind is precisely the account to fall to.
+      const fallback =
+        handover && targetUserId === callerUserId
+          ? await this.fallbackFor(callerUserId, groupId)
+          : null;
+
       await leaveGroup(this.prisma, targetMembership);
+
+      // Before the scoped revoke, so the session it moves is still live.
+      const tokens = fallback
+        ? await this.auth.switchSession(
+            handover!.sessionId,
+            callerUserId,
+            fallback.user,
+            handover!.ip,
+            handover!.userAgent,
+            scopeKey,
+          )
+        : null;
 
       // After the row is gone, never before: a revoked session with the
       // membership still in place would leave the removed account signed out
@@ -422,8 +449,61 @@ export class AccountSwitchService {
         `account-switch: user=${targetUserId} removed from group=${groupId} (scope=${scopeKey}) by caller=${callerUserId}, ${revoked} session(s) revoked`,
       );
 
-      return ok({ userId: targetUserId, removed: true }, 'accountSwitch.removed');
+      if (!fallback || !tokens) {
+        return ok({ userId: targetUserId, removed: true }, 'accountSwitch.removed');
+      }
+
+      // Same best-effort pointer as `switchTo`, for the same reason: the
+      // tokens already exist, and a throw here would strand them.
+      if (fallback.groupStands) {
+        try {
+          await this.prisma.linkedAccountGroup.update({
+            where: { id: groupId },
+            data: { actingAsUserId: fallback.user.id },
+          });
+        } catch (error) {
+          this.logger.error(
+            `account-switch: caller=${callerUserId} left group=${groupId} for ${fallback.user.id}, but the place was not moved with it: ${
+              (error as Error)?.message ?? error
+            }`,
+          );
+        }
+      }
+
+      return ok(
+        {
+          userId: targetUserId,
+          removed: true,
+          switchedTo: { userId: fallback.user.id, fullName: fallback.user.fullName },
+          ...tokens,
+        },
+        'accountSwitch.removed',
+      );
     });
+  }
+
+  /**
+   * The member a leaving caller's place falls to — ADR-0035's rule for a
+   * logout, so both ways out land on the same account: the oldest remaining
+   * member, skipping one that could not hold a session or that this door does
+   * not admit (C-22, as `switchTo` refuses it), and none when nobody is left.
+   */
+  private async fallbackFor(callerUserId: string, groupId: string) {
+    const others = await this.prisma.linkedAccountMember.findMany({
+      where: { groupId, userId: { not: callerUserId } },
+      orderBy: { addedAt: 'asc' },
+      select: { userId: true },
+    });
+
+    for (const { userId } of others) {
+      const user = await this.surfaceOwners.admissibleUser(userId, {
+        role: {
+          include: { rolePermissions: { include: { permission: true } } },
+        },
+      });
+      if (mayHoldSession(user)) return { user, groupStands: others.length >= 2 };
+    }
+    return null;
   }
 
   // --- the rule ------------------------------------------------------------

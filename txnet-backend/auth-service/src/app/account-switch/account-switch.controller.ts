@@ -30,7 +30,7 @@ import {
   switchAccountSchema,
 } from './account-switch.schema';
 import { withRefreshCookie } from '../common/http/refresh-cookie';
-import { resolveSwitchScope } from '../common/security/switch-scope';
+import { botScopeOf, resolveSwitchScope } from '../common/security/switch-scope';
 import { AllowRestricted } from '../auth/decorators/allow-restricted.decorator';
 
 /**
@@ -197,11 +197,12 @@ export class AccountSwitchController {
   /**
    * Remove a member from the group on this surface (F-0208).
    *
-   * Mints nothing and sets no cookie, even when the caller removes itself: the
-   * caller's *own* session is only revoked if it was minted in this scope, and
-   * that is a sign-out, not a handover — there is no replacement session to
-   * hand back. The panel reloads and lands on the login screen; the bot's next
-   * call finds no session and offers the one-tap sign-in.
+   * Removing another member mints nothing. Removing **the caller itself** in a
+   * browser hands it to the member it falls back to (see the service), so the
+   * response is then a token pair and the `refresh_token` cookie, like a
+   * switch. Only when no member is left — and always in a chat — does it end
+   * as a sign-out: the panel lands on the login screen, the bot's next call
+   * offers the one-tap sign-in.
    *
    * Limit is the switch's, not the add's: it changes no credential and reveals
    * nothing (every refusal is `accountSwitch.notAMember`), but it does write.
@@ -215,11 +216,22 @@ export class AccountSwitchController {
     configKey: 'ACCOUNTS_REMOVE_RATE_LIMIT',
     windowSec: 900,
   })
-  remove(@Body() body: any, @Req() req: Request) {
-    return this.accounts.remove(
+  async remove(
+    @Body() body: any,
+    @Ip() ip: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.accounts.remove(
       resolveSwitchScope(req),
       this.callerId(req),
       body.userId,
+      // A browser only: a chat's session lives in the bot's own store, and
+      // leaving there stays a sign-out (`bot-service` drops its token).
+      botScopeOf(req)
+        ? undefined
+        : { sessionId: this.callerSessionId(req), ip, userAgent: this.ua(req) },
     );
+    return withRefreshCookie(res, result);
   }
 }

@@ -202,10 +202,10 @@ things follow for this app:
   with an empty group. That is the intended reading, not a bug to report: the
   accounts are untouched and the set is rebuilt one click at a time.
 - **Removing an account (`F-0208`) removes it here only.** The switcher's remove
-  control asks inline before acting; removing the *current* account revokes this
-  browser's own session, so that path does a full `window.location` reload
-  rather than `reload()`ing the group — the token this tab holds is already
-  dead. Removing anyone else leaves the session alone and just re-reads.
+  control asks inline; removing the *current* account moves the browser onto
+  the oldest remaining member (ADR-0035), or signs out with none left — a full
+  `window.location` reload, since this tab's token is dead. Removing anyone
+  else leaves the session alone and just re-reads.
 
 ## The same panel, inside a messenger (F-310, ADR-0017)
 
