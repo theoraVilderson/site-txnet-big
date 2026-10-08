@@ -113,6 +113,10 @@ channel, body and payload. Written by `applyTenantStatus` and
 `makeSuspensionManual` in every status change's transaction — by hand, a
 grace, a purchase, a renewal. The same section re-reads on it.
 
+**F-019-c3 — a grace extended.** Type `tenant.subscription.grace_extended`,
+same channel, body and payload. Written by `grantGrace` in its transaction,
+status changed or not; the section's deadline moved.
+
 **RT-1-f — panel drain and removal.** Type `network.panel.drained`,
 `tenant:`, body `{type, panelId, groupId}`. Written by `GroupDrainService.drainDue`
 (`billing-service/src/app/traffic/group-drain.ts`) when a pass retired at

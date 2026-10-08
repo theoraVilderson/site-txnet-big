@@ -41,6 +41,8 @@ export const RealtimeEventType = {
   TENANT_SUBSCRIPTION_RENEWED: 'tenant.subscription.renewed',
   /** F-019-c2: a reseller's status or suspension cause changed, any writer (`applyTenantStatus`, `makeSuspensionManual`). */
   TENANT_STATUS_CHANGED: 'tenant.status.changed',
+  /** F-019-c3: the platform owner moved a reseller's renewal deadline (`graceUntil`), status changed or not (`TenantSubscriptionService.grantGrace`). */
+  TENANT_SUBSCRIPTION_GRACE_EXTENDED: 'tenant.subscription.grace_extended',
 } as const;
 
 /** Outbox event types (`outbox_event.type`), routed as `outboxRoutingKey(type)`. Only {@link RealtimeEventType} reach a browser. */
@@ -184,6 +186,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.TENANT_DOMAIN_CHANGED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_RENEWED]: 'worker-service',
   [OutboxEventType.TENANT_STATUS_CHANGED]: 'worker-service',
+  [OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED]: 'worker-service',
   [OutboxEventType.TENANT_BILLING_CREDITED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED]: 'worker-service',

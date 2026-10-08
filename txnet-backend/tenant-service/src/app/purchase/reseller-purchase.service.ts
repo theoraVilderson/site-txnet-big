@@ -15,7 +15,7 @@ import { lockPackage, replacePackageEntitlements } from '../packages/package-ent
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
-import { PRICE_OF, addBillingPeriod, periodChargeReference } from '../renewal/tenant-renewal.service';
+import { PRICE_OF, addBillingPeriod, periodChargeReference, renewalDeadline } from '../renewal/tenant-renewal.service';
 import { OwnerView, ResellerView, resellerHosts, slugInUse, writeReseller } from '../resellers/reseller-rows';
 import { isReservedSlug } from '../resellers/reseller.schema';
 import { applyTenantStatus } from '../status/tenant-status.transition';
@@ -58,6 +58,12 @@ export type PurchaseView = ResellerView & { packageId: string; currentPeriodEnd:
 export type OwnedReseller = Pick<ResellerView, 'id' | 'slug' | 'status' | 'billingModel' | 'domains'> & {
   package: { id: string; name: string } | null;
   currentPeriodEnd: Date | null;
+  /**
+   * When an unpaid renewal suspends it: `currentPeriodEnd` + the setting's
+   * grace days, or the platform owner's later `graceUntil` — the renewal's own
+   * `renewalDeadline` (F-019-c3). Null with `currentPeriodEnd`.
+   */
+  suspendsAt: Date | null;
 };
 
 export type PackageOffer = {
@@ -146,13 +152,21 @@ export class ResellerPurchaseService {
         slug: true,
         status: true,
         billingModel: true,
-        subscription: { select: { currentPeriodEnd: true, package: { select: { id: true, name: true } } } },
+        subscription: { select: { currentPeriodEnd: true, graceUntil: true, package: { select: { id: true, name: true } } } },
         domains: { select: { domainValue: true, domainType: true, purpose: true, verificationStatus: true } },
       },
     });
     if (!row) return { reseller: null };
     const { subscription, ...rest } = row;
-    return { reseller: { ...rest, package: subscription?.package ?? null, currentPeriodEnd: subscription?.currentPeriodEnd ?? null } };
+    let suspendsAt: Date | null = null;
+    if (subscription) {
+      const settings = await this.all.tenantSubscriptionSetting.findUnique({ where: { id: 1 }, select: { renewalGraceDays: true } });
+      if (!settings) throw new Error('tenant_subscription_setting row is missing — run the migrations');
+      suspendsAt = renewalDeadline(subscription.currentPeriodEnd, settings.renewalGraceDays, subscription.graceUntil);
+    }
+    return {
+      reseller: { ...rest, package: subscription?.package ?? null, currentPeriodEnd: subscription?.currentPeriodEnd ?? null, suspendsAt },
+    };
   }
 
   /** The slug a name suggests, or the first free one beside it. Advisory: the purchase checks again. */

@@ -25,9 +25,10 @@ export function ResellerSubscription() {
   if (!reseller) return null;
   const state = subscriptionState(reseller, Date.now());
   if (!state) return null;
-  const end = reseller.currentPeriodEnd
-    ? (formatInstant(reseller.currentPeriodEnd, lang, { withTime: false }) ?? reseller.currentPeriodEnd)
-    : null;
+  const day = (iso: string | null) => (iso ? (formatInstant(iso, lang, { withTime: false }) ?? iso) : null);
+  const end = day(reseller.currentPeriodEnd);
+  // Grace names tenant's deadline, never one the panel works out (rule 3).
+  const suspendsAt = day(reseller.suspendsAt);
 
   return (
     <section aria-labelledby="my-reseller-title" className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-4">
@@ -52,7 +53,9 @@ export function ResellerSubscription() {
           </div>
         )}
       </dl>
-      <p className="text-xs leading-5 text-text-secondary">{t("common", R.hint[state])}</p>
+      <p className="text-xs leading-5 text-text-secondary">
+        {state === "grace" ? t("common", R.hint.grace, { date: suspendsAt ?? "—" }) : t("common", R.hint[state])}
+      </p>
       <Link href={myResellerConsolePath(reseller.id, false)} className={buttonClass({ variant: "primary", size: "sm" })}>
         <Store size={16} aria-hidden />
         {t("common", R.open)}

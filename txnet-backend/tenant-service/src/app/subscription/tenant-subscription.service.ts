@@ -10,7 +10,7 @@ import {
   TenantSuspensionCause,
   TenantType,
 } from '@prisma/client';
-import { ResellerAccess, TenantBillingLedger, lockProductQuotaTerms, lockQuotaTerms, platformCurrencyOf, type ResellerActor } from '@txnet-backend/shared-core';
+import { OutboxEventType, ResellerAccess, TenantBillingLedger, lockProductQuotaTerms, lockQuotaTerms, platformCurrencyOf, type ResellerActor } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { renewalDeadline } from '../renewal/tenant-renewal.service';
@@ -355,8 +355,8 @@ export class TenantSubscriptionService {
     if (!settings) throw new Error('tenant_subscription_setting row is missing — run the migrations');
 
     const view = await this.all.$transaction(async (tx) => {
-      const [tenant] = await tx.$queryRaw<{ id: string; tenantType: TenantType; status: TenantStatus; suspensionCause: TenantSuspensionCause | null }[]>`
-        SELECT id, "tenantType", status, "suspensionCause"
+      const [tenant] = await tx.$queryRaw<{ id: string; tenantType: TenantType; status: TenantStatus; suspensionCause: TenantSuspensionCause | null; ownerUserId: string }[]>`
+        SELECT id, "tenantType", status, "suspensionCause", "ownerUserId"
         FROM "tenant"."tenant"
         WHERE id = ${tenantId}::uuid AND "deletedAt" IS NULL
         FOR UPDATE`;
@@ -383,6 +383,16 @@ export class TenantSubscriptionService {
           now,
         }));
       }
+      // F-019-c3: the deadline moved, with or without a status change — the owner's open My services re-reads it.
+      await tx.outboxEvent.create({
+        data: {
+          aggregate: 'tenant.subscription',
+          aggregateId: tenantId,
+          type: OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED,
+          payload: { tenantId, userId: tenant.ownerUserId },
+        },
+        select: { id: true },
+      });
       const result: GraceView = { tenantId, currentPeriodEnd: after.currentPeriodEnd, graceUntil: after.graceUntil as Date, status, suspensionCause };
       await tx.adminAuditLog.create({
         data: {

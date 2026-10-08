@@ -45,6 +45,7 @@ const HELD: OwnedReseller = {
   billingModel: "subscription_monthly",
   package: { id: "p-1", name: "Silver" },
   currentPeriodEnd: "2026-11-01T00:00:00.000Z",
+  suspendsAt: "2026-11-04T00:00:00.000Z",
   domains: [],
 };
 
@@ -89,11 +90,13 @@ describe("ResellerSubscription", () => {
     expect(screen.getByRole("link", { name: K.open }).getAttribute("href")).toBe(myResellerConsolePath("t-1", false));
   });
 
-  it("says grace and what to do when the period ended unpaid", async () => {
-    mine.mockResolvedValue({ reseller: { ...HELD, currentPeriodEnd: "2020-01-01T00:00:00.000Z" } });
+  it("says grace, what to do and by when — tenant's deadline, not one worked out here (F-019-c3)", async () => {
+    mine.mockResolvedValue({ reseller: { ...HELD, currentPeriodEnd: "2020-01-01T00:00:00.000Z", suspendsAt: "2020-01-11T00:00:00.000Z" } });
     render(<ResellerSubscription />);
     expect(await screen.findByText(K.state.grace)).toBeTruthy();
-    expect(screen.getByText(K.hint.grace)).toBeTruthy();
+    const hint = screen.getByText((text) => text.startsWith(`${K.hint.grace}:`));
+    expect(hint.textContent).toMatch(/2020/);
+    expect(hint.textContent).toMatch(/11/);
   });
 
   it("says suspended", async () => {
@@ -124,14 +127,19 @@ describe("ResellerSubscription", () => {
     expect(mine).not.toHaveBeenCalled();
   });
 
-  it("re-reads on a paid renewal, a status change or a renewal's notice on the user's channel, with no clock", async () => {
+  it("re-reads on a paid renewal, a status change, a grace extended or a renewal's notice on the user's channel, with no clock", async () => {
     mine.mockResolvedValue({ reseller: HELD });
     render(<ResellerSubscription />);
     await screen.findByText(K.state.active);
 
     const [channel, types, reread] = vi.mocked(useLiveReread).mock.calls.at(-1)!;
     expect(channel).toBe("user:u-1");
-    expect(types).toEqual([RealtimeEvents.tenantSubscriptionRenewed, RealtimeEvents.tenantStatusChanged, RealtimeEvents.notificationCreated]);
+    expect(types).toEqual([
+      RealtimeEvents.tenantSubscriptionRenewed,
+      RealtimeEvents.tenantStatusChanged,
+      RealtimeEvents.tenantSubscriptionGraceExtended,
+      RealtimeEvents.notificationCreated,
+    ]);
 
     mine.mockResolvedValue({ reseller: { ...HELD, status: "suspended" } });
     act(() => reread("event"));

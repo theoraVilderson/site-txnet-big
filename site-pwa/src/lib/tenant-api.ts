@@ -157,6 +157,11 @@ export interface OwnedReseller {
   billingModel: Reseller["billingModel"];
   package: { id: string; name: string } | null;
   currentPeriodEnd: string | null;
+  /**
+   * When an unpaid renewal suspends it — the period end plus the grace days,
+   * or the platform owner's later grace (F-019-c3). Null with `currentPeriodEnd`.
+   */
+  suspendsAt: string | null;
   domains: Reseller["domains"];
 }
 

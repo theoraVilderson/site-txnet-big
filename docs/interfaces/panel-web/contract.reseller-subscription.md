@@ -38,8 +38,9 @@ read and its re-read) and `_lib/reseller-subscription.ts` (the state, tones).
    ([tenant/contract.billing.md](../../domains/tenant/contract.billing.md)
    "Subscription renewal"); otherwise **active**. `terminated` shows nothing,
    and the route never answers it. Grace says to top up the reseller's billing
-   wallet before the grace runs out; it names no deadline, because the route
-   answers no `graceUntil` and the panel does not guess one.
+   wallet before `suspendsAt`, tenant's own deadline (F-019-c3: period end
+   plus the grace days, or the platform owner's later grace) — never one the
+   panel works out.
 4. **Tones are theme tokens**: active green, grace gold (a tone, never a
    control — user, 2026-09-13), suspended the error tone.
 5. **A failure costs this section only.** No answer, `null`, or a failed read
@@ -50,7 +51,8 @@ read and its re-read) and `_lib/reseller-subscription.ts` (the state, tones).
    `useLiveReread` on the caller's `user:` channel for
    `tenant.subscription.renewed` (a paid renewal, F-019-c1) and
    `tenant.status.changed` (any status change, by hand or by the platform,
-   F-019-c2) — both pushed to the owner
+   F-019-c2) and `tenant.subscription.grace_extended` (F-019-c3) — all
+   pushed to the owner
    ([realtime/contract.live-events.md](../../platform/realtime/contract.live-events.md)) —
    and `notification.created`: an unpaid one's "payment due" and "suspended"
    are inbox rows for the owner ([automation/contract.outbox.md](../../domains/automation/contract.outbox.md)
@@ -64,8 +66,12 @@ the end (also for `trial`), active before it or with no period, nothing for
 terminated; the section outside any list with slug, package, state and the
 link's path; grace's and suspension's sentences; nothing for `null` or a
 failed read; nothing asked of a reseller's user or the platform owner; and a
-`tenant.subscription.renewed`, `tenant.status.changed` or
-`notification.created` on `user:<id>` re-reading into the new state.
+`tenant.subscription.renewed`, `tenant.status.changed`,
+`tenant.subscription.grace_extended` or `notification.created` on
+`user:<id>` re-reading into the new state; grace names `suspendsAt`.
+F-019-c3: `purchase/reseller-purchase.spec.ts` (`suspendsAt`, the later grace,
+none without a subscription) and `subscription/tenant-subscription-grace.spec.ts`
+(the event with no status change).
 F-019-c2: tenant-service `status/tenant-status.spec.ts` (every change writes
 it to the owner, in the lock). F-019-c1: tenant-service
 `renewal/tenant-renewal.spec.ts` (a paid renewal writes the event to the
@@ -75,7 +81,7 @@ owner's channel only).
 
 ## Not covered
 
-A grace extended without a status change (`graceUntil` only) pushes nothing:
-the section does not show the deadline. Renewing or changing the package from here is not offered:
+The platform's `renewalGraceDays` edited moves every reseller's deadline and
+pushes nothing; the section shows it on the next read. Renewing or changing the package from here is not offered:
 `/resellers/buy` holds the reseller (F-019-l), and an upgrade is the reseller
 workspace's (F-019-v10).

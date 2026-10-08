@@ -162,6 +162,12 @@ describe('tenant.status.changed (F-019-c2)', () => {
 
     expect(published).toEqual([{ channel: `user:${USER}`, payload: { type: OutboxEventType.TENANT_STATUS_CHANGED } }]);
   });
+
+  it('so does a grace the platform owner extends (F-019-c3)', async () => {
+    const { consumer, published } = build();
+    await consumer.handle({ ...event(), aggregate: 'tenant.subscription', type: OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED, payload: { tenantId: TENANT, userId: USER } });
+    expect(published).toEqual([{ channel: `user:${USER}`, payload: { type: OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED } }]);
+  });
 });
 
 // RT-1-b: a row names whose page re-reads — one user's, or a tenant's operators'.

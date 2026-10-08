@@ -3094,7 +3094,7 @@
       },
       "hint": {
         "active": "It renews from your reseller's billing wallet when the period ends.",
-        "grace": "The renewal was not paid. Top up your reseller's billing wallet before the grace period runs out, or it is suspended.",
+        "grace": "The renewal was not paid. Top up your reseller's billing wallet before {{date}}, or it is suspended.",
         "suspended": "Your reseller is suspended and its buyers cannot buy. Open its menu to see why and what brings it back."
       },
       "open": "Open the reseller menu"

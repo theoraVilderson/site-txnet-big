@@ -209,6 +209,7 @@ describe("a buyer who already holds one (F-019-l)", () => {
     billingModel: "subscription_monthly",
     package: { id: "p1", name: "Pro" },
     currentPeriodEnd: "2026-10-18T10:00:00.000Z",
+    suspendsAt: "2026-10-21T10:00:00.000Z",
     domains: [
       domain("ali-vpn.edge.txnet.app", "subdomain", "panel", "pending"),
       domain("pending.ali.ir", "custom_domain", "panel", "verifying"),

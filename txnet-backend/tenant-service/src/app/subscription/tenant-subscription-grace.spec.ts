@@ -1,3 +1,4 @@
+import { OutboxEventType } from '@txnet-backend/shared-core';
 import { TenantSubscriptionService } from './tenant-subscription.service';
 import { grantGraceSchema } from './tenant-subscription.schema';
 
@@ -18,6 +19,7 @@ describe('TenantSubscriptionService.grantGrace', () => {
   const OWNER_TENANT = '11111111-1111-1111-1111-111111111111';
   const ADMIN = '22222222-2222-2222-2222-222222222222';
   const RESELLER = '44444444-4444-4444-4444-444444444444';
+  const OWNER = '55555555-5555-4555-8555-555555555555';
   const DAY = 86_400_000;
   const NOW = new Date('2026-10-05T10:00:00.000Z');
   const actor = { adminId: ADMIN, tenantId: OWNER_TENANT, ip: '127.0.0.1' };
@@ -39,6 +41,7 @@ describe('TenantSubscriptionService.grantGrace', () => {
       tenantType: 'reseller',
       status: opts.status ?? 'active',
       suspensionCause: opts.cause ?? null,
+      ownerUserId: OWNER,
     };
     const sub = { currentPeriodEnd: opts.periodEnd ?? new Date('2026-10-03T00:00:00.000Z'), graceUntil: opts.graceUntil ?? null };
     const tx = {
@@ -51,7 +54,7 @@ describe('TenantSubscriptionService.grantGrace', () => {
         update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('tenant'), { ...tenantRow, suspendedAt: null, graceEndsAt: null, suspendedReason: null, ...data })),
       },
       tenantStatusHistory: { create: vi.fn(async (_args: { data: Record<string, unknown> }) => (writes.push('history'), {})) },
-      outboxEvent: { create: vi.fn(async () => (writes.push('outbox'), {})) },
+      outboxEvent: { create: vi.fn(async (_args: { data: { type: string; aggregateId: string; payload: Record<string, unknown> } }) => (writes.push('outbox'), {})) },
       tenantBillingTransaction: { create: vi.fn() },
       tenantBillingWallet: { update: vi.fn() },
       adminAuditLog: { create: vi.fn(async (_args: { data: Record<string, unknown> }) => (writes.push('audit'), {})) },
@@ -99,6 +102,10 @@ describe('TenantSubscriptionService.grantGrace', () => {
       status: 'active',
     });
     expect(inGrace.tx.tenant.update).not.toHaveBeenCalled();
+    // F-019-c3: no status moved, and the owner's open My services still hears the new deadline.
+    expect(inGrace.tx.outboxEvent.create.mock.calls.map((c) => c[0].data)).toEqual([
+      expect.objectContaining({ aggregateId: RESELLER, type: OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED, payload: { tenantId: RESELLER, userId: OWNER } }),
+    ]);
 
     const extended = build({ graceUntil: new Date('2026-10-20T00:00:00.000Z') });
     await expect(extended.service.grantGrace(actor, RESELLER, input, NOW)).resolves.toMatchObject({ graceUntil: new Date('2026-10-27T00:00:00.000Z') });

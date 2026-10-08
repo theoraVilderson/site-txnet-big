@@ -8,11 +8,17 @@ import { resellerPurchaseApi, type OwnedReseller } from "@/lib/tenant-api";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 
 /**
- * A paid renewal (F-019-c1) and any status change — by hand or by the
- * platform (F-019-c2) — are pushed as themselves; a renewal's warning is an
- * inbox row, and that row is live (F-035-b).
+ * A paid renewal (F-019-c1), any status change — by hand or by the platform
+ * (F-019-c2) — and a grace the platform owner extends (F-019-c3) are pushed
+ * as themselves; a renewal's warning is an inbox row, and that row is live
+ * (F-035-b).
  */
-const RENEWAL_EVENTS = [RealtimeEvents.tenantSubscriptionRenewed, RealtimeEvents.tenantStatusChanged, RealtimeEvents.notificationCreated];
+const RENEWAL_EVENTS = [
+  RealtimeEvents.tenantSubscriptionRenewed,
+  RealtimeEvents.tenantStatusChanged,
+  RealtimeEvents.tenantSubscriptionGraceExtended,
+  RealtimeEvents.notificationCreated,
+];
 
 /**
  * The reseller the caller holds, for My services (F-502-v): `GET
@@ -22,7 +28,7 @@ const RENEWAL_EVENTS = [RealtimeEvents.tenantSubscriptionRenewed, RealtimeEvents
  * view beside the Grants and its failure costs only itself.
  *
  * Re-read when the user's channel says a renewal was paid, the status
- * changed, or that an inbox row arrived — a renewal's "payment due" and "suspended" are both one — and
+ * changed, the grace moved, or that an inbox row arrived — a renewal's "payment due" and "suspended" are both one — and
  * after a reconnect (C-14). Never on a clock.
  */
 export function useOwnedReseller(): OwnedReseller | null {

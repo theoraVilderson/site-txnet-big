@@ -113,6 +113,7 @@ describe('ResellerPurchaseService', () => {
         findMany: vi.fn(async () => [pkg]),
       },
       user: { findFirst: vi.fn(async () => ({ ...person, status: opts.status ?? 'active' })) },
+      tenantSubscriptionSetting: { findUnique: vi.fn(async () => ({ renewalGraceDays: 3 })) },
       $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
     };
     const redis = { del: vi.fn(async (key: string) => void writes.push(`del ${key}`)) };
@@ -233,7 +234,7 @@ describe('ResellerPurchaseService', () => {
       slug: 'ali-vpn',
       status: 'active',
       billingModel: 'subscription_monthly',
-      subscription: { currentPeriodEnd: NOW, package: { id: PACKAGE, name: 'Pro' } },
+      subscription: { currentPeriodEnd: NOW, graceUntil: null, package: { id: PACKAGE, name: 'Pro' } },
       domains: [{ domainValue: 'ali-vpn.edge.txnet.app', domainType: 'subdomain', purpose: 'panel', verificationStatus: 'verified' }],
     } as never);
     expect(await held.service.mine(buyer)).toEqual({
@@ -244,6 +245,8 @@ describe('ResellerPurchaseService', () => {
         billingModel: 'subscription_monthly',
         package: { id: PACKAGE, name: 'Pro' },
         currentPeriodEnd: NOW,
+        // F-019-c3: when an unpaid renewal suspends it — the setting's grace days past the period end.
+        suspendsAt: new Date(NOW.getTime() + 3 * 86_400_000),
         domains: [{ domainValue: 'ali-vpn.edge.txnet.app', domainType: 'subdomain', purpose: 'panel', verificationStatus: 'verified' }],
       },
     });
@@ -253,6 +256,17 @@ describe('ResellerPurchaseService', () => {
     });
 
     await expect(build({ callerType: 'reseller' }).service.mine(buyer)).rejects.toMatchObject({ reason: 'not_platform_user' });
+  });
+
+  it("answers the platform owner's later grace as the deadline, and none without a subscription (F-019-c3)", async () => {
+    const graceUntil = new Date(NOW.getTime() + 10 * 86_400_000);
+    const held = build({ owns: true });
+    const row = { id: 'old', slug: 'ali-vpn', status: 'active', billingModel: 'subscription_monthly', domains: [] };
+    held.all.tenant.findFirst.mockResolvedValueOnce({ ...row, subscription: { currentPeriodEnd: NOW, graceUntil, package: null } } as never);
+    expect((await held.service.mine(buyer)).reseller).toMatchObject({ suspendsAt: graceUntil });
+
+    held.all.tenant.findFirst.mockResolvedValueOnce({ ...row, subscription: null } as never);
+    expect((await held.service.mine(buyer)).reseller).toMatchObject({ currentPeriodEnd: null, suspendsAt: null });
   });
 
   it('refuses a buyer who is not active', async () => {

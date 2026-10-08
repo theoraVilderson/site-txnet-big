@@ -66,7 +66,7 @@ read on the app pool before the cross-tenant pool is touched.
 
 | Route | Body / query | Answer |
 |---|---|---|
-| `GET /api/tenants/purchase/mine` | — | `{reseller}`: the caller's live reseller (`id, slug, status, billingModel, package {id, name}, currentPeriodEnd, domains`), `null` when none — a 200 either way (F-019-l) |
+| `GET /api/tenants/purchase/mine` | — | `{reseller}`: the caller's live reseller (`id, slug, status, billingModel, package {id, name}, currentPeriodEnd, suspendsAt, domains` — `suspendsAt` is `renewalDeadline`, F-019-c3), `null` when none — a 200 either way (F-019-l) |
 | `GET /api/tenants/purchase/packages` | — | active packages by name: `id, name, monthlyPrice, yearlyPrice, currencyCode, includedFeatureKeys` — `currencyCode` the package's (F-116-h3) |
 | `GET /api/tenants/purchase/slug` | `name` 1..100, `.strict()` | `{slug}` — a suggestion, checked again by the purchase |
 | `POST /api/tenants/purchase` | `{packageId, billingModel, name, slug?}`, `.strict()` | `201` a reseller view + `packageId, currentPeriodEnd, charged, walletBalance, currencyCode` (the buyer's wallet's) |
@@ -166,6 +166,7 @@ routes answer `ResellerAccess`'s refusals first; they never start a subscription
 | Rule | Why |
 |---|---|
 | `graceUntil` = the latest of now, the renewal's deadline (`currentPeriodEnd` + `renewalGraceDays`) and an earlier `graceUntil`, plus `days`; the renewal suspends at the later of the two (`renewalDeadline`) | a grant never shortens time already given, and a second grant adds to the first |
+| **The owner's open pages hear it:** `tenant.subscription.grace_extended` `{tenantId, userId: owner}` in the transaction, status changed or not; pushed live (F-019-c3) | the deadline My services shows moved (C-14) |
 | **No money moves:** no ledger entry, `currentPeriodEnd` unchanged; a paid renewal clears `graceUntil` | a manual credit would record money that never arrived; the period is still owed (user, 2026-09-17) |
 | A `non_payment` suspension is lifted at once (`rules.md` #15; history reason = the given reason, actor the admin); a `manual` one stays; `trial` / `active` keep their status | reactivating by hand was undone by the next sweep |
 | One transaction, the tenant row `FOR UPDATE`: the subscription, the status change if any, one audit row (`tenant_subscription_grace`, target `tenant`, before/after with `days` and `reason`) | the renewal holds the same lock, so a sweep sees the grant wholly or not at all |
