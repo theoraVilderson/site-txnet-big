@@ -21,7 +21,6 @@ import { consentRefusal } from "../../../_lib/support-access";
 import { BulkByFilter } from "./BulkByFilter";
 import { FindByLink } from "./FindByLink";
 import { Alert, Button, buttonClass, Input, PageHeader, useConfirm } from "../../../../_components/kit";
-import { WorkspaceTabs } from "../../../_components/WorkspaceTabs";
 
 /** How long typing rests before the list is asked again. */
 const TYPING_MS = 350;
@@ -154,8 +153,6 @@ export function ResellerUsersView({ id }: { id: string }) {
           </>
         }
       />
-      {/* The platform's own users (F-311-ab) are not a reseller's workspace. */}
-      {!platform && <WorkspaceTabs id={id} />}
 
       {/* F-117-g: platform staff's consent, request and emergency entry; nothing to anyone else. */}
       <PlatformAccessBanner tenantId={id} onChange={retry} />

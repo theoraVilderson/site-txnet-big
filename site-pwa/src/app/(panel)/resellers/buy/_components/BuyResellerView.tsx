@@ -15,7 +15,7 @@ import {
   type Purchased,
   type ResellerBillingModel,
 } from "@/lib/tenant-api";
-import { useResellerPanelOpener } from "../../../_components/ResellerPanelButton";
+import { useResellerPanelOpener } from "../../../_components/ResellerWorkspaceNav";
 import { Select } from "../../../_components/kit/Select";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { usePanelSession } from "../../../_context/PanelSessionContext";

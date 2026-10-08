@@ -23,7 +23,6 @@ import {
   isPrimaryTaken,
 } from "../../../_lib/bots";
 import { Alert, Button, Input, PageHeader, useConfirm } from "../../../../_components/kit";
-import { WorkspaceTabs } from "../../../_components/WorkspaceTabs";
 
 /** The refusal's own sentence, else the generic answer for that error. */
 function useMessage() {
@@ -109,7 +108,6 @@ export function ResellerBotView({ id }: { id: string }) {
           </>
         }
       />
-      <WorkspaceTabs id={id} />
 
       {loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">

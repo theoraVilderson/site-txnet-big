@@ -19,7 +19,6 @@ import {
   templateToSend,
 } from "../../../_lib/branding";
 import { Alert, Button, Input, PageHeader } from "../../../../_components/kit";
-import { WorkspaceTabs } from "../../../_components/WorkspaceTabs";
 
 /** How long typing rests before the preview is asked for. */
 const PREVIEW_DELAY_MS = 300;
@@ -84,7 +83,6 @@ export function ResellerBrandingView({ id }: { id: string }) {
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-4 md:p-8">
       <PageHeader title={slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)} subtitle={t("common", K.subtitle)} />
-      <WorkspaceTabs id={id} />
 
       {loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">

@@ -32,7 +32,6 @@ import {
   isRoutable,
 } from "../../../_lib/domains";
 import { Alert, Button, IconButton, Input, PageHeader } from "../../../../_components/kit";
-import { WorkspaceTabs } from "../../../_components/WorkspaceTabs";
 
 /** The refusal's own sentence, else the generic answer for that error. */
 function useMessage() {
@@ -143,7 +142,6 @@ export function ResellerDomainsView({ id }: { id: string }) {
           </>
         }
       />
-      <WorkspaceTabs id={id} />
 
       {loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">

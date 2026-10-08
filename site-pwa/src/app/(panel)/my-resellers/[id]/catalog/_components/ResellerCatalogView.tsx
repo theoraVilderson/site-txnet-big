@@ -7,7 +7,6 @@ import { catalogAdminApi } from "@/lib/catalog-api";
 import { myResellerCatalogPath, myResellerCatalogTranslationsPath } from "@/lib/routes";
 import { CatalogSurfaceProvider, type CatalogSurface } from "../../../../catalog/_lib/surface";
 import { RESELLER_CATALOG_KEYS as K, catalogRefusalKey } from "../../../_lib/catalog";
-import { WorkspaceTabs } from "../../../_components/WorkspaceTabs";
 import { useWorkspaceSelf } from "../../../_lib/workspace";
 
 /**
@@ -51,7 +50,6 @@ export function ResellerCatalogView({ id, children }: { id: string; children: Re
       chrome: (
         <div className="flex flex-col gap-2">
           <p className="text-xs font-bold text-text-secondary">{slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}</p>
-          <WorkspaceTabs id={id} />
         </div>
       ),
     }),

@@ -27,7 +27,6 @@ import {
   type ClosedCapability,
 } from "../../_lib/onboarding";
 import { PageHeader } from "../../../_components/kit/PageHeader";
-import { WorkspaceTabs } from "../../_components/WorkspaceTabs";
 import { useWorkspaceSelf } from "../../_lib/workspace";
 import { Alert, Button, buttonClass } from "../../../_components/kit";
 
@@ -102,7 +101,6 @@ export function OnboardingConsoleView({ id }: { id: string }) {
           </>
         }
       />
-      <WorkspaceTabs id={id} />
 
       {loadError !== null ? (
         <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">

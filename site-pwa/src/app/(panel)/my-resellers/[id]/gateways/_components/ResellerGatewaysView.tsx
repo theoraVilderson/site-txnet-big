@@ -7,7 +7,6 @@ import { gatewayAdminApi } from "@/lib/billing-api";
 import { GatewaysView } from "../../../../gateways/_components/GatewaysView";
 import type { GatewaySurface } from "../../../../gateways/_lib/surface";
 import { RESELLER_GATEWAY_KEYS as K, gatewayRefusalKey } from "../../../_lib/gateways";
-import { WorkspaceTabs } from "../../../_components/WorkspaceTabs";
 
 /**
  * A reseller's payment gateways (F-066-w4, `panel-web/contract.resellers.md`
@@ -49,7 +48,6 @@ export function ResellerGatewaysView({ id }: { id: string }) {
       chrome: (
         <div className="flex flex-col gap-2">
           <p className="text-xs font-bold text-text-secondary">{slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}</p>
-          <WorkspaceTabs id={id} />
         </div>
       ),
     }),

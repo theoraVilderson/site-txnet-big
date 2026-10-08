@@ -11,7 +11,7 @@ updated: 2026-10-08
 A topic file of [contract.md](contract.md) (§10). The workspace itself — the
 console and one screen per section — is ADR-0064 (4) and
 [contract.resellers.md](contract.resellers.md). This file holds the two
-addresses it has and the sidebar block that leads to it.
+addresses it has and the switcher and menu that lead through it.
 
 ## Two addresses, one set of screens
 
@@ -50,27 +50,40 @@ addresses it has and the sidebar block that leads to it.
    Admission is still tenant-service's and billing's (invariant 21); the
    panel only decides what it offers.
 
-## The sidebar's reseller block (`ResellerPanelButton`)
+## The workspace switcher and the reseller menu (UX-2-a)
 
-At the top of the nav, above the pins — a workspace, not a footer action
-beside logout. Titled "my reseller".
+It replaced the sidebar's "my reseller" block and the workspace's tab bar
+(`contract.ux.md` N8) — one reseller's screens are a menu of their own, not
+one button and then tabs (user, 2026-10-08: the switcher over a menu section).
 
-1. **On the platform, per owned reseller:** its slug, then two actions kept
-   apart — **reseller settings** (a link, current anywhere inside that
-   workspace) and **open its panel** (the handoff, F-061-f).
-2. **The handoff is offered only where it lands.** `GET /auth/handoff` says
-   `hasPanel` per reseller, by the same `panelHostOf` `POST` refuses on.
-   Without one the action is disabled and a line under it says to connect and
-   verify the domain first — the click is never refused into the settings.
-3. **On the reseller's own domain:** reseller settings only, to `/reseller`.
-   No handoff: there is nowhere to hand off to (F-061-m).
-4. **Nothing at all** before `me` answers, for a caller who owns no reseller
-   on the platform, or for anyone but the owner or a `tenant.manage` seat on
-   a reseller's domain.
+1. **The address picks the menu; nothing is stored.** `workspaceOfPath`:
+   `/reseller/…` is the caller's own (rule 0), `/my-resellers/:id/…` the
+   path's — except the platform's own users page, which shares the address
+   (F-311-ab) and stays the account's. On a reseller's domain only `/reseller`
+   counts: a `/my-resellers` address there is the 404 (rule 1).
+2. **The switcher** opens the nav: "my account" (`/`) and "my reseller", the
+   current one marked (`aria-current="true"` — a workspace, not a page).
+   "My reseller" goes to the workspace in the path, else `/reseller`, else —
+   an owner whose one reseller is terminated — that one by id. Not drawn for
+   a caller with none, nor before `me` and the owned list answer.
+3. **Inside a workspace the sidebar draws `RESELLER_MENU`** (`_lib/reseller-menu.ts`)
+   instead of the account's: home & setup, sales (catalog), finance
+   (gateways only — tenant billing is the session's tenant, not the path's),
+   customers (users), infrastructure (domains, bot), settings (brand). Headed
+   sections that fold under their own ids (`reseller-<id>`); no pins and no
+   footer entries — those are the account's; logout stays.
+4. **"Open my panel" — the handoff (F-061-f) — sits in home**, offered only
+   on the platform, only for a reseller the caller owns, and only enabled
+   where it lands (`hasPanel` on `GET /auth/handoff`, the `panelHostOf`
+   `POST` refuses on); otherwise a line under it says to connect and verify
+   the domain first — never a refused click. None on a reseller's own domain:
+   there is nowhere to hand off to (F-061-m).
+5. **More than one owned reseller** (a terminated one beside the live one):
+   under the switcher, on the platform, one link per slug picks which.
 
 ## Proof
 
 `my-resellers/self-workspace.test.tsx` (paths, the redirect and 404s, the
-menu's users entry), `_components/ResellerPanelButton.test.tsx` (the block on
-both hosts), `my-resellers/workspace-tabs.test.tsx` (id-less tabs),
+menu's users entry), `_components/workspace-switcher.test.tsx` (the path's
+menu, the switcher and the handoff on both hosts, every entry's page),
 `handoff.service.spec.ts` (`hasPanel`).

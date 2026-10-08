@@ -27,7 +27,6 @@ import { useUserMessage } from "./useUserMessage";
 import { Alert, Button, PageHeader } from "../../../../../_components/kit";
 import { usePanelSession } from "../../../../../_context/PanelSessionContext";
 import { isPlatformTenant } from "../../../../_lib/users";
-import { WorkspaceTabs } from "../../../../_components/WorkspaceTabs";
 
 const S = K.services;
 const PAGE_SIZE = 20;
@@ -122,7 +121,6 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
           </>
         }
       />
-      {!platform && <WorkspaceTabs id={id} />}
 
       {/* F-117-g: platform staff's consent, request and emergency entry; nothing to anyone else. */}
       <PlatformAccessBanner tenantId={id} onChange={retry} />

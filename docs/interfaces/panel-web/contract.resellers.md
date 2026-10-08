@@ -177,7 +177,7 @@ A purchase's last step links here (`BuyResellerView`, "add your domain").
 18. **No permission is judged by the page.** tenant-service admits the owner,
     a staff seat with `tenant.manage` or platform support (invariant 21); the
     page makes its calls and shows the refusal's sentence. The domains screen,
-    like every workspace page, carries the workspace tab bar (`contract.ux.md` N8).
+    like every workspace page, is an entry of the reseller menu (UX-2-a).
 19. **One sentence per refusal** (`DOMAIN_REFUSAL_KEYS`, namespace
     `common.resellerDomains`): shared-core's `ResellerAccessRejection` plus
     tenant-service's `DomainRejection`, both read from source by the spec, as
@@ -214,8 +214,8 @@ behind it is [tenant/contract.onboarding.md](../../domains/tenant/contract.onboa
     ambient `/gateways` or `/catalog`: they configure the session's tenant, the
     platform's (ADR-0064). Domain and gateway have theirs; until w6 and w8 ship,
     the bot and pricing steps link nothing.
-26. **Reached from the sidebar.** The reseller block's "reseller settings"
-    opens it; "open its panel" hands off, apart (F-061-n). On the reseller's
+26. **Reached from the sidebar.** The switcher's "my reseller" opens it;
+    "open my panel" in its menu hands off, apart (UX-2-a). On the reseller's
     own domain it is `/reseller`: [contract.reseller-workspace.md](contract.reseller-workspace.md).
     An answered handoff refusal still opens the console. Refusals: `ONBOARDING_REFUSAL_KEYS`,
     namespace `common.resellerOnboarding`, read from `ResellerAccessRejection`.
