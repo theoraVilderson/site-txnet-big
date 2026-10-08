@@ -47,7 +47,9 @@ const t = (_ns: string, key: string) => key;
 const HANDLES = { deliveryId: "d1", channel: "otp:c1", channelToken: "tok" };
 
 function typeCode(code: string) {
-  const boxes = screen.getAllByRole("textbox").filter((el) => el.getAttribute("maxlength") === "1");
+  // The code boxes, not the address field: they take any digits (c2a445d6 dropped
+  // `maxlength=1` so a paste or the OS's autofill lands whole).
+  const boxes = screen.getAllByRole("textbox").filter((el) => el.getAttribute("inputmode") === "numeric");
   code.split("").forEach((digit, i) => fireEvent.change(boxes[i], { target: { value: digit } }));
 }
 
