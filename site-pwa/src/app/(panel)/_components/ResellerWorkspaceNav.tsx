@@ -49,8 +49,8 @@ export function OtherResellers({ collapsed }: { collapsed: boolean }) {
 }
 
 /**
- * "Open my panel" (the handoff, F-061-f), drawn after the reseller's links in
- * the account section: only on the platform, only for a reseller the caller owns, and
+ * "Open my panel" (the handoff, F-061-f), drawn after the reseller's links,
+ * inside its group in the account section, at their size: only on the platform, only for a reseller the caller owns, and
  * enabled only where it lands (`hasPanel`) — otherwise the line under it says
  * to connect a domain first, rather than a refused click.
  */
@@ -69,11 +69,11 @@ export function HandoffAction({ collapsed }: { collapsed: boolean }) {
         onClick={() => open(reseller.id)}
         disabled={!canOpen || pending !== null}
         aria-describedby={canOpen ? undefined : `reseller-nopanel-${reseller.id}`}
-        className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-text-secondary transition-colors duration-200 enabled:hover:bg-leaf-bg enabled:hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-60 ${
+        className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-text-secondary transition-colors duration-200 enabled:hover:bg-leaf-bg enabled:hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-60 ${
           collapsed ? "lg:justify-center" : ""
         }`}
       >
-        <ExternalLink size={22} className="shrink-0 rtl:-scale-x-100" aria-hidden />
+        <ExternalLink size={18} className="shrink-0 rtl:-scale-x-100" aria-hidden />
         <span className={`flex-1 truncate text-start font-medium ${collapsed ? "lg:sr-only" : ""}`}>{label}</span>
         <CollapsedTooltip collapsed={collapsed} label={label} />
       </button>

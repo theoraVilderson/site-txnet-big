@@ -51,8 +51,8 @@ describe("the page header says whose page it is", () => {
   it("tags a reseller's page with the reseller and its slug", async () => {
     pathname = "/reseller/users";
     header();
-    expect(await screen.findByText("arian")).toBeInTheDocument();
-    expect(screen.getByText(N.scope)).toBeInTheDocument();
+    const tag = (await screen.findByText("arian")).closest("p")!;
+    expect(within(tag).getByText(N.scope)).toBeInTheDocument();
   });
 
   it("crumbs the reseller's users as the reseller's, not the platform's", async () => {
@@ -61,6 +61,8 @@ describe("the page header says whose page it is", () => {
     await screen.findByText("arian");
     const trail = screen.getByRole("navigation", { name: BC });
     expect(within(trail).getByRole("link", { name: N.menu.users })).toHaveAttribute("href", "/reseller/users");
+    // Under the one reseller button, as the menu draws it.
+    expect(within(trail).getByText(N.scope)).toBeInTheDocument();
     expect(within(trail).queryByText(S.menu.users)).toBeNull();
   });
 
@@ -69,7 +71,7 @@ describe("the page header says whose page it is", () => {
     owned = [];
     pathname = "/reseller/users/u-9";
     header("Ali");
-    expect(await screen.findByText(N.scope)).toBeInTheDocument();
+    expect((await screen.findAllByText(N.scope)).length).toBeGreaterThan(0);
     expect(within(screen.getByRole("navigation", { name: BC })).getByRole("link", { name: N.menu.users })).toBeInTheDocument();
   });
 

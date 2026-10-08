@@ -131,11 +131,21 @@ export type PanelMenuEntry = (PanelMenuLink | PanelMenuGroup) & Placed;
 export type VisibleMenuLink = Omit<PanelMenuLink, "href"> & {
   href: string;
   tag?: string;
+  /**
+   * A reseller's page (UX-2-a): drawn under the "reseller" button by this
+   * short label; `label` stays the full one wherever the button is not
+   * around it — pins, the palette, the breadcrumb.
+   */
+  short?: string;
   /** Steps done of all of them, drawn beside the label — the reseller's setup row (UX-2-e). */
   progress?: { done: number; total: number };
 };
 export type VisibleMenuGroup = Omit<PanelMenuGroup, "children"> & {
   children: VisibleMenuLink[];
+  /** Whose, beside the label — the reseller button's slug (UX-2-a2). */
+  tag?: string;
+  /** Steps done of all of them — the reseller button while setup is incomplete (UX-2-e). */
+  progress?: { done: number; total: number };
 };
 export type VisibleMenuEntry = (VisibleMenuLink | VisibleMenuGroup) & Placed;
 

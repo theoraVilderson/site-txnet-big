@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { PANEL_MENU, menuTrail } from "../../_lib/panel-menu";
-import { RESELLER_MENU } from "../../_lib/reseller-menu";
+import { RESELLER_MENU_GROUP } from "../../_lib/reseller-menu";
 import { useResellerWorkspace } from "../../_context/ResellerWorkspaceContext";
 import { cn } from "./cn";
 
@@ -19,7 +19,7 @@ const R = FrontendI18nKeys.common.resellerNav;
  * the reseller's users there, never the account's entry of the same address
  * (a staff seat's), which wins only outside it (UX-2-a2).
  */
-const RESELLER_FIRST = [...RESELLER_MENU, ...PANEL_MENU];
+const RESELLER_FIRST = [RESELLER_MENU_GROUP, ...PANEL_MENU];
 
 export interface PageHeaderProps {
   title: ReactNode;

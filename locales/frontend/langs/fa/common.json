@@ -1942,7 +1942,19 @@
       "setup": "راه‌اندازی نمایندگی"
     },
     "scope": "نمایندگی",
-    "setupProgress": "{{label}}: {{done}} از {{total}} قدم انجام شده"
+    "setupProgress": "{{label}}: {{done}} از {{total}} قدم انجام شده",
+    "groupLabel": "نمایندگی {{slug}}",
+    "short": {
+      "home": "خانه",
+      "setup": "راه‌اندازی",
+      "settings": "تنظیمات",
+      "branding": "برند",
+      "catalog": "کاتالوگ",
+      "gateways": "درگاه‌ها",
+      "users": "کاربران",
+      "domains": "دامنه‌ها",
+      "bot": "ربات"
+    }
   },
   "openingResellerPanel": "در حال باز کردن پنل نمایندگی…",
   "handoffFailed": "این لینک منقضی شده یا قبلاً استفاده شده است. برای ادامه وارد شوید.",

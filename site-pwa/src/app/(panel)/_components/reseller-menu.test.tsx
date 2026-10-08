@@ -6,7 +6,7 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { resellerMenu, workspaceOfPath } from "../_lib/reseller-menu";
 import { clearOwnedResellersCache } from "../my-resellers/_lib/workspace";
 import { usePanelUiStore } from "../_stores/panel-ui-store";
-import { useUiPreferences } from "@/stores/ui-preferences-store";
+import { DEFAULT_UI_PREFERENCES, useUiPreferences } from "@/stores/ui-preferences-store";
 import { ResellerWorkspaceProvider } from "../_context/ResellerWorkspaceContext";
 import { PanelSidebar } from "./PanelSidebar";
 
@@ -111,26 +111,27 @@ describe("workspaceOfPath — the address picks the menu", () => {
 });
 
 describe("the reseller's links", () => {
-  it("each join the account section it belongs to, by id or with none", () => {
+  it("are one group in the account section, its pages in working order, by id or with none", () => {
     const byId = resellerMenu({ id: "r-9", self: false });
-    expect(byId.map((l) => [l.section, l.href])).toEqual([
-      ["account", "/my-resellers/r-9"],
-      ["account", "/my-resellers/r-9/settings"],
-      ["account", "/my-resellers/r-9/branding"],
-      ["sales", "/my-resellers/r-9/catalog"],
-      ["finance", "/my-resellers/r-9/gateways"],
-      ["people", "/my-resellers/r-9/users"],
-      ["infra", "/my-resellers/r-9/domains"],
-      ["infra", "/my-resellers/r-9/bot"],
+    expect(byId).toMatchObject({ id: "reseller", section: "account" });
+    expect(byId.children.map((l) => l.href)).toEqual([
+      "/my-resellers/r-9",
+      "/my-resellers/r-9/catalog",
+      "/my-resellers/r-9/gateways",
+      "/my-resellers/r-9/users",
+      "/my-resellers/r-9/domains",
+      "/my-resellers/r-9/bot",
+      "/my-resellers/r-9/branding",
+      "/my-resellers/r-9/settings",
     ]);
-    const self = resellerMenu({ id: "r-1", self: true }).map((l) => l.href);
-    expect(self).toEqual(byId.map((l) => l.href.replace("/my-resellers/r-9", "/reseller")));
+    const self = resellerMenu({ id: "r-1", self: true }).children.map((l) => l.href);
+    expect(self).toEqual(byId.children.map((l) => l.href.replace("/my-resellers/r-9", "/reseller")));
   });
 
   it("link only pages that exist, at both addresses", () => {
     const app = join(__dirname, "..");
     const missing = resellerMenu({ id: "ID", self: false })
-      .flatMap((e) => [e.href.replace("/my-resellers/ID", "my-resellers/[id]"), e.href.replace("/my-resellers/ID", "reseller")])
+      .children.flatMap((e) => [e.href.replace("/my-resellers/ID", "my-resellers/[id]"), e.href.replace("/my-resellers/ID", "reseller")])
       .filter((dir) => !existsSync(join(app, dir, "page.tsx")));
     expect(missing).toEqual([]);
   });
@@ -139,21 +140,33 @@ describe("the reseller's links", () => {
 /** The list a section heading folds. */
 const sectionList = (label: string) => document.getElementById(screen.getByRole("button", { name: label }).getAttribute("aria-controls")!)!;
 
-describe("one menu", () => {
-  it("carries the owner's reseller links in the account's sections, beside the account's own", async () => {
+/** The one "reseller" button (user, 2026-10-08: one entry that opens, not links spread over the sections). */
+const resellerButton = () => screen.findByRole("button", { name: (n) => n === N.groupLabel || n === N.scope });
+
+describe("one reseller button that opens", () => {
+  it("is closed in my account, names the reseller once, and opens to its pages", async () => {
     renderSidebar();
-    const catalog = await screen.findByRole("link", { name: N.menu.catalog });
-    expect(catalog).toHaveAttribute("href", "/reseller/catalog");
-    expect(within(sectionList(S.sections.sales)).getByRole("link", { name: N.menu.catalog })).toBe(catalog);
-    expect(within(sectionList(S.sections.infra)).getByRole("link", { name: N.menu.domains })).toBeInTheDocument();
-    expect(within(sectionList(S.sections.account)).getByRole("link", { name: S.menu.dashboard })).toBeInTheDocument();
-    expect(within(sectionList(S.sections.account)).getByRole("link", { name: N.menu.home })).toHaveAttribute("href", "/reseller");
+    const button = await resellerButton();
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    // Named once, on the button — not on every page under it.
+    expect(screen.getAllByText("arian")).toHaveLength(1);
+    expect(screen.queryByRole("link", { name: N.short.catalog })).toBeNull();
+
+    fireEvent.click(button);
+    const pages = document.getElementById(button.getAttribute("aria-controls")!)!;
+    expect(await within(pages).findByRole("link", { name: N.short.catalog })).toHaveAttribute("href", "/reseller/catalog");
+    expect(within(pages).getByRole("link", { name: N.short.home })).toHaveAttribute("href", "/reseller");
+    // The handoff belongs to the reseller: inside, after its pages.
+    expect(within(pages).getByRole("button", { name: N.open })).toBeInTheDocument();
+    // Nowhere else in the menu.
+    expect(screen.getAllByRole("link", { name: N.short.catalog })).toHaveLength(1);
   });
 
-  it("stays one menu inside the workspace, the page's link current", async () => {
+  it("is open by itself on a reseller page, that page current", async () => {
     pathname = "/reseller/domains";
     renderSidebar();
-    expect(await screen.findByRole("link", { name: N.menu.domains })).toHaveAttribute("aria-current", "page");
+    expect(await screen.findByRole("link", { name: N.short.domains })).toHaveAttribute("aria-current", "page");
+    expect(await resellerButton()).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("link", { name: S.menu.dashboard })).not.toHaveAttribute("aria-current");
   });
 
@@ -162,7 +175,7 @@ describe("one menu", () => {
     owned = [];
     pathname = "/my-resellers/r-9/catalog";
     renderSidebar();
-    expect(await screen.findByRole("link", { name: N.menu.catalog })).toHaveAttribute("href", "/my-resellers/r-9/catalog");
+    expect(await screen.findByRole("link", { name: N.short.catalog })).toHaveAttribute("href", "/my-resellers/r-9/catalog");
     // Not theirs: no handoff to offer.
     expect(screen.queryByRole("button", { name: N.open })).toBeNull();
   });
@@ -174,23 +187,31 @@ describe("one menu", () => {
     const list = await screen.findByRole("list", { name: N.others });
     expect(within(list).getByRole("link", { name: "old" })).toHaveAttribute("aria-current", "true");
     expect(within(list).getByRole("link", { name: "arian" })).toHaveAttribute("href", "/reseller");
-    expect(screen.getByRole("link", { name: N.menu.domains })).toHaveAttribute("href", "/my-resellers/r-0/domains");
+    expect(screen.getByRole("link", { name: N.short.domains })).toHaveAttribute("href", "/my-resellers/r-0/domains");
   });
 
-  it("carries no reseller links for a caller with no reseller", async () => {
+  it("is not there for a caller with no reseller", async () => {
     owned = [];
     renderSidebar();
     await waitFor(() => expect(screen.getByRole("link", { name: S.menu.dashboard })).toBeInTheDocument());
-    expect(screen.queryByRole("link", { name: N.menu.home })).toBeNull();
+    expect(screen.queryByRole("button", { name: (n) => n === N.groupLabel || n === N.scope })).toBeNull();
   });
 
   it("draws a reseller staff seat's users once, where the account menu has it", async () => {
     me = { ...ON_DOMAIN, permissions: ["tenant.manage"], tenant: { ...ON_DOMAIN.tenant, isOwner: false } };
     owned = [];
     renderSidebar();
-    expect(await screen.findByRole("link", { name: N.menu.catalog })).toHaveAttribute("href", "/reseller/catalog");
+    // The account's own users page arrives a moment later and redraws the menu: click after it.
     await waitFor(() => expect(screen.getByRole("link", { name: S.menu.users })).toHaveAttribute("href", "/reseller/users"));
-    expect(screen.queryByRole("link", { name: N.menu.users })).toBeNull();
+    fireEvent.click(await resellerButton());
+    expect(await screen.findByRole("link", { name: N.short.catalog })).toHaveAttribute("href", "/reseller/catalog");
+    expect(screen.queryByRole("link", { name: N.short.users })).toBeNull();
+  });
+
+  it("keeps the full label where the button is not around it — a pinned page", async () => {
+    useUiPreferences.setState({ prefs: { ...DEFAULT_UI_PREFERENCES, "ui.pins": ["reseller-domains"] } });
+    renderSidebar();
+    expect(await screen.findByRole("link", { name: N.menu.domains })).toHaveAttribute("href", "/reseller/domains");
   });
 });
 
@@ -215,7 +236,7 @@ describe("the handoff, after the reseller's links", () => {
     owned = [];
     pathname = "/reseller/bot";
     renderSidebar();
-    expect(await screen.findByRole("link", { name: N.menu.bot })).toHaveAttribute("aria-current", "page");
+    expect(await screen.findByRole("link", { name: N.short.bot })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByRole("button", { name: N.open })).toBeNull();
   });
 });

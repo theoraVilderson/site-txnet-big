@@ -63,23 +63,30 @@ each reseller page in the section it belongs to — first built as a
    (`/reseller`, rule 0), else an owner's one terminated reseller by id. On a
    reseller's domain only its own counts: a `/my-resellers` address there is
    the 404 (rule 1). None before `me` and the owned list answer.
-2. **Each link joins an N1 section** (`RESELLER_MENU`, `withResellerMenu`):
-   home, settings, brand → `account`; catalog → `sales`; gateways →
-   `finance` (only those — tenant billing is the session's tenant, not the
-   path's); users → `people`; domains, bot → `infra`. Drawn after the
-   section's own entries, labelled "reseller …" beside the account's
-   catalog or gateways, and tagged with its slug. A link the account menu
-   already holds (a staff seat's `/reseller/users`) is not drawn twice. It
-   pins like any entry; a pinned one with no reseller in play is not drawn
-   and stays in `ui.pins` (N5).
-3. **"Open my panel" — the handoff (F-061-f) — follows them in `account`**,
-   offered only on the platform, only for a reseller the caller owns, and
-   only enabled where it lands (`hasPanel` on `GET /auth/handoff`, the
-   `panelHostOf` `POST` refuses on); otherwise a line under it says to
-   connect and verify the domain first — never a refused click. None on a
-   reseller's own domain: nowhere to hand off to (F-061-m).
+2. **One "reseller" button in `account` that opens to its pages**
+   (`RESELLER_MENU`, `resellerMenu`, an N3 group; user, 2026-10-08). It
+   replaced the first build, which spread the links over five sections —
+   "reseller …" and a slug on every row, truncating into each other in a
+   288px sidebar. The button carries the slug and, until setup is
+   complete, its count (UX-2-e); it opens by itself on any of its pages
+   (the group holding the current page is open). Under it, short labels
+   in working order: home, setup (while incomplete), catalog, gateways
+   (only those it sells with — its billing with the platform is the
+   session's tenant), users, domains, bot, brand, settings. The full label
+   ("reseller catalog") stays wherever the button is not around it: pins,
+   the palette, the breadcrumb ("my account › reseller › …",
+   `RESELLER_MENU_GROUP`). A page the account menu already holds (a staff
+   seat's `/reseller/users`) is not drawn twice. A pinned one with no
+   reseller in play is not drawn and stays in `ui.pins` (N5).
+3. **"Open my panel" — the handoff (F-061-f) — follows its pages, inside
+   the button**, offered only on the platform, only for a reseller the
+   caller owns, and only enabled where it lands (`hasPanel` on
+   `GET /auth/handoff`, the `panelHostOf` `POST` refuses on); otherwise a
+   line under it says to connect and verify the domain first — never a
+   refused click. None on a reseller's own domain: nowhere to hand off to
+   (F-061-m).
 4. **More than one owned reseller** (a terminated one beside the live one):
-   after it, on the platform, one link per slug picks whose links are drawn.
+   after it, on the platform, one link per slug picks whose pages are drawn.
 
 ## Whose page it is — said once (UX-2-a2)
 

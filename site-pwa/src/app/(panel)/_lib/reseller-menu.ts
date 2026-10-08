@@ -15,48 +15,61 @@ import {
   myResellerUsersPath,
 } from "@/lib/routes";
 import type { SetupProgress } from "../my-resellers/_lib/setup";
-import { menuHrefs, type MenuSectionId, type PanelMenuLink, type VisibleMenuEntry, type VisibleMenuLink } from "./panel-menu";
+import { menuHrefs, type MenuSectionId, type PanelMenuGroup, type PanelMenuLink, type VisibleMenuEntry, type VisibleMenuGroup } from "./panel-menu";
 
 /** The reseller menu's strings as generated constants (C-06). */
 const R = FrontendI18nKeys.common.resellerNav;
 
 interface ResellerMenuLink extends PanelMenuLink {
-  /** The account menu's section it joins (N1) — one menu, not a second one. */
-  section: MenuSectionId;
+  /** The label inside the "reseller" button, which already says whose. */
+  short: string;
   href: (id: string, self: boolean) => string;
 }
 
 /**
- * One reseller's workspace, merged into the account's menu (UX-2-a; user,
- * 2026-10-08: one menu, the reseller's pages in the sections they belong to,
- * not a switcher). Home, settings and brand join `account`; the catalog
- * `sales`; gateways `finance` — only those: the reseller's billing with the
- * platform is the session's tenant (`PANEL_TENANT_BILLING`), not the path's;
- * users `people`; domains and the bot `infra`. The handoff is not an entry —
- * the sidebar draws it after them in `account` (`contract.reseller-workspace.md`).
+ * One reseller's workspace in the account's menu: **one "reseller" button in
+ * `account` that opens to its pages** (user, 2026-10-08 — first merged into
+ * the sections they belong to, which spread "reseller …" and a slug over
+ * five sections). In working order: home, then what a shop needs (catalog,
+ * gateways, users, domains, bot), then brand and settings. Gateways are only
+ * those it sells with — its billing with the platform is the session's
+ * tenant (`PANEL_TENANT_BILLING`). The handoff is not an entry: the sidebar
+ * draws it after them, inside (`contract.reseller-workspace.md`).
  */
 export const RESELLER_MENU: readonly ResellerMenuLink[] = [
-  { section: "account", id: "reseller-home", label: R.menu.home, icon: Store, href: myResellerConsolePath },
-  { section: "account", id: "reseller-settings", label: R.menu.settings, icon: Settings2, href: myResellerSettingsPath },
-  { section: "account", id: "reseller-branding", label: R.menu.branding, icon: Palette, href: myResellerBrandingPath },
-  { section: "sales", id: "reseller-catalog", label: R.menu.catalog, icon: Package, href: myResellerCatalogPath },
-  { section: "finance", id: "reseller-gateways", label: R.menu.gateways, icon: Landmark, href: myResellerGatewaysPath },
-  { section: "people", id: "reseller-users", label: R.menu.users, icon: UserCog, href: myResellerUsersPath },
-  { section: "infra", id: "reseller-domains", label: R.menu.domains, icon: Globe, href: myResellerDomainsPath },
-  { section: "infra", id: "reseller-bot", label: R.menu.bot, icon: Bot, href: myResellerBotPath },
+  { id: "reseller-home", label: R.menu.home, short: R.short.home, icon: Store, href: myResellerConsolePath },
+  { id: "reseller-catalog", label: R.menu.catalog, short: R.short.catalog, icon: Package, href: myResellerCatalogPath },
+  { id: "reseller-gateways", label: R.menu.gateways, short: R.short.gateways, icon: Landmark, href: myResellerGatewaysPath },
+  { id: "reseller-users", label: R.menu.users, short: R.short.users, icon: UserCog, href: myResellerUsersPath },
+  { id: "reseller-domains", label: R.menu.domains, short: R.short.domains, icon: Globe, href: myResellerDomainsPath },
+  { id: "reseller-bot", label: R.menu.bot, short: R.short.bot, icon: Bot, href: myResellerBotPath },
+  { id: "reseller-branding", label: R.menu.branding, short: R.short.branding, icon: Palette, href: myResellerBrandingPath },
+  { id: "reseller-settings", label: R.menu.settings, short: R.short.settings, icon: Settings2, href: myResellerSettingsPath },
 ];
 
 /**
- * The setup wizard's row (UX-2-e): in `account` after the home, carrying the
- * route's count, and only while setup is not complete — not a `RESELLER_MENU`
- * row, because a finished reseller has nothing there to open.
+ * The setup wizard's row (UX-2-e): after the home, carrying the route's
+ * count, and only while setup is not complete — not a `RESELLER_MENU` row,
+ * because a finished reseller has nothing there to open.
  */
 export const RESELLER_SETUP_LINK: ResellerMenuLink = {
-  section: "account",
   id: "reseller-setup",
   label: R.menu.setup,
+  short: R.short.setup,
   icon: ListChecks,
   href: myResellerSetupPath,
+};
+
+/** The button's id; one at a time is open, like any group (N2). */
+export const RESELLER_GROUP_ID = "reseller";
+
+/** The same button as menu data, for the breadcrumb: "my account › reseller › …" (UX-2-a2). */
+export const RESELLER_MENU_GROUP: PanelMenuGroup & { section: MenuSectionId } = {
+  id: RESELLER_GROUP_ID,
+  section: "account",
+  label: R.scope,
+  icon: Store,
+  children: [RESELLER_MENU[0], RESELLER_SETUP_LINK, ...RESELLER_MENU.slice(1)],
 };
 
 /** A reseller's workspace: whose, and whether at its id-less address (F-061-n). */
@@ -89,30 +102,37 @@ export function workspaceOfPath(
 }
 
 /**
- * {@link RESELLER_MENU} for one workspace: links placed in the account's
- * sections, each tagged with whose they are (`tag`, the slug when known) —
- * the sidebar draws it beside the label (UX-2-a2).
+ * {@link RESELLER_MENU} for one workspace, as the one button: whose it is
+ * (`tag`, the slug when known) and, until setup is complete, the setup row
+ * after the home and its count on the button itself (UX-2-e).
  */
 export function resellerMenu(
   ws: Workspace,
   slug: string | null = null,
   setup: SetupProgress | null = null,
-): (VisibleMenuLink & { section: MenuSectionId })[] {
-  const rows = RESELLER_MENU.flatMap((row) => (row.id === "reseller-home" && setup && !setup.complete ? [row, RESELLER_SETUP_LINK] : [row]));
-  return rows.map(({ href, ...link }) => ({
-    ...link,
-    href: href(ws.id, ws.self),
+): VisibleMenuGroup & { section: MenuSectionId } {
+  const open = setup && !setup.complete ? setup : null;
+  const rows = RESELLER_MENU.flatMap((row) => (row.id === "reseller-home" && open ? [row, RESELLER_SETUP_LINK] : [row]));
+  const progress = open ? { done: open.done, total: open.total } : undefined;
+  return {
+    id: RESELLER_GROUP_ID,
+    section: "account",
+    label: R.scope,
+    icon: Store,
     tag: slug ?? undefined,
-    ...(link.id === RESELLER_SETUP_LINK.id && setup ? { progress: { done: setup.done, total: setup.total } } : {}),
-  }));
+    progress,
+    children: rows.map(({ href, ...link }) => ({
+      ...link,
+      href: href(ws.id, ws.self),
+      ...(link.id === RESELLER_SETUP_LINK.id ? { progress } : {}),
+    })),
+  };
 }
 
 /**
- * The account's menu with the reseller's links merged in, each after the
- * account's own entries of its section (`menuSections` keeps that order). A
- * link the account's menu already holds — `/reseller/users` for a reseller's
- * staff seat (F-311-ab) — is not drawn twice. `setup` adds the setup row
- * while it is incomplete (UX-2-e).
+ * The account's menu with the reseller's button after its own entries. A
+ * page the account's menu already holds — `/reseller/users` for a reseller's
+ * staff seat (F-311-ab) — is not drawn twice.
  */
 export function withResellerMenu(
   menu: readonly VisibleMenuEntry[],
@@ -122,5 +142,6 @@ export function withResellerMenu(
 ): VisibleMenuEntry[] {
   if (!ws) return [...menu];
   const held = new Set(menuHrefs(menu));
-  return [...menu, ...resellerMenu(ws, slug, setup).filter((l) => !held.has(l.href))];
+  const group = resellerMenu(ws, slug, setup);
+  return [...menu, { ...group, children: group.children.filter((l) => !held.has(l.href)) }];
 }

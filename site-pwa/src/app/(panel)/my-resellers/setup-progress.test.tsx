@@ -49,12 +49,19 @@ beforeEach(() => {
 describe("the menu row", () => {
   it("carries the route's count and opens the wizard, until every step is done", () => {
     const ws = { id: "r-1", self: true };
-    const row = withResellerMenu([], ws, "shop", setupProgress(view({ domain: true, gateway: true }))).find((l) => l.id === "reseller-setup");
-    expect(row).toMatchObject({ section: "account", href: "/reseller/setup", progress: { done: 2, total: 4 } });
+    // The reseller button's pages, and the button itself.
+    const button = (setup: Parameters<typeof withResellerMenu>[3]) =>
+      withResellerMenu([], ws, "shop", setup).find((e) => e.id === "reseller") as { progress?: object; children: { id: string; href: string; progress?: object }[] };
+    const open = button(setupProgress(view({ domain: true, gateway: true })));
+    expect(open.children.find((l) => l.id === "reseller-setup")).toMatchObject({ href: "/reseller/setup", progress: { done: 2, total: 4 } });
+    // Seen with the button closed, too.
+    expect(open.progress).toEqual({ done: 2, total: 4 });
 
-    expect(withResellerMenu([], ws, "shop", setupProgress(view({ domain: true, gateway: true, bot: true, pricing: true }))).some((l) => l.id === "reseller-setup")).toBe(false);
+    const done = button(setupProgress(view({ domain: true, gateway: true, bot: true, pricing: true })));
+    expect(done.children.some((l) => l.id === "reseller-setup")).toBe(false);
+    expect(done.progress).toBeUndefined();
     // Not known yet: no row, never a guessed one.
-    expect(withResellerMenu([], ws, "shop", null).some((l) => l.id === "reseller-setup")).toBe(false);
+    expect(button(null).children.some((l) => l.id === "reseller-setup")).toBe(false);
   });
 });
 

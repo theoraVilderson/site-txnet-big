@@ -15,6 +15,7 @@ import { Popover } from "./kit/Popover";
 import { useMediaQuery } from "./kit/overlay";
 import { LogoutButton } from "./LogoutButton";
 import { HandoffAction, OtherResellers } from "./ResellerWorkspaceNav";
+import { RESELLER_GROUP_ID } from "../_lib/reseller-menu";
 import { ThemeDropdown } from "@auth/auth/_components/ThemeDropdown";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -208,10 +209,12 @@ export function PanelSidebar() {
     item: VisibleMenuLink,
     nested: boolean,
     pin?: { handle: ReactNode; up: boolean; down: boolean },
+    /** Under the reseller button: its short label, no tag — the button says whose. */
+    inGroup = false,
   ) => {
     const isActive = item.href === active;
     const Icon = item.icon;
-    const label = t("common", item.label);
+    const label = t("common", inGroup && item.short ? item.short : item.label);
     const badge = badgeOf(item.id);
     const filled = isActive && !nested;
     const step = (delta: -1 | 1) =>
@@ -256,7 +259,7 @@ export function PanelSidebar() {
           <Icon size={nested ? 18 : 22} className="shrink-0" />
           <span className={`flex-1 truncate font-medium ${whenCollapsed("lg:sr-only")}`}>{label}</span>
           {/* Whose page (UX-2-a2): a reseller's slug, beside the account's own of the same kind. */}
-          {item.tag && (
+          {item.tag && !inGroup && (
             <span
               aria-hidden
               dir="ltr"
@@ -280,7 +283,7 @@ export function PanelSidebar() {
             </span>
           )}
           {renderBadge(badge)}
-          {!nested && <CollapsedTooltip collapsed={collapsed} label={label} />}
+          {(!nested || inGroup) && <CollapsedTooltip collapsed={collapsed} label={label} />}
         </Link>
         {/* Shown on hover or focus where there is a pointer, always on touch;
             the rail's icons have no room for them. */}
@@ -320,11 +323,23 @@ export function PanelSidebar() {
     const Icon = group.icon;
     const submenuId = `${PANEL_SIDEBAR_ID}-${group.id}`;
     const label = t("common", group.label);
+    // The reseller button (UX-2-a): named with whose it is, and its pages
+    // followed by its panel and the other resellers — they are the reseller's.
+    const reseller = group.id === RESELLER_GROUP_ID;
+    const name = reseller && group.tag ? t("common", RN.groupLabel, { slug: group.tag }) : label;
+    const tail = reseller ? (
+      <>
+        <HandoffAction collapsed={false} />
+        <OtherResellers collapsed={false} />
+      </>
+    ) : null;
+    const children = group.children.map((child) => renderLink(child, true, undefined, reseller));
     const trigger = (
       <button
         type="button"
         aria-expanded={railCollapsed ? undefined : isOpen}
         aria-controls={railCollapsed ? undefined : submenuId}
+        aria-label={name === label ? undefined : name}
         onClick={railCollapsed ? undefined : () => toggleGroup(group.id)}
         className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start transition-colors duration-200 ${
           containsActive
@@ -334,11 +349,29 @@ export function PanelSidebar() {
       >
         <Icon size={22} className="shrink-0" />
         <span className={`flex-1 truncate font-medium ${whenCollapsed("lg:sr-only")}`}>{label}</span>
+        {group.tag && (
+          <span
+            aria-hidden
+            dir="ltr"
+            className={`max-w-24 shrink-0 truncate rounded-md border border-card-border px-1.5 text-[10px] font-bold leading-4 text-text-secondary ${whenCollapsed("lg:hidden")}`}
+          >
+            {group.tag}
+          </span>
+        )}
+        {group.progress && (
+          <span
+            aria-hidden
+            dir="ltr"
+            className={`shrink-0 rounded-full bg-leaf-bg px-1.5 text-[10px] font-bold leading-5 text-primary ${whenCollapsed("lg:hidden")}`}
+          >
+            {group.progress.done}/{group.progress.total}
+          </span>
+        )}
         <ChevronDown
           size={16}
           className={`shrink-0 transition-transform duration-300 ${isOpen ? "rotate-180" : ""} ${whenCollapsed("lg:hidden")}`}
         />
-        <CollapsedTooltip collapsed={collapsed && flyoutId !== group.id} label={label} />
+        <CollapsedTooltip collapsed={collapsed && flyoutId !== group.id} label={name} />
       </button>
     );
     return (
@@ -348,15 +381,18 @@ export function PanelSidebar() {
             wrapped in the popover it always read "closed, opens a dialog". */}
         {railCollapsed ? (
           <Popover
-            label={label}
+            label={name}
             side="end"
             open={flyoutId === group.id}
             onOpenChange={(next) => setFlyout(next ? { id: group.id, path: pathname } : null)}
             trigger={trigger}
             className="w-60 p-2"
           >
-            <p className="px-3 pb-1 pt-1 text-xs font-bold text-text-secondary">{label}</p>
-            <div className="space-y-1">{group.children.map((child) => renderLink(child, true))}</div>
+            <p className="px-3 pb-1 pt-1 text-xs font-bold text-text-secondary">{name}</p>
+            <div className="space-y-1">
+              {children}
+              {tail}
+            </div>
           </Popover>
         ) : (
           trigger
@@ -365,7 +401,8 @@ export function PanelSidebar() {
           {isOpen && !railCollapsed && (
             <motion.div key="submenu" id={submenuId} {...FOLD} className="overflow-hidden">
               <div className="ms-5 mt-1 space-y-1 border-s border-card-border ps-3">
-                {group.children.map((child) => renderLink(child, true))}
+                {children}
+                {tail}
               </div>
             </motion.div>
           )}
@@ -510,15 +547,7 @@ export function PanelSidebar() {
               </Reorder.Group>
             </div>
           )}
-          {renderSections(sections, headings, (id) =>
-            id === "account" ? (
-              <>
-                {/* After the reseller's own links (UX-2-a): its panel, and which reseller. */}
-                <HandoffAction collapsed={railCollapsed} />
-                <OtherResellers collapsed={railCollapsed} />
-              </>
-            ) : null,
-          )}
+          {renderSections(sections, headings)}
         </nav>
 
         {/*

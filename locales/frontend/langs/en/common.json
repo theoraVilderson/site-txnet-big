@@ -1942,7 +1942,19 @@
       "setup": "Reseller setup"
     },
     "scope": "Reseller",
-    "setupProgress": "{{label}}: {{done}} of {{total}} steps done"
+    "setupProgress": "{{label}}: {{done}} of {{total}} steps done",
+    "groupLabel": "Reseller {{slug}}",
+    "short": {
+      "home": "Home",
+      "setup": "Setup",
+      "settings": "Settings",
+      "branding": "Brand",
+      "catalog": "Catalog",
+      "gateways": "Gateways",
+      "users": "Users",
+      "domains": "Domains",
+      "bot": "Bot"
+    }
   },
   "openingResellerPanel": "Opening your reseller panel…",
   "handoffFailed": "This link has expired or was already used. Sign in to continue.",
