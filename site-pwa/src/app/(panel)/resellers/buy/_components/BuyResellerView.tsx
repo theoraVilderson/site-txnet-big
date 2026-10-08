@@ -18,6 +18,7 @@ import {
 import { useResellerPanelOpener } from "../../../_components/ResellerWorkspaceNav";
 import { Select } from "../../../_components/kit/Select";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
+import { DataTable } from "../../../_components/kit/DataTable";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatInstant } from "../../../_lib/datetime";
 import { formatMoney } from "../../../_lib/money";
@@ -337,35 +338,33 @@ function Capabilities({ offers, pickedId }: { offers: PackageOffer[]; pickedId: 
       {offers.length > 0 && (
         <div>
           <p className="text-xs font-bold text-text-secondary">{t("common", K.features)}</p>
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-card-border text-xs text-text-secondary">
-                  <th className="py-2 text-start font-medium">{t("common", K.feature)}</th>
-                  {offers.map((o) => (
-                    <th key={o.id} className={`px-3 py-2 text-center font-medium ${o.id === pickedId ? "text-primary" : ""}`}>
-                      {o.name}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {featureChart(offers).map((row) => (
-                  <tr key={row.key} className="border-b border-card-border last:border-0">
-                    <td className="py-2 text-text-primary">{features[row.key] ? t("common", features[row.key]) : row.key}</td>
-                    {row.included.map((has, i) => (
-                      <td key={offers[i].id} className={`px-3 py-2 text-center ${offers[i].id === pickedId ? "bg-primary/5" : ""}`}>
-                        {has ? (
-                          <Check size={16} className="mx-auto text-primary" aria-label={t("common", K.has)} />
-                        ) : (
-                          <Minus size={16} className="mx-auto text-text-secondary" aria-label={t("common", K.hasNot)} />
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-2">
+            <DataTable
+              label={t("common", K.features)}
+              compact
+              bare
+              rows={featureChart(offers)}
+              rowKey={(row) => row.key}
+              columns={[
+                {
+                  id: "feature",
+                  header: t("common", K.feature),
+                  cell: (row) => (features[row.key] ? t("common", features[row.key]) : row.key),
+                  className: "text-text-primary",
+                },
+                ...offers.map((o, i) => ({
+                  id: o.id,
+                  header: <span className={o.id === pickedId ? "text-primary" : undefined}>{o.name}</span>,
+                  cell: (row: { included: boolean[] }) =>
+                    row.included[i] ? (
+                      <Check size={16} className="text-primary" aria-label={t("common", K.has)} />
+                    ) : (
+                      <Minus size={16} className="text-text-secondary" aria-label={t("common", K.hasNot)} />
+                    ),
+                  className: o.id === pickedId ? "bg-primary/5" : undefined,
+                })),
+              ]}
+            />
           </div>
         </div>
       )}

@@ -64,6 +64,15 @@ export const REFUSAL_KEYS: Record<CatalogRejection, string> = {
   meter_not_found: CATALOG_KEYS.refusals.meter_not_found,
   rate_card_not_found: CATALOG_KEYS.refusals.rate_card_not_found,
   rate_card_not_served: CATALOG_KEYS.refusals.rate_card_not_served,
+  campaign_not_found: CATALOG_KEYS.refusals.campaign_not_found,
+  campaign_overlaps: CATALOG_KEYS.refusals.campaign_overlaps,
+  campaign_started: CATALOG_KEYS.refusals.campaign_started,
+  campaign_pending: CATALOG_KEYS.refusals.campaign_pending,
+  no_price_to_restore: CATALOG_KEYS.refusals.no_price_to_restore,
+  price_scheduled_in_campaign: CATALOG_KEYS.refusals.price_scheduled_in_campaign,
+  price_in_campaign: CATALOG_KEYS.refusals.price_in_campaign,
+  season_not_found: CATALOG_KEYS.refusals.season_not_found,
+  season_date_invalid: CATALOG_KEYS.refusals.season_date_invalid,
 };
 
 /** The refusal's own sentence key, when billing named one this page knows. */

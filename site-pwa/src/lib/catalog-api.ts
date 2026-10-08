@@ -67,7 +67,17 @@ export type CatalogRejection =
   | "traffic_quota_required"
   | "meter_not_found"
   | "rate_card_not_found"
-  | "rate_card_not_served";
+  | "rate_card_not_served"
+  /** F-503-a campaigns, F-505-a seasons. */
+  | "campaign_not_found"
+  | "campaign_overlaps"
+  | "campaign_started"
+  | "campaign_pending"
+  | "no_price_to_restore"
+  | "price_scheduled_in_campaign"
+  | "price_in_campaign"
+  | "season_not_found"
+  | "season_date_invalid";
 
 /** Text by language code (F-1533-d/f); at least the item's source language. The key is billing's. */
 export type Texts = Record<string, string>;

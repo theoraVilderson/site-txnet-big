@@ -1544,7 +1544,16 @@
       "traffic_quota_required": "A network variant must state its traffic. Add a traffic limit in GB; 0 means unlimited.",
       "meter_not_found": "That meter does not exist. Reload the page and try again.",
       "rate_card_not_found": "That rate was not found. It may belong to the platform, which only the platform owner can change.",
-      "rate_card_not_served": "Nothing would sell at this rate: a per-GB rate is only for a metered variant, charged per GB with nothing included."
+      "rate_card_not_served": "Nothing would sell at this rate: a per-GB rate is only for a metered variant, charged per GB with nothing included.",
+      "campaign_not_found": "This campaign does not exist.",
+      "campaign_overlaps": "This campaign's dates overlap another campaign on the same price. Pick dates that do not overlap.",
+      "campaign_started": "This campaign has already started, so it can no longer be cancelled.",
+      "campaign_pending": "A price set before this campaign ends would be undone when the campaign ends. Set it after the campaign.",
+      "no_price_to_restore": "There is no price in effect when the campaign starts, so there is nothing to restore when it ends.",
+      "price_scheduled_in_campaign": "A price is already scheduled within these dates; the campaign's end would undo it.",
+      "price_in_campaign": "This price belongs to a campaign. Cancel the campaign instead.",
+      "season_not_found": "This season does not exist.",
+      "season_date_invalid": "That day does not exist in that month."
     },
     "rename": "Edit names",
     "translations": {
@@ -1903,7 +1912,8 @@
       "sms_usage_charge": "SMS usage",
       "currency_change": "Currency change",
       "quota_overage_charge": "Quota overage (units past your package)",
-      "quota_overage_refund": "Quota overage refunded"
+      "quota_overage_refund": "Quota overage refunded",
+      "subscription_upgrade_charge": "Package upgrade (prorated for the days left)"
     },
     "topup": "Top up",
     "topupPage": {
@@ -2646,7 +2656,16 @@
       "traffic_quota_required": "A network variant must state its traffic. Add a traffic limit in GB; 0 means unlimited.",
       "meter_not_found": "That meter does not exist. Reload the page and try again.",
       "rate_card_not_found": "That rate was not found. It may belong to the platform, which only the platform owner can change.",
-      "rate_card_not_served": "Nothing would sell at this rate: a per-GB rate is only for a metered variant, charged per GB with nothing included."
+      "rate_card_not_served": "Nothing would sell at this rate: a per-GB rate is only for a metered variant, charged per GB with nothing included.",
+      "campaign_not_found": "this campaign does not exist.",
+      "campaign_overlaps": "this campaign's dates overlap another campaign on the same price. Pick dates that do not overlap.",
+      "campaign_started": "this campaign has already started, so it can no longer be cancelled.",
+      "campaign_pending": "a price set before this campaign ends would be undone when the campaign ends. Set it after the campaign.",
+      "no_price_to_restore": "there is no price in effect when the campaign starts, so there is nothing to restore when it ends.",
+      "price_scheduled_in_campaign": "a price is already scheduled within these dates; the campaign's end would undo it.",
+      "price_in_campaign": "this price belongs to a campaign. Cancel the campaign instead.",
+      "season_not_found": "this season does not exist.",
+      "season_date_invalid": "that day does not exist in that month."
     }
   },
   "resellerBots": {
