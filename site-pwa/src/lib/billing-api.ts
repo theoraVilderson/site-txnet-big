@@ -2160,6 +2160,8 @@ export interface EffectiveSellingSettings {
   maxClients: { value: number | null; layer: SellingLayer };
   priority: { value: number; layer: SellingLayer };
   weight: { value: number; layer: SellingLayer };
+  /** K under `hrw` (F-027-di): how many inbounds a buyer is placed on; platform 2, at most 16. */
+  inboundsPerBuyer: { value: number; layer: SellingLayer };
 }
 
 /**
@@ -2174,6 +2176,7 @@ export interface PanelGroupMember {
   maxClients: number | null;
   priority: number | null;
   weight: number | null;
+  inboundsPerBuyer: number | null;
   effective: EffectiveSellingSettings;
   /** The inbounds assigned to this membership (F-027-ch); `[]` = it sells the panel's pool. */
   inbounds: string[];
@@ -2209,8 +2212,11 @@ export interface PanelGroup {
 /** `createPanelGroupSchema`'s fields; `strategy` is never sent (billing rule 21). */
 export type PanelGroupBody = Partial<Pick<PanelGroup, "name" | "minHealthyPanels" | "subscriptionTtlSeconds">>;
 
-/** `network.InboundPlacement` (F-114-b): a config on every picked inbound, or one on the emptiest. */
-export type InboundPlacement = "all" | "spread";
+/**
+ * `network.InboundPlacement` (F-114-b): a config on every picked inbound, one
+ * on the emptiest, or K by the Grant's rendezvous hash (`hrw`, F-027-di).
+ */
+export type InboundPlacement = "all" | "spread" | "hrw";
 
 /** One inbound as `network-service` last read it, the admin's pick, and how many live configs it holds. */
 export interface PanelInbound {
@@ -2239,6 +2245,7 @@ export interface PanelInbounds {
   maxClients: number | null;
   priority: number | null;
   weight: number | null;
+  inboundsPerBuyer: number | null;
   /** Each value as fulfilment reads it for a member that sets none, with `panel` or `platform`. */
   effective: EffectiveSellingSettings;
   /** Null until the first read, and again after a refresh until the next pass reads. */
@@ -2254,11 +2261,12 @@ export type PanelInboundsBody = {
   maxClients?: number | null;
   priority?: number | null;
   weight?: number | null;
+  inboundsPerBuyer?: number | null;
   inbounds?: { remoteId: string; sold: boolean; maxClients?: number | null }[];
 };
 
 /** A member's own selling settings (F-027-cg): any of them, at least one; null inherits the panel's. */
-export type MemberSellingBody = Partial<Pick<PanelGroupMember, "inboundPlacement" | "maxClients" | "priority" | "weight">>;
+export type MemberSellingBody = Partial<Pick<PanelGroupMember, "inboundPlacement" | "maxClients" | "priority" | "weight" | "inboundsPerBuyer">>;
 
 export type DrainedMember = PanelGroupMember & { waitSeconds: number };
 export type RemovedMember = { groupId: string; panelId: string; removed: true };

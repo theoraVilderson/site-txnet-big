@@ -11,20 +11,34 @@ import { SYSTEMS_KEYS } from "./systems";
 const K = SYSTEMS_KEYS.inbounds;
 
 /** `network.InboundPlacement`, in the schema's order (C-09), with its label and what it does. */
-export const INBOUND_PLACEMENTS = ["all", "spread"] as const satisfies readonly InboundPlacement[];
+export const INBOUND_PLACEMENTS = ["all", "spread", "hrw"] as const satisfies readonly InboundPlacement[];
 
 export const PLACEMENT_KEYS: Record<InboundPlacement, { label: string; hint: string }> = {
   all: { label: K.placement.all, hint: K.placement.allHint },
   spread: { label: K.placement.spread, hint: K.placement.spreadHint },
+  hrw: { label: K.placement.hrw, hint: K.placement.hrwHint },
 };
 
 /** billing's `capSchema`: a whole number from 1, or none. */
 const MAX_CAP = 1_000_000;
 
+/** billing's `inboundsPerBuyerSchema`: K under `hrw`, 1..16 (network rule 4b). */
+export const MAX_PER_BUYER = 16;
+
+/** K as typed: `null` = not set here, `undefined` = not a K. */
+export function perBuyerOf(text: string): number | null | undefined {
+  const t = text.trim();
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isInteger(n) && n >= 1 && n <= MAX_PER_BUYER ? n : undefined;
+}
+
 export type InboundsForm = {
   placement: InboundPlacement;
   /** The panel's cap as typed; empty = none. */
   panelMax: string;
+  /** The panel's own K under `hrw`, as typed; empty = the platform's (F-027-di). */
+  perBuyer: string;
   /** Per inbound, by the panel's id for it. */
   picks: Record<string, { sold: boolean; cap: string }>;
 };
@@ -36,6 +50,7 @@ export function inboundsFormOf(view: PanelInbounds): InboundsForm {
     // The placement in force: the panel's own, else the platform's (F-027-cg).
     placement: view.effective.inboundPlacement.value,
     panelMax: capText(view.maxClients),
+    perBuyer: capText(view.inboundsPerBuyer),
     picks: Object.fromEntries(view.inbounds.map((i) => [i.remoteId, { sold: i.sold, cap: capText(i.maxClients) }])),
   };
 }
@@ -83,6 +98,13 @@ export function validateInbounds(form: InboundsForm, view: PanelInbounds): Inbou
   const body: PanelInboundsBody = {};
 
   if (form.placement !== view.effective.inboundPlacement.value) body.inboundPlacement = form.placement;
+
+  // K is asked only under `hrw`; under another placement the field is hidden, so neither checked nor sent.
+  if (form.placement === "hrw") {
+    const perBuyer = perBuyerOf(form.perBuyer);
+    if (perBuyer === undefined) errors.perBuyer = K.invalid.perBuyer;
+    else if (perBuyer !== view.inboundsPerBuyer) body.inboundsPerBuyer = perBuyer;
+  }
 
   const panelMax = capOf(form.panelMax);
   if (panelMax === undefined) errors.panelMax = K.invalid.cap;

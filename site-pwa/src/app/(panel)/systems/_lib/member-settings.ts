@@ -1,5 +1,5 @@
 import type { InboundPlacement, MemberSellingBody, PanelGroupMember, PanelInbound, PanelInbounds, SellingLayer } from "@/lib/billing-api";
-import { sellable } from "./panel-inbounds";
+import { perBuyerOf, sellable } from "./panel-inbounds";
 import { SYSTEMS_KEYS } from "./systems";
 
 /**
@@ -37,6 +37,9 @@ export type MemberChoice = {
   maxClients: string;
   inboundsMode: "pool" | "own";
   picked: string[];
+  /** K under `hrw` (F-027-di): the panel's, or this group's own. */
+  perBuyerMode: "panel" | "own";
+  perBuyer: string;
 };
 
 /** What the member holds; an "own" value starts from what is in force (the panel's, once read), so switching to it changes nothing yet. */
@@ -48,10 +51,18 @@ export function memberChoiceOf(member: PanelGroupMember, panel: PanelInbounds | 
     maxClients: member.maxClients === null ? "" : String(member.maxClients),
     inboundsMode: member.inbounds.length > 0 ? "own" : "pool",
     picked: member.inbounds,
+    perBuyerMode: member.inboundsPerBuyer === null ? "panel" : "own",
+    perBuyer: String(member.inboundsPerBuyer ?? panel?.effective.inboundsPerBuyer.value ?? member.effective.inboundsPerBuyer.value),
   };
 }
 
-export type MemberChoiceErrors = Partial<Record<"maxClients" | "inbounds" | "form", string>>;
+/** K is asked only where the placement in force for this member is `hrw`: its own, else the panel's. */
+export function perBuyerAsked(form: MemberChoice, panel: PanelInbounds | null): boolean {
+  const placement = form.placementMode === "own" ? form.placement : panel?.effective.inboundPlacement.value;
+  return placement === "hrw";
+}
+
+export type MemberChoiceErrors = Partial<Record<"maxClients" | "perBuyer" | "inbounds" | "form", string>>;
 
 /** Two writes behind one save: the settings `PATCH` (only what differs) and the inbounds `PUT` (the whole set), each null when unchanged. */
 export type MemberChoiceValidation =
@@ -74,6 +85,15 @@ export function validateMemberChoice(form: MemberChoice, member: PanelGroupMembe
     else cap = n;
   }
   if (!errors.maxClients && cap !== member.maxClients) settings.maxClients = cap;
+
+  // "Same as the panel" is null on the wire, whatever the field still holds.
+  let perBuyer: number | null = null;
+  if (form.perBuyerMode === "own") {
+    const k = perBuyerOf(form.perBuyer);
+    if (k === undefined || k === null) errors.perBuyer = K.member.invalid.perBuyer;
+    else perBuyer = k;
+  }
+  if (!errors.perBuyer && perBuyer !== member.inboundsPerBuyer) settings.inboundsPerBuyer = perBuyer;
 
   const next = form.inboundsMode === "pool" ? [] : [...new Set(form.picked)].sort(byRemoteId);
   if (form.inboundsMode === "own" && next.length === 0) errors.inbounds = K.member.invalid.pickOne;

@@ -22,6 +22,7 @@ import {
   waitOf,
 } from "./_lib/panel-groups";
 import { INBOUND_PLACEMENTS, capField, inboundNote, inboundsFormOf, nothingPicked, validateInbounds } from "./_lib/panel-inbounds";
+import { memberChoiceOf, perBuyerAsked, validateMemberChoice } from "./_lib/member-settings";
 import { REFUSAL_KEYS, SYSTEMS_KEYS as K } from "./_lib/systems";
 
 /**
@@ -61,11 +62,13 @@ const member = (over: Partial<PanelGroupMember> = {}): PanelGroupMember => ({
   maxClients: null,
   priority: null,
   weight: null,
+  inboundsPerBuyer: null,
   effective: {
     inboundPlacement: { value: "all", layer: "platform" },
     maxClients: { value: null, layer: "platform" },
     priority: { value: 0, layer: "platform" },
     weight: { value: 1, layer: "platform" },
+    inboundsPerBuyer: { value: 2, layer: "platform" },
   },
   inbounds: [],
   role: "primary",
@@ -220,12 +223,13 @@ describe("a panel's inbounds (F-114-b)", () => {
     seenAt: "2026-09-25T10:00:00.000Z", sold: false, maxClients: null, clients: 0, assignedTo: null, ...over,
   });
   const view = (inbounds: PanelInbound[], over: Partial<PanelInbounds> = {}): PanelInbounds => ({
-    panelId: "p-1", inboundPlacement: null, maxClients: null, priority: null, weight: null, inboundsReadAt: null, users: 0, inbounds,
+    panelId: "p-1", inboundPlacement: null, maxClients: null, priority: null, weight: null, inboundsPerBuyer: null, inboundsReadAt: null, users: 0, inbounds,
     effective: {
       inboundPlacement: { value: over.inboundPlacement ?? "all", layer: over.inboundPlacement ? "panel" : "platform" },
       maxClients: { value: over.maxClients ?? null, layer: over.maxClients ? "panel" : "platform" },
       priority: { value: 0, layer: "platform" },
       weight: { value: 1, layer: "platform" },
+      inboundsPerBuyer: { value: over.inboundsPerBuyer ?? 2, layer: over.inboundsPerBuyer ? "panel" : "platform" },
     },
     ...over,
   });
@@ -252,6 +256,45 @@ describe("a panel's inbounds (F-114-b)", () => {
       ok: true,
       body: { inboundPlacement: "spread", maxClients: null, inbounds: [{ remoteId: "2", sold: true, maxClients: 10 }, { remoteId: "3", sold: true }] },
     });
+  });
+
+  it("hrw: K inbounds per buyer, sent with the placement and only when it changed (F-027-di-p)", () => {
+    const v = view([inbound("1", { sold: true }), inbound("2", { sold: true })]);
+    const form = inboundsFormOf(v);
+    // Empty: the platform's default (2), not a value of the panel's own.
+    expect(form.perBuyer).toBe("");
+    form.placement = "hrw";
+    expect(validateInbounds(form, v)).toEqual({ ok: true, body: { inboundPlacement: "hrw" } });
+    form.perBuyer = "3";
+    expect(validateInbounds(form, v)).toEqual({ ok: true, body: { inboundPlacement: "hrw", inboundsPerBuyer: 3 } });
+
+    const own = view([inbound("1", { sold: true })], { inboundPlacement: "hrw", inboundsPerBuyer: 3 });
+    expect(inboundsFormOf(own).perBuyer).toBe("3");
+    expect(validateInbounds({ ...inboundsFormOf(own), perBuyer: "" }, own)).toEqual({ ok: true, body: { inboundsPerBuyer: null } });
+  });
+
+  it("hrw: refuses a K outside 1..16, and asks nothing about K under another placement", () => {
+    const v = view([inbound("1", { sold: true })]);
+    for (const bad of ["0", "17", "1.5", "x"]) {
+      expect(validateInbounds({ ...inboundsFormOf(v), placement: "hrw", perBuyer: bad }, v)).toEqual({ ok: false, errors: { perBuyer: K.inbounds.invalid.perBuyer } });
+    }
+    // Hidden under `all`: a stale K typed there is neither checked nor sent.
+    expect(validateInbounds({ ...inboundsFormOf(v), placement: "spread", perBuyer: "99" }, v)).toEqual({ ok: true, body: { inboundPlacement: "spread" } });
+  });
+
+  it("hrw on a member: K follows the panel or is the group's own, asked only where hrw is in force", () => {
+    const panel = view([inbound("1", { sold: true })], { inboundPlacement: "hrw", inboundsPerBuyer: 4 });
+    const m = member({ effective: { ...member().effective, inboundPlacement: { value: "hrw", layer: "panel" }, inboundsPerBuyer: { value: 4, layer: "panel" } } });
+    const choice = memberChoiceOf(m, panel);
+    expect(choice).toMatchObject({ perBuyerMode: "panel", perBuyer: "4" });
+    expect(perBuyerAsked(choice, panel)).toBe(true);
+    expect(perBuyerAsked({ ...choice, placementMode: "own", placement: "all" }, panel)).toBe(false);
+
+    expect(validateMemberChoice({ ...choice, perBuyerMode: "own", perBuyer: "6" }, m)).toEqual({ ok: true, settings: { inboundsPerBuyer: 6 }, inbounds: null });
+    expect(validateMemberChoice({ ...choice, perBuyerMode: "own", perBuyer: "20" }, m)).toEqual({ ok: false, errors: { perBuyer: K.member.invalid.perBuyer } });
+    // Back to the panel's: null on the wire.
+    const ownK = member({ ...m, inboundsPerBuyer: 6 });
+    expect(validateMemberChoice({ ...memberChoiceOf(ownK, panel), perBuyerMode: "panel" }, ownK)).toEqual({ ok: true, settings: { inboundsPerBuyer: null }, inbounds: null });
   });
 
   it("refuses a cap that is not a whole number from 1, per field", () => {

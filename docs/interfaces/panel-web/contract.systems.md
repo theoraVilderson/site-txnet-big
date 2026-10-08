@@ -138,8 +138,11 @@ The *why* is **ADR-0080**.
    The settings sheet's "Inbounds & sales" on a pull panel (a push panel is
    never called, so has none, and says so) shows what the last read found,
    when, and the panel's users. The
-   admin ticks inbounds, picks `all` or `spread` (each said in a sentence),
-   and sets the panel's and each inbound's user cap, empty = none. Only a
+   admin ticks inbounds, picks `all`, `spread` or `hrw` (each said in a
+   sentence), and sets the panel's and each inbound's user cap, empty =
+   none. K (`inboundsPerBuyer`, 1..16, empty = the platform's 2) is asked
+   only under `hrw`, here and on a group member where `hrw` is in force
+   (`perBuyerAsked`), and sent only when it changed (F-027-di-p). Only a
    sellable inbound can be ticked — a gone one, or one of a protocol we do
    not sell, is marked and never sent (`sellable`, `inboundNote`); a
    disabled one keeps its tick and is marked. A panel with no live, sellable

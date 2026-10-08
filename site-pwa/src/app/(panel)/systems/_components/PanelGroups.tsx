@@ -10,7 +10,7 @@ import { formatInstant } from "../../_lib/datetime";
 import { Field, Sheet } from "../../catalog/_components/catalog-ui";
 import { groupDeleteBlock } from "../_lib/panel-lifecycle";
 import { INBOUND_PLACEMENTS, PLACEMENT_KEYS } from "../_lib/panel-inbounds";
-import { inboundChoices, memberChoiceOf, sellsNobody, validateMemberChoice, type MemberChoice, type MemberChoiceErrors } from "../_lib/member-settings";
+import { inboundChoices, memberChoiceOf, perBuyerAsked, sellsNobody, validateMemberChoice, type MemberChoice, type MemberChoiceErrors } from "../_lib/member-settings";
 import {
   DRAIN_TTL_MULTIPLE,
   MEMBER_ROLE_KEYS,
@@ -643,6 +643,7 @@ function MemberSheet({
   const set = (change: Partial<MemberChoice>) => setForm((f) => (f ? { ...f, ...change } : f));
   const panelPlacement = view && t("common", PLACEMENT_KEYS[view.effective.inboundPlacement.value].label);
   const panelCap = view && (view.effective.maxClients.value === null ? t("common", M.noCap) : String(view.effective.maxClients.value));
+  const panelPerBuyer = view && String(view.effective.inboundsPerBuyer.value);
   // What the form would sell right now, so the warning follows the ticks, not the saved row.
   const preview = form && { ...member, inbounds: form.inboundsMode === "pool" ? [] : form.picked };
 
@@ -691,6 +692,31 @@ function MemberSheet({
               />
             </Choice>
           </fieldset>
+
+          {/* K under hrw (F-027-di): only where hrw is the placement in force for this group. */}
+          {perBuyerAsked(form, view) && (
+            <fieldset className="flex flex-col gap-2">
+              <legend className="mb-2 text-xs font-bold text-text-primary">{t("common", M.perBuyer)}</legend>
+              <Choice
+                name={t("common", M.perBuyer)}
+                value={form.perBuyerMode}
+                onChange={(v) => set({ perBuyerMode: v })}
+                same={t("common", M.samePanelValue, { value: panelPerBuyer ?? "" })}
+                own={t("common", M.own)}
+              >
+                <Input
+                  dir="ltr"
+                  inputMode="numeric"
+                  value={form.perBuyer}
+                  onChange={(e) => set({ perBuyer: e.target.value })}
+                  aria-label={t("common", M.perBuyer)}
+                  className="sm:max-w-40"
+                />
+                <span className="text-[11px] leading-5 text-text-secondary">{t("common", SYSTEMS_KEYS.inbounds.perBuyerHint)}</span>
+                {errors.perBuyer && <Alert tone="error">{t("common", errors.perBuyer)}</Alert>}
+              </Choice>
+            </fieldset>
+          )}
 
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-2 text-xs font-bold text-text-primary">{t("common", M.cap)}</legend>

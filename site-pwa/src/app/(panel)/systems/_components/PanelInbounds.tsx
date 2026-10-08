@@ -152,6 +152,17 @@ export function PanelInbounds({ panelId }: { panelId: string }) {
         />
       </fieldset>
 
+      {/* K under hrw (F-027-di): asked only there, so it never reads as a second cap. */}
+      {form.placement === "hrw" && (
+        <label className="flex max-w-xs flex-col gap-1 text-xs text-text-secondary">
+          {t("common", K.perBuyer)}
+          <Input dir="ltr" inputMode="numeric" value={form.perBuyer} onChange={(e) => setForm({ ...form, perBuyer: e.target.value })} />
+          <span className="leading-5">{t("common", K.perBuyerHint)}</span>
+          <span>{t("common", K.from, { layer: t("common", LAYER_KEYS[view.effective.inboundsPerBuyer.layer]) })}</span>
+          {errors.perBuyer && <span className="text-error">{t("common", errors.perBuyer)}</span>}
+        </label>
+      )}
+
       <label className="flex max-w-xs flex-col gap-1 text-xs text-text-secondary">
         {t("common", K.panelMax)}
         <Input dir="ltr" inputMode="numeric" value={form.panelMax} onChange={(e) => setForm({ ...form, panelMax: e.target.value })} />

@@ -52,11 +52,13 @@ const member = (over: Partial<PanelGroupMember> = {}): PanelGroupMember => ({
   maxClients: null,
   priority: null,
   weight: null,
+  inboundsPerBuyer: null,
   effective: {
     inboundPlacement: { value: "all", layer: "platform" },
     maxClients: { value: null, layer: "platform" },
     priority: { value: 0, layer: "platform" },
     weight: { value: 1, layer: "platform" },
+    inboundsPerBuyer: { value: 2, layer: "platform" },
   },
   inbounds: [],
   role: "primary",
@@ -107,11 +109,13 @@ const view = (over: Partial<PanelInbounds> = {}): PanelInbounds => ({
   maxClients: 300,
   priority: null,
   weight: null,
+  inboundsPerBuyer: null,
   effective: {
     inboundPlacement: { value: "spread", layer: "panel" },
     maxClients: { value: 300, layer: "panel" },
     priority: { value: 0, layer: "platform" },
     weight: { value: 1, layer: "platform" },
+    inboundsPerBuyer: { value: 2, layer: "platform" },
   },
   inboundsReadAt: "2026-09-25T10:00:00.000Z",
   users: 0,
@@ -224,6 +228,9 @@ describe("the member form — 'same as the panel' is said, not implied by an emp
       maxClients: "",
       inboundsMode: "pool",
       picked: [],
+      // K under hrw: the panel's, starting from the value in force (F-027-di-p).
+      perBuyerMode: "panel",
+      perBuyer: "2",
     });
     expect(memberChoiceOf(member({ inboundPlacement: "all", maxClients: 40, inbounds: ["2"] }), view())).toEqual({
       placementMode: "own",
@@ -232,6 +239,8 @@ describe("the member form — 'same as the panel' is said, not implied by an emp
       maxClients: "40",
       inboundsMode: "own",
       picked: ["2"],
+      perBuyerMode: "panel",
+      perBuyer: "2",
     });
   });
 

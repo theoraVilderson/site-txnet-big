@@ -3595,7 +3595,9 @@
         "all": "On every ticked inbound",
         "allHint": "Each buyer gets a config on every ticked inbound, one link each. Their traffic is shared across them.",
         "spread": "On one ticked inbound, the emptiest",
-        "spreadHint": "Each buyer gets one config, on the ticked inbound with the fewest users that is under its cap."
+        "spreadHint": "Each buyer gets one config, on the ticked inbound with the fewest users that is under its cap.",
+        "hrw": "On a few ticked inbounds, fixed per buyer",
+        "hrwHint": "Each buyer gets a config on K of the ticked inbounds, always the same ones for that buyer. If an inbound is lost, only its own buyers move; nobody else's configs change."
       },
       "panelMax": "Most users on this panel",
       "panelMaxHint": "Empty = no cap. At the cap, no new buyer is placed here; buyers already here keep their configs.",
@@ -3617,11 +3619,14 @@
       "saved": "Saved. The next buyer is placed this way.",
       "invalid": {
         "cap": "A whole number from 1, or empty for no cap.",
-        "unchanged": "Nothing was changed."
+        "unchanged": "Nothing was changed.",
+        "perBuyer": "A whole number from 1 to 16, or empty for the platform's default."
       },
       "from": "In force: {{layer}}",
       "assignedTo": "sold only by {{group}}",
-      "poolHint": "An inbound a group has taken is sold only by that group; the rest are the pool every other group on this panel shares."
+      "poolHint": "An inbound a group has taken is sold only by that group; the rest are the pool every other group on this panel shares.",
+      "perBuyer": "Inbounds per buyer (K)",
+      "perBuyerHint": "1 to 16. Empty = the platform's default (2). With fewer ticked inbounds than K, a buyer gets one on each."
     },
     "edit": {
       "basics": "Name and region",
@@ -3813,8 +3818,10 @@
       },
       "invalid": {
         "cap": "Write a whole number from 1 to 1,000,000, or pick \"Same as the panel\".",
-        "pickOne": "Tick at least one inbound, or pick \"The panel's shared inbounds\"."
-      }
+        "pickOne": "Tick at least one inbound, or pick \"The panel's shared inbounds\".",
+        "perBuyer": "Write a whole number from 1 to 16, or pick \"Same as the panel\"."
+      },
+      "perBuyer": "Inbounds per buyer (K) for this group"
     },
     "groupCard": {
       "meta": "{{members}} panels · {{variants}} products · subscription refresh every {{wait}}",
