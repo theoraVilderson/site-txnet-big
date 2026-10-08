@@ -57,6 +57,7 @@ export class CallbackTenantMiddleware implements NestMiddleware {
    * decision 4) are `tenant`'s to own and F-018's to write.
    */
   private tenantOf(host: string): Promise<string | null> {
-    return tenantOfHost(this.prisma, host, [TenantDomainPurpose.panel]);
+    // An `api` door answers as a panel one (`answersAsPanel`): a relay may send the bank's redirect to `api.<domain>`.
+    return tenantOfHost(this.prisma, host, [TenantDomainPurpose.panel, TenantDomainPurpose.api]);
   }
 }
