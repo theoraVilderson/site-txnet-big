@@ -1,6 +1,7 @@
 import type { Me } from "@/lib/auth-api";
 import type { OwnedReseller, PackageOffer, PurchaseBody, ResellerBillingModel } from "@/lib/tenant-api";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { myResellerSetupPath } from "@/lib/routes";
 import { PACKAGE_FEATURE_KEYS } from "./packages";
 import { RESERVED_SLUGS, type Errors } from "./resellers";
 
@@ -155,3 +156,9 @@ export function suggestibleName(raw: string): string | null {
   const name = raw.trim();
   return name.length >= 1 && name.length <= NAME_MAX ? name : null;
 }
+
+/**
+ * Where a bought reseller goes next: its setup wizard (UX-2-e), at the id-less
+ * address — the buyer is its owner, and `/my-resellers/:id` would move there.
+ */
+export const afterPurchasePath = (id: string) => myResellerSetupPath(id, true);

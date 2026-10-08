@@ -19,14 +19,17 @@ export default function PanelLayout({
     // switcher needs it before the page below it renders — so the session sits
     // at the layout, not inside a page.
     <PanelSessionProvider>
-      {/* UX-2-a2: whose reseller the page is, decided once for the menu and every header. */}
-      <ResellerWorkspaceProvider>
       {/*
         Inside the session, because the socket's credential is the access token
         that provider establishes — and at the layout, because that is what
         makes one connection outlive every screen under it (F-070-c).
       */}
       <PanelRealtimeProvider>
+      {/*
+        UX-2-a2: whose reseller the page is, decided once for the menu and every
+        header. Inside the socket: its setup row re-reads on a live event (UX-2-e).
+      */}
+      <ResellerWorkspaceProvider>
         {/* UX-1-l: the person's display preferences, loaded once `me` is known. */}
         <PanelPreferences />
         {/* UX-1-b: one motion level for framer-motion and the CSS below it. */}
@@ -42,8 +45,8 @@ export default function PanelLayout({
         <PaymentCreditedToast />
         {/* F-018-ac: the gateway closed the socket because the tenant is terminated. */}
         <TenantClosedBanner />
-      </PanelRealtimeProvider>
       </ResellerWorkspaceProvider>
+      </PanelRealtimeProvider>
     </PanelSessionProvider>
   );
 }

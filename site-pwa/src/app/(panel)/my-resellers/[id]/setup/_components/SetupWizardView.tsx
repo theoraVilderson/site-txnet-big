@@ -13,6 +13,7 @@ import { DURATION, EASE } from "@/lib/motion";
 import { myResellerConsolePath } from "@/lib/routes";
 import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-api";
 import { usePanelSession } from "../../../../_context/PanelSessionContext";
+import { useResellerWorkspace } from "../../../../_context/ResellerWorkspaceContext";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { useWizard } from "../../../../_components/kit/Wizard";
 import { cn } from "../../../../_components/kit/cn";
@@ -71,9 +72,12 @@ export function SetupWizardView({ id }: { id: string }) {
 
   // A live event or a save is a hint: re-read with no skeleton, keep the
   // screen on a failure.
+  // The menu's setup row and the gate's celebration read it too (UX-2-e).
+  const { rereadSetup } = useResellerWorkspace();
   const quietRead = useCallback(() => {
     resellerOnboardingApi.get(id).then(setView, () => undefined);
-  }, [id]);
+    rereadSetup();
+  }, [id, rereadSetup]);
 
   // The route's steps, then the brand screen.
   const wizard = useWizard({ count: (view?.steps.length ?? 0) + 1 });

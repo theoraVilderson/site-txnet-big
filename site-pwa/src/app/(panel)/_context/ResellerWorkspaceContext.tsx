@@ -3,7 +3,9 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import type { OwnedReseller } from "@/lib/auth-api";
+import { useResellerSetup } from "../_hooks/useResellerSetup";
 import { workspaceOfPath, type Workspace } from "../_lib/reseller-menu";
+import type { SetupProgress } from "../my-resellers/_lib/setup";
 import { resellerDomainOf, selfResellerOf, useOwnedResellerList } from "../my-resellers/_lib/workspace";
 import { usePanelSession } from "./PanelSessionContext";
 
@@ -26,9 +28,13 @@ export interface ResellerWorkspaceState {
   owned: readonly OwnedReseller[] | null;
   /** On a reseller's own domain: no handoff, nowhere to hand off to (F-061-m). */
   onResellerDomain: boolean;
+  /** How far that reseller is set up — the menu's setup row (UX-2-e); `null` until it answers. */
+  setup: SetupProgress | null;
+  /** A page saved something setup counts: read it again now. */
+  rereadSetup: () => void;
 }
 
-const NONE: ResellerWorkspaceState = { workspace: null, inPath: false, slug: null, owned: null, onResellerDomain: false };
+const NONE: ResellerWorkspaceState = { workspace: null, inPath: false, slug: null, owned: null, onResellerDomain: false, setup: null, rereadSetup: () => undefined };
 
 const ResellerWorkspaceContext = createContext<ResellerWorkspaceState>(NONE);
 
@@ -56,9 +62,12 @@ export function ResellerWorkspaceProvider({ children }: { children: ReactNode })
   const wsSelf = workspace?.self ?? false;
   const slug = (wsId && owned?.find((r) => r.id === wsId)?.slug) || null;
   const onResellerDomain = typeof domain === "string";
+  // Setup progress and the gate's celebration live here, once, for whichever
+  // page is open (UX-2-e).
+  const { setup, reread: rereadSetup } = useResellerSetup(wsId);
   const value = useMemo<ResellerWorkspaceState>(
-    () => ({ workspace: wsId === null ? null : { id: wsId, self: wsSelf }, inPath, slug, owned, onResellerDomain }),
-    [wsId, wsSelf, inPath, slug, owned, onResellerDomain],
+    () => ({ workspace: wsId === null ? null : { id: wsId, self: wsSelf }, inPath, slug, owned, onResellerDomain, setup, rereadSetup }),
+    [wsId, wsSelf, inPath, slug, owned, onResellerDomain, setup, rereadSetup],
   );
   return <ResellerWorkspaceContext.Provider value={value}>{children}</ResellerWorkspaceContext.Provider>;
 }

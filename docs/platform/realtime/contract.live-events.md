@@ -99,6 +99,8 @@ the reseller's `tenant:` — the page is on the platform's panel, where the owne
 is a platform user and staff are the platform's; the reseller's channel
 reaches nobody looking at it. Payload `{tenantId, userId, resellerId,
 domainId}`. ResellerDomainsView re-reads on both (EDGE-1-f, built); the button stays.
+The setup wizard and the workspace's setup row re-read the onboarding
+checklist on the same two (UX-2-c, UX-2-e).
 
 **RT-1-f — panel drain and removal.** Type `network.panel.drained`,
 `tenant:`, body `{type, panelId, groupId}`. Written by `GroupDrainService.drainDue`

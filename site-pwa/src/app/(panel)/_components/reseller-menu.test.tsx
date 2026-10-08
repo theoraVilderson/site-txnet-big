@@ -32,6 +32,8 @@ const S = FrontendI18nKeys.common.shell;
 
 let pathname = "/";
 let me: unknown = null;
+// The setup row and its reads are UX-2-e's (`my-resellers/setup-progress.test.tsx`).
+vi.mock("../_hooks/useResellerSetup", () => ({ useResellerSetup: () => ({ setup: null, reread: () => undefined }) }));
 vi.mock("next/navigation", () => ({ usePathname: () => pathname, useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/context/LocaleContext", () => ({
   useLocale: () => ({ lang: "en", isRtl: false, t: (_ns: string, key: string) => key }),

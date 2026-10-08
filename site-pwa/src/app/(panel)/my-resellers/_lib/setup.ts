@@ -29,3 +29,24 @@ export function setupSlide(level: MotionLevel, direction: 1 | -1, isRtl: boolean
   if (level === "reduced") return { opacity: 0 };
   return { x: direction * (isRtl ? -24 : 24), opacity: 0 };
 }
+
+/** How far a reseller's setup is, from the route — what the menu row draws (UX-2-e). */
+export interface SetupProgress {
+  done: number;
+  total: number;
+  complete: boolean;
+  /** The gate: shut while no panel domain is proved. */
+  onboarding: boolean;
+}
+
+export function setupProgress(v: ResellerOnboarding): SetupProgress {
+  return { done: v.steps.filter((s) => s.done).length, total: v.steps.length, complete: v.complete, onboarding: v.onboarding };
+}
+
+/**
+ * The gate lifted between two answers this view saw — never on the first
+ * answer, so a reseller opened yesterday is not celebrated on every load (M5).
+ */
+export function gateOpened(before: SetupProgress | null, after: SetupProgress): boolean {
+  return before !== null && before.onboarding && !after.onboarding;
+}

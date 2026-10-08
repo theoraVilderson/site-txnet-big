@@ -1928,9 +1928,11 @@
       "domains": "Reseller domains",
       "bot": "Reseller bot",
       "settings": "Reseller settings",
-      "branding": "Reseller brand"
+      "branding": "Reseller brand",
+      "setup": "Reseller setup"
     },
-    "scope": "Reseller"
+    "scope": "Reseller",
+    "setupProgress": "{{label}}: {{done}} of {{total}} steps done"
   },
   "openingResellerPanel": "Opening your reseller panel…",
   "handoffFailed": "This link has expired or was already used. Sign in to continue.",
@@ -2261,7 +2263,7 @@
       "body": "{{slug}} is active. {{charged}} was taken from your wallet; the period ends {{date}}.",
       "balance": "Wallet balance is now {{balance}}.",
       "next": "Next: add your own domain and point it (CNAME) at {{target}}. Until it is verified, your customers cannot reach you.",
-      "addDomain": "Add your domain"
+      "setup": "Set up your reseller"
     },
     "owned": {
       "title": "Your reseller",
@@ -2585,7 +2587,8 @@
         "hint": "How your configs are named in your customers' VPN apps.",
         "optional": "Optional — it is not part of setup progress"
       }
-    }
+    },
+    "opened": "Your domain is verified — your reseller is open to customers."
   },
   "resellerGateways": {
     "title": "{{slug}}'s payment gateways",

@@ -6,7 +6,7 @@ import { Check, CheckCircle2, HandCoins, Loader2, Minus, Store } from "lucide-re
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi } from "@/lib/billing-api";
-import { PANEL_DEPOSIT, myResellerDomainsPath } from "@/lib/routes";
+import { PANEL_DEPOSIT } from "@/lib/routes";
 import { clearOwnedResellersCache } from "../../../my-resellers/_lib/workspace";
 import {
   resellerPurchaseApi,
@@ -27,6 +27,7 @@ import { BILLING_MODELS, RESELLER_KEYS } from "../../_lib/resellers";
 import {
   PURCHASE_KEYS as K,
   RESELLER_BASICS,
+  afterPurchasePath,
   canBuyReseller,
   emptyPurchaseForm,
   featureChart,
@@ -213,8 +214,9 @@ export function BuyResellerView() {
               {t("common", K.done.next, { target })}
             </p>
           )}
-          <Link href={myResellerDomainsPath(bought.id, true)} className={buttonClass({ variant: "primary", size: "sm", className: "mt-4" })}>
-            {t("common", K.done.addDomain)}
+          {/* Straight into the wizard (UX-2-e): its first step is the domain. */}
+          <Link href={afterPurchasePath(bought.id)} className={buttonClass({ variant: "primary", size: "sm", className: "mt-4" })}>
+            {t("common", K.done.setup)}
           </Link>
         </div>
       </Shell>

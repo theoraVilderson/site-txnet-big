@@ -40,6 +40,7 @@ import { usePanelSession } from "../_context/PanelSessionContext";
 
 /** The shell's strings as generated constants (C-06). */
 const S = FrontendI18nKeys.common.shell;
+const RN = FrontendI18nKeys.common.resellerNav;
 
 export const PANEL_SIDEBAR_ID = "panel-sidebar";
 
@@ -235,7 +236,13 @@ export function PanelSidebar() {
           aria-current={isActive ? "page" : undefined}
           // With a count, the name says it as words in the reader's language; the
           // number drawn beside the label is decorative.
-          aria-label={badge === null ? undefined : t("common", S.badge, { label, count: badge })}
+          aria-label={
+            badge !== null
+              ? t("common", S.badge, { label, count: badge })
+              : item.progress
+                ? t("common", RN.setupProgress, { label, done: item.progress.done, total: item.progress.total })
+                : undefined
+          }
           className={`group relative flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 ${
             nested ? "py-2 text-sm" : "py-3"
           } ${
@@ -258,6 +265,18 @@ export function PanelSidebar() {
               } ${whenCollapsed("lg:hidden")}`}
             >
               {item.tag}
+            </span>
+          )}
+          {/* The reseller's setup row (UX-2-e): steps done of all, read aloud by the label. */}
+          {item.progress && (
+            <span
+              aria-hidden
+              dir="ltr"
+              className={`shrink-0 rounded-full px-1.5 text-[10px] font-bold leading-5 ${
+                filled ? "bg-on-accent/20 text-on-accent" : "bg-leaf-bg text-primary"
+              } ${whenCollapsed("lg:hidden")}`}
+            >
+              {item.progress.done}/{item.progress.total}
             </span>
           )}
           {renderBadge(badge)}

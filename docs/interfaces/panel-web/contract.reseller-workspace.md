@@ -154,6 +154,21 @@ User, 2026-10-08: a wizard rather than a checklist to tick off.
 8. **The brand screen comes last and counts toward nothing**
    (`BrandingPanel`): not a route step, so never in the progress bar. A
    fully set-up reseller lands on it, under the finished screen.
+9. **Setup progress in the menu, until complete** (UX-2-e): a "reseller
+   setup · done/total" row in `account` after the home, opening the
+   wizard (`RESELLER_SETUP_LINK`); gone once `complete`, and never drawn
+   before the first answer. `ResellerWorkspaceProvider` reads it once
+   for the reseller in play (`useResellerSetup`), again on
+   `tenant.domain.changed` and when a page that saved asks
+   (`rereadSetup` — the wizard does). So the provider sits inside the
+   socket's (`layout.tsx`).
+10. **The gate lifting is celebrated once, live** (M5): confetti and a
+    toast when one answer says shut and the next says open
+    (`gateOpened`) — never on the first read, so a reseller opened
+    yesterday is not celebrated on every load.
+11. **A bought reseller lands in the wizard**: the purchase screen's
+    button is `afterPurchasePath` — `/reseller/setup`, whose first step
+    is the domain.
 
 ## Proof
 
@@ -164,4 +179,5 @@ sections, the handoff on both hosts, every link's page),
 `my-resellers/workspace-home.test.tsx` (home and settings, UX-2-b),
 `my-resellers/setup-wizard.test.tsx` (the wizard, UX-2-c),
 `my-resellers/setup-steps.test.tsx` (its steps' forms and the brand screen, UX-2-d),
+`my-resellers/setup-progress.test.tsx` (the menu row, the celebration, after buying, UX-2-e),
 `handoff.service.spec.ts` (`hasPanel`).

@@ -75,7 +75,7 @@ export function useVisibleMenu(): VisibleMenuEntry[] {
     me && tenantType === "reseller" && holdsPermission(held, "tenant.manage") ? me.tenant.id : null,
   );
   const tenantId = ownTenantOf(me?.tenant ?? null, canAdminister);
-  const { workspace, slug } = useResellerWorkspace();
+  const { workspace, slug, setup } = useResellerWorkspace();
   const wsId = workspace?.id ?? null;
   const wsSelf = workspace?.self ?? false;
   return useMemo(
@@ -84,7 +84,8 @@ export function useVisibleMenu(): VisibleMenuEntry[] {
         visibleMenu(PANEL_MENU, held ?? [], tenantType, isOwner, ownsReseller, tenantId),
         wsId === null ? null : { id: wsId, self: wsSelf },
         slug,
+        setup,
       ),
-    [held, tenantType, isOwner, ownsReseller, tenantId, wsId, wsSelf, slug],
+    [held, tenantType, isOwner, ownsReseller, tenantId, wsId, wsSelf, slug, setup],
   );
 }
