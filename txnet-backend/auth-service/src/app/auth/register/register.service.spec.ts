@@ -85,6 +85,9 @@ function harness(limits: { tenantType?: string; endUsers?: number; users?: numbe
     }),
   };
 
+  // The door's owner (ADR-0059 (3)): nobody, unless a test says otherwise.
+  const owners = { ownerMatching: vi.fn().mockResolvedValue(null) };
+
   const service = new RegisterService(
     prisma as never,
     redis as never,
@@ -92,9 +95,10 @@ function harness(limits: { tenantType?: string; endUsers?: number; users?: numbe
     channels as never,
     botLinks as never,
     deliveries as never,
+    owners as never,
   );
 
-  return { service, prisma, redis, otpService, channels, botLinks, deliveries };
+  return { service, prisma, redis, otpService, channels, botLinks, deliveries, owners };
 }
 
 const input = (over: Record<string, unknown> = {}) => ({
@@ -280,6 +284,33 @@ describe('RegisterService.register — refusals', () => {
     expect(h.prisma.user.findFirst.mock.calls[0][0].where).toEqual({
       OR: [{ username: 'behnam' }, { phoneNumber: PHONE }],
     });
+  });
+
+  // F-061-l: a customer account holding the owner's number or username would
+  // match first at every sign-in on this domain, and the owner — admitted only
+  // when no account of the tenant matches — could never sign in there again.
+  it("refuses the domain owner's own number or username, in the same words as any duplicate", async () => {
+    h.owners.ownerMatching.mockResolvedValue({ user: { id: 'owner', tenantId: 'platform' } });
+
+    expect(await register(h)).toEqual({
+      ok: false,
+      msg: 'register.duplicateUser',
+      error: null,
+    });
+    expect(h.owners.ownerMatching).toHaveBeenCalledWith(
+      { OR: [{ username: 'behnam' }, { phoneNumber: PHONE }] },
+      {},
+    );
+    expect(h.redis.setJson).not.toHaveBeenCalled();
+    expect(h.otpService.issueOtp).not.toHaveBeenCalled();
+  });
+
+  it('asks about the owner only once the tenant itself has no such account', async () => {
+    h.prisma.user.findFirst.mockResolvedValue({ id: 'existing' });
+
+    await register(h);
+
+    expect(h.owners.ownerMatching).not.toHaveBeenCalled();
   });
 
   it('refuses when the environment offers no channel at all', async () => {

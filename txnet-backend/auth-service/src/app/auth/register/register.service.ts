@@ -16,6 +16,7 @@ import {
 import { OtpChannelRegistry } from '../otp/otp-channels.service';
 import { otpRealtimeChannel, RESELLER_LIMIT_USAGE, resellerLimitOf, tenantTransaction, type ResellerLimitReader, type ResellerUsageReader } from '@txnet-backend/shared-core';
 import { OtpDeliveryStore } from '../otp/otp-delivery.store';
+import { SurfaceOwnerService } from '../surface-owner/surface-owner.service';
 import { BotLinkService } from '../bot-link/bot-link.service';
 import { BotPlatform } from '@txnet-backend/messenger';
 import { normalizePhone } from '../../common/validation/phone.schema';
@@ -47,6 +48,7 @@ export class RegisterService {
     private readonly channels: OtpChannelRegistry,
     private readonly botLinks: BotLinkService,
     private readonly deliveries: OtpDeliveryStore,
+    private readonly owners: SurfaceOwnerService,
   ) {}
 
   /**
@@ -103,11 +105,18 @@ export class RegisterService {
       // is a best-effort check — the Postgres unique constraint on `user`
       // is the authoritative guard, re-checked when verify-phone promotes
       // the pending record (below).
+      const claimed = { OR: [{ username: input.username }, { phoneNumber }] };
       const existing = await this.prisma.user.findFirst({
-        where: { OR: [{ username: input.username }, { phoneNumber }] },
+        where: claimed,
         select: { id: true },
       });
-      if (existing) {
+      // On a reseller's domain the owner's own account, which lives in another
+      // tenant, is taken too (F-061-l): a customer holding their number would
+      // match first at every sign-in here and lock the owner out, since the
+      // owner is admitted only when no account of the tenant matches
+      // (ADR-0059 (3)). Asked only once the tenant check passed, and off a panel
+      // or bot domain it answers `null` without a query.
+      if (existing || (await this.owners.ownerMatching(claimed, {}))) {
         return err('register.duplicateUser');
       }
 
