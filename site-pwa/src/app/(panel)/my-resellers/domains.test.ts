@@ -10,6 +10,7 @@ import {
   DOMAIN_PURPOSES,
   EDGE_STATUS_KEYS,
   domainLiveChannels,
+  dnsName,
   isApex,
   isLive,
   DOMAIN_REFUSAL_KEYS,
@@ -155,3 +156,31 @@ describe("the workspace path", () => {
     expect(existsSync(join(__dirname, "[id]", "domains", "page.tsx"))).toBe(true);
   });
 });
+
+describe("a record's name as the DNS panel takes it (EDGE-1-o, D-72)", () => {
+  it("names a record inside the domain's own zone, and keeps the full name beside it", () => {
+    expect(dnsName("_domain-verification.panel.barghgho.ir")).toEqual({
+      short: "_domain-verification.panel",
+      zone: "barghgho.ir",
+      full: "_domain-verification.panel.barghgho.ir",
+    });
+    expect(dnsName("panel.barghgho.ir")).toMatchObject({ short: "panel", zone: "barghgho.ir" });
+  });
+
+  it("writes the zone itself as @", () => {
+    expect(dnsName("barghgho.ir")).toMatchObject({ short: "@", zone: "barghgho.ir" });
+    expect(dnsName("_domain-verification.barghgho.ir")).toMatchObject({ short: "_domain-verification" });
+  });
+
+  it("finds the zone under a suffix of two labels", () => {
+    expect(dnsName("_domain-verification.panel.shop.co.ir")).toMatchObject({ short: "_domain-verification.panel", zone: "shop.co.ir" });
+    expect(dnsName("_cf-custom-hostname.vpn.example.co.uk")).toMatchObject({ short: "_cf-custom-hostname.vpn", zone: "example.co.uk" });
+  });
+
+  it("tells an apex apart under a suffix of two labels", () => {
+    expect(isApex("shop.co.ir")).toBe(true);
+    expect(isApex("panel.shop.co.ir")).toBe(false);
+    expect(isApex("barghgho.ir")).toBe(true);
+  });
+});
+

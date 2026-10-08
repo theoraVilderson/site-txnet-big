@@ -26,6 +26,7 @@ import {
   domainHost,
   domainLiveChannels,
   domainRefusalKey,
+  dnsName,
   isApex,
   isLive,
   isRoutable,
@@ -283,6 +284,7 @@ function DomainCard({
 
       <div className="space-y-2">
         <h3 className="text-xs font-bold text-text-secondary">{t("common", K.records.title)}</h3>
+        <p className="text-xs text-text-secondary">{t("common", K.records.zoneHint, { zone: dnsName(domain.domainValue).zone })}</p>
         <DataTable
           label={t("common", K.records.title)}
           compact
@@ -296,7 +298,7 @@ function DomainCard({
           rowKey={(r) => `${r.type}|${r.name}`}
           columns={[
             { id: "type", header: t("common", K.records.type), cell: (r) => r.type, className: "font-mono" },
-            { id: "name", header: t("common", K.records.name), cell: (r) => <Copyable text={r.name} /> },
+            { id: "name", header: t("common", K.records.name), cell: (r) => <RecordName name={r.name} /> },
             { id: "value", header: t("common", K.records.value), cell: (r) => <Copyable text={r.value} /> },
           ]}
         />
@@ -387,6 +389,20 @@ function CdnSettings({ domain }: { domain: ResellerDomain }) {
         <p className="text-text-secondary">{t("common", K.cdn.cache)}</p>
       </div>
     </details>
+  );
+}
+
+/** The name the DNS panel takes, copied as is; the full name under it for a panel that wants that (EDGE-1-o). */
+function RecordName({ name }: { name: string }) {
+  const { t } = useLocale();
+  const { short, full } = dnsName(name);
+  return (
+    <>
+      <Copyable text={short} />
+      <span dir="ltr" className="block break-all font-mono text-[11px] text-text-secondary">
+        {t("common", K.records.full, { name: full })}
+      </span>
+    </>
   );
 }
 

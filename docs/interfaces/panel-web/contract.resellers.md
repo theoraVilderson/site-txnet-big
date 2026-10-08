@@ -192,8 +192,8 @@ A purchase's last step links here (`BuyResellerView`, "add your domain").
     request.
 22. **Printed, never inferred.** The status, the TXT record and the CNAME
     target, the last check's lines — expected and found — are the view's, as
-    they came. Each record's name and value has a copy button; the CNAME's name
-    is the domain itself.
+    they came. A name copies relative to its zone by the suffix list, `@` the zone
+    itself, the full name under it (`dnsName`, EDGE-1-o); a value copies whole.
 
 ### The console (F-066-w)
 

@@ -1,3 +1,5 @@
+import { getDomain } from "tldts";
+
 import type { CheckName, DomainPurpose, DomainStatus, EdgeStatus } from "@/lib/tenant-api";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { RealtimeEvents } from "@/generated/wire";
@@ -38,12 +40,24 @@ export const EDGE_HINT_KEYS: Record<EdgeStatus, string> = K.edge.hint;
 /** Live = verified (or inside its grace) and its certificate issued (ADR-0129 (3)). */
 export const isLive = (status: DomainStatus, edge: EdgeStatus) => isRoutable(status) && edge === "issued";
 
+/** The registrable domain, by the public suffix list: `shop.co.ir`, not `co.ir`. `_` labels are DNS names, not hosts. */
+const zoneOf = (name: string) => getDomain(name, { validateHostname: false }) ?? name;
+
 /**
- * Two labels is an apex (`example.com`), which a Custom Hostname cannot be
- * below Enterprise (ADR-0129 Consequences). A suffix of two labels
- * (`example.co.uk`) is not told apart without the public suffix list.
+ * The zone itself is an apex (`example.com`, `shop.co.ir`), which a Custom
+ * Hostname cannot be below Enterprise (ADR-0129 Consequences).
  */
-export const isApex = (host: string) => host.split(".").length === 2;
+export const isApex = (host: string) => zoneOf(host) === host;
+
+/**
+ * A record's name as a DNS panel takes it (EDGE-1-o, D-72): relative to the
+ * domain's zone, `@` for the zone itself. ArvanCloud and most others append the
+ * zone to what is typed, so a pasted full name lands one zone too deep.
+ */
+export function dnsName(full: string): { short: string; zone: string; full: string } {
+  const zone = zoneOf(full);
+  return { short: full === zone ? "@" : full.slice(0, -(zone.length + 1)), zone, full };
+}
 
 /** What the page re-reads on (RT-1-e): the domain service writes it on every change of status or edge step. */
 export const DOMAIN_LIVE_EVENTS: readonly string[] = [RealtimeEvents.tenantDomainChanged];

@@ -2313,7 +2313,9 @@
       "type": "Type",
       "name": "Name",
       "value": "Value",
-      "edgeHint": "Only if your own CDN (for example ArvanCloud) sits in front of this domain: publish the second TXT record too. Until it is in place, visitors get error 409. With the CNAME straight to the target it is not needed."
+      "edgeHint": "Only if your own CDN (for example ArvanCloud) sits in front of this domain: publish the second TXT record too. Until it is in place, visitors get error 409. With the CNAME straight to the target it is not needed.",
+      "zoneHint": "Enter each record name in the DNS settings of {{zone}} exactly as the Copy button takes it. Panels such as ArvanCloud add the rest of the name themselves. @ means the domain itself.",
+      "full": "Full name: {{name}}"
     },
     "copy": "Copy",
     "copied": "Copied",
