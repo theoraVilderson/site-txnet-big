@@ -29,6 +29,7 @@ services:
       - ../site-pwa/.next:/app/.next
     environment:
       - DOMAIN_NAME=${DOMAIN_NAME}
+      - DEV_ALLOWED_ORIGINS=${DEV_ALLOWED_ORIGINS:-}
       - ENVIRONMENT=${ENVIRONMENT}
       - PORT=8181
       - HOSTNAME=${DOMAIN_NAME}

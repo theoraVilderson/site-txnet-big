@@ -16,8 +16,20 @@ import type { NextConfig } from "next";
  */
 const domainName = process.env.DOMAIN_NAME?.trim() || "txnet.cyou";
 
+/**
+ * A reseller's own domain (`panel.barghgho.ir`) is not under `domainName`, so
+ * Next refused its dev requests — the HMR socket among them, which Traefik
+ * then reported as a 500. Next has no "any origin" pattern (`**` is refused),
+ * so the dev stack names those hosts here, comma-separated. A new one needs a
+ * restart, like every value in this file. Dev only: a build serves no HMR.
+ */
+const extraDevOrigins = (process.env.DEV_ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((host) => host.trim())
+  .filter(Boolean);
+
 const nextConfig: NextConfig = {
-  allowedDevOrigins: [domainName, `*.${domainName}`],
+  allowedDevOrigins: [domainName, `*.${domainName}`, ...extraDevOrigins],
   output: "standalone",
 
   serverExternalPackages: [
