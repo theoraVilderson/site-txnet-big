@@ -128,6 +128,29 @@ describe('the old /auth/signup path', () => {
   });
 });
 
+describe('the bare /auth path', () => {
+  // `auth/loading.tsx` wraps every page under `/auth` in Suspense, so a page
+  // `redirect()` there arrives after a 200 shell has streamed: the browser got
+  // `NEXT_REDIRECT` in the HTML and "switched to client rendering" instead of
+  // a redirect. It has to be answered before anything renders.
+  it('sends /auth to the login screen', async () => {
+    const response = await proxy(requestFor('/auth?ref=bot'));
+
+    expect(response?.status).toBe(307);
+    expect(response?.headers.get('location')).toBe(
+      'https://panel.example.com/auth/login?ref=bot',
+    );
+  });
+
+  it('answers a signed-in visitor without asking auth-service', async () => {
+    // The guard on `/auth/login` sends them home from there.
+    const response = await proxy(requestFor('/auth', SIGNED_IN));
+
+    expect(response?.status).toBe(307);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('the session check', () => {
   it('never asks a route that mutates the session', async () => {
     // This is the whole point of the route existing. `/auth/refresh` *rotates*:

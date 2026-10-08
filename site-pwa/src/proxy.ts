@@ -35,6 +35,14 @@ export const REFRESH_COOKIE = Cookies.refreshToken;
 const RENAMED_PATH = "/auth/signup";
 
 /**
+ * The bare auth path, which has no screen of its own. Answered here, not by a
+ * page `redirect()`: `auth/loading.tsx` wraps every page under it in Suspense,
+ * so a page redirect arrives after a 200 shell has streamed — the visitor gets
+ * `NEXT_REDIRECT` in the HTML and a client-rendering fallback, not a redirect.
+ */
+const AUTH_ROOT = "/auth";
+
+/**
  * auth-service, server-to-server. `AUTH_SERVICE_ORIGIN` keeps this hop inside
  * `private_backend_network` (`http://auth-service:${AUTH_PORT}`), which is the
  * whole point of doing the check here — the public route would send it back
@@ -137,6 +145,12 @@ export async function proxy(request: NextRequest) {
     const target = request.nextUrl.clone();
     target.pathname = AUTH_REGISTER + pathname.slice(RENAMED_PATH.length);
     return NextResponse.redirect(target, 308);
+  }
+
+  if (pathname === AUTH_ROOT) {
+    const target = request.nextUrl.clone();
+    target.pathname = AUTH_LOGIN;
+    return NextResponse.redirect(target, 307);
   }
 
   if (!isGuarded(pathname)) return null;
