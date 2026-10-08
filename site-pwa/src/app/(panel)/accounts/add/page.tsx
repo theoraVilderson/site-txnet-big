@@ -138,28 +138,41 @@ export default function AddAccountPage() {
       setError(t("common", C.accounts.linkPending));
     });
 
-  const finish = async () => {
-    await reload();
-    setDone(true);
+  /**
+   * Become the account just added, the way the switcher does: a full
+   * navigation, because everything fetched so far belongs to the account
+   * being left (2026-10-08 — the panel used to stay where it was). The add
+   * already happened, so a refused switch still ends on "added" rather than
+   * on an error that reads as if nothing was.
+   */
+  const finish = async (userId: string) => {
+    try {
+      await authApi.switchAccount(userId);
+      window.location.assign("/");
+    } catch {
+      await reload();
+      setDone(true);
+    }
   };
 
   const verifyCode = () =>
     run(async () => {
-      await authApi.addAccountOtpVerify(phoneNumber, otpCode);
-      await finish();
+      const { userId } = await authApi.addAccountOtpVerify(phoneNumber, otpCode);
+      await finish(userId);
     });
 
   const submitPassword = () =>
     run(async () => {
       if (!captcha.token) return;
+      let added;
       try {
-        await authApi.addAccountPassword(identifier, password, captcha.token);
+        added = await authApi.addAccountPassword(identifier, password, captcha.token);
       } finally {
         // Burnt by the guard before the password was even compared, so a wrong
         // password must re-arm the slider too — see `requestCode`.
         captcha.spend();
       }
-      await finish();
+      await finish(added.userId);
     });
 
   const field =
@@ -243,7 +256,20 @@ export default function AddAccountPage() {
       </div>
 
       {proof === "otp" && (
-        <div className="space-y-4">
+        // A form so a full code submits itself, as on the login screen:
+        // `OTPInput` calls `requestSubmit` on the form its boxes are in.
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (pending || botLink) return;
+            if (codeSent) {
+              if (otpCode.length === OTP_LENGTH) verifyCode();
+            } else if (phoneNumber && captcha.verified) {
+              requestCode();
+            }
+          }}
+        >
           <PhoneField
             id="add-account-phone"
             label={t("common", C.accounts.phonePlaceholder)}
@@ -350,7 +376,7 @@ export default function AddAccountPage() {
               {t("common", C.accounts.resendCode)}
             </button>
           )}
-        </div>
+        </form>
       )}
 
       {proof === "password" && (
