@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { AlertCircle, Check, ChevronRight, Loader2 } from "lucide-react";
 import { OTPInput } from "@auth/auth/_components/OTPInput";
@@ -29,6 +30,11 @@ export function OtpStep({
   delivery,
 }: OtpStepProps) {
   const { t, isRtl } = useAuthUI();
+
+  // Every way onto this step sends a new code, so whatever the page still
+  // holds is the old one: typed over, it went off half-old (2026-10-08).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
+  useEffect(() => { if (value) onChange(""); }, []);
 
   return (
     <motion.div

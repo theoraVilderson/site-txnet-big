@@ -32,9 +32,12 @@ export async function generateJIT<PayloadType>(
 export function getEnv(key: string) {
   return process.env[key]!;
 }
+/** Persian (۰-۹) and Arabic-Indic (٠-٩) digits to ASCII; everything else as it was. */
 export const toEnglishDigits = (str: string) => {
   if (!str) return "";
-  return str.replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString());
+  return str
+    .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString())
+    .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString());
 };
 
 /**

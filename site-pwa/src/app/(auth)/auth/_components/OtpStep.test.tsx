@@ -49,6 +49,15 @@ beforeEach(() => {
   mockAuthUI();
 });
 
+describe('a new code', () => {
+  it('opens with empty boxes, whatever code the page still holds', () => {
+    // Every way onto this step sends a code, so a code still in the page's
+    // state is the old one — and typed over, it was submitted half-old.
+    const { onChange } = renderStep({ value: '543100' });
+    expect(onChange).toHaveBeenCalledWith('');
+  });
+});
+
 describe('the code input', () => {
   it('renders exactly OTP_LENGTH boxes — the API rejects any other length', () => {
     renderStep();
