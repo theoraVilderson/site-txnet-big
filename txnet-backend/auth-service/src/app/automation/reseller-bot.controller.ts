@@ -83,7 +83,8 @@ export class ResellerBotController {
     windowSec: 900,
   })
   list(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request) {
-    return this.refusing(() => this.bots.list(this.actor(req), tenantId));
+    // `{bots}`, as the contract says and the panel reads — not the bare list.
+    return this.refusing(async () => ({ bots: await this.bots.list(this.actor(req), tenantId) }));
   }
 
   /**
