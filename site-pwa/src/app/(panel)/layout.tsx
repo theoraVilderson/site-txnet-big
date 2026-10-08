@@ -7,6 +7,7 @@ import { PaymentCreditedToast } from "./_components/PaymentCreditedToast";
 import { TenantClosedBanner } from "./_components/TenantClosedBanner";
 import { PanelRealtimeProvider } from "./_context/PanelRealtimeContext";
 import { PanelSessionProvider } from "./_context/PanelSessionContext";
+import { ResellerWorkspaceProvider } from "./_context/ResellerWorkspaceContext";
 
 export default function PanelLayout({
   children,
@@ -18,6 +19,8 @@ export default function PanelLayout({
     // switcher needs it before the page below it renders — so the session sits
     // at the layout, not inside a page.
     <PanelSessionProvider>
+      {/* UX-2-a2: whose reseller the page is, decided once for the menu and every header. */}
+      <ResellerWorkspaceProvider>
       {/*
         Inside the session, because the socket's credential is the access token
         that provider establishes — and at the layout, because that is what
@@ -40,6 +43,7 @@ export default function PanelLayout({
         {/* F-018-ac: the gateway closed the socket because the tenant is terminated. */}
         <TenantClosedBanner />
       </PanelRealtimeProvider>
+      </ResellerWorkspaceProvider>
     </PanelSessionProvider>
   );
 }

@@ -2,59 +2,27 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { CollapsedTooltip } from "./CollapsedTooltip";
-import { authApi, type OwnedReseller } from "@/lib/auth-api";
+import { authApi } from "@/lib/auth-api";
 import { useLocale } from "@/context/LocaleContext";
 import { ApiError } from "@/lib/api-error";
 import { AUTH_HANDOFF, PANEL_RESELLER_SELF, resellerWorkspaceRoot } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { usePanelSession } from "../_context/PanelSessionContext";
-import { workspaceOfPath, type Workspace } from "../_lib/reseller-menu";
-import { resellerDomainOf, selfResellerOf, useOwnedResellerList } from "../my-resellers/_lib/workspace";
+import { useResellerWorkspace } from "../_context/ResellerWorkspaceContext";
 
 /** The reseller links' strings (UX-2-a, C-06). */
 const K = FrontendI18nKeys.common.resellerNav;
-
-/** What the sidebar needs to know about the caller's reseller workspaces. */
-export interface ResellerWorkspaceNav {
-  /** The reseller whose links the menu carries, or `null`: the account's menu alone. */
-  workspace: Workspace | null;
-  /** The caller's owned resellers (`GET /auth/handoff`); `null` until it answers. */
-  owned: readonly OwnedReseller[] | null;
-  /** On a reseller's own domain: no handoff, nowhere to hand off to (F-061-m). */
-  onResellerDomain: boolean;
-}
-
-/**
- * Whose reseller links the one menu carries (UX-2-a): the workspace the
- * address is inside — staff opening a reseller by id see that one's — else
- * the caller's own (`/reseller`), else, for an owner whose one reseller is
- * terminated, that one by id. On a reseller's domain only its own `/reseller`
- * counts (a `/my-resellers` address there is the 404, `PlatformOnlyWorkspace`).
- * Until `me` and the owned list answer, the account's menu stands alone.
- */
-export function useResellerWorkspace(): ResellerWorkspaceNav {
-  const { me } = usePanelSession();
-  const pathname = usePathname() ?? "";
-  const owned = useOwnedResellerList();
-  const selfId = selfResellerOf(me, owned);
-  const domain = resellerDomainOf(me, owned);
-  const inPath = me ? workspaceOfPath(pathname, me, selfId) : null;
-  let workspace: Workspace | null = inPath && (inPath.self || domain === null) ? inPath : null;
-  if (!workspace && typeof selfId === "string") workspace = { id: selfId, self: true };
-  if (!workspace && domain === null && owned && owned.length > 0) workspace = { id: owned[0].id, self: false };
-  return { workspace, owned, onResellerDomain: typeof domain === "string" };
-}
 
 /**
  * An owner holding more than one reseller (a terminated one beside the live
  * one), on the platform: one link per slug, after the reseller's links, picks
  * whose the menu carries.
  */
-export function OtherResellers({ nav, collapsed }: { nav: ResellerWorkspaceNav; collapsed: boolean }) {
+export function OtherResellers({ collapsed }: { collapsed: boolean }) {
   const { t } = useLocale();
+  const nav = useResellerWorkspace();
   if (nav.onResellerDomain || !nav.owned || nav.owned.length < 2) return null;
   const selfId = nav.owned.find((r) => r.live)?.id;
   return (
@@ -86,8 +54,9 @@ export function OtherResellers({ nav, collapsed }: { nav: ResellerWorkspaceNav; 
  * enabled only where it lands (`hasPanel`) — otherwise the line under it says
  * to connect a domain first, rather than a refused click.
  */
-export function HandoffAction({ nav, collapsed }: { nav: ResellerWorkspaceNav; collapsed: boolean }) {
+export function HandoffAction({ collapsed }: { collapsed: boolean }) {
   const { t } = useLocale();
+  const nav = useResellerWorkspace();
   const { pending, open } = useResellerPanelOpener();
   const reseller = nav.workspace && !nav.onResellerDomain ? nav.owned?.find((r) => r.id === nav.workspace?.id) : undefined;
   if (!reseller) return null;

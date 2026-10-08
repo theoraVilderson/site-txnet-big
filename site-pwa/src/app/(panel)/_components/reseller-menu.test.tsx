@@ -7,7 +7,15 @@ import { resellerMenu, workspaceOfPath } from "../_lib/reseller-menu";
 import { clearOwnedResellersCache } from "../my-resellers/_lib/workspace";
 import { usePanelUiStore } from "../_stores/panel-ui-store";
 import { useUiPreferences } from "@/stores/ui-preferences-store";
+import { ResellerWorkspaceProvider } from "../_context/ResellerWorkspaceContext";
 import { PanelSidebar } from "./PanelSidebar";
+
+const renderSidebar = () =>
+  render(
+    <ResellerWorkspaceProvider>
+      <PanelSidebar />
+    </ResellerWorkspaceProvider>,
+  );
 
 /**
  * One menu for the account and its reseller (UX-2-a, `contract.reseller-workspace.md`;
@@ -131,7 +139,7 @@ const sectionList = (label: string) => document.getElementById(screen.getByRole(
 
 describe("one menu", () => {
   it("carries the owner's reseller links in the account's sections, beside the account's own", async () => {
-    render(<PanelSidebar />);
+    renderSidebar();
     const catalog = await screen.findByRole("link", { name: N.menu.catalog });
     expect(catalog).toHaveAttribute("href", "/reseller/catalog");
     expect(within(sectionList(S.sections.sales)).getByRole("link", { name: N.menu.catalog })).toBe(catalog);
@@ -142,7 +150,7 @@ describe("one menu", () => {
 
   it("stays one menu inside the workspace, the page's link current", async () => {
     pathname = "/reseller/domains";
-    render(<PanelSidebar />);
+    renderSidebar();
     expect(await screen.findByRole("link", { name: N.menu.domains })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: S.menu.dashboard })).not.toHaveAttribute("aria-current");
   });
@@ -151,7 +159,7 @@ describe("one menu", () => {
     me = STAFF;
     owned = [];
     pathname = "/my-resellers/r-9/catalog";
-    render(<PanelSidebar />);
+    renderSidebar();
     expect(await screen.findByRole("link", { name: N.menu.catalog })).toHaveAttribute("href", "/my-resellers/r-9/catalog");
     // Not theirs: no handoff to offer.
     expect(screen.queryByRole("button", { name: N.open })).toBeNull();
@@ -160,7 +168,7 @@ describe("one menu", () => {
   it("lets an owner holding a terminated reseller beside the live one pick which", async () => {
     owned = [ARIAN, { id: "r-0", slug: "old", here: false, hasPanel: false, live: false }];
     pathname = "/my-resellers/r-0/domains";
-    render(<PanelSidebar />);
+    renderSidebar();
     const list = await screen.findByRole("list", { name: N.others });
     expect(within(list).getByRole("link", { name: "old" })).toHaveAttribute("aria-current", "true");
     expect(within(list).getByRole("link", { name: "arian" })).toHaveAttribute("href", "/reseller");
@@ -169,7 +177,7 @@ describe("one menu", () => {
 
   it("carries no reseller links for a caller with no reseller", async () => {
     owned = [];
-    render(<PanelSidebar />);
+    renderSidebar();
     await waitFor(() => expect(screen.getByRole("link", { name: S.menu.dashboard })).toBeInTheDocument());
     expect(screen.queryByRole("link", { name: N.menu.home })).toBeNull();
   });
@@ -177,7 +185,7 @@ describe("one menu", () => {
   it("draws a reseller staff seat's users once, where the account menu has it", async () => {
     me = { ...ON_DOMAIN, permissions: ["tenant.manage"], tenant: { ...ON_DOMAIN.tenant, isOwner: false } };
     owned = [];
-    render(<PanelSidebar />);
+    renderSidebar();
     expect(await screen.findByRole("link", { name: N.menu.catalog })).toHaveAttribute("href", "/reseller/catalog");
     await waitFor(() => expect(screen.getByRole("link", { name: S.menu.users })).toHaveAttribute("href", "/reseller/users"));
     expect(screen.queryByRole("link", { name: N.menu.users })).toBeNull();
@@ -187,7 +195,7 @@ describe("one menu", () => {
 describe("the handoff, after the reseller's links", () => {
   it("opens the owner's panel on its domain, from the platform", async () => {
     pathname = "/reseller";
-    render(<PanelSidebar />);
+    renderSidebar();
     fireEvent.click(await screen.findByRole("button", { name: N.open }));
     await waitFor(() => expect(assign).toHaveBeenCalledWith("https://arianvpn.ir/auth/handoff#c0de"));
   });
@@ -195,7 +203,7 @@ describe("the handoff, after the reseller's links", () => {
   it("is disabled where it would be refused, and says why", async () => {
     owned = [{ ...ARIAN, hasPanel: false }];
     pathname = "/reseller";
-    render(<PanelSidebar />);
+    renderSidebar();
     expect(await screen.findByRole("button", { name: N.open })).toBeDisabled();
     expect(screen.getByText(N.noPanel)).toBeInTheDocument();
   });
@@ -204,7 +212,7 @@ describe("the handoff, after the reseller's links", () => {
     me = ON_DOMAIN;
     owned = [];
     pathname = "/reseller/bot";
-    render(<PanelSidebar />);
+    renderSidebar();
     expect(await screen.findByRole("link", { name: N.menu.bot })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByRole("button", { name: N.open })).toBeNull();
   });

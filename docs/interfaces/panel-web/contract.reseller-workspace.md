@@ -68,8 +68,10 @@ each reseller page in the section it belongs to — first built as a
    `finance` (only those — tenant billing is the session's tenant, not the
    path's); users → `people`; domains, bot → `infra`. Drawn after the
    section's own entries, labelled "reseller …" beside the account's
-   catalog or gateways. A link the account menu already holds (a staff
-   seat's `/reseller/users`) is not drawn twice. Not pinnable (N5).
+   catalog or gateways, and tagged with its slug. A link the account menu
+   already holds (a staff seat's `/reseller/users`) is not drawn twice. It
+   pins like any entry; a pinned one with no reseller in play is not drawn
+   and stays in `ui.pins` (N5).
 3. **"Open my panel" — the handoff (F-061-f) — follows them in `account`**,
    offered only on the platform, only for a reseller the caller owns, and
    only enabled where it lands (`hasPanel` on `GET /auth/handoff`, the
@@ -78,6 +80,29 @@ each reseller page in the section it belongs to — first built as a
    reseller's own domain: nowhere to hand off to (F-061-m).
 4. **More than one owned reseller** (a terminated one beside the live one):
    after it, on the platform, one link per slug picks whose links are drawn.
+
+## Whose page it is — said once (UX-2-a2)
+
+An owner who is also the platform's admin has two users pages, two
+catalogs, two gateway lists. Data never crosses — each page is by its
+address's tenant, and the services admit by it (invariant 21) — so what
+has to stay clear is what the person sees.
+
+1. **One answer, one place.** `ResellerWorkspaceProvider` (in the panel
+   layout) decides whose reseller (rule 1 above) and whether the address is
+   inside it. The menu and the palette (`useVisibleMenu`), the dashboard,
+   the handoff and `PageHeader` read it; nothing computes it again.
+2. **Every reseller page is tagged by its address, not by the page.**
+   `PageHeader` draws "reseller · slug" above the title on any page inside
+   the workspace, so a new workspace page is labelled without opting in.
+   The platform's own users page shares the `/my-resellers` address and is
+   not tagged.
+3. **The breadcrumb reads the reseller's links first** inside the
+   workspace: `/reseller/users` is "people › reseller users", never the
+   account's "users" — a staff seat's account menu holds that address too.
+4. **A new reseller page is one `RESELLER_MENU` row** (section, label,
+   path builder) and a page under the workspace; menu, palette, tag and
+   trail follow. `reseller-menu.test.tsx` fails on a row with no page.
 
 ## Home and settings (UX-2-b)
 
@@ -99,5 +124,6 @@ section has one; the home keeps what says how far the reseller is.
 `my-resellers/self-workspace.test.tsx` (paths, the redirect and 404s, the
 menu's users entry), `_components/reseller-menu.test.tsx` (whose links, their
 sections, the handoff on both hosts, every link's page),
+`_components/reseller-scope.test.tsx` (the header's tag and trail, UX-2-a2),
 `my-resellers/workspace-home.test.tsx` (home and settings, UX-2-b),
 `handoff.service.spec.ts` (`hasPanel`).

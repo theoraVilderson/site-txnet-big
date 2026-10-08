@@ -14,7 +14,7 @@ import { Menu } from "./kit/Menu";
 import { Popover } from "./kit/Popover";
 import { useMediaQuery } from "./kit/overlay";
 import { LogoutButton } from "./LogoutButton";
-import { HandoffAction, OtherResellers, useResellerWorkspace } from "./ResellerWorkspaceNav";
+import { HandoffAction, OtherResellers } from "./ResellerWorkspaceNav";
 import { ThemeDropdown } from "@auth/auth/_components/ThemeDropdown";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -30,7 +30,6 @@ import {
   type VisibleMenuGroup,
   type VisibleMenuLink,
 } from "../_lib/panel-menu";
-import { withResellerMenu } from "../_lib/reseller-menu";
 import { MAX_PINS, pinnedLinks, reorderPins, stepPin, togglePin } from "../_lib/pins";
 import { recordRecentPage } from "../_lib/recent-pages";
 import { useMenuBadges, type BadgedEntry } from "../_hooks/useMenuBadges";
@@ -70,9 +69,9 @@ const FOLD = {
  * rail (N3). Support, the support inbox and manual payments carry a count (N4).
  *
  * One menu for the account and its reseller (UX-2-a): the reseller's pages
- * join the sections they belong to (`withResellerMenu`), the handoff after
- * them in `account`. Nothing is stored; whose reseller is the address's or
- * the caller's own (`useResellerWorkspace`).
+ * join the sections they belong to (`useVisibleMenu`), each tagged with its
+ * slug, the handoff after them in `account`. Whose reseller is decided once
+ * (`ResellerWorkspaceProvider`).
  */
 export function PanelSidebar() {
   const { t } = useLocale();
@@ -95,14 +94,7 @@ export function PanelSidebar() {
   const flyoutId = flyout !== null && flyout.path === pathname ? flyout.id : null;
 
   const { me } = usePanelSession();
-  const nav = useResellerWorkspace();
-  const wsId = nav.workspace?.id ?? null;
-  const wsSelf = nav.workspace?.self ?? false;
-  const accountMenu = useVisibleMenu();
-  const menu = useMemo(
-    () => withResellerMenu(accountMenu, wsId === null ? null : { id: wsId, self: wsSelf }),
-    [accountMenu, wsId, wsSelf],
-  );
+  const menu = useVisibleMenu();
   const sections = useMemo(() => menuSections(menu), [menu]);
   const footer = useMemo(() => menuFooter(menu), [menu]);
   const headings = sections.length > 1;
@@ -256,6 +248,18 @@ export function PanelSidebar() {
         >
           <Icon size={nested ? 18 : 22} className="shrink-0" />
           <span className={`flex-1 truncate font-medium ${whenCollapsed("lg:sr-only")}`}>{label}</span>
+          {/* Whose page (UX-2-a2): a reseller's slug, beside the account's own of the same kind. */}
+          {item.tag && (
+            <span
+              aria-hidden
+              dir="ltr"
+              className={`max-w-20 shrink-0 truncate rounded-md border border-card-border px-1.5 text-[10px] font-bold leading-4 ${
+                filled ? "border-on-accent/40 text-on-accent" : "text-text-secondary"
+              } ${whenCollapsed("lg:hidden")}`}
+            >
+              {item.tag}
+            </span>
+          )}
           {renderBadge(badge)}
           {!nested && <CollapsedTooltip collapsed={collapsed} label={label} />}
         </Link>
@@ -284,8 +288,7 @@ export function PanelSidebar() {
               onClick={() => step(1)}
             />
           )}
-          {/* A pin is an account entry (N5); a reseller's link is not one. */}
-          {!item.id.startsWith("reseller-") && renderEntryMenu(item.id, label)}
+          {renderEntryMenu(item.id, label)}
           {pin?.handle}
         </div>
       </div>
@@ -489,8 +492,8 @@ export function PanelSidebar() {
             id === "account" ? (
               <>
                 {/* After the reseller's own links (UX-2-a): its panel, and which reseller. */}
-                <HandoffAction nav={nav} collapsed={railCollapsed} />
-                <OtherResellers nav={nav} collapsed={railCollapsed} />
+                <HandoffAction collapsed={railCollapsed} />
+                <OtherResellers collapsed={railCollapsed} />
               </>
             ) : null,
           )}

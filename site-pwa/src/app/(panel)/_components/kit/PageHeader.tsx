@@ -1,15 +1,25 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, type LucideIcon } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Store, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { PANEL_MENU, menuTrail } from "../../_lib/panel-menu";
+import { RESELLER_MENU } from "../../_lib/reseller-menu";
+import { useResellerWorkspace } from "../../_context/ResellerWorkspaceContext";
 import { cn } from "./cn";
 
 const K = FrontendI18nKeys.common.kit.pageHeader;
+const R = FrontendI18nKeys.common.resellerNav;
+
+/**
+ * Inside a reseller's workspace its links come first: `/reseller/users` is
+ * the reseller's users there, never the account's entry of the same address
+ * (a staff seat's), which wins only outside it (UX-2-a2).
+ */
+const RESELLER_FIRST = [...RESELLER_MENU, ...PANEL_MENU];
 
 export interface PageHeaderProps {
   title: ReactNode;
@@ -32,14 +42,20 @@ export interface PageHeaderProps {
  * menu tree to this page (`menuTrail`) and the page's own `tail`. Below `md`
  * the trail is one back link to the nearest crumb that is a page. A page alone
  * in its section, with no group and no tail, has no trail to show.
+ *
+ * On a reseller's page — the address says so (`ResellerWorkspaceProvider`) —
+ * a scope tag above the title names whose it is ("reseller · slug"), and the
+ * trail reads the reseller's links (UX-2-a2). No page passes either: a new
+ * workspace page is labelled by being under the workspace's address.
  */
 export function PageHeader({ title, subtitle, icon: Icon, actions, tail, className }: PageHeaderProps) {
   const { t, isRtl } = useLocale();
   // `null` outside the App Router (a page rendered alone in a spec): no trail.
   const pathname = usePathname() ?? "";
 
+  const { inPath, slug } = useResellerWorkspace();
   const crumbs = [
-    ...menuTrail(PANEL_MENU, pathname).map((c) => ({ label: t("common", c.label), href: c.href, section: c.section })),
+    ...menuTrail(inPath ? RESELLER_FIRST : PANEL_MENU, pathname).map((c) => ({ label: t("common", c.label), href: c.href, section: c.section })),
     ...(tail ? [{ label: tail, href: null, section: undefined }] : []),
   ];
   // A section's name alone before the page is not a trail (UX-1-j): one is
@@ -83,6 +99,18 @@ export function PageHeader({ title, subtitle, icon: Icon, actions, tail, classNa
       )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
+          {inPath && (
+            <p className="mb-1 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-leaf-bg px-2.5 py-0.5 text-xs font-bold text-primary">
+              <Store size={12} aria-hidden />
+              {t("common", R.scope)}
+              {slug && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span dir="ltr">{slug}</span>
+                </>
+              )}
+            </p>
+          )}
           <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary md:text-3xl">
             {Icon && <Icon size={22} className="shrink-0 text-primary" aria-hidden />}
             {title}

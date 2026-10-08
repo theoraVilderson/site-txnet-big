@@ -33,7 +33,7 @@ vi.mock("@/context/LocaleContext", () => ({
 }));
 vi.mock("../_context/PanelSessionContext", () => ({ usePanelSession: () => ({ me, group: { current: { userId: "u-1" } } }) }));
 vi.mock("../_context/PanelRealtimeContext", () => ({ usePanelRealtime: () => null }));
-vi.mock("./ResellerWorkspaceNav", () => ({ OtherResellers: () => null, HandoffAction: () => null, useResellerWorkspace: () => ({ workspace: null, owned: null, onResellerDomain: false }) }));
+vi.mock("./ResellerWorkspaceNav", () => ({ OtherResellers: () => null, HandoffAction: () => null }));
 vi.mock("./LogoutButton", () => ({ LogoutButton: () => null }));
 vi.mock("@auth/auth/_components/LangDropdown", () => ({ LangDropdown: () => null }));
 vi.mock("@auth/auth/_components/ThemeDropdown", () => ({ ThemeDropdown: () => null }));

@@ -127,7 +127,8 @@ type Placed = { section?: MenuPlacement };
 
 export type PanelMenuEntry = (PanelMenuLink | PanelMenuGroup) & Placed;
 
-export type VisibleMenuLink = Omit<PanelMenuLink, "href"> & { href: string };
+/** `tag`: whose the link is when not the account's — a reseller's slug (UX-2-a2). */
+export type VisibleMenuLink = Omit<PanelMenuLink, "href"> & { href: string; tag?: string };
 export type VisibleMenuGroup = Omit<PanelMenuGroup, "children"> & {
   children: VisibleMenuLink[];
 };

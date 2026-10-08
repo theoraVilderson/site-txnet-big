@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { holdsPermission } from "@/lib/permissions";
 import { resellerPurchaseApi, tenantAccessApi } from "@/lib/tenant-api";
 import { PANEL_MENU, ownTenantOf, visibleMenu, type VisibleMenuEntry } from "../_lib/panel-menu";
+import { withResellerMenu } from "../_lib/reseller-menu";
+import { useResellerWorkspace } from "../_context/ResellerWorkspaceContext";
 import { usePanelSession } from "../_context/PanelSessionContext";
 
 /**
@@ -58,7 +60,9 @@ function useCanAdminister(tenantId: string | null): boolean | null {
  * The menu as the caller may see it (F-097, UX-1-j) — the sidebar draws it and
  * the palette searches it (UX-1-n, N6), so a page one hides the other never
  * offers. Authority comes off the caller, never off the path: until `me`
- * answers, nothing gated is shown.
+ * answers, nothing gated is shown. One menu with the reseller's links merged
+ * into its sections (UX-2-a), from the one answer to "whose reseller"
+ * (`ResellerWorkspaceProvider`).
  */
 export function useVisibleMenu(): VisibleMenuEntry[] {
   const { me } = usePanelSession();
@@ -71,8 +75,16 @@ export function useVisibleMenu(): VisibleMenuEntry[] {
     me && tenantType === "reseller" && holdsPermission(held, "tenant.manage") ? me.tenant.id : null,
   );
   const tenantId = ownTenantOf(me?.tenant ?? null, canAdminister);
+  const { workspace, slug } = useResellerWorkspace();
+  const wsId = workspace?.id ?? null;
+  const wsSelf = workspace?.self ?? false;
   return useMemo(
-    () => visibleMenu(PANEL_MENU, held ?? [], tenantType, isOwner, ownsReseller, tenantId),
-    [held, tenantType, isOwner, ownsReseller, tenantId],
+    () =>
+      withResellerMenu(
+        visibleMenu(PANEL_MENU, held ?? [], tenantType, isOwner, ownsReseller, tenantId),
+        wsId === null ? null : { id: wsId, self: wsSelf },
+        slug,
+      ),
+    [held, tenantType, isOwner, ownsReseller, tenantId, wsId, wsSelf, slug],
   );
 }

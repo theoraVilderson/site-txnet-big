@@ -13,18 +13,14 @@ import {
   myResellerSettingsPath,
   myResellerUsersPath,
 } from "@/lib/routes";
-import { menuHrefs, type MenuSectionId, type VisibleMenuEntry, type VisibleMenuLink } from "./panel-menu";
+import { menuHrefs, type MenuSectionId, type PanelMenuLink, type VisibleMenuEntry, type VisibleMenuLink } from "./panel-menu";
 
 /** The reseller menu's strings as generated constants (C-06). */
 const R = FrontendI18nKeys.common.resellerNav;
 
-interface ResellerMenuLink {
+interface ResellerMenuLink extends PanelMenuLink {
   /** The account menu's section it joins (N1) — one menu, not a second one. */
   section: MenuSectionId;
-  id: string;
-  /** A `common` namespace key. */
-  label: string;
-  icon: LucideIcon;
   href: (id: string, self: boolean) => string;
 }
 
@@ -77,9 +73,13 @@ export function workspaceOfPath(
   return { id, self: id === selfId };
 }
 
-/** {@link RESELLER_MENU} for one workspace: links placed in the account's sections. */
-export function resellerMenu(ws: Workspace): (VisibleMenuLink & { section: MenuSectionId })[] {
-  return RESELLER_MENU.map(({ href, ...link }) => ({ ...link, href: href(ws.id, ws.self) }));
+/**
+ * {@link RESELLER_MENU} for one workspace: links placed in the account's
+ * sections, each tagged with whose they are (`tag`, the slug when known) —
+ * the sidebar draws it beside the label (UX-2-a2).
+ */
+export function resellerMenu(ws: Workspace, slug: string | null = null): (VisibleMenuLink & { section: MenuSectionId })[] {
+  return RESELLER_MENU.map(({ href, ...link }) => ({ ...link, href: href(ws.id, ws.self), tag: slug ?? undefined }));
 }
 
 /**
@@ -88,8 +88,12 @@ export function resellerMenu(ws: Workspace): (VisibleMenuLink & { section: MenuS
  * link the account's menu already holds — `/reseller/users` for a reseller's
  * staff seat (F-311-ab) — is not drawn twice.
  */
-export function withResellerMenu(menu: readonly VisibleMenuEntry[], ws: Workspace | null): VisibleMenuEntry[] {
+export function withResellerMenu(
+  menu: readonly VisibleMenuEntry[],
+  ws: Workspace | null,
+  slug: string | null = null,
+): VisibleMenuEntry[] {
   if (!ws) return [...menu];
   const held = new Set(menuHrefs(menu));
-  return [...menu, ...resellerMenu(ws).filter((l) => !held.has(l.href))];
+  return [...menu, ...resellerMenu(ws, slug).filter((l) => !held.has(l.href))];
 }
