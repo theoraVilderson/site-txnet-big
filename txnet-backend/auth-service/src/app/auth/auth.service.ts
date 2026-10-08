@@ -446,6 +446,19 @@ export class AuthService {
     }) as Promise<ResponseType<{ active: boolean }>>;
   }
 
+  /**
+   * Whose live session a refresh token is, or `null` — read-only, as
+   * {@link sessionStatus}: nothing rotates. The handoff asks it so an owner
+   * already signed in on its domain keeps that session (F-061-o).
+   */
+  async liveSessionUserId(refreshToken: string): Promise<string | null> {
+    const session = await this.prisma.session.findUnique({
+      where: { refreshTokenHash: this.tokens.refreshHash(refreshToken) },
+      select: { userId: true, revokedAt: true, expiresAt: true },
+    });
+    return session && !session.revokedAt && session.expiresAt > new Date() ? session.userId : null;
+  }
+
   async refresh(input: RefreshInput, ip: string, userAgent: string) {
     return safeExecute(async () => {
       if (!input.refreshToken) return err('auth.refreshTokenRequired');

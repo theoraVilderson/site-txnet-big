@@ -413,8 +413,16 @@ export const authApi = {
   async ownedResellers() { return request<{ resellers: OwnedReseller[] }>("/auth/handoff", { method: "GET" }); },
   /** A single-use code for one of them, and the origin of its panel to spend it on. */
   async issueHandoff(tenantId: string) { return request<{ origin: string; code: string; expiresIn: number }>("/auth/handoff", { method: "POST", body: JSON.stringify({ tenantId }) }); },
-  /** Spend that code on the reseller's own domain: the same session a password sign-in opens. */
-  async redeemHandoff(code: string) { const result = await request<AuthResult>("/auth/handoff/redeem", { method: "POST", body: JSON.stringify({ code }) }); accessToken = result.accessToken; return result; },
+  /**
+   * Spend that code on the reseller's own domain. `alreadySignedIn`: this
+   * domain already holds a live session of the same account, which is kept —
+   * no new session, no token here (F-061-o); the panel restores it from its cookie.
+   */
+  async redeemHandoff(code: string) {
+    const result = await request<AuthResult | { alreadySignedIn: true }>("/auth/handoff/redeem", { method: "POST", body: JSON.stringify({ code }) });
+    if ("accessToken" in result) accessToken = result.accessToken;
+    return result;
+  },
   /** The caller's own identity and authority (F-097). */
   async me() { return request<Me>("/auth/me", { method: "GET" }); },
   /** The platform owner finds a user by phone, username or email (F-018-ad): `user.search` on the platform's tenant. */

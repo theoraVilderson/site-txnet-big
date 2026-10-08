@@ -16,6 +16,10 @@ const C = FrontendI18nKeys.common;
  * panel" (F-061-f). The fragment holds a single-use code; spending it opens a
  * session of the same account here, and the panel takes over.
  *
+ * Already signed in here as the same account, that session is kept and the
+ * dashboard opens — no second session (F-061-o). As anyone else, or nobody,
+ * the code opens the owner's session as before.
+ *
  * The fragment is dropped from the address bar before the code is spent, so it
  * is neither in history nor reusable from Back. Any failure — expired, spent,
  * another domain's — ends at the login screen's link: signing in by hand is

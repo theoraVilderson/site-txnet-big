@@ -54,6 +54,8 @@ function harness(opts: { reseller?: unknown; ownerUserId?: string | null; user?:
   };
   const seenScope: unknown[] = [];
   const auth = {
+    // Whose live session a refresh cookie is (F-061-o): `rt-ali` is the owner's own on this domain.
+    liveSessionUserId: vi.fn(async (token?: string) => ({ 'rt-ali': 'user-ali', 'rt-other': 'user-cust' })[token ?? ''] ?? null),
     createSessionForUser: vi.fn(async () => {
       seenScope.push(TenantContext.currentOrNull());
       return { accessToken: 'at', refreshToken: 'rt', expiresIn: 900 };
@@ -190,6 +192,34 @@ describe('HandoffService.issue', () => {
 });
 
 describe('HandoffService.redeem', () => {
+  // F-061-o (user, 2026-10-08): the owner already signed in on its domain with
+  // the same account goes to its dashboard — no second session, no new cookie.
+  it('keeps the session the same account already holds on this domain, and spends the code', async () => {
+    const h = harness();
+    const { data } = await mint(h);
+
+    const redeemed = await runWithTenant(RESELLER_DOOR as never, () =>
+      h.service.redeem(data.code, '1.2.3.4', 'ua', null, 'rt-ali'),
+    );
+
+    expect(redeemed).toMatchObject({ ok: true, msg: 'auth.handoffAlreadySignedIn', data: { alreadySignedIn: true } });
+    expect(h.auth.createSessionForUser).not.toHaveBeenCalled();
+    expect(h.store.size).toBe(0);
+  });
+
+  it('still opens the owner a session when this domain is signed in as somebody else, or not at all', async () => {
+    for (const cookie of ['rt-other', 'rt-dead', undefined]) {
+      const h = harness();
+      const { data } = await mint(h);
+
+      const redeemed = await runWithTenant(RESELLER_DOOR as never, () =>
+        h.service.redeem(data.code, '1.2.3.4', 'ua', null, cookie),
+      );
+
+      expect(redeemed).toMatchObject({ ok: true, msg: 'auth.loginSuccess', data: { accessToken: 'at' } });
+    }
+  });
+
   it("opens a session of the same account, in the owner's own tenant branded by the door", async () => {
     const h = harness();
     const { data } = await mint(h);

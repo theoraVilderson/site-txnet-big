@@ -134,7 +134,7 @@ export class HandoffService {
    * account is read, and only the caller whose `DEL` removed it goes on, so two
    * redemptions racing cannot both open a session.
    */
-  async redeem(code: string, ip: string, userAgent: string, scopeKey: string | null) {
+  async redeem(code: string, ip: string, userAgent: string, scopeKey: string | null, currentRefreshToken?: string) {
     return safeExecute(async () => {
       const door = this.surfaceOwners.surface();
       const key = RedisKeys.handoff(code);
@@ -148,6 +148,13 @@ export class HandoffService {
       const user = owner?.user as { status?: string; deletedAt?: Date | null } | undefined;
       if (!owner || user?.status !== 'active' || user.deletedAt) return err('auth.handoffInvalid');
 
+      // Already signed in here as the same account (F-061-o, user 2026-10-08):
+      // keep that session — the code is spent, nothing new is opened and no
+      // cookie is set, and the panel goes to its dashboard. Signed in as
+      // somebody else, or not at all, the owner gets its own session as before.
+      if (currentRefreshToken && (await this.auth.liveSessionUserId(currentRefreshToken)) === grant.userId) {
+        return ok({ alreadySignedIn: true as const }, 'auth.handoffAlreadySignedIn');
+      }
 
       const session = await runWithTenant(owner.scope, () =>
         this.auth.createSessionForUser(owner.user, ip, userAgent, scopeKey),

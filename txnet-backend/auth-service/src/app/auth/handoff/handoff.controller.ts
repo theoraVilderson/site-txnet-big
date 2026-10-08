@@ -10,13 +10,14 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
+import { REFRESH_TOKEN_COOKIE, RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
 import { Request, Response } from 'express';
 import { AuthGuard } from '../auth.guard';
 import { NoActiveSessionGuard } from '../guards/no-active-session.guard';
 import { RateLimit } from '../decorators/rate-limit.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { rateLimitSubject } from '../../common/security/service-caller';
+import { readCookie } from '../../common/http/cookies';
 import { withRefreshCookie } from '../../common/http/refresh-cookie';
 import { resolveSwitchScope } from '../../common/security/switch-scope';
 import { handoffIssueSchema, handoffRedeemSchema } from '../auth.schema';
@@ -79,6 +80,8 @@ export class HandoffController {
       ip,
       req.get('user-agent') ?? 'unknown',
       resolveSwitchScope(req),
+      // This domain's own session, if any: the same account keeps it (F-061-o).
+      readCookie(req.headers.cookie, REFRESH_TOKEN_COOKIE),
     );
     return withRefreshCookie(res, result);
   }

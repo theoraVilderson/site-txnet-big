@@ -89,6 +89,7 @@
     "handoffIssued": "Opening your reseller panel",
     "handoffRefused": "This reseller panel cannot be opened from your account",
     "handoffInvalid": "This link has expired or was already used. Sign in again.",
+    "handoffAlreadySignedIn": "You are already signed in to this panel with this account.",
     "userSearch": "Users found",
     "userSearchRefused": "Only the platform owner can search users"
   },
