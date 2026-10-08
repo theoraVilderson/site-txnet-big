@@ -21,7 +21,7 @@ const configured: Record<string, number> = { LOGIN_PWD_RATE_LIMIT: 5 };
 
 describe('RateLimitGuard', () => {
   let reflector: { getAllAndOverride: Mock };
-  let limiter: { hit: Mock; hitPlatform: Mock };
+  let limiter: { hit: Mock; hitPlatform: Mock; hitCaller: RateLimiter['hitCaller'] };
   let config: { get: Mock };
   let guard: RateLimitGuard;
 
@@ -35,6 +35,9 @@ describe('RateLimitGuard', () => {
       hitPlatform: vi
         .fn()
         .mockResolvedValue({ allowed: true, current: 1, limit: 50 }),
+      // The guard spends through `hitCaller` (ADR-0129 amendment 2): the real
+      // one, so with no claim it is exactly the two counters above.
+      hitCaller: RateLimiter.prototype.hitCaller,
     };
     // The validated env: every limit has a value, because the schema gives
     // each one a default.
