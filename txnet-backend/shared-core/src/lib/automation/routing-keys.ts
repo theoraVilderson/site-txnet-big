@@ -54,6 +54,8 @@ export const OutboxEventType = {
   TENANT_QUOTA_ALERT: 'tenant.quota.alert',
   /** F-019-v8: yesterday's refused units and overage, told to a reseller's owner from 09:00 on the quota clock — once a day (`quotaDigests`). */
   TENANT_QUOTA_DIGEST: 'tenant.quota.digest',
+  /** RT-1-e2: a reseller's custom domain went live (verified and its certificate issued), failed its window, or lost its record — told to its owner (`TenantDomainService`). */
+  TENANT_DOMAIN_NOTICE: 'tenant.domain.notice',
   /** F-117-d (ADR-0104 (5)): the platform's staff entered a reseller in an emergency, without its consent — told to its owner at entry. */
   TENANT_EMERGENCY_ENTRY: 'tenant.support.emergency_entry',
   /** F-707-e: a tenant's wheel spent 80% of the day's cap — once a tenant day, one event per admin holding `engagement.manage` (`alertCapCrossing`). */
@@ -183,6 +185,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.TENANT_QUOTA_ALERT]: 'worker-service',
   [OutboxEventType.TENANT_QUOTA_DIGEST]: 'worker-service',
   [OutboxEventType.TENANT_EMERGENCY_ENTRY]: 'worker-service',
+  [OutboxEventType.TENANT_DOMAIN_NOTICE]: 'worker-service',
   [OutboxEventType.TENANT_WHEEL_CAP_NEARING]: 'worker-service',
   [OutboxEventType.LOTTERY_WON]: 'worker-service',
   [OutboxEventType.LOTTERY_PUBLISHED]: 'worker-service',

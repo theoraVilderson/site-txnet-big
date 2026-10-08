@@ -41,6 +41,8 @@ describe('notice classes (F-601-s)', () => {
       'purchaseStuckPanelUnavailable',
       'purchaseStuckStrategyNotBuilt',
       'purchaseStuckWriteUnconfirmed',
+      'resellerDomainDropped',
+      'resellerDomainFailed',
       'resellerEmergencyEntry',
       'resellerQuotaCapReached',
       'resellerQuotaStopped',
@@ -66,6 +68,8 @@ describe('notice classes (F-601-s)', () => {
       'paymentCredited',
       'purchaseDelayed',
       'purchaseDelivered',
+      // RT-1-e2: a reseller's custom domain went live.
+      'resellerDomainLive',
       // F-019-v8: a reseller's quota at 80%, its overage started, and its daily digest.
       'resellerQuotaDigest',
       'resellerQuotaNearing',

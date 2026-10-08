@@ -94,6 +94,10 @@ export const NOTICE_CLASS_OF: Readonly<Record<string, NoticeClass>> = {
   resellerQuotaStopped: 'critical',
   resellerQuotaUnpaid: 'critical',
   resellerQuotaCapReached: 'critical',
+  // RT-1-e2: a domain that failed or lost its record stops the reseller's sales; one gone live is good news to act on.
+  resellerDomainFailed: 'critical',
+  resellerDomainDropped: 'critical',
+  resellerDomainLive: 'important',
   resellerQuotaNearing: 'important',
   resellerQuotaOverageStarted: 'important',
   resellerQuotaDigest: 'important',

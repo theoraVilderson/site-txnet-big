@@ -75,7 +75,10 @@ import type { AddDomainInput } from './tenant-domain.schema';
  * that loses both leaves the CDN. Live = `verified` and `issued`.
  *
  * **Every change of status writes `tenant.domain.changed`** in the transaction
- * that made it (RT-1-e, C-14), for the owner's page and the platform staff's.
+ * that made it (RT-1-e, C-14), for the owner's page and the platform staff's;
+ * so does a check whose result changed (RT-1-e2), never the same result again.
+ * **Its owner is told** (`tenant.domain.notice`) when it goes live — verified
+ * and issued, by whichever lands second — fails its window, or loses its record.
  *
  * **Who.** {@link ResellerAccess}: the reseller the path names, reached by its
  * owner or the platform owner's staff (F-061-h). Only then is the cross-tenant
@@ -176,6 +179,12 @@ const HOUR_MS = 3_600_000;
 /** Edge steps read every tick; the rest wait for the re-validation clock. */
 const EDGE_MOVING: TenantDomainEdgeStatus[] = [TenantDomainEdgeStatus.none, TenantDomainEdgeStatus.registering, TenantDomainEdgeStatus.issuing];
 const EDGE_SETTLED: TenantDomainEdgeStatus[] = [TenantDomainEdgeStatus.issued, TenantDomainEdgeStatus.renew_failed, TenantDomainEdgeStatus.failed];
+
+/** A check's result as the page shows it, order aside: two equal ones are no news (RT-1-e2). */
+function resultOf(check: DomainCheck | Prisma.JsonValue | null): string {
+  const lines = (check as DomainCheck | null)?.lines ?? [];
+  return JSON.stringify(lines.map((l) => [l.check, l.ok, [...l.found].sort()]).sort());
+}
 
 /** The rows the edge holds (ADR-0129 amendment 3): verified, or verifying with ownership proven. */
 const HELD: Prisma.TenantDomainWhereInput[] = [
@@ -531,6 +540,10 @@ export class TenantDomainService {
         data,
       });
       if (count > 0 && data.edgeStatus !== undefined && data.edgeStatus !== row.edgeStatus) await this.announce(tx, row);
+      // Live by the certificate landing second (RT-1-e2); a renewal that comes back is not news.
+      const live =
+        data.edgeStatus === TenantDomainEdgeStatus.issued && EDGE_MOVING.includes(row.edgeStatus) && row.verificationStatus === DomainVerificationStatus.verified;
+      if (count > 0 && live) await this.tellOwner(tx, row, 'live');
       return count > 0;
     });
   }
@@ -551,6 +564,22 @@ export class TenantDomainService {
         aggregateId: row.id,
         type: OutboxEventType.TENANT_DOMAIN_CHANGED,
         payload: { tenantId: this.platformTenantId, userId: row.tenant.ownerUserId, resellerId: row.tenantId, domainId: row.id },
+      },
+      select: { id: true },
+    });
+  }
+
+  /** `tenant.domain.notice` (RT-1-e2): the reseller's owner, in their inbox and on the bot, in their language. */
+  private async tellOwner(tx: Prisma.TransactionClient, row: DomainRow, outcome: 'live' | 'failed' | 'dropped'): Promise<void> {
+    // The owner is told in its own tenant: a bought reseller's owner is a platform user (F-019-h),
+    // whom auth-service would not find under the reseller's.
+    const owner = await tx.user.findUnique({ where: { id: row.tenant.ownerUserId }, select: { tenantId: true } });
+    await tx.outboxEvent.create({
+      data: {
+        aggregate: 'tenant.domain',
+        aggregateId: row.id,
+        type: OutboxEventType.TENANT_DOMAIN_NOTICE,
+        payload: { tenantId: row.tenantId, ownerUserId: row.tenant.ownerUserId, ownerTenantId: owner?.tenantId ?? row.tenantId, host: row.domainValue, outcome },
       },
       select: { id: true },
     });
@@ -588,7 +617,17 @@ export class TenantDomainService {
         data: { ...data, lastCheckedAt: now, lastCheck: check as unknown as Prisma.InputJsonValue },
       });
       if (count > 0 && retract) await this.redis.del(UnscopedRedisKeys.tenantByHost(row.domainValue));
-      if (count > 0 && statusOf({ ...row, ...data } as DomainRow) !== statusOf(row)) await this.announce(tx, row);
+      const news = statusOf({ ...row, ...data } as DomainRow) !== statusOf(row) || resultOf(check) !== resultOf(row.lastCheck) || data.ownershipProvenAt instanceof Date;
+      if (count > 0 && news) await this.announce(tx, row);
+      const outcome =
+        data.verificationStatus === DomainVerificationStatus.verified && row.edgeStatus === TenantDomainEdgeStatus.issued
+          ? 'live'
+          : data.verificationStatus === DomainVerificationStatus.failed
+            ? 'failed'
+            : data.verificationStatus === DomainVerificationStatus.pending && row.verificationStatus === DomainVerificationStatus.verified
+              ? 'dropped'
+              : null;
+      if (count > 0 && outcome) await this.tellOwner(tx, row, outcome);
     });
   }
 

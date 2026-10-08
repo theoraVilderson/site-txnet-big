@@ -114,7 +114,12 @@ domain is held once TXT and CNAME prove it, and verified once they pass.
   `error`; the next tick tries again.
 - **Every change of status or edge step writes `tenant.domain.changed`** in its
   transaction ([live-events RT-1-e](../../platform/realtime/contract.live-events.md)):
-  the owner's `user:` channel and the platform's `tenant:` channel.
+  the owner's `user:` channel and the platform's `tenant:` channel. So does a
+  check whose lines (check, ok, found) or ownership proof changed (RT-1-e2); the
+  same result again writes nothing, so a waiting domain is quiet between changes.
+- **The owner is told** (`tenant.domain.notice`, RT-1-e2) when the domain goes
+  live (verified and edge `issued`, whichever lands second; a renewal coming back
+  is not news), fails its window, or drops to `pending`.
 
 ## Rules
 

@@ -376,5 +376,19 @@
     "emergencyEntry": "🚨 A member of the platform's staff has entered your panel for an emergency, without your consent, for one hour. Their reason and every step they take are listed under support access in your panel.",
     "emergencyEntryMany": "🚨 The platform's staff entered your panel {{count}} times for emergencies, without your consent. Their reasons and every step are listed under support access in your panel.",
     "emergencyEntryManyTitle": "Emergency access to your panel ({{count}})"
+  },
+  "resellerDomain": {
+    "liveTitle": "Your domain {{host}} is live",
+    "live": "✅ Your domain {{host}} is verified and its certificate is issued. Your panel now opens on it, and your users can sign up and buy.",
+    "liveManyTitle": "Your domains are live ({{count}})",
+    "liveMany": "✅ {{count}} of your domains are verified and live.",
+    "failedTitle": "Domain {{host}} was not verified",
+    "failed": "❌ Your domain {{host}} could not be verified within 72 hours. The domains page shows what each check expected and what it found; fix the records there and ask for a check again.",
+    "failedManyTitle": "Domains not verified ({{count}})",
+    "failedMany": "❌ {{count}} of your domains could not be verified within 72 hours. The domains page shows what each check found.",
+    "droppedTitle": "Domain {{host}} stopped working",
+    "dropped": "⛔ The verification record of {{host}} has been missing for 72 hours, so your panel no longer opens on it. Put the TXT record back and ask for a check on the domains page.",
+    "droppedManyTitle": "Domains stopped working ({{count}})",
+    "droppedMany": "⛔ {{count}} of your domains lost their verification record and no longer open your panel."
   }
 }

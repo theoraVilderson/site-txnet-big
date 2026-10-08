@@ -67,6 +67,9 @@ export class TenantBillingCreditedConsumer implements OnApplicationBootstrap {
   }
 }
 
+/** A domain notice's outcome (RT-1-e2) and the template that tells it. */
+const DOMAIN_NOTICE_TEMPLATES: Record<string, string> = { live: 'resellerDomainLive', failed: 'resellerDomainFailed', dropped: 'resellerDomainDropped' };
+
 /** The params a quota notice carries through: how to name the quota, and its figures. */
 const QUOTA_PARAMS = ['quotaKey', 'productNameKey', 'included', 'unitPrice', 'currencyCode', 'day', 'refused', 'overageUnits', 'overageCost'] as const;
 
@@ -102,7 +105,8 @@ export function quotaNotice(type: string, p: Record<string, unknown>): { templat
  * users on platform panels (F-118-w, once per refusal spell) — through `EventNoticeSender` (F-067-o): the
  * owner's inbox and bot, each once under its own marker. Its quotas too
  * (F-019-v8): 80%, 100%, stopped, and the daily digest ({@link quotaNotice}). An emergency
- * entry by the platform's staff (F-117-d), at entry. The wheel's
+ * entry by the platform's staff (F-117-d), at entry. A custom domain live,
+ * failed or lost (RT-1-e2). The wheel's
  * day at 80% of its cap (F-707-e) goes to each wheel admin the payload names. No live push of its
  * own: the inbox row's `notification.created` already reaches every open
  * device (F-035-b), and no page reads a subscription event.
@@ -158,6 +162,16 @@ export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap 
     if (event.type === OutboxEventType.TENANT_EMERGENCY_ENTRY) {
       // F-117-d (ADR-0104 (5)): told at entry. No params: the reason is the history's, never the message's.
       await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId: ownerUserId, template: 'resellerEmergencyEntry', params: {} } });
+      return;
+    }
+    if (event.type === OutboxEventType.TENANT_DOMAIN_NOTICE) {
+      // RT-1-e2: a custom domain live, failed its window, or lost its record — named by its host.
+      const template = DOMAIN_NOTICE_TEMPLATES[str(p, 'outcome') ?? ''];
+      const host = str(p, 'host');
+      if (!template || !host) throw new Error(`outbox event ${event.id} is a domain notice auth-service has no words for`);
+      // In the owner's own tenant (`ownerTenantId`): a bought reseller's owner is a platform user.
+      const person = { tenantId: str(p, 'ownerTenantId') ?? tenantId, userId: ownerUserId, template, params: { host } };
+      await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person });
       return;
     }
     if (event.type === OutboxEventType.TENANT_WHOLESALE_UNFUNDED) {

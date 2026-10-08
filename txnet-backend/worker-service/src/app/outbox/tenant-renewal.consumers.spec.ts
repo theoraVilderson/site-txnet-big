@@ -60,6 +60,30 @@ describe('TenantSubscriptionNoticeConsumer — an emergency entry (F-117-d)', ()
   });
 });
 
+describe('TenantSubscriptionNoticeConsumer — a custom domain (RT-1-e2)', () => {
+  it.each([
+    ['live', 'resellerDomainLive'],
+    ['failed', 'resellerDomainFailed'],
+    ['dropped', 'resellerDomainDropped'],
+  ])('tells the owner a domain %s, naming the host', async (outcome, template) => {
+    const { consumer, person } = build();
+    await consumer.handle(event(OutboxEventType.TENANT_DOMAIN_NOTICE, { host: 'panel.barghgho.ir', outcome }));
+    expect(person()).toEqual({ tenantId: TENANT, userId: OWNER, template, params: { host: 'panel.barghgho.ir' } });
+  });
+
+  it("tells the owner in its own tenant, not the reseller's: a bought reseller's owner is a platform user", async () => {
+    const { consumer, person } = build();
+    await consumer.handle(event(OutboxEventType.TENANT_DOMAIN_NOTICE, { host: 'a.ir', outcome: 'live', ownerTenantId: 'platform-1' }));
+    expect(person()).toMatchObject({ tenantId: 'platform-1', userId: OWNER });
+  });
+
+  it('refuses an outcome it has no words for, so the event dead-letters', async () => {
+    const { consumer, send } = build();
+    await expect(consumer.handle(event(OutboxEventType.TENANT_DOMAIN_NOTICE, { host: 'a.ir', outcome: 'odd' }))).rejects.toThrow(/domain notice/);
+    expect(send).not.toHaveBeenCalled();
+  });
+});
+
 describe('TenantSubscriptionNoticeConsumer — renewal notices (F-019-c)', () => {
   it('passes a payment due its amount, balance and suspension date', async () => {
     const { consumer, person } = build();

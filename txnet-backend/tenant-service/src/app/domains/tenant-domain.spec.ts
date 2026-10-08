@@ -114,6 +114,8 @@ describe('TenantDomainService', () => {
         }),
       },
       tenantSubscription: { findUnique: async () => null },
+      // A bought reseller's owner is a user of the platform's tenant (F-019-h).
+      user: { findUnique: async ({ where }: { where: { id: string } }) => (where.id === OWNER ? { tenantId: PLATFORM } : null) },
       resellerLimit: { findMany: async () => [] },
       packageLimit: { findMany: async () => [] },
       resellerLimitSetting: {
@@ -650,7 +652,7 @@ describe('TenantDomainService', () => {
     });
   });
 
-  describe('every change of status writes tenant.domain.changed (RT-1-e, C-14)', () => {
+  describe('every change of status or result writes tenant.domain.changed (RT-1-e, RT-1-e2, C-14)', () => {
     it('names the domain for the owner\'s channel and the platform staff\'s, in the transaction that wrote it', async () => {
       const { service, world, outbox } = build({ rows: [pendingRow()] });
       await service.requestCheck(owner, RESELLER, 'd1', at(1));
@@ -661,11 +663,48 @@ describe('TenantDomainService', () => {
       expect(outbox[0]).toMatchObject({ aggregateId: 'd1', payload: { domainId: 'd1', resellerId: RESELLER, userId: OWNER, tenantId: PLATFORM } });
     });
 
-    it('writes nothing for a tick that changed no status', async () => {
-      const { service, outbox } = build({ rows: [pendingRow({ verificationStatus: 'verifying' })] });
+    it('tells the page a new check result, and nothing for the same result again (RT-1-e2)', async () => {
+      const { service, world, outbox } = build({ rows: [pendingRow({ verificationStatus: 'verifying' })] });
       await service.checkDue(at(1));
+      expect(outbox.map((e) => e.type)).toEqual([OutboxEventType.TENANT_DOMAIN_CHANGED]);
       await service.checkDue(at(2));
-      expect(outbox).toEqual([]);
+      expect(outbox).toHaveLength(1);
+
+      world.cname['ali-vpn.ir'] = ['ali.edge.txnet.app'];
+      await service.checkDue(at(3));
+      expect(outbox).toHaveLength(2);
+    });
+
+    it('tells the owner once the domain is live, by whichever of the check and the certificate lands second (RT-1-e2)', async () => {
+      const { service, rows, world, edge, outbox } = build({ rows: [pendingRow({ verificationStatus: 'verifying' })] });
+      world.txt[verifyRecordName('ali-vpn.ir')] = ['tok-1'];
+      world.cname['ali-vpn.ir'] = ['ali.edge.txnet.app'];
+      world.arrivesAs['http://ali-vpn.ir'] = 409;
+      await service.checkDue(at(1));
+      edge.set('fake-1', { status: 'issued', ownership: null });
+      healthy(world);
+      await service.checkDue(at(2));
+      expect(rows[0]).toMatchObject({ verificationStatus: 'verified', edgeStatus: 'issued' });
+
+      const told = outbox.filter((e) => e.type === OutboxEventType.TENANT_DOMAIN_NOTICE);
+      expect(told).toHaveLength(1);
+      expect(told[0]).toMatchObject({ aggregateId: 'd1', payload: { tenantId: RESELLER, ownerUserId: OWNER, ownerTenantId: PLATFORM, host: 'ali-vpn.ir', outcome: 'live' } });
+
+      await service.checkDue(at(9));
+      expect(outbox.filter((e) => e.type === OutboxEventType.TENANT_DOMAIN_NOTICE)).toHaveLength(1);
+    });
+
+    it('tells the owner a domain that failed its window, and one that lost its record (RT-1-e2)', async () => {
+      const failing = build({ rows: [pendingRow({ verificationStatus: 'verifying' })], edgeOff: true });
+      await failing.service.checkDue(at(72));
+      expect(failing.outbox.filter((e) => e.type === OutboxEventType.TENANT_DOMAIN_NOTICE).map((e) => e.payload['outcome'])).toEqual(['failed']);
+
+      const losing = build({
+        rows: [pendingRow({ verificationStatus: 'verified', verifiedAt: T0, lastCheckedAt: T0, revalidatingSince: at(1) })],
+        edgeOff: true,
+      });
+      await losing.service.checkDue(at(80));
+      expect(losing.outbox.filter((e) => e.type === OutboxEventType.TENANT_DOMAIN_NOTICE).map((e) => e.payload['outcome'])).toEqual(['dropped']);
     });
 
     it('a write that rolls back takes its event with it', async () => {

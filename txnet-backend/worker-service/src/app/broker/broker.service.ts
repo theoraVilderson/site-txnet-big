@@ -348,6 +348,8 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       OutboxEventType.TENANT_QUOTA_DIGEST,
       // F-117-d: the platform's staff entered in an emergency, without consent — the same owner, at entry.
       OutboxEventType.TENANT_EMERGENCY_ENTRY,
+      // RT-1-e2: a custom domain live, failed its window, or lost its record — the same owner.
+      OutboxEventType.TENANT_DOMAIN_NOTICE,
       // F-707-e: the wheel's day at 80% of its cap — to each of the tenant's wheel admins, not the owner.
       OutboxEventType.TENANT_WHEEL_CAP_NEARING,
       // F-707-m: a lottery prize given — to its winner, a person notice as the one above.

@@ -15,6 +15,9 @@ export const NOTIFY_TEMPLATES = [
   'subscriptionSuspended',
   'resellerWholesaleUnfunded',
   'resellerEmergencyEntry',
+  'resellerDomainLive',
+  'resellerDomainFailed',
+  'resellerDomainDropped',
   'resellerQuotaNearing',
   'resellerQuotaOverageStarted',
   'resellerQuotaStopped',
@@ -143,6 +146,7 @@ type NotificationsNamespace = {
   subscription?: Texts;
   resellerBilling?: Texts;
   resellerSupport?: Texts;
+  resellerDomain?: Texts;
   resellerQuota?: Texts;
   resellerQuotaKeys?: Texts;
   panel?: Texts;
@@ -225,6 +229,39 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.resellerSupport?.emergencyEntryMany,
       fallback: "🚨 The platform's staff entered your panel {{count}} times for emergencies, without your consent. Their reasons and every step are listed under support access in your panel.",
       inbox: { read: (ns) => ns?.resellerSupport?.emergencyEntryManyTitle, fallback: 'Emergency access to your panel ({{count}})' },
+    },
+  },
+  // RT-1-e2: a reseller's custom domain went live (verified and its certificate issued).
+  resellerDomainLive: {
+    read: (ns) => ns?.resellerDomain?.live,
+    fallback: '✅ Your domain {{host}} is verified and its certificate is issued. Your panel now opens on it, and your users can sign up and buy.',
+    inbox: { read: (ns) => ns?.resellerDomain?.liveTitle, fallback: 'Your domain {{host}} is live' },
+    many: {
+      read: (ns) => ns?.resellerDomain?.liveMany,
+      fallback: '✅ {{count}} of your domains are verified and live.',
+      inbox: { read: (ns) => ns?.resellerDomain?.liveManyTitle, fallback: 'Your domains are live ({{count}})' },
+    },
+  },
+  // RT-1-e2: 72 hours of checks and the records never all passed.
+  resellerDomainFailed: {
+    read: (ns) => ns?.resellerDomain?.failed,
+    fallback: '❌ Your domain {{host}} could not be verified within 72 hours. The domains page shows what each check expected and what it found; fix the records there and ask for a check again.',
+    inbox: { read: (ns) => ns?.resellerDomain?.failedTitle, fallback: 'Domain {{host}} was not verified' },
+    many: {
+      read: (ns) => ns?.resellerDomain?.failedMany,
+      fallback: '❌ {{count}} of your domains could not be verified within 72 hours. The domains page shows what each check found.',
+      inbox: { read: (ns) => ns?.resellerDomain?.failedManyTitle, fallback: 'Domains not verified ({{count}})' },
+    },
+  },
+  // RT-1-e2: a verified domain's TXT record was missing past its grace.
+  resellerDomainDropped: {
+    read: (ns) => ns?.resellerDomain?.dropped,
+    fallback: "⛔ The verification record of {{host}} has been missing for 72 hours, so your panel no longer opens on it. Put the TXT record back and ask for a check on the domains page.",
+    inbox: { read: (ns) => ns?.resellerDomain?.droppedTitle, fallback: 'Domain {{host}} stopped working' },
+    many: {
+      read: (ns) => ns?.resellerDomain?.droppedMany,
+      fallback: '⛔ {{count}} of your domains lost their verification record and no longer open your panel.',
+      inbox: { read: (ns) => ns?.resellerDomain?.droppedManyTitle, fallback: 'Domains stopped working ({{count}})' },
     },
   },
   // F-118-w: a reseller's billing wallet no longer funds its users on platform panels — once per refusal spell.
