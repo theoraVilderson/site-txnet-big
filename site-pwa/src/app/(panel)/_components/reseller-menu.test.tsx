@@ -3,18 +3,20 @@ import { join } from "node:path";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { RESELLER_SECTIONS, resellerMenu, workspaceOfPath } from "../_lib/reseller-menu";
+import { resellerMenu, workspaceOfPath } from "../_lib/reseller-menu";
 import { clearOwnedResellersCache } from "../my-resellers/_lib/workspace";
 import { usePanelUiStore } from "../_stores/panel-ui-store";
 import { useUiPreferences } from "@/stores/ui-preferences-store";
 import { PanelSidebar } from "./PanelSidebar";
 
 /**
- * The workspace switcher (UX-2-a, `contract.reseller-workspace.md`): at the
- * top of the sidebar, "my account" / "my reseller". Nothing is stored — the
- * address picks the menu: inside `/reseller/…` or `/my-resellers/:id/…` the
- * sidebar draws the reseller's own sectioned menu, with the handoff in it, on
- * both hosts. It replaced the sidebar's reseller block and the N8 tab bar.
+ * One menu for the account and its reseller (UX-2-a, `contract.reseller-workspace.md`;
+ * user, 2026-10-08: merged into the sections, not a switcher). The reseller's
+ * pages join the account menu's sections — catalog under sales, gateways under
+ * finance, users under people, domains and bot under infra, home, settings and
+ * brand under account with the handoff after them — on both hosts. Whose
+ * reseller: the address's, else the caller's own; nothing is stored. It
+ * replaced the sidebar's reseller block and the N8 tab bar.
  */
 
 const N = FrontendI18nKeys.common.resellerNav;
@@ -98,51 +100,51 @@ describe("workspaceOfPath — the address picks the menu", () => {
   });
 });
 
-describe("the reseller menu", () => {
-  it("has the six sections, in order, each with its pages, by id or with none", () => {
-    expect(RESELLER_SECTIONS.map((s) => s.id)).toEqual(["home", "sales", "finance", "customers", "infra", "settings"]);
+describe("the reseller's links", () => {
+  it("each join the account section it belongs to, by id or with none", () => {
     const byId = resellerMenu({ id: "r-9", self: false });
-    expect(byId.map((s) => [s.id, s.entries.map((e) => e.href)])).toEqual([
-      ["home", ["/my-resellers/r-9"]],
-      ["sales", ["/my-resellers/r-9/catalog"]],
-      ["finance", ["/my-resellers/r-9/gateways"]],
-      ["customers", ["/my-resellers/r-9/users"]],
-      ["infra", ["/my-resellers/r-9/domains", "/my-resellers/r-9/bot"]],
-      ["settings", ["/my-resellers/r-9/settings", "/my-resellers/r-9/branding"]],
+    expect(byId.map((l) => [l.section, l.href])).toEqual([
+      ["account", "/my-resellers/r-9"],
+      ["account", "/my-resellers/r-9/settings"],
+      ["account", "/my-resellers/r-9/branding"],
+      ["sales", "/my-resellers/r-9/catalog"],
+      ["finance", "/my-resellers/r-9/gateways"],
+      ["people", "/my-resellers/r-9/users"],
+      ["infra", "/my-resellers/r-9/domains"],
+      ["infra", "/my-resellers/r-9/bot"],
     ]);
-    const self = resellerMenu({ id: "r-1", self: true }).flatMap((s) => s.entries.map((e) => e.href));
-    expect(self).toEqual(byId.flatMap((s) => s.entries.map((e) => e.href.replace("/my-resellers/r-9", "/reseller"))));
+    const self = resellerMenu({ id: "r-1", self: true }).map((l) => l.href);
+    expect(self).toEqual(byId.map((l) => l.href.replace("/my-resellers/r-9", "/reseller")));
   });
 
-  it("links only pages that exist, at both addresses", () => {
+  it("link only pages that exist, at both addresses", () => {
     const app = join(__dirname, "..");
     const missing = resellerMenu({ id: "ID", self: false })
-      .flatMap((s) => s.entries)
       .flatMap((e) => [e.href.replace("/my-resellers/ID", "my-resellers/[id]"), e.href.replace("/my-resellers/ID", "reseller")])
       .filter((dir) => !existsSync(join(app, dir, "page.tsx")));
     expect(missing).toEqual([]);
   });
 });
 
-describe("the switcher", () => {
-  it("draws the account's menu outside a workspace, with my reseller one tap away", async () => {
+/** The list a section heading folds. */
+const sectionList = (label: string) => document.getElementById(screen.getByRole("button", { name: label }).getAttribute("aria-controls")!)!;
+
+describe("one menu", () => {
+  it("carries the owner's reseller links in the account's sections, beside the account's own", async () => {
     render(<PanelSidebar />);
-    const switcher = await screen.findByRole("navigation", { name: N.switcher.label });
-    expect(within(switcher).getByRole("link", { name: N.switcher.account })).toHaveAttribute("aria-current", "true");
-    expect(within(switcher).getByRole("link", { name: N.switcher.reseller })).toHaveAttribute("href", "/reseller");
-    expect(screen.getByRole("link", { name: S.menu.dashboard })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: N.menu.catalog })).toBeNull();
+    const catalog = await screen.findByRole("link", { name: N.menu.catalog });
+    expect(catalog).toHaveAttribute("href", "/reseller/catalog");
+    expect(within(sectionList(S.sections.sales)).getByRole("link", { name: N.menu.catalog })).toBe(catalog);
+    expect(within(sectionList(S.sections.infra)).getByRole("link", { name: N.menu.domains })).toBeInTheDocument();
+    expect(within(sectionList(S.sections.account)).getByRole("link", { name: S.menu.dashboard })).toBeInTheDocument();
+    expect(within(sectionList(S.sections.account)).getByRole("link", { name: N.menu.home })).toHaveAttribute("href", "/reseller");
   });
 
-  it("draws the reseller's sectioned menu inside it, and not the account's", async () => {
+  it("stays one menu inside the workspace, the page's link current", async () => {
     pathname = "/reseller/domains";
     render(<PanelSidebar />);
-    const switcher = await screen.findByRole("navigation", { name: N.switcher.label });
-    expect(within(switcher).getByRole("link", { name: N.switcher.reseller })).toHaveAttribute("aria-current", "true");
     expect(await screen.findByRole("link", { name: N.menu.domains })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: N.menu.home })).toHaveAttribute("href", "/reseller");
-    expect(screen.getByRole("button", { name: N.sections.infra })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: S.menu.dashboard })).toBeNull();
+    expect(screen.getByRole("link", { name: S.menu.dashboard })).not.toHaveAttribute("aria-current");
   });
 
   it("follows the id in the address for staff opening another reseller", async () => {
@@ -165,15 +167,24 @@ describe("the switcher", () => {
     expect(screen.getByRole("link", { name: N.menu.domains })).toHaveAttribute("href", "/my-resellers/r-0/domains");
   });
 
-  it("is not drawn for a caller with no reseller", async () => {
+  it("carries no reseller links for a caller with no reseller", async () => {
     owned = [];
     render(<PanelSidebar />);
     await waitFor(() => expect(screen.getByRole("link", { name: S.menu.dashboard })).toBeInTheDocument());
-    expect(screen.queryByRole("navigation", { name: N.switcher.label })).toBeNull();
+    expect(screen.queryByRole("link", { name: N.menu.home })).toBeNull();
+  });
+
+  it("draws a reseller staff seat's users once, where the account menu has it", async () => {
+    me = { ...ON_DOMAIN, permissions: ["tenant.manage"], tenant: { ...ON_DOMAIN.tenant, isOwner: false } };
+    owned = [];
+    render(<PanelSidebar />);
+    expect(await screen.findByRole("link", { name: N.menu.catalog })).toHaveAttribute("href", "/reseller/catalog");
+    await waitFor(() => expect(screen.getByRole("link", { name: S.menu.users })).toHaveAttribute("href", "/reseller/users"));
+    expect(screen.queryByRole("link", { name: N.menu.users })).toBeNull();
   });
 });
 
-describe("the handoff, inside the reseller menu", () => {
+describe("the handoff, after the reseller's links", () => {
   it("opens the owner's panel on its domain, from the platform", async () => {
     pathname = "/reseller";
     render(<PanelSidebar />);

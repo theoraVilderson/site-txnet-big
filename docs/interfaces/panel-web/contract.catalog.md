@@ -181,7 +181,7 @@ same management for a reseller a route names".
 11. **One page, two surfaces, chosen by path and never by session**
     (`CatalogSurface`, `catalog/_lib/surface.ts`): `catalogAdminApi(tenantId)`,
     this surface's two hrefs, its chrome (drawn under the page header: whose
-    catalog; its sections are the sidebar's reseller menu, UX-2-a) and its refusals. It travels by
+    catalog; the sidebar's "reseller catalog", UX-2-a) and its refusals. It travels by
     **context**, not by prop as the gateway page's does: these calls are made
     four components deep (`VariantCard`, `NewVariant`, `Capabilities`), and a
     prop threaded through all of them is a prop somebody forgets to pass.

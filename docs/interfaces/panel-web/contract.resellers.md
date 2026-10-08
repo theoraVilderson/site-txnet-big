@@ -214,8 +214,8 @@ behind it is [tenant/contract.onboarding.md](../../domains/tenant/contract.onboa
     ambient `/gateways` or `/catalog`: they configure the session's tenant, the
     platform's (ADR-0064). Domain and gateway have theirs; until w6 and w8 ship,
     the bot and pricing steps link nothing.
-26. **Reached from the sidebar.** The switcher's "my reseller" opens it;
-    "open my panel" in its menu hands off, apart (UX-2-a). On the reseller's
+26. **Reached from the sidebar.** "Reseller home" in the one menu opens it;
+    "open my panel" after it hands off, apart (UX-2-a). On the reseller's
     own domain it is `/reseller`: [contract.reseller-workspace.md](contract.reseller-workspace.md).
     An answered handoff refusal still opens the console. Refusals: `ONBOARDING_REFUSAL_KEYS`,
     namespace `common.resellerOnboarding`, read from `ResellerAccessRejection`.

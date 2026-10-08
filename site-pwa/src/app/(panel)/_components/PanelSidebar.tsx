@@ -14,7 +14,7 @@ import { Menu } from "./kit/Menu";
 import { Popover } from "./kit/Popover";
 import { useMediaQuery } from "./kit/overlay";
 import { LogoutButton } from "./LogoutButton";
-import { HandoffAction, WorkspaceSwitcher, useResellerWorkspace } from "./ResellerWorkspaceNav";
+import { HandoffAction, OtherResellers, useResellerWorkspace } from "./ResellerWorkspaceNav";
 import { ThemeDropdown } from "@auth/auth/_components/ThemeDropdown";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -30,7 +30,7 @@ import {
   type VisibleMenuGroup,
   type VisibleMenuLink,
 } from "../_lib/panel-menu";
-import { resellerMenu } from "../_lib/reseller-menu";
+import { withResellerMenu } from "../_lib/reseller-menu";
 import { MAX_PINS, pinnedLinks, reorderPins, stepPin, togglePin } from "../_lib/pins";
 import { recordRecentPage } from "../_lib/recent-pages";
 import { useMenuBadges, type BadgedEntry } from "../_hooks/useMenuBadges";
@@ -69,10 +69,10 @@ const FOLD = {
  * height animation, and while collapsed a group opens as a flyout beside the
  * rail (N3). Support, the support inbox and manual payments carry a count (N4).
  *
- * Above it, the workspace switcher (UX-2-a): inside a reseller's workspace —
- * the address says so, nothing is stored — the sidebar draws that reseller's
- * own sectioned menu instead, with the handoff in its home section, and no
- * pins or footer entries, which are the account's.
+ * One menu for the account and its reseller (UX-2-a): the reseller's pages
+ * join the sections they belong to (`withResellerMenu`), the handoff after
+ * them in `account`. Nothing is stored; whose reseller is the address's or
+ * the caller's own (`useResellerWorkspace`).
  */
 export function PanelSidebar() {
   const { t } = useLocale();
@@ -98,15 +98,15 @@ export function PanelSidebar() {
   const nav = useResellerWorkspace();
   const wsId = nav.workspace?.id ?? null;
   const wsSelf = nav.workspace?.self ?? false;
-  const reseller = useMemo(() => (wsId === null ? null : resellerMenu({ id: wsId, self: wsSelf })), [wsId, wsSelf]);
-  const menu = useVisibleMenu();
+  const accountMenu = useVisibleMenu();
+  const menu = useMemo(
+    () => withResellerMenu(accountMenu, wsId === null ? null : { id: wsId, self: wsSelf }),
+    [accountMenu, wsId, wsSelf],
+  );
   const sections = useMemo(() => menuSections(menu), [menu]);
   const footer = useMemo(() => menuFooter(menu), [menu]);
   const headings = sections.length > 1;
-  const active = activeHref(
-    reseller ? reseller.flatMap((s) => s.entries.map((e) => e.href)) : menuHrefs(menu),
-    pathname,
-  );
+  const active = activeHref(menuHrefs(menu), pathname);
   const badges = useMenuBadges();
   const pinned = useMemo(() => pinnedLinks(menu, pins), [menu, pins]);
   const pinnedIds = pinned.map((l) => l.id);
@@ -284,8 +284,8 @@ export function PanelSidebar() {
               onClick={() => step(1)}
             />
           )}
-          {/* A pin is an account entry (N5); the reseller menu has none. */}
-          {!reseller && renderEntryMenu(item.id, label)}
+          {/* A pin is an account entry (N5); a reseller's link is not one. */}
+          {!item.id.startsWith("reseller-") && renderEntryMenu(item.id, label)}
           {pin?.handle}
         </div>
       </div>
@@ -352,18 +352,14 @@ export function PanelSidebar() {
   const renderEntry = (entry: VisibleMenuEntry) =>
     isMenuGroup(entry) ? renderGroup(entry) : renderLink(entry, false);
 
-  /**
-   * Sections under headings that fold (N2). The reseller menu's fold under
-   * their own ids (`reseller-<id>`), apart from the account's same-named ones.
-   */
+  /** Sections under headings that fold (N2); `extra` is drawn at a section's end. */
   const renderSections = (
     list: readonly { id: string; label: string; entries: VisibleMenuEntry[] }[],
     withHeadings: boolean,
-    prefix = "",
     extra?: (id: string) => ReactNode,
   ) =>
     list.map((section) => {
-      const foldId = `${prefix}${section.id}`;
+      const foldId = section.id;
       const folded = withHeadings && closedSections.includes(foldId);
       const listId = `${PANEL_SIDEBAR_ID}-section-${foldId}`;
       const body = (
@@ -464,41 +460,39 @@ export function PanelSidebar() {
           // container would clip — so the rail does not scroll while collapsed.
           className={`isolate flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 ${whenCollapsed("lg:overflow-visible")}`}
         >
-          {/* The switcher opens the nav (UX-2-a): which menu follows the address. */}
-          <WorkspaceSwitcher nav={nav} collapsed={railCollapsed} />
-          {reseller ? (
-            renderSections(reseller, true, "reseller-", (id) =>
-              id === "home" ? <HandoffAction key="handoff" nav={nav} collapsed={railCollapsed} /> : null,
-            )
-          ) : (
-            <>
-              {pinned.length > 0 && (
-                <div className="mb-2 border-b border-card-border pb-2">
-                  <p
-                    aria-hidden
-                    className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-text-secondary ${whenCollapsed("lg:sr-only")}`}
-                  >
-                    {t("common", S.sections.pinned)}
-                  </p>
-                  {/* Drag (by the handle) and up/down write the same `ui.pins` (N5). */}
-                  <Reorder.Group
-                    as="ul"
-                    axis="y"
-                    values={pinnedIds}
-                    onReorder={(order: string[]) => writePins((current) => reorderPins(current, order))}
-                    aria-label={t("common", S.sections.pinned)}
-                    className="space-y-1"
-                  >
-                    {pinned.map((link, i) => (
-                      <PinnedItem key={link.id} id={link.id} dragLabel={t("common", S.pins.drag)} hidden={railCollapsed}>
-                        {(handle) => renderLink(link, false, { handle, up: i > 0, down: i < pinned.length - 1 })}
-                      </PinnedItem>
-                    ))}
-                  </Reorder.Group>
-                </div>
-              )}
-              {renderSections(sections, headings)}
-            </>
+          {pinned.length > 0 && (
+            <div className="mb-2 border-b border-card-border pb-2">
+              <p
+                aria-hidden
+                className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-text-secondary ${whenCollapsed("lg:sr-only")}`}
+              >
+                {t("common", S.sections.pinned)}
+              </p>
+              {/* Drag (by the handle) and up/down write the same `ui.pins` (N5). */}
+              <Reorder.Group
+                as="ul"
+                axis="y"
+                values={pinnedIds}
+                onReorder={(order: string[]) => writePins((current) => reorderPins(current, order))}
+                aria-label={t("common", S.sections.pinned)}
+                className="space-y-1"
+              >
+                {pinned.map((link, i) => (
+                  <PinnedItem key={link.id} id={link.id} dragLabel={t("common", S.pins.drag)} hidden={railCollapsed}>
+                    {(handle) => renderLink(link, false, { handle, up: i > 0, down: i < pinned.length - 1 })}
+                  </PinnedItem>
+                ))}
+              </Reorder.Group>
+            </div>
+          )}
+          {renderSections(sections, headings, (id) =>
+            id === "account" ? (
+              <>
+                {/* After the reseller's own links (UX-2-a): its panel, and which reseller. */}
+                <HandoffAction nav={nav} collapsed={railCollapsed} />
+                <OtherResellers nav={nav} collapsed={railCollapsed} />
+              </>
+            ) : null,
           )}
         </nav>
 
@@ -512,7 +506,7 @@ export function PanelSidebar() {
           over budget at 360px **and** at 700px. Settings sits above it (N1).
         */}
         <div className="isolate shrink-0 space-y-1 border-t border-card-border px-3 py-4">
-          {!reseller && footer.map(renderEntry)}
+          {footer.map(renderEntry)}
           <LogoutButton collapsed={collapsed} />
         </div>
       </aside>

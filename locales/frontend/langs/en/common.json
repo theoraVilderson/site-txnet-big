@@ -1919,29 +1919,16 @@
     "open": "Open my reseller's panel",
     "opening": "Opening reseller panel…",
     "noPanel": "Connect and verify the reseller's domain to open its panel.",
-    "switcher": {
-      "label": "Workspace",
-      "account": "My account",
-      "reseller": "My reseller"
-    },
     "others": "Your resellers",
-    "sections": {
-      "home": "Home & setup",
-      "sales": "Sales",
-      "finance": "Finance",
-      "customers": "Customers",
-      "infra": "Infrastructure",
-      "settings": "Settings"
-    },
     "menu": {
-      "home": "Home",
-      "catalog": "Catalog and prices",
-      "gateways": "Payment gateways",
-      "users": "Users",
-      "domains": "Domains",
-      "bot": "Bot",
-      "branding": "Brand",
-      "settings": "Reseller settings"
+      "home": "Reseller home",
+      "catalog": "Reseller catalog",
+      "gateways": "Reseller gateways",
+      "users": "Reseller users",
+      "domains": "Reseller domains",
+      "bot": "Reseller bot",
+      "settings": "Reseller settings",
+      "branding": "Reseller brand"
     }
   },
   "openingResellerPanel": "Opening your reseller panel…",

@@ -11,7 +11,7 @@ updated: 2026-10-08
 A topic file of [contract.md](contract.md) (§10). The workspace itself — the
 console and one screen per section — is ADR-0064 (4) and
 [contract.resellers.md](contract.resellers.md). This file holds the two
-addresses it has and the switcher and menu that lead through it.
+addresses it has and how the one menu leads through it.
 
 ## Two addresses, one set of screens
 
@@ -50,36 +50,34 @@ addresses it has and the switcher and menu that lead through it.
    Admission is still tenant-service's and billing's (invariant 21); the
    panel only decides what it offers.
 
-## The workspace switcher and the reseller menu (UX-2-a)
+## One menu: the reseller's links in the account's sections (UX-2-a)
 
 It replaced the sidebar's "my reseller" block and the workspace's tab bar
-(`contract.ux.md` N8) — one reseller's screens are a menu of their own, not
-one button and then tabs (user, 2026-10-08: the switcher over a menu section).
+(`contract.ux.md` N8). User, 2026-10-08: account and reseller are one menu,
+each reseller page in the section it belongs to — first built as a
+"my account / my reseller" switcher, reversed the same day.
 
-1. **The address picks the menu; nothing is stored.** `workspaceOfPath`:
-   `/reseller/…` is the caller's own (rule 0), `/my-resellers/:id/…` the
-   path's — except the platform's own users page, which shares the address
-   (F-311-ab) and stays the account's. On a reseller's domain only `/reseller`
-   counts: a `/my-resellers` address there is the 404 (rule 1).
-2. **The switcher** opens the nav: "my account" (`/`) and "my reseller", the
-   current one marked (`aria-current="true"` — a workspace, not a page).
-   "My reseller" goes to the workspace in the path, else `/reseller`, else —
-   an owner whose one reseller is terminated — that one by id. Not drawn for
-   a caller with none, nor before `me` and the owned list answer.
-3. **Inside a workspace the sidebar draws `RESELLER_MENU`** (`_lib/reseller-menu.ts`)
-   instead of the account's: home & setup, sales (catalog), finance
-   (gateways only — tenant billing is the session's tenant, not the path's),
-   customers (users), infrastructure (domains, bot), settings (settings, brand). Headed
-   sections that fold under their own ids (`reseller-<id>`); no pins and no
-   footer entries — those are the account's; logout stays.
-4. **"Open my panel" — the handoff (F-061-f) — sits in home**, offered only
-   on the platform, only for a reseller the caller owns, and only enabled
-   where it lands (`hasPanel` on `GET /auth/handoff`, the `panelHostOf`
-   `POST` refuses on); otherwise a line under it says to connect and verify
-   the domain first — never a refused click. None on a reseller's own domain:
-   there is nowhere to hand off to (F-061-m).
-5. **More than one owned reseller** (a terminated one beside the live one):
-   under the switcher, on the platform, one link per slug picks which.
+1. **Whose reseller, from the address; nothing is stored.** `workspaceOfPath`:
+   `/my-resellers/:id/…` is the path's — except the platform's own users
+   page, which shares the address (F-311-ab) — else the caller's own
+   (`/reseller`, rule 0), else an owner's one terminated reseller by id. On a
+   reseller's domain only its own counts: a `/my-resellers` address there is
+   the 404 (rule 1). None before `me` and the owned list answer.
+2. **Each link joins an N1 section** (`RESELLER_MENU`, `withResellerMenu`):
+   home, settings, brand → `account`; catalog → `sales`; gateways →
+   `finance` (only those — tenant billing is the session's tenant, not the
+   path's); users → `people`; domains, bot → `infra`. Drawn after the
+   section's own entries, labelled "reseller …" beside the account's
+   catalog or gateways. A link the account menu already holds (a staff
+   seat's `/reseller/users`) is not drawn twice. Not pinnable (N5).
+3. **"Open my panel" — the handoff (F-061-f) — follows them in `account`**,
+   offered only on the platform, only for a reseller the caller owns, and
+   only enabled where it lands (`hasPanel` on `GET /auth/handoff`, the
+   `panelHostOf` `POST` refuses on); otherwise a line under it says to
+   connect and verify the domain first — never a refused click. None on a
+   reseller's own domain: nowhere to hand off to (F-061-m).
+4. **More than one owned reseller** (a terminated one beside the live one):
+   after it, on the platform, one link per slug picks whose links are drawn.
 
 ## Home and settings (UX-2-b)
 
@@ -94,12 +92,12 @@ section has one; the home keeps what says how far the reseller is.
    `/my-resellers/:id/settings`): operating currency, time zone, limits,
    product quotas, the cap on extras, package change, support access — each
    card by the path's reseller, admitting and refusing on its own
-   (invariant 21). The menu's settings section links it before the brand.
+   (invariant 21). The menu links it in `account`, before the brand.
 
 ## Proof
 
 `my-resellers/self-workspace.test.tsx` (paths, the redirect and 404s, the
-menu's users entry), `_components/workspace-switcher.test.tsx` (the path's
-menu, the switcher and the handoff on both hosts, every entry's page),
+menu's users entry), `_components/reseller-menu.test.tsx` (whose links, their
+sections, the handoff on both hosts, every link's page),
 `my-resellers/workspace-home.test.tsx` (home and settings, UX-2-b),
 `handoff.service.spec.ts` (`hasPanel`).

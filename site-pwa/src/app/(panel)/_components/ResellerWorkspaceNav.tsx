@@ -3,40 +3,37 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { ExternalLink, Store, UserRound, type LucideIcon } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { CollapsedTooltip } from "./CollapsedTooltip";
 import { authApi, type OwnedReseller } from "@/lib/auth-api";
 import { useLocale } from "@/context/LocaleContext";
 import { ApiError } from "@/lib/api-error";
-import { AUTH_HANDOFF, PANEL_HOME, PANEL_RESELLER_SELF, resellerWorkspaceRoot } from "@/lib/routes";
+import { AUTH_HANDOFF, PANEL_RESELLER_SELF, resellerWorkspaceRoot } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { DURATION, EASE } from "@/lib/motion";
 import { usePanelSession } from "../_context/PanelSessionContext";
 import { workspaceOfPath, type Workspace } from "../_lib/reseller-menu";
 import { resellerDomainOf, selfResellerOf, useOwnedResellerList } from "../my-resellers/_lib/workspace";
 
-/** The switcher's and the reseller menu's strings (UX-2-a, C-06). */
+/** The reseller links' strings (UX-2-a, C-06). */
 const K = FrontendI18nKeys.common.resellerNav;
 
 /** What the sidebar needs to know about the caller's reseller workspaces. */
 export interface ResellerWorkspaceNav {
-  /** The workspace the address is inside — its menu is drawn — or `null`: the account's. */
+  /** The reseller whose links the menu carries, or `null`: the account's menu alone. */
   workspace: Workspace | null;
   /** The caller's owned resellers (`GET /auth/handoff`); `null` until it answers. */
   owned: readonly OwnedReseller[] | null;
-  /** Where "my reseller" goes; `null` draws no switcher. */
-  target: string | null;
   /** On a reseller's own domain: no handoff, nowhere to hand off to (F-061-m). */
   onResellerDomain: boolean;
 }
 
 /**
- * The address picks the menu (UX-2-a): nothing is stored. A workspace is drawn
- * only where its screens are — on the platform's panel by id, and on a
- * reseller's domain at its own `/reseller` (a `/my-resellers` address there is
- * the panel's 404, `PlatformOnlyWorkspace`). Until `me` and the owned list
- * answer, the account's menu stands and no switcher is drawn.
+ * Whose reseller links the one menu carries (UX-2-a): the workspace the
+ * address is inside — staff opening a reseller by id see that one's — else
+ * the caller's own (`/reseller`), else, for an owner whose one reseller is
+ * terminated, that one by id. On a reseller's domain only its own `/reseller`
+ * counts (a `/my-resellers` address there is the 404, `PlatformOnlyWorkspace`).
+ * Until `me` and the owned list answer, the account's menu stands alone.
  */
 export function useResellerWorkspace(): ResellerWorkspaceNav {
   const { me } = usePanelSession();
@@ -45,100 +42,47 @@ export function useResellerWorkspace(): ResellerWorkspaceNav {
   const selfId = selfResellerOf(me, owned);
   const domain = resellerDomainOf(me, owned);
   const inPath = me ? workspaceOfPath(pathname, me, selfId) : null;
-  const workspace = inPath && (inPath.self || domain === null) ? inPath : null;
-  let target: string | null = null;
-  if (workspace) target = resellerWorkspaceRoot(workspace.id, workspace.self);
-  else if (typeof selfId === "string") target = PANEL_RESELLER_SELF;
-  // An owner whose one reseller is terminated still reaches it, by id.
-  else if (domain === null && owned && owned.length > 0) target = resellerWorkspaceRoot(owned[0].id);
-  return { workspace, owned, target, onResellerDomain: typeof domain === "string" };
+  let workspace: Workspace | null = inPath && (inPath.self || domain === null) ? inPath : null;
+  if (!workspace && typeof selfId === "string") workspace = { id: selfId, self: true };
+  if (!workspace && domain === null && owned && owned.length > 0) workspace = { id: owned[0].id, self: false };
+  return { workspace, owned, onResellerDomain: typeof domain === "string" };
 }
 
 /**
- * The workspace switcher (UX-2-a) at the top of the nav: "my account" and
- * "my reseller", one current. Under it, on the platform, an owner holding more
- * than one reseller (a terminated one beside the live one) picks which.
+ * An owner holding more than one reseller (a terminated one beside the live
+ * one), on the platform: one link per slug, after the reseller's links, picks
+ * whose the menu carries.
  */
-export function WorkspaceSwitcher({ nav, collapsed }: { nav: ResellerWorkspaceNav; collapsed: boolean }) {
+export function OtherResellers({ nav, collapsed }: { nav: ResellerWorkspaceNav; collapsed: boolean }) {
   const { t } = useLocale();
-  if (!nav.target) return null;
-  const inReseller = nav.workspace !== null;
-  const others = inReseller && !nav.onResellerDomain && nav.owned && nav.owned.length > 1 ? nav.owned : [];
-  const selfId = nav.owned?.find((r) => r.live)?.id;
+  if (nav.onResellerDomain || !nav.owned || nav.owned.length < 2) return null;
+  const selfId = nav.owned.find((r) => r.live)?.id;
   return (
-    <div className="mb-3 space-y-2 border-b border-card-border pb-3">
-      <nav
-        aria-label={t("common", K.switcher.label)}
-        className={`grid gap-1 rounded-xl border border-card-border p-1 grid-cols-2 ${collapsed ? "lg:grid-cols-1" : ""}`}
-      >
-        <Segment href={PANEL_HOME} current={!inReseller} icon={UserRound} label={t("common", K.switcher.account)} collapsed={collapsed} />
-        <Segment href={nav.target} current={inReseller} icon={Store} label={t("common", K.switcher.reseller)} collapsed={collapsed} />
-      </nav>
-      {others.length > 0 && (
-        <ul aria-label={t("common", K.others)} className={`space-y-0.5 ${collapsed ? "lg:hidden" : ""}`}>
-          {others.map((r) => {
-            const current = r.id === nav.workspace?.id;
-            return (
-              <li key={r.id}>
-                <Link
-                  href={resellerWorkspaceRoot(r.id, r.id === selfId)}
-                  aria-current={current ? "true" : undefined}
-                  dir="ltr"
-                  className={`block truncate rounded-lg px-3 py-1.5 text-sm ${
-                    current ? "bg-leaf-bg font-bold text-primary" : "text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
-                  }`}
-                >
-                  {r.slug}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function Segment({
-  href,
-  current,
-  icon: Icon,
-  label,
-  collapsed,
-}: {
-  href: string;
-  current: boolean;
-  icon: LucideIcon;
-  label: string;
-  collapsed: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      // The current workspace, not the current page: "true", not "page".
-      aria-current={current ? "true" : undefined}
-      className={`group relative isolate flex items-center justify-center gap-2 rounded-lg px-2 py-2 text-sm font-medium transition-colors duration-200 ${
-        current ? "text-on-accent" : "text-text-secondary hover:text-text-primary"
-      }`}
-    >
-      {current && (
-        <motion.span
-          layoutId="workspace-switcher-current"
-          aria-hidden
-          transition={{ duration: DURATION.base, ease: EASE.standard }}
-          className="absolute inset-0 -z-10 rounded-lg bg-primary"
-        />
-      )}
-      <Icon size={16} aria-hidden className="shrink-0" />
-      <span className={`truncate ${collapsed ? "lg:sr-only" : ""}`}>{label}</span>
-      <CollapsedTooltip collapsed={collapsed} label={label} />
-    </Link>
+    <ul aria-label={t("common", K.others)} className={`space-y-0.5 ps-3 ${collapsed ? "lg:hidden" : ""}`}>
+      {nav.owned.map((r) => {
+        const current = r.id === nav.workspace?.id;
+        return (
+          <li key={r.id}>
+            <Link
+              href={resellerWorkspaceRoot(r.id, r.id === selfId)}
+              aria-current={current ? "true" : undefined}
+              dir="ltr"
+              className={`block truncate rounded-lg px-3 py-1.5 text-sm ${
+                current ? "bg-leaf-bg font-bold text-primary" : "text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
+              }`}
+            >
+              {r.slug}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
 /**
- * "Open my panel" (the handoff, F-061-f), drawn in the reseller menu's home
- * section: only on the platform, only for a reseller the caller owns, and
+ * "Open my panel" (the handoff, F-061-f), drawn after the reseller's links in
+ * the account section: only on the platform, only for a reseller the caller owns, and
  * enabled only where it lands (`hasPanel`) — otherwise the line under it says
  * to connect a domain first, rather than a refused click.
  */
@@ -177,7 +121,7 @@ export function HandoffAction({ nav, collapsed }: { nav: ResellerWorkspaceNav; c
  * Opens one reseller's own panel, signed in as the same account: mint a
  * handoff code and spend it on its origin. An answered refusal — it has no
  * panel host — opens its console here instead (F-066-w); only an unreachable
- * service leaves the visitor where they were. Shared by the reseller menu and
+ * service leaves the visitor where they were. Shared by the sidebar and
  * `/resellers/buy`'s held state (F-019-l), so the two never disagree.
  */
 export function useResellerPanelOpener() {
