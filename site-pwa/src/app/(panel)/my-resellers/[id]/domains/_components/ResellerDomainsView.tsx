@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AlertCircle, Check, CheckCircle2, Clock, Copy, Loader2, RefreshCw, XCircle, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
@@ -31,7 +31,7 @@ import {
   isLive,
   isRoutable,
 } from "../../../_lib/domains";
-import { Alert, Button, Input, PageHeader } from "../../../../_components/kit";
+import { Alert, Button, IconButton, Input, PageHeader } from "../../../../_components/kit";
 import { WorkspaceTabs } from "../../../_components/WorkspaceTabs";
 
 /** The refusal's own sentence, else the generic answer for that error. */
@@ -397,39 +397,48 @@ function RecordName({ name }: { name: string }) {
   const { t } = useLocale();
   const { short, full } = dnsName(name);
   return (
-    <>
-      <Copyable text={short} />
-      <span dir="ltr" className="block break-all font-mono text-[11px] text-text-secondary">
-        {t("common", K.records.full, { name: full })}
+    <Copyable text={short}>
+      <span className="mt-0.5 block text-[10px] leading-4 text-text-secondary">
+        {t("common", K.records.full)}{" "}
+        <span dir="ltr" className="break-all font-mono">{full}</span>
       </span>
-    </>
+    </Copyable>
   );
 }
 
-function Copyable({ text }: { text: string }) {
+/**
+ * The copy button first, at a fixed place, so every row's button sits in one
+ * column whatever the text's length; the text (left-to-right) takes the rest.
+ */
+function Copyable({ text, children }: { text: string; children?: ReactNode }) {
   return (
-    <>
-      <span dir="ltr" className="break-all font-mono">{text}</span> <CopyButton text={text} />
-    </>
+    <span className="flex items-start gap-2">
+      <CopyButton text={text} />
+      <span className="min-w-0 flex-1 pt-1">
+        <span dir="ltr" className="block break-all font-mono">{text}</span>
+        {children}
+      </span>
+    </span>
   );
 }
 
 function CopyButton({ text }: { text: string }) {
   const { t } = useLocale();
   const [copied, setCopied] = useState(false);
+  const label = t("common", copied ? K.copied : K.copy);
   return (
-    <Button
-      variant="quiet"
+    <IconButton
       size="sm"
+      aria-label={label}
+      title={label}
+      className="shrink-0"
       onClick={() => {
         void navigator.clipboard?.writeText(text).then(() => {
           setCopied(true);
           setTimeout(() => setCopied(false), 1500);
         });
       }}
-      icon={copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
-    >
-      {t("common", copied ? K.copied : K.copy)}
-    </Button>
+      icon={copied ? <Check size={14} aria-hidden className="text-primary" /> : <Copy size={14} aria-hidden />}
+    />
   );
 }
