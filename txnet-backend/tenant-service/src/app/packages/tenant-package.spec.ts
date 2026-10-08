@@ -55,9 +55,14 @@ describe('TenantPackageService', () => {
         ),
         findMany: vi.fn(async () => [stored()]),
       },
-      $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
+      // The app pool: RLS refuses an `admin_audit_log` row written on it (42501 on the dev DB, 2026-10-07).
+      $transaction: vi.fn(async () => {
+        throw new Error('new row violates row-level security policy for table "admin_audit_log"');
+      }),
     };
-    return { service: new TenantPackageService(prisma as never, prisma as never), prisma, tx, writes };
+    // The cross-tenant pool, where every package write and its audit row go.
+    const all = { ...prisma, $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) };
+    return { service: new TenantPackageService(prisma as never, all as never), prisma, all, tx, writes };
   };
 
   it('refuses a caller who is not the platform owner before a package is touched', async () => {
@@ -69,10 +74,11 @@ describe('TenantPackageService', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('creates the package and its audit row in one transaction, prices as decimal strings', async () => {
-    const { service, prisma, tx, writes } = build();
+  it('creates the package and its audit row in one transaction on the cross-tenant pool, prices as decimal strings', async () => {
+    const { service, prisma, all, tx, writes } = build();
     const view = await service.create(actor, input);
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(all.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(writes).toEqual(['create', 'audit']);
     const data = (tx.tenantFeaturePackage.create.mock.calls[0] as unknown as [{ data: Record<string, unknown> }])[0].data;
     expect(data).toMatchObject({ name: 'Growth', monthlyPrice: '1500000.00', yearlyPrice: '15000000', includedFeatureKeys: ['spin_wheel', 'coupon_engine'] });
@@ -86,10 +92,10 @@ describe('TenantPackageService', () => {
   it('names a taken package name, before the transaction and on a lost race', async () => {
     const taken = build({ nameTaken: true });
     await expect(taken.service.create(actor, input)).rejects.toMatchObject({ reason: 'package_name_taken' });
-    expect(taken.prisma.$transaction).not.toHaveBeenCalled();
+    expect(taken.all.$transaction).not.toHaveBeenCalled();
 
     const race = build();
-    race.prisma.$transaction.mockRejectedValueOnce(Object.assign(new Error('unique'), { code: 'P2002' }));
+    race.all.$transaction.mockRejectedValueOnce(Object.assign(new Error('unique'), { code: 'P2002' }));
     const e = await race.service.create(actor, input).catch((x) => x);
     expect(e).toBeInstanceOf(TenantPackageRefused);
     expect(e.reason).toBe('package_name_taken');

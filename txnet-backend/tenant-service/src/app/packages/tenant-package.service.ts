@@ -85,8 +85,9 @@ export class TenantPackageService {
   async create(actor: TenantPackageActor, input: CreatePackageInput): Promise<PackageView> {
     await this.access(actor);
     await this.nameFree(input.name);
+    // The cross-tenant pool, as `update` and `apply`: RLS refuses this audit row on the app pool.
     const view = await this.writing(input.name, () =>
-      this.prisma.$transaction(async (tx) => {
+      this.all.$transaction(async (tx) => {
         await this.metersKnown(tx, input.meterRates ?? []);
         const row = await tx.tenantFeaturePackage.create({
           data: {
