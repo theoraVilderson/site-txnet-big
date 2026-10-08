@@ -147,10 +147,15 @@ export const resellerWorkspaceRoot = (id: string, self = false) =>
   self ? PANEL_RESELLER_SELF : `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}`;
 /**
  * A reseller's onboarding console (F-066-w): the checklist, and what stays
- * closed until a domain is proved. The workspace's first screen — the
- * sidebar's "reseller settings" opens it.
+ * closed until a domain is proved. The workspace's home — the switcher's
+ * "my reseller" opens it (UX-2-a).
  */
 export const myResellerConsolePath = (id: string, self = false) => resellerWorkspaceRoot(id, self);
+/**
+ * A reseller's settings (UX-2-b): operating currency, time zone, limits and
+ * quotas, package change and support access — the cards the home once stacked.
+ */
+export const myResellerSettingsPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/settings`;
 /** A reseller's custom domains: add one, the records to publish, "check now" (F-066-w2). */
 export const myResellerDomainsPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/domains`;
 /**

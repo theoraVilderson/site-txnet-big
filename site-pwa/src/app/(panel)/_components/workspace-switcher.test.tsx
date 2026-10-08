@@ -108,7 +108,7 @@ describe("the reseller menu", () => {
       ["finance", ["/my-resellers/r-9/gateways"]],
       ["customers", ["/my-resellers/r-9/users"]],
       ["infra", ["/my-resellers/r-9/domains", "/my-resellers/r-9/bot"]],
-      ["settings", ["/my-resellers/r-9/branding"]],
+      ["settings", ["/my-resellers/r-9/settings", "/my-resellers/r-9/branding"]],
     ]);
     const self = resellerMenu({ id: "r-1", self: true }).flatMap((s) => s.entries.map((e) => e.href));
     expect(self).toEqual(byId.flatMap((s) => s.entries.map((e) => e.href.replace("/my-resellers/r-9", "/reseller"))));

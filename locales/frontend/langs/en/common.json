@@ -1940,7 +1940,8 @@
       "users": "Users",
       "domains": "Domains",
       "bot": "Bot",
-      "branding": "Brand"
+      "branding": "Brand",
+      "settings": "Reseller settings"
     }
   },
   "openingResellerPanel": "Opening your reseller panel…",
@@ -2487,6 +2488,10 @@
       "branding": {
         "title": "Brand",
         "hint": "How your configs are named in your customers' VPN apps."
+      },
+      "settings": {
+        "title": "Reseller settings",
+        "hint": "Currency, time zone, limits, your package and support access."
       }
     },
     "limits": {
@@ -2559,6 +2564,12 @@
         "doneNow": "Upgraded. The new package's quotas apply now.",
         "doneRenewal": "Saved. The new package starts at your renewal."
       }
+    },
+    "progress": "{{done}} of {{total}} steps done",
+    "shortcuts": "Shortcuts",
+    "settingsPage": {
+      "title": "Reseller settings",
+      "subtitle": "Currency, time zone, limits and quotas, your package, and the platform's access to your people."
     }
   },
   "resellerGateways": {

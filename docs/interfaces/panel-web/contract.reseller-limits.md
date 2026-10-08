@@ -54,7 +54,7 @@ parts in `resellers/_lib/limits.ts`.
 
 ## The reseller's own (F-019-s)
 
-On its workspace console (`/my-resellers/:id`, `ResellerLimitsCard`), under
+On its workspace settings page (`/my-resellers/:id/settings`, UX-2-b; `ResellerLimitsCard`), under
 the operating currency: each key, what is used and where the limit comes from.
 
 | # | Rule | Why |
@@ -66,7 +66,7 @@ the operating currency: each key, what is used and where the limit comes from.
 
 ## The reseller's quotas, its cap on extras and its package (F-019-v10, ADR-0107 points 6, 9, 11)
 
-On the same console, below the limits card: `ProductQuotasCard`, `OverageCapCard`,
+On the same page, below the limits card: `ProductQuotasCard`, `OverageCapCard`,
 `PackageChangeCard` (`[id]/_components/QuotaCards.tsx`); the pure parts in
 `my-resellers/_lib/limits.ts`. Every call is by the path's reseller (rule 8).
 

@@ -69,7 +69,7 @@ one button and then tabs (user, 2026-10-08: the switcher over a menu section).
 3. **Inside a workspace the sidebar draws `RESELLER_MENU`** (`_lib/reseller-menu.ts`)
    instead of the account's: home & setup, sales (catalog), finance
    (gateways only — tenant billing is the session's tenant, not the path's),
-   customers (users), infrastructure (domains, bot), settings (brand). Headed
+   customers (users), infrastructure (domains, bot), settings (settings, brand). Headed
    sections that fold under their own ids (`reseller-<id>`); no pins and no
    footer entries — those are the account's; logout stays.
 4. **"Open my panel" — the handoff (F-061-f) — sits in home**, offered only
@@ -81,9 +81,25 @@ one button and then tabs (user, 2026-10-08: the switcher over a menu section).
 5. **More than one owned reseller** (a terminated one beside the live one):
    under the switcher, on the platform, one link per slug picks which.
 
+## Home and settings (UX-2-b)
+
+The home's card stack moved to a page of its own, so the menu's settings
+section has one; the home keeps what says how far the reseller is.
+
+1. **Home** (`OnboardingConsoleView`, `/reseller`): the gate's state, a
+   progress bar — the route's steps done of all of them, counted at render,
+   never stored — the required and recommended steps, then shortcuts:
+   settings, brand, users.
+2. **Settings** (`ResellerSettingsView`, `/reseller/settings` and
+   `/my-resellers/:id/settings`): operating currency, time zone, limits,
+   product quotas, the cap on extras, package change, support access — each
+   card by the path's reseller, admitting and refusing on its own
+   (invariant 21). The menu's settings section links it before the brand.
+
 ## Proof
 
 `my-resellers/self-workspace.test.tsx` (paths, the redirect and 404s, the
 menu's users entry), `_components/workspace-switcher.test.tsx` (the path's
 menu, the switcher and the handoff on both hosts, every entry's page),
+`my-resellers/workspace-home.test.tsx` (home and settings, UX-2-b),
 `handoff.service.spec.ts` (`hasPanel`).

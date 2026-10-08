@@ -2,19 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Circle, Clock, DoorClosed, DoorOpen, Palette, RefreshCw, Users } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, Clock, DoorClosed, DoorOpen, Palette, RefreshCw, Settings2, Users, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { authApi } from "@/lib/auth-api";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { myResellerBrandingPath, myResellerUsersPath } from "@/lib/routes";
+import { myResellerBrandingPath, myResellerSettingsPath, myResellerUsersPath } from "@/lib/routes";
 import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-api";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
-import { OperatingCurrencyCard } from "../../../_components/OperatingCurrencyCard";
-import { TenantTimeZoneCard } from "../../../_components/TenantTimeZoneCard";
-import { ResellerLimitsCard } from "./ResellerLimitsCard";
-import { SupportAccessCard } from "./SupportAccessCard";
-import { OverageCapCard, PackageChangeCard, ProductQuotasCard } from "./QuotaCards";
 import { Badge } from "../../../financial/_components/Badge";
 import {
   CLOSED_CAPABILITY_KEYS,
@@ -46,7 +41,11 @@ type Step = ResellerOnboarding["steps"][number];
  *  - **not a suspension.** `tenantOnboarding` is what the reseller's own users
  *    are refused with; this page explains it in the gate's tone, never the
  *    suspended one;
- *  - **every step from the route, as it came.** Nothing is inferred or stored.
+ *  - **every step from the route, as it came.** Nothing is inferred or stored;
+ *    the progress bar is the steps' own count.
+ *
+ * The workspace's home (UX-2-b): the gate, setup progress and shortcuts. The
+ * settings cards it once stacked are `ResellerSettingsView`'s page.
  */
 export function OnboardingConsoleView({ id }: { id: string }) {
   const { t } = useLocale();
@@ -151,6 +150,8 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
         </section>
       )}
 
+      <Progress view={view} />
+
       {gate && (
         <div className="space-y-3">
           <h2 className="text-sm font-bold text-text-secondary">{t("common", K.required)}</h2>
@@ -167,47 +168,57 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
         </div>
       )}
 
-      {/* Not a step: nothing waits on it, and it is never "done". */}
+      {/* Not steps: nothing waits on them, and they are never "done". */}
       <div className="space-y-3">
-        <h2 className="text-sm font-bold text-text-secondary">{t("common", K.more.title)}</h2>
-        <section className="flex flex-col gap-3 rounded-2xl border border-card-border bg-card-bg p-5 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-start gap-3">
-            <Palette size={20} className="mt-0.5 shrink-0 text-primary" aria-hidden />
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-text-primary">{t("common", K.more.branding.title)}</h3>
-              <p className="text-xs text-text-secondary">{t("common", K.more.branding.hint)}</p>
-            </div>
-          </div>
-          <Link href={myResellerBrandingPath(id, self)} className={buttonClass({ variant: "quiet", size: "sm" })}>
-            {t("common", K.open)}
-            <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
-          </Link>
-        </section>
-        <section className="flex flex-col gap-3 rounded-2xl border border-card-border bg-card-bg p-5 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-start gap-3">
-            <Users size={20} className="mt-0.5 shrink-0 text-primary" aria-hidden />
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-text-primary">{t("common", USERS.title)}</h3>
-              <p className="text-xs text-text-secondary">{t("common", USERS.hint)}</p>
-            </div>
-          </div>
-          <Link href={myResellerUsersPath(id, self)} className={buttonClass({ variant: "quiet", size: "sm" })}>
-            {t("common", K.open)}
-            <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
-          </Link>
-        </section>
-        {/* F-116-h. By the path's reseller, like every card here (invariant 21). */}
-        <OperatingCurrencyCard tenantId={id} scope="reseller" />
-        {/* TZ-1-e: the reseller's own clock, by the same path's reseller. */}
-        <TenantTimeZoneCard tenantId={id} scope="reseller" />
-        <ResellerLimitsCard tenantId={id} />
-        <ProductQuotasCard tenantId={id} />
-        <OverageCapCard tenantId={id} />
-        <PackageChangeCard tenantId={id} />
-        {/* F-117-f: the platform's access to this reseller's people; nothing to platform staff. */}
-        <SupportAccessCard tenantId={id} />
+        <h2 className="text-sm font-bold text-text-secondary">{t("common", K.shortcuts)}</h2>
+        <Shortcut icon={Settings2} title={t("common", K.more.settings.title)} hint={t("common", K.more.settings.hint)} href={myResellerSettingsPath(id, self)} />
+        <Shortcut icon={Palette} title={t("common", K.more.branding.title)} hint={t("common", K.more.branding.hint)} href={myResellerBrandingPath(id, self)} />
+        <Shortcut icon={Users} title={t("common", USERS.title)} hint={t("common", USERS.hint)} href={myResellerUsersPath(id, self)} />
       </div>
     </>
+  );
+}
+
+/** How many of the route's steps are done — counted, never stored. */
+function Progress({ view }: { view: ResellerOnboarding }) {
+  const { t } = useLocale();
+  const total = view.steps.length;
+  const done = view.steps.filter((s) => s.done).length;
+  if (total === 0) return null;
+  const label = t("common", K.progress, { done, total });
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium text-text-secondary">{label}</p>
+      <div
+        className="h-2 overflow-hidden rounded-full bg-leaf-bg"
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-valuenow={done}
+      >
+        <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${(done / total) * 100}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function Shortcut({ icon: Icon, title, hint, href }: { icon: LucideIcon; title: string; hint: string; href: string }) {
+  const { t } = useLocale();
+  return (
+    <section className="flex flex-col gap-3 rounded-2xl border border-card-border bg-card-bg p-5 md:flex-row md:items-center md:justify-between">
+      <div className="flex items-start gap-3">
+        <Icon size={20} className="mt-0.5 shrink-0 text-primary" aria-hidden />
+        <div className="space-y-1">
+          <h3 className="text-base font-bold text-text-primary">{title}</h3>
+          <p className="text-xs text-text-secondary">{hint}</p>
+        </div>
+      </div>
+      <Link href={href} className={buttonClass({ variant: "quiet", size: "sm" })}>
+        {t("common", K.open)}
+        <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
+      </Link>
+    </section>
   );
 }
 

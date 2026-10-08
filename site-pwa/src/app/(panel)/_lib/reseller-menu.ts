@@ -1,4 +1,4 @@
-import { Bot, Globe, Home, Landmark, Package, Palette, UserCog, type LucideIcon } from "lucide-react";
+import { Bot, Globe, Home, Landmark, Package, Palette, Settings2, UserCog, type LucideIcon } from "lucide-react";
 import type { Me } from "@/lib/auth-api";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import {
@@ -10,6 +10,7 @@ import {
   myResellerConsolePath,
   myResellerDomainsPath,
   myResellerGatewaysPath,
+  myResellerSettingsPath,
   myResellerUsersPath,
 } from "@/lib/routes";
 import type { VisibleMenuLink } from "./panel-menu";
@@ -52,6 +53,7 @@ export const RESELLER_MENU: readonly ResellerMenuLink[] = [
   { section: "customers", id: "reseller-users", label: R.menu.users, icon: UserCog, href: myResellerUsersPath },
   { section: "infra", id: "reseller-domains", label: R.menu.domains, icon: Globe, href: myResellerDomainsPath },
   { section: "infra", id: "reseller-bot", label: R.menu.bot, icon: Bot, href: myResellerBotPath },
+  { section: "settings", id: "reseller-settings", label: R.menu.settings, icon: Settings2, href: myResellerSettingsPath },
   { section: "settings", id: "reseller-branding", label: R.menu.branding, icon: Palette, href: myResellerBrandingPath },
 ];
 

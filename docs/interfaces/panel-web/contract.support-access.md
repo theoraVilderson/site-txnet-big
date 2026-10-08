@@ -22,7 +22,7 @@ strings `common.supportAccess` (both sides).
 ## The reseller's card (F-117-f)
 
 `my-resellers/[id]/_components/SupportAccessCard.tsx`, on the workspace
-console (`/my-resellers/:id`, `OnboardingConsoleView`) under the limit and
+settings page (`/my-resellers/:id/settings`, `ResellerSettingsView`) under the limit and
 package cards. By the path's reseller, never the session's (invariant 21).
 
 | # | Rule | Why |
