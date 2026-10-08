@@ -48,14 +48,22 @@ export class HandoffService {
     private readonly auth: AuthService,
   ) {}
 
-  /** The resellers the caller owns — what the panel offers a button for. */
+  /**
+   * The resellers the caller owns — what the panel offers a button for.
+   * `here` marks the one whose panel domain this request came through
+   * (F-061-m): there is nowhere to hand off to, so the panel opens its console
+   * instead. Read off the resolved door, never another query.
+   */
   async owned(claims: AuthClaims) {
     return safeExecute(async () => {
-      const resellers = await this.all.tenant.findMany({
+      const owned = await this.all.tenant.findMany({
         where: { ownerUserId: claims.sub, tenantType: TenantType.reseller, deletedAt: null },
         select: { id: true, slug: true },
         orderBy: { slug: 'asc' },
       });
+      const door = this.surfaceOwners.surface();
+      const hereId = door?.via === 'domain' ? door.id : null;
+      const resellers = owned.map((r) => ({ ...r, here: r.id === hereId }));
       return ok({ resellers }, 'auth.handoffResellers');
     });
   }

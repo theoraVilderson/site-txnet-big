@@ -215,9 +215,9 @@ behind it is [tenant/contract.onboarding.md](../../domains/tenant/contract.onboa
     platform's (ADR-0064). Domain and gateway have theirs; until w6 and w8 ship,
     the bot and pricing steps link nothing.
 26. **Reached from the sidebar.** "My reseller panel" (`ResellerPanelButton`)
-    tries the handoff; an answered refusal — the reseller has no panel host —
-    opens the console instead. Only an unreachable service leaves the visitor
-    where they were. Refusals: `ONBOARDING_REFUSAL_KEYS`, namespace
+    hands off; on that reseller's own domain (`here`, F-061-m) or on an answered
+    refusal (no panel host) it opens the console. Only an unreachable service
+    leaves the visitor where they were. Refusals: `ONBOARDING_REFUSAL_KEYS`, namespace
     `common.resellerOnboarding`, read from `ResellerAccessRejection`.
 
 ### Its gateways (F-066-w4)

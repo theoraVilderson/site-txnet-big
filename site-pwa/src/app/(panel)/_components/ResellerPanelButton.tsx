@@ -13,7 +13,8 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 /** The `common` namespace as generated constants (F-083, C-06). */
 const C = FrontendI18nKeys.common;
 
-type Reseller = { id: string; slug: string };
+/** `here`: this request came through the reseller's own panel domain (F-061-m). */
+type Reseller = { id: string; slug: string; here?: boolean };
 
 /**
  * "My reseller panel" (F-061-f): one entry per reseller the caller owns, which
@@ -28,7 +29,8 @@ type Reseller = { id: string; slug: string };
  * the handoff refuses it (`auth.handoffRefused`). The entry then opens its
  * onboarding console on this panel instead (F-066-w, ADR-0064 (4)) — which is
  * where such a reseller is configured. Only an answer that never arrived
- * leaves the visitor where they were.
+ * leaves the visitor where they were. On the reseller's own domain there is
+ * nowhere to hand off to, so the entry opens that console directly (F-061-m).
  *
  * Renders nothing for a caller who owns no reseller, and nothing if the list
  * cannot be read: it is a shortcut, never a reason to break the sidebar. The
@@ -54,7 +56,7 @@ export function ResellerPanelButton({
           <button
             key={reseller.id}
             type="button"
-            onClick={() => open(reseller.id)}
+            onClick={() => open(reseller.id, reseller.here)}
             disabled={pending !== null}
             className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-text-secondary transition-colors duration-200 hover:bg-leaf-bg hover:text-text-primary disabled:opacity-60 ${
               collapsed ? "lg:justify-center" : ""
@@ -102,7 +104,11 @@ export function useOwnedResellers(): readonly Reseller[] | null {
 export function useResellerPanelOpener() {
   const router = useRouter();
   const [pending, setPending] = useState<string | null>(null);
-  const open = async (tenantId: string) => {
+  const open = async (tenantId: string, here = false) => {
+    if (here) {
+      router.push(myResellerConsolePath(tenantId));
+      return;
+    }
     setPending(tenantId);
     try {
       const { origin, code } = await authApi.issueHandoff(tenantId);

@@ -140,8 +140,21 @@ describe('HandoffService.issue', () => {
     expect(h.all.tenant.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ ownerUserId: 'user-ali', deletedAt: null }) }),
     );
-    expect(listed).toMatchObject({ ok: true, data: { resellers: [{ id: RESELLER_DOOR.id, slug: 'arian-vpn' }] } });
+    expect(listed).toMatchObject({ ok: true, data: { resellers: [{ id: RESELLER_DOOR.id, slug: 'arian-vpn', here: false }] } });
   });
+
+  // F-061-m: on the reseller's own domain there is nowhere to hand off to —
+  // the button opens its console there instead of looping back to itself.
+  it("marks the reseller whose domain the request came through, without reading anything more", async () => {
+    const h = harness();
+    const onDoor = { ...PLATFORM, surfacePurpose: 'panel', brand: { id: RESELLER_DOOR.id, slug: RESELLER_DOOR.slug } };
+
+    const listed = await runWithTenant(onDoor as never, () => h.service.owned(CLAIMS as never));
+
+    expect(listed).toMatchObject({ ok: true, data: { resellers: [{ id: RESELLER_DOOR.id, here: true }] } });
+    expect(h.all.tenant.findUnique).not.toHaveBeenCalled();
+  });
+
 });
 
 describe('HandoffService.redeem', () => {
