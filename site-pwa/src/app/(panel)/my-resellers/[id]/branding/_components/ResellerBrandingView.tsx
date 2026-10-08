@@ -46,10 +46,34 @@ function useMessage() {
  */
 export function ResellerBrandingView({ id }: { id: string }) {
   const { t } = useLocale();
+  const [slug, setSlug] = useState<string | null>(null);
+
+  // The name for the title, when the visitor owns it; staff see the plain title.
+  useEffect(() => {
+    let alive = true;
+    authApi
+      .ownedResellers()
+      .then((r) => alive && setSlug(r.resellers.find((x) => x.id === id)?.slug ?? null))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+
+  return (
+    <div className="mx-auto w-full max-w-3xl space-y-6 p-4 md:p-8">
+      <PageHeader title={slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)} subtitle={t("common", K.subtitle)} />
+      <BrandingPanel id={id} />
+    </div>
+  );
+}
+
+/** The page's body without its frame — shared by the page and the setup wizard's brand screen (UX-2-d). */
+export function BrandingPanel({ id }: { id: string }) {
+  const { t } = useLocale();
   const message = useMessage();
 
   const [branding, setBranding] = useState<ResellerBranding | null>(null);
-  const [slug, setSlug] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [asked, setAsked] = useState(0);
   const retry = () => {
@@ -68,36 +92,18 @@ export function ResellerBrandingView({ id }: { id: string }) {
     };
   }, [id, asked]);
 
-  // The name for the title, when the visitor owns it; staff see the plain title.
-  useEffect(() => {
-    let alive = true;
-    authApi
-      .ownedResellers()
-      .then((r) => alive && setSlug(r.resellers.find((x) => x.id === id)?.slug ?? null))
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, [id]);
-
-  return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 p-4 md:p-8">
-      <PageHeader title={slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)} subtitle={t("common", K.subtitle)} />
-
-      {loadError !== null ? (
-        <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
-          <Alert tone="error">{message(loadError)}</Alert>
-          <Button variant="primary" size="sm" onClick={retry}>
-            {t("common", K.reload)}
-          </Button>
-        </div>
-      ) : branding === null ? (
-        <TableSkeleton rows={2} columns={1} />
-      ) : (
-        <LineNameSection id={id} saved={branding.lineNameTemplate} onSaved={setBranding} />
-      )}
-    </div>
-  );
+  if (loadError !== null) {
+    return (
+      <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
+        <Alert tone="error">{message(loadError)}</Alert>
+        <Button variant="primary" size="sm" onClick={retry}>
+          {t("common", K.reload)}
+        </Button>
+      </div>
+    );
+  }
+  if (branding === null) return <TableSkeleton rows={2} columns={1} />;
+  return <LineNameSection id={id} saved={branding.lineNameTemplate} onSaved={setBranding} />;
 }
 
 function LineNameSection({ id, saved, onSaved }: { id: string; saved: string | null; onSaved: (b: ResellerBranding) => void }) {

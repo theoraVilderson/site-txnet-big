@@ -28,6 +28,10 @@ export interface GatewaySurface {
   refusalKey?: (e: unknown) => string | null;
   /** The groups a gateway's audience is picked from (F-102-g): this tenant's own. */
   groups: () => Promise<UserGroup[]>;
+  /** Inside another page — the setup wizard's step (UX-2-d): no page frame or title, the actions kept. */
+  embedded?: boolean;
+  /** After a gateway is created, edited or removed and the list re-read: the wizard re-reads its checklist. */
+  onChanged?: () => void;
 }
 
 /** The caller's own tenant, which is what the gateway page was before there was a second surface. */

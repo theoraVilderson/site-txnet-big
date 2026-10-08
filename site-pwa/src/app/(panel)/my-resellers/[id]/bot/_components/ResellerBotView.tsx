@@ -61,27 +61,8 @@ const STATUS_TONE: Record<ResellerBot["status"], { icon: LucideIcon; className: 
  */
 export function ResellerBotView({ id }: { id: string }) {
   const { t } = useLocale();
-  const message = useMessage();
-
-  const [bots, setBots] = useState<ResellerBot[] | null>(null);
   const [slug, setSlug] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<unknown>(null);
   const [asked, setAsked] = useState(0);
-  const retry = () => {
-    setLoadError(null);
-    setAsked((n) => n + 1);
-  };
-
-  useEffect(() => {
-    let alive = true;
-    resellerBotsApi
-      .list(id)
-      .then((list) => alive && setBots(list))
-      .catch((e) => alive && setLoadError(e));
-    return () => {
-      alive = false;
-    };
-  }, [id, asked]);
 
   // The name for the title, when the visitor owns it; staff see the plain title.
   useEffect(() => {
@@ -102,45 +83,89 @@ export function ResellerBotView({ id }: { id: string }) {
         subtitle={t("common", K.subtitle)}
         actions={
           <>
-            <Button variant="quiet" size="sm" onClick={retry} icon={<RefreshCw size={12} aria-hidden />}>
+            <Button variant="quiet" size="sm" onClick={() => setAsked((n) => n + 1)} icon={<RefreshCw size={12} aria-hidden />}>
             {t("common", K.refresh)}
           </Button>
           </>
         }
       />
-
-      {loadError !== null ? (
-        <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
-          <Alert tone="error">{message(loadError)}</Alert>
-          <Button variant="primary" size="sm" onClick={retry}>
-            {t("common", K.reload)}
-          </Button>
-        </div>
-      ) : bots === null ? (
-        <TableSkeleton rows={2} columns={2} />
-      ) : (
-        <>
-          <ConnectBot id={id} bots={bots} onConnected={(bot) => setBots((list) => [bot, ...(list ?? [])])} />
-          <section className="space-y-3">
-            <h2 className="text-base font-bold text-text-primary">{t("common", K.connected)}</h2>
-            {bots.length === 0 ? (
-              <p className="rounded-2xl border border-card-border bg-card-bg p-6 text-sm text-text-secondary">
-                {t("common", K.empty)}
-              </p>
-            ) : (
-              bots.map((bot) => (
-                <BotCard
-                  key={bot.id}
-                  tenantId={id}
-                  bot={bot}
-                  onRetired={() => setBots((list) => (list ?? []).filter((b) => b.id !== bot.id))}
-                />
-              ))
-            )}
-          </section>
-        </>
-      )}
+      <BotPanel id={id} asked={asked} />
     </div>
+  );
+}
+
+/**
+ * The page's body without its frame — the connect form and the bots — shared
+ * by the page and the setup wizard's bot step (UX-2-d). `asked` re-reads it;
+ * `onChanged` hears a connect or a retire, the wizard's cue to re-read its
+ * checklist.
+ */
+export function BotPanel({ id, asked = 0, onChanged }: { id: string; asked?: number; onChanged?: () => void }) {
+  const { t } = useLocale();
+  const message = useMessage();
+
+  const [bots, setBots] = useState<ResellerBot[] | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [retried, setRetried] = useState(0);
+  const retry = () => {
+    setLoadError(null);
+    setRetried((n) => n + 1);
+  };
+
+  useEffect(() => {
+    let alive = true;
+    setLoadError(null);
+    resellerBotsApi
+      .list(id)
+      .then((list) => alive && setBots(list))
+      .catch((e) => alive && setLoadError(e));
+    return () => {
+      alive = false;
+    };
+  }, [id, asked, retried]);
+
+  if (loadError !== null) {
+    return (
+      <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
+        <Alert tone="error">{message(loadError)}</Alert>
+        <Button variant="primary" size="sm" onClick={retry}>
+          {t("common", K.reload)}
+        </Button>
+      </div>
+    );
+  }
+  if (bots === null) return <TableSkeleton rows={2} columns={2} />;
+  return (
+    <>
+      <ConnectBot
+        id={id}
+        bots={bots}
+        onConnected={(bot) => {
+          setBots((list) => [bot, ...(list ?? [])]);
+          onChanged?.();
+        }}
+      />
+      <section className="space-y-3">
+        <h2 className="text-base font-bold text-text-primary">{t("common", K.connected)}</h2>
+        {bots.length === 0 ? (
+          <p className="rounded-2xl border border-card-border bg-card-bg p-6 text-sm text-text-secondary">
+            {t("common", K.empty)}
+          </p>
+        ) : (
+          bots.map((bot) => (
+            <BotCard
+              key={bot.id}
+              tenantId={id}
+              bot={bot}
+              onRetired={() => {
+                setBots((list) => (list ?? []).filter((b) => b.id !== bot.id));
+                onChanged?.();
+              }}
+            />
+          ))
+        )}
+      </section>
+    </>
   );
 }
 

@@ -39,7 +39,10 @@ export interface CatalogSurface {
   /** Put under the page's header: whose catalog this is, and the workspace's tab bar (contract.ux.md N8). */
   chrome?: ReactNode;
   /** The sentence key for a refusal this surface knows (`ResellerAccess`'s); the generic answer otherwise. */
-  refusalKey?: (e: unknown) => string | null;
+  refusalKey?: (e: unknown) => string | null;  /** Inside another page — the setup wizard's pricing step (UX-2-d): no page frame or title, the actions kept. */
+  embedded?: boolean;
+  /** After the catalog is re-read following a change: the wizard re-reads its checklist. */
+  onChanged?: () => void;
 }
 
 /** The caller's own tenant, which is what the catalog page was before there was a second surface. */

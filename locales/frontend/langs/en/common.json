@@ -2573,14 +2573,18 @@
       "optional": "Recommended — it does not block opening",
       "domainWaiting": "Publish the records below at your DNS provider. This page follows the check live — you do not need to refresh.",
       "domainOpen": "Your domain is verified — your reseller is open to customers.",
-      "openScreen": "Open this step's screen",
       "finished": {
         "title": "Your reseller is fully set up",
         "body": "Domain, payment gateway, bot and prices are all in place. You can change any of them from the menu.",
         "home": "Go to your reseller's home"
       },
       "start": "Set up step by step",
-      "startHint": "The wizard opens at the first step that is not done yet."
+      "startHint": "The wizard opens at the first step that is not done yet.",
+      "brand": {
+        "title": "Your brand",
+        "hint": "How your configs are named in your customers' VPN apps.",
+        "optional": "Optional — it is not part of setup progress"
+      }
     }
   },
   "resellerGateways": {

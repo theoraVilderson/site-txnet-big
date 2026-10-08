@@ -22,8 +22,21 @@ import { useWorkspaceSelf } from "../../../_lib/workspace";
  * No permission is judged here. Billing admits the reseller's owner, a staff
  * seat of it holding `tenant.manage`, or platform support (invariant 21), and
  * a refusal is shown as its own sentence.
+ *
+ * `embedded`: the setup wizard's pricing step (UX-2-d) — the same screen
+ * without its page frame; `onChanged` tells it the catalog changed.
  */
-export function ResellerCatalogView({ id, children }: { id: string; children: ReactNode }) {
+export function ResellerCatalogView({
+  id,
+  children,
+  embedded = false,
+  onChanged,
+}: {
+  id: string;
+  children: ReactNode;
+  embedded?: boolean;
+  onChanged?: () => void;
+}) {
   const { t } = useLocale();
   const [slug, setSlug] = useState<string | null>(null);
   const self = useWorkspaceSelf(id);
@@ -47,14 +60,17 @@ export function ResellerCatalogView({ id, children }: { id: string; children: Re
       catalogHref: myResellerCatalogPath(id, self),
       translationsHref: myResellerCatalogTranslationsPath(id, self),
       refusalKey: catalogRefusalKey,
-      chrome: (
+      // Inside the setup wizard (UX-2-d) the step names whose it is.
+      embedded,
+      onChanged,
+      chrome: embedded ? null : (
         <div className="flex flex-col gap-2">
           <p className="text-xs font-bold text-text-secondary">{slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}</p>
         </div>
       ),
     }),
     // `t` is stable for a language; the chrome is rebuilt when the name arrives.
-    [id, slug, self, t],
+    [id, slug, self, t, embedded, onChanged],
   );
 
   return <CatalogSurfaceProvider value={surface}>{children}</CatalogSurfaceProvider>;

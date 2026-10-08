@@ -160,6 +160,12 @@ export function CatalogView() {
     api.translations().then((d) => setPending(d.length), () => setPending(null));
   }, [api, lang, langCodes]);
 
+  // A change the host may care about (the setup wizard's checklist, UX-2-d).
+  const changed = async () => {
+    await load();
+    surface.onChanged?.();
+  };
+
   useEffect(() => {
     // Every setState in load runs after its first await, as in `CouponsView`.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -172,7 +178,7 @@ export function CatalogView() {
     try {
       await run();
       setNotice(t("common", K.saved));
-      await load();
+      await changed();
     } catch (e) {
       setActionError(message(e));
     }
@@ -209,7 +215,7 @@ export function CatalogView() {
     try {
       setReport(removalReport(await api.removeProducts(ids)));
       setSelected(new Set());
-      await load();
+      await changed();
     } catch (e) {
       setActionError(message(e));
     } finally {
@@ -246,7 +252,7 @@ export function CatalogView() {
       }
       setReport(categoryRemovalReport(outcomes));
       setPickedCategories(new Set());
-      await load();
+      await changed();
     } catch (e) {
       setActionError(message(e));
     } finally {
@@ -261,7 +267,7 @@ export function CatalogView() {
     setNotice(null);
     try {
       setReport(switchReport(await Promise.allSettled(ids.map((id) => api.updateCategory(id, { isActive: on })))));
-      await load();
+      await changed();
     } finally {
       setSwitching(false);
     }
@@ -277,47 +283,46 @@ export function CatalogView() {
     setRenaming(null);
     setMoving(null);
     setNotice(t("common", K.saved));
-    await load();
+    await changed();
   };
 
+  const actions = (
+    <div className="flex flex-wrap items-center gap-2">
+      {!guide && (
+        <Button
+          variant="quiet"
+          size="sm"
+          onClick={() => {
+            setGuide(true);
+            writeGuideClosed(false);
+          }}
+          icon={<BookOpen size={14} aria-hidden />}
+        >
+          {t("common", K.guide.show)}
+        </Button>
+      )}
+      <Link href={surface.translationsHref} className={buttonClass({ variant: "quiet", size: "sm" })}>
+        <Languages size={14} aria-hidden />
+        {t("common", K.translations.open)}
+        {pending ? (
+          <span className="rounded-full bg-primary px-1.5 text-[10px] text-on-accent" title={t("common", K.translationsPending, { count: pending })}>
+            {pending}
+          </span>
+        ) : null}
+      </Link>
+      <Button variant="primary" size="sm" onClick={() => setCreating("product")} icon={<Plus size={14} aria-hidden />}>
+        {t("common", K.newProduct)}
+      </Button>
+    </div>
+  );
+
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-4 sm:p-6">
-      <PageHeader
-        icon={Package}
-        title={t("common", K.title)}
-        subtitle={t("common", K.subtitle)}
-        actions={
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              {!guide && (
-                <Button
-                  variant="quiet"
-                  size="sm"
-                  onClick={() => {
-                    setGuide(true);
-                    writeGuideClosed(false);
-                  }}
-                  icon={<BookOpen size={14} aria-hidden />}
-                >
-                  {t("common", K.guide.show)}
-                </Button>
-              )}
-              <Link href={surface.translationsHref} className={buttonClass({ variant: "quiet", size: "sm" })}>
-                <Languages size={14} aria-hidden />
-                {t("common", K.translations.open)}
-                {pending ? (
-                  <span className="rounded-full bg-primary px-1.5 text-[10px] text-on-accent" title={t("common", K.translationsPending, { count: pending })}>
-                    {pending}
-                  </span>
-                ) : null}
-              </Link>
-              <Button variant="primary" size="sm" onClick={() => setCreating("product")} icon={<Plus size={14} aria-hidden />}>
-                {t("common", K.newProduct)}
-              </Button>
-            </div>
-          </>
-        }
-      />
+    <div className={surface.embedded ? "flex flex-col gap-5" : "mx-auto flex w-full max-w-5xl flex-col gap-5 p-4 sm:p-6"}>
+      {surface.embedded ? (
+        <div className="flex justify-end">{actions}</div>
+      ) : (
+        <PageHeader icon={Package} title={t("common", K.title)} subtitle={t("common", K.subtitle)} actions={actions} />
+      )}
       {surface.chrome}
 
       {guide && <CatalogGuide onClose={closeGuide} />}
@@ -674,7 +679,7 @@ export function CatalogView() {
             setCategoryId("");
             setPlatformOnly(false);
             setShowArchived(false);
-            await load();
+            await changed();
             setFreshId(next.freshId);
             setOpenId(next.openId);
             setNotice(next.notice && t("common", next.notice));
@@ -692,7 +697,7 @@ export function CatalogView() {
           categories={categories}
           categoryLabel={nameOf}
           onClose={() => setOpenId(null)}
-          onChanged={load}
+          onChanged={changed}
         />
       )}
       {moving && <MoveCategorySheet category={moving} categories={categories} label={nameOf} onClose={() => setMoving(null)} onSaved={saved} />}

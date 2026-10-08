@@ -185,10 +185,12 @@ same management for a reseller a route names".
     **context**, not by prop as the gateway page's does: these calls are made
     four components deep (`VariantCard`, `NewVariant`, `Capabilities`), and a
     prop threaded through all of them is a prop somebody forgets to pass.
+    `embedded` and `onChanged` put the same screen in the setup wizard's
+    pricing step (UX-2-d, `contract.reseller-workspace.md`).
 12. **The ambient page is never this screen.** A reseller's owner signs in to
     the platform owner's tenant (ADR-0059), so `/catalog` would price the
     **platform's** products and answer 200 doing it. That is why the console's
-    pricing step links here (`stepHref`) and why the spec holds the prefix.
+    pricing step links here (`stepHref`) or embeds it and why the spec holds the prefix.
 13. **Nothing is elevated here** (`surfaceActor`). The actor the forms build a
     body from is `null` on this surface, whoever is signed in: billing runs the
     work as the reseller and its `.strict()` schema refuses a `tenantId`, so

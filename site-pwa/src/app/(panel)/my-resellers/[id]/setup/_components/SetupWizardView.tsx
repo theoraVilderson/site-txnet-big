@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, PartyPopper } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, Palette, PartyPopper, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { useLiveReread } from "@/hooks/useLiveReread";
@@ -11,19 +11,26 @@ import { useMotionLevel } from "@/hooks/useMotionLevel";
 import { authApi } from "@/lib/auth-api";
 import { DURATION, EASE } from "@/lib/motion";
 import { myResellerConsolePath } from "@/lib/routes";
-import { resellerOnboardingApi, type OnboardingStepKey, type ResellerOnboarding } from "@/lib/tenant-api";
+import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-api";
 import { usePanelSession } from "../../../../_context/PanelSessionContext";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { useWizard } from "../../../../_components/kit/Wizard";
 import { cn } from "../../../../_components/kit/cn";
 import { Alert, Button, PageHeader, buttonClass } from "../../../../_components/kit";
 import { DOMAIN_LIVE_EVENTS, domainLiveChannels } from "../../../_lib/domains";
-import { ONBOARDING_KEYS as K, STEP_KEYS, onboardingRefusalKey, stepHref } from "../../../_lib/onboarding";
+import { ONBOARDING_KEYS as K, STEP_KEYS, onboardingRefusalKey } from "../../../_lib/onboarding";
 import { SETUP_STEP_ICONS, firstUndoneIndex, setupSlide } from "../../../_lib/setup";
 import { useWorkspaceSelf } from "../../../_lib/workspace";
+import { BotPanel } from "../../bot/_components/ResellerBotView";
+import { BrandingPanel } from "../../branding/_components/ResellerBrandingView";
+import { ResellerCatalogView } from "../../catalog/_components/ResellerCatalogView";
 import { DomainsPanel } from "../../domains/_components/ResellerDomainsView";
+import { ResellerGatewaysView } from "../../gateways/_components/ResellerGatewaysView";
 
 const W = K.wizard;
+
+// The catalog is the heaviest screen and only the pricing step needs it.
+const CatalogView = lazy(() => import("../../../../catalog/_components/CatalogView").then((m) => ({ default: m.CatalogView })));
 
 type Step = ResellerOnboarding["steps"][number];
 
@@ -41,7 +48,12 @@ type Step = ResellerOnboarding["steps"][number];
  *    says so without a refresh;
  *  - **a page, not the kit's dialog** (K12): nothing is submitted at the end —
  *    each step's own screen saves itself — so it uses `useWizard` for the
- *    step and the direction, and draws its own frame.
+ *    step and the direction, and draws its own frame;
+ *  - **each step is its screen's own form** (UX-2-d): the domains, gateways,
+ *    bot and catalog bodies, embedded; a save there, and every move between
+ *    steps, re-reads the checklist quietly;
+ *  - **the brand screen comes last and counts toward nothing** — not a route
+ *    step; a fully set-up reseller lands on it, under the finished screen.
  */
 export function SetupWizardView({ id }: { id: string }) {
   const { t } = useLocale();
@@ -56,17 +68,25 @@ export function SetupWizardView({ id }: { id: string }) {
   const [slug, setSlug] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [asked, setAsked] = useState(0);
-  const wizard = useWizard({ count: view?.steps.length ?? 1 });
 
-  // Opened at the first undone step once, on the first answer; a live
-  // re-read after it never moves the person off the step they are on.
+  // A live event or a save is a hint: re-read with no skeleton, keep the
+  // screen on a failure.
+  const quietRead = useCallback(() => {
+    resellerOnboardingApi.get(id).then(setView, () => undefined);
+  }, [id]);
+
+  // The route's steps, then the brand screen.
+  const wizard = useWizard({ count: (view?.steps.length ?? 0) + 1 });
+
+  // Placed once, on the first answer — the first undone step, or the brand
+  // screen when none is left; a re-read after it never moves the person.
   const placed = useRef(false);
   const goTo = useRef(wizard.goTo);
   goTo.current = wizard.goTo;
   useEffect(() => {
     if (!view || placed.current) return;
     placed.current = true;
-    const first = firstUndoneIndex(view.steps);
+    const first = view.complete ? view.steps.length : firstUndoneIndex(view.steps);
     if (first > 0) goTo.current(first);
   }, [view]);
 
@@ -81,10 +101,6 @@ export function SetupWizardView({ id }: { id: string }) {
     };
   }, [id, asked]);
 
-  // A live event is a hint: re-read with no skeleton, keep the screen on a failure.
-  const quietRead = useCallback(() => {
-    resellerOnboardingApi.get(id).then(setView, () => undefined);
-  }, [id]);
   const { me, group } = usePanelSession();
   const [own, platform] = domainLiveChannels(group?.current.userId ?? null, me);
   useLiveReread(own, DOMAIN_LIVE_EVENTS, quietRead);
@@ -135,7 +151,8 @@ export function SetupWizardView({ id }: { id: string }) {
       ) : (
         <>
           <SetupProgress view={view} />
-          {view.complete ? <Finished home={home} /> : <Steps id={id} view={view} wizard={wizard} />}
+          {view.complete && <Finished home={home} />}
+          <Steps id={id} view={view} wizard={wizard} home={home} onChanged={quietRead} />
         </>
       )}
     </div>
@@ -172,88 +189,142 @@ function SetupProgress({ view }: { view: ResellerOnboarding }) {
   );
 }
 
-function Steps({ id, view, wizard }: { id: string; view: ResellerOnboarding; wizard: ReturnType<typeof useWizard> }) {
+function Steps({
+  id,
+  view,
+  wizard,
+  home,
+  onChanged,
+}: {
+  id: string;
+  view: ResellerOnboarding;
+  wizard: ReturnType<typeof useWizard>;
+  home: string;
+  onChanged: () => void;
+}) {
   const { t, isRtl } = useLocale();
   const level = useMotionLevel();
   const { index, direction } = wizard;
   const steps = view.steps;
-  const step = steps[Math.min(index, steps.length - 1)];
+  const brandAt = steps.length;
+  const step = index < brandAt ? steps[index] : null;
   const BackIcon = isRtl ? ArrowRight : ArrowLeft;
   const NextIcon = isRtl ? ArrowLeft : ArrowRight;
-  const last = index >= steps.length - 1;
+  // The person's own move re-reads the checklist: a step's screen may have
+  // saved something no event reports. The first placement does not.
+  const move = (to: number) => {
+    wizard.goTo(to);
+    onChanged();
+  };
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
-      {/* The rail: every step, done or not — none waits on another. */}
+      {/* The rail: every step, done or not — none waits on another — then the brand. */}
       <nav aria-label={t("common", W.title)} className="lg:w-60 lg:shrink-0">
         <ol className="flex gap-2 overflow-x-auto lg:flex-col">
-          {steps.map((s, i) => {
-            const Icon = SETUP_STEP_ICONS[s.key];
-            const current = i === index;
-            return (
-              <li key={s.key} className="shrink-0">
-                <button
-                  type="button"
-                  onClick={() => wizard.goTo(i)}
-                  aria-current={current ? "step" : undefined}
-                  className={cn(
-                    "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start transition-colors",
-                    current ? "bg-card-bg shadow-sm" : "hover:bg-card-bg/60",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "grid size-8 shrink-0 place-items-center rounded-full border text-xs font-bold",
-                      s.done
-                        ? "border-transparent bg-primary text-on-accent"
-                        : current
-                          ? "border-[var(--accent-primary)] bg-[var(--leaf-bg)] text-primary"
-                          : "border-card-border text-text-secondary",
-                    )}
-                  >
-                    {s.done ? <Check size={14} aria-hidden /> : <Icon size={14} aria-hidden />}
-                  </span>
-                  <span className={cn("text-xs font-bold", current || s.done ? "text-text-primary" : "text-text-secondary")}>
-                    {t("common", STEP_KEYS[s.key].title)}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
+          {steps.map((s, i) => (
+            <RailItem
+              key={s.key}
+              icon={SETUP_STEP_ICONS[s.key]}
+              label={t("common", STEP_KEYS[s.key].title)}
+              done={s.done}
+              current={i === index}
+              onClick={() => move(i)}
+            />
+          ))}
+          <RailItem icon={Palette} label={t("common", W.brand.title)} done={false} optional current={index === brandAt} onClick={() => move(brandAt)} />
         </ol>
       </nav>
 
       <section className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-card-border bg-card-bg">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={step.key}
+            key={step?.key ?? "brand"}
             initial={setupSlide(level, direction, isRtl)}
             animate={{ x: 0, opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: level === "reduced" ? DURATION.fast : DURATION.base, ease: EASE.standard }}
             className="flex flex-col gap-5 p-4 sm:p-6"
           >
-            <StepHead step={step} index={index} total={steps.length} />
-            <StepBody id={id} step={step} />
+            {step ? (
+              <>
+                <StepHead step={step} index={index} total={steps.length} />
+                <StepBody id={id} step={step} onChanged={onChanged} />
+              </>
+            ) : (
+              <>
+                <BrandHead />
+                <BrandingPanel id={id} />
+              </>
+            )}
           </motion.div>
         </AnimatePresence>
 
         <footer className="flex items-center justify-between gap-2 border-t border-card-border px-4 py-3 sm:px-6">
           {index > 0 ? (
-            <Button variant="quiet" icon={<BackIcon size={16} aria-hidden />} onClick={() => wizard.goTo(index - 1)}>
+            <Button variant="quiet" icon={<BackIcon size={16} aria-hidden />} onClick={() => move(index - 1)}>
               {t("common", W.back)}
             </Button>
           ) : (
             <span />
           )}
-          {!last && (
-            <Button variant={step.done ? "primary" : "quiet"} iconEnd={<NextIcon size={16} aria-hidden />} onClick={() => wizard.goTo(index + 1)}>
+          {step ? (
+            <Button variant={step.done ? "primary" : "quiet"} iconEnd={<NextIcon size={16} aria-hidden />} onClick={() => move(index + 1)}>
               {t("common", step.done ? W.next : W.skip)}
             </Button>
+          ) : (
+            <Link href={home} className={buttonClass({ variant: "primary" })}>
+              {t("common", W.finished.home)}
+            </Link>
           )}
         </footer>
       </section>
     </div>
+  );
+}
+
+function RailItem({
+  icon: Icon,
+  label,
+  done,
+  current,
+  optional = false,
+  onClick,
+}: {
+  icon: LucideIcon;
+  label: string;
+  done: boolean;
+  current: boolean;
+  optional?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <li className="shrink-0">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-current={current ? "step" : undefined}
+        className={cn(
+          "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start transition-colors",
+          current ? "bg-card-bg shadow-sm" : "hover:bg-card-bg/60",
+        )}
+      >
+        <span
+          className={cn(
+            "grid size-8 shrink-0 place-items-center rounded-full border text-xs font-bold",
+            optional && "border-dashed",
+            done
+              ? "border-transparent bg-primary text-on-accent"
+              : current
+                ? "border-[var(--accent-primary)] bg-[var(--leaf-bg)] text-primary"
+                : "border-card-border text-text-secondary",
+          )}
+        >
+          {done ? <Check size={14} aria-hidden /> : <Icon size={14} aria-hidden />}
+        </span>
+        <span className={cn("text-xs font-bold", current || done ? "text-text-primary" : "text-text-secondary")}>{label}</span>
+      </button>
+    </li>
   );
 }
 
@@ -282,10 +353,45 @@ function StepHead({ step, index, total }: { step: Step; index: number; total: nu
   );
 }
 
-/** The step's own work, inside the wizard. */
-function StepBody({ id, step }: { id: string; step: Step }) {
-  if (step.key === "domain") return <DomainStep id={id} done={step.done} />;
-  return <ScreenLink id={id} stepKey={step.key} />;
+/** The step's own screen, inside the wizard, by the path's reseller (UX-2-d). */
+function StepBody({ id, step, onChanged }: { id: string; step: Step; onChanged: () => void }) {
+  switch (step.key) {
+    case "domain":
+      return <DomainStep id={id} done={step.done} />;
+    case "gateway":
+      return <ResellerGatewaysView id={id} embedded onChanged={onChanged} />;
+    case "bot":
+      return (
+        <div className="space-y-6">
+          <BotPanel id={id} onChanged={onChanged} />
+        </div>
+      );
+    case "pricing":
+      return (
+        <ResellerCatalogView id={id} embedded onChanged={onChanged}>
+          <Suspense fallback={<TableSkeleton rows={4} columns={3} />}>
+            <CatalogView />
+          </Suspense>
+        </ResellerCatalogView>
+      );
+  }
+}
+
+/** Not a route step: what it is, and that it counts toward nothing. */
+function BrandHead() {
+  const { t } = useLocale();
+  return (
+    <div className="flex items-start gap-3">
+      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--leaf-bg)] text-primary">
+        <Palette size={20} aria-hidden />
+      </span>
+      <div className="min-w-0 space-y-1">
+        <p className="text-[11px] font-bold text-text-secondary">{t("common", W.brand.optional)}</p>
+        <h2 className="text-base font-bold text-text-primary">{t("common", W.brand.title)}</h2>
+        <p className="text-xs text-text-secondary">{t("common", W.brand.hint)}</p>
+      </div>
+    </div>
+  );
 }
 
 /** The domains page's own body (F-066-w2), and what the gate says about it now. */
@@ -300,18 +406,6 @@ function DomainStep({ id, done }: { id: string; done: boolean }) {
       )}
       <DomainsPanel id={id} />
     </div>
-  );
-}
-
-function ScreenLink({ id, stepKey }: { id: string; stepKey: OnboardingStepKey }) {
-  const { t } = useLocale();
-  const self = useWorkspaceSelf(id);
-  const href = stepHref(stepKey, id, self);
-  if (!href) return null;
-  return (
-    <Link href={href} className={buttonClass({ variant: "primary", size: "sm", className: "self-start" })}>
-      {t("common", W.openScreen)}
-    </Link>
   );
 }
 

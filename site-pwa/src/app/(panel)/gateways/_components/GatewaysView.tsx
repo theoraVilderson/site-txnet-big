@@ -62,6 +62,12 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
           },
         };
 
+  // A change the host may care about (the setup wizard's checklist, UX-2-d).
+  const changed = async () => {
+    await reload();
+    surface.onChanged?.();
+  };
+
   const [editing, setEditing] = useState<AdminGateway | "new" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -72,7 +78,7 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
     try {
       const out = await surface.api.remove(g.source, g.id);
       setNotice(out.mode === "deleted" ? t("common", G.deleted) : t("common", G.deactivated, { count: String(out.grantsWithdrawn) }));
-      await reload();
+      await changed();
     } catch (e) {
       setActionError(errorMessage(e));
     }
@@ -88,25 +94,19 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
     </span>
   );
 
+  const addButton = (
+    <Button variant="primary" disabled={!ready} onClick={() => setEditing("new")} icon={<Plus size={16} aria-hidden />}>
+      {t("common", G.add)}
+    </Button>
+  );
+
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
-      <PageHeader
-        icon={Landmark}
-        title={t("common", G.title)}
-        subtitle={t("common", G.subtitle)}
-        actions={
-          <>
-            <Button
-              variant="primary"
-              disabled={!ready}
-              onClick={() => setEditing("new")}
-              icon={<Plus size={16} aria-hidden />}
-            >
-              {t("common", G.add)}
-            </Button>
-          </>
-        }
-      />
+    <div className={surface.embedded ? "flex flex-col gap-6" : "mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6"}>
+      {surface.embedded ? (
+        <div className="flex flex-wrap justify-end gap-2">{addButton}</div>
+      ) : (
+        <PageHeader icon={Landmark} title={t("common", G.title)} subtitle={t("common", G.subtitle)} actions={addButton} />
+      )}
       {surface.chrome}
 
       <AnimatePresence initial={false}>
@@ -276,7 +276,7 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
           onClose={() => setEditing(null)}
           onCreated={async () => {
             setNotice(null);
-            await reload();
+            await changed();
           }}
         />
       )}
@@ -290,7 +290,7 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
           onSaved={async () => {
             setEditing(null);
             setNotice(null);
-            await reload();
+            await changed();
           }}
         />
       )}

@@ -144,6 +144,16 @@ User, 2026-10-08: a wizard rather than a checklist to tick off.
    the checklist (`useLiveReread`, C-14) on the same channels the page uses,
    so a domain the sweep verifies says "open" without a refresh.
 6. **The way in** is a link on the home while `complete` is false.
+7. **Every step is its screen's own form, no new route** (UX-2-d):
+   gateways and the catalog through their surfaces with `embedded` (no
+   page frame or title, the actions kept) and `onChanged` (after a save
+   and the re-read); the bot through `BotPanel`. A save there, and every
+   move the person makes between steps, re-reads the checklist quietly —
+   nothing reports a gateway or a bot live. The catalog loads only when
+   its step is opened.
+8. **The brand screen comes last and counts toward nothing**
+   (`BrandingPanel`): not a route step, so never in the progress bar. A
+   fully set-up reseller lands on it, under the finished screen.
 
 ## Proof
 
@@ -153,4 +163,5 @@ sections, the handoff on both hosts, every link's page),
 `_components/reseller-scope.test.tsx` (the header's tag and trail, UX-2-a2),
 `my-resellers/workspace-home.test.tsx` (home and settings, UX-2-b),
 `my-resellers/setup-wizard.test.tsx` (the wizard, UX-2-c),
+`my-resellers/setup-steps.test.tsx` (its steps' forms and the brand screen, UX-2-d),
 `handoff.service.spec.ts` (`hasPanel`).

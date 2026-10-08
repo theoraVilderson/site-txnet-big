@@ -23,7 +23,14 @@ vi.mock("@/hooks/useMotionLevel", () => ({ useMotionLevel: () => "reduced" }));
 vi.mock("../_context/PanelSessionContext", () => ({
   usePanelSession: () => ({ me: { tenant: { id: "p-1", type: "platform_owner" }, permissions: [] }, group: { current: { userId: "u-1" } }, isLoading: false }),
 }));
-vi.mock("@/lib/auth-api", () => ({ authApi: { ownedResellers: vi.fn(async () => ({ resellers: [] })) } }));
+vi.mock("@/lib/auth-api", () => ({
+  authApi: { ownedResellers: vi.fn(async () => ({ resellers: [] })) },
+  resellerUserGroupsApi: { list: vi.fn(async () => []) },
+  resellerBotsApi: { list: vi.fn(async () => []) },
+}));
+// The other steps' screens are UX-2-d's (`setup-steps.test.tsx`).
+vi.mock("../gateways/_components/GatewaysView", () => ({ GatewaysView: () => <div data-testid="gateways-view" /> }));
+vi.mock("../catalog/_components/CatalogView", () => ({ CatalogView: () => <div data-testid="catalog-view" /> }));
 vi.mock("@/lib/tenant-api", () => ({
   resellerOnboardingApi: { get: vi.fn() },
   resellerDomainsApi: { list: vi.fn(), add: vi.fn(), check: vi.fn() },

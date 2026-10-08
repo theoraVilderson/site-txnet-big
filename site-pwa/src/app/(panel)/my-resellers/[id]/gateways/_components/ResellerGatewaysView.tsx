@@ -21,8 +21,11 @@ import { RESELLER_GATEWAY_KEYS as K, gatewayRefusalKey } from "../../../_lib/gat
  * No permission is judged here. Billing admits the reseller's owner, a staff
  * seat of it holding `tenant.manage`, or platform support (invariant 21), and
  * a refusal is shown as its own sentence.
+ *
+ * `embedded`: the setup wizard's gateway step (UX-2-d) — the same screen
+ * without its page frame; `onChanged` tells it a gateway was saved.
  */
-export function ResellerGatewaysView({ id }: { id: string }) {
+export function ResellerGatewaysView({ id, embedded = false, onChanged }: { id: string; embedded?: boolean; onChanged?: () => void }) {
   const { t } = useLocale();
   const [slug, setSlug] = useState<string | null>(null);
 
@@ -45,14 +48,17 @@ export function ResellerGatewaysView({ id }: { id: string }) {
       refusalKey: gatewayRefusalKey,
       // Its own groups, by the path: the ambient list is the session tenant's (F-102-g-d).
       groups: () => resellerUserGroupsApi.list(id),
-      chrome: (
+      // Inside the setup wizard (UX-2-d) the step names whose it is.
+      embedded,
+      onChanged,
+      chrome: embedded ? null : (
         <div className="flex flex-col gap-2">
           <p className="text-xs font-bold text-text-secondary">{slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}</p>
         </div>
       ),
     }),
     // `t` is stable for a language; the chrome is rebuilt when the name arrives.
-    [id, slug, t],
+    [id, slug, t, embedded, onChanged],
   );
 
   return <GatewaysView surface={surface} />;
