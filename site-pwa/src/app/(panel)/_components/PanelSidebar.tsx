@@ -325,6 +325,7 @@ export function PanelSidebar() {
         type="button"
         aria-expanded={railCollapsed ? undefined : isOpen}
         aria-controls={railCollapsed ? undefined : submenuId}
+        onClick={railCollapsed ? undefined : () => toggleGroup(group.id)}
         className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start transition-colors duration-200 ${
           containsActive
             ? "text-primary"
@@ -342,22 +343,24 @@ export function PanelSidebar() {
     );
     return (
       <div key={group.id} className="flex flex-col">
-        {/* Collapsed, a group opens beside the rail (N3); otherwise the
-            popover never opens and the click folds the submenu in place. */}
-        <Popover
-          label={label}
-          side="end"
-          open={flyoutId === group.id}
-          onOpenChange={(next) => {
-            if (next && !railCollapsed) return toggleGroup(group.id);
-            setFlyout(next ? { id: group.id, path: pathname } : null);
-          }}
-          trigger={trigger}
-          className="w-60 p-2"
-        >
-          <p className="px-3 pb-1 pt-1 text-xs font-bold text-text-secondary">{label}</p>
-          <div className="space-y-1">{group.children.map((child) => renderLink(child, true))}</div>
-        </Popover>
+        {/* Collapsed, a group opens beside the rail (N3). Otherwise the button
+            folds the submenu in place, and says so itself (`aria-expanded`) —
+            wrapped in the popover it always read "closed, opens a dialog". */}
+        {railCollapsed ? (
+          <Popover
+            label={label}
+            side="end"
+            open={flyoutId === group.id}
+            onOpenChange={(next) => setFlyout(next ? { id: group.id, path: pathname } : null)}
+            trigger={trigger}
+            className="w-60 p-2"
+          >
+            <p className="px-3 pb-1 pt-1 text-xs font-bold text-text-secondary">{label}</p>
+            <div className="space-y-1">{group.children.map((child) => renderLink(child, true))}</div>
+          </Popover>
+        ) : (
+          trigger
+        )}
         <AnimatePresence initial={false}>
           {isOpen && !railCollapsed && (
             <motion.div key="submenu" id={submenuId} {...FOLD} className="overflow-hidden">
