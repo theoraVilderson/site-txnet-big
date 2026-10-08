@@ -125,7 +125,10 @@ export function PhoneField({
   return (
     <div className="organic-field phone-field" ref={wrapper}>
       <div className="field-nature" />
-      <div className="flex items-stretch gap-2">
+      {/* Left to right in every language: a number reads `+98 912 …`, so the
+          code is on its left on a Persian page too. The row only — the
+          label's side follows the page (`[dir="ltr"] .organic-field label`). */}
+      <div dir="ltr" className="flex items-stretch gap-2">
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
