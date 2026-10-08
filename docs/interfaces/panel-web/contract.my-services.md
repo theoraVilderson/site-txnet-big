@@ -196,6 +196,7 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
     The list is the Grant's whole list, so this never shortens a page.
 19. **Found by its configs or a pasted link:** [contract.service-search.md](contract.service-search.md).
     **A spending cap under "manage", held money above the list:** [contract.spending-cap.md](contract.spending-cap.md).
+    **The reseller the caller holds, a section above the list, never a row:** [contract.reseller-subscription.md](contract.reseller-subscription.md).
 
 ## Proof
 

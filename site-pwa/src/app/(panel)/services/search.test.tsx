@@ -38,6 +38,8 @@ vi.mock("./_hooks/useGrantsPage", () => ({ useGrantsPage: vi.fn() }));
 vi.mock("../_hooks/useWalletBalance", () => ({
   useWalletBalance: () => ({ balance: null, held: null, available: null, currencyCode: null, isLoading: true, failed: false, refresh: () => {} }),
 }));
+// So does the reseller section (F-502-v).
+vi.mock("./_components/ResellerSubscription", () => ({ ResellerSubscription: () => null }));
 vi.mock("./_components/ServiceRow", () => ({
   ServiceRow: ({ row }: { row: GrantRow }) => <li>{row.id}</li>,
 }));

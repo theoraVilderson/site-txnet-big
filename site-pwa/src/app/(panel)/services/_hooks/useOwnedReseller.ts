@@ -1,0 +1,47 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { RealtimeEvents } from "@/generated/wire";
+import { useLiveReread } from "@/hooks/useLiveReread";
+import { userChannel } from "@/lib/realtime";
+import { resellerPurchaseApi, type OwnedReseller } from "@/lib/tenant-api";
+import { usePanelSession } from "../../_context/PanelSessionContext";
+
+/** A renewal warned or suspended is an inbox row, and that row is live (F-035-b). */
+const RENEWAL_EVENTS = [RealtimeEvents.notificationCreated];
+
+/**
+ * The reseller the caller holds, for My services (F-502-v): `GET
+ * /purchase/mine`, asked only of a platform user who is not its owner — the
+ * one caller who can buy one (the sidebar's `useHoldsLiveReseller` gate).
+ * `null` while unasked, pending, answered none or failed: the section is a
+ * view beside the Grants and its failure costs only itself.
+ *
+ * Re-read when the user's channel says an inbox row arrived — a renewal's
+ * "payment due" and "suspended" are both one — and after a reconnect
+ * (C-14). Never on a clock.
+ */
+export function useOwnedReseller(): OwnedReseller | null {
+  const { me, group } = usePanelSession();
+  const userId = group?.current.userId ?? null;
+  const canHold = me != null && me.tenant.type === "platform_owner" && !me.tenant.isOwner;
+  const [reseller, setReseller] = useState<OwnedReseller | null>(null);
+  const [asked, setAsked] = useState(0);
+
+  useEffect(() => {
+    if (!canHold) return;
+    let live = true;
+    resellerPurchaseApi
+      .mine()
+      .then((r) => live && setReseller(r.reseller))
+      // A failed re-read keeps the last answer: the event is a hint, not the record.
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [canHold, userId, asked]);
+
+  useLiveReread(canHold && userId ? userChannel(userId) : null, RENEWAL_EVENTS, () => setAsked((n) => n + 1));
+
+  return canHold ? reseller : null;
+}

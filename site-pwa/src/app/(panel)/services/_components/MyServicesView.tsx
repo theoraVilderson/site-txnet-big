@@ -13,6 +13,7 @@ import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { useGrantsPage } from "../_hooks/useGrantsPage";
 import { capabilityNames, PASTE_MAX_LINES, pastedLines, serviceName } from "../_lib/my-services";
 import { useWalletBalance } from "../../_hooks/useWalletBalance";
+import { ResellerSubscription } from "./ResellerSubscription";
 import { ServiceRow } from "./ServiceRow";
 import { ServiceSearch } from "./ServiceSearch";
 import { SuggestionCard } from "./SuggestionCard";
@@ -58,6 +59,9 @@ const NO_LINES: readonly string[] = [];
  * held by this page alone and sent to billing's `by-lines` in a POST body;
  * the box shows how many, not the links. Paging and "show ended" keep them,
  * a reload, typing a name or clearing drops them.
+ *
+ * **A reseller the caller holds is a section above the Grants** (F-502-v,
+ * `ResellerSubscription`), read on its own: it is not a Grant.
  *
  * **Which services are told essentials only is read once per visit** (F-601-o):
  * one list of ids from `notification`, not a read per row, and moved here when
@@ -212,6 +216,9 @@ export function MyServicesView() {
           {t("common", S.meteringUnavailable)}
         </p>
       )}
+
+      {/* F-502-v: a reseller is its own section, never a row of the Grants. */}
+      <ResellerSubscription />
 
       {(q !== "" || pasted != null || state.total + state.hidden > 0) && (
         <ServiceSearch
