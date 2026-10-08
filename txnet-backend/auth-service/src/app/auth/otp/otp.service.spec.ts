@@ -278,3 +278,22 @@ describe('OtpService — delivery leaves the request path', () => {
   });
 
 });
+
+describe('OtpService.verifyOtp — what the user is told', () => {
+  // 2026-10-08, register on panel.barghgho.ir: a wrong code threw the plain
+  // text 'invalid otp', which `sanitizeError` cannot name, so the person read
+  // "the request could not be processed" (`system.badRequest`) instead of
+  // "the code is wrong". The message must be a key the client translates.
+  const verifier = (peek: unknown) => {
+    const store = { peekForVerification: vi.fn().mockResolvedValue(peek), clear: vi.fn() };
+    return new OtpService(store as never, {} as never, {} as never, {} as never, {} as never, {} as never, { get: vi.fn() } as never);
+  };
+
+  it.each([
+    ['a missing code', { status: 'missing' }, 'otp.expiredOrInvalid'],
+    ['an exhausted code', { status: 'exhausted' }, 'otp.attemptsExhausted'],
+    ['a wrong code', { status: 'pending', codeHash: '$argon2id$v=19$m=65536,t=3,p=4$c2FsdHNhbHQ$aGFzaA' }, 'otp.invalidCode'],
+  ])('names %s by its key', async (_label, peek, key) => {
+    await expect(verifier(peek).verifyOtp(PHONE, OtpPurpose.register_phone_verify, '000000')).rejects.toThrow(key);
+  });
+});

@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  BackendI18nKeys,
   RateLimitBucket,
   rateLimitBucketKey,
 } from '@txnet-backend/shared-core';
@@ -277,15 +278,17 @@ export class OtpService implements IOtpService {
     const peek = await this.store.peekForVerification(phoneNumber, purpose);
 
     if (peek.status === 'missing') {
-      throw new BadRequestException('otp expired or invalid');
+      throw new BadRequestException(BackendI18nKeys.errors.otp.expiredOrInvalid);
     }
     if (peek.status === 'exhausted') {
-      throw new HttpException('otp attempts exhausted', 429);
+      throw new HttpException(BackendI18nKeys.errors.otp.attemptsExhausted, 429);
     }
 
     const isValid = await argon2.verify(peek.codeHash, inputCode);
     if (!isValid) {
-      throw new BadRequestException('invalid otp');
+      // A key, not prose: `sanitizeError` passes a key through and turns anything
+      // else into `system.badRequest` — "the request could not be processed".
+      throw new BadRequestException(BackendI18nKeys.errors.otp.invalidCode);
     }
 
     await this.store.clear(phoneNumber, purpose);
