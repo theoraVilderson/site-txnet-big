@@ -109,6 +109,10 @@ model User {
   passwordHash           String // SENSITIVE — never default-select
   roleId                 String     @db.Uuid
   status                 UserStatus @default(active)
+  /// Why staff set `status` (ADR-0133), shown to the person verbatim; null
+  /// while `active`. Who set it is in `admin_audit_log`.
+  statusReason           String?
+  statusChangedAt        DateTime?
   theme                  ThemePreference @default(system)
   languagePreference     Language   @default(fa)
   twoFactorEnabled       Boolean    @default(false)

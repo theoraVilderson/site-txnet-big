@@ -141,6 +141,7 @@ export default function LoginPage() {
             message={submitError.error?.message ?? null}
             fieldErrors={submitError.error?.fieldErrors}
             reference={submitError.error?.ref}
+            detail={submitError.error?.detail}
           />
           <AnimatePresence mode="wait">
             {step === 1 ? (

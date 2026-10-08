@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"path"
 	"strings"
 
 	"auth-handler/internal/api/middlewares"
@@ -123,6 +124,13 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 					"role", claims.RoleName, "role_id", claims.RoleID, "user_id", claims.Sub, "unauthorized", unauthorized)
 				return response.Err(keyForbidden, nil), nil
 			}
+		}
+
+		// ADR-0133 (4): a restricted account reaches its own support
+		// conversations and the socket, nothing else. After the session and
+		// staleness checks, so a revoked one is still told to sign in.
+		if claims.Restricted && !restrictedMayReach(r.Header.Get("X-Forwarded-Uri")) {
+			return response.Err(keyAccountRestricted, map[string]string{"reason": reasonAccountRestricted}), nil
 		}
 
 		// Success: set identity headers.
@@ -328,6 +336,7 @@ const (
 	keySessionRevoked     = i18nkeys.ErrorsAuthSessionRevoked
 	keyPermissionsChanged = i18nkeys.ErrorsAuthPermissionsChanged
 	keyForbidden          = i18nkeys.ErrorsPermissionsForbidden
+	keyAccountRestricted  = i18nkeys.ErrorsAuthAccountRestricted
 	keyUnexpected         = i18nkeys.ErrorsSystemUnexpected
 )
 
@@ -350,7 +359,7 @@ func statusForKey(ok bool, msgKey string) int {
 		return http.StatusOK
 	}
 	switch msgKey {
-	case keyForbidden:
+	case keyForbidden, keyAccountRestricted:
 		return http.StatusForbidden
 	case keyUnexpected:
 		return http.StatusInternalServerError
@@ -389,6 +398,43 @@ const reasonSessionRevoked = "sessionRevoked"
 
 // reasonAuthorizationRequired: no credential was sent at all.
 const reasonAuthorizationRequired = "authorizationRequired"
+
+// reasonAccountRestricted: the account is restricted to support (ADR-0133).
+// Refreshing will not change it; the panel draws the restricted screen.
+const reasonAccountRestricted = "accountRestricted"
+
+// restrictedReach is every path a restricted account may reach (ADR-0133):
+// the person's own support conversations and what that screen reads, and the
+// socket the conversation goes live on. Matched by whole segment, so
+// `/api/support/conversationsX` is not `/api/support/conversations`. The
+// support-service agent and settings routes are siblings, never children.
+var restrictedReach = []string{
+	"/api/support/conversations",
+	"/api/support/categories",
+	"/api/support/availability",
+	"/realtime",
+}
+
+// restrictedMayReach reports whether a restricted account may reach uri, the
+// X-Forwarded-Uri Traefik asks about. A path that is not already in its
+// cleaned form — a `..`, an encoded one, a doubled slash — is refused rather
+// than resolved: a gate that resolves paths can be argued into one it did not
+// mean.
+func restrictedMayReach(uri string) bool {
+	p := uri
+	if i := strings.IndexAny(p, "?#"); i >= 0 {
+		p = p[:i]
+	}
+	if p == "" || strings.Contains(p, "%") || path.Clean(p) != p {
+		return false
+	}
+	for _, allowed := range restrictedReach {
+		if p == allowed || strings.HasPrefix(p, allowed+"/") {
+			return true
+		}
+	}
+	return false
+}
 
 // stalePermissions reports whether what the token says the caller may do is no
 // longer true (ADR-0043): the user holds another role now, or the role's set

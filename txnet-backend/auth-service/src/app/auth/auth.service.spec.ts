@@ -166,6 +166,13 @@ const activeUser = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+/** ADR-0133 (3): the ban's answer, and the reason staff wrote with it. */
+const BANNED = (statusReason: string | null) => ({
+  ok: false,
+  msg: 'auth.accountBanned',
+  error: { reason: 'accountBanned', facts: statusReason ? { statusReason } : {} },
+});
+
 const login = (h: Harness, password = 'Correct!Passw0rd') =>
   h.service.loginWithPassword(
     { identifier: 'behnam', password } as never,
@@ -578,11 +585,9 @@ describe('AuthService.verifyLoginOtp — the token purpose is load-bearing', () 
     expect(h.prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
-  it('rejects an otp_login token whose account is no longer active', async () => {
+  it('rejects an otp_login token whose account is gone', async () => {
     h.tokens.verify.mockReturnValue({ sub: 'user-1', purpose: 'otp_login' });
-    h.prisma.user.findUnique.mockResolvedValue(
-      activeUser({ status: 'suspended' }),
-    );
+    h.prisma.user.findUnique.mockResolvedValue(null);
 
     const res = await h.service.verifyLoginOtp(
       { otpToken: 'tok', otpCode: '123456' } as never,
@@ -592,6 +597,25 @@ describe('AuthService.verifyLoginOtp — the token purpose is load-bearing', () 
 
     expect(res).toEqual({ ok: false, msg: 'auth.invalidOtpToken', error: null });
     expect(h.otp.verifyOtp).not.toHaveBeenCalled();
+  });
+
+  // ADR-0133 (3): the token was issued after the password checked out, so the
+  // ban is told here — and no code is spent on a sign-in that cannot finish.
+  it('tells a banned account so on its otp_login token, with the reason', async () => {
+    h.tokens.verify.mockReturnValue({ sub: 'user-1', purpose: 'otp_login' });
+    h.prisma.user.findUnique.mockResolvedValue(
+      activeUser({ status: 'banned', statusReason: 'chargeback fraud' }),
+    );
+
+    const res = await h.service.verifyLoginOtp(
+      { otpToken: 'tok', otpCode: '123456' } as never,
+      '1.2.3.4',
+      'jest-ua',
+    );
+
+    expect(res).toEqual(BANNED('chargeback fraud'));
+    expect(h.otp.verifyOtp).not.toHaveBeenCalled();
+    expect(h.sessionService.createSession).not.toHaveBeenCalled();
   });
 
   it('completes the login on a valid otp_login token', async () => {
@@ -1558,5 +1582,111 @@ describe('AuthService.logoutEverywhere', () => {
     await h.service.logoutEverywhere({ refreshToken: 'r' });
 
     expect(h.prisma.linkedAccountMember.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * BAN-1-b (ADR-0133). A restricted (`suspended`) account signs in as before —
+ * the token says it is restricted, and the gate and `AuthGuard` keep it to
+ * support. A banned one never signs in, and is told so with the reason — but
+ * only once the password or the code checked out, so a stranger trying a
+ * number learns nothing the `invalidCredentials` answer does not already say.
+ */
+describe('AuthService sign-in — a blocked account (ADR-0133)', () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    h = harness();
+  });
+
+  it('signs a restricted account in by password', async () => {
+    h.prisma.user.findFirst.mockResolvedValue(activeUser({ status: 'suspended' }));
+    argon2.verify.mockResolvedValue(true);
+
+    expect(await login(h)).toMatchObject({ ok: true, msg: 'auth.loginSuccess' });
+    expect(h.tokens.signAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'suspended' }),
+      'session-new',
+    );
+  });
+
+  it('tells a banned account so, with the reason, once the password is right', async () => {
+    h.prisma.user.findFirst.mockResolvedValue(
+      activeUser({ status: 'banned', statusReason: 'resold accounts' }),
+    );
+    argon2.verify.mockResolvedValue(true);
+
+    expect(await login(h)).toEqual(BANNED('resold accounts'));
+    expect(h.sessionService.createSession).not.toHaveBeenCalled();
+    expect(h.tokens.signAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('answers a banned account a wrong password exactly as anyone else', async () => {
+    h.prisma.user.findFirst.mockResolvedValue(activeUser({ status: 'banned', statusReason: 'x' }));
+    argon2.verify.mockResolvedValue(false);
+
+    expect(await login(h)).toEqual({ ok: false, msg: 'auth.invalidCredentials', error: null });
+  });
+
+  it('sends a login code to a restricted and to a banned number alike', async () => {
+    for (const status of ['suspended', 'banned']) {
+      h.otp.issueOtp.mockClear();
+      h.prisma.user.findFirst.mockResolvedValue(activeUser({ status }));
+      await h.service.requestLoginOtp('09123456789', undefined, '1.2.3.4', 'fa');
+      expect(h.otp.issueOtp).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('signs a restricted account in by code', async () => {
+    h.prisma.user.findFirst.mockResolvedValue(activeUser({ status: 'suspended' }));
+
+    const res = await h.service.verifyLoginOtp(
+      { phoneNumber: '09123456789', otpCode: '123456' } as never,
+      '1.2.3.4',
+      'jest-ua',
+    );
+
+    expect(res).toMatchObject({ ok: true, msg: 'auth.loginSuccess' });
+  });
+
+  it('tells a banned account so once its code verified, and opens no session', async () => {
+    h.prisma.user.findFirst.mockResolvedValue(
+      activeUser({ status: 'banned', statusReason: 'abuse' }),
+    );
+
+    const res = await h.service.verifyLoginOtp(
+      { phoneNumber: '09123456789', otpCode: '123456' } as never,
+      '1.2.3.4',
+      'jest-ua',
+    );
+
+    expect(h.otp.verifyOtp).toHaveBeenCalled();
+    expect(res).toEqual(BANNED('abuse'));
+    expect(h.sessionService.createSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses to refresh a banned account', async () => {
+    h.prisma.session.findUnique.mockResolvedValue({
+      id: 'session-old',
+      userId: 'user-1',
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    h.prisma.user.findUnique.mockResolvedValue(activeUser({ status: 'banned' }));
+
+    const res = await h.service.refresh({ refreshToken: 'r' } as never, '1.2.3.4', 'ua');
+
+    expect(res).toEqual({ ok: false, msg: 'auth.invalidRefreshToken', error: null });
+    expect(h.sessionService.createSession).not.toHaveBeenCalled();
+  });
+
+  it('lets a restricted account be proven for the switcher, never a banned one', async () => {
+    argon2.verify.mockResolvedValue(true);
+    h.prisma.user.findFirst.mockResolvedValue(activeUser({ status: 'suspended' }));
+    expect(await h.service.proveAccountByPassword('behnam', 'pw')).toMatchObject({ id: 'user-1' });
+
+    h.prisma.user.findFirst.mockResolvedValue(activeUser({ status: 'banned' }));
+    expect(await h.service.proveAccountByPassword('behnam', 'pw')).toBeNull();
   });
 });

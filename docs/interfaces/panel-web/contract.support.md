@@ -69,12 +69,24 @@ holds sentences only for statuses, scan states, sender kinds and its own
 labels (`common.support.*`, every Prisma value covered — the spec reads
 `support.prisma`).
 
+## A restricted account (BAN-1-e, ADR-0133)
+
+When `me.restriction` is set, `PanelShell` draws `RestrictedShell` instead of
+the panel: the reason (or "no reason recorded"), the switcher and sign-out,
+and under them only the person's own `/support` pages. Any other path —
+`/support/inbox` and `/support/settings` included — is `replace`d by
+`/support` and nothing of it is drawn. The server is the boundary
+(forward-auth "A restricted token"); this frame is so the person reads a
+reason, not a wall of refusals. A banned person's sign-in error carries the
+reason on its own line (`FormError` `detail`, `banDetail`).
+
 ## Staff (F-033-p)
 
 | Route | Component | Who | What it does |
 |---|---|---|---|
 | `/support/inbox` | `SupportInboxView.tsx` | `support.agent` | the four views (`pending`, `live`, `mine`, `unassigned`) in support's queue order; priority, SLA badge, owner, unread; presence on/off; re-read every minute |
 | `/support/inbox/[id]` | `AgentThreadView.tsx` | `support.agent` | messages and notes, take/release, priority, resolve, close; reply or note, canned insert; the user's sidebar (F-033-m); drawn per `contract.ux.md` T4 |
+| (sidebar) | `UserStatusControl.tsx` | `restriction.assign` / `user.ban` | the person's status and reason; restrict and ban with a reason, lift after a confirm — each offered by the caller's own key (BAN-1-f, ADR-0133) |
 | `/support/settings` | `SupportSettingsView.tsx` | `support.manage` | tabs: working hours (`HH:MM`, `24:00` allowed, the tenant's zone), SLA targets per priority, categories (F-033-e) |
 
 Menu: `support-inbox` and `support-settings`, each hidden without its

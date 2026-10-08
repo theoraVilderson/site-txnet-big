@@ -21,6 +21,8 @@ import { BotKey, BotKeys } from './bot-keys';
 export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   [BotKeys.menu.guest]: 'Hi 👋\nSign in to your account here, or create a new one.',
   [BotKeys.menu.member]: 'Welcome back 👋',
+  [BotKeys.menu.restricted]: 'Your account is restricted: for now you can only talk to support.\nReason: {{reason}}',
+  [BotKeys.menu.restrictedNoReason]: 'Your account is restricted: for now you can only talk to support.',
   [BotKeys.action.login]: 'Sign in',
   [BotKeys.action.register]: 'Create an account',
   [BotKeys.action.forgot]: 'I forgot my password',

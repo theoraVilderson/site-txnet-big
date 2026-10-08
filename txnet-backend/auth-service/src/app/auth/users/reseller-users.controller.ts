@@ -1,4 +1,5 @@
 import {
+  Body,
   BadRequestException,
   ConflictException,
   Controller,
@@ -22,7 +23,12 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { AuthGuard } from '../auth.guard';
 import { RateLimit } from '../decorators/rate-limit.decorator';
 import type { AuthClaims } from '../token.service';
-import { resellerUserListSchema, type ResellerUserListQuery } from './reseller-users.schema';
+import {
+  resellerUserBlockSchema,
+  resellerUserListSchema,
+  type ResellerUserBlockBody,
+  type ResellerUserListQuery,
+} from './reseller-users.schema';
 import {
   ResellerUsersActor,
   ResellerUsersRefused,
@@ -99,8 +105,11 @@ export class ResellerUsersController {
     @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Req() req: Request,
+    // Optional: the bot's block button sends none (ADR-0133 — the person is
+    // shown it when there is one).
+    @Body(new ZodValidationPipe(resellerUserBlockSchema)) body: ResellerUserBlockBody = {},
   ) {
-    return this.refusing(() => this.users.block(this.actor(req), tenantId, userId, this.ip(req)));
+    return this.refusing(() => this.users.block(this.actor(req), tenantId, userId, this.ip(req), body?.reason));
   }
 
   @Delete(':userId/block')

@@ -20,3 +20,10 @@ export const resellerUserListSchema = z.object({
 });
 
 export type ResellerUserListQuery = z.infer<typeof resellerUserListSchema>;
+
+/** `POST …/block` — why, shown to the person on the restricted screen (ADR-0133). */
+export const resellerUserBlockSchema = z
+  .object({ reason: z.string().trim().max(500).optional() })
+  .default({});
+
+export type ResellerUserBlockBody = z.infer<typeof resellerUserBlockSchema>;

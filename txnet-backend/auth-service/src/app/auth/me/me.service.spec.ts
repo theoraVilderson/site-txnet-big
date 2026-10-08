@@ -111,7 +111,8 @@ describe('MeService.describe', () => {
   it('says nothing about a user the row no longer allows', async () => {
     for (const row of [
       null,
-      { id: 'user-1', fullName: 'Sara', status: 'suspended', deletedAt: null, tenantId: 'tenant-1', tenant: { id: 'tenant-1', tenantType: 'reseller' } },
+      // A banned account holds no session; a restricted one is answered (ADR-0133).
+      { id: 'user-1', fullName: 'Sara', status: 'banned', deletedAt: null, tenantId: 'tenant-1', tenant: { id: 'tenant-1', tenantType: 'reseller' } },
       { id: 'user-1', fullName: 'Sara', status: 'active', deletedAt: new Date(), tenantId: 'tenant-1', tenant: { id: 'tenant-1', tenantType: 'reseller' } },
     ]) {
       const { prisma, service } = harness();
@@ -136,5 +137,30 @@ describe('MeService.describe', () => {
     expect(plain.ok && plain.data.isImpersonated).toBe(false);
     expect(acting.ok && acting.data.isImpersonated).toBe(true);
     expect(acting.ok && acting.data.impersonatedBy).toBe('operator-9');
+  });
+});
+
+/**
+ * BAN-1-b (ADR-0133): a restricted account reads `me` — it is what the panel
+ * draws the restricted screen from — and is told the reason staff wrote. The
+ * answer is the person's own status, so it is read, not taken from the token.
+ */
+describe('MeService.describe — a restricted account', () => {
+  it('answers a restricted account with its reason', async () => {
+    const { prisma, service } = harness();
+    prisma.user.findUnique.mockResolvedValueOnce({
+      ...(await prisma.user.findUnique()),
+      status: 'suspended',
+      statusReason: 'unpaid invoice',
+    });
+
+    const res = await service.describe({ ...CLAIMS, restricted: true, permissions: [] });
+
+    expect(res).toMatchObject({ ok: true, data: { restriction: { reason: 'unpaid invoice' } } });
+  });
+
+  it('answers an active account with no restriction', async () => {
+    const { service } = harness();
+    expect(await service.describe(CLAIMS)).toMatchObject({ ok: true, data: { restriction: null } });
   });
 });

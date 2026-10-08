@@ -15,8 +15,11 @@ export function FormError({
   message,
   fieldErrors = [],
   reference,
+  detail,
 }: {
   message: string | null;
+  /** A line the server sent beside the message — a ban's reason (ADR-0133). Shown as written. */
+  detail?: string;
   fieldErrors?: ApiFieldError[];
   /** The server's correlation id, when it sent one — worth quoting to support. */
   reference?: string;
@@ -35,6 +38,7 @@ export function FormError({
           className="mb-4 rounded-xl border border-error-border bg-error-bg px-4 py-3 text-sm font-medium text-error"
         >
           <p>{message}</p>
+          {detail && <p className="mt-1 font-normal">{detail}</p>}
           {fieldErrors.length > 0 && (
             <ul className="mt-2 space-y-1 text-xs font-normal opacity-90">
               {fieldErrors.map((f) => (

@@ -173,6 +173,18 @@ role is granted only what its writer holds (identity `contract.roles.md`), and
 an edit reaches the next request through the role's fingerprint (ADR-0043),
 by id — so a tenant role's changes are as immediate as a template's.
 
+## A restricted token (BAN-1-c, ADR-0133)
+
+A token with `restricted: true` (a `suspended` account, identity
+`contract.blocked-accounts.md`) is admitted only when `X-Forwarded-Uri` is one
+of `/api/support/conversations`, `/api/support/categories`,
+`/api/support/availability` or the realtime path `/realtime` — the path itself
+or below it, by whole segment. Anything else, a missing URI, and a path that is
+not already clean (`..`, `%`-encoding, `//`) is **403** `auth.accountRestricted`
+with `error.reason: accountRestricted`. Checked after the session and
+staleness checks, so a revoked token is still told to sign in. The agent and
+settings routes of support-service are siblings of these, never children.
+
 ## Guarantees
 
 - Fail-closed: any error or unmet check returns non-2xx, so Traefik blocks the

@@ -132,19 +132,20 @@ export class ResellerUsersService {
   }
 
   /**
-   * Block one of this reseller's users: `suspended`, every live session gone.
+   * Block one of this reseller's users: `suspended` — restricted to support,
+   * with the reason it is shown (ADR-0133) — and every live session gone.
    *
-   * Sign-in already refuses anything but `active` (`AuthService`), so the
-   * status is the decision and the revoke is what makes it immediate — a token
-   * minted a minute ago would otherwise keep working until it expired.
+   * The next sign-in is the restricted one (`AuthService`), so the status is
+   * the decision and the revoke is what makes it immediate — a token minted a
+   * minute ago would otherwise keep working until it expired.
    */
-  block(actor: ResellerUsersActor, tenantId: string, userId: string, ip: string): Promise<ResellerUserView> {
-    return this.setStatus(actor, tenantId, userId, ip, UserStatus.suspended);
+  block(actor: ResellerUsersActor, tenantId: string, userId: string, ip: string, reason?: string): Promise<ResellerUserView> {
+    return this.setStatus(actor, tenantId, userId, ip, UserStatus.suspended, reason?.trim() || null);
   }
 
   /** Lift a block. Only a `suspended` account is lifted — `banned` is the platform's, not the reseller's. */
   unblock(actor: ResellerUsersActor, tenantId: string, userId: string, ip: string): Promise<ResellerUserView> {
-    return this.setStatus(actor, tenantId, userId, ip, UserStatus.active);
+    return this.setStatus(actor, tenantId, userId, ip, UserStatus.active, null);
   }
 
   private setStatus(
@@ -153,6 +154,7 @@ export class ResellerUsersService {
     userId: string,
     ip: string,
     status: Exclude<UserStatus, 'banned'>,
+    reason: string | null,
   ): Promise<ResellerUserView> {
     return this.run(actor, tenantId, 'staffWrite', async (reseller) => {
       // Blocking yourself locks the reseller out of its own panel with a button.
@@ -175,7 +177,11 @@ export class ResellerUsersService {
         // Idempotent: the second click of a button is not a second audit row.
         if (user.status === status) return null;
 
-        const updated = await tx.user.update({ where: { id: userId }, data: { status }, select: SELECT });
+        const updated = await tx.user.update({
+          where: { id: userId },
+          data: { status, statusReason: reason, statusChangedAt: new Date() },
+          select: SELECT,
+        });
         await tx.adminAuditLog.create({
           data: {
             // The reseller's own trail, not the platform's: this act was taken
@@ -188,6 +194,7 @@ export class ResellerUsersService {
             oldValue: { status: user.status },
             newValue: { status },
             adminIpAddress: ip,
+            reason,
           },
         });
         return updated;
@@ -196,9 +203,9 @@ export class ResellerUsersService {
       if (!changed) return view(await this.mustRead(userId), ctx);
       // After the transaction: Redis is not transactional, and a marker dropped
       // for a write that then rolled back would sign out an account nobody blocked.
-      if (status === UserStatus.suspended) {
-        await this.sessions.revokeAllSessionsForUser(userId, SessionRevokedReason.admin_ban);
-      }
+      // Both ways (ADR-0133 decision 5): the next sign-in is the restricted
+      // one, or the whole one — no token outlives the change.
+      await this.sessions.revokeAllSessionsForUser(userId, SessionRevokedReason.admin_ban);
       return view(changed, ctx);
     });
   }

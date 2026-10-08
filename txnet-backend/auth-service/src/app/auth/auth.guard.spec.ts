@@ -1,7 +1,9 @@
 import type { Mock } from 'vitest';
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from './auth.guard';
+import { AllowRestricted } from './decorators/allow-restricted.decorator';
 import { SessionStore } from './session/session.store';
 import { PermissionStateStore } from './permissions/permission-state.store';
 import { AuthClaims, TokenService } from './token.service';
@@ -271,5 +273,57 @@ describe('AuthGuard — the switch scope of an authenticated call', () => {
     await guard.canActivate(context);
 
     expect(request.switchScope).toBe('device:the-one-it-was-minted-under');
+  });
+});
+
+/**
+ * BAN-1-c (ADR-0133 decision 4). auth-service is not behind the gate, so its
+ * guard is the gate for its own routes: a restricted token reaches only a
+ * handler marked `@AllowRestricted()` — `me`, the switcher — and every other
+ * one answers `403 auth.accountRestricted`. Unmarked is refused, so a route
+ * someone forgot to think about fails closed.
+ */
+describe('AuthGuard — a restricted token (ADR-0133)', () => {
+  class Marked {
+    @AllowRestricted()
+    open() {}
+    shut() {}
+  }
+  @AllowRestricted()
+  class MarkedClass {
+    any() {}
+  }
+
+  const tokens = new TokenService(configStub);
+  const guard = new AuthGuard(
+    tokens,
+    { read: vi.fn().mockResolvedValue({ userId: 'user-1', scopeKey: null }) } as unknown as SessionStore,
+    { isStale: vi.fn().mockResolvedValue(false) } as unknown as PermissionStateStore,
+    new Reflector(),
+  );
+  const at = (claims: object, cls: new () => object, handler: string) => {
+    const { context } = contextWith(`Bearer ${tokens.sign({ ...accessClaims, ...claims })}`);
+    Object.assign(context, {
+      getClass: () => cls,
+      getHandler: () => (cls.prototype as Record<string, unknown>)[handler],
+    });
+    return guard.canActivate(context);
+  };
+
+  it('admits it on a marked handler and in a marked controller', async () => {
+    await expect(at({ restricted: true, permissions: [] }, Marked, 'open')).resolves.toBe(true);
+    await expect(at({ restricted: true, permissions: [] }, MarkedClass, 'any')).resolves.toBe(true);
+  });
+
+  it('refuses it anywhere else with accountRestricted', async () => {
+    const refusal = at({ restricted: true, permissions: [] }, Marked, 'shut');
+    await expect(refusal).rejects.toThrow(ForbiddenException);
+    await expect(refusal).rejects.toMatchObject({
+      response: { i18nKey: 'auth.accountRestricted', reason: 'accountRestricted' },
+    });
+  });
+
+  it('leaves an unrestricted token alone everywhere', async () => {
+    await expect(at({}, Marked, 'shut')).resolves.toBe(true);
   });
 });

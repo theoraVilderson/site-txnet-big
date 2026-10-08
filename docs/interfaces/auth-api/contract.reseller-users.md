@@ -34,7 +34,7 @@ person (ADR-0103); `staff` marks one who holds any permission, or the owner.
 | Route | Body / query | Answers | Rate limit | Auth |
 |---|---|---|---|---|
 | GET `/auth/tenants/:tenantId/users` | `q?` 3-64, `page` >=1 (1), `pageSize` 1-100 (20) | 200 `{items:[user], total, page, pageSize}`, newest first. Admitted under `read`, so a suspended reseller still sees its customers | 60 / 900s per caller (`RESELLER_USER_READ_RATE_LIMIT`) | Bearer + `ResellerAccess` |
-| POST `/auth/tenants/:tenantId/users/:userId/block` | — | 200 `user` at `suspended`, every session of that account revoked. Blocking an already-blocked user is the same 200 and writes nothing | 20 / 900s per caller (`RESELLER_USER_WRITE_RATE_LIMIT`) | Bearer + `ResellerAccess` (`staffWrite`) |
+| POST `/auth/tenants/:tenantId/users/:userId/block` | `{reason?}` (≤500, ADR-0133) | 200 `user` at `suspended` — restricted to support — every session of that account revoked. Blocking an already-blocked user is the same 200 and writes nothing | 20 / 900s per caller (`RESELLER_USER_WRITE_RATE_LIMIT`) | Bearer + `ResellerAccess` (`staffWrite`) |
 | DELETE `/auth/tenants/:tenantId/users/:userId/block` | — | 200 `user` at `active`. **Unblock is the deletion of the block**, not a second verb on the user | 20 / 900s per caller (shared with `POST`) | Bearer + `ResellerAccess` (`staffWrite`) |
 
 Both ids are `ParseUUIDPipe`d, so a malformed one is a 400 before any door runs.

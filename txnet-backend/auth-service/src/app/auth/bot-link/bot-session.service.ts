@@ -6,7 +6,7 @@ import {
 } from '@txnet-backend/messenger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { normalizeMessengerPhone } from './bot-link.service';
-import { AuthService } from '../auth.service';
+import { AuthService, mayHoldSession } from '../auth.service';
 import { botScopeKey, SwitchScope } from '../../common/security/switch-scope';
 import { TenantContext, runWithTenant } from '../../tenant-context/tenant-context';
 import { BackendI18nKeys } from '@txnet-backend/shared-core';
@@ -232,8 +232,13 @@ export class BotSessionService {
     // The same order password login answers in (invariant #12): nothing about
     // an account is said before the caller has proven anything. Here the proof
     // came first, so these are simply the account's own conditions.
-    if (user.deletedAt || user.status !== 'active') {
+    if (user.deletedAt) {
       return { state: 'refused', key: BackendI18nKeys.errors.auth.invalidCredentials };
+    }
+    // ADR-0133: the link is the proof, so a ban is told now; a restricted
+    // account signs in, and its token keeps it to support.
+    if (user.status === 'banned') {
+      return { state: 'refused', key: BackendI18nKeys.errors.auth.accountBanned };
     }
     if (!user.phoneVerifiedAt) {
       return { state: 'refused', key: BackendI18nKeys.errors.auth.phoneVerificationRequired };
@@ -295,7 +300,7 @@ export class BotSessionService {
     if (!stillAMember) return null;
 
     const user = await this.surfaceOwners.admissibleUser(target, WITH_ROLE);
-    if (!user || user.deletedAt || user.status !== 'active') return null;
+    if (!mayHoldSession(user)) return null;
     if (!user.phoneVerifiedAt) return null;
     if (!BOT_SESSION_ROLES.includes(user.role?.name)) return null;
     return user;

@@ -6,6 +6,7 @@ import { AuthGuard } from '../../auth/auth.guard';
 import { RateLimit } from '../../auth/decorators/rate-limit.decorator';
 import type { AuthClaims } from '../../auth/token.service';
 import { UiPreferencesService } from './ui-preferences.service';
+import { AllowRestricted } from '../../auth/decorators/allow-restricted.decorator';
 
 const LIMIT = {
   key: (req: Request & { user?: AuthClaims }) => rateLimitBucketKey(RateLimitBucket.ME_UI_PREFERENCES, req?.user?.sub ?? req?.ip),
@@ -24,6 +25,8 @@ const LIMIT = {
  * answer `unknown_preference`, which a strict schema would fold into a
  * generic validation failure.
  */
+// The panel's own boot reads, so a restricted account's screen loads (ADR-0133).
+@AllowRestricted()
 @Controller('auth/me/ui-preferences')
 export class UiPreferencesController {
   constructor(private readonly preferences: UiPreferencesService) {}

@@ -20,6 +20,8 @@ export type Me = {
   tenant: { id: string; type: TenantType; isOwner: boolean };
   isImpersonated: boolean;
   impersonatedBy?: string;
+  /** Set while the account is restricted to support (ADR-0133), with the reason staff wrote. */
+  restriction: { reason: string | null } | null;
 };
 
 /**
@@ -66,12 +68,15 @@ export class MeService {
         fullName: true,
         email: true,
         status: true,
+        statusReason: true,
         deletedAt: true,
         tenant: { select: { id: true, tenantType: true, ownerUserId: true } },
       },
     });
 
-    if (!user || user.status !== 'active' || user.deletedAt) {
+    // A restricted account reads `me`: it is what the panel draws the
+    // restricted screen from (ADR-0133). A banned one holds no session.
+    if (!user || (user.status !== 'active' && user.status !== 'suspended') || user.deletedAt) {
       return err('auth.invalidCredentials');
     }
 
@@ -89,6 +94,9 @@ export class MeService {
         isOwner: user.tenant.ownerUserId === user.id,
       },
       isImpersonated: claims.isImpersonated === true,
+      // The person's own status, read — a restriction lifted a second ago is
+      // lifted here, whatever the token still says.
+      restriction: user.status === 'suspended' ? { reason: user.statusReason ?? null } : null,
     };
     if (claims.impersonatedBy) me.impersonatedBy = claims.impersonatedBy;
 

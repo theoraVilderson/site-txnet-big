@@ -335,7 +335,8 @@ export class AuthApiClient {
   // --- who the caller is (F-038-g4) --------------------------------------
 
   /** `GET /auth/me` — the signed-in user and their tenant: who a tap under a suggestion is from. */
-  me(ctx: CallContext): Promise<ApiResult<{ userId: string; tenant?: { id: string } }>> {
+  // `restriction`: set while the account is restricted to support (ADR-0133).
+  me(ctx: CallContext): Promise<ApiResult<{ userId: string; tenant?: { id: string }; restriction?: { reason: string | null } | null }>> {
     return this.call('GET', '/api/auth/me', undefined, ctx);
   }
 

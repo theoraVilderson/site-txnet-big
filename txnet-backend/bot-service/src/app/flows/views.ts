@@ -295,6 +295,23 @@ export function memberMenu(miniAppUrl?: string, topUp = false, reseller = false,
 }
 
 /**
+ * A restricted account's menu (BAN-1-g, ADR-0133): why, and the way to
+ * support — plus its other accounts and sign-out, which are its own. Nothing
+ * a gate would refuse a tap later.
+ */
+export function restrictedMenu(reason: string | null, support = false): BotView {
+  return view(
+    'menu.restricted',
+    reason ? { key: BotKeys.menu.restricted, values: { reason } } : { key: BotKeys.menu.restrictedNoReason },
+    [
+      ...(support ? [[{ id: ACTIONS.support, label: { key: BotKeys.action.support } }]] : []),
+      [{ id: ACTIONS.accounts, label: { key: BotKeys.action.accounts } }],
+      [{ id: ACTIONS.logout, label: { key: BotKeys.action.logout } }],
+    ],
+  );
+}
+
+/**
  * The switch group as one screen (`F-0210`): who this chat is, and who else it
  * may become in one tap.
  *

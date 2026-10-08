@@ -1,7 +1,9 @@
 {
   "menu": {
     "guest": "Hi 👋\nSign in to your account here, or create a new one.",
-    "member": "Welcome back 👋"
+    "member": "Welcome back 👋",
+    "restricted": "Your account is restricted: for now you can only talk to support.\nReason: {{reason}}",
+    "restrictedNoReason": "Your account is restricted: for now you can only talk to support."
   },
   "action": {
     "login": "Sign in",

@@ -306,6 +306,8 @@ describe('TokenService', () => {
       id: 'user-1',
       tenantId: 'tenant-1',
       roleId: 'role-1',
+      // Without it the token is restricted (ADR-0133 fails closed).
+      status: 'active',
       role: {
         name: 'Admin',
         rolePermissions: [
@@ -452,5 +454,32 @@ describe('TokenService — permission fingerprint (ADR-0043)', () => {
     const acting = hashOf(tokens.signImpersonatedToken(userWith(['user.read']), 's-2', 'operator-1'));
 
     expect(acting).toBe(plain);
+  });
+});
+
+/**
+ * BAN-1-b (ADR-0133 decision 4): a restricted account's token says so and
+ * carries no permissions, so nothing it reaches can treat it as staff. Its
+ * `permHash` stays the role's own, or ADR-0043's staleness rule would answer
+ * `permissionsChanged` forever and the client would refresh in a loop.
+ */
+describe('TokenService.signAccessToken — a restricted account', () => {
+  const tokens = new TokenService(configStub());
+  const role = { name: 'Support', rolePermissions: [{ permission: { key: 'support.agent' } }] };
+  const user = (status: string) => ({ id: 'u-1', tenantId: 't-1', roleId: 'r-1', status, role });
+
+  it('marks the token restricted and empties its permissions', () => {
+    const restricted = tokens.verify(tokens.signAccessToken(user('suspended'), 's-1'));
+    const whole = tokens.verify(tokens.signAccessToken(user('active'), 's-1'));
+
+    expect(restricted.restricted).toBe(true);
+    expect(restricted.permissions).toEqual([]);
+    expect(restricted.permHash).toBe(whole.permHash);
+  });
+
+  it('leaves an active account unmarked', () => {
+    const whole = tokens.verify(tokens.signAccessToken(user('active'), 's-1'));
+    expect(whole.restricted).toBeUndefined();
+    expect(whole.permissions).toEqual(['support.agent']);
   });
 });

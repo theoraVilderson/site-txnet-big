@@ -89,6 +89,27 @@ export function deliveryHandles(delivery: OtpDeliveryHandles) {
   };
 }
 
+/**
+ * ADR-0133: who may hold a session. A restricted (`suspended`) account signs
+ * in — its token is restricted and the gates keep it to support; a banned one
+ * never does.
+ */
+export function mayHoldSession(user: any): boolean {
+  return !!user && !user.deletedAt && (user.status === 'active' || user.status === 'suspended');
+}
+
+/**
+ * ADR-0133 (3): the ban, told with the reason staff wrote. Only ever answered
+ * after a proof — the password matched or the code verified.
+ */
+export function bannedAnswer(user: { statusReason?: string | null }) {
+  // `facts`, where the panel reads a refusal's figures (`ApiError.facts`).
+  return err('auth.accountBanned', {
+    reason: 'accountBanned',
+    facts: user.statusReason ? { statusReason: user.statusReason } : {},
+  });
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -193,7 +214,9 @@ export class AuthService {
     lang: string,
     scopeKey?: string | null,
   ) {
-    if (!user || user.deletedAt || user.status !== 'active') {
+    // A banned account is checked like any other until the password has
+    // matched: answered earlier, the ban would tell a stranger it exists.
+    if (!user || user.deletedAt) {
       return err('auth.invalidCredentials');
     }
 
@@ -215,6 +238,8 @@ export class AuthService {
     }
 
     await this.rateLimiter.reset(failureBucket);
+
+    if (user.status === 'banned') return bannedAnswer(user);
 
     // Invariant #6 (an unverified phone cannot complete password login) is
     // enforced here rather than before the password check: answered any
@@ -306,7 +331,9 @@ export class AuthService {
     // refuse, and the channel would answer it a second time by accepting or
     // refusing a subscription (`OtpDeliveryStore.mintHandles`).
     const delivery = await this.deliveries.mintHandles();
-    if (user?.status === 'active' && user.phoneVerifiedAt) {
+    // Every status alike (ADR-0133 decision 3): a banned account is told why
+    // only once its code verified, so it has to be sent one.
+    if (user && user.phoneVerifiedAt) {
       await this.otp.issueOtp(
         phoneNumber,
         OtpPurpose.login,
@@ -382,9 +409,12 @@ export class AuthService {
     userAgent: string,
     scopeKey?: string | null,
   ) {
-    if (!user || user.status !== 'active') {
+    if (!user) {
       return err('auth.invalidOtpToken');
     }
+    // The token was issued after the password matched, so the ban is told now
+    // rather than after a code that could not finish anything.
+    if (user.status === 'banned') return bannedAnswer(user);
     await this.otp.verifyOtp(user.phoneNumber!, OtpPurpose.login, otpCode);
     const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);
     return ok(sessionData, 'auth.loginSuccess');
@@ -399,10 +429,11 @@ export class AuthService {
     userAgent: string,
     scopeKey?: string | null,
   ) {
-    if (!user || user.status !== 'active' || !user.phoneVerifiedAt) {
+    if (!user || !user.phoneVerifiedAt) {
       return err('auth.invalidOtp');
     }
     await this.otp.verifyOtp(phoneNumber, OtpPurpose.login, otpCode);
+    if (user.status === 'banned') return bannedAnswer(user);
     const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);
     return ok(sessionData, 'auth.loginSuccess');
   }
@@ -494,7 +525,9 @@ export class AuthService {
           },
         },
       });
-      if (!user) return err('auth.invalidRefreshToken');
+      // A ban revokes every session, so this is the one that slipped between
+      // the two writes (ADR-0133 decision 5).
+      if (!mayHoldSession(user)) return err('auth.invalidRefreshToken');
 
       await this.sessionService.revokeSession(session.id, 'user_logout');
       const result = await this.sessionService.createSession(
@@ -724,7 +757,7 @@ export class AuthService {
       // is skipped rather than refused — the next one may be fine, and if none
       // is, the place is simply signed out.
       const user = await this.findUserForSession(candidate.userId);
-      if (!user || user.deletedAt || user.status !== 'active') continue;
+      if (!mayHoldSession(user)) continue;
       return { user, groupId: membership.groupId };
     }
     return null;
@@ -770,7 +803,9 @@ export class AuthService {
     if (link) return link;
 
     const delivery = await this.deliveries.mintHandles();
-    if (user?.status === 'active') {
+    // A restricted account may still reset its password (it still signs in); a
+    // banned one has nothing to sign in to (ADR-0133).
+    if (user && user.status !== 'banned') {
       await this.otp.issueOtp(
         input.phoneNumber,
         OtpPurpose.password_reset,
@@ -958,7 +993,7 @@ export class AuthService {
 
   /** The rest of `proveAccountByPassword`, in the found account's tenant. */
   private async checkAccountPassword(user: any, identity: string, password: string) {
-    if (!user || user.deletedAt || user.status !== 'active') return null;
+    if (!mayHoldSession(user)) return null;
 
     // The same bucket login uses, on purpose: this route is another way to
     // guess a password, so it has to consume the same budget or it becomes the
@@ -1036,7 +1071,7 @@ export class AuthService {
     );
     if (link) return link;
 
-    if (user?.status === 'active' && user.phoneVerifiedAt) {
+    if (user && user.status !== 'banned' && user.phoneVerifiedAt) {
       await this.otp.issueOtp(
         phoneNumber,
         OtpPurpose.account_switch_link,
@@ -1078,7 +1113,7 @@ export class AuthService {
 
   /** The rest of `proveAccountByOtp`, in the found account's tenant. */
   private async checkAccountProofOtp(user: any, phoneNumber: string, otpCode: string) {
-    if (!user || user.deletedAt || user.status !== 'active') return null;
+    if (!mayHoldSession(user)) return null;
     if (!user.phoneVerifiedAt) return null;
     if (
       !(await this.otp.verifyOtp(

@@ -186,16 +186,34 @@ describe('BotSessionService', () => {
     expect(auth.createSessionForUser).not.toHaveBeenCalled();
   });
 
-  it('refuses an inactive account without saying more than a password login would', async () => {
+  it('refuses a deleted account without saying more than a password login would', async () => {
     const { service } = harness({
       link: { userId: 'u-1' },
-      user: { ...linkedUser, status: 'suspended' },
+      user: { ...linkedUser, deletedAt: new Date() },
     });
 
     expect(await inTenant(() => service.authenticate(ctx, null))).toEqual({
       state: 'refused',
       key: 'auth.invalidCredentials',
     });
+  });
+
+  // ADR-0133: the messenger link is the proof here, so a ban is told at once.
+  it('tells a banned account so', async () => {
+    const { service, auth } = harness({ link: { userId: 'u-1' }, user: { ...linkedUser, status: 'banned' } });
+
+    expect(await inTenant(() => service.authenticate(ctx, null))).toEqual({
+      state: 'refused',
+      key: 'auth.accountBanned',
+    });
+    expect(auth.createSessionForUser).not.toHaveBeenCalled();
+  });
+
+  it('signs a restricted account in — its token is the restricted one', async () => {
+    const { service, auth } = harness({ link: { userId: 'u-1' }, user: { ...linkedUser, status: 'suspended' } });
+
+    expect(await inTenant(() => service.authenticate(ctx, null))).toMatchObject({ state: 'authenticated' });
+    expect(auth.createSessionForUser).toHaveBeenCalled();
   });
 });
 
@@ -515,7 +533,7 @@ describe('BotSessionService — an implicit sign-in follows the place', () => {
     const h = placeHarness(SWITCHED_TO);
     h.prisma.user.findUnique.mockImplementation(async ({ where }: any) =>
       where.id === SWITCHED_TO
-        ? { ...linkedUser, id: SWITCHED_TO, status: 'suspended' }
+        ? { ...linkedUser, id: SWITCHED_TO, status: 'banned' }
         : { ...linkedUser, id: 'u-1' },
     );
 

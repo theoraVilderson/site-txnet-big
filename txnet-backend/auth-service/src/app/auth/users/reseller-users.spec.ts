@@ -191,7 +191,7 @@ describe('ResellerUsersService', () => {
 
       expect(order).toEqual(['admit:staffWrite', 'bind', 'findFirst', 'update', 'audit', 'revoke']);
       expect(user.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { status: UserStatus.suspended } }),
+        expect.objectContaining({ data: expect.objectContaining({ status: UserStatus.suspended, statusReason: null }) }),
       );
       expect(adminAuditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -270,10 +270,30 @@ describe('ResellerUsersService', () => {
       await service.unblock(actor, reseller, 'u-1', '10.0.0.1');
 
       expect(user.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { status: UserStatus.active } }),
+        expect.objectContaining({ data: expect.objectContaining({ status: UserStatus.active, statusReason: null }) }),
       );
       expect(adminAuditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ action: 'user_unban' }) }),
+      );
+    });
+
+    // ADR-0133 decision 5: the restricted token must not outlive the lift.
+    it('revokes on the lift too, so the next sign-in is the whole one', async () => {
+      const { service, sessions } = build({ user: aUser({ status: UserStatus.suspended }) });
+      await service.unblock(actor, reseller, 'u-1', '10.0.0.1');
+      expect(sessions.revokeAllSessionsForUser).toHaveBeenCalledWith('u-1', 'admin_ban');
+    });
+  });
+
+  describe('block — the reason (ADR-0133)', () => {
+    it('stores the reason the person is shown, and audits it', async () => {
+      const { service, user, adminAuditLog } = build();
+      await service.block(actor, reseller, 'u-1', '10.0.0.1', '  unpaid invoice ');
+      expect(user.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ statusReason: 'unpaid invoice' }) }),
+      );
+      expect(adminAuditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ reason: 'unpaid invoice' }) }),
       );
     });
 

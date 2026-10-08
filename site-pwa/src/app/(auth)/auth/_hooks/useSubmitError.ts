@@ -8,6 +8,15 @@ export interface SubmitError {
   message: string;
   fieldErrors: ApiFieldError[];
   ref?: string;
+  /** A ban's reason (ADR-0133), shown under the message. */
+  detail?: string;
+}
+
+/** The reason staff wrote with a ban, when the refusal is one (ADR-0133). */
+export function banDetail(e: unknown): string | undefined {
+  if (!(e instanceof ApiError) || e.reason !== "accountBanned") return undefined;
+  const reason = e.facts.statusReason;
+  return typeof reason === "string" && reason ? reason : undefined;
 }
 
 /**
@@ -32,6 +41,7 @@ export function useSubmitError() {
         message: toMessage(e),
         fieldErrors: e instanceof ApiError ? e.fieldErrors : [],
         ref: e instanceof ApiError ? e.ref : undefined,
+        detail: banDetail(e),
       });
     },
   };

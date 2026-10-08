@@ -91,7 +91,9 @@
     "handoffInvalid": "This link has expired or was already used. Sign in again.",
     "handoffAlreadySignedIn": "You are already signed in to this panel with this account.",
     "userSearch": "Users found",
-    "userSearchRefused": "Only the platform owner can search users"
+    "userSearchRefused": "Only the platform owner can search users",
+    "accountBanned": "This account has been banned",
+    "accountRestricted": "Your account is restricted to support only"
   },
   "impersonation": {
     "notImpersonated": "This session is not impersonated",

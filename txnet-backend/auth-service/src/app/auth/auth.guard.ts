@@ -1,10 +1,13 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
+import { ALLOW_RESTRICTED } from './decorators/allow-restricted.decorator';
 import { TokenService } from './token.service';
 import { SessionStore } from './session/session.store';
 import { SwitchScope } from '../common/security/switch-scope';
@@ -16,6 +19,7 @@ export class AuthGuard implements CanActivate {
     private readonly tokens: TokenService,
     private readonly sessions: SessionStore,
     private readonly permissions: PermissionStateStore,
+    private readonly reflector: Reflector = new Reflector(),
   ) {}
 
   async canActivate(context: ExecutionContext) {
@@ -67,6 +71,22 @@ export class AuthGuard implements CanActivate {
     // `device_id` cookie. A session with no stamp keeps the request's answer,
     // so nothing minted before this shipped changes behaviour.
     if (session.scopeKey) request.switchScope = session.scopeKey;
+
+    // ADR-0133 (4): this service is not behind the gate, so this is the gate
+    // for a restricted account here. Unmarked is refused — a route nobody
+    // thought about fails closed.
+    if (
+      claims.restricted &&
+      !this.reflector.getAllAndOverride<boolean>(ALLOW_RESTRICTED, [
+        context.getHandler(),
+        context.getClass(),
+      ])
+    ) {
+      throw new ForbiddenException({
+        i18nKey: 'auth.accountRestricted',
+        reason: 'accountRestricted',
+      });
+    }
 
     request.user = claims;
     return true;

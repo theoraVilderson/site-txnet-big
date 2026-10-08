@@ -31,6 +31,7 @@ import {
   meTimeZoneSchema,
 } from '../auth.schema';
 import type { AuthClaims } from '../token.service';
+import { AllowRestricted } from '../decorators/allow-restricted.decorator';
 
 /**
  * `GET /api/auth/me` — the caller's own identity and authority (F-097).
@@ -55,6 +56,8 @@ export class MeController {
   ) {}
 
   @Get('me')
+  // The restricted screen is drawn from it (ADR-0133).
+  @AllowRestricted()
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
   @RateLimit({
@@ -136,6 +139,7 @@ export class MeController {
   /** The caller's own zone and the one they are read in (TZ-1-c, ADR-0108): theirs, else the tenant's, else the platform's. */
   @TenantCapability('account')
   @Get('me/timezone')
+  @AllowRestricted()
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
   @RateLimit({
@@ -150,6 +154,7 @@ export class MeController {
   /** A choice (`user`) or the panel's browser report (`browser`); a report never overwrites a choice. */
   @TenantCapability('account')
   @Put('me/timezone')
+  @AllowRestricted()
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
   @RateLimit({

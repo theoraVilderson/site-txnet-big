@@ -65,6 +65,14 @@ answers (ADR-0009, ADR-0112). The rules are support's
     from the offer keeps it and "Send it anyway" (`keepDraft`); a new message
     replaces it. No match, or guides unreachable: it opens at once, as before.
 
+## A restricted account (BAN-1-g, ADR-0133)
+
+A chat whose token is `restricted` gets `restrictedMenu`: the reason
+(`menu.restricted`, from `GET /auth/me`'s `restriction`) and only support,
+accounts and sign-out. The bot reads the mark off the token to choose the menu
+and nothing more — the gate refuses every other route anyway. A banned account
+is refused at `bots/session` with `auth.accountBanned`.
+
 ## Not here
 
 Agents answer from the panel (F-033-p); typing, presence and the live socket

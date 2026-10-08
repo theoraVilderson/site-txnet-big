@@ -44,6 +44,12 @@ export type AuthClaims = {
    * Absent on tokens minted before that shipped, and on single-purpose tokens.
    */
   permHash?: string;
+  /**
+   * The account is restricted (`suspended`, ADR-0133): `permissions` is empty
+   * and the gate and `AuthGuard` admit the token only on their allow-lists —
+   * the person's own support conversations, `me`, sign-out. Absent otherwise.
+   */
+  restricted?: boolean;
   sessionId: string;
   passwordVersion?: number;
   isImpersonated?: boolean;
@@ -82,14 +88,21 @@ export class TokenService {
   signAccessToken(user: any, sessionId: string): string {
     const permissions =
       user.role?.rolePermissions?.map((rp: any) => rp.permission.key) ?? [];
+    // Anything but `active` is restricted — a caller that forgot to read the
+    // status gets the narrow token, never the whole one (ADR-0133). A banned
+    // account never reaches here: every sign-in path refuses it first.
+    const restricted = user.status !== 'active';
     return this.sign({
       sub: user.id,
       tenantId: user.tenantId,
       roleId: user.roleId,
       roleName: user.role?.name ?? '',
       roleScope: roleScopeOf(user.role),
-      permissions,
+      permissions: restricted ? [] : permissions,
+      // The role's own fingerprint even when restricted, or ADR-0043's
+      // staleness rule would answer `permissionsChanged` on every request.
       permHash: permissionFingerprint(permissions),
+      ...(restricted ? { restricted: true } : {}),
       sessionId,
     });
   }

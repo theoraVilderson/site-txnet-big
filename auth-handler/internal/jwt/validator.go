@@ -40,6 +40,9 @@ type Claims struct {
 	// changed role is refused at once rather than after the token expires
 	// (ADR-0043). Empty on a token minted before that shipped.
 	PermHash       string `json:"permHash"`
+	// Restricted marks a restricted account (`suspended`, ADR-0133): its
+	// permissions are empty and the gate admits it only on its allow-list.
+	Restricted     bool   `json:"restricted"`
 	IsImpersonated bool   `json:"isImpersonated"`
 	ImpersonatedBy string `json:"impersonatedBy"`
 	Exp            int64  `json:"exp"`

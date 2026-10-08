@@ -41,6 +41,7 @@ import {
   helpView,
   languageView,
   memberMenu,
+  restrictedMenu,
   MINI_APP_PARAM,
   say,
   signOutAllConfirmView,
@@ -49,6 +50,7 @@ import { progressOf, summaryOf } from '../flows/steps';
 import { ChatAccess } from '../session/chat-access';
 import { ConversationStore } from './conversation.store';
 import { callContextOf, ChatContext, FlowResult, NavState } from './nav.types';
+import { isRestrictedToken } from './restricted';
 import { BotKeys, botLinkMessageKey } from '../locale/bot-keys';
 
 /** The one step that belongs to no flow: the panel drives it (`F-0203`). */
@@ -551,6 +553,11 @@ export class ConversationRouter {
   private async menu(ctx: ChatContext) {
     const token = await this.access.token(ctx);
     if (!token) return guestMenu(this.guideApi.isConfigured);
+    // BAN-1-g (ADR-0133): a restricted account sees why, and support.
+    if (isRestrictedToken(token)) {
+      const me = await this.api.me({ ...callContextOf(ctx), accessToken: token });
+      return restrictedMenu(me.ok ? (me.data.restriction?.reason ?? null) : null, this.supportApi.isConfigured);
+    }
     // F-311-c: the management row exists only for a chat the door admits
     // (F-311-e). Asked here, on the same token the menu was decided with, and
     // remembered nowhere — this bot serves the reseller's customers too, and

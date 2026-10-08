@@ -272,12 +272,19 @@ export type Me = {
   email: string | null;
   isImpersonated: boolean;
   impersonatedBy?: string;
+  /** Set while the account is restricted to support (ADR-0133), with the reason staff wrote. */
+  restriction?: { reason: string | null } | null;
 };
 
 /**
  * One user as `GET /auth/users` answers (F-018-ad): enough to tell two people
  * apart and to see one is suspended — never the number, never an email.
  */
+/** `identity.user.status` (ADR-0133): `suspended` is restricted to support, `banned` is out. */
+export type AccountStatus = "active" | "suspended" | "banned";
+
+export type UserStatusView = { id: string; status: AccountStatus; statusReason: string | null };
+
 export type UserSearchHit = {
   id: string;
   fullName: string;
@@ -472,6 +479,10 @@ export const authApi = {
    * account's own phone, or by that account's own password.
    */
   async addAccountOtpRequest(phoneNumber: string, captchaToken: string, channel?: OtpChannel) { return request<OtpRequestResult>("/auth/accounts/add/otp/request", { method: "POST", body: JSON.stringify({ phoneNumber, ...(channel ? { channel } : {}) }) }, captchaToken); },
+  /** Where a person stands (BAN-1-d) — `restriction.assign` or `user.ban`, own tenant. */
+  async userStatus(userId: string) { return request<UserStatusView>(`/auth/users/${encodeURIComponent(userId)}/status`, { method: "GET" }); },
+  /** Restrict, ban or lift, with the reason the person is shown (ADR-0133). */
+  async setUserStatus(userId: string, status: AccountStatus, reason?: string) { return request<UserStatusView>(`/auth/users/${encodeURIComponent(userId)}/status`, { method: "PUT", body: JSON.stringify({ status, reason }) }); },
   async addAccountOtpVerify(phoneNumber: string, otpCode: string) { return request<{ groupId: string; added: boolean; userId: string }>("/auth/accounts/add/otp/verify", { method: "POST", body: JSON.stringify({ phoneNumber, otpCode }) }); },
   async addAccountPassword(identifier: string, password: string, captchaToken: string) { return request<{ groupId: string; added: boolean; userId: string }>("/auth/accounts/add/password", { method: "POST", body: JSON.stringify({ identifier, password }) }, captchaToken); },
   /**

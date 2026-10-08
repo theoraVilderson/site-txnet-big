@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SessionRevokedReason } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { AuthService } from '../auth/auth.service';
+import { AuthService, mayHoldSession } from '../auth/auth.service';
 import { SessionService } from '../auth/session/session.service';
 import { OtpChannel } from '../auth/otp/otp.interface';
 import { err, ok, safeExecute } from '../common/response/response.util';
@@ -530,7 +530,9 @@ export class AccountSwitchService {
         deletedAt: true,
       },
     });
-    if (!user || user.deletedAt || user.status !== 'active') return null;
+    // A restricted member may be switched to — its token is the restricted
+    // one; a banned member may not (ADR-0133).
+    if (!mayHoldSession(user)) return null;
     return user;
   }
 }

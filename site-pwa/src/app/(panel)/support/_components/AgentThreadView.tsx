@@ -27,6 +27,7 @@ import { AttachmentList, JumpToLatest, SendButton, ThreadMessages, TypingDots, u
 import { StatusPill } from "./SupportView";
 import { PriorityPill, SlaBadge } from "./SupportInboxView";
 import { usePresence } from "./usePresence";
+import { UserStatusControl } from "./UserStatusControl";
 import { PageHeader } from "../../_components/kit/PageHeader";
 import { Alert, Button, Field, NativeSelect, SegmentedControl, Textarea, useConfirm } from "../../_components/kit";
 
@@ -499,6 +500,8 @@ function Sidebar({ id }: { id: string }) {
           {t("common", S.userId)}: <span className="font-mono text-text-primary">{context.userId}</span>
         </p>
       )}
+      {/* BAN-1-f: restrict, ban and lift, by the caller's own keys (ADR-0133). */}
+      {context && <UserStatusControl userId={context.userId} />}
       {failed || (context && !billing) ? (
         <p className="text-text-secondary">{t("common", S.unavailable)}</p>
       ) : !billing ? (

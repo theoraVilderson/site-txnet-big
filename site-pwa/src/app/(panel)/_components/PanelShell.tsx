@@ -6,6 +6,8 @@ import { CommandPalette } from "./CommandPalette";
 import { PanelSidebar } from "./PanelSidebar";
 import { PanelTopBar } from "./PanelTopBar";
 import { RouteProgress } from "./RouteProgress";
+import { RestrictedShell } from "./RestrictedShell";
+import { usePanelSession } from "../_context/PanelSessionContext";
 
 /**
  * The frame every panel page renders inside (F-093-a): the sidebar at the
@@ -17,6 +19,9 @@ import { RouteProgress } from "./RouteProgress";
 export function PanelShell({ children }: { children: React.ReactNode }) {
   // The person's own `ui.sidebar.collapsed` (UX-1-l), not this tab's.
   const collapsed = useUiPreferences((s) => s.prefs["ui.sidebar"].collapsed);
+  // ADR-0133: a restricted account gets one screen, not the panel.
+  const { me } = usePanelSession();
+  if (me?.restriction) return <RestrictedShell reason={me.restriction.reason}>{children}</RestrictedShell>;
 
   return (
     <div className="relative min-h-screen w-full transition-colors duration-500">

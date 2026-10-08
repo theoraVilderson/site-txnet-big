@@ -31,6 +31,7 @@ import {
 } from './account-switch.schema';
 import { withRefreshCookie } from '../common/http/refresh-cookie';
 import { resolveSwitchScope } from '../common/security/switch-scope';
+import { AllowRestricted } from '../auth/decorators/allow-restricted.decorator';
 
 /**
  * The caller's own switch group: adding to it (F-0205), reading it (F-0206),
@@ -59,6 +60,8 @@ import { resolveSwitchScope } from '../common/security/switch-scope';
  * token plus the platform and chat headers — all of them set below the route.
  */
 @TenantCapability('account')
+// A restricted account may still move to another of its accounts (ADR-0133).
+@AllowRestricted()
 @Controller('auth/accounts')
 export class AccountSwitchController {
   constructor(private readonly accounts: AccountSwitchService) {}

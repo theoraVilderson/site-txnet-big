@@ -5350,6 +5350,24 @@
         "edit": "Edit",
         "cancel": "Cancel"
       }
+    },
+    "account": {
+      "title": "Account status",
+      "active": "Active",
+      "suspended": "Restricted (support only)",
+      "banned": "Banned",
+      "reason": "Reason",
+      "restrict": "Restrict",
+      "ban": "Ban",
+      "lift": "Lift restriction",
+      "unban": "Lift ban",
+      "reasonLabel": "Reason (shown to the user)",
+      "confirm": "Save",
+      "cancel": "Cancel",
+      "liftConfirm": "Make this account active again? All of its sessions end and the user signs in again.",
+      "restrictHint": "The user signs in but only sees the reason and can talk to support.",
+      "banHint": "The user can no longer sign in; they see the reason when they try.",
+      "done": "Account status saved"
     }
   },
   "guides": {
@@ -5749,5 +5767,11 @@
       "none": "No panel is registered yet.",
       "open": "Systems"
     }
+  },
+  "restricted": {
+    "title": "Your account is restricted",
+    "body": "Until the restriction is lifted you can only talk to support. If you think this is a mistake, message support right here.",
+    "reason": "Reason",
+    "noReason": "No reason was recorded. Ask support."
   }
 }
