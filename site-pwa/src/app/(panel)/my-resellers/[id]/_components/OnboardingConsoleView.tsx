@@ -7,7 +7,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { authApi } from "@/lib/auth-api";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { myResellerBrandingPath, myResellerSettingsPath, myResellerUsersPath } from "@/lib/routes";
+import { myResellerBrandingPath, myResellerSettingsPath, myResellerSetupPath, myResellerUsersPath } from "@/lib/routes";
 import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-api";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { Badge } from "../../../financial/_components/Badge";
@@ -151,6 +151,15 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
       )}
 
       <Progress view={view} />
+
+      {!view.complete && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-text-secondary">{t("common", K.wizard.startHint)}</p>
+          <Link href={myResellerSetupPath(id, self)} className={buttonClass({ variant: "primary", size: "sm" })}>
+            {t("common", K.wizard.start)}
+          </Link>
+        </div>
+      )}
 
       {gate && (
         <div className="space-y-3">

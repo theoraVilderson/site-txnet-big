@@ -119,6 +119,32 @@ section has one; the home keeps what says how far the reseller is.
    card by the path's reseller, admitting and refusing on its own
    (invariant 21). The menu links it in `account`, before the brand.
 
+## The setup wizard (UX-2-c)
+
+User, 2026-10-08: a wizard rather than a checklist to tick off.
+`/reseller/setup` and `/my-resellers/:id/setup` (`SetupWizardView`).
+
+1. **The route's steps, in the route's order, one at a time** (F-213):
+   `GET /api/tenants/:id/onboarding` names them; the wizard adds none and
+   reorders none. Every step can be opened from the rail — none waits on
+   another, and only the domain gates (`contract.onboarding.md`).
+2. **It opens at the first step not done; "later" stores nothing.** The
+   checklist is live, so it already knows where to resume
+   (`firstUndoneIndex`). A re-read never moves the person off their step.
+3. **The progress bar is the route's count** — steps done of all of them,
+   the home's own figure — never the step index. All done: a finished
+   screen in place of the steps.
+4. **Motion is the panel's** (M1–M3): the step slides in from the side it is
+   walked toward, mirrored right-to-left; at `reduced` it fades only
+   (`setupSlide`). It is a page, not the kit's K12 dialog: nothing is
+   submitted at the end — each step's own form saves itself — so it uses
+   `useWizard` for the step and direction and draws its own frame.
+5. **The domain step is the domains page's own body** (`DomainsPanel`):
+   add, the records with copy, "check now". `tenant.domain.changed` re-reads
+   the checklist (`useLiveReread`, C-14) on the same channels the page uses,
+   so a domain the sweep verifies says "open" without a refresh.
+6. **The way in** is a link on the home while `complete` is false.
+
 ## Proof
 
 `my-resellers/self-workspace.test.tsx` (paths, the redirect and 404s, the
@@ -126,4 +152,5 @@ menu's users entry), `_components/reseller-menu.test.tsx` (whose links, their
 sections, the handoff on both hosts, every link's page),
 `_components/reseller-scope.test.tsx` (the header's tag and trail, UX-2-a2),
 `my-resellers/workspace-home.test.tsx` (home and settings, UX-2-b),
+`my-resellers/setup-wizard.test.tsx` (the wizard, UX-2-c),
 `handoff.service.spec.ts` (`hasPanel`).

@@ -156,6 +156,11 @@ export const myResellerConsolePath = (id: string, self = false) => resellerWorks
  * quotas, package change and support access — the cards the home once stacked.
  */
 export const myResellerSettingsPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/settings`;
+/**
+ * A reseller's setup wizard (UX-2-c, F-213): the onboarding route's steps one at
+ * a time, opened at the first one not done — nothing about where it was left is stored.
+ */
+export const myResellerSetupPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/setup`;
 /** A reseller's custom domains: add one, the records to publish, "check now" (F-066-w2). */
 export const myResellerDomainsPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/domains`;
 /**

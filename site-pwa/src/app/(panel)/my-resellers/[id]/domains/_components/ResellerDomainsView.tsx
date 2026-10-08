@@ -80,37 +80,8 @@ const EDGE_TONE: Record<EdgeStatus, { icon: LucideIcon; className: string }> = {
  */
 export function ResellerDomainsView({ id }: { id: string }) {
   const { t } = useLocale();
-  const message = useMessage();
-
-  const [domains, setDomains] = useState<ResellerDomain[] | null>(null);
   const [slug, setSlug] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<unknown>(null);
   const [asked, setAsked] = useState(0);
-  const retry = () => {
-    setLoadError(null);
-    setAsked((n) => n + 1);
-  };
-
-  useEffect(() => {
-    let alive = true;
-    resellerDomainsApi
-      .list(id)
-      .then((list) => alive && setDomains(list))
-      .catch((e) => alive && setLoadError(e));
-    return () => {
-      alive = false;
-    };
-  }, [id, asked]);
-
-  // A live event is a hint, not the record: the list is read again with no
-  // skeleton, and a failed read keeps what is on screen.
-  const { me, group } = usePanelSession();
-  const [own, platform] = domainLiveChannels(group?.current.userId ?? null, me);
-  const quietRead = () => {
-    resellerDomainsApi.list(id).then(setDomains, () => undefined);
-  };
-  useLiveReread(own, DOMAIN_LIVE_EVENTS, quietRead);
-  useLiveReread(platform, DOMAIN_LIVE_EVENTS, quietRead);
 
   // The name for the title, when the visitor owns it; staff see the plain title.
   useEffect(() => {
@@ -124,11 +95,6 @@ export function ResellerDomainsView({ id }: { id: string }) {
     };
   }, [id]);
 
-  const replace = (next: ResellerDomain) =>
-    setDomains((list) => (list ?? []).some((d) => d.id === next.id)
-      ? (list ?? []).map((d) => (d.id === next.id ? next : d))
-      : [next, ...(list ?? [])]);
-
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
       <PageHeader
@@ -136,35 +102,83 @@ export function ResellerDomainsView({ id }: { id: string }) {
         subtitle={t("common", K.subtitle)}
         actions={
           <>
-            <Button variant="quiet" size="sm" onClick={retry} icon={<RefreshCw size={12} aria-hidden />}>
+            <Button variant="quiet" size="sm" onClick={() => setAsked((n) => n + 1)} icon={<RefreshCw size={12} aria-hidden />}>
             {t("common", K.refresh)}
           </Button>
           </>
         }
       />
-
-      {loadError !== null ? (
-        <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
-          <Alert tone="error">{message(loadError)}</Alert>
-          <Button variant="primary" size="sm" onClick={retry}>
-            {t("common", K.reload)}
-          </Button>
-        </div>
-      ) : domains === null ? (
-        <TableSkeleton rows={3} columns={2} />
-      ) : (
-        <>
-          <AddDomain id={id} onAdded={replace} />
-          {domains.length === 0 ? (
-            <p className="rounded-2xl border border-card-border bg-card-bg p-6 text-sm text-text-secondary">
-              {t("common", K.empty)}
-            </p>
-          ) : (
-            domains.map((d) => <DomainCard key={d.id} tenantId={id} domain={d} onChanged={replace} />)
-          )}
-        </>
-      )}
+      <DomainsPanel id={id} asked={asked} />
     </div>
+  );
+}
+
+/**
+ * The page's body without its frame — the add form and one card per domain,
+ * read and followed live — shared by the page and the setup wizard's domain
+ * step (UX-2-c). `asked` re-reads it loudly.
+ */
+export function DomainsPanel({ id, asked = 0 }: { id: string; asked?: number }) {
+  const { t } = useLocale();
+  const message = useMessage();
+
+  const [domains, setDomains] = useState<ResellerDomain[] | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [retried, setRetried] = useState(0);
+  const retry = () => {
+    setLoadError(null);
+    setRetried((n) => n + 1);
+  };
+
+  useEffect(() => {
+    let alive = true;
+    setLoadError(null);
+    resellerDomainsApi
+      .list(id)
+      .then((list) => alive && setDomains(list))
+      .catch((e) => alive && setLoadError(e));
+    return () => {
+      alive = false;
+    };
+  }, [id, asked, retried]);
+
+  // A live event is a hint, not the record: the list is read again with no
+  // skeleton, and a failed read keeps what is on screen.
+  const { me, group } = usePanelSession();
+  const [own, platform] = domainLiveChannels(group?.current.userId ?? null, me);
+  const quietRead = () => {
+    resellerDomainsApi.list(id).then(setDomains, () => undefined);
+  };
+  useLiveReread(own, DOMAIN_LIVE_EVENTS, quietRead);
+  useLiveReread(platform, DOMAIN_LIVE_EVENTS, quietRead);
+
+  const replace = (next: ResellerDomain) =>
+    setDomains((list) => (list ?? []).some((d) => d.id === next.id)
+      ? (list ?? []).map((d) => (d.id === next.id ? next : d))
+      : [next, ...(list ?? [])]);
+
+  if (loadError !== null) {
+    return (
+      <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
+        <Alert tone="error">{message(loadError)}</Alert>
+        <Button variant="primary" size="sm" onClick={retry}>
+          {t("common", K.reload)}
+        </Button>
+      </div>
+    );
+  }
+  if (domains === null) return <TableSkeleton rows={3} columns={2} />;
+  return (
+    <>
+      <AddDomain id={id} onAdded={replace} />
+      {domains.length === 0 ? (
+        <p className="rounded-2xl border border-card-border bg-card-bg p-6 text-sm text-text-secondary">
+          {t("common", K.empty)}
+        </p>
+      ) : (
+        domains.map((d) => <DomainCard key={d.id} tenantId={id} domain={d} onChanged={replace} />)
+      )}
+    </>
   );
 }
 

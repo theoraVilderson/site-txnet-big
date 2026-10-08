@@ -2558,6 +2558,29 @@
     "settingsPage": {
       "title": "Reseller settings",
       "subtitle": "Currency, time zone, limits and quotas, your package, and the platform's access to your people."
+    },
+    "wizard": {
+      "title": "Set up step by step",
+      "titleSlug": "Set up {{slug}}, step by step",
+      "subtitle": "One step at a time. Leave whenever you like — you come back to the first step that is not done yet.",
+      "later": "Later",
+      "next": "Next",
+      "back": "Back",
+      "skip": "Skip for now",
+      "stepOf": "Step {{current}} of {{total}}",
+      "stepDone": "This step is done.",
+      "required": "Required to open",
+      "optional": "Recommended — it does not block opening",
+      "domainWaiting": "Publish the records below at your DNS provider. This page follows the check live — you do not need to refresh.",
+      "domainOpen": "Your domain is verified — your reseller is open to customers.",
+      "openScreen": "Open this step's screen",
+      "finished": {
+        "title": "Your reseller is fully set up",
+        "body": "Domain, payment gateway, bot and prices are all in place. You can change any of them from the menu.",
+        "home": "Go to your reseller's home"
+      },
+      "start": "Set up step by step",
+      "startHint": "The wizard opens at the first step that is not done yet."
     }
   },
   "resellerGateways": {

@@ -3,7 +3,7 @@ id: tenant
 layer: domain
 status: active
 version: 6
-updated: 2026-09-19
+updated: 2026-10-08
 ---
 
 # Contract — tenant / the onboarding gate
@@ -180,4 +180,4 @@ Refusals are `ResellerAccess`'s: `not_allowed` 403, `reseller_not_found` 404,
 |---|---|
 | auth-, billing-, notification-service | `TenantStatusGuard` — inherit the column through `tenantAllows`, unchanged |
 | worker-service `TenantStatusGate`, gateway-service `TenantSocketWatch` | the same state; a gated tenant's ticks and sockets follow their capability |
-| panel-web | the checklist, on `/my-resellers/:id` (F-066-w, `resellerOnboardingApi`); the door rule through `GET /api/public/tenant/serves-panel` (F-066-x, F-018-ak) |
+| panel-web | the checklist, on `/my-resellers/:id` (F-066-w, `resellerOnboardingApi`) and its setup wizard, `/my-resellers/:id/setup` (UX-2-c); the door rule through `GET /api/public/tenant/serves-panel` (F-066-x, F-018-ak) |
