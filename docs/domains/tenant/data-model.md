@@ -90,6 +90,9 @@ any service, so nothing is backfilled; RLS is untouched (its `tenantId` did not 
 (existing suspensions become `manual`), `tenant_subscription.renewalWarnedAt`, and
 `renewalGraceDays` with its CHECK.
 
+`20261008000100_proven_ownership_puts_a_domain_at_the_edge` (EDGE-1-n, ADR-0129 amendment 3) adds
+`ownershipProvenAt` to `tenant_domain`: TXT + CNAME passed while `verifying`, so the edge holds it. Additive.
+
 `20261007000200_a_domain_behind_its_own_cdn_is_told_the_edge_record` (EDGE-1-d) adds `edgeOwnershipName` /
 `edgeOwnershipValue` to `tenant_domain`. Additive.
 

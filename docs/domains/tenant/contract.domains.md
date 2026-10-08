@@ -56,7 +56,7 @@ in the add's transaction; adding again a domain it already has is answered, neve
 | status (view) | stored as | routes? | leaves by |
 |---|---|---|---|
 | `pending` | `pending` | no | the tenant asks for a check |
-| `verifying` | `verifying` | no | a passing check -> `verified`; `DOMAIN_VERIFY_WINDOW_HOURS` (72) after the request -> `failed` |
+| `verifying` | `verifying` | no | TXT + CNAME passing -> `ownershipProvenAt`, held at the edge (below); a passing check -> `verified`; `DOMAIN_VERIFY_WINDOW_HOURS` (72) after the request -> `failed`, proof cleared |
 | `verified` | `verified` | **yes** | a re-validation missing the TXT record -> `revalidating` |
 | `revalidating` | `verified` + `revalidatingSince` | **yes** | the record back -> `verified`; `DOMAIN_REVALIDATION_GRACE_HOURS` (72) -> `pending`, token kept |
 | `failed` | `failed` | no | the tenant asks for a check again |
@@ -89,22 +89,25 @@ A `verified` domain is re-validated on its **TXT record only** (and the advisory
 catalog 13.2 step 6 is about a lost record, and a CDN outage is not one. A DNS
 lookup that errors (not "no record") is a sweep `error` and changes nothing.
 
-## The edge lifecycle (EDGE-1-e, ADR-0129 (6))
+## The edge lifecycle (EDGE-1-e, ADR-0129 (6); two stages, EDGE-1-n, amendment 3)
 
 Run by `check-due` after the checks, so a domain verified this tick is
 registered this tick; only with `EDGE_LIFECYCLE_ENABLED=true` (off until
 go-live, EDGE-1-i, "The CDN and go-live" below). **Live = `verified` and edge `issued`.**
+**Held** = `verified`, or `verifying` with `ownershipProvenAt`: the probe lines
+reach us through the edge, which answers 409 for a host it does not hold, so a
+domain is held once TXT and CNAME prove it, and verified once they pass.
 
 | edge step | read | leaves by |
 |---|---|---|
-| `none` (verified) | every tick | written `registering`, then `register(host)` -> the answer's step; a hostname left from a failure is removed first |
+| `none` (held) | every tick | written `registering`, then `register(host)` -> the answer's step; a hostname left from a failure is removed first |
 | `registering` | every tick | a register that threw keeps `edgeLastError` and is sent again |
 | `issuing` | every tick | `status(id)` -> `issued` / `failed` / still `issuing` |
 | `issued`, `renew_failed`, `failed` | every `DOMAIN_REVALIDATE_EVERY_HOURS` | `status(id)`; renewal is Cloudflare's, `renew_failed` is read, never retried |
 
 - A hostname the provider no longer has is written `none` and registered again:
-  our table is the list. A domain no longer `verified` (dropped to `pending`)
-  is removed from the CDN and its edge columns cleared.
+  our table is the list. A domain no longer held (`pending`, `failed`) is
+  removed from the CDN and its edge columns cleared; so is a replaced claim's.
 - `failed` keeps what the provider said (`edgeLastError`). A check the tenant
   asks for on a `verified` domain whose edge `failed` sets it back to `none`.
 - Every write is guarded on the step it read. A provider error is a sweep

@@ -110,3 +110,23 @@ address list to keep in step. Decided:
   and other customers of the same CDN can still send any claim), and a key per
   domain set by the reseller in the CDN (one more step to forget).
 Rows EDGE-1-k, EDGE-1-m (gateway), EDGE-1-l (limiter).
+
+## Amendment 3 — the edge holds a domain once its ownership is proven (2026-10-08, D-72)
+Decision 6 registered a domain at the edge only after `verified`, and `verified`
+needs the http, https and cache lines to come back from the domain itself. Those
+requests go through Cloudflare, which answers a hostname it does not hold with
+409 and has no certificate for it, so no domain could ever pass: a deadlock on
+the direct CNAME and behind a reseller's own CDN alike (its origin is the same
+edge). Found on dev with `panel.barghgho.ir`. Decided (user):
+- **Two stages.** A `verifying` domain whose TXT and CNAME lines pass has its
+  ownership proven (`ownershipProvenAt`) and is registered at the edge on the
+  same tick, as a `verified` one was. The probe lines then pass once the
+  certificate is issued, and only then is the domain `verified` and routed.
+  Live is still `verified` and `issued`.
+- The proof is cleared whenever the domain leaves `verifying` for `failed` or
+  `pending`, and a domain the edge holds with no proof and no `verified` is
+  taken off it, as before.
+- Rejected: skipping the probe lines on a direct CNAME (a domain would route
+  before it had a certificate) and registering by hand (every reseller after
+  the first would hit the same wall).
+Rows EDGE-1-n (tenant), EDGE-1-o (panel-web).

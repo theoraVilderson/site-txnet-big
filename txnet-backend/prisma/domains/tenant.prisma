@@ -303,6 +303,10 @@ model TenantDomain {
   /// grace ends, then `pending`. The catalog's `revalidating` is this, not a status,
   /// so every routing reader keeps checking `verified` alone.
   revalidatingSince  DateTime?
+  /// When TXT and CNAME first passed while `verifying` (EDGE-1-n, ADR-0129
+  /// amendment 3): the edge holds the domain from then, so its certificate can
+  /// issue before the probe lines verify it. Cleared when it leaves `verifying`.
+  ownershipProvenAt  DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 

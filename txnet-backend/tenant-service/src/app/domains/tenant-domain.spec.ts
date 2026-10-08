@@ -198,6 +198,7 @@ describe('TenantDomainService', () => {
     edgeLastError: null,
     edgeOwnershipName: null,
     edgeOwnershipValue: null,
+    ownershipProvenAt: null,
     ...over,
   });
 
@@ -593,6 +594,59 @@ describe('TenantDomainService', () => {
       await service.checkDue(at(2));
       expect(edge.hostnames.size).toBe(0);
       expect(rows[0]['edgeStatus']).toBe('none');
+    });
+  });
+
+  describe('two stages: proven ownership puts the domain at the edge (EDGE-1-n, ADR-0129 amendment 3)', () => {
+    /** TXT and CNAME in place, but the edge answers 409 and has no certificate: it does not hold the host yet. */
+    const atTheEdgeOnly = (world: ReturnType<typeof build>['world']) => {
+      world.txt[verifyRecordName('ali-vpn.ir')] = ['tok-1'];
+      world.cname['ali-vpn.ir'] = ['ali.edge.txnet.app'];
+      world.arrivesAs['http://ali-vpn.ir'] = 409;
+    };
+
+    it('registers a verifying domain once TXT and CNAME pass, and verifies it when the probes come through', async () => {
+      const { service, rows, world, edge } = build({ rows: [pendingRow({ verificationStatus: 'verifying' })] });
+      atTheEdgeOnly(world);
+
+      expect(await service.checkDue(at(1))).toMatchObject({ waiting: 1, verified: 0, edgeRegistered: 1 });
+      expect(rows[0]).toMatchObject({ verificationStatus: 'verifying', ownershipProvenAt: at(1), edgeStatus: 'issuing', edgeHostnameId: 'fake-1' });
+
+      // The certificate is issued and the edge forwards the host: the probe lines pass.
+      edge.set('fake-1', { status: 'issued', ownership: null });
+      healthy(world);
+      expect(await service.checkDue(at(2))).toMatchObject({ verified: 1, edgeIssued: 1 });
+      expect(rows[0]).toMatchObject({ verificationStatus: 'verified', edgeStatus: 'issued', edgeHostnameId: 'fake-1' });
+      expect(edge.hostnames.size).toBe(1);
+    });
+
+    it('proves nothing and registers nothing while the TXT record is missing', async () => {
+      const { service, rows, world, edge } = build({ rows: [pendingRow({ verificationStatus: 'verifying' })] });
+      atTheEdgeOnly(world);
+      world.txt[verifyRecordName('ali-vpn.ir')] = [];
+
+      expect(await service.checkDue(at(1))).toMatchObject({ waiting: 1, edgeRegistered: 0 });
+      expect(rows[0]).toMatchObject({ ownershipProvenAt: null, edgeStatus: 'none' });
+      expect(edge.hostnames.size).toBe(0);
+    });
+
+    it('a proven domain that never verifies fails at the window, loses its proof and leaves the edge', async () => {
+      const { service, rows, world, edge } = build({ rows: [pendingRow({ verificationStatus: 'verifying' })] });
+      atTheEdgeOnly(world);
+      await service.checkDue(at(1));
+      expect(edge.hostnames.size).toBe(1);
+
+      expect(await service.checkDue(at(72))).toMatchObject({ failed: 1, edgeRemoved: 1 });
+      expect(rows[0]).toMatchObject({ verificationStatus: 'failed', ownershipProvenAt: null, edgeStatus: 'none', edgeHostnameId: null });
+      expect(edge.hostnames.size).toBe(0);
+    });
+
+    it('holds no domain at the edge while the lifecycle is off', async () => {
+      const { service, rows, world, edge } = build({ rows: [pendingRow({ verificationStatus: 'verifying' })], edgeOff: true });
+      atTheEdgeOnly(world);
+      await service.checkDue(at(1));
+      expect(rows[0]['ownershipProvenAt']).toEqual(at(1));
+      expect(edge.hostnames.size).toBe(0);
     });
   });
 

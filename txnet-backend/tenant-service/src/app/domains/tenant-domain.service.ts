@@ -65,11 +65,14 @@ import type { AddDomainInput } from './tenant-domain.schema';
  * Redis that cannot be reached refuses the change rather than leaving the old
  * answer cached.
  *
- * **The edge (ADR-0129 (6), EDGE-1-e).** Once `verified`, the domain is
- * registered with the {@link EdgeProvider} and read every tick until its
+ * **The edge (ADR-0129 (6), EDGE-1-e; amendment 3, EDGE-1-n).** Once its
+ * ownership is proven — TXT and CNAME pass while `verifying` — or once
+ * `verified`, the domain is registered with the {@link EdgeProvider}: the probe
+ * lines reach the platform through the edge, so they can pass only after its
+ * certificate is issued. It is read every tick until its
  * certificate is `issued` or `failed`, then on the re-validation clock (renewal
  * is the provider's; `renew_failed` is read, never retried). A domain no
- * longer `verified` leaves the CDN. Live = `verified` and `issued`.
+ * that loses both leaves the CDN. Live = `verified` and `issued`.
  *
  * **Every change of status writes `tenant.domain.changed`** in the transaction
  * that made it (RT-1-e, C-14), for the owner's page and the platform staff's.
@@ -149,6 +152,7 @@ const DOMAIN_SELECT = {
   lastCheckedAt: true,
   lastCheck: true,
   revalidatingSince: true,
+  ownershipProvenAt: true,
   edgeProvider: true,
   edgeHostnameId: true,
   edgeStatus: true,
@@ -172,6 +176,16 @@ const HOUR_MS = 3_600_000;
 /** Edge steps read every tick; the rest wait for the re-validation clock. */
 const EDGE_MOVING: TenantDomainEdgeStatus[] = [TenantDomainEdgeStatus.none, TenantDomainEdgeStatus.registering, TenantDomainEdgeStatus.issuing];
 const EDGE_SETTLED: TenantDomainEdgeStatus[] = [TenantDomainEdgeStatus.issued, TenantDomainEdgeStatus.renew_failed, TenantDomainEdgeStatus.failed];
+
+/** The rows the edge holds (ADR-0129 amendment 3): verified, or verifying with ownership proven. */
+const HELD: Prisma.TenantDomainWhereInput[] = [
+  { verificationStatus: DomainVerificationStatus.verified },
+  { verificationStatus: DomainVerificationStatus.verifying, ownershipProvenAt: { not: null } },
+];
+
+function isHeld(row: Pick<DomainRow, 'verificationStatus' | 'ownershipProvenAt'>): boolean {
+  return row.verificationStatus === DomainVerificationStatus.verified || (row.verificationStatus === DomainVerificationStatus.verifying && row.ownershipProvenAt !== null);
+}
 
 /** The edge columns of a domain the CDN does not hold. */
 const OFF_EDGE = {
@@ -212,6 +226,8 @@ export class TenantDomainService {
       throw new DomainRefused('domain_taken', host);
     }
 
+    // A claim with proven ownership may be at the edge (amendment 3); its hostname goes with the row.
+    if (existing?.edgeHostnameId) await this.edge.remove(existing.edgeHostnameId);
     try {
       const row = await this.all.$transaction(async (tx) => {
         // Each custom domain is a certificate (F-019-q, ADR-0106): the reseller's
@@ -365,9 +381,11 @@ export class TenantDomainService {
     const target = cnameTargetHost(row.tenant.slug, this.base());
     if (row.verificationStatus === DomainVerificationStatus.verifying) {
       const cname = this.lookup.cname(host);
+      const txt = this.lookup.txt(verifyRecordName(host)).then((found) => txtLine(host, token, found));
+      const pointed = cname.then((found) => cnameLine(target, this.base(), found));
       const check = await this.check(now, [
-        this.lookup.txt(verifyRecordName(host)).then((found) => txtLine(host, token, found)),
-        cname.then((found) => cnameLine(target, this.base(), found)),
+        txt,
+        pointed,
         ...(['http', 'https'] as const).map((scheme) => {
           const nonce = randomBytes(8).toString('hex');
           return this.lookup
@@ -388,8 +406,14 @@ export class TenantDomainService {
         return 'verified';
       }
       const expired = now.getTime() - (row.statusChangedAt ?? now).getTime() >= this.hours('DOMAIN_VERIFY_WINDOW_HOURS');
-      await this.write(row, now, check, expired ? { verificationStatus: DomainVerificationStatus.failed, statusChangedAt: now } : {}, false);
-      return expired ? 'failed' : 'waiting';
+      if (expired) {
+        await this.write(row, now, check, { verificationStatus: DomainVerificationStatus.failed, statusChangedAt: now, ownershipProvenAt: null }, false);
+        return 'failed';
+      }
+      // The first stage (ADR-0129 amendment 3): owned and pointed at us, so the edge may hold it.
+      const proven = !row.ownershipProvenAt && (await txt).ok && (await pointed).ok;
+      await this.write(row, now, check, proven ? { ownershipProvenAt: now } : {}, false);
+      return 'waiting';
     }
 
     // `verified`: catalog 13.2 step 6 re-validates the record, not the path —
@@ -414,6 +438,7 @@ export class TenantDomainService {
       verificationStatus: DomainVerificationStatus.pending,
       verifiedAt: null,
       revalidatingSince: null,
+      ownershipProvenAt: null,
       statusChangedAt: now,
     }, true);
     this.logger.log(`custom domain ${host} of ${row.tenantId} lost its record: back to pending, no longer routed`);
@@ -430,9 +455,9 @@ export class TenantDomainService {
   }
 
   /**
-   * The domains the edge owes a step: verified ones not yet issued (every
-   * tick) or settled and due again on the re-validation clock, and any domain
-   * no longer verified that the CDN still holds.
+   * The domains the edge owes a step: held ones (verified, or verifying with
+   * ownership proven) not yet issued (every tick) or settled and due again on
+   * the re-validation clock, and any domain no longer held that the CDN still has.
    */
   private async edgeDue(now: Date): Promise<DomainRow[]> {
     const every = this.hours('DOMAIN_REVALIDATE_EVERY_HOURS');
@@ -440,13 +465,17 @@ export class TenantDomainService {
       where: {
         domainType: TenantDomainType.custom_domain,
         OR: [
-          { verificationStatus: DomainVerificationStatus.verified, edgeStatus: { in: EDGE_MOVING } },
-          {
-            verificationStatus: DomainVerificationStatus.verified,
+          ...HELD.map((held) => ({ ...held, edgeStatus: { in: EDGE_MOVING } })),
+          ...HELD.map((held) => ({
+            ...held,
             edgeStatus: { in: EDGE_SETTLED },
             OR: [{ edgeCheckedAt: null }, { edgeCheckedAt: { lte: new Date(now.getTime() - every) } }],
+          })),
+          {
+            verificationStatus: { not: DomainVerificationStatus.verified },
+            edgeHostnameId: { not: null },
+            OR: [{ verificationStatus: { not: DomainVerificationStatus.verifying } }, { ownershipProvenAt: null }],
           },
-          { verificationStatus: { not: DomainVerificationStatus.verified }, edgeHostnameId: { not: null } },
         ],
       },
       orderBy: { edgeCheckedAt: { sort: 'asc', nulls: 'first' } },
@@ -458,10 +487,10 @@ export class TenantDomainService {
   /** One domain's next edge step. Every write is guarded on the edge step it read. */
   private async edgeOne(row: DomainRow, now: Date): Promise<EdgeOutcome> {
     const id = row.edgeHostnameId;
-    if (row.verificationStatus !== DomainVerificationStatus.verified) {
+    if (!isHeld(row)) {
       await this.edge.remove(id!);
       await this.edgeWrite(row, { ...OFF_EDGE, edgeCheckedAt: now });
-      this.logger.log(`custom domain ${row.domainValue} is no longer verified: taken off the edge`);
+      this.logger.log(`custom domain ${row.domainValue} is neither verified nor proven: taken off the edge`);
       return 'edgeRemoved';
     }
 
