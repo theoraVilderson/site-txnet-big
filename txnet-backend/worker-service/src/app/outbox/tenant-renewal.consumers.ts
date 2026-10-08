@@ -4,9 +4,10 @@ import { ConfigService } from '@nestjs/config';
 
 import { envelopeData } from '../automation/internal-answer';
 import { BrokerService } from '../broker/broker.service';
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { RealtimePublisher } from '../realtime/realtime.publisher';
-import { EventNoticeSender } from './event-notice';
+import { EventNoticeSender, type Person } from './event-notice';
 
 /** This consumer's segment of its per-channel markers (ADR-0045, F-067-o). */
 const NOTICE_CONSUMER = 'tenant-subscription-notice';
@@ -107,7 +108,9 @@ export function quotaNotice(type: string, p: Record<string, unknown>): { templat
  * (F-019-v8): 80%, 100%, stopped, and the daily digest ({@link quotaNotice}). An emergency
  * entry by the platform's staff (F-117-d), at entry. A custom domain live,
  * failed or lost (RT-1-e2). The wheel's
- * day at 80% of its cap (F-707-e) goes to each wheel admin the payload names. No live push of its
+ * day at 80% of its cap (F-707-e) goes to each wheel admin the payload names. Each person is
+ * told in the tenant they live in (F-067-q): a bought reseller's owner is a platform user,
+ * whom auth-service finds under no reseller's tenant. No live push of its
  * own: the inbox row's `notification.created` already reaches every open
  * device (F-035-b), and no page reads a subscription event.
  */
@@ -121,8 +124,15 @@ export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap 
     redis: RedisService,
     realtime: RealtimePublisher,
     config: ConfigService,
+    private readonly crossTenant: CrossTenantPrismaService,
   ) {
     this.notices = new EventNoticeSender(redis, realtime, config, broker);
+  }
+
+  /** Tells `person` in the tenant they live in; one the users table does not know keeps the event's (F-067-q). */
+  private async tell(eventId: string, person: Person): Promise<void> {
+    const home = await this.crossTenant.user.findUnique({ where: { id: person.userId }, select: { tenantId: true } });
+    await this.notices.send({ consumer: NOTICE_CONSUMER, eventId, person: { ...person, tenantId: home?.tenantId ?? person.tenantId } });
   }
 
   async onApplicationBootstrap() {
@@ -139,7 +149,7 @@ export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap 
       if (!tenantId || !userId) throw new Error(`outbox event ${event.id} has a payload without its tenant or admin`);
       const params: Record<string, string> = {};
       for (const k of ['day', 'spent', 'cap', 'currencyCode'] as const) if (str(p, k)) params[k] = str(p, k)!;
-      await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId, template: 'wheelCapNearing', params } });
+      await this.tell(event.id, { tenantId, userId, template: 'wheelCapNearing', params });
       return;
     }
     if (event.type === OutboxEventType.LOTTERY_WON) {
@@ -148,7 +158,7 @@ export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap 
       if (!tenantId || !userId) throw new Error(`outbox event ${event.id} has a payload without its tenant or winner`);
       const params: Record<string, string> = {};
       for (const k of ['title', 'prize'] as const) if (str(p, k)) params[k] = str(p, k)!;
-      await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId, template: 'lotteryWon', params } });
+      await this.tell(event.id, { tenantId, userId, template: 'lotteryWon', params });
       return;
     }
     const ownerUserId = str(p, 'ownerUserId');
@@ -156,12 +166,12 @@ export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap 
     if (event.type === OutboxEventType.TENANT_QUOTA_ALERT || event.type === OutboxEventType.TENANT_QUOTA_DIGEST) {
       const quota = quotaNotice(event.type, p);
       if (!quota) throw new Error(`outbox event ${event.id} is a quota notice auth-service has no words for`);
-      await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId: ownerUserId, ...quota } });
+      await this.tell(event.id, { tenantId, userId: ownerUserId, ...quota });
       return;
     }
     if (event.type === OutboxEventType.TENANT_EMERGENCY_ENTRY) {
       // F-117-d (ADR-0104 (5)): told at entry. No params: the reason is the history's, never the message's.
-      await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId: ownerUserId, template: 'resellerEmergencyEntry', params: {} } });
+      await this.tell(event.id, { tenantId, userId: ownerUserId, template: 'resellerEmergencyEntry', params: {} });
       return;
     }
     if (event.type === OutboxEventType.TENANT_DOMAIN_NOTICE) {
@@ -169,13 +179,13 @@ export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap 
       const template = DOMAIN_NOTICE_TEMPLATES[str(p, 'outcome') ?? ''];
       const host = str(p, 'host');
       if (!template || !host) throw new Error(`outbox event ${event.id} is a domain notice auth-service has no words for`);
-      // In the owner's own tenant (`ownerTenantId`): a bought reseller's owner is a platform user.
+      // `ownerTenantId` is what tenant-service read (RT-1-e2); `tell` reads it again, for every notice.
       const person = { tenantId: str(p, 'ownerTenantId') ?? tenantId, userId: ownerUserId, template, params: { host } };
-      await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person });
+      await this.tell(event.id, person);
       return;
     }
     if (event.type === OutboxEventType.TENANT_WHOLESALE_UNFUNDED) {
-      await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId: ownerUserId, template: 'resellerWholesaleUnfunded', params: {} } });
+      await this.tell(event.id, { tenantId, userId: ownerUserId, template: 'resellerWholesaleUnfunded', params: {} });
       return;
     }
     const amount = str(p, 'amount');
@@ -193,6 +203,6 @@ export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap 
       params.balance = str(p, 'balance') ?? '0.00';
       params.suspendsAt = str(p, 'suspendsAt') ?? '';
     }
-    await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId: ownerUserId, template, params } });
+    await this.tell(event.id, { tenantId, userId: ownerUserId, template, params });
   }
 }

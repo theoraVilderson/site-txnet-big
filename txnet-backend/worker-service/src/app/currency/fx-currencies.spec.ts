@@ -161,6 +161,7 @@ describe('FX sources for many currencies (F-116-i2)', () => {
   it('carries a per-currency override through env validation, and drops an empty one', () => {
     const env = validateEnv({
       DATABASE_APP_URL: 'postgresql://x',
+      DATABASE_CROSS_TENANT_URL: 'postgresql://y',
       RABBITMQ_URL: 'amqp://x',
       REDIS_URL: 'redis://x',
       FX_SOURCES_GBP: 'tgju-gbp,ecb-gbp',

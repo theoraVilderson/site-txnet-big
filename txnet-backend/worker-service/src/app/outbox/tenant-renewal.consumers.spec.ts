@@ -28,9 +28,12 @@ function event(type: string, payload: Record<string, unknown> = {}): OutboxMessa
   };
 }
 
-function build() {
+/** `homes` maps a user to the tenant they live in; a user it does not name is not found. */
+function build(homes: Record<string, string> = {}) {
   const config = { get: (_k: string, fallback?: unknown) => fallback };
-  const consumer = new TenantSubscriptionNoticeConsumer({} as never, {} as never, { publish: vi.fn() } as never, config as never);
+  const findUnique = vi.fn(async ({ where }: { where: { id: string } }) => (homes[where.id] ? { tenantId: homes[where.id] } : null));
+  const crossTenant = { user: { findUnique } };
+  const consumer = new TenantSubscriptionNoticeConsumer({} as never, {} as never, { publish: vi.fn() } as never, config as never, crossTenant as never);
   const send = vi.fn(async (_notice: { consumer: string; person?: { tenantId: string; userId: string; template: string; params: Record<string, string> } }) => undefined);
   (consumer as unknown as { notices: { send: typeof send } }).notices = { send };
   const person = () => (send.mock.calls[0] as unknown as [{ person: { tenantId: string; userId: string; template: string; params: Record<string, string> } }])[0].person;
@@ -81,6 +84,40 @@ describe('TenantSubscriptionNoticeConsumer — a custom domain (RT-1-e2)', () =>
     const { consumer, send } = build();
     await expect(consumer.handle(event(OutboxEventType.TENANT_DOMAIN_NOTICE, { host: 'a.ir', outcome: 'odd' }))).rejects.toThrow(/domain notice/);
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe("TenantSubscriptionNoticeConsumer — the person's own tenant (F-067-q)", () => {
+  // A bought reseller's owner is a platform user: auth-service looks a person up
+  // in the tenant it is told, and under the reseller's it found no one and sent
+  // nothing (`sent: []`, no error). The consumer reads where the person lives.
+  const PLATFORM = '99999999-9999-4999-8999-999999999999';
+  const ADMIN = '55555555-5555-4555-8555-555555555555';
+
+  it.each([
+    ['renewal due', OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE, { amount: '20.00' }],
+    ['suspended', OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED, { amount: '20.00' }],
+    ['zero balance', OutboxEventType.TENANT_WHOLESALE_UNFUNDED, {}],
+    ['quota alert', OutboxEventType.TENANT_QUOTA_ALERT, { level: '80', mode: 'overage' }],
+    ['quota digest', OutboxEventType.TENANT_QUOTA_DIGEST, { day: '2026-10-08' }],
+    ['emergency entry', OutboxEventType.TENANT_EMERGENCY_ENTRY, {}],
+    ['domain', OutboxEventType.TENANT_DOMAIN_NOTICE, { host: 'a.ir', outcome: 'live' }],
+  ])("tells a platform owner of a reseller's %s in the platform's tenant", async (_label, type, payload) => {
+    const { consumer, person } = build({ [OWNER]: PLATFORM });
+    await consumer.handle(event(type, payload));
+    expect(person()).toMatchObject({ tenantId: PLATFORM, userId: OWNER });
+  });
+
+  it('tells a wheel admin in their own tenant too', async () => {
+    const { consumer, person } = build({ [ADMIN]: PLATFORM });
+    await consumer.handle(event(OutboxEventType.TENANT_WHEEL_CAP_NEARING, { userId: ADMIN, day: '2026-10-08', spent: '8', cap: '10' }));
+    expect(person()).toMatchObject({ tenantId: PLATFORM, userId: ADMIN, template: 'wheelCapNearing' });
+  });
+
+  it("keeps the event's tenant for an owner who lives in the reseller itself", async () => {
+    const { consumer, person } = build({ [OWNER]: TENANT });
+    await consumer.handle(event(OutboxEventType.TENANT_WHOLESALE_UNFUNDED));
+    expect(person()).toMatchObject({ tenantId: TENANT });
   });
 });
 
