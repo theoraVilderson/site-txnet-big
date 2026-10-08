@@ -1900,7 +1900,13 @@
       "noRedirect": "The bank did not answer with a page to pay on. Try again, or pick another gateway."
     }
   },
-  "resellerPanel": "My reseller panel: {{slug}}",
+  "resellerNav": {
+    "title": "My reseller",
+    "settings": "Reseller settings",
+    "open": "Open reseller panel",
+    "opening": "Opening reseller panel…",
+    "noPanel": "Connect and verify the reseller's domain to open its panel."
+  },
   "openingResellerPanel": "Opening your reseller panel…",
   "handoffFailed": "This link has expired or was already used. Sign in to continue.",
   "resellers": {

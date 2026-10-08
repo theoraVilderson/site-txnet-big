@@ -24,6 +24,8 @@ export default function UsersWidget() {
   const router = useRouter();
   const { me } = usePanelSession();
   const tenantId = me?.tenant.id ?? null;
+  // On a reseller's own domain its users page has no id in the address (F-061-n).
+  const self = me?.tenant.type === "reseller";
   const [q, setQ] = useState("");
   const source = useWidgetSource(
     "users",
@@ -43,7 +45,7 @@ export default function UsersWidget() {
             onSubmit={(e) => {
               e.preventDefault();
               const query = q.trim();
-              if (tenantId) router.push(query ? `${myResellerUsersPath(tenantId)}?q=${encodeURIComponent(query)}` : myResellerUsersPath(tenantId));
+              if (tenantId) router.push(query ? `${myResellerUsersPath(tenantId, self)}?q=${encodeURIComponent(query)}` : myResellerUsersPath(tenantId, self));
             }}
             className="relative"
           >
@@ -57,7 +59,7 @@ export default function UsersWidget() {
               className="h-10 w-full rounded-xl border border-card-border bg-bg-inner ps-9 pe-3 text-sm text-text-primary outline-none focus:border-primary"
             />
           </form>
-          {tenantId && <FooterLink href={myResellerUsersPath(tenantId)}>{t("common", D.users.open)}</FooterLink>}
+          {tenantId && <FooterLink href={myResellerUsersPath(tenantId, self)}>{t("common", D.users.open)}</FooterLink>}
         </div>
       )}
     </WidgetBody>

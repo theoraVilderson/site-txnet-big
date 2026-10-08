@@ -82,6 +82,14 @@ export const GUIDE_SECTION_ROUTES: Readonly<Record<GuidePanelSection, string>> =
 const PATTERNS: { section: GuidePanelSection; segments: string[] }[] = [
   ...Object.entries(GUIDE_SECTION_ROUTES).map(([section, path]) => ({ section: section as GuidePanelSection, segments: split(path) })),
   { section: "my_resellers" as const, segments: split(myResellerConsolePath(ID)) },
+  // The caller's own workspace has no id in its address (F-061-n): the same sections at `/reseller/…`.
+  { section: "my_resellers" as const, segments: split(myResellerConsolePath(ID, true)) },
+  { section: "reseller_domains" as const, segments: split(myResellerDomainsPath(ID, true)) },
+  { section: "reseller_gateways" as const, segments: split(myResellerGatewaysPath(ID, true)) },
+  { section: "reseller_bot" as const, segments: split(myResellerBotPath(ID, true)) },
+  { section: "reseller_catalog" as const, segments: split(myResellerCatalogPath(ID, true)) },
+  { section: "reseller_branding" as const, segments: split(myResellerBrandingPath(ID, true)) },
+  { section: "reseller_users" as const, segments: split(myResellerUsersPath(ID, true)) },
 ].sort((a, b) => b.segments.length - a.segments.length);
 
 function split(path: string): string[] {

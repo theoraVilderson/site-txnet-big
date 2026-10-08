@@ -108,7 +108,7 @@ export interface PanelMenuLink extends PermissionGated {
    * A page inside the caller's own tenant is a function of `me.tenant.id`
    * (F-311-ab), and is hidden while that id is unknown.
    */
-  href: string | ((tenantId: string) => string) | null;
+  href: string | ((tenantId: string, self: boolean) => string) | null;
 }
 
 export interface PanelMenuGroup extends PermissionGated {
@@ -285,7 +285,8 @@ export function isMenuGroup<T extends PanelMenuEntry | VisibleMenuEntry>(
  * and hides it.
  *
  * `tenantId` is `me.tenant.id`, which builds an `href` that is a function of it
- * (F-311-ab); `null` hides such an entry.
+ * (F-311-ab); `null` hides such an entry. A reseller's session gets the
+ * id-less address of its own domain (F-061-n).
  */
 export function visibleMenu(
   entries: readonly PanelMenuEntry[],
@@ -297,7 +298,9 @@ export function visibleMenu(
 ): VisibleMenuEntry[] {
   const permitted = (e: PermissionGated) => admits(e, held, tenantType, isOwner, ownsReseller);
   const withPage = (l: PanelMenuLink): VisibleMenuLink | null => {
-    if (typeof l.href === "function") return tenantId === null ? null : { ...l, href: l.href(tenantId) };
+    // `self`: a reseller's session, on its own domain — the id-less address (F-061-n).
+    if (typeof l.href === "function")
+      return tenantId === null ? null : { ...l, href: l.href(tenantId, tenantType === "reseller") };
     return l.href === null ? null : { ...l, href: l.href };
   };
   const out: VisibleMenuEntry[] = [];
@@ -441,8 +444,11 @@ export interface MenuCrumb {
 export function menuTrail(entries: readonly PanelMenuEntry[], pathname: string): MenuCrumb[] {
   const hrefOf = (l: PanelMenuLink) => {
     if (typeof l.href !== "function") return l.href;
+    // A reseller's own domain addresses it with no id at all (F-061-n).
+    const self = l.href("TENANTPROBE", true);
+    if (!self.includes("TENANTPROBE") && (pathname === self || pathname.startsWith(`${self}/`))) return self;
     // Letters only, so a path builder that encodes its id hands the probe back unchanged.
-    const [before, after] = l.href("TENANTPROBE").split("TENANTPROBE");
+    const [before, after] = l.href("TENANTPROBE", false).split("TENANTPROBE");
     const escape = (part: string) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     return pathname.match(new RegExp(`^${escape(before)}[^/]+${escape(after)}(?=/|$)`))?.[0] ?? null;
   };

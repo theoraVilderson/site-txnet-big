@@ -67,7 +67,7 @@ describe("the routes the screens call", () => {
   });
 
   it("is linked from the reseller's console", () => {
-    expect(source(CONSOLE)).toContain("myResellerUsersPath(id)");
+    expect(source(CONSOLE)).toContain("myResellerUsersPath(id, self)");
   });
 });
 

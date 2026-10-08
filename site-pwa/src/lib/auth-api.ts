@@ -253,6 +253,14 @@ export type SwitchGroup = {
  * is the second door an operator surface needs: `settlement.manage` on a
  * reseller's own role does not make that reseller the platform owner.
  */
+/**
+ * One reseller the caller owns (`GET /auth/handoff`, F-061-f). `here`: this
+ * request came through its own panel domain (F-061-m). `hasPanel`: a handoff
+ * to it would land — it has a verified panel domain (F-061-n). `live`: not
+ * terminated — an owner holds one at a time (`already_reseller`).
+ */
+export type OwnedReseller = { id: string; slug: string; here: boolean; hasPanel: boolean; live: boolean };
+
 export type Me = {
   userId: string;
   fullName: string;
@@ -402,7 +410,7 @@ export const authApi = {
   /** The caller's own account plus the accounts they may switch to (F-0206). */
   async listAccounts() { return request<SwitchGroup>("/auth/accounts", { method: "GET" }); },
   /** The resellers the caller owns — one "my reseller panel" entry each (F-061-f). */
-  async ownedResellers() { return request<{ resellers: { id: string; slug: string; here: boolean }[] }>("/auth/handoff", { method: "GET" }); },
+  async ownedResellers() { return request<{ resellers: OwnedReseller[] }>("/auth/handoff", { method: "GET" }); },
   /** A single-use code for one of them, and the origin of its panel to spend it on. */
   async issueHandoff(tenantId: string) { return request<{ origin: string; code: string; expiresIn: number }>("/auth/handoff", { method: "POST", body: JSON.stringify({ tenantId }) }); },
   /** Spend that code on the reseller's own domain: the same session a password sign-in opens. */

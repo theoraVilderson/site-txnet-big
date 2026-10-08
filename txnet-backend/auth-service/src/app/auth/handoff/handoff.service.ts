@@ -2,8 +2,10 @@ import { randomBytes } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import {
   DomainVerificationStatus,
+  Prisma,
   TenantDomainPurpose,
   TenantDomainType,
+  TenantStatus,
   TenantType,
 } from '@prisma/client';
 import { answersAsPanel, panelHostOf } from '@txnet-backend/shared-core';
@@ -39,6 +41,18 @@ const ROLE_INCLUDE = {
  * one's panel answers on, are rows of those tenants. Every read is narrowed to
  * `ownerUserId = caller`.
  */
+/** The rows `panelHostOf` judges a reseller's panel host from: panel domains, verified unless a subdomain. */
+const PANEL_DOMAINS = {
+  where: {
+    purpose: TenantDomainPurpose.panel,
+    OR: [
+      { domainType: TenantDomainType.subdomain },
+      { verificationStatus: DomainVerificationStatus.verified },
+    ],
+  },
+  select: { domainValue: true, domainType: true },
+} satisfies Prisma.Tenant$domainsArgs;
+
 @Injectable()
 export class HandoffService {
   constructor(
@@ -53,17 +67,29 @@ export class HandoffService {
    * `here` marks the one whose panel domain this request came through
    * (F-061-m): there is nowhere to hand off to, so the panel opens its console
    * instead. Read off the resolved door, never another query.
+   *
+   * `live`: not terminated — the one reseller an owner may hold at a time.
+   * `hasPanel`: a handoff to it would land (F-061-n) — the same `panelHostOf`
+   * `issue` refuses on, over the same rows, so the sidebar offers "open its
+   * panel" only where the click succeeds.
    */
   async owned(claims: AuthClaims) {
     return safeExecute(async () => {
       const owned = await this.all.tenant.findMany({
         where: { ownerUserId: claims.sub, tenantType: TenantType.reseller, deletedAt: null },
-        select: { id: true, slug: true },
+        select: { id: true, slug: true, status: true, domains: PANEL_DOMAINS },
         orderBy: { slug: 'asc' },
       });
       const door = this.surfaceOwners.surface();
       const hereId = door?.via === 'domain' ? door.id : null;
-      const resellers = owned.map((r) => ({ ...r, here: r.id === hereId }));
+      const resellers = owned.map(({ domains, status, ...r }) => ({
+        ...r,
+        here: r.id === hereId,
+        // Not terminated: an owner has one at most (`already_reseller`), and it
+        // is the one the panel opens at the id-less `/reseller` (F-061-n).
+        live: status !== TenantStatus.terminated,
+        hasPanel: panelHostOf(domains ?? [], TenantType.reseller) !== null,
+      }));
       return ok({ resellers }, 'auth.handoffResellers');
     });
   }
@@ -82,16 +108,7 @@ export class HandoffService {
         where: { id: tenantId, ownerUserId: claims.sub, tenantType: TenantType.reseller, deletedAt: null },
         select: {
           id: true,
-          domains: {
-            where: {
-              purpose: TenantDomainPurpose.panel,
-              OR: [
-                { domainType: TenantDomainType.subdomain },
-                { verificationStatus: DomainVerificationStatus.verified },
-              ],
-            },
-            select: { domainValue: true, domainType: true },
-          },
+          domains: PANEL_DOMAINS,
         },
       });
       const host = reseller ? panelHostOf(reseller.domains, TenantType.reseller) : null;
@@ -130,6 +147,7 @@ export class HandoffService {
       const owner = await this.surfaceOwners.ownerById(grant.userId, ROLE_INCLUDE);
       const user = owner?.user as { status?: string; deletedAt?: Date | null } | undefined;
       if (!owner || user?.status !== 'active' || user.deletedAt) return err('auth.handoffInvalid');
+
 
       const session = await runWithTenant(owner.scope, () =>
         this.auth.createSessionForUser(owner.user, ip, userAgent, scopeKey),

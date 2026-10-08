@@ -15,8 +15,11 @@ import { WorkspaceTabs } from "./_components/WorkspaceTabs";
 vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
 let pathname = "/my-resellers/r1";
 vi.mock("next/navigation", () => ({ usePathname: () => pathname }));
+let me: unknown = null;
+vi.mock("../_context/PanelSessionContext", () => ({ usePanelSession: () => ({ me }) }));
 
 beforeEach(() => {
+  me = null;
   vi.mocked(useLocale).mockReturnValue({ lang: "en", t: (_ns: string, key: string) => key } as unknown as ReturnType<typeof useLocale>);
 });
 
@@ -50,6 +53,17 @@ describe("the workspace tab bar", () => {
     render(<WorkspaceTabs id="r1" />);
     expect(current().map((a) => a.textContent)).toEqual([label]);
   });
+});
+
+// F-061-n: on the reseller's own domain the same tabs carry no id.
+it("links the id-less sections on the reseller's own domain", () => {
+  me = { tenant: { id: "r1", type: "reseller", isOwner: true }, permissions: [] };
+  pathname = "/reseller/gateways";
+  render(<WorkspaceTabs id="r1" />);
+  expect(screen.getAllByRole("link").map((a) => a.getAttribute("href"))).toEqual(
+    SECTIONS.map(([, h]) => h.replace("/my-resellers/r1", "/reseller")),
+  );
+  expect(current().map((a) => a.textContent)).toEqual(["resellerOnboarding.tabs.gateways"]);
 });
 
 /** Every workspace page draws it — through its view, or the surface's chrome. */

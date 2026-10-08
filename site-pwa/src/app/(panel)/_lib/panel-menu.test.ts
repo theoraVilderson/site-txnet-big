@@ -251,7 +251,8 @@ describe("visibleMenu, the caller's own tenant (F-311-ab)", () => {
   it("links platform staff to the platform's own users, and a reseller's staff to the reseller's", () => {
     expect(users("platform_owner", ["tenant.manage"])).toEqual(["/my-resellers/T1/users"]);
     expect(users("platform_owner", ["*"])).toEqual(["/my-resellers/T1/users"]);
-    expect(users("reseller", ["tenant.manage"], "R 1")).toEqual(["/my-resellers/R%201/users"]);
+    // On its own domain, with no id in the address (F-061-n).
+    expect(users("reseller", ["tenant.manage"], "R 1")).toEqual(["/reseller/users"]);
   });
 
   it("is hidden from a caller without the permission, and while the tenant id is unknown", () => {

@@ -37,6 +37,10 @@ describe("a page asks for its own section's guides", () => {
     expect(sectionOfPath("/my-resellers/r1/domains")).toBe("reseller_domains");
     expect(sectionOfPath("/my-resellers/r1/catalog/translations")).toBe("reseller_catalog");
     expect(sectionOfPath("/my-resellers/r1")).toBe("my_resellers");
+    // The caller's own workspace, at the address with no id (F-061-n).
+    expect(sectionOfPath("/reseller")).toBe("my_resellers");
+    expect(sectionOfPath("/reseller/gateways")).toBe("reseller_gateways");
+    expect(sectionOfPath("/reseller/catalog/translations")).toBe("reseller_catalog");
     expect(sectionOfPath("/wheel/settings")).toBe("wheel");
     expect(sectionOfPath("/guides/g1")).toBe("guides");
   });

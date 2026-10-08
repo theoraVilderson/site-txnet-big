@@ -103,7 +103,7 @@ function sourcesFor(me: Me | null, menu: readonly VisibleMenuEntry[], pasted: bo
           hint: [u.username && `@${u.username}`, u.phoneMasked].filter(Boolean).join(" · ") || undefined,
           icon: UserRound,
           haystacks: [],
-          href: myResellerUserPath(tenantId, u.id),
+          href: myResellerUserPath(tenantId, u.id, me.tenant.type === "reseller"),
         }));
       },
     });

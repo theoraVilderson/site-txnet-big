@@ -7,6 +7,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi } from "@/lib/billing-api";
 import { PANEL_DEPOSIT, myResellerDomainsPath } from "@/lib/routes";
+import { clearOwnedResellersCache } from "../../../my-resellers/_lib/workspace";
 import {
   resellerPurchaseApi,
   type OwnedReseller,
@@ -160,6 +161,8 @@ export function BuyResellerView() {
     setFailure(null);
     try {
       const answer = await resellerPurchaseApi.purchase(purchaseBody(form));
+      // The list read before the purchase knows nothing of it; `/reseller` must find it (F-061-n).
+      clearOwnedResellersCache();
       setBought(answer);
       setBalance({ amount: answer.walletBalance, currency: answer.currencyCode });
     } catch (e) {
@@ -210,7 +213,7 @@ export function BuyResellerView() {
               {t("common", K.done.next, { target })}
             </p>
           )}
-          <Link href={myResellerDomainsPath(bought.id)} className={buttonClass({ variant: "primary", size: "sm", className: "mt-4" })}>
+          <Link href={myResellerDomainsPath(bought.id, true)} className={buttonClass({ variant: "primary", size: "sm", className: "mt-4" })}>
             {t("common", K.done.addDomain)}
           </Link>
         </div>

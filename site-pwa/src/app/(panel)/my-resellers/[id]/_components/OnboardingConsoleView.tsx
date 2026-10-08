@@ -28,6 +28,7 @@ import {
 } from "../../_lib/onboarding";
 import { PageHeader } from "../../../_components/kit/PageHeader";
 import { WorkspaceTabs } from "../../_components/WorkspaceTabs";
+import { useWorkspaceSelf } from "../../_lib/workspace";
 import { Alert, Button, buttonClass } from "../../../_components/kit";
 
 const USERS = FrontendI18nKeys.common.resellerUsers.moreUsers;
@@ -121,6 +122,7 @@ export function OnboardingConsoleView({ id }: { id: string }) {
 
 function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
   const { t } = useLocale();
+  const self = useWorkspaceSelf(id);
   const state = consoleState(view);
   const { gate, rest } = splitSteps(view);
   const closed = view.closed.filter((c): c is ClosedCapability => c in CLOSED_CAPABILITY_KEYS);
@@ -178,7 +180,7 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
               <p className="text-xs text-text-secondary">{t("common", K.more.branding.hint)}</p>
             </div>
           </div>
-          <Link href={myResellerBrandingPath(id)} className={buttonClass({ variant: "quiet", size: "sm" })}>
+          <Link href={myResellerBrandingPath(id, self)} className={buttonClass({ variant: "quiet", size: "sm" })}>
             {t("common", K.open)}
             <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
           </Link>
@@ -191,7 +193,7 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
               <p className="text-xs text-text-secondary">{t("common", USERS.hint)}</p>
             </div>
           </div>
-          <Link href={myResellerUsersPath(id)} className={buttonClass({ variant: "quiet", size: "sm" })}>
+          <Link href={myResellerUsersPath(id, self)} className={buttonClass({ variant: "quiet", size: "sm" })}>
             {t("common", K.open)}
             <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
           </Link>
@@ -213,7 +215,8 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
 
 function StepCard({ id, step }: { id: string; step: Step }) {
   const { t } = useLocale();
-  const href = stepHref(step.key, id);
+  const self = useWorkspaceSelf(id);
+  const href = stepHref(step.key, id, self);
   const keys = STEP_KEYS[step.key];
 
   return (

@@ -132,42 +132,66 @@ export const PANEL_RESELLER_PURCHASE = `${PANEL_RESELLERS}/buy`;
  */
 export const PANEL_MY_RESELLERS = "/my-resellers";
 /**
+ * The same workspace on the reseller's **own** panel domain (F-061-n), where
+ * the session's tenant is the reseller. It carries no id: the visitor is on
+ * that reseller's domain already, and a `/my-resellers/<id>` there would show
+ * a customer-facing address the platform's own way of managing it.
+ */
+export const PANEL_RESELLER_SELF = "/reseller";
+/**
+ * Where one reseller's workspace is rooted: by id on the platform panel, id-less
+ * on its own domain (`self`, read by `useWorkspaceSelf`). Every workspace path
+ * below takes the same `self`, so one screen links right on either host.
+ */
+export const resellerWorkspaceRoot = (id: string, self = false) =>
+  self ? PANEL_RESELLER_SELF : `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}`;
+/**
  * A reseller's onboarding console (F-066-w): the checklist, and what stays
  * closed until a domain is proved. The workspace's first screen — the
- * sidebar's "my reseller panel" opens it for a reseller with no panel domain.
+ * sidebar's "reseller settings" opens it.
  */
-export const myResellerConsolePath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}`;
+export const myResellerConsolePath = (id: string, self = false) => resellerWorkspaceRoot(id, self);
 /** A reseller's custom domains: add one, the records to publish, "check now" (F-066-w2). */
-export const myResellerDomainsPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/domains`;
+export const myResellerDomainsPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/domains`;
 /**
  * A reseller's payment gateways (F-066-w4): the `/gateways` page's components
  * over the route that names the reseller, so the owner configures its gateways
  * and never the session tenant's.
  */
-export const myResellerGatewaysPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/gateways`;
+export const myResellerGatewaysPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/gateways`;
 /**
  * A reseller's bot (F-066-w6): connect a Telegram or Bale bot from a pasted
  * token, and retire one. Singular — a reseller has one bot per messenger
  * (`primary`, C-05), so the screen is `/bot`, not `/bots`.
  */
-export const myResellerBotPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/bot`;
+export const myResellerBotPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/bot`;
 /**
  * A reseller's catalog (F-066-w8): the `/catalog` page's components over the
  * route that names the reseller, so its owner prices its own products and
  * never the session tenant's — the platform's, for the visitor this is for.
  */
-export const myResellerCatalogPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/catalog`;
+export const myResellerCatalogPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/catalog`;
 /** A reseller's brand settings: today the default name of a config line in a buyer's app (F-307-k). */
-export const myResellerBrandingPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/branding`;
+export const myResellerBrandingPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/branding`;
 /**
  * A reseller's users (F-311-v, over F-311-a): find one, and open their
  * services. By the path's reseller, never the session's tenant.
  */
-export const myResellerUsersPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/users`;
+export const myResellerUsersPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/users`;
 /** One user's services, as that reseller's admin reads and acts on them (F-311-v, over F-311-f/g). */
-export const myResellerUserPath = (id: string, userId: string) => `${myResellerUsersPath(id)}/${encodeURIComponent(userId)}`;
+export const myResellerUserPath = (id: string, userId: string, self = false) =>
+  `${myResellerUsersPath(id, self)}/${encodeURIComponent(userId)}`;
 /** Where that catalog's machine-drafted names are reviewed (F-1533-e on the reseller's surface). */
-export const myResellerCatalogTranslationsPath = (id: string) => `${myResellerCatalogPath(id)}/translations`;
+export const myResellerCatalogTranslationsPath = (id: string, self = false) => `${myResellerCatalogPath(id, self)}/translations`;
+/**
+ * The same address on the reseller's own domain: `/my-resellers/<id>/x` ->
+ * `/reseller/x`, or `null` when `pathname` is not that reseller's workspace.
+ */
+export function selfWorkspacePath(pathname: string, id: string): string | null {
+  const root = resellerWorkspaceRoot(id);
+  if (pathname !== root && !pathname.startsWith(`${root}/`)) return null;
+  return `${PANEL_RESELLER_SELF}${pathname.slice(root.length)}`;
+}
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */
 export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /** The platform owner's panels: registration, health, drift and the holds queue (F-027-ad). */

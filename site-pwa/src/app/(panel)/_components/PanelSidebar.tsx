@@ -400,6 +400,9 @@ export function PanelSidebar() {
           // container would clip — so the rail does not scroll while collapsed.
           className={`isolate flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 ${whenCollapsed("lg:overflow-visible")}`}
         >
+          {/* The reseller block opens the nav (F-061-n): a workspace of its own,
+              not a footer action beside logout. */}
+          <ResellerPanelButton resellers={resellers} collapsed={railCollapsed} />
           {pinned.length > 0 && (
             <div className="mb-2 border-b border-card-border pb-2">
               <p
@@ -472,7 +475,6 @@ export function PanelSidebar() {
         */}
         <div className="isolate shrink-0 space-y-1 border-t border-card-border px-3 py-4">
           {footer.map(renderEntry)}
-          <ResellerPanelButton resellers={resellers} collapsed={collapsed} />
           <LogoutButton collapsed={collapsed} />
         </div>
       </aside>

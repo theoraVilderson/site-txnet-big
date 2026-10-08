@@ -8,6 +8,7 @@ import { myResellerCatalogPath, myResellerCatalogTranslationsPath } from "@/lib/
 import { CatalogSurfaceProvider, type CatalogSurface } from "../../../../catalog/_lib/surface";
 import { RESELLER_CATALOG_KEYS as K, catalogRefusalKey } from "../../../_lib/catalog";
 import { WorkspaceTabs } from "../../../_components/WorkspaceTabs";
+import { useWorkspaceSelf } from "../../../_lib/workspace";
 
 /**
  * A reseller's catalog, as one surface the catalog components read from
@@ -26,6 +27,7 @@ import { WorkspaceTabs } from "../../../_components/WorkspaceTabs";
 export function ResellerCatalogView({ id, children }: { id: string; children: ReactNode }) {
   const { t } = useLocale();
   const [slug, setSlug] = useState<string | null>(null);
+  const self = useWorkspaceSelf(id);
 
   // The name for the title, when the visitor owns it; staff see the plain title.
   useEffect(() => {
@@ -43,8 +45,8 @@ export function ResellerCatalogView({ id, children }: { id: string; children: Re
     () => ({
       tenantId: id,
       api: catalogAdminApi(id),
-      catalogHref: myResellerCatalogPath(id),
-      translationsHref: myResellerCatalogTranslationsPath(id),
+      catalogHref: myResellerCatalogPath(id, self),
+      translationsHref: myResellerCatalogTranslationsPath(id, self),
       refusalKey: catalogRefusalKey,
       chrome: (
         <div className="flex flex-col gap-2">
@@ -54,7 +56,7 @@ export function ResellerCatalogView({ id, children }: { id: string; children: Re
       ),
     }),
     // `t` is stable for a language; the chrome is rebuilt when the name arrives.
-    [id, slug, t],
+    [id, slug, self, t],
   );
 
   return <CatalogSurfaceProvider value={surface}>{children}</CatalogSurfaceProvider>;

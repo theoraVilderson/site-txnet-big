@@ -155,6 +155,38 @@ describe('HandoffService.issue', () => {
     expect(h.all.tenant.findUnique).not.toHaveBeenCalled();
   });
 
+  // F-061-n: the sidebar offers "open its panel" only where a handoff can land,
+  // instead of a click that is refused and quietly opens the settings instead.
+  it('says which of them have a panel domain to be handed to', async () => {
+    const h = harness();
+    h.all.tenant.findMany.mockResolvedValue([
+      { id: 'r-live', slug: 'arian-vpn', domains: [{ domainValue: 'arianvpn.ir', domainType: 'custom_domain' }] },
+      { id: 'r-new', slug: 'nova', domains: [{ domainValue: 'nova.txnet.test', domainType: 'subdomain' }] },
+    ]);
+
+    const listed = await runWithTenant(PLATFORM as never, () => h.service.owned(CLAIMS as never));
+
+    expect(listed).toMatchObject({
+      ok: true,
+      data: { resellers: [{ id: 'r-live', hasPanel: true }, { id: 'r-new', hasPanel: false }] },
+    });
+    expect((listed as unknown as { data: { resellers: object[] } }).data.resellers[0]).not.toHaveProperty('domains');
+  });
+
+  // F-061-n: one live reseller per owner (`already_reseller`) is the one the
+  // panel opens at the id-less `/reseller`; a terminated one stays listed.
+  it('says which of them is live, and never answers its status as such', async () => {
+    const h = harness();
+    h.all.tenant.findMany.mockResolvedValue([
+      { id: 'r-old', slug: 'old', status: 'terminated', domains: [] },
+      { id: 'r-live', slug: 'arian-vpn', status: 'active', domains: [] },
+    ]);
+
+    const listed = await runWithTenant(PLATFORM as never, () => h.service.owned(CLAIMS as never));
+
+    expect(listed).toMatchObject({ data: { resellers: [{ id: 'r-old', live: false }, { id: 'r-live', live: true }] } });
+    expect((listed as unknown as { data: { resellers: object[] } }).data.resellers[1]).not.toHaveProperty('status');
+  });
 });
 
 describe('HandoffService.redeem', () => {

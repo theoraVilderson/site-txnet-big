@@ -1,40 +1,41 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Store } from "lucide-react";
+import { useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { ExternalLink, Settings2, Store } from "lucide-react";
 import { CollapsedTooltip } from "./CollapsedTooltip";
-import { authApi } from "@/lib/auth-api";
+import { authApi, type OwnedReseller } from "@/lib/auth-api";
 import { useLocale } from "@/context/LocaleContext";
 import { ApiError } from "@/lib/api-error";
-import { AUTH_HANDOFF, myResellerConsolePath } from "@/lib/routes";
+import { AUTH_HANDOFF, PANEL_RESELLER_SELF, myResellerConsolePath } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { usePanelSession } from "../_context/PanelSessionContext";
+import { resellerDomainOf, selfResellerOf, useOwnedResellerList } from "../my-resellers/_lib/workspace";
 
-/** The `common` namespace as generated constants (F-083, C-06). */
-const C = FrontendI18nKeys.common;
+/** The sidebar's reseller block (F-061-n, C-06). */
+const K = FrontendI18nKeys.common.resellerNav;
 
-/** `here`: this request came through the reseller's own panel domain (F-061-m). */
-type Reseller = { id: string; slug: string; here?: boolean };
+type Reseller = Pick<OwnedReseller, "id" | "slug"> & Partial<Pick<OwnedReseller, "here" | "hasPanel" | "live">>;
 
 /**
- * "My reseller panel" (F-061-f): one entry per reseller the caller owns, which
- * opens that reseller's own domain already signed in as the same account.
+ * The sidebar's "my reseller" block (F-061-n), at the top of the nav. Two
+ * things an owner does with a reseller, never folded into one click again:
  *
- * The session cannot follow on its own — the refresh cookie is host-only
- * (ADR-0060 (4)) — so a click mints a single-use code here and the reseller's
- * domain spends it at `AUTH_HANDOFF`. The code rides in the fragment, which no
- * request, log line or `Referer` carries.
+ * - **Reseller settings** — its workspace: users, catalog, gateways, domains,
+ *   bot, brand (ADR-0064 (4)). The owner's live reseller at the id-less
+ *   `/reseller`, on its domain and on the platform's panel alike; a
+ *   terminated one it still holds by id, `/my-resellers/:id`.
+ * - **Open its panel** — the handoff (F-061-f): a single-use code spent on its
+ *   own domain, because the refresh cookie is host-only (ADR-0060 (4)). Only
+ *   on the platform, and only enabled where it lands (`hasPanel`); otherwise
+ *   the line under it says to connect a domain first, instead of the click
+ *   being refused and silently opening the settings.
  *
- * A reseller with no panel domain of its own has nowhere to be handed to, and
- * the handoff refuses it (`auth.handoffRefused`). The entry then opens its
- * onboarding console on this panel instead (F-066-w, ADR-0064 (4)) — which is
- * where such a reseller is configured. Only an answer that never arrived
- * leaves the visitor where they were. On the reseller's own domain there is
- * nowhere to hand off to, so the entry opens that console directly (F-061-m).
- *
- * Renders nothing for a caller who owns no reseller, and nothing if the list
- * cannot be read: it is a shortcut, never a reason to break the sidebar. The
- * list is `useOwnedResellers`', read by the sidebar.
+ * On a reseller's domain the block is that reseller's alone, offered to its
+ * owner — whose session there is the platform's tenant, so `here` says it —
+ * and to a staff seat holding `tenant.manage` (invariant 21). Renders
+ * nothing for anyone else, and nothing until `me` has answered.
  */
 export function ResellerPanelButton({
   resellers,
@@ -44,33 +45,115 @@ export function ResellerPanelButton({
   collapsed?: boolean;
 }) {
   const { t } = useLocale();
+  const { me } = usePanelSession();
+  const pathname = usePathname();
   const { pending, open } = useResellerPanelOpener();
+  if (!me) return null;
 
+  // On a reseller's own domain: its settings only. The owner's session there is
+  // the platform's tenant, so the door's `here` says it (`resellerDomainOf`).
+  const domain = resellerDomainOf(me, resellers);
+  const self = selfResellerOf(me, resellers);
+  if (domain === undefined || self === undefined) return null;
+  if (domain !== null) {
+    if (self !== domain) return null;
+    return (
+      <Block title={t("common", K.title)} collapsed={collapsed}>
+        <SettingsLink href={PANEL_RESELLER_SELF} pathname={pathname} label={t("common", K.settings)} collapsed={collapsed} />
+      </Block>
+    );
+  }
+  if (me.tenant.type === "reseller") return null;
+
+  if (!resellers || resellers.length === 0) return null;
   return (
-    <>
-      {(resellers ?? []).map((reseller) => {
-        const label = t("common", pending === reseller.id ? C.openingResellerPanel : C.resellerPanel, {
-          slug: reseller.slug,
-        });
+    <Block title={t("common", K.title)} collapsed={collapsed}>
+      {resellers.map((reseller) => {
+        const openLabel = t("common", pending === reseller.id ? K.opening : K.open);
+        const canOpen = reseller.hasPanel !== false;
         return (
-          <button
-            key={reseller.id}
-            type="button"
-            onClick={() => open(reseller.id, reseller.here)}
-            disabled={pending !== null}
-            className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-text-secondary transition-colors duration-200 hover:bg-leaf-bg hover:text-text-primary disabled:opacity-60 ${
-              collapsed ? "lg:justify-center" : ""
-            }`}
-          >
-            <Store size={22} className="shrink-0" aria-hidden />
-            <span className={`flex-1 truncate text-start font-medium ${collapsed ? "lg:sr-only" : ""}`}>
-              {label}
-            </span>
-            <CollapsedTooltip collapsed={collapsed} label={label} />
-          </button>
+          <div key={reseller.id} className="rounded-xl border border-card-border p-1.5">
+            <p
+              dir="ltr"
+              className={`flex items-center gap-2 px-2 pb-1 pt-0.5 text-sm font-bold text-text-primary ${collapsed ? "lg:sr-only" : ""}`}
+            >
+              <Store size={16} aria-hidden className="shrink-0 text-primary" />
+              <span className="truncate">{reseller.slug}</span>
+            </p>
+            <SettingsLink
+              // Its own live reseller has no id in the address, here too (F-061-n).
+              href={reseller.id === self ? PANEL_RESELLER_SELF : myResellerConsolePath(reseller.id)}
+              pathname={pathname}
+              label={t("common", K.settings)}
+              collapsed={collapsed}
+            />
+            <button
+              type="button"
+              onClick={() => open(reseller.id)}
+              disabled={!canOpen || pending !== null}
+              aria-describedby={canOpen ? undefined : `reseller-nopanel-${reseller.id}`}
+              className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-secondary transition-colors duration-200 enabled:hover:bg-leaf-bg enabled:hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-60 ${
+                collapsed ? "lg:justify-center" : ""
+              }`}
+            >
+              <ExternalLink size={18} className="shrink-0 rtl:-scale-x-100" aria-hidden />
+              <span className={`flex-1 truncate text-start font-medium ${collapsed ? "lg:sr-only" : ""}`}>{openLabel}</span>
+              <CollapsedTooltip collapsed={collapsed} label={openLabel} />
+            </button>
+            {!canOpen && (
+              <p
+                id={`reseller-nopanel-${reseller.id}`}
+                className={`px-3 pb-1 text-xs text-text-secondary ${collapsed ? "lg:sr-only" : ""}`}
+              >
+                {t("common", K.noPanel)}
+              </p>
+            )}
+          </div>
         );
       })}
-    </>
+    </Block>
+  );
+}
+
+function Block({ title, collapsed, children }: { title: string; collapsed: boolean; children: React.ReactNode }) {
+  return (
+    <section aria-label={title} className="mb-2 space-y-1.5 border-b border-card-border pb-3">
+      <p
+        aria-hidden
+        className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-text-secondary ${collapsed ? "lg:sr-only" : ""}`}
+      >
+        {title}
+      </p>
+      {children}
+    </section>
+  );
+}
+
+/** Current anywhere inside the workspace, the way a group lights for its pages. */
+function SettingsLink({
+  href,
+  pathname,
+  label,
+  collapsed,
+}: {
+  href: string;
+  pathname: string;
+  label: string;
+  collapsed: boolean;
+}) {
+  const current = pathname === href || pathname.startsWith(`${href}/`);
+  return (
+    <Link
+      href={href}
+      aria-current={current ? "page" : undefined}
+      className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200 ${
+        current ? "bg-leaf-bg font-bold text-primary" : "text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
+      } ${collapsed ? "lg:justify-center" : ""}`}
+    >
+      <Settings2 size={18} className="shrink-0" aria-hidden />
+      <span className={`flex-1 truncate font-medium ${collapsed ? "lg:sr-only" : ""}`}>{label}</span>
+      <CollapsedTooltip collapsed={collapsed} label={label} />
+    </Link>
   );
 }
 
@@ -79,19 +162,9 @@ export function ResellerPanelButton({
  * empty when it cannot be read. A terminated one is still listed, so this is
  * not "may buy another" — that is `GET /purchase/mine` (F-114-c).
  */
-export function useOwnedResellers(): readonly Reseller[] | null {
-  const [resellers, setResellers] = useState<Reseller[] | null>(null);
-  useEffect(() => {
-    let live = true;
-    authApi
-      .ownedResellers()
-      .then((r) => live && setResellers(r.resellers))
-      .catch(() => live && setResellers([]));
-    return () => {
-      live = false;
-    };
-  }, []);
-  return resellers;
+export function useOwnedResellers(): readonly OwnedReseller[] | null {
+  // One read per account, shared with the workspace's guard and links.
+  return useOwnedResellerList();
 }
 
 /**
@@ -106,7 +179,7 @@ export function useResellerPanelOpener() {
   const [pending, setPending] = useState<string | null>(null);
   const open = async (tenantId: string, here = false) => {
     if (here) {
-      router.push(myResellerConsolePath(tenantId));
+      router.push(PANEL_RESELLER_SELF);
       return;
     }
     setPending(tenantId);
@@ -115,7 +188,8 @@ export function useResellerPanelOpener() {
       window.location.assign(`${origin}${AUTH_HANDOFF}#${code}`);
     } catch (e) {
       setPending(null);
-      if (e instanceof ApiError && !e.unreachable) router.push(myResellerConsolePath(tenantId));
+      // Its own workspace, at the address with no id (F-061-n); the guard sends any other there too.
+      if (e instanceof ApiError && !e.unreachable) router.push(PANEL_RESELLER_SELF);
     }
   };
   return { pending, open };

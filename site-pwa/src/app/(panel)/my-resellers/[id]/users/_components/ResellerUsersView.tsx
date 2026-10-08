@@ -8,6 +8,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { authApi, resellerUsersApi, type ResellerUser } from "@/lib/auth-api";
 import { myResellerUserPath } from "@/lib/routes";
+import { useWorkspaceSelf } from "../../../_lib/workspace";
 import { Pagination } from "../../../../_components/kit/Pagination";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { formatInstant } from "../../../../_lib/datetime";
@@ -55,6 +56,7 @@ export function ResellerUsersView({ id }: { id: string }) {
   const confirm = useConfirm();
   // The platform's own users (F-311-ab) have no console to go back to.
   const { me } = usePanelSession();
+  const self = useWorkspaceSelf(id);
   const platform = isPlatformTenant(id, me);
   const message = useUserMessage();
 
@@ -219,7 +221,7 @@ export function ResellerUsersView({ id }: { id: string }) {
                   </Button>
                 )}
                 <Link
-                  href={`${myResellerUserPath(id, user.id)}?${new URLSearchParams({ name: user.fullName })}`}
+                  href={`${myResellerUserPath(id, user.id, self)}?${new URLSearchParams({ name: user.fullName })}`}
                   className={buttonClass({ variant: "quiet", size: "sm" })}
                 >
                   {t("common", K.open)}

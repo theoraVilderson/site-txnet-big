@@ -52,10 +52,10 @@ export function splitSteps(v: ResellerOnboarding) {
  * session's tenant — the platform's — not this reseller (ADR-0064). Every one
  * of the four now has its own.
  */
-export function stepHref(key: OnboardingStepKey, id: string): string | null {
-  if (key === "domain") return myResellerDomainsPath(id);
-  if (key === "gateway") return myResellerGatewaysPath(id);
-  if (key === "bot") return myResellerBotPath(id);
-  if (key === "pricing") return myResellerCatalogPath(id);
+export function stepHref(key: OnboardingStepKey, id: string, self = false): string | null {
+  if (key === "domain") return myResellerDomainsPath(id, self);
+  if (key === "gateway") return myResellerGatewaysPath(id, self);
+  if (key === "bot") return myResellerBotPath(id, self);
+  if (key === "pricing") return myResellerCatalogPath(id, self);
   return null;
 }

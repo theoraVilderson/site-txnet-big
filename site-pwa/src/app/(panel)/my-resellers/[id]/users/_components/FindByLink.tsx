@@ -7,6 +7,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { resellerGrantsApi, type BulkOutcomeRow, type ResellerGrantRow } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
 import { myResellerUserPath } from "@/lib/routes";
+import { useWorkspaceSelf } from "../../../_lib/workspace";
 import { Pagination } from "../../../../_components/kit/Pagination";
 import { formatInstant } from "../../../../_lib/datetime";
 import { flattenTexts } from "../../../../catalog/_lib/catalog-form";
@@ -38,6 +39,7 @@ export function FindByLink({ id }: { id: string }) {
   const { t, lang } = useLocale();
   const message = useUserMessage();
   const api = useMemo(() => resellerGrantsApi(id), [id]);
+  const self = useWorkspaceSelf(id);
 
   const [text, setText] = useState("");
   const [search, setSearch] = useState<{ lines: string[]; capped: boolean; page: number } | null>(null);
@@ -173,7 +175,7 @@ export function FindByLink({ id }: { id: string }) {
                       </p>
                     </div>
                     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone.className}`}>{t("common", tone.labelKey)}</span>
-                    <Link href={myResellerUserPath(id, row.userId)} className={buttonClass({ variant: "quiet", size: "sm" })}>
+                    <Link href={myResellerUserPath(id, row.userId, self)} className={buttonClass({ variant: "quiet", size: "sm" })}>
                       {t("common", F.openUser)}
                       <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
                     </Link>
