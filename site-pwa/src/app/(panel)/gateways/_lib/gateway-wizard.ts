@@ -13,7 +13,7 @@ export const WIZARD_STEPS: readonly { id: WizardStepId; fields: readonly (keyof 
   { id: "provider", fields: ["source", "tenantId", "providerName"] },
   { id: "details", fields: ["displayName", "gatewayCategory", "minAcceptAmount", "maxAcceptAmount", "isActive"] },
   { id: "fee", fields: ["feeCalculationMode", "feeType", "feeValue", "feeFloor", "feeCeiling", "taxRatePercent"] },
-  { id: "secrets", fields: ["merchantId", "secretKey", "webhookSecret", "staticRate", "callbackUrl", "verificationStatus"] },
+  { id: "secrets", fields: ["merchantId", "secretKey", "webhookSecret", "staticRate", "callbackUrl"] },
   { id: "review", fields: [] },
 ];
 

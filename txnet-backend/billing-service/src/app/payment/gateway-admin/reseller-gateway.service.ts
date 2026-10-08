@@ -59,9 +59,9 @@ export type ResellerCreateGatewayInput = Omit<CreateGatewayInput, 'tenantId'>;
  *
  * **Nothing here is elevated.** The actor handed on is a reseller, never the
  * platform owner, so the two rules that turn on that difference hold unchanged:
- * `verificationStatus` is `verification_is_platform_owners` on this surface for
- * everyone, platform staff included — verifying a gateway is done on the
- * ambient route, as the platform owner — and a `platform` source is
+ * `blockedReason` is `block_is_platform_owners` on this surface for
+ * everyone, platform staff included — blocking a gateway is done on the
+ * ambient route, as the platform owner (F-104-ak) — and a `platform` source is
  * `not_platform_owner` on create, `gateway_not_found` on anything else.
  *
  * **The tenant is the path's.** The reseller's owner is a user of the platform

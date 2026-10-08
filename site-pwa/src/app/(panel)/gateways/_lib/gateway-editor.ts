@@ -10,7 +10,7 @@ import type { FormErrors, GatewayForm } from "./gateway-form";
 export type EditorSectionId = "general" | "amounts" | "fee" | "connection";
 
 export const EDITOR_SECTIONS: readonly { id: EditorSectionId; fields: readonly (keyof GatewayForm)[] }[] = [
-  { id: "general", fields: ["displayName", "providerName", "gatewayCategory", "isActive", "verificationStatus"] },
+  { id: "general", fields: ["displayName", "providerName", "gatewayCategory", "isActive", "blockedReason"] },
   { id: "amounts", fields: ["minAcceptAmount", "maxAcceptAmount", "depositPresets"] },
   { id: "fee", fields: ["feeCalculationMode", "feeType", "feeValue", "feeFloor", "feeCeiling", "taxRatePercent"] },
   { id: "connection", fields: ["merchantId", "secretKey", "webhookSecret", "staticRate", "callbackUrl"] },

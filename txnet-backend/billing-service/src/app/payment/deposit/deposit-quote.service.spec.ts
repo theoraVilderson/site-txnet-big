@@ -38,8 +38,7 @@ function gatewayRow(overrides: Record<string, unknown> = {}) {
     gatewayCategory: 'domestic_rial',
     merchantIdEncrypted: 'SECRET-MERCHANT',
     apiKeyEncrypted: 'SECRET-KEY',
-    verificationStatus: 'verified',
-    verifiedByAdminId: null,
+    blockedAt: null,
     isActive: true,
     minAcceptAmount: d('1.00'),
     maxAcceptAmount: d('1000.00'),
@@ -82,7 +81,11 @@ type Setup = {
   liveRate?: { snapshotId: string; rate: Prisma.Decimal };
 };
 
+/** Every `where` the tenant's own gateways were listed with, newest build's. */
+let asked: Record<string, unknown>[] = [];
+
 function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, configured, liveRate, tenantPresets }: Setup = {}) {
+  asked = [];
   const tx = {
     $executeRaw: async () => 0,
     tenant: { findUnique: async () => ({ tenantType: 'reseller', operatingCurrencyCode: 'USD' }) },
@@ -92,7 +95,7 @@ function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, 
     depositSetting: { findUnique: async () => (tenantPresets ? { presets: tenantPresets } : null) },
     tenantGatewayConfig: {
       findFirst: async () => rows[0] ?? null,
-      findMany: async () => rows,
+      findMany: async (args: { where: Record<string, unknown> }) => (asked.push(args.where), rows),
     },
   };
   const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
@@ -281,23 +284,26 @@ describe('DepositQuoteService.listGateways', () => {
   });
 
   // Test mode: which rows are reached is the query's (the int spec); what a row
-  // is called once reached is this — off, or a tenant row not yet verified.
-  it('marks a switched-off or unverified gateway as testing, for a manager', async () => {
-    const service = build({
-      rows: [
-        gatewayRow(),
-        gatewayRow({ id: 'off', isActive: false }),
-        gatewayRow({ id: 'pending', verificationStatus: 'pending_test_transaction' }),
-      ],
-    });
+  // is called once reached is this — switched off, nothing else (F-104-ak).
+  it('marks a switched-off gateway as testing, for a manager', async () => {
+    const service = build({ rows: [gatewayRow(), gatewayRow({ id: 'off', isActive: false })] });
 
     const gateways = await asTenant(() => service.listGateways({ canTest: true }));
 
     expect(gateways.map((g) => [g.id, g.testing])).toEqual([
       [GATEWAY, false],
       ['off', true],
-      ['pending', true],
     ]);
+  });
+
+  // F-104-ak: a tenant's gateway needs no platform approval; a platform block
+  // keeps it from every payer, a manager testing it included.
+  it('offers a switched-on gateway of the tenant at once, and never one the platform blocked', async () => {
+    await asTenant(() => build().listGateways());
+    expect(asked).toEqual([{ isActive: true, blockedAt: null, tenantId: TENANT }]);
+
+    await asTenant(() => build().listGateways({ canTest: true }));
+    expect(asked).toEqual([{ tenantId: TENANT, blockedAt: null }]);
   });
 
   // F-092-v: the gateway's own list, else the tenant's, never outside the range.

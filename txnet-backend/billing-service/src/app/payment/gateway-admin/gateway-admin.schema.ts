@@ -5,7 +5,6 @@ import {
   GatewayCategory,
   PaymentProviderName,
   RateRoundingMode,
-  TenantGatewayVerificationStatus,
 } from '@prisma/client';
 import { GATEWAY_CREDENTIAL_SOURCES } from '@txnet-backend/shared-core';
 import { z } from 'zod';
@@ -75,7 +74,8 @@ const fields = {
   description: z.string().trim().max(500).nullable(),
   supportedCurrencies: z.array(z.string().regex(/^[A-Z0-9]{2,10}$/)).max(20),
   confirmationMode: z.nativeEnum(ConfirmationMode),
-  verificationStatus: z.nativeEnum(TenantGatewayVerificationStatus),
+  // F-104-ak: the platform owner's block on a tenant gateway — a reason blocks, null lifts.
+  blockedReason: z.string().max(300).nullable(),
   // Normalised and bounded by `deposit-presets.ts`; the schema only keeps the shape sane.
   depositPresets: z.array(z.string().max(20)).max(20),
   // Tax on a top-up (ADR-0076): `numeric(9, 4)`, 0..100 checked in the service; null inherits the tenant's default.
@@ -120,6 +120,7 @@ export const depositTaxSchema = z.object({ taxRatePercent: fields.taxRatePercent
 export type DepositTaxBody = z.infer<typeof depositTaxSchema>;
 
 export const listGatewaysSchema = z.object({ tenantId: uuid('tenantId').optional() });
+
 
 export type CreateGatewayBody = z.infer<typeof createGatewaySchema>;
 export type UpdateGatewayBody = z.infer<typeof updateGatewaySchema>;

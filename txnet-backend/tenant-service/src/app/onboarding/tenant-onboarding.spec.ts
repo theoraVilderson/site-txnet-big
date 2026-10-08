@@ -158,7 +158,7 @@ describe('TenantOnboardingService', () => {
       purpose: 'panel',
       verificationStatus: 'verified',
     });
-    expect(all.tenantGatewayConfig.findFirst.mock.calls[0]![0].where).toMatchObject({ isActive: true, verificationStatus: 'verified' });
+    expect(all.tenantGatewayConfig.findFirst.mock.calls[0]![0].where).toMatchObject({ isActive: true, blockedAt: null });
     expect(all.botIntegration.findFirst.mock.calls[0]![0].where).toMatchObject({ status: 'active' });
   });
 

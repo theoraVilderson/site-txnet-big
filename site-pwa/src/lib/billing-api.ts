@@ -2353,7 +2353,8 @@ export interface AdminGateway {
   providerName: string;
   gatewayCategory: string;
   isActive: boolean;
-  verificationStatus: string | null;
+  /** The platform owner's block (F-104-ak); `null` when not blocked, and always for a platform gateway. */
+  blocked: { at: string; reason: string } | null;
   description: string | null;
   supportedCurrencies: unknown;
   confirmationMode: string | null;
@@ -2401,7 +2402,8 @@ type GatewayFieldsBody = {
   feeValue?: string;
   feeFloor?: string | null;
   feeCeiling?: string | null;
-  verificationStatus?: string;
+  /** Platform owner, tenant gateway, edit only (F-104-ak): a reason blocks it, `null` lifts the block. */
+  blockedReason?: string | null;
   depositPresets?: string[];
   callbackUrl?: string | null;
   /** `null` inherits the tenant's default tax (ADR-0076). */

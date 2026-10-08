@@ -8,7 +8,6 @@ import {
   PaymentProviderName,
   Prisma,
   RateRoundingMode,
-  TenantGatewayVerificationStatus,
   TenantType,
 } from '@prisma/client';
 import { tenantTransaction, operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
@@ -69,8 +68,11 @@ export type GatewayFields = {
   description?: string | null;
   supportedCurrencies?: string[];
   confirmationMode?: string;
-  /** Tenant gateways only, and only the platform owner may set it. */
-  verificationStatus?: string;
+  /**
+   * Tenant gateways only, and only the platform owner may send it (F-104-ak):
+   * a reason blocks the gateway, `null` lifts the block.
+   */
+  blockedReason?: string | null;
   /** Quick amounts on the top-up page; empty inherits the tenant's default (F-092-v). */
   depositPresets?: string[];
   /** Tax on a top-up through this gateway, 0..100; `null` inherits the tenant's default (ADR-0076). */
@@ -93,7 +95,8 @@ export type GatewayView = {
   providerName: string;
   gatewayCategory: string;
   isActive: boolean;
-  verificationStatus: string | null;
+  /** The platform owner's block (F-104-ak); `null` when not blocked, and always for a platform gateway. */
+  blocked: { at: Date; reason: string } | null;
   description: string | null;
   supportedCurrencies: unknown;
   confirmationMode: string | null;
@@ -139,7 +142,8 @@ export type GatewayAdminRejection =
   | 'not_platform_owner'
   | 'gateway_not_found'
   | 'tenant_not_found'
-  | 'verification_is_platform_owners'
+  | 'block_is_platform_owners'
+  | 'gateway_blocked'
   | 'provider_already_configured'
   | 'invalid_range'
   | 'missing_field'
@@ -247,16 +251,12 @@ function taxRate(v: unknown): Prisma.Decimal | null {
  * of them changed. The deprecated `merchantId` / `*Encrypted` columns are
  * never selected and never written with a value (invariant 8).
  *
- * **Verification is the platform owner's.** A tenant gateway is offered to
- * payers only once `verified` (`deposit-pricing.ts`). A tenant that changes a
- * verified gateway's secret sends it back to `pending_test_transaction`, and
- * the reset commits *before* the new secret is written, so there is no moment
- * at which a verified gateway charges into an unverified account. So does a
- * change of `providerName`, whoever makes it (F-104-x): the test transaction
- * proved the old driver, and nothing about it covers the new one. A patch that
- * names `verificationStatus` itself is the platform owner saying otherwise,
- * and wins. `feeValue`, `callbackUrl` and the rest change nothing the test
- * proved, and leave a verified gateway verified.
+ * **A tenant's gateway is its own; the block is the platform owner's**
+ * (F-104-ak, the user's call 2026-10-08). Switched on, a tenant gateway is
+ * offered (`deposit-pricing.ts`) — no approval, and no reset when its secret or
+ * provider changes. The platform owner alone may block one, with a reason, and
+ * lift it; a blocked gateway is offered to nobody and cannot be deleted, since
+ * deleting and adding it again would lift the block.
  */
 @Injectable()
 export class GatewayAdminService {
@@ -388,7 +388,7 @@ export class GatewayAdminService {
     for (const field of REQUIRED_ON_CREATE) {
       if (input[field] === undefined || input[field] === null || input[field] === '') throw new GatewayAdminRefused('missing_field', field);
     }
-    if (input.verificationStatus !== undefined && !owner) throw new GatewayAdminRefused('verification_is_platform_owners');
+    if (input.blockedReason !== undefined && !owner) throw new GatewayAdminRefused('block_is_platform_owners');
     this.assertRanges(input);
     const providerColumns = this.providerRules(input);
 
@@ -400,7 +400,7 @@ export class GatewayAdminService {
       data['merchantId'] = '';
     } else {
       data['tenantId'] = tenantId;
-      Object.assign(data, this.verification(input.verificationStatus, actor));
+      Object.assign(data, this.block(input.blockedReason, actor));
     }
 
     const created = await this.within(owner, async (tx) => {
@@ -450,8 +450,8 @@ export class GatewayAdminService {
     const updated = await this.within(owner, async (tx) => {
       const row = await this.load(tx, ref, actor, owner);
 
-      if (patch.verificationStatus !== undefined && (!owner || ref.source === 'platform')) {
-        throw new GatewayAdminRefused('verification_is_platform_owners');
+      if (patch.blockedReason !== undefined && (!owner || ref.source === 'platform')) {
+        throw new GatewayAdminRefused('block_is_platform_owners');
       }
       this.assertRanges({ ...this.snapshot(row), ...patch });
       const providerColumns = this.providerRules({ ...this.snapshot(row), ...patch });
@@ -465,19 +465,7 @@ export class GatewayAdminService {
       }
 
       const data = { ...this.columns(patch, ref.source), ...providerColumns };
-      if (ref.source === 'tenant') {
-        if (patch.verificationStatus !== undefined) Object.assign(data, this.verification(patch.verificationStatus, actor));
-        const providerChanged = patch.providerName !== undefined && patch.providerName !== row['providerName'];
-        const secretSwapped = !owner && secretsChanged.length > 0;
-        if (
-          patch.verificationStatus === undefined &&
-          (providerChanged || secretSwapped) &&
-          row['verificationStatus'] === TenantGatewayVerificationStatus.verified
-        ) {
-          data['verificationStatus'] = TenantGatewayVerificationStatus.pending_test_transaction;
-          data['verifiedByAdminId'] = null;
-        }
-      }
+      if (ref.source === 'tenant') Object.assign(data, this.block(patch.blockedReason, actor));
 
       const before = this.snapshot(row);
       let next: Row = row;
@@ -542,6 +530,7 @@ export class GatewayAdminService {
     // started on the gateway, whichever way the rest of the call ends.
     const row = await this.within(owner, async (db) => {
       const row = await this.load(db, ref, actor, owner);
+      if (row['blockedAt']) throw new GatewayAdminRefused('gateway_blocked', ref.id);
       const usage = await this.usage(db, ref, lookbackSec);
       if (usage.open_payments > 0) throw new GatewayAdminRefused('gateway_has_open_payments', `${ref.id}: ${usage.open_payments} open`);
       if (ref.source === 'platform') await db.paymentGateway.update({ where: { id: ref.id }, data: { isActive: false } });
@@ -655,13 +644,13 @@ export class GatewayAdminService {
     return SECRET_KEYS.filter((k) => typeof input[k] === 'string');
   }
 
-  private verification(status: string | undefined, actor: GatewayActor): Row {
-    if (status === undefined) return {};
-    if (!(status in TenantGatewayVerificationStatus)) throw new GatewayAdminRefused('missing_field', 'verificationStatus');
-    return {
-      verificationStatus: status,
-      verifiedByAdminId: status === TenantGatewayVerificationStatus.verified ? actor.adminId : null,
-    };
+  /** The block columns a `blockedReason` asks for: a reason blocks, `null` lifts; absent changes nothing. */
+  private block(reason: string | null | undefined, actor: GatewayActor): Row {
+    if (reason === undefined) return {};
+    if (reason === null) return { blockedAt: null, blockedReason: null, blockedByAdminId: null };
+    const why = reason.trim();
+    if (!why) throw new GatewayAdminRefused('missing_field', 'blockedReason');
+    return { blockedAt: new Date(), blockedReason: why, blockedByAdminId: actor.adminId };
   }
 
   /** The columns a patch names, converted. Only named columns: a secret key is not one, and never becomes one. */
@@ -689,7 +678,7 @@ export class GatewayAdminService {
   /** Every public column of a row, JSON-safe. The one shape an audit row or an answer is built from. */
   private snapshot(row: Row): Record<string, unknown> {
     const out: Record<string, unknown> = {};
-    for (const k of [...PLAIN_COLUMNS, ...Object.keys(ENUM_COLUMNS), 'verificationStatus', ...PLATFORM_ONLY]) {
+    for (const k of [...PLAIN_COLUMNS, ...Object.keys(ENUM_COLUMNS), 'blockedReason', ...PLATFORM_ONLY]) {
       if (row[k] !== undefined) out[k] = row[k];
     }
     for (const k of DECIMAL_COLUMNS) if (row[k] !== undefined) out[k] = str(row[k]);
@@ -751,7 +740,10 @@ export class GatewayAdminService {
       providerName: row['providerName'] as string,
       gatewayCategory: row['gatewayCategory'] as string,
       isActive: Boolean(row['isActive']),
-      verificationStatus: source === 'tenant' ? str(row['verificationStatus']) : null,
+      blocked:
+        source === 'tenant' && row['blockedAt']
+          ? { at: row['blockedAt'] as Date, reason: String(row['blockedReason'] ?? '') }
+          : null,
       description: source === 'platform' ? str(row['description']) : null,
       supportedCurrencies: source === 'platform' ? (row['supportedCurrencies'] ?? []) : null,
       confirmationMode: source === 'platform' ? str(row['confirmationMode']) : null,

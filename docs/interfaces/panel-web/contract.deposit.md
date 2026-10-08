@@ -89,7 +89,7 @@ route returns the whole breakdown instead of the pieces of one.
    the boundary, because the route's own regex takes ASCII only and a `fa` user
    would otherwise get an unexplained 400.
 9. **Every gateway in the picker is usable.** The route leaves out anything with
-   no driver, no verified config or no merchant id in the vault, so there is no
+   no driver, a switched-off or platform-blocked config (F-104-ak) or no merchant id in the vault, so there is no
    disabled state and no "why can't I pick this". Legacy intersected a
    hard-coded `GATEWAYS` array with the server's list, so a gateway the tenant
    had just added appeared nowhere until the app was rebuilt.

@@ -8,7 +8,6 @@ export const PROVIDERS = Object.keys(PROVIDER_FIELDS) as Provider[];
 export const CATEGORIES = ["domestic_rial", "international_card", "crypto", "in_chat"] as const;
 export const FEE_MODES = ["manual", "automatic"] as const;
 export const FEE_TYPES = ["percentage", "fixed"] as const;
-export const VERIFICATION = ["pending_test_transaction", "verified", "failed"] as const;
 
 /**
  * What the form holds: every field a string (or a boolean), exactly as typed.
@@ -32,8 +31,11 @@ export interface GatewayForm {
   feeValue: string;
   feeFloor: string;
   feeCeiling: string;
-  /** `""` when the row has none (a platform gateway) or the caller may not set it. */
-  verificationStatus: string;
+  /**
+   * The platform owner's block on a tenant gateway (F-104-ak): `""` is not
+   * blocked. Sent by an edit only, and only by the platform owner.
+   */
+  blockedReason: string;
   merchantId: string;
   secretKey: string;
   webhookSecret: string;
@@ -98,7 +100,7 @@ const REQUIRED = ["displayName", "providerName", "gatewayCategory"] as const;
 const DECIMALS = ["minAcceptAmount", "maxAcceptAmount", "feeValue", "feeFloor", "feeCeiling"] as const;
 /** Empty is sent as `null`: no fee floor or ceiling, and no minimum or maximum amount. */
 const NULLABLE = new Set<keyof GatewayForm>(["feeFloor", "feeCeiling", "minAcceptAmount", "maxAcceptAmount", "taxRatePercent"]);
-/** Every field an edit may send, secrets and verification aside — they have rules of their own below. */
+/** Every field an edit may send, secrets and the block aside — they have rules of their own below. */
 const EDITABLE = [
   "displayName",
   "providerName",
@@ -122,11 +124,11 @@ export const canManageLinks = (me: Me | null | undefined) => isPlatformOwner(me)
  * The actor the gateway form may build a body from, on this surface.
  *
  * On the ambient page it is whoever is signed in: the platform owner names a
- * tenant and sets `verificationStatus` there. On a reseller's screen the work
+ * tenant and blocks one there (`blockedReason`). On a reseller's screen the work
  * runs **as the reseller** (`billing/contract.gateways.md`, "A named
  * reseller's gateways"), so nothing a platform staff member holds may reach
  * the body — the route's schema is `.strict()` and would refuse a `tenantId`,
- * and `verificationStatus` is `verification_is_platform_owners` for everyone
+ * and `blockedReason` is `block_is_platform_owners` for everyone
  * here. One `null` in one place, rather than a rule repeated in the wizard and
  * the editor.
  */
@@ -147,7 +149,7 @@ export function emptyForm(source: GatewaySource): GatewayForm {
     feeValue: "0",
     feeFloor: "",
     feeCeiling: "",
-    verificationStatus: "",
+    blockedReason: "",
     merchantId: "",
     secretKey: "",
     webhookSecret: "",
@@ -178,7 +180,7 @@ export function formFromGateway(g: AdminGateway): GatewayForm {
     feeValue: g.feeValue,
     feeFloor: g.feeFloor ?? "",
     feeCeiling: g.feeCeiling ?? "",
-    verificationStatus: g.verificationStatus ?? "",
+    blockedReason: g.blocked?.reason ?? "",
     merchantId: "",
     secretKey: "",
     webhookSecret: "",
@@ -270,7 +272,6 @@ export function createBody(form: GatewayForm, me: Me | null): CreateGatewayBody 
   }
   if (isPlatformOwner(me) && form.source === "tenant") {
     if (form.tenantId.trim()) body.tenantId = form.tenantId.trim();
-    if (form.verificationStatus) body.verificationStatus = form.verificationStatus;
   }
   // Billing requires a fee value; an automatic-fee gateway left it empty.
   if (body.feeValue === undefined || body.feeValue === "") body.feeValue = "0";
@@ -290,13 +291,10 @@ export function updateBody(original: AdminGateway, form: GatewayForm, me: Me | n
     if (k === "feeValue" && form.feeValue.trim() === "") continue;
     if (form[k] !== before[k]) body[k] = value(form, k);
   }
-  if (
-    isPlatformOwner(me) &&
-    original.source === "tenant" &&
-    form.verificationStatus !== "" &&
-    form.verificationStatus !== before.verificationStatus
-  ) {
-    body.verificationStatus = form.verificationStatus;
+  // F-104-ak: a reason blocks, an emptied box lifts the block.
+  const reason = form.blockedReason.trim();
+  if (isPlatformOwner(me) && original.source === "tenant" && reason !== before.blockedReason.trim()) {
+    body.blockedReason = reason || null;
   }
   if (!samePresets(form.depositPresets, before.depositPresets)) body.depositPresets = form.depositPresets;
   if (form.callbackUrl.trim() !== before.callbackUrl.trim()) body.callbackUrl = form.callbackUrl.trim() || null;

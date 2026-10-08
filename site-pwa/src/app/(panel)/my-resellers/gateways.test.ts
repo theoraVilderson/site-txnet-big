@@ -17,7 +17,7 @@ import { stepHref } from "./_lib/onboarding";
  *    for (ADR-0059) — so a path built without `/tenants/:id` configures the
  *    wrong tenant and answers 200 while doing it;
  *  - **an elevated body.** The reseller route's schema is `.strict()` and the
- *    work runs as the reseller: a `tenantId` or a `verificationStatus` that the
+ *    work runs as the reseller: a `tenantId` or a `blockedReason` that the
  *    platform staff's own session would add is refused, so the form is handed an
  *    actor with no owner powers whoever is signed in;
  *  - **a refusal with no sentence.** Both doors' reasons are read from the
@@ -50,14 +50,16 @@ describe("what a write may carry", () => {
       providerName: "zarinpal",
       gatewayCategory: "domestic_rial",
       tenantId: "t-other",
-      verificationStatus: "verified",
+      blockedReason: "chargebacks",
     };
     const owner = { tenant: { type: "platform_owner" } } as never;
     // The same platform staff member, on the two surfaces.
-    expect(createBody(form, surfaceActor(owner, null))).toMatchObject({ tenantId: "t-other", verificationStatus: "verified" });
+    expect(createBody(form, surfaceActor(owner, null))).toMatchObject({ tenantId: "t-other" });
     const scoped = createBody(form, surfaceActor(owner, "t-1"));
     expect(scoped).not.toHaveProperty("tenantId");
-    expect(scoped).not.toHaveProperty("verificationStatus");
+    // A block is set on an existing gateway, never on create — on either surface.
+    expect(createBody(form, surfaceActor(owner, null))).not.toHaveProperty("blockedReason");
+    expect(scoped).not.toHaveProperty("blockedReason");
   });
 });
 

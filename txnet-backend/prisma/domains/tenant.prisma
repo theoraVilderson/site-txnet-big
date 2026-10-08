@@ -575,8 +575,16 @@ model TenantGatewayConfig {
   gatewayCategory     GatewayCategory
   merchantIdEncrypted String? // SENSITIVE — never default-select
   apiKeyEncrypted     String? // SENSITIVE — never default-select
+  /// Retired by F-104-ak: nothing reads it. A tenant's gateway is offered once
+  /// switched on; the platform's lever is `blockedAt`. Kept until a migration drops it.
   verificationStatus  TenantGatewayVerificationStatus @default(pending_test_transaction)
   verifiedByAdminId   String?                         @db.Uuid
+  /// F-104-ak. Set by the platform owner alone: a blocked gateway is offered to
+  /// nobody, and cannot be deleted (so it cannot be re-added unblocked). Null = not blocked.
+  blockedAt           DateTime?
+  /// Why, in the platform owner's words; shown to the tenant. Set with `blockedAt`.
+  blockedReason       String?
+  blockedByAdminId    String?                         @db.Uuid
   isActive            Boolean                         @default(false)
   minAcceptAmount     Decimal?                        @db.Decimal(18, 2) // null = no minimum
   maxAcceptAmount     Decimal?                        @db.Decimal(18, 2) // null = no maximum

@@ -14,7 +14,6 @@ import { formatMoney } from "../../_lib/money";
 import {
   CATEGORIES,
   PROVIDERS,
-  VERIFICATION,
   createBody,
   emptyForm,
   isPlatformOwner,
@@ -331,23 +330,6 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
           t("common", G.callback.hint),
           true,
         )}
-        {owner && form.source === "tenant" && (
-          <div className="sm:max-w-xs">
-            {labeled(
-              "verificationStatus",
-              t("common", F.verification),
-              <Select
-                value={form.verificationStatus}
-                onChange={(v) => set("verificationStatus", v)}
-                ariaLabel={t("common", F.verification)}
-                placeholder="—"
-                options={VERIFICATION.map((v) => ({ value: v, label: t("common", W.verification[v]) }))}
-              />,
-              undefined,
-              true,
-            )}
-          </div>
-        )}
       </div>
     ),
 
@@ -484,9 +466,6 @@ function ReviewStep({ form, owner, money, onEdit }: { form: GatewayForm; owner: 
             t("common", G.callback.default)
           ),
         ],
-        ...(owner && form.source === "tenant" && form.verificationStatus
-          ? ([[t("common", F.verification), t("common", W.verification[form.verificationStatus as (typeof VERIFICATION)[number]])]] as [string, ReactNode][])
-          : []),
       ])}
       {missingSecrets && (
         <p className="flex items-start gap-2 rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] p-3 text-xs text-text-primary">

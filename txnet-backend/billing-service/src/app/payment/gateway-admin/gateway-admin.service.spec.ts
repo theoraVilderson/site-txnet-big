@@ -12,10 +12,10 @@
  *    edit another reseller's gateway can point that gateway's merchant id at its
  *    own account and collect somebody else's sales. A row of another tenant is
  *    answered as *not found*, so the surface does not confirm it exists;
- *  - **verification.** Only the platform owner verifies a tenant gateway, and a
- *    tenant that changes a verified gateway's secret sends it back to
- *    `pending_test_transaction` — otherwise a verified gateway is a place to
- *    swap in an unverified account without anyone looking;
+ *  - **the block** (F-104-ak). A tenant's gateway is its own business: switched
+ *    on, it is offered. The platform owner alone may block one, with a reason,
+ *    and lift it; a blocked gateway cannot be deleted, or deleting and adding it
+ *    again would lift the block;
  *  - **secrets.** A merchant id and secret key are relayed to the vault writer
  *    (F-102-a) and appear in no answer, no audit row, and no gateway column;
  *  - **delete** (ADR-0041 §6). A row nothing points at is deleted. A row a
@@ -29,7 +29,7 @@
  *    a lent gateway's borrowers are counted and released through two database
  *    functions that check the gateway is the caller's own.
  */
-import { Prisma, TenantGatewayVerificationStatus, TenantType } from '@prisma/client';
+import { Prisma, TenantType } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { GatewayAdminRefused, GatewayAdminService, GatewaySecretWriter } from './gateway-admin.service';
@@ -110,7 +110,7 @@ function table(rows: Row[], name: string, writes: string[]) {
 
 const LOOKBACK_SEC = 86_400;
 
-function build(seed: { payments?: Row[]; grants?: Row[]; verified?: boolean; onDeactivate?: () => void } = {}) {
+function build(seed: { payments?: Row[]; grants?: Row[]; blocked?: boolean; onDeactivate?: () => void } = {}) {
   const writes: string[] = [];
   const audit: Row[] = [];
   const calls: string[] = [];
@@ -124,8 +124,8 @@ function build(seed: { payments?: Row[]; grants?: Row[]; verified?: boolean; onD
   );
   const tenantGatewayConfig = table(
     [
-      { id: RESELLER_GW, tenantId: RESELLER, ...FIELDS, isActive: true, merchantIdEncrypted: 'ENC-LEGACY', apiKeyEncrypted: 'ENC-KEY', verificationStatus: seed.verified ? TenantGatewayVerificationStatus.verified : TenantGatewayVerificationStatus.pending_test_transaction, createdAt: new Date(), updatedAt: new Date() },
-      { id: OTHER_GW, tenantId: OTHER, ...FIELDS, providerName: 'idpay', isActive: true, verificationStatus: TenantGatewayVerificationStatus.verified, createdAt: new Date(), updatedAt: new Date() },
+      { id: RESELLER_GW, tenantId: RESELLER, ...FIELDS, isActive: true, merchantIdEncrypted: 'ENC-LEGACY', apiKeyEncrypted: 'ENC-KEY', blockedAt: seed.blocked ? new Date() : null, blockedReason: seed.blocked ? 'chargebacks' : null, createdAt: new Date(), updatedAt: new Date() },
+      { id: OTHER_GW, tenantId: OTHER, ...FIELDS, providerName: 'idpay', isActive: true, blockedAt: null, createdAt: new Date(), updatedAt: new Date() },
     ],
     'tenantGatewayConfig',
     writes,
@@ -292,44 +292,39 @@ describe('GatewayAdminService — who may manage which gateway', () => {
     ]);
   });
 
-  it('only the platform owner verifies, and a tenant that changes a verified gateway\'s secret sends it back to pending', async () => {
-    const { service, db } = build({ verified: true });
-
-    expect(
-      (await refusal(() => service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { verificationStatus: 'verified' }))).reason,
-    ).toBe('verification_is_platform_owners');
-
-    await service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { merchantId: MERCHANT });
-    expect(db.tenantGatewayConfig.rows.find((r) => r['id'] === RESELLER_GW)?.['verificationStatus']).toBe(
-      TenantGatewayVerificationStatus.pending_test_transaction,
-    );
-
-    await service.update(actor(OWNER), { source: 'tenant', id: RESELLER_GW }, { verificationStatus: 'verified' });
-    const row = db.tenantGatewayConfig.rows.find((r) => r['id'] === RESELLER_GW);
-    expect(row?.['verificationStatus']).toBe(TenantGatewayVerificationStatus.verified);
-    expect(row?.['verifiedByAdminId']).toBe(ADMIN);
-  });
-
-  it('sends a verified gateway back to pending when its provider changes, and leaves fee and callback alone (F-104-x)', async () => {
-    const { service, db } = build({ verified: true });
+  it('only the platform owner blocks a tenant gateway, with a reason, and lifts it', async () => {
+    const { service, db } = build();
     const row = () => db.tenantGatewayConfig.rows.find((r) => r['id'] === RESELLER_GW);
 
-    await service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { feeValue: '2.5000', callbackUrl: 'https://pay.example.com/back' });
-    expect(row()?.['verificationStatus']).toBe(TenantGatewayVerificationStatus.verified);
+    expect(
+      (await refusal(() => service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { blockedReason: 'x' }))).reason,
+    ).toBe('block_is_platform_owners');
+    expect(
+      (await refusal(() => service.update(actor(OWNER), { source: 'platform', id: PLATFORM_GW }, { blockedReason: 'x' }))).reason,
+    ).toBe('block_is_platform_owners');
 
-    await service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { providerName: 'zarinpal' });
-    expect(row()?.['verificationStatus']).toBe(TenantGatewayVerificationStatus.verified);
+    const view = await service.update(actor(OWNER), { source: 'tenant', id: RESELLER_GW }, { blockedReason: '  chargebacks  ' });
+    expect(row()).toMatchObject({ blockedReason: 'chargebacks', blockedByAdminId: ADMIN });
+    expect(row()?.['blockedAt']).toBeInstanceOf(Date);
+    expect(view.blocked).toEqual({ at: row()?.['blockedAt'], reason: 'chargebacks' });
 
-    await service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { providerName: 'stripe' });
-    expect(row()?.['verificationStatus']).toBe(TenantGatewayVerificationStatus.pending_test_transaction);
-    expect(row()?.['verifiedByAdminId']).toBeNull();
+    await service.update(actor(OWNER), { source: 'tenant', id: RESELLER_GW }, { blockedReason: null });
+    expect(row()).toMatchObject({ blockedAt: null, blockedReason: null, blockedByAdminId: null });
+  });
 
-    await service.update(actor(OWNER), { source: 'tenant', id: RESELLER_GW }, { verificationStatus: 'verified' });
-    await service.update(actor(OWNER), { source: 'tenant', id: RESELLER_GW }, { providerName: 'idpay' });
-    expect(row()?.['verificationStatus']).toBe(TenantGatewayVerificationStatus.pending_test_transaction);
+  it("leaves a tenant's gateway its own: a new secret or provider needs nobody's approval", async () => {
+    const { service, db } = build();
 
-    await service.update(actor(OWNER), { source: 'tenant', id: RESELLER_GW }, { providerName: 'zarinpal', verificationStatus: 'verified' });
-    expect(row()?.['verificationStatus']).toBe(TenantGatewayVerificationStatus.verified);
+    await service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { merchantId: MERCHANT, providerName: 'stripe' });
+
+    expect(db.tenantGatewayConfig.rows.find((r) => r['id'] === RESELLER_GW)?.['blockedAt']).toBeNull();
+  });
+
+  it('refuses to delete a blocked gateway, so deleting and adding it again cannot lift the block', async () => {
+    const { service, db } = build({ blocked: true });
+
+    expect((await refusal(() => service.remove(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }))).reason).toBe('gateway_blocked');
+    expect(db.tenantGatewayConfig.rows.some((r) => r['id'] === RESELLER_GW)).toBe(true);
   });
 
   it('refuses a second gateway of the same provider for one tenant, and a minimum above the maximum', async () => {
@@ -514,7 +509,7 @@ describe('GatewayAdminService — which pool serves whom (ADR-0053, F-102-f-b)',
 
     await service.list(actor(OWNER));
     await service.create(actor(OWNER), { source: 'tenant', tenantId: OTHER, ...FIELDS, providerName: 'stripe' });
-    await service.update(actor(OWNER), { source: 'tenant', id: OTHER_GW }, { verificationStatus: 'verified' });
+    await service.update(actor(OWNER), { source: 'tenant', id: OTHER_GW }, { blockedReason: 'chargebacks' });
     await service.remove(actor(OWNER), { source: 'platform', id: PLATFORM_GW });
 
     expect(new Set(calls.filter((c) => c.startsWith('app:')))).toEqual(new Set(['app:tenant.findUnique']));

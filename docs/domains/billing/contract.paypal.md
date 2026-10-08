@@ -27,7 +27,7 @@ the rule corrected here — the builder checks the docs, never asks.
 | 5 | Proof that nothing moved: every existing spec passes unchanged; one new spec `charge-currency.spec.ts` covers the resolver (null → driver default, set → row, a code outside `chargeCurrencies` → throws `InvalidPricingInput`) | PP-1-b |
 | 6 | `/api/billing/gateways` (own) and `/api/billing/tenants/:tenantId/gateways` (a reseller's, ADR-0064) accept `chargeCurrency` on create and patch, and answer it resolved (`chargeCurrency`, never null on the wire) plus `chargeCurrencies` (the driver's list, sorted) | PP-1-c |
 | 7 | Refused, before any write: a code not in the driver's list → `400 currency_not_supported` naming the field; `useLiveRate = true` and `FxRateReader` has no rate for it → `400 currency_not_rated` (the operator either picks another or turns the live rate off and sets `staticRate`). USD always passes the second check (the pivot) | PP-1-c |
-| 8 | A `chargeCurrency` change on a gateway with `verificationStatus = verified` resets it to `pending_test_transaction` (F-104-x's rule and code path), unless the same patch sets `verificationStatus`. Open payments are unaffected (rule 2) | PP-1-c |
+| 8 | Retired by F-104-ak: a tenant gateway has no approval to reset, so a `chargeCurrency` change resets nothing. Open payments are unaffected (rule 2) | PP-1-c |
 | 9 | `staticRate`, `minRate`, `maxRate` stay "charge units per one unit of `currencyCode`" (F-0609) — now of the resolved charge currency. The form says which currency (PP-1-i) | PP-1-c |
 
 ## The webhook URL is shown (PP-1-h)

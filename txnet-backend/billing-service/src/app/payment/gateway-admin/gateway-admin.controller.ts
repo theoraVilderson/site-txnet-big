@@ -53,7 +53,8 @@ import { GatewaySecretsRefused, GatewaySecretsUnavailable } from './vault-secret
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
 const STATUS: Record<GatewayAdminRejection, 400 | 403 | 404 | 409> = {
   not_platform_owner: 403,
-  verification_is_platform_owners: 403,
+  block_is_platform_owners: 403,
+  gateway_blocked: 409,
   gateway_not_found: 404,
   tenant_not_found: 404,
   provider_already_configured: 409,

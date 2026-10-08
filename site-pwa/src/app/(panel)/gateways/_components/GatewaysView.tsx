@@ -188,10 +188,14 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
                           <span className={`text-[10px] font-bold ${g.isActive ? "text-success" : "text-text-secondary"}`}>
                             {g.isActive ? t("common", G.active) : t("common", G.inactive)}
                           </span>
+                          {g.blocked && (
+                            <span className="rounded-full bg-[var(--error-bg)] px-2 py-0.5 text-[10px] font-bold text-[var(--error-color)]" title={g.blocked.reason}>
+                              {t("common", G.blocked)}
+                            </span>
+                          )}
                         </span>
                         <span className="text-xs text-text-secondary" dir="ltr">
                           {g.providerName} · {g.gatewayCategory}
-                          {g.verificationStatus ? ` · ${g.verificationStatus}` : ""}
                           {owner && g.tenantId ? ` · ${g.tenantId}` : ""}
                         </span>
                         <span className="flex flex-wrap gap-3">

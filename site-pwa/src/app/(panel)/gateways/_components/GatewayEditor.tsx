@@ -35,7 +35,6 @@ import { EDITOR_SECTIONS, firstInvalidSection, sectionOf, type EditorSectionId }
 import {
   CATEGORIES,
   PROVIDERS,
-  VERIFICATION,
   changedFields,
   formFromGateway,
   isPlatformOwner,
@@ -66,7 +65,7 @@ const FIELD_LABELS: Partial<Record<keyof GatewayForm, string>> = {
   providerName: F.provider,
   gatewayCategory: F.category,
   isActive: F.isActive,
-  verificationStatus: F.verification,
+  blockedReason: F.blockedReason,
   minAcceptAmount: F.minAmount,
   maxAcceptAmount: F.maxAmount,
   depositPresets: G.presets.title,
@@ -273,6 +272,11 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: Gatewa
   const sections: Record<EditorSectionId, ReactNode> = {
     general: (
       <div className="grid gap-4 sm:grid-cols-2">
+        {gateway.blocked && !owner && (
+          <p role="status" className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] p-3 text-sm text-text-primary sm:col-span-2">
+            {t("common", G.blockedBecause, { reason: gateway.blocked.reason })}
+          </p>
+        )}
         <div className="sm:col-span-2">
           <Field id="gw-displayName" label={t("common", F.displayName)} error={errors.displayName} hint={t("common", W.hints.displayName)}>
             <TextInput id="gw-displayName" value={form.displayName} onChange={(v) => set("displayName", v)} invalid={Boolean(errors.displayName)} />
@@ -300,15 +304,11 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: Gatewa
           <Toggle checked={form.isActive} onChange={(v) => set("isActive", v)} label={t("common", F.isActive)} hint={t("common", W.hints.isActive)} />
         </div>
         {owner && gateway.source === "tenant" && (
-          <Field id="gw-verificationStatus" label={t("common", F.verification)}>
-            <Select
-              value={form.verificationStatus}
-              onChange={(v) => set("verificationStatus", v)}
-              ariaLabel={t("common", F.verification)}
-              placeholder="—"
-              options={VERIFICATION.map((v) => ({ value: v, label: t("common", W.verification[v]) }))}
-            />
-          </Field>
+          <div className="sm:col-span-2">
+            <Field id="gw-blockedReason" label={t("common", F.blockedReason)} hint={t("common", F.blockedHint)} optional>
+              <TextInput id="gw-blockedReason" value={form.blockedReason} onChange={(v) => set("blockedReason", v)} />
+            </Field>
+          </div>
         )}
       </div>
     ),
@@ -451,8 +451,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: Gatewa
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     {chip(form.isActive ? t("common", G.active) : t("common", G.inactive), form.isActive)}
                     {chip(gateway.source === "platform" ? t("common", G.platform) : t("common", G.tenant), false)}
-                    {form.verificationStatus &&
-                      chip(t("common", W.verification[form.verificationStatus as (typeof VERIFICATION)[number]]), form.verificationStatus === "verified")}
+                    {gateway.blocked && chip(t("common", G.blocked), false)}
                   </div>
                 </div>
               </div>

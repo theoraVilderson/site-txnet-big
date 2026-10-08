@@ -1,4 +1,4 @@
-import { FeeCalcMode, Prisma, TenantGatewayVerificationStatus, TenantType } from '@prisma/client';
+import { FeeCalcMode, Prisma, TenantType } from '@prisma/client';
 
 import type { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import type { GatewayMerchant, GatewaySource, MerchantGatewayRef } from '../gateway/gateway-merchant';
@@ -32,14 +32,20 @@ import {
  * bank.
  */
 
-const SELECTABLE = { isActive: true, verificationStatus: TenantGatewayVerificationStatus.verified };
+/**
+ * A tenant's gateway is its own (F-104-ak): switched on, it is offered. The
+ * platform owner's lever is a block, which no caller sees past — a manager
+ * testing included.
+ */
+const SELECTABLE = { isActive: true, blockedAt: null };
+const UNBLOCKED = { blockedAt: null };
 const PLATFORM_SELECTABLE = { isActive: true };
 
 /**
  * Test mode (the user's call, 2026-09-14). A gateway cannot be tested while it
  * is off, and switching it on shows it to every user — so a caller who may
- * manage gateways is also offered its **own** gateways that are off or not yet
- * verified, each marked `testing`. A granted gateway is somebody else's and is
+ * manage gateways is also offered its **own** gateways that are off, each
+ * marked `testing`. A granted gateway is somebody else's and is
  * never offered this way.
  */
 export type SelectOptions = {
@@ -65,8 +71,7 @@ export function offeredInThisChat(
   return !!chatPlatform && provider.chatPlatform === chatPlatform && gateway.grantId === null;
 }
 
-const testingOf = (row: { isActive: boolean; verificationStatus?: string | null }): boolean =>
-  !row.isActive || (row.verificationStatus != null && row.verificationStatus !== TenantGatewayVerificationStatus.verified);
+const testingOf = (row: { isActive: boolean }): boolean => !row.isActive;
 
 /**
  * What a quote needs of a row — the columns both tables share. Selected
@@ -273,8 +278,8 @@ export async function selectGateway(
     }
   } else {
     const row = await tx.tenantGatewayConfig.findFirst({
-      where: options.canTest ? { id, tenantId } : { ...SELECTABLE, id, tenantId },
-      select: { ...GATEWAY_COLUMNS, verificationStatus: true },
+      where: options.canTest ? { id, tenantId, ...UNBLOCKED } : { ...SELECTABLE, id, tenantId },
+      select: GATEWAY_COLUMNS,
     });
     if (row) return { ...row, source, grantId: null, ownerTenantId: tenantId, testing: testingOf(row) };
   }
@@ -307,8 +312,8 @@ export async function selectableGateways(
       })
     : [];
   const own = await tx.tenantGatewayConfig.findMany({
-    where: options.canTest ? { tenantId } : { ...SELECTABLE, tenantId },
-    select: { ...GATEWAY_COLUMNS, verificationStatus: true },
+    where: options.canTest ? { tenantId, ...UNBLOCKED } : { ...SELECTABLE, tenantId },
+    select: GATEWAY_COLUMNS,
     orderBy: { createdAt: 'asc' },
   });
   const granted = await grantedGateways(tx, crossTenant, tenantId);

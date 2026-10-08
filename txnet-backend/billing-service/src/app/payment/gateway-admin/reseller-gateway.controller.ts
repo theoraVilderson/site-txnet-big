@@ -55,7 +55,8 @@ const STATUS: Record<ResellerGatewayRejection, 400 | 403 | 404 | 409> = {
   // GatewayAdminService: what may be done to a gateway. The same statuses the
   // ambient surface answers, so one client reads both.
   not_platform_owner: 403,
-  verification_is_platform_owners: 403,
+  block_is_platform_owners: 403,
+  gateway_blocked: 409,
   gateway_not_found: 404,
   tenant_not_found: 404,
   provider_already_configured: 409,
@@ -79,9 +80,9 @@ const STATUS: Record<ResellerGatewayRejection, 400 | 403 | 404 | 409> = {
  * instead. It admits the reseller's owner, one of its staff seats holding
  * `tenant.manage`, and the platform owner's staff. What may then be done to a
  * gateway is `GatewayAdminService`'s, unchanged: the work runs as the reseller,
- * so a platform gateway is `gateway_not_found` here and `verificationStatus` is
- * `verification_is_platform_owners` for **everyone**, platform staff included —
- * verifying is done on the ambient route, as the platform owner.
+ * so a platform gateway is `gateway_not_found` here and `blockedReason` is
+ * `block_is_platform_owners` for **everyone**, platform staff included —
+ * blocking is done on the ambient route, as the platform owner (F-104-ak).
  *
  * Secrets behave as they do there: `merchantId`, `secretKey` and
  * `webhookSecret` go in, reach the vault through `tenant-service`, and appear

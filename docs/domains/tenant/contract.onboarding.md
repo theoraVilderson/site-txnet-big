@@ -148,7 +148,7 @@ The panel's side — the cache, and why every doubt renders — is
 ```
 
 **Every step is computed from live rows, never stored** — a `verified` panel
-domain, an `isActive` + `verified` `tenant_gateway_config`, an `active`
+domain, an `isActive`, unblocked `tenant_gateway_config` (F-104-ak), an `active`
 `bot_integration`, and something the catalog offers the reseller. A reseller
 that deletes its last gateway is back on that step.
 

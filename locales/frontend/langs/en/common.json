@@ -137,6 +137,8 @@
     "tenant": "Tenant",
     "active": "Active",
     "inactive": "Inactive",
+    "blocked": "Blocked by the platform",
+    "blockedBecause": "The platform has blocked this gateway; no user is offered it. Reason: {{reason}}",
     "merchantId": "Merchant ID",
     "secretKey": "Secret key",
     "configured": "Set",
@@ -163,7 +165,8 @@
       "feeValue": "Fee value",
       "feeFloor": "Fee floor",
       "feeCeiling": "Fee ceiling",
-      "verification": "Verification",
+      "blockedReason": "Block reason",
+      "blockedHint": "Platform owner only. A reason blocks the gateway for everyone; clearing it opens the gateway again.",
       "secrets": "Secrets",
       "secretsHint": "Stored encrypted and never shown again. Leave empty to keep the current value.",
       "save": "Save",
@@ -335,11 +338,6 @@
       "feeTypes": {
         "percentage": "Percentage",
         "fixed": "Fixed amount"
-      },
-      "verification": {
-        "pending_test_transaction": "Awaiting a test transaction",
-        "verified": "Verified",
-        "failed": "Failed"
       },
       "hints": {
         "displayName": "e.g. \"Pay by bank card\"",
@@ -2542,7 +2540,8 @@
       "reseller_suspended": "this reseller is suspended; its gateways cannot be changed until that is lifted.",
       "reseller_terminated": "this reseller is closed and takes no further changes.",
       "not_platform_owner": "a platform gateway is created from the platform owner's own page.",
-      "verification_is_platform_owners": "verifying a gateway is the platform owner's, and is not done from this page.",
+      "block_is_platform_owners": "only the platform owner may block or unblock a gateway.",
+      "gateway_blocked": "the platform has blocked this gateway; it cannot be deleted until the block is lifted.",
       "gateway_not_found": "that gateway was not found.",
       "tenant_not_found": "that reseller was not found.",
       "provider_already_configured": "this reseller already has a gateway with that provider; edit that one.",

@@ -6,8 +6,9 @@
  * policy (`20260909001500_…`), which binds only on a connection that set
  * `app.tenant_id` — a read anywhere else answers nothing and does not fail, so
  * a list that quietly lost its transaction would look like a tenant with no
- * gateways. And a row the user may pick is active **and** verified: a gateway
- * still awaiting its test transaction must not take a user's money.
+ * gateways. And a row the user may pick is active **and** not blocked by the
+ * platform owner (F-104-ak): a blocked gateway takes nobody's money, a manager
+ * testing it included. Nothing else is asked of a tenant's own gateway.
  *
  * `billing.payment_gateway` has no tenant column and no policy at all, so what
  * keeps a reseller off the platform brand's gateways is the tenant type read
@@ -38,7 +39,7 @@ const USER = '44444444-4444-4444-8444-444444444444';
 
 const ADMIN = '55555555-5555-4555-8555-555555555555';
 const A_ZARINPAL = 'aaaaaaaa-0000-4000-8000-000000000001';
-const A_PENDING = 'aaaaaaaa-0000-4000-8000-000000000002';
+const A_BLOCKED = 'aaaaaaaa-0000-4000-8000-000000000002';
 const A_INACTIVE = 'aaaaaaaa-0000-4000-8000-000000000003';
 const B_ZARINPAL = 'bbbbbbbb-0000-4000-8000-000000000001';
 const P_OWN = 'cccccccc-0000-4000-8000-000000000001';
@@ -67,19 +68,19 @@ beforeAll(async () => {
   }
 
   const gateways: Array<[string, string, string, string, boolean]> = [
-    // id, tenant, provider, verificationStatus, isActive
-    [A_ZARINPAL, TENANT_A, 'zarinpal', 'verified', true],
-    [A_PENDING, TENANT_A, 'idpay', 'pending_test_transaction', true],
-    [A_INACTIVE, TENANT_A, 'nowpayments', 'verified', false],
-    [B_ZARINPAL, TENANT_B, 'zarinpal', 'verified', true],
-    [P_OWN, PLATFORM, 'zarinpal', 'verified', true],
+    // id, tenant, provider, blocked, isActive — none is `verified`: F-104-ak retired the approval
+    [A_ZARINPAL, TENANT_A, 'zarinpal', 'false', true],
+    [A_BLOCKED, TENANT_A, 'idpay', 'true', true],
+    [A_INACTIVE, TENANT_A, 'nowpayments', 'false', false],
+    [B_ZARINPAL, TENANT_B, 'zarinpal', 'false', true],
+    [P_OWN, PLATFORM, 'zarinpal', 'false', true],
   ];
-  for (const [id, tenantId, provider, status, active] of gateways) {
+  for (const [id, tenantId, provider, blocked, active] of gateways) {
     await owner.$executeRawUnsafe(`
       INSERT INTO tenant.tenant_gateway_config
-        (id, "tenantId", "displayName", "providerName", "gatewayCategory", "verificationStatus", "isActive",
+        (id, "tenantId", "displayName", "providerName", "gatewayCategory", "blockedAt", "isActive",
          "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "staticRate", "updatedAt", "currencyCode")
-      VALUES ('${id}', '${tenantId}', '${provider}', '${provider}', 'domestic_rial', '${status}', ${active},
+      VALUES ('${id}', '${tenantId}', '${provider}', '${provider}', 'domestic_rial', ${blocked === 'true' ? 'now()' : 'NULL'}, ${active},
          1.00, 1000.00, 'manual', 'percentage', 1.0000, 1000000, now(), 'USD')
     `);
   }
@@ -120,7 +121,7 @@ beforeAll(async () => {
       new Map(
         [
         ...({
-          [TENANT_A]: [A_ZARINPAL, A_PENDING, A_INACTIVE],
+          [TENANT_A]: [A_ZARINPAL, A_BLOCKED, A_INACTIVE],
           [TENANT_B]: [B_ZARINPAL],
           [PLATFORM]: [P_OWN],
         }[tenantId] ?? []
@@ -179,7 +180,7 @@ const quoteAs = (tenantId: string, gatewayId: string, source: 'tenant' | 'platfo
   );
 
 describe('deposit gateways under RLS', () => {
-  it("lists only the tenant's own active, verified gateways", async () => {
+  it("lists only the tenant's own active, unblocked gateways", async () => {
     const a = await runWithTenant({ id: TENANT_A }, () => service.listGateways());
     const b = await runWithTenant({ id: TENANT_B }, () => service.listGateways());
 
@@ -197,7 +198,7 @@ describe('deposit gateways under RLS', () => {
 
   it.each([
     ['another tenant', B_ZARINPAL],
-    ['awaiting its test transaction', A_PENDING],
+    ['blocked by the platform', A_BLOCKED],
     ['inactive', A_INACTIVE],
   ])('refuses a gateway that is %s', async (_label, gatewayId) => {
     await expect(quoteAs(TENANT_A, gatewayId)).rejects.toBeInstanceOf(DepositGatewayNotFound);
@@ -233,9 +234,9 @@ describe('deposit gateways under RLS', () => {
 /**
  * Test mode (the user's call, 2026-09-14): a gateway cannot be tested while it
  * is off, and switching it on shows it to every user. So a caller who may
- * manage gateways (`canTest`) is also offered the ones that are off or not yet
- * verified — its **own** only, each marked `testing` — and everyone else sees
- * exactly what the cases above say.
+ * manage gateways (`canTest`) is also offered the ones that are off — its
+ * **own** only, each marked `testing`, never one the platform blocked — and
+ * everyone else sees exactly what the cases above say.
  */
 describe('test mode — a gateway manager is offered its own switched-off gateways', () => {
   it('lists them to a manager, marked, and to nobody else', async () => {
@@ -244,7 +245,6 @@ describe('test mode — a gateway manager is offered its own switched-off gatewa
     expect(new Map(manager.map((g) => [g.id, g.testing]))).toEqual(
       new Map([
         [A_ZARINPAL, false],
-        [A_PENDING, true],
         [A_INACTIVE, true],
       ]),
     );
@@ -252,8 +252,15 @@ describe('test mode — a gateway manager is offered its own switched-off gatewa
     expect(user.map((g) => [g.id, g.testing])).toEqual([[A_ZARINPAL, false]]);
   });
 
+  it('refuses a blocked gateway even to a manager', async () => {
+    await expect(
+      runWithTenant({ id: TENANT_A }, () =>
+        service.quote({ userId: USER, gatewayId: A_BLOCKED, source: 'tenant', amount: new Prisma.Decimal('20.00'), couponCodes: [], canTest: true }),
+      ),
+    ).rejects.toBeInstanceOf(DepositGatewayNotFound);
+  });
+
   it.each([
-    ['awaiting its test transaction', A_PENDING],
     ['inactive', A_INACTIVE],
   ])('quotes a gateway that is %s for a manager', async (_label, gatewayId) => {
     await expect(

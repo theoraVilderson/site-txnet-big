@@ -27,7 +27,7 @@ import { PROVIDERS as WIZARD_PROVIDERS } from "./_lib/gateway-form";
  *   an empty merchant id (billing refuses it, but only after the operator
  *   thought they had saved).
  * - **An edit sends only what changed.** A full body on every save would
- *   rewrite `verificationStatus` for a tenant that may not set it, and a stale
+ *   rewrite `blockedReason` for a tenant that may not set it, and a stale
  *   form would silently undo another operator's change to a field this one
  *   never touched.
  * - **Linking is the platform owner's.** `gateway.manage` alone does not make a
@@ -54,7 +54,7 @@ const GATEWAY: AdminGateway = {
   providerName: "zarinpal",
   gatewayCategory: "domestic_rial",
   isActive: true,
-  verificationStatus: "verified",
+  blocked: null,
   description: null,
   supportedCurrencies: null,
   confirmationMode: null,
@@ -115,11 +115,17 @@ describe("gateway form — what a save sends", () => {
     expect(updateBody({ ...GATEWAY, feeFloor: "0.5" }, { ...form, feeFloor: "" }, OWNER_ME)).toEqual({ feeFloor: null });
   });
 
-  it("never sends verification or another tenant for a reseller, and does for the platform owner", () => {
-    const form = { ...formFromGateway(GATEWAY), verificationStatus: "failed" as const };
+  // F-104-ak: the block is the platform owner's lever on a tenant gateway — a
+  // reason blocks, an emptied box lifts it; nobody else sends it.
+  it("never sends a block or another tenant for a reseller, and does for the platform owner", () => {
+    const form = { ...formFromGateway(GATEWAY), blockedReason: "  chargebacks " };
 
     expect(updateBody(GATEWAY, form, RESELLER_ME)).toEqual({});
-    expect(updateBody(GATEWAY, form, OWNER_ME)).toEqual({ verificationStatus: "failed" });
+    expect(updateBody(GATEWAY, form, OWNER_ME)).toEqual({ blockedReason: "chargebacks" });
+    const blocked = { ...GATEWAY, blocked: { at: "2026-10-08T00:00:00Z", reason: "chargebacks" } };
+    expect(formFromGateway(blocked).blockedReason).toBe("chargebacks");
+    expect(updateBody(blocked, { ...formFromGateway(blocked), blockedReason: "" }, OWNER_ME)).toEqual({ blockedReason: null });
+    expect(updateBody({ ...GATEWAY, source: "platform" }, form, OWNER_ME)).toEqual({});
 
     const create = { ...emptyForm("tenant"), tenantId: "t-other", displayName: "X", providerName: "idpay", gatewayCategory: "domestic_rial", minAcceptAmount: "1", maxAcceptAmount: "2", feeValue: "0" };
     expect(createBody(create, RESELLER_ME)).not.toHaveProperty("tenantId");

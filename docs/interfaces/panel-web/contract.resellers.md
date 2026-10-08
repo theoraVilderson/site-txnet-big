@@ -241,7 +241,7 @@ default quick amounts and default top-up tax (F-104-aj). Every rule behind the r
 29. **Nothing is elevated here** (`surfaceActor`). The actor the form builds a
     body from is `null` on this surface, whoever is signed in: billing runs the
     work as the reseller, its `.strict()` schema refuses a `tenantId`, and
-    `verificationStatus` is `verification_is_platform_owners` for platform staff
+    `blockedReason` is `block_is_platform_owners` for platform staff
     too. The gateway-links panel is the ambient page's alone for the same reason.
 30. **One sentence per refusal, on read and on write alike**
     (`GATEWAY_REFUSAL_KEYS`, namespace `common.resellerGateways`,

@@ -4,7 +4,6 @@ import {
   DomainVerificationStatus,
   TenantDomainPurpose,
   TenantDomainType,
-  TenantGatewayVerificationStatus,
 } from '@prisma/client';
 import { TenantOnboardingPolicy, TENANT_CAPABILITIES, TenantCapabilityName, offeredToTenant, operatingCurrencyOf, platformProductsSoldBy, ResellerAccess, ResellerAccessRejection, ResellerActor } from '@txnet-backend/shared-core';
 
@@ -77,7 +76,8 @@ export class TenantOnboardingService {
         where: {
           tenantId: reseller.id,
           isActive: true,
-          verificationStatus: TenantGatewayVerificationStatus.verified,
+          // F-104-ak: switched on and not blocked by the platform — no approval step.
+          blockedAt: null,
         },
         select: { id: true },
       }),
