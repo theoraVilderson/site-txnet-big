@@ -71,7 +71,8 @@ failed read; nothing asked of a reseller's user or the platform owner; and a
 `user:<id>` re-reading into the new state; grace names `suspendsAt`.
 F-019-c3: `purchase/reseller-purchase.spec.ts` (`suspendsAt`, the later grace,
 none without a subscription) and `subscription/tenant-subscription-grace.spec.ts`
-(the event with no status change).
+(the event with no status change; F-019-c4: a `renewalGraceDays` edit
+writes it for each reseller in grace whose deadline moved, and only those).
 F-019-c2: tenant-service `status/tenant-status.spec.ts` (every change writes
 it to the owner, in the lock). F-019-c1: tenant-service
 `renewal/tenant-renewal.spec.ts` (a paid renewal writes the event to the
@@ -81,7 +82,6 @@ owner's channel only).
 
 ## Not covered
 
-The platform's `renewalGraceDays` edited moves every reseller's deadline and
-pushes nothing; the section shows it on the next read. Renewing or changing the package from here is not offered:
+Renewing or changing the package from here is not offered:
 `/resellers/buy` holds the reseller (F-019-l), and an upgrade is the reseller
 workspace's (F-019-v10).

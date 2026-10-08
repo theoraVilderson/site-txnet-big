@@ -140,3 +140,55 @@ describe('TenantSubscriptionService.grantGrace', () => {
     expect(grantGraceSchema.safeParse({ days: 3, reason: 'x', graceUntil: '2027-01-01' }).success).toBe(false);
   });
 });
+
+/**
+ * F-019-c4: the platform's `renewalGraceDays` moves the deadline of every
+ * reseller already in grace, and My services names that deadline. Only those
+ * whose deadline actually moved are told: a reseller the platform owner gave
+ * a later `graceUntil` keeps its date.
+ */
+describe('TenantSubscriptionService.updateSettings tells the resellers in grace', () => {
+  const ADMIN = '22222222-2222-2222-2222-222222222222';
+  const OWNER_TENANT = '11111111-1111-1111-1111-111111111111';
+  const actor = { adminId: ADMIN, tenantId: OWNER_TENANT, ip: '127.0.0.1' };
+  const DAY = 86_400_000;
+  const ENDED = new Date(Date.now() - DAY);
+  const settings = { trialDays: 7, suspensionHoldDays: 7, renewalGraceDays: 3, quotaTimeZone: 'Asia/Tehran' };
+
+  const build = (inGrace: Array<{ tenantId: string; currentPeriodEnd: Date; graceUntil: Date | null; tenant: { ownerUserId: string } }>) => {
+    const tx = {
+      tenantSubscriptionSetting: {
+        findUnique: vi.fn(async () => settings),
+        update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ ...settings, ...data })),
+      },
+      tenantSubscription: { findMany: vi.fn(async (_args: { where: unknown }) => inGrace) },
+      outboxEvent: { createMany: vi.fn(async (_args: { data: Array<{ type: string; aggregateId: string; payload: Record<string, unknown> }> }) => ({ count: 0 })) },
+      adminAuditLog: { create: vi.fn(async () => ({})) },
+    };
+    const prisma = { tenant: { findUnique: vi.fn(async () => ({ tenantType: 'platform_owner' })) } };
+    const all = { $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) };
+    return { service: new TenantSubscriptionService(prisma as never, all as never, {} as never, {} as never), tx };
+  };
+
+  it('writes grace_extended for each reseller in grace whose deadline moved, and only those', async () => {
+    const { service, tx } = build([
+      { tenantId: 'r-moved', currentPeriodEnd: ENDED, graceUntil: null, tenant: { ownerUserId: 'u-1' } },
+      { tenantId: 'r-held', currentPeriodEnd: ENDED, graceUntil: new Date(ENDED.getTime() + 30 * DAY), tenant: { ownerUserId: 'u-2' } },
+    ]);
+    await service.updateSettings(actor, { ...settings, renewalGraceDays: 5 });
+
+    expect(tx.tenantSubscription.findMany.mock.calls[0][0].where).toMatchObject({
+      tenant: { tenantType: 'reseller', deletedAt: null, status: { in: ['active', 'trial'] } },
+    });
+    expect(tx.outboxEvent.createMany.mock.calls[0][0].data).toEqual([
+      { aggregate: 'tenant.subscription', aggregateId: 'r-moved', type: OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED, payload: { tenantId: 'r-moved', userId: 'u-1' } },
+    ]);
+  });
+
+  it('reads and writes nothing more when the grace days did not change', async () => {
+    const { service, tx } = build([{ tenantId: 'r-1', currentPeriodEnd: ENDED, graceUntil: null, tenant: { ownerUserId: 'u-1' } }]);
+    await service.updateSettings(actor, { ...settings, trialDays: 10 });
+    expect(tx.tenantSubscription.findMany).not.toHaveBeenCalled();
+    expect(tx.outboxEvent.createMany).not.toHaveBeenCalled();
+  });
+});

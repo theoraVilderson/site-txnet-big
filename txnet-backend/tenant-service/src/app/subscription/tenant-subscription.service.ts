@@ -435,6 +435,7 @@ export class TenantSubscriptionService {
         },
         select: SETTINGS,
       });
+      if (after.renewalGraceDays !== before.renewalGraceDays) await this.announceMovedDeadlines(tx, before.renewalGraceDays, after.renewalGraceDays);
       await tx.adminAuditLog.create({
         data: {
           tenantId: actor.tenantId,
@@ -449,6 +450,35 @@ export class TenantSubscriptionService {
         },
       });
       return after;
+    });
+  }
+
+  /**
+   * F-019-c4: a `renewalGraceDays` edit moves the deadline of every reseller
+   * already in grace — past its period end, not suspended — and My services
+   * names that deadline. One `grace_extended` per reseller whose deadline
+   * actually moved; one held by a later `graceUntil` is not told. Resellers
+   * not yet due read the new setting when their period ends.
+   */
+  private async announceMovedDeadlines(tx: Prisma.TransactionClient, beforeDays: number, afterDays: number): Promise<void> {
+    const inGrace = await tx.tenantSubscription.findMany({
+      where: {
+        currentPeriodEnd: { lte: new Date() },
+        tenant: { tenantType: TenantType.reseller, deletedAt: null, status: { in: [TenantStatus.active, TenantStatus.trial] } },
+      },
+      select: { tenantId: true, currentPeriodEnd: true, graceUntil: true, tenant: { select: { ownerUserId: true } } },
+    });
+    const moved = inGrace.filter(
+      (s) => renewalDeadline(s.currentPeriodEnd, beforeDays, s.graceUntil).getTime() !== renewalDeadline(s.currentPeriodEnd, afterDays, s.graceUntil).getTime(),
+    );
+    if (moved.length === 0) return;
+    await tx.outboxEvent.createMany({
+      data: moved.map((s) => ({
+        aggregate: 'tenant.subscription',
+        aggregateId: s.tenantId,
+        type: OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED,
+        payload: { tenantId: s.tenantId, userId: s.tenant.ownerUserId },
+      })),
     });
   }
 
