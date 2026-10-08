@@ -1,3 +1,4 @@
+import { OutboxEventType } from '@txnet-backend/shared-core';
 import { ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import {
@@ -124,17 +125,19 @@ describe('TenantStatusService', () => {
   const OWNER_TENANT = '11111111-1111-1111-1111-111111111111';
   const ADMIN = '22222222-2222-2222-2222-222222222222';
   const RESELLER = '44444444-4444-4444-4444-444444444444';
+  const OWNER = '55555555-5555-4555-8555-555555555555';
   const DAY = 86_400_000;
   const actor = { adminId: ADMIN, tenantId: OWNER_TENANT, ip: '127.0.0.1' };
 
   const build = (opts: { callerType?: string; status?: string; cause?: string | null; tenantType?: string; holdDays?: number; found?: boolean } = {}) => {
     const writes: string[] = [];
-    const row = { id: RESELLER, tenantType: opts.tenantType ?? 'reseller', status: opts.status ?? 'active', suspensionCause: opts.cause ?? null, suspendedAt: null, graceEndsAt: null, suspendedReason: null };
+    const row = { id: RESELLER, tenantType: opts.tenantType ?? 'reseller', status: opts.status ?? 'active', suspensionCause: opts.cause ?? null, suspendedAt: null, graceEndsAt: null, suspendedReason: null, ownerUserId: OWNER };
     const tx = {
       $queryRaw: vi.fn(async () => (writes.push('lock'), opts.found === false ? [] : [row])),
       tenant: { update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('tenant'), { ...row, ...data })) },
       tenantStatusHistory: { create: vi.fn(async (_: { data: Record<string, unknown> }) => (writes.push('history'), {})) },
       adminAuditLog: { create: vi.fn(async (_: { data: Record<string, unknown> }) => (writes.push('audit'), {})) },
+      outboxEvent: { create: vi.fn(async (_: { data: { type: string; aggregateId: string; payload: Record<string, unknown> } }) => (writes.push('outbox'), {})) },
     };
     const prisma = { tenant: { findUnique: vi.fn(async () => ({ tenantType: opts.callerType ?? 'platform_owner' })) } };
     const all = {
@@ -162,7 +165,7 @@ describe('TenantStatusService', () => {
     const before = Date.now();
     const view = await service.change(actor, RESELLER, { status: 'suspended', reason: 'unpaid' });
 
-    expect(writes).toEqual(['lock', 'tenant', 'history', 'audit']);
+    expect(writes).toEqual(['lock', 'tenant', 'history', 'outbox', 'audit']);
     const data = tx.tenant.update.mock.calls[0][0].data as { status: string; suspendedAt: Date; graceEndsAt: Date; suspendedReason: string };
     expect(data.status).toBe('suspended');
     expect(data.suspendedReason).toBe('unpaid');
@@ -175,6 +178,19 @@ describe('TenantStatusService', () => {
     expect(view.status).toBe('suspended');
   });
 
+  it("every change tells the reseller owner's open pages, in the lock (F-019-c2, C-14)", async () => {
+    for (const [status, cause, to] of [['active', null, 'suspended'], ['suspended', 'manual', 'active'], ['suspended', 'non_payment', 'suspended']] as const) {
+      const { service, tx } = build({ status, cause });
+      await service.change(actor, RESELLER, { status: to });
+      expect(tx.outboxEvent.create).toHaveBeenCalledTimes(1);
+      expect(tx.outboxEvent.create.mock.calls[0][0].data).toMatchObject({
+        aggregateId: RESELLER,
+        type: OutboxEventType.TENANT_STATUS_CHANGED,
+        payload: { tenantId: RESELLER, userId: OWNER },
+      });
+    }
+  });
+
   it('reactivating clears suspendedAt and graceEndsAt', async () => {
     const { service, tx } = build({ status: 'suspended' });
     await service.change(actor, RESELLER, { status: 'active' });
@@ -185,7 +201,7 @@ describe('TenantStatusService', () => {
     const { service, tx, writes } = build({ status: 'suspended', cause: 'non_payment' });
     const view = await service.change(actor, RESELLER, { status: 'suspended', reason: 'spam' });
 
-    expect(writes).toEqual(['lock', 'tenant', 'history', 'audit']);
+    expect(writes).toEqual(['lock', 'tenant', 'history', 'outbox', 'audit']);
     expect(tx.tenant.update.mock.calls[0][0].data).toEqual({ suspensionCause: 'manual', suspendedReason: 'spam' });
     expect(tx.tenantStatusHistory.create.mock.calls[0][0].data).toMatchObject({ fromStatus: 'suspended', toStatus: 'suspended', reason: 'spam', actorUserId: ADMIN });
     expect(tx.adminAuditLog.create.mock.calls[0][0].data).toMatchObject({ oldValue: { suspensionCause: 'non_payment' }, newValue: { suspensionCause: 'manual' } });

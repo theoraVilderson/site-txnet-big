@@ -174,7 +174,7 @@ describe('TenantRenewalService', () => {
       suspendedReason: 'subscription_unpaid',
     });
     expect(tx.tenantStatusHistory.create.mock.calls[0][0].data).toMatchObject({ toStatus: 'suspended', actorUserId: null });
-    expect(tx.outboxEvent.create.mock.calls[0][0].data.type).toBe(OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED);
+    expect(tx.outboxEvent.create.mock.calls.map((c) => c[0].data.type)).toEqual([OutboxEventType.TENANT_STATUS_CHANGED, OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED]);
     expect(tx.tenantFeatureEntitlement.deleteMany).not.toHaveBeenCalled();
     expect(writes.some((w) => w.includes('delete'))).toBe(false);
   });

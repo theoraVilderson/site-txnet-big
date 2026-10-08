@@ -1,4 +1,5 @@
 import { Prisma, TenantStatus, TenantSuspensionCause } from '@prisma/client';
+import { OutboxEventType } from '@txnet-backend/shared-core';
 
 /**
  * One tenant's move between statuses, inside the caller's transaction and
@@ -10,10 +11,14 @@ import { Prisma, TenantStatus, TenantSuspensionCause } from '@prisma/client';
  * why (`suspensionCause`); reactivating clears all four; terminating keeps
  * them for the record. One `tenant_status_history` row, `actorUserId` null
  * when the platform moved it. Nothing is deleted.
+ *
+ * Every change, here or in {@link makeSuspensionManual}, writes
+ * `tenant.status.changed` `{tenantId, userId}` in the same transaction: the
+ * reseller owner's open pages re-read (F-019-c2, C-14). Ids only.
  */
 
 const DAY_MS = 86_400_000;
-const STATUS_SELECT = { id: true, status: true, suspensionCause: true, suspendedAt: true, graceEndsAt: true, suspendedReason: true } as const;
+const STATUS_SELECT = { id: true, status: true, suspensionCause: true, suspendedAt: true, graceEndsAt: true, suspendedReason: true, ownerUserId: true } as const;
 
 export type TenantStatusChange = {
   from: TenantStatus;
@@ -34,6 +39,8 @@ export type TenantStatusRow = {
   suspendedAt: Date | null;
   graceEndsAt: Date | null;
   suspendedReason: string | null;
+  /** Whose open pages hear the change. */
+  ownerUserId: string;
 };
 
 export async function applyTenantStatus(tx: Prisma.TransactionClient, tenantId: string, change: TenantStatusChange): Promise<TenantStatusRow> {
@@ -59,6 +66,7 @@ export async function applyTenantStatus(tx: Prisma.TransactionClient, tenantId: 
   await tx.tenantStatusHistory.create({
     data: { tenantId, fromStatus: change.from, toStatus: to, reason, actorUserId: change.actorUserId },
   });
+  await announceStatus(tx, after);
   return after;
 }
 
@@ -79,5 +87,19 @@ export async function makeSuspensionManual(
   await tx.tenantStatusHistory.create({
     data: { tenantId, fromStatus: TenantStatus.suspended, toStatus: TenantStatus.suspended, reason: change.reason, actorUserId: change.actorUserId },
   });
+  await announceStatus(tx, after);
   return after;
+}
+
+/** `tenant.status.changed` (F-019-c2): pushed live to the owner by the worker; nobody is told. */
+async function announceStatus(tx: Prisma.TransactionClient, after: TenantStatusRow): Promise<void> {
+  await tx.outboxEvent.create({
+    data: {
+      aggregate: 'tenant.status',
+      aggregateId: after.id,
+      type: OutboxEventType.TENANT_STATUS_CHANGED,
+      payload: { tenantId: after.id, userId: after.ownerUserId },
+    },
+    select: { id: true },
+  });
 }

@@ -48,8 +48,10 @@ read and its re-read) and `_lib/reseller-subscription.ts` (the state, tones).
    failed re-read keeps the last answer.
 6. **A renewal re-reads it, never a clock** (C-14, ADR-0121).
    `useLiveReread` on the caller's `user:` channel for
-   `tenant.subscription.renewed` — a paid renewal, pushed to the owner
-   (F-019-c1, [realtime/contract.live-events.md](../../platform/realtime/contract.live-events.md)) —
+   `tenant.subscription.renewed` (a paid renewal, F-019-c1) and
+   `tenant.status.changed` (any status change, by hand or by the platform,
+   F-019-c2) — both pushed to the owner
+   ([realtime/contract.live-events.md](../../platform/realtime/contract.live-events.md)) —
    and `notification.created`: an unpaid one's "payment due" and "suspended"
    are inbox rows for the owner ([automation/contract.outbox.md](../../domains/automation/contract.outbox.md)
    "The tenant consumers"), and the inbox row is live. A reconnect re-reads
@@ -62,8 +64,10 @@ the end (also for `trial`), active before it or with no period, nothing for
 terminated; the section outside any list with slug, package, state and the
 link's path; grace's and suspension's sentences; nothing for `null` or a
 failed read; nothing asked of a reseller's user or the platform owner; and a
-`tenant.subscription.renewed` or `notification.created` on `user:<id>`
-re-reading into the new state. F-019-c1: tenant-service
+`tenant.subscription.renewed`, `tenant.status.changed` or
+`notification.created` on `user:<id>` re-reading into the new state.
+F-019-c2: tenant-service `status/tenant-status.spec.ts` (every change writes
+it to the owner, in the lock). F-019-c1: tenant-service
 `renewal/tenant-renewal.spec.ts` (a paid renewal writes the event to the
 owner) and worker-service `outbox/live-push.consumer.spec.ts` (`{type}` on the
 owner's channel only).
@@ -71,7 +75,7 @@ owner's channel only).
 
 ## Not covered
 
-A status the platform owner sets by hand (`PUT /tenants/:id/status`) pushes
-nothing; an open page shows it on the next visit or reconnect. Renewing or changing the package from here is not offered:
+A grace extended without a status change (`graceUntil` only) pushes nothing:
+the section does not show the deadline. Renewing or changing the package from here is not offered:
 `/resellers/buy` holds the reseller (F-019-l), and an upgrade is the reseller
 workspace's (F-019-v10).

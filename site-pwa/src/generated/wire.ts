@@ -63,4 +63,5 @@ export const RealtimeEvents = {
   "grantUsage": "entitlement.grant.usage",
   "tenantDomainChanged": "tenant.domain.changed",
   "tenantSubscriptionRenewed": "tenant.subscription.renewed",
+  "tenantStatusChanged": "tenant.status.changed",
 } as const;

@@ -13,6 +13,7 @@
     "walletChanged": "billing.wallet.changed",
     "grantUsage": "entitlement.grant.usage",
     "tenantDomainChanged": "tenant.domain.changed",
-    "tenantSubscriptionRenewed": "tenant.subscription.renewed"
+    "tenantSubscriptionRenewed": "tenant.subscription.renewed",
+    "tenantStatusChanged": "tenant.status.changed"
   }
 }

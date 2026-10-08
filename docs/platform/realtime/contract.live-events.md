@@ -108,6 +108,11 @@ by `TenantRenewalService` in a paid renewal's transaction only — an unpaid one
 is already a notice, whose inbox row is live. My services' reseller section
 re-reads on it (`contract.reseller-subscription.md`).
 
+**F-019-c2 — a reseller's status.** Type `tenant.status.changed`, same
+channel, body and payload. Written by `applyTenantStatus` and
+`makeSuspensionManual` in every status change's transaction — by hand, a
+grace, a purchase, a renewal. The same section re-reads on it.
+
 **RT-1-f — panel drain and removal.** Type `network.panel.drained`,
 `tenant:`, body `{type, panelId, groupId}`. Written by `GroupDrainService.drainDue`
 (`billing-service/src/app/traffic/group-drain.ts`) when a pass retired at

@@ -51,6 +51,7 @@ describe('TenantSubscriptionService.grantGrace', () => {
         update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('tenant'), { ...tenantRow, suspendedAt: null, graceEndsAt: null, suspendedReason: null, ...data })),
       },
       tenantStatusHistory: { create: vi.fn(async (_args: { data: Record<string, unknown> }) => (writes.push('history'), {})) },
+      outboxEvent: { create: vi.fn(async () => (writes.push('outbox'), {})) },
       tenantBillingTransaction: { create: vi.fn() },
       tenantBillingWallet: { update: vi.fn() },
       adminAuditLog: { create: vi.fn(async (_args: { data: Record<string, unknown> }) => (writes.push('audit'), {})) },

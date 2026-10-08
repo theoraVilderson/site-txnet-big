@@ -37,6 +37,8 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: reado
    * ones are already notices (`tenant-subscription-notice`).
    */
   [OutboxEventType.TENANT_SUBSCRIPTION_RENEWED]: { audience: ['user'], fields: [] },
+  /** F-019-c2: a reseller's status changed, by hand or by the platform — its owner's My services re-reads. */
+  [OutboxEventType.TENANT_STATUS_CHANGED]: { audience: ['user'], fields: [] },
 };
 
 /**

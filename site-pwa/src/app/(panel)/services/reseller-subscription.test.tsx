@@ -124,14 +124,14 @@ describe("ResellerSubscription", () => {
     expect(mine).not.toHaveBeenCalled();
   });
 
-  it("re-reads on a paid renewal or a renewal's notice on the user's channel, with no clock", async () => {
+  it("re-reads on a paid renewal, a status change or a renewal's notice on the user's channel, with no clock", async () => {
     mine.mockResolvedValue({ reseller: HELD });
     render(<ResellerSubscription />);
     await screen.findByText(K.state.active);
 
     const [channel, types, reread] = vi.mocked(useLiveReread).mock.calls.at(-1)!;
     expect(channel).toBe("user:u-1");
-    expect(types).toEqual([RealtimeEvents.tenantSubscriptionRenewed, RealtimeEvents.notificationCreated]);
+    expect(types).toEqual([RealtimeEvents.tenantSubscriptionRenewed, RealtimeEvents.tenantStatusChanged, RealtimeEvents.notificationCreated]);
 
     mine.mockResolvedValue({ reseller: { ...HELD, status: "suspended" } });
     act(() => reread("event"));

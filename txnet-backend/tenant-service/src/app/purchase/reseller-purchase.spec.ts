@@ -87,9 +87,10 @@ describe('ResellerPurchaseService', () => {
         createMany: vi.fn(async () => (writes.push('entitlements'), {})),
       },
       tenantStatusHistory: { create: vi.fn(async (_args: { data: Record<string, unknown> }) => (writes.push('status history'), {})) },
+      outboxEvent: { create: vi.fn(async (args: { data: { type: string } }) => (writes.push(args.data.type), {})) },
     };
     Object.assign(tx.tenant, {
-      update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push(`status ${data.status}`), { id: NEW_TENANT, ...data })),
+      update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push(`status ${data.status}`), { id: NEW_TENANT, ownerUserId: BUYER, ...data })),
     });
     const all = {
       tenant: {
@@ -171,6 +172,7 @@ describe('ResellerPurchaseService', () => {
       'entitlements',
       'status active',
       'status history',
+      'tenant.status.changed',
     ]);
     // The buyer's wallet, in the platform owner's scope, referenced by the reseller it bought.
     expect(wallets.debit.mock.calls[0][1]).toMatchObject({ userId: BUYER, reasonType: 'reseller_purchase', referenceId: NEW_TENANT, tenantId: PLATFORM });
