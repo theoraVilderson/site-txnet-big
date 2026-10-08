@@ -126,6 +126,8 @@ export type GatewayView = {
   taxRatePercent: string | null;
   /** The callback address sent to the provider, or `null` for the tenant's panel domain (F-092-w). */
   callbackUrl: string | null;
+  /** The owner's user groups it is offered to; empty = everyone (F-102-g). */
+  userGroupIds: string[];
   /** `null` when the vault writer could not be asked; the list still renders. */
   credentials: GatewaySecretsState | null;
   /**
@@ -149,7 +151,9 @@ export type GatewayAdminRejection =
   | 'missing_field'
   | 'invalid_presets'
   | 'invalid_callback'
-  | 'gateway_has_open_payments';
+  | 'gateway_has_open_payments'
+  /** F-102-g: a group named for a gateway's audience is not its owner's. */
+  | 'group_not_found';
 
 /** A refusal. Its message names the rule and a row id, never a value. */
 export class GatewayAdminRefused extends Error {
@@ -364,12 +368,25 @@ export class GatewayAdminService {
       }),
     ]);
 
+    // F-102-g: one read for every listed gateway's groups. A tenant's own rows
+    // only, or every tenant's for the platform owner — the same scope as the list.
+    const audience = await this.within(owner, (db) =>
+      db.gatewayAudience.findMany({
+        where: { tenantId: owner ? filter.tenantId : actor.tenantId },
+        select: { gatewayId: true, tenantGatewayConfigId: true, groupId: true },
+      }),
+    );
+    const groupsOf = (source: GatewaySource, id: string) =>
+      audience.filter((a) => (source === 'platform' ? a.gatewayId : a.tenantGatewayConfigId) === id).map((a) => a.groupId);
+
     const out: GatewayView[] = [];
     for (const row of platform as Row[]) {
-      out.push(this.view('platform', row, await this.stateOrNull(this.target({ source: 'platform', id: row['id'] as string }, row, actor))));
+      const id = row['id'] as string;
+      out.push(this.view('platform', row, await this.stateOrNull(this.target({ source: 'platform', id }, row, actor)), groupsOf('platform', id)));
     }
     for (const row of tenant as Row[]) {
-      out.push(this.view('tenant', row, await this.stateOrNull(this.target({ source: 'tenant', id: row['id'] as string }, row, actor))));
+      const id = row['id'] as string;
+      out.push(this.view('tenant', row, await this.stateOrNull(this.target({ source: 'tenant', id }, row, actor)), groupsOf('tenant', id)));
     }
     return out;
   }
@@ -443,6 +460,48 @@ export class GatewayAdminService {
     return this.view(input.source, created, credentials);
   }
 
+  /**
+   * Who a gateway is offered to (F-102-g): the set of its owner's user groups,
+   * replaced whole; `[]` = everyone again. The owner is the row's tenant — the
+   * platform owner for a platform gateway — so the platform owner setting a
+   * reseller's gateway picks that reseller's groups, never its own. A group
+   * that is not the owner's is `group_not_found` before anything is written;
+   * the composite key refuses it again in the database. One `gateway_update`
+   * audit row, in the owner's tenant.
+   */
+  async setAudience(actor: GatewayActor, ref: GatewayRef, groupIds: string[]): Promise<{ userGroupIds: string[] }> {
+    const owner = await this.isOwner(actor);
+    const ids = [...new Set(groupIds)];
+    await this.within(owner, async (tx) => {
+      const row = await this.load(tx, ref, actor, owner);
+      const ownerTenantId = ref.source === 'platform' ? actor.tenantId : (row['tenantId'] as string);
+      if (ids.length > 0) {
+        const found = await tx.userGroup.findMany({ where: { tenantId: ownerTenantId, id: { in: ids } }, select: { id: true } });
+        if (found.length !== ids.length) throw new GatewayAdminRefused('group_not_found', ref.id);
+      }
+      const column = ref.source === 'platform' ? 'gatewayId' : 'tenantGatewayConfigId';
+      const before = await this.audienceOf(tx, ref);
+      await tx.gatewayAudience.deleteMany({ where: { [column]: ref.id } });
+      if (ids.length > 0) {
+        await tx.gatewayAudience.createMany({ data: ids.map((groupId) => ({ tenantId: ownerTenantId, groupId, [column]: ref.id })) });
+      }
+      await tx.adminAuditLog.create({
+        data: {
+          tenantId: ownerTenantId,
+          adminId: actor.adminId,
+          action: 'gateway_update',
+          targetEntityType: 'gateway',
+          targetEntityId: ref.id,
+          oldValue: { userGroupIds: before },
+          newValue: { source: ref.source, userGroupIds: ids },
+          adminIpAddress: actor.ip,
+        },
+      });
+    });
+    this.logger.log(`gateway ${ref.source}:${ref.id} audience set by ${actor.adminId}`);
+    return { userGroupIds: ids };
+  }
+
   async update(actor: GatewayActor, ref: GatewayRef, patch: UpdateGatewayInput): Promise<GatewayView> {
     const owner = await this.isOwner(actor);
     const secretsChanged = this.secretsNamed(patch);
@@ -488,13 +547,13 @@ export class GatewayAdminService {
           adminIpAddress: actor.ip,
         },
       });
-      return next;
+      return { next, userGroupIds: await this.audienceOf(tx, ref) };
     });
 
-    const target = this.target(ref, updated, actor);
+    const target = this.target(ref, updated.next, actor);
     const credentials = secretsChanged.length > 0 ? await this.writeSecrets(target, patch, actor) : await this.stateOrNull(target);
     this.logger.log(`gateway ${ref.source}:${ref.id} updated by ${actor.adminId}`);
-    return this.view(ref.source, updated, credentials);
+    return this.view(ref.source, updated.next, credentials, updated.userGroupIds);
   }
 
   /**
@@ -577,6 +636,12 @@ export class GatewayAdminService {
    * RLS policy, which is what lets this connection answer it (as in
    * `SettlementService.assertOperator`).
    */
+  /** The groups one gateway is offered to (F-102-g); empty = everyone. */
+  private async audienceOf(db: Tx, ref: GatewayRef): Promise<string[]> {
+    const column = ref.source === 'platform' ? 'gatewayId' : 'tenantGatewayConfigId';
+    return (await db.gatewayAudience.findMany({ where: { [column]: ref.id }, select: { groupId: true } })).map((a) => a.groupId);
+  }
+
   private async isOwner(actor: GatewayActor): Promise<boolean> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
     return tenant?.tenantType === TenantType.platform_owner;
@@ -731,7 +796,7 @@ export class GatewayAdminService {
     taxRate(r['taxRatePercent']);
   }
 
-  private view(source: GatewaySource, row: Row, credentials: GatewaySecretsState | null): GatewayView {
+  private view(source: GatewaySource, row: Row, credentials: GatewaySecretsState | null, userGroupIds: string[] = []): GatewayView {
     return {
       source,
       id: row['id'] as string,
@@ -766,6 +831,7 @@ export class GatewayAdminService {
       depositPresets: presetStrings(row['depositPresets']),
       taxRatePercent: str(row['taxRatePercent']),
       callbackUrl: str(row['callbackUrl']),
+      userGroupIds,
       credentials,
       missingSecrets: credentials
         ? (PROVIDER_FIELDS[row['providerName'] as PaymentProviderName]?.secrets ?? []).filter((k) => !credentials[k].configured)

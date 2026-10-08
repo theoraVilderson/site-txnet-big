@@ -1,4 +1,4 @@
-import { FeeCalcMode, Prisma, TenantType } from '@prisma/client';
+import { FeeCalcMode, Prisma, TenantType, UserGroupMemberType } from '@prisma/client';
 
 import type { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import type { GatewayMerchant, GatewaySource, MerchantGatewayRef } from '../gateway/gateway-merchant';
@@ -52,7 +52,50 @@ export type SelectOptions = {
   canTest?: boolean;
   /** The messenger a bot caller proved it is (F-104-k); `null`/absent is not a bot. See {@link offeredInThisChat}. */
   chatPlatform?: string | null;
+  /**
+   * The person paying (F-102-g): a gateway offered to chosen groups is offered
+   * to them only if they are a user member of one. **Every caller acting for a
+   * user passes it.** Absent is a tenant-level reader — a reseller's billing
+   * top-up, the currencies a tenant may pin — and no audience applies.
+   */
+  userId?: string | null;
 };
+
+/**
+ * Who a gateway is offered to (F-102-g): no group = everyone; groups = a user
+ * in at least one of them. The same rule as a discount rule's group.
+ */
+export function admittedByAudience(audience: readonly string[], memberOf: readonly string[]): boolean {
+  return audience.length === 0 || audience.some((g) => memberOf.includes(g));
+}
+
+/**
+ * The offers `userId` may see, of the tenant's **own** gateways (F-102-g). A
+ * granted one is left as it is: its audience rows are its lender's groups,
+ * which hold the lender's users, not this tenant's — the grant itself is the
+ * lever there. Two reads, inside the caller's tenant transaction (RLS: the
+ * audience and the memberships are both this tenant's).
+ */
+async function forPayer(tx: Prisma.TransactionClient, offers: GatewayOffer[], userId: string): Promise<GatewayOffer[]> {
+  const own = offers.filter((g) => g.grantId === null);
+  if (own.length === 0) return offers;
+  const rows = await tx.gatewayAudience.findMany({
+    where: {
+      OR: [
+        { gatewayId: { in: own.filter((g) => g.source === 'platform').map((g) => g.id) } },
+        { tenantGatewayConfigId: { in: own.filter((g) => g.source === 'tenant').map((g) => g.id) } },
+      ],
+    },
+    select: { gatewayId: true, tenantGatewayConfigId: true, groupId: true },
+  });
+  if (rows.length === 0) return offers;
+  const memberOf = (
+    await tx.userGroupMember.findMany({ where: { userId, memberType: UserGroupMemberType.user }, select: { groupId: true } })
+  ).map((m) => m.groupId);
+  const audienceOf = (g: GatewayOffer) =>
+    rows.filter((r) => (g.source === 'platform' ? r.gatewayId : r.tenantGatewayConfigId) === g.id).map((r) => r.groupId);
+  return offers.filter((g) => g.grantId !== null || admittedByAudience(audienceOf(g), memberOf));
+}
 
 /**
  * Whether this gateway may be offered to this caller (F-104-k). Every gateway
@@ -268,6 +311,20 @@ export async function selectGateway(
   source: GatewaySource,
   options: SelectOptions = {},
 ): Promise<GatewayOffer | null> {
+  const offer = await selectAnyGateway(tx, crossTenant, tenantId, id, source, options);
+  if (!offer || !options.userId) return offer;
+  // A gateway outside the payer's groups is one that does not exist (F-102-g).
+  return (await forPayer(tx, [offer], options.userId))[0] ?? null;
+}
+
+async function selectAnyGateway(
+  tx: Prisma.TransactionClient,
+  crossTenant: CrossTenantPrismaService,
+  tenantId: string,
+  id: string,
+  source: GatewaySource,
+  options: SelectOptions,
+): Promise<GatewayOffer | null> {
   if (source === 'platform') {
     if (await isPlatformOwner(tx, tenantId)) {
       const row = await tx.paymentGateway.findFirst({
@@ -317,13 +374,14 @@ export async function selectableGateways(
     orderBy: { createdAt: 'asc' },
   });
   const granted = await grantedGateways(tx, crossTenant, tenantId);
-  return [
+  const offers: GatewayOffer[] = [
     ...platform.map((g) => ({ ...g, source: 'platform' as const, grantId: null, ownerTenantId: tenantId, testing: testingOf(g) })),
     ...own.map((g) => ({ ...g, source: 'tenant' as const, grantId: null, ownerTenantId: tenantId, testing: testingOf(g) })),
     // A row already offered as this tenant's own is not offered twice: a
     // platform owner granted its own gateway would otherwise see it doubled.
     ...granted.filter((g) => !platform.some((p) => p.id === g.id) && !own.some((o) => o.id === g.id)),
   ];
+  return options.userId ? forPayer(tx, offers, options.userId) : offers;
 }
 
 /**

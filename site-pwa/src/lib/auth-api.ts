@@ -647,6 +647,14 @@ export const supportConsentApi = {
 
 const userGroupPath = (id: string) => `/auth/user-groups/${encodeURIComponent(id)}`;
 
+/**
+ * A reseller's groups by the path (F-102-g-d): what its workspace's gateway
+ * editor picks an audience from. Invariant 21 decides; read only.
+ */
+export const resellerUserGroupsApi = {
+  async list(tenantId: string) { return request<UserGroup[]>(`/auth/tenants/${encodeURIComponent(tenantId)}/user-groups`, { method: "GET" }); },
+};
+
 export const userGroupsApi = {
   async list() { return request<UserGroup[]>("/auth/user-groups", { method: "GET" }); },
   async create(body: { name: string; allTenants?: boolean }) { return request<UserGroup>("/auth/user-groups", { method: "POST", body: JSON.stringify(body) }); },

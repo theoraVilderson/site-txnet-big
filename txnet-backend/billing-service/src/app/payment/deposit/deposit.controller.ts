@@ -163,7 +163,12 @@ export class DepositController {
     windowSec: 900,
   })
   gateways(@Req() req: Request) {
-    return this.deposits.listGateways({ canTest: canTest(req), chatPlatform: this.chatOf(req)?.platform ?? null });
+    return this.deposits.listGateways({
+      canTest: canTest(req),
+      chatPlatform: this.chatOf(req)?.platform ?? null,
+      // Only the gateways offered to this user's groups (F-102-g).
+      userId: identityOf(req).userId,
+    });
   }
 
   @TenantCapability('endUserDeposit')

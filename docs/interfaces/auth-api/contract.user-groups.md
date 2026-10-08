@@ -36,6 +36,7 @@ SuperAdmin as `*`), and acts on the **session's tenant** — nothing takes a
 | POST `/auth/user-groups/:id/members` | `userIds?`, `tenantIds?` — ≤ 500 each, at least one id | 200 `{added}` — only the new ones; one already in is not an error | write |
 | DELETE `/auth/user-groups/:id/members/users/:userId` | — | 200 `{removed: true}` | write |
 | DELETE `/auth/user-groups/:id/members/tenants/:tenantId` | — | 200 `{removed: true}` | write |
+| GET `/auth/tenants/:tenantId/user-groups` | — | 200 `[group]` — the **path's** reseller's, behind `ResellerAccess` (invariant 21, `read`), not `user_group.manage`; read in its scope (F-102-g-d, ADR-0064 (1)). 403 `not_allowed` / `reseller_suspended`, 404 `reseller_not_found`, 409 `reseller_terminated` | read |
 
 Every id in a path is `ParseUUIDPipe`d. A user and a reseller have their own
 removal path, so neither id can be read as the other.
@@ -54,10 +55,12 @@ removal path, so neither id can be read as the other.
 | `not_a_reseller` | 400 | the platform owner named its own tenant as a member |
 | `name_taken` | 409 | the tenant already has a group of that name |
 | `all_tenants_conflict` | 409 | a reseller named in an every-reseller group, or `allTenants` switched on while resellers are named |
-| `group_in_use` | 409 | a discount rule names the group; point the rule elsewhere first |
+| `group_in_use` | 409 | a discount rule or a gateway's audience names the group; point it elsewhere first |
 
 ## Consumers
 
 panel-web's `/user-groups` page (F-114-m,
 [contract.user-groups.md](../panel-web/contract.user-groups.md)). Billing's discount
-rules name a group by id (`groupId`, billing `contract.purchase.md`).
+rules name a group by id (`groupId`, billing `contract.purchase.md`), and so does a
+gateway's audience (`billing.gateway_audience`, billing `contract.gateways.md` F-102-g) —
+`group_in_use` covers both.

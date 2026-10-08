@@ -377,3 +377,49 @@ describe('a granted gateway (ADR-0041)', () => {
     expect(b.map((g) => g.id)).toEqual([B_ZARINPAL]);
   });
 });
+
+// F-102-g: a gateway offered only to chosen groups, under the same RLS. The
+// platform owner's group is used for membership because its trigger admits any
+// user id without an identity row; the rule is the same for a reseller's.
+describe('a gateway offered to chosen groups (F-102-g)', () => {
+  const GROUP = 'eeeeeeee-0000-4000-8000-000000000001';
+  const OUTSIDER = '66666666-6666-4666-8666-666666666666';
+
+  beforeAll(async () => {
+    await owner.$executeRawUnsafe(`
+      INSERT INTO governance.user_group (id, "tenantId", name, "createdByAdminId", "updatedAt")
+      VALUES ('${GROUP}', '${PLATFORM}', 'vip', '${ADMIN}', now())
+    `);
+    await owner.$executeRawUnsafe(`
+      INSERT INTO governance.user_group_member (id, "groupId", "tenantId", "memberType", "userId", "addedByAdminId")
+      VALUES (gen_random_uuid(), '${GROUP}', '${PLATFORM}', 'user', '${USER}', '${ADMIN}')
+    `);
+    await owner.$executeRawUnsafe(`
+      INSERT INTO billing.gateway_audience ("tenantId", "groupId", "tenantGatewayConfigId")
+      VALUES ('${PLATFORM}', '${GROUP}', '${P_OWN}')
+    `);
+  });
+
+  const listAs = (userId?: string) => runWithTenant({ id: PLATFORM }, () => service.listGateways({ userId }));
+
+  it('is listed to a member, hidden from anyone else, and unfiltered for a tenant-level reader', async () => {
+    expect((await listAs(USER)).map((g) => g.id)).toContain(P_OWN);
+    expect((await listAs(OUTSIDER)).map((g) => g.id)).not.toContain(P_OWN);
+    expect((await listAs()).map((g) => g.id)).toContain(P_OWN);
+  });
+
+  it("cannot name another tenant's group, nor give a platform gateway a reseller's audience", async () => {
+    await expect(
+      owner.$executeRawUnsafe(`
+        INSERT INTO billing.gateway_audience ("tenantId", "groupId", "tenantGatewayConfigId")
+        VALUES ('${TENANT_A}', '${GROUP}', '${A_ZARINPAL}')
+      `),
+    ).rejects.toThrow();
+    await expect(
+      owner.$executeRawUnsafe(`
+        INSERT INTO billing.gateway_audience ("tenantId", "groupId", "gatewayId")
+        VALUES ('${PLATFORM}', '${GROUP}', '${PLATFORM_ZARINPAL}'), ('${TENANT_A}', '${GROUP}', '${PLATFORM_ZARINPAL}')
+      `),
+    ).rejects.toThrow();
+  });
+});

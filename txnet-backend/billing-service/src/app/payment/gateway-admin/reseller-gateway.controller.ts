@@ -30,10 +30,12 @@ import {
   CreateResellerGatewayBody,
   DepositPresetsBody,
   DepositTaxBody,
+  GatewayAudienceBody,
   UpdateGatewayBody,
   createResellerGatewaySchema,
   depositPresetsSchema,
   depositTaxSchema,
+  gatewayAudienceSchema,
   updateGatewaySchema,
 } from './gateway-admin.schema';
 import {
@@ -61,6 +63,7 @@ const STATUS: Record<ResellerGatewayRejection, 400 | 403 | 404 | 409> = {
   tenant_not_found: 404,
   provider_already_configured: 409,
   gateway_has_open_payments: 409,
+  group_not_found: 404,
   invalid_range: 400,
   missing_field: 400,
   invalid_presets: 400,
@@ -159,6 +162,22 @@ export class ResellerGatewayController {
     @Ip() ip: string,
   ) {
     return this.refusing(() => this.gateways.update(this.actor(req, ip), tenantId, { source: this.source(source), id }, body));
+  }
+
+  /** Who it is offered to (F-102-g): this reseller's user groups, replaced whole; `[]` = everyone. */
+  @Put(':source/:id/audience')
+  @RateLimit(WRITE)
+  async setAudience(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('source') source: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(gatewayAudienceSchema)) body: GatewayAudienceBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return this.refusing(() =>
+      this.gateways.setAudience(this.actor(req, ip), tenantId, { source: this.source(source), id }, body.userGroupIds),
+    );
   }
 
   @Delete(':source/:id')

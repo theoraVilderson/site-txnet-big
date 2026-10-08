@@ -121,6 +121,9 @@ export type DepositTaxBody = z.infer<typeof depositTaxSchema>;
 
 export const listGatewaysSchema = z.object({ tenantId: uuid('tenantId').optional() });
 
+/** Who a gateway is offered to (F-102-g): the owner's groups, the whole set; `[]` = everyone. */
+export const gatewayAudienceSchema = z.object({ userGroupIds: z.array(uuid('userGroupIds')).max(50) }).strict();
+export type GatewayAudienceBody = z.infer<typeof gatewayAudienceSchema>;
 
 export type CreateGatewayBody = z.infer<typeof createGatewaySchema>;
 export type UpdateGatewayBody = z.infer<typeof updateGatewaySchema>;

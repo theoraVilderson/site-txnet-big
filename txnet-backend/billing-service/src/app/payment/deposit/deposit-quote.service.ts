@@ -200,7 +200,7 @@ export class DepositQuoteService {
 
     const { gateway, coupons, defaultTaxRatePercent, currencyCode } = await tenantTransaction(this.prisma, async (tx) => {
       const currencyCode = await operatingCurrencyOf(tx, tenant.id);
-      const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, request.source, { canTest: request.canTest });
+      const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, request.source, { canTest: request.canTest, userId });
       if (!gateway || !this.offeredHere(gateway, request.chatPlatform) || !offeredInCurrency(gateway, currencyCode)) {
         throw new DepositGatewayNotFound(gatewayId, request.source);
       }

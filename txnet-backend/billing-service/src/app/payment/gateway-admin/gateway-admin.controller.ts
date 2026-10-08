@@ -32,11 +32,13 @@ import {
   CreateGatewayBody,
   DepositPresetsBody,
   DepositTaxBody,
+  GatewayAudienceBody,
   ListGatewaysQuery,
   UpdateGatewayBody,
   createGatewaySchema,
   depositPresetsSchema,
   depositTaxSchema,
+  gatewayAudienceSchema,
   listGatewaysSchema,
   updateGatewaySchema,
 } from './gateway-admin.schema';
@@ -59,6 +61,7 @@ const STATUS: Record<GatewayAdminRejection, 400 | 403 | 404 | 409> = {
   tenant_not_found: 404,
   provider_already_configured: 409,
   gateway_has_open_payments: 409,
+  group_not_found: 404,
   invalid_range: 400,
   missing_field: 400,
   invalid_presets: 400,
@@ -155,6 +158,19 @@ export class GatewayAdminController {
    * whether the row is gone or, because a payment or a grant points at it, was
    * deactivated instead (ADR-0041 §6).
    */
+  /** Who it is offered to (F-102-g): the owner's user groups, replaced whole; `[]` = everyone. */
+  @Put(':source/:id/audience')
+  @RateLimit(WRITE)
+  async setAudience(
+    @Param('source') source: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(gatewayAudienceSchema)) body: GatewayAudienceBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return this.refusing(() => this.gateways.setAudience(this.actor(req, ip), { source: this.source(source), id }, body.userGroupIds));
+  }
+
   @Delete(':source/:id')
   @HttpCode(HttpStatus.OK)
   @RateLimit(WRITE)

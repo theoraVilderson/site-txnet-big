@@ -47,7 +47,7 @@ export class OtherGatewayService {
       const tried = payment.gatewayId ?? payment.tenantGatewayConfigId;
       const holds = (min: string | null, max: string | null) =>
         (min === null || payment.amountRequested.gte(new Prisma.Decimal(min))) && (max === null || payment.amountRequested.lte(new Prisma.Decimal(max)));
-      const other = (await this.quotes.listGateways()).find(
+      const other = (await this.quotes.listGateways({ userId })).find(
         // A gateway's limits are in its own currency: compared only when that is the attempt's.
         (g) => g.id !== tried && !g.testing && (g.currencyCode !== payment.currencyCode || holds(g.minAmount, g.maxAmount)),
       );

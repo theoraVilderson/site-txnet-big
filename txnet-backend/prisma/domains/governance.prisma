@@ -130,6 +130,8 @@ model UserGroup {
 
   members       UserGroupMember[]
   discountRules DiscountRule[]
+  /// Gateways offered only to this group's users (F-102-g).
+  gatewayAudience GatewayAudience[]
 
   @@unique([tenantId, name])
   /// The composite key members and discount rules point at, so neither can

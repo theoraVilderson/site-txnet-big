@@ -175,7 +175,11 @@ export class DepositStartService {
       // platform, so it is in the platform's (ADR-0098 part 4, F-116-b). Read
       // before pricing: the price is computed in it (F-116-e).
       const currencyCode = request.billingTenantId ? await platformCurrencyOf(tx) : await operatingCurrencyOf(tx, tenant.id);
-      const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, source, { canTest: request.canTest });
+      const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, source, {
+        canTest: request.canTest,
+        // A user's top-up is offered by their groups (F-102-g); a reseller's billing top-up is tenant-level.
+        userId: request.billingTenantId ? null : userId,
+      });
       if (!gateway || !offeredInCurrency(gateway, currencyCode)) throw new DepositGatewayNotFound(gatewayId, source);
       if (this.providers.has(gateway.providerName) && !offeredInThisChat(this.providers.get(gateway.providerName), gateway, request.chat?.platform ?? null)) {
         throw new DepositGatewayNotFound(gatewayId, source);

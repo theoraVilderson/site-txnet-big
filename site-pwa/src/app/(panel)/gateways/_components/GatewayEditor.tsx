@@ -28,6 +28,8 @@ import type { AdminGateway, GatewaySecretState } from "@/lib/billing-api";
 import { Select } from "../../_components/kit/Select";
 import { formatMoney } from "../../_lib/money";
 import { PresetsEditor } from "./PresetsEditor";
+import { GatewayAudienceSection } from "./GatewayAudienceSection";
+import { ownsAudience } from "../_lib/audience";
 import { secretFields, takesStaticRate } from "../_lib/provider-fields";
 import { FeeFields, Field, PROVIDER_ICONS, SecretInput, TextInput, fieldErrorText, useRangeText, type SetField } from "./gateway-fields";
 import { Toggle } from "../../_components/kit/Toggle";
@@ -91,6 +93,8 @@ interface GatewayEditorProps {
   me: Me | null;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
+  /** Its audience was saved (F-102-g): the list re-reads, the editor stays open. */
+  onAudienceSaved?: () => void;
 }
 
 /**
@@ -106,7 +110,7 @@ interface GatewayEditorProps {
  * - A refused save scrolls to the first section with an error. Closing with
  *   unsaved changes asks first; Ctrl/⌘+S saves.
  */
-export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: GatewayEditorProps) {
+export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudienceSaved }: GatewayEditorProps) {
   const { t, lang } = useLocale();
   const confirm = useConfirm();
   const errorMessage = useGatewayMessage(surface);
@@ -483,6 +487,10 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: Gatewa
                 </section>
               );
             })}
+            {/* Its own save, on its own route (F-102-g-e): never part of "what changed". */}
+            {ownsAudience(gateway, surface.tenantId, me) && (
+              <GatewayAudienceSection gateway={gateway} surface={surface} onSaved={() => onAudienceSaved?.()} />
+            )}
             {failure && (
               <p role="alert" className="flex items-center gap-2 rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] p-3 text-xs font-bold text-error">
                 <TriangleAlert size={14} aria-hidden />

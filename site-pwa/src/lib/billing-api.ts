@@ -684,6 +684,8 @@ export interface GatewayAdminApi {
   /** The tenant's default tax on a top-up (F-104-ag); `null` is no tax. */
   tax(): Promise<{ taxRatePercent: string | null }>;
   setTax(taxRatePercent: string | null): Promise<{ taxRatePercent: string | null }>;
+  /** Who it is offered to (F-102-g): the owner's groups, replaced whole; `[]` = everyone. */
+  setAudience(source: GatewaySource, id: string, userGroupIds: string[]): Promise<{ userGroupIds: string[] }>;
 }
 
 /**
@@ -705,6 +707,8 @@ export function gatewayAdminApi(tenantId: string | null): GatewayAdminApi {
     tax: () => call<{ taxRatePercent: string | null }>(`${at}/tax`, { method: "GET" }),
     setTax: (taxRatePercent) =>
       call<{ taxRatePercent: string | null }>(`${at}/tax`, { method: "PUT", body: JSON.stringify({ taxRatePercent }) }),
+    setAudience: (source, id, userGroupIds) =>
+      call<{ userGroupIds: string[] }>(`${row(source, id)}/audience`, { method: "PUT", body: JSON.stringify({ userGroupIds }) }),
   };
 }
 
@@ -2388,6 +2392,8 @@ export interface AdminGateway {
   missingSecrets: GatewaySecretName[] | null;
   createdAt: string;
   updatedAt: string;
+  /** The owner's user groups it is offered to; empty = everyone (F-102-g). */
+  userGroupIds: string[];
 }
 
 type GatewayFieldsBody = {

@@ -188,6 +188,11 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
                           <span className={`text-[10px] font-bold ${g.isActive ? "text-success" : "text-text-secondary"}`}>
                             {g.isActive ? t("common", G.active) : t("common", G.inactive)}
                           </span>
+                          {g.userGroupIds?.length > 0 && (
+                            <span className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-[10px] font-bold text-primary">
+                              {t("common", G.audience.limited)}
+                            </span>
+                          )}
                           {g.blocked && (
                             <span className="rounded-full bg-[var(--error-bg)] px-2 py-0.5 text-[10px] font-bold text-[var(--error-color)]" title={g.blocked.reason}>
                               {t("common", G.blocked)}
@@ -281,6 +286,7 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
           surface={surface}
           me={actor}
           onClose={() => setEditing(null)}
+          onAudienceSaved={() => void reload()}
           onSaved={async () => {
             setEditing(null);
             setNotice(null);

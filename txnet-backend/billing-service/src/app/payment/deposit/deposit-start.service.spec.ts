@@ -97,6 +97,8 @@ type Setup = {
   callbackOrigin?: string;
   /** `FRONTEND_ORIGIN`, comma-separated like CORS reads it. */
   frontendOrigin?: string;
+  /** F-102-g: the groups the gateway is offered to; the payer is in none. */
+  audience?: string[];
 };
 
 function build(setup: Setup = {}) {
@@ -113,6 +115,7 @@ function build(setup: Setup = {}) {
     tenantType = 'reseller',
     callbackOrigin = '',
     frontendOrigin = '',
+    audience = [],
   } = setup;
 
   const calls: Calls = { created: [], updated: [], reserved: [], settled: [], credited: [], requested: [], links: [] };
@@ -125,6 +128,11 @@ function build(setup: Setup = {}) {
     // misses, and `selectableGateways` always asks (F-096-b).
     paymentGatewayGrant: { findMany: async () => [] },
     tenantGatewayConfig: { findFirst: async () => row },
+    // F-102-g: the gateway's groups, and the payer's — a member of none.
+    gatewayAudience: {
+      findMany: async () => audience.map((groupId) => ({ gatewayId: null, tenantGatewayConfigId: GATEWAY, groupId })),
+    },
+    userGroupMember: { findMany: async () => [] },
     // No tenant default tax: these cases price without one (ADR-0076 is pinned in gateway-pricing.spec.ts).
     depositSetting: { findUnique: async () => null },
     // The filter and the order are the service's, so the fake applies the
@@ -238,6 +246,16 @@ const start = (service: DepositStartService, couponCodes: string[] = [], origin?
   );
 
 describe('DepositStartService.start', () => {
+  // F-102-g: the list hides it; a start that names it anyway is refused the same way.
+  it('refuses a gateway offered to groups the payer is not in, before anything is held', async () => {
+    const { service, calls } = build({ audience: ['group-vip'] });
+    const request = { userId: USER, gatewayId: GATEWAY, source: 'tenant' as const, amount: d('20.00'), couponCodes: [] };
+
+    await expect(asTenant(() => service.start(request))).rejects.toBeInstanceOf(DepositGatewayNotFound);
+    expect(calls.reserved).toEqual([]);
+    expect(calls.created).toEqual([]);
+  });
+
   it('answers an in-chat gateway with the invoice, mints nothing, and starts it only in its own bot (F-104-k)', async () => {
     const { service, calls } = build({ inChat: true, domains: [] });
     const request = { userId: USER, gatewayId: GATEWAY, source: 'tenant' as const, amount: d('20.00'), couponCodes: [] };

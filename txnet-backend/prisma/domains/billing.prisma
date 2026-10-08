@@ -578,8 +578,38 @@ model PaymentGateway {
   couponLimits CouponGateway[]
   /// Grants of this gateway to tenants that do not own it (ADR-0041, F-096-a).
   grants       PaymentGatewayGrant[]
+  /// The groups it is offered to; none = everyone (F-102-g).
+  audience     GatewayAudience[]
 
   @@map("payment_gateway")
+  @@schema("billing")
+}
+
+/// F-102-g — a gateway offered only to chosen user groups of its owner. No
+/// row for a gateway = it is offered to everyone, as before; rows = only to a
+/// user who is a **user** member of one of them (`admitsUser`, as a discount
+/// rule's group). Only the owner's own users: a granted gateway (ADR-0041) is
+/// not filtered by its lender's groups. Exactly one of the two gateway columns
+/// (CHECK). `tenantId` is the owner's — the platform owner's for a platform
+/// gateway (trigger) — and the composite keys keep group and tenant gateway in
+/// that tenant. A group in use cannot be deleted (Restrict -> `group_in_use`).
+model GatewayAudience {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId              String   @db.Uuid
+  groupId               String   @db.Uuid
+  gatewayId             String?  @db.Uuid
+  tenantGatewayConfigId String?  @db.Uuid
+  createdAt             DateTime @default(now())
+
+  group               UserGroup            @relation(fields: [groupId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  gateway             PaymentGateway?      @relation(fields: [gatewayId], references: [id], onDelete: Cascade)
+  tenantGatewayConfig TenantGatewayConfig? @relation(fields: [tenantGatewayConfigId, tenantId], references: [id, tenantId], onDelete: Cascade)
+
+  @@unique([gatewayId, groupId])
+  @@unique([tenantGatewayConfigId, groupId])
+  @@index([tenantId])
+  @@index([groupId])
+  @@map("gateway_audience")
   @@schema("billing")
 }
 

@@ -110,6 +110,11 @@ export class ResellerGatewayService {
     return this.run(actor, tenantId, 'staffWrite', (as) => this.gateways.update(as, ref, patch));
   }
 
+  /** Who it is offered to (F-102-g): the reseller's own groups only — the admitted reseller is the actor. */
+  setAudience(actor: ResellerGatewayActor, tenantId: string, ref: GatewayRef, groupIds: string[]): Promise<{ userGroupIds: string[] }> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.gateways.setAudience(as, ref, groupIds));
+  }
+
   remove(
     actor: ResellerGatewayActor,
     tenantId: string,

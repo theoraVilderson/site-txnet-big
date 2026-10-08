@@ -41,6 +41,8 @@ const ADMIN = '44444444-4444-4444-8444-444444444444';
 const PLATFORM_GW = '55555555-5555-4555-8555-555555555555';
 const RESELLER_GW = '66666666-6666-4666-8666-666666666666';
 const OTHER_GW = '77777777-7777-4777-8777-777777777777';
+const RESELLER_GROUP = '88888888-8888-4888-8888-888888888881';
+const OTHER_GROUP = '88888888-8888-4888-8888-888888888882';
 
 const MERCHANT = 'zp-merchant-9f3c1e';
 const SECRET = 'sk_live_very_secret_value';
@@ -149,6 +151,31 @@ function build(seed: { payments?: Row[]; grants?: Row[]; blocked?: boolean; onDe
     paymentTransaction,
     paymentGatewayGrant,
     depositSetting: table([], 'depositSetting', writes),
+    // F-102-g: the groups each tenant has, and which gateway is offered to which.
+    userGroup: {
+      findMany: async ({ where }: { where: { tenantId: string; id: { in: string[] } } }) =>
+        [{ id: RESELLER_GROUP, tenantId: RESELLER }, { id: OTHER_GROUP, tenantId: OTHER }].filter(
+          (g) => g.tenantId === where.tenantId && where.id.in.includes(g.id),
+        ),
+    },
+    gatewayAudience: (() => {
+      const rows: Row[] = [];
+      return {
+        rows,
+        findMany: async ({ where = {} }: { where?: Row } = {}) => rows.filter((r) => matches(r, where)),
+        deleteMany: async ({ where }: { where: Row }) => {
+          writes.push('gatewayAudience.deleteMany');
+          const gone = rows.filter((r) => matches(r, where));
+          gone.forEach((r) => rows.splice(rows.indexOf(r), 1));
+          return { count: gone.length };
+        },
+        createMany: async ({ data }: { data: Row[] }) => {
+          writes.push('gatewayAudience.createMany');
+          rows.push(...data);
+          return { count: data.length };
+        },
+      };
+    })(),
     adminAuditLog: {
       create: async ({ data }: { data: Row }) => {
         writes.push('audit');
@@ -347,6 +374,63 @@ describe('GatewayAdminService — who may manage which gateway', () => {
     expect(db.tenantGatewayConfig.rows.find((r) => r['id'] === RESELLER_GW)?.['maxAcceptAmount']).toBeNull();
     // With the maximum open, any minimum is a valid range.
     await expect(service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { minAcceptAmount: '900.00' })).resolves.toBeDefined();
+  });
+});
+
+// F-102-g: a gateway offered only to chosen groups of its owner.
+describe('GatewayAdminService — who a gateway is offered to (F-102-g)', () => {
+  it("sets a gateway's groups, answers them on the list, and audits the change", async () => {
+    const { service, audit } = build();
+    const s = inTenant(service);
+
+    await expect(s.setAudience(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, [RESELLER_GROUP])).resolves.toEqual({
+      userGroupIds: [RESELLER_GROUP],
+    });
+
+    const listed = await s.list(actor(RESELLER));
+    expect(listed.find((g) => g.id === RESELLER_GW)?.userGroupIds).toEqual([RESELLER_GROUP]);
+    expect(audit.at(-1)).toMatchObject({
+      tenantId: RESELLER,
+      action: 'gateway_update',
+      targetEntityId: RESELLER_GW,
+      oldValue: { userGroupIds: [] },
+      newValue: { source: 'tenant', userGroupIds: [RESELLER_GROUP] },
+    });
+  });
+
+  it('opens it to everyone again with an empty list', async () => {
+    const { service } = build();
+    const s = inTenant(service);
+    await s.setAudience(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, [RESELLER_GROUP]);
+
+    await s.setAudience(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, []);
+
+    expect((await s.list(actor(RESELLER))).find((g) => g.id === RESELLER_GW)?.userGroupIds).toEqual([]);
+  });
+
+  it("refuses a group that is not the gateway owner's, and writes nothing", async () => {
+    const { service, writes } = build();
+
+    const e = await refusal(() => inTenant(service).setAudience(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, [OTHER_GROUP]));
+
+    expect(e.reason).toBe('group_not_found');
+    expect(writes).toEqual([]);
+  });
+
+  it("does not let a reseller touch the platform's gateway or another reseller's", async () => {
+    const { service } = build();
+    const s = inTenant(service);
+
+    expect((await refusal(() => s.setAudience(actor(RESELLER), { source: 'platform', id: PLATFORM_GW }, []))).reason).toBe('gateway_not_found');
+    expect((await refusal(() => s.setAudience(actor(RESELLER), { source: 'tenant', id: OTHER_GW }, []))).reason).toBe('gateway_not_found');
+  });
+
+  it("takes the reseller's own groups when the platform owner sets them on its gateway", async () => {
+    const { service } = build();
+
+    await expect(
+      inTenant(service).setAudience(actor(OWNER), { source: 'tenant', id: RESELLER_GW }, [RESELLER_GROUP]),
+    ).resolves.toEqual({ userGroupIds: [RESELLER_GROUP] });
   });
 });
 

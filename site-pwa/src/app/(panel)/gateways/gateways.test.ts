@@ -55,6 +55,7 @@ const GATEWAY: AdminGateway = {
   gatewayCategory: "domestic_rial",
   isActive: true,
   blocked: null,
+  userGroupIds: [],
   description: null,
   supportedCurrencies: null,
   confirmationMode: null,

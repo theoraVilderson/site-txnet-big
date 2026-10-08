@@ -44,6 +44,24 @@ Refusals name their `reason`: 403 `not_platform_owner`, `block_is_platform_owner
 `gateway-admin.service.spec.ts`, `gateway-admin.schema.spec.ts`, `deposit-presets.spec.ts`, `vault-secret.client.spec.ts`, `gateway-grant-schema.int.spec.ts` (the two functions).
 
 
+## Who a gateway is offered to (built — F-102-g)
+
+`PUT :source/:id/audience` `{userGroupIds: uuid[] ≤ 50}` on both surfaces (the
+named reseller's included) → `{userGroupIds}`; every gateway view carries
+`userGroupIds`. Asked by the user 2026-10-08; the three open calls were taken
+on the recommendation when the user said to carry on (backlog F-102-g).
+
+| Rule | Why |
+|---|---|
+| No group = everyone, as before. Groups = only a user who is a **user** member of at least one (`admittedByAudience`, `deposit-pricing.ts`) — a group's reseller members do not count | the same reading a discount rule's group has (`contract.purchase.md`); one meaning of "in this group" everywhere |
+| The set is replaced whole; `[]` opens the gateway to everyone again. A group not the gateway owner's is `group_not_found` (404) before anything is written; `billing.gateway_audience`'s composite keys refuse it again, and a trigger keeps a platform gateway to the platform owner's groups. One `gateway_update` audit row `{userGroupIds}` in the owner's tenant | the owner is the row's tenant — the platform owner setting a reseller's gateway picks that reseller's groups, never its own |
+| Applied where a payer is named, in `selectableGateways` / `selectGateway`: the top-up list, quote and start, and "another gateway" (F-038-m). A gateway outside the payer's groups is not listed, and naming it anyway is `DepositGatewayNotFound` — never a refusal of its own | a separate refusal would tell a user there is a better gateway kept from them |
+| Not applied with no payer: a reseller's billing top-up and the currencies a tenant may pin are tenant-level. Not applied to a **granted** gateway (ADR-0041): its audience rows are its lender's groups, holding the lender's users; the grant is the lever there | a lender's groups say nothing about a borrower's customers |
+| A group a gateway names cannot be deleted: `group_in_use` (Restrict), as for a discount rule | a deleted group would silently open the gateway to everyone |
+
+Proof: `gateway-admin.service.spec.ts`, `deposit-quote.service.spec.ts`,
+`deposit-start.service.spec.ts`, `deposit-gateways.int.spec.ts` (RLS, the keys, the trigger).
+
 ## A named reseller's gateways (built — F-066-w3, ADR-0064)
 
 `/api/billing/tenants/:tenantId/gateways` (`payment/gateway-admin/reseller-gateway.*`):

@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
+import { userGroupsApi, type UserGroup } from "@/lib/auth-api";
 import { ambientGatewayApi, type GatewayAdminApi } from "@/lib/billing-api";
 
 /**
@@ -25,10 +26,12 @@ export interface GatewaySurface {
   chrome?: ReactNode;
   /** The sentence key for a refusal this surface knows (`ResellerAccess`'s); the generic answer otherwise. */
   refusalKey?: (e: unknown) => string | null;
+  /** The groups a gateway's audience is picked from (F-102-g): this tenant's own. */
+  groups: () => Promise<UserGroup[]>;
 }
 
 /** The caller's own tenant, which is what the gateway page was before there was a second surface. */
-export const AMBIENT_GATEWAYS: GatewaySurface = { tenantId: null, api: ambientGatewayApi };
+export const AMBIENT_GATEWAYS: GatewaySurface = { tenantId: null, api: ambientGatewayApi, groups: () => userGroupsApi.list() };
 
 /**
  * One sentence for a failed call, the same on the list, the wizard and the

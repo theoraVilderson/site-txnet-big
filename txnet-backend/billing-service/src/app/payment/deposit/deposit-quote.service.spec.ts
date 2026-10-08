@@ -79,14 +79,26 @@ type Setup = {
   configured?: string[];
   /** What the FX reader answers (F-092-c). `undefined` is a platform with no published rate. */
   liveRate?: { snapshotId: string; rate: Prisma.Decimal };
+  /** F-102-g: the groups a tenant gateway is offered to; none = everyone. */
+  audience?: { tenantGatewayConfigId: string; groupId: string }[];
+  /** F-102-g: the groups the payer is a user member of. */
+  memberOf?: string[];
 };
+
+/** Whether the audience was read at all, newest build's (F-102-g). */
+let audienceRead = false;
 
 /** Every `where` the tenant's own gateways were listed with, newest build's. */
 let asked: Record<string, unknown>[] = [];
 
-function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, configured, liveRate, tenantPresets }: Setup = {}) {
+function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, configured, liveRate, tenantPresets, audience = [], memberOf = [] }: Setup = {}) {
   asked = [];
+  audienceRead = false;
   const tx = {
+    gatewayAudience: {
+      findMany: async () => ((audienceRead = true), audience.map((a) => ({ ...a, gatewayId: null }))),
+    },
+    userGroupMember: { findMany: async () => memberOf.map((groupId) => ({ groupId })) },
     $executeRaw: async () => 0,
     tenant: { findUnique: async () => ({ tenantType: 'reseller', operatingCurrencyCode: 'USD' }) },
     // No grant: `selectGateway` looks for one only after the tenant's own row
@@ -319,6 +331,36 @@ describe('DepositQuoteService.listGateways', () => {
     const gateways = await asTenant(() => service.listGateways());
 
     expect(gateways.map((g) => g.presets)).toEqual([['3.00', '7.00'], ['2.50']]);
+  });
+});
+
+// F-102-g: a gateway may be offered only to chosen user groups of its owner.
+describe('a gateway offered to chosen groups (F-102-g)', () => {
+  const VIP = 'vip-gateway';
+  const rows = [gatewayRow(), gatewayRow({ id: VIP, displayName: 'VIP' })];
+  const audience = [{ tenantGatewayConfigId: VIP, groupId: 'group-vip' }];
+
+  it('is listed only to a user in one of its groups; a gateway with none is listed to everyone', async () => {
+    const outsider = await asTenant(() => build({ rows, audience, memberOf: ['group-other'] }).listGateways({ userId: USER }));
+    expect(outsider.map((g) => g.id)).toEqual([GATEWAY]);
+
+    const member = await asTenant(() => build({ rows, audience, memberOf: ['group-vip'] }).listGateways({ userId: USER }));
+    expect(member.map((g) => g.id)).toEqual([GATEWAY, VIP]);
+  });
+
+  it('is refused on a quote by a user outside its groups, exactly as a gateway that does not exist', async () => {
+    const service = build({ rows: [rows[1]], audience, memberOf: [] });
+
+    await expect(
+      asTenant(() => service.quote({ userId: USER, gatewayId: VIP, source: 'tenant', amount: d('10.00'), couponCodes: [] })),
+    ).rejects.toBeInstanceOf(DepositGatewayNotFound);
+  });
+
+  it('is not filtered for a tenant-level reader, which names no payer', async () => {
+    const all = await asTenant(() => build({ rows, audience }).listGateways());
+
+    expect(all.map((g) => g.id)).toEqual([GATEWAY, VIP]);
+    expect(audienceRead).toBe(false);
   });
 });
 

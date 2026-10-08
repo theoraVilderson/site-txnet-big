@@ -27,7 +27,8 @@ export type ResellerGatewayRefusal =
   | "invalid_range"
   | "missing_field"
   | "invalid_presets"
-  | "invalid_callback";
+  | "invalid_callback"
+  | "group_not_found";
 
 export const GATEWAY_REFUSAL_KEYS: Record<ResellerGatewayRefusal, string> = K.refusals;
 

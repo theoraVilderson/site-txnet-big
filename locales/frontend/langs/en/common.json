@@ -433,6 +433,21 @@
       "save": "Save rate",
       "saving": "Saving…",
       "saved": "Rate saved."
+    },
+    "audience": {
+      "title": "Who sees this gateway",
+      "subtitle": "You can show this gateway only to chosen groups of your users.",
+      "everyone": "All users",
+      "everyoneHint": "Every paying user sees this gateway.",
+      "groups": "Chosen groups only",
+      "groupsHint": "Only users in at least one of these groups see it.",
+      "noGroups": "You have no user groups yet. Create one on the User groups page first.",
+      "groupsFailed": "The groups could not be read. Open the page again.",
+      "members": "{{count}} users",
+      "pickOne": "Pick at least one group.",
+      "save": "Save access",
+      "saved": "Saved",
+      "limited": "Groups only"
     }
   },
   "wallet": {
@@ -2555,7 +2570,8 @@
       "invalid_range": "the smallest and largest amounts do not agree.",
       "missing_field": "a field this provider requires is empty.",
       "invalid_presets": "the quick amounts are not valid: positive, no repeats, ascending, at most eight.",
-      "invalid_callback": "the callback must be a full http or https address."
+      "invalid_callback": "the callback must be a full http or https address.",
+      "group_not_found": "That group is not this gateway owner's."
     }
   },
   "resellerCatalog": {

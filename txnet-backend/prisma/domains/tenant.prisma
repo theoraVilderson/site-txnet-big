@@ -621,8 +621,12 @@ model TenantGatewayConfig {
   grants   PaymentGatewayGrant[]
   /// Coupons limited to this gateway (`billing.coupon_gateway`, migration 20260914001100_coupon_limits).
   couponLimits CouponGateway[]
+  /// The groups it is offered to; none = everyone (F-102-g, `billing.gateway_audience`).
+  audience     GatewayAudience[]
 
   @@unique([tenantId, providerName])
+  /// What `gateway_audience` points at, so an audience row is its owner's (F-102-g).
+  @@unique([id, tenantId])
   @@map("tenant_gateway_config")
   @@schema("tenant")
 }
