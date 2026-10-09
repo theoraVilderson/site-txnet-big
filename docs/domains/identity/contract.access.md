@@ -57,7 +57,7 @@ as **assign** in [contract.roles.md](contract.roles.md)). Code: `TenantRolesServ
 
 | Operation | Input | Output | Refuses |
 |---|---|---|---|
-| read a person's keys | userId | `{userId, keys, role:{id,name,keys}, given:[{key,reason,by,at}], taken:[…]}` | `user_not_found` |
+| read a person's keys | userId | `{userId, keys, role:{id,name,keys}, groups:[{id,name,keys}], given:[{key,reason,by,at}], taken:[…]}` — `groups` by `AccessReader.groupsOf`, the rule the answer counts by | `user_not_found` |
 | give or take | userId, key, `{effect: give\|take, reason}` | the same view, after | `key_not_grantable` (`*`, `platform.`), `key_unknown` (no `permission` row), `key_not_held` (outside the writer's grant scope), `key_on_wildcard` (the person holds `*`), `no_authority`, `user_not_found` |
 | lift | userId, key | the same view, after | `key_not_found` (nothing given or taken), and the checks above |
 

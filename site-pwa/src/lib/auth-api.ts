@@ -752,6 +752,24 @@ export interface PermissionArea {
   permissions: PermissionEntry[];
 }
 
+/** A key given or taken on one person: which, why, by whom, since when (AC-1-l). */
+export type KeyOverride = { key: string; reason: string; by: string; at: string };
+
+/** One person's keys by source, and the answer they add up to (AC-1-l, ADR-0138). */
+export type PersonKeys = {
+  userId: string;
+  keys: string[];
+  role: { id: string; name: string; keys: string[] };
+  /** Each group that gives them access, with every key it gives (AC-1-n). */
+  groups: { id: string; name: string; keys: string[] }[];
+  given: KeyOverride[];
+  taken: KeyOverride[];
+};
+
+/** `…/users/:userId/keys`, or one key under it (AC-1-l). */
+export const personKeysPath = (tenantId: string, userId: string, key?: string) =>
+  `${resellerUsersApiPath(tenantId)}/${encodeURIComponent(userId)}/keys${key ? `/${encodeURIComponent(key)}` : ""}`;
+
 export const tenantRolesApiPath = (tenantId: string) => `/auth/tenants/${encodeURIComponent(tenantId)}/roles`;
 
 /**
@@ -782,6 +800,18 @@ export const tenantRolesApi = {
       method: "PUT",
       body: JSON.stringify({ roleId }),
     });
+  },
+  /** One person's keys by source (AC-1-l); the role door's `read`. */
+  async keysOf(tenantId: string, userId: string) {
+    return request<PersonKeys>(personKeysPath(tenantId, userId), { method: "GET" });
+  },
+  /** Give or take one key, with a reason; a give replaces a take of the same key and the reverse. */
+  async setKey(tenantId: string, userId: string, key: string, body: { effect: "give" | "take"; reason: string }) {
+    return request<PersonKeys>(personKeysPath(tenantId, userId, key), { method: "PUT", body: JSON.stringify(body) });
+  },
+  /** Lift a key given or taken: the role and groups decide it again. */
+  async liftKey(tenantId: string, userId: string, key: string) {
+    return request<PersonKeys>(personKeysPath(tenantId, userId, key), { method: "DELETE" });
   },
   /** The registry (AC-1-f): every key the platform knows, by area, labelled in the request's language. */
   async permissions() {

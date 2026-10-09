@@ -8,8 +8,11 @@ type LoadedUser = { id: string; role?: { rolePermissions?: { permission: { key: 
 
 const ROLE_KEYS = { role: { select: { rolePermissions: { select: { permission: { select: { key: true } } } } } } } as const;
 
+/** A group that gives a person access, named — `accessOf` reads only its keys. */
+type GroupSource = { id: string; name: string; roleKeys: string[]; keys: string[] };
+
 /** Sources beyond the role, per person; empty for anyone nothing else applies to. */
-type Personal = Omit<AccessSources, 'roleKeys'>;
+type Personal = Omit<AccessSources, 'roleKeys' | 'groups'> & { groups: GroupSource[] };
 
 /** The client a read runs on: the cross-tenant pool by default, or a writer's own transaction. */
 type Reader = Pick<Prisma.TransactionClient, 'userPermission' | 'userGroupMember' | 'user'>;
@@ -45,6 +48,18 @@ export class AccessReader {
   async ofLoadedMany(users: readonly LoadedUser[], client: Reader = this.prisma): Promise<Map<string, UserAccess>> {
     const personal = await this.personalOf(users, client);
     return new Map(users.map((u) => [u.id, accessOf({ roleKeys: roleKeysOf(u), ...personal.get(u.id) })]));
+  }
+
+  /**
+   * The groups that give this person access, each with every key it gives
+   * them — the group's role and its own keys. What a Permissions section
+   * names as a key's source (AC-1-n); the same rule the answer counts by.
+   */
+  async groupsOf(userId: string, client: Reader = this.prisma): Promise<{ id: string; name: string; keys: string[] }[]> {
+    const groups = (await this.personalOf([{ id: userId }], client)).get(userId)?.groups ?? [];
+    return groups
+      .map((g) => ({ id: g.id, name: g.name, keys: [...new Set([...g.roleKeys, ...g.keys])].sort() }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /** The answer for these people, read in one pass — absent ids are left out. */
@@ -95,7 +110,7 @@ export class AccessReader {
    * the platform's keys are not theirs, so that membership counts for nothing.
    */
   private async personalOf(users: readonly Pick<LoadedUser, 'id'>[], client: Reader): Promise<Map<string, Personal>> {
-    type Entry = { given: string[]; taken: string[]; groups: { roleKeys: string[]; keys: string[] }[] };
+    type Entry = { given: string[]; taken: string[]; groups: GroupSource[] };
     const out = new Map<string, Entry>();
     if (users.length === 0) return out;
     const ids = users.map((u) => u.id);
@@ -109,7 +124,7 @@ export class AccessReader {
         select: {
           userId: true,
           tenantId: true,
-          group: { select: { role: ROLE_KEYS.role, permissions: { select: { permission: { select: { key: true } } } } } },
+          group: { select: { id: true, name: true, role: ROLE_KEYS.role, permissions: { select: { permission: { select: { key: true } } } } } },
         },
       }),
       client.user.findMany({ where: { id: { in: ids } }, select: { id: true, tenantId: true } }),
@@ -120,6 +135,8 @@ export class AccessReader {
     for (const m of memberships) {
       if (!m.userId || tenantOf.get(m.userId) !== m.tenantId) continue;
       entry(m.userId).groups.push({
+        id: m.group.id,
+        name: m.group.name,
         roleKeys: m.group.role?.rolePermissions.map((rp) => rp.permission.key) ?? [],
         keys: m.group.permissions.map((p) => p.permission.key),
       });

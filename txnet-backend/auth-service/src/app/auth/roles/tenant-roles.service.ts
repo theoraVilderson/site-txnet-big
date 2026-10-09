@@ -64,6 +64,8 @@ export type PersonKeys = {
   userId: string;
   keys: string[];
   role: { id: string; name: string; keys: string[] };
+  /** Each group that gives them access, and every key it gives (AC-1-n). */
+  groups: { id: string; name: string; keys: string[] }[];
   given: KeyOverride[];
   taken: KeyOverride[];
 };
@@ -334,8 +336,9 @@ export class TenantRolesService {
   }
 
   private async personKeys(tx: Tx, person: Prisma.UserGetPayload<{ select: typeof PERSON }>): Promise<PersonKeys> {
-    const [answer, rows] = await Promise.all([
+    const [answer, groups, rows] = await Promise.all([
       this.answers.ofLoaded(person, tx),
+      this.answers.groupsOf(person.id, tx),
       tx.userPermission.findMany({
         where: { userId: person.id },
         select: { effect: true, reason: true, grantedByUserId: true, updatedAt: true, permission: { select: { key: true } } },
@@ -350,6 +353,7 @@ export class TenantRolesService {
       userId: person.id,
       keys: answer.keys,
       role: { id: person.roleId, name: person.role?.name ?? '', keys: permissionsOf(person) },
+      groups,
       given: of('give'),
       taken: of('take'),
     };

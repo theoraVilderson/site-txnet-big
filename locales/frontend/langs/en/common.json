@@ -5938,5 +5938,43 @@
     "ended": "You are back in your own account.",
     "expired": "The 30 minutes are over. You are back in your own account.",
     "reloadEnds": "Reloading the page also ends it."
+  },
+  "personKeys": {
+    "title": "Permissions",
+    "hint": "Everything they may do, and where each one comes from.",
+    "none": "They hold no permissions.",
+    "wildcard": "Every permission",
+    "source": {
+      "role": "role {{name}}",
+      "group": "group {{name}}",
+      "given": "given: {{reason}}"
+    },
+    "taken": "Taken away",
+    "takenHint": "Taken from them even though their role or a group gives it.",
+    "give": "Give or take a permission",
+    "lift": "Lift",
+    "liftConfirm": "Lift the exception on {{key}}?",
+    "liftHint": "Their role and groups decide this permission again.",
+    "lifted": "Exception lifted.",
+    "dialogTitle": "Give or take a permission",
+    "key": "Permission",
+    "pickKey": "Choose a permission",
+    "effect": "What to do",
+    "effectGive": "Give",
+    "effectTake": "Take away",
+    "reason": "Reason",
+    "reasonHint": "3 to 500 characters. It is kept in the history.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saved": "Saved.",
+    "noneGrantable": "There is no permission here you may give.",
+    "refusals": {
+      "key_unknown": "That permission does not exist.",
+      "key_not_grantable": "This permission cannot be given to one person.",
+      "key_not_held": "You may only give or take a permission you may give yourself.",
+      "key_on_wildcard": "They hold every permission; there is nothing to give or take.",
+      "key_not_found": "That exception is already gone — refresh.",
+      "no_authority": "You cannot change this person's permissions: they hold as much as you, or own the reseller."
+    }
   }
 }

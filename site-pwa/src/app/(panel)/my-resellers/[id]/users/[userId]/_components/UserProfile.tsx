@@ -33,6 +33,7 @@ import {
   roleEditable,
 } from "../../../../_lib/users";
 import { useWorkspaceSelf } from "../../../../_lib/workspace";
+import { UserPermissions } from "./UserPermissions";
 import { useUserMessage } from "./useUserMessage";
 
 const P = K.profile;
@@ -52,6 +53,8 @@ const P = K.profile;
  *    seat is the Team page's;
  *  - **a save sends only what changed** (`profileChanges`), and the answer
  *    replaces what is shown;
+ *  - **every key they hold and where it comes from**, give / take / lift one
+ *    (AC-1-n): `UserPermissions`, below the role;
  *  - **"sign in as this user"** (AC-1-i) on the caller's own tenant, or for
  *    platform staff on a reseller's user under its consent — `mayImpersonate`:
  *    `canAct` (never the owner, ADR-0137) and the route's key. A reseller's own
@@ -304,6 +307,8 @@ export function UserProfile({
           </div>
         )}
       </section>
+
+      <UserPermissions id={id} userId={userId} canAct={editable} />
     </div>
   );
 }

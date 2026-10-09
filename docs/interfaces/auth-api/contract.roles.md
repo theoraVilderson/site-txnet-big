@@ -49,7 +49,7 @@ Role-level refusals are the ones above, unchanged. Code:
 | PATCH `/auth/tenants/:tenantId/roles/:id` | as `PATCH /auth/roles/:id` | as `PATCH /auth/roles/:id` | same |
 | DELETE `/auth/tenants/:tenantId/roles/:id` | — | as `DELETE /auth/roles/:id` | same |
 | PUT `/auth/tenants/:tenantId/users/:userId/role` | `{roleId}` (UUID) | 200 `{userId, role:{id, name}}`. 404 `role_not_found` / `user_not_found`, 403 `role_not_held` / `no_authority` | `RESELLER_USER_WRITE` per caller |
-| GET `/auth/tenants/:tenantId/users/:userId/keys` (v45, AC-1-l) | — | 200 `{userId, keys, role:{id,name,keys}, given:[{key,reason,by,at}], taken:[…]}`. 404 `user_not_found` | `RESELLER_USER_READ` per caller |
+| GET `/auth/tenants/:tenantId/users/:userId/keys` (v45, AC-1-l) | — | 200 `{userId, keys, role:{id,name,keys}, groups:[{id,name,keys}] (v47), given:[{key,reason,by,at}], taken:[…]}`. 404 `user_not_found` | `RESELLER_USER_READ` per caller |
 | PUT `/auth/tenants/:tenantId/users/:userId/keys/:key` (v45) | `{effect: "give"\|"take", reason}` (3-500) | 200 the view above. 400 `key_unknown`; 403 `key_not_grantable` / `key_not_held` / `no_authority`; 404 `user_not_found`; 409 `key_on_wildcard` | `RESELLER_USER_WRITE` per caller |
 | DELETE `/auth/tenants/:tenantId/users/:userId/keys/:key` (v45) | — | 200 the view above. 404 `key_not_found`; otherwise as `PUT` | same |
 

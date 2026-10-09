@@ -23,15 +23,21 @@ describe('TenantRolesService — a key given or taken (AC-1-l)', () => {
 
   type Row = { permission: { key: string }; effect: 'give' | 'take'; reason: string; grantedByUserId: string; updatedAt: Date };
 
-  const build = (options: { roleKeys?: string[]; rows?: Row[]; as?: 'owner' | 'member' } = {}) => {
+  type Membership = { id: string; name: string; keys: string[] };
+
+  const build = (options: { roleKeys?: string[]; rows?: Row[]; as?: 'owner' | 'member'; groups?: Membership[] } = {}) => {
     const rows: Row[] = [...(options.rows ?? [])];
     const written: { audit?: Record<string, unknown>; outbox?: Record<string, unknown> } = {};
     const target = { id: 'u-agent', tenantId: reseller, roleId: 'role-support', role: { name: 'Support', rolePermissions: keys(...(options.roleKeys ?? ['user.read', 'user.write'])) } };
     const tx = {
       $executeRaw: vi.fn(async () => undefined),
       user: { findFirst: vi.fn(async () => target), findMany: vi.fn(async () => [{ id: target.id, tenantId: reseller }]) },
-      // In no group that gives access (AC-1-m).
-      userGroupMember: { findMany: vi.fn(async () => []) },
+      // The groups that give access (AC-1-m); none unless the case names one.
+      userGroupMember: {
+        findMany: vi.fn(async () =>
+          (options.groups ?? []).map((g) => ({ userId: 'u-agent', tenantId: reseller, group: { id: g.id, name: g.name, role: null, permissions: keys(...g.keys) } })),
+        ),
+      },
       permission: { findUnique: vi.fn(async ({ where }: { where: { key: string } }) => (where.key === 'no.such' ? null : { id: `perm-${where.key}`, key: where.key })) },
       userPermission: {
         findMany: vi.fn(async () => rows.map((r) => ({ userId: 'u-agent', ...r }))),
@@ -154,5 +160,13 @@ describe('TenantRolesService — a key given or taken (AC-1-l)', () => {
       given: [],
       taken: [{ key: 'user.write', reason: 'probation', by: 'u-lead' }],
     });
+  });
+
+  it('names each group a key comes from (AC-1-n)', async () => {
+    const { service } = build({ groups: [{ id: 'g-desk', name: 'Desk crew', keys: ['ticket.reply'] }] });
+    const view = await service.keysOf(giver, reseller, 'u-agent');
+
+    expect(view.keys).toEqual(expect.arrayContaining(['ticket.reply']));
+    expect(view.groups).toEqual([{ id: 'g-desk', name: 'Desk crew', keys: ['ticket.reply'] }]);
   });
 });
