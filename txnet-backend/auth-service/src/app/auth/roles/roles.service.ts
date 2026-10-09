@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { BackendI18nKeys, accessChanged, holdsPermission, ok, tenantTransaction } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, accessChanged, holdsPermission, isPlatformKey, ok, tenantTransaction } from '@txnet-backend/shared-core';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CreateRoleInput, UpdateRoleInput } from './role.schema';
 
@@ -165,9 +165,18 @@ export class RolesService {
    *
    * A key with no `permission` row is refused for everyone — a typo must not
    * become a grant that silently means nothing.
+   *
+   * A platform key is refused on every role written here, `*` included: they
+   * are all tenant-made roles, and the platform's set is never granted to one
+   * (AC-1-c, catalog §3.3, ADR-0135). The gate would refuse the claim anyway
+   * (F-018-n2); refusing the write keeps a role from holding a key it can
+   * never use.
    */
   private async grantable(scope: RoleScope, keys: string[]): Promise<string[]> {
     const wanted = [...new Set(keys)];
+    if (wanted.some(isPlatformKey)) {
+      throw new ForbiddenException(BackendI18nKeys.errors.role.permissionPlatformOnly);
+    }
     const rows = await this.prisma.permission.findMany({
       where: { key: { in: wanted } },
       select: { id: true, key: true },

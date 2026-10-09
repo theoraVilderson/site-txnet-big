@@ -33,7 +33,10 @@ been usable by the platform alone.
    teams. `/api/auth/roles` stays as it was, for the caller's own tenant.
 2. **The tenant ceiling bounds what is granted on a reseller.** The ceiling is
    every concrete key the templates (`role.tenantId IS NULL`) name, `*`
-   excepted; SuperAdmin holds nothing else.
+   excepted; SuperAdmin holds nothing else. *Amended 2026-10-09 (AC-1-e, the
+   user's choice): the ceiling is the permission registry less its
+   platform-only keys — the gate's own ceiling — so a key becomes grantable
+   without granting it to every template holder.*
    That is the database's half of the rule `forward-auth` applies to a token
    with `roleScope: tenant`. The owner grants the whole ceiling. A member or
    the platform's staff grant only the part of it they hold. On the platform's

@@ -50,6 +50,18 @@ roles:
       # named role, and a line under `Admin` would let every tenant grant it
       # to its own roles. Given by hand, one person at a time.
       - tenant.emergency_access
+      # The platform's staff set (AC-1-c, catalog §3.3, ADR-0135): its own
+      # `platform.` namespace, apart from every tenant key, under no role but
+      # this one — so outside the tenant ceiling, and the role editor refuses
+      # it on any tenant-made role. `shared-core/.../tenant/platform-keys.ts`
+      # says what each opens; a platform key counts only for a caller signed in
+      # to the platform owner's tenant.
+      - platform.tenant.create
+      - platform.tenant.manage
+      - platform.plan.assign
+      - platform.node.manage
+      - platform.report.read
+      - platform.impersonate
   Admin:
     permissions:
       - user.read

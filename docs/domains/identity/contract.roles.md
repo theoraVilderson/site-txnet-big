@@ -44,6 +44,7 @@ permission is the door; the tenant on the caller's claims is the boundary.
 |---|---|
 | A caller may grant only the keys **it holds itself**; `*` (SuperAdmin) may grant any key that exists | a tenant writes the grants of the roles its own staff hold, so without this `role.manage` alone would let a reseller mint `tenant.manage` for itself. ADR-0062 (4) |
 | A key with no `permission` row is refused for everyone, `*` included | a typo must not become a grant that silently means nothing |
+| A `platform.` key is refused on every role, `*` included: `role.permissionPlatformOnly` (AC-1-c, invariant 20) | the platform's staff set is never a tenant role's (catalog §3.3, ADR-0135); every role written here is tenant-made, and the gate would refuse the claim anyway |
 | A template, another tenant's role and a non-existent id all answer `role.notFound` | one answer, so a write is not an oracle for role ids elsewhere on the platform. It is also what enforces invariant #9 — a write path never finds an `isSystemRole` row |
 | `permissions` on an edit is the **whole** set, never a diff | the fingerprint is over a set; a partial edit would race two admins into a half-applied role |
 | A role a user still holds is `role.inUse`, not a cascade | `user.roleId` is a NOT NULL FK (invariant #5) and this endpoint has no role it could move those users to on the caller's behalf |
@@ -95,6 +96,16 @@ consent name no key: they are the owner's contract with the platform.
 The keys sit under `Admin` in `permissions.yaml`, which is what puts them in
 the ceiling; **no template is granted one** in the database (migration
 `20261009000200`), so nobody holds more than before.
+
+## The platform keys (AC-1-c, ADR-0135)
+
+The platform's staff set is the `platform.` namespace —
+`platform.tenant.create`, `.tenant.manage`, `.plan.assign`, `.node.manage`,
+`.report.read`, `.impersonate` (`shared-core/.../tenant/platform-keys.ts`),
+under `SuperAdmin` alone in the policy file. No tenant role may be given one
+(above), and `isPlatformStaff` admits a key only for a caller of the platform
+owner's tenant, so a reseller's `*` is not the platform's. AC-1-d moves the
+platform's routes from `tenant.manage` and `panel.manage` onto them.
 
 ## Every query is tenant-bound
 

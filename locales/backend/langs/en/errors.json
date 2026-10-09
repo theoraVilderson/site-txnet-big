@@ -260,7 +260,8 @@
     "nameTaken": "A role with that name already exists here",
     "permissionUnknown": "That permission does not exist",
     "permissionNotHeld": "You cannot grant a permission you do not hold yourself",
-    "inUse": "This role is still held by a user"
+    "inUse": "This role is still held by a user",
+    "permissionPlatformOnly": "Platform permissions cannot be given to a tenant role"
   },
   "support": {
     "conversationNotFound": "This conversation was not found.",

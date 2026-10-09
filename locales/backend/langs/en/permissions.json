@@ -48,6 +48,9 @@
     "payment": {
       "label": "Payments"
     },
+    "platform": {
+      "label": "Platform"
+    },
     "realtime": {
       "label": "Live updates"
     },
@@ -196,6 +199,40 @@
       "confirm_manual": {
         "label": "Confirm payments by hand",
         "description": "Approve a card-to-card or other manual payment."
+      }
+    },
+    "platform": {
+      "tenant": {
+        "create": {
+          "label": "Create resellers",
+          "description": "Create a new reseller. Platform staff only."
+        },
+        "manage": {
+          "label": "Administer resellers",
+          "description": "Configure any reseller, and reach its people under its consent. Platform staff only."
+        }
+      },
+      "plan": {
+        "assign": {
+          "label": "Assign plans",
+          "description": "Set the package and plan a reseller is sold, its subscription and limits. Platform staff only."
+        }
+      },
+      "node": {
+        "manage": {
+          "label": "Manage panels and nodes",
+          "description": "Register and manage the platform's panels and nodes. Platform staff only."
+        }
+      },
+      "report": {
+        "read": {
+          "label": "See platform reports",
+          "description": "See figures across every tenant. Platform staff only."
+        }
+      },
+      "impersonate": {
+        "label": "Sign in as a reseller's user",
+        "description": "Sign in as a reseller's user under its consent. Platform staff only."
       }
     },
     "realtime": {

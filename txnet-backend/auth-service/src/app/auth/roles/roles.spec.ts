@@ -64,7 +64,7 @@ function harness(overrides: Record<string, Record<string, unknown>> = {}) {
       findMany: vi.fn().mockImplementation(({ where }: { where: { key: { in: string[] } } }) =>
         Promise.resolve(
           where.key.in
-            .filter((key) => ['user.view', 'wallet.view', 'role.manage', 'tenant.manage'].includes(key))
+            .filter((key) => ['user.view', 'wallet.view', 'role.manage', 'tenant.manage', 'platform.report.read'].includes(key))
             .map((key) => ({ id: `perm-${key}`, key })),
         ),
       ),
@@ -137,6 +137,17 @@ describe('RolesService', () => {
       expect(tx.rolePermission.createMany.mock.calls[0][0].data).toEqual([
         { roleId: 'role-new', permissionId: 'perm-tenant.manage' },
       ]);
+    });
+
+    it('refuses a platform key on any tenant role, even for `*`, before writing (AC-1-c, ADR-0135)', async () => {
+      const { prisma, service } = harness();
+      await expect(service.create(SUPER, { name: 'Ops', permissions: ['user.view', 'platform.report.read'] })).rejects.toMatchObject({
+        message: 'role.permissionPlatformOnly',
+      });
+      await expect(service.update(SUPER, 'role-staff', { permissions: ['platform.report.read'] })).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('refuses a key no permission row defines, even for `*`', async () => {

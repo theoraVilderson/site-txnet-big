@@ -70,6 +70,7 @@ export * from './lib/tenant/status-policy';
 export * from './lib/tenant/owner-cache';
 export * from './lib/tenant/reseller-access';
 export * from './lib/tenant/reseller-keys';
+export * from './lib/tenant/platform-keys';
 export * from './lib/tenant/support-consent';
 export * from './lib/tenant/platform-access-trail';
 export * from './lib/tenant/line-name-template';

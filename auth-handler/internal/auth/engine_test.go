@@ -396,3 +396,44 @@ func TestCheckTenantRoleUsesTheCeilingOfEveryNonWildcardRole(t *testing.T) {
 		t.Fatalf("unauthorized = %v, want [* tenant.manage]", unauthorized)
 	}
 }
+
+// The platform set is never a tenant's (AC-1-c, catalog §3.3, ADR-0135), read
+// from the shipped policy file itself: every `platform.` key is held by
+// SuperAdmin alone, so a role a tenant made is refused the claim, and no named
+// role below SuperAdmin allows it. The reverse half — a platform key counts
+// only for a caller of the platform's tenant — is Nest's
+// (`shared-core/.../tenant/platform-keys.spec.ts`).
+func TestPlatformKeysAreRefusedToEveryTenantRole(t *testing.T) {
+	engine, err := LoadFile(filepath.Join("..", "..", "configs", "permissions.yaml"))
+	if err != nil {
+		t.Fatalf("LoadFile(shipped) error = %v", err)
+	}
+	var platform []string
+	for _, policy := range engine.roles {
+		for p := range policy.Permissions {
+			if strings.HasPrefix(p, "platform.") {
+				platform = append(platform, p)
+			}
+		}
+	}
+	if len(platform) != 6 {
+		t.Fatalf("the shipped policy names %d platform keys (%v), want the six of ADR-0135", len(platform), platform)
+	}
+	for _, key := range platform {
+		if _, ok := engine.CheckTenantRole([]string{key}); ok {
+			t.Errorf("a tenant-made role may claim %q", key)
+		}
+		for _, role := range []string{"Admin", "Support", "user"} {
+			if _, ok := engine.Check(role, []string{key}); ok {
+				t.Errorf("%s may claim %q", role, key)
+			}
+		}
+		if _, ok := engine.Check("SuperAdmin", []string{key}); !ok {
+			t.Errorf("SuperAdmin may not claim %q", key)
+		}
+	}
+	// The reseller keys stay inside the ceiling (AC-1-e).
+	if _, ok := engine.CheckTenantRole([]string{"domain.manage", "staff.manage"}); !ok {
+		t.Errorf("a tenant-made role may not claim the reseller keys")
+	}
+}
