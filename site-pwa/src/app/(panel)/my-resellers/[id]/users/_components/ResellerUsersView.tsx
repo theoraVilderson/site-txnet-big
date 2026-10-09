@@ -2,18 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Ban, RefreshCw, Search, ShieldAlert, Undo2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { authApi, resellerUsersApi, type ResellerUser } from "@/lib/auth-api";
-import { myResellerUserPath } from "@/lib/routes";
 import { useWorkspaceSelf } from "../../../_lib/workspace";
 import { Pagination } from "../../../../_components/kit/Pagination";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { formatInstant } from "../../../../_lib/datetime";
 import { usePanelSession } from "../../../../_context/PanelSessionContext";
-import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, canBanHere, isPlatformTenant, statusActionsOf, usersQuery, type StatusAction } from "../../../_lib/users";
+import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, canBanHere, isPlatformTenant, ownUsersRedirect, statusActionsOf, userPagePath, usersQuery, type StatusAction } from "../../../_lib/users";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
 import { TenantGrantLimitCard } from "../../../_components/GrantLimitCards";
 import { ConsentNeeded, PlatformAccessBanner } from "../../../_components/PlatformAccessBanner";
@@ -52,7 +51,7 @@ const STATUS_TONE: Record<ResellerUser["status"], string> = {
  *  - **or chosen by a filter** — a panel, a product, every active service —
  *    and run as a job the page watches (F-311-x1, `BulkByFilter`).
  */
-export function ResellerUsersView({ id }: { id: string }) {
+export function ResellerUsersView({ id, own = false }: { id: string; own?: boolean }) {
   const { t, lang } = useLocale();
   const confirm = useConfirm();
   // The platform's own users (F-311-ab) have no console to go back to.
@@ -60,6 +59,7 @@ export function ResellerUsersView({ id }: { id: string }) {
   const self = useWorkspaceSelf(id);
   const platform = isPlatformTenant(id, me);
   const message = useUserMessage();
+  useOwnUsersRedirect(own, me?.tenant.id);
 
   // `?q=` opens the list already searched — the dashboard's users widget (UX-1-r).
   const searched = useSearchParams()?.get("q") ?? "";
@@ -171,7 +171,7 @@ export function ResellerUsersView({ id }: { id: string }) {
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
       <PageHeader
-        title={platform ? t("common", FrontendI18nKeys.common.shell.menu.users) : slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}
+        title={own || platform ? t("common", FrontendI18nKeys.common.shell.menu.users) : slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}
         subtitle={t("common", K.subtitle)}
         actions={
           <>
@@ -200,7 +200,7 @@ export function ResellerUsersView({ id }: { id: string }) {
         {short && <p className="mt-1 text-xs text-text-secondary">{t("common", K.searchHint)}</p>}
       </div>
 
-      <FindByLink id={id} />
+      <FindByLink id={id} own={own} />
       <BulkByFilter id={id} />
       <TenantGrantLimitCard tenantId={id} />
 
@@ -251,7 +251,7 @@ export function ResellerUsersView({ id }: { id: string }) {
                   </Button>
                 ))}
                 <Link
-                  href={`${myResellerUserPath(id, user.id, self)}?${new URLSearchParams({ name: user.fullName })}`}
+                  href={userPagePath(id, user.id, own, self)}
                   className={buttonClass({ variant: "quiet", size: "sm" })}
                 >
                   {t("common", K.open)}
@@ -296,4 +296,18 @@ export function ResellerUsersView({ id }: { id: string }) {
       </Dialog>
     </div>
   );
+}
+
+/**
+ * An old `/my-resellers/<session tenant>/users[/…]` address — a bookmark, a
+ * link from before `/users` — is replaced by its `/users` one, query kept.
+ */
+export function useOwnUsersRedirect(own: boolean, sessionTenantId: string | undefined) {
+  const router = useRouter();
+  const pathname = usePathname() ?? "";
+  const query = useSearchParams()?.toString() ?? "";
+  const target = own ? null : ownUsersRedirect(pathname, sessionTenantId);
+  useEffect(() => {
+    if (target) router.replace(query ? `${target}?${query}` : target);
+  }, [router, target, query]);
 }

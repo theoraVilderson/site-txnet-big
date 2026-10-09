@@ -31,6 +31,7 @@ import {
   myResellerDomainsPath,
   myResellerGatewaysPath,
   myResellerUsersPath,
+  PANEL_USERS,
 } from "@/lib/routes";
 
 export type GuidePanelSection = (typeof GUIDE_PANEL_SECTIONS)[number];
@@ -90,6 +91,8 @@ const PATTERNS: { section: GuidePanelSection; segments: string[] }[] = [
   { section: "reseller_catalog" as const, segments: split(myResellerCatalogPath(ID, true)) },
   { section: "reseller_branding" as const, segments: split(myResellerBrandingPath(ID, true)) },
   { section: "reseller_users" as const, segments: split(myResellerUsersPath(ID, true)) },
+  // The session's own users, the same screens at their own address.
+  { section: "reseller_users" as const, segments: split(PANEL_USERS) },
 ].sort((a, b) => b.segments.length - a.segments.length);
 
 function split(path: string): string[] {

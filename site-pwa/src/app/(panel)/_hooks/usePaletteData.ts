@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api-error";
 import { authApi, resellerUsersApi, type Me } from "@/lib/auth-api";
 import { billingApi } from "@/lib/billing-api";
-import { PANEL_MY_SERVICES, myResellerUserPath, panelMyServicesSearchPath, panelSupportThreadPath } from "@/lib/routes";
+import { PANEL_MY_SERVICES, panelMyServicesSearchPath, panelUserPath, panelSupportThreadPath } from "@/lib/routes";
 import { supportApi } from "@/lib/support-api";
 import { isMenuGroup, type VisibleMenuEntry } from "../_lib/panel-menu";
 import { PALETTE_GROUP_LIMIT, type PaletteDataGroup, type PaletteItem } from "../_lib/palette";
@@ -103,7 +103,7 @@ function sourcesFor(me: Me | null, menu: readonly VisibleMenuEntry[], pasted: bo
           hint: [u.username && `@${u.username}`, u.phoneMasked].filter(Boolean).join(" · ") || undefined,
           icon: UserRound,
           haystacks: [],
-          href: myResellerUserPath(tenantId, u.id, me.tenant.type === "reseller"),
+          href: panelUserPath(u.id),
         }));
       },
     });

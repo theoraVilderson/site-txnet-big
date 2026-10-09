@@ -2,6 +2,7 @@ import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { ResellerUser } from "@/lib/auth-api";
 import type { AdminConfigAction, AdminConfigActionBody, ConfigActionRefusal, UsersCatalogProduct } from "@/lib/billing-api";
+import { PANEL_USERS, myResellerUserPath, myResellerUsersPath, panelUserPath } from "@/lib/routes";
 import { REFUSAL_KEYS } from "../../services/_lib/service-configs";
 
 /** The screens' strings as generated constants (C-06). */
@@ -149,6 +150,26 @@ export const ADMIN_REFUSAL_KEYS: Record<ConfigActionRefusal, string> = {
  * signed in to the platform (F-311-aa). The platform has no console to go
  * back to, and its page is titled as the menu entry that opened it.
  */
+/**
+ * Where one user's page is: `/users/:userId` when the list is the session's
+ * own users (`own`), the reseller workspace's address otherwise.
+ */
+export function userPagePath(id: string, userId: string, own: boolean, self: boolean): string {
+  return own ? panelUserPath(userId) : myResellerUserPath(id, userId, self);
+}
+
+/**
+ * The `/users` address of a `/my-resellers/<session tenant>/users[/…]` one —
+ * the session's own users before they had their own (2026-10-09) — or `null`
+ * for any other path, a real reseller's included.
+ */
+export function ownUsersRedirect(pathname: string, sessionTenantId: string | null | undefined): string | null {
+  if (!sessionTenantId) return null;
+  const root = myResellerUsersPath(sessionTenantId);
+  if (pathname !== root && !pathname.startsWith(`${root}/`)) return null;
+  return `${PANEL_USERS}${pathname.slice(root.length)}`;
+}
+
 export function isPlatformTenant(
   id: string,
   me: { tenant: { id: string; type: "platform_owner" | "reseller" } } | null,

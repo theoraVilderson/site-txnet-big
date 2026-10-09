@@ -4039,7 +4039,7 @@
     "searchHint": "type at least 3 characters to search",
     "empty": "this reseller has no users yet.",
     "emptySearch": "no user matches this search.",
-    "open": "services",
+    "open": "Open",
     "unnamed": "no name",
     "columns": {
       "joined": "joined"
@@ -4056,7 +4056,7 @@
     "services": {
       "back": "back to the users",
       "title": "{{name}}'s services",
-      "titlePlain": "a user's services",
+      "titlePlain": "A user",
       "subtitle": "What this user holds, as they see it. Actions on a config here are logged in your name.",
       "empty": "this user has no service.",
       "noCurrent": "this user has no current service.",

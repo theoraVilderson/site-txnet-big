@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Check, ChevronDown, Copy, Loader2, QrCode, RefreshCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
+import { resellerUsersApi } from "@/lib/auth-api";
 import { resellerUserGrantsApi, type GrantRow, type GrantScope, type ResellerUserGrantsApi, type UserConfigRow } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
 import { Pagination } from "../../../../../_components/kit/Pagination";
@@ -28,6 +29,7 @@ import { useUserMessage } from "./useUserMessage";
 import { Alert, Button, PageHeader, Tabs } from "../../../../../_components/kit";
 import { usePanelSession } from "../../../../../_context/PanelSessionContext";
 import { isPlatformTenant } from "../../../../_lib/users";
+import { useOwnUsersRedirect } from "../../_components/ResellerUsersView";
 
 const S = K.services;
 /** The page's two tabs, kept in `?tab=` (AC-1-b); none, or a value naming no tab, is the services. */
@@ -52,15 +54,28 @@ const PAGE_SIZE = 20;
  *  - **a suspended reseller reads and cannot act**: the actions come back
  *    `reseller_suspended`, said as its sentence.
  */
-export function UserServicesView({ id, userId }: { id: string; userId: string }) {
+export function UserServicesView({ id, userId, own = false }: { id: string; userId: string; own?: boolean }) {
   const { t, lang } = useLocale();
   const message = useUserMessage();
   const query = useSearchParams();
-  const name = query.get("name");
   const tab: Tab = query.get("tab") === "profile" ? "profile" : "services";
   // The platform's own users (F-311-ab) are not a reseller's workspace.
   const { me } = usePanelSession();
   const platform = isPlatformTenant(id, me);
+  useOwnUsersRedirect(own, me?.tenant.id);
+  // The title is the person's name as auth has it now (AC-1-a), never one a
+  // link carried in the address; a failed read leaves the plain title.
+  const [name, setName] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    resellerUsersApi
+      .profile(id, userId)
+      .then((p) => alive && setName(p.fullName || null))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [id, userId]);
   const [texts, setTexts] = useState<Record<string, string>>({});
   const api = useMemo(() => resellerUserGrantsApi(id, userId), [id, userId]);
 
@@ -115,8 +130,8 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
       <PageHeader
-        title={name ? t("common", S.title, { name }) : t("common", S.titlePlain)}
-        subtitle={t("common", S.subtitle)}
+        title={name ?? t("common", S.titlePlain)}
+        subtitle={tab === "services" ? t("common", S.subtitle) : undefined}
         tail={name ?? t("common", S.titlePlain)}
         actions={
           tab === "services" && (
@@ -141,7 +156,7 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
       />
 
       {tab === "profile" ? (
-        <UserProfile id={id} userId={userId} platform={platform} />
+        <UserProfile id={id} userId={userId} platform={platform} onShown={(p) => setName(p.fullName || null)} />
       ) : (
         <>
           {/* Read again with the list: an issue or a refresh changes how many are open. */}

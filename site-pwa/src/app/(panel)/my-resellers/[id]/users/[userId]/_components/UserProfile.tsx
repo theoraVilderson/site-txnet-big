@@ -54,9 +54,12 @@ export function UserProfile({
   id,
   userId,
   platform,
+  onShown,
 }: {
   id: string;
   userId: string;
+  /** Each answer shown, so the page's title follows a renamed person. */
+  onShown?: (p: ResellerUserProfile) => void;
   platform: boolean;
 }) {
   const { t, lang } = useLocale();
@@ -78,6 +81,7 @@ export function UserProfile({
 
   const show = (p: ResellerUserProfile) => {
     setPerson(p);
+    onShown?.(p);
     setForm({ fullName: p.fullName, username: p.username ?? "" });
     setRoleId(p.role?.id ?? "");
   };

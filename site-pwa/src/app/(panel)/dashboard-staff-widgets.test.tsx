@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { resellerUsersApi } from "@/lib/auth-api";
 import { billingApi, resellerRevenueApi } from "@/lib/billing-api";
-import { myResellerUsersPath } from "@/lib/routes";
+import { PANEL_USERS } from "@/lib/routes";
 import { supportAgentApi } from "@/lib/support-api";
 import { WIDGETS, startOfDayIn, visibleWidgets } from "./_lib/widgets";
 
@@ -133,7 +133,7 @@ describe("the widgets (D5)", () => {
     expect(vi.mocked(resellerUsersApi.list)).toHaveBeenCalledWith("t-1", { page: 1, pageSize: 1 });
     fireEvent.change(screen.getByRole("searchbox", { name: D.users.search }), { target: { value: "sara" } });
     fireEvent.submit(screen.getByRole("search"));
-    expect(push).toHaveBeenCalledWith(`${myResellerUsersPath("t-1")}?q=sara`);
+    expect(push).toHaveBeenCalledWith(`${PANEL_USERS}?q=sara`);
   });
 
   it("systems: panels in service counted by verdict", async () => {

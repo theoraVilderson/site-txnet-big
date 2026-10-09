@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { aiAdminApi, type AiReason, type AtRiskItem, type AtRiskKind } from "@/lib/ai-api";
-import { myResellerUserPath } from "@/lib/routes";
+import { panelUserPath } from "@/lib/routes";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { formatInstant } from "../../_lib/datetime";
 import { K, card } from "./ai-ui";
@@ -88,7 +88,7 @@ export function AtRiskList() {
             <li key={`${item.userId}:${item.grantId}`} className={`${card} flex flex-col gap-2`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 {tenantId ? (
-                  <Link href={myResellerUserPath(tenantId, item.userId)} className="text-sm font-bold text-primary underline" dir="ltr">
+                  <Link href={panelUserPath(item.userId)} className="text-sm font-bold text-primary underline" dir="ltr">
                     {t("common", K.atRisk.customer)} {item.userId}
                   </Link>
                 ) : (

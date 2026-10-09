@@ -2,9 +2,11 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { Home, Wallet } from "lucide-react";
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import {
   PANEL_MENU,
   activeHref,
+  menuTrail,
   ownTenantOf,
   visibleMenu,
   type PanelMenuEntry,
@@ -26,6 +28,7 @@ import {
  */
 
 const PANEL_ROUTES = join(__dirname, "..");
+const M_USERS = FrontendI18nKeys.common.shell.menu.users;
 
 const link = (id: string, href: string | null): PanelMenuEntry => ({
   id,
@@ -48,7 +51,7 @@ describe("PANEL_MENU", () => {
       "children" in entry ? entry.children.map((c) => c.href) : [entry.href],
     ).map((href) => href.replace("/TENANT", "/[id]"));
 
-    expect(hrefs).toContain("/my-resellers/[id]/users");
+    expect(hrefs).toContain("/users");
 
     expect(hrefs.length).toBeGreaterThan(0);
     for (const href of hrefs) {
@@ -248,11 +251,12 @@ describe("visibleMenu, the caller's own tenant (F-311-ab)", () => {
       "children" in e ? e.children.map((c) => c.href) : [e.href],
     ).filter((h) => h.endsWith("/users"));
 
-  it("links platform staff to the platform's own users, and a reseller's staff to the reseller's", () => {
-    expect(users("platform_owner", ["tenant.manage"])).toEqual(["/my-resellers/T1/users"]);
-    expect(users("platform_owner", ["*"])).toEqual(["/my-resellers/T1/users"]);
-    // On its own domain, with no id in the address (F-061-n).
-    expect(users("reseller", ["tenant.manage"], "R 1")).toEqual(["/reseller/users"]);
+  // The session's own users are not a reseller's workspace: `/users`, never
+  // `/my-resellers/<own id>/users`, which read as "my reseller" (2026-10-09).
+  it("links platform staff and a reseller's staff alike to /users, the session's own users", () => {
+    expect(users("platform_owner", ["tenant.manage"])).toEqual(["/users"]);
+    expect(users("platform_owner", ["*"])).toEqual(["/users"]);
+    expect(users("reseller", ["tenant.manage"], "R 1")).toEqual(["/users"]);
   });
 
   it("is hidden from a caller without the permission, and while the tenant id is unknown", () => {
@@ -274,7 +278,13 @@ describe("visibleMenu, the caller's own tenant (F-311-ab)", () => {
 
   it("lights up on one user's page under it", () => {
     const hrefs = users("platform_owner", ["*"]);
-    expect(activeHref(["/", ...hrefs], "/my-resellers/T1/users/u-9")).toBe("/my-resellers/T1/users");
+    expect(activeHref(["/", ...hrefs], "/users/u-9")).toBe("/users");
+  });
+
+  // The breadcrumb on one user's page: the users page is a link back.
+  it("draws the users page as a linked crumb on one user's page, and none elsewhere", () => {
+    expect(menuTrail(PANEL_MENU, "/users/u-9").at(-1)).toEqual({ label: M_USERS, href: "/users" });
+    expect(menuTrail(PANEL_MENU, "/wheel").some((c) => c.href === "/users")).toBe(false);
   });
 });
 

@@ -79,7 +79,7 @@ export function PageHeader({ title, subtitle, icon: Icon, actions, tail, classNa
                     {c.label}
                   </span>
                 ) : c.href ? (
-                  <Link href={c.href} className="rounded-md hover:text-primary hover:underline">
+                  <Link href={c.href} className="rounded-md font-medium text-primary underline-offset-2 hover:underline">
                     {c.label}
                   </Link>
                 ) : (

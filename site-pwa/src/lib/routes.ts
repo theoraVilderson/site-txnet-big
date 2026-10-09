@@ -184,11 +184,19 @@ export const myResellerCatalogPath = (id: string, self = false) => `${resellerWo
 /** A reseller's brand settings: today the default name of a config line in a buyer's app (F-307-k). */
 export const myResellerBrandingPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/branding`;
 /**
+ * The session's own tenant's users — the platform's for its staff, a
+ * reseller's for its seated admins (F-311-ab, D-55): the same screens as
+ * {@link myResellerUsersPath}, at an address that does not read "my reseller".
+ */
+export const PANEL_USERS = "/users";
+/** One of the session's own users: their services and profile. */
+export const panelUserPath = (userId: string) => `${PANEL_USERS}/${encodeURIComponent(userId)}`;
+/**
  * A reseller's users (F-311-v, over F-311-a): find one, and open their
  * services. By the path's reseller, never the session's tenant.
  */
 export const myResellerUsersPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/users`;
-/** One user's services, as that reseller's admin reads and acts on them (F-311-v, over F-311-f/g). */
+/** One user's page — services and profile — as that reseller's admin reads and acts on them (F-311-v, over F-311-f/g). */
 export const myResellerUserPath = (id: string, userId: string, self = false) =>
   `${myResellerUsersPath(id, self)}/${encodeURIComponent(userId)}`;
 /**

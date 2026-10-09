@@ -59,11 +59,11 @@ describe("menuTrail", () => {
   });
 
   it("matches a tenant's own page on the tenant the path names", () => {
-    expect(menuTrail(PANEL_MENU, "/my-resellers/t-9/users/u-1")).toEqual([
+    expect(menuTrail(PANEL_MENU, "/my-resellers/t-9/team/s-1")).toEqual([
       { label: SEC.people, href: null, section: true },
-      { label: M.users, href: "/my-resellers/t-9/users" },
+      { label: M.team, href: "/my-resellers/t-9/team" },
     ]);
-    expect(menuTrail(PANEL_MENU, "/my-resellers/t-9/usersx")).toEqual([]);
+    expect(menuTrail(PANEL_MENU, "/my-resellers/t-9/teamx")).toEqual([]);
   });
 
   it("is empty on a path no menu entry owns", () => {

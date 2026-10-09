@@ -18,6 +18,8 @@ import {
   isPlatformTenant,
   issuableProducts,
   usersQuery,
+  userPagePath,
+  ownUsersRedirect,
 } from "./_lib/users";
 
 /**
@@ -164,6 +166,29 @@ describe("blocking a user from the list (F-311-v4)", () => {
 
 describe("the platform's own users and the catalog the forms name (F-311-ab, -ab2)", () => {
   const me = (id: string, type: "platform_owner" | "reseller") => ({ tenant: { id, type } });
+
+  // `/users` is the session's own users (2026-10-09); the workspace keeps its own.
+  it("opens one user at /users/:id on the session's own users, in the workspace otherwise", () => {
+    expect(userPagePath("T", "u 1", true, false)).toBe("/users/u%201");
+    expect(userPagePath("R", "u", false, false)).toBe("/my-resellers/R/users/u");
+    expect(userPagePath("R", "u", false, true)).toBe("/reseller/users/u");
+  });
+
+  it("moves an old /my-resellers/<session tenant>/users address to /users, and no other", () => {
+    expect(ownUsersRedirect("/my-resellers/P/users", "P")).toBe("/users");
+    expect(ownUsersRedirect("/my-resellers/P/users/u-9", "P")).toBe("/users/u-9");
+    expect(ownUsersRedirect("/my-resellers/R/users", "P")).toBeNull();
+    expect(ownUsersRedirect("/my-resellers/P/usersx", "P")).toBeNull();
+    expect(ownUsersRedirect("/my-resellers/P/users", null)).toBeNull();
+  });
+
+  // The title is the person's name, read from auth — never a `?name=` a link carried.
+  it("puts nothing about the person into the user page's address", () => {
+    const view = readFileSync(join(__dirname, "[id]/users/_components/ResellerUsersView.tsx"), "utf8");
+    const page = readFileSync(join(__dirname, "[id]/users/[userId]/_components/UserServicesView.tsx"), "utf8");
+    expect(view).not.toMatch(/name: user\.fullName/);
+    expect(page).not.toMatch(/query\.get\("name"\)/);
+  });
 
   it("knows the path's tenant is the platform's only when it is the session's platform tenant", () => {
     expect(isPlatformTenant("P", me("P", "platform_owner"))).toBe(true);

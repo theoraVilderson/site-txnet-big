@@ -15,11 +15,14 @@ Reached from the console's "More settings" (`OnboardingConsoleView`), and
 from the sidebar's **Users** entry on the tenant the session is in (F-311-ab,
 [contract.shell.md](contract.shell.md) rule 2): the platform's own users for
 platform staff (F-311-aa, D-55), the reseller's for its staff on its domain.
+The session's own users live at `/users` (`OwnUsers`, the same screens with
+`own`), never `/my-resellers/<own id>/users` — that address read "my reseller"
+(user, 2026-10-09); an old one is replaced by its `/users` twin (`ownUsersRedirect`).
 
 | page | route | files |
 |---|---|---|
-| its users | `/my-resellers/[id]/users` (`myResellerUsersPath`) | `my-resellers/[id]/users/_components/ResellerUsersView.tsx`, `FindByLink.tsx`, `BulkByFilter.tsx` |
-| one user's services | `/my-resellers/[id]/users/[userId]` (`myResellerUserPath`) | `…/users/[userId]/_components/UserServicesView.tsx`, `AdminConfigs.tsx`, `GrantActions.tsx`, `GrantHistory.tsx`, `useUserMessage.ts` |
+| its users | `/my-resellers/[id]/users` (`myResellerUsersPath`); the session's own: `/users` (`PANEL_USERS`, `users/_components/OwnUsers.tsx`) | `my-resellers/[id]/users/_components/ResellerUsersView.tsx`, `FindByLink.tsx`, `BulkByFilter.tsx` |
+| one user's page | `/my-resellers/[id]/users/[userId]` (`myResellerUserPath`); the session's own: `/users/[userId]` (`panelUserPath`) | `…/users/[userId]/_components/UserServicesView.tsx`, `AdminConfigs.tsx`, `GrantActions.tsx`, `GrantHistory.tsx`, `useUserMessage.ts` |
 
 Platform staff (no consent needed by the reseller's own people) meet the consent banner at the top of both, and a `consent_required` page reads "ask the reseller": [contract.support-access.md](contract.support-access.md) rules 11-16 (F-117-g).
 
@@ -40,7 +43,7 @@ over its "by a pasted line" (F-311-t) and [contract.reseller-grants-bulk.md](../
 | 2 | **No permission is judged here.** `ResellerAccess` admits; a refusal is its sentence (`USER_REFUSAL_KEYS`), which the spec holds to both controllers' `STATUS` maps | invariant 21 is the door's, and a reason with no sentence reaches an owner as a blank line |
 | 3 | The list's search is **3–64 characters or none** (`usersQuery`); fewer keep the unfiltered list, with a hint. It is sent after typing rests, from page 1 | the route answers 400 to one or two letters |
 | 4 | A row shows name, `@username`, `phoneMasked`, status, the status reason and joined date — never a phone. **Restrict / lift, ban / lift** (F-311-v4, BAN-1-h, `statusActionsOf`): restrict (the block route) on `active`, lift on `suspended`, both for anyone the page admits; ban and its lift only where `canBanHere` — the session's own tenant and `user.ban` — over `PUT /auth/users/:id/status`. Restrict and ban ask for the reason in a dialog; a lift is confirmed first; the row takes the user auth answers | the route answers no phone; the person reads that reason (ADR-0133); the status route acts in the caller's own tenant only |
-| 5 | The user's name reaches the services page as `?name=` for its title only; nothing is read by it | there is no read of one user by id, and the title is display |
+| 5 | The user's page is titled with their name read from auth's profile (AC-1-a), following a rename on the Profile tab; nothing about the person goes in the address. The list's button reads "Open" | a `?name=` sat in history and logs, went stale on a rename, and was missing from every other way in (2026-10-09) |
 | 6 | The services page is `/services`' own pieces — `UsageMeter`, `UsageBars` (`read` = the admin's usage route), `ConfigLines` without `onRenamed` (no pencil), `QrDialog`, `GRANT_TONES` — over this user's routes | the admin sees what the user sees; there is no admin label route |
 | 7 | The list is billing's `current` scope, "show ended" (`hidden`) switches to `all` — billing filters, never the page | as `/services` (contract.my-services.md) |
 | 8 | A Grant's sheet is read **only when opened**: configs, 30-day usage and the `/sub` link — the link on copy / QR only | the three share one bucket, 300/900s per caller |

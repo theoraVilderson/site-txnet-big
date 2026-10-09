@@ -32,7 +32,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_AI, PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_GUIDES, PANEL_HOME, PANEL_LOTTERIES, PANEL_LOTTERIES_MANAGE, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_LIMITS, PANEL_RESELLER_PACKAGES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SUPPORT, PANEL_SUPPORT_INBOX, PANEL_SUPPORT_SETTINGS, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS, PANEL_WHEEL, PANEL_WHEEL_SETTINGS, myResellerRolesPath, myResellerTeamPath, myResellerUsersPath } from "@/lib/routes";
+import { PANEL_AI, PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_GUIDES, PANEL_HOME, PANEL_LOTTERIES, PANEL_LOTTERIES_MANAGE, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_LIMITS, PANEL_RESELLER_PACKAGES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SUPPORT, PANEL_SUPPORT_INBOX, PANEL_SUPPORT_SETTINGS, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS, PANEL_WHEEL, PANEL_WHEEL_SETTINGS, myResellerRolesPath, myResellerTeamPath, PANEL_USERS } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { holdsEveryPermission } from "@/lib/permissions";
 
@@ -234,11 +234,12 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
   // ── people ──
   // F-311-ab. One users page for every tenant (D-55), opened on the tenant the
   // session is in: platform staff reach the platform's own users (F-311-aa), a
-  // reseller's staff on its domain the reseller's. `tenant.manage` hides it;
+  // reseller's staff on its domain the reseller's — at `/users`, which ignores
+  // the id but keeps the function so the tenant-id gate applies. `tenant.manage` hides it;
   // `ResellerAccess.…IncludingPlatform` is the door, and a seat it refuses reads
   // as that page's refusal. The owner signs in to the platform (ADR-0059), so
   // their reseller's users stay behind its console.
-  { section: "people", id: "users", label: M.users, icon: UserCog, href: myResellerUsersPath, requires: ["tenant.manage"] },
+  { section: "people", id: "users", label: M.users, icon: UserCog, href: () => PANEL_USERS, requires: ["tenant.manage"] },
   // F-1201-c. The team on the session's tenant: the platform's staff, or a
   // reseller's seats for a seated admin. The same door as users.
   { section: "people", id: "team", label: M.team, icon: Contact, href: myResellerTeamPath, requires: ["tenant.manage"] },
@@ -471,6 +472,8 @@ export function menuTrail(entries: readonly PanelMenuEntry[], pathname: string):
     // A reseller's own domain addresses it with no id at all (F-061-n).
     const self = l.href("TENANTPROBE", true);
     if (!self.includes("TENANTPROBE") && (pathname === self || pathname.startsWith(`${self}/`))) return self;
+    // An address with no id at all (`/users`): it is the path or it is not.
+    if (!l.href("TENANTPROBE", false).includes("TENANTPROBE")) return null;
     // Letters only, so a path builder that encodes its id hands the probe back unchanged.
     const [before, after] = l.href("TENANTPROBE", false).split("TENANTPROBE");
     const escape = (part: string) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

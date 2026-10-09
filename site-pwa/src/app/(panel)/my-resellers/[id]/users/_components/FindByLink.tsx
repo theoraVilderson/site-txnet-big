@@ -6,7 +6,6 @@ import { ArrowLeft, Loader2, Search, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { resellerGrantsApi, type BulkOutcomeRow, type ResellerGrantRow } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
-import { myResellerUserPath } from "@/lib/routes";
 import { useWorkspaceSelf } from "../../../_lib/workspace";
 import { Pagination } from "../../../../_components/kit/Pagination";
 import { formatInstant } from "../../../../_lib/datetime";
@@ -14,7 +13,7 @@ import { flattenTexts } from "../../../../catalog/_lib/catalog-form";
 import { GRANT_TONES, pastedLines, serviceName } from "../../../../services/_lib/my-services";
 import { GRANT_KEYS as G, emptyDraft, type GrantActionDraft } from "../../../_lib/grant-actions";
 import { BULK_ACTIONS, BULK_KEYS as B, BULK_MAX_GRANTS, FIND_KEYS as F, bulkBody, bulkRefusalKey, toggleTicked, type BulkAction } from "../../../_lib/grant-bulk";
-import { USER_KEYS } from "../../../_lib/users";
+import { USER_KEYS, userPagePath } from "../../../_lib/users";
 import { ActionFields } from "../[userId]/_components/GrantActions";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
 import { Alert, Button, buttonClass, Field, Input, Textarea } from "../../../../_components/kit";
@@ -35,7 +34,7 @@ const panel = "space-y-2 rounded-2xl border border-card-border bg-bg-inner p-3";
  *  - **an outcome per Grant**: the refused ones are named with their sentence,
  *    the rest done; then the search is read again.
  */
-export function FindByLink({ id }: { id: string }) {
+export function FindByLink({ id, own = false }: { id: string; own?: boolean }) {
   const { t, lang } = useLocale();
   const message = useUserMessage();
   const api = useMemo(() => resellerGrantsApi(id), [id]);
@@ -175,7 +174,7 @@ export function FindByLink({ id }: { id: string }) {
                       </p>
                     </div>
                     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone.className}`}>{t("common", tone.labelKey)}</span>
-                    <Link href={myResellerUserPath(id, row.userId, self)} className={buttonClass({ variant: "quiet", size: "sm" })}>
+                    <Link href={userPagePath(id, row.userId, own, self)} className={buttonClass({ variant: "quiet", size: "sm" })}>
                       {t("common", F.openUser)}
                       <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
                     </Link>

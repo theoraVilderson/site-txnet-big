@@ -5,7 +5,7 @@ import { ApiError } from "@/lib/api-error";
 import { aiAdminApi, type AiOffer, type AiSettings, type PlanMargin } from "@/lib/ai-api";
 import { billingApi, type AdminCoupon } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
-import { myResellerUserPath, panelResellerPath } from "@/lib/routes";
+import { panelResellerPath, panelUserPath } from "@/lib/routes";
 import { usePanelSession } from "../_context/PanelSessionContext";
 import { AiView } from "./_components/AiView";
 
@@ -165,7 +165,7 @@ describe("at risk and the report (F-038-j2)", () => {
     render(<AiView />);
     tab("ai.tabs.atRisk");
     const link = await screen.findByRole("link", { name: /u-1/ });
-    expect(link.getAttribute("href")).toBe(myResellerUserPath(TENANT, "u-1"));
+    expect(link.getAttribute("href")).toBe(panelUserPath("u-1"));
     expect(screen.getByText("ai.reasons.idle_7d")).toBeTruthy();
     expect(screen.getByText(/ai\.atRisk\.renewChance:30/)).toBeTruthy();
     expect(screen.queryByText("something_new")).toBeNull();
