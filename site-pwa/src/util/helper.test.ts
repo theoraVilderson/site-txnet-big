@@ -43,15 +43,15 @@ describe('toEnglishDigits', () => {
     expect(toEnglishDigits(once)).toBe(once);
   });
 
-  describe('Arabic-Indic digits are NOT converted', () => {
-    // The range is U+06F0-U+06F9 (Persian) only. Arabic-Indic U+0660-U+0669
-    // — what an Arabic keyboard produces — falls straight through. Real gap:
-    // this is the string that later reaches `parseInt`.
+  describe('Arabic-Indic digits are converted too', () => {
+    // U+0660-U+0669 — what an Arabic keyboard produces — beside the Persian
+    // U+06F0-U+06F9. The gap this block used to pin was closed by c2a445d6
+    // (the code boxes take any digits); this is the string `parseInt` reads.
     it.each([
-      ['arabic-indic zero to nine', '٠١٢٣٤٥٦٧٨٩'],
-      ['arabic-indic phone', '٠٩١٢١٢٣٤٥٦٧'],
-    ])('%s stays as-is', (_label, input) => {
-      expect(toEnglishDigits(input)).toBe(input);
+      ['arabic-indic zero to nine', '٠١٢٣٤٥٦٧٨٩', '0123456789'],
+      ['arabic-indic phone', '٠٩١٢١٢٣٤٥٦٧', '09121234567'],
+    ])('%s becomes ASCII', (_label, input, ascii) => {
+      expect(toEnglishDigits(input)).toBe(ascii);
     });
   });
 });
