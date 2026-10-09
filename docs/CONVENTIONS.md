@@ -1,7 +1,7 @@
 ---
 id: conventions
 status: active
-updated: 2026-10-06
+updated: 2026-10-09
 ---
 
 # House style
@@ -522,4 +522,25 @@ forbid: rolePermissions:\s*\{\s*some:\s*\{\s*permission:
 in: txnet-backend/**/*.ts
 except: txnet-backend/**/*.spec.ts, txnet-backend/shared-core/src/lib/http/key-holders.ts
 message: ask findKeyHolders (shared-core, C-15, ADR-0138) — role rows alone miss a key given or taken, and a group's
+```
+
+## C-16 — a package is never asked for by name
+
+**Rule.** Code asks what a tenant *may do* — a feature key or a limit — never
+*which package it bought*. `tenant.plan === 'pro'`, `pkg.name !== 'Starter'`,
+`switch (package.name)`, `where: { package: { name: 'Growth' } }` are all
+violations; reading a package's name to show it is not.
+
+**Why.** Catalog §3.11: a name check makes "the Pro plan but with 20 domains"
+a deploy instead of a panel edit, and spreads the package's definition over
+every file that tests it. The package's keys and limits (`contract.limits.md`,
+`contract.entitlements.md`) are the only place a package means anything. On
+2026-10-09 nothing violated it; this keeps it that way. The pattern covers
+`plan`, `package`, `pkg` and `*Plan` / `*Package` names in TypeScript and Go.
+
+```check C-16
+forbid: (?:(?:\b(?:plan|package|pkg)|[a-z0-9.](?:Plan|Package))(?:Name|Slug|Code)?(?:\??\.(?:[Nn]ame|[Ss]lug|[Cc]ode))?\s*[!=]==?\s*['\"`]|['\"`]\s*[!=]==?\s*[\w?.]*(?:\b(?:plan|package|pkg)|[a-z0-9.](?:Plan|Package))(?:Name|Slug|Code)?(?:\??\.(?:[Nn]ame|[Ss]lug|[Cc]ode))?\b(?!\s*\()|switch\s*\(\s*[\w?.]*(?:\b(?:plan|package|pkg)|[a-z0-9.](?:Plan|Package))(?:Name|Slug|Code)?(?:\??\.(?:[Nn]ame|[Ss]lug|[Cc]ode))?\s*\)|\.includes\(\s*[\w?.]*(?:\b(?:plan|package|pkg)|[a-z0-9.](?:Plan|Package))(?:Name|Slug|Code)?(?:\??\.(?:[Nn]ame|[Ss]lug|[Cc]ode))?\s*\)|\b\w*(?:[Pp]ackage|[Pp]lan)\w*\s*:\s*\{\s*(?:name|slug|code)\s*:\s*['\"`]|[Pp]ackage\.find\w*\(\s*\{\s*where\s*:\s*\{\s*(?:name|slug|code)\s*:\s*['\"`])
+in: txnet-backend/**/*.ts, site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, auth-handler/**/*.go, network-service/**/*.go, sub-service/**/*.go, i18n-platform/**/*.go
+except: txnet-backend/**/*.spec.ts, txnet-backend/**/seed*.ts, txnet-backend/prisma/**, site-pwa/src/**/*.test.ts, site-pwa/src/**/*.test.tsx, **/*_test.go
+message: gate on a feature key (@RequiresFeature / TenantEntitlements.check) or a limit (resellerLimitOf) — never on a package or plan name (C-16, catalog §3.11)
 ```
