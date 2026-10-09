@@ -65,6 +65,8 @@ export type UserGroupMemberView = {
   userId: string | null;
   tenantId: string | null;
   label: string | null;
+  /** A user of the group's own tenant: they hold whatever access the group gives (AC-1-m/o). */
+  receivesAccess: boolean;
   addedAt: Date;
 };
 
@@ -218,7 +220,13 @@ export class UserGroupAdminService {
       const userIds = rows.flatMap((r) => (r.userId ? [r.userId] : []));
       const tenantIds = rows.flatMap((r) => (r.memberTenantId ? [r.memberTenantId] : []));
       const names = new Map<string, string>();
-      if (userIds.length > 0) for (const u of await users.findMany({ where: { id: { in: userIds } }, select: { id: true, fullName: true } })) names.set(u.id, u.fullName);
+      const here = new Set<string>();
+      if (userIds.length > 0) {
+        for (const u of await users.findMany({ where: { id: { in: userIds } }, select: { id: true, fullName: true, tenantId: true } })) {
+          names.set(u.id, u.fullName);
+          if (u.tenantId === tenant.id) here.add(u.id);
+        }
+      }
       if (tenantIds.length > 0) for (const t of await this.all.tenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true, slug: true } })) names.set(t.id, t.slug);
 
       const items = rows.map((r) => ({
@@ -226,6 +234,7 @@ export class UserGroupAdminService {
         userId: r.userId,
         tenantId: r.memberTenantId,
         label: names.get((r.userId ?? r.memberTenantId) as string) ?? null,
+        receivesAccess: r.userId !== null && here.has(r.userId),
         addedAt: r.createdAt,
       }));
       return { items, total, page, pageSize };

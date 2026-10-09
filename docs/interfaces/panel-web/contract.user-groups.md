@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 34
-updated: 2026-09-25
+updated: 2026-10-09
 ---
 
 # Contract — panel-web: user groups (F-114-m)
@@ -11,7 +11,7 @@ updated: 2026-09-25
 A topic file of [contract.md](contract.md) (§10). One page, `/user-groups`
 (`PANEL_USER_GROUPS`), under `(panel)/user-groups/`: `UserGroupsView.tsx` the
 list, `GroupSheet.tsx` create and rename, `MembersSheet.tsx` one group's
-members, `UserSearch.tsx` finding a user, and `_lib/user-groups.ts` the rules.
+members, `AccessSheet.tsx` what it gives (AC-1-o), `UserSearch.tsx` finding a user, and `_lib/user-groups.ts` the rules.
 The routes are auth-api's
 [contract.user-groups.md](../auth-api/contract.user-groups.md) (F-114-j); who a
 group may hold is governance's
@@ -48,6 +48,14 @@ group may hold is governance's
    the service counts it — only the new members.
 8. **Delete is confirmed**, and the sentence says the members go with it; a
    group a discount rule serves answers `group_in_use`, shown as its sentence.
+9. **A group's Access** (AC-1-o, `AccessSheet`, the row's "Access" action):
+   a role from those the caller may give whole (`assignableRoles`; the held
+   one stays listed), extra keys with the Roles page's `KeyPicker`
+   (F-1201-d), and who receives them — the members the server marks
+   `receivesAccess`, the first 50 read and the rest counted. The **whole**
+   set is sent (`accessBody`), nothing when untouched. Roles and `grantable`
+   come through the role door, so without `role.manage` the sheet says why.
+   A group of every reseller gets a sentence, no form (`access_on_resellers`).
 
 ## Proof
 
@@ -56,4 +64,5 @@ source, the permission key and the schema bounds against the service, the menu
 entry for the platform owner and a reseller and hidden without the key,
 `canNameResellers` by tenant type, `memberSearchOf` per caller, the form
 (`validateGroupForm`, `createGroupBody`, `updateGroupBody`), `parseIds`,
-`membersBody`, every key in `en` and `fa`.
+`membersBody`, `accessBody` (the whole set, the 200-key cap read from the
+schema), `receivers`, every key in `en` and `fa`.

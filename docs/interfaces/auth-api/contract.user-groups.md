@@ -33,7 +33,7 @@ SuperAdmin as `*`), and acts on the **session's tenant** — nothing takes a
 | PATCH `/auth/user-groups/:id` | `name?`, `allTenants?` — at least one | 200 `group` | write |
 | DELETE `/auth/user-groups/:id` | — | 200 `{id, deleted: true}`; its members go with it | write |
 | PUT `/auth/user-groups/:id/access` (v46, AC-1-m) | `{roleId: uuid \| null, keys: [key]}` (≤ 200) — the **whole** set | 200 `group` | write |
-| GET `/auth/user-groups/:id/members` | `page` >=1 (1), `pageSize` 1-100 (50) | 200 `{items:[{memberType, userId, tenantId, label, addedAt}], total, page, pageSize}`, newest first; `label` is a user's `fullName` or a reseller's `slug` — never a phone | read |
+| GET `/auth/user-groups/:id/members` | `page` >=1 (1), `pageSize` 1-100 (50) | 200 `{items:[{memberType, userId, tenantId, label, receivesAccess, addedAt}], total, page, pageSize}`, newest first; `label` is a user's `fullName` or a reseller's `slug` — never a phone; `receivesAccess` (v47): a user of the group's own tenant, who holds what it gives | read |
 | POST `/auth/user-groups/:id/members` | `userIds?`, `tenantIds?` — ≤ 500 each, at least one id | 200 `{added}` — only the new ones; one already in is not an error | write |
 | DELETE `/auth/user-groups/:id/members/users/:userId` | — | 200 `{removed: true}` | write |
 | DELETE `/auth/user-groups/:id/members/tenants/:tenantId` | — | 200 `{removed: true}` | write |

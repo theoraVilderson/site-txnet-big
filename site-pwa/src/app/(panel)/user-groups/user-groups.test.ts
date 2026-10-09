@@ -2,11 +2,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import type { Me } from "@/lib/auth-api";
+import type { Me, UserGroupMember } from "@/lib/auth-api";
 import { PANEL_USER_GROUPS } from "@/lib/routes";
 import { PANEL_MENU, isMenuGroup, menuHrefs, visibleMenu } from "../_lib/panel-menu";
 import {
+  ACCESS_KEYS_MAX,
   GROUP_NAME_MAX,
+  accessBody,
+  receivers,
   MEMBER_IDS_MAX,
   REFUSAL_KEYS,
   USER_GROUP_KEYS,
@@ -152,5 +155,37 @@ describe("every key this page can reach", () => {
   it.each(["en", "fa"])("resolves in %s", (lang) => {
     const keys = shipped(lang);
     expect(flatten(USER_GROUP_KEYS).filter((k) => !keys.has(k))).toEqual([]);
+  });
+});
+
+/**
+ * The group's Access sheet (AC-1-o) over `PUT /auth/user-groups/:id/access`
+ * (AC-1-m): the body is the **whole** set, so a sheet that sends only the
+ * ticked difference strips every key it did not show; and "who receives
+ * them" is the server's `receivesAccess`, never every member.
+ */
+describe("a group's access", () => {
+  const none = { roleId: null, roleName: null, keys: [] };
+
+  it("sends the whole set, each key once, and nothing when nothing changed", () => {
+    expect(accessBody(none, "r-desk", ["ticket.reply", "coupon.manage", "ticket.reply"])).toEqual({ roleId: "r-desk", keys: ["coupon.manage", "ticket.reply"] });
+    expect(accessBody({ roleId: "r-desk", roleName: "Desk", keys: ["b.x", "a.x"] }, "r-desk", ["a.x", "b.x"])).toBeNull();
+    expect(accessBody({ roleId: "r-desk", roleName: "Desk", keys: [] }, null, [])).toEqual({ roleId: null, keys: [] });
+  });
+
+  it("holds the schema's cap on keys", () => {
+    expect(read(`${SERVICE}/user-group.schema.ts`)).toMatch(new RegExp(`setUserGroupAccessSchema[\\s\\S]*?\\.max\\(${ACCESS_KEYS_MAX}\\)`));
+    expect(() => accessBody(none, null, Array.from({ length: ACCESS_KEYS_MAX + 1 }, (_, i) => `k.k${i}`))).toThrow();
+  });
+
+  it("names as receiving only the members the server says receive it", () => {
+    const m = (over: Partial<UserGroupMember>): UserGroupMember => ({ memberType: "user", userId: "u", tenantId: null, label: "x", receivesAccess: false, addedAt: "", ...over });
+    const here = m({ userId: "u-here", receivesAccess: true });
+    expect(receivers([here, m({ userId: "u-far" }), m({ memberType: "tenant", userId: null, tenantId: "t-1" })])).toEqual([here]);
+  });
+
+  it("is served by the controller and the member view carries receivesAccess", () => {
+    expect(read(`${SERVICE}/user-group.controller.ts`)).toContain("@Put(':id/access')");
+    expect(read(`${SERVICE}/user-group-admin.service.ts`)).toMatch(/receivesAccess: boolean/);
   });
 });

@@ -24,6 +24,7 @@ const group = (id: string, name: string): UserGroup => ({
   allTenants: false,
   userCount: 3,
   tenantCount: 0,
+  access: { roleId: null, roleName: null, keys: [] },
   createdAt: "",
   updatedAt: "",
 });

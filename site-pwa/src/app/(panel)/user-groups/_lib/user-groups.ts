@@ -1,4 +1,4 @@
-import type { Me } from "@/lib/auth-api";
+import type { Me, UserGroupAccess, UserGroupMember } from "@/lib/auth-api";
 import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
@@ -31,7 +31,13 @@ export type UserGroupRefusal =
   | "not_a_reseller"
   | "all_tenants_conflict"
   | "member_not_found"
-  | "group_in_use";
+  | "group_in_use"
+  | "access_on_resellers"
+  | "role_not_found"
+  | "key_unknown"
+  | "key_not_grantable"
+  | "key_not_held"
+  | "no_authority";
 
 export const REFUSAL_KEYS: Record<UserGroupRefusal, string> = K.refusals;
 
@@ -129,4 +135,33 @@ export function membersBody(userIds: readonly string[], tenantIds: readonly stri
   if (userIds.length > 0) body.userIds = [...userIds];
   if (tenants.length > 0) body.tenantIds = [...tenants];
   return Object.keys(body).length > 0 ? body : null;
+}
+
+// ------------------------------------------------------------------ the access
+
+/** The schema's cap on a group's extra keys (`setUserGroupAccessSchema`); the spec reads it. */
+export const ACCESS_KEYS_MAX = 200;
+
+/**
+ * The `PUT …/access` body — the **whole** set (AC-1-m), keys once each and
+ * sorted — or `null` when it restates what the group already gives, so an
+ * untouched form sends nothing.
+ */
+export function accessBody(was: UserGroupAccess, roleId: string | null, keys: readonly string[]): { roleId: string | null; keys: string[] } | null {
+  const next = [...new Set(keys)].sort();
+  if (next.length > ACCESS_KEYS_MAX) throw new Error(`at most ${ACCESS_KEYS_MAX} keys`);
+  const same = (was.roleId ?? null) === roleId && next.join() === [...was.keys].sort().join();
+  return same ? null : { roleId, keys: next };
+}
+
+/** Whether the group gives anything: a role or one key. */
+export const givesAccess = (a: UserGroupAccess) => a.roleId !== null || a.keys.length > 0;
+
+/**
+ * The members who receive what the group gives: its own tenant's users
+ * (`receivesAccess`). A reseller, or another tenant's user in the platform's
+ * group, gets nothing (governance `contract.md`).
+ */
+export function receivers(members: readonly UserGroupMember[]): UserGroupMember[] {
+  return members.filter((m) => m.memberType === "user" && m.receivesAccess);
 }

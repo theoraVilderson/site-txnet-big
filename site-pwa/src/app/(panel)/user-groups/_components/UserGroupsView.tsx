@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Pencil, Plus, RotateCw, Trash2, Users, UsersRound } from "lucide-react";
+import { KeyRound, Pencil, Plus, RotateCw, Trash2, Users, UsersRound } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { userGroupsApi, type UserGroup } from "@/lib/auth-api";
 import { usePanelSession } from "../../_context/PanelSessionContext";
@@ -12,6 +12,7 @@ import { USER_GROUP_KEYS as K, canManageGroups, canNameResellers } from "../_lib
 import { Alert, useMessage } from "./user-groups-ui";
 import { GroupSheet } from "./GroupSheet";
 import { MembersSheet } from "./MembersSheet";
+import { AccessSheet } from "./AccessSheet";
 import { PageHeader } from "../../_components/kit/PageHeader";
 import { Button, useConfirm } from "../../_components/kit";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -20,7 +21,8 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
  * An admin's user groups (F-114-m), by name, over `/auth/user-groups`
  * (F-114-j). Every tenant has its own; what is listed is auth-service's
  * answer for the session's tenant. The resellers column and "every reseller"
- * are the platform owner's only.
+ * are the platform owner's only. A group's role and extra keys are its
+ * Access sheet's (AC-1-o).
  *
  * The check here only spares a caller who typed the path a refused read.
  */
@@ -39,6 +41,7 @@ export function UserGroupsView() {
   const [loaded, setLoaded] = useState<number | null>(null);
   const [editing, setEditing] = useState<UserGroup | "new" | null>(null);
   const [members, setMembers] = useState<UserGroup | null>(null);
+  const [access, setAccess] = useState<UserGroup | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -134,6 +137,7 @@ export function UserGroupsView() {
           ]}
           actions={(g) => [
             { id: "members", label: t("common", K.actions.members), icon: <Users size={14} aria-hidden />, onSelect: () => setMembers(g) },
+            { id: "access", label: t("common", K.actions.access), icon: <KeyRound size={14} aria-hidden />, onSelect: () => setAccess(g) },
             { id: "edit", label: t("common", K.actions.edit), icon: <Pencil size={14} aria-hidden />, onSelect: () => setEditing(g) },
             { id: "delete", label: t("common", K.actions.delete), icon: <Trash2 size={14} aria-hidden />, tone: "danger", onSelect: () => remove(g) },
           ]}
@@ -153,6 +157,18 @@ export function UserGroupsView() {
         />
       )}
       {open && <MembersSheet group={open} onClose={() => setMembers(null)} onChanged={reload} />}
+      {access && (
+        <AccessSheet
+          group={access}
+          onClose={() => setAccess(null)}
+          onSaved={(g) => {
+            setAccess(null);
+            setFailure(null);
+            setNotice(t("common", g ? K.access.saved : K.access.unchanged));
+            if (g) reload();
+          }}
+        />
+      )}
     </div>
   );
 }

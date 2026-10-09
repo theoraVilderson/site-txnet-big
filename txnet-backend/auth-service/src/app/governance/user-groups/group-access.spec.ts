@@ -69,7 +69,15 @@ function harness(start: { roleId?: string | null; keys?: string[]; members?: str
         return [...members]
           .filter((u) => (where.userId ? where.userId.in.includes(u) : true))
           .filter(() => (where.userId ? has && !group.allTenants : true))
-          .map((u) => ({ userId: u, tenantId: TENANT, group: { role: roleOf(group.roleId), permissions: keys(...groupKeys) } }));
+          .map((u) => ({
+            id: `m-${u}`,
+            userId: u,
+            tenantId: TENANT,
+            memberType: UserGroupMemberType.user,
+            memberTenantId: null,
+            createdAt: new Date('2026-10-01'),
+            group: { id: GROUP, name: group.name, role: roleOf(group.roleId), permissions: keys(...groupKeys) },
+          }));
       }),
       createMany: vi.fn(async ({ data }: { data: { userId: string }[] }) => {
         let count = 0;
@@ -77,6 +85,7 @@ function harness(start: { roleId?: string | null; keys?: string[]; members?: str
         return { count };
       }),
       deleteMany: vi.fn(async ({ where }: { where: { userId: string } }) => ({ count: members.delete(where.userId) ? 1 : 0 })),
+      count: vi.fn(async () => members.size),
     },
     user: {
       findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
@@ -166,5 +175,13 @@ describe('a group holds access (AC-1-m)', () => {
   it('refuses adding yourself to a group that holds access', async () => {
     const h = harness({ keys: ['coupon.manage'], members: [] });
     await expect(reason(inTenant(() => h.service.addMembers(lead(), GROUP, { userIds: [LEAD] })))).resolves.toBe('no_authority');
+  });
+
+  it('says which members receive what it gives: its own tenant\'s people, never another tenant\'s (AC-1-o)', async () => {
+    const h = harness({ roleId: 'role-desk', members: [ALI, FAR] });
+    const page = await inTenant(() => h.service.members(lead(), GROUP, 1, 50));
+
+    const receives = Object.fromEntries(page.items.map((m) => [m.userId, m.receivesAccess]));
+    expect(receives).toEqual({ [ALI]: true, [FAR]: false });
   });
 });

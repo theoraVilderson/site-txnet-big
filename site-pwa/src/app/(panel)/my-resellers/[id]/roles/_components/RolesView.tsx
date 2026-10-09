@@ -9,11 +9,12 @@ import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { usePanelSession } from "../../../../_context/PanelSessionContext";
 import { useOwnTenantRedirect } from "../../../_lib/useOwnTenantRedirect";
 import { isPlatformTenant } from "../../../_lib/users";
-import { editorAreas, permissionIndex, unknownKeys } from "../../../_lib/roles";
+import { permissionIndex } from "../../../_lib/roles";
+import { KeyPicker } from "../../../../_components/KeyPicker";
 import { useUserMessage } from "../../users/[userId]/_components/useUserMessage";
 import { ConsentNeeded, PlatformAccessBanner } from "../../../_components/PlatformAccessBanner";
 import { consentRefusal } from "../../../_lib/support-access";
-import { Alert, Badge, Button, Checkbox, Dialog, Field, Input, PageHeader, useConfirm } from "../../../../_components/kit";
+import { Alert, Badge, Button, Dialog, Field, Input, PageHeader, useConfirm } from "../../../../_components/kit";
 
 const K = FrontendI18nKeys.common.tenantRoles;
 
@@ -140,11 +141,6 @@ export function RolesView({ id, own: ownTenant = false }: { id: string; own?: bo
       </span>
     );
 
-  const toggle = (key: string, on: boolean) =>
-    setEditing((e) => e && { ...e, keys: on ? [...e.keys, key] : e.keys.filter((k) => k !== key) });
-
-  const areas = editing && answer ? editorAreas(registry, answer.grantable, editing.role?.permissions ?? []) : [];
-  const strays = editing ? unknownKeys(editing.role?.permissions ?? [], index) : [];
   const nameOk = editing ? editing.name.trim().length >= 2 && editing.name.trim().length <= 40 : false;
 
   return (
@@ -268,35 +264,13 @@ export function RolesView({ id, own: ownTenant = false }: { id: string; own?: bo
             <Field label={t("common", K.name)} hint={t("common", K.nameHint)}>
               <Input value={editing.name} maxLength={40} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
             </Field>
-            <div className="space-y-3">
-              <p className="text-sm font-bold text-text-primary">{t("common", K.permissions)}</p>
-              <p className="text-xs text-text-secondary">{t("common", areas.length === 0 ? K.noneGrantable : K.onlyYours)}</p>
-              {areas.map((area) => (
-                <fieldset key={area.area} className="space-y-2 rounded-xl border border-card-border p-3">
-                  <legend className="px-1 text-xs font-bold text-text-secondary">{area.label}</legend>
-                  {area.permissions.map((p) => (
-                    <div key={p.key} className="flex items-start justify-between gap-2">
-                      <Checkbox
-                        checked={editing.keys.includes(p.key)}
-                        disabled={p.locked}
-                        onChange={(on) => toggle(p.key, on)}
-                        label={p.label}
-                        hint={p.description || undefined}
-                      />
-                      {p.platformOnly && <Badge tone="neutral">{t("common", K.platformOnly)}</Badge>}
-                    </div>
-                  ))}
-                </fieldset>
-              ))}
-              {strays.length > 0 && (
-                <fieldset className="space-y-2 rounded-xl border border-card-border p-3">
-                  <legend className="px-1 text-xs font-bold text-text-secondary">{t("common", K.other)}</legend>
-                  {strays.map((key) => (
-                    <Checkbox key={key} checked={editing.keys.includes(key)} disabled onChange={() => undefined} label={<span dir="ltr">{key}</span>} />
-                  ))}
-                </fieldset>
-              )}
-            </div>
+            <KeyPicker
+              registry={registry}
+              grantable={answer?.grantable ?? []}
+              held={editing.role?.permissions ?? []}
+              value={editing.keys}
+              onChange={(keys) => setEditing((e) => e && { ...e, keys })}
+            />
           </div>
         )}
       </Dialog>

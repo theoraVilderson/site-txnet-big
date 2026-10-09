@@ -663,9 +663,14 @@ export type UserGroup = {
   allTenants: boolean;
   userCount: number;
   tenantCount: number;
+  /** What the group gives its user members (AC-1-m). */
+  access: UserGroupAccess;
   createdAt: string;
   updatedAt: string;
 };
+
+/** A role and/or extra keys a group gives its own tenant's user members (AC-1-m). */
+export type UserGroupAccess = { roleId: string | null; roleName: string | null; keys: string[] };
 
 /** One member. `label` is a user's name or a reseller's slug — never a phone. */
 export type UserGroupMember = {
@@ -673,6 +678,8 @@ export type UserGroupMember = {
   userId: string | null;
   tenantId: string | null;
   label: string | null;
+  /** A user of the group's own tenant: holds whatever the group gives (AC-1-o). */
+  receivesAccess: boolean;
   addedAt: string;
 };
 
@@ -906,6 +913,8 @@ export const userGroupsApi = {
   },
   async addMembers(id: string, body: { userIds?: string[]; tenantIds?: string[] }) { return request<{ added: number }>(`${userGroupPath(id)}/members`, { method: "POST", body: JSON.stringify(body) }); },
   async removeUser(id: string, userId: string) { return request<{ removed: true }>(`${userGroupPath(id)}/members/users/${encodeURIComponent(userId)}`, { method: "DELETE" }); },
+  /** The **whole** access — a role or none, and every extra key (AC-1-m). */
+  async setAccess(id: string, body: { roleId: string | null; keys: string[] }) { return request<UserGroup>(`${userGroupPath(id)}/access`, { method: "PUT", body: JSON.stringify(body) }); },
   async removeTenant(id: string, tenantId: string) { return request<{ removed: true }>(`${userGroupPath(id)}/members/tenants/${encodeURIComponent(tenantId)}`, { method: "DELETE" }); },
   /** A reseller finds its own users (F-311-a); the door is `ResellerAccess`, not a permission key. */
   async resellerUsers(tenantId: string, q: string) {

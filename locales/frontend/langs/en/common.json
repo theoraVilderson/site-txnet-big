@@ -3969,7 +3969,8 @@
     "actions": {
       "members": "Members",
       "edit": "Rename",
-      "delete": "Delete"
+      "delete": "Delete",
+      "access": "Access"
     },
     "confirmDelete": "Delete the group \"{{name}}\"? Its members are removed with it.",
     "deleted": "The group \"{{name}}\" was deleted.",
@@ -4025,7 +4026,28 @@
       "not_a_reseller": "The platform itself cannot be a member of its own group.",
       "all_tenants_conflict": "A group of every reseller cannot also name resellers. Remove the named resellers first, or switch \"every reseller\" off.",
       "member_not_found": "That member is no longer in this group.",
-      "group_in_use": "A discount rule serves this group. Point the rule elsewhere first."
+      "group_in_use": "A discount rule serves this group. Point the rule elsewhere first.",
+      "access_on_resellers": "A group of every reseller cannot hold access.",
+      "role_not_found": "That role no longer exists — refresh.",
+      "key_unknown": "A permission you chose does not exist.",
+      "key_not_grantable": "A permission you chose cannot be given by a group.",
+      "key_not_held": "You may only give what you may give yourself — on access, and on adding or removing a member of a group that holds it.",
+      "no_authority": "You cannot add or remove this person: they hold as much as you, or it is you."
+    },
+    "access": {
+      "title": "Access of {{name}}",
+      "hint": "Every member of this group holds this role and these permissions while they are a member.",
+      "role": "Role",
+      "noRole": "No role",
+      "keys": "Extra permissions",
+      "receivers": "Who receives them",
+      "receiversNone": "No member receives them yet.",
+      "receiversMore": "and {{count}} more",
+      "receiversHint": "Only users of this group's own team. Resellers and other teams' users receive nothing.",
+      "everyReseller": "A group of every reseller cannot hold access: its members are resellers, not people.",
+      "save": "Save",
+      "saved": "Access saved.",
+      "unchanged": "Nothing changed."
     }
   },
   "resellerUsers": {
